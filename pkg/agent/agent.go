@@ -139,6 +139,14 @@ type Agent struct {
 	workspaceRootMu sync.RWMutex
 	workspaceRoot   string
 	debug           bool
+	// role is the SP-150 §150c role whose model selection this agent's
+	// usage is attributed to (a configuration.Role* constant such as
+	// "coder" or "reviewer"). Set once at creation: the primary agent is
+	// the coder role; a subagent carries the role its model was resolved
+	// through (subagents/types.go SubagentOptions.Role). Empty only for
+	// agents built before role stamping landed; GetRoleUsage and the cost
+	// build sites bucket an empty role under "unknown".
+	role string
 	// contextProfile is the resolved set of context-engine levers (tool allowlist, prompt path, compaction trigger, etc.).
 	// Resolved once at agent creation. Zero-value means full-context mode.
 	contextProfile configuration.ContextProfile

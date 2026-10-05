@@ -46,6 +46,7 @@ func (a *Agent) accumulateResponseCost(resp *api.ChatResponse) {
 		BillingType:      billingType,
 		Provider:         a.GetProvider(),
 		Model:            a.GetModel(),
+		Role:             a.GetRole(),
 		ChargedCost:      chargedCost,
 		TokenCost:        tokenCost,
 		PromptTokens:     resp.Usage.PromptTokens,

@@ -36,6 +36,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/plancontract"
 	"github.com/sprout-foundry/sprout/pkg/verify"
 )
@@ -130,6 +131,15 @@ func goldenRuns() []Run {
 	r := base("add-badge", "alpha", "prov-a", 1, goldenTime(0, 0, 0), goldenTime(0, 1, 234), 250, 0.0011)
 	r.Passed = true
 	r.Result = goldenBuildPass()
+	// The run's per-role usage (SP-150 §150c, 150.5): a single coder-role
+	// entry whose split sums to the run's totals (250 tokens, 0.0011
+	// cost, 2 model calls). Every other golden run leaves RoleUsage
+	// empty (the serialized "RoleUsage": null) — this one pins the
+	// populated shape.
+	r.RoleUsage = []agent.RoleUsage{
+		{Role: "coder", PromptTokens: 200, CompletionTokens: 50, Tokens: 250,
+			ChargedCost: 0.0011, TokenCost: 0.0011, Calls: 2},
+	}
 	add(r)
 	r = base("add-badge", "alpha", "prov-a", 2, goldenTime(0, 5, 0), goldenTime(0, 7, 500), 310, 0.0013)
 	r.Passed = true

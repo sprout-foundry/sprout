@@ -305,13 +305,16 @@ func metricKeyFor(ag *Agent) string {
 	return id
 }
 
-// modelStat returns the stat for a model ID from a recorder's snapshot
-// (a zero stat when the model has no recorded checks).
+// modelStat returns the stat for a model ID from a recorder's snapshot,
+// summed across that model's roles (a zero stat when the model has no
+// recorded checks).
 func modelStat(m *LanguageGuardMetrics, modelID string) LanguageGuardModelStat {
+	total := LanguageGuardModelStat{ModelID: modelID}
 	for _, s := range m.Snapshot() {
 		if s.ModelID == modelID {
-			return s
+			total.Checks += s.Checks
+			total.Mismatches += s.Mismatches
 		}
 	}
-	return LanguageGuardModelStat{ModelID: modelID}
+	return total
 }

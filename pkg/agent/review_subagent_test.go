@@ -57,7 +57,7 @@ func TestResolveSubagentProviderModel_ReviewerUsesReviewSettings(t *testing.T) {
 	}
 	root := t.TempDir()
 
-	provider, model, _, err := resolveSubagentProviderModel(parent, "code_reviewer", true, root)
+	provider, model, _, _, err := resolveSubagentProviderModel(parent, "code_reviewer", true, root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestResolveSubagentProviderModel_ReviewerUsesReviewSettings(t *testing.T) {
 		t.Errorf("reviewer resolved to %s/%s, want review-prov/review-model", provider, model)
 	}
 
-	provider, model, _, err = resolveSubagentProviderModel(parent, "coder", true, root)
+	provider, model, _, _, err = resolveSubagentProviderModel(parent, "coder", true, root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestResolveSubagentProviderModel_ReviewerWithoutReviewSettings(t *testing.T
 		t.Fatal(err)
 	}
 
-	provider, model, _, err := resolveSubagentProviderModel(parent, "reviewer", true, t.TempDir())
+	provider, model, _, _, err := resolveSubagentProviderModel(parent, "reviewer", true, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -48,6 +48,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 			Provider:     spec.provider,
 			SystemPrompt: spec.systemPromptText,
 			WorkingDir:   spec.workingDir,
+			Role:         spec.role,
 		})
 	}
 	printSubagentDone(spec.persona, result)

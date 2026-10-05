@@ -3,7 +3,75 @@ package commands
 import (
 	"strings"
 	"testing"
+
+	"github.com/sprout-foundry/sprout/pkg/agent"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
+
+// newAgentForUsageTest builds an agent against an isolated config dir (the
+// primary agent is the coder role) so the /usage per-role assertions never
+// touch the real config or a live provider.
+func newAgentForUsageTest(t *testing.T) *agent.Agent {
+	t.Helper()
+	mgr, cleanup := configuration.NewTestManager(t)
+	t.Cleanup(cleanup)
+	client := agent.NewMockLLMProviderWithLimit(128_000)
+	chatAgent, err := agent.NewAgentWithClient(client, api.TestClientType, mgr)
+	if err != nil {
+		t.Fatalf("NewAgentWithClient failed: %v", err)
+	}
+	t.Cleanup(func() { chatAgent.Shutdown() })
+	return chatAgent
+}
+
+// TestUsageJSONPayload_IncludesRoleUsage pins that the /usage --json payload
+// carries the per-role token/cost totals (SP-150 §150c, item 150.5).
+func TestUsageJSONPayload_IncludesRoleUsage(t *testing.T) {
+	chatAgent := newAgentForUsageTest(t)
+	if got := chatAgent.GetRole(); got == "" {
+		t.Fatalf("precondition: agent role = %q, want non-empty (coder)", got)
+	}
+
+	// One model call on the agent's own role.
+	chatAgent.TrackMetricsFromResponse(100, 50, 150, 0.01, 0, 0, 0)
+
+	payload := buildUsageJSONPayload(chatAgent)
+	if len(payload.RoleUsage) == 0 {
+		t.Fatalf("payload.RoleUsage is empty, want the per-role totals")
+	}
+	var found bool
+	for _, ru := range payload.RoleUsage {
+		if ru.Role != chatAgent.GetRole() {
+			continue
+		}
+		found = true
+		if ru.PromptTokens != 100 || ru.CompletionTokens != 50 || ru.Tokens != 150 {
+			t.Errorf("%s role tokens = %+v, want 100 prompt / 50 completion / 150 total", ru.Role, ru)
+		}
+	}
+	if !found {
+		t.Errorf("payload.RoleUsage = %+v, want an entry for role %q", payload.RoleUsage, chatAgent.GetRole())
+	}
+}
+
+// TestUsageJSONPayload_EmptyRoleUsage pins that an agent with no role-attributed
+// usage yields an empty (nil) RoleUsage, and the dashboard renders without
+// error (the empty case must not break the layout).
+func TestUsageJSONPayload_EmptyRoleUsage(t *testing.T) {
+	chatAgent := newAgentForUsageTest(t)
+
+	payload := buildUsageJSONPayload(chatAgent)
+	if len(payload.RoleUsage) != 0 {
+		t.Errorf("no-usage agent RoleUsage = %+v, want empty", payload.RoleUsage)
+	}
+
+	// The dashboard renders the no-data case without error.
+	cmd := &UsageCommand{}
+	if err := cmd.Execute(nil, chatAgent); err != nil {
+		t.Errorf("Execute (no usage) returned error: %v", err)
+	}
+}
 
 func TestUsageCommand_Name(t *testing.T) {
 	cmd := &UsageCommand{}

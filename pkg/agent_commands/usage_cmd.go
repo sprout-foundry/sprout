@@ -146,6 +146,22 @@ func (u *UsageCommand) Execute(args []string, chatAgent *agent.Agent) error {
 			efficiency)
 	}
 
+	// Per-role breakdown (SP-150 §150c, 150.5): attribute the session's
+	// tokens and cost to the model role each call was made under. Omitted
+	// when no usage was recorded with a role, so an empty session renders
+	// exactly as before.
+	if roleUsage := chatAgent.GetRoleUsage(); len(roleUsage) > 0 {
+		fmt.Println()
+		fmt.Println(" By role")
+		for _, ru := range roleUsage {
+			// Cost is the effective spend for the role: the charged cost
+			// (pay-per-token) or the estimated token cost (subscription /
+			// free) — at most one is non-zero per call.
+			fmt.Printf("   %-12s %8s tokens  $%.6f\n",
+				ru.Role, formatTokens(ru.Tokens), ru.ChargedCost+ru.TokenCost)
+		}
+	}
+
 	fmt.Println("──────────────────────────────────────────────────────────────────")
 	fmt.Println()
 
@@ -176,6 +192,11 @@ type usageJSONPayload struct {
 	CacheSavings       float64 `json:"cache_savings"`
 	CacheEfficiencyPct float64 `json:"cache_efficiency_pct"`
 	EstimatedResponses int     `json:"estimated_responses"`
+	// RoleUsage is the per-role token/cost breakdown (SP-150 §150c,
+	// 150.5): how much of the session's tokens and cost was attributed to
+	// each model role. Empty (omitted) when no usage was recorded with a
+	// role.
+	RoleUsage []agent.RoleUsage `json:"role_usage,omitempty"`
 }
 
 // ExecuteWithJSONOutput emits the usage dashboard data as JSON.
@@ -183,7 +204,14 @@ func (u *UsageCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Age
 	if chatAgent == nil || chatAgent.GetTotalTokens() == 0 {
 		return WriteJSONToOutput(usageJSONPayload{})
 	}
+	return WriteJSONToOutput(buildUsageJSONPayload(chatAgent))
+}
 
+// buildUsageJSONPayload assembles the /usage --json payload from the agent's
+// metrics. It is factored out of ExecuteWithJSONOutput so tests can assert on
+// the payload (including the per-role totals, SP-150 §150c) without capturing
+// stdout.
+func buildUsageJSONPayload(chatAgent *agent.Agent) usageJSONPayload {
 	totalTokens := chatAgent.GetTotalTokens()
 	promptTokens := chatAgent.GetPromptTokens()
 	completionTokens := chatAgent.GetCompletionTokens()
@@ -222,7 +250,7 @@ func (u *UsageCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Age
 		cacheEfficiencyPct = float64(cachedTokens) / float64(totalTokens) * 100
 	}
 
-	return WriteJSONToOutput(usageJSONPayload{
+	return usageJSONPayload{
 		Model:              chatAgent.GetModel(),
 		Turns:              iterations,
 		TotalTokens:        totalTokens,
@@ -241,7 +269,8 @@ func (u *UsageCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Age
 		CacheSavings:       cachedSavings,
 		CacheEfficiencyPct: cacheEfficiencyPct,
 		EstimatedResponses: estimatedResponses,
-	})
+		RoleUsage:          chatAgent.GetRoleUsage(),
+	}
 }
 
 // renderBar returns a bar string of the given width showing the filled/total ratio.

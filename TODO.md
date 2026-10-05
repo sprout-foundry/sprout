@@ -241,12 +241,7 @@ the end, without checkboxes.
 - [x] **150.4** Plan mode uses the `planner` role, the main loop `coder`;
       `summarizer` is resolvable for SP-151/SP-157. Tests. Spec: SP-150
       §150a.
-- [ ] **150.5** Metering: every model call carries its role; usage ledger
-      (`pkg/agent/usage_ledger.go`) and cost model record per-role
-      tokens and cost; per-role totals in `/cost` views and usage events;
-      add role to the 152.9 mismatch metric and the 154.3 metrics.
-      Tests. Spec: SP-150 §150c.
-- [ ] **150.6** CLI: `/model --role <role> <model>` and `sprout config`
+- [x] **150.5** Metering: every model call carries its role; usage ledger (`pkg/agent/usage_ledger.go`) and cost model record per-role tokens and cost; per-role totals in `/cost` views and usage events; add role to the 152.9 mismatch metric and the 154.3 metrics. Tests. Spec: SP-150 §150c.- [ ] **150.6** CLI: `/model --role <role> <model>` and `sprout config`
       support for roles. Tests. Spec: SP-150 §150d.
 - [ ] **150.7** Web UI settings: role models section, collapsed by
       default. Vitest. Spec: SP-150 §150d.

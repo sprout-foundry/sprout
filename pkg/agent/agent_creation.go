@@ -87,6 +87,11 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 		subagentDepth:       params.subagentDepth,
 		rootPersonaID:       params.rootPersonaID,
 		shellCwd:            &shellCwdTracker{},
+		// The primary (main-loop) agent's usage is attributed to the coder
+		// role (SP-150 §150c, item 150.5): the main conversation loop is
+		// the coder's. Subagents carry the role their model was resolved
+		// through instead (createSubagent).
+		role: configuration.RoleCoder,
 	}
 
 	// Set up output router

@@ -272,6 +272,7 @@ func runIsolatedSubagent(ctx context.Context, a *Agent, spec *subagentLaunchSpec
 		SystemPrompt: spec.systemPromptText,
 		WorkingDir:   ws.dir(),
 		Quiet:        quiet,
+		Role:         spec.role,
 	}, nil, 0)
 	if result == nil {
 		result = &SubagentResult{ID: taskID, Error: fmt.Errorf("subagent produced no result")}

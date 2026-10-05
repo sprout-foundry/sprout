@@ -74,6 +74,10 @@ type CostTracker interface {
 	SetTokenCostTotal(float64)
 	SetSubscriptionTokens(int)
 	SetFreeTokens(int)
+	// GetRoleUsage returns the per-role token/cost totals (SP-150 §150c,
+	// item 150.5), sorted by role. Nil/empty when no cost entry carried a
+	// role yet.
+	GetRoleUsage() []RoleUsage
 }
 
 // TokenCounter manages prompt and completion token counts.

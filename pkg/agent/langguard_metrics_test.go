@@ -11,11 +11,11 @@ import (
 // and that an empty model ID is bucketed under "unknown".
 func TestLanguageGuardMetricsRecordKeepsInvariant(t *testing.T) {
 	m := NewLanguageGuardMetrics()
-	m.Record("model-a", false)
-	m.Record("model-a", true)
-	m.Record("model-a", true)
-	m.Record("model-b", false)
-	m.Record("", true) // empty model ID -> "unknown"
+	m.Record("model-a", "", false)
+	m.Record("model-a", "", true)
+	m.Record("model-a", "", true)
+	m.Record("model-b", "", false)
+	m.Record("", "", true) // empty model ID -> "unknown"
 
 	snap := m.Snapshot()
 	byID := map[string]LanguageGuardModelStat{}
@@ -49,10 +49,10 @@ func TestLanguageGuardMetricsRate(t *testing.T) {
 		t.Errorf("Snapshot on empty = %d rows, want 0", len(got))
 	}
 
-	m.Record("model-a", true)
-	m.Record("model-a", false)
-	m.Record("model-b", true)
-	m.Record("model-b", true)
+	m.Record("model-a", "", true)
+	m.Record("model-a", "", false)
+	m.Record("model-b", "", true)
+	m.Record("model-b", "", true)
 
 	byID := map[string]LanguageGuardModelStat{}
 	for _, s := range m.Snapshot() {
@@ -75,9 +75,9 @@ func TestLanguageGuardMetricsRate(t *testing.T) {
 // affect the recorder).
 func TestLanguageGuardMetricsSnapshotIsSortedAndCopied(t *testing.T) {
 	m := NewLanguageGuardMetrics()
-	m.Record("zeta", false)
-	m.Record("alpha", false)
-	m.Record("mid", false)
+	m.Record("zeta", "", false)
+	m.Record("alpha", "", false)
+	m.Record("mid", "", false)
 
 	snap := m.Snapshot()
 	if len(snap) != 3 {
@@ -99,7 +99,7 @@ func TestLanguageGuardMetricsSnapshotIsSortedAndCopied(t *testing.T) {
 // safe no-op (callers can hold a nil without guarding).
 func TestLanguageGuardMetricsNilReceiverIsNoOp(t *testing.T) {
 	var m *LanguageGuardMetrics
-	m.Record("x", true) // must not panic
+	m.Record("x", "", true) // must not panic
 	if m.Snapshot() != nil {
 		t.Errorf("nil receiver Snapshot = non-nil, want nil")
 	}
@@ -122,7 +122,7 @@ func TestLanguageGuardMetricsConcurrentRecord(t *testing.T) {
 			defer wg.Done()
 			for i := 0; i < perGoroutine; i++ {
 				modelID := fmt.Sprintf("model-%d", g%5)
-				m.Record(modelID, i%10 == 0) // 10% mismatches
+				m.Record(modelID, "", i%10 == 0) // 10% mismatches
 			}
 		}(g)
 	}
@@ -161,7 +161,7 @@ func TestLanguageGuardMetricsGlobalSwap(t *testing.T) {
 	if mid == before {
 		t.Fatalf("swap did not install the test recorder")
 	}
-	mid.Record("test-model", true)
+	mid.Record("test-model", "", true)
 	if got := mid.OverallRate(); got != 1.0 {
 		t.Errorf("test recorder OverallRate = %v, want 1.0", got)
 	}

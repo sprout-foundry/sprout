@@ -50,7 +50,7 @@ func TestResolveSubagentProviderModel_UnknownPersonaResolvesCoderRole(t *testing
 		configuration.RoleCoder: {Provider: "openrouter", Model: "coder-role-model"},
 	})
 
-	provider, model, _, err := resolveSubagentProviderModel(agent, "no-such-persona-xyz", true, t.TempDir())
+	provider, model, _, _, err := resolveSubagentProviderModel(agent, "no-such-persona-xyz", true, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestResolveSubagentProviderModel_RoleEntryBeatsLegacyAlias(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	provider, model, _, err := resolveSubagentProviderModel(agent, "no-such-persona-xyz", true, t.TempDir())
+	provider, model, _, _, err := resolveSubagentProviderModel(agent, "no-such-persona-xyz", true, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestResolveSubagentProviderModel_LegacySubagentSettingsAliasCoderRole(t *te
 		t.Fatal(err)
 	}
 
-	provider, model, _, err := resolveSubagentProviderModel(agent, "coder", true, t.TempDir())
+	provider, model, _, _, err := resolveSubagentProviderModel(agent, "coder", true, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestResolveSubagentProviderModel_ReviewerRoleOverride(t *testing.T) {
 		configuration.RoleReviewer: {Provider: "openai", Model: "review-role-model"},
 	})
 
-	provider, model, _, err := resolveSubagentProviderModel(agent, "reviewer", true, t.TempDir())
+	provider, model, _, _, err := resolveSubagentProviderModel(agent, "reviewer", true, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +138,7 @@ func TestResolveSubagentProviderModel_ReviewerRoleOverrideBeatsParent(t *testing
 		configuration.RoleReviewer: {Provider: "openai", Model: "review-role-model"},
 	})
 
-	provider, model, _, err := resolveSubagentProviderModel(parent, "reviewer", true, t.TempDir())
+	provider, model, _, _, err := resolveSubagentProviderModel(parent, "reviewer", true, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}

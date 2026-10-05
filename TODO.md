@@ -52,7 +52,7 @@ protects.
       same precedence as the legacy getters (remove the test that pins the
       inversion). Test: existing configs with only legacy fields resolve the
       same models as before roles. Spec: SP-150 §150a.
-- [ ] **fix.6** Coalesced milestones keep their route: `mergeMilestones`
+- [x] **fix.6** Coalesced milestones keep their route: `mergeMilestones`
       (`pkg/webui/stream_coalesce.go`) drops `client_id`/`chat_id`/`user_id`,
       so every batch is filtered out; merge only same-route events and copy
       the route keys onto the batch. Spec: SP-151.

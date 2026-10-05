@@ -412,6 +412,14 @@ func (a *Agent) RotateSession() (string, error) {
 		a.changeTracker.SetSessionID(newID)
 	}
 
+	// The new run has a new run id (session id): the prior run's
+	// started/finished plan-scope state (SP-151 §151a) must not leak in —
+	// it would emit a "finished" milestone for a scope that merely looks
+	// terminal in the new run.
+	if a.scopeMilestones != nil {
+		a.scopeMilestones.Reset()
+	}
+
 	return newID, nil
 }
 

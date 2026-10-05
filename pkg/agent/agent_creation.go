@@ -84,6 +84,7 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 		security:            securityMgr,
 		mcpSub:              mcpMgr,
 		todoMgr:             tools.NewTodoManager(),
+		scopeMilestones:     newScopeMilestoneTracker(),
 		subagentDepth:       params.subagentDepth,
 		rootPersonaID:       params.rootPersonaID,
 		shellCwd:            &shellCwdTracker{},

@@ -256,7 +256,7 @@ the end, without checkboxes.
       revision and scope IDs in `events_types.go`; regenerate the
       `@sprout/events` TypeScript union (`packages/events`). Tests. Spec:
       SP-151 §151a, §151d.
-- [ ] **151.2** Emit milestone events as plan scope items start and finish
+- [x] **151.2** Emit milestone events as plan scope items start and finish
       (from 148.6 scope IDs), with files-touched count and elapsed time.
       Test with a fixture plan. Spec: SP-151 §151a.
 - [ ] **151.3** Emit `progress_verification` from SP-149 results (evidence

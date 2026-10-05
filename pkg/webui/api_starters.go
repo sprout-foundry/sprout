@@ -70,7 +70,7 @@ func (ws *ReactWebServer) handleAPIStartersList(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	list, err := starters.List()
+	list, err := starters.ListForUsers()
 	if err != nil {
 		// A malformed embedded tree is a build bug in this repository,
 		// not a client error: 500, not 400.

@@ -102,6 +102,37 @@ func List() ([]Starter, error) {
 	return out, nil
 }
 
+// testOnlyStarters are embedded trees that exist only to exercise the
+// starter mechanism in tests (and to pin the benchmark task catalogue, which
+// references the fixture by id). They stay fully addressable by id —
+// Instantiate, Version, Manifest, FileCount, and the complete List — but are
+// withheld from the user-facing choosers, because their commands (the
+// fixture's npm steps) cannot run in a real project (SP-153 §153b, item 153.9).
+var testOnlyStarters = map[string]bool{
+	"fixture": true,
+}
+
+// ListForUsers returns the embedded starters a user can actually start a new
+// project from: the full catalogue (List) minus the test-only trees named in
+// testOnlyStarters, still sorted by id. It is what `sprout new --starter`
+// (153.4) and GET /api/starters (153.6) display, so a test-only starter whose
+// commands cannot run never reaches a chooser. Addressing a starter by id
+// (Instantiate and friends) is unaffected, so tests and the benchmark keep
+// reaching the fixture directly.
+func ListForUsers() ([]Starter, error) {
+	all, err := List()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Starter, 0, len(all))
+	for _, s := range all {
+		if !testOnlyStarters[s.ID] {
+			out = append(out, s)
+		}
+	}
+	return out, nil
+}
+
 // Version returns the version of the embedded tree for starterID. It is
 // the "embedded version" side of the SP-153 §153d upgrade check: an
 // existing project whose manifest names an older version than this one

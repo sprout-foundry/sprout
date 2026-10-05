@@ -91,7 +91,7 @@ func TestHandleAPIStartersList(t *testing.T) {
 		}
 	})
 
-	t.Run("lists the embedded starters", func(t *testing.T) {
+	t.Run("lists the user-facing starters, withholding test-only ones", func(t *testing.T) {
 		ws := newStartersTestServer(t)
 		req := httptest.NewRequest(http.MethodGet, "/api/starters", nil)
 		rec := httptest.NewRecorder()
@@ -107,28 +107,15 @@ func TestHandleAPIStartersList(t *testing.T) {
 		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 			t.Fatalf("response must carry a starters array: %s (%v)", rec.Body.String(), err)
 		}
-		if len(body.Starters) == 0 {
-			t.Fatal("expected at least one embedded starter")
-		}
-
-		var fx *starterEntryJSON
+		// The test-only fixture is withheld from the chooser (fix.9): it is
+		// still addressable by id (Instantiate) and in the full catalogue
+		// (starters.List), but must never reach the user-facing list. There
+		// are no product starters yet, so the list is expected to be empty —
+		// the assertion is "fixture absent", not "at least one present".
 		for i := range body.Starters {
 			if body.Starters[i].ID == "fixture" {
-				fx = &body.Starters[i]
-				break
+				t.Fatalf("test-only fixture must be withheld from the user-facing list: %s", rec.Body.String())
 			}
-		}
-		if fx == nil {
-			t.Fatalf("fixture starter missing from the catalogue: %s", rec.Body.String())
-		}
-		if fx.Version != "0.1.0" {
-			t.Errorf("expected fixture version 0.1.0, got %q", fx.Version)
-		}
-		if fx.Files != 3 {
-			t.Errorf("expected 3 project-content files for the fixture tree, got %d", fx.Files)
-		}
-		if !fx.HasManifest {
-			t.Error("expected has_manifest=true for the fixture starter")
 		}
 	})
 }

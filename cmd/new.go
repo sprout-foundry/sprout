@@ -98,11 +98,13 @@ func runNewProject(starterID, dir string, out io.Writer) error {
 	return err
 }
 
-// printAvailableStarters writes the embedded starter catalogue (id and
+// printAvailableStarters writes the user-facing starter catalogue (id and
 // version, one per line, sorted by id) to out. It is the "here is what you
 // can pick" help shown on both the no-starter and unknown-starter paths.
+// Test-only trees (ListForUsers, e.g. the fixture) are withheld, since their
+// commands cannot run in a real project.
 func printAvailableStarters(out io.Writer) error {
-	list, err := starters.List()
+	list, err := starters.ListForUsers()
 	if err != nil {
 		return fmt.Errorf("list available starters: %w", err)
 	}
@@ -118,6 +120,6 @@ func printAvailableStarters(out io.Writer) error {
 }
 
 func init() {
-	newCmd.Flags().StringVar(&newStarterID, "starter", "", "Starter id to instantiate (e.g. 'fixture')")
+	newCmd.Flags().StringVar(&newStarterID, "starter", "", "Starter id to instantiate (run `sprout new` without it to list the available starters)")
 	rootCmd.AddCommand(newCmd)
 }

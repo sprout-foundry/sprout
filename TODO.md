@@ -77,8 +77,15 @@ protects.
       `handleAPIWorkspaceBrowse` containment convention. Pinned by
       `TestHandleAPIStartersInstantiate` "target outside daemon root returns
       403" + "daemon root itself is an allowed target".
-- [ ] **fix.9** Hide the test fixture starter from `sprout new` and the web
+- [x] **fix.9** Hide the test fixture starter from `sprout new` and the web
       UI chooser (its npm commands cannot run); keep it for tests only.
+      Fixed: `pkg/starters` gains `testOnlyStarters` (the fixture) and
+      `ListForUsers()` (full catalogue minus test-only trees); `sprout new`
+      (`cmd/new.go`) and `GET /api/starters` (`api_starters.go`) now list via
+      `ListForUsers()`, while `List`, `Instantiate`, `Version`, `Manifest` and
+      `FileCount` still address the fixture by id (tests + benchmark). Pinned
+      by `TestListForUsers`, the updated CLI/web-UI list tests, and the CLI
+      flag help no longer naming the hidden fixture.
 - [ ] **fix.10** Language guard in streaming mode: emit a replacement event
       with the regenerated text (CLI and web UI) instead of relying on the
       length heuristic; show the notice only for the final (no-tool-call)

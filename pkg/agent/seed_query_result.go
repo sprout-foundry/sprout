@@ -266,6 +266,16 @@ func (a *Agent) handleQueryResult(qc *queryRunContext, result string, err error)
 	// result.
 	result = a.attachVerificationReply(result)
 
+	// SP-151 §151a (151.3): emit the turn's verification + completion
+	// progress events from the SP-149 turn-end result (progress_verification
+	// when a result exists, then progress_complete). Placed after the
+	// verification reply attachment and before the commit/finalize/streaming
+	// early-returns below so both success outcomes emit them. The error and
+	// interrupt paths above never reach this point: a failed or interrupted
+	// run is not a completed run, so it emits no completion event (its
+	// consumers already get the error/interrupt events).
+	a.publishTurnProgressComplete()
+
 	// ---- Post-loop hooks (moved from old ConversationHandler.finalizeConversation) ----
 
 	// Commit tracked changes. Subagents are EXEMPT: their writes are

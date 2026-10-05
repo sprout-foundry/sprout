@@ -305,3 +305,20 @@ func pwdCommand() string {
 	}
 	return "pwd"
 }
+
+func TestRunCommandDoesNotExposeDaemonCredentials(t *testing.T) {
+	t.Setenv("SPROUT_AUTH_TOKEN", "daemon-secret")
+	t.Setenv("SPROUT_WORKSPACE_TXN_SECRET", "txn-secret")
+	t.Setenv("SPROUT_TXN_TEST_VISIBLE", "kept")
+
+	result, err := RunCommand(context.Background(), t.TempDir(), RunRequest{Command: "env"})
+	if err != nil {
+		t.Fatalf("RunCommand: %v", err)
+	}
+	if strings.Contains(result.Stdout, "daemon-secret") || strings.Contains(result.Stdout, "txn-secret") {
+		t.Errorf("escalated command saw daemon credentials:\n%s", result.Stdout)
+	}
+	if !strings.Contains(result.Stdout, "SPROUT_TXN_TEST_VISIBLE=kept") {
+		t.Errorf("ordinary environment must pass through; got:\n%s", result.Stdout)
+	}
+}

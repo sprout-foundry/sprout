@@ -1,5 +1,3 @@
-//go:build !js
-
 package tools
 
 // design_sync_execute.go — the execution half of the design-sync

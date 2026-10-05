@@ -325,6 +325,10 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 	opts.CompactionTriggerFraction = a.computeCompactionTriggerFraction()
 	opts.SubstitutionTargetFraction = 0.50
 
+	// Folded here, after every prompt rebuild and before the prompt is
+	// handed to the seed agent, so the mode's skills reach this turn.
+	a.autoActivateModeSkills()
+
 	if a.systemPrompt != "" {
 		opts.SystemPrompt = a.systemPrompt
 	}

@@ -2,8 +2,8 @@
 
 package webcontent
 
-// NewBrowserRenderer returns a no-op renderer for WASM builds where a headless
-// browser is not available. The returned renderer always returns an error.
+// NewBrowserRenderer returns the WASM renderer: workspace-file screenshots go
+// to the host page (see browser_page_js.go); everything else returns an error.
 func NewBrowserRenderer() BrowserRenderer {
-	return nop
+	return &pageRenderer{}
 }

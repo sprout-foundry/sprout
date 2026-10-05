@@ -123,13 +123,6 @@ export const syntheticEndpoints: CloudEndpoint[] = [
     syntheticResponse: { models: [] },
     description: 'Provider model listing (not available in browser mode)',
   },
-  {
-    path: '/api/upload/image',
-    methods: ['POST'],
-    category: 'synthetic',
-    syntheticResponse: { error: 'Image upload not available in browser mode' },
-    description: 'Image upload for vision (not available in browser mode)',
-  },
 
   {
     path: '/api/diagnostics',

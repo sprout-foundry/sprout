@@ -273,6 +273,23 @@ export async function readAsset(fetchFn: typeof fetch, path: string, readFn?: ty
 }
 
 /**
+ * Read a binary asset (image, font) as a data: URL, for inlining into a
+ * preview or render document. Empty string when the file is missing.
+ */
+export async function readAssetDataUrl(fetchFn: typeof fetch, path: string, readFn?: typeof fetch): Promise<string> {
+  const response = await (readFn ?? fetchFn)(fileUrl(path));
+  if (!response.ok) {
+    if (response.status === 404) return '';
+    throw new ReadAssetError(path, response.status);
+  }
+  const blob = await response.blob();
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
+  return `data:${blob.type || 'application/octet-stream'};base64,${btoa(binary)}`;
+}
+
+/**
  * Read and parse `target`'s SP-140-4d feedback file — the read half of the
  * detail pane's resolution flow (SP-140-4 item 4.8). Built over the same
  * `/api/file` read path as `readAsset` (zero new HTTP endpoints), so a

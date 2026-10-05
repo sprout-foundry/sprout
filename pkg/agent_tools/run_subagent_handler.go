@@ -50,8 +50,9 @@ func (h *runSubagentHandler) Definition() ToolDefinition {
 			"For MULTIPLE INDEPENDENT tasks, use run_parallel_subagents instead for faster completion.\n\n" +
 			"**REQUIRED**: You MUST specify a persona parameter. " +
 			"Personas are configured from JSON defaults plus user config " +
-			"(for example: general, coder, refactor, debugger, tester, reviewer, researcher, web_scraper).\n\n" +
+			"(for example: general, coder, designer, tester, reviewer, researcher, web_scraper).\n\n" +
 			"Persona selection guide: `coder` — new features, production code, algorithms; " +
+			"`designer` — design work in the workspace `design/` tree (design tokens, screens, flow sources, brand); " +
 			"`refactor` — behavior-preserving refactors, duplication removal; " +
 			"`tester` — unit tests, coverage; " +
 			"`reviewer` — diff review (security, correctness, quality); " +

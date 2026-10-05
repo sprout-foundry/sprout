@@ -34,10 +34,13 @@ import (
 // branching on the URL inside the goroutine, which keeps the control
 // flow linear and the log line accurate.
 type chatQueryOptions struct {
-	Provider           string
-	Model              string
-	WorkspaceRoot      string
-	SystemPrompt       string
+	Provider      string
+	Model         string
+	WorkspaceRoot string
+	SystemPrompt  string
+	// Mode is the client's workspace mode; it shapes the agent per request,
+	// not the chat (SP-147 §3).
+	Mode               string
 	AllowSlashCommands bool
 	// EchoQueryInAccept controls whether the 202 Accepted response body
 	// includes the submitted query text. /api/query historically echoes
@@ -312,6 +315,10 @@ func (ws *ReactWebServer) runChatQuery(
 			"The terminal is currently processing a query. Try again in a moment.")
 		return
 	}
+
+	// After the busy guard, so a running query's mode is never swapped
+	// under it.
+	clientAgent.SetWorkspaceMode(opts.Mode)
 
 	// Slash-command safety gate (SP-114 Phase 2). Validate BEFORE launching
 	// the goroutine so an unsafe command returns 400 synchronously rather

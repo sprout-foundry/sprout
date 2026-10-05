@@ -1,5 +1,3 @@
-//go:build !js
-
 package tools
 
 import (
@@ -239,4 +237,24 @@ func hasRenderableExtension(path string) bool {
 	default:
 		return false
 	}
+}
+
+// visionModeFrontend is the analysis mode used by the analyze_ui_screenshot tool.
+const visionModeFrontend = "frontend"
+
+// viewportDim extracts an integer viewport dimension from tool args, handling
+// both int (direct calls) and float64 (JSON deserialization) representations.
+// Falls back to def when the key is missing or non-positive.
+func viewportDim(args map[string]any, key string, def float64) float64 {
+	switch v := args[key].(type) {
+	case int:
+		if v > 0 {
+			return float64(v)
+		}
+	case float64:
+		if v > 0 {
+			return v
+		}
+	}
+	return def
 }

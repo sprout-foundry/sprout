@@ -278,6 +278,7 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 		Model         string `json:"model,omitempty"`
 		WorkspaceRoot string `json:"workspace_root,omitempty"`
 		SystemPrompt  string `json:"system_prompt,omitempty"`
+		Mode          string `json:"mode,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&query); err != nil {
@@ -304,6 +305,7 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 		Model:              query.Model,
 		WorkspaceRoot:      query.WorkspaceRoot,
 		SystemPrompt:       query.SystemPrompt,
+		Mode:               query.Mode,
 		AllowSlashCommands: true,
 		EchoQueryInAccept:  true,
 		LogTag:             "handleAPIQuery",

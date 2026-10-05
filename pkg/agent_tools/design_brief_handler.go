@@ -1,5 +1,3 @@
-//go:build !js
-
 package tools
 
 import (
@@ -57,22 +55,21 @@ func (h *designBriefHandler) Definition() ToolDefinition {
 		Description: "Read the design/ tree for ONE screen and return a structured, " +
 			"read-only brief to build it from (SP-140-5 §5g). Run it BEFORE a dev turn " +
 			"builds a screen — it is the 'brief whenever building a screen' step of the loop. " +
-			"screen_name is the wireframe stem (e.g. `login`); a path like " +
-			"`design/wireframes/login.svg` is accepted and reduced to its stem. " +
+			"screen_name is the screen stem (e.g. `login`); a path like " +
+			"`design/screens/login.html` is accepted and reduced to its stem. " +
 			"The brief combines, for that screen: " +
 			"purpose (the README Screens listing text), " +
-			"wireframe path (design/wireframes/<stem>.svg) and whether it exists, " +
+			"screen path (design/screens/<stem>.html) and whether it exists, " +
 			"flows IN and OUT with their triggers (every flow edge touching the screen, " +
 			"with the mermaid edge label as the trigger, the far endpoint, and the flow file), " +
-			"token paths to consume (the `{group.token}` references the wireframe carries, " +
+			"token paths to consume (the `{group.token}` references the screen carries, " +
 			"each flagged known/unknown against design/tokens/, plus the token groups " +
 			"available in the tree), " +
 			"open feedback annotations (the §4d feedback file for the screen with its " +
 			"unresolved count and, at full depth, the unresolved notes), and " +
 			"status (the README status marker: draft/review/ready). " +
 			"depth=`summary` (the default) returns the condensed brief — counts and headings; " +
-			"depth=`full` returns the detailed one (annotation notes, the delivered screen " +
-			"file path). " +
+			"depth=`full` returns the detailed one (annotation notes). " +
 			"IMPORTANT: this tool WRITES NO FILES. The output is advisory context for the " +
 			"implementing agent, returned as text plus a structured ScreenBrief in the " +
 			"ToolResult — it is a CONTRACT, NOT A GENERATOR; no component code is produced. " +
@@ -84,13 +81,13 @@ func (h *designBriefHandler) Definition() ToolDefinition {
 				Name:        "screen_name",
 				Type:        "string",
 				Required:    true,
-				Description: "The screen to brief: its wireframe stem (e.g. `login`). A design asset path (`design/wireframes/login.svg`) is accepted and reduced to the stem.",
+				Description: "The screen to brief: its stem (e.g. `login`). A design asset path (`design/screens/login.html`) is accepted and reduced to the stem.",
 			},
 			{
 				Name:        "depth",
 				Type:        "string",
 				Required:    false,
-				Description: "`summary` (default) returns the condensed brief (counts and headings); `full` returns the detailed brief (open annotation notes, the delivered screen file path).",
+				Description: "`summary` (default) returns the condensed brief (counts and headings); `full` returns the detailed brief (open annotation notes).",
 			},
 		},
 		Required: []string{"screen_name"},
@@ -190,13 +187,3 @@ func (h *designBriefHandler) Timeout() time.Duration { return 60 * time.Second }
 func (h *designBriefHandler) MaxResultSize() int     { return 0 }
 func (h *designBriefHandler) SafeForParallel() bool  { return true }
 func (h *designBriefHandler) Interactive() bool      { return false }
-
-// registerDesignBriefTools registers the design_brief tool. It is pure Go, but
-// SP-140 invariant 7 keeps only design_assets and design_validate on the WASM
-// roster, so this is registered from a build-tagged registrar (excluded from
-// WASM via design_brief_handler_js.go, which returns nil).
-func registerDesignBriefTools() []ToolHandler {
-	return []ToolHandler{
-		&designBriefHandler{},
-	}
-}

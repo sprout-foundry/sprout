@@ -48,7 +48,6 @@ vi.mock('../contexts/SproutAdapterContext', () => ({
   useSproutFetch: () => fetchMock,
 }));
 vi.mock('./PreviewPanel.css', () => ({}));
-vi.mock('./PreviewPane.css', () => ({}));
 
 /** Settle the hook's async state updates (one macrotask tick inside act). */
 const flush = async (): Promise<void> => {

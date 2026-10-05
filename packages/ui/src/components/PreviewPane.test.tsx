@@ -2,8 +2,6 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { PreviewPane } from './PreviewPane';
 
-vi.mock('./PreviewPane.css', () => ({}));
-
 describe('PreviewPane', () => {
   describe('states', () => {
     it('shows a spinner and "starting" message in the starting state', () => {

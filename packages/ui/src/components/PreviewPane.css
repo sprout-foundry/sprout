@@ -1,5 +1,5 @@
-/* PreviewPane component styles (SP-155 §155a). Token-driven per
-   docs/internal/design-system.md — no raw hex/rgba. */
+/* PreviewPane component styles (SP-155 §155a). Token-driven — CSS
+   custom properties only, no raw hex/rgba. */
 
 .preview-pane {
   display: flex;

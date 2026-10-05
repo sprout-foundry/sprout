@@ -157,6 +157,12 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 		// publishClientEventWithChat) are captured for WebSocket reattach replay.
 		ws.startRunBufferSubscriber()
 
+		// Record hosted-preview registrations (SP-155 §155a, TODO 155.5):
+		// the agent's register_preview_port tool publishes preview_port_registered
+		// on the shared bus; this subscriber keeps the active hosted preview on
+		// the server so /api/preview/status reports the platform URL.
+		ws.startHostedPreviewSubscriber()
+
 		// SP-108: Start wakeup poller for auto-resume on background completions.
 		go ws.startWakeupPoller(ctx, 2*time.Second)
 
@@ -235,6 +241,11 @@ func (ws *ReactWebServer) Shutdown() error {
 	// TODO 155.4): they are owned child processes that would otherwise
 	// outlive the daemon and hold the dev port.
 	ws.stopPreviewManagers()
+
+	// Forget the active hosted preview (SP-155 §155a, TODO 155.5): it is
+	// in-memory state derived from agent events and must not survive a
+	// process restart.
+	ws.clearHostedPreview()
 
 	// Stop the local LLM server if it was running. The server is a detached
 	// process that survives CLI sessions, but when the daemon shuts down

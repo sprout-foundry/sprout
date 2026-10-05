@@ -93,7 +93,15 @@ export type ServerEventType =
   | 'progress_milestone'
   | 'progress_question'
   | 'progress_verification'
-  | 'progress_complete';
+  | 'progress_complete'
+  // SP-155 §155a (item 155.5): the agent's register_preview_port tool
+  // publishes this on the shared event bus after a successful platform
+  // registration. In hosted workspaces the agent runs in-process in the
+  // webui server, which subscribes to it to record the hosted preview URL
+  // (the pane embeds it). It is an in-process signal, NOT forwarded to the
+  // browser over the WebSocket, so it is intentionally absent from the
+  // WS outbound registry (websocket_outbound_registry.go).
+  | 'preview_port_registered';
 
 /**
  * The envelope every event flows through. `data` shape varies per

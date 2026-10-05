@@ -68,6 +68,22 @@ func (ws *ReactWebServer) stopPreviewManagers() {
 	}
 }
 
+// hostedPreviewShortcut reports the active hosted preview (SP-155 §155a,
+// TODO 155.5) and tells the caller to stop, when one is registered. The
+// hosted URL is platform-managed — the agent registered it, and the
+// platform owns it — so the local dev-server actions (start/restart/stop)
+// must not touch it: they simply echo the hosted state back instead of
+// spawning, restarting, or stopping a dev server. Kept as a single
+// helper so all three actions share one documented interaction.
+func (ws *ReactWebServer) hostedPreviewShortcut(w http.ResponseWriter) bool {
+	st, ok := ws.hostedPreviewState()
+	if !ok {
+		return false
+	}
+	writeJSON(w, http.StatusOK, st)
+	return true
+}
+
 // previewDevDeclaration resolves the project's dev declaration for the
 // start/restart actions: the manifest's dev port with (0, "") when it
 // carries a usable dev command and port, or the HTTP code, error code and
@@ -94,9 +110,18 @@ func previewDevDeclaration(root string) (port, code int, errCode, msg string) {
 // server's lifecycle state for the current workspace root. The response
 // is always 200 — a state observation, never a caller fault: a project
 // without a dev server reports stopped, with the reason.
+//
+// A registered hosted preview takes precedence over the local manager
+// (SP-155 §155a, TODO 155.5): when the agent registered a platform
+// preview port, the pane embeds that platform URL, so we report it as
+// running/hosted rather than the local dev server's state.
 func (ws *ReactWebServer) handleAPIPreviewStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
+		return
+	}
+	if st, ok := ws.hostedPreviewState(); ok {
+		writeJSON(w, http.StatusOK, st)
 		return
 	}
 	m := ws.previewManager(ws.GetWorkspaceRoot())
@@ -113,6 +138,12 @@ func (ws *ReactWebServer) handleAPIPreviewStatus(w http.ResponseWriter, r *http.
 func (ws *ReactWebServer) handleAPIPreviewStart(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
+		return
+	}
+	// A registered hosted preview wins: a local start would spawn a dev
+	// server the pane ignores (it embeds the platform URL), so echo the
+	// hosted state and do not touch the local manager (SP-155 §155a).
+	if ws.hostedPreviewShortcut(w) {
 		return
 	}
 	root := ws.GetWorkspaceRoot()
@@ -159,6 +190,11 @@ func (ws *ReactWebServer) handleAPIPreviewRestart(w http.ResponseWriter, r *http
 		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
 	}
+	// A registered hosted preview is platform-managed: a restart has
+	// nothing local to cycle, so echo the hosted state (SP-155 §155a).
+	if ws.hostedPreviewShortcut(w) {
+		return
+	}
 	root := ws.GetWorkspaceRoot()
 	_, code, errCode, msg := previewDevDeclaration(root)
 	if code != 0 {
@@ -182,6 +218,11 @@ func (ws *ReactWebServer) handleAPIPreviewRestart(w http.ResponseWriter, r *http
 func (ws *ReactWebServer) handleAPIPreviewStop(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
+		return
+	}
+	// A registered hosted preview is platform-managed: Stop cannot stop
+	// it (we never started it), so echo the hosted state (SP-155 §155a).
+	if ws.hostedPreviewShortcut(w) {
 		return
 	}
 	m := ws.previewManager(ws.GetWorkspaceRoot())

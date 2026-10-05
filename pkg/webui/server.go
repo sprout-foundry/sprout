@@ -107,6 +107,15 @@ type ReactWebServer struct {
 	// (and dev server) rather than clobbering the running one.
 	previewManagers   map[string]*preview.Manager
 	previewManagersMu sync.Mutex
+
+	// hostedPreview is the active platform-registered preview (SP-155
+	// §155a, TODO 155.5): the URL the agent's register_preview_port call
+	// returned, recorded by the event-bus subscriber when it fires. While
+	// set, /api/preview/status reports it (running, hosted) in preference
+	// to any local dev server. nil means no hosted preview is registered.
+	// Guarded by hostedPreviewMu.
+	hostedPreview   *hostedPreviewInfo
+	hostedPreviewMu sync.RWMutex
 }
 
 // IsSharedMode reports whether the server is in "shared agent" mode —

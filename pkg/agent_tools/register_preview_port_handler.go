@@ -10,6 +10,7 @@ import (
 	"time"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // registerPreviewPortHandler implements ToolHandler for register_preview_port.
@@ -116,6 +117,21 @@ func (h *registerPreviewPortHandler) Execute(ctx context.Context, env ToolEnv, a
 		return ToolResult{
 			Output: fmt.Sprintf("Registered port %d but could not parse preview URL. The server is running.", port),
 		}, nil
+	}
+
+	// SP-155 §155a (item 155.5): let the webui server learn about the
+	// registered preview URL so its preview pane can embed it instead of
+	// only printing it. In hosted workspaces the agent runs in-process in
+	// the webui server and ToolEnv.EventBus is the shared bus, so a
+	// publish here reaches the server's subscriber. Best-effort: a nil bus
+	// (or any publish hiccup) never fails the tool — the model still gets
+	// the URL in the output below.
+	if env.EventBus != nil && result.PreviewURL != "" {
+		env.EventBus.Publish(events.EventTypePreviewPortRegistered, map[string]any{
+			"preview_url": result.PreviewURL,
+			"port":        port,
+			"label":       label,
+		})
 	}
 
 	return ToolResult{

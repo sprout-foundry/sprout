@@ -145,26 +145,16 @@ test.describe('Special Characters in Filenames', () => {
     fs.writeFileSync(punctFile, 'Punctuation filename content');
 
     await page.goto(vite.url, { waitUntil: 'networkidle' });
-    await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
-
+    // The sidebar's selected tab persists per instance, so the reload may
+    // come back in Files mode (no chat-shell). Either way, select Files and
+    // assert the tree itself — that is the thing under test.
     const filesTab = page.getByTestId(TESTIDS['sidebar-files-tab']);
-    const hasFilesTab = await filesTab.isVisible({ timeout: 5_000 }).catch(() => false);
+    await expect(filesTab).toBeVisible({ timeout: 30_000 });
+    await filesTab.click();
 
-    if (hasFilesTab) {
-      await filesTab.click();
-      await page.waitForTimeout(2000);
+    const fileItem = page.getByTestId(TESTIDS['file-tree-item']).filter({ hasText: '!@#$%^&()' }).first();
+    await expect(fileItem).toBeVisible({ timeout: 15_000 });
 
-      // Use the file-tree-item testid
-      const fileItem = page.getByTestId(TESTIDS['file-tree-item']).filter({ hasText: '!@#$%^&()' }).first();
-      const hasFileItem = await fileItem.isVisible({ timeout: 5_000 }).catch(() => false);
-
-      if (hasFileItem) {
-        await expect(fileItem).toBeVisible({ timeout: 5_000 });
-      }
-
-      await expect(page.getByTestId(TESTIDS['sidebar-container'])).toBeVisible({ timeout: 5_000 });
-    } else {
-      await expect(page.getByTestId(TESTIDS['sidebar-container'])).toBeVisible({ timeout: 10_000 });
-    }
+    await expect(page.getByTestId(TESTIDS['sidebar-container'])).toBeVisible({ timeout: 10_000 });
   });
 });

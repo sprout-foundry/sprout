@@ -19,6 +19,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	lspproxy "github.com/sprout-foundry/sprout/pkg/lsp/proxy"
+	"github.com/sprout-foundry/sprout/pkg/preview"
 	"github.com/sprout-foundry/sprout/pkg/security"
 )
 
@@ -99,6 +100,13 @@ type ReactWebServer struct {
 	socketPath                      string       // Unix domain socket path (when non-empty, listen on socket instead of TCP)
 	startOnce                       sync.Once    // Ensures background workers are started exactly once
 	serverCtx                       atomic.Value // context.Context — safe to read without ws.mutex
+
+	// previewManagers caches one preview.Manager (SP-155 §155a, TODO
+	// 155.4: the dev-server manager behind /api/preview/*) per project
+	// root, so a worktree switch to a different root gets its own manager
+	// (and dev server) rather than clobbering the running one.
+	previewManagers   map[string]*preview.Manager
+	previewManagersMu sync.Mutex
 }
 
 // IsSharedMode reports whether the server is in "shared agent" mode —

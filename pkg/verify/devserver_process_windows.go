@@ -12,19 +12,21 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/utils/shellexec"
 )
 
-// devProcess owns one launched dev-server process and the Job Object that
+// DevProcess owns one launched dev-server process and the Job Object that
 // holds it plus every descendant (the Windows analogue of a process group).
 // Killing only the shell would leave children holding the output pipes open,
-// and cmd.Wait would block until they exit on their own.
-type devProcess struct {
+// and cmd.Wait would block until they exit on their own. See
+// devserver_process_unix.go for the exported-type rationale (the SP-149
+// page checks and the SP-155 preview manager share this process type).
+type DevProcess struct {
 	cmd *exec.Cmd
 	job windows.Handle
 }
 
-// spawnDevProcess starts command through the platform shell in root, capturing
-// combined output to out, and assigns the started shell to a Job Object so
-// the whole tree can be terminated.
-func spawnDevProcess(root, command string, out *bytes.Buffer) (*devProcess, error) {
+// StartDevProcess starts command through the platform shell in root,
+// capturing combined output to out, and assigns the started shell to a Job
+// Object so the whole tree can be terminated.
+func StartDevProcess(root, command string, out *bytes.Buffer) (*DevProcess, error) {
 	cmd := shellexec.Command(command) //nolint:gosec // G204: the dev command is trusted starter-manifest configuration (SP-149 149b), by design
 	if root != "" {
 		cmd.Dir = root
@@ -34,7 +36,7 @@ func spawnDevProcess(root, command string, out *bytes.Buffer) (*devProcess, erro
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("start dev server %q: %w", command, err)
 	}
-	p := &devProcess{cmd: cmd}
+	p := &DevProcess{cmd: cmd}
 	job, err := windows.CreateJobObject(nil, nil)
 	if err != nil {
 		return p, nil
@@ -53,9 +55,9 @@ func spawnDevProcess(root, command string, out *bytes.Buffer) (*devProcess, erro
 	return p, nil
 }
 
-// stop terminates the Job Object (the whole process tree) and falls back to
+// Stop terminates the Job Object (the whole process tree) and falls back to
 // killing the shell.
-func (p *devProcess) stop() {
+func (p *DevProcess) Stop() {
 	if p == nil {
 		return
 	}
@@ -67,8 +69,8 @@ func (p *devProcess) stop() {
 	}
 }
 
-// wait reaps the process, guaranteeing the captured output is complete.
-func (p *devProcess) wait() error {
+// Wait reaps the process, guaranteeing the captured output is complete.
+func (p *DevProcess) Wait() error {
 	if p == nil || p.cmd == nil {
 		return nil
 	}

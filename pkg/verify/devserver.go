@@ -24,11 +24,11 @@ const devProbeClientTimeout = 500 * time.Millisecond
 // start it, wait for readiness on its port, capture its combined output, and
 // always stop it (even on failure or cancellation). It is the common
 // orchestrator; the process-spawning and -stopping halves are the
-// platform-specific devProcess (devserver_process_*.go).
+// platform-specific DevProcess (devserver_process_*.go).
 type devServer struct {
-	proc *devProcess
+	proc *DevProcess
 	out  *bytes.Buffer
-	// done is closed once the process has been reaped (cmd.Wait returned),
+	// done is closed once the process has been reaped (Wait returned),
 	// which also guarantees the captured output is complete.
 	done chan struct{}
 }
@@ -47,14 +47,14 @@ func startDevServer(ctx context.Context, root, devCommand string, port int, time
 		timeout = DefaultDevServerTimeout
 	}
 	ds := &devServer{out: &bytes.Buffer{}}
-	proc, err := spawnDevProcess(root, devCommand, ds.out)
+	proc, err := StartDevProcess(root, devCommand, ds.out)
 	if err != nil {
 		return ds, "start dev server: " + err.Error()
 	}
 	ds.proc = proc
 	ds.done = make(chan struct{})
 	go func() {
-		_ = proc.wait()
+		_ = proc.Wait()
 		close(ds.done)
 	}()
 
@@ -90,7 +90,7 @@ func stopDevServer(ds *devServer) {
 	if ds == nil || ds.proc == nil {
 		return
 	}
-	ds.proc.stop()
+	ds.proc.Stop()
 	if ds.done != nil {
 		<-ds.done
 	}

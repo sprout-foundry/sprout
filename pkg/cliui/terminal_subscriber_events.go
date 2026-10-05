@@ -305,6 +305,50 @@ func (s *TerminalSubscriberState) HandleAgentMessageEvent(data map[string]interf
 	footer.Refresh()
 }
 
+// HandleProgressEvent renders the deterministic one-line summary of a
+// SP-151 progress event in the scroll region (SP-151 §151c, item
+// 151.6): milestone, verification, and completion events.
+//
+// progress_question events are deliberately NOT rendered: the CLI
+// already shows the interactive ask_user prompt for the same decision
+// (the ask_user_request / security-prompt path), so a second "Needs a
+// decision" line would be redundant. The question template still exists
+// for the web UI and webhooks (SP-151 §151c / §151d) — it just isn't
+// printed in the terminal.
+func (s *TerminalSubscriberState) HandleProgressEvent(evtType string, data map[string]interface{}, indicator *console.ActivityIndicator, footer *console.StatusFooter) {
+	summary := ProgressEventSummary(evtType, data)
+	if summary == "" {
+		return
+	}
+	if evtType == events.EventTypeProgressQuestion {
+		return
+	}
+	// Progress lines are informational; a completed run is a success
+	// when verified and needs attention when it wasn't.
+	glyph := console.GlyphInfo
+	if evtType == events.EventTypeProgressComplete {
+		if verified, _ := data["verified"].(bool); verified {
+			glyph = console.GlyphSuccess
+		} else {
+			glyph = console.GlyphWarning
+		}
+	}
+	// Same row-invalidation pattern as HandleAgentMessageEvent: stop
+	// the spinner, flush buffered prose, then print through
+	// console.PrintExternal — which takes outputMu internally, so do
+	// NOT wrap in console.LockOutput. The explicit trailing newline
+	// terminates the line on the bare fmt.Print fallback path (the
+	// reader paths detect it and do not double it).
+	indicator.Stop()
+	s.thinkingActive = false
+	s.flushExternalWrite()
+	console.PrintExternal(glyph.Prefix() + summary + "\n")
+	// The notice invalidates the collapse-run row math the next
+	// ToolEnd would use.
+	s.run = nil
+	footer.Refresh()
+}
+
 // runEventLoop is the goroutine body for the terminal tool subscriber.
 // It selects on ctx cancellation and incoming events, dispatching each
 // event type to the corresponding handler method.
@@ -339,6 +383,11 @@ func (s *TerminalSubscriberState) runEventLoop(ctx context.Context, ch <-chan ev
 				s.HandleTodoUpdateEvent(data, indicator, footer)
 			case events.EventTypeAgentMessage:
 				s.HandleAgentMessageEvent(data, indicator, footer)
+			case events.EventTypeProgressMilestone,
+				events.EventTypeProgressVerification,
+				events.EventTypeProgressComplete,
+				events.EventTypeProgressQuestion:
+				s.HandleProgressEvent(evt.Type, data, indicator, footer)
 			case events.EventTypeQueryCompleted:
 				s.HandleQueryCompletedEvent(data, indicator)
 			}

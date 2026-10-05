@@ -291,7 +291,7 @@ the end, without checkboxes.
 - [x] **155.3** Preview pane component with starting / running / stopped /
       failed states, restart action, reload on file changes. Vitest.
       Spec: SP-155 §155a.
-- [ ] **155.4** Backend: start or detect the dev server from the starter
+- [x] **155.4** Backend: start or detect the dev server from the starter
       manifest's `dev` command and port (153.2) and expose its URL to the
       pane. Go tests. Spec: SP-155 §155a.
 - [ ] **155.5** Hosted: the pane embeds the URL from a registered preview

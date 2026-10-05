@@ -12,17 +12,21 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/agent"
 )
 
-// langGuardStat returns one model's language-guard stat from a snapshot
-// (the zero stat when the model has no recorded checks yet). The
-// snapshot is small (one entry per model ever judged, sorted by model
-// id), so a linear scan is the whole job.
+// langGuardStat returns one model's language-guard stat from a snapshot,
+// summed across that model's roles (the SP-150 §150c role dimension splits
+// a model's checks by role; the benchmark's per-model delta wants the total
+// for the model). It is the zero stat when the model has no recorded checks
+// yet. The snapshot is small (one entry per (model, role) ever judged,
+// sorted by model then role), so a linear scan is the whole job.
 func langGuardStat(snapshot []agent.LanguageGuardModelStat, modelID string) agent.LanguageGuardModelStat {
+	total := agent.LanguageGuardModelStat{ModelID: modelID}
 	for _, s := range snapshot {
 		if s.ModelID == modelID {
-			return s
+			total.Checks += s.Checks
+			total.Mismatches += s.Mismatches
 		}
 	}
-	return agent.LanguageGuardModelStat{ModelID: modelID}
+	return total
 }
 
 // workDir is the parent for the fresh copies: WorkDir where set,

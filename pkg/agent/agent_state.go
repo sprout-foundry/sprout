@@ -63,6 +63,24 @@ func (a *Agent) GetTokenCostTotal() float64 {
 	return a.state.GetTokenCostTotal()
 }
 
+// GetRole returns the SP-150 §150c role whose model selection this agent's
+// usage is attributed to (a configuration.Role* constant, "coder" for the
+// primary agent). Empty when the agent was built before role stamping
+// (callers bucket it under "unknown").
+func (a *Agent) GetRole() string {
+	return a.role
+}
+
+// GetRoleUsage returns the per-role token/cost totals (SP-150 §150c,
+// item 150.5) accumulated for this agent, sorted by role. Nil when no cost
+// entry carried a role yet.
+func (a *Agent) GetRoleUsage() []RoleUsage {
+	if a.state == nil {
+		return nil
+	}
+	return a.state.GetRoleUsage()
+}
+
 // GetTaskActions returns completed task actions
 func (a *Agent) GetTaskActions() []TaskAction {
 	mu := a.state.GetTaskActionsMutex()

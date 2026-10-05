@@ -84,13 +84,13 @@ type AgentFactory func(runDir string, spec ModelSpec) (*agent.Agent, error)
 // wall-time anchors: the repair data the turn-end hook stored on the
 // agent, the runner's turn count, the run's token and cost totals (the
 // agent's existing conversation cost tracking — the run's agent is
-// fresh, so the conversation total is the run's usage), and the run's
-// share of the process-wide language-guard metric (SP-152 §152e). The
-// spec's "per role via SP-150" is a future qualifier: the per-role split
-// lands with SP-150's usage ledger (150.5) and is not tracked here yet.
-// A setup-error run (Err set before the agent was built) leaves every
-// metric zero; a run whose agent was built but whose turn errored still
-// records its metrics (the turn was issued and may have consumed usage).
+// fresh, so the conversation total is the run's usage), the run's
+// per-role token/cost breakdown (SP-150 §150c, 150.5 — the agent's
+// per-role usage), and the run's share of the process-wide
+// language-guard metric (SP-152 §152e). A setup-error run (Err set before
+// the agent was built) leaves every metric zero; a run whose agent was
+// built but whose turn errored still records its metrics (the turn was
+// issued and may have consumed usage).
 type Run struct {
 	// TaskID is the benchmark task this run executed (Task.ID).
 	TaskID string
@@ -146,6 +146,10 @@ type Run struct {
 	// LangMismatches is how many of those judged messages were a
 	// reliable language mismatch (a delta).
 	LangMismatches int64
+	// RoleUsage is the run's per-role token/cost breakdown (SP-150 §150c,
+	// 150.5): the run's agent's per-role usage, captured from its metrics.
+	// Empty when the run errored before the agent's turn recorded usage.
+	RoleUsage []agent.RoleUsage
 }
 
 // Runner runs a benchmark task's headless runs (SP-154 §154b).
@@ -393,6 +397,10 @@ func (r *Runner) runOnce(task *Task, spec ModelSpec, runNumber int) Run {
 	run.Turns = 1
 	run.Tokens = ag.GetTotalTokens()
 	run.Cost = ag.GetTotalCost()
+	// Per-role token/cost breakdown (SP-150 §150c, 150.5): the run's
+	// agent's per-role usage (fresh agent → the conversation total is the
+	// run's usage, so the per-role split is the run's per-role usage).
+	run.RoleUsage = ag.GetRoleUsage()
 	if tv != nil {
 		run.RepairRounds = tv.Rounds
 		run.RepairAttempts = tv.Attempts

@@ -33,6 +33,7 @@ func (sp *sproutProvider) accumulateResponseCost(resp *core.ChatResponse) {
 		BillingType:      billingType,
 		Provider:         sp.agent.GetProvider(),
 		Model:            sp.agent.GetModel(),
+		Role:             sp.agent.GetRole(),
 		ChargedCost:      chargedCost,
 		TokenCost:        tokenCost,
 		PromptTokens:     resp.Usage.PromptTokens,

@@ -29,7 +29,7 @@ func resolveParallelTaskPersonas(ctx context.Context, a *Agent, tasks []Subagent
 		if explicit && a.GetConfig() != nil && a.GetConfig().GetSubagentType(persona) == nil {
 			return agenterrors.NewValidation(fmt.Sprintf("task %s: unknown or disabled persona %q", tasks[i].ID, tasks[i].Persona), nil)
 		}
-		provider, model, systemPrompt, err := resolveSubagentProviderModel(a, persona, explicit, workspaceRoot)
+		provider, model, role, systemPrompt, err := resolveSubagentProviderModel(a, persona, explicit, workspaceRoot)
 		if err != nil {
 			return agenterrors.Wrap(err, fmt.Sprintf("task %s", tasks[i].ID))
 		}
@@ -37,6 +37,7 @@ func resolveParallelTaskPersonas(ctx context.Context, a *Agent, tasks []Subagent
 		tasks[i].Provider = provider
 		tasks[i].Model = model
 		tasks[i].SystemPrompt = systemPrompt
+		tasks[i].Role = role
 
 		if isReviewerPersona(a, persona) {
 			if reviewContext == nil {

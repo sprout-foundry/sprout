@@ -47,7 +47,18 @@
           "Tokens": 250,
           "Cost": 0.0011,
           "LangChecks": 0,
-          "LangMismatches": 0
+          "LangMismatches": 0,
+          "RoleUsage": [
+            {
+              "role": "coder",
+              "prompt_tokens": 200,
+              "completion_tokens": 50,
+              "tokens": 250,
+              "charged_cost": 0.0011,
+              "token_cost": 0.0011,
+              "calls": 2
+            }
+          ]
         },
         {
           "TaskID": "add-badge",
@@ -76,7 +87,8 @@
           "Tokens": 310,
           "Cost": 0.0013,
           "LangChecks": 1,
-          "LangMismatches": 1
+          "LangMismatches": 1,
+          "RoleUsage": null
         },
         {
           "TaskID": "add-badge",
@@ -105,7 +117,8 @@
           "Tokens": 290,
           "Cost": 0.0012,
           "LangChecks": 0,
-          "LangMismatches": 0
+          "LangMismatches": 0,
+          "RoleUsage": null
         }
       ],
       "Passed": 3,
@@ -149,7 +162,8 @@
           "Tokens": 500,
           "Cost": 0.0031,
           "LangChecks": 0,
-          "LangMismatches": 0
+          "LangMismatches": 0,
+          "RoleUsage": null
         },
         {
           "TaskID": "dark-mode",
@@ -186,7 +200,8 @@
           "Tokens": 520,
           "Cost": 0.0033,
           "LangChecks": 0,
-          "LangMismatches": 0
+          "LangMismatches": 0,
+          "RoleUsage": null
         },
         {
           "TaskID": "dark-mode",
@@ -206,7 +221,8 @@
           "Tokens": 0,
           "Cost": 0,
           "LangChecks": 0,
-          "LangMismatches": 0
+          "LangMismatches": 0,
+          "RoleUsage": null
         }
       ],
       "Passed": 0,
@@ -245,7 +261,8 @@
           "Tokens": 340,
           "Cost": 0.0021,
           "LangChecks": 0,
-          "LangMismatches": 0
+          "LangMismatches": 0,
+          "RoleUsage": null
         },
         {
           "TaskID": "add-badge",
@@ -274,7 +291,8 @@
           "Tokens": 355,
           "Cost": 0.0022,
           "LangChecks": 0,
-          "LangMismatches": 0
+          "LangMismatches": 0,
+          "RoleUsage": null
         },
         {
           "TaskID": "add-badge",
@@ -305,7 +323,8 @@
           "Tokens": 420,
           "Cost": 0.0027,
           "LangChecks": 0,
-          "LangMismatches": 0
+          "LangMismatches": 0,
+          "RoleUsage": null
         }
       ],
       "Passed": 2,
@@ -344,7 +363,8 @@
           "Tokens": 480,
           "Cost": 0.0029,
           "LangChecks": 0,
-          "LangMismatches": 0
+          "LangMismatches": 0,
+          "RoleUsage": null
         },
         {
           "TaskID": "dark-mode",
@@ -378,7 +398,8 @@
           "Tokens": 495,
           "Cost": 0.003,
           "LangChecks": 0,
-          "LangMismatches": 0
+          "LangMismatches": 0,
+          "RoleUsage": null
         },
         {
           "TaskID": "dark-mode",
@@ -407,7 +428,8 @@
           "Tokens": 510,
           "Cost": 0.0032,
           "LangChecks": 0,
-          "LangMismatches": 0
+          "LangMismatches": 0,
+          "RoleUsage": null
         }
       ],
       "Passed": 0,

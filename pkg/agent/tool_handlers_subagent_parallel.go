@@ -339,6 +339,7 @@ func buildParallelSubagentTasks(tasks []SubagentTask) []SubagentTask {
 			Provider:     pt.Provider,
 			Persona:      pt.Persona,
 			SystemPrompt: pt.SystemPrompt,
+			Role:         pt.Role,
 		}
 	}
 	return result

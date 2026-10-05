@@ -16,14 +16,22 @@ import (
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
-// resolveSubagentProviderModel resolves the provider, model, and system
-// prompt text for the given persona. Applies persona-specific config,
-// global subagent config, and parent fallback in that priority order.
-// Loads the system prompt from file if needed.
-func resolveSubagentProviderModel(a *Agent, persona string, personaExplicitlyProvided bool, subagentWorkspaceRoot string) (provider, model, systemPromptText string, _ error) {
+// resolveSubagentProviderModel resolves the provider, model, role, and
+// system prompt text for the given persona. Applies persona-specific
+// config, global subagent config, and parent fallback in that priority
+// order. Loads the system prompt from file if needed.
+//
+// role is the SP-150 §150c role the subagent's usage is attributed to —
+// the role whose resolution drove the chosen model (SP-150 §150c, item
+// 150.5): the reviewer role when the reviewer-persona override fires
+// (the review settings alias the reviewer role), the coder role otherwise
+// (the default subagent resolution and any persona's explicit provider/
+// model are not a role, so they attribute to the coder role).
+func resolveSubagentProviderModel(a *Agent, persona string, personaExplicitlyProvided bool, subagentWorkspaceRoot string) (provider, model, role, systemPromptText string, _ error) {
 	var systemPromptPath string
 	personaProviderExplicit := false
 	personaModelExplicit := false
+	role = configuration.RoleCoder
 
 	if a.configManager != nil {
 		config := a.configManager.GetConfig()
@@ -34,7 +42,7 @@ func resolveSubagentProviderModel(a *Agent, persona string, personaExplicitlyPro
 			if subagentType != nil {
 				// Check LocalOnly flag - reject in cloud mode
 				if subagentType.LocalOnly && !a.IsLocalMode() {
-					return "", "", "", agenterrors.NewValidation(fmt.Sprintf("persona '%s' is local-only and cannot be used as a subagent in cloud mode", persona), nil)
+					return "", "", "", "", agenterrors.NewValidation(fmt.Sprintf("persona '%s' is local-only and cannot be used as a subagent in cloud mode", persona), nil)
 				}
 				// Spawnability check: a Delegatable=false target may only be
 				// spawned when the active persona explicitly lists it in
@@ -46,12 +54,12 @@ func resolveSubagentProviderModel(a *Agent, persona string, personaExplicitlyPro
 				// orchestrator-can't-spawn-coordinator) are needed: the
 				// missing entries express the policy directly.
 				if !subagentType.Delegatable && !a.canSpawnNonDelegatable(persona) {
-					return "", "", "", agenterrors.NewValidation(fmt.Sprintf("persona '%s' is not spawnable from %q (delegatable=false and not listed in spawner's can_spawn_non_delegatable)", persona, a.GetActivePersona()), nil)
+					return "", "", "", "", agenterrors.NewValidation(fmt.Sprintf("persona '%s' is not spawnable from %q (delegatable=false and not listed in spawner's can_spawn_non_delegatable)", persona, a.GetActivePersona()), nil)
 				}
 				// No persona can spawn itself — orthogonal to spawn_policy.
 				currentPersona := a.GetActivePersona()
 				if currentPersona != "" && currentPersona == persona {
-					return "", "", "", agenterrors.NewValidation(fmt.Sprintf("persona '%s' cannot spawn itself (prevents self-recursion)", persona), nil)
+					return "", "", "", "", agenterrors.NewValidation(fmt.Sprintf("persona '%s' cannot spawn itself (prevents self-recursion)", persona), nil)
 				}
 				provider = config.GetSubagentTypeProvider(persona)
 				model = config.GetSubagentTypeModel(persona)
@@ -127,6 +135,7 @@ func resolveSubagentProviderModel(a *Agent, persona string, personaExplicitlyPro
 			if !personaModelExplicit {
 				model = reviewModel
 			}
+			role = configuration.RoleReviewer
 			a.Logger().Debug("Using review provider/model for reviewer persona: provider=%s model=%s\n", provider, model)
 		}
 
@@ -173,7 +182,7 @@ func resolveSubagentProviderModel(a *Agent, persona string, personaExplicitlyPro
 		}
 	}
 
-	return provider, model, systemPromptText, nil
+	return provider, model, role, systemPromptText, nil
 }
 
 // ---------------------------------------------------------------------------

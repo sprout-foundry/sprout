@@ -646,6 +646,106 @@ func TestRunner_TokensAndCostAreTheConversationTotals(t *testing.T) {
 	assertWallTime(t, run)
 }
 
+// TestRunner_RunCarriesRoleUsage pins the run's per-role token/cost
+// breakdown (SP-150 §150c, 150.5 / SP-154 §154b, 154.3): the Run record
+// carries the run's agent's per-role usage, so a benchmark can attribute
+// spend to the model role each call was made under. A scripted passing
+// turn is consumed entirely by the primary agent (the coder role), so the
+// run's RoleUsage is the coder's conversation split — the same scripted
+// totals the tokens/cost test pins (100 for the tool call + 200 for the
+// answer = 300, 230 prompt / 70 completion) — and the assertion is
+// cross-checked against the built agent's own per-role accessor.
+func TestRunner_RunCarriesRoleUsage(t *testing.T) {
+	shAvailable(t)
+	mgr, cleanup := configuration.NewTestManager(t)
+	t.Cleanup(cleanup)
+
+	var (
+		built  *agent.Agent
+		client *agent.ScriptedClient
+	)
+	factory := func(runDir string, spec ModelSpec) (*agent.Agent, error) {
+		args := fmt.Sprintf(`{"path":%q,"content":"function bench() { return 1; }"}`,
+			filepath.Join(runDir, "src", "bench.js"))
+		toolResp := agent.NewToolCallResponse("write_file", args)
+		toolResp.Usage = agent.ScriptedTokenUsage{PromptTokens: 80, CompletionTokens: 20, TotalTokens: 100}
+		answerResp := agent.NewStopResponse("Done!")
+		answerResp.Usage = agent.ScriptedTokenUsage{PromptTokens: 150, CompletionTokens: 50, TotalTokens: 200}
+		client = agent.NewScriptedClient(toolResp, answerResp)
+		if err := mgr.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+			cfg.ContextMode = configuration.ContextModeFull
+			cfg.SkipPrompt = true
+			cfg.Verification = &configuration.VerificationConfig{Enabled: true, RepairAttempts: 1}
+			return nil
+		}); err != nil {
+			return nil, fmt.Errorf("harness: configure run config: %w", err)
+		}
+		ag, err := agent.NewAgentWithClient(client, api.TestClientType, mgr)
+		if err != nil {
+			return nil, fmt.Errorf("harness: build scripted agent: %w", err)
+		}
+		ag.SetMaxIterations(10)
+		ag.SetWorkspaceRoot(runDir)
+		built = ag
+		return ag, nil
+	}
+
+	runner := &Runner{
+		ConfigManager: mgr,
+		AgentFactory:  factory,
+		ShapeCopy:     shapeManifest("echo fixture-bench-ok"),
+		RunsPerTask:   1,
+	}
+
+	runs, err := runner.RunTask(context.Background(), benchTask(), ModelSpec{Model: "bench-model"})
+	if err != nil {
+		t.Fatalf("RunTask: %v", err)
+	}
+	if len(runs) != 1 {
+		t.Fatalf("runs = %d, want 1", len(runs))
+	}
+	run := runs[0]
+	if !run.Passed {
+		t.Fatalf("Passed = false, want true (the build command passes): %+v", run)
+	}
+
+	// The run's per-role usage mirrors the built agent's accessor (the
+	// wiring), and since the whole turn ran under the primary agent's
+	// role it is a single entry for that role.
+	if got := run.RoleUsage; len(got) == 0 {
+		t.Fatalf("Run.RoleUsage is empty, want the run agent's per-role usage")
+	}
+	if len(built.GetRoleUsage()) == 0 {
+		t.Fatalf("agent GetRoleUsage() is empty, want the per-role usage")
+	}
+	var coder *agent.RoleUsage
+	for i, ru := range run.RoleUsage {
+		if ru.Role == run.Model || ru.Role == built.GetRole() {
+			coder = &run.RoleUsage[i]
+			break
+		}
+	}
+	if coder == nil {
+		// The primary agent's role is the coder; fall back to the sole
+		// entry (a single-role scripted run has exactly one).
+		if len(run.RoleUsage) == 1 {
+			coder = &run.RoleUsage[0]
+		} else {
+			t.Fatalf("Run.RoleUsage = %+v, want an entry for the primary role %q", run.RoleUsage, built.GetRole())
+		}
+	}
+	// The coder's split is the scripted conversation total: 100 (tool
+	// call) + 200 (answer) = 300 tokens, 230 prompt / 70 completion.
+	if coder.PromptTokens != 230 || coder.CompletionTokens != 70 || coder.Tokens != 300 {
+		t.Errorf("%s role split = %+v, want 230 prompt / 70 completion / 300 total (the scripted sum)", coder.Role, coder)
+	}
+	// Cross-check the wiring against the built agent's accessor.
+	if len(run.RoleUsage) != len(built.GetRoleUsage()) {
+		t.Errorf("Run.RoleUsage has %d entries, agent has %d, want the same per-role split", len(run.RoleUsage), len(built.GetRoleUsage()))
+	}
+	assertWallTime(t, run)
+}
+
 // TestRunner_LanguageGuardMismatchCounted pins the run's share of the
 // process-wide language-guard metric (SP-152 §152e, recorded by the
 // guard's existing Record call site — 154.3 reads the delta, it does

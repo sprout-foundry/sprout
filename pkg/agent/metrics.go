@@ -111,6 +111,7 @@ func (a *Agent) TrackMetricsFromResponse(promptTokens, completionTokens, totalTo
 		BillingType:      billingType,
 		Provider:         a.GetProvider(),
 		Model:            a.GetModel(),
+		Role:             a.GetRole(),
 		ChargedCost:      chargedCost,
 		TokenCost:        tokenCost,
 		PromptTokens:     promptTokens,

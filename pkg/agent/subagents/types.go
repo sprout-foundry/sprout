@@ -162,6 +162,12 @@ type SubagentOptions struct {
 	WorkingDir             string        // optional: override workspace root (must be within $HOME)
 	MaxConcurrentSubagents int           // max parallel subagents (0 = unlimited, default unlimited)
 	FleetTokenBudget       int           // shared token budget across all parallel subagents (0 = unlimited)
+	// Role is the SP-150 §150c role the subagent's usage is attributed to
+	// (the role its model was resolved through; a configuration.Role*
+	// constant). Set by the spawn handler from the same resolution that
+	// picked the provider/model; empty → createSubagent attributes the
+	// subagent to the coder role (the default subagent resolution).
+	Role string
 	// Quiet suppresses streaming the subagent's output to the terminal. Used
 	// for background runs, whose output would otherwise interleave with the
 	// primary agent's. Activity events are still published.
@@ -265,6 +271,11 @@ type SubagentTask struct {
 	// SystemPrompt is the resolved persona system prompt; empty falls back to
 	// SubagentOptions.SystemPrompt.
 	SystemPrompt string
+	// Role is the SP-150 §150c role this task's subagent usage is
+	// attributed to (the role its model was resolved through). Empty → the
+	// coder role (createSubagent's fallback). Set by the caller that
+	// resolved the model (e.g. the reviewer path sets "reviewer").
+	Role string
 }
 
 // SubagentMetrics tracks operational metrics for the subagent runner.

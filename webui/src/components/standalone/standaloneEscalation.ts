@@ -22,6 +22,7 @@ import { setActiveRepoURL } from '../../services/activeRepo';
 import { installEscalationBridge, type ConsentDecision } from '../../services/agentEscalation';
 import { configureBrowserGit } from '../../services/browserGit';
 import { trackFileWrite } from '../../services/cloudWasmHandlers';
+import { isFromTrustedParent, postTargetOrigin } from './standaloneOrigin';
 import type { WasmShell } from '../../services/wasmShell';
 
 /** Consent asks the host and time out rather than hanging the agent loop. */
@@ -96,15 +97,13 @@ export function bootStandaloneEscalation(shell: WasmShell): StandaloneEscalation
         };
         const timer = window.setTimeout(() => done('deny'), CONSENT_TIMEOUT_MS);
         const onMessage = (ev: MessageEvent) => {
+          if (!isFromTrustedParent(ev)) return;
           const data = ev.data;
           if (!data || data.source !== 'sprout-host' || data.type !== 'confirmResult') return;
           done(data.decision === 'always' ? 'always' : data.decision === 'once' ? 'once' : 'deny');
         };
         window.addEventListener('message', onMessage);
-        window.parent?.postMessage(
-          { source: 'sprout-editor', type: 'confirm', command },
-          window.location.origin === 'null' ? '*' : window.location.origin,
-        );
+        window.parent?.postMessage({ source: 'sprout-editor', type: 'confirm', command }, postTargetOrigin());
       }),
   });
 

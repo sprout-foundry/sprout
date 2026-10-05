@@ -80,18 +80,23 @@ func mergeStreamChunks(a, b events.UIEvent) events.UIEvent {
 }
 
 // coalesceProgressMilestones collapses runs of ADJACENT progress_milestone
-// events into a single batched event whose Data is
+// events that share the same route (client_id/chat_id/user_id) into a single
+// batched event whose Data is
 // {"run_id": <first milestone's run_id>, "milestones": [ <m1 payload>, <m2
-// payload>, ... ]} so consumers of a long run read progress at a human rate
-// (SP-151 §151b). A single (non-adjacent) milestone keeps its flat payload
-// with NO "milestones" key.
+// payload>, ... ], "client_id"/"chat_id"/"user_id": <route keys>} so consumers
+// of a long run read progress at a human rate. A single
+// (non-adjacent) milestone keeps its flat payload with NO "milestones" key.
 //
-// question, verification, completion and every other event type are NEVER
-// coalesced: they pass through untouched and in order, and any one of them
-// breaks a milestone run. Like coalesceStreamChunks, a batched event always
-// gets a FRESH Data map and FRESH per-milestone payload maps — the input
-// events' maps are shared with other subscribers and the replay ring, so they
-// must never be mutated in place.
+// Only milestones on the SAME route are merged: two adjacent milestones with
+// different client_id/chat_id/user_id each stay separate, because merging
+// across routes would mis-deliver the batch. question, verification,
+// completion and every other event type are NEVER coalesced: they pass through
+// untouched and in order, and any one of them breaks a milestone run. Like
+// coalesceStreamChunks, a batched event always gets a FRESH Data map and FRESH
+// per-milestone payload maps — the input events' maps are shared with other
+// subscribers and the replay ring, so they must never be mutated in place. The
+// route keys are copied onto the batch so it still reaches its destination
+// through the per-connection forwarder, which filters on them.
 func coalesceProgressMilestones(in []events.UIEvent) []events.UIEvent {
 	if len(in) < 2 {
 		return in
@@ -100,7 +105,7 @@ func coalesceProgressMilestones(in []events.UIEvent) []events.UIEvent {
 	for _, ev := range in {
 		if ev.Type == events.EventTypeProgressMilestone && len(out) > 0 {
 			last := out[len(out)-1]
-			if last.Type == events.EventTypeProgressMilestone {
+			if last.Type == events.EventTypeProgressMilestone && sameMilestoneRoute(last, ev) {
 				out[len(out)-1] = mergeMilestones(last, ev)
 				continue
 			}
@@ -110,12 +115,34 @@ func coalesceProgressMilestones(in []events.UIEvent) []events.UIEvent {
 	return out
 }
 
+// milestoneRouteKeys are the routing keys a progress_milestone event carries so
+// the websocket forwarder can filter it per connection. They are the same keys
+// sameStreamRoute compares, plus user_id.
+var milestoneRouteKeys = []string{"client_id", "chat_id", "user_id"}
+
+// sameMilestoneRoute reports whether two milestones can be merged: they must
+// share every route key (client_id/chat_id/user_id), with an empty value on one
+// side matching an empty value on the other. Merging across routes would
+// mis-deliver the batched event.
+func sameMilestoneRoute(a, b events.UIEvent) bool {
+	for _, key := range milestoneRouteKeys {
+		if streamField(a, key) != streamField(b, key) {
+			return false
+		}
+	}
+	return true
+}
+
 // mergeMilestones returns a new batched milestone event combining last and
 // cur. If last is already a batch, cur's payload is appended to a FRESH copy
 // of its "milestones" slice; otherwise the batch starts as [last, cur]. The
 // batch keeps last's identity (ID/type) but takes the later (cur) timestamp,
-// mirroring mergeStreamChunks. Fresh maps throughout — the inputs' maps are
-// never mutated.
+// mirroring mergeStreamChunks. The route keys (client_id/chat_id/user_id) are
+// copied onto the batch Data from last — the same-route gate guarantees every
+// milestone in the run shares them, so reading them from last is correct in
+// both the fresh-batch and extend-existing-batch cases. Only keys that are
+// present and non-empty are copied, matching how flat payloads carry them.
+// Fresh maps throughout — the inputs' maps are never mutated.
 func mergeMilestones(last, cur events.UIEvent) events.UIEvent {
 	milestones := make([]interface{}, 0, 3)
 	if existing, ok := milestoneSlice(last.Data); ok {
@@ -135,6 +162,11 @@ func mergeMilestones(last, cur events.UIEvent) events.UIEvent {
 	if m, ok := last.Data.(map[string]interface{}); ok {
 		if rid, ok := m["run_id"].(string); ok {
 			data["run_id"] = rid
+		}
+		for _, key := range milestoneRouteKeys {
+			if v, ok := m[key].(string); ok && v != "" {
+				data[key] = v
+			}
 		}
 	}
 	batch.Data = data

@@ -71,6 +71,23 @@ func milestone(scope string) events.UIEvent {
 	}
 }
 
+// milestoneRouted returns a flat progress_milestone event carrying the route
+// keys a real payload has (merged in by the event metadata), which the
+// websocket forwarder uses to filter per connection.
+func milestoneRouted(scope, clientID, chatID, userID string) events.UIEvent {
+	data := map[string]interface{}{
+		"run_id":        "run-1",
+		"plan_revision": 3,
+		"scope_id":      scope,
+		"phase":         "finished",
+		"elapsed_ms":    42000,
+		"client_id":     clientID,
+		"chat_id":       chatID,
+		"user_id":       userID,
+	}
+	return events.UIEvent{Type: events.EventTypeProgressMilestone, Data: data}
+}
+
 // progressEvent returns a non-milestone progress event of type typ carrying a
 // marker, used to verify that question/verification/complete are never
 // coalesced and break milestone runs.
@@ -314,5 +331,131 @@ func TestCoalesceProgressMilestones_FreshMaps(t *testing.T) {
 	}
 	if got := ms[0]["scope_id"]; got != "a" {
 		t.Errorf("batch milestone[0] was mutated by input mutation: scope_id = %v", got)
+	}
+}
+
+// TestCoalesceProgressMilestones_BatchCarriesRouteKeys verifies that a
+// coalesced batch keeps the route keys of its first milestone, so the
+// per-connection forwarder (which reads client_id/chat_id/user_id) still
+// delivers it.
+func TestCoalesceProgressMilestones_BatchCarriesRouteKeys(t *testing.T) {
+	in := []events.UIEvent{
+		milestoneRouted("a", "client-1", "chat-1", "user-1"),
+		milestoneRouted("b", "client-1", "chat-1", "user-1"),
+		milestoneRouted("c", "client-1", "chat-1", "user-1"),
+	}
+	out := coalesceProgressMilestones(in)
+	if len(out) != 1 {
+		t.Fatalf("expected 1 batched event, got %d", len(out))
+	}
+	data, _ := out[0].Data.(map[string]interface{})
+	for key, want := range map[string]string{
+		"client_id": "client-1",
+		"chat_id":   "chat-1",
+		"user_id":   "user-1",
+		"run_id":    "run-1",
+	} {
+		if got := data[key]; got != want {
+			t.Errorf("batch %s = %v, want %v", key, got, want)
+		}
+	}
+	if ids := scopeIDs(t, out[0]); len(ids) != 3 || ids[0] != "a" || ids[1] != "b" || ids[2] != "c" {
+		t.Errorf("milestones = %v, want [a b c]", ids)
+	}
+}
+
+// TestCoalesceProgressMilestones_DifferentRoutesNotMerged verifies that
+// adjacent milestones with different route keys are NOT merged.
+func TestCoalesceProgressMilestones_DifferentRoutesNotMerged(t *testing.T) {
+	cases := []struct {
+		name string
+		in   []events.UIEvent
+	}{
+		{"different client_id", []events.UIEvent{
+			milestoneRouted("a", "client-1", "chat-1", "user-1"),
+			milestoneRouted("b", "client-2", "chat-1", "user-1"),
+		}},
+		{"different chat_id", []events.UIEvent{
+			milestoneRouted("a", "client-1", "chat-1", "user-1"),
+			milestoneRouted("b", "client-1", "chat-2", "user-1"),
+		}},
+		{"different user_id", []events.UIEvent{
+			milestoneRouted("a", "client-1", "chat-1", "user-1"),
+			milestoneRouted("b", "client-1", "chat-1", "user-2"),
+		}},
+		{"empty matches empty", []events.UIEvent{
+			milestoneRouted("a", "", "", ""),
+			milestoneRouted("b", "", "", ""),
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out := coalesceProgressMilestones(tc.in)
+			if tc.name == "empty matches empty" {
+				if len(out) != 1 {
+					t.Fatalf("expected 1 batched event (empty routes match), got %d", len(out))
+				}
+				if ids := scopeIDs(t, out[0]); len(ids) != 2 {
+					t.Errorf("milestones = %v, want [a b]", ids)
+				}
+				// Absent route keys stay absent on the batch.
+				data, _ := out[0].Data.(map[string]interface{})
+				if _, present := data["client_id"]; present {
+					t.Errorf("batch gained a client_id key it should not have: %v", data)
+				}
+			} else {
+				if len(out) != 2 {
+					t.Fatalf("expected 2 separate events, got %d", len(out))
+				}
+				if isMilestoneBatch(out[0].Data) || isMilestoneBatch(out[1].Data) {
+					t.Errorf("events with different routes must not merge into a batch")
+				}
+				// Each stays flat with its own route keys intact.
+				data0, _ := out[0].Data.(map[string]interface{})
+				data1, _ := out[1].Data.(map[string]interface{})
+				if data0["client_id"] != tc.in[0].Data.(map[string]interface{})["client_id"] {
+					t.Errorf("out[0] client_id = %v, want unchanged", data0["client_id"])
+				}
+				if data1["client_id"] != tc.in[1].Data.(map[string]interface{})["client_id"] {
+					t.Errorf("out[1] client_id = %v, want unchanged", data1["client_id"])
+				}
+			}
+		})
+	}
+}
+
+// TestCoalesceProgressMilestones_BatchSurvivesForwarder verifies that a
+// coalesced batch now carries its route keys, so it is no longer dropped by
+// shouldForwardEventToConnection (which falls through to the global-event
+// filter when a batch has no client_id/chat_id).
+func TestCoalesceProgressMilestones_BatchSurvivesForwarder(t *testing.T) {
+	ws := &ReactWebServer{}
+	// Post-fix: a coalesced batch carries the route keys and passes the
+	// per-connection forwarder for the matching connection.
+	batch := coalesceProgressMilestones([]events.UIEvent{
+		milestoneRouted("a", "client-1", "chat-1", "user-1"),
+		milestoneRouted("b", "client-1", "chat-1", "user-1"),
+	})[0]
+	connInfo := &ConnectionInfo{
+		ClientID: "client-1",
+		ChatID:   "chat-1",
+		UserID:   "user-1",
+	}
+	if !ws.shouldForwardEventToConnection(batch, connInfo) {
+		t.Error("coalesced batch with route keys should be forwarded to matching connection")
+	}
+
+	// Contrast with the pre-fix behavior: a batch WITHOUT route keys is
+	// dropped because progress_milestone is not a known global event type
+	// and the connection has no user_id fallback.
+	routelessBatch := events.UIEvent{
+		Type: events.EventTypeProgressMilestone,
+		Data: map[string]interface{}{
+			"run_id":     "run-1",
+			"milestones": []interface{}{},
+		},
+	}
+	if ws.shouldForwardEventToConnection(routelessBatch, connInfo) {
+		t.Error("route-less batch must still be dropped (no client_id/chat_id, not a global type)")
 	}
 }

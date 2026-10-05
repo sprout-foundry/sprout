@@ -26,6 +26,7 @@ func (ws *ReactWebServer) setupRoutes(ctx context.Context) *http.ServeMux {
 	ws.registerFileRoutes(mux)
 	ws.registerDesignRoutes(mux)
 	ws.registerStarterRoutes(mux)
+	ws.registerPreviewRoutes(mux)
 	ws.registerSettingsRoutes(mux)
 	ws.registerWorkspaceRoutes(mux)
 	ws.registerSyncRoutes(mux)

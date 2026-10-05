@@ -7,19 +7,19 @@ import (
 	"errors"
 )
 
-// devProcess is a no-op for WASM builds: the browser-side plane never launches
-// a dev-server process, so a page check that needs a real server cannot run
-// under WASM (it is reported as "the dev server did not start"). The type
+// DevProcess is a no-op for WASM builds: the browser-side plane never launches
+// a dev-server process, so a check or preview that needs a real server cannot
+// run under WASM (it is reported as "the dev server did not start"). The type
 // exists with the same shape as the platform files so the package compiles
 // for js/wasm.
-type devProcess struct{}
+type DevProcess struct{}
 
-// spawnDevProcess reports that dev-server process support is unavailable in
+// StartDevProcess reports that dev-server process support is unavailable in
 // WASM builds (the browser cannot launch a host process).
-func spawnDevProcess(_ string, _ string, _ *bytes.Buffer) (*devProcess, error) {
+func StartDevProcess(_ string, _ string, _ *bytes.Buffer) (*DevProcess, error) {
 	return nil, errors.New("dev server process support is unavailable in WASM builds")
 }
 
-func (p *devProcess) stop() {}
+func (p *DevProcess) Stop() {}
 
-func (p *devProcess) wait() error { return nil }
+func (p *DevProcess) Wait() error { return nil }

@@ -162,6 +162,16 @@ const TESTIDS = {
   // Editor footer whitespace mode
   "settings-whitespace-mode": "settings-whitespace-mode",
 
+  // Role models (SP-150 §150d, RoleModelsSection.tsx). Row/input/save testids
+  // are generated per role: `role-model-{row,input,save}-${role}` and
+  // `role-provider-input-${role}` (BUILTIN_ROLES: planner|coder|summarizer|
+  // reviewer|commit); `coder` is the representative registered value.
+  "role-models-section": "role-models-section",
+  "role-model-row-coder": "role-model-row-coder", // pattern role-model-row-${role}
+  "role-model-input-coder": "role-model-input-coder", // pattern role-model-input-${role}
+  "role-provider-input-coder": "role-provider-input-coder", // pattern role-provider-input-${role}
+  "role-model-save-coder": "role-model-save-coder", // pattern role-model-save-${role}
+
   // Skills
   "skills-install-source": "skills-install-source",
   "skills-install-ref": "skills-install-ref",
@@ -558,6 +568,18 @@ const TESTIDS = {
   "design-status-set-login-ready": "design-status-set-login-ready", // pattern design-status-set-${stem}-${status}
   "design-status-set-login-clear": "design-status-set-login-clear", // pattern design-status-set-${stem}-clear
   "design-status-error-login": "design-status-error-login", // pattern design-status-error-${stem}
+
+  // Preview (SP-155 §155a: the preview pane's dev-server lifecycle surface,
+  // packages/ui/src/components/PreviewPane.tsx)
+  "preview-pane": "preview-pane", // the pane root
+  "preview-pane-title": "preview-pane-title", // the pane header
+  "preview-pane-status": "preview-pane-status", // the live status line
+  "preview-pane-starting": "preview-pane-starting", // the starting placeholder
+  "preview-pane-iframe": "preview-pane-iframe", // the embed (localhost URL)
+  "preview-pane-stopped": "preview-pane-stopped", // the stopped affordance
+  "preview-pane-restart": "preview-pane-restart", // the restart action
+  "preview-pane-failed": "preview-pane-failed", // the failure reason surface
+  "preview-pane-no-url": "preview-pane-no-url", // running-but-no-URL guard
 } as const;
 
 // Derived set for O(1) coverage lookups

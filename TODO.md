@@ -234,7 +234,7 @@ the end, without checkboxes.
 - [x] **150.2** Existing settings (`subagent_model`, `commit_model`,
       review and completion models) read as aliases for their roles. A
       test per alias. Spec: SP-150 §150a.
-- [ ] **150.3** `ResolveRole(name)` replaces the per-setting getters
+- [x] **150.3** `ResolveRole(name)` replaces the per-setting getters
       internally; context-profile resolution (SP-125) runs on the
       resolved model; the provider-name grep test still passes. Tests.
       Spec: SP-150 §150b.

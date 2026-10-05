@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
@@ -228,16 +229,21 @@ func collectParallelResults(results []*SubagentResult, tasks []SubagentTask, a *
 
 // resolveParallelSubagentConfig resolves the effective provider and model for
 // parallel subagent tasks, checking config, fallback warnings, and parent
-// agent inheritance.
+// agent inheritance. SP-150 §150b: parallel subagents do the coder role's
+// work, so the selection resolves through the coder role (the subagent
+// settings alias it).
 func resolveParallelSubagentConfig(a *Agent) (string, string) {
 	var subagentProvider, subagentModel string
 	if a.configManager != nil {
 		config := a.configManager.GetConfig()
-		subagentProvider = config.GetSubagentProvider()
-		subagentModel = config.GetSubagentModel()
+		subagentProvider, subagentModel = config.ResolveRole(configuration.RoleCoder)
 		a.warnSubagentFallback("parallel subagent defaults", "", "", strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), subagentProvider, subagentModel)
 
-		// If no explicit subagent config, inherit from parent agent's runtime values.
+		// If no explicit subagent config, inherit from parent agent's runtime
+		// values. The gate stays on the RAW legacy subagent fields: when
+		// those are unset, the parent agent's provider/model still wins
+		// (SP-150 §150b; in a normal session the last-used provider is the
+		// conversation provider, so the two are equivalent).
 		if config.SubagentProvider == "" && config.SubagentModel == "" {
 			if parentProvider := a.GetProvider(); parentProvider != "" && parentProvider != "unknown" {
 				subagentProvider = parentProvider

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/factory"
 	"github.com/sprout-foundry/sprout/pkg/git"
 )
@@ -46,8 +47,9 @@ func handleGenerateCommitMessage(a *Agent, diff []byte, notes string) (string, e
 }
 
 // commitMessageClient builds the LLM client for commit message generation,
-// mirroring prepareCommitClient in the CLI commit flow: the configured
-// commit provider/model wins, then the conversation provider/model.
+// mirroring prepareCommitClient in the CLI commit flow: the commit role's
+// provider/model first (SP-150 §150b — the commit settings alias the commit
+// role), then the conversation provider/model.
 // Returns nil when no client can be created.
 func commitMessageClient(a *Agent) api.ClientInterface {
 	if a == nil {
@@ -58,8 +60,9 @@ func commitMessageClient(a *Agent) api.ClientInterface {
 		return nil
 	}
 	if cfg := cm.GetConfig(); cfg != nil {
-		if provider := cfg.GetCommitProvider(); provider != "" {
-			if client, err := factory.CreateProviderClient(api.ClientType(provider), cfg.GetCommitModel()); err == nil {
+		provider, model := cfg.ResolveRole(configuration.RoleCommit)
+		if provider != "" {
+			if client, err := factory.CreateProviderClient(api.ClientType(provider), model); err == nil {
 				return client
 			}
 		}

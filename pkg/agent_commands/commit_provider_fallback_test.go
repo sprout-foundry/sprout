@@ -52,3 +52,37 @@ func TestPrepareCommitClient_NoProviderAtAll(t *testing.T) {
 	client, _, _ := (&CommitCommand{}).prepareCommitClient(cfg, nil)
 	assert.Nil(t, client, "no provider at all must resolve to a nil client")
 }
+
+// TestPrepareCommitClient_RoleCommitResolvesProviderModel verifies (SP-150
+// §150b) that with only the commit role set (no legacy commit settings and
+// no last-used provider), the commit path resolves the commit role's
+// provider/model through ResolveRole.
+func TestPrepareCommitClient_RoleCommitResolvesProviderModel(t *testing.T) {
+	cfg := &configuration.Config{
+		Roles: map[string]configuration.RoleConfig{
+			configuration.RoleCommit: {Provider: string(api.TestClientType), Model: "commit-role-model"},
+		},
+	}
+
+	client, clientType, model := (&CommitCommand{}).prepareCommitClient(cfg, nil)
+	require.NotNil(t, client, "the commit role must resolve a client")
+	assert.Equal(t, api.ClientType(api.TestClientType), clientType)
+	assert.Equal(t, "commit-role-model", model)
+}
+
+// TestPrepareCommitClient_RoleCommitBeatsLastUsedProvider verifies the
+// precedence: an explicit commit role entry wins over the conversation's
+// last-used provider fallback (the last-used provider is an unreachable
+// local Ollama, so a broken precedence would leave the client nil).
+func TestPrepareCommitClient_RoleCommitBeatsLastUsedProvider(t *testing.T) {
+	cfg := &configuration.Config{
+		LastUsedProvider: string(api.OllamaClientType),
+		Roles: map[string]configuration.RoleConfig{
+			configuration.RoleCommit: {Provider: string(api.TestClientType), Model: "commit-role-model"},
+		},
+	}
+
+	client, clientType, _ := (&CommitCommand{}).prepareCommitClient(cfg, nil)
+	require.NotNil(t, client, "the commit role must beat the last-used provider")
+	assert.Equal(t, api.ClientType(api.TestClientType), clientType)
+}

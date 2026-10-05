@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
@@ -71,21 +72,28 @@ func resolveSubagentProviderModel(a *Agent, persona string, personaExplicitlyPro
 				a.warnSubagentFallback(fmt.Sprintf("persona '%s'", persona), strings.TrimSpace(subagentType.Provider), strings.TrimSpace(subagentType.Model), strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), provider, model)
 			} else {
 				a.Logger().Debug("Warning: Persona '%s' not found or disabled, using default subagent config\n", persona)
-				provider = config.GetSubagentProvider()
-				model = config.GetSubagentModel()
+				// SP-150 §150b: the default subagent config resolves through
+				// the coder role (the subagent settings alias it).
+				provider, model = config.ResolveRole(configuration.RoleCoder)
 				a.warnSubagentFallback("default subagent config", "", "", strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), provider, model)
 			}
 		} else {
-			// No persona specified, use default subagent config
-			provider = config.GetSubagentProvider()
-			model = config.GetSubagentModel()
+			// No persona specified, use default subagent config (SP-150 §150b:
+			// resolved through the coder role, which aliases the subagent
+			// settings).
+			provider, model = config.ResolveRole(configuration.RoleCoder)
 			a.Logger().Debug("Using subagent provider=%s model=%s from config\n", provider, model)
 			a.warnSubagentFallback("default subagent config", "", "", strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), provider, model)
 		}
 
 		// Inherit from parent agent for each field not explicitly set by persona
 		// or global subagent config. Field-by-field: setting SubagentProvider
-		// doesn't block model inheritance, and vice versa.
+		// doesn't block model inheritance, and vice versa. The gate stays on
+		// the RAW legacy subagent fields (not the role-resolved value, which
+		// falls back to the last-used provider): when the subagent settings are
+		// unset, the parent agent's provider/model still wins (SP-150 §150b —
+		// in a normal session the last-used provider is the conversation
+		// provider, so the two are equivalent).
 		parentProvider := a.GetProvider()
 		parentModel := a.GetModel()
 		if !personaProviderExplicit && config.SubagentProvider == "" {
@@ -104,11 +112,20 @@ func resolveSubagentProviderModel(a *Agent, persona string, personaExplicitlyPro
 
 		// Reviews share one model setting: an explicit review_provider covers
 		// the reviewer persona too, ahead of the generic subagent settings.
-		if reviewProvider := strings.TrimSpace(config.GetReviewProvider()); reviewProvider != "" &&
+		// SP-150 §150b: the reviewer persona resolves through the reviewer
+		// role (the review settings alias it; an unset role falls back to
+		// the conversation's last-used provider). Unlike the legacy
+		// GetReviewProvider gate, this fires whenever the reviewer role
+		// resolves a provider — including the last-used fallback — so the
+		// reviewer persona always runs the reviewer role's selection. In a
+		// normal session the last-used provider is the conversation
+		// provider, which is what the parent-inheritance path would have
+		// given anyway.
+		if reviewProvider, reviewModel := config.ResolveRole(configuration.RoleReviewer); strings.TrimSpace(reviewProvider) != "" &&
 			!personaProviderExplicit && isReviewerPersona(a, persona) {
-			provider = reviewProvider
+			provider = strings.TrimSpace(reviewProvider)
 			if !personaModelExplicit {
-				model = config.GetReviewModel()
+				model = reviewModel
 			}
 			a.Logger().Debug("Using review provider/model for reviewer persona: provider=%s model=%s\n", provider, model)
 		}

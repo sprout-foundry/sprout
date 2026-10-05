@@ -15,7 +15,10 @@
  * mode's shell component, which composes its surface and its own chrome. The
  * surfaces stay inside their shells, not here.
  *
- * Adding a mode is: one entry here, one rail, one shell. No new
+ * Modes are defined by one public registration API (SP-155 §155b): the
+ * built-in Code and Design modes register through it at module load, and an
+ * embedding shell registers further modes with the same call. Adding a mode
+ * is: one registration, one rail, one shell. No new
  * `currentView === 'x'` exception in the app.
  */
 
@@ -65,11 +68,84 @@ export interface WorkspaceMode {
   Shell: ComponentType<WorkspaceShellProps>;
 }
 
+/**
+ * Public registration payload (SP-155 §155b): id, label, icon, shell
+ * component, and an availability predicate.
+ *
+ * This is the only way a mode gets into the registry — built-ins and
+ * extensions share the call, so the registry has one write path. `hint` is
+ * the only optional field: the switcher's secondary text is a hint, and a
+ * mode without one simply renders none.
+ */
+export interface WorkspaceModeRegistration {
+  id: WorkspaceModeId;
+  label: string;
+  icon: LucideIcon;
+  /** Switcher secondary text. Optional — defaults to empty. */
+  hint?: string;
+  /** Whether this mode is offered for the given workspace. */
+  available: (ctx: WorkspaceModeContext) => boolean;
+  /** The mode's shell component. */
+  Shell: ComponentType<WorkspaceShellProps>;
+}
+
+/** Removes the registration created by `registerWorkspaceMode`. */
+export type UnregisterWorkspaceMode = () => void;
+
 /** The mode new sessions start in. */
 export const DEFAULT_WORKSPACE_MODE: WorkspaceModeId = 'code';
 
 /**
  * Mode registry.
+ *
+ * The live array registrations write into: the built-ins register into it at
+ * module load (below), and `registerWorkspaceMode` appends or replaces
+ * entries. Consumers import this one array, so a registration made after
+ * import is visible to them — the switcher lists whatever the registry holds.
+ *
+ * Registration is a boot-time concern: the built-ins register at module load
+ * and an embedding shell is expected to register its modes before the shell
+ * renders. A later `availableModes` call reflects the registry as it stands;
+ * a memoized mode list (e.g. inside `useWorkspaceMode`) picks up
+ * late registrations on its next recomputation, not mid-render.
+ */
+export const WORKSPACE_MODES: WorkspaceMode[] = [];
+
+/**
+ * Public mode registration API (SP-155 §155b).
+ *
+ * A new id is appended, after the built-ins, in switcher order. Re-registering
+ * an existing id replaces that entry in place (the mode keeps its position),
+ * so registration is idempotent and an embedding shell can override a
+ * built-in's label, icon, or shell without reordering the switcher.
+ *
+ * Returns a disposer that removes the entry this call created. It checks
+ * identity, so a disposer held across a re-registration of the same id removes
+ * nothing — the newer definition stays.
+ */
+export function registerWorkspaceMode(definition: WorkspaceModeRegistration): UnregisterWorkspaceMode {
+  const mode: WorkspaceMode = {
+    id: definition.id,
+    label: definition.label,
+    icon: definition.icon,
+    hint: definition.hint ?? '',
+    available: definition.available,
+    Shell: definition.Shell,
+  };
+  const existing = WORKSPACE_MODES.findIndex((entry) => entry.id === mode.id);
+  if (existing === -1) {
+    WORKSPACE_MODES.push(mode);
+  } else {
+    WORKSPACE_MODES[existing] = mode;
+  }
+  return () => {
+    const index = WORKSPACE_MODES.findIndex((entry) => entry === mode);
+    if (index !== -1) WORKSPACE_MODES.splice(index, 1);
+  };
+}
+
+/**
+ * Built-in modes, registered through the same public API an extension uses.
  *
  * `code` is always available: it is the baseline experience over any root.
  * `design` is also always offered: an empty workspace gets the Design empty
@@ -78,24 +154,23 @@ export const DEFAULT_WORKSPACE_MODE: WorkspaceModeId = 'code';
  * absent tree looks like; hiding the mode only meant the tree could never be
  * started from the UI.
  */
-export const WORKSPACE_MODES: WorkspaceMode[] = [
-  {
-    id: 'code',
-    label: 'Code',
-    icon: Code2,
-    hint: 'Chat, editor, git, terminal',
-    available: () => true,
-    Shell: CodeShell,
-  },
-  {
-    id: 'design',
-    label: 'Design',
-    icon: Palette,
-    hint: 'Flows, screens, tokens',
-    available: () => true,
-    Shell: DesignShell,
-  },
-];
+registerWorkspaceMode({
+  id: 'code',
+  label: 'Code',
+  icon: Code2,
+  hint: 'Chat, editor, git, terminal',
+  available: () => true,
+  Shell: CodeShell,
+});
+
+registerWorkspaceMode({
+  id: 'design',
+  label: 'Design',
+  icon: Palette,
+  hint: 'Flows, screens, tokens',
+  available: () => true,
+  Shell: DesignShell,
+});
 
 /** Modes offered for a workspace, in switcher order. */
 export function availableModes(ctx: WorkspaceModeContext): WorkspaceMode[] {

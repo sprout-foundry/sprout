@@ -259,6 +259,13 @@ type Agent struct {
 	security SecurityManager    // Approvals, redaction, elevation, bypass
 	mcpSub   MCPSubManager      // MCP server lifecycle and tool caching
 	todoMgr  *tools.TodoManager // Per-agent todo manager for session isolation
+	// scopeMilestones tracks SP-148 plan scope items that started or
+	// finished this session (SP-151 §151a, item 151.2): the per-scope
+	// started/finished state that decides which progress_milestone events a
+	// todo_write emits. Initialized at agent creation, lazily for bare test
+	// agents, and reset on session rotation so stale scope state never leaks
+	// across runs.
+	scopeMilestones *scopeMilestoneTracker
 
 	// Event system (bridges output and core)
 	eventBus  *events.EventBus

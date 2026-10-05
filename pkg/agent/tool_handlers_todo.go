@@ -288,7 +288,11 @@ func handleTodoWrite(ctx context.Context, a *Agent, args map[string]interface{})
 	}
 
 	a.Logger().Debug("TodoWrite: processing %d todos\n", len(todos))
+	prev := a.GetTodoManager().Read()
 	result := a.GetTodoManager().Write(todos)
+	// SP-151 §151a (item 151.2): emit progress_milestone for plan scope
+	// items that just started or finished with this write.
+	a.observeScopeMilestones(prev, todos)
 	a.Logger().Debug("TodoWrite result: %s\n", result)
 
 	// CLI rendering: when there's no active browser and stdin is a TTY,

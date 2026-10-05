@@ -29,7 +29,7 @@ protects.
       baseline build/test, and refuse model writes to `.sprout/starter.json`
       during a turn. Test: a model that rewrites the test command to `true`
       still fails verification. Spec: SP-149 §149b.
-- [ ] **fix.2** Deliver the verification result to the user: the block is
+- [x] **fix.2** Deliver the verification result to the user: the block is
       appended only to the returned string (`seed_query_result.go`), which
       the streaming CLI and the web UI never show. Write it into the last
       assistant message in state and emit it as a stream chunk. Test: a

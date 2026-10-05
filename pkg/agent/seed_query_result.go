@@ -256,15 +256,19 @@ func (a *Agent) handleQueryResult(qc *queryRunContext, result string, err error)
 	// the query-completed event and via state.
 	result = a.applyLanguageGuard(qc, result)
 
-	// SP-149 §149c/§149d (149.6): attach the turn's verification result to
-	// the final reply — AFTER the language guard, so the guard's
-	// language-detection sees only the model's own text, and before the
-	// return, via the stored per-turn state (reset in prepareQueryRun).
-	// The attachment is a no-op when the turn-end hook never ran for the
-	// turn. The error and interrupt paths above never reach this point:
-	// an interrupted turn reports as an interrupt, not a verification
-	// result.
-	result = a.attachVerificationReply(result)
+	// SP-149 §149c/§149d (149.6): deliver the turn's verification result to
+	// the user — AFTER the language guard, so the guard's language-detection
+	// sees only the model's own text, and before the return, via the stored
+	// per-turn state (reset in prepareQueryRun). It appends the attachment
+	// to the reply, writes it into the last assistant message in state (what
+	// the query_completed response and later turns read), and — when the
+	// reply string will be suppressed by the streaming early-return below —
+	// emits it as a stream chunk (what the streaming CLI and the Web UI's
+	// live stream show). The attachment is a no-op when the turn-end hook
+	// never ran for the turn. The error and interrupt paths above never
+	// reach this point: an interrupted turn reports as an interrupt, not a
+	// verification result.
+	result = a.deliverVerificationResult(result)
 
 	// SP-151 §151a (151.3): emit the turn's verification + completion
 	// progress events from the SP-149 turn-end result (progress_verification
@@ -301,7 +305,7 @@ func (a *Agent) handleQueryResult(qc *queryRunContext, result string, err error)
 	// stderr for the human, but the orchestrator LLM only sees what we return
 	// here via SubagentResult.Output — returning "" would make the orchestrator
 	// think the subagent did nothing and re-attempt the task.
-	if !a.IsSubagent() && a.output.IsStreamingEnabled() && len(a.output.GetStreamingBuffer().String()) > 0 {
+	if !a.IsSubagent() && a.output.IsStreamingEnabled() && a.output.GetStreamingBuffer().Len() > 0 {
 		return "", nil
 	}
 

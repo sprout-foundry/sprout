@@ -5,8 +5,10 @@
 // attachment is a deterministic block rendered from the stored per-turn
 // verification state (turnVerification) — no NLP rewrites of the model's
 // own prose: the failing attachment itself states the failure, which is
-// what §149d requires. It is appended to the final reply in
-// handleQueryResult, after the language guard.
+// what §149d requires. It is delivered in handleQueryResult, after the
+// language guard, through deliverVerificationResult: appended to the final
+// reply, written into the last assistant message in state, and — when the
+// reply string is suppressed by streaming — emitted as a stream chunk.
 
 package agent
 
@@ -14,6 +16,7 @@ import (
 	"fmt"
 	"strings"
 
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/verify"
 )
 
@@ -31,6 +34,68 @@ func (a *Agent) attachVerificationReply(reply string) string {
 		return reply
 	}
 	return strings.TrimRight(reply, "\n") + "\n\n" + attachment
+}
+
+// deliverVerificationResult delivers the turn's verification result to the
+// user on every path (fix.2): it appends the attachment to the final reply
+// (the same formatting attachVerificationReply uses), writes the attachment
+// into the last assistant message in state (what the query_completed event's
+// response and later turns read), and — exactly when handleQueryResult's
+// streaming early-return will suppress the returned result string — emits the
+// attachment as a stream chunk (what the streaming CLI's terminal write and
+// the Web UI's live stream consume). A turn with no stored verification
+// result (verification disabled, no code change, a subagent turn, or a runner
+// setup error) is a no-op: byte-identical reply, no state write, no chunk.
+func (a *Agent) deliverVerificationResult(reply string) string {
+	attachment := verificationReplyAttachment(a.currentTurnVerification())
+	if attachment == "" {
+		return reply
+	}
+	a.appendVerificationAttachmentToLastAssistantMessage(attachment)
+	if a.suppressVerificationResult() {
+		a.PublishStreamChunk("\n\n"+attachment, "assistant_text")
+	}
+	return a.attachVerificationReply(reply)
+}
+
+// suppressVerificationResult reports whether handleQueryResult's streaming
+// early-return will suppress the returned result string (the content already
+// reached the client via streaming). Exactly that condition: a primary agent
+// with streaming enabled and a non-empty streaming buffer. The verification
+// attachment is emitted as a stream chunk in this case — and only in this
+// case — so the user sees the block once, whether the reply rides in the
+// returned string (streaming off, or nothing streamed) or in the chunk.
+func (a *Agent) suppressVerificationResult() bool {
+	return !a.IsSubagent() && a.output.IsStreamingEnabled() && a.output.GetStreamingBuffer().Len() > 0
+}
+
+// appendVerificationAttachmentToLastAssistantMessage writes the verification
+// attachment into the last assistant message (with non-empty content) in the
+// agent's conversation state, using the copy-slice + SetMessages pattern
+// applyLanguageGuard uses. It is what carries the block to the Web UI's
+// completion path: the streaming CLI suppresses the result string, so only
+// state feeds the query_completed response that the Web UI renders. When no
+// assistant message with content exists it is a no-op — the attachment then
+// rides only in the returned result string.
+func (a *Agent) appendVerificationAttachmentToLastAssistantMessage(attachment string) {
+	if a.state == nil {
+		return
+	}
+	messages := a.state.GetMessages()
+	index := -1
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == "assistant" && messages[i].Content != "" {
+			index = i
+			break
+		}
+	}
+	if index < 0 {
+		return
+	}
+	updated := make([]api.Message, len(messages))
+	copy(updated, messages)
+	updated[index].Content += "\n\n" + attachment
+	a.state.SetMessages(updated)
 }
 
 // verificationReplyAttachment renders the SP-149 §149d final-reply

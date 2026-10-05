@@ -251,7 +251,7 @@ the end, without checkboxes.
 
 ## SP-151 — Progress Events (`roadmap/SP-151-progress-events.md`)
 
-- [ ] **151.1** Event types `progress_milestone`, `progress_question`,
+- [x] **151.1** Event types `progress_milestone`, `progress_question`,
       `progress_verification`, `progress_complete` with run, plan
       revision and scope IDs in `events_types.go`; regenerate the
       `@sprout/events` TypeScript union (`packages/events`). Tests. Spec:

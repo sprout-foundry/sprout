@@ -25,6 +25,7 @@ export type {
   PasswordRequestData,
   ProviderNoCredentialData,
   AskUserRequestData,
+  AskUserRequestOption,
   SessionChangedData,
   RateLimitedData,
   CompactStartedData,
@@ -39,6 +40,11 @@ export type {
   TerminalPtyExitData,
   ContextManagementDiagnosticData,
   LanguageGuardReplacementData,
+  ProgressMilestoneData,
+  ProgressQuestionData,
+  ProgressVerificationCheck,
+  ProgressVerificationData,
+  ProgressCompleteData,
 } from './types';
 export { EventsContextProvider, useEvents } from './context';
 export type { EventsContextProviderProps } from './context';

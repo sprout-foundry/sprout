@@ -168,6 +168,15 @@ const (
 	// payload carries chat_id, the replacement notice, the original (full
 	// switched content, for "view original"), and the reason.
 	EventTypeLanguageGuardReplacement = "language_guard_replacement"
+	// SP-151 §151a progress events: structured run-progress signals
+	// emitted by the runtime (NOT parsed from model text). Each payload
+	// carries the stable correlation IDs (run, plan revision, scope
+	// item) so consumers can de-duplicate and correlate. Item 151.1
+	// defines the types; runtime emission is items 151.2–151.4.
+	EventTypeProgressMilestone    = "progress_milestone"
+	EventTypeProgressQuestion     = "progress_question"
+	EventTypeProgressVerification = "progress_verification"
+	EventTypeProgressComplete     = "progress_complete"
 )
 
 // EventBus manages event distribution between CLI and Web UI.

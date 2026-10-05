@@ -89,7 +89,11 @@ export type ServerEventType =
   | 'session_changed'
   | 'delegate_clarification_requested'
   | 'delegate_clarification_responded'
-  | 'language_guard_replacement';
+  | 'language_guard_replacement'
+  | 'progress_milestone'
+  | 'progress_question'
+  | 'progress_verification'
+  | 'progress_complete';
 
 /**
  * The envelope every event flows through. `data` shape varies per
@@ -164,4 +168,136 @@ export interface WorkspaceBusyData {
   code: 'workspace_busy';
   running_chat_id: string;
   running_chat_name: string;
+}
+
+// ── SP-151 progress event payloads ───────────────────────────────────
+//
+// The four progress event types (SP-151 §151a) are structured run-progress
+// signals emitted by the runtime, not parsed from model text. Each carries
+// the stable correlation IDs (run, plan revision, scope item) so consumers
+// can de-duplicate and correlate. Field names mirror the Go json tags 1:1
+// (snake_case); `@sprout/events` (packages/events/src/types.ts) carries
+// the canonical shared versions of these payloads.
+
+/**
+ * A single selectable option in a `progress_question` payload. Mirrors the
+ * ask_user option shape.
+ *
+ * Go: pkg/events/events_types.go::AskUserRequestOption
+ */
+export interface AskUserRequestOption {
+  /** Display label rendered in the option list. Required. */
+  label: string;
+  /** Machine-friendly value returned on selection. Falls back to `label`. */
+  value?: string;
+  /** Optional explanatory text shown next to the label. */
+  description?: string;
+}
+
+/**
+ * Payload of a `progress_milestone` event (SP-151 §151a): a plan scope
+ * item (SP-148) started or finished, with the files-touched count and the
+ * scope item's elapsed wall time.
+ *
+ * Go: pkg/events/progress_events.go::ProgressMilestoneData
+ */
+export interface ProgressMilestoneData {
+  /** Stable run identifier correlating every event of one run. */
+  run_id: string;
+  /** Revision of the SP-148 plan (0 when the run has no active plan). */
+  plan_revision: number;
+  /** Scope item id (plancontract.ScopeItem.ID); absent without plan scope. */
+  scope_id?: string;
+  /** Scope item's title, for display. */
+  scope_title?: string;
+  /** "started" | "finished" — which milestone phase this reports. */
+  phase: string;
+  /** How many files the scope item changed. */
+  files_touched?: number;
+  /** Scope item's elapsed wall time in milliseconds. */
+  elapsed_ms: number;
+}
+
+/**
+ * Payload of a `progress_question` event (SP-151 §151a): the agent needs a
+ * decision. Carries the question, options if any, and why it matters —
+ * complementing `ask_user_request` with plan context.
+ *
+ * Go: pkg/events/progress_events.go::ProgressQuestionData
+ */
+export interface ProgressQuestionData {
+  run_id: string;
+  plan_revision: number;
+  /** Scope item the question belongs to; absent when not scoped. */
+  scope_id?: string;
+  /** The decision being requested. */
+  question: string;
+  /** Short categorizing label rendered above the question. */
+  header?: string;
+  /** Selectable choices; absent for freeform questions. */
+  options?: AskUserRequestOption[];
+  /** Why the decision matters. */
+  why_it_matters?: string;
+}
+
+/**
+ * Compact evidence a single verification check carries (SP-149). Mirrors
+ * the consumer-facing fields of verify.Check; the full result (routes,
+ * screenshots, steps, duration) stays server-side.
+ *
+ * Go: pkg/events/progress_events.go::ProgressVerificationCheck
+ */
+export interface ProgressVerificationCheck {
+  /** plancontract check kind ("build", "test", ...). */
+  kind: string;
+  /** ids of the plan acceptance items this check covers. */
+  items?: string[];
+  /** Trusted command that ran (absent when skipped). */
+  command?: string;
+  /** Check did not run (no trusted command, or the run was cancelled). */
+  skipped?: boolean;
+  /** Whether the check passed (false for a skipped check). */
+  passed?: boolean;
+  /** Explains a skipped or abnormal check (timeout, cancellation). */
+  reason?: string;
+  /** Bounded excerpt of the check's output (evidence). */
+  excerpt?: string;
+}
+
+/**
+ * Payload of a `progress_verification` event (SP-151 §151a): the SP-149
+ * verification result — the checks, pass/fail, and evidence references.
+ *
+ * Go: pkg/events/progress_events.go::ProgressVerificationData
+ */
+export interface ProgressVerificationData {
+  run_id: string;
+  plan_revision: number;
+  /** Run happened without an active SP-148 plan (SP-149 baseline mode). */
+  baseline?: boolean;
+  /** Nothing failed and at least one check actually ran (SP-149 §149d). */
+  passed?: boolean;
+  /** Individual check outcomes, in run order. */
+  checks: ProgressVerificationCheck[];
+  /** Run-level findings that prevented some commands from resolving. */
+  errors?: string[];
+}
+
+/**
+ * Payload of a `progress_complete` event (SP-151 §151a): the run
+ * finished. `verified` is true only when a passing verification result
+ * exists (SP-149 §149d / SP-151 §151c); when SP-149 is disabled or was
+ * not run, `verification` is absent and `not_verified_reason` says why.
+ *
+ * Go: pkg/events/progress_events.go::ProgressCompleteData
+ */
+export interface ProgressCompleteData {
+  run_id: string;
+  plan_revision: number;
+  /** True only when a passing verification result exists. */
+  verified?: boolean;
+  /** Final verification result; absent when SP-149 is disabled or was not run. */
+  verification?: ProgressVerificationData;
+  /** Why the run is not verified (e.g. "verification disabled"). */
+  not_verified_reason?: string;
 }

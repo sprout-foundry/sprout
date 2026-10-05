@@ -95,3 +95,72 @@ describe('HeaderBar back-link', () => {
     expect(link?.textContent).toContain('acme/widgets');
   });
 });
+
+// SP-155 §155a (item 155.6): the Code-mode preview panel toggle.
+describe('HeaderBar preview toggle', () => {
+  async function renderWithPreview(onTogglePreviewPanel: () => void, previewPanelOpen = false) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response('[]', { status: 200 }))),
+    );
+    await act(async () => {
+      root.render(
+        <HeaderBar
+          isMobile={false}
+          isSidebarOpen
+          isConnected
+          onToggleSidebar={() => undefined}
+          onToggleContextPanel={() => undefined}
+          onTogglePreviewPanel={onTogglePreviewPanel}
+          previewPanelOpen={previewPanelOpen}
+        />,
+      );
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+  }
+
+  it('renders the toggle when the host wires it in and fires the callback', async () => {
+    const onToggle = vi.fn();
+    await renderWithPreview(onToggle, false);
+    const btn = container.querySelector('[data-testid="preview-panel-toggle"]');
+    expect(btn).not.toBeNull();
+    expect(btn).toHaveAttribute('aria-pressed', 'false');
+    btn?.click();
+    expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+
+  it('reflects the open state through aria-pressed', async () => {
+    await renderWithPreview(() => undefined, true);
+    expect(container.querySelector('[data-testid="preview-panel-toggle"]')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('renders no preview toggle when the host does not wire it in', async () => {
+    await renderHeader(200, '[]');
+    expect(container.querySelector('[data-testid="preview-panel-toggle"]')).toBeNull();
+  });
+
+  it('hides the preview toggle on mobile', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(new Response('[]', { status: 200 }))),
+    );
+    await act(async () => {
+      root.render(
+        <HeaderBar
+          isMobile
+          isSidebarOpen
+          isConnected
+          onToggleSidebar={() => undefined}
+          onToggleContextPanel={() => undefined}
+          onTogglePreviewPanel={() => undefined}
+        />,
+      );
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(container.querySelector('[data-testid="preview-panel-toggle"]')).toBeNull();
+  });
+});

@@ -1,4 +1,4 @@
-import { CircleStop, CircleX, RotateCcw } from 'lucide-react';
+import { CircleStop, CircleX, RotateCcw, X } from 'lucide-react';
 import './PreviewPane.css';
 
 /**
@@ -44,6 +44,12 @@ export interface PreviewPaneProps {
   title?: string;
   /** Force the Restart action to be disabled regardless of state. */
   restartDisabled?: boolean;
+  /**
+   * Invoked by the close affordance. The parent decides what closing means
+   * (collapse the panel, hide the surface). Omitted when the pane is shown
+   * without a close affordance (it then renders none).
+   */
+  onClose?: () => void;
 }
 
 /**
@@ -60,6 +66,7 @@ export function PreviewPane({
   reloadKey,
   title = 'Preview',
   restartDisabled = false,
+  onClose,
 }: PreviewPaneProps): JSX.Element {
   const restarting = status === 'starting';
   const restartEnabled = !restarting && !restartDisabled;
@@ -97,6 +104,17 @@ export function PreviewPane({
           <RotateCcw size={14} aria-hidden="true" />
           <span>Restart</span>
         </button>
+        {onClose && (
+          <button
+            type="button"
+            className="preview-pane__close"
+            data-testid="preview-pane-close"
+            onClick={onClose}
+            aria-label={`Close ${title}`}
+          >
+            <X size={14} aria-hidden="true" />
+          </button>
+        )}
       </div>
 
       <div className="preview-pane__body">

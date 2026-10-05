@@ -3,13 +3,18 @@
  *
  * Host protocol (window.postMessage):
  *   host → page: { source: 'sprout-host', type: 'open',   path, content? }
+ *   host → page: { source: 'sprout-host', type: 'put',    path, content }  // VFS write
  *   host → page: { source: 'sprout-host', type: 'theme',  bg?, fg? }
  *   host → page: { source: 'sprout-host', type: 'setDoc', content }  // programmatic edit
  *   host → page: { source: 'sprout-host', type: 'save' }
- *   page → host: { source: 'sprout-editor', type: 'ready' }
+ *   page → host: { source: 'sprout-editor', type: 'ready', page, build, capabilities }
  *   page → host: { source: 'sprout-editor', type: 'dirty', value: bool }
  *   page → host: { source: 'sprout-editor', type: 'save', path, content }
  *                (host ACKs with { type: 'saved', path } to clear dirty)
+ *
+ * `ready` carries the page kind, the running binary's build identity, and
+ * the capability list (standaloneReady.ts) — hosts feature-detect on it
+ * instead of hardcoding protocol versions.
  *
  * Persistence: reads/writes through the wasmShell service — the same
  * SproutWasm-backed store the webui uses (sprout-wasm-fs IndexedDB/OPFS),
@@ -19,6 +24,7 @@
 import { EditorView } from '@codemirror/view';
 import { editorExtensionsFor, languageTitleFor } from './editorLang';
 import { bootStandaloneEscalation } from './standaloneEscalation';
+import { buildReadyPayload as readyPayload } from './standaloneReady';
 import { isFromTrustedParent, postTargetOrigin } from './standaloneOrigin';
 import type { WasmShell } from '../../services/wasmShell';
 
@@ -56,12 +62,12 @@ async function boot() {
       console.error('[editor] escalation boot failed:', err);
     }
     setState('ready');
-    post('ready');
+    post('ready', readyPayload('editor', wasm));
   } catch (err) {
     setState('wasm failed');
     console.error('[editor] wasm init failed:', err);
     // Still functional as a plain editor (no persistence).
-    post('ready');
+    post('ready', readyPayload('editor', null));
   }
 }
 
@@ -131,6 +137,20 @@ window.addEventListener('message', (ev: MessageEvent) => {
   switch (data.type) {
     case 'open':
       openPath(data.path as string, data.content as string | undefined);
+      break;
+    case 'put':
+      // Host-synced file push (parity with the terminal page): write into
+      // the VFS. When the pushed path IS the open doc, refresh the view —
+      // the host just replaced the content under the editor.
+      if (shellReady && wasm) {
+        const putPath = String(data.path ?? '');
+        const err = wasm.writeFile(putPath, String(data.content ?? ''));
+        if (err) {
+          console.error('[editor] put failed:', putPath, err);
+        } else if (currentPath === putPath) {
+          openPath(putPath, String(data.content ?? ''));
+        }
+      }
       break;
     case 'saved':
       clearDirty();

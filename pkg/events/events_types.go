@@ -177,6 +177,19 @@ const (
 	EventTypeProgressQuestion     = "progress_question"
 	EventTypeProgressVerification = "progress_verification"
 	EventTypeProgressComplete     = "progress_complete"
+	// EventTypePreviewPortRegistered (SP-155 §155a, item 155.5) is
+	// published by the register_preview_port tool after it successfully
+	// registers a preview port with the platform. In hosted workspaces the
+	// agent runs in-process inside the webui server, so the webui server
+	// subscribes to this on the shared event bus and records the returned
+	// preview URL as the active hosted preview — the preview pane embeds
+	// it instead of only printing it to the model (item 155.6 places the
+	// pane). The payload carries preview_url, port, and label.
+	//
+	// This is an in-process signal (agent -> webui server), not a
+	// WebSocket-forwarded event, so it is intentionally absent from the
+	// WS outbound registry (websocket_outbound_registry.go).
+	EventTypePreviewPortRegistered = "preview_port_registered"
 )
 
 // EventBus manages event distribution between CLI and Web UI.

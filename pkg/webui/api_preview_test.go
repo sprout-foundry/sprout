@@ -122,6 +122,7 @@ type previewStateJSON struct {
 	URL      string `json:"url,omitempty"`
 	Error    string `json:"error,omitempty"`
 	Detected bool   `json:"detected,omitempty"`
+	Hosted   bool   `json:"hosted,omitempty"`
 }
 
 // previewStatus invokes the status handler and unmarshals its body.

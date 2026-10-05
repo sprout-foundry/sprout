@@ -31,6 +31,12 @@ type State struct {
 	URL      string `json:"url,omitempty"`
 	Error    string `json:"error,omitempty"`
 	Detected bool   `json:"detected,omitempty"`
+	// Hosted marks that the URL is a platform-registered preview (the agent
+	// called register_preview_port in a hosted workspace) rather than a
+	// local dev server managed by this package. The pane embeds the hosted
+	// URL directly; local start/restart/stop actions never apply to it.
+	// SP-155 §155a (item 155.5).
+	Hosted bool `json:"hosted,omitempty"`
 }
 
 // Option customizes a Manager.

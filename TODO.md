@@ -288,7 +288,7 @@ the end, without checkboxes.
       Code/Design unchanged. Spec: SP-155 §155b.
 - [x] **155.2** Default mode from configuration (built-in default stays
       `code`). Vitest. Spec: SP-155 §155b.
-- [ ] **155.3** Preview pane component with starting / running / stopped /
+- [x] **155.3** Preview pane component with starting / running / stopped /
       failed states, restart action, reload on file changes. Vitest.
       Spec: SP-155 §155a.
 - [ ] **155.4** Backend: start or detect the dev server from the starter

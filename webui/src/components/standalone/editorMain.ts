@@ -18,6 +18,7 @@
  */
 import { EditorView } from '@codemirror/view';
 import { editorExtensionsFor, languageTitleFor } from './editorLang';
+import { bootStandaloneEscalation } from './standaloneEscalation';
 import type { WasmShell } from '../../services/wasmShell';
 
 const statusPath = document.querySelector<HTMLSpanElement>('#status .path')!;
@@ -46,6 +47,13 @@ async function boot() {
     const mod = await import('../../services/wasmShell');
     wasm = await mod.initWasmShell({});
     shellReady = true;
+    // VFS bridge + escalation bridge (cloud/embedded scenario). Best-effort:
+    // a failure here leaves the editor usable, just not escalation-capable.
+    try {
+      bootStandaloneEscalation(wasm);
+    } catch (err) {
+      console.error('[editor] escalation boot failed:', err);
+    }
     setState('ready');
     post('ready');
   } catch (err) {

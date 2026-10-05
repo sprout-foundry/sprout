@@ -137,7 +137,7 @@ func (ws *ReactWebServer) handleWasmAssets(w http.ResponseWriter, r *http.Reques
 			// Vary on Accept-Encoding so shared caches don't serve a
 			// brotli body to a client that asked for identity.
 			w.Header().Add("Vary", "Accept-Encoding")
-			w.Write(data)
+			_, _ = w.Write(data) //nolint:gosec // G705: build-artifact bytes from the embedded FS, not user input
 			return
 		}
 		// Precompressed variant missing (e.g. a dist built before this
@@ -157,7 +157,7 @@ func (ws *ReactWebServer) handleWasmAssets(w http.ResponseWriter, r *http.Reques
 	// (wasm_exec.js rides the same release discipline — see the
 	// checked-in-browser-runtime note in scripts/build-wasm.sh.)
 	w.Header().Set("Cache-Control", "public, max-age=3600")
-	w.Write(data)
+	_, _ = w.Write(data) //nolint:gosec // G705: build-artifact bytes from the embedded FS, not user input
 }
 
 // negotiatePrecompressedWasm picks the best precompressed variant the
@@ -222,7 +222,7 @@ func (ws *ReactWebServer) handleStandalonePage(w http.ResponseWriter, r *http.Re
 	// The pages are entry documents: they must revalidate so a rebuilt
 	// bundle (new hashed asset URLs) is picked up immediately.
 	w.Header().Set("Cache-Control", "no-cache, must-revalidate")
-	w.Write(data)
+	_, _ = w.Write(data) //nolint:gosec // G705: build-artifact HTML from the embedded FS, not user input
 }
 
 // handleStaticFiles serves static files with proper MIME types

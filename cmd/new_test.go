@@ -47,8 +47,8 @@ func TestRunNewProject_InstallsFixture(t *testing.T) {
 
 // TestRunNewProject_UnknownStarterListsAvailable pins the "listing available
 // starters on unknown ID" requirement (153.4): an unknown id prints the
-// catalogue (which includes the fixture) and returns an error, and writes
-// nothing to the destination.
+// user-facing catalogue (test-only starters such as the fixture are
+// withheld) and returns an error, and writes nothing to the destination.
 func TestRunNewProject_UnknownStarterListsAvailable(t *testing.T) {
 	dest := t.TempDir()
 	var out bytes.Buffer
@@ -58,7 +58,8 @@ func TestRunNewProject_UnknownStarterListsAvailable(t *testing.T) {
 
 	got := out.String()
 	assert.Contains(t, got, "Available starters")
-	assert.Contains(t, got, "fixture")
+	// The test-only fixture is withheld from the chooser (fix.9).
+	assert.NotContains(t, got, "fixture")
 
 	// The starter is resolved before the destination is touched, so nothing
 	// is written for an unknown id.
@@ -67,8 +68,9 @@ func TestRunNewProject_UnknownStarterListsAvailable(t *testing.T) {
 }
 
 // TestRunNewProject_EmptyStarterListsAvailable covers the no-starter path:
-// the catalogue is printed and an error is returned; a project cannot be
-// created without naming a starter (153.4).
+// the user-facing catalogue is printed (test-only starters withheld) and an
+// error is returned; a project cannot be created without naming a starter
+// (153.4).
 func TestRunNewProject_EmptyStarterListsAvailable(t *testing.T) {
 	dest := t.TempDir()
 	var out bytes.Buffer
@@ -78,7 +80,8 @@ func TestRunNewProject_EmptyStarterListsAvailable(t *testing.T) {
 
 	got := out.String()
 	assert.Contains(t, got, "Available starters")
-	assert.Contains(t, got, "fixture")
+	// The test-only fixture is withheld from the chooser (fix.9).
+	assert.NotContains(t, got, "fixture")
 
 	_, statErr := os.Stat(starterstore.StarterManifestPath(dest))
 	assert.True(t, os.IsNotExist(statErr), "no manifest may be written when no starter is named")

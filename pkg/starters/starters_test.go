@@ -39,6 +39,43 @@ func TestList(t *testing.T) {
 	assert.Equal(t, fixtureVersion, f.Version)
 }
 
+// TestListForUsers pins the chooser split (fix.9): the test-only trees named
+// in testOnlyStarters are withheld from the user-facing list but remain in
+// the full catalogue, so they stay addressable by id for tests and the
+// benchmark task catalogue.
+func TestListForUsers(t *testing.T) {
+	full, err := List()
+	require.NoError(t, err)
+	visible, err := ListForUsers()
+	require.NoError(t, err)
+
+	visibleIDs := make(map[string]bool, len(visible))
+	for _, s := range visible {
+		visibleIDs[s.ID] = true
+	}
+	fullIDs := make(map[string]bool, len(full))
+	for _, s := range full {
+		fullIDs[s.ID] = true
+	}
+
+	// Every test-only starter is in the full catalogue but withheld from the
+	// user-facing list.
+	for id := range testOnlyStarters {
+		assert.True(t, fullIDs[id], "test-only %q must stay in the full catalogue", id)
+		assert.False(t, visibleIDs[id], "test-only %q must be withheld from the user-facing list", id)
+	}
+
+	// The fixture specifically: present in List, absent from ListForUsers.
+	assert.True(t, fullIDs["fixture"], "fixture must be embedded in the full catalogue")
+	assert.False(t, visibleIDs["fixture"], "fixture must be withheld from the chooser")
+
+	// The user-facing list is a subset of the full catalogue, still sorted by
+	// id.
+	for i := 1; i < len(visible); i++ {
+		assert.Less(t, visible[i-1].ID, visible[i].ID, "ListForUsers must be sorted by id")
+	}
+}
+
 func TestVersion(t *testing.T) {
 	v, err := Version("fixture")
 	require.NoError(t, err)

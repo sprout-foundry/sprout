@@ -74,10 +74,10 @@ func newCompletionTestManager(t *testing.T) *configuration.Manager {
 	return mgr
 }
 
-// TestResolveCompletionClient_RoleCoderWins verifies (SP-150 §150b) that the
-// completion endpoint resolves its LLM client through the coder role: with
-// only roles.coder set, the role's provider/model beat the conversation's
-// last-used provider.
+// TestResolveCompletionClient_RoleCoderWins verifies that the completion
+// endpoint resolves its LLM client through the completion getters, which
+// fall back to the coder role: with only roles.coder set, the role's
+// provider/model beat the conversation's last-used provider.
 func TestResolveCompletionClient_RoleCoderWins(t *testing.T) {
 	mgr := newCompletionTestManager(t)
 	require.NoError(t, mgr.UpdateConfigNoSave(func(cfg *configuration.Config) error {
@@ -96,9 +96,8 @@ func TestResolveCompletionClient_RoleCoderWins(t *testing.T) {
 }
 
 // TestResolveCompletionClient_CompletionSettingsAliasCoderRole verifies the
-// 150.2 alias direction at the call site: the legacy completion settings
-// resolve the coder role, so pre-role configurations keep working through
-// the role resolver.
+// alias direction at the call site: the legacy completion settings win in
+// the completion getters, so pre-role configurations keep working.
 func TestResolveCompletionClient_CompletionSettingsAliasCoderRole(t *testing.T) {
 	mgr := newCompletionTestManager(t)
 	require.NoError(t, mgr.UpdateConfigNoSave(func(cfg *configuration.Config) error {
@@ -109,15 +108,15 @@ func TestResolveCompletionClient_CompletionSettingsAliasCoderRole(t *testing.T) 
 
 	client, clientType, model, err := resolveCompletionClient(mgr)
 	require.NoError(t, err)
-	require.NotNil(t, client, "the legacy completion settings must resolve a client via the coder role")
+	require.NotNil(t, client, "the legacy completion settings must resolve a client via the completion getters")
 	assert.Equal(t, api.ClientType(api.TestClientType), clientType)
 	assert.Equal(t, "legacy-completion-model", model)
 }
 
 // TestResolveCompletionClient_NoSelectionUsesLastUsedProvider verifies the
-// fallback shape: with no coder role and no completion settings, the role
-// resolver returns the conversation's last-used provider, which the role
-// path uses directly.
+// fallback shape: with no completion settings and no roles, the completion
+// getters resolve empty, so the main conversation provider path (the
+// conversation's last-used provider) is used.
 func TestResolveCompletionClient_NoSelectionUsesLastUsedProvider(t *testing.T) {
 	mgr := newCompletionTestManager(t)
 	require.NoError(t, mgr.UpdateConfigNoSave(func(cfg *configuration.Config) error {
@@ -129,6 +128,30 @@ func TestResolveCompletionClient_NoSelectionUsesLastUsedProvider(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, client)
 	assert.Equal(t, api.ClientType(api.TestClientType), clientType)
+}
+
+// TestResolveCompletionClient_SubagentSettingsDoNotLeak verifies the
+// completion-first resolution: with only the subagent settings configured —
+// the coder role's general alias, but NOT the completion path's — the
+// completion resolution must use the main conversation provider, and the
+// subagent model must not leak into the completion path. The subagent
+// provider is a resolvable one (openai), so a resolver that consults the
+// subagent settings would leak them here: the subagent's provider/model
+// would win over the main provider.
+func TestResolveCompletionClient_SubagentSettingsDoNotLeak(t *testing.T) {
+	mgr := newCompletionTestManager(t)
+	require.NoError(t, mgr.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		cfg.LastUsedProvider = string(api.TestClientType)
+		cfg.SubagentProvider = string(api.OpenAIClientType)
+		cfg.SubagentModel = "subagent-model"
+		return nil
+	}))
+
+	client, clientType, model, err := resolveCompletionClient(mgr)
+	require.NoError(t, err)
+	require.NotNil(t, client)
+	assert.Equal(t, api.ClientType(api.TestClientType), clientType, "the main conversation provider must resolve the client")
+	assert.NotEqual(t, "subagent-model", model, "the subagent model must not leak into the completion path")
 }
 
 // TestResolveCompletionClient_UnresolvableProviderErrors verifies the main

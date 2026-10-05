@@ -91,20 +91,26 @@ var (
 	errCompletionClientCreation = errors.New("failed to create provider client")
 )
 
-// resolveCompletionClient picks the LLM client for code completion (SP-150
-// §150b: the completion path resolves the coder role, which aliases the
-// legacy completion settings): the role-resolved provider/model first
-// (e.g. a cheap local model for inline completions), then the main
-// conversation provider. A role that resolves to an empty provider means
-// "no explicit selection"; the main provider is then the only candidate.
-// The error, when non-nil, wraps one of the two sentinel errors above.
+// resolveCompletionClient picks the LLM client for code completion,
+// completion-first: it tries the completion-specific getters first —
+// GetCompletionProvider/GetCompletionModel implement the legacy getters'
+// field-wise precedence (an explicit completion setting wins, then the coder
+// role, no last-used-provider fallback) — then, when the completion provider
+// resolves empty, the main conversation provider. The subagent settings (the
+// coder role's general alias) are never consulted here, so a configured
+// subagent model cannot leak into inline completions; the completion
+// settings are the completion path's own alias, read through the coder role
+// by these getters only. The error, when non-nil, wraps one of the two
+// sentinel errors above.
 func resolveCompletionClient(configManager *configuration.Manager) (api.ClientInterface, api.ClientType, string, error) {
 	cfg := configManager.GetConfig()
-
-	if completionProvider, completionModel := cfg.ResolveRole(configuration.RoleCoder); completionProvider != "" {
-		if clientType, mapErr := configManager.MapStringToClientType(completionProvider); mapErr == nil {
-			if client, createErr := factory.CreateProviderClient(clientType, completionModel); createErr == nil {
-				return client, clientType, completionModel, nil
+	if cfg != nil {
+		if completionProvider := cfg.GetCompletionProvider(); completionProvider != "" {
+			completionModel := cfg.GetCompletionModel()
+			if clientType, mapErr := configManager.MapStringToClientType(completionProvider); mapErr == nil {
+				if client, createErr := factory.CreateProviderClient(clientType, completionModel); createErr == nil {
+					return client, clientType, completionModel, nil
+				}
 			}
 		}
 	}

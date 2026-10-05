@@ -94,3 +94,33 @@ func TestResolveSubagentProviderModel_ReviewerWithoutReviewSettings(t *testing.T
 		t.Errorf("reviewer resolved to %s/%s, want subagent settings when review_* unset", provider, model)
 	}
 }
+
+// TestResolveSubagentProviderModel_ReviewerWithoutExplicitSelectionKeepsSubagentSettings
+// pins the reviewer-override gate: it fires on an explicit reviewer selection
+// (HasExplicitRole), not on the resolver's last-used-provider fallback. With
+// a last-used provider set but no roles.reviewer and no review settings, the
+// reviewer persona must keep the subagent settings and its coder-role
+// attribution — the last-used fallback is not a selection.
+func TestResolveSubagentProviderModel_ReviewerWithoutExplicitSelectionKeepsSubagentSettings(t *testing.T) {
+	parent, _ := newReviewTestRunner(t)
+	if err := parent.configManager.UpdateConfigNoSave(func(c *configuration.Config) error {
+		c.SubagentProvider = "subagent-prov"
+		c.SubagentModel = "subagent-model"
+		c.LastUsedProvider = "openrouter"
+		c.ProviderModels = map[string]string{"openrouter": "openai/gpt-5"}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	provider, model, role, _, err := resolveSubagentProviderModel(parent, "reviewer", true, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if provider != "subagent-prov" || model != "subagent-model" {
+		t.Errorf("reviewer resolved to %s/%s, want the subagent settings when the reviewer selection is not explicit", provider, model)
+	}
+	if role != configuration.RoleCoder {
+		t.Errorf("reviewer role = %q, want the coder role when the reviewer selection is not explicit", role)
+	}
+}

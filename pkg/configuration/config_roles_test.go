@@ -395,14 +395,18 @@ func TestResolveRole_InternalRoleChains(t *testing.T) {
 			wantModel:    "sub-m",
 		},
 		{
-			name: "coder: completion settings when subagent settings are unset",
+			// The completion settings are the completion path's own alias
+			// (read by GetCompletionProvider/Model), never a source for the
+			// general coder resolver — with only them set, the coder role
+			// falls back to the conversation.
+			name: "coder: completion settings do not alias the coder role",
 			role: RoleCoder,
 			mutate: func(c *Config) {
 				c.CompletionProvider = "zai"
 				c.CompletionModel = "completion-m"
 			},
-			wantProvider: "zai",
-			wantModel:    "completion-m",
+			wantProvider: "openrouter",
+			wantModel:    "openai/gpt-5",
 		},
 		{
 			name:         "coder: conversation fallback when nothing is set",
@@ -496,6 +500,72 @@ func TestResolveRole_InternalRoleChains(t *testing.T) {
 			assert.Equal(t, tt.wantModel, model, tt.name)
 		})
 	}
+}
+
+// TestHasExplicitRole_Reviewer pins the explicit-reviewer gate: it fires only on
+// an explicit user selection — a roles.reviewer entry or the legacy review
+// settings — never on the resolver's last-used-provider fallback.
+func TestHasExplicitRole_Reviewer(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(c *Config)
+		want   bool
+	}{
+		{
+			name: "no reviewer selection: false even with a last-used provider",
+		},
+		{
+			name: "roles.reviewer provider set: true",
+			mutate: func(c *Config) {
+				c.Roles = map[string]RoleConfig{RoleReviewer: {Provider: "zai"}}
+			},
+			want: true,
+		},
+		{
+			name: "roles.reviewer model only: true",
+			mutate: func(c *Config) {
+				c.Roles = map[string]RoleConfig{RoleReviewer: {Model: "review-m"}}
+			},
+			want: true,
+		},
+		{
+			name: "legacy review provider set: true",
+			mutate: func(c *Config) {
+				c.ReviewProvider = "zai"
+			},
+			want: true,
+		},
+		{
+			name: "legacy review model set: true",
+			mutate: func(c *Config) {
+				c.ReviewModel = "review-m"
+			},
+			want: true,
+		},
+		{
+			name: "other roles set: false for reviewer",
+			mutate: func(c *Config) {
+				c.Roles = map[string]RoleConfig{RoleCoder: {Provider: "zai"}}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{
+				LastUsedProvider: "openrouter",
+				ProviderModels:   map[string]string{"openrouter": "openai/gpt-5", "zai": "GLM-4.6"},
+			}
+			if tt.mutate != nil {
+				tt.mutate(cfg)
+			}
+			assert.Equal(t, tt.want, cfg.HasExplicitRole(RoleReviewer))
+		})
+	}
+
+	// A nil receiver reports false.
+	var nilCfg *Config
+	assert.False(t, nilCfg.HasExplicitRole(RoleReviewer))
 }
 
 // TestBuiltInRoles verifies the stable ordering of the built-in role names.

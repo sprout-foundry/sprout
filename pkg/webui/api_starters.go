@@ -220,6 +220,22 @@ func (ws *ReactWebServer) handleAPIStartersInstantiate(w http.ResponseWriter, r 
 		return
 	}
 
+	// Contain the instantiate target to the daemon root (SP-153, TODO fix.8).
+	// Without this, a client could point `path` anywhere the daemon process
+	// can write and drop a full project tree there. Mirror
+	// handleAPIWorkspaceBrowse: resolve the daemon root's symlinks and reject
+	// a canonical target that is neither the root nor strictly under it.
+	daemonRoot := ws.GetDaemonRoot()
+	resolvedDaemonRoot := daemonRoot
+	if evaled, err := filepath.EvalSymlinks(daemonRoot); err == nil {
+		resolvedDaemonRoot = evaled
+	}
+	if target != resolvedDaemonRoot && !isWithinWorkspace(target, resolvedDaemonRoot) {
+		writeJSONErr(w, http.StatusForbidden, "target_outside_daemon_root",
+			"target directory is outside the daemon root")
+		return
+	}
+
 	if err := starters.Instantiate(req.Starter, target); err != nil {
 		switch {
 		case errors.Is(err, starters.ErrUnknownStarter):

@@ -68,9 +68,15 @@ protects.
       cost ledger books per role (`RecordCostWithRole` +
       `TakeUnbookedUsageByRole`); `AgentState`/`ConversationState` persist
       and restore `role_usage`. Spec: SP-150 §150c.
-- [ ] **fix.8** Starter instantiate endpoint stays inside the daemon root:
+- [x] **fix.8** Starter instantiate endpoint stays inside the daemon root:
       `pkg/webui/api_starters.go` has no containment check; return 403
       outside `GetDaemonRoot()` as `handleAPIWorkspaceBrowse` does.
+      Fixed: `handleAPIStartersInstantiate` now resolves the daemon root's
+      symlinks and rejects a canonical target that is neither the root nor
+      strictly under it (`target_outside_daemon_root`, 403), mirroring the
+      `handleAPIWorkspaceBrowse` containment convention. Pinned by
+      `TestHandleAPIStartersInstantiate` "target outside daemon root returns
+      403" + "daemon root itself is an allowed target".
 - [ ] **fix.9** Hide the test fixture starter from `sprout new` and the web
       UI chooser (its npm commands cannot run); keep it for tests only.
 - [ ] **fix.10** Language guard in streaming mode: emit a replacement event

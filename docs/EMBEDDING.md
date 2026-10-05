@@ -258,10 +258,10 @@ lives in **`docs/CLOUD_BACKEND_CONTRACT.md`**.
   Size the iframe; the terminal refits via the xterm FitAddon on window
   resize.
 - **Theming**: the terminal's palette and the editor's colors are set in
-  their `standalone/*Main.ts` entry files. The editor accepts a
-  `{ type: 'theme', bg, fg }` message; the terminal accepts
-  `{ type: 'theme', ... }` for the same purpose. Pass your product's
-  colors after `ready`.
+  their `standalone/*Main.ts` entry files. Only the editor accepts a
+  `{ type: 'theme', bg, fg }` message; the terminal has no theme
+  handler yet (its palette is fixed at build time). Pass your product's
+  colors to the editor after `ready`.
 - **Lifecycle**: `ready` is your start signal — send commands only after
   it. On iframe reload the whole WASM runtime reboots and re-announces
   `ready`; re-seed any files your flow depends on at that point. There is

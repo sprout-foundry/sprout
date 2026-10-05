@@ -104,6 +104,21 @@ func (a *Agent) runTurnEndVerification(qc *queryRunContext, finalResult string) 
 	runner := verify.New()
 	runner.ConfigCommands = verify.ConfigurationCommands(cfg)
 
+	// Every verification run of the turn executes against the turn's frozen
+	// snapshot (SP-149 §149b): the manifest's commands and the plan's
+	// acceptance captured at the turn's start. The snapshot is taken in
+	// prepareQueryRun; if it is missing for some reason (verification was
+	// enabled after the turn started), take one now at hook entry. Either
+	// way there is exactly one snapshot per turn, taken no later than the
+	// hook's first verify run, so a model that edits .sprout/starter.json
+	// or .sprout/plan.json during a repair round cannot change what
+	// "passing" means.
+	snap := a.getTurnVerifySnapshot()
+	if snap == nil {
+		snap = runner.Snapshot(a.GetWorkspaceRoot())
+		a.setTurnVerifySnapshot(snap)
+	}
+
 	limit := cfg.VerificationRepairAttempts()
 	attempts := make(map[string]int)
 	rounds := 0
@@ -116,7 +131,7 @@ func (a *Agent) runTurnEndVerification(qc *queryRunContext, finalResult string) 
 		if qc.runCtx.Err() != nil {
 			return finalResult, fmt.Errorf("%w: %w", core.ErrInterrupted, qc.runCtx.Err())
 		}
-		res, err := runner.Run(qc.runCtx, a.GetWorkspaceRoot())
+		res, err := runner.RunSnapshot(qc.runCtx, a.GetWorkspaceRoot(), snap)
 		if err != nil {
 			a.Logger().Debug("turn-end verification setup error: %v\n", err)
 			return finalResult, nil
@@ -304,11 +319,36 @@ func (a *Agent) setTurnVerification(tv turnVerification) {
 // resetTurnVerification clears the per-turn verification state at the
 // turn's start (prepareQueryRun), so a previous turn's stored result,
 // attempts, and limit never attach to this turn's reply: a turn's final
-// reply may only carry that turn's verification outcome.
+// reply may only carry that turn's verification outcome. It also clears
+// the turn's frozen verification snapshot (SP-149 §149b) so a previous
+// turn's snapshot never feeds a later turn's verification runs.
 func (a *Agent) resetTurnVerification() {
 	a.turnVerificationMu.Lock()
 	defer a.turnVerificationMu.Unlock()
 	a.turnVerification = turnVerification{}
+	a.turnVerifySnapshot = nil
+}
+
+// setTurnVerifySnapshot stores the turn's frozen verification input
+// (SP-149 §149b): the starter manifest's commands and the plan's acceptance
+// captured once at the turn's start. It is guarded by turnVerificationMu and
+// cleared at each turn's start (resetTurnVerification), so a turn's
+// verification runs against the inputs the turn began with.
+func (a *Agent) setTurnVerifySnapshot(snap *verify.Snapshot) {
+	a.turnVerificationMu.Lock()
+	defer a.turnVerificationMu.Unlock()
+	a.turnVerifySnapshot = snap
+}
+
+// getTurnVerifySnapshot returns the turn's frozen verification input
+// (SP-149 §149b), or nil when none was captured for the turn (verification
+// was not enabled at the turn's start). The turn-end hook reads it to run
+// every repair round against the turn-start inputs instead of re-reading
+// the files.
+func (a *Agent) getTurnVerifySnapshot() *verify.Snapshot {
+	a.turnVerificationMu.Lock()
+	defer a.turnVerificationMu.Unlock()
+	return a.turnVerifySnapshot
 }
 
 // currentTurnVerification returns the stored per-turn verification state

@@ -228,6 +228,15 @@ type ToolFuncSet struct {
 	// tracker has a pre-command baseline to diff TrackShellCommand against.
 	// Nil when no tracker.
 	PrepareShellCommand func(command string)
+	// GuardStarterManifestWrite refuses a model write or edit of the
+	// project's starter manifest while verification is enabled (SP-149
+	// §149b): the manifest is the project's trusted source for the
+	// verification commands, so a mid-turn rewrite would change what
+	// "passing" means. Set by pkg/agent (wireAgentToolFuncs) to the agent's
+	// refuseStarterManifestWrite; nil in standalone runs, in which case the
+	// write/edit handlers skip the guard. The turn-start snapshot is the
+	// enforcement; this is the polite rail that refuses the write.
+	GuardStarterManifestWrite func(path string) error
 }
 
 // ResolveToolFuncs returns the tool func set to dispatch through. It prefers

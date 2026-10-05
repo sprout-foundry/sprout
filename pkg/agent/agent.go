@@ -14,6 +14,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/langguard"
 	"github.com/sprout-foundry/sprout/pkg/security"
 	"github.com/sprout-foundry/sprout/pkg/validation"
+	"github.com/sprout-foundry/sprout/pkg/verify"
 )
 
 const (
@@ -289,6 +290,17 @@ type Agent struct {
 	// error).
 	turnVerificationMu sync.Mutex
 	turnVerification   turnVerification
+	// turnVerifySnapshot is the frozen verification input captured once at
+	// the turn's start (SP-149 §149b): the starter manifest's commands and
+	// the plan's acceptance that every verification run of the turn
+	// executes against. It is stored under turnVerificationMu and reset at
+	// each turn's start (prepareQueryRun) so a turn's verification never
+	// re-reads .sprout/starter.json or .sprout/plan.json mid-turn and a
+	// previous turn's snapshot never leaks into a later one. The turn-end
+	// hook runs every repair round against this snapshot (taking a fresh
+	// one at hook entry only if none was stored), so the model cannot
+	// change what "passing" means mid-turn.
+	turnVerifySnapshot *verify.Snapshot
 	// toolFuncs is this agent's per-agent tool dispatch set, built by
 	// wireAgentToolFuncs and carried into ToolEnv so agent-dependent tools
 	// route to THIS agent, not the most recently constructed one.

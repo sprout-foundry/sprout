@@ -17,6 +17,7 @@ import (
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/verify"
 )
 
 // ---------------------------------------------------------------------------
@@ -215,6 +216,20 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 	// turn's verification outcome (the turn-end hook stores it at the
 	// turn's end).
 	a.resetTurnVerification()
+
+	// SP-149 §149b: capture the turn's verification inputs — the starter
+	// manifest's commands and the plan's acceptance — once, at the turn's
+	// start, right after the per-turn verification state is reset. Every
+	// verification run of the turn (every repair round) executes against
+	// this snapshot rather than re-reading the files, so a model that
+	// edits .sprout/starter.json or .sprout/plan.json mid-turn cannot
+	// change what "passing" means. A snapshot is taken only when
+	// verification is enabled for this turn; a disabled turn takes none.
+	if a.configManager != nil {
+		if cfg := a.configManager.GetConfig(); cfg != nil && cfg.VerificationEnabled() {
+			a.setTurnVerifySnapshot(verify.New().Snapshot(a.GetWorkspaceRoot()))
+		}
+	}
 
 	// Reset circuit breaker history for a fresh query
 	if a.state.GetCircuitBreaker() != nil {

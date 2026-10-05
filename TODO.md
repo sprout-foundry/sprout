@@ -297,7 +297,7 @@ the end, without checkboxes.
 - [x] **155.5** Hosted: the pane embeds the URL from a registered preview
       port (`register_preview_port`) instead of only printing it. Test
       with a stub. Spec: SP-155 §155a.
-- [ ] **155.6** Pane placement: Code-mode panel and the SP-143 screen
+- [x] **155.6** Pane placement: Code-mode panel and the SP-143 screen
       preview slot where it applies; e2e with a fixture starter project
       and local dev server. Spec: SP-155 §155a.
 - [ ] **155.7** Export chat, changes, file and preview views from

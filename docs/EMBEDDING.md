@@ -248,7 +248,9 @@ A reference self-hosted backend implementation of this surface exists in
 production (an LLM gateway serving the bundle at `/code` — the
 `/user/me*` GitHub account surface, BYOK settings stubs, `/api/tasks`,
 `POST /api/repo/import`, git-proxy); a sketched version of it is the
-natural companion follow-up to this document.
+natural companion follow-up to this document. The complete contract —
+bootstrap fields, session model, and the generated endpoint tables — now
+lives in **`docs/CLOUD_BACKEND_CONTRACT.md`**.
 
 ## 6. Sizing, theming, lifecycle
 

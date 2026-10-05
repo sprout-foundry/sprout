@@ -22,6 +22,7 @@ import { NATIVE_CHAT_ENABLED } from '../services/nativeChatStubs/nativeChatFlag'
 import { chatTranscriptToMessages } from '../utils/chatTranscript';
 import { processingAfter, requestChatReplay } from '../utils/chatReplay';
 import { markSteerPending, pendingSteerBubble } from '../utils/pendingSteer';
+import { activeWorkspaceModeId } from '../workspaces/useWorkspaceMode';
 import { recordConversationCleared } from './bootSessionRestore';
 
 const TOOL_MARKER = /\[executing tool \[([^\]]+)\]/;
@@ -604,7 +605,7 @@ export function useChatSessionManager({
 
       try {
         debugLog('[>>] Sending message:', trimmedMessage);
-        await apiService.sendQuery(trimmedMessage, targetChatId);
+        await apiService.sendQuery(trimmedMessage, targetChatId, activeWorkspaceModeId() ?? undefined);
         setState((prev) => ({ inputValue: '' }));
         debugLog('[OK] Message sent successfully');
       } catch (error) {

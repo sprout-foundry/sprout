@@ -1223,6 +1223,16 @@ describe('CloudAdapter', () => {
       expect(mockWasmShell.runAgent).not.toHaveBeenCalled();
     });
 
+    it('passes the workspace mode through to the in-browser agent', async () => {
+      await adapter.fetch('/api/query', {
+        method: 'POST',
+        body: JSON.stringify({ query: 'design a login screen', chat_id: 'c1', mode: 'design' }),
+      });
+
+      expect(mockWasmShell.runAgent).toHaveBeenCalledTimes(1);
+      expect(mockWasmShell.runAgent.mock.calls[0][6]).toBe('design');
+    });
+
     it('should handle /api/query with URL query parameters (stripped before routing)', async () => {
       // The CloudAdapter strips query params from the pathname before classifying
       // the endpoint. So /api/query?chat_id=abc is still routed to WASM runAgent.

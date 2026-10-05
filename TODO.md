@@ -17,6 +17,101 @@ the end, without checkboxes.
 
 ---
 
+## Review fixes — correctness and spec promises
+Found in the code review of the automated work. Fix these before new feature
+items, in order. Each fix adds a test that tries to break the rule it
+protects.
+
+- [ ] **fix.1** Verification commands cannot change mid-turn: the runner
+      re-reads `.sprout/starter.json` and `.sprout/plan.json` every repair
+      round (`pkg/verify/verify.go`), and the model can edit both. Snapshot
+      the manifest commands and plan acceptance at turn start, always run the
+      baseline build/test, and refuse model writes to `.sprout/starter.json`
+      during a turn. Test: a model that rewrites the test command to `true`
+      still fails verification. Spec: SP-149 §149b.
+- [ ] **fix.2** Deliver the verification result to the user: the block is
+      appended only to the returned string (`seed_query_result.go`), which
+      the streaming CLI and the web UI never show. Write it into the last
+      assistant message in state and emit it as a stream chunk. Test: a
+      failing turn shows "Verification: FAILED" in CLI and web output.
+      Spec: SP-149 §149d.
+- [ ] **fix.3** No "not verified" notice when verification is off:
+      `progress_complete` renders "Run complete — not verified (verification
+      disabled)" after every turn by default. Do not emit or render it when
+      verification is disabled. Spec: SP-151, SP-155 default UI unchanged.
+- [ ] **fix.4** Language guard ignores runtime-injected user messages: the
+      English `<verification-report>` messages count in the user-language
+      vote (`final_message_guard.go` `recentUserMessages`). Exclude injected
+      messages or reuse the language resolved at turn start. Test: a Spanish
+      user with two repair rounds is still judged Spanish. Spec: SP-152.
+- [ ] **fix.5** Model roles keep legacy behavior: inline completions resolve
+      the coder role, which reads `subagent_*` before `completion_*`
+      (`api_completion.go`); restore completion-first. The reviewer gate
+      `ResolveRole(reviewer) != ""` always fires; gate on an explicit
+      reviewer selection. `roleSelection` must merge field-wise with the
+      same precedence as the legacy getters (remove the test that pins the
+      inversion). Test: existing configs with only legacy fields resolve the
+      same models as before roles. Spec: SP-150 §150a.
+- [ ] **fix.6** Coalesced milestones keep their route: `mergeMilestones`
+      (`pkg/webui/stream_coalesce.go`) drops `client_id`/`chat_id`/`user_id`,
+      so every batch is filtered out; merge only same-route events and copy
+      the route keys onto the batch. Spec: SP-151.
+- [ ] **fix.7** Role attribution: subagent and reviewer spend is rolled into
+      the parent's role with zero prompt/completion; the plan agent is
+      stamped `coder`; ledger bookings carry no role
+      (`TakeUnbookedUsageByRole` has no caller); role usage is not restored
+      with state. Fix all four so per-role totals equal the overall total.
+      Spec: SP-150 §150c.
+- [ ] **fix.8** Starter instantiate endpoint stays inside the daemon root:
+      `pkg/webui/api_starters.go` has no containment check; return 403
+      outside `GetDaemonRoot()` as `handleAPIWorkspaceBrowse` does.
+- [ ] **fix.9** Hide the test fixture starter from `sprout new` and the web
+      UI chooser (its npm commands cannot run); keep it for tests only.
+- [ ] **fix.10** Language guard in streaming mode: emit a replacement event
+      with the regenerated text (CLI and web UI) instead of relying on the
+      length heuristic; show the notice only for the final (no-tool-call)
+      response, not mid-turn preambles. Spec: SP-152 acceptance.
+- [ ] **fix.11** "View original": render the held original in the web UI and
+      offer it in the CLI, or remove the claim from the notice text.
+      Spec: SP-152 §152b.
+- [ ] **fix.12** Cap total repair rounds per turn (not only per check key),
+      so alternating failures or new interaction IDs cannot loop.
+      Spec: SP-149.
+- [ ] **fix.13** Verification runs only for application-code changes: skip
+      docs and `.sprout/` paths in `TurnChangedPaths`. Spec: SP-149 §149a.
+- [ ] **fix.14** Plan revision never decreases: `planstore` `Save` bumps from
+      `max(stored, given)`.
+- [ ] **fix.15** Mode registry: reject re-registering built-in mode ids and
+      never leave zero modes (`webui/src/workspaces/registry.ts`).
+- [ ] **fix.16** Plan snapshot for milestones refreshes on plan revision, and
+      a scope that goes pending→completed in one write emits both events
+      (`scope_milestones.go`).
+- [ ] **fix.17** Progress strip filters by the active chat (`ProgressStrip.tsx`);
+      TS event types match the Go payloads (optional `plan_revision`,
+      `elapsed_ms`, batched `milestones`).
+- [ ] **fix.18** Role models settings: re-sync the draft when config changes
+      and keep custom role names on save (`RoleModelsSection.tsx`); reject
+      unknown role names in `/model --role`.
+
+## Review fixes — finish ticked items that are not wired
+- [ ] **wire.1** Benchmark: `sprout benchmark` CLI entry and a per-task
+      timeout that stops a hung turn. (The ≥5 tasks per starter wait for the
+      starter frameworks — see Not automatable.) Spec: SP-154.
+- [ ] **wire.2** Summarizer role: call the progress summarizer where the spec
+      says, through role metering and with a timeout, or remove it.
+      Spec: SP-151 §151.8.
+
+## Review fixes — repository rules
+- [ ] **rules.1** Remove item tags from code comments and user-visible
+      strings added by the automated work ("TODO 153.6", "item 149.5",
+      "(152.7)", "SP-149 §149a" in the manual-check reason). Spec-level
+      references in docs are fine.
+- [ ] **rules.2** Split files over 500 lines introduced or grown by the
+      automated work (`pkg/agent/seed_provider_chat.go`,
+      `pkg/benchmark/runner_test.go`, `config_roles_test.go`,
+      `verification_hook_test.go`, and the others the review listed), no
+      behavior change.
+
 ## Commit message generation (bug fixes)
 
 - [x] **commit.1** Commit tool: generate a real message when `message` is

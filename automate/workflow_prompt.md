@@ -42,8 +42,11 @@ Your job is to complete each TODO item with full build/test/review rigor, commit
 3. **After the orchestrator completes**, verify that it delegated the review to the `reviewer` subagent (check its output for a run_subagent call to reviewer) and that its report contains build/test evidence (commands + outcomes). If it skipped the review or lacks test evidence, treat it as a failure and retry with a stronger reminder.
 4. **Verify the build passes** (run the project's build command like `make build-all` or `go build ./...`)
 5. **If build fails**, delegate a fix to orchestrator and re-verify
-6. **Review staged changes** with `git diff --cached`, then commit using the commit tool with the `notes` parameter (NOT the `message` parameter). Pass the TODO item description and a brief summary of what changed in `notes` so the LLM can generate a proper conventional commit message.
-7. **Mark the TODO item `[x]`** in TODO.md using edit_file
+6. **Mark the TODO item `[x]`** in TODO.md using edit_file, then stage TODO.md together with the files the item changed. The tick and the work land in ONE commit; never a separate "mark complete" commit.
+7. **Review staged changes** with `git diff --cached`, then commit with the commit tool. Write the message yourself and pass it as `message`; do not rely on `notes`. The message must follow these rules:
+   - Conventional Commit subject: `type(scope): summary`, at most 72 characters, imperative mood, lowercase after the colon, no trailing period. `type` is one of `feat`, `fix`, `refactor`, `test`, `docs`, `chore`; `scope` is the area or spec, e.g. `feat(plans): add structured plan store` or `feat(billing): grant welcome credits on approval`.
+   - Optional body after one blank line, wrapped at 72 characters, at most about 5 lines: what changed and why. No file-by-file lists, no gate or test narrative, no restating the TODO text.
+   - Never mention "TODO item", item numbers, automation, or the workflow in the message.
 8. **Move to the next `[ ]` item**
 
 ## Rules
@@ -52,6 +55,11 @@ Your job is to complete each TODO item with full build/test/review rigor, commit
 - **Do NOT stop early.** Keep working through `[ ]` items until they are all `[x]` or you hit an unrecoverable error. A failed subagent, a broken build, or budget pressure are NOT stop conditions — fix, retry, or skip-and-move-on (see failure rule below) and continue to the next item.
 - If a subagent fails or the build cannot be fixed after 2 attempts, log the failure in your next iteration summary and continue to the next item. Do not stop — move on.
 - Do NOT use `git add .` or `git add -A` — only stage specific files you created or modified
+- **Tick honestly.** Mark an item `[x]` only when what it describes is reachable: a non-test caller exists and a user (or the consumer the spec names) can actually trigger it, end to end. If part is missing, leave the item `[ ]`, add a short note under it saying what remains, and move on.
+- **Test the rules, not just the happy path.** When a spec or item states a rule ("never…", "only from…", "once…", "always…", "must not…"), add a test that tries to break it (e.g. the model rewriting a command, a free user sending a role, a second grant, a second waiter) and prove the rule holds.
+- **Wiring counts.** A new function, endpoint, event or notifier is not done until something calls it outside tests. Check for the caller before ticking.
+- **Drafts on branches.** If an item says a partial implementation exists on a branch, apply it first with `git cherry-pick --no-commit <sha>` (the only allowed use of cherry-pick), review it against the spec, finish it, and commit the whole item as one commit.
+- **No item tags in code.** Comments and user-visible strings never carry TODO item numbers, spec item tags (e.g. "149.5", "§149a"), dates or workflow notes; keep the engineering reason as plain prose. Keep source files under 500 lines; split before exceeding.
 
 ## Vitest / Testing Rules (CRITICAL — OOM Prevention)
 
@@ -84,7 +92,7 @@ These operations are FORBIDDEN under all circumstances. If you feel the need to 
 - **NEVER force push** under any circumstances.
 - If a commit fails or produces a bad message, leave it as-is and continue. Do NOT try to "clean up" git history.
 
-- Commit after each TODO item, not in bulk
+- Commit once per TODO item (work plus the `[x]` tick), not in bulk
 - Skip items already marked `[x]`
 - Stop when no `[ ]` items remain
 

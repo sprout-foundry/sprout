@@ -244,3 +244,56 @@ func (a *Agent) observeScopeMilestones(prev, next []tools.TodoItem) {
 	}
 	a.scopeMilestones.observe(a, prev, next)
 }
+
+// questionContext returns the plan context a decision is correlated to (SP-151
+// §151a, item 151.4): the active scope item (the most recently started scope
+// that has not finished) and the plan revision. It is the read-side companion
+// to observe: observe records scope transitions, questionContext reports which
+// scope a mid-run decision belongs to.
+//
+// The active scope is the one with the latest startedAt among scopes that have
+// started but not finished. Scopes started in the same todo_write share a
+// startedAt (observe seeds them all with one time.Now()); on that tie the
+// lexicographically greater scope id wins, keeping the choice deterministic
+// regardless of map iteration order. With no active scope it is "".
+//
+// Locking mirrors observe and Reset: planSnapshot is called first (it takes
+// t.planMu and releases it before returning — and returns the cached revision
+// without I/O once loaded), then t.mu is taken to read scopes. The two locks
+// are never held together, so there is no deadlock and no plan I/O runs under
+// the scope lock.
+func (t *scopeMilestoneTracker) questionContext(a *Agent) (scopeID string, planRev int) {
+	if t == nil {
+		return "", 0
+	}
+	planRev, _ = t.planSnapshot(a)
+	t.mu.Lock()
+	active := ""
+	var latest time.Time
+	for id, s := range t.scopes {
+		if s == nil || !s.started || s.finished {
+			continue
+		}
+		switch {
+		case active == "":
+			active, latest = id, s.startedAt
+		case s.startedAt.After(latest):
+			active, latest = id, s.startedAt
+		case s.startedAt.Equal(latest) && id > active:
+			active = id
+		}
+	}
+	t.mu.Unlock()
+	return active, planRev
+}
+
+// planQuestionContext returns the plan context (active scope item id + plan
+// revision) a progress_question event is correlated to (SP-151 §151a, item
+// 151.4). A bare agent with no tracker (the minimal test agents) reports no
+// context: ("", 0).
+func (a *Agent) planQuestionContext() (scopeID string, planRev int) {
+	if a == nil || a.scopeMilestones == nil {
+		return "", 0
+	}
+	return a.scopeMilestones.questionContext(a)
+}

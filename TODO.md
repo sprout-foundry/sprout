@@ -263,7 +263,7 @@ the end, without checkboxes.
       references) and `progress_complete` with the final result or "not
       verified". Test: event order and correlating IDs. Spec: SP-151
       §151a; SP-149 §149c.
-- [ ] **151.4** Emit `progress_question` alongside `ask_user_request` with
+- [x] **151.4** Emit `progress_question` alongside `ask_user_request` with
       plan context. Test. Spec: SP-151 §151a.
 - [ ] **151.5** Coalesce milestones only (`pkg/webui/stream_coalesce.go`);
       question, verification and completion events never coalesced.

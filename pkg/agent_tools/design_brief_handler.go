@@ -1,5 +1,3 @@
-//go:build !js
-
 package tools
 
 import (
@@ -189,13 +187,3 @@ func (h *designBriefHandler) Timeout() time.Duration { return 60 * time.Second }
 func (h *designBriefHandler) MaxResultSize() int     { return 0 }
 func (h *designBriefHandler) SafeForParallel() bool  { return true }
 func (h *designBriefHandler) Interactive() bool      { return false }
-
-// registerDesignBriefTools registers the design_brief tool. It is pure Go, but
-// SP-140 invariant 7 keeps only design_assets and design_validate on the WASM
-// roster, so this is registered from a build-tagged registrar (excluded from
-// WASM via design_brief_handler_js.go, which returns nil).
-func registerDesignBriefTools() []ToolHandler {
-	return []ToolHandler{
-		&designBriefHandler{},
-	}
-}

@@ -40,6 +40,17 @@ export interface WasmReadFileResult {
   error?: string;
 }
 
+export interface WasmReadFileBytesResult {
+  bytes?: Uint8Array;
+  error?: string;
+}
+
+export interface WasmSaveImageResult {
+  path?: string;
+  filename?: string;
+  error?: string;
+}
+
 export interface WasmChangeDirResult {
   cwd: string;
   error?: string;
@@ -72,6 +83,10 @@ export interface WasmShell {
   writeFile(path: string, content: string): string; // error or ""
   /** Read a file's content. */
   readFile(path: string): WasmReadFileResult;
+  /** Read a file byte-exact (images, fonts). */
+  readFileBytes(path: string): WasmReadFileBytesResult;
+  /** Store an uploaded image the way the daemon's /api/upload/image does. */
+  saveImage(bytes: Uint8Array): WasmSaveImageResult;
   /** List directory entries. */
   listDir(path: string): WasmListDirResult;
   /** Delete a file. */
@@ -238,6 +253,8 @@ export interface SproutWasmAPI {
   changeDir(dir: string): string;
   writeFile(path: string, content: string): string;
   readFile(path: string): string;
+  readFileBytes?(path: string): WasmReadFileBytesResult;
+  saveImage?(bytes: Uint8Array): WasmSaveImageResult;
   listDir(path: string): string;
   deleteFile(path: string): string;
   getHistory(): string;
@@ -448,6 +465,18 @@ export async function initWasmShell(config?: {
       readFile(path: string): WasmReadFileResult {
         const json = wasm.readFile(path);
         return safeJsonParse<WasmReadFileResult>(json, { content: '', error: 'unreadable response' });
+      },
+
+      readFileBytes(path: string): WasmReadFileBytesResult {
+        const api = wasm as SproutWasmAPI;
+        if (!api.readFileBytes) return { error: 'WASM binary does not expose readFileBytes' };
+        return api.readFileBytes(path);
+      },
+
+      saveImage(bytes: Uint8Array): WasmSaveImageResult {
+        const api = wasm as SproutWasmAPI;
+        if (!api.saveImage) return { error: 'WASM binary does not expose saveImage' };
+        return api.saveImage(bytes);
       },
 
       listDir(path: string): WasmListDirResult {

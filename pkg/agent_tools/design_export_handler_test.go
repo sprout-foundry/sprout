@@ -822,14 +822,12 @@ func TestDesignExportHandler_RegisteredInAllTools(t *testing.T) {
 	require.True(t, found, "AllTools() must register design_export_tokens on native builds")
 }
 
-// TestDesignExportHandler_NotInSharedList proves SP-140 invariant 7: the
-// handler is reached through its build-tagged registrar, not constructed in
-// all.go's unconditional shared list (which would put it on the WASM roster).
-func TestDesignExportHandler_NotInSharedList(t *testing.T) {
+// TestDesignExportHandler_InSharedList pins SP-158 §158a: the handler is pure
+// Go and constructed in all.go's unconditional list, so it is on the WASM
+// roster as well as native.
+func TestDesignExportHandler_InSharedList(t *testing.T) {
 	t.Parallel()
-	all, err := os.ReadFile("all.go")
-	require.NoError(t, err)
-	assert.NotContains(t, string(all), "&designExportHandler{}",
-		"design_export_tokens must be registered via registerDesignExportTools(), not the shared list")
-	assert.Contains(t, string(all), "registerDesignExportTools()")
+	src := readToolSource(t, "design_export_handler.go")
+	assert.Empty(t, buildConstraints(src), "design_export_handler.go must carry no build constraint")
+	assert.Contains(t, readToolSource(t, designAllToolsFile), "&designExportHandler{}")
 }

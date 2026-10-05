@@ -1,6 +1,7 @@
 ---
 name: Design System
 description: The design workflow for sprout's design/ tree — brief, tokens, screens, flow sources — with validation between every step. Use for any design work (new designs, extending an existing tree, or reconciling design with code). Persona-agnostic.
+tools: design_assets, design_validate, design_brief, design_export_tokens, design_sync, design_render, design_critique, design_import_sketch
 ---
 
 # Design System — Workflow Knowledge

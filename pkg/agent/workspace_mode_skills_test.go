@@ -193,3 +193,52 @@ func TestRootAgentHasDesignAndSkillTools(t *testing.T) {
 		}
 	}
 }
+
+func TestSkillDeclaredTools(t *testing.T) {
+	cases := map[string][]string{
+		"---\nname: X\ntools: a_b, c\n---\nbody":         {"a_b", "c"},
+		"---\nname: X\ntools: [a, \"b\"]\n---\nbody":     {"a", "b"},
+		"---\nname: X\n---\ntools: not-frontmatter\n":    nil,
+		"no frontmatter\ntools: a\n":                     nil,
+		"\ufeff---\ntools: a\ndescription: d\n---\nbody": {"a"},
+	}
+	for content, want := range cases {
+		if got := skillDeclaredTools(content); !slices.Equal(got, want) {
+			t.Errorf("skillDeclaredTools(%q) = %v, want %v", content, got, want)
+		}
+	}
+}
+
+// TestActivateSkillByID_NotesToolsThisHostLacks: the design skill declares
+// its tools; a host that cannot call some of them gets the skill plus a note
+// naming them, and a host with all of them gets no note.
+func TestActivateSkillByID_NotesToolsThisHostLacks(t *testing.T) {
+	const note = "Not available in this environment"
+
+	full := newIsolatedTestAgent(t)
+	defer full.Shutdown()
+	if _, err := full.activateSkillByID(skills.SkillIDDesignSystem); err != nil {
+		t.Fatalf("activateSkillByID: %v", err)
+	}
+	if strings.Contains(full.GetSystemPrompt(), note) {
+		t.Error("a host with every declared tool must not get the unavailable-tools note")
+	}
+
+	low := newIsolatedTestAgent(t)
+	defer low.Shutdown()
+	profile, err := configuration.ResolveContextProfile(&configuration.Config{ContextMode: configuration.ContextModeLowContext}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	low.contextProfile = profile
+	if _, err := low.activateSkillByID(skills.SkillIDDesignSystem); err != nil {
+		t.Fatalf("activateSkillByID: %v", err)
+	}
+	prompt := low.GetSystemPrompt()
+	if !strings.Contains(prompt, note) || !strings.Contains(prompt, "`design_render`") {
+		t.Error("the low-context host lacks design_render; the fold must say so")
+	}
+	if strings.Contains(prompt[strings.Index(prompt, note):], "`design_validate`") {
+		t.Error("design_validate is available in low-context mode and must not be listed as missing")
+	}
+}

@@ -22,8 +22,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type { DesignFeedbackAnnotation } from '../../services/api/types';
 import { designRootPath } from '../../services/api/designApiPaths';
-import { readAsset } from '../../services/api/designApi';
-import { referencedAssetPaths } from '../../design/screenRefs';
+import { readAsset, readAssetDataUrl } from '../../services/api/designApi';
+import { isBinaryAsset, referencedAssetPaths } from '../../design/screenRefs';
 import LivePreview from '../LivePreview';
 import AnnotationPins from './AnnotationPins';
 import type { ScreenBriefModel } from './screenBrief';
@@ -165,7 +165,9 @@ export default function ScreenWorkbench({
       await Promise.all(
         assetRefsKey.split('|').map(async (ref) => {
           try {
-            next[ref] = await readAsset(read, designRootPath(ref));
+            next[ref] = isBinaryAsset(ref)
+              ? await readAssetDataUrl(read, designRootPath(ref))
+              : await readAsset(read, designRootPath(ref));
           } catch {
             // An unreadable ref falls back to the proxy form for that path.
           }

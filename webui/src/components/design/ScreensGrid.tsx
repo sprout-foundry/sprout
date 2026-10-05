@@ -39,6 +39,7 @@ import {
 import {
   designRootPath,
   readAsset,
+  readAssetDataUrl,
   writeAsset,
   readFeedback,
   fileUrl,
@@ -55,7 +56,7 @@ import type {
   DesignFeedbackAnnotation,
 } from '../../services/api/types';
 import LivePreview from '../LivePreview';
-import { injectPreviewMarker, referencedAssetPaths, rewriteScreenRefs } from '../../design/screenRefs';
+import { injectPreviewMarker, isBinaryAsset, referencedAssetPaths, rewriteScreenRefs } from '../../design/screenRefs';
 import AnnotationPins from './AnnotationPins';
 import { assetDisplayName } from './assetNames';
 import ConflictBanner from './ConflictBanner';
@@ -327,7 +328,9 @@ export default function ScreensGrid({
       await Promise.all(
         [...refs].map(async (ref) => {
           try {
-            next[ref] = await readAsset(transport, designRelativePath(ref));
+            next[ref] = isBinaryAsset(ref)
+              ? await readAssetDataUrl(transport, designRelativePath(ref))
+              : await readAsset(transport, designRelativePath(ref));
           } catch {
             // An unreadable ref falls back to the proxy form for that path.
           }

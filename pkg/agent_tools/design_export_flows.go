@@ -1,5 +1,3 @@
-//go:build !js
-
 package tools
 
 // The design_export_tokens `flows` target (SP-140-9 §9b, §9c): regenerate

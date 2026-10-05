@@ -363,47 +363,12 @@ func TestDesignBriefHandler_Deterministic(t *testing.T) {
 // Registration surface (SP-140 invariant 7)
 // ---------------------------------------------------------------------------
 
-// TestDesignBrief_RegistrarIsBuildTagged pins the build-tag split: the native
-// handler is !js with a nil-returning js stub, and all.go reaches it through
-// the registrar (never constructs the handler, which is declared only in the
-// !js file).
-func TestDesignBrief_RegistrarIsBuildTagged(t *testing.T) {
+// TestDesignBriefHandler_InSharedList pins SP-158 §158a: the handler is pure
+// Go and constructed in all.go's unconditional list, so it is on the WASM
+// roster as well as native.
+func TestDesignBriefHandler_InSharedList(t *testing.T) {
 	t.Parallel()
-
-	const handlerFile = "design_brief_handler.go"
-	const stubFile = "design_brief_handler_js.go"
-	const registrar = "registerDesignBriefTools"
-
-	handler := readToolSource(t, handlerFile)
-	assert.Contains(t, buildConstraints(handler), designNativeBuildTag,
-		"%s must carry `%s` (SP-140 invariant 7)", handlerFile, designNativeBuildTag)
-	assert.Contains(t, handler, "func "+registrar+"()")
-
-	stub := readToolSource(t, stubFile)
-	assert.Contains(t, buildConstraints(stub), designWasmBuildTag,
-		"%s must carry `%s`", stubFile, designWasmBuildTag)
-	assert.Contains(t, stub, "func "+registrar+"()")
-	assert.Contains(t, stub, "return nil",
-		"%s must return nil: the tool is unregistered on WASM", stubFile)
-
-	all := readToolSource(t, designAllToolsFile)
-	assert.Contains(t, all, registrar+"()",
-		"all.go must call %s() so the WASM exclusion is wired in", registrar)
-	assert.NotContains(t, all, "&designBriefHandler{}",
-		"all.go must reach design_brief through its registrar, not construct the !js handler")
-}
-
-// TestDesignBrief_OnRosterOnlyThroughRegistrar asserts the tool is genuinely
-// reachable on native via the registrar the roster splits on.
-func TestDesignBrief_OnRosterOnlyThroughRegistrar(t *testing.T) {
-	t.Parallel()
-	handlers := registerDesignBriefTools()
-	require.Len(t, handlers, 1)
-	assert.Equal(t, "design_brief", handlers[0].Name())
-
-	names := map[string]bool{}
-	for _, h := range AllTools() {
-		names[h.Name()] = true
-	}
-	assert.True(t, names["design_brief"], "design_brief must be registered on native")
+	src := readToolSource(t, "design_brief_handler.go")
+	assert.Empty(t, buildConstraints(src), "design_brief_handler.go must carry no build constraint")
+	assert.Contains(t, readToolSource(t, designAllToolsFile), "&designBriefHandler{}")
 }

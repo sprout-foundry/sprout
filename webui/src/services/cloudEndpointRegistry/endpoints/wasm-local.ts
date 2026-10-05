@@ -78,6 +78,12 @@ export const wasmLocalEndpoints: CloudEndpoint[] = [
     description: 'Read/write file content (WASM handles locally)',
   },
   {
+    path: '/api/design/status',
+    methods: ['GET'],
+    category: 'wasm-local',
+    description: 'Design tree health and drift (WASM designStatus)',
+  },
+  {
     path: '/api/files/prettier-config',
     methods: ['GET'],
     category: 'wasm-local',

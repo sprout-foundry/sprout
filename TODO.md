@@ -281,7 +281,7 @@ the end, without checkboxes.
 
 ## SP-155 — Live Preview and Extension Points (`roadmap/SP-155-live-preview-and-extension-points.md`)
 
-- [ ] **155.1** Public mode registration API (id, label, icon, shell
+- [x] **155.1** Public mode registration API (id, label, icon, shell
       component, availability predicate) in
       `webui/src/workspaces/registry.ts`; built-in Code and Design
       register through it. Vitest: a test mode appears in the switcher;

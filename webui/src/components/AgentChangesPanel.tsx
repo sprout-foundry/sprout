@@ -50,7 +50,7 @@ import DiffView from './DiffView';
 import { showThemedConfirm } from './ThemedDialog';
 import './AgentChangesPanel.css';
 
-interface AgentChangesPanelProps {
+export interface AgentChangesPanelProps {
   /**
    * Optional callback for "Ask agent about this change". When provided,
    * clicking the chat icon next to a file opens the chat with a

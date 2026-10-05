@@ -231,7 +231,7 @@ the end, without checkboxes.
       `reviewer`, `commit`), parsed and merged across global and project
       config; unset roles fall back to the conversation model. Tests.
       Spec: SP-150 §150a.
-- [ ] **150.2** Existing settings (`subagent_model`, `commit_model`,
+- [x] **150.2** Existing settings (`subagent_model`, `commit_model`,
       review and completion models) read as aliases for their roles. A
       test per alias. Spec: SP-150 §150a.
 - [ ] **150.3** `ResolveRole(name)` replaces the per-setting getters

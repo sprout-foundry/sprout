@@ -300,7 +300,7 @@ the end, without checkboxes.
 - [x] **155.6** Pane placement: Code-mode panel and the SP-143 screen
       preview slot where it applies; e2e with a fixture starter project
       and local dev server. Spec: SP-155 §155a.
-- [ ] **155.7** Export chat, changes, file and preview views from
+- [x] **155.7** Export chat, changes, file and preview views from
       `@sprout/ui` (or a documented entry point) with typed props; run
       `cd packages/ui && npm run build` before webui type-check. Spec:
       SP-155 §155c.

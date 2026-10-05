@@ -105,6 +105,57 @@ func (ws *ReactWebServer) handleAssets(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 }
 
+// handleWasmAssets serves the WASM runtime files (sprout.wasm,
+// wasm_exec.js) from static/wasm/. Before this route existed the requests
+// fell into the SPA catch-all and were answered with index.html as
+// text/html — the shell fetch passed its ok check and WebAssembly
+// instantiate died with an "invalid magic number" compile error.
+func (ws *ReactWebServer) handleWasmAssets(w http.ResponseWriter, r *http.Request) {
+	filePath := strings.TrimPrefix(r.URL.Path, "/wasm/")
+	if filePath == "" || strings.Contains(filePath, "..") || strings.HasPrefix(filePath, "/") || strings.HasPrefix(filePath, "\\") {
+		http.NotFound(w, r)
+		return
+	}
+
+	data, err := readStaticFile("wasm/" + filePath)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	if contentType := assetContentType(path.Ext(filePath)); contentType != "" {
+		w.Header().Set("Content-Type", contentType)
+	}
+	// The binary is content-addressed by the release tag; cache hard.
+	// (wasm_exec.js rides the same release discipline — see the
+	// checked-in-browser-runtime note in scripts/build-wasm.sh.)
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	w.Write(data)
+}
+
+// handleStandalonePage serves the editor.html / terminal.html component
+// entries. Like the WASM assets these previously fell into the SPA
+// catch-all and returned the React app instead of the component shells.
+func (ws *ReactWebServer) handleStandalonePage(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimPrefix(r.URL.Path, "/")
+	if name != "editor.html" && name != "terminal.html" {
+		http.NotFound(w, r)
+		return
+	}
+
+	data, err := readStaticFile(name)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	// The pages are entry documents: they must revalidate so a rebuilt
+	// bundle (new hashed asset URLs) is picked up immediately.
+	w.Header().Set("Cache-Control", "no-cache, must-revalidate")
+	w.Write(data)
+}
+
 // handleStaticFiles serves static files with proper MIME types
 func (ws *ReactWebServer) handleStaticFiles(w http.ResponseWriter, r *http.Request) {
 	if !strings.HasPrefix(r.URL.Path, "/static/") {

@@ -361,6 +361,17 @@ export async function initWasmShell(config?: {
     if (!wasmResponse.ok) {
       throw new Error(`Failed to fetch ${wasmUrl}: ${wasmResponse.status}`);
     }
+    // Guard against a misrouted asset: a server answering the .wasm URL
+    // with the SPA's index.html (or any non-wasm type) passes the ok check
+    // and only dies later inside WebAssembly.instantiate with an opaque
+    // "invalid magic number". Name the actual problem instead.
+    const wasmType = (wasmResponse.headers.get('content-type') ?? '').toLowerCase();
+    if (wasmType && !wasmType.includes('application/wasm') && !wasmType.includes('octet-stream')) {
+      throw new Error(
+        `${wasmUrl} answered Content-Type ${wasmType}, not application/wasm — ` +
+          `the server is not serving the WASM asset (check the /wasm/ route or the asset path)`,
+      );
+    }
 
     debug(' Step 4: Reading arrayBuffer...');
     const wasmBuffer = await wasmResponse.arrayBuffer();

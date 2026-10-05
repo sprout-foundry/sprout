@@ -294,7 +294,7 @@ the end, without checkboxes.
 - [x] **155.4** Backend: start or detect the dev server from the starter
       manifest's `dev` command and port (153.2) and expose its URL to the
       pane. Go tests. Spec: SP-155 §155a.
-- [ ] **155.5** Hosted: the pane embeds the URL from a registered preview
+- [x] **155.5** Hosted: the pane embeds the URL from a registered preview
       port (`register_preview_port`) instead of only printing it. Test
       with a stub. Spec: SP-155 §155a.
 - [ ] **155.6** Pane placement: Code-mode panel and the SP-143 screen

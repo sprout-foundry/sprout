@@ -273,7 +273,7 @@ the end, without checkboxes.
       Tests. Spec: SP-151 §151c.
 - [x] **151.7** Web UI compact progress strip in the chat rendering the
       summaries. Vitest. Spec: SP-151 §151c.
-- [ ] **151.8** Optional `summarizer`-role summaries built only from event
+- [x] **151.8** Optional `summarizer`-role summaries built only from event
       fields, template fallback on error; never a success summary without
       a passing verification event. Tests. Spec: SP-151 §151c.
 

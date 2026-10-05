@@ -353,6 +353,151 @@ func TestSetRole_NilReceiver(t *testing.T) {
 	assert.NotPanics(t, func() { cfg.SetRole(RolePlanner, RoleConfig{Provider: "openai"}) })
 }
 
+// TestResolveRole_InternalRoleChains pins item 150.3 (SP-150 §150b):
+// ResolveRole is the single internal resolver. For each internal role the
+// full precedence chain must hold: an explicit roles-section entry beats
+// the legacy alias settings, which beat the conversation's (last-used
+// provider + its configured model).
+func TestResolveRole_InternalRoleChains(t *testing.T) {
+	newCfg := func() *Config {
+		return &Config{
+			LastUsedProvider: "openrouter",
+			ProviderModels:   map[string]string{"openrouter": "openai/gpt-5", "zai": "GLM-4.6"},
+		}
+	}
+
+	tests := []struct {
+		name         string
+		role         string
+		mutate       func(c *Config)
+		wantProvider string
+		wantModel    string
+	}{
+		{
+			name: "coder: roles entry wins over the subagent alias",
+			role: RoleCoder,
+			mutate: func(c *Config) {
+				c.SubagentProvider = "zai"
+				c.SubagentModel = "sub-m"
+				c.Roles = map[string]RoleConfig{RoleCoder: {Provider: "openrouter", Model: "role-m"}}
+			},
+			wantProvider: "openrouter",
+			wantModel:    "role-m",
+		},
+		{
+			name: "coder: subagent settings alias when the role is unset",
+			role: RoleCoder,
+			mutate: func(c *Config) {
+				c.SubagentProvider = "zai"
+				c.SubagentModel = "sub-m"
+			},
+			wantProvider: "zai",
+			wantModel:    "sub-m",
+		},
+		{
+			name: "coder: completion settings when subagent settings are unset",
+			role: RoleCoder,
+			mutate: func(c *Config) {
+				c.CompletionProvider = "zai"
+				c.CompletionModel = "completion-m"
+			},
+			wantProvider: "zai",
+			wantModel:    "completion-m",
+		},
+		{
+			name:         "coder: conversation fallback when nothing is set",
+			role:         RoleCoder,
+			wantProvider: "openrouter",
+			wantModel:    "openai/gpt-5",
+		},
+		{
+			name: "commit: roles entry wins over the commit alias",
+			role: RoleCommit,
+			mutate: func(c *Config) {
+				c.CommitProvider = "zai"
+				c.CommitModel = "commit-m"
+				c.Roles = map[string]RoleConfig{RoleCommit: {Provider: "openrouter", Model: "role-m"}}
+			},
+			wantProvider: "openrouter",
+			wantModel:    "role-m",
+		},
+		{
+			name: "commit: commit settings alias when the role is unset",
+			role: RoleCommit,
+			mutate: func(c *Config) {
+				c.CommitProvider = "zai"
+				c.CommitModel = "commit-m"
+			},
+			wantProvider: "zai",
+			wantModel:    "commit-m",
+		},
+		{
+			name:         "commit: conversation fallback when nothing is set",
+			role:         RoleCommit,
+			wantProvider: "openrouter",
+			wantModel:    "openai/gpt-5",
+		},
+		{
+			name: "reviewer: roles entry wins over the review alias",
+			role: RoleReviewer,
+			mutate: func(c *Config) {
+				c.ReviewProvider = "zai"
+				c.ReviewModel = "review-m"
+				c.Roles = map[string]RoleConfig{RoleReviewer: {Provider: "openrouter", Model: "role-m"}}
+			},
+			wantProvider: "openrouter",
+			wantModel:    "role-m",
+		},
+		{
+			name: "reviewer: review settings alias when the role is unset",
+			role: RoleReviewer,
+			mutate: func(c *Config) {
+				c.ReviewProvider = "zai"
+				c.ReviewModel = "review-m"
+			},
+			wantProvider: "zai",
+			wantModel:    "review-m",
+		},
+		{
+			name:         "reviewer: conversation fallback when nothing is set",
+			role:         RoleReviewer,
+			wantProvider: "openrouter",
+			wantModel:    "openai/gpt-5",
+		},
+		{
+			name: "planner: roles entry only (no legacy alias)",
+			role: RolePlanner,
+			mutate: func(c *Config) {
+				c.SubagentProvider = "zai" // present but must not alias planner
+				c.Roles = map[string]RoleConfig{RolePlanner: {Provider: "openrouter", Model: "planner-m"}}
+			},
+			wantProvider: "openrouter",
+			wantModel:    "planner-m",
+		},
+		{
+			name: "planner: conversation fallback (no legacy alias)",
+			role: RolePlanner,
+			mutate: func(c *Config) {
+				c.SubagentProvider = "zai" // present but must not alias planner
+			},
+			wantProvider: "openrouter",
+			wantModel:    "openai/gpt-5",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := newCfg()
+			if tt.mutate != nil {
+				tt.mutate(cfg)
+			}
+			provider, model := cfg.ResolveRole(tt.role)
+			assert.Equal(t, tt.wantProvider, provider, tt.name)
+			assert.Equal(t, tt.wantModel, model, tt.name)
+		})
+	}
+}
+
 // TestBuiltInRoles verifies the stable ordering of the built-in role names.
 func TestBuiltInRoles(t *testing.T) {
 	assert.Equal(t,

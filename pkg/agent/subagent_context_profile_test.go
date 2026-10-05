@@ -70,6 +70,45 @@ func TestSubagentProfile_SmallModelActivatesLCM(t *testing.T) {
 	}
 }
 
+// TestSubagentProfile_RoleResolvedModelResolvesOwnProfile verifies SP-150
+// §150b on top of SP-125 R4: the subagent's provider/model come from role
+// resolution (roles.coder points at a small-context model) and the context
+// profile is resolved against the subagent's OWN model window — LCM
+// activates even though the parent runs a 200K model.
+func TestSubagentProfile_RoleResolvedModelResolvesOwnProfile(t *testing.T) {
+	parent, runner := newSubagentProfileTestRunner(t, 200_000, 32_000)
+	defer parent.Shutdown()
+
+	if err := parent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		cfg.Roles = map[string]configuration.RoleConfig{
+			configuration.RoleCoder: {Provider: "test", Model: "small-context-model"},
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("UpdateConfigNoSave failed: %v", err)
+	}
+
+	// The spawn path (SP-150 §150b) resolves the coder role and flows the
+	// pair into SubagentOptions exactly as the spawn handler does.
+	provider, model := parent.configManager.GetConfig().ResolveRole(configuration.RoleCoder)
+	if provider != "test" || model != "small-context-model" {
+		t.Fatalf("role resolution = (%q, %q), want (test, small-context-model)", provider, model)
+	}
+
+	sub, err := runner.createSubagent(SubagentOptions{Persona: "coder", Provider: provider, Model: model}, context.Background())
+	if err != nil {
+		t.Fatalf("createSubagent failed: %v", err)
+	}
+	defer sub.Shutdown()
+
+	if sub.contextProfile.Mode != configuration.ContextModeLowContext {
+		t.Errorf("expected ContextModeLowContext for the role-resolved 32K model, got %q", sub.contextProfile.Mode)
+	}
+	if got := sub.state.GetMaxContextTokens(); got != 32_000 {
+		t.Errorf("subagent max context tokens = %d, want 32000", got)
+	}
+}
+
 // TestSubagentProfile_LargeModelStaysFull verifies that a 200K subagent model
 // does NOT activate LCM, even when the parent is also 200K (full mode).
 func TestSubagentProfile_LargeModelStaysFull(t *testing.T) {

@@ -4,12 +4,14 @@ package webui
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/codecompletion"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/factory"
 )
 
@@ -49,39 +51,14 @@ func (ws *ReactWebServer) handleAPICompletion(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	var clientType api.ClientType
-	var model string
-	var client api.ClientInterface
-	cfg := configManager.GetConfig()
-
-	// Try the completion-specific provider/model first (e.g. a cheap local
-	// Ollama model). If it is not configured or cannot be reached, fall back
-	// to the main provider.
-	if completionProvider := cfg.GetCompletionProvider(); completionProvider != "" {
-		if ct, mapErr := configManager.MapStringToClientType(completionProvider); mapErr == nil {
-			clientType = ct
-			model = cfg.GetCompletionModel()
-			if cl, createErr := factory.CreateProviderClient(clientType, model); createErr == nil {
-				client = cl
-			}
+	client, _, _, selErr := resolveCompletionClient(configManager)
+	if selErr != nil {
+		code := "failed_to_create_provider_client"
+		if errors.Is(selErr, errCompletionProviderUnresolvable) {
+			code = "failed_to_resolve_provider"
 		}
-	}
-
-	// No completion provider configured, or it failed to create — use the main provider.
-	if client == nil {
-		var resolveErr error
-		clientType, resolveErr = configManager.GetProvider()
-		if resolveErr != nil {
-			writeJSONErr(w, http.StatusInternalServerError, "failed_to_resolve_provider", fmt.Sprintf("Failed to resolve provider: %v", resolveErr))
-			return
-		}
-		model = configManager.GetModelForProvider(clientType)
-		var createErr error
-		client, createErr = factory.CreateProviderClient(clientType, model)
-		if createErr != nil {
-			writeJSONErr(w, http.StatusInternalServerError, "failed_to_create_provider_client", fmt.Sprintf("Failed to create provider client: %v", createErr))
-			return
-		}
+		writeJSONErr(w, http.StatusInternalServerError, code, selErr.Error())
+		return
 	}
 
 	result, err := codecompletion.GenerateCompletion(r.Context(), client, codecompletion.CompletionRequest{
@@ -101,4 +78,45 @@ func (ws *ReactWebServer) handleAPICompletion(w http.ResponseWriter, r *http.Req
 		"model":       client.GetModel(),
 		"tokens_used": result.TokensUsed,
 	})
+}
+
+// Sentinel errors for resolveCompletionClient's main-provider fallback so
+// the handler keeps its pre-role error codes.
+var (
+	// errCompletionProviderUnresolvable marks a main-provider resolution
+	// failure (handler code failed_to_resolve_provider).
+	errCompletionProviderUnresolvable = errors.New("failed to resolve provider")
+	// errCompletionClientCreation marks a main-provider client creation
+	// failure (handler code failed_to_create_provider_client).
+	errCompletionClientCreation = errors.New("failed to create provider client")
+)
+
+// resolveCompletionClient picks the LLM client for code completion (SP-150
+// §150b: the completion path resolves the coder role, which aliases the
+// legacy completion settings): the role-resolved provider/model first
+// (e.g. a cheap local model for inline completions), then the main
+// conversation provider. A role that resolves to an empty provider means
+// "no explicit selection"; the main provider is then the only candidate.
+// The error, when non-nil, wraps one of the two sentinel errors above.
+func resolveCompletionClient(configManager *configuration.Manager) (api.ClientInterface, api.ClientType, string, error) {
+	cfg := configManager.GetConfig()
+
+	if completionProvider, completionModel := cfg.ResolveRole(configuration.RoleCoder); completionProvider != "" {
+		if clientType, mapErr := configManager.MapStringToClientType(completionProvider); mapErr == nil {
+			if client, createErr := factory.CreateProviderClient(clientType, completionModel); createErr == nil {
+				return client, clientType, completionModel, nil
+			}
+		}
+	}
+
+	clientType, resolveErr := configManager.GetProvider()
+	if resolveErr != nil {
+		return nil, clientType, "", fmt.Errorf("%w: %w", errCompletionProviderUnresolvable, resolveErr)
+	}
+	model := configManager.GetModelForProvider(clientType)
+	client, createErr := factory.CreateProviderClient(clientType, model)
+	if createErr != nil {
+		return nil, clientType, model, fmt.Errorf("%w: %w", errCompletionClientCreation, createErr)
+	}
+	return client, clientType, model, nil
 }

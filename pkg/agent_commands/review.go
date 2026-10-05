@@ -144,9 +144,10 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 		return fmt.Errorf("configuration error: %w", err)
 	}
 
-	// Display the provider/model being used for review
-	reviewProvider := cfg.GetReviewProvider()
-	reviewModel := cfg.GetReviewModel()
+	// Display the provider/model being used for review. SP-150 §150b: the
+	// review flow resolves the reviewer role; the review settings alias it,
+	// and an unset role falls back to the last-used provider.
+	reviewProvider, reviewModel := cfg.ResolveRole(configuration.RoleReviewer)
 	logger.LogProcessStep(fmt.Sprintf("Using provider: %s, model: %s for review", reviewProvider, reviewModel))
 
 	logger.LogProcessStep("Configuration loaded successfully")

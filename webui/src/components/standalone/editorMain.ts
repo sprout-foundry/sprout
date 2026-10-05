@@ -22,7 +22,7 @@
  * webui alike.
  */
 import { EditorView } from '@codemirror/view';
-import { editorExtensionsFor, languageTitleFor } from './editorLang';
+import { editorExtensionsFor, languageCompartment, languageTitleFor, loadLanguageExtension } from './editorLang';
 import { bootStandaloneEscalation } from './standaloneEscalation';
 import { buildReadyPayload as readyPayload } from './standaloneReady';
 import { isFromTrustedParent, postTargetOrigin } from './standaloneOrigin';
@@ -107,6 +107,11 @@ async function openPath(path: string, content?: string) {
   }
   buildView(doc, path);
   clearDirty();
+  // Grammar loads after first paint (dynamic import, per language).
+  const lang = await loadLanguageExtension(path);
+  if (lang && view && currentPath === path) {
+    view.dispatch({ effects: languageCompartment.reconfigure(lang) });
+  }
 }
 async function saveCurrent() {
   if (!view || !currentPath) return;

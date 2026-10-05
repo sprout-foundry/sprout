@@ -39,7 +39,7 @@ protects.
       `progress_complete` renders "Run complete — not verified (verification
       disabled)" after every turn by default. Do not emit or render it when
       verification is disabled. Spec: SP-151, SP-155 default UI unchanged.
-- [ ] **fix.4** Language guard ignores runtime-injected user messages: the
+- [x] **fix.4** Language guard ignores runtime-injected user messages: the
       English `<verification-report>` messages count in the user-language
       vote (`final_message_guard.go` `recentUserMessages`). Exclude injected
       messages or reuse the language resolved at turn start. Test: a Spanish

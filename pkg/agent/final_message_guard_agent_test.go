@@ -8,6 +8,8 @@ import (
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/langguard"
+	"github.com/sprout-foundry/sprout/pkg/plancontract"
+	"github.com/sprout-foundry/sprout/pkg/verify"
 )
 
 // Reliably detectable prose fixtures, mirrored from pkg/langguard's
@@ -17,6 +19,12 @@ const (
 	lgEnglishProse  = "The build succeeded after applying the patch, so the tests can run and the release is ready to ship."
 	lgEnglishProse2 = "All the tests passed after the patch was applied, so the release is now ready to be shipped."
 	lgSpanishProse  = "El paquete está listo para compilar ahora mismo y las pruebas pasan sin errores."
+
+	// Long, unambiguous Spanish prose (30+ words per sentence) that the
+	// trigram detector reports above its reliability bar, so the vote
+	// over it is deterministic.
+	lgSpanishLongA = "Necesito que la aplicación muestre la lista de tareas en la pantalla principal, con los filtros por estado y por fecha de creación, y que el buscador funcione sin recargar la página entera."
+	lgSpanishLongB = "Además quiero que el panel de configuración permita cambiar el idioma de la interfaz y activar el tema oscuro, y que los cambios se guarden automáticamente sin tener que pulsar ningún botón extra."
 )
 
 // newLanguageGuardAgent builds an Agent backed by a scripted client with
@@ -241,6 +249,58 @@ func TestApplyLanguageGuardNilConfig(t *testing.T) {
 	}
 	if last := lastAssistantMessage(t, ag); last.Content != want {
 		t.Errorf("final assistant message = %q, want the notice %q", last.Content, want)
+	}
+}
+
+// failingVerificationReport builds a verification report exactly the way
+// the turn-end hook builds one for a failing build check: the English
+// <verification-report> envelope that lands as a user-role message in
+// the transcript on every repair round.
+func failingVerificationReport(attempts map[string]int) string {
+	res := &verify.Result{
+		Checks: []verify.Check{
+			{Kind: plancontract.KindBuild, Command: "make build", Excerpt: "go: build failed"},
+		},
+	}
+	return buildVerificationReport(res, attempts, 3)
+}
+
+// TestRecentUserMessagesExcludesVerificationReports pins the rule that
+// machine-injected verification reports never count in the user-language
+// vote. The turn-end hook feeds each failing report back to the model as
+// a user-role message, so a Spanish user with two repair rounds has two
+// English reports in the history alongside their own Spanish messages.
+// Under the old behavior the reports tie the user's messages (no unique
+// winner), the user's language resolves as undetermined, and the guard
+// never judges the reply; the test fails if the reports start counting
+// again.
+func TestRecentUserMessagesExcludesVerificationReports(t *testing.T) {
+	ag, _ := newLanguageGuardAgent(t, "", false)
+	msgs := []api.Message{
+		{Role: "user", Content: lgSpanishLongA},
+		{Role: "assistant", Content: lgEnglishProse},
+		{Role: "user", Content: lgSpanishLongB},
+		{Role: "assistant", Content: lgEnglishProse2},
+		{Role: "user", Content: failingVerificationReport(map[string]int{"build": 1})},
+		{Role: "assistant", Content: lgEnglishProse},
+		{Role: "user", Content: failingVerificationReport(map[string]int{"build": 2})},
+		{Role: "assistant", Content: lgSpanishProse},
+	}
+
+	recent := ag.recentUserMessages(msgs)
+	if len(recent) != 2 {
+		t.Fatalf("recentUserMessages = %d messages, want the user's 2 (the reports excluded)", len(recent))
+	}
+	if recent[0] != lgSpanishLongA || recent[1] != lgSpanishLongB {
+		t.Errorf("recentUserMessages = %q, want the user's own messages in chronological order", recent)
+	}
+
+	user, determined := langguard.ResolveUserLanguage(recent, langguard.Language{})
+	if !determined {
+		t.Fatalf("user language undetermined; want determined (the reports must not count in the vote)")
+	}
+	if user.Code != "es" {
+		t.Errorf("user language = %q, want %q", user.Code, "es")
 	}
 }
 

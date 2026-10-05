@@ -36,6 +36,10 @@ func newStartersTestServer(t *testing.T) *ReactWebServer {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Scope the instantiate endpoint's containment bound (fix.8) to a
+	// controlled daemon root, so tests exercise the 403 path with
+	// predictable edges instead of the process's real $HOME.
+	server.daemonRoot = t.TempDir()
 	return server
 }
 
@@ -142,7 +146,7 @@ func TestHandleAPIStartersInstantiate(t *testing.T) {
 
 	t.Run("instantiates into a fresh directory", func(t *testing.T) {
 		ws := newStartersTestServer(t)
-		dest := filepath.Join(t.TempDir(), "newproj")
+		dest := filepath.Join(ws.daemonRoot, "newproj")
 		req := httptest.NewRequest(http.MethodPost, "/api/starters/instantiate", strings.NewReader(starterInstantiateBody("fixture", dest, "")))
 		rec := httptest.NewRecorder()
 		ws.handleAPIStartersInstantiate(rec, req)
@@ -199,7 +203,7 @@ func TestHandleAPIStartersInstantiate(t *testing.T) {
 
 	t.Run("unknown starter returns 404", func(t *testing.T) {
 		ws := newStartersTestServer(t)
-		req := httptest.NewRequest(http.MethodPost, "/api/starters/instantiate", strings.NewReader(starterInstantiateBody("no-such-starter", filepath.Join(t.TempDir(), "x"), "")))
+		req := httptest.NewRequest(http.MethodPost, "/api/starters/instantiate", strings.NewReader(starterInstantiateBody("no-such-starter", filepath.Join(ws.daemonRoot, "x"), "")))
 		rec := httptest.NewRecorder()
 		ws.handleAPIStartersInstantiate(rec, req)
 		if rec.Code != http.StatusNotFound {
@@ -210,7 +214,7 @@ func TestHandleAPIStartersInstantiate(t *testing.T) {
 
 	t.Run("path-like starter id is rejected", func(t *testing.T) {
 		ws := newStartersTestServer(t)
-		req := httptest.NewRequest(http.MethodPost, "/api/starters/instantiate", strings.NewReader(starterInstantiateBody("../../evil", filepath.Join(t.TempDir(), "x"), "")))
+		req := httptest.NewRequest(http.MethodPost, "/api/starters/instantiate", strings.NewReader(starterInstantiateBody("../../evil", filepath.Join(ws.daemonRoot, "x"), "")))
 		rec := httptest.NewRecorder()
 		ws.handleAPIStartersInstantiate(rec, req)
 		if rec.Code != http.StatusBadRequest {
@@ -232,7 +236,7 @@ func TestHandleAPIStartersInstantiate(t *testing.T) {
 
 	t.Run("missing starter returns 400", func(t *testing.T) {
 		ws := newStartersTestServer(t)
-		req := httptest.NewRequest(http.MethodPost, "/api/starters/instantiate", strings.NewReader(fmt.Sprintf(`{"path":%q}`, filepath.Join(t.TempDir(), "x"))))
+		req := httptest.NewRequest(http.MethodPost, "/api/starters/instantiate", strings.NewReader(fmt.Sprintf(`{"path":%q}`, filepath.Join(ws.daemonRoot, "x"))))
 		rec := httptest.NewRecorder()
 		ws.handleAPIStartersInstantiate(rec, req)
 		if rec.Code != http.StatusBadRequest {
@@ -265,9 +269,42 @@ func TestHandleAPIStartersInstantiate(t *testing.T) {
 		}
 	})
 
+	t.Run("target outside daemon root returns 403", func(t *testing.T) {
+		ws := newStartersTestServer(t)
+		// A fresh directory that is NOT under ws.daemonRoot: the
+		// containment check must refuse it before anything is written.
+		outside := t.TempDir()
+		req := httptest.NewRequest(http.MethodPost, "/api/starters/instantiate", strings.NewReader(starterInstantiateBody("fixture", outside, "")))
+		rec := httptest.NewRecorder()
+		ws.handleAPIStartersInstantiate(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 for a target outside the daemon root, got %d: %s", rec.Code, rec.Body.String())
+		}
+		jsonErrorCode(t, rec, "target_outside_daemon_root")
+		// Nothing was written to the out-of-bounds target.
+		if entries, err := os.ReadDir(outside); err == nil && len(entries) > 0 {
+			t.Errorf("expected no writes to the out-of-bounds target, found %d entries", len(entries))
+		}
+	})
+
+	t.Run("daemon root itself is an allowed target", func(t *testing.T) {
+		ws := newStartersTestServer(t)
+		// The daemon root itself (or a child of it) is in-bounds.
+		req := httptest.NewRequest(http.MethodPost, "/api/starters/instantiate", strings.NewReader(starterInstantiateBody("fixture", filepath.Join(ws.daemonRoot, "child"), "")))
+		rec := httptest.NewRecorder()
+		ws.handleAPIStartersInstantiate(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 for a target under the daemon root, got %d: %s", rec.Code, rec.Body.String())
+		}
+		if _, err := os.Stat(filepath.Join(ws.daemonRoot, "child", "README.md")); err != nil {
+			t.Errorf("expected the tree under the daemon root: %v", err)
+		}
+	})
+
 	t.Run("absolute traversal is canonicalized, not refused", func(t *testing.T) {
 		ws := newStartersTestServer(t)
-		base := t.TempDir()
+		base := ws.daemonRoot
 		// Clean collapses the ".." segment; the write lands at base/proj.
 		target := filepath.Join(base, "x", "..", "proj")
 		req := httptest.NewRequest(http.MethodPost, "/api/starters/instantiate", strings.NewReader(starterInstantiateBody("fixture", target, "")))
@@ -288,7 +325,7 @@ func TestHandleAPIStartersInstantiate(t *testing.T) {
 
 	t.Run("non-empty destination is refused and left untouched", func(t *testing.T) {
 		ws := newStartersTestServer(t)
-		dest := t.TempDir()
+		dest := ws.daemonRoot
 		existing := filepath.Join(dest, "keep.txt")
 		if err := os.WriteFile(existing, []byte("keep"), 0o644); err != nil {
 			t.Fatal(err)
@@ -309,7 +346,7 @@ func TestHandleAPIStartersInstantiate(t *testing.T) {
 
 	t.Run("project name is accepted but never used for paths", func(t *testing.T) {
 		ws := newStartersTestServer(t)
-		dest := filepath.Join(t.TempDir(), "named")
+		dest := filepath.Join(ws.daemonRoot, "named")
 		req := httptest.NewRequest(http.MethodPost, "/api/starters/instantiate", strings.NewReader(starterInstantiateBody("fixture", dest, "my app")))
 		rec := httptest.NewRecorder()
 		ws.handleAPIStartersInstantiate(rec, req)
@@ -324,7 +361,7 @@ func TestHandleAPIStartersInstantiate(t *testing.T) {
 	t.Run("path-like project name is rejected", func(t *testing.T) {
 		for _, name := range []string{"../../evil", "a/b", ".."} {
 			ws := newStartersTestServer(t)
-			req := httptest.NewRequest(http.MethodPost, "/api/starters/instantiate", strings.NewReader(starterInstantiateBody("fixture", filepath.Join(t.TempDir(), "n"), name)))
+			req := httptest.NewRequest(http.MethodPost, "/api/starters/instantiate", strings.NewReader(starterInstantiateBody("fixture", filepath.Join(ws.daemonRoot, "n"), name)))
 			rec := httptest.NewRecorder()
 			ws.handleAPIStartersInstantiate(rec, req)
 			if rec.Code != http.StatusBadRequest {

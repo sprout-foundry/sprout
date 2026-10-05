@@ -839,7 +839,7 @@
         "context_length": 262144,
         "description": "Gemma is a family of open models built by Google DeepMind. Gemma 4 models are multimodal, handling text and image input and generating text output.",
         "id": "google/gemma-4-31B-it",
-        "input_cost": 0.15,
+        "input_cost": 0.2,
         "name": "Gemma 4 31B",
         "output_cost": 0.4,
         "tags": [

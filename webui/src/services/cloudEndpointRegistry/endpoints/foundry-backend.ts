@@ -75,24 +75,39 @@ const taskEndpoints: CloudEndpoint[] = [
 ];
 
 // --- Fly workspaces & ETH-2 transactions ---
-// /workspace/fly is platform-only surface (never a local sprout route), used
-// by the escalation paths: list/create workspaces and the txn lifecycle the
-// "Run in cloud container" action drives (push deltas → run → pull deltas →
-// finish). Relative URLs so the CloudAdapter proxies them with session
-// credentials.
+// /workspace/fly is the LEGACY prefix: the live client (cloudTxn.ts) addresses
+// the host-agnostic /workspace/txn surface (SP-BUILDER-12) and only falls back
+// to /workspace/fly for in-flight sessions that resolved a workspace before
+// that change. /workspace/fly remains platform-only surface (never a local
+// sprout route); both prefixes are relative so the CloudAdapter proxies them
+// with session credentials.
 const flyWorkspaceEndpoints: CloudEndpoint[] = [
+  {
+    path: '/workspace/txn',
+    methods: ['GET', 'POST'],
+    category: 'foundry-backend',
+    description:
+      'Resolve/create the caller workspace for a repo, any backend (runner when attached, else Fly) — the escalation entry point',
+  },
+  {
+    path: '/workspace/txn/',
+    methods: ['POST', 'GET'],
+    category: 'foundry-backend',
+    isPrefix: true,
+    description: 'Backend-agnostic txn lifecycle (open/status/push/run/pull/finish)',
+  },
   {
     path: '/workspace/fly',
     methods: ['GET', 'POST'],
     category: 'foundry-backend',
-    description: 'List/create Fly workspaces (escalation + txn workspace resolve)',
+    description: 'Legacy: list/create Fly workspaces (in-flight sessions only)',
   },
   {
     path: '/workspace/fly/',
     methods: ['POST', 'GET'],
     category: 'foundry-backend',
     isPrefix: true,
-    description: 'Fly workspace txn lifecycle (open/status/push/run/pull/finish)',
+    description: 'Legacy: Fly workspace txn lifecycle (in-flight sessions only)',
   },
 ];
 

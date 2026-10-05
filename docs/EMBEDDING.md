@@ -232,9 +232,12 @@ reads at boot. The fields that matter to a non-platform host:
   (Host-driven picker configuration — pointing the CTA at a
   host-chosen route — is a requested follow-up.)
 - **Tasks**: `GET|POST /api/tasks`, `GET /api/tasks/{id}`.
-- **Escalation**: `GET|POST /workspace/fly` + the txn lifecycle
-  (`/workspace/fly/{id}/txn/...`) — the "Run in cloud container" path.
-  A self-host backend can implement it against any container host.
+- **Escalation**: `GET|POST /workspace/txn` + the txn lifecycle
+  (`/workspace/txn/{workspaceId}/txn/...`) — the "Run in cloud container"
+  path. The surface is backend-agnostic (SP-BUILDER-12): the platform
+  routes to the user's own runner when one is attached, else Fly.
+  `/workspace/fly` remains for in-flight legacy clients. A self-host
+  backend can implement it against any container host.
 - **Settings/BYOK**: `GET|POST /api/settings`, `/api/settings/providers`,
   `/api/settings/credentials` (+ `/…/{id}`), `GET /api/providers`.
 - **Misc**: `GET /api/stats`, `GET /api/terminal/agent-sessions*`,
@@ -273,21 +276,26 @@ lives in **`docs/CLOUD_BACKEND_CONTRACT.md`**.
 
 ## 7. What the embed cannot do (yet)
 
-Standalone pages: no chat, no agent loop, no auth, no git bridge (the
-browser-git dispatch needs the full webui's bridge, read-only when
-present). Cloud bundle: needs a backend for the §5b surface, and the
-GitHub picker is platform-hardwired today (host-driven picker
-configuration is the requested fix).
+Standalone pages: no chat and no agent loop. They DO have the git/VFS
+bridge and the escalation wiring (`standaloneEscalation.ts`): pass
+`?repo=<url>` when you open the page and an exit-127 command in the
+terminal runs through the cloud-workspace txn flow (consent comes to
+you as a `sprout-host` `confirm` postMessage — answer with
+`{ source: 'sprout-host', type: 'confirmResult', decision: 'once' |
+'always' | 'deny' }`). Cloud bundle: needs a backend for the §5b
+surface, and the GitHub picker is platform-hardwired today (host-driven
+picker configuration is the requested fix).
 
 The WASM shell covers the POSIX-ish core (file tools, text processing).
 It cannot reach your network, spawn real processes, or run native
-toolchains — a `go build` in the embedded terminal runs nothing. `git`
-answers only after the full webui app has registered its browser-git
-bridge (the standalone embed pages don't ship it), and read-only at that
-(status/log/diff/show — see `pkg/wasmshell/commands_git.go`). For full
-builds, the hosted path (platform workspaces, SP-BUILDER-5) remains the
-answer; the browser shell is for light in-page work: editing,
-inspection, format/transform tools, teaching, support consoles.
+toolchains — a `go build` in the embedded terminal runs nothing in-page;
+it is exactly what the escalation path hands to the cloud workspace.
+`git` answers read-only (status/log/diff/show — see
+`pkg/wasmshell/commands_git.go`); full clone/push needs the full webui
+app's browser-git bridge or an escalation run. For full builds, the
+hosted path (platform workspaces, SP-BUILDER-5) remains the answer; the
+browser shell is for light in-page work: editing, inspection,
+format/transform tools, teaching, support consoles.
 
 WASM feature parity is tracked in `docs/WASM_API.md` (its "Build state"
 note).

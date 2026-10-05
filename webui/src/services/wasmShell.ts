@@ -383,6 +383,10 @@ export async function initWasmShell(config?: {
     // time-to-ready on the 55MB binary. It requires the response to be
     // application/wasm (browsers enforce the MIME type), so octet-stream
     // servers and missing headers fall back to the buffered path.
+    //
+    // The streaming attempt consumes its OWN fetch; the original
+    // wasmResponse stays untouched and is the fallback body — a failed
+    // stream never re-downloads 55MB.
     let compile: Promise<WebAssembly.WebAssemblyInstantiatedSource>;
     if (wasmType.includes('application/wasm') && typeof WebAssembly.instantiateStreaming === 'function') {
       debug(' Step 4a: instantiateStreaming...');

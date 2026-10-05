@@ -162,6 +162,40 @@ func TestHandleWasmAssetsDoesNotCompressWasmExec(t *testing.T) {
 	}
 }
 
+func TestNegotiatePrecompressedWasmQValueRejection(t *testing.T) {
+	server := newWebServerForRoutes(t)
+
+	// A client that explicitly rejects an encoding (q=0) cannot decompress
+	// that body — serving one would hard-break the load.
+	tests := []struct {
+		name      string
+		acceptEnc string
+		wantEnc   string
+	}{
+		{name: "gzip explicitly rejected, br accepted", acceptEnc: "gzip;q=0, br", wantEnc: "br"},
+		{name: "br explicitly rejected, gzip accepted", acceptEnc: "br;q=0, gzip", wantEnc: "gzip"},
+		{name: "gzip q=0.000 variant counts as rejection", acceptEnc: "gzip;q=0.000, br", wantEnc: "br"},
+		{name: "both rejected → identity", acceptEnc: "gzip;q=0, br;q=0", wantEnc: ""},
+		{name: "plain tokens unaffected", acceptEnc: "gzip, deflate, br", wantEnc: "br"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := readStaticFile("wasm/sprout.wasm.br"); err != nil {
+				t.Skipf("precompressed wasm variants not available: %v", err)
+			}
+			req := httptest.NewRequest(http.MethodGet, "/wasm/sprout.wasm", nil)
+			req.Header.Set("Accept-Encoding", tc.acceptEnc)
+			rec := httptest.NewRecorder()
+			server.handleWasmAssets(rec, req)
+
+			if got := rec.Header().Get("Content-Encoding"); got != tc.wantEnc {
+				t.Fatalf("Content-Encoding = %q, want %q", got, tc.wantEnc)
+			}
+		})
+	}
+}
+
 func TestHandleStandalonePagesServeComponentShells(t *testing.T) {
 	server := newWebServerForRoutes(t)
 
@@ -201,5 +235,27 @@ func TestHandleStandalonePageRejectsOtherNames(t *testing.T) {
 	server.handleStandalonePage(rec, req)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 for index.html via the standalone handler, got %d", rec.Code)
+	}
+}
+
+func TestRejectsEncoding(t *testing.T) {
+	tests := []struct {
+		ae    string
+		token string
+		want  bool
+	}{
+		{"gzip;q=0, br", "gzip", true},
+		{"gzip;q=0, br", "br", false},
+		{"br;q=0.000, gzip", "br", true},
+		{"gzip, deflate, br", "gzip", false},
+		{"gzip", "gzip", false},
+		{"", "gzip", false},
+		{"deflate", "gzip", false},
+		{"gzip;q=0.5", "gzip", false}, // nonzero q is not a rejection
+	}
+	for _, tc := range tests {
+		if got := rejectsEncoding(tc.ae, tc.token); got != tc.want {
+			t.Errorf("rejectsEncoding(%q, %q) = %v; want %v", tc.ae, tc.token, got, tc.want)
+		}
 	}
 }

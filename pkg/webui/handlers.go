@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"net/http"
 	"path"
+	"strconv"
 	"strings"
 )
 
@@ -160,22 +161,45 @@ func (ws *ReactWebServer) handleWasmAssets(w http.ResponseWriter, r *http.Reques
 }
 
 // negotiatePrecompressedWasm picks the best precompressed variant the
-// client supports. Only exact token matches in Accept-Encoding count —
-// no q-value parsing; every browser sends the plain tokens and the
-// fallback (raw file) is always available.
-func negotiatePrecompressedWasm(w http.ResponseWriter, r *http.Request, filePath string) (encoded, encoding string, ok bool) {
+// client supports. Token matching is substring-based but q=0 rejections
+// disable the token (a client sending "gzip;q=0" cannot decompress a
+// gzip body — serving one would hard-break the load). No full q-value
+// parsing: the raw file is always the fallback.
+func negotiatePrecompressedWasm(_ http.ResponseWriter, r *http.Request, filePath string) (encoded, encoding string, ok bool) {
 	if filePath != "sprout.wasm" {
 		return "", "", false // wasm_exec.js compresses poorly and is small
 	}
 	ae := r.Header.Get("Accept-Encoding")
 	switch {
-	case strings.Contains(ae, "br"):
+	case strings.Contains(ae, "br") && !rejectsEncoding(ae, "br"):
 		return "br", "br", true
-	case strings.Contains(ae, "gzip"):
+	case strings.Contains(ae, "gzip") && !rejectsEncoding(ae, "gzip"):
 		return "gz", "gzip", true
 	default:
 		return "", "", false
 	}
+}
+
+// rejectsEncoding reports whether the Accept-Encoding header explicitly
+// rejects `token` (a ";q=0" qualifier, optionally ";q=0.000"-style).
+func rejectsEncoding(ae, token string) bool {
+	for _, part := range strings.Split(ae, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" || !strings.HasPrefix(part, token) {
+			continue
+		}
+		q := strings.ToLower(strings.TrimPrefix(part, token))
+		if strings.HasPrefix(q, ";q=0") && !strings.HasPrefix(q, ";q=0.") {
+			return true
+		}
+		// ";q=0.000" variants: parse the value.
+		if strings.HasPrefix(q, ";q=0.") {
+			if v, err := strconv.ParseFloat(strings.TrimPrefix(q, ";q="), 64); err == nil && v == 0 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // handleStandalonePage serves the editor.html / terminal.html component

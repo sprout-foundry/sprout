@@ -25,6 +25,7 @@ import {
 } from './cloudProxyRoutes';
 import { handleCloudChatSessionsEndpoint } from './cloudChatSessions';
 import { handleCloudSessionsEndpoint } from './cloudSessionHandlers';
+import { handleWasmImageUpload, uploadBodyBytes } from './cloudWasmBinary';
 import {
   handleWasmLocal,
   handleWasmEditDecision,
@@ -412,6 +413,21 @@ export class CloudAdapter implements APIAdapter {
       const bodyStr = typeof init?.body === 'string' ? init.body : await this.extractRequestBody(input);
       const handled = handleCloudChatSessionsEndpoint(urlPath, method, url, bodyStr ?? undefined);
       if (handled) return handled;
+    }
+
+    // ── Image upload (byte-exact into the WASM VFS) ─────────────────
+    // The body is FormData/Blob, which the string-based wasm-local path
+    // would mangle, so it is read here as bytes.
+    if (urlPath === '/api/upload/image' && method === 'POST' && !nativeFs) {
+      const bytes = await uploadBodyBytes(init?.body ?? (input instanceof Request ? await input.blob() : null));
+      if (bytes) {
+        try {
+          const shell = await this.ensureWasmShell();
+          return handleWasmImageUpload(shell, bytes);
+        } catch (err) {
+          console.warn('[CloudAdapter] WASM shell unavailable for image upload, falling through to proxy:', err);
+        }
+      }
     }
 
     // ── Synthetic response interception ────────────────────────────

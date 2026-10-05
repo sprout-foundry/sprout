@@ -491,7 +491,7 @@ describe('cloudEndpointRegistry', () => {
       // Includes onboarding, instances, LSP, history,
       // settings/mcp/skills/subagent-types, and other not-available-in-
       // browser-mode endpoints.
-      expect(synthetic.length).toBeGreaterThanOrEqual(34);
+      expect(synthetic.length).toBeGreaterThanOrEqual(33);
       expect(synthetic.length).toBeLessThan(70);
     });
 

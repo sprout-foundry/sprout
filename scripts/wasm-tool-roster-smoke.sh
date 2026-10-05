@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # Smoke test: builds the WASM target and asserts the tool roster excludes
 # vision, run_automate, browse_url, codegraph (the SP-112-7/6/8 exclusions)
-# and the browser/vision-dependent design tools design_render and
-# design_import_sketch (the SP-140 invariant 7 exclusion), while keeping
-# design_assets and design_validate on the roster.
+# and asserts every design tool is on the roster (SP-140 invariant 7 as
+# amended by SP-158: rendering goes through the host page in WASM).
 #
 # Runs as part of CI's make build-all verification (added in .github/workflows/
 # build.yml by SP-112-9; extended by SP-140-2 item 2.10). Also runnable
@@ -92,102 +91,56 @@ if [ "$WASM_STUB_COUNT" -ne 4 ]; then
 fi
 echo "✓ Found all 4 expected WASM stub files"
 
-# 5. SP-140 invariant 7 / SP-140-2 item 2.10: design-tool roster split.
+# 5. SP-140 invariant 7 as amended by SP-158: every design tool ships to WASM.
 #
-#    The design tier is partitioned by dependency:
-#      - design_assets, design_validate: pure Go → shared AllTools, on WASM.
-#      - design_render (host browser), design_import_sketch (vision):
-#        native-only, with _handler_js.go stubs returning nil.
-#
-#    The tools are registered by broad file families (design*), so we assert on
-#    the build-tag file selection AND that no design handler is constructed
-#    directly in all.go's unconditional list.
-echo "→ Checking design-tool WASM roster split (SP-140 invariant 7)..."
+#    The handlers are shared (no build tag, constructed in all.go's
+#    unconditional list). Rendering reaches the host page through
+#    pkg/webcontent's page renderer; the critique's vision pass has a js
+#    variant that leaves the critique to the primary model.
+echo "→ Checking design-tool WASM roster (SP-158)..."
 
-# 5a. WASM must include the two browser/vision design stubs...
-for stub in design_render_handler_js.go design_import_sketch_handler_js.go; do
-    if echo "$WASMFILES" | grep -q "^${stub}$"; then
-        echo "✓ WASM includes $stub (design stub - SP-140 invariant 7)"
-    else
-        echo "FAIL: WASM build missing $stub"
-        exit 1
-    fi
-done
+DESIGN_HANDLERS="design_assets_handler.go design_validate_handler.go design_brief_handler.go design_export_handler.go design_sync_handler.go design_render_handler.go design_critique_handler.go design_import_sketch_handler.go"
 
-# 5b. ...and must NOT include their native implementations.
-for native in design_render_handler.go design_import_sketch_handler.go; do
-    if echo "$WASMFILES" | grep -q "^${native}$"; then
-        echo "FAIL: WASM build incorrectly includes native $native"
-        exit 1
-    fi
-done
-echo "✓ WASM excludes native design_render / design_import_sketch"
-
-# 5c. design_assets and design_validate are pure Go: they must be compiled into
-#     the WASM build unconditionally (no build tag), which is what puts them on
-#     the WASM roster via AllTools.
-for shared in design_assets_handler.go design_validate_handler.go; do
+# 5a. Every design handler is compiled into the WASM build.
+for shared in $DESIGN_HANDLERS; do
     if echo "$WASMFILES" | grep -q "^${shared}$"; then
-        echo "✓ WASM includes $shared (shared design tool)"
+        echo "✓ WASM includes $shared"
     else
-        echo "FAIL: WASM build missing $shared — design_assets/design_validate are pure Go"
-        echo "      and must compile on GOOS=js (SP-140-2 AC, SP-140 invariant 7)"
+        echo "FAIL: WASM build missing $shared — design tools ship to every build (SP-158)"
         exit 1
     fi
 done
 
-# 5d. design_assets must have no build tag of its own (a !js tag here would
-#     drop it from WASM even though the file is named in the shared list).
-if head -1 pkg/agent_tools/design_assets_handler.go | grep -q "^//go:build"; then
-    echo "FAIL: design_assets_handler.go gained a build constraint; it must stay shared"
+# 5b. No design handler carries a build tag of its own.
+for shared in $DESIGN_HANDLERS; do
+    if head -1 "pkg/agent_tools/$shared" | grep -q "^//go:build"; then
+        echo "FAIL: $shared has a build constraint; design tools must stay shared"
+        exit 1
+    fi
+done
+echo "✓ design handlers carry no build constraint"
+
+# 5c. Each design handler is constructed in all.go's shared list.
+for handler in designAssetsHandler designValidateHandler designBriefHandler designExportHandler designSyncHandler designRenderHandler designCritiqueHandler designImportSketchHandler; do
+    if ! grep -q "&${handler}{}" pkg/agent_tools/all.go; then
+        echo "FAIL: all.go does not construct ${handler} in the shared list"
+        exit 1
+    fi
+done
+echo "✓ all.go constructs every design handler"
+
+# 5d. The browser-specific pieces are selected: the critique's vision pass
+#     variant, and the page-backed renderer in pkg/webcontent.
+if ! echo "$WASMFILES" | grep -q "^design_critique_vision_js\.go$"; then
+    echo "FAIL: WASM build missing design_critique_vision_js.go"
     exit 1
 fi
-echo "✓ design_assets_handler.go carries no build constraint"
-
-# 5e. The native-only handlers must not be constructed directly in all.go —
-#     that would not compile on js, and would mean the stub is not the path.
-for handler in designRenderHandler designImportSketchHandler; do
-    if grep -q "&${handler}{}" pkg/agent_tools/all.go; then
-        echo "FAIL: all.go constructs &${handler}{} directly; it is native-only and"
-        echo "      must be reached through its build-tagged registrar (SP-140 invariant 7)"
-        exit 1
-    fi
-done
-echo "✓ all.go reaches native-only design handlers via their registrars"
-
-# 5f. The WASM stubs must actually return nil (unregistered), not a handler.
-for stub in design_render_handler_js.go design_import_sketch_handler_js.go; do
-    if ! awk '/^func registerDesign/{f=1} f' "pkg/agent_tools/${stub}" | grep -q "return nil"; then
-        echo "FAIL: pkg/agent_tools/${stub} does not return nil; the tool would be"
-        echo "      advertised on WASM without a working implementation"
-        exit 1
-    fi
-done
-echo "✓ design WASM stubs return nil (tools unregistered, not registered-but-broken)"
-
-# 5g. No design_assets WASM variant exists. design_assets is shared, so a
-#     per-tool stub file (the all_assets_wasm.go shape the AC anticipated)
-#     would be redundant and would signal the shared registration regressed.
-for candidate in all_assets_wasm.go design_assets_handler_js.go design_assets_handler_wasm.go; do
-    if [ -e "pkg/agent_tools/${candidate}" ]; then
-        echo "FAIL: pkg/agent_tools/${candidate} exists; design_assets is WASM-eligible"
-        echo "      via the shared AllTools list and needs no per-tool WASM variant"
-        exit 1
-    fi
-done
-echo "✓ no redundant design_assets WASM variant"
-
-# 5h. design_assets is on the roster by construction: it is listed in the
-#     shared (untagged) list in all.go, which the WASM build compiles.
-if ! grep -q "&designAssetsHandler{}" pkg/agent_tools/all.go; then
-    echo "FAIL: all.go does not construct &designAssetsHandler{} in the shared list"
+WEBCONTENTFILES=$(GOOS=js GOARCH=wasm go list -f '{{range .GoFiles}}{{.}}{{"\n"}}{{end}}' ./pkg/webcontent/ 2>/dev/null || echo "")
+if ! echo "$WEBCONTENTFILES" | grep -q "^browser_page_js\.go$"; then
+    echo "FAIL: WASM build missing pkg/webcontent/browser_page_js.go (page renderer)"
     exit 1
 fi
-if ! grep -q "&designValidateHandler{}" pkg/agent_tools/all.go; then
-    echo "FAIL: all.go does not construct &designValidateHandler{} in the shared list"
-    exit 1
-fi
-echo "✓ design_assets and design_validate are in all.go's shared tool list"
+echo "✓ WASM selects the page renderer and the primary-model critique pass"
 
 # Cleanup: remove any artifacts created during the smoke test. The WASM
 # build may have written to /tmp/sprout.wasm (Linux/macOS) or the local

@@ -230,6 +230,10 @@ func (a *Agent) activateSkillByID(skillID string) (string, error) {
 		sourceLabel = "unknown"
 	}
 	skillMessage := fmt.Sprintf("%ssource: %s)]\n\n%s", header, sourceLabel, skillInfo.Content)
+	if missing := a.unavailableSkillTools(skillInfo.Content); len(missing) > 0 {
+		skillMessage += fmt.Sprintf("\n\n> **Not available in this environment:** `%s`. Skip the steps that need them and tell the user which checks were not run.",
+			strings.Join(missing, "`, `"))
+	}
 	if strings.TrimSpace(a.systemPrompt) != "" {
 		a.systemPrompt = a.systemPrompt + "\n\n---\n\n" + skillMessage
 	} else {
@@ -264,4 +268,53 @@ func getStringArg(args map[string]interface{}, name string) (string, error) {
 		return "", agenterrors.NewInvalidInputError(fmt.Sprintf("argument '%s' must be a string", name), nil)
 	}
 	return str, nil
+}
+
+// skillDeclaredTools reads the `tools:` line of a skill's frontmatter — the
+// tools its workflow relies on — as `tools: a, b` or `tools: [a, b]`.
+func skillDeclaredTools(content string) []string {
+	body, ok := strings.CutPrefix(strings.TrimLeft(content, "\ufeff \t\r\n"), "---")
+	if !ok {
+		return nil
+	}
+	end := strings.Index(body, "\n---")
+	if end < 0 {
+		return nil
+	}
+	for _, line := range strings.Split(body[:end], "\n") {
+		value, ok := strings.CutPrefix(strings.TrimSpace(line), "tools:")
+		if !ok {
+			continue
+		}
+		value = strings.Trim(strings.TrimSpace(value), "[]")
+		var names []string
+		for _, name := range strings.Split(value, ",") {
+			if name = strings.Trim(strings.TrimSpace(name), `"'`); name != "" {
+				names = append(names, name)
+			}
+		}
+		return names
+	}
+	return nil
+}
+
+// unavailableSkillTools lists the skill's declared tools this agent cannot
+// call, so a skill written for every host stays honest on a host that lacks
+// some of them (a low-context profile, a persona allowlist).
+func (a *Agent) unavailableSkillTools(content string) []string {
+	declared := skillDeclaredTools(content)
+	if len(declared) == 0 {
+		return nil
+	}
+	visible := make(map[string]bool)
+	for _, tool := range a.getOptimizedToolDefinitions(nil) {
+		visible[tool.Function.Name] = true
+	}
+	var missing []string
+	for _, name := range declared {
+		if !visible[name] {
+			missing = append(missing, name)
+		}
+	}
+	return missing
 }

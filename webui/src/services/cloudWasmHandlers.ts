@@ -10,6 +10,7 @@ import { historyForChat, recordTurn, setChatRunning } from './cloudChatSessions'
 import { NATIVE_CHAT_ENABLED } from './nativeChatStubs/nativeChatFlag';
 import { platformProviderConfig, reportedManagedContextWindow } from './platformProvider';
 import type { WasmDirEntry, WasmShell } from './wasmShell';
+import { binaryMimeType } from './cloudWasmBinary';
 import { workspaceCwdContextLine } from './workspaceCwd';
 
 // Global event dispatcher — set by the webui's event system so WASM
@@ -531,6 +532,14 @@ function handleWasmFile(shell: WasmShell, method: string, fullUrl: string, bodyS
   const safePath = sanitizePath(path);
 
   if (method === 'GET') {
+    const binaryMime = binaryMimeType(safePath);
+    if (binaryMime) {
+      const bytes = shell.readFileBytes(safePath);
+      if (bytes.error || !bytes.bytes) {
+        return jsonError(bytes.error ?? 'unreadable file', 404);
+      }
+      return new Response(bytes.bytes as BodyInit, { status: 200, headers: { 'Content-Type': binaryMime } });
+    }
     const result = shell.readFile(safePath);
     if (result.error) {
       return jsonError(result.error, 404);

@@ -12,6 +12,8 @@ function createMockShell(overrides: Partial<WasmShell> = {}): WasmShell {
     changeDir: () => ({ cwd: '/home/user' }),
     writeFile: () => '',
     readFile: () => ({ content: '' }),
+    readFileBytes: () => ({ error: 'not found' }),
+    saveImage: () => ({ error: 'not implemented' }),
     listDir: () => ({ entries: [] }),
     deleteFile: () => '',
     runAgent: async () => ({ response: '', provider: '', model: '' }),
@@ -578,5 +580,55 @@ describe('handleWasmLocal — /api/search', () => {
 
     expect(ran).toContain("'/workspace'");
     expect(body.results.map((r: { file: string }) => r.file)).toEqual(['src/a.go']);
+  });
+});
+
+import { handleWasmImageUpload, uploadBodyBytes } from './cloudWasmBinary';
+
+describe('handleWasmLocal — binary files', () => {
+  it('serves images byte-exact with their MIME type', async () => {
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0xff, 0x00]);
+    const shell = createMockShell({
+      readFile: () => ({ content: 'mangled' }),
+      readFileBytes: (path: string) => (path.endsWith('design/brand/logo.png') ? { bytes: png } : { error: 'missing' }),
+    });
+    const res = handleWasmLocal(shell, '/api/file', 'GET', '/api/file?path=design/brand/logo.png');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toBe('image/png');
+    expect(new Uint8Array(await res.arrayBuffer())).toEqual(png);
+  });
+
+  it('keeps text files on the text path', async () => {
+    const shell = createMockShell({
+      readFile: () => ({ content: 'body {}' }),
+      readFileBytes: () => ({ error: 'should not be called' }),
+    });
+    const res = handleWasmLocal(shell, '/api/file', 'GET', '/api/file?path=design/generated/tokens.css');
+    expect(res.headers.get('Content-Type')).toContain('text/plain');
+    expect(await res.text()).toBe('body {}');
+  });
+});
+
+describe('image upload in browser mode', () => {
+  it('reads the image field of a FormData body as bytes', async () => {
+    const form = new FormData();
+    form.append('image', new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' }));
+    expect(await uploadBodyBytes(form)).toEqual(new Uint8Array([1, 2, 3]));
+    expect(await uploadBodyBytes('text')).toBeNull();
+  });
+
+  it('stores the image through the shell and replies like the daemon', async () => {
+    const shell = createMockShell({
+      saveImage: () => ({ path: '/workspace/.sprout/images/paste.png', filename: 'paste.png' }),
+    });
+    const res = handleWasmImageUpload(shell, new Uint8Array([1]));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ path: '/workspace/.sprout/images/paste.png', filename: 'paste.png' });
+  });
+
+  it('reports a rejected image as a 400', async () => {
+    const shell = createMockShell({ saveImage: () => ({ error: 'Not a recognized image format' }) });
+    const res = handleWasmImageUpload(shell, new Uint8Array([1]));
+    expect(res.status).toBe(400);
   });
 });

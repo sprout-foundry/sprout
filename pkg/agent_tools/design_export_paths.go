@@ -1,5 +1,3 @@
-//go:build !js
-
 // design_export_paths.go — output-path confinement + artifact-relocation helpers
 // for the design_export_tokens handler, split from design_export_handler.go.
 // These pure helpers keep every generated artifact inside design/ (logical

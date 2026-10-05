@@ -1,5 +1,3 @@
-//go:build !js
-
 package tools
 
 import (
@@ -184,13 +182,3 @@ func (h *designSyncHandler) MaxResultSize() int { return 0 }
 func (h *designSyncHandler) SafeForParallel() bool { return false }
 
 func (h *designSyncHandler) Interactive() bool { return false }
-
-// registerDesignSyncTools registers the design_sync tool. It is pure Go, but
-// SP-140 invariant 7 keeps only design_assets and design_validate on the WASM
-// roster, so this is registered from a build-tagged registrar (excluded from
-// WASM via design_sync_handler_js.go, which returns nil).
-func registerDesignSyncTools() []ToolHandler {
-	return []ToolHandler{
-		&designSyncHandler{},
-	}
-}

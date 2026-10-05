@@ -1,6 +1,6 @@
 # SP-158 — The Design Loop in the Browser Build
 
-> **Status (2026-10-05):** Proposed.
+> **Status (2026-10-05):** Implemented (158a–158e); browser e2e pending.
 > Amends SP-140 invariant 7. Related: SP-147 (mode shapes the agent per
 > request), SP-143 (screen kit), SP-155 (preview pane, mode registry,
 > composable views).
@@ -65,8 +65,10 @@ every other WASM writer; verify revision-checked writes (SP-140-7) with
 `design_render` gets a `js` implementation that calls a host bridge,
 following the existing `__sproutGitTools` / `__sproutShellGit` pattern:
 
-1. Go (WASM) calls `__sproutRender({source, frame, state})` and awaits
-   the promise.
+1. Go (WASM) calls `__sproutRender({path, width, height})` and awaits
+   the promise. The seam is `pkg/webcontent`'s renderer: the WASM build's
+   `BrowserRenderer` is page-backed, so `design_render`, `design_critique`
+   and every other screenshot caller run unchanged.
 2. The host builds the screen document with the inliner the preview
    already uses (`design/screenRefs.ts`), extended to binary assets as
    `data:` URLs.
@@ -92,26 +94,40 @@ to the native renderer is wanted.
 
 ### 158e. Skill text matches the host
 
-When a skill is folded into the prompt, append a short note listing any
-tool the skill names that is not registered on this host, with the
-instruction to skip that step and say so. This keeps every skill honest
-on every build without per-host skill copies.
+A skill declares the tools its workflow relies on in its frontmatter
+(`tools: a, b`). When it is folded into the prompt, any declared tool the
+agent cannot call on this host is listed in a short note with the
+instruction to skip that step and say so. This keeps every skill honest on
+every build and profile without per-host skill copies.
+
+### Notes from implementation
+
+- Inlined workspace scripts become a non-executing marker
+  (`<script type="text/x-sprout-src" src="/api/file?…">`) plus the code
+  inline at the end of `<body>`. The screen runtime locates itself by its
+  script src, so a `data:` URL left it unbooted (every state visible) — in
+  the hosted preview as well as in renders.
+- Inline `<script>` bodies are held out of the reference rewrite; it was
+  rewriting `src="…"`/`url(…)` strings inside bundled code.
+- `design_critique` in the browser build attaches the render with the
+  rubric and the primary model writes the critique in its reply; the
+  tool's own result stays `visual: false` because no separate pass ran.
 
 ## Acceptance criteria
 
-- [ ] WASM roster: `design_brief`, `design_export_tokens`, `design_sync`
-      registered; roster test and smoke script updated.
+- [x] WASM roster: every design tool registered; roster test and smoke
+      script updated.
 - [ ] A chat image in browser mode reaches the model as an image (e2e,
       cloud mode).
 - [ ] `read_file` and the image viewer show a PNG correctly in browser
       mode.
 - [ ] `design_render` in browser mode produces a PNG of a phone-frame
-      screen with its states applied (e2e).
-- [ ] `design_critique` in browser mode returns findings with
-      `visual: true` from the primary model.
+      screen with its states applied (e2e). The rasterizer itself is
+      verified in headless Chrome against the repo's screens and flows.
+- [ ] `design_critique` in browser mode: the primary model critiques the
+      attached render (e2e).
 - [ ] Design health strip populated in browser mode.
-- [ ] Skill fold notes unavailable tools (unit test with a stub
-      registry).
+- [x] Skill fold notes unavailable tools (unit test).
 - [ ] A Design-mode query in browser mode starts with the design-system
       skill folded (e2e; the per-request mode plumbing already exists).
 

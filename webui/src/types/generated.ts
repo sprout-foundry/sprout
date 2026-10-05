@@ -300,8 +300,11 @@ export interface ProgressVerificationData {
 /**
  * Payload of a `progress_complete` event (SP-151 §151a): the run
  * finished. `verified` is true only when a passing verification result
- * exists (SP-149 §149d / SP-151 §151c); when SP-149 is disabled or was
- * not run, `verification` is absent and `not_verified_reason` says why.
+ * exists (SP-149 §149d / SP-151 §151c). `not_verified_reason` says why
+ * only when verification is enabled and the turn was not verified (e.g.
+ * "no code changes this turn"); when SP-149 is disabled (the CLI
+ * default) both `verification` and `not_verified_reason` are absent — the
+ * payload carries just `run_id`, so the default UI is unchanged.
  *
  * Go: pkg/events/progress_events.go::ProgressCompleteData
  */
@@ -312,6 +315,6 @@ export interface ProgressCompleteData {
   verified?: boolean;
   /** Final verification result; absent when SP-149 is disabled or was not run. */
   verification?: ProgressVerificationData;
-  /** Why the run is not verified (e.g. "verification disabled"). */
+  /** Why the run is not verified (e.g. "no code changes this turn"); absent when verification is disabled. */
   not_verified_reason?: string;
 }

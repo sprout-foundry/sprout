@@ -70,7 +70,10 @@ export function progressVerificationSummary(data?: ProgressVerificationData): st
  * Render a progress_complete event (SP-151 §151a) as a single line: a
  * verified run carries the final check count when the nested
  * verification has checks, an unverified run carries its reason when
- * one is present.
+ * one is present. A run that is not verified and carries no reason
+ * (verification disabled, the default) renders nothing — the progress
+ * strip self-hides on an empty summary, so the default user sees no
+ * per-turn "not verified" notice.
  */
 export function progressCompleteSummary(data?: ProgressCompleteData): string {
   if (data?.verified === true) {
@@ -80,7 +83,7 @@ export function progressCompleteSummary(data?: ProgressCompleteData): string {
   }
   const reason = data?.not_verified_reason ?? '';
   if (reason !== '') return `Run complete — not verified (${reason})`;
-  return 'Run complete — not verified';
+  return '';
 }
 
 /**

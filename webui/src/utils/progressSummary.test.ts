@@ -188,8 +188,14 @@ describe('progressCompleteSummary', () => {
     );
   });
 
-  it('not verified without a reason', () => {
-    expect(progressCompleteSummary(complete({}))).toBe('Run complete — not verified');
+  it('not verified without a reason says nothing', () => {
+    expect(progressCompleteSummary(complete({}))).toBe('');
+  });
+
+  it('not verified with the enabled-case reason still renders the notice', () => {
+    expect(progressCompleteSummary(complete({ not_verified_reason: 'no code changes this turn' }))).toBe(
+      'Run complete — not verified (no code changes this turn)',
+    );
   });
 });
 

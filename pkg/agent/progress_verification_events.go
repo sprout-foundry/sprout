@@ -13,7 +13,10 @@
 // run id, the session id, and the plan revision). When the hook never ran
 // for the turn (verification disabled, no code change, a subagent turn, or a
 // runner setup error) only progress_complete is emitted: verified is omitted
-// (false) and not_verified_reason states why there is no result.
+// (false). When verification is enabled, not_verified_reason states why
+// there is no result; when it is disabled (the CLI default) the event
+// carries only run_id — no not-verified content — so the default user sees
+// no per-turn notice (SP-155 default UI unchanged).
 //
 // The payloads are built as map[string]interface{} with the exact snake_case
 // wire names (mirroring the events.ProgressVerificationData /
@@ -40,9 +43,11 @@ import (
 // events carry the same run_id (the session id) and plan_revision.
 //
 // When the hook never ran for the turn (nil stored result) it emits only
-// progress_complete: verified is omitted (false) and not_verified_reason
-// states why there is no result. No progress_verification is emitted — there
-// was no result to report.
+// progress_complete: verified is omitted (false), and not_verified_reason
+// states why there is no result — except when verification is disabled
+// (the default), in which case the payload carries only run_id and the
+// renderers show nothing. No progress_verification is emitted either way —
+// there was no result to report.
 //
 // publishEvent drops the event when no event bus is wired, so this is a no-op
 // on a bare agent (the bus-nil guard lives in publishEvent).
@@ -137,7 +142,9 @@ func progressVerificationPayload(res *verify.Result, runID string) map[string]in
 // map the standalone progress_verification event carries (shared builder, so
 // the two cannot drift). When res is nil it carries run_id and
 // not_verified_reason (omitted when empty): verified is omitted (false) and
-// there is no verification key, because there was no result to attach.
+// there is no verification key, because there was no result to attach. The
+// disabled-verification path passes an empty reason, so the event is the
+// run-completion signal only (run_id) with no not-verified content.
 func progressCompletePayload(res *verify.Result, runID string, notVerifiedReason string) map[string]interface{} {
 	payload := map[string]interface{}{
 		"run_id": runID,
@@ -163,8 +170,10 @@ func progressCompletePayload(res *verify.Result, runID string, notVerifiedReason
 // turn-end hook's guard conditions. It is cheap — a config read plus the
 // turn-changed paths, no I/O:
 //
-//   - "verification disabled" — the agent has no configuration, or the
-//     configuration does not enable verification (the default, SP-149 §149e);
+//   - "" — verification is disabled (no configuration manager, or the
+//     configuration does not enable verification, the CLI default, SP-149
+//     §149e). A disabled turn carries no not-verified content, so the
+//     default user sees no per-turn notice (SP-155 default UI unchanged);
 //   - "no code changes this turn" — verification is enabled but the turn
 //     changed no application code (the hook gates on the turn's own changes,
 //     §149a);
@@ -172,15 +181,12 @@ func progressCompletePayload(res *verify.Result, runID string, notVerifiedReason
 //     turn changed code, but the hook still did not run (a subagent turn, or a
 //     runner setup error).
 func (a *Agent) notVerifiedReason() string {
-	if a == nil {
-		return "verification disabled"
-	}
-	if a.configManager == nil {
-		return "verification disabled"
+	if a == nil || a.configManager == nil {
+		return ""
 	}
 	cfg := a.configManager.GetConfig()
 	if cfg == nil || !cfg.VerificationEnabled() {
-		return "verification disabled"
+		return ""
 	}
 	if len(a.TurnChangedPaths()) == 0 {
 		return "no code changes this turn"

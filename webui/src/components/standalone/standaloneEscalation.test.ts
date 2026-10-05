@@ -8,10 +8,10 @@
  */
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { __resetActiveRepoForTests, getActiveRepoURL } from '../../services/activeRepo';
+import { __resetStandaloneRepo as __resetActiveRepoForTests, getStandaloneRepoURL as getActiveRepoURL } from './standaloneRepo';
 import { getEscalationPolicy, setEscalationPolicy } from '../../services/agentEscalation';
 import { __resetBrowserGitForTest, getBrowserGitVfsBridge } from '../../services/browserGit';
-import { getVfsManifestSnapshot } from '../../services/cloudWasmHandlers';
+import { getVfsManifestSnapshot } from '../../services/vfsFiles';
 import type { WasmShell } from '../../services/wasmShell';
 import { bootStandaloneEscalation, repoURLFromLocation } from './standaloneEscalation';
 

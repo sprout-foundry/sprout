@@ -18,10 +18,10 @@
  * request over postMessage, with a 30s timeout counting as decline. Hosts
  * that don't answer keep the default-safe behavior (nothing runs).
  */
-import { setActiveRepoURL } from '../../services/activeRepo';
+import { setActiveRepoURL } from './standaloneRepo';
 import { installEscalationBridge, type ConsentDecision } from '../../services/agentEscalation';
 import { configureBrowserGit } from '../../services/browserGit';
-import { trackFileWrite } from '../../services/cloudWasmHandlers';
+import { trackFileWrite } from '../../services/vfsFiles';
 import { isFromTrustedParent, postTargetOrigin } from './standaloneOrigin';
 import type { WasmShell } from '../../services/wasmShell';
 
@@ -63,7 +63,7 @@ export function bootStandaloneEscalation(shell: WasmShell): StandaloneEscalation
     name: 'Browser IDE',
     email: 'browser-ide@sprout.dev',
     readVfsFiles: async () => {
-      const { listAllVfsFiles } = await import('../../services/cloudWasmHandlers');
+      const { listAllVfsFiles } = await import('../../services/vfsFiles');
       return listAllVfsFiles(shell);
     },
     writeVfsFiles: async (files) => {

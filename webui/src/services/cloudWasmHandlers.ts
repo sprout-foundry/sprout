@@ -178,57 +178,29 @@ export function handleWasmLocal(
  *
  * When the WASM binary is updated to include the O_DIRECTORY fix, listDir
  * will work and the manifest becomes a no-op supplement.
+ *
+ * The manifest itself and the pure enumeration helpers live in
+ * vfsFiles.ts (React-free, shared with the standalone pages); the
+ * re-exports below keep the existing import paths stable.
  */
-const vfsManifest = new Set<string>();
+export {
+  getVfsManifestSnapshot,
+  listAllVfsFiles,
+  normalizeVfsPath as normalizePath,
+  trackFileWrite,
+  untrackFileWrite,
+  workspaceRootOf,
+} from './vfsFiles';
+import {
+  getVfsManifestSnapshot as snapshot,
+  isRuntimePath,
+  joinVfsPath,
+  normalizeVfsPath as normalizePath,
+  RUNTIME_DIRS,
+  trackFileWrite as trackWrite,
+  workspaceRootOf,
+} from './vfsFiles';
 
-// The project directory. Binaries built before the bridge exposed it kept
-// everything at the (unmovable) cwd.
-function workspaceRootOf(wasm: { getCwd(): string; getWorkspaceRoot?(): string } | undefined): string {
-  if (!wasm) return '/workspace';
-  return wasm.getWorkspaceRoot ? wasm.getWorkspaceRoot() : wasm.getCwd();
-}
-
-/** Normalize a path to absolute form; relative paths are relative to the
- *  workspace (never the terminal's cwd, which `cd` moves). */
-function normalizePath(p: string): string {
-  if (!p.startsWith('/')) {
-    const root = workspaceRootOf(typeof window !== 'undefined' ? window.SproutWasm : undefined);
-    p = p === '.' ? root : `${root}/${p}`;
-  }
-  // Collapse ./ and resolve ../
-  const parts = p.split('/');
-  const resolved: string[] = [];
-  for (const part of parts) {
-    if (part === '' || part === '.') continue;
-    if (part === '..') {
-      resolved.pop();
-      continue;
-    }
-    resolved.push(part);
-  }
-  return '/' + resolved.join('/');
-}
-
-/** Track a file write in the manifest. */
-export function trackFileWrite(rawPath: string): void {
-  vfsManifest.add(normalizePath(rawPath));
-}
-
-/**
- * Read-only snapshot of the VFS write manifest. Used by browserGit's VFS
- * bridge to enumerate files when the deployed WASM binary's listDir is
- * broken (O_DIRECTORY bug). Returns a copy so callers can't mutate state.
- */
-export function getVfsManifestSnapshot(): Set<string> {
-  return new Set(vfsManifest);
-}
-
-/**
- * Writes the agent's platform provider, with the managed model's context
- * window, at the path Go's GetConfigDir() resolves ($HOME/.config/sprout,
- * HOME being /home/user in the VFS). Best-effort: a config written earlier
- * still serves if this write fails.
- */
 function writePlatformProviderConfig(shell: WasmShell, apiOrigin: string): void {
   try {
     shell.writeFile(
@@ -243,21 +215,6 @@ function writePlatformProviderConfig(shell: WasmShell, apiOrigin: string): void 
 /** Chats (by id, '' for the default) whose run the user asked to stop. */
 const stopRequested = new Set<string>();
 
-/** HOME inside the WASM shell's virtual filesystem. */
-const AGENT_HOME = '/home/user';
-
-/**
- * Directories the runtime keeps in the browser's filesystem: the agent's home
- * (its settings and sessions) and its scratch space. They share the
- * filesystem with the workspace but aren't workspace content.
- */
-const RUNTIME_DIRS = [AGENT_HOME, '/tmp'];
-
-const within = (p: string, dir: string) => p === dir || p.startsWith(`${dir}/`);
-
-/** Whether `p` is runtime state rather than content of the workspace at `root`. */
-const isRuntimePath = (p: string, root: string) => RUNTIME_DIRS.some((dir) => within(p, dir) && !within(root, dir));
-
 /**
  * Hidden from the workspace's listings: runtime state, and a directory that
  * only holds it (/home).
@@ -265,98 +222,12 @@ const isRuntimePath = (p: string, root: string) => RUNTIME_DIRS.some((dir) => wi
 function hiddenFromWorkspace(shell: WasmShell, absPath: string, root: string): boolean {
   if (isRuntimePath(absPath, root)) return true;
   const prefix = absPath === '/' ? '/' : `${absPath}/`;
-  if (!RUNTIME_DIRS.some((dir) => dir.startsWith(prefix) && !within(root, dir))) return false;
+  if (!RUNTIME_DIRS.some((dir) => dir.startsWith(prefix) && !(root === dir || root.startsWith(`${dir}/`)))) return false;
   const listing = shell.listDir(absPath);
   return !listing.error && listing.entries.every((e) => hiddenFromWorkspace(shell, joinVfsPath(absPath, e.name), root));
 }
 
-/**
- * Read all files from the WASM VFS, returning {path, content} pairs.
- * Used by browserGit to sync the working tree before git operations.
- */
-export async function listAllVfsFiles(shell: WasmShell): Promise<Array<{ path: string; content: string }>> {
-  const cwd = workspaceRootOf(shell);
-  // Try to get all file paths via the flattenEntries/listFilesTracked logic
-  const files: Array<{ path: string; content: string }> = [];
-
-  // Every file in the tree: a one-level listing left out everything in
-  // subfolders, and git then reported those files as deleted.
-  let paths: string[] = [];
-  try {
-    paths = listAllFilesTracked(shell, cwd);
-  } catch {
-    // Fall back to manifest
-    paths = Array.from(vfsManifest);
-  }
-
-  for (const absPath of paths) {
-    if (isRuntimePath(absPath, cwd)) continue;
-    try {
-      const result = shell.readFile(absPath);
-      if (!result.error) {
-        // Only the workspace's own files, relative to it.
-        const normalizedCwd = cwd.endsWith('/') ? cwd : cwd + '/';
-        if (!absPath.startsWith(normalizedCwd)) continue;
-        files.push({ path: absPath.slice(normalizedCwd.length), content: result.content });
-      }
-    } catch {
-      // best-effort: skip unreadable entries.
-    }
-  }
-  return files;
-}
-
-/**
- * Get all known files from the manifest that are descendants of dir.
- * Tries listDir first; falls back to manifest on error.
- */
-function listFilesTracked(shell: WasmShell, dir: string): string[] {
-  // Try the WASM binary's listDir first — works on newer binaries.
-  try {
-    const result = shell.listDir(dir);
-    if (!result.error && result.entries && result.entries.length > 0) {
-      // listDir works — return entries as full paths.
-      return result.entries
-        .filter((e) => e.type === 'file')
-        .map((e) => {
-          const base = dir === '/' ? '' : dir;
-          return `${base}/${e.name}`.replace(/\/+/g, '/');
-        });
-    }
-  } catch {
-    // listDir broken — fall through to manifest.
-  }
-
-  // Fall back to the manifest.
-  const normalizedDir = normalizePath(dir);
-  const files = Array.from(vfsManifest).filter((path) => {
-    if (normalizedDir === '/') return path.startsWith('/'); // root: match everything
-    return path.startsWith(normalizedDir + '/') || path === normalizedDir;
-  });
-  return files.sort();
-}
-
-/**
- * Recursively list all files in a directory using listDir with manifest
- * fallback. Returns absolute paths.
- */
-function listAllFilesTracked(shell: WasmShell, dir: string): string[] {
-  // Try recursive listDir first.
-  const result = flattenEntries(shell, dir);
-  if (result.length > 0) return result.map((f) => f.path);
-
-  // Fall back to manifest.
-  return listFilesTracked(shell, dir);
-}
-
 // ── Individual wasm-local route handlers ─────────────────────────
-
-/**
- * Join a directory and a child name into an absolute path.
- */
-function joinVfsPath(dir: string, name: string): string {
-  return dir === '/' ? `/${name}` : `${dir}/${name}`;
-}
 
 /** Path relative to the shell's CWD (the browser workspace root). */
 function vfsRelative(absPath: string, rootDir: string): string {
@@ -403,7 +274,7 @@ function singleLevelFileEntries(
  */
 function groupManifestChildren(dir: string, rootDir?: string): Array<{ name: string; path: string; isDir: boolean }> {
   const underDir = (p: string) => (dir === '/' ? p.startsWith('/') : p.startsWith(`${dir}/`) || p === dir);
-  const workspacePaths = Array.from(vfsManifest).filter((p) => rootDir === undefined || !isRuntimePath(p, rootDir));
+  const workspacePaths = Array.from(snapshot()).filter((p) => rootDir === undefined || !isRuntimePath(p, rootDir));
   let base = dir;
   let paths = workspacePaths.filter(underDir);
   if (paths.length === 0 && workspacePaths.length > 0) {
@@ -577,7 +448,7 @@ function handleWasmFile(shell: WasmShell, method: string, fullUrl: string, bodyS
   if (err) {
     return jsonError(err, 500);
   }
-  trackFileWrite(safePath);
+  trackWrite(safePath);
   announceFileChange(safePath, 'write');
   // Same success contract as the daemon's write endpoint: the buffer manager
   // clears the unsaved flag only on this shape.
@@ -608,7 +479,7 @@ function handleWasmCreate(shell: WasmShell, bodyStr?: string): Response {
     if (err) {
       return jsonError(err, 500);
     }
-    trackFileWrite(safePath);
+    trackWrite(safePath);
   }
   announceFileChange(safePath, 'created');
   return jsonOk({ message: 'ok', path: safePath });

@@ -71,6 +71,18 @@ func (a *Agent) GetRole() string {
 	return a.role
 }
 
+// SetRole sets the SP-150 §150c role the agent's model calls are attributed
+// to. The primary constructor stamps the coder role (the main conversation
+// loop is the coder's); entry points whose loop serves a different purpose
+// re-stamp it here — e.g. the planning entry point stamps the planner role
+// so the plan agent's metering is attributed to the planner, not the coder.
+func (a *Agent) SetRole(role string) {
+	if a == nil {
+		return
+	}
+	a.role = role
+}
+
 // GetRoleUsage returns the per-role token/cost totals (SP-150 §150c,
 // item 150.5) accumulated for this agent, sorted by role. Nil when no cost
 // entry carried a role yet.

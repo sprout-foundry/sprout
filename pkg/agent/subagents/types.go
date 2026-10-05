@@ -189,7 +189,17 @@ type SubagentResult struct {
 	Error      error
 	TokensUsed int
 	Cost       float64
-	ToolCalls  int
+	// Role is the SP-150 §150c role the subagent's model was resolved
+	// through. The parent rolls the subagent's usage up under this role so
+	// its spend is attributed to the purpose it served (empty → the coder
+	// fallback, matching subagentRole's default resolution).
+	Role string
+	// PromptTokens / CompletionTokens are the subagent's prompt/completion
+	// token split. Carried so the parent's rollup attributes the subagent's
+	// real token counts to its role instead of a zero-split aggregate.
+	PromptTokens     int
+	CompletionTokens int
+	ToolCalls        int
 	// Iterations is the assistant-turn count consumed by this subagent
 	// run. Surfaced to the primary via SubagentRunMetrics.Iterations so
 	// the model has visibility into how many LLM rounds a delegated task

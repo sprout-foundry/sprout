@@ -162,6 +162,29 @@ func (m *AgentMetricsManager) GetRoleUsage() []RoleUsage {
 	sort.Slice(out, func(i, j int) bool { return out[i].Role < out[j].Role })
 	return out
 }
+
+// SetRoleUsage replaces the per-role usage map (SP-150 §150c, item 150.5).
+// Used by state restore to rehydrate the per-role totals so they keep summing
+// to the restored overall totals. An empty/nil slice clears the map.
+func (m *AgentMetricsManager) SetRoleUsage(usages []RoleUsage) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.roleUsage = make(map[string]*RoleUsage, len(usages))
+	for _, ru := range usages {
+		m.roleUsage[ru.Role] = &RoleUsage{
+			Role:             ru.Role,
+			PromptTokens:     ru.PromptTokens,
+			CompletionTokens: ru.CompletionTokens,
+			Tokens:           ru.Tokens,
+			ChargedCost:      ru.ChargedCost,
+			TokenCost:        ru.TokenCost,
+			Calls:            ru.Calls,
+		}
+	}
+}
 func (m *AgentMetricsManager) GetChargedCostTotal() float64 {
 	if m == nil {
 		return 0

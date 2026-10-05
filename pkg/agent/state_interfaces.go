@@ -78,6 +78,10 @@ type CostTracker interface {
 	// item 150.5), sorted by role. Nil/empty when no cost entry carried a
 	// role yet.
 	GetRoleUsage() []RoleUsage
+	// SetRoleUsage replaces the per-role token/cost totals (SP-150 §150c,
+	// item 150.5). Used by state restore to rehydrate the per-role totals so
+	// they keep summing to the restored overall totals.
+	SetRoleUsage([]RoleUsage)
 }
 
 // TokenCounter manages prompt and completion token counts.

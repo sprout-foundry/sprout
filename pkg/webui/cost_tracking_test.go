@@ -81,6 +81,34 @@ func TestRecordCost_MultipleRecords(t *testing.T) {
 	}
 }
 
+// TestRecordCostWithRole_AttributesRole pins (SP-150 §150c, item 150.5) that a
+// per-role booking records a role-tagged record and that the per-role records
+// sum to the overall total.
+func TestRecordCostWithRole_AttributesRole(t *testing.T) {
+	cs := makeCostStore(t)
+
+	cs.RecordCostWithRole("openai", "gpt-4", "sess1", "chat1", "", "", "pay_per_token", "coder", 100, 50, 0.05, 0)
+	cs.RecordCostWithRole("openai", "gpt-4", "sess1", "chat1", "", "", "pay_per_token", "reviewer", 30, 10, 0.02, 0)
+
+	if len(cs.records) != 2 {
+		t.Fatalf("expected 2 records, got %d", len(cs.records))
+	}
+	if cs.records[0].Role != "coder" {
+		t.Errorf("record 0 role = %q, want coder", cs.records[0].Role)
+	}
+	if cs.records[1].Role != "reviewer" {
+		t.Errorf("record 1 role = %q, want reviewer", cs.records[1].Role)
+	}
+	// The per-role records sum to the overall cost.
+	var sum float64
+	for _, r := range cs.records {
+		sum += r.Cost
+	}
+	if !floatEq(sum, 0.07, 1e-9) {
+		t.Errorf("per-role cost sum = %f, want 0.07 (coder + reviewer)", sum)
+	}
+}
+
 func TestGetSummary_InRange(t *testing.T) {
 	cs := makeCostStore(t)
 

@@ -56,12 +56,18 @@ protects.
       (`pkg/webui/stream_coalesce.go`) drops `client_id`/`chat_id`/`user_id`,
       so every batch is filtered out; merge only same-route events and copy
       the route keys onto the batch. Spec: SP-151.
-- [ ] **fix.7** Role attribution: subagent and reviewer spend is rolled into
+- [x] **fix.7** Role attribution: subagent and reviewer spend is rolled into
       the parent's role with zero prompt/completion; the plan agent is
       stamped `coder`; ledger bookings carry no role
       (`TakeUnbookedUsageByRole` has no caller); role usage is not restored
       with state. Fix all four so per-role totals equal the overall total.
-      Spec: SP-150 §150c.
+      Fixed: `SubagentResult` now carries the subagent's role + prompt/
+      completion split, and the single/parallel/reviewer rollups use
+      `Agent.RollupSubagentUsage` so spend lands in the right role with real
+      tokens; `createPlanningAgent` stamps the planner role (`SetRole`); the
+      cost ledger books per role (`RecordCostWithRole` +
+      `TakeUnbookedUsageByRole`); `AgentState`/`ConversationState` persist
+      and restore `role_usage`. Spec: SP-150 §150c.
 - [ ] **fix.8** Starter instantiate endpoint stays inside the daemon root:
       `pkg/webui/api_starters.go` has no containment check; return 403
       outside `GetDaemonRoot()` as `handleAPIWorkspaceBrowse` does.

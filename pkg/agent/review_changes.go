@@ -195,7 +195,9 @@ func (a *Agent) runReviewTasks(ctx context.Context, tasks []SubagentTask, quiet 
 			printSubagentDone(personas.IDReviewer, r)
 		}
 		if r.TokensUsed > 0 || r.Cost > 0 {
-			a.TrackMetricsFromResponse(0, 0, r.TokensUsed, r.Cost, 0, 0, 0)
+			// Roll the reviewer's usage up under its own role with its real
+			// prompt/completion token split (SP-150 §150c, item 150.5).
+			a.RollupSubagentUsage(r)
 		}
 	}
 	return results

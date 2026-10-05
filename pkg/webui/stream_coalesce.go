@@ -78,3 +78,111 @@ func mergeStreamChunks(a, b events.UIEvent) events.UIEvent {
 	merged.Timestamp = b.Timestamp
 	return merged
 }
+
+// coalesceProgressMilestones collapses runs of ADJACENT progress_milestone
+// events into a single batched event whose Data is
+// {"run_id": <first milestone's run_id>, "milestones": [ <m1 payload>, <m2
+// payload>, ... ]} so consumers of a long run read progress at a human rate
+// (SP-151 §151b). A single (non-adjacent) milestone keeps its flat payload
+// with NO "milestones" key.
+//
+// question, verification, completion and every other event type are NEVER
+// coalesced: they pass through untouched and in order, and any one of them
+// breaks a milestone run. Like coalesceStreamChunks, a batched event always
+// gets a FRESH Data map and FRESH per-milestone payload maps — the input
+// events' maps are shared with other subscribers and the replay ring, so they
+// must never be mutated in place.
+func coalesceProgressMilestones(in []events.UIEvent) []events.UIEvent {
+	if len(in) < 2 {
+		return in
+	}
+	out := make([]events.UIEvent, 0, len(in))
+	for _, ev := range in {
+		if ev.Type == events.EventTypeProgressMilestone && len(out) > 0 {
+			last := out[len(out)-1]
+			if last.Type == events.EventTypeProgressMilestone {
+				out[len(out)-1] = mergeMilestones(last, ev)
+				continue
+			}
+		}
+		out = append(out, ev)
+	}
+	return out
+}
+
+// mergeMilestones returns a new batched milestone event combining last and
+// cur. If last is already a batch, cur's payload is appended to a FRESH copy
+// of its "milestones" slice; otherwise the batch starts as [last, cur]. The
+// batch keeps last's identity (ID/type) but takes the later (cur) timestamp,
+// mirroring mergeStreamChunks. Fresh maps throughout — the inputs' maps are
+// never mutated.
+func mergeMilestones(last, cur events.UIEvent) events.UIEvent {
+	milestones := make([]interface{}, 0, 3)
+	if existing, ok := milestoneSlice(last.Data); ok {
+		for _, m := range existing {
+			milestones = append(milestones, copyMilestonePayload(m))
+		}
+	} else {
+		milestones = append(milestones, milestonePayload(last))
+	}
+	milestones = append(milestones, milestonePayload(cur))
+
+	batch := last
+	batch.Timestamp = cur.Timestamp
+	data := map[string]interface{}{"milestones": milestones}
+	// run_id is carried at the top level of both flat and batch payloads, so
+	// reading it from last.Data is correct in either case.
+	if m, ok := last.Data.(map[string]interface{}); ok {
+		if rid, ok := m["run_id"].(string); ok {
+			data["run_id"] = rid
+		}
+	}
+	batch.Data = data
+	return batch
+}
+
+// isMilestoneBatch reports whether data is a coalesced milestone batch — a map
+// carrying a non-nil "milestones" slice.
+func isMilestoneBatch(data interface{}) bool {
+	_, ok := milestoneSlice(data)
+	return ok
+}
+
+// milestoneSlice returns the "milestones" payload slice from a batched
+// milestone Data map, reporting ok=false when the map is not a batch (i.e. it
+// is a flat milestone).
+func milestoneSlice(data interface{}) ([]interface{}, bool) {
+	m, ok := data.(map[string]interface{})
+	if !ok {
+		return nil, false
+	}
+	s, ok := m["milestones"].([]interface{})
+	if !ok || s == nil {
+		return nil, false
+	}
+	return s, true
+}
+
+// milestonePayload returns a FRESH copy of ev's flat milestone payload map.
+// The input map is shared with other subscribers and the replay ring, so it
+// is never returned by reference; a non-map Data yields an empty map.
+func milestonePayload(ev events.UIEvent) map[string]interface{} {
+	src, _ := ev.Data.(map[string]interface{})
+	out := make(map[string]interface{}, len(src))
+	for k, v := range src {
+		out[k] = v
+	}
+	return out
+}
+
+// copyMilestonePayload returns a fresh copy of a milestone payload map stored
+// inside an existing batch's "milestones" slice, so neither the stored maps
+// nor any input maps are mutated when the batch is extended.
+func copyMilestonePayload(m interface{}) map[string]interface{} {
+	src, _ := m.(map[string]interface{})
+	out := make(map[string]interface{}, len(src))
+	for k, v := range src {
+		out[k] = v
+	}
+	return out
+}

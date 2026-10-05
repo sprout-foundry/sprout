@@ -265,7 +265,7 @@ the end, without checkboxes.
       §151a; SP-149 §149c.
 - [x] **151.4** Emit `progress_question` alongside `ask_user_request` with
       plan context. Test. Spec: SP-151 §151a.
-- [ ] **151.5** Coalesce milestones only (`pkg/webui/stream_coalesce.go`);
+- [x] **151.5** Coalesce milestones only (`pkg/webui/stream_coalesce.go`);
       question, verification and completion events never coalesced.
       Test. Spec: SP-151 §151b.
 - [ ] **151.6** Deterministic template summaries in Go and CLI rendering

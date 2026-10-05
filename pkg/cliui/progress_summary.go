@@ -81,7 +81,10 @@ func verificationChecksSummary(checks []interface{}) string {
 // ProgressCompleteSummary renders a progress_complete event (SP-151
 // §151a) as a single line: a verified run carries the final check count
 // when the nested verification has checks, an unverified run carries
-// its reason when one is present.
+// its reason when one is present. A run that is not verified and carries
+// no reason (verification disabled, the default) renders nothing — the
+// CLI's empty-summary suppression then prints no line, so the default
+// user sees no per-turn "not verified" notice.
 func ProgressCompleteSummary(data map[string]interface{}) string {
 	if verified, _ := data["verified"].(bool); verified {
 		if nested, ok := data["verification"].(map[string]interface{}); ok {
@@ -95,7 +98,7 @@ func ProgressCompleteSummary(data map[string]interface{}) string {
 	if reason, _ := data["not_verified_reason"].(string); reason != "" {
 		return "Run complete — not verified (" + reason + ")"
 	}
-	return "Run complete — not verified"
+	return ""
 }
 
 // ProgressQuestionSummary renders a progress_question event (SP-151

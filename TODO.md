@@ -35,7 +35,7 @@ protects.
       assistant message in state and emit it as a stream chunk. Test: a
       failing turn shows "Verification: FAILED" in CLI and web output.
       Spec: SP-149 §149d.
-- [ ] **fix.3** No "not verified" notice when verification is off:
+- [x] **fix.3** No "not verified" notice when verification is off:
       `progress_complete` renders "Run complete — not verified (verification
       disabled)" after every turn by default. Do not emit or render it when
       verification is disabled. Spec: SP-151, SP-155 default UI unchanged.

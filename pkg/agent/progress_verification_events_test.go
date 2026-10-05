@@ -4,8 +4,9 @@
 // acceptance tests: at turn completion the runtime emits
 // progress_verification (the SP-149 evidence) followed by
 // progress_complete (the verdict), both carrying the same correlation ids,
-// and emits only progress_complete with a not_verified_reason when the
-// turn-end hook never ran.
+// and emits only progress_complete when the turn-end hook never ran —
+// with a not_verified_reason when verification is enabled, and with no
+// not-verified content at all when it is disabled (the default).
 //
 // The pure payload builders are asserted directly (exact-map + omitempty
 // pins). The emit path is driven through the real method —
@@ -77,8 +78,9 @@ func pveFailingResult() *verify.Result {
 
 // pveAgent builds a bare agent with session id "run-1" and a captured EventBus,
 // so publishTurnProgressComplete runs the real emit path and its events can be
-// asserted. The agent has no configuration manager (configManager == nil) so
-// the "not verified" reason resolves to "verification disabled".
+// asserted. The agent has no configuration manager (configManager == nil), so
+// verification is disabled and the not-verified path carries no
+// not_verified_reason.
 func pveAgent(t *testing.T) (*Agent, <-chan events.UIEvent) {
 	t.Helper()
 
@@ -367,8 +369,10 @@ func TestPublishTurnProgressComplete_FailingResult(t *testing.T) {
 
 // TestPublishTurnProgressComplete_NotVerified pins the no-result case: with an
 // empty stored verification state (the hook never ran) exactly ONE event is
-// emitted — progress_complete with verified omitted and
-// not_verified_reason set — and NO progress_verification.
+// emitted — progress_complete with verified omitted — and NO
+// progress_verification. A disabled-verification agent (no config manager)
+// carries no not_verified_reason key at all: the event is the run-completion
+// signal only, so the default (disabled) UI shows no per-turn notice.
 func TestPublishTurnProgressComplete_NotVerified(t *testing.T) {
 	ag, ch := pveAgent(t) // configManager == nil, no stored result
 
@@ -384,11 +388,49 @@ func TestPublishTurnProgressComplete_NotVerified(t *testing.T) {
 	if _, ok := data["verified"]; ok {
 		t.Errorf("verified must be omitted when there is no result, got %v", data["verified"])
 	}
-	if data["not_verified_reason"] != "verification disabled" {
-		t.Errorf("not_verified_reason = %v, want %q", data["not_verified_reason"], "verification disabled")
+	if _, ok := data["not_verified_reason"]; ok {
+		t.Errorf("not_verified_reason must be absent for a disabled-verification turn, got %v", data["not_verified_reason"])
 	}
 	if _, ok := data["verification"]; ok {
 		t.Errorf("verification must be absent when there is no result, got %v", data["verification"])
+	}
+	if data["run_id"] != "run-1" {
+		t.Errorf("run_id = %v, want run-1", data["run_id"])
+	}
+}
+
+// TestPublishTurnProgressComplete_EnabledNoCodeChanges pins the enabled-case
+// notice: an agent with verification enabled but a turn that changed no code
+// emits exactly ONE event — progress_complete with
+// not_verified_reason "no code changes this turn" — and NO
+// progress_verification.
+func TestPublishTurnProgressComplete_EnabledNoCodeChanges(t *testing.T) {
+	mgr, cleanup := configuration.NewTestManager(t)
+	t.Cleanup(cleanup)
+	if err := mgr.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		cfg.Verification = &configuration.VerificationConfig{Enabled: true}
+		return nil
+	}); err != nil {
+		t.Fatalf("configure verification: %v", err)
+	}
+
+	ag, ch := pveAgent(t)
+	ag.configManager = mgr
+
+	ag.publishTurnProgressComplete()
+
+	ev := pveNextEvent(t, ch)
+	if ev.Type != events.EventTypeProgressComplete {
+		t.Fatalf("event = %q, want progress_complete (no result → no progress_verification)", ev.Type)
+	}
+	pveNoMoreEvents(t, ch, 300*time.Millisecond)
+
+	data := pveData(t, ev)
+	if data["not_verified_reason"] != "no code changes this turn" {
+		t.Errorf("not_verified_reason = %v, want %q", data["not_verified_reason"], "no code changes this turn")
+	}
+	if _, ok := data["verified"]; ok {
+		t.Errorf("verified must be omitted when there is no result, got %v", data["verified"])
 	}
 	if data["run_id"] != "run-1" {
 		t.Errorf("run_id = %v, want run-1", data["run_id"])
@@ -417,18 +459,18 @@ func TestPublishTurnProgressComplete_SubagentSilent(t *testing.T) {
 
 // TestProgressComplete_NotVerifiedReason pins every branch of the
 // not-verified reason (mirroring the SP-149 hook's guard conditions): a nil
-// config manager or a config with verification disabled → "verification
-// disabled"; verification enabled but no code change → "no code changes this
-// turn"; verification enabled with a code change → "verification did not run
-// this turn".
+// config manager or a config with verification disabled (the default) → ""
+// (no not-verified notice); verification enabled but no code change → "no
+// code changes this turn"; verification enabled with a code change →
+// "verification did not run this turn".
 func TestProgressComplete_NotVerifiedReason(t *testing.T) {
 	// Nil receiver and nil config manager.
 	var nilAgent *Agent
-	if got := nilAgent.notVerifiedReason(); got != "verification disabled" {
-		t.Errorf("nil receiver reason = %q, want %q", got, "verification disabled")
+	if got := nilAgent.notVerifiedReason(); got != "" {
+		t.Errorf("nil receiver reason = %q, want \"\" (verification disabled → no notice)", got)
 	}
-	if got := NewTestAgent().notVerifiedReason(); got != "verification disabled" {
-		t.Errorf("nil config manager reason = %q, want %q", got, "verification disabled")
+	if got := NewTestAgent().notVerifiedReason(); got != "" {
+		t.Errorf("nil config manager reason = %q, want \"\" (verification disabled → no notice)", got)
 	}
 
 	// Config present, verification disabled (the default).
@@ -436,8 +478,8 @@ func TestProgressComplete_NotVerifiedReason(t *testing.T) {
 	t.Cleanup(cleanupDisabled)
 	agDisabled := NewTestAgent()
 	agDisabled.configManager = mgrDisabled
-	if got := agDisabled.notVerifiedReason(); got != "verification disabled" {
-		t.Errorf("disabled-config reason = %q, want %q", got, "verification disabled")
+	if got := agDisabled.notVerifiedReason(); got != "" {
+		t.Errorf("disabled-config reason = %q, want \"\" (verification disabled → no notice)", got)
 	}
 
 	// Config present, verification enabled.

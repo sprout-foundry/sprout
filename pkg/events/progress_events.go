@@ -114,9 +114,12 @@ type ProgressVerificationData struct {
 
 // ProgressCompleteData is the payload for progress_complete (SP-151
 // §151a): the run finished. A run is "verified" only when a passing
-// verification result exists (SP-149 §149d / SP-151 §151c); when SP-149 is
-// disabled or was not run, Verification is nil and NotVerifiedReason says
-// why (e.g. "verification disabled").
+// verification result exists (SP-149 §149d / SP-151 §151c).
+// NotVerifiedReason is set only when verification is enabled and the turn
+// was not verified (e.g. "no code changes this turn"); when SP-149 is
+// disabled (the CLI default) both Verification and NotVerifiedReason are
+// absent and the payload carries just run_id, so the default UI is
+// unchanged.
 type ProgressCompleteData struct {
 	RunID        string `json:"run_id"`
 	PlanRevision int    `json:"plan_revision"`
@@ -125,6 +128,7 @@ type ProgressCompleteData struct {
 	// Verification is the final verification result; nil when SP-149 is
 	// disabled or was not run.
 	Verification *ProgressVerificationData `json:"verification,omitempty"`
-	// NotVerifiedReason explains why the run is not verified.
+	// NotVerifiedReason explains why the run is not verified (empty when
+	// verification is disabled).
 	NotVerifiedReason string `json:"not_verified_reason,omitempty"`
 }

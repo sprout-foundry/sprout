@@ -245,11 +245,11 @@ func TestProgressCompleteSummary(t *testing.T) {
 			want: "Run complete — not verified (verification disabled)",
 		},
 		{
-			name: "not verified without a reason",
+			name: "not verified without a reason says nothing",
 			data: map[string]interface{}{
 				"run_id": "run-1",
 			},
-			want: "Run complete — not verified",
+			want: "",
 		},
 	}
 	for _, c := range cases {

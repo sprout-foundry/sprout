@@ -1,5 +1,9 @@
 package agent
 
+import (
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+)
+
 // NewTestAgent creates a minimal Agent suitable for unit tests.
 //
 // Tests that create bare &Agent{} structs must remember to call
@@ -22,4 +26,23 @@ func NewTestAgent() *Agent {
 		mcpSub:              NewAgentMCPManager(),
 		shellCommandHistory: make(map[string]*ShellCommandResult),
 	}
+}
+
+// NewTestAgentWithConfigManager is NewTestAgent with the configuration
+// manager wired in, for tests that exercise config-gated behavior (e.g.
+// the SP-149 verification flag) without a full NewAgent.
+func NewTestAgentWithConfigManager(mgr *configuration.Manager) *Agent {
+	ag := NewTestAgent()
+	ag.configManager = mgr
+	return ag
+}
+
+// PublishTurnProgressComplete exposes the turn-completion progress emit —
+// the progress_verification / progress_complete pair built from the stored
+// turn-end verification result (SP-151 §151a) — for cross-package tests
+// and embedding turn loops. It is the same path handleQueryResult calls on
+// the success path; a no-op when no event bus is wired or the turn is a
+// subagent turn.
+func (a *Agent) PublishTurnProgressComplete() {
+	a.publishTurnProgressComplete()
 }

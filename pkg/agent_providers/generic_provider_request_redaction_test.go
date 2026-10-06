@@ -80,3 +80,43 @@ func TestBuildHTTPRequestCtx_RedactionNeverCorruptsJSON(t *testing.T) {
 		t.Errorf("raw JWT still present in outbound body after egress redaction (len=%d)", len(jwt))
 	}
 }
+
+// TestBuildHTTPRequestCtx_RedactionSurvivesEscapeAdjacentSecret covers the
+// escape-adjacent boundary: a secret capture that abuts a JSON escape
+// (\uXXXX, \n, \\, \") must not corrupt the payload. Pre-fix, byte-level
+// redaction could orphan the escape and trip the refuse-to-send guard.
+func TestBuildHTTPRequestCtx_RedactionSurvivesEscapeAdjacentSecret(t *testing.T) {
+	jwt := redactionTestJWT(t)
+	// Raw JSON bodies with the secret right against an escape sequence.
+	bodies := []string{
+		`{"messages":[{"role":"tool","content":"` + jwt + `\u0041"}]}`,
+		`{"messages":[{"role":"tool","content":"` + jwt + `"}]}`,
+		`{"messages":[{"role":"tool","content":"` + jwt + `\n"}]}`,
+		`{"messages":[{"role":"tool","content":"prefix ` + jwt + ` suffix"}]}`,
+	}
+	p := &GenericProvider{
+		config: &ProviderConfig{
+			Name:     "redaction-test",
+			Endpoint: "https://api.test.invalid/v1/chat/completions",
+			Auth:     AuthConfig{Type: "bearer", Key: "test-key"},
+			Defaults: RequestDefaults{Model: "glm-5.3-flash"},
+		},
+		model: "glm-5.3-flash",
+	}
+	for i, b := range bodies {
+		body := []byte(b)
+		if !json.Valid(body) {
+			t.Fatalf("case %d precondition: input must be valid JSON", i)
+		}
+		_, sentBody, err := p.buildHTTPRequestCtx(context.Background(), body, false)
+		if err != nil {
+			t.Fatalf("case %d: buildHTTPRequestCtx refused a valid body: %v", i, err)
+		}
+		if !json.Valid(sentBody) {
+			t.Errorf("case %d: outbound body invalid after redaction: %s", i, sentBody)
+		}
+		if strings.Contains(string(sentBody), jwt) {
+			t.Errorf("case %d: secret survived egress redaction", i)
+		}
+	}
+}

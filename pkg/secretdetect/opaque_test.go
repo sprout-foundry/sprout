@@ -97,7 +97,79 @@ func TestRedactOpaque_JSONBodyWithJWTStaysValidJSON(t *testing.T) {
 	}
 }
 
-// TestRedact_TrimsBoundaryBackslashesFromNeedle exercises the display-layer
+// TestRedactOpaqueJSON_StaysValidJSON proves the JSON-aware redaction never
+// corrupts a serialized payload, including the escape-adjacent shape that
+// byte-level RedactOpaque risks. It also checks the secret is actually
+// removed and non-string structure (keys, numbers) survives.
+func TestRedactOpaqueJSON_StaysValidJSON(t *testing.T) {
+	jwt := fixtureJWT(t)
+	// Raw JSON bodies exercising escape-adjacent placements of the secret.
+	bodies := []string{
+		`{"k":"` + jwt + `"}`,
+		`{"k":"` + jwt + `\u0041"}`,
+		`{"k":"` + jwt + `\n"}`,
+		`{"k":"` + jwt + `\\"}`,
+		`{"c":"{\"accessToken\":\"` + jwt + `\"}"}`,
+		`{"messages":[{"role":"tool","content":"` + jwt + `"}],"n":3,"ok":true}`,
+	}
+	for i, b := range bodies {
+		if !json.Valid([]byte(b)) {
+			t.Fatalf("case %d precondition: input must be valid JSON: %s", i, b)
+		}
+		out := RedactOpaqueJSON(b)
+		if !json.Valid([]byte(out)) {
+			t.Errorf("case %d: RedactOpaqueJSON produced invalid JSON:\n  in : %s\n  out: %s", i, b, out)
+		}
+		if strings.Contains(out, jwt) {
+			t.Errorf("case %d: secret survived redaction", i)
+		}
+		if !strings.Contains(out, "[REDACTED]") {
+			t.Errorf("case %d: expected a [REDACTED] token, got %s", i, out)
+		}
+	}
+
+	// Non-string structure and keys are preserved.
+	in := `{"model":"gpt","n":3,"ok":true,"key":"` + jwt + `"}`
+	out := RedactOpaqueJSON(in)
+	var got, want map[string]any
+	if err := json.Unmarshal([]byte(in), &want); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("output not parseable: %v (%s)", err, out)
+	}
+	if got["model"] != "gpt" || got["n"].(float64) != 3 || got["ok"].(bool) != true {
+		t.Errorf("non-string fields altered: %s", out)
+	}
+	if got["key"] != "[REDACTED]" {
+		t.Errorf("secret value not redacted: %v", got["key"])
+	}
+}
+
+// TestRedactOpaqueJSON_NonJSONFallsBack: a non-JSON body is handled by the
+// byte-level path unchanged.
+func TestRedactOpaqueJSON_NonJSONFallsBack(t *testing.T) {
+	in := "plain text with " + fixtureJWT(t) + " inline"
+	out := RedactOpaqueJSON(in)
+	if strings.Contains(out, fixtureJWT(t)) == false && !strings.Contains(out, "[REDACTED]") {
+		t.Errorf("expected the inline secret to be redacted, got: %s", out)
+	}
+}
+
+// TestRedactOpaqueJSON_CleanPayloadUnchanged: a JSON payload with no secret is
+// returned byte-for-byte (no re-marshaling / key reordering).
+func TestRedactOpaqueJSON_CleanPayloadUnchanged(t *testing.T) {
+	// Non-canonical key order/whitespace that Marshal would normalize.
+	in := `{"b": 1, "a":  2, "nested": {"z": "plain value", "y": [1, 2, 3]}}`
+	if !json.Valid([]byte(in)) {
+		t.Fatalf("precondition: must be valid JSON")
+	}
+	out := RedactOpaqueJSON(in)
+	if out != in {
+		t.Errorf("clean payload was reformatted:\n  in : %s\n  out: %s", in, out)
+	}
+}
+
 // Redact path with hand-built matches so leading, trailing, and degenerate
 // boundary cases are covered independently of the gitleaks scanner.
 func TestRedact_TrimsBoundaryBackslashesFromNeedle(t *testing.T) {

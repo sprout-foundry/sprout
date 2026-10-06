@@ -169,6 +169,7 @@ treating an entry as unstarted._
 | SP-156 | [Deploy Targets and Ship Mode](./SP-156-deploy-targets.md) | 📝 Proposed (2026-10-03). Deploy target interface, `sprout deploy` and deploy tools with credentials kept out of model context; Ship mode for status, history and rollback. |
 | SP-157 | [Checkpoints and Project Health](./SP-157-checkpoints-and-project-health.md) | 📝 Proposed (2026-10-03). Project timeline with summaries and restorable checkpoints; format/lint/test after edits; `sprout health`; readable build/runtime error explanations. |
 | SP-158 | [The Design Loop in the Browser Build](./SP-158-browser-design-loop.md) | 🚧 Implemented (2026-10-05), browser e2e pending. Every design tool ships to WASM (amends SP-140 inv. 7); images reach the model in browser mode; in-browser rasterization for `design_render`/`design_critique`; skill folds note host-unavailable tools. |
+| SP-159 | [`sprout runner` — Your Own Machine as the Browser Build's Runner](./SP-159-sprout-runner.md) | 📝 Proposed (2026-10-05). Device-code `sprout runner link`, relay by default; per-runner modes container (default) / native (OS sandbox) / bare-metal; streaming runs, long-running processes + preview, conflict-checked sync. Platform side: SP-BUILDER-14. |
 
 ## Future / On Hold
 

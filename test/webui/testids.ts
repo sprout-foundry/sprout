@@ -320,6 +320,14 @@ const TESTIDS = {
   "escalation-toast-txn-skipped": "escalation-toast-txn-skipped",
   "escalation-toast-txn-warning": "escalation-toast-txn-warning",
   "escalation-toast-txn-error": "escalation-toast-txn-error",
+  "escalation-toast-txn-cloud-fallback": "escalation-toast-txn-cloud-fallback",
+
+  // Escalation host choice (RunHostPicker): runner vs cloud
+  "run-host-picker": "run-host-picker",
+  "run-host-option": "run-host-option",
+  "run-host-option-cloud": "run-host-option-cloud",
+  "run-host-bare-metal-warning": "run-host-bare-metal-warning",
+  "run-host-notice": "run-host-notice",
 
   // Session working directory (services/workspaceCwd.ts) — Files panel
   // repo/cwd selector row (WorkspaceCwdBar). The chip was removed: the

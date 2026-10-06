@@ -13,6 +13,7 @@ import {
   CloudTxnError,
   createTxn,
   resolveTxnWorkspace,
+  RunnerUnavailableError,
   TXN_MAX_FILES,
   TXN_MAX_FILE_BYTES,
   txnFinish,
@@ -305,7 +306,7 @@ describe('resolveTxnWorkspace', () => {
       'GET /workspace/txn/resolve?repo_url=https%3A%2F%2Fgithub.com%2Facme%2Fapp': () =>
         jsonResponse({ error: 'no workspace for repo' }, { status: 404 }),
       'POST /workspace/txn': (body) => {
-        expect(body).toEqual({ repo_url: 'https://github.com/acme/app' });
+        expect(body).toEqual({ repo_url: 'https://github.com/acme/app', host: 'auto' });
         return jsonResponse({ workspace_id: 'ws-new', status: 'pending', backend: 'fly' }, { status: 201 });
       },
     });
@@ -347,6 +348,110 @@ describe('resolveTxnWorkspace', () => {
   it('requires a repo URL', async () => {
     await expect(resolveTxnWorkspace('')).rejects.toThrow(TypeError);
     await expect(resolveTxnWorkspace('   ')).rejects.toThrow(TypeError);
+  });
+});
+
+describe('resolveTxnWorkspace with a chosen host', () => {
+  const REPO = 'https://github.com/acme/app';
+  const RESOLVE_FLY = 'GET /workspace/txn/resolve?repo_url=https%3A%2F%2Fgithub.com%2Facme%2Fapp&host=fly';
+  const RESOLVE_R1 =
+    'GET /workspace/txn/resolve?repo_url=https%3A%2F%2Fgithub.com%2Facme%2Fapp&host=runner&runner_id=r-1';
+  const RESOLVE_R9 =
+    'GET /workspace/txn/resolve?repo_url=https%3A%2F%2Fgithub.com%2Facme%2Fapp&host=runner&runner_id=r-9';
+
+  it('cloud: asks the platform for the Fly workspace and uses it without creating (no session block)', async () => {
+    const fetchMock = routeFetch({
+      [RESOLVE_FLY]: () => jsonResponse({ workspace_id: 'ws-fly', status: 'stopped', backend: 'fly' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await resolveTxnWorkspace(REPO, { host: 'fly' })).toEqual({ workspaceId: 'ws-fly', created: false });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // The txn lifecycle for a Fly workspace stays on the Fly path.
+    const openMock = routeFetch({
+      'POST /workspace/fly/ws-fly/txn': () => jsonResponse({ txn_id: 't', status: 'push' }, { status: 201 }),
+    });
+    vi.stubGlobal('fetch', openMock);
+    await createTxn('ws-fly');
+    expect(openMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('cloud: creates with host "fly" when the user has no Fly workspace for the repo', async () => {
+    const fetchMock = routeFetch({
+      [RESOLVE_FLY]: () => jsonResponse({ error: 'no workspace for repo' }, { status: 404 }),
+      'POST /workspace/txn': (body) => {
+        expect(body).toEqual({ repo_url: REPO, host: 'fly' });
+        return jsonResponse({ workspace_id: 'ws-new', backend: 'fly' }, { status: 201 });
+      },
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await resolveTxnWorkspace(REPO, { host: 'fly' })).toEqual({ workspaceId: 'ws-new', created: true });
+  });
+
+  it('runner: reuses the workspace the platform resolves on that runner', async () => {
+    const fetchMock = routeFetch({
+      [RESOLVE_R1]: () =>
+        jsonResponse({ workspace_id: 'ws-mine', status: 'stopped', backend: 'runner', runner_id: 'r-1' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await resolveTxnWorkspace(REPO, { host: 'runner', runnerId: 'r-1' })).toEqual({
+      workspaceId: 'ws-mine',
+      created: false,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('runner: creates pinned to the runner (host + runner_id) on the txn path', async () => {
+    const created: unknown[] = [];
+    const fetchMock = routeFetch({
+      [RESOLVE_R1]: () => jsonResponse({ error: 'no workspace for repo' }, { status: 404 }),
+      'POST /workspace/txn': (body) => {
+        created.push(body);
+        return jsonResponse({ workspace_id: 'ws-r1', status: 'pending', backend: 'runner' }, { status: 201 });
+      },
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await resolveTxnWorkspace(REPO, { host: 'runner', runnerId: 'r-1' })).toEqual({
+      workspaceId: 'ws-r1',
+      created: true,
+    });
+    expect(created).toEqual([{ repo_url: REPO, host: 'runner', runner_id: 'r-1' }]);
+
+    // Runner-backed txns use the host-agnostic lifecycle path.
+    const openMock = routeFetch({
+      'POST /workspace/txn/ws-r1/txn': () => jsonResponse({ txn_id: 't', status: 'push' }, { status: 201 }),
+    });
+    vi.stubGlobal('fetch', openMock);
+    await createTxn('ws-r1');
+    expect(openMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('runner: a 409 runner_unavailable rejects with RunnerUnavailableError', async () => {
+    vi.stubGlobal(
+      'fetch',
+      routeFetch({
+        [RESOLVE_R9]: () => jsonResponse({ error: 'none' }, { status: 404 }),
+        'POST /workspace/txn': () =>
+          jsonResponse({ error: 'runner_unavailable', message: 'that runner is not online' }, { status: 409 }),
+      }),
+    );
+    const err = await resolveTxnWorkspace(REPO, { host: 'runner', runnerId: 'r-9' }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(RunnerUnavailableError);
+    expect((err as RunnerUnavailableError).runnerId).toBe('r-9');
+    expect((err as RunnerUnavailableError).status).toBe(409);
+  });
+
+  it('runner: other 409s (e.g. a busy txn) stay plain CloudTxnErrors', async () => {
+    vi.stubGlobal(
+      'fetch',
+      routeFetch({
+        [RESOLVE_R9]: () => jsonResponse({ error: 'none' }, { status: 404 }),
+        'POST /workspace/txn': () => jsonResponse({ error: 'something else' }, { status: 409 }),
+      }),
+    );
+    const err = await resolveTxnWorkspace(REPO, { host: 'runner', runnerId: 'r-9' }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(CloudTxnError);
+    expect(err).not.toBeInstanceOf(RunnerUnavailableError);
   });
 });
 

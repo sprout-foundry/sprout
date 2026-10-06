@@ -3,11 +3,12 @@
  * mode (git push, VFS quota, command timeout, exit 127). Offers three ways
  * out, in priority order:
  *
- *   Txn  — "Run in cloud container" (ETH-2, primary): open a transaction on
- *          the user's fly workspace, push the browser's dirty files, run the
- *          exact command that returned 127 in the container, pull the
- *          resulting deltas back into the browser VFS, finish. The user
- *          never leaves the IDE and pays only for the machine time used.
+ *   Txn  — "Run in cloud container" / "Run on <runner>" (ETH-2, primary):
+ *          open a transaction on the user's workspace on the chosen host (one
+ *          of their runners, or the cloud), push the browser's dirty files,
+ *          run the exact command that returned 127 there, pull the resulting
+ *          deltas back into the browser VFS, finish. The user never leaves
+ *          the IDE; cloud runs pay only for the machine time used.
  *   Mode A — "Run as cloud task": submit the work to the platform task queue
  *          (POST /api/tasks) and poll it to completion inline.
  *   Mode B — "Start Full Workspace": provision a full cloud workspace and
@@ -16,15 +17,18 @@
  * Listens for sprout:escalation-trigger events with severity='blocking'.
  */
 
-import { Cloud, Container, Loader2, Rocket, X } from 'lucide-react';
+import { Cloud, Container, Loader2, Rocket, Server, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { EscalationTriggerEvent } from '../hooks/useEscalationTriggers';
 import { ESCALATION_TRIGGER_EVENT } from '../hooks/useEscalationTriggers';
+import { useRunHostChoice } from '../hooks/useRunHostChoice';
 import { isTerminalCloudTaskStatus, pollCloudTask, submitCloudTask, type CloudTask } from '../services/cloudTasks';
-import { runTxnCommand, txnPhaseLabel, type TxnProgress } from '../services/cloudTxnEscalate';
+import { HostUnavailableError, runTxnCommand, txnPhaseLabel, type TxnProgress } from '../services/cloudTxnEscalate';
+import { CLOUD_HOST, hostDisplayName, rememberHost, type EscalationHost } from '../services/escalationHost';
 import { startFullWorkspace, useFullWorkspacesAvailable } from '../services/fullWorkspace';
 import { onPlatformLinkClick, openPlatformPage } from '../services/homeView';
 import { platformHref } from '../utils/platformUrl';
+import { RunHostPicker } from './RunHostPicker';
 import './EscalationToast.css';
 
 interface EscalationState {
@@ -77,12 +81,15 @@ interface CloudTaskProgress {
 export function EscalationListener() {
   const [escalation, setEscalation] = useState<EscalationState | null>(null);
   const [cloudTask, setCloudTask] = useState<CloudTaskProgress | null>(null);
-  const [txn, setTxn] = useState<TxnProgress | null>(null);
+  const [txn, setTxn] = useState<(TxnProgress & { host: EscalationHost; offerCloud?: boolean }) | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [startingWorkspace, setStartingWorkspace] = useState(false);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const workspacesAvailable = useFullWorkspacesAvailable();
   const mountedRef = useRef(true);
+  const triggerCommand = typeof escalation?.trigger.command === 'string' ? escalation.trigger.command.trim() : '';
+  const canRunTxn = triggerCommand !== '' && Boolean(escalation?.trigger.repoURL);
+  const hostChoice = useRunHostChoice(escalation?.trigger.repoURL, canRunTxn && escalation ? escalation : null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -119,46 +126,71 @@ export function EscalationListener() {
   }, []);
 
   /**
-   * ETH-2: run the triggering command transactionally in the user's cloud
-   * workspace container — open → push browser deltas → run → pull container
-   * deltas back into the VFS → finish. `finish` is ALWAYS called (success,
-   * failure or timeout) so the pay-per-run machine is never left running:
-   * the finally block is the guarantee, the in-flow call just avoids an
-   * extra round trip on the happy path.
+   * ETH-2: run the triggering command transactionally in the user's
+   * workspace on `host` — open → push browser deltas → run → pull deltas
+   * back into the VFS → finish. `finish` is ALWAYS called (success, failure
+   * or timeout) so the pay-per-run machine is never left running: the
+   * finally block is the guarantee, the in-flow call just avoids an extra
+   * round trip on the happy path. A runner that can't take the run (offline
+   * or busy) leaves the error up with a "run in the cloud" way out.
    */
-  const handleRunTxn = useCallback(() => {
-    const trigger = escalation?.trigger;
-    const command = typeof trigger?.command === 'string' ? trigger.command.trim() : '';
-    const repoURL = trigger?.repoURL;
-    if (!command || !repoURL || submitting || txn) return;
+  const startTxn = useCallback(
+    (host: EscalationHost) => {
+      const trigger = escalation?.trigger;
+      const command = typeof trigger?.command === 'string' ? trigger.command.trim() : '';
+      const repoURL = trigger?.repoURL;
+      if (!command || !repoURL || submitting) return;
 
-    setSubmitting(true);
-    setTxn({ phase: 'opening' });
+      rememberHost(repoURL, host);
+      setSubmitting(true);
+      setTxn({ phase: 'opening', host });
 
-    const run = async (): Promise<void> => {
-      try {
-        const outcome = await runTxnCommand(repoURL, command, (phase) => {
-          if (mountedRef.current) setTxn({ phase });
-        });
-        if (mountedRef.current) {
-          setTxn({
-            phase: 'done',
-            result: outcome.result,
-            pulledFiles: outcome.pulledFiles,
-            skippedFiles: outcome.skippedFiles,
-            pushedFiles: outcome.pushedFiles,
-            warning: outcome.warning,
-          });
+      const run = async (): Promise<void> => {
+        try {
+          const outcome = await runTxnCommand(
+            repoURL,
+            command,
+            (phase) => {
+              if (mountedRef.current) setTxn({ phase, host });
+            },
+            host,
+          );
+          if (mountedRef.current) {
+            setTxn({
+              phase: 'done',
+              host,
+              result: outcome.result,
+              pulledFiles: outcome.pulledFiles,
+              skippedFiles: outcome.skippedFiles,
+              pushedFiles: outcome.pushedFiles,
+              warning: outcome.warning,
+            });
+          }
+        } catch (err) {
+          if (mountedRef.current) {
+            setTxn({
+              phase: 'error',
+              host,
+              error: err instanceof Error ? err.message : String(err),
+              offerCloud: err instanceof HostUnavailableError,
+            });
+          }
+        } finally {
+          if (mountedRef.current) setSubmitting(false);
         }
-      } catch (err) {
-        if (mountedRef.current) setTxn({ phase: 'error', error: err instanceof Error ? err.message : String(err) });
-      } finally {
-        if (mountedRef.current) setSubmitting(false);
-      }
-    };
+      };
 
-    run();
-  }, [escalation, submitting, txn]);
+      run();
+    },
+    [escalation, submitting],
+  );
+
+  const handleRunTxn = useCallback(() => {
+    if (txn || !hostChoice.loaded) return;
+    startTxn(hostChoice.host);
+  }, [txn, hostChoice.loaded, hostChoice.host, startTxn]);
+
+  const handleRunInCloudInstead = useCallback(() => startTxn(CLOUD_HOST), [startTxn]);
 
   /**
    * Mode A: submit the escalation as a platform task, then poll it inline.
@@ -238,10 +270,10 @@ export function EscalationListener() {
   if (!escalation?.visible) return null;
 
   const repoURL = escalation.trigger.repoURL;
-  const command = typeof escalation.trigger.command === 'string' ? escalation.trigger.command.trim() : '';
   // The txn CTA needs both the command (what to run) and repo context (where
   // to run it); without either the toast falls back to Mode A / Mode B.
-  const showTxnButton = command !== '' && Boolean(repoURL) && !txn && !cloudTask;
+  const showTxnButton = canRunTxn && !txn && !cloudTask;
+  const txnOnRunner = hostChoice.host.kind === 'runner';
   // Shown only when there is repo context (same gate the Mode B path uses for
   // a meaningful task) and no txn/cloud task is already in flight.
   const showCloudTaskButton = Boolean(repoURL) && !cloudTask && !txn;
@@ -263,9 +295,22 @@ export function EscalationListener() {
             {txn ? (
               <div className="escalation-toast-progress" data-testid="escalation-toast-txn-progress">
                 {txn.error ? (
-                  <p className="escalation-toast-task-error" data-testid="escalation-toast-txn-error">
-                    {txn.error}
-                  </p>
+                  <>
+                    <p className="escalation-toast-task-error" data-testid="escalation-toast-txn-error">
+                      {txn.error}
+                    </p>
+                    {txn.offerCloud ? (
+                      <button
+                        className="escalation-toast-action escalation-toast-action-secondary"
+                        onClick={handleRunInCloudInstead}
+                        disabled={submitting}
+                        data-testid="escalation-toast-txn-cloud-fallback"
+                      >
+                        <Container size={14} />
+                        Run in cloud container instead
+                      </button>
+                    ) : null}
+                  </>
                 ) : txn.result ? (
                   <div data-testid="escalation-toast-txn-result">
                     <p className="escalation-toast-txn-summary">
@@ -307,7 +352,7 @@ export function EscalationListener() {
                 ) : (
                   <p className="escalation-toast-task-status" data-testid="escalation-toast-txn-status">
                     <Loader2 size={13} className="spinner" aria-hidden="true" />
-                    {txnPhaseLabel(txn.phase)}…
+                    {txnPhaseLabel(txn.phase, txn.host)}…
                   </p>
                 )}
               </div>
@@ -346,16 +391,31 @@ export function EscalationListener() {
               </p>
             ) : null}
 
+            {showTxnButton && hostChoice.runners.length > 0 ? (
+              <RunHostPicker
+                runners={hostChoice.runners}
+                value={hostChoice.host}
+                onChange={hostChoice.setHost}
+                disabled={submitting}
+              />
+            ) : null}
+
             <div className="escalation-toast-actions">
               {showTxnButton ? (
                 <button
                   className="escalation-toast-action"
                   onClick={handleRunTxn}
-                  disabled={submitting}
+                  disabled={submitting || !hostChoice.loaded}
                   data-testid="escalation-toast-txn"
                 >
-                  {submitting ? <Loader2 size={14} className="spinner" aria-hidden="true" /> : <Container size={14} />}
-                  Run in cloud container
+                  {submitting ? (
+                    <Loader2 size={14} className="spinner" aria-hidden="true" />
+                  ) : txnOnRunner ? (
+                    <Server size={14} />
+                  ) : (
+                    <Container size={14} />
+                  )}
+                  {txnOnRunner ? `Run on ${hostDisplayName(hostChoice.host)}` : 'Run in cloud container'}
                 </button>
               ) : null}
               {showCloudTaskButton ? (

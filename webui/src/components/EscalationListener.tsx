@@ -87,6 +87,11 @@ export function EscalationListener() {
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const workspacesAvailable = useFullWorkspacesAvailable();
   const mountedRef = useRef(true);
+  // Bumped whenever the toast is dismissed or a new trigger replaces the
+  // current one. Async txn/cloud-task callbacks capture the value at start
+  // and bail when it has moved on — otherwise dismissing the toast mid-run
+  // would be undone by the next phase update, resurrecting it.
+  const epochRef = useRef(0);
   const triggerCommand = typeof escalation?.trigger.command === 'string' ? escalation.trigger.command.trim() : '';
   const canRunTxn = triggerCommand !== '' && Boolean(escalation?.trigger.repoURL);
   const hostChoice = useRunHostChoice(escalation?.trigger.repoURL, canRunTxn && escalation ? escalation : null);
@@ -103,7 +108,9 @@ export function EscalationListener() {
       const detail = (e as CustomEvent<EscalationTriggerEvent>).detail;
       if (detail?.severity === 'blocking') {
         // A new blocking limit replaces any previous cloud-task/txn view —
-        // the old task stays reachable from the platform's /tasks page.
+        // the old task stays reachable from the platform's /tasks page. Its
+        // in-flight callbacks are invalidated by the epoch bump.
+        epochRef.current += 1;
         setCloudTask(null);
         setTxn(null);
         setSubmitting(false);
@@ -116,8 +123,10 @@ export function EscalationListener() {
   }, []);
 
   const handleDismiss = useCallback(() => {
-    // The poll/txn loops may still be in flight; they write through the
-    // mounted guard and the toast simply stops rendering.
+    // Invalidate any in-flight txn/cloud-task callbacks so a late phase
+    // update can't bring the toast back; the run itself continues on the
+    // platform and its result stays available there.
+    epochRef.current += 1;
     setEscalation(null);
     setCloudTask(null);
     setTxn(null);
@@ -145,17 +154,22 @@ export function EscalationListener() {
       setSubmitting(true);
       setTxn({ phase: 'opening', host });
 
+      const epoch = epochRef.current;
+      const live = () => mountedRef.current && epochRef.current === epoch;
       const run = async (): Promise<void> => {
         try {
           const outcome = await runTxnCommand(
             repoURL,
             command,
             (phase) => {
-              if (mountedRef.current) setTxn({ phase, host });
+              // Ignore the terminal phases: runTxnCommand emits "done"/"error"
+              // for status UIs, but this listener sets its own richer terminal
+              // state (with the result/error) once the promise settles.
+              if (phase !== 'done' && phase !== 'error' && live()) setTxn({ phase, host });
             },
             host,
           );
-          if (mountedRef.current) {
+          if (live()) {
             setTxn({
               phase: 'done',
               host,
@@ -167,7 +181,7 @@ export function EscalationListener() {
             });
           }
         } catch (err) {
-          if (mountedRef.current) {
+          if (live()) {
             setTxn({
               phase: 'error',
               host,
@@ -176,7 +190,7 @@ export function EscalationListener() {
             });
           }
         } finally {
-          if (mountedRef.current) setSubmitting(false);
+          if (live()) setSubmitting(false);
         }
       };
 
@@ -203,17 +217,19 @@ export function EscalationListener() {
     if (!repoURL || submitting || cloudTask) return;
 
     setSubmitting(true);
+    const epoch = epochRef.current;
+    const live = () => mountedRef.current && epochRef.current === epoch;
     submitCloudTask({
       repo_url: repoURL,
       prompt: deriveEscalationPrompt(trigger),
     })
       .then(({ task }: { task: CloudTask }) => {
-        if (!mountedRef.current) return;
+        if (!live()) return;
         setCloudTask({ taskId: task.task_id, status: task.status || 'pending' });
         return pollCloudTask(task.task_id, {
           intervalMs: CLOUD_TASK_POLL_INTERVAL_MS,
           onTick: (t: CloudTask) => {
-            if (!mountedRef.current) return;
+            if (!live()) return;
             setCloudTask((prev) =>
               prev && prev.taskId === task.task_id ? { ...prev, status: t.status, error: prev.error } : prev,
             );
@@ -221,19 +237,19 @@ export function EscalationListener() {
         }).catch((err: unknown) => {
           // Rejected only on timeout or a failed status request; either way
           // the task itself still exists and stays linkable.
-          if (!mountedRef.current) return;
+          if (!live()) return;
           const message = err instanceof Error && err.message ? err.message : 'Cloud task status polling failed';
           setCloudTask((prev) => (prev && prev.taskId === task.task_id ? { ...prev, error: message } : prev));
         });
       })
       .catch((err: unknown) => {
-        if (!mountedRef.current) return;
+        if (!live()) return;
         const message = err instanceof Error && err.message ? err.message : String(err);
         // Submit failed — no task id yet, so only the error renders.
         setCloudTask({ taskId: '', status: '', error: message });
       })
       .finally(() => {
-        if (mountedRef.current) setSubmitting(false);
+        if (live()) setSubmitting(false);
       });
   }, [escalation, submitting, cloudTask]);
 

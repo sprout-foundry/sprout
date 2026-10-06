@@ -230,6 +230,9 @@ export async function runTxnCommand(
       const what = host.kind === 'runner' ? 'Closing the runner transaction' : 'Cloud container stop';
       warning = `${what} failed — it will idle out on its own. ${err instanceof Error ? err.message : String(err)}`;
     }
+    // Terminal phase so a status UI always learns the run is over — including
+    // runs that never reach "pulling" (an error at open/push/run).
+    onPhase?.('done');
     return {
       result,
       pulledFiles: applied.applied,
@@ -238,6 +241,9 @@ export async function runTxnCommand(
       warning,
     };
   } catch (err) {
+    // Report the failure phase first, then the terminal "error" phase, so the
+    // status UI clears instead of sticking on the last progress phase.
+    onPhase?.('error');
     if (err instanceof RunnerUnavailableError && host.kind === 'runner') throw new HostUnavailableError(host);
     throw new Error(describeTxnError(err, phase, host));
   } finally {

@@ -36,7 +36,7 @@ func cmdHelp(args []string, stdin string) CmdResult {
 	out.WriteString("          source sh bash xargs env command type which time sleep\n")
 	out.WriteString("          date whoami history clear help\n")
 	out.WriteString("git:      status diff log show branch remote add commit checkout switch\n")
-	out.WriteString("          fetch push pull clone init rm mv ls-files rev-parse ...\n")
+	out.WriteString("          fetch push pull clone init rm mv config ls-files rev-parse ...\n")
 	out.WriteString("gh:       repo clone/view, pr list/view/checkout/create/diff/status, auth status\n")
 	out.WriteString("\nShell language: pipes, && || ;, redirections (> >> < 2>&1 &> <<EOF <<<),\n")
 	out.WriteString("if/elif/else, for (incl. C-style), while/until, case, functions, ( ) and\n")

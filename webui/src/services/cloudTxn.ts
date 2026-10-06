@@ -43,6 +43,34 @@ export type { TxnFile, TxnManifest, TxnPullApplyResult, TxnPullIO, TxnPushInput,
 /** Default run timeout for an escalation-spawned command (seconds). */
 export const TXN_RUN_TIMEOUT_SECONDS = 600;
 
+/**
+ * Budget for the lifecycle calls that open a workspace/transaction (resolve,
+ * create, txn open). These are quick platform round trips; without a bound, a
+ * hung request leaves the escalation toast spinning on "Starting cloud
+ * container" forever with no way out but a reload.
+ */
+export const TXN_OPEN_TIMEOUT_MS = 120_000;
+
+/**
+ * fetch() with a hard timeout. Aborts (and rejects) after `timeoutMs` so a
+ * stalled platform request surfaces as an error the toast can show instead of
+ * an eternal progress spinner.
+ */
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (err) {
+    if (controller.signal.aborted) {
+      throw new Error(`request timed out after ${Math.round(timeoutMs / 1000)}s`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // ── Contract shapes ─────────────────────────────────────────────────────────
 
 export interface TxnRunResult {
@@ -137,7 +165,7 @@ export class RunnerUnavailableError extends CloudTxnError {
 
 async function getJSON<T>(url: string): Promise<T | null> {
   try {
-    const res = await fetch(url, { method: 'GET', credentials: 'include' });
+    const res = await fetchWithTimeout(url, { method: 'GET', credentials: 'include' }, TXN_OPEN_TIMEOUT_MS);
     if (!res.ok) return null;
     return (await res.json()) as T;
   } catch {
@@ -160,12 +188,16 @@ function resolveWorkspace(repoURL: string, choice: TxnHostChoice): Promise<TxnWo
 async function createWorkspace(repoURL: string, choice: TxnHostChoice): Promise<TxnWorkspace> {
   const body: Record<string, string> = { repo_url: repoURL, host: choice.host };
   if (choice.host === 'runner') body.runner_id = choice.runnerId;
-  const createRes = await fetch('/workspace/txn', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify(body),
-  });
+  const createRes = await fetchWithTimeout(
+    '/workspace/txn',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(body),
+    },
+    TXN_OPEN_TIMEOUT_MS,
+  );
   if (!createRes.ok) {
     const err = await toTxnError(createRes, 'Cloud workspace resolve');
     if (choice.host === 'runner' && createRes.status === 409 && err.message === 'runner_unavailable') {
@@ -236,13 +268,14 @@ function txnURL(workspaceId: string, txnId: string, suffix = ''): string {
   return `/workspace/${txnBase(workspaceId)}/${encodeURIComponent(workspaceId)}/txn/${encodeURIComponent(txnId)}${suffix}`;
 }
 
-async function postJSON<T>(url: string, action: string, body?: unknown): Promise<T> {
-  const res = await fetch(url, {
+async function postJSON<T>(url: string, action: string, body?: unknown, timeoutMs?: number): Promise<T> {
+  const init: RequestInit = {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
     body: JSON.stringify(body ?? {}),
-  });
+  };
+  const res = timeoutMs ? await fetchWithTimeout(url, init, timeoutMs) : await fetch(url, init);
   if (!res.ok) throw await toTxnError(res, action);
   return (await res.json()) as T;
 }
@@ -254,6 +287,7 @@ export async function createTxn(workspaceId: string): Promise<{ txn_id: string; 
     `/workspace/${txnBase(workspaceId)}/${encodeURIComponent(workspaceId)}/txn`,
     'Cloud txn open',
     {},
+    TXN_OPEN_TIMEOUT_MS,
   );
   if (typeof res?.txn_id !== 'string' || res.txn_id === '') {
     throw new TypeError('Cloud txn open response is missing txn_id');

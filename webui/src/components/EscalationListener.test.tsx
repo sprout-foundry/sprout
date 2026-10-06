@@ -410,6 +410,35 @@ describe('EscalationListener — ETH-2 txn action', () => {
     expect(screen.queryByTestId('escalation-toast-txn-result')).toBeNull();
     await waitFor(() => expect(screen.getByTestId('escalation-toast-txn')).toBeEnabled());
   });
+
+  it('stays dismissed after a phase update (dismiss is authoritative mid-run)', async () => {
+    const onPhase: { fn?: (phase: string) => void } = {};
+    vi.mocked(resolveTxnWorkspace).mockResolvedValue({ workspaceId: 'ws-1', created: false });
+    vi.mocked(createTxn).mockResolvedValue({ txn_id: 'txn-1', status: 'push' });
+    vi.mocked(txnPush).mockResolvedValue({ applied: 1, deleted: 0, skipped: [] });
+    // Capture the phase callback so we can drive it after dismiss.
+    vi.mocked(txnRun).mockImplementation((_ws, _txn, _cmd, _t) => {
+      onPhase.fn?.('running');
+      return new Promise((resolve) => setTimeout(() => resolve(RUN_RESULT), 0));
+    });
+    vi.mocked(txnPull).mockResolvedValue(PULL_MANIFEST);
+    vi.mocked(txnFinish).mockResolvedValue(undefined);
+
+    render(createElement(EscalationListener));
+    fireTrigger();
+    await clickRunTxn();
+    await flush();
+
+    // Dismiss while the txn is still in flight.
+    fireEvent.click(screen.getByLabelText('Dismiss'));
+    expect(screen.queryByTestId('escalation-toast-txn-status')).toBeNull();
+
+    // A late phase update from the still-running txn must NOT resurrect it.
+    act(() => onPhase.fn?.('pulling'));
+    await flush();
+    expect(screen.queryByTestId('escalation-toast-txn-status')).toBeNull();
+    expect(screen.queryByTestId('escalation-toast-txn-result')).toBeNull();
+  });
 });
 
 describe('EscalationListener — runner host choice', () => {

@@ -28,6 +28,20 @@ interface PendingConsent {
   resolve: (answer: ConsentAnswer) => void;
 }
 
+/**
+ * Watchdog window per phase: how long the status may sit on a phase before it
+ * is assumed stuck and cleared. `running` is deliberately generous — a long
+ * command is expected to take a while — while the container bookkeeping phases
+ * (open/push/pull) should always transition quickly.
+ */
+const STALL_CLEAR_MS: Record<string, number> = {
+  opening: 120_000,
+  pushing: 120_000,
+  running: 30 * 60_000,
+  pulling: 120_000,
+};
+const STALL_CLEAR_DEFAULT_MS = 120_000;
+
 /** Whether a runner host is still on the user's account and able to take work. */
 async function runnerAvailable(host: EscalationHost): Promise<boolean> {
   if (host.kind !== 'runner') return true;
@@ -50,16 +64,20 @@ export function AgentEscalationBridge({ repoURL }: { repoURL?: string }) {
         }),
       alwaysHost: () => getRememberedHost(repoURL) ?? AUTO_HOST,
       isHostAvailable: runnerAvailable,
-      onPhase: (command, phase, host) => setProgress(phase === 'done' ? null : { command, phase, host }),
+      onPhase: (command, phase, host) =>
+        setProgress(phase === 'done' || phase === 'error' ? null : { command, phase, host }),
     });
   }, [repoURL]);
 
-  // The run reports opening → pushing → running → pulling; clear the status
-  // shortly after the last phase since runTxnCommand has no "done" callback.
+  // Safety net: a run advances opening → pushing → running → pulling → done (or
+  // → error). If a phase arrives but no next phase follows within the watchdog
+  // window — a genuinely hung open/push/run, or a dropped terminal callback —
+  // clear the status so it can't pin itself over the composer forever.
   useEffect(() => {
-    if (progress?.phase !== 'pulling') return undefined;
-    const t = setTimeout(() => setProgress(null), 4000);
+    if (!progress) return undefined;
+    const t = setTimeout(() => setProgress(null), STALL_CLEAR_MS[progress.phase] ?? STALL_CLEAR_DEFAULT_MS);
     return () => clearTimeout(t);
+    // Re-arm on every phase change: each new phase resets the watchdog.
   }, [progress]);
 
   const current = pending[0];

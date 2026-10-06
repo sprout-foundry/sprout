@@ -164,6 +164,34 @@ export const AGENT_GIT_TOOLS: AgentGitToolDefinition[] = [
     },
   },
   {
+    name: 'git_config',
+    description:
+      'Get or set a git config value for a cloned repo. Use it to set the commit identity (key "user.name"/"user.email") before committing or pulling. Omit value to read; pass value to write.',
+    parameters: {
+      type: 'object',
+      properties: {
+        repo: repoParam,
+        key: { type: 'string', description: 'Config key, e.g. "user.name" or "user.email"' },
+        value: { type: 'string', description: 'Optional: value to set. Omit to read the current value.' },
+      },
+      required: ['repo', 'key'],
+    },
+    execute: async (args) => {
+      try {
+        if (typeof args.key !== 'string' || !args.key) throw new Error('key must be a non-empty string');
+        const dir = resolveRepoDir(args.repo as string);
+        if (typeof args.value === 'string') {
+          await gitClient.setConfig(dir, args.key, args.value);
+          return 'Set ' + args.key + ' = ' + args.value + ' in ' + args.repo;
+        }
+        const current = await gitClient.getConfig(dir, args.key);
+        return current === null ? args.key + ' is not set in ' + args.repo : args.key + ' = ' + current;
+      } catch (err) {
+        return 'git_config error: ' + (err instanceof Error ? err.message : String(err));
+      }
+    },
+  },
+  {
     name: 'git_read_file',
     description: 'Read the contents of a file from a cloned git repository.',
     parameters: {

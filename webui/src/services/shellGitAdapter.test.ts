@@ -28,6 +28,8 @@ vi.mock('./browserGit', () => ({
   gitMove: vi.fn(),
   gitRemoteBranches: vi.fn(),
   gitOriginUrl: vi.fn(),
+  gitConfigGet: vi.fn(),
+  gitConfigSet: vi.fn(),
 }));
 
 import {
@@ -36,6 +38,8 @@ import {
   gitCheckout,
   gitClone,
   gitCommit,
+  gitConfigGet,
+  gitConfigSet,
   gitDiff,
   gitFetch,
   gitLog,
@@ -339,5 +343,17 @@ describe('git checkout / branch / fetch / push / pull / clone', () => {
     const r = await SHELL_GIT_SUBCOMMANDS.mv(['a.txt', 'b.txt']);
     expect(r.exitCode).toBe(0);
     expect(mockMove).toHaveBeenCalledWith('a.txt', 'b.txt');
+  });
+
+  it('config sets a value', async () => {
+    const r = await SHELL_GIT_SUBCOMMANDS.config(['user.name', 'Alice']);
+    expect(r.exitCode).toBe(0);
+    expect(vi.mocked(gitConfigSet)).toHaveBeenCalledWith('user.name', 'Alice');
+  });
+
+  it('config reads a value', async () => {
+    vi.mocked(gitConfigGet).mockResolvedValue('Alice');
+    const r = await SHELL_GIT_SUBCOMMANDS.config(['user.name']);
+    expect(r.stdout.trim()).toBe('Alice');
   });
 });

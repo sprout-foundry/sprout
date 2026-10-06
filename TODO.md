@@ -34,6 +34,32 @@ the end, without checkboxes.
       leaves the item unchecked and the loop moves on; a `BLOCKED` item is
       skipped for the rest of the run.
 
+- [ ] **auto.2** Workflow runs never wait on approvals, and a blocked
+      command does not end the run. Three fixes in the security path
+      (`pkg/agent/seed_tool_security.go`,
+      `pkg/agent_tools/security_classifier_workspace.go`,
+      `pkg/configuration/config_subagent_type.go`):
+      (a) A workflow/automate run is non-interactive for approvals even
+      when launched from a terminal: today `canPrompt` follows the
+      console's interactivity, so Caution commands prompt and wait up to
+      `utils.ApprovalPromptTimeout` (30 min) with nobody to answer. In a
+      workflow run, Caution results follow the configured risk profile
+      without prompting; hard blocks still block.
+      (b) A hard block in a non-interactive run rejects that one command
+      with a clear tool error the agent can act on, instead of the
+      "fatal security block … The run will exit" path that ends the whole
+      session. The critical tier itself (IsCriticalOperation) is
+      unchanged and stays absolute.
+      (c) `offWorkspacePathInCommand` treats any `/…` token as a file path,
+      including quoted search patterns such as `grep -n "/api/git/"`;
+      ignore tokens whose top-level directory does not exist on this
+      machine (or that are clearly pattern arguments), so route strings
+      do not trigger "outside the workspace root" prompts.
+      Tests: a workflow run started with a TTY never waits on a Caution
+      approval; a hard-blocked command returns an error and the next tool
+      call still runs; `grep -n "/api/git/" file` in the workspace is not
+      flagged while `cat /etc/hosts` still is.
+
 ## Review fixes — correctness and spec promises
 Found in the code review of the automated work. Fix these before new feature
 items, in order. Each fix adds a test that tries to break the rule it
@@ -126,8 +152,13 @@ protects.
       `verificationLoopShouldStop` helper ends the turn when either fires,
       and the §149d failure report still attaches. Pinned by pure stop-rule
       tests and an alternating-failure integration fixture.
-- [ ] **fix.13** Verification runs only for application-code changes: skip
+- [x] **fix.13** Verification runs only for application-code changes: skip
       docs and `.sprout/` paths in `TurnChangedPaths`. Spec: SP-149 §149a.
+      Fixed: a pure `IsApplicationCodePath` predicate plus
+      `Agent.TurnChangedApplicationPaths`; the turn-end gate and the
+      not-verified reason read the filtered window, so docs-only or
+      bookkeeping-only turns never start a build while a code+docs turn
+      still runs. Pinned by a predicate table and full-turn tests.
 - [ ] **fix.14** Plan revision never decreases: `planstore` `Save` bumps from
       `max(stored, given)`.
 - [ ] **fix.15** Mode registry: reject re-registering built-in mode ids and

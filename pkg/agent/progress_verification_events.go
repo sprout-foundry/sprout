@@ -168,18 +168,19 @@ func progressCompletePayload(res *verify.Result, runID string, notVerifiedReason
 // notVerifiedReason states why a completed turn has no verification result
 // (SP-151 §151a progress_complete.not_verified_reason), mirroring the SP-149
 // turn-end hook's guard conditions. It is cheap — a config read plus the
-// turn-changed paths, no I/O:
+// turn's application-code paths, no I/O:
 //
 //   - "" — verification is disabled (no configuration manager, or the
 //     configuration does not enable verification, the CLI default, SP-149
 //     §149e). A disabled turn carries no not-verified content, so the
 //     default user sees no per-turn notice (SP-155 default UI unchanged);
 //   - "no code changes this turn" — verification is enabled but the turn
-//     changed no application code (the hook gates on the turn's own changes,
-//     §149a);
+//     changed no application code (the hook gates on the turn's own
+//     application-code changes, §149a — a docs-only or .sprout-bookkeeping
+//     turn reads as no code changes);
 //   - "verification did not run this turn" — verification is enabled and the
-//     turn changed code, but the hook still did not run (a subagent turn, or a
-//     runner setup error).
+//     turn changed application code, but the hook still did not run (a
+//     subagent turn, or a runner setup error).
 func (a *Agent) notVerifiedReason() string {
 	if a == nil || a.configManager == nil {
 		return ""
@@ -188,7 +189,7 @@ func (a *Agent) notVerifiedReason() string {
 	if cfg == nil || !cfg.VerificationEnabled() {
 		return ""
 	}
-	if len(a.TurnChangedPaths()) == 0 {
+	if len(a.TurnChangedApplicationPaths()) == 0 {
 		return "no code changes this turn"
 	}
 	return "verification did not run this turn"

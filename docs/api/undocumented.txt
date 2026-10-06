@@ -22,7 +22,6 @@
 /api/command/complete
 /api/command/execute
 /api/computer-use/test
-/api/config
 /api/design/status
 /api/hotkeys
 /api/hotkeys/preset
@@ -65,7 +64,6 @@
 /api/skills/
 /api/starters
 /api/starters/instantiate
-/api/stats
 /api/support-bundle
 /api/sync
 /api/sync/batch

@@ -112,7 +112,7 @@ Notes:
 | Method | Path | Handler | Served by |
 |---|---|---|---|
 | POST | `/api/computer-use/test` | handleAPIComputerUseTest | daemon |
-| GET | `/api/config` | handleAPIConfig | daemon, browser-local |
+| GET | `/api/config` | humaGetConfig | daemon, browser-local |
 | GET, PUT | `/api/hotkeys` | handleAPIHotkeys | daemon, browser-local |
 | POST | `/api/hotkeys/preset` | handleAPIHotkeysPreset | daemon, browser-local |
 | POST | `/api/hotkeys/validate` | handleAPIHotkeysValidate | daemon, browser-local |
@@ -256,7 +256,7 @@ Notes:
 |---|---|---|---|
 | POST | `/api/diagnostics` | handleAPIDiagnostics | daemon, browser-local |
 | POST | `/api/semantic` | handleAPISemantic | daemon, browser-local |
-| GET | `/api/stats` | handleAPIStats | daemon, host |
+| GET | `/api/stats` | humaGetStats | daemon, host |
 | GET | `/api/support-bundle` | handleAPISupportBundle | daemon, browser-local |
 | GET | `/api/ws-metrics` | handleAPIWSMetrics | daemon |
 

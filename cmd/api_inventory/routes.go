@@ -25,8 +25,11 @@ type Route struct {
 	RegisterFn string
 }
 
-// parseRoutes parses pkg/webui/routes.go and returns every mux.HandleFunc
-// registration in source order.
+// parseRoutes parses pkg/webui/routes.go and returns every route registration
+// in source order: plain mux.HandleFunc patterns plus Huma operations
+// (huma.Register with a huma.Operation). routes.go is the single source of
+// truth for the registered route set, and both registration styles coexist
+// there, so the inventory must discover both to stay complete.
 func parseRoutes(path string) ([]Route, error) {
 	data, err := os.ReadFile(path) // #nosec G703 -- path resolves within the repo root (pkg/webui/routes.go)
 	if err != nil {
@@ -43,27 +46,84 @@ func parseRoutes(path string) ([]Route, error) {
 		if !ok || fd.Name == nil || fd.Body == nil {
 			return true
 		}
-		// Attribute each HandleFunc call to the enclosing register function.
+		// Attribute each registration to the enclosing register function.
 		ast.Inspect(fd.Body, func(c ast.Node) bool {
 			call, ok := c.(*ast.CallExpr)
-			if !ok || calleeName(call) != "HandleFunc" || len(call.Args) < 2 {
-				return true
-			}
-			pattern, ok := stringLiteral(call.Args[0])
 			if !ok {
 				return true
 			}
-			routes = append(routes, Route{
-				Path:        pattern,
-				Handler:     describeHandler(call.Args[1]),
-				HandlerBase: handlerBase(call.Args[1]),
-				RegisterFn:  fd.Name.Name,
-			})
+			// Plain mux.HandleFunc registrations.
+			if calleeName(call) == "HandleFunc" && len(call.Args) >= 2 {
+				if pattern, ok := stringLiteral(call.Args[0]); ok {
+					routes = append(routes, Route{
+						Path:        pattern,
+						Handler:     describeHandler(call.Args[1]),
+						HandlerBase: handlerBase(call.Args[1]),
+						RegisterFn:  fd.Name.Name,
+					})
+				}
+				return true
+			}
+			// Huma operation registrations: huma.Register(api, huma.Operation{...}, handler).
+			if r, ok := humaRoute(call, fd.Name.Name); ok {
+				routes = append(routes, r)
+			}
 			return true
 		})
 		return true
 	})
 	return routes, nil
+}
+
+// humaRoute reports whether call is a huma.Register invocation and, if so,
+// returns the Route it registers (the Operation's Path plus the handler
+// expression). The method is derived later from the registry or handler
+// source, so the Operation's Method field is not needed here.
+func humaRoute(call *ast.CallExpr, registerFn string) (Route, bool) {
+	if len(call.Args) < 3 {
+		return Route{}, false
+	}
+	// Confirm the receiver is the huma package (huma.Register), not some
+	// unrelated Register symbol.
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || sel.Sel.Name != "Register" {
+		return Route{}, false
+	}
+	pkg, ok := sel.X.(*ast.Ident)
+	if !ok || pkg.Name != "huma" {
+		return Route{}, false
+	}
+	op, ok := call.Args[1].(*ast.CompositeLit)
+	if !ok {
+		return Route{}, false
+	}
+	var path string
+	found := false
+	for _, elt := range op.Elts {
+		kv, ok := elt.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		key, ok := kv.Key.(*ast.Ident)
+		if !ok || key.Name != "Path" {
+			continue
+		}
+		if lit, ok := stringLiteral(kv.Value); ok {
+			path = lit
+			found = true
+			break
+		}
+	}
+	if !found {
+		return Route{}, false
+	}
+	handler := call.Args[2]
+	return Route{
+		Path:        path,
+		Handler:     describeHandler(handler),
+		HandlerBase: handlerBase(handler),
+		RegisterFn:  registerFn,
+	}, true
 }
 
 // stringLiteral returns the value of a basic string literal expression.

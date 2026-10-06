@@ -8,6 +8,7 @@ import (
 	"runtime/pprof"
 	"time"
 
+	huma "github.com/danielgtaylor/huma/v2"
 	lspproxy "github.com/sprout-foundry/sprout/pkg/lsp/proxy"
 )
 
@@ -36,8 +37,38 @@ func (ws *ReactWebServer) setupRoutes(ctx context.Context) *http.ServeMux {
 	ws.registerChangesRoutes(mux)
 	ws.registerAutomateRoutes(mux)
 	ws.registerCompletionRoutes(mux)
+	ws.registerHumaRoutes(mux)
 
 	return mux
+}
+
+// registerHumaOperations registers every Huma operation on the given API. The
+// huma.Register calls live in routes.go (not a separate file) so the contract
+// test's AST walk of that single file discovers the Huma paths alongside the
+// plain mux patterns. Each operation is mounted on the shared ServeMux by the
+// humago adapter as a method+path pattern (mux.HandleFunc("GET <path>", ...)),
+// which shadows any plain handler for the same path — the plain registrations
+// for these routes are therefore removed. Both the live server (via
+// registerHumaRoutes) and the contract doc generator (via HumaOpenAPIDoc) call
+// this one function, so the registered set cannot drift.
+func registerHumaOperations(api huma.API, ws *ReactWebServer) {
+	huma.Register(api, huma.Operation{
+		OperationID: "get-stats",
+		Method:      http.MethodGet,
+		Path:        "/api/stats",
+		Summary:     "Server statistics",
+		Description: "Reports server and per-client statistics, including provider, model, and token usage.",
+		Tags:        []string{"diagnostics"},
+	}, ws.humaGetStats)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "get-config",
+		Method:      http.MethodGet,
+		Path:        "/api/config",
+		Summary:     "Current server configuration",
+		Description: "Reports the server's port, daemon and workspace roots, agent metadata, and enabled features.",
+		Tags:        []string{"settings"},
+	}, ws.humaGetConfig)
 }
 
 func (ws *ReactWebServer) registerCoreRoutes(mux *http.ServeMux) {
@@ -122,7 +153,8 @@ func (ws *ReactWebServer) registerCommandRoutes(mux *http.ServeMux) {
 }
 
 func (ws *ReactWebServer) registerDiagnosticsRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/stats", ws.handleAPIStats)
+	// /api/stats is now a Huma operation (see registerHumaRoutes); the plain
+	// registration was removed so the method+path pattern is registered once.
 	mux.HandleFunc("/api/providers", ws.handleAPIProviders)
 	mux.HandleFunc("/api/providers/models", ws.handleGetModels)
 	mux.HandleFunc("/api/diagnostics", ws.handleAPIDiagnostics)
@@ -165,7 +197,8 @@ func (ws *ReactWebServer) registerSettingsRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/onboarding/status", ws.handleAPIOnboardingStatus)
 	mux.HandleFunc("/api/onboarding/complete", ws.handleAPIOnboardingComplete)
 	mux.HandleFunc("/api/onboarding/skip", ws.handleAPIOnboardingSkip)
-	mux.HandleFunc("/api/config", ws.handleAPIConfig)
+	// /api/config is now a Huma operation (see registerHumaRoutes); the plain
+	// registration was removed so the method+path pattern is registered once.
 	mux.HandleFunc("/api/settings", ws.handleAPISettings)
 	mux.HandleFunc("/api/settings/mcp", ws.handleAPISettingsMCP)
 	mux.HandleFunc("/api/settings/mcp/servers/", ws.handleAPISettingsMCPServers)

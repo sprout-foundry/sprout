@@ -59,8 +59,11 @@ func IsValidFilename(name string) bool {
 }
 
 // Discover scans the given directory for valid workflow JSON files.
+//
+// Uses readDirCompat rather than os.ReadDir so it works in the in-browser
+// WASM shell (js/wasm rejects O_DIRECTORY). See fs_compat_wasm.go.
 func Discover(dir string) ([]Entry, error) {
-	entries, err := os.ReadDir(dir)
+	entries, err := readDirCompat(dir)
 	if err != nil {
 		return nil, err
 	}

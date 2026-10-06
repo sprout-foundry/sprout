@@ -368,11 +368,26 @@ func TestTail_MultiFile(t *testing.T) {
 
 // ─── git command ─────────────────────────────────────────────────────────
 
-func TestGit_WriteSubcommandEscalates(t *testing.T) {
-	for _, sub := range []string{"add", "commit", "push", "pull", "checkout", "reset", "rm", "stash"} {
+func TestGit_UnknownSubcommandEscalates(t *testing.T) {
+	// Subcommands the browser adapter does not implement stay a 127 so the
+	// transactional escalation path takes them to a container.
+	for _, sub := range []string{"rebase", "merge", "reset", "stash", "cherry-pick"} {
 		r := ParseAndExecute("git " + sub + " .")
 		if r.ExitCode != 127 {
-			t.Errorf("git %s exit = %d, want 127 (write subcommands escalate)", sub, r.ExitCode)
+			t.Errorf("git %s exit = %d, want 127 (unknown subcommands escalate)", sub, r.ExitCode)
+		}
+	}
+}
+
+func TestGit_WriteSubcommandsAreAllowed(t *testing.T) {
+	// add/commit/checkout/fetch/push/pull/clone/init/rm/mv are answered
+	// in-browser; with no executor installed they report the "not available"
+	// 127, not the "unknown subcommand" ESCALATE 127 with its distinct message.
+	RegisterGitExecutor(nil)
+	defer RegisterGitExecutor(nil)
+	for _, sub := range []string{"add", "commit", "checkout", "fetch", "push", "pull", "init", "clone", "rm", "mv"} {
+		if !GitSubcommands[sub] {
+			t.Errorf("git %s should be an allowed subcommand", sub)
 		}
 	}
 }

@@ -1889,4 +1889,25 @@ describe('CloudAdapter — agent network restriction', () => {
       delete (globalThis as { SproutWasm?: unknown }).SproutWasm;
     }
   });
+
+  it('allowlists the advertised egress proxy and routes the agent through it', async () => {
+    const setAllowedOrigins = vi.fn();
+    const setCorsProxy = vi.fn();
+    (globalThis as { SproutWasm?: unknown }).SproutWasm = { setAllowedOrigins, setCorsProxy };
+    try {
+      const fresh = new CloudAdapter({
+        apiBase: 'https://api.sprout.dev',
+        wsBase: '',
+        egressProxy: 'https://app.sprout.dev/git-proxy',
+        getAuthToken: () => null,
+      } as never);
+      await fresh.fetch('/api/files');
+      expect(setAllowedOrigins).toHaveBeenCalledWith(
+        expect.arrayContaining([window.location.origin, 'https://api.sprout.dev', 'https://app.sprout.dev']),
+      );
+      expect(setCorsProxy).toHaveBeenCalledWith('https://app.sprout.dev/git-proxy');
+    } finally {
+      delete (globalThis as { SproutWasm?: unknown }).SproutWasm;
+    }
+  });
 });

@@ -314,6 +314,83 @@ export const AGENT_GIT_TOOLS: AgentGitToolDefinition[] = [
     },
   },
   {
+    name: 'git_fetch',
+    description:
+      'Fetch refs from a remote without changing the working tree. Use this to make remote branches (e.g. PR branches) reachable for checkout when the repo was cloned shallowly or the branch is new. Requires a GitHub token (localStorage "github_pat").',
+    parameters: {
+      type: 'object',
+      properties: {
+        repo: repoParam,
+        remote: { type: 'string', description: 'Optional: remote to fetch (default: origin)' },
+        ref: { type: 'string', description: 'Optional: single ref to fetch (e.g. refs/heads/feature)' },
+        branch: { type: 'string', description: 'Optional: fetch only this branch (single-branch)' },
+        depth: { type: 'number', description: 'Optional: shallow-fetch depth' },
+        tags: { type: 'boolean', description: 'Optional: also fetch tags' },
+        prune: { type: 'boolean', description: 'Optional: prune deleted remote refs' },
+      },
+      required: ['repo'],
+    },
+    execute: async (args) => {
+      try {
+        const token = getGithubToken() ?? undefined;
+        if (!token && !usesPlatformGitHub()) return 'No GitHub token found. The user must authenticate first.';
+        const branch = typeof args.branch === 'string' && args.branch ? args.branch : undefined;
+        // A named branch fetches single-branch; otherwise fetch all refs so
+        // origin/<branch> is reachable for checkout.
+        const ref = typeof args.ref === 'string' && args.ref ? args.ref : branch ? `refs/heads/${branch}` : undefined;
+        await gitClient.fetch(resolveRepoDir(args.repo as string), {
+          token,
+          remote: typeof args.remote === 'string' && args.remote ? args.remote : undefined,
+          ref,
+          singleBranch: branch !== undefined,
+          depth: typeof args.depth === 'number' ? Math.floor(args.depth) : undefined,
+          tags: args.tags === true,
+          prune: args.prune === true,
+        });
+        return 'Fetched refs into ' + args.repo + (branch ? ' (' + branch + ')' : '');
+      } catch (err) {
+        return 'git_fetch error: ' + (err instanceof Error ? err.message : String(err));
+      }
+    },
+  },
+  {
+    name: 'git_refs',
+    description:
+      'List refs (local branches, remote-tracking branches, and the current branch) in a cloned repo. Use after git_fetch to see which remote branches are reachable for checkout.',
+    parameters: {
+      type: 'object',
+      properties: {
+        repo: repoParam,
+        remote: { type: 'string', description: 'Optional: remote whose tracking branches to list (default: origin)' },
+      },
+      required: ['repo'],
+    },
+    execute: async (args) => {
+      try {
+        const dir = resolveRepoDir(args.repo as string);
+        const remote = typeof args.remote === 'string' && args.remote ? args.remote : 'origin';
+        const local = await gitClient.listBranches(dir);
+        const current = await gitClient.currentBranch(dir);
+        let remoteBranches: string[] = [];
+        // A missing remote (never cloned with one) is not an error — local
+        // branches still list.
+        try {
+          remoteBranches = await gitClient.listRemoteBranches(dir, remote);
+        } catch {
+          remoteBranches = [];
+        }
+        const lines: string[] = [];
+        lines.push('Local branches' + (current ? ' (HEAD -> ' + current + ')' : ' (detached HEAD)') + ':');
+        lines.push(local.length ? local.map((b) => (b === current ? '  * ' + b : '    ' + b)).join('\n') : '  (none)');
+        lines.push('Remote branches (' + remote + '/…):');
+        lines.push(remoteBranches.length ? remoteBranches.map((b) => '    ' + b).join('\n') : '  (none fetched)');
+        return 'Refs for ' + args.repo + ':\n' + lines.join('\n');
+      } catch (err) {
+        return 'git_refs error: ' + (err instanceof Error ? err.message : String(err));
+      }
+    },
+  },
+  {
     name: 'git_create_branch',
     description: 'Create a new branch in a cloned repo. Created from HEAD but not checked out.',
     parameters: {
@@ -355,11 +432,13 @@ export const AGENT_GIT_TOOLS: AgentGitToolDefinition[] = [
   {
     name: 'git_clone',
     description:
-      'Clone a public GitHub/GitLab/Bitbucket/Codeberg repository into the workspace. Args: { url } where url is like https://github.com/owner/name (or owner/name shorthand). Shallow clone (depth 1, default branch). After cloning, refer to the repo as "owner/name" in other git tools and read its files under repos/owner/name/. A small repo like octocat/Hello-World is a good smoke test.',
+      'Clone a public GitHub/GitLab/Bitbucket/Codeberg repository into the workspace. Args: { url } where url is like https://github.com/owner/name (or owner/name shorthand). Clones all branches at a bounded depth (default 50) so remote branches (e.g. PR branches) are reachable for checkout. After cloning, refer to the repo as "owner/name" in other git tools and read its files under repos/owner/name/. A small repo like octocat/Hello-World is a good smoke test.',
     parameters: {
       type: 'object',
       properties: {
         url: { type: 'string', description: 'Repository URL (https://github.com/owner/name) or owner/name shorthand' },
+        branch: { type: 'string', description: 'Optional: clone this branch instead of the default (single-branch)' },
+        depth: { type: 'number', description: 'Optional: clone depth (default 50, all branches)' },
       },
       required: ['url'],
     },
@@ -380,7 +459,15 @@ export const AGENT_GIT_TOOLS: AgentGitToolDefinition[] = [
         const m = url.replace(/\.git$/, '').match(/\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)$/);
         if (!m) throw new Error('cannot parse owner/name from url');
         const repo = m[1] + '/' + m[2];
-        await gitClient.clone(url, resolveRepoDir(repo), { depth: 1, singleBranch: true });
+        const branch = typeof args.branch === 'string' && args.branch ? args.branch : undefined;
+        const depth = typeof args.depth === 'number' ? Math.floor(args.depth) : 50;
+        await gitClient.clone(url, resolveRepoDir(repo), {
+          depth,
+          branch,
+          // A named branch is a single-branch clone; otherwise clone all refs
+          // so origin/<branch> is reachable without an extra fetch.
+          singleBranch: branch !== undefined,
+        });
         const entries = await gitClient.listDir(resolveRepoDir(repo), '/');
         return (
           'Cloned ' +

@@ -21,6 +21,7 @@ const mockFns = vi.hoisted(() => ({
   pfsRmdir: vi.fn().mockResolvedValue(undefined),
   // isomorphic-git methods
   gitClone: vi.fn().mockResolvedValue(undefined),
+  gitFetch: vi.fn().mockResolvedValue(undefined),
   gitPull: vi.fn().mockResolvedValue(undefined),
   gitPush: vi.fn().mockResolvedValue(undefined),
   gitStatusMatrix: vi.fn().mockResolvedValue([]),
@@ -68,6 +69,7 @@ vi.mock('@isomorphic-git/lightning-fs', () => {
 vi.mock('isomorphic-git', () => ({
   default: {
     clone: mockFns.gitClone,
+    fetch: mockFns.gitFetch,
     pull: mockFns.gitPull,
     push: mockFns.gitPush,
     statusMatrix: mockFns.gitStatusMatrix,
@@ -119,6 +121,7 @@ beforeEach(() => {
   mockFns.pfsRmdir.mockResolvedValue(undefined);
 
   mockFns.gitClone.mockResolvedValue(undefined);
+  mockFns.gitFetch.mockResolvedValue(undefined);
   mockFns.gitPull.mockResolvedValue(undefined);
   mockFns.gitPush.mockResolvedValue(undefined);
   mockFns.gitStatusMatrix.mockResolvedValue([]);
@@ -150,9 +153,9 @@ describe('clone()', () => {
       expect.objectContaining({
         url: 'https://github.com/owner/repo.git',
         dir: '/repos/owner/repo',
-        depth: 1,
-        singleBranch: true,
-        ref: 'main',
+        depth: 50,
+        singleBranch: false,
+        ref: undefined,
         corsProxy: undefined,
         onAuth: undefined,
         onProgress: undefined,
@@ -241,6 +244,61 @@ describe('pull()', () => {
     mockFns.gitPull.mockRejectedValue(new Error('conflict'));
 
     await expect(gitClient.pull('/repos/owner/repo')).rejects.toThrow('conflict');
+  });
+});
+
+// ── fetch() ──────────────────────────────────────────────────────────
+
+describe('fetch()', () => {
+  it('calls git.fetch with remote origin and all-branch defaults', async () => {
+    await gitClient.fetch('/repos/owner/repo');
+
+    expect(mockFns.gitFetch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dir: '/repos/owner/repo',
+        remote: 'origin',
+        singleBranch: false,
+        tags: false,
+        prune: false,
+      }),
+    );
+  });
+
+  it('passes ref, depth, tags, and prune from opts', async () => {
+    await gitClient.fetch('/repos/owner/repo', {
+      remote: 'upstream',
+      ref: 'refs/heads/feature',
+      singleBranch: true,
+      depth: 5,
+      tags: true,
+      prune: true,
+    });
+
+    expect(mockFns.gitFetch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        remote: 'upstream',
+        ref: 'refs/heads/feature',
+        singleBranch: true,
+        depth: 5,
+        tags: true,
+        prune: true,
+      }),
+    );
+  });
+
+  it('sets onAuth when token is provided', async () => {
+    await gitClient.fetch('/repos/owner/repo', { token: 'tok' });
+
+    const callArgs = mockFns.gitFetch.mock.calls[0][0];
+    expect(typeof callArgs.onAuth).toBe('function');
+    const authResult = await callArgs.onAuth();
+    expect(authResult).toEqual({ username: 'x-access-token', password: 'tok' });
+  });
+
+  it('propagates fetch error', async () => {
+    mockFns.gitFetch.mockRejectedValue(new Error('no remote'));
+
+    await expect(gitClient.fetch('/repos/owner/repo')).rejects.toThrow('no remote');
   });
 });
 
@@ -395,7 +453,7 @@ describe('commit()', () => {
     expect(mockFns.gitCommit).toHaveBeenCalledWith(
       expect.objectContaining({
         message: 'fix: something',
-        author: undefined,
+        author: { name: 'Sprout User', email: 'user@sprout.local' },
         committer: { name: 'Sprout User', email: 'user@sprout.local' },
       }),
     );
@@ -474,6 +532,34 @@ describe('branch operations', () => {
       mockFns.gitListBranches.mockResolvedValue(['main', 'develop', 'feature']);
       const branches = await gitClient.listBranches('/repos/owner/repo');
       expect(branches).toEqual(['main', 'develop', 'feature']);
+    });
+
+    it('passes remote through to git.listBranches', async () => {
+      await gitClient.listBranches('/repos/owner/repo', { remote: 'origin' });
+      expect(mockFns.gitListBranches).toHaveBeenCalledWith({
+        fs: expect.anything(),
+        dir: '/repos/owner/repo',
+        remote: 'origin',
+      });
+    });
+  });
+
+  describe('listRemoteBranches()', () => {
+    it('prefixes remote-tracking branches with the remote name', async () => {
+      mockFns.gitListBranches.mockResolvedValue(['main', 'pr-1']);
+      const branches = await gitClient.listRemoteBranches('/repos/owner/repo', 'origin');
+      expect(branches).toEqual(['origin/main', 'origin/pr-1']);
+      expect(mockFns.gitListBranches).toHaveBeenCalledWith({
+        fs: expect.anything(),
+        dir: '/repos/owner/repo',
+        remote: 'origin',
+      });
+    });
+
+    it('defaults the remote to origin', async () => {
+      mockFns.gitListBranches.mockResolvedValue([]);
+      await gitClient.listRemoteBranches('/repos/owner/repo');
+      expect(mockFns.gitListBranches).toHaveBeenCalledWith(expect.objectContaining({ remote: 'origin' }));
     });
   });
 

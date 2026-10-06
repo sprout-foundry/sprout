@@ -298,6 +298,7 @@ async function installAdapterForConfig(config: RuntimeConfig): Promise<void> {
       apiBase: config.apiBaseURL,
       wsUrl: config.wsURL,
       navItems: config.navItems ?? CLOUD_NAV_ITEMS,
+      egressProxy: config.egressProxy,
     });
     installAdapter(adapter);
 

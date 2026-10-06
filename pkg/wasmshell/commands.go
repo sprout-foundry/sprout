@@ -123,6 +123,7 @@ func init() {
 	CmdRegistry["realpath"] = cmdRealpath
 	CmdRegistry["tee"] = cmdTee
 	CmdRegistry["git"] = cmdGit
+	CmdRegistry["gh"] = cmdGh
 }
 
 // ─── Utility functions ──────────────────────────────────────────────────

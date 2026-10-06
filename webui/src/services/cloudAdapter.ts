@@ -45,6 +45,10 @@ export interface CloudAdapterConfig {
   wsUrl: string;
   /** Platform nav items (tasks, billing, etc.) injected at runtime */
   navItems?: PlatformNavItem[];
+  /** Egress proxy the platform advertises (RuntimeConfig.egressProxy). When
+   * set, the agent routes non-platform HTTP (GitHub git + REST) through it and
+   * its origin joins the network allowlist. */
+  egressProxy?: string;
 }
 
 /**
@@ -73,17 +77,50 @@ function seedFilesIfAbsent(shell: WasmShell, files: Array<{ path: string; conten
  * Everything the agent needs goes through the platform; direct calls to
  * provider APIs (model catalogs, backend probes) would expose the user's
  * activity to third parties and fail on CORS regardless.
+ *
+ * GitHub is the exception: `git fetch`/`gh pr` need to reach github.com and
+ * api.github.com, which send no CORS headers and are not on the allowlist.
+ * When the platform advertises an egress proxy (config.egressProxy), the agent
+ * routes non-platform HTTP through it (setCorsProxy) and the proxy's origin is
+ * added to the allowlist — the same mechanism the git panel already uses at
+ * /git-proxy. Without a proxy, GitHub stays unreachable and the shell's git
+ * write commands fall through to the container-escalation path.
  */
-function restrictAgentNetwork(apiBase: string): void {
-  const wasm = (globalThis as { SproutWasm?: { setAllowedOrigins?: (origins: string[]) => unknown } }).SproutWasm;
-  if (typeof wasm?.setAllowedOrigins !== 'function' || typeof window === 'undefined') return;
+function restrictAgentNetwork(apiBase: string, egressProxy?: string): void {
+  const wasm = (
+    globalThis as {
+      SproutWasm?: {
+        setAllowedOrigins?: (origins: string[]) => unknown;
+        setCorsProxy?: (proxyUrl: string) => unknown;
+      };
+    }
+  ).SproutWasm;
+  if (typeof window === 'undefined') return;
   const origins = new Set([window.location.origin]);
   try {
     origins.add(new URL(apiBase, window.location.href).origin);
   } catch {
     // apiBase is relative or empty: same-origin only.
   }
-  wasm.setAllowedOrigins([...origins]);
+
+  // The egress proxy is same-origin in the hosted editor; resolve it anyway so
+  // an absolute proxy URL on another host still gets allowlisted.
+  if (egressProxy) {
+    try {
+      origins.add(new URL(egressProxy, window.location.href).origin);
+    } catch {
+      // Unparseable proxy URL: skip allowlisting it (the proxy call is still
+      // attempted; a misconfigured URL fails at request time with a clear error).
+    }
+  }
+
+  if (typeof wasm?.setAllowedOrigins === 'function') {
+    wasm.setAllowedOrigins([...origins]);
+  }
+  // Route the agent's non-platform HTTP through the proxy when one is offered.
+  if (egressProxy && typeof wasm?.setCorsProxy === 'function') {
+    wasm.setCorsProxy(egressProxy);
+  }
 }
 
 export class CloudAdapter implements APIAdapter {
@@ -158,7 +195,7 @@ export class CloudAdapter implements APIAdapter {
     if (!this.wasmInitPromise) {
       this.wasmInitPromise = initWasmShell()
         .then((shell) => {
-          restrictAgentNetwork(this.config.apiBase);
+          restrictAgentNetwork(this.config.apiBase, this.config.egressProxy);
           this.wasmShell = shell;
           return shell;
         })

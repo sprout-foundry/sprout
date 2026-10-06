@@ -1268,6 +1268,40 @@ func (c *trackingClient) ResetTPSStats() {}
 // =============================================================================
 // SP-051: depth + active_persona event metadata on subagent creation
 // =============================================================================
+// TestCreateSubagent_FallsBackToProviderStringForUnknownProviders pins the
+// browser-build fix: when ResolveProviderModel can't map a provider string
+// (the WASM in-browser "platform" provider is a config file, not a built-in),
+// createSubagent must fall back to treating the provider string as the
+// ClientType — exactly what the main agent path does — instead of failing the
+// spawn with "resolve provider/model". With a genuinely unknown provider the
+// spawn still fails, but at client creation ("create client"), proving the
+// resolver error no longer short-circuits subagent creation.
+func TestCreateSubagent_FallsBackToProviderStringForUnknownProviders(t *testing.T) {
+	parent := newIsolatedTestAgent(t)
+	defer parent.Shutdown()
+
+	shared := &SharedState{
+		EventBus:      events.NewEventBus(),
+		TodoManager:   tools.NewTodoManager(),
+		ConfigManager: parent.configManager,
+		WorkspaceRoot: parent.workspaceRoot,
+	}
+	runner := NewSubagentRunner(parent, shared)
+
+	_, err := runner.createSubagent(
+		SubagentOptions{Persona: "coder", Provider: "platform-definitely-not-registered"},
+		context.Background(),
+	)
+	if err == nil {
+		t.Fatal("expected an error for an unbuildable provider")
+	}
+	if strings.Contains(err.Error(), "resolve provider/model") {
+		t.Errorf("subagent creation short-circuited at provider resolution: %v", err)
+	}
+	if !strings.Contains(err.Error(), "create client") {
+		t.Errorf("error = %v, want a client-creation failure (fallback path)", err)
+	}
+}
 
 // TestCreateSubagent_StampsDepthAndPersonaIntoEventMetadata pins the contract
 // that every event a subagent publishes is tagged with `subagent_depth` and

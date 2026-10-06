@@ -99,4 +99,14 @@ export interface RuntimeConfig {
    * platform in cloud mode. Undefined when the host cannot know it — the
    * editor's account-surface exits then keep their relative URLs. */
   platformURL?: string;
+
+  /** Egress proxy advertised by the platform (e.g.
+   * "https://app.sprout.dev/git-proxy"). GitHub's git endpoints and
+   * api.github.com send no CORS headers, so the in-browser agent can't reach
+   * them directly — and the browser's two-origin network allowlist blocks
+   * them anyway. When set, the WASM agent routes non-platform HTTP through
+   * this proxy (llmproxy.SetCorsProxy) and the proxy's origin is added to
+   * the allowlist, so `git fetch`/`gh pr` work from the browser shell.
+   * Undefined in local mode / when the platform doesn't advertise one. */
+  egressProxy?: string;
 }

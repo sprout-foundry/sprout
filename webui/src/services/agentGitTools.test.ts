@@ -11,10 +11,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockGitClient = {
   clone: vi.fn().mockResolvedValue(undefined),
+  fetch: vi.fn().mockResolvedValue(undefined),
   status: vi.fn().mockResolvedValue([]),
   diff: vi.fn().mockResolvedValue([]),
   log: vi.fn().mockResolvedValue([]),
   listBranches: vi.fn().mockResolvedValue([]),
+  listRemoteBranches: vi.fn().mockResolvedValue([]),
   currentBranch: vi.fn().mockResolvedValue('main'),
   branch: vi.fn().mockResolvedValue(undefined),
   checkout: vi.fn().mockResolvedValue(undefined),
@@ -53,6 +55,7 @@ beforeEach(() => {
   mockGitClient.diff.mockResolvedValue([]);
   mockGitClient.log.mockResolvedValue([]);
   mockGitClient.listBranches.mockResolvedValue([]);
+  mockGitClient.listRemoteBranches.mockResolvedValue([]);
   mockGitClient.currentBranch.mockResolvedValue('main');
   mockGitClient.branch.mockResolvedValue(undefined);
   mockGitClient.checkout.mockResolvedValue(undefined);
@@ -90,8 +93,8 @@ function findTool(name: string): AgentGitToolDefinition {
 // ── Structure tests ──────────────────────────────────────────────────
 
 describe('AGENT_GIT_TOOLS structure', () => {
-  it('has 15 tool definitions', () => {
-    expect(AGENT_GIT_TOOLS).toHaveLength(15);
+  it('has 17 tool definitions', () => {
+    expect(AGENT_GIT_TOOLS).toHaveLength(17);
   });
 
   it('each tool has required fields', () => {
@@ -114,7 +117,7 @@ describe('AGENT_GIT_TOOLS structure', () => {
   });
 
   it('AGENT_GIT_TOOL_NAMES matches all tool names', () => {
-    expect(AGENT_GIT_TOOL_NAMES.size).toBe(15);
+    expect(AGENT_GIT_TOOL_NAMES.size).toBe(17);
     for (const tool of AGENT_GIT_TOOLS) {
       expect(AGENT_GIT_TOOL_NAMES.has(tool.name)).toBe(true);
     }
@@ -133,8 +136,12 @@ describe('AGENT_GIT_TOOLS structure', () => {
       'git_commit',
       'git_push',
       'git_pull',
+      'git_fetch',
+      'git_refs',
       'git_create_branch',
       'git_checkout',
+      'git_clone',
+      'git_list_repos',
     ];
     for (const name of expected) {
       expect(AGENT_GIT_TOOL_NAMES.has(name)).toBe(true);
@@ -424,6 +431,55 @@ describe('git_pull', () => {
   });
 });
 
+describe('git_fetch', () => {
+  it('returns error when no token in localStorage', async () => {
+    mockLocalStorage.getItem.mockReturnValue(null);
+    const result = await findTool('git_fetch').execute({ repo: 'owner/repo' });
+    expect(result).toBe('No GitHub token found. The user must authenticate first.');
+    expect(mockGitClient.fetch).not.toHaveBeenCalled();
+  });
+
+  it('fetches all refs by default (no branch)', async () => {
+    mockLocalStorage.getItem.mockReturnValue('ghp_mytoken');
+    const result = await findTool('git_fetch').execute({ repo: 'owner/repo' });
+    expect(result).toBe('Fetched refs into owner/repo');
+    expect(mockGitClient.fetch).toHaveBeenCalledWith(
+      '/repos/owner/repo',
+      expect.objectContaining({ token: 'ghp_mytoken', singleBranch: false }),
+    );
+  });
+
+  it('fetches a single branch when branch provided', async () => {
+    mockLocalStorage.getItem.mockReturnValue('ghp_mytoken');
+    const result = await findTool('git_fetch').execute({ repo: 'owner/repo', branch: 'feature' });
+    expect(result).toBe('Fetched refs into owner/repo (feature)');
+    expect(mockGitClient.fetch).toHaveBeenCalledWith(
+      '/repos/owner/repo',
+      expect.objectContaining({ ref: 'refs/heads/feature', singleBranch: true }),
+    );
+  });
+});
+
+describe('git_refs', () => {
+  it('lists local and remote branches, marking HEAD', async () => {
+    mockGitClient.listBranches.mockResolvedValue(['main', 'feature']);
+    mockGitClient.currentBranch.mockResolvedValue('main');
+    mockGitClient.listRemoteBranches.mockResolvedValue(['origin/main', 'origin/pr-1']);
+    const result = await findTool('git_refs').execute({ repo: 'owner/repo' });
+    expect(result).toContain('Local branches (HEAD -> main)');
+    expect(result).toContain('  * main');
+    expect(result).toContain('Remote branches (origin/…)');
+    expect(result).toContain('origin/pr-1');
+  });
+
+  it('reports "(none fetched)" when the remote is absent', async () => {
+    mockGitClient.listBranches.mockResolvedValue(['main']);
+    mockGitClient.listRemoteBranches.mockRejectedValue(new Error('no remote'));
+    const result = await findTool('git_refs').execute({ repo: 'owner/repo' });
+    expect(result).toContain('(none fetched)');
+  });
+});
+
 describe('git_create_branch', () => {
   it('creates branch and returns confirmation', async () => {
     const result = await findTool('git_create_branch').execute({
@@ -632,10 +688,10 @@ describe('error handling', () => {
         );
       }
 
-      // push/pull check localStorage *before* calling gitClient,
+      // push/pull/fetch check localStorage *before* calling gitClient,
       // so with no token they return their pre-auth message (not an error string).
       // Set a token so execution reaches the actual gitClient call that throws.
-      if (tool.name === 'git_push' || tool.name === 'git_pull') {
+      if (tool.name === 'git_push' || tool.name === 'git_pull' || tool.name === 'git_fetch') {
         mockLocalStorage.getItem.mockReturnValue('ghp_mytoken');
       } else {
         mockLocalStorage.getItem.mockReturnValue(null);

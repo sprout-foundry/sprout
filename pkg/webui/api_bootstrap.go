@@ -67,6 +67,13 @@ type RuntimeConfig struct {
 	// (same pattern as other optional fields), and the editor keeps its
 	// current relative-exit behavior.
 	PlatformURL string `json:"platformURL,omitempty"`
+
+	// EgressProxy is the URL of the platform's egress/CORS proxy that the
+	// in-browser agent routes non-platform HTTP (GitHub git + REST) through.
+	// Sourced from the SPROUT_EGRESS_PROXY env var; empty string omits the
+	// field, and the agent falls back to the two-origin network restriction
+	// (GitHub unreachable in-browser). See webui/src/types/runtimeConfig.ts.
+	EgressProxy string `json:"egressProxy,omitempty"`
 }
 
 // UpdateInfo tells the frontend a newer release is available. It is a
@@ -114,6 +121,10 @@ func (ws *ReactWebServer) handleAPIBootstrap(w http.ResponseWriter, r *http.Requ
 		// exits. Empty (env unset) → the omitempty tag drops the field and
 		// the editor keeps its current relative-exit behavior.
 		PlatformURL: os.Getenv("SPROUT_PLATFORM_URL"),
+		// Egress proxy the platform advertises for the in-browser agent's
+		// GitHub traffic. Empty (env unset) → the omitempty tag drops it and
+		// the agent keeps the two-origin restriction.
+		EgressProxy: os.Getenv("SPROUT_EGRESS_PROXY"),
 	}
 	writeJSON(w, http.StatusOK, config)
 }

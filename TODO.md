@@ -131,6 +131,28 @@ protects.
       `verification_hook_test.go`, and the others the review listed), no
       behavior change.
 
+## Web UI delivery hygiene (before SP-160)
+Small fixes to how the hosted web UI bundle is built and cached; they are
+needed whatever the integration work does. Spec context: SP-160 §160e.
+
+- [ ] **hyg.1** Release cloud bundle base path and mode: `.github/workflows/release.yml`
+      runs `scripts/build-webui-dist.mjs --mode cloud`, which builds in
+      production mode at base `/`, while hosts serve the bundle under
+      `/webui/` (root-absolute `/assets/*` URLs break there; see the comment
+      in `webui/vite.config.ts`). Build the released cloud bundle at
+      `/webui/` in production mode, and add a test or CI check that the
+      released `index.html` references only `/webui/` asset URLs.
+- [ ] **hyg.2** Content-hash the WASM assets: `sprout.wasm` and
+      `wasm_exec.js` keep fixed names in the bundle (`build-webui-dist.mjs`,
+      `services/wasmShell.ts` probes `/webui/wasm` and `/wasm`), so a host
+      that caches them as immutable can mix old WASM with new code after an
+      upgrade. Emit hashed file names plus a small manifest the loader reads;
+      test that changing the WASM changes its URL.
+- [ ] **hyg.3** Single `services/api` import style: `OnboardingDialog.tsx`
+      and `ErrorBoundary.tsx` import it dynamically while about 70 modules
+      import it statically, which only produces a Vite warning and no chunk
+      split. Use static imports everywhere (or split deliberately).
+
 ## Commit message generation (bug fixes)
 
 - [x] **commit.1** Commit tool: generate a real message when `message` is

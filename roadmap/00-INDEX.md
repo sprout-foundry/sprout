@@ -168,6 +168,7 @@ treating an entry as unstarted._
 | SP-155 | [Live Preview and UI Extension Points](./SP-155-live-preview-and-extension-points.md) | 📝 Proposed (2026-10-03). Preview pane for the running app (local and hosted); public mode registry, configurable default mode, composable views and copy keys for embedding shells. |
 | SP-156 | [Deploy Targets and Ship Mode](./SP-156-deploy-targets.md) | 📝 Proposed (2026-10-03). Deploy target interface, `sprout deploy` and deploy tools with credentials kept out of model context; Ship mode for status, history and rollback. |
 | SP-157 | [Checkpoints and Project Health](./SP-157-checkpoints-and-project-health.md) | 📝 Proposed (2026-10-03). Project timeline with summaries and restorable checkpoints; format/lint/test after edits; `sprout health`; readable build/runtime error explanations. |
+| SP-160 | [Integration API — Composition, Host Contract, Backend Contract](./SP-160-integration-api.md) | 📝 Proposed (2026-10-05). `@sprout/workspace` composition package (the local web UI is built on it), `SproutHost` host contract replacing `isCloud`/`appMode`, versioned backend contract with a conformance suite, one token package, content-hashed delivery. |
 
 ## Future / On Hold
 

@@ -2911,6 +2911,7 @@ paths:
         - conversation/query
   /api/chat-sessions:
     get:
+      description: Lists the requesting client's chat sessions with metadata, including the active chat.
       operationId: chatSessionsList
       responses:
         "200":
@@ -2918,19 +2919,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChatSessionsListResponse'
-          description: The client's chat sessions, most recently active first.
+          description: OK
         "405":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The route only accepts GET.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: List the client's chat sessions.
       tags:
         - conversation/query
   /api/chat-sessions/breakpoints:
     post:
-      description: Returns the forkable breakpoints (user messages) for a chat session. When the body omits `chat_id`, the client's active chat is used.
+      description: Lists the turns a chat session can be forked at.
       operationId: chatSessionBreakpoints
       requestBody:
         content:
@@ -2943,7 +2950,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChatSessionBreakpointsResponse'
-          description: The forkable breakpoints for the chat.
+          description: OK
         "405":
           content:
             application/json:
@@ -2956,11 +2963,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The chat agent was not available.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: List a chat session's forkable breakpoints.
       tags:
         - conversation/query
   /api/chat-sessions/compact:
     post:
+      description: Compacts a chat session's conversation state to reclaim context.
       operationId: chatSessionsCompact
       requestBody:
         content:
@@ -2974,7 +2988,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChatSessionCompactResponse'
-          description: The chat session state was compacted.
+          description: OK
         "405":
           content:
             application/json:
@@ -2987,11 +3001,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: Failed to sync the chat state.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Compact a chat session's state.
       tags:
         - conversation/query
   /api/chat-sessions/create:
     post:
+      description: Creates a new chat session for the client. In shared mode this is rejected beyond the single shared chat.
       operationId: chatSessionsCreate
       requestBody:
         content:
@@ -3004,7 +3025,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChatSessionCreateResponse'
-          description: The chat session was created.
+          description: OK
         "403":
           content:
             application/json:
@@ -3023,11 +3044,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: A session with this ID already exists.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Create a chat session.
       tags:
         - conversation/query
   /api/chat-sessions/create-in-worktree:
     post:
+      description: Creates a git worktree off the current branch and a chat session bound to it.
       operationId: chatSessionsCreateInWorktree
       requestBody:
         content:
@@ -3041,7 +3069,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChatSessionCreateInWorktreeResponse'
-          description: The session and its worktree were created.
+          description: OK
         "405":
           content:
             application/json:
@@ -3060,11 +3088,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: An internal error occurred.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Create a chat session in a new git worktree.
       tags:
         - conversation/query
   /api/chat-sessions/delete:
     post:
+      description: Deletes a chat session. The default session cannot be deleted.
       operationId: chatSessionsDelete
       requestBody:
         content:
@@ -3078,7 +3113,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChatSessionDeleteResponse'
-          description: The chat session was deleted.
+          description: OK
         "400":
           content:
             application/json:
@@ -3097,11 +3132,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The route only accepts POST.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Delete a chat session.
       tags:
         - conversation/query
   /api/chat-sessions/delete-all:
     post:
+      description: Deletes every chat session except the default one.
       operationId: chatSessionsDeleteAll
       responses:
         "200":
@@ -3109,7 +3151,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChatSessionsDeleteAllResponse'
-          description: All non-default sessions were deleted and the default is active.
+          description: OK
         "403":
           content:
             application/json:
@@ -3122,12 +3164,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The route only accepts POST.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Delete all non-default chat sessions.
       tags:
         - conversation/query
   /api/chat-sessions/fork:
     post:
-      description: Forks the conversation at the given user-message breakpoint (1-based), saving the current session and creating a new one from the truncated history. When the body omits `chat_id`, the client's active chat is used.
+      description: Forks a chat session's history at a prior turn into a new session.
       operationId: chatSessionFork
       requestBody:
         content:
@@ -3141,7 +3189,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChatSessionForkResponse'
-          description: The session was forked.
+          description: OK
         "400":
           content:
             application/json:
@@ -3160,12 +3208,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The chat agent was not available.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Fork a chat session at a breakpoint.
       tags:
         - conversation/query
   /api/chat-sessions/history:
     post:
-      description: Clears the conversation messages for a chat session while keeping the session and its configuration overrides intact. The prior session is preserved as a restorable unit.
+      description: Clears a chat session's message history.
       operationId: chatSessionClearHistory
       requestBody:
         content:
@@ -3179,7 +3233,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChatSessionClearHistoryResponse'
-          description: A new session was started for the chat.
+          description: OK
         "404":
           content:
             application/json:
@@ -3198,12 +3252,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: Failed to rotate the session.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Clear a chat session's history.
       tags:
         - conversation/query
   /api/chat-sessions/messages:
     get:
-      description: Read-only fetch of a chat session's transcript. Unlike the switch endpoint this does not change the client's active chat, so a background pane can refresh without disturbing the active chat.
+      description: Returns the display messages for a chat session.
       operationId: chatSessionMessages
       parameters:
         - $ref: '#/components/parameters/chatId'
@@ -3213,7 +3273,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChatSessionMessagesResponse'
-          description: The chat session with its messages.
+          description: OK
         "400":
           content:
             application/json:
@@ -3226,11 +3286,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The route only accepts GET.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Fetch a chat session's messages.
       tags:
         - conversation/query
   /api/chat-sessions/pin:
     post:
+      description: Pins a chat session so it sorts to the top of the session list.
       operationId: chatSessionsPin
       requestBody:
         content:
@@ -3244,7 +3311,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChatSessionPinResponse'
-          description: The chat session was pinned.
+          description: OK
         "400":
           content:
             application/json:
@@ -3263,11 +3330,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The route only accepts POST.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Pin a chat session.
       tags:
         - conversation/query
   /api/chat-sessions/rename:
     post:
+      description: Renames a chat session and emits a session_changed event for the client.
       operationId: chatSessionsRename
       requestBody:
         content:
@@ -3281,7 +3355,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChatSessionRenameResponse'
-          description: The chat session was renamed.
+          description: OK
         "400":
           content:
             application/json:
@@ -3294,11 +3368,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The route only accepts POST.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Rename a chat session.
       tags:
         - conversation/query
   /api/chat-sessions/switch:
     post:
+      description: Sets the client's active chat session and emits a session_changed event.
       operationId: chatSessionsSwitch
       requestBody:
         content:
@@ -3312,7 +3393,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChatSessionSwitchResponse'
-          description: The active chat was switched.
+          description: OK
         "400":
           content:
             application/json:
@@ -3337,11 +3418,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The target session belongs to a different lane.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Switch the active chat session.
       tags:
         - conversation/query
   /api/chat-sessions/unpin:
     post:
+      description: Removes the pin from a chat session.
       operationId: chatSessionsUnpin
       requestBody:
         content:
@@ -3355,7 +3443,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChatSessionPinResponse'
-          description: The chat session was unpinned.
+          description: OK
         "400":
           content:
             application/json:
@@ -3374,11 +3462,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The route only accepts POST.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Unpin a chat session.
       tags:
         - conversation/query
   /api/chat-sessions/worktree-mappings:
     get:
+      description: Lists the chat sessions bound to git worktrees.
       operationId: chatSessionWorktreeList
       responses:
         "200":
@@ -3386,18 +3481,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChatSessionWorktreeMappingsResponse'
-          description: The chat sessions that have a worktree path.
+          description: OK
         "405":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The route only accepts GET.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: List chat sessions with worktree mappings.
       tags:
         - conversation/query
   /api/completion:
     post:
+      description: Generates a code completion for the given prefix/suffix using the resolved completion provider and model. Requires `prefix`.
       operationId: completionGenerate
       requestBody:
         content:
@@ -3411,7 +3513,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CompletionResponse'
-          description: The generated completion.
+          description: OK
         "400":
           content:
             application/json:
@@ -3436,6 +3538,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The agent or its configuration is unavailable.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Generate a code completion.
       tags:
         - conversation/query
@@ -3637,7 +3745,7 @@ paths:
         - diagnostics
   /api/edits/:
     get:
-      description: 'Prefix route: the sub-segment(s) after /api/edits/ are dynamic. The documented shape is /api/edits/{id}, whose GET returns the state of a pending edit proposal.'
+      description: Returns the state of a pending edit proposal at the /api/edits/{id} shape.
       operationId: editStatus
       parameters:
         - description: The dynamic sub-segment(s); the documented shape is {id}.
@@ -3652,7 +3760,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/EditStatusResponse'
-          description: The pending edit proposal.
+          description: OK
         "404":
           content:
             application/json:
@@ -3665,11 +3773,17 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: Only GET and POST are accepted.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Get a pending edit proposal's status.
       tags:
         - conversation/query
     post:
-      description: Submits the user's per-hunk accept/reject choices for a pending edit at /api/edits/{id}/decision, unblocking the agent's edit-approval broker.
+      description: Submits the user's per-hunk accept/reject choices for a pending edit at the /api/edits/{id}/decision shape, unblocking the agent's edit-approval broker.
       operationId: editDecision
       parameters:
         - description: The dynamic sub-segment(s); the documented shape is {id}/decision.
@@ -3690,7 +3804,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/EditDecisionResponse'
-          description: The decision was delivered.
+          description: OK
         "404":
           content:
             application/json:
@@ -3709,6 +3823,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The edit was already decided.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Submit a per-hunk edit decision.
       tags:
         - conversation/query
@@ -5063,7 +5183,7 @@ paths:
         - terminal
   /api/query:
     post:
-      description: Starts an agent query for a chat session. The query runs asynchronously; progress and completion are delivered over the WebSocket. When the body omits `chat_id`, the client's active chat is used.
+      description: Submits a query to the agent for the resolved chat (body `chat_id` or the client's active chat) and starts the query lifecycle asynchronously. The response is written by the shared runner, so this operation reports a 202 Accepted with the submitted query text.
       operationId: queryStart
       requestBody:
         content:
@@ -5072,6 +5192,8 @@ paths:
               $ref: '#/components/schemas/QueryRequest'
         required: true
       responses:
+        "200":
+          description: OK
         "202":
           content:
             application/json:
@@ -5114,12 +5236,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: No AI provider is configured.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Start a query in a chat session.
       tags:
         - conversation/query
   /api/query/rewind:
     post:
-      description: Truncates the conversation history back to before the given turn and, by default, reverts the file changes made during the discarded turns. When the body omits `chat_id`, the client's active chat is used.
+      description: Truncates the conversation history back to a prior turn, optionally reverting file changes made during the discarded turns. Requires `to_turn`.
       operationId: queryRewind
       requestBody:
         content:
@@ -5133,7 +5261,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/QueryRewindResponse'
-          description: The conversation was rewound.
+          description: OK
         "400":
           content:
             application/json:
@@ -5164,12 +5292,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: No AI provider is configured.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Rewind the conversation to a prior turn.
       tags:
         - conversation/query
   /api/query/status:
     get:
-      description: Reports whether a query is currently active for a chat. This is the polling fallback for when the WebSocket drops and reconnects.
+      description: Reports whether a query is currently active for the resolved chat. A polling fallback for when the WebSocket drops and reconnects.
       operationId: queryStatus
       parameters:
         - $ref: '#/components/parameters/chatId'
@@ -5179,19 +5313,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/QueryStatusResponse'
-          description: The active-query status for the chat.
+          description: OK
         "405":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The route only accepts GET.
-      summary: Poll whether a query is active.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Active-query status for a chat.
       tags:
         - conversation/query
   /api/query/steer:
     post:
-      description: Injects input into the currently running query, or executes a safe slash command mid-turn. When the body omits `chat_id`, the client's active chat is used.
+      description: Injects user input into the currently running query loop, or executes a safe slash command mid-turn. Requires an active query.
       operationId: querySteer
       requestBody:
         content:
@@ -5205,7 +5345,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SteerCommandResponse'
-          description: A safe slash command was executed mid-turn.
+          description: OK
         "202":
           content:
             application/json:
@@ -5242,12 +5382,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: No AI provider is configured.
-      summary: Steer a running query.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Steer an active query.
       tags:
         - conversation/query
   /api/query/steer/retract:
     post:
-      description: Pulls back the newest staged-but-unpicked steer message so the user can edit it. When the body omits `chat_id`, the client's active chat is used. Returns success=false (not an error) when nothing is pending.
+      description: Pulls back the newest staged-but-unpicked steer message so the user can edit it. Returns 200 with success=false when nothing is pending.
       operationId: querySteerRetract
       requestBody:
         content:
@@ -5264,7 +5410,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SteerRetractResponse'
-          description: The newest staged steer was retracted, if any.
+          description: OK
         "405":
           content:
             application/json:
@@ -5283,12 +5429,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: No AI provider is configured.
-      summary: Retract the newest staged steer.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Retract the latest staged steer.
       tags:
         - conversation/query
   /api/query/stop:
     post:
-      description: Interrupts the currently running query and cancels its active subagents. Returns 200 with already_completed=true when nothing was running. When the URL omits `chat_id`, the client's active chat is used.
+      description: Interrupts the currently running query loop and cancels its subagents. Returns 200 already_completed when there is nothing to stop.
       operationId: queryStop
       parameters:
         - $ref: '#/components/parameters/chatId'
@@ -5298,7 +5450,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/QueryStopAlreadyCompleted'
-          description: No query was running for the chat.
+          description: OK
         "202":
           content:
             application/json:
@@ -5323,6 +5475,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: No AI provider is configured.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Stop the active query.
       tags:
         - conversation/query
@@ -5550,6 +5708,7 @@ paths:
         - diagnostics
   /api/sessions:
     get:
+      description: Lists saved sessions with message count and token metadata, scoped by the `scope` query parameter.
       operationId: sessionsList
       parameters:
         - description: Sessions for the current workspace (current, the default) or across all workspaces (all).
@@ -5568,7 +5727,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SessionsListResponse'
-          description: The saved sessions, capped at the most recent 100.
+          description: OK
         "405":
           content:
             application/json:
@@ -5581,11 +5740,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: Failed to list sessions.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: List saved sessions.
       tags:
         - conversation/query
   /api/sessions/{id}/export:
     get:
+      description: Streams a saved session to a downloadable file (json or markdown) with a Content-Disposition header.
       operationId: sessionExport
       parameters:
         - description: The saved session ID to export.
@@ -5641,7 +5807,7 @@ paths:
             text/markdown:
               schema:
                 type: string
-          description: The exported session, with a Content-Disposition attachment header.
+          description: OK
         "400":
           content:
             application/json:
@@ -5666,12 +5832,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: Failed to load or export the session.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Export a saved session to a downloadable file.
       tags:
         - conversation/query
   /api/sessions/restore:
     post:
-      description: Restores a saved session into a chat. When `chat_id` is omitted the restore targets the client's active chat.
+      description: Restores a saved session into the client's active (or a specified) chat and publishes the recovered messages.
       operationId: sessionRestore
       requestBody:
         content:
@@ -5685,7 +5857,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SessionRestoreResponse'
-          description: The session was restored.
+          description: OK
         "400":
           content:
             application/json:
@@ -5704,11 +5876,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: An internal error occurred.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Restore a saved session.
       tags:
         - conversation/query
   /api/sessions/search:
     get:
+      description: Searches saved sessions' transcripts for a query string.
       operationId: sessionsSearch
       parameters:
         - description: The search query string.
@@ -5748,7 +5927,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SessionsSearchResponse'
-          description: The matching sessions.
+          description: OK
         "400":
           content:
             application/json:
@@ -5767,12 +5946,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: Failed to build or search the index.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Search across saved sessions.
       tags:
         - conversation/query
   /api/shell-approvals/:
     post:
-      description: 'Prefix route: the sub-segment(s) after /api/shell-approvals/ are dynamic; the documented shape is /api/shell-approvals/{id}/decision. Submits per-part accept/reject choices for a pending shell approval, unblocking the agent''s shell-approval broker.'
+      description: Submits per-part accept/reject choices for a pending shell approval at the /api/shell-approvals/{id}/decision shape, unblocking the agent's shell-approval broker.
       operationId: shellApprovalDecision
       parameters:
         - description: The dynamic sub-segment(s); the documented shape is {id}/decision.
@@ -5793,7 +5978,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ShellApprovalDecisionResponse'
-          description: The decision was delivered.
+          description: OK
         "400":
           content:
             application/json:
@@ -5818,6 +6003,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: No agent is available to receive the decision.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Submit a per-part shell approval decision.
       tags:
         - conversation/query
@@ -5844,7 +6035,7 @@ paths:
         - diagnostics
   /api/subagent/:
     post:
-      description: 'Prefix route: the sub-segment(s) after /api/subagent/ are dynamic; the documented shape is /api/subagent/{id}/cancel. Cancels one running subagent in the active chat. Idempotent: when the ID is not currently running it returns a 200 already_completed payload so the UI can clean up its row.'
+      description: 'Cancels one running subagent in the active chat at the /api/subagent/{id}/cancel shape. Idempotent: a non-running ID returns a 200 already_completed payload.'
       operationId: subagentCancel
       parameters:
         - description: The dynamic sub-segment(s); the documented shape is {id}/cancel.
@@ -5860,7 +6051,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SubagentCancelResponse'
-          description: The subagent was already done.
+          description: OK
         "202":
           content:
             application/json:
@@ -5891,6 +6082,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: No AI provider is configured.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Cancel a running subagent.
       tags:
         - conversation/query

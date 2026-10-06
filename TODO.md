@@ -64,7 +64,7 @@ checkboxes.
       (contract.3-6) are the reference types for the migrations below; the
       file becomes generated output once every family is migrated.
       Spec: SP-160 §160c.
-- [ ] **contract.8** Migrate the conversation family (`/api/query*`,
+- [x] **contract.8** Migrate the conversation family (`/api/query*`,
       `/api/chat-sessions*`, `/api/sessions*`, `/api/subagent*`,
       `/api/edits*`, `/api/shell-approvals*`, `/api/completion`) to Huma
       operations with typed input/output, no behavior change (existing

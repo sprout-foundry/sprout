@@ -75,19 +75,24 @@ func HumaOpenAPIDoc() (map[string]any, error) {
 	return doc, nil
 }
 
-// humaRequestInput is the common input for the Huma GET operations: it carries
-// the raw *http.Request (via a Huma resolver) so the handlers can reuse the
-// existing request-oriented helpers (client-ID resolution, client context).
-// The field is excluded from the generated request schema.
+// humaRequestInput is the common input for the Huma operations: it carries the
+// raw *http.Request and *http.ResponseWriter (via a Huma resolver) so the
+// handlers can reuse the existing request-oriented helpers (client-ID
+// resolution, client context) and — for operations whose backend writes the
+// response itself (e.g. the query runners) — hand the live ResponseWriter to
+// them so the emitted bytes are unchanged. Both fields are excluded from the
+// generated request schema.
 type humaRequestInput struct {
-	Req *http.Request `json:"-"`
+	Req  *http.Request       `json:"-"`
+	Resp http.ResponseWriter `json:"-"`
 }
 
-// Resolve implements huma.Resolver, capturing the request through the humago
-// adapter before the handler runs.
+// Resolve implements huma.Resolver, capturing the request and response writer
+// through the humago adapter before the handler runs.
 func (in *humaRequestInput) Resolve(ctx huma.Context) []error {
-	r, _ := humago.Unwrap(ctx)
+	r, w := humago.Unwrap(ctx)
 	in.Req = r
+	in.Resp = w
 	return nil
 }
 
@@ -123,3 +128,21 @@ func (ws *ReactWebServer) humaGetStats(ctx context.Context, in *statsInput) (*st
 func (ws *ReactWebServer) humaGetConfig(ctx context.Context, in *configInput) (*configOutput, error) {
 	return &configOutput{Body: ws.buildAPIConfig(in.Req)}, nil
 }
+
+// writtenResponseOutput is the output for Huma operations whose backend writes
+// the HTTP response itself through the ResponseWriter (the query-family
+// runners and the completion backend do this, exactly as their plain-handler
+// counterparts did). Its Body is a func(huma.Context) so Huma invokes it as a
+// callback and — crucially — returns WITHOUT setting a default status or
+// marshaling a second body: the bytes the backend wrote are the entire
+// response. This keeps the migrated operation byte-identical to the plain
+// handler it replaces (a default Huma error model or a second WriteHeader
+// would both break that identity).
+type writtenResponseOutput struct {
+	Body func(huma.Context)
+}
+
+// noopWrittenResponse is the func(huma.Context) value used as
+// writtenResponseOutput.Body. The response was already written by the backend
+// (via in.Resp), so there is nothing left to do.
+func noopWrittenResponse(huma.Context) {}

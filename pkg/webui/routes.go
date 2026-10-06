@@ -8,7 +8,6 @@ import (
 	"runtime/pprof"
 	"time"
 
-	huma "github.com/danielgtaylor/huma/v2"
 	lspproxy "github.com/sprout-foundry/sprout/pkg/lsp/proxy"
 )
 
@@ -36,41 +35,16 @@ func (ws *ReactWebServer) setupRoutes(ctx context.Context) *http.ServeMux {
 	ws.registerSearchRoutes(mux)
 	ws.registerChangesRoutes(mux)
 	ws.registerAutomateRoutes(mux)
-	ws.registerCompletionRoutes(mux)
 	ws.registerHumaRoutes(mux)
 
 	return mux
 }
 
-// registerHumaOperations registers every Huma operation on the given API. The
-// huma.Register calls live in routes.go (not a separate file) so the contract
-// test's AST walk of that single file discovers the Huma paths alongside the
-// plain mux patterns. Each operation is mounted on the shared ServeMux by the
-// humago adapter as a method+path pattern (mux.HandleFunc("GET <path>", ...)),
-// which shadows any plain handler for the same path — the plain registrations
-// for these routes are therefore removed. Both the live server (via
-// registerHumaRoutes) and the contract doc generator (via HumaOpenAPIDoc) call
-// this one function, so the registered set cannot drift.
-func registerHumaOperations(api huma.API, ws *ReactWebServer) {
-	huma.Register(api, huma.Operation{
-		OperationID: "get-stats",
-		Method:      http.MethodGet,
-		Path:        "/api/stats",
-		Summary:     "Server statistics",
-		Description: "Reports server and per-client statistics, including provider, model, and token usage.",
-		Tags:        []string{"diagnostics"},
-	}, ws.humaGetStats)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-config",
-		Method:      http.MethodGet,
-		Path:        "/api/config",
-		Summary:     "Current server configuration",
-		Description: "Reports the server's port, daemon and workspace roots, agent metadata, and enabled features.",
-		Tags:        []string{"settings"},
-	}, ws.humaGetConfig)
-}
-
+// The Huma operations (every huma.Register call) live in huma_routes.go,
+// which registerHumaRoutes (huma_api.go) mounts on the same ServeMux. Each
+// operation is registered once by the humago adapter as a method+path pattern,
+// so the plain mux registrations for those routes were removed. The contract
+// test's AST walk reads the Huma paths from huma_routes.go.
 func (ws *ReactWebServer) registerCoreRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/ws", ws.handleWebSocket)
 	mux.HandleFunc("/terminal", ws.handleTerminalWebSocket)
@@ -119,21 +93,14 @@ func (ws *ReactWebServer) registerCoreRoutes(mux *http.ServeMux) {
 }
 
 func (ws *ReactWebServer) registerQueryRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/query", ws.handleAPIQuery)
-	mux.HandleFunc("/api/query/steer", ws.handleAPIQuerySteer)
-	mux.HandleFunc("/api/query/steer/retract", ws.handleAPIQuerySteerRetract)
-	mux.HandleFunc("/api/query/stop", ws.handleAPIQueryStop)
-	mux.HandleFunc("/api/query/status", ws.handleAPIQueryStatus)
-	// SP-071-3: rewind the conversation to a prior turn.
-	mux.HandleFunc("/api/query/rewind", ws.handleAPIQueryRewind)
-	// SP-072-4: per-hunk edit approval endpoints.
-	mux.HandleFunc("/api/edits/", ws.handleAPIEdits)
-	// SP-093-3: per-part shell approval decision endpoint.
-	mux.HandleFunc("/api/shell-approvals/", ws.handleAPIShellApprovals)
+	// The /api/query* and /api/completion routes are Huma operations (see
+	// registerHumaOperations in huma_routes.go); their plain registrations
+	// were removed so each method+path pattern is registered once. The
+	// /api/edits/, /api/shell-approvals/, and /api/subagent/ routes are
+	// likewise Huma operations (registered as method+subtree patterns); the
+	// handlers parse r.URL.Path as before.
 	// SP-089-3: password prompt endpoints.
 	mux.HandleFunc("/api/password/", ws.handleAPIPasswordRoutes)
-	// SP-059: per-subagent cancel; path is /api/subagent/{id}/cancel.
-	mux.HandleFunc("/api/subagent/", ws.handleAPISubagentCancel)
 	// Foundry proxy endpoints — accept the translated chat format from CloudAdapter
 	mux.HandleFunc("/api/proxy/chat", ws.handleAPIProxyChat)
 	mux.HandleFunc("/api/proxy/chat/stop", ws.handleAPIProxyChatStop)
@@ -307,28 +274,11 @@ func (ws *ReactWebServer) registerTerminalRoutes(mux *http.ServeMux, ctx context
 }
 
 func (ws *ReactWebServer) registerSessionRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/sessions", ws.handleAPISessions)
-	mux.HandleFunc("/api/sessions/restore", ws.handleAPIRestoreSession)
-	mux.HandleFunc("/api/sessions/search", ws.handleAPISessionsSearch)
-	mux.HandleFunc("/api/sessions/{id}/export", ws.handleAPISessionExport)
-	// Revision history + rollback now flow through /api/changes/* (the
-	// ChangeTracker session buffer) and the LLM rollback_changes tool.
-	// The old /api/history/* endpoints were removed with RevisionListPanel.
-	mux.HandleFunc("/api/chat-sessions", ws.handleAPIChatSessions)
-	mux.HandleFunc("/api/chat-sessions/create", ws.handleAPIChatSessionsCreate)
-	mux.HandleFunc("/api/chat-sessions/create-in-worktree", ws.handleAPIChatSessionCreateInWorktree)
-	mux.HandleFunc("/api/chat-sessions/delete", ws.handleAPIChatSessionsDelete)
-	mux.HandleFunc("/api/chat-sessions/delete-all", ws.handleAPIChatSessionsDeleteAll)
-	mux.HandleFunc("/api/chat-sessions/rename", ws.handleAPIChatSessionsRename)
-	mux.HandleFunc("/api/chat-sessions/pin", ws.handleAPIChatSessionsPin)
-	mux.HandleFunc("/api/chat-sessions/unpin", ws.handleAPIChatSessionsUnpin)
-	mux.HandleFunc("/api/chat-sessions/switch", ws.handleAPIChatSessionsSwitch)
-	mux.HandleFunc("/api/chat-sessions/messages", ws.handleAPIChatSessionMessages)
-	mux.HandleFunc("/api/chat-sessions/compact", ws.handleAPIChatSessionsCompact)
-	mux.HandleFunc("/api/chat-sessions/history", ws.handleAPIChatSessionClearHistory)
-	mux.HandleFunc("/api/chat-sessions/fork", ws.handleAPIChatSessionFork)
-	mux.HandleFunc("/api/chat-sessions/breakpoints", ws.handleAPIChatSessionBreakpoints)
-	mux.HandleFunc("/api/chat-sessions/worktree-mappings", ws.handleAPIChatSessionWorktreeList)
+	// The /api/sessions* and /api/chat-sessions* routes are Huma operations
+	// (see registerHumaOperations in huma_routes.go); their plain registrations
+	// were removed so each method+path pattern is registered once. The
+	// singular /api/chat-session/ worktree route is a separate surface and
+	// stays a plain handler.
 	mux.HandleFunc("/api/chat-session/", ws.handleAPIChatSessionWorktree)
 }
 
@@ -336,8 +286,4 @@ func (ws *ReactWebServer) registerSearchRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/search", ws.handleAPIQuerySearch)
 	mux.HandleFunc("/api/search/replace", ws.handleAPIQuerySearchReplace)
 	mux.HandleFunc("/api/upload/image", ws.handleUploadImage)
-}
-
-func (ws *ReactWebServer) registerCompletionRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/completion", ws.handleAPICompletion)
 }

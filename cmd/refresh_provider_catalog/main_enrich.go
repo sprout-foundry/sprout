@@ -40,13 +40,14 @@ func normalizeModels(models []api.ModelInfo) []providercatalog.Model {
 			continue
 		}
 		out = append(out, providercatalog.Model{
-			ID:            id,
-			Name:          strings.TrimSpace(model.Name),
-			Description:   strings.TrimSpace(model.Description),
-			ContextLength: model.ContextLength,
-			Tags:          append([]string(nil), model.Tags...),
-			InputCost:     model.InputCost,
-			OutputCost:    model.OutputCost,
+			ID:              id,
+			Name:            strings.TrimSpace(model.Name),
+			Description:     strings.TrimSpace(model.Description),
+			ContextLength:   model.ContextLength,
+			Tags:            append([]string(nil), model.Tags...),
+			InputCost:       model.InputCost,
+			OutputCost:      model.OutputCost,
+			CachedInputCost: model.CachedInputCost,
 		})
 	}
 
@@ -90,6 +91,11 @@ func enrichFromConfig(providerID string, models []modelcontract.CanonicalModel) 
 				Currency:      "USD",
 				Source:        "embedded-config",
 			}
+		} else if models[i].Pricing != nil && models[i].Pricing.CachedPerMTok <= 0 && mi.CachedCost > 0 {
+			// The API priced input/output but omitted the cached-input rate;
+			// fill only that gap from the config. Keeping the cached rate is
+			// what lets the metrics path compute exact cache savings.
+			models[i].Pricing.CachedPerMTok = mi.CachedCost
 		}
 		if models[i].ContextWindow == 0 && mi.ContextLength > 0 {
 			models[i].ContextWindow = mi.ContextLength
@@ -141,7 +147,7 @@ func mergeConfigOnlyModels(providerID string, models []modelcontract.CanonicalMo
 		if existing[mi.ID] {
 			continue
 		}
-		models = append(models, modelcontract.CanonicalModel{
+		cm := modelcontract.CanonicalModel{
 			ID:            mi.ID,
 			DisplayName:   mi.Name,
 			Description:   mi.Description,
@@ -149,7 +155,20 @@ func mergeConfigOnlyModels(providerID string, models []modelcontract.CanonicalMo
 			Status:        modelcontract.StatusActive,
 			Capabilities:  modelcontract.CapabilitiesFromTags(mi.Tags),
 			Source:        "embedded-config",
-		})
+		}
+		// Carry the config's pricing (including the cached-input rate) so
+		// config-only models — e.g. deepseek-chat, which the provider API
+		// doesn't list — keep their exact cache-savings pricing.
+		if mi.InputCost > 0 || mi.OutputCost > 0 || mi.CachedCost > 0 {
+			cm.Pricing = &modelcontract.Pricing{
+				InputPerMTok:  mi.InputCost,
+				OutputPerMTok: mi.OutputCost,
+				CachedPerMTok: mi.CachedCost,
+				Currency:      "USD",
+				Source:        "embedded-config",
+			}
+		}
+		models = append(models, cm)
 	}
 	return models
 }
@@ -204,6 +223,20 @@ func fetchOpenRouterModels(ctx context.Context) map[string]openRouterModel {
 	return cache
 }
 
+// lookupOpenRouterModel finds an OpenRouter entry by exact ID, falling back to
+// a date-suffix-stripped match (e.g. "gpt-5-2025-08-07" → "gpt-5").
+func lookupOpenRouterModel(cache map[string]openRouterModel, id string) (openRouterModel, bool) {
+	if m, ok := cache[id]; ok {
+		return m, true
+	}
+	if stripped := stripDateSuffix(id); stripped != id {
+		if m, ok := cache[stripped]; ok {
+			return m, true
+		}
+	}
+	return openRouterModel{}, false
+}
+
 // enrichFromOpenRouter fills pricing gaps by cross-referencing OpenRouter's
 // public model list. OpenRouter aggregates pricing for 300+ models across
 // providers. Prices include OpenRouter's markup over native provider pricing,
@@ -220,14 +253,21 @@ func enrichFromOpenRouter(ctx context.Context, models []modelcontract.CanonicalM
 		pricingHasValues := models[i].Pricing != nil &&
 			(models[i].Pricing.InputPerMTok > 0 || models[i].Pricing.OutputPerMTok > 0)
 		if pricingHasValues {
+			// Input/output are already priced, but the cached-input rate may
+			// be missing. Fill only that gap from OpenRouter's cache-read
+			// price so cache-savings reporting stays exact for models whose
+			// native listing omits it.
+			if models[i].Pricing.CachedPerMTok <= 0 {
+				if orModel, ok := lookupOpenRouterModel(cache, models[i].ID); ok {
+					if v, err := strconv.ParseFloat(orModel.Pricing.InputCacheRead, 64); err == nil && v > 0 {
+						models[i].Pricing.CachedPerMTok = v * 1e6
+					}
+				}
+			}
 			continue
 		}
 
-		orModel, ok := cache[models[i].ID]
-		if !ok {
-			// Try fuzzy match: strip date suffix (e.g. "gpt-5-2025-08-07" → "gpt-5").
-			orModel, ok = cache[stripDateSuffix(models[i].ID)]
-		}
+		orModel, ok := lookupOpenRouterModel(cache, models[i].ID)
 		if !ok {
 			continue
 		}

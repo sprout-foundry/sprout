@@ -61,3 +61,39 @@ func TestPendingNotifications_EmptyRoundTrip(t *testing.T) {
 
 	assert.Empty(t, b.DrainNotifications())
 }
+
+// TestCacheSavingsUnknown_SurvivesStateRoundTrip pins that the "savings
+// unknown" flag survives ExportState → ImportState: without it, a restored
+// session whose savings were undeterminable would render a misleading $0.
+func TestCacheSavingsUnknown_SurvivesStateRoundTrip(t *testing.T) {
+	a := newTestAgent(t)
+	defer a.Shutdown()
+
+	a.state.SetCachedTokens(600)
+	a.state.SetCachedCostSavings(0)
+	a.state.SetCacheSavingsUnknown(true)
+
+	snapshot, err := a.ExportState()
+	require.NoError(t, err)
+
+	b := newTestAgent(t)
+	defer b.Shutdown()
+	require.NoError(t, b.ImportState(snapshot))
+
+	assert.True(t, b.GetCacheSavingsUnknown(), "restored agent must carry the unknown-savings flag")
+	assert.Equal(t, "unknown", b.FormatCacheSavings())
+
+	// A session with known savings restores as known.
+	c := newTestAgent(t)
+	defer c.Shutdown()
+	c.state.SetCachedTokens(600)
+	c.state.SetCachedCostSavings(0.0042)
+	c.state.SetCacheSavingsUnknown(false)
+	snap2, err := c.ExportState()
+	require.NoError(t, err)
+	d := newTestAgent(t)
+	defer d.Shutdown()
+	require.NoError(t, d.ImportState(snap2))
+	assert.False(t, d.GetCacheSavingsUnknown())
+	assert.Equal(t, "$0.004200", d.FormatCacheSavings())
+}

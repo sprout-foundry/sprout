@@ -178,6 +178,7 @@ func (a *Agent) SaveStateScoped(sessionID, workingDir string) error {
 		CachedTokens:            a.state.GetCachedTokens(),
 		CacheWriteTokens:        a.state.GetCacheWriteTokens(),
 		CachedCostSavings:       a.state.GetCachedCostSavings(),
+		CacheSavingsUnknown:     a.state.GetCacheSavingsUnknown(),
 		RoleUsage:               a.GetRoleUsage(),
 		LastUpdated:             time.Now(),
 		SessionID:               cleanSessionID,
@@ -282,6 +283,7 @@ func (a *Agent) ApplyState(state *ConversationState) {
 	a.state.SetCachedTokens(state.CachedTokens)
 	a.state.SetCacheWriteTokens(state.CacheWriteTokens)
 	a.state.SetCachedCostSavings(state.CachedCostSavings)
+	a.state.SetCacheSavingsUnknown(state.CacheSavingsUnknown)
 	a.state.SetImageTokens(state.ImageTokens)
 	// Restore the per-role totals (SP-150 §150c, item 150.5) so they keep
 	// summing to the restored overall totals; markUsageBooked below then

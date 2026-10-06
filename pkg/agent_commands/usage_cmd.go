@@ -58,7 +58,6 @@ func (u *UsageCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	maxContext := chatAgent.GetMaxContextTokens()
 	totalCost := chatAgent.GetTotalCost()
 	iterations := chatAgent.GetCurrentIteration()
-	cachedSavings := chatAgent.GetCachedCostSavings()
 	estimatedResponses := chatAgent.GetEstimatedTokenResponses()
 
 	// Computed values (matching summary.go)
@@ -136,7 +135,7 @@ func (u *UsageCommand) Execute(args []string, chatAgent *agent.Agent) error {
 			efficiency = float64(cachedTokens) / float64(totalTokens) * 100
 		}
 
-		savingsStr := fmt.Sprintf("$%.6f", cachedSavings)
+		savingsStr := chatAgent.FormatCacheSavings()
 		ratingGlyph, ratingText := getEfficiencyRating(efficiency)
 
 		fmt.Println()
@@ -174,22 +173,26 @@ func (u *UsageCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 // usageJSONPayload is the JSON representation produced by /usage --json.
 type usageJSONPayload struct {
-	Model              string  `json:"model"`
-	Turns              int     `json:"turns"`
-	TotalTokens        int     `json:"total_tokens"`
-	PromptTokens       int     `json:"prompt_tokens"`
-	CompletionTokens   int     `json:"completion_tokens"`
-	CachedTokens       int     `json:"cached_tokens"`
-	CacheWriteTokens   int     `json:"cache_write_tokens"`
-	ProcessedPrompt    int     `json:"processed_prompt_tokens"`
-	ProcessedTotal     int     `json:"processed_total_tokens"`
-	CurrentContext     int     `json:"current_context_tokens"`
-	MaxContext         int     `json:"max_context_tokens"`
-	ContextPct         float64 `json:"context_pct"`
-	CachePct           float64 `json:"cache_pct"`
-	TotalCost          float64 `json:"total_cost"`
-	CostPerTurn        float64 `json:"cost_per_turn"`
-	CacheSavings       float64 `json:"cache_savings"`
+	Model            string  `json:"model"`
+	Turns            int     `json:"turns"`
+	TotalTokens      int     `json:"total_tokens"`
+	PromptTokens     int     `json:"prompt_tokens"`
+	CompletionTokens int     `json:"completion_tokens"`
+	CachedTokens     int     `json:"cached_tokens"`
+	CacheWriteTokens int     `json:"cache_write_tokens"`
+	ProcessedPrompt  int     `json:"processed_prompt_tokens"`
+	ProcessedTotal   int     `json:"processed_total_tokens"`
+	CurrentContext   int     `json:"current_context_tokens"`
+	MaxContext       int     `json:"max_context_tokens"`
+	ContextPct       float64 `json:"context_pct"`
+	CachePct         float64 `json:"cache_pct"`
+	TotalCost        float64 `json:"total_cost"`
+	CostPerTurn      float64 `json:"cost_per_turn"`
+	CacheSavings     float64 `json:"cache_savings"`
+	// CacheSavingsKnown is false when no cached response could determine
+	// savings (no actual cost and no usable catalog rate). Consumers must
+	// render "unknown" rather than $0 in that case.
+	CacheSavingsKnown  bool    `json:"cache_savings_known"`
 	CacheEfficiencyPct float64 `json:"cache_efficiency_pct"`
 	EstimatedResponses int     `json:"estimated_responses"`
 	// RoleUsage is the per-role token/cost breakdown (SP-150 §150c,
@@ -267,6 +270,7 @@ func buildUsageJSONPayload(chatAgent *agent.Agent) usageJSONPayload {
 		TotalCost:          totalCost,
 		CostPerTurn:        costPerTurn,
 		CacheSavings:       cachedSavings,
+		CacheSavingsKnown:  !chatAgent.GetCacheSavingsUnknown() || cachedSavings > 0,
 		CacheEfficiencyPct: cacheEfficiencyPct,
 		EstimatedResponses: estimatedResponses,
 		RoleUsage:          chatAgent.GetRoleUsage(),

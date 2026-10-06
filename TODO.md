@@ -47,7 +47,7 @@ checkboxes.
       `/api/search*`, `/api/create`, `/api/delete`, `/api/rename`,
       `/api/upload`, `/api/diagnostics`, `/api/lsp*`, `/api/semantic`.
       Spec: SP-160 §160c.
-- [ ] **contract.5** Document the git family, read endpoints
+- [x] **contract.5** Document the git family, read endpoints
       (`/api/git/*` status, log, diff, branches and other GETs).
       Spec: SP-160 §160c.
 - [ ] **contract.6** Document the git family, write endpoints (commit,

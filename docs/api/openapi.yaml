@@ -2232,6 +2232,326 @@ paths:
             text/plain:
               schema:
                 type: string
+  /api/git/status:
+    get:
+      tags: [git]
+      summary: Report the workspace's git status.
+      description: >-
+        Returns the current branch, ahead/behind tracking, and the staged,
+        modified, untracked, deleted, and renamed file lists for the active
+        workspace. When the workspace is not a git repository the response
+        reports `in_git_repo: false` and empty lists rather than an error.
+      operationId: gitStatus
+      responses:
+        "200":
+          description: The git status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitStatusResponse"
+        "405":
+          description: The route only accepts GET.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The git status could not be read.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/git/diff:
+    get:
+      tags: [git]
+      summary: Return the staged and unstaged diff for a file.
+      description: >-
+        Returns the staged and unstaged diff for the file at the `path` query
+        parameter, plus a combined diff and the full before/after file contents
+        used by the editable merge view. When the workspace is not a git
+        repository the diffs come back empty and the contents are unavailable.
+      operationId: gitDiff
+      parameters:
+        - name: path
+          in: query
+          required: true
+          description: The file to diff, relative to the workspace root.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The staged, unstaged, and combined diffs for the file.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitDiffResponse"
+        "400":
+          description: The `path` query parameter is missing or empty.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts GET.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: A diff could not be read.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/git/log:
+    get:
+      tags: [git]
+      summary: List recent commits, paginated.
+      description: >-
+        Returns a page of commit entries (hash, author, date, subject, and
+        branch/HEAD refs) plus the page's `offset`, `limit`, and the total
+        commit count. The `limit` defaults to 30 and is capped at 100; the
+        `offset` defaults to 0. Returns an error when the workspace is not a
+        git repository.
+      operationId: gitLog
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+      responses:
+        "200":
+          description: The page of commits.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitLogResponse"
+        "400":
+          description: The workspace is not a git repository.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts GET.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The git log could not be read.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/git/branches:
+    get:
+      tags: [git]
+      summary: List local and remote branches.
+      description: >-
+        Returns the current branch plus the combined, local, and remote branch
+        lists for the active workspace. Remote symrefs such as `origin/HEAD`
+        are skipped. When the workspace is not a git repository the lists come
+        back empty and `message` is `not_git_repo` rather than an error.
+      operationId: gitBranches
+      responses:
+        "200":
+          description: The current and available branches.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitBranchesResponse"
+        "405":
+          description: The route only accepts GET.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: A branch list could not be read.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/git/worktrees:
+    get:
+      tags: [git]
+      summary: List git worktrees.
+      description: >-
+        Returns the set of worktrees in the repository with each worktree's
+        path, branch, whether it is the main worktree, whether it is the
+        active workspace, and its parent worktree's path and branch. When the
+        workspace is not a git repository the list comes back empty and
+        `message` is `not_git_repo` rather than an error.
+      operationId: gitWorktrees
+      responses:
+        "200":
+          description: The worktrees in the repository.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitWorktreesResponse"
+        "405":
+          description: The route only accepts GET.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The worktree list could not be read.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/git/deep-review/fix/status:
+    get:
+      tags: [git]
+      summary: Poll the status and logs of a running deep-review fix job.
+      description: >-
+        Returns incremental status and log lines for a running deep-review fix
+        job, identified by `job_id`. The `since` parameter (a log index)
+        requests only the log lines after that index; the response's
+        `next_index` is the next value to pass as `since` to continue polling.
+        Only the client that started the job can query it; other clients are
+        told the job is not found.
+      operationId: gitDeepReviewFixStatus
+      parameters:
+        - name: job_id
+          in: query
+          required: true
+          description: The fix-job ID to poll.
+          schema:
+            type: string
+        - name: since
+          in: query
+          required: false
+          description: The log index to resume from; the response returns only the lines after it.
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: The job's current status, incremental logs, and result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitDeepReviewFixStatusResponse"
+        "400":
+          description: The `job_id` query parameter is missing.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: The job is unknown, or it belongs to a different client.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts GET.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/git/commit/show:
+    get:
+      tags: [git]
+      summary: Show a commit's metadata, diff, and file list.
+      description: >-
+        Returns the full hash, short hash, author, date, refs, and subject of
+        the commit at the `hash` query parameter, along with its unified diff,
+        a diff-tree file list, and a stat summary. This daemon endpoint is a
+        GET; the in-browser browser-git path lists the same operation as a
+        POST in the web UI's cloud endpoint registry, but the daemon handler
+        itself requires GET.
+      operationId: gitCommitShow
+      parameters:
+        - name: hash
+          in: query
+          required: true
+          description: The commit hash to show.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The commit's metadata, diff, files, and stat summary.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitCommitShowResponse"
+        "400":
+          description: The `hash` is missing, invalid, or does not name a commit.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts GET.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The commit's metadata, diff, or file list could not be read.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/git/commit/show/file:
+    get:
+      tags: [git]
+      summary: Show the diff of a single file within a commit.
+      description: >-
+        Returns the unified diff for the file at `path` within the commit at
+        `hash`, plus the full before/after contents used by the read-only
+        merge view. Both `hash` and `path` are required. This daemon endpoint
+        is a GET; the in-browser browser-git path lists the same operation as
+        a POST in the web UI's cloud endpoint registry, but the daemon
+        handler itself requires GET.
+      operationId: gitCommitFileDiff
+      parameters:
+        - name: hash
+          in: query
+          required: true
+          description: The commit hash to inspect.
+          schema:
+            type: string
+        - name: path
+          in: query
+          required: true
+          description: The file to diff within the commit, relative to the workspace root.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The single-file diff and before/after contents.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitCommitFileDiffResponse"
+        "400":
+          description: The `hash` or `path` is missing, the hash is not a commit, or the path is invalid.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: The file is not present in the commit.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts GET.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The commit's file diff could not be read.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 components:
   schemas:
     Error:
@@ -4133,6 +4453,384 @@ components:
         - servers
         - active
         - workspace
+    GitFile:
+      type: object
+      description: A single file entry with its git status character.
+      properties:
+        path:
+          type: string
+          description: The file path, relative to the repository root.
+        status:
+          type: string
+          description: The git name-status character (for example M, A, D, R, or ? for untracked).
+        staged:
+          type: boolean
+          description: Whether the file is staged; omitted when the entry is not staged.
+      required:
+        - path
+        - status
+    GitStatus:
+      type: object
+      description: The structured git status for a repository.
+      properties:
+        branch:
+          type: string
+          description: The current branch; empty when detached.
+        ahead:
+          type: integer
+          description: How many commits ahead of the upstream branch.
+        behind:
+          type: integer
+          description: How many commits behind the upstream branch.
+        staged:
+          type: array
+          items:
+            $ref: "#/components/schemas/GitFile"
+          description: Files staged for commit.
+        modified:
+          type: array
+          items:
+            $ref: "#/components/schemas/GitFile"
+          description: Files modified or added but not staged.
+        untracked:
+          type: array
+          items:
+            $ref: "#/components/schemas/GitFile"
+          description: Files that are not yet tracked by git.
+        deleted:
+          type: array
+          items:
+            $ref: "#/components/schemas/GitFile"
+          description: Files deleted but not staged.
+        renamed:
+          type: array
+          items:
+            $ref: "#/components/schemas/GitFile"
+          description: Files renamed (the new path).
+        truncated:
+          type: boolean
+          description: Whether any file list was truncated by the per-section limit.
+        in_git_repo:
+          type: boolean
+          description: Whether the workspace is a git repository.
+      required:
+        - branch
+        - ahead
+        - behind
+        - staged
+        - modified
+        - untracked
+        - deleted
+        - renamed
+        - truncated
+        - in_git_repo
+    GitStatusResponse:
+      type: object
+      description: The response from /api/git/status.
+      properties:
+        message:
+          type: string
+        status:
+          $ref: "#/components/schemas/GitStatus"
+        files:
+          type: array
+          description: A flat, backward-compatible union of all the file lists.
+          items:
+            $ref: "#/components/schemas/GitFile"
+        in_git_repo:
+          type: boolean
+          description: Whether the workspace is a git repository.
+      required:
+        - message
+        - status
+        - files
+        - in_git_repo
+    GitDiffResponse:
+      type: object
+      description: The response from /api/git/diff.
+      properties:
+        message:
+          type: string
+        path:
+          type: string
+          description: The file the diff is for, relative to the workspace root.
+        has_staged:
+          type: boolean
+          description: Whether the file has staged changes.
+        has_unstaged:
+          type: boolean
+          description: Whether the file has unstaged changes.
+        staged_diff:
+          type: string
+          description: The staged (cached) unified diff.
+        unstaged_diff:
+          type: string
+          description: The unstaged (working tree) unified diff.
+        diff:
+          type: string
+          description: The combined staged and unstaged diff.
+        original_content:
+          type: string
+          description: The before (HEAD) file content for the merge view; absent when the workspace is not a git repository.
+        modified_content:
+          type: string
+          description: The after (working tree) file content for the merge view; absent when the workspace is not a git repository.
+        contents_truncated:
+          type: boolean
+          description: Whether a content side was omitted for size or binary content; absent when the workspace is not a git repository.
+      required:
+        - message
+        - path
+        - has_staged
+        - has_unstaged
+        - staged_diff
+        - unstaged_diff
+        - diff
+    GitCommit:
+      type: object
+      description: A single commit entry in the git log.
+      properties:
+        hash:
+          type: string
+          description: The full commit hash.
+        short_hash:
+          type: string
+          description: The abbreviated (seven-character) commit hash.
+        author:
+          type: string
+          description: The author name.
+        date:
+          type: string
+          description: The author date in strict ISO 8601.
+        message:
+          type: string
+          description: The commit subject line.
+        ref_names:
+          type: string
+          description: The branch or HEAD refs pointing at this commit; omitted when there are none.
+      required:
+        - hash
+        - short_hash
+        - author
+        - date
+        - message
+    GitLogResponse:
+      type: object
+      description: The response from /api/git/log.
+      properties:
+        message:
+          type: string
+        commits:
+          type: array
+          items:
+            $ref: "#/components/schemas/GitCommit"
+        offset:
+          type: integer
+          description: The offset the page was fetched from.
+        limit:
+          type: integer
+          description: The page size used for the request.
+        total:
+          type: integer
+          description: The total commit count; only populated when a full page was returned.
+      required:
+        - message
+        - commits
+        - offset
+        - limit
+        - total
+    GitBranchesResponse:
+      type: object
+      description: The response from /api/git/branches.
+      properties:
+        message:
+          type: string
+          description: success when the workspace is a git repository, or not_git_repo otherwise.
+        current:
+          type: string
+          description: The current branch; empty when detached or not a git repository.
+        branches:
+          type: array
+          items:
+            type: string
+          description: The combined local and remote branch names, sorted with the current branch first.
+        local_branches:
+          type: array
+          items:
+            type: string
+          description: The local branch names.
+        remote_branches:
+          type: array
+          items:
+            type: string
+          description: The remote branch names, excluding HEAD symrefs.
+      required:
+        - message
+        - current
+        - branches
+        - local_branches
+        - remote_branches
+    WorktreeInfo:
+      type: object
+      description: A single git worktree.
+      properties:
+        path:
+          type: string
+          description: The worktree's filesystem path.
+        branch:
+          type: string
+          description: The branch checked out in the worktree; empty when detached.
+        is_main:
+          type: boolean
+          description: Whether this is the main (primary) worktree.
+        is_current:
+          type: boolean
+          description: Whether this is the active workspace.
+        parent_path:
+          type: string
+          description: The main worktree's path; omitted for the main worktree itself.
+        parent_branch:
+          type: string
+          description: The main worktree's branch; omitted for the main worktree itself.
+      required:
+        - path
+        - branch
+        - is_main
+        - is_current
+    GitWorktreesResponse:
+      type: object
+      description: The response from /api/git/worktrees.
+      properties:
+        message:
+          type: string
+          description: success when the workspace is a git repository, or not_git_repo otherwise.
+        worktrees:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorktreeInfo"
+        current:
+          type: string
+          description: The current branch; empty when detached or not a git repository.
+      required:
+        - message
+        - worktrees
+        - current
+    GitDeepReviewFixStatusResponse:
+      type: object
+      description: The response from /api/git/deep-review/fix/status.
+      properties:
+        message:
+          type: string
+        job_id:
+          type: string
+          description: The fix-job ID.
+        session_id:
+          type: string
+          description: The isolated fix session ID.
+        status:
+          type: string
+          description: The job's current state.
+          enum: [running, completed, error]
+        logs:
+          type: array
+          items:
+            type: string
+          description: The incremental log lines since the requested index.
+        next_index:
+          type: integer
+          description: The next index to pass as since to continue polling.
+        result:
+          type: string
+          description: The fix workflow's final result; empty until completion.
+        error:
+          type: string
+          description: The job's error; empty unless the job failed.
+      required:
+        - message
+        - job_id
+        - session_id
+        - status
+        - logs
+        - next_index
+        - result
+        - error
+    GitCommitShowResponse:
+      type: object
+      description: The response from /api/git/commit/show.
+      properties:
+        message:
+          type: string
+        hash:
+          type: string
+          description: The full commit hash.
+        short_hash:
+          type: string
+          description: The abbreviated (seven-character) commit hash.
+        author:
+          type: string
+        date:
+          type: string
+          description: The author date in strict ISO 8601.
+        ref_names:
+          type: string
+          description: The branch or HEAD refs pointing at the commit.
+        subject:
+          type: string
+          description: The commit subject line.
+        files:
+          type: array
+          items:
+            $ref: "#/components/schemas/GitFile"
+          description: The files the commit touched, with their name-status character.
+        diff:
+          type: string
+          description: The commit's unified diff.
+        stats:
+          type: string
+          description: The diff-tree stat summary.
+      required:
+        - message
+        - hash
+        - short_hash
+        - author
+        - date
+        - ref_names
+        - subject
+        - files
+        - diff
+        - stats
+    GitCommitFileDiffResponse:
+      type: object
+      description: The response from /api/git/commit/show/file.
+      properties:
+        message:
+          type: string
+        hash:
+          type: string
+          description: The commit hash.
+        path:
+          type: string
+          description: The file path within the commit.
+        diff:
+          type: string
+          description: The single-file unified diff within the commit.
+        original_content:
+          type: string
+          description: The parent-revision content for the merge view; empty for a new file.
+        modified_content:
+          type: string
+          description: The commit's content for the merge view; empty for a deleted file.
+        contents_truncated:
+          type: boolean
+          description: Whether a content side was omitted for size or binary content.
+      required:
+        - message
+        - hash
+        - path
+        - diff
+        - original_content
+        - modified_content
+        - contents_truncated
   parameters:
     chatId:
       # Shared query-parameter form of the chat-scoping knob: the chat session

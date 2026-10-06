@@ -73,9 +73,13 @@ func ClassifyToolCallWithWorkspace(toolName string, args map[string]interface{},
 }
 
 // offWorkspacePathInCommand reports whether cmd references any path that
-// resolves outside workspaceRoot, /tmp, or extraAllowed. Lexical only —
-// no filesystem access, so it cannot be fooled by symlink swaps between
-// check and execution (the approval dialog itself names the raw paths).
+// resolves outside workspaceRoot, /tmp, or extraAllowed. Path resolution is
+// lexical (no symlink following, so it cannot be fooled by symlink swaps
+// between check and execution). The single filesystem touch is an existence
+// probe of a rooted token's top-level directory, used to tell a real outside
+// path (/etc/hosts) from a route string or search pattern that merely starts
+// with "/" (grep -n "/api/git/"): a token whose top-level directory does not
+// exist on this machine is not a file target.
 func offWorkspacePathInCommand(cmd, workspaceRoot string, extraAllowed []string) bool {
 	wsAbs := absPathLexical(workspaceRoot)
 	allowed := make([]string, 0, len(extraAllowed))
@@ -106,6 +110,25 @@ func offWorkspacePathInCommand(cmd, workspaceRoot string, extraAllowed []string)
 			resolved = filepath.Join(wsAbs, resolved)
 		}
 		if !isUnderAny(absPathLexical(resolved), wsAbs, allowed) {
+			// A rooted token whose first path component does not exist on this
+			// machine cannot be a real file target — it is a route string,
+			// search pattern (@see grep -n "/api/git/"), URL path, or similar
+			// pattern argument. Ignoring it keeps such tokens from triggering a
+			// spurious "outside the workspace root" prompt. Genuine outside
+			// paths (e.g. /etc/hosts) have an existing top-level directory and
+			// are still flagged; a path under a nonexistent tree is untraversable
+			// and so is not a real escape either.
+			//
+			// The shortcut is skipped when the token contains a ".." segment:
+			// such a token must be flagged regardless of whether its (cleaned)
+			// top-level directory exists, because the shell resolves it against
+			// the filesystem root, not the workspace — e.g.
+			// `cat /nonexistent/../etc/hosts` reaches /etc/hosts even though
+			// /nonexistent does not exist. Skipping the `..` case would reopen
+			// exactly the escape this fix is meant to help catch.
+			if isRootedPath(resolved) && !strings.Contains(raw, "..") && !topLevelDirExists(resolved) {
+				continue
+			}
 			return true
 		}
 	}
@@ -124,6 +147,36 @@ func offWorkspacePathInCommand(cmd, workspaceRoot string, extraAllowed []string)
 		}
 	}
 	return false
+}
+
+// topLevelDirExists reports whether the first path component of a rooted
+// path exists on this machine as a directory. It stats ONLY the top-level
+// component (e.g. "/api" for "/api/git/") — never the full token — so it
+// cannot be used to probe file contents, and a race on a deeper component
+// cannot change the verdict. Used to tell a real outside path (whose top
+// directory exists) from a route string or search pattern that merely
+// starts with "/".
+func topLevelDirExists(p string) bool {
+	p = filepath.ToSlash(p)
+	if !strings.HasPrefix(p, "/") {
+		// Windows drive-rooted path: check the volume root itself.
+		if len(p) >= 2 && p[1] == ':' {
+			info, err := os.Stat(p[:2] + string(filepath.Separator))
+			return err == nil && info.IsDir()
+		}
+		return false
+	}
+	trimmed := strings.TrimPrefix(p, "/")
+	first := trimmed
+	if idx := strings.IndexByte(trimmed, '/'); idx >= 0 {
+		first = trimmed[:idx]
+	}
+	if first == "" {
+		// "/" itself: the root always exists.
+		return true
+	}
+	info, err := os.Stat(string(filepath.Separator) + first)
+	return err == nil && info.IsDir()
 }
 
 // expandShellPathLexical expands a leading ~ to the user's home dir

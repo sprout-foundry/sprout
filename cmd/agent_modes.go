@@ -52,6 +52,15 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		isInteractive = false
 	}
 
+	// A workflow/automate run is driven by a config file, not a person at the
+	// keyboard. Even when it is launched from a terminal (so os.Stdin is a
+	// TTY), nobody answers the Caution approval prompt, so a run must never
+	// wait on it: Caution results follow the configured risk profile without
+	// prompting, while hard blocks still block. Marking the agent here makes
+	// every approval surface (Gate 1, the broker, the filesystem gate) treat
+	// the run as non-interactive regardless of the console's interactivity.
+	markWorkflowRun(chatAgent, workflowConfig)
+
 	// Determine if web UI should be enabled
 	// Web UI requires: interactive mode, daemon mode, not disabled, and not in CI/subagent
 	enableWebUI := (isInteractive || daemonMode) && !disableWebUI && !IsCI()

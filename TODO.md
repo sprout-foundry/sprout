@@ -42,7 +42,7 @@ the end, without checkboxes.
       no-runnable-items / no-progress / budget / cancel / cap and recording
       the reason in the run record. Opt-in via a `continuation` block in the
       workflow config. Pinned by scripted loop tests.
-- [ ] **auto.2** Workflow runs never wait on approvals, and a blocked
+- [x] **auto.2** Workflow runs never wait on approvals, and a blocked
       command does not end the run. Three fixes in the security path
       (`pkg/agent/seed_tool_security.go`,
       `pkg/agent_tools/security_classifier_workspace.go`,
@@ -67,6 +67,14 @@ the end, without checkboxes.
       approval; a hard-blocked command returns an error and the next tool
       call still runs; `grep -n "/api/git/" file` in the workspace is not
       flagged while `cat /etc/hosts` still is.
+      Fixed: a workflow run marks the agent non-interactive for approvals
+      (`SetWorkflowRun`), so Caution results follow the risk profile without
+      prompting while hard blocks still block; a non-interactive hard block
+      rejects the single command with an actionable error instead of the
+      run-exiting path; `offWorkspacePathInCommand` ignores rooted tokens
+      whose top-level directory does not exist (and that carry no `..`), so
+      route/search patterns are not flagged. `IsCriticalOperation` unchanged.
+      Pinned by Go tests.
 
 - [ ] **auto.3** Cache savings show $0: `calculateCachedTokenSavings`
       (`pkg/agent/metrics.go`) returns 0 whenever the model has no cached

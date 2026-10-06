@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"net/http"
 	"path"
+	"strconv"
 	"strings"
 )
 
@@ -103,6 +104,125 @@ func (ws *ReactWebServer) handleAssets(w http.ResponseWriter, r *http.Request) {
 	// Vite hashes filenames, so these are immutable — cache aggressively
 	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 	w.Write(data)
+}
+
+// handleWasmAssets serves the WASM runtime files (sprout.wasm,
+// wasm_exec.js) from static/wasm/. Before this route existed the requests
+// fell into the SPA catch-all and were answered with index.html as
+// text/html — the shell fetch passed its ok check and WebAssembly
+// instantiate died with an "invalid magic number" compile error.
+//
+// sprout.wasm is served precompressed when the client advertises support:
+// the raw binary is ~55MB, ~15MB gzipped, ~12MB brotli — transfer time
+// dominates embed startup. The .gz/.br siblings are produced by
+// scripts/build-wasm.sh next to the raw binary.
+func (ws *ReactWebServer) handleWasmAssets(w http.ResponseWriter, r *http.Request) {
+	filePath := strings.TrimPrefix(r.URL.Path, "/wasm/")
+	if filePath == "" || strings.Contains(filePath, "..") || strings.HasPrefix(filePath, "/") || strings.HasPrefix(filePath, "\\") {
+		http.NotFound(w, r)
+		return
+	}
+
+	if encoded, encoding, ok := negotiatePrecompressedWasm(w, r, filePath); ok {
+		data, err := readStaticFile("wasm/" + filePath + "." + encoded)
+		if err == nil {
+			if contentType := assetContentType(path.Ext(filePath)); contentType != "" {
+				w.Header().Set("Content-Type", contentType)
+			}
+			w.Header().Set("Content-Encoding", encoding)
+			// The binary is content-addressed by the release tag; cache
+			// hard. (wasm_exec.js rides the same release discipline — see
+			// the checked-in-browser-runtime note in scripts/build-wasm.sh.)
+			w.Header().Set("Cache-Control", "public, max-age=3600")
+			// Vary on Accept-Encoding so shared caches don't serve a
+			// brotli body to a client that asked for identity.
+			w.Header().Add("Vary", "Accept-Encoding")
+			_, _ = w.Write(data) //nolint:gosec // G705: build-artifact bytes from the embedded FS, not user input
+			return
+		}
+		// Precompressed variant missing (e.g. a dist built before this
+		// change): fall through to the raw file rather than 404.
+	}
+
+	data, err := readStaticFile("wasm/" + filePath)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	if contentType := assetContentType(path.Ext(filePath)); contentType != "" {
+		w.Header().Set("Content-Type", contentType)
+	}
+	// The binary is content-addressed by the release tag; cache hard.
+	// (wasm_exec.js rides the same release discipline — see the
+	// checked-in-browser-runtime note in scripts/build-wasm.sh.)
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	_, _ = w.Write(data) //nolint:gosec // G705: build-artifact bytes from the embedded FS, not user input
+}
+
+// negotiatePrecompressedWasm picks the best precompressed variant the
+// client supports. Token matching is substring-based but q=0 rejections
+// disable the token (a client sending "gzip;q=0" cannot decompress a
+// gzip body — serving one would hard-break the load). No full q-value
+// parsing: the raw file is always the fallback.
+func negotiatePrecompressedWasm(_ http.ResponseWriter, r *http.Request, filePath string) (encoded, encoding string, ok bool) {
+	if filePath != "sprout.wasm" {
+		return "", "", false // wasm_exec.js compresses poorly and is small
+	}
+	ae := r.Header.Get("Accept-Encoding")
+	switch {
+	case strings.Contains(ae, "br") && !rejectsEncoding(ae, "br"):
+		return "br", "br", true
+	case strings.Contains(ae, "gzip") && !rejectsEncoding(ae, "gzip"):
+		return "gz", "gzip", true
+	default:
+		return "", "", false
+	}
+}
+
+// rejectsEncoding reports whether the Accept-Encoding header explicitly
+// rejects `token` (a ";q=0" qualifier, optionally ";q=0.000"-style).
+func rejectsEncoding(ae, token string) bool {
+	for _, part := range strings.Split(ae, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" || !strings.HasPrefix(part, token) {
+			continue
+		}
+		q := strings.ToLower(strings.TrimPrefix(part, token))
+		if strings.HasPrefix(q, ";q=0") && !strings.HasPrefix(q, ";q=0.") {
+			return true
+		}
+		// ";q=0.000" variants: parse the value.
+		if strings.HasPrefix(q, ";q=0.") {
+			if v, err := strconv.ParseFloat(strings.TrimPrefix(q, ";q="), 64); err == nil && v == 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// handleStandalonePage serves the editor.html / terminal.html component
+// entries. Like the WASM assets these previously fell into the SPA
+// catch-all and returned the React app instead of the component shells.
+func (ws *ReactWebServer) handleStandalonePage(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimPrefix(r.URL.Path, "/")
+	if name != "editor.html" && name != "terminal.html" {
+		http.NotFound(w, r)
+		return
+	}
+
+	data, err := readStaticFile(name)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	// The pages are entry documents: they must revalidate so a rebuilt
+	// bundle (new hashed asset URLs) is picked up immediately.
+	w.Header().Set("Cache-Control", "no-cache, must-revalidate")
+	_, _ = w.Write(data) //nolint:gosec // G705: build-artifact HTML from the embedded FS, not user input
 }
 
 // handleStaticFiles serves static files with proper MIME types

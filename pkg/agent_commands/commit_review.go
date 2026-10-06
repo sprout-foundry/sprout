@@ -38,10 +38,17 @@ func generateCommitReview(ctx context.Context, chatAgent *agent.Agent) (string, 
 	if chatAgent != nil {
 		configManager := chatAgent.GetConfigManager()
 		if configManager != nil {
-			if ct, e := configManager.GetProvider(); e == nil {
-				model := configManager.GetModelForProvider(ct)
-				if cl, ce := factory.CreateProviderClient(ct, model); ce == nil {
+			if cfg := configManager.GetConfig(); cfg != nil && strings.TrimSpace(cfg.GetReviewProvider()) != "" {
+				if cl, ce := factory.CreateProviderClient(api.ClientType(cfg.GetReviewProvider()), cfg.GetReviewModel()); ce == nil {
 					client = cl
+				}
+			}
+			if client == nil {
+				if ct, e := configManager.GetProvider(); e == nil {
+					model := configManager.GetModelForProvider(ct)
+					if cl, ce := factory.CreateProviderClient(ct, model); ce == nil {
+						client = cl
+					}
 				}
 			}
 		}

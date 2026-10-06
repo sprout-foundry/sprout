@@ -158,11 +158,11 @@ func TestRegistry_NoOrphanHandlers(t *testing.T) {
 		"shell_command", "git", "commit", "read_file", "write_file",
 		"edit_file", "write_structured_file", "patch_structured_file",
 		"search_files", "repo_map",
-		"rollback_changes", "view_history", "list_skills", "embedding_index",
+		"rollback_changes", "view_history", "list_skills",
 		"save_memory", "run_subagent", "run_parallel_subagents",
 		"TodoRead", "TodoWrite", "ask_user",
 		"activate_skill",
-		"browse_url", "web_search", "semantic_search",
+		"browse_url", "web_search",
 		"analyze_image_content", "analyze_ui_screenshot",
 		"search_memories", "list_directory", "fetch_url",
 	}

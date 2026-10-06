@@ -8,22 +8,10 @@ Three distinct operations manage conversation context:
 2. **Rollup** (LLM call, amortized) — folds oldest checkpoints into higher-level summaries.
 3. **Compact** (LLM call, explicit) — `/compact` wipes active checkpoint list, replaces history head with recap.
 
-The conversation store (vector embeddings) is orthogonal — survives `/compact` and rollups.
-
 Key invariants:
 - `/compact` must not skip when checkpoints exist.
 - Don't gate substitution on headroom.
-- Don't treat embedding store as ephemeral.
 - Don't let rollups consume the recency window.
-
-## Embedding index build
-
-Two load-bearing invariants (`pkg/embedding/IndexManager.BuildIndex`):
-
-1. **Partial builds must persist progress** — every 50 files flush to store + manifest. Moving flush to end-of-build breaks slow devices.
-2. **ORT `session.Run` must be ctx-cancellable** — route through `runSessionWithOptions` (`pkg/embedding/onnx_run_options.go`).
-
-Model/threshold details: `git log --grep=SP-135` and `--grep=SP-134` (spec bodies deleted from `roadmap/`; Jina Code v2 is the code model, MLX/ONNX the providers).
 
 ## Security Risk Classification
 

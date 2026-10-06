@@ -4,7 +4,6 @@ Guidance for AI agents working in this repository.
 
 ## Workflow
 
-- **Subagents**: serialized only — `run_subagent`, never `run_parallel_subagents`.
 - **Build**: `make build-all` after every code change.
 - **Roadmap**: `ls roadmap/` before touching an area; `SP-###.md` files are authoritative.
 - **First-time setup**: `make prepare-grammars` (needed for IDE; Make targets do it automatically).

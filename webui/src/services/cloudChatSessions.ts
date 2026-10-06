@@ -25,8 +25,12 @@ import {
   saveSession,
   startNewCloudSession,
 } from './cloudSessionStore';
+import { repoScopedKey } from './repoScope';
 
 const STORAGE_KEY = 'sprout-cloud-chats';
+
+// Each repository keeps its own chat list (repoScope.ts).
+const storageKey = (): string => repoScopedKey(STORAGE_KEY);
 
 // Chats whose in-page agent is answering right now (this page only).
 const runningChats = new Set<string>();
@@ -111,7 +115,7 @@ function newChat(sessionId: string, mode: 'code' | 'design' = 'code', name?: str
 
 function read(): ChatIndex {
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? 'null') as ChatIndex | null;
+    const parsed = JSON.parse(window.localStorage.getItem(storageKey()) ?? 'null') as ChatIndex | null;
     if (parsed && Array.isArray(parsed.chats) && parsed.chats.length > 0) return parsed;
   } catch {
     // Corrupt or unavailable storage: start over with the current transcript.
@@ -125,7 +129,7 @@ function read(): ChatIndex {
 
 function write(index: ChatIndex): void {
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(index));
+    window.localStorage.setItem(storageKey(), JSON.stringify(index));
   } catch {
     // Storage full or unavailable: the chat list lasts for this page only.
   }
@@ -257,7 +261,7 @@ export function handleCloudChatSessionsEndpoint(
 }
 
 export function __resetCloudChatsForTests(): void {
-  window.localStorage.removeItem(STORAGE_KEY);
+  window.localStorage.removeItem(storageKey());
 }
 
 /** The transcript a chat's messages are saved under, or null when unknown. */

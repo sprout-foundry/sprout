@@ -146,12 +146,25 @@ func publishSubagentActivity(ctx context.Context, a *Agent, phase, message strin
 // Utility helpers shared by subagent handlers
 // ---------------------------------------------------------------------------
 
-// truncateString truncates a string to a maximum length
+// truncateString truncates a string to a maximum number of runes, appending
+// an ellipsis when truncation happened. It counts runes rather than bytes so
+// multi-byte characters are never split mid-sequence.
 func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
 		return s
 	}
-	return s[:maxLen] + "..."
+	return string(runes[:maxLen]) + "..."
+}
+
+// truncateStringNoEllipsis is truncateString without the appended ellipsis,
+// for call sites that add their own suffix.
+func truncateStringNoEllipsis(s string, maxLen int) string {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
+		return s
+	}
+	return string(runes[:maxLen])
 }
 
 // stripAnsiCodes removes ANSI escape codes from a string

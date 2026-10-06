@@ -39,9 +39,6 @@ func newSeedToolRegistryWithPublisher(agent *Agent, ep core.EventPublisher) *cor
 	}
 
 	for _, h := range tools.GetNewToolRegistry().All() {
-		if h.Definition().RequiresEmbeddings && (agent == nil || agent.GetEmbeddingManager() == nil) {
-			continue
-		}
 		if agent != nil {
 			// LCM tool allowlist: skip tools not in the curated set.
 			if allowSet != nil {
@@ -54,7 +51,7 @@ func newSeedToolRegistryWithPublisher(agent *Agent, ep core.EventPublisher) *cor
 					continue
 				}
 			}
-			if h.Name() == "run_subagent" && !agent.CanSpawnSubagents() {
+			if spawnsSubagentsAnyMode(h.Name()) && !agent.CanSpawnSubagents() {
 				continue
 			}
 		}

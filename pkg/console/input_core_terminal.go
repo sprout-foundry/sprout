@@ -50,13 +50,12 @@ func writeModifyOtherKeysDisable(w io.Writer) {
 // NewInputReader creates a new input reader
 func NewInputReader(prompt string) *InputReader {
 	ir := &InputReader{
-		prompt:          prompt,
-		termFd:          int(os.Stdin.Fd()),
-		history:         make([]string, 0, 100),
-		historyIndex:    -1,
-		collapsedPastes: make([]pasteSpan, 0, 8),
-		contextMenu:     NewContextMenu(),
-		autocomplete:    newInlineAutocomplete(),
+		prompt:       prompt,
+		termFd:       int(os.Stdin.Fd()),
+		history:      make([]string, 0, 100),
+		historyIndex: -1,
+		contextMenu:  NewContextMenu(),
+		autocomplete: newInlineAutocomplete(),
 	}
 	ir.updateTerminalWidth()
 	return ir

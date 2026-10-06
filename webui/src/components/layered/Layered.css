@@ -6,7 +6,7 @@
 }
 
 .project-rail {
-  width: 48px;
+  width: 60px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -43,29 +43,42 @@
   cursor: default;
 }
 
+/* A periodic-table tile: the symbol centered, the name along the bottom. */
 .project-rail-project {
-  align-items: baseline;
-  gap: 1px;
-  padding-top: 3px;
+  width: 50px;
+  height: 52px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: 4px 3px 3px;
   border-color: var(--border-subtle);
   background: var(--bg-elevated);
   line-height: 1;
 }
 
-/* Read like an element symbol: large first letter, small second. */
-.project-rail-mono-major {
-  font-size: 16px;
+.project-rail-symbol {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
   font-weight: 700;
 }
 
-.project-rail-mono-minor {
-  font-size: 11px;
-  font-weight: 600;
+.project-rail-name {
+  overflow: hidden;
+  font-size: 9px;
+  line-height: 1.2;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--text-tertiary);
 }
 
-.project-rail-project.active .project-rail-mono-minor {
-  color: var(--text-secondary);
+.project-rail-btn:focus-visible,
+.project-rail-project:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
 }
 
 .rail-hover-card {
@@ -91,9 +104,25 @@
   font-weight: 600;
 }
 
-.project-rail-project.active {
-  border: 2px solid var(--accent-primary);
-  color: var(--text-primary);
+/* The selected tile fills with the theme's accent. Its text is black or white
+   from the accent's WCAG relative luminance (computed from its linear sRGB
+   channels; 0.179 is where both reach the same contrast), so any accent gets
+   at least 4.58:1. Browsers without relative colors use the theme's
+   on-accent token. */
+.project-rail-project.active,
+.project-rail-project.active:hover {
+  border-color: var(--accent-primary);
+  background: var(--accent-primary);
+  color: var(--accent-on-primary);
+  color: color(
+    from var(--accent-primary) srgb-linear clamp(0, (0.179 - (0.2126 * r + 0.7152 * g + 0.0722 * b)) * 1000, 1)
+      clamp(0, (0.179 - (0.2126 * r + 0.7152 * g + 0.0722 * b)) * 1000, 1)
+      clamp(0, (0.179 - (0.2126 * r + 0.7152 * g + 0.0722 * b)) * 1000, 1)
+  );
+}
+
+.project-rail-project.active .project-rail-name {
+  color: inherit;
 }
 
 .project-rail-divider {
@@ -236,6 +265,24 @@
   overflow: auto;
 }
 
+/* The file tree scrolls its own list; with the rows above it stacked on a
+   100%-tall tree, the drill body would scroll as well. */
+.project-nav-drill-body:has(> .file-tree) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.project-nav-drill-body:has(> .file-tree) > * {
+  flex-shrink: 0;
+}
+
+.project-nav-drill-body:has(> .file-tree) > .file-tree {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+}
+
 .project-nav-section {
   padding: var(--space-2) 0;
 }
@@ -312,18 +359,6 @@
   border-top: 1px solid var(--border-subtle);
   padding: var(--space-2) 0;
   flex-shrink: 0;
-}
-
-.context-thread {
-  height: 100%;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.context-thread > * {
-  flex: 1;
-  min-height: 0;
 }
 
 .header-search-btn {

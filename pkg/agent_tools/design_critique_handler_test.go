@@ -1546,16 +1546,11 @@ func TestIsRenderableCritiqueSource(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Registration: build-tagged (native only), not in the shared roster
-// ---------------------------------------------------------------------------
-
-func TestRegisterDesignCritiqueTools_NativeRoster(t *testing.T) {
+// TestDesignCritique_OnSharedRoster: design_critique ships to every build
+// (SP-158), so AllTools registers it directly.
+func TestDesignCritique_OnSharedRoster(t *testing.T) {
 	t.Parallel()
-	handlers := registerDesignCritiqueTools()
-	require.Len(t, handlers, 1)
-	assert.Equal(t, "design_critique", handlers[0].Name())
-
+	assert.Contains(t, readToolSource(t, designAllToolsFile), "&designCritiqueHandler{}")
 	found := false
 	for _, h := range AllTools() {
 		if h.Name() == "design_critique" {
@@ -1563,18 +1558,7 @@ func TestRegisterDesignCritiqueTools_NativeRoster(t *testing.T) {
 			break
 		}
 	}
-	require.True(t, found, "AllTools() must register design_critique on native builds")
-}
-
-// TestDesignCritique_NotInSharedAllToolsList pins SP-140 invariant 7: the
-// handler is reached through its build-tagged registrar, never constructed
-// directly in the unconditional list (which would break the WASM build).
-func TestDesignCritique_NotInSharedAllToolsList(t *testing.T) {
-	t.Parallel()
-	src := readToolSource(t, designAllToolsFile)
-	assert.NotContains(t, src, "&designCritiqueHandler{}",
-		"all.go must reach design_critique through registerDesignCritiqueTools(), not directly")
-	assert.Contains(t, src, designCritiqueRegistrar+"()")
+	require.True(t, found, "AllTools() must register design_critique")
 }
 
 // TestDesignCritiqueHandler_UsesSharedRenderHelper pins the §4a "renders the
@@ -1584,12 +1568,12 @@ func TestDesignCritique_NotInSharedAllToolsList(t *testing.T) {
 // critique tool, split out from the handler).
 func TestDesignCritiqueHandler_UsesSharedRenderHelper(t *testing.T) {
 	t.Parallel()
-	src := readToolSource(t, designCritiqueRenderFile)
+	src := readToolSource(t, "design_critique_render.go")
 	assert.Contains(t, src, "renderInputToString(",
 		"design_critique must render through the shared render helper")
 	assert.Contains(t, src, "buildRenderAttachment(",
 		"design_critique must attach through the SP-137 render attachment path")
-	assert.Contains(t, src, "AnalyzeImage(",
+	assert.Contains(t, readToolSource(t, "design_critique_vision.go"), "AnalyzeImage(",
 		"design_critique must analyze through the SP-137 vision entry point")
 	assert.NotContains(t, src, "BrowseURL(",
 		"design_critique must not talk to the browser directly")
@@ -1601,14 +1585,15 @@ func TestDesignCritiqueHandler_UsesSharedRenderHelper(t *testing.T) {
 func TestDesignCritiqueHandler_NoProviderNames(t *testing.T) {
 	t.Parallel()
 	files := []string{
-		designCritiqueHandlerFile,
-		designCritiqueRenderFile,
+		"design_critique_handler.go",
+		"design_critique_render.go",
 		"design_critique_discovery.go",
 		"design_critique_cache.go",
 		"design_critique_findings.go",
 		"design_critique_static.go",
 		"design_critique_findings_sidecar.go",
-		designCritiqueWasmStubFile,
+		"design_critique_vision.go",
+		"design_critique_vision_js.go",
 	}
 	for _, provider := range []string{"openai", "anthropic", "deepinfra", "openrouter", "ollama", "gemini", "claude"} {
 		for _, name := range files {

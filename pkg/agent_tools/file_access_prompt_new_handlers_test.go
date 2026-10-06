@@ -169,7 +169,7 @@ func TestRepoMap_DefaultDirectory_SkipsGate(t *testing.T) {
 	h := &repoMapHandler{}
 
 	// Even with a deny classifier, the default "." should skip the gate
-	// and proceed to GenerateRepoMapWithSemanticMatches (which will
+	// and proceed to GenerateRepoMap (which will
 	// scan the temp dir and return something).
 	env := ToolEnv{
 		WorkspaceRoot:        dir,

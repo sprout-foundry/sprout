@@ -6,20 +6,18 @@ import (
 	"testing"
 )
 
-// `search` supersedes search_files and semantic_search: it runs the same
-// literal walker and the same embedding index, and measured at an equal
-// top-10 result budget it matches semantic alone (10/14) and doubles ripgrep
-// (5/14) on the held-out set in search_fusion_eval_test.go.
+// `search` supersedes search_files: it runs the same literal walker and groups
+// results per file.
 //
-// They are hidden rather than deleted. Hiding drops two schemas from every
-// turn's context and removes a choice the model should not have to make, while
-// keeping the names resolvable for callers that already reference them —
+// search_files is hidden rather than deleted. Hiding drops its schema from
+// every turn's context and removes a choice the model should not have to make,
+// while keeping the name resolvable for callers that already reference it —
 // replayed sessions, saved automations, subagent configs. Deleting would turn
 // each of those into an unknown-tool failure.
 func TestSupersededSearchToolsAreHiddenButCallable(t *testing.T) {
 	registry := GetNewToolRegistry()
 
-	for _, name := range []string{"search_files", "semantic_search"} {
+	for _, name := range []string{"search_files"} {
 		h, ok := registry.Lookup(name)
 		if !ok || h == nil {
 			t.Errorf("%s is not in the registry — hiding must not make a tool uncallable, "+
@@ -33,10 +31,10 @@ func TestSupersededSearchToolsAreHiddenButCallable(t *testing.T) {
 
 	search, ok := registry.Lookup("search")
 	if !ok || search == nil {
-		t.Fatal("`search` is not registered — the replacement for both hidden tools is missing")
+		t.Fatal("`search` is not registered — the replacement for search_files is missing")
 	}
 	if search.Definition().Hidden {
-		t.Error("`search` is hidden; it is the tool that replaces the other two")
+		t.Error("`search` is hidden; it is the tool that replaces search_files")
 	}
 }
 

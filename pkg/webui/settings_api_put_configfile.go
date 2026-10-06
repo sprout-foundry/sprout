@@ -210,9 +210,9 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 // object seeded from the config's current values.
 //
 // Two constraints meet here. The webui saves one field at a time
-// (updateSetting('embedding_index.enabled', v) puts {"embedding_index.enabled":true}
+// (updateSetting('computer_use.enabled', v) puts {"computer_use.enabled":true}
 // on the wire), but every section applier rebuilds its struct wholesale from
-// patch["embedding_index"]. So a dotted key matched no applier and the write was
+// patch["computer_use"]. So a dotted key matched no applier and the write was
 // dropped — surfaced only in a "warnings" field the client never reads, behind a
 // 200 and a green "Saved" toast. Seeding from the current values is what keeps
 // the expansion from trading that silent no-op for a silent wipe of the field's

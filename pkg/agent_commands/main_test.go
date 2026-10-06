@@ -24,19 +24,10 @@ func TestMain(m *testing.M) {
 	// subprocesses; redirect their config so the real ~/.gitconfig is never
 	// read or written.
 	testgit.Configure()
-	// Disable implicit embedding auto-index for the whole suite. Every agent
-	// built by a test calls RestoreEmbeddingIndex(), which otherwise
-	// auto-enables the index, lazily downloads a ~240MB ONNX model, and
-	// spawns a background build/inference goroutine. Multiplied across tests
-	// those goroutines can balloon a single test process to 25–30GB RSS.
-	os.Setenv("SPROUT_DISABLE_EMBEDDING_AUTOINDEX", "1")
 	// Isolate from the real workspace config. Inside a git repo,
 	// SPROUT_CONFIG points at .sprout/; without this override, tests
 	// using NewManagerSilent/NewManager leak config writes there.
 	os.Setenv("SPROUT_CONFIG", filepath.Join(os.TempDir(), "sprout-cmds-test-config"))
-	if os.Getenv("SPROUT_MODELS_DIR") == "" {
-		os.Setenv("SPROUT_MODELS_DIR", filepath.Join(os.TempDir(), "sprout-test-models"))
-	}
 
 	tmpDir, err := os.MkdirTemp("", "sprout-agent-commands-test-state-*")
 	if err != nil {

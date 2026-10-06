@@ -184,8 +184,9 @@ func TestBuildScreenBrief_DepthSummaryVsFull(t *testing.T) {
 	assert.Contains(t, full.Feedback.Notes[0], "hierarchy")
 	assert.Contains(t, full.Feedback.Notes[0], "Primary CTA reads as secondary")
 
-	// The full depth names the delivered screen file; the summary does not.
-	assert.Empty(t, summary.ScreenFile)
+	// The screen file is the primary artifact, reported at both depths; the
+	// full depth still carries the annotation notes.
+	assert.Equal(t, "design/screens/login.html", summary.ScreenFile)
 	assert.Equal(t, "design/screens/login.html", full.ScreenFile)
 
 	// The structured fields the agent acts on are identical at both depths.
@@ -226,9 +227,11 @@ func TestBuildScreenBrief_UnknownScreenIsNotFoundNotError(t *testing.T) {
 	require.NotNil(t, brief)
 
 	assert.False(t, brief.Found)
+	assert.False(t, brief.ScreenExists)
 	assert.False(t, brief.WireframeExists)
-	assert.Equal(t, "design/wireframes/settings.svg", brief.Wireframe,
-		"the brief still names where the wireframe would live")
+	assert.Empty(t, brief.Wireframe, "a legacy wireframe path is only named when it exists")
+	assert.Equal(t, "design/screens/settings.html", brief.ScreenFile,
+		"the brief still names where the screen would live")
 	assert.Empty(t, brief.Purpose)
 	assert.Empty(t, brief.Status)
 	assert.Empty(t, brief.FlowsIn)

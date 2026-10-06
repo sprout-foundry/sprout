@@ -50,7 +50,6 @@ const DEFAULT_APP_STATE: AppState = {
   editApprovalRequest: null,
   shellApprovalRequest: null,
   modelSelectionRequest: null,
-  driftNotification: null,
   outputVerbosity: 'default' as const,
   inputValue: '',
 };

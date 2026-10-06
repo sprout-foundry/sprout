@@ -5,7 +5,7 @@ package cmd
 // setupWebUIServer resolves the bind address, applies the port strategy
 // (daemon single-port supervisor vs non-daemon dynamic port), builds and
 // starts the web UI server with all of its agent wiring, and — in daemon
-// mode — starts the embedding/agent socket servers and the idle reaper.
+// mode — starts the agent socket server and the idle reaper.
 // It returns the started server, the supervisor (nil outside daemon mode),
 // the resolved bind address, a cleanup that closes the daemon socket
 // servers, and an error (only the bind-address validation can fail;
@@ -257,16 +257,7 @@ func setupWebUIServer(ctx context.Context, cancel context.CancelFunc, chatAgent 
 			}
 		}
 
-		// SP-136 P3: the daemon hosts the embedding socket so CLI processes
-		// route embedding ops through it (one model load, one index writer).
 		var socketActivities []*daemon.DaemonActivity
-		if daemonMode {
-			embedSrv := startDaemonEmbeddingServer(ctx, true)
-			if embedSrv != nil {
-				cleanups = append(cleanups, embedSrv.Close)
-				socketActivities = append(socketActivities, embedSrv.Activity)
-			}
-		}
 
 		// SP-136 P4: the daemon hosts the agent socket so the CLI can run
 		// one-shot queries through the daemon-owned agent.
@@ -295,7 +286,7 @@ func setupWebUIServer(ctx context.Context, cancel context.CancelFunc, chatAgent 
 	// The socket servers (when daemon mode created them) outlive this
 	// function — the caller defers the cleanup so they close at RunAgent
 	// exit, exactly as the original in-block defers did. Run LIFO to match
-	// the original defer order (agent socket before embedding socket).
+	// the original defer order.
 	cleanup := func() {
 		for i := len(cleanups) - 1; i >= 0; i-- {
 			cleanups[i]()

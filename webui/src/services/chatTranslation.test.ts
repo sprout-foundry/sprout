@@ -171,4 +171,9 @@ describe('translateRequestBody — chat translation edge cases (SP-015-R7)', () 
       system_prompt: 'You are a coding assistant',
     });
   });
+
+  it('passes the workspace mode through to the proxy', () => {
+    const result = translateRequestBody('/api/query', { query: 'design it', mode: 'design' });
+    expect(result.mode).toBe('design');
+  });
 });

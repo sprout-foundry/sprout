@@ -27,40 +27,7 @@ func wireAgentToolFuncs(agent *Agent, isProduction bool) {
 		return
 	}
 
-	set := &tools.ToolFuncSet{
-		RunSubagent: func(ctx context.Context, args map[string]any) (string, error) {
-			return handleRunSubagent(ctx, agent, args)
-		},
-		RunParallelSubagents: func(ctx context.Context, args map[string]any) (string, error) {
-			return handleRunParallelSubagents(ctx, agent, args)
-		},
-		RequestClarification: func(ctx context.Context, args map[string]any) (string, error) {
-			return handleRequestClarification(ctx, agent, args)
-		},
-		RespondClarification: func(ctx context.Context, args map[string]any) (string, error) {
-			return handleRespondClarification(ctx, agent, args)
-		},
-		ListChanges: func(ctx context.Context, args map[string]any) (string, error) {
-			return handleListChanges(ctx, agent, args)
-		},
-		RecoverFile: func(ctx context.Context, args map[string]any) (string, error) {
-			return handleRecoverFile(ctx, agent, args)
-		},
-		RevertMyChanges: func(ctx context.Context, args map[string]any) (string, error) {
-			return handleRevertMyChanges(ctx, agent, args)
-		},
-		MCPRefresh: func(ctx context.Context, args map[string]any) (string, error) {
-			return handleMCPRefresh(ctx, agent, args)
-		},
-		// ChangeTracker hooks: keep session file-mutation tracking working
-		// now that write/edit execution lives in pkg/agent_tools. Without
-		// these the Agent Changes panel and revert tooling see nothing.
-		TrackFileWrite: agent.TrackFileWrite,
-		TrackFileEdit:  agent.TrackFileEdit,
-		TrackShellCommand: func(command string) error {
-			return agent.TrackShellCommand(command)
-		},
-	}
+	set := buildAgentToolFuncs(agent)
 
 	tools.ToolFuncMu.Lock()
 	defer tools.ToolFuncMu.Unlock()
@@ -83,4 +50,58 @@ func wireAgentToolFuncs(agent *Agent, isProduction bool) {
 	tools.RecoverFileFunc = set.RecoverFile
 	tools.RevertMyChangesFunc = set.RevertMyChanges
 	tools.MCPRefreshFunc = set.MCPRefresh
+}
+
+// buildAgentToolFuncs returns the per-agent dispatch set for agent's
+// agent-dependent tools. Subagents get their own set (without touching the
+// package-level fallback): without it their tool calls fell back to the
+// package vars, which point at the most recently constructed agent — so a
+// subagent's writes went untracked and its list_changes / revert_my_changes /
+// recover_file acted on another agent's change history.
+func buildAgentToolFuncs(agent *Agent) *tools.ToolFuncSet {
+	return &tools.ToolFuncSet{
+		RunSubagent: func(ctx context.Context, args map[string]any) (string, error) {
+			return handleRunSubagent(ctx, agent, args)
+		},
+		RunParallelSubagents: func(ctx context.Context, args map[string]any) (string, error) {
+			return handleRunParallelSubagents(ctx, agent, args)
+		},
+		ReviewChanges: func(ctx context.Context, args map[string]any) (string, error) {
+			return handleReviewChanges(ctx, agent, args)
+		},
+		CheckSubagent: func(ctx context.Context, args map[string]any) (string, error) {
+			return handleCheckSubagent(ctx, agent, args)
+		},
+		StopSubagent: func(ctx context.Context, args map[string]any) (string, error) {
+			return handleStopSubagent(ctx, agent, args)
+		},
+		RequestClarification: func(ctx context.Context, args map[string]any) (string, error) {
+			return handleRequestClarification(ctx, agent, args)
+		},
+		RespondClarification: func(ctx context.Context, args map[string]any) (string, error) {
+			return handleRespondClarification(ctx, agent, args)
+		},
+		ListChanges: func(ctx context.Context, args map[string]any) (string, error) {
+			return handleListChanges(ctx, agent, args)
+		},
+		RecoverFile: func(ctx context.Context, args map[string]any) (string, error) {
+			return handleRecoverFile(ctx, agent, args)
+		},
+		RevertMyChanges: func(ctx context.Context, args map[string]any) (string, error) {
+			return handleRevertMyChanges(ctx, agent, args)
+		},
+		MCPRefresh: func(ctx context.Context, args map[string]any) (string, error) {
+			return handleMCPRefresh(ctx, agent, args)
+		},
+		// ChangeTracker hooks: keep session file-mutation tracking working
+		// now that write/edit execution lives in pkg/agent_tools. Without
+		// these the Agent Changes panel and revert tooling see nothing.
+		TrackFileWrite:      agent.TrackFileWrite,
+		TrackFileWriteState: agent.TrackFileWriteState,
+		TrackFileEdit:       agent.TrackFileEdit,
+		TrackShellCommand: func(command string) error {
+			return agent.TrackShellCommand(command)
+		},
+		PrepareShellCommand: agent.PrepareShellCommand,
+	}
 }

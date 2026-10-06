@@ -50,6 +50,6 @@ func runShellCommand(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	shellCmd.Flags().StringVarP(&shellProvider, "provider", "p", "", "Provider to use (openai, openrouter, deepinfra, deepseek, ollama, etc.)")
+	shellCmd.Flags().StringVarP(&shellProvider, "provider", "p", "", providerFlagUsage)
 	shellCmd.Flags().StringVarP(&shellModel, "model", "m", "", "Model name (e.g., 'gpt-4', 'qwen/qwen3-coder-30b', 'deepseek-v3')")
 }

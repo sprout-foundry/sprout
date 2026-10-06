@@ -3,7 +3,6 @@ import type {
   CompactCompletedData,
   CompactStartedData,
   ContextManagementDiagnosticData,
-  DriftDetectedData,
   MetricsUpdateData,
   ProviderNoCredentialData,
   RateLimitedData,
@@ -112,25 +111,6 @@ export const handleWorkspaceChanged = (ctx: EventHandlerContext): void => {
       },
     }),
   );
-};
-
-/**
- * Handles drift_detected events: sets drift notification state so the
- * DriftNotification component can render a banner with action buttons.
- */
-export const handleDriftDetected = (ctx: EventHandlerContext): void => {
-  const { event, setState } = ctx;
-  const data = (event.data ?? {}) as DriftDetectedData;
-  debugLog('[drift] Drift detected:', data);
-
-  const similarity = data.similarity ?? 0;
-  const threshold = data.threshold ?? 0;
-  const sessionId = data.sessionId ?? '';
-  const options = data.options ?? [];
-
-  setState((prev) => ({
-    driftNotification: { similarity, threshold, sessionId, options },
-  }));
 };
 
 /**
@@ -256,15 +236,4 @@ export const handleWorkspacePatch = (ctx: EventHandlerContext): void => {
   logEntry.level = 'info';
   setState((prev) => ({ logs: appendCappedLog(prev.logs, logEntry) }));
   debugLog('[workspace] Patch:', String(raw.path ?? ''));
-};
-
-// Handle recall_diagnostic event (log-only; structured diagnostics UI is a follow-up).
-export const handleRecallDiagnostic = (ctx: EventHandlerContext): void => {
-  const { event, setState } = ctx;
-  const logEntry = createLogEntry(event);
-  logEntry.category = 'system';
-  logEntry.level = 'info';
-  const data = (event.data ?? {}) as Record<string, unknown>;
-  setState((prev) => ({ logs: appendCappedLog(prev.logs, logEntry) }));
-  debugLog('[recall] Diagnostic:', data);
 };

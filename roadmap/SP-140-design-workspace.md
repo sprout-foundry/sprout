@@ -193,7 +193,10 @@ exists; the drift reporting (§5c) additionally needs Phase 2's
    Browser- and vision-dependent tools (`design_render`,
    `design_import_sketch`, `design_critique`) are `//go:build !js` with
    WASM stubs mirroring `all_vision.go`; only `design_assets` and
-   `design_validate` ship WASM variants.
+   `design_validate` ship WASM variants. *Amended by SP-158:* the
+   pure-Go tools (`design_brief`, `design_export_tokens`, `design_sync`)
+   ship to WASM, and render/critique/sketch import gain browser
+   implementations.
 
 ## Acceptance criteria (umbrella)
 

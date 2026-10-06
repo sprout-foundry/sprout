@@ -1,14 +1,12 @@
 package agent
 
 import (
-	"context"
 	"sort"
 	"strings"
 
 	"github.com/google/uuid"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
-	"github.com/sprout-foundry/sprout/pkg/redact"
 )
 
 // newCheckpointID returns a stable identifier for a new TurnCheckpoint.
@@ -179,21 +177,7 @@ func (a *Agent) recordTurnCheckpointFromMessages(startIndex, endIndex int, turnM
 		RevisionID:        revisionID,
 	}
 
-	// Extract the first user message content for embedding.
-	var userPrompt string
-	for _, msg := range turnMessages {
-		if msg.Role == "user" && msg.Content != "" {
-			userPrompt = StripUserMessageTimestamp(msg.Content)
-			break
-		}
-	}
-
-	// Record checkpoint under mutex — capture embedding decision and related
-	// data inside the lock so the embedding call can run *after* release.
-	shouldEmbed := false
-	var turnNumber int
-	var sessionID, workspaceRoot string
-
+	// Record checkpoint under mutex.
 	func() {
 		mu := a.state.GetCheckpointMutex()
 		mu.Lock()
@@ -214,59 +198,15 @@ func (a *Agent) recordTurnCheckpointFromMessages(startIndex, endIndex int, turnM
 			})
 			a.state.SetTurnCheckpoints(checkpoints)
 		}
-
-		// Capture embedding decision while still holding the lock so all
-		// related values come from the same consistent state snapshot.
-		if a.GetEmbeddingManager() != nil && userPrompt != "" && len(checkpoints) > 0 {
-			shouldEmbed = true
-			sessionID = a.state.GetSessionID()
-			workspaceRoot = a.currentWorkspaceRoot()
-			for i, cp := range checkpoints {
-				if cp.StartIndex == startIndex {
-					turnNumber = i + 1 // 1-based
-					break
-				}
-			}
-		}
 	}()
 
 	a.journalTurnCheckpoint(checkpoint)
 
-	// Embed and schedule rollup asynchronously so the synchronous path
-	// (summary building + add to list) stays fast. The checkpoint is
-	// already in the list at this point, so the next query sees it
-	// immediately regardless of how long embedding takes.
-	go func() {
-		if shouldEmbed {
-			// Redact secrets before embedding to avoid persisting them in the
-			// embedding store's conversation_turns index.
-			safeUserPrompt := redact.String(userPrompt)
-			safeActionableSummary := redact.String(actionableSummary)
-
-			turn, err := NewConversationTurn(sessionID, turnNumber, safeUserPrompt, workspaceRoot)
-			if err == nil {
-				turn.ActionableSummary = safeActionableSummary
-				// FilesTouched, Duration, TokenUsage are left as zero values to be enriched later
-				_ = EmbedAndStoreTurn(context.Background(), a.GetEmbeddingManager(), turn, checkpoint.ID)
-
-				// Set session intent embedding from the first turn's prompt
-				// embedding. Uses atomic check-and-set to avoid TOCTOU races.
-				// Guard on turnNumber==1: with embedding now async, turn N and
-				// turn N+1 goroutines can be in flight simultaneously; without
-				// this guard, whichever finishes first wins regardless of turn
-				// order, so turn 2 could become the session intent.
-				if turnNumber == 1 {
-					a.state.SetSessionIntentEmbeddingIfNil(turn.PromptEmbedding)
-				}
-			}
-		}
-
-		// After a new per-turn checkpoint lands, check whether
-		// any level is now over its rollup threshold. Idempotent and bounded —
-		// at most one rollup runs at a time per agent; subsequent turns retrigger
-		// for additional levels.
-		a.scheduleRollupIfNeeded()
-	}()
+	// Check asynchronously whether any level is now over its rollup
+	// threshold, so the synchronous path stays fast. Idempotent and bounded:
+	// at most one rollup runs at a time per agent; subsequent turns retrigger
+	// for additional levels.
+	go a.scheduleRollupIfNeeded()
 }
 
 func (a *Agent) buildTurnCheckpointSummary(messages []api.Message) string {

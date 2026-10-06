@@ -84,28 +84,6 @@ func ContextManagementDiagnosticEvent(currentTokens, maxTokens, nativeMaxTokens 
 	}
 }
 
-// RecallDiagnosticEvent (SP-066 Phase 3) reports a single semantic-recall
-// pass. embedDurationMS measures the embed call (the recall query's
-// latency on the user's critical path). candidatesConsidered is what the
-// store returned before recency rerank + filter. injected/injectedChars
-// is what actually landed in the prompt supplement. topScores is the
-// raw cosine similarities for the candidates so subscribers can spot
-// near-miss patterns and tune the threshold.
-func RecallDiagnosticEvent(embedDurationMS float64, candidatesConsidered, injected, injectedChars int, topScores []float32) map[string]interface{} {
-	scores := make([]float64, len(topScores))
-	for i, s := range topScores {
-		scores[i] = float64(s)
-	}
-	return map[string]interface{}{
-		"embed_duration_ms":     embedDurationMS,
-		"candidates_considered": candidatesConsidered,
-		"injected":              injected,
-		"injected_chars":        injectedChars,
-		"top_scores":            scores,
-		"timestamp":             time.Now().UTC().Format(time.RFC3339),
-	}
-}
-
 // CompactCompletedEvent creates the payload for a compact_completed event.
 // On success, err should be nil and after/summary fields describe the new
 // state. On failure, err carries the reason and counts reflect the
@@ -125,17 +103,6 @@ func CompactCompletedEvent(source string, beforeCount, afterCount int, summaryCh
 		data["success"] = true
 	}
 	return data
-}
-
-// DriftDetectedEvent creates a drift notification event for the WebUI
-func DriftDetectedEvent(similarity float64, threshold float64, sessionID string) map[string]interface{} {
-	return map[string]interface{}{
-		"similarity": similarity,
-		"threshold":  threshold,
-		"sessionId":  sessionID,
-		"timestamp":  time.Now().UTC().Format(time.RFC3339),
-		"options":    []string{"continue", "new_chat"},
-	}
 }
 
 // AutomateSessionStartedEvent creates a session_started event payload.

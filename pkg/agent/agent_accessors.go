@@ -8,7 +8,6 @@ import (
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
-	"github.com/sprout-foundry/sprout/pkg/embedding"
 	"github.com/sprout-foundry/sprout/pkg/validation"
 )
 
@@ -177,14 +176,6 @@ func (a *Agent) HasPasswordPrompter() bool {
 	return a.passwordPrompter != nil
 }
 
-// GetEmbeddingManager returns the embedding index manager (may be nil if
-// embedding is not configured or enabled in the agent's config).
-func (a *Agent) GetEmbeddingManager() *embedding.EmbeddingManager {
-	a.embeddingMu.RLock()
-	defer a.embeddingMu.RUnlock()
-	return a.embeddingMgr
-}
-
 // GetVisionProcessor returns the agent's vision processor, creating it lazily on first call.
 func (a *Agent) GetVisionProcessor() *tools.VisionProcessor {
 	if a == nil {
@@ -230,7 +221,6 @@ func (a *Agent) GetSubagentRunner() *SubagentRunner {
 		a.subagentRunner = NewSubagentRunner(a, &SharedState{
 			EventBus:      a.eventBus,
 			TodoManager:   a.todoMgr,
-			EmbeddingMgr:  a.GetEmbeddingManager(),
 			ConfigManager: a.configManager,
 			WorkspaceRoot: a.GetWorkspaceRoot(),
 		})

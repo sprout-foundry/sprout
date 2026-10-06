@@ -56,13 +56,13 @@ type onboardingProviderPresentation struct {
 
 var onboardingProviderPresentations = map[string]onboardingProviderPresentation{
 	"zai": {
-		Description:         "Good first choice for coding-focused use. Z.AI also has a dedicated coding plan and remote MCP services.",
+		Description:         "GLM models through the Z.AI API platform. Z.AI also offers a GLM Coding Plan subscription and remote MCP services.",
 		SetupHint:           "Use either a standard Z.AI API key or, if you already have one, a GLM Coding Plan setup.",
 		DocsURL:             "https://docs.z.ai/devpack/overview",
 		SignupURL:           "https://platform.z.ai/",
 		APIKeyLabel:         "Z.AI API Key",
 		APIKeyHelp:          "Create a key in the Z.AI API platform. Coding Plan subscriptions are separate from normal API billing.",
-		Recommended:         true,
+		Recommended:         false,
 		RecommendedPrefixes: []string{"glm-5", "glm-4.7", "glm-4.6", "glm-4.5-air"},
 		RecommendedModelWhy: "Prefer a current GLM coding model if one is listed for your account.",
 	},
@@ -132,16 +132,6 @@ var onboardingProviderPresentations = map[string]onboardingProviderPresentation{
 		RecommendedPrefixes: []string{"qwen3.5-"},
 		RecommendedModelWhy: "Best speed-to-capability ratio for local hardware.",
 	},
-}
-
-var onboardingProviderOrder = map[string]int{
-	"zai":          0,
-	"minimax":      1,
-	"deepinfra":    2,
-	"openrouter":   3,
-	"chutes":       4,
-	"cerebras":     5,
-	"sprout-local": 6,
 }
 
 func applyOnboardingPresentation(entry onboardingProvider) onboardingProvider {

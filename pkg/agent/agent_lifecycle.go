@@ -3,8 +3,6 @@ package agent
 import (
 	"context"
 	"time"
-
-	"github.com/sprout-foundry/sprout/pkg/embedding"
 )
 
 // Shutdown attempts to gracefully stop background work and child processes
@@ -19,7 +17,7 @@ func (a *Agent) Shutdown() {
 // IsShutdown reports whether Shutdown() has completed. The WebUI releases
 // agents on background goroutines (workspace switch, chat deletion, idle
 // eviction), so callers that need teardown to have finished — flushed history,
-// closed embedding store, stopped MCP servers — have to be able to observe it.
+// stopped MCP servers — have to be able to observe it.
 func (a *Agent) IsShutdown() bool {
 	if a == nil {
 		return true
@@ -29,6 +27,11 @@ func (a *Agent) IsShutdown() bool {
 
 func (a *Agent) shutdownLocked() {
 	defer a.shutdown.Store(true)
+
+	// Background subagent tasks outlive turns but not the agent.
+	if a.subagentRunner != nil {
+		a.subagentRunner.CancelAll()
+	}
 
 	// Save command history to configuration before shutdown.
 	// saveHistoryToConfig reads state via getters (which are individually
@@ -101,14 +104,6 @@ func (a *Agent) shutdownLocked() {
 		_ = a.debugLogFile.Close()
 		a.debugLogFile = nil
 	}
-
-	// Release embedding manager resources. The manager is shared across every
-	// agent on this workspace, so it is closed by the last releaser, not here.
-	a.embeddingMu.Lock()
-	mgr := a.embeddingMgr
-	a.embeddingMgr = nil
-	a.embeddingMu.Unlock()
-	embedding.ReleaseManager(mgr)
 }
 
 // SetInterruptHandler sets the interrupt handler for UI mode

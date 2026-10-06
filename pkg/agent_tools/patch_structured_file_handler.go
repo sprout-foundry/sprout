@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"time"
 
@@ -145,9 +146,11 @@ func (h *patchStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 				return ToolResult{Output: fmt.Sprintf("Failed to resolve path: %v", err), IsError: true}, nil
 			}
 		}
+		original, readErr := os.ReadFile(writePath)
 		if err := os.WriteFile(writePath, []byte(content), filePerm); err != nil {
 			return ToolResult{Output: fmt.Sprintf("Failed to write file: %v", err), IsError: true}, nil
 		}
+		trackStructuredWrite(ctx, env, path, string(original), content, readErr == nil)
 		return ToolResult{Output: fmt.Sprintf("File %s written successfully", path)}, nil
 	}
 
@@ -208,8 +211,22 @@ func (h *patchStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 	if err := os.WriteFile(readPath, []byte(content), filePerm); err != nil {
 		return ToolResult{Output: fmt.Sprintf("Failed to write file: %v", err), IsError: true}, nil
 	}
+	trackStructuredWrite(ctx, env, path, fileContent, content, true)
 
 	return ToolResult{Output: fmt.Sprintf("Successfully patched %s with %d operation(s)", path, len(patchOps))}, nil
+}
+
+// trackStructuredWrite records a patch_structured_file write with the
+// agent's change tracker (best-effort), so its edits appear in list_changes
+// and can be reverted like write_file's.
+func trackStructuredWrite(ctx context.Context, env ToolEnv, path, original, content string, existed bool) {
+	funcs := env.ResolveToolFuncs()
+	if !funcs.TracksWrites() {
+		return
+	}
+	if err := funcs.TrackWrite(trackingPath(ctx, path), original, content, existed); err != nil {
+		log.Printf("[patch_structured_file] change tracking failed for %q: %v", path, err)
+	}
 }
 
 // resolveForReadWithoutGate resolves the path for reading without the gate.

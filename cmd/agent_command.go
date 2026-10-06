@@ -195,6 +195,16 @@ func createChatAgent() (*agent.Agent, error) {
 	// so the subsequent NewAgent() call picks up the fresh configuration.
 	maybeRunOnboarding()
 
+	// Setup was skipped or didn't finish: start in editor-only mode — the
+	// web UI without an agent — rather than failing on the missing provider.
+	if onboardingDeclined && !daemonMode {
+		daemonMode = true
+		fmt.Println()
+		console.GlyphInfo.Printf("Starting in editor-only mode: browse and edit your files in the web UI.")
+		fmt.Println("Add an AI provider any time in the web UI's settings, or run 'sprout keys set <provider>' and start sprout again.")
+		return nil, nil
+	}
+
 	// If using the local provider, pre-load the model in-process — with
 	// the user's actual persisted/flag-selected model, not the RAM-tier
 	// default. This preload runs before the real agent (and its own
@@ -303,7 +313,7 @@ func init() {
 	boolFlagAlias(agentCmd.Flags(), &agentSkipPrompt, "skip-prompt", "yes", aliasSilent)
 	agentCmd.Flags().BoolVar(&agentNoConnectionCheck, "no-connection-check", false, "Skip provider connection check at startup (saves 1-3 seconds)")
 	agentCmd.Flags().StringVarP(&agentModel, "model", "m", "", "Model name for agent system")
-	agentCmd.Flags().StringVarP(&agentProvider, "provider", "p", "", "Provider to use (openai, chutes, openrouter, deepinfra, deepseek, zai, mistral, ollama, ollama-local, ollama-cloud, lmstudio, or custom providers)")
+	agentCmd.Flags().StringVarP(&agentProvider, "provider", "p", "", providerFlagUsage)
 	agentCmd.Flags().StringVar(&agentSessionID, "session-id", "", "Resume a specific session ID in the current working directory scope")
 	agentCmd.Flags().BoolVar(&agentLastSession, "last-session", false, "Resume the most recent session from the current working directory scope")
 	agentCmd.Flags().StringVar(&agentPersona, "persona", "", "Persona to activate at startup (e.g., general, coder, refactor, debugger, tester, reviewer, researcher, web_scraper)")
@@ -318,8 +328,8 @@ func init() {
 	agentCmd.Flags().BoolVar(&agentUnsafe, "unsafe", false, "UNSAFE MODE: Bypass most security checks (still blocks critical system operations)")
 	agentCmd.Flags().BoolVar(&agentUnsafeShell, "unsafe-shell", false, "UNSAFE SHELL MODE: Bypass CAUTION-tier shell prompts only (DANGEROUS operations still block; file security still applies)")
 	agentCmd.Flags().BoolVar(&agentNoSubagents, "no-subagents", false, "Disable subagent tools (run_subagent, run_parallel_subagents)")
-	agentCmd.Flags().StringVar(&agentSubagentModel, "subagent-model", "", "Model for subagent tools (persists to config; set per-session)")
-	agentCmd.Flags().StringVar(&agentSubagentProvider, "subagent-provider", "", "Provider for subagent tools (persists to config; set per-session)")
+	agentCmd.Flags().StringVar(&agentSubagentModel, "subagent-model", "", "Model for subagent tools (saved to config)")
+	agentCmd.Flags().StringVar(&agentSubagentProvider, "subagent-provider", "", "Provider for subagent tools (saved to config)")
 	agentCmd.Flags().StringVar(&agentResourceDirectory, "resource-directory", "", "Optional directory (relative to current working directory) to store captured web/vision resources")
 	agentCmd.Flags().StringVar(&agentWorkflowConfig, "workflow-config", "", "JSON file that defines agent workflow steps for non-interactive runs")
 	agentCmd.Flags().StringVar(&agentAutomateSessionFile, "automate-session-file", "", "Session record JSON path to finalize when this run exits (set by 'automate run --detach'; empty = no finalization)")
@@ -389,67 +399,22 @@ func availablePersonaCompletions(cfg *configuration.Config, toComplete string) [
 var agentCmd = &cobra.Command{
 	Use:   "agent [intent]",
 	Short: "Agent for code analysis and editing (default when running 'sprout' alone)",
-	Long: `Agent mode for intelligent code analysis and editing with modern CLI + Web UI.
-
-Features:
-• Clean CLI output with automatic web UI startup
-• Real-time event streaming to web interface
-• Error recovery and malformed tool call detection
-• Context management and optimization
-• Intelligent fallback and retry mechanisms
-
-The agent runs in two modes:
-
-1. **Interactive Mode**:
-   - Clean CLI with real-time streaming
-   - Automatic web UI startup on localhost:56000
-   - Modern web interface for rich interaction
-   - Event-driven communication between CLI and web UI
-
-2. **Direct Mode**:
-   - Clean CI-style output for automation
-   - Optional web UI for monitoring progress
-   - Tool execution with atomic operations
-   - Context management and optimization
+	Long: `Run the coding agent. With no intent it starts an interactive session
+(terminal prompt plus the web UI on localhost:56000); with an intent it runs
+that one task and exits.
 
 Examples:
-  # Interactive mode (automatic when no arguments provided)
-  sprout agent
+  sprout agent                                   # interactive session
+  sprout agent "How does the auth flow work?"    # one task, then exit
+  sprout agent -p openrouter -m qwen/qwen3-coder-30b "Fix the login bug"
+  sprout agent --persona web_scraper "Collect the pricing table from the docs"
+  sprout agent --last-session                    # resume the latest session here
+  sprout agent --session-id <id>                 # resume a specific session
+  sprout agent --no-web-ui --json -o result.json "Summarize open TODOs"
+  sprout agent --workflow-config workflow.json   # scripted multi-step run
 
-  # Direct mode
-  sprout agent "Add better error handling to the main function"
-  sprout agent "How does the authentication system work?"
-
-  # With specific provider and model
-  sprout agent --provider openrouter --model "qwen/qwen3-coder-30b" "Fix the login bug"
-  sprout agent -p deepinfra -m "deepseek-v3" "Analyze the codebase structure"
-  sprout agent -p deepseek -m "deepseek-chat" "Write Python code for data analysis"
-
-  # Start with a persona
-  sprout agent --persona web-scraper "Collect pricing table data from docs pages"
-
-  # With custom provider (configured via 'sprout custom add')
-  sprout agent --provider my-custom-slow --model "custom-model-v1" "Review this code"
-
-  # Skip connection check for faster startup (saves 1-3 seconds)
-  sprout agent --no-connection-check "Quick analysis"
-  SPROUT_NO_CONNECTION_CHECK=1 sprout agent "Another quick analysis"
-
-  # Set subagent model/provider (persists to config)
-  sprout agent --subagent-model "claude-haiku-4-20250514" "Fix the tests"
-  sprout agent --subagent-provider deepinfra --subagent-model "deepseek-v3" "Refactor auth"
-
-  # Non-interactive run with an agent workflow
-  sprout agent --workflow-config examples/agent_workflow.json
-
-  # Resume a previous session in this directory scope
-  sprout agent --session-id session_1234567890
-
-  # Resume the most recent session from this directory
-  sprout agent --last-session
-
-  # Disable web UI
-  sprout agent --no-web-ui "Analyze this code"`,
+Run 'sprout agent --help-all' for advanced flags (budgets, risk profile,
+subagent model, custom system prompts).`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runAgentCommand,
 }

@@ -10,7 +10,7 @@ import { useEffect, useState, type ReactElement } from 'react';
 import { OPEN_COMMAND_PALETTE_EVENT, OPEN_NOTIFICATIONS_EVENT } from '../../config/layout';
 import { useActiveRepoURL } from '../../services/activeRepo';
 import { closeHome, openHome, useHomeView } from '../../services/homeView';
-import { githubRepoSlug } from '../../utils/platformUrl';
+import { repoName, repoSlug as repoSlugFromURL } from '../../utils/platformUrl';
 import { useUnreadNotificationCount } from '../../hooks/useUnreadNotificationCount';
 import { UserMenu } from '../UserMenu';
 
@@ -52,8 +52,9 @@ export default function PhoneTabBar({
   onLeaveTerminal,
 }: PhoneTabBarProps): ReactElement | null {
   const home = useHomeView();
-  const repoSlug = githubRepoSlug(useActiveRepoURL());
-  const projectLabel = repoSlug?.split('/')[1] ?? 'Project';
+  const activeRepoURL = useActiveRepoURL();
+  const repoSlug = repoSlugFromURL(activeRepoURL);
+  const projectLabel = repoName(activeRepoURL) ?? 'Project';
   const shown = !useKeyboardOpen();
   const unread = useUnreadNotificationCount();
 

@@ -1,5 +1,3 @@
-//go:build !js
-
 package tools
 
 import (
@@ -20,10 +18,9 @@ import (
 // attaches the image through the SP-137 tool-result image path, and (when a
 // vision tier is available) returns an analysis of it for critique.
 //
-// It is browser- and vision-dependent, so it is a //go:build !js file with a
-// WASM stub in design_render_handler_js.go (mirroring all_vision.go). The
-// registration is build-tagged and lives in neither the shared AllTools list
-// nor the WASM roster (SP-140 invariant 7).
+// It is a shared tool (SP-158): natively the screenshot comes from the
+// headless browser; in the browser build pkg/webcontent hands it to the host
+// page, which rasterizes the file in an offscreen iframe.
 type designRenderHandler struct{}
 
 func (h *designRenderHandler) Name() string { return "design_render" }
@@ -32,9 +29,9 @@ func (h *designRenderHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name: "design_render",
 		Description: "Render a design source to an image for critique: a wireframe/icon SVG, a " +
-			"self-contained screen HTML file, or a mermaid flow (.mmd). Renders it in a headless " +
-			"browser and returns the image attached (vision-capable models see the pixels) plus an " +
-			"analysis. Use this to see your own output before judging it or after a revision. " +
+			"self-contained screen HTML file, or a mermaid flow (.mmd). Renders it in a browser " +
+			"(headless natively, the host page in the browser build) and returns the image attached " +
+			"(vision-capable models see the pixels) plus an analysis when a vision tier exists. Use this to see your own output before judging it or after a revision. " +
 			"SVG and HTML render directly; a .mmd source is rendered by generating a standalone " +
 			"HTML page with the pinned vendored mermaid script — the .mmd source is never modified. " +
 			"Pass flow_layout to nudge a flow's orientation (top-down/bottom-up/left-right/right-left) " +
@@ -273,14 +270,3 @@ func (h *designRenderHandler) Timeout() time.Duration { return 0 }
 func (h *designRenderHandler) MaxResultSize() int     { return 0 }
 func (h *designRenderHandler) SafeForParallel() bool  { return false }
 func (h *designRenderHandler) Interactive() bool      { return false }
-
-// registerDesignRenderTools registers the design_render tool, which requires
-// the host browser tier (and, for critique, the vision tier) that native
-// (desktop/daemon) builds provide. Excluded from WASM builds via
-// design_render_handler_js.go, which returns nil — mirroring
-// registerVisionTools/all_vision.go (SP-140 invariant 7, SP-140-2 §2c).
-func registerDesignRenderTools() []ToolHandler {
-	return []ToolHandler{
-		&designRenderHandler{},
-	}
-}

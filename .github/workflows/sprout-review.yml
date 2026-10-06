@@ -71,6 +71,14 @@ jobs:
           review-type: "comprehensive"
           comment-threshold: "medium"
 
+          # Known false positive the reviewer must avoid (there is no
+          # review-context input in sprout-agent@v1, so this lives here as
+          # documentation): pkg/webui/security_headers.go reads
+          # envutil.GetEnvSimple("FRAME_ANCESTORS"), and GetEnvSimple
+          # prepends SPROUT_ (pkg/envutil/env.go: os.Getenv("SPROUT_"+suffix)).
+          # The configured variable IS SPROUT_FRAME_ANCESTORS; docs that say
+          # SPROUT_FRAME_ANCESTORS are correct — do not flag a mismatch.
+
           timeout-minutes: "30"
           debug: "false"
 

@@ -77,11 +77,6 @@ const TESTIDS = {
   "sidebar-design-button": "sidebar-design-button",
 
   // SP-092-3: Past sessions hint
-  "past-sessions-hint": "past-sessions-hint",
-  "past-sessions-hint-input": "past-sessions-hint-input",
-  "past-sessions-hint-loading": "past-sessions-hint-loading",
-  "past-sessions-hint-empty": "past-sessions-hint-empty",
-  "past-sessions-hint-card-abc123": "past-sessions-hint-card-abc123",
 
   // Editor
   editor: "editor",
@@ -320,10 +315,19 @@ const TESTIDS = {
   "escalation-toast-txn-progress": "escalation-toast-txn-progress",
   "escalation-toast-txn-status": "escalation-toast-txn-status",
   "escalation-toast-txn-result": "escalation-toast-txn-result",
+  "escalation-toast-txn-empty-push": "escalation-toast-txn-empty-push",
   "escalation-toast-txn-pulled": "escalation-toast-txn-pulled",
   "escalation-toast-txn-skipped": "escalation-toast-txn-skipped",
   "escalation-toast-txn-warning": "escalation-toast-txn-warning",
   "escalation-toast-txn-error": "escalation-toast-txn-error",
+  "escalation-toast-txn-cloud-fallback": "escalation-toast-txn-cloud-fallback",
+
+  // Escalation host choice (RunHostPicker): runner vs cloud
+  "run-host-picker": "run-host-picker",
+  "run-host-option": "run-host-option",
+  "run-host-option-cloud": "run-host-option-cloud",
+  "run-host-bare-metal-warning": "run-host-bare-metal-warning",
+  "run-host-notice": "run-host-notice",
 
   // Session working directory (services/workspaceCwd.ts) — Files panel
   // repo/cwd selector row (WorkspaceCwdBar). The chip was removed: the
@@ -466,6 +470,8 @@ const TESTIDS = {
   "design-screen-pending-login": "design-screen-pending-login", // pattern design-screen-pending-${card.name}
   // SP-140-6 agent side column (§6f, DesignSideColumn.tsx + DesignAgentPanel.tsx)
   "design-side-column": "design-side-column",
+  "design-side-close": "design-side-close",
+  "design-side-reopen": "design-side-reopen",
   "design-side-tab-details": "design-side-tab-details",
   "design-side-tab-agent": "design-side-tab-agent",
   "design-side-panel-details": "design-side-panel-details",

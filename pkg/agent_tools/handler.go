@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
-	"github.com/sprout-foundry/sprout/pkg/embedding"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -68,12 +67,6 @@ type ToolDefinition struct {
 	// to the model. Use it for superseded tools: existing callers keep
 	// working without the schema costing context on every turn.
 	Hidden bool `json:"-"`
-
-	// RequiresEmbeddings marks a tool that has no useful behavior without an
-	// embedding index. The registration path filters these out when the
-	// agent has no EmbeddingManager, so the model never sees a tool that
-	// would fail at execution time.
-	RequiresEmbeddings bool `json:"-"`
 }
 
 // ParameterDef defines a single tool parameter's schema.
@@ -117,9 +110,6 @@ type ToolEnv struct {
 	MaxTokensFunc      func() int
 	// ConfigManager provides configuration access for tools that need it (e.g., API keys for web fetching)
 	ConfigManager *configuration.Manager
-	// EmbeddingMgr is the agent's long-lived embedding manager. When set,
-	// tools must reuse it instead of constructing their own.
-	EmbeddingMgr *embedding.EmbeddingManager
 	// AskUser routes ask_user prompts through the active interactive channel
 	// (WebUI dialog when a browser is connected, terminal stdin otherwise).
 	// Nil means the tool must fall back to the CLI prompt directly.
@@ -197,6 +187,9 @@ type ToolEnv struct {
 type ToolFuncSet struct {
 	RunSubagent          func(ctx context.Context, args map[string]any) (string, error)
 	RunParallelSubagents func(ctx context.Context, args map[string]any) (string, error)
+	ReviewChanges        func(ctx context.Context, args map[string]any) (string, error)
+	CheckSubagent        func(ctx context.Context, args map[string]any) (string, error)
+	StopSubagent         func(ctx context.Context, args map[string]any) (string, error)
 	RequestClarification func(ctx context.Context, args map[string]any) (string, error)
 	RespondClarification func(ctx context.Context, args map[string]any) (string, error)
 	ListChanges          func(ctx context.Context, args map[string]any) (string, error)
@@ -212,6 +205,10 @@ type ToolFuncSet struct {
 	// the tracker must not re-read the file, which now holds new
 	// content. Nil when no tracker is available (standalone tools).
 	TrackFileWrite func(filePath string, originalContent string, content string) error
+	// TrackFileWriteState is TrackFileWrite with explicit pre-write
+	// existence, so an existing empty file isn't recorded as a create.
+	// Preferred over TrackFileWrite when set.
+	TrackFileWriteState func(filePath string, originalContent string, content string, existed bool) error
 	// TrackFileEdit records an old→new replacement (edit_file) with the
 	// agent's ChangeTracker. Nil when no tracker is available.
 	TrackFileEdit func(filePath string, originalContent string, newContent string) error
@@ -220,6 +217,10 @@ type ToolFuncSet struct {
 	// the file tools). The closure owns read-only classification, cwd
 	// resolution, and destructive detection. Nil when no tracker.
 	TrackShellCommand func(command string) error
+	// PrepareShellCommand runs before a shell command executes so the
+	// tracker has a pre-command baseline to diff TrackShellCommand against.
+	// Nil when no tracker.
+	PrepareShellCommand func(command string)
 }
 
 // ResolveToolFuncs returns the tool func set to dispatch through. It prefers
@@ -355,4 +356,25 @@ type ToolResult struct {
 	TokenUsage int64 `json:"token_usage"`
 	// IsError indicates whether this result represents an error state.
 	IsError bool `json:"is_error"`
+}
+
+// TrackWrite records a full-file write with whichever tracking func the env
+// provides, preferring the existence-aware one. No-op without a tracker.
+func (s *ToolFuncSet) TrackWrite(filePath, originalContent, content string, existed bool) error {
+	switch {
+	case s == nil:
+		return nil
+	case s.TrackFileWriteState != nil:
+		return s.TrackFileWriteState(filePath, originalContent, content, existed)
+	case s.TrackFileWrite != nil:
+		return s.TrackFileWrite(filePath, originalContent, content)
+	default:
+		return nil
+	}
+}
+
+// TracksWrites reports whether writes are tracked at all (so handlers can
+// skip the pre-write read when they aren't).
+func (s *ToolFuncSet) TracksWrites() bool {
+	return s != nil && (s.TrackFileWriteState != nil || s.TrackFileWrite != nil)
 }

@@ -49,9 +49,9 @@ if (typeof Response === 'undefined') {
 describe('cloudEndpointRegistry', () => {
   describe('CLOUD_ENDPOINTS', () => {
     it('should have all required endpoints defined', () => {
-      // Verify we have approximately 103 endpoints (19 wasm-local + 27 browser-git + 14 foundry-backend + 40 synthetic + 3 no-op);
+      // Verify we have approximately 97 endpoints (19 wasm-local + 27 browser-git + 14 foundry-backend + 34 synthetic + 3 no-op);
       // the chat-session list is served browser-local, outside the registry.
-      expect(CLOUD_ENDPOINTS.length).toBeGreaterThanOrEqual(103);
+      expect(CLOUD_ENDPOINTS.length).toBeGreaterThanOrEqual(97);
     });
 
     it('should have unique path+method combinations', () => {
@@ -150,6 +150,16 @@ describe('cloudEndpointRegistry', () => {
         { path: '/api/stats', method: 'GET' },
         { path: '/api/settings', method: 'GET' },
         { path: '/api/settings', method: 'PUT' },
+        // SP-BUILDER-12: the host-agnostic escalation surface (the live
+        // client) and its legacy Fly prefix both proxy to the platform.
+        { path: '/workspace/txn', method: 'GET' },
+        { path: '/workspace/txn', method: 'POST' },
+        { path: '/workspace/txn/ws-1/txn/t-1/push', method: 'POST' },
+        { path: '/workspace/fly', method: 'GET' },
+        { path: '/workspace/fly/ws-1/txn/t-1/run', method: 'POST' },
+        { path: '/runners', method: 'GET' },
+        { path: '/workspace', method: 'GET' },
+        { path: '/workspace/ws-1', method: 'GET' },
       ];
 
       for (const { path, method } of testCases) {
@@ -481,10 +491,10 @@ describe('cloudEndpointRegistry', () => {
 
     it('should have expected number of synthetic endpoints', () => {
       const synthetic = getEndpointsByCategory('synthetic');
-      // Includes onboarding, instances, embedding/LSP, history,
+      // Includes onboarding, instances, LSP, history,
       // settings/mcp/skills/subagent-types, and other not-available-in-
       // browser-mode endpoints.
-      expect(synthetic.length).toBeGreaterThanOrEqual(40);
+      expect(synthetic.length).toBeGreaterThanOrEqual(33);
       expect(synthetic.length).toBeLessThan(70);
     });
 

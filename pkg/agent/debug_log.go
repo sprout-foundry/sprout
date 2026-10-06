@@ -8,8 +8,7 @@ import (
 )
 
 // debugLogEnabled gates verbose informational logging from package-level
-// (non-Agent-method) call sites such as turn_embedding.go and
-// proactive_context.go. Toggleable at runtime; defaults to whatever the
+// (non-Agent-method) call sites. Toggleable at runtime; defaults to whatever the
 // SPROUT_DEBUG environment variable indicates at package init.
 //
 // Real errors / warnings (failed embeds, unexpected nil providers, etc.)
@@ -38,8 +37,8 @@ func SetPackageDebugLogging(enabled bool) {
 
 // SetPackageLogger sets the package-level AgentLogger that package-level
 // functions (without an *Agent receiver) use for structured logging.
-// Called during agent initialization so embedding, proactive context, etc.
-// all route through the same logger with session context.
+// Called during agent initialization so package-level helpers all route
+// through the same logger with session context.
 func SetPackageLogger(l *AgentLogger) {
 	if l != nil {
 		packageLogger.Store(l)

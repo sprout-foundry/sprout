@@ -2,9 +2,11 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -190,6 +192,56 @@ func handleListSkills(ctx context.Context, a *Agent, args map[string]interface{}
 	return sb.String(), nil
 }
 
+// activateSkillByID is the skill-activation core shared by the
+// activate_skill tool and turn-start auto-activation: load the skill, add
+// its ID to the active-skill set, and fold its instructions into the
+// system prompt.
+//
+// Idempotence is decided by the prompt, not the active-skill set: persona
+// switches, model refreshes and per-query prompt overrides rebuild the
+// prompt without clearing that set, and trusting it told the agent a skill
+// was "already active" while none of its instructions were in context. A
+// skill whose fold is present gets a short note; one whose fold was lost is
+// folded again.
+//
+// Errors are returned unwrapped: the tool path wraps them in a user-facing
+// tool error, while best-effort callers (auto-activation) log and continue.
+func (a *Agent) activateSkillByID(skillID string) (string, error) {
+	if strings.TrimSpace(skillID) == "" {
+		return "", errors.New("skill_id is required")
+	}
+	config := a.GetConfigManager().GetConfig()
+	skillInfo, err := LoadSkillInWorkspace(skillID, config, a.GetWorkspaceRoot())
+	if err != nil {
+		return "", err
+	}
+
+	if !slices.Contains(a.state.GetActiveSkills(), skillID) {
+		a.state.SetActiveSkills(append(slices.Clone(a.state.GetActiveSkills()), skillID))
+	}
+
+	header := fmt.Sprintf("[Skill Activated: %s (", skillInfo.Name)
+	if strings.Contains(a.systemPrompt, header) {
+		return fmt.Sprintf("Skill '%s' is already active; its instructions are in your system prompt.", skillID), nil
+	}
+
+	sourceLabel := skillInfo.Source
+	if sourceLabel == "" {
+		sourceLabel = "unknown"
+	}
+	skillMessage := fmt.Sprintf("%ssource: %s)]\n\n%s", header, sourceLabel, skillInfo.Content)
+	if missing := a.unavailableSkillTools(skillInfo.Content); len(missing) > 0 {
+		skillMessage += fmt.Sprintf("\n\n> **Not available in this environment:** `%s`. Skip the steps that need them and tell the user which checks were not run.",
+			strings.Join(missing, "`, `"))
+	}
+	if strings.TrimSpace(a.systemPrompt) != "" {
+		a.systemPrompt = a.systemPrompt + "\n\n---\n\n" + skillMessage
+	} else {
+		a.systemPrompt = skillMessage
+	}
+	return fmt.Sprintf("Activated skill '%s' (%s).\n\nDescription: %s\n\nInstructions loaded into context.", skillInfo.Name, skillID, skillInfo.Description), nil
+}
+
 func handleActivateSkill(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	skillID, err := getStringArg(args, "skill_id")
 	if err != nil {
@@ -199,43 +251,11 @@ func handleActivateSkill(ctx context.Context, a *Agent, args map[string]interfac
 		}
 	}
 
-	configManager := a.GetConfigManager()
-	config := configManager.GetConfig()
-
-	// Check if already active
-	for _, id := range a.state.GetActiveSkills() {
-		if id == skillID {
-			return fmt.Sprintf("Skill '%s' is already active.", skillID), nil
-		}
-	}
-
-	// Load the skill
-	skillInfo, err := LoadSkillInWorkspace(skillID, config, a.GetWorkspaceRoot())
+	result, err := a.activateSkillByID(skillID)
 	if err != nil {
 		return "", agenterrors.NewTool("skills", "failed to activate skill", err)
 	}
-
-	// Add to active skills
-	currentActive := a.state.GetActiveSkills()
-	newActive := make([]string, len(currentActive)+1)
-	copy(newActive, currentActive)
-	newActive[len(newActive)-1] = skillID
-	a.state.SetActiveSkills(newActive)
-
-	// Fold skill instructions into the active system prompt so they persist across
-	// all subsequent turns without relying on history system-message injection.
-	sourceLabel := skillInfo.Source
-	if sourceLabel == "" {
-		sourceLabel = "unknown"
-	}
-	skillMessage := fmt.Sprintf("[Skill Activated: %s (source: %s)]\n\n%s", skillInfo.Name, sourceLabel, skillInfo.Content)
-	if strings.TrimSpace(a.systemPrompt) != "" {
-		a.systemPrompt = a.systemPrompt + "\n\n---\n\n" + skillMessage
-	} else {
-		a.systemPrompt = skillMessage
-	}
-
-	return fmt.Sprintf("Activated skill '%s' (%s).\n\nDescription: %s\n\nInstructions loaded into context.", skillInfo.Name, skillID, skillInfo.Description), nil
+	return result, nil
 }
 
 func getStringArg(args map[string]interface{}, name string) (string, error) {
@@ -248,4 +268,53 @@ func getStringArg(args map[string]interface{}, name string) (string, error) {
 		return "", agenterrors.NewInvalidInputError(fmt.Sprintf("argument '%s' must be a string", name), nil)
 	}
 	return str, nil
+}
+
+// skillDeclaredTools reads the `tools:` line of a skill's frontmatter — the
+// tools its workflow relies on — as `tools: a, b` or `tools: [a, b]`.
+func skillDeclaredTools(content string) []string {
+	body, ok := strings.CutPrefix(strings.TrimLeft(content, "\ufeff \t\r\n"), "---")
+	if !ok {
+		return nil
+	}
+	end := strings.Index(body, "\n---")
+	if end < 0 {
+		return nil
+	}
+	for _, line := range strings.Split(body[:end], "\n") {
+		value, ok := strings.CutPrefix(strings.TrimSpace(line), "tools:")
+		if !ok {
+			continue
+		}
+		value = strings.Trim(strings.TrimSpace(value), "[]")
+		var names []string
+		for _, name := range strings.Split(value, ",") {
+			if name = strings.Trim(strings.TrimSpace(name), `"'`); name != "" {
+				names = append(names, name)
+			}
+		}
+		return names
+	}
+	return nil
+}
+
+// unavailableSkillTools lists the skill's declared tools this agent cannot
+// call, so a skill written for every host stays honest on a host that lacks
+// some of them (a low-context profile, a persona allowlist).
+func (a *Agent) unavailableSkillTools(content string) []string {
+	declared := skillDeclaredTools(content)
+	if len(declared) == 0 {
+		return nil
+	}
+	visible := make(map[string]bool)
+	for _, tool := range a.getOptimizedToolDefinitions(nil) {
+		visible[tool.Function.Name] = true
+	}
+	var missing []string
+	for _, name := range declared {
+		if !visible[name] {
+			missing = append(missing, name)
+		}
+	}
+	return missing
 }

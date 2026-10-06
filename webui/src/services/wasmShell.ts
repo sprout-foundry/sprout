@@ -7,8 +7,6 @@
  *   console.log(result.stdout);
  */
 
-import { installSproutONNXBridge, installJinaBridge } from './sproutONNXBridge';
-import { installEmbeddingBackendController } from './embeddingBackendController';
 import { safeJsonParse } from '../utils/json';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -39,6 +37,17 @@ export interface WasmListDirResult {
 
 export interface WasmReadFileResult {
   content: string;
+  error?: string;
+}
+
+export interface WasmReadFileBytesResult {
+  bytes?: Uint8Array;
+  error?: string;
+}
+
+export interface WasmSaveImageResult {
+  path?: string;
+  filename?: string;
   error?: string;
 }
 
@@ -74,6 +83,10 @@ export interface WasmShell {
   writeFile(path: string, content: string): string; // error or ""
   /** Read a file's content. */
   readFile(path: string): WasmReadFileResult;
+  /** Read a file byte-exact (images, fonts). */
+  readFileBytes(path: string): WasmReadFileBytesResult;
+  /** Store an uploaded image the way the daemon's /api/upload/image does. */
+  saveImage(bytes: Uint8Array): WasmSaveImageResult;
   /** List directory entries. */
   listDir(path: string): WasmListDirResult;
   /** Delete a file. */
@@ -88,6 +101,8 @@ export interface WasmShell {
     chatId?: string,
     /** JSON [{role, content}] seeding a chat's agent when it is created fresh. */
     history?: string,
+    /** Workspace mode the query was sent from; selects the agent's mode skills. */
+    mode?: string,
   ): Promise<{ response: string; provider: string; model: string }>;
   /** Clear a chat's agent history (every chat's when no id is given). */
   clearConversation(chatId?: string): void;
@@ -101,6 +116,10 @@ export interface WasmShell {
   respondToEditDecision?(requestId: string, approved: boolean, acceptedHunks: string[]): { delivered: boolean };
   /** Deliver a shell approval decision to a pending shell approval request. */
   respondToShellApproval?(requestId: string, decisions: Record<string, boolean>): { delivered: boolean };
+  /** The §6b design status JSON for the workspace root (GET /api/design/status). */
+  designStatus?(): string;
+  /** Build identity of the running binary (version/commit/date). Null on binaries built before the export existed. */
+  getBuildInfo(): { version: string; commit: string; date: string } | null;
   /** Get the fully initialized Go global. */
   readonly wasm: typeof globalThis & { SproutWasm: unknown };
 }
@@ -236,6 +255,8 @@ export interface SproutWasmAPI {
   changeDir(dir: string): string;
   writeFile(path: string, content: string): string;
   readFile(path: string): string;
+  readFileBytes?(path: string): WasmReadFileBytesResult;
+  saveImage?(bytes: Uint8Array): WasmSaveImageResult;
   listDir(path: string): string;
   deleteFile(path: string): string;
   getHistory(): string;
@@ -251,6 +272,7 @@ export interface SproutWasmAPI {
     onEvent?: (eventJson: string) => void,
     chatId?: string,
     history?: string,
+    mode?: string,
   ): Promise<{ response: string; provider: string; model: string }>;
   clearConversation?(chatId?: string): void;
   stopAgent?(chatId?: string): void;
@@ -262,6 +284,12 @@ export interface SproutWasmAPI {
   parseFile?(filePath: string, content: Uint8Array | ArrayBuffer): string;
   extractSymbols?(filePath: string, content: Uint8Array | ArrayBuffer): string;
   supportedLanguages?(): string;
+  // ── Design health (cmd/wasm/design_funcs.go) ──
+  /** The §6b design status JSON for the workspace root. Absent in binaries built before the export existed. */
+  designStatus?(root?: string): string;
+  // ── Build identity (cmd/wasm/main.go getBuildInfoFunc) ──
+  /** Version/commit/date of the running binary. Absent in binaries built before the export existed. */
+  getBuildInfo?(): string;
 }
 
 declare global {
@@ -335,22 +363,6 @@ export async function initWasmShell(config?: {
 
     window.__sproutStore = store;
 
-    // Install the ONNX bridges so the Go-WASM build's embedding manager can
-    // delegate inference to onnxruntime-web running in this page.
-    //
-    // __sproutJinaONNX is the primary provider — the embedding manager now
-    // constructs Jina Code v2 exclusively (createONNXProvider →
-    // acquireSharedJinaProvider → NewJinaONNXEmbeddingProvider). The older
-    // __sproutONNX (EmbeddingGemma) bridge is kept for the wasmshell-level
-    // embedding wrapper (pkg/wasmshell/embedding_funcs.go) which still calls
-    // NewONNXEmbeddingProvider directly.
-    installSproutONNXBridge();
-    installJinaBridge();
-    // Install the SP-100 embedding-backend controller so the WASM shell's
-    // SproutWasm.switchEmbeddingBackend / .embeddingBackendStatus / .embeddingModel
-    // functions have a host-side handler to delegate to.
-    installEmbeddingBackendController();
-
     // 2. Load wasm_exec.js.
     debug(' Step 1: Loading wasm_exec.js...');
     const script = document.createElement('script');
@@ -374,12 +386,40 @@ export async function initWasmShell(config?: {
     if (!wasmResponse.ok) {
       throw new Error(`Failed to fetch ${wasmUrl}: ${wasmResponse.status}`);
     }
+    // Guard against a misrouted asset: a server answering the .wasm URL
+    // with the SPA's index.html (or any non-wasm type) passes the ok check
+    // and only dies later inside WebAssembly.instantiate with an opaque
+    // "invalid magic number". Name the actual problem instead.
+    const wasmType = (wasmResponse.headers.get('content-type') ?? '').toLowerCase();
+    if (wasmType && !wasmType.includes('application/wasm') && !wasmType.includes('octet-stream')) {
+      throw new Error(
+        `${wasmUrl} answered Content-Type ${wasmType}, not application/wasm — ` +
+          `the server is not serving the WASM asset (check the /wasm/ route or the asset path)`,
+      );
+    }
 
-    debug(' Step 4: Reading arrayBuffer...');
-    const wasmBuffer = await wasmResponse.arrayBuffer();
-    debug(' ArrayBuffer size:', wasmBuffer.byteLength);
-    debug(' Step 5: WebAssembly.instantiate...');
-    const { instance } = await WebAssembly.instantiate(wasmBuffer, go.importObject);
+    debug(' Step 4: Instantiating (streaming when possible)...');
+    // Streaming compile overlaps download and compilation — roughly halves
+    // time-to-ready on the 55MB binary. It requires the response to be
+    // application/wasm (browsers enforce the MIME type), so octet-stream
+    // servers and missing headers fall back to the buffered path.
+    //
+    // The streaming attempt consumes its OWN fetch; the original
+    // wasmResponse stays untouched and is the fallback body — a failed
+    // stream never re-downloads 55MB.
+    let compile: Promise<WebAssembly.WebAssemblyInstantiatedSource>;
+    if (wasmType.includes('application/wasm') && typeof WebAssembly.instantiateStreaming === 'function') {
+      debug(' Step 4a: instantiateStreaming...');
+      compile = WebAssembly.instantiateStreaming(fetch(wasmUrl), go.importObject).catch((streamErr) => {
+        debug(' streaming compile failed, falling back to buffered:', streamErr);
+        return wasmResponse.arrayBuffer().then((buf) => WebAssembly.instantiate(buf, go.importObject));
+      });
+    } else {
+      const wasmBuffer = await wasmResponse.arrayBuffer();
+      debug(' ArrayBuffer size:', wasmBuffer.byteLength);
+      compile = WebAssembly.instantiate(wasmBuffer, go.importObject);
+    }
+    const { instance } = await compile;
     debug(' Step 5: Instantiated');
 
     // 4. Run the Go instance (this blocks until main() hits the channel wait).
@@ -460,6 +500,18 @@ export async function initWasmShell(config?: {
         return safeJsonParse<WasmReadFileResult>(json, { content: '', error: 'unreadable response' });
       },
 
+      readFileBytes(path: string): WasmReadFileBytesResult {
+        const api = wasm as SproutWasmAPI;
+        if (!api.readFileBytes) return { error: 'WASM binary does not expose readFileBytes' };
+        return api.readFileBytes(path);
+      },
+
+      saveImage(bytes: Uint8Array): WasmSaveImageResult {
+        const api = wasm as SproutWasmAPI;
+        if (!api.saveImage) return { error: 'WASM binary does not expose saveImage' };
+        return api.saveImage(bytes);
+      },
+
       listDir(path: string): WasmListDirResult {
         const json = wasm.listDir(path);
         // The WASM export returns a bare array of entries (JSON null for an
@@ -475,6 +527,12 @@ export async function initWasmShell(config?: {
         return wasm.deleteFile(path);
       },
 
+      getBuildInfo(): { version: string; commit: string; date: string } | null {
+        if (typeof wasm.getBuildInfo !== 'function') return null;
+        const json = wasm.getBuildInfo();
+        return safeJsonParse<{ version: string; commit: string; date: string } | null>(json, null);
+      },
+
       runAgent(
         provider: string,
         model: string,
@@ -482,12 +540,13 @@ export async function initWasmShell(config?: {
         onEvent?: (eventJson: string) => void,
         chatId?: string,
         history?: string,
+        mode?: string,
       ): Promise<{ response: string; provider: string; model: string }> {
         const api = wasm as SproutWasmAPI;
         if (!api.runAgent) {
           return Promise.reject(new Error('WASM binary does not expose runAgent'));
         }
-        return api.runAgent(provider, model, query, onEvent, chatId, history);
+        return api.runAgent(provider, model, query, onEvent, chatId, history, mode);
       },
 
       clearConversation(chatId?: string): void {

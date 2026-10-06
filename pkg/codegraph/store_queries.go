@@ -123,7 +123,6 @@ func classifyConfidence(sym Symbol) ConfidenceLevel {
 // isWASMPath returns true if the file path is in a WASM/JS-export directory.
 func isWASMPath(path string) bool {
 	return strings.HasPrefix(path, "cmd/wasm/") ||
-		strings.HasPrefix(path, "cmd/embedding-wasm/") ||
 		strings.HasPrefix(path, "cmd/model_registry_server/")
 }
 

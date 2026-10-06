@@ -331,9 +331,10 @@ func TestDesignAssetsHandler_ValidTreeInventory(t *testing.T) {
 	assert.Equal(t, 2, out.TokenGroups[0].Tokens)
 
 	require.Len(t, out.Flows, 1)
-	// The §9b-derived flow: 3 step nodes + 2 off-path screen nodes.
-	assert.Equal(t, 5, out.Flows[0].Nodes)
-	assert.Equal(t, 2, out.Flows[0].Edges)
+	// The flow source's own counts (SP-140-9 §9b): 3 walk steps + 1 step
+	// edge; the off-path nav rendering is a derived-export concept.
+	assert.Equal(t, 3, out.Flows[0].Nodes)
+	assert.Equal(t, 1, out.Flows[0].Edges)
 
 	// Findings empty, bySeverity carries every key at zero.
 	assert.Empty(t, out.Findings)

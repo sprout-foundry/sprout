@@ -25,11 +25,11 @@ import (
 
 // SecurityCautionLabel is the bracketed label rendered in security caution
 // messages. CLI-B-2 extraction.
-const SecurityCautionLabel = "⚠️  SECURITY CAUTION"
+const SecurityCautionLabel = "SECURITY CAUTION"
 
 // SecurityLoopLabel is the bracketed label rendered in security loop
 // messages. CLI-B-2 extraction.
-const SecurityLoopLabel = "🛑 SECURITY LOOP"
+const SecurityLoopLabel = "SECURITY LOOP"
 
 // VerbosePreviewWidth is the argument-preview truncation width in verbose
 // mode. In verbose mode the width is bumped so power users see more of
@@ -61,6 +61,13 @@ type TerminalSubscriberState struct {
 	// when a tool fires before any prose (query_started → ToolStart with
 	// no StreamChunk in between).
 	thinkingActive bool
+	// toolsInFlight maps a running tool's call id to its spinner label.
+	// Tools the model calls in parallel share the one spinner row; see
+	// startToolSpinner.
+	toolsInFlight map[string]string
+	// spinnerUnderEndLine is set when the spinner was resumed directly
+	// below an end line instead of after a blank row.
+	spinnerUnderEndLine bool
 }
 
 // IsCompact reports whether the subscriber should suppress tool chrome
@@ -164,6 +171,7 @@ func NewTerminalSubscriberState(configMgr *configuration.Manager, chatAgent *age
 	return &TerminalSubscriberState{
 		seenSpawn:        make(map[string]bool),
 		pendingArgs:      make(map[string]string),
+		toolsInFlight:    make(map[string]string),
 		subagentProgress: make(map[string]SubagentProgressSnapshot),
 		configMgr:        configMgr,
 		chatAgent:        chatAgent,
@@ -270,16 +278,6 @@ func (s *TerminalSubscriberState) HandleToolStartEvent(data map[string]interface
 			fmt.Fprintln(os.Stderr, FormatSpawnLine(chatAgent, depth, persona, ctxMax, taskDesc))
 		}
 	}
-	// Ensure the spinner lands on a fresh line so it never
-	// overwrites partial streamed text. Stdout for parity
-	// with how stream chunks were just printed.
-	s.flushExternalWrite()
-	console.LockOutput()
-	fmt.Fprintln(os.Stdout)
-	console.UnlockOutput()
-	// Notify the renderer that an external write consumed
-	// one terminal row so physicalLines stays in sync.
-	// Note: External callers must handle currentTurnRenderer themselves.
 	s.progressMu.Lock()
 	snap, hasSnap := s.subagentProgress[persona]
 	s.progressMu.Unlock()
@@ -287,7 +285,59 @@ func (s *TerminalSubscriberState) HandleToolStartEvent(data map[string]interface
 	if hasSnap && depth > 0 {
 		ctxSuffix = FormatSubagentCtxSuffix(snap)
 	}
-	indicator.Start(FormatToolStartLine(depth, persona, name, FormatToolPreview(chatAgent, name, args, s.VerboseMaxArgLen())) + ctxSuffix)
+	label := FormatToolStartLine(depth, persona, name, FormatToolPreview(chatAgent, name, args, s.VerboseMaxArgLen())) + ctxSuffix
+
+	// A parallel call joins the spinner that is already running rather
+	// than opening a row of its own: the end line of whichever tool
+	// finishes first replaces the spinner's row, so any earlier row would
+	// be stranded with its first frame.
+	parallel := len(s.toolsInFlight) > 0 && indicator.IsActive()
+	s.toolsInFlight[toolInFlightKey(data, name)] = label
+	if parallel {
+		indicator.Start(label)
+		return
+	}
+	s.startToolSpinner(indicator, label)
+}
+
+// startToolSpinner starts the tool spinner on a fresh line so it never
+// overwrites partial streamed text (stdout, for parity with how stream
+// chunks were just printed), leaving a blank row above the spinner.
+func (s *TerminalSubscriberState) startToolSpinner(indicator *console.ActivityIndicator, label string) {
+	s.flushExternalWrite()
+	console.LockOutput()
+	_, _ = fmt.Fprintln(os.Stdout)
+	console.UnlockOutput()
+	s.spinnerUnderEndLine = false
+	indicator.Start(label)
+}
+
+// resumeToolSpinner puts the spinner back for tools still running after
+// one of a parallel batch finished. The end line left the cursor on a
+// fresh row, so the spinner goes there directly — no blank row between.
+func (s *TerminalSubscriberState) resumeToolSpinner(indicator *console.ActivityIndicator) {
+	for _, label := range s.toolsInFlight {
+		s.spinnerUnderEndLine = true
+		indicator.Start(label)
+		return
+	}
+}
+
+// rowsAboveSpinnerToPreviousEnd is how far ReplaceLastN must walk up from
+// the spinner to reach the previous end line: past the blank row a fresh
+// spinner leaves, or straight to it for a resumed one.
+func (s *TerminalSubscriberState) rowsAboveSpinnerToPreviousEnd() int {
+	if s.spinnerUnderEndLine {
+		return 1
+	}
+	return 2
+}
+
+func toolInFlightKey(data map[string]interface{}, name string) string {
+	if id, _ := data["tool_call_id"].(string); id != "" {
+		return id
+	}
+	return name
 }
 
 // HandleToolEndEvent processes a ToolEnd event.
@@ -304,6 +354,7 @@ func (s *TerminalSubscriberState) HandleToolEndEvent(data map[string]interface{}
 		// No spinner was started; emit no result chrome.
 		return
 	}
+	delete(s.toolsInFlight, toolInFlightKey(data, name))
 	status, _ := data["status"].(string)
 	var durationMs int64
 	switch v := data["duration_ms"].(type) {
@@ -389,20 +440,20 @@ func (s *TerminalSubscriberState) HandleToolEndEvent(data map[string]interface{}
 			s.run.Depth, s.run.Persona, s.run.LastIcon, s.run.Name,
 			s.run.Count, s.run.ArgsTrail,
 			float64(s.run.TotalMs)/1000.0,
-		)+resultSuffix, 2)
+		)+resultSuffix, s.rowsAboveSpinnerToPreviousEnd())
 	} else {
 		indicator.Replace(FormatToolEndLine(depth, persona, icon, name,
 			preview, float64(durationMs)/1000.0) + resultSuffix)
 		s.run = &ToolRunState{
-			Name:      name,
-			Depth:     depth,
-			Persona:   persona,
-			Count:     1,
-			ArgsTrail: []string{preview},
-			TotalMs:   durationMs,
-			LastIcon:  icon,
-			LastEnd:   now,
+			Name:     name,
+			Depth:    depth,
+			Persona:  persona,
+			Count:    1,
+			TotalMs:  durationMs,
+			LastIcon: icon,
+			LastEnd:  now,
 		}
+		s.run.AppendArg(preview)
 	}
 	footer.Refresh()
 
@@ -410,5 +461,8 @@ func (s *TerminalSubscriberState) HandleToolEndEvent(data map[string]interface{}
 	// Compact mode already showed just the diffstat and returned early.
 	if status == "completed" && args != "" {
 		s.MaybeDisplayEditDiff(name, args)
+	}
+	if len(s.toolsInFlight) > 0 {
+		s.resumeToolSpinner(indicator)
 	}
 }

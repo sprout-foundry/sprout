@@ -9,39 +9,17 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
-// diff_context.go — heuristic diff analysis shared by the CLI review command
-// (pkg/agent_commands) and the WebUI deep-review endpoints (pkg/webui).
-// Everything here is workspace-aware: callers pass the workspace root so the
-// same code serves the CLI (cwd) and the WebUI (per-client root).
+// diff_context.go — heuristic diff analysis for the WebUI deep-review
+// endpoints (pkg/webui). The CLI's single-call review uses the richer
+// staged_context.go (StagedContext); DetectProjectType and CategorizeChanges
+// live there — this file keeps the webui-shaped helpers that have no
+// staged_context counterpart.
 
 // maxContextFileBytes bounds the per-file read in ExtractFileContext. The
 // WebUI enforced its own 10 MiB limit before this consolidation; the CLI had
 // none (a pathologically large staged file was read whole). The shared bound
 // applies to both.
 const maxContextFileBytes = 10 << 20
-
-// DetectProjectType returns a human label for the project under workspaceRoot
-// based on its build/manifest files, or "" when no marker matches.
-func DetectProjectType(workspaceRoot string) string {
-	projectMarkers := []struct {
-		name string
-		file string
-	}{
-		{name: "Go project", file: "go.mod"},
-		{name: "Node.js project", file: "package.json"},
-		{name: "Python project", file: "requirements.txt"},
-		{name: "Python project", file: "setup.py"},
-		{name: "Python project", file: "pyproject.toml"},
-		{name: "Rust project", file: "Cargo.toml"},
-		{name: "Ruby project", file: "Gemfile"},
-	}
-	for _, marker := range projectMarkers {
-		if _, err := os.Stat(filepath.Join(workspaceRoot, marker.file)); err == nil {
-			return marker.name
-		}
-	}
-	return ""
-}
 
 // ExtractKeyCommentsFromDiff scans added diff lines for comments ("//" or
 // "#") judged important by IsImportantComment and returns up to 10 of them,
@@ -75,57 +53,6 @@ func ExtractKeyCommentsFromDiff(diff string) string {
 		keyComments = keyComments[:10]
 	}
 	return strings.Join(keyComments, "\n")
-}
-
-// CategorizeChanges buckets added/removed diff lines into coarse change
-// categories (security, error handling, dependencies, tests, removals) and
-// returns a bullet list. "" when nothing matched.
-func CategorizeChanges(diff string) string {
-	lines := strings.Split(diff, "\n")
-	categories := make(map[string]int)
-
-	for _, line := range lines {
-		if strings.HasPrefix(line, "diff --git") || strings.HasPrefix(line, "index") {
-			continue
-		}
-
-		if strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++") {
-			addedLine := strings.TrimPrefix(line, "+")
-			if strings.Contains(strings.ToUpper(addedLine), "SECURITY") ||
-				strings.Contains(addedLine, "filesystem.ErrOutsideWorkingDirectory") ||
-				strings.Contains(addedLine, "WithSecurityBypass") {
-				categories["Security fixes/improvements"]++
-			}
-			if strings.Contains(addedLine, "error") ||
-				strings.Contains(addedLine, "Err") ||
-				strings.Contains(addedLine, "return nil") ||
-				strings.Contains(addedLine, "if err") {
-				categories["Error handling"]++
-			}
-			if strings.Contains(addedLine, "require(") ||
-				strings.Contains(addedLine, "github.com/") ||
-				strings.Contains(addedLine, "go.mod") {
-				categories["Dependency updates"]++
-			}
-			if strings.Contains(addedLine, "Test") || strings.Contains(addedLine, "test") {
-				categories["Test changes"]++
-			}
-		}
-
-		if strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---") {
-			categories["Code removal/refactoring"]++
-		}
-	}
-
-	if len(categories) == 0 {
-		return ""
-	}
-
-	linesOut := make([]string, 0, len(categories))
-	for category, count := range categories {
-		linesOut = append(linesOut, fmt.Sprintf("- %s (%d changes)", category, count))
-	}
-	return strings.Join(linesOut, "\n")
 }
 
 // ExtractFileContextForChanges returns up to the first 500 lines of each

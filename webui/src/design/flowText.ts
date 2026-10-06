@@ -124,6 +124,57 @@ export function splitFlowOperators(line: string): { segments: string[]; operator
 }
 
 /** Extract the leading node id from a node reference segment. */
+/**
+ * The flow canvas's text for one inventory flow entry: a legacy .mmd passes
+ * through; a flow source .json is converted to equivalent mermaid text (the
+ * walk's screen edges, step ids as node ids, triggers as labels) so the
+ * canvas keeps one render path (SP-140-9 §9b: the .json is the source).
+ */
+export function flowCanvasText(path: string, text: string): string {
+  if (!path.endsWith('.json')) return text;
+  let src: { name?: unknown; steps?: unknown };
+  try {
+    src = JSON.parse(text) as { name?: unknown; steps?: unknown };
+  } catch {
+    return '';
+  }
+  if (!Array.isArray(src.steps)) return '';
+  const steps: Array<{ id: string; label?: string; screen?: string; trigger?: string; next?: string }> = [];
+  for (const raw of src.steps) {
+    if (typeof raw !== 'object' || raw === null) return '';
+    const step = raw as Record<string, unknown>;
+    if (typeof step.id !== 'string' || step.id === '') return '';
+    steps.push({
+      id: step.id,
+      label: typeof step.label === 'string' ? step.label : undefined,
+      screen: typeof step.screen === 'string' ? step.screen : undefined,
+      trigger: typeof step.trigger === 'string' ? step.trigger : undefined,
+      next: typeof step.next === 'string' ? step.next : undefined,
+    });
+  }
+  const byID = new Map(steps.map((s) => [s.id, s]));
+  const node = (s: { id: string; label?: string; screen?: string }): string => {
+    const id = s.screen ?? s.id;
+    const label = s.label ?? id;
+    return `${id}[${label.replace(/[\[\]"|]/g, '')}]`;
+  };
+  const lines = ['flowchart TD'];
+  const declared = new Set<string>();
+  for (const s of steps) {
+    if (!declared.has(s.id)) {
+      lines.push(`  ${node(s)}`);
+      declared.add(s.id);
+    }
+    if (!s.next) continue;
+    const next = byID.get(s.next);
+    if (!next) continue;
+    const label = s.trigger ? `|-- ${s.trigger.replace(/["|]/g, '')} --|` : '';
+    lines.push(`  ${s.screen ?? s.id} ${label} --> ${node(next)}`);
+    declared.add(next.id);
+  }
+  return lines.join('\n');
+}
+
 export function parseFlowNodeId(segment: string): string {
   return LEADING_ID.exec(segment.trim())?.[0] ?? '';
 }

@@ -46,3 +46,13 @@ describe('managed model context window', () => {
     expect(size).toBeGreaterThanOrEqual(132_000);
   });
 });
+
+describe('managed model image support', () => {
+  it('declares image support unless the platform says otherwise', async () => {
+    expect(platformProviderConfig('https://app.test', undefined).supports_vision).toBe(true);
+
+    vi.stubGlobal('fetch', modelsResponse({ data: [{ id: 'managed', supports_vision: false }] }));
+    await loadManagedContextWindow('https://app.test');
+    expect(platformProviderConfig('https://app.test', undefined).supports_vision).toBe(false);
+  });
+});

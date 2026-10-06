@@ -134,9 +134,6 @@ func TestProcessQueryAsThreadsSourceToGuard(t *testing.T) {
 
 	a := &Agent{
 		configManager: configManager,
-		contextProfile: configuration.ContextProfile{
-			SkipProactiveContext: true,
-		},
 		workspaceRoot: t.TempDir(),
 	}
 

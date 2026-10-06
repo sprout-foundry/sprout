@@ -60,7 +60,7 @@ func screenStemFromRoute(route string) string {
 
 // SlugMatches reports whether a name satisfies the shared slug rule
 // (SlugPattern, SP-140-1). It is exported so the sync handler/tests can assert
-// a proposed stem is a legal wireframe name without duplicating the regexp.
+// a proposed stem is a legal screen name without duplicating the regexp.
 func SlugMatches(name string) bool {
 	ok, err := regexp.MatchString(SlugPattern, name)
 	return err == nil && ok
@@ -68,14 +68,14 @@ func SlugMatches(name string) bool {
 
 // deliveredScreen returns the design/screens/<stem>.html path when a hi-fi
 // screen has already been delivered for a stem, "" otherwise. It is the
-// structural pass's "is the design tree already ahead here?" check: when a
-// screen exists but no wireframe does, the proposal is to backfill the
-// wireframe, and the delta names the delivered screen as adoption context.
+// structural pass's "is the design tree already ahead here?" check: when the
+// screen exists, a route delta is a no-op (the screen is the artifact), and
+// only the flow edge may still be proposed.
 func deliveredScreen(tree syncTree, stem string) string {
 	if stem == "" {
 		return ""
 	}
-	target := path.Join(DirName, "screens", stem+".html")
+	target := path.Join(DirName, ScreenSubdir, stem+".html")
 	for _, f := range tree.screenFiles {
 		if f == target {
 			return f
@@ -85,7 +85,7 @@ func deliveredScreen(tree syncTree, stem string) string {
 }
 
 // analyzeStructural detects structural deltas in one touched file: a new
-// route/screen in a router file, and nav targets whose wireframe counterpart
+// route/screen in a router file, and nav targets whose screen counterpart
 // is missing.
 func analyzeStructural(f SyncFileInput, tree syncTree) []SyncDelta {
 	content := string(f.Content)
@@ -100,83 +100,75 @@ func analyzeStructural(f SyncFileInput, tree syncTree) []SyncDelta {
 				continue
 			}
 			component := firstComponentName(block)
-			if tree.wireframeStems[stem] {
-				// The wireframe exists; the only structural question is the
-				// nav edge, which the nav pass below covers. Skip.
+			if tree.screenStems[stem] || tree.wireframeStems[stem] {
+				// The screen exists (or its pre-migration wireframe does —
+				// the deprecation validator owns that nag); the only
+				// structural question is the flow edge, covered below. Skip.
 				continue
 			}
 			line := strings.Count(content[:m[0]], "\n") + 1
-			wireframePath := path.Join(DirName, "wireframes", stem+".svg")
-			designFiles := []string{wireframePath}
-			what := fmt.Sprintf("new route %q%s with no wireframe", route, componentSuffix(component))
-			if screen := deliveredScreen(tree, stem); screen != "" {
-				// The semantic layer is partly ahead: a hi-fi screen is
-				// already delivered, so the proposal is to backfill the
-				// wireframe the screen implies. The delivered screen is part
-				// of the delta's design-file read set.
-				designFiles = append(designFiles, screen)
-				what = fmt.Sprintf("new route %q%s has a delivered screen %s but no wireframe",
-					route, componentSuffix(component), screen)
-			}
-			d := SyncDelta{
-				Delta:         fmt.Sprintf("%s; propose %s", what, wireframePath),
-				Kind:          DeltaKindWireframe,
-				Basis:         DeltaBasisStructural,
-				Confidence:    ConfidenceMedium,
-				DesignFiles:   designFiles,
-				SafeToApply:   true,
-				WireframeStem: stem,
-				Status:        FlowDraftStatus,
-				CodeFiles:     []string{f.Path},
-				Evidence:      fmt.Sprintf("%s (line %d)", strings.TrimSpace(route), line),
-			}
-			deltas = append(deltas, d)
+			screenPath := ScreenRelPath(stem)
+			deltas = append(deltas, SyncDelta{
+				Delta: fmt.Sprintf("new route %q%s with no screen; propose %s",
+					route, componentSuffix(component), screenPath),
+				Kind:        DeltaKindScreen,
+				Basis:       DeltaBasisStructural,
+				Confidence:  ConfidenceMedium,
+				DesignFiles: []string{screenPath},
+				SafeToApply: true,
+				ScreenStem:  stem,
+				Status:      FlowDraftStatus,
+				CodeFiles:   []string{f.Path},
+				Evidence:    fmt.Sprintf("%s (line %d)", strings.TrimSpace(route), line),
+			})
 
-			// The flow edge that gets the screen into the graph. The source
+			// The flow step that gets the screen into the graph. The source
 			// is the route's parent segment when there is one, else the
-			// screen is an entry point and the edge is proposed into the
-			// first existing flow file (or a new one when none exists).
+			// screen is an entry point and the step is proposed into the
+			// first existing flow source (or a new one when none exists).
 			edge, flowFile := proposeFlowEdge(stem, tree)
 			if edge != "" {
 				deltas = append(deltas, SyncDelta{
 					Delta: fmt.Sprintf("new screen %q is not in any flow; propose edge %q in %s",
 						stem, edge, flowFile),
-					Kind:          DeltaKindFlow,
-					Basis:         DeltaBasisStructural,
-					Confidence:    ConfidenceMedium,
-					DesignFiles:   []string{flowFile},
-					SafeToApply:   true,
-					WireframeStem: stem,
-					FlowEdge:      edge,
-					FlowFile:      flowFile,
-					Status:        FlowDraftStatus,
-					CodeFiles:     []string{f.Path},
-					Evidence:      fmt.Sprintf("route %q", route),
+					Kind:        DeltaKindFlow,
+					Basis:       DeltaBasisStructural,
+					Confidence:  ConfidenceMedium,
+					DesignFiles: []string{flowFile},
+					SafeToApply: true,
+					ScreenStem:  stem,
+					FlowEdge:    edge,
+					FlowFile:    flowFile,
+					Status:      FlowDraftStatus,
+					CodeFiles:   []string{f.Path},
+					Evidence:    fmt.Sprintf("route %q", route),
 				})
 			}
 		}
 	}
 
 	// Nav targets: `data-nav="login"` or `to="/login"` values that name a
-	// screen whose wireframe is missing.
+	// screen whose primary artifact is missing. A legacy wireframe with the
+	// stem also suppresses the proposal — the screen concept exists and the
+	// deprecation validator owns the conversion nag.
 	for _, target := range navTargets(content) {
 		stem := screenStemFromRoute("/" + strings.Trim(target, "/"))
-		if stem == "" || tree.wireframeStems[stem] {
+		if stem == "" || tree.screenStems[stem] || tree.wireframeStems[stem] {
 			continue
 		}
-		wireframePath := path.Join(DirName, "wireframes", stem+".svg")
+		screenPath := ScreenRelPath(stem)
 		deltas = append(deltas, SyncDelta{
-			Delta: fmt.Sprintf("nav target %q has no wireframe; propose %s",
-				target, wireframePath),
-			Kind:          DeltaKindWireframe,
-			Basis:         DeltaBasisStructural,
-			Confidence:    ConfidenceMedium,
-			DesignFiles:   []string{wireframePath},
-			SafeToApply:   true,
-			WireframeStem: stem,
-			Status:        FlowDraftStatus,
-			CodeFiles:     []string{f.Path},
-			Evidence:      target,
+			Delta: fmt.Sprintf("nav target %q has no screen; propose %s",
+				target, screenPath),
+			Kind:        DeltaKindScreen,
+			Basis:       DeltaBasisStructural,
+			Confidence:  ConfidenceMedium,
+			DesignFiles: []string{screenPath},
+			SafeToApply: true,
+			ScreenStem:  stem,
+			Status:      FlowDraftStatus,
+			CodeFiles:   []string{f.Path},
+			Evidence:    target,
 		})
 	}
 	return deltas
@@ -231,16 +223,18 @@ func navTargets(content string) []string {
 // proposeFlowEdge proposes a flow edge for a newly detected screen. The source
 // is derived from the screen's name when it has a parent segment
 // ("settings-profile" → settings → profile); otherwise the edge is proposed
-// from an existing wireframe that links to it (the code's nav targets), and
-// failing that from the first existing wireframe stem so the graph stays
-// connected. It returns ("", "") when no edge can be proposed (no wireframes
-// and no flow file to host it).
+// from an existing screen that links to it (the code's nav targets), and
+// failing that from the first existing screen stem so the graph stays
+// connected. The proposal targets the flow SOURCE document
+// (design/flows/<name>.json) — the derived .mmd is regenerated from it, never
+// hand-written. It returns ("", "") when no edge can be proposed (no screens
+// and no flow source to host it).
 func proposeFlowEdge(stem string, tree syncTree) (edge, flowFile string) {
 	flowFile = ""
 	if len(tree.flowFiles) > 0 {
 		flowFile = tree.flowFiles[0]
 	} else {
-		flowFile = path.Join(DirName, FlowSubdir, stem+".mmd")
+		flowFile = FlowSourceRelPath(stem)
 	}
 
 	target := stem
@@ -248,14 +242,14 @@ func proposeFlowEdge(stem string, tree syncTree) (edge, flowFile string) {
 	// Prefer an explicit parent segment in a compound stem.
 	if i := strings.LastIndex(stem, "-"); i > 0 {
 		candidate := stem[:i]
-		if tree.wireframeStems[candidate] {
+		if tree.screenStems[candidate] {
 			source = candidate
 		}
 	}
 	if source == "" {
-		// Fall back to any existing wireframe (sorted, for determinism).
-		stems := make([]string, 0, len(tree.wireframeStems))
-		for s := range tree.wireframeStems {
+		// Fall back to any existing screen (sorted, for determinism).
+		stems := make([]string, 0, len(tree.screenStems))
+		for s := range tree.screenStems {
 			stems = append(stems, s)
 		}
 		sort.Strings(stems)

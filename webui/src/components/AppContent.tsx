@@ -32,7 +32,6 @@ import { useLog } from '../utils/log';
 import { extractSymbols } from '../utils/symbolUtils';
 import type { WorkspaceModeId } from '../workspaces/registry';
 import type { WorkspaceShellProps } from '../workspaces/shell';
-import { useChatModePinning } from '../workspaces/useChatModePinning';
 import { useDesignSectionPersistence } from '../workspaces/useDesignSectionPersistence';
 import { useWorkspaceMode } from '../workspaces/useWorkspaceMode';
 import CommandPalette, { type PaletteMode } from './CommandPalette';
@@ -424,45 +423,12 @@ const AppContent: React.FC<AppContentProps> = ({
     select: selectWorkspaceMode,
   } = useWorkspaceMode({ hasDesignTree });
 
-  // Per-mode chat pinning. A mode switch restores that mode's own
-  // conversation (Design with no pin starts a fresh chat, never a Code
-  // session); pins are recorded as sessions become active in the mode.
-  // onFreshSession passes ONLY the create: creating a chat does not move the
-  // active chat, so the hook's restoreFreshSession performs the switch itself
-  // (create → switch → pin) — pinning without switching would let the first
-  // send re-pin the still-active Code session into the design pin.
-  // SP-142: creates and switches carry the lane so the server stamps it and
-  // rejects cross-mode switches (mode_mismatch). Only code/design are lane
-  // modes today; a future mode id maps to the code lane until it earns one.
+  // One conversation per project (SP-147): the chat list is unfiltered —
+  // design and code chats are stages of the same project conversation
+  // history, and the mode shapes the agent, not the session list. Creates
+  // still carry the lane for the server's mode stamp; a mode switch keeps
+  // the active chat (no per-mode pins, no boot-time fresh design chat).
   const chatLane: 'code' | 'design' = workspaceMode.id === 'design' ? 'design' : 'code';
-  const laneChatSessions = useMemo(
-    () => (chatSessions ?? []).filter((c) => (c.mode === 'design' ? 'design' : 'code') === chatLane),
-    [chatSessions, chatLane],
-  );
-  const chatModePinning = useChatModePinning({
-    mode: workspaceMode.id,
-    activeChatId,
-    onSwitchSession: (sessionId) => onActiveChatChange?.(sessionId, chatLane),
-    onFreshSession: () => onCreateChat?.(chatLane),
-  });
-  const { switchSession: pinSwitchSession, recordSend: pinRecordSend } = chatModePinning;
-
-  // Pin-recording wrappers: record the mode's pin at the moments a session
-  // becomes active (explicit switch / message send), then delegate to the
-  // existing chat handlers.
-  const sendWithModePin = useCallback(
-    (message: string) => {
-      pinRecordSend();
-      onSendMessage(message);
-    },
-    [pinRecordSend, onSendMessage],
-  );
-  const switchSessionWithModePin = useCallback(
-    (id: string) => {
-      pinSwitchSession(id);
-    },
-    [pinSwitchSession],
-  );
 
   useChatSessionsSync({
     chatSessions,
@@ -478,7 +444,7 @@ const AppContent: React.FC<AppContentProps> = ({
   // Tab-driven switches (clicking a chat tab) must record the
   // mode pin too — the raw handler would switch without recording, leaving
   // the pin pointing at the previous session.
-  useActiveChatTab({ activeBufferId, buffersRef, activeChatId, onActiveChatChange: switchSessionWithModePin });
+  useActiveChatTab({ activeBufferId, buffersRef, activeChatId, onActiveChatChange });
 
   const handlePrimaryViewChange = useCallback(
     (view: ViewType) => {
@@ -508,6 +474,9 @@ const AppContent: React.FC<AppContentProps> = ({
   // chat tab — or open one bound to it — exactly as clicking the tab would,
   // then switch chat state. The focused chat tab drives the active chat
   // (useActiveChatTab), so opening a generic chat tab would switch it back.
+  // The chat's own mode rides the switch (SP-147: one conversation per
+  // project — the list is not lane-filtered, and the server's lane backstop
+  // keys on the chat's mode, so a design chat must not be opened as code).
   const openConversation = useCallback(
     (id: string, title?: string) => {
       const existing = Array.from(buffersRef.current?.values() ?? []).find(
@@ -525,7 +494,8 @@ const AppContent: React.FC<AppContentProps> = ({
           metadata: { chatId: id },
         });
       }
-      const switched = Promise.resolve(onActiveChatChange?.(id, 'code'));
+      const chatMode = chatSessions?.find((c) => c.id === id)?.mode;
+      const switched = Promise.resolve(onActiveChatChange?.(id, chatMode === 'design' ? 'design' : 'code'));
       onViewChange('chat');
       // A phone keyboard would cover the conversation being opened.
       if (!isMobile) void switched.finally(() => requestComposerFocus(id));
@@ -1006,7 +976,7 @@ const AppContent: React.FC<AppContentProps> = ({
   const chatProps = useMemo(
     () => ({
       messages: state.messages,
-      onSendMessage: sendWithModePin,
+      onSendMessage,
       onQueueMessage,
       onQueueMessageRemove: chatQueue.remove,
       onQueueMessageEdit: chatQueue.edit,
@@ -1050,7 +1020,7 @@ const AppContent: React.FC<AppContentProps> = ({
     }),
     [
       state.messages,
-      sendWithModePin,
+      onSendMessage,
       onQueueMessage,
       chatQueue,
       inputValue,
@@ -1148,7 +1118,7 @@ const AppContent: React.FC<AppContentProps> = ({
       perChatCache,
       activeChatId,
       chatSessions,
-      onActiveChatChange: switchSessionWithModePin,
+      onActiveChatChange,
       // New Chat stamps the lane it was created in (SP-142): EditorTabs
       // invokes this with no args, so the current mode is bound here.
       onCreateChat: onCreateChat ? () => onCreateChat(chatLane) : undefined,
@@ -1223,7 +1193,7 @@ const AppContent: React.FC<AppContentProps> = ({
             onSidebarToggle={onSidebarToggle}
             conversations={{
               // The mode's own lane, like its chat tabs (SP-142).
-              sessions: laneChatSessions,
+              sessions: chatSessions ?? [],
               activeId: activeChatId,
               // The chat list is only refetched on switch, so its
               // active_query goes stale; the per-chat UI state is live.

@@ -55,14 +55,12 @@ func extractSubagentSummary(stdout string) map[string]string {
 			// Extract file operations (fast ASCII checks)
 			switch firstChar {
 			case 'C', 'c':
-				if strings.HasPrefix(trimmedLine, "Created:") || strings.HasPrefix(trimmedLine, "Wrote") {
-					file := strings.TrimSpace(trimmedLine[8:])
-					if strings.HasPrefix(trimmedLine, "Created:") {
-						file = strings.TrimSpace(trimmedLine[8:])
-					} else if strings.HasPrefix(trimmedLine, "Wrote") {
-						file = strings.TrimSpace(trimmedLine[6:])
-					}
-					fileChanges = append(fileChanges, "Created: "+file)
+				if file, ok := strings.CutPrefix(trimmedLine, "Created:"); ok {
+					fileChanges = append(fileChanges, "Created: "+strings.TrimSpace(file))
+				}
+			case 'W', 'w':
+				if file, ok := strings.CutPrefix(trimmedLine, "Wrote"); ok && strings.TrimSpace(file) != "" {
+					fileChanges = append(fileChanges, "Created: "+strings.TrimSpace(file))
 				}
 			case 'M', 'm':
 				if strings.HasPrefix(trimmedLine, "Modified:") {

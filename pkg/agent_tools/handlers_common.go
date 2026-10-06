@@ -85,3 +85,14 @@ func getBoolArg(args map[string]any, key string) bool {
 func estimateTokenUsage(s string) int {
 	return len(s) / 4
 }
+
+// truncateRunes shortens s to at most max runes, appending an ellipsis when
+// truncation happened. It counts runes rather than bytes so multi-byte
+// characters are never split mid-sequence (which would emit invalid UTF-8).
+func truncateRunes(s string, max int) string {
+	runes := []rune(s)
+	if len(runes) <= max {
+		return s
+	}
+	return string(runes[:max]) + "..."
+}

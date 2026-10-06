@@ -17,8 +17,8 @@ import type { GitHubUser } from '../services/githubService';
 import type { AgentConfigProps } from './settings/types';
 import type { UIScale } from '../hooks/useUIScale';
 
-// SettingsPanel pulls in CredentialsSettingsTab, ProviderSettingsTab,
-// onnxEmbeddingProvider, and a few other heavy dependencies. It only
+// SettingsPanel pulls in CredentialsSettingsTab, ProviderSettingsTab, and a
+// few other heavy dependencies. It only
 // renders when the sidebar settings section is open, so split it into
 // its own chunk; the bundle no longer pays for it on initial load.
 const SettingsPanel = lazy(() => import('./SettingsPanel'));

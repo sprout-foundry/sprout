@@ -59,6 +59,7 @@ func readInput() (string, error) {
 
 // readIntInput reads an integer from stdin with validation
 func readIntInput(prompt string, min int, max int) (int, error) {
+	fmt.Print(prompt)
 	input, err := readInput()
 	if err != nil {
 		return 0, fmt.Errorf("failed to read input: %w", err)
@@ -165,7 +166,7 @@ func Initialize() (*Config, *APIKeys, error) {
 			// Don't save test provider as default - it's for testing only
 			// Leave LastUsedProvider empty and let callers handle the test provider
 			console.GlyphSuccess.Fprintln(os.Stdout, "No real provider available; using test provider for CI")
-			console.GlyphWarning.Fprintln(os.Stdout, "Please configure a real provider (OPENROUTER_API_KEY or OPENAI_API_KEY)")
+			console.GlyphWarning.Fprintln(os.Stdout, "Please configure a real provider: run 'sprout keys set <provider>' or export its API key")
 		}
 
 		if err := config.Save(); err != nil {
@@ -449,8 +450,8 @@ func ShowNextSteps(provider, configDir string) {
 		fmt.Println("You're in editor-only mode. AI-powered features are not available.")
 		fmt.Println()
 		fmt.Println("To enable AI features:")
-		fmt.Println("  • Run 'sprout agent -d' to launch the webui and configure providers")
-		fmt.Println("  • Or set the SPROUT_PROVIDER environment variable (SPROUT_PROVIDER also supported)")
+		fmt.Println("  • Run 'sprout keys set <provider>' to add an API key")
+		fmt.Println("  • Or run 'sprout agent -d' and add a provider in the web UI's settings")
 		fmt.Println()
 		return
 	}

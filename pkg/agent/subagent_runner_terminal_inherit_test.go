@@ -13,7 +13,7 @@ import (
 // failed shell_command background=true / check_background / stop_background
 // because no TerminalManager or BackgroundProcessManager was attached, even
 // when the root agent had a TerminalManager. The Agent struct construction
-// in createSubagent was propagating todoMgr / eventBus / embeddingMgr from
+// in createSubagent was propagating todoMgr / eventBus from
 // the parent but missing terminalManager.
 func TestSubagentRunner_InheritsTerminalManagerFromParent(t *testing.T) {
 	parent := newIsolatedTestAgent(t)

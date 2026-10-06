@@ -32,8 +32,9 @@ const OrchestratorSubagentTimeout = time.Hour
 
 // ResolveSubagentTimeout returns the effective execution timeout for a
 // subagent run: an explicit caller-set timeout always wins; otherwise the
-// orchestrator persona (by canonical ID or alias) gets a full hour and every
-// other persona gets the 30-minute default. Alias resolution goes through
+// orchestrator persona (by canonical ID or alias) gets a full hour, a persona
+// with a time budget gets that budget plus the wrap-up grace, and every other
+// persona gets the 30-minute default. Alias resolution goes through
 // the config catalog so it stays in sync with the persona definitions.
 //
 // Automation workflows can raise both defaults via
@@ -49,19 +50,36 @@ func ResolveSubagentTimeout(cm *configuration.Manager, opts SubagentOptions) tim
 	if opts.Timeout > 0 {
 		return opts.Timeout
 	}
-	if t := EnvSubagentTimeout(); t > 0 {
-		if IsOrchestratorPersona(cm, opts.Persona) {
-			if t > OrchestratorSubagentTimeout {
-				return t
-			}
-		} else if t > DefaultSubagentTimeout {
-			return t
-		}
-	}
+	base := DefaultSubagentTimeout
 	if IsOrchestratorPersona(cm, opts.Persona) {
-		return OrchestratorSubagentTimeout
+		base = OrchestratorSubagentTimeout
 	}
-	return DefaultSubagentTimeout
+	if b := personaTimeBudget(cm, opts.Persona); b > 0 {
+		base = b + wrapUpGrace
+	}
+	if t := EnvSubagentTimeout(); t > base {
+		return t
+	}
+	return base
+}
+
+// wrapUpGrace is added to a persona's time budget when that budget is the
+// binding timeout, giving the subagent room to summarize and write its final
+// output after the budget expires.
+const wrapUpGrace = 3 * time.Minute
+
+// personaTimeBudget returns the configured time budget for a persona, or 0
+// when the persona or its budget is unset. A nil config manager (no shared
+// state) also returns 0 — the persona defaults apply instead.
+func personaTimeBudget(cm *configuration.Manager, persona string) time.Duration {
+	if persona == "" || cm == nil {
+		return 0
+	}
+	st := cm.GetConfig().GetSubagentType(persona)
+	if st == nil {
+		return 0
+	}
+	return time.Duration(st.TimeBudgetSeconds) * time.Second
 }
 
 // EnvSubagentTimeout reads SPROUT_TOOL_TIMEOUT (seconds). Returns 0 when

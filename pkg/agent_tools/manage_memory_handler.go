@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/redact"
 )
@@ -72,6 +74,27 @@ func (h *manageMemoryHandler) Validate(args map[string]any) error {
 	return nil
 }
 
+// resolveMemoryName sanitizes a memory name and rejects names that sanitize
+// to nothing. The pkg/agent sanitize helper maps an empty result to the
+// default name "untitled"; silently funneling every malformed call onto one
+// shared file is exactly the bug this guard exists for (a bare delete would
+// destroy that file with a success message), so inputs that would hit the
+// default are rejected unless the caller literally asked for "untitled".
+func resolveMemoryName(name string) (string, error) {
+	// Models frequently pass the filename with its extension (any casing).
+	trimmed := strings.TrimSpace(name)
+	if lowered := strings.ToLower(trimmed); strings.HasSuffix(lowered, ".md") {
+		trimmed = trimmed[:len(trimmed)-3]
+	}
+
+	sanitized := sanitizeMemoryName(trimmed)
+	if sanitized == "untitled" && !strings.EqualFold(strings.TrimSpace(trimmed), "untitled") {
+		return "", fmt.Errorf("memory name %q is empty after sanitization; pass a short slug (letters, digits, hyphens)", name)
+	}
+
+	return sanitized, nil
+}
+
 func (h *manageMemoryHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
 	op, _ := extractString(args, "operation")
 	op = strings.TrimSpace(strings.ToLower(op))
@@ -101,6 +124,72 @@ func (h *manageMemoryHandler) MaxResultSize() int     { return 0 }
 func (h *manageMemoryHandler) SafeForParallel() bool  { return false }
 func (h *manageMemoryHandler) Interactive() bool      { return false }
 
+const memoryDirName = "memories"
+
+// getMemoryDir returns the path to the memory directory, creating it if needed.
+// Returns "" if the config directory cannot be determined.
+func getMemoryDir() string {
+	configDir, err := configuration.GetConfigDir()
+	if err != nil {
+		return ""
+	}
+
+	memoryDir := filepath.Join(configDir, memoryDirName)
+
+	// Create directory if it doesn't exist
+	if _, err := os.Stat(memoryDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(memoryDir, 0o755); err != nil {
+			return ""
+		}
+	}
+
+	return memoryDir
+}
+
+// saveMemoryToDisk writes a memory file as <memoryDir>/<name>.md.
+func saveMemoryToDisk(sanitized, content string) (string, error) {
+	memoryDir := getMemoryDir()
+	if memoryDir == "" {
+		return "", agenterrors.NewConfig("unable to locate config directory for memories", nil)
+	}
+
+	filePath := filepath.Join(memoryDir, sanitized+".md")
+
+	err := os.WriteFile(filePath, []byte(content), 0o600)
+	if err != nil {
+		return "", agenterrors.NewTool("manage_memory", fmt.Sprintf("failed to write memory file %q: %v", sanitized, err), err)
+	}
+
+	return fmt.Sprintf("Memory '%s' saved to ~/.config/sprout/memories/%s.md. This memory will be loaded in all future conversations.", sanitized, sanitized), nil
+}
+
+// sanitizeMemoryName sanitizes a memory name for use as a filename:
+// lowercase, spaces to hyphens, and only alphanumeric/hyphen/underscore
+// characters kept, mirroring the pkg/agent copy. An input that sanitizes to
+// nothing yields the historical "untitled" default; manage_memory callers
+// must go through resolveMemoryName, which rejects that case instead of
+// letting malformed calls collapse onto one shared file.
+func sanitizeMemoryName(name string) string {
+	// Convert to lowercase
+	name = strings.ToLower(name)
+
+	// Replace spaces with hyphens
+	name = strings.ReplaceAll(name, " ", "-")
+
+	// Keep only alphanumeric, hyphens, and underscores
+	matched := regexp.MustCompile(`[^a-z0-9\-_]+`).ReplaceAllString(name, "")
+
+	// Remove leading/trailing hyphens and underscores
+	matched = strings.Trim(matched, "-_")
+
+	// Default name if empty
+	if matched == "" {
+		matched = "untitled"
+	}
+
+	return matched
+}
+
 // executeAdd handles the "add" operation.
 func (h *manageMemoryHandler) executeAdd(env ToolEnv, args map[string]any) (ToolResult, error) {
 	name, _ := extractString(args, "name")
@@ -109,7 +198,16 @@ func (h *manageMemoryHandler) executeAdd(env ToolEnv, args map[string]any) (Tool
 	// Redact secrets before persisting to memory files
 	content = redact.String(content)
 
-	sanitized := sanitizeMemoryName(name)
+	sanitized, err := resolveMemoryName(name)
+	if err != nil {
+		return ToolResult{Output: fmt.Sprintf("manage_memory add: %v", err), IsError: true}, nil
+	}
+
+	notice := ""
+	if _, statErr := os.Stat(filepath.Join(getMemoryDir(), sanitized+".md")); statErr == nil {
+		notice = " (existing memory overwritten)"
+	}
+
 	result, err := saveMemoryToDisk(sanitized, content)
 	if err != nil {
 		return ToolResult{
@@ -118,16 +216,8 @@ func (h *manageMemoryHandler) executeAdd(env ToolEnv, args map[string]any) (Tool
 		}, nil
 	}
 
-	// Embed into conversation store (best-effort) if embedding manager is available
-	if env.EmbeddingMgr != nil && env.EmbeddingMgr.IsInitialized() {
-		ctx := context.Background()
-		if convoStore, err := env.EmbeddingMgr.GetConversationStore(ctx); err == nil && convoStore != nil {
-			_ = convoStore.StoreMemory(ctx, sanitized, content)
-		}
-	}
-
 	return ToolResult{
-		Output:     result,
+		Output:     result + notice,
 		TokenUsage: int64(estimateTokenUsage(result)),
 	}, nil
 }
@@ -135,7 +225,11 @@ func (h *manageMemoryHandler) executeAdd(env ToolEnv, args map[string]any) (Tool
 // executeRead handles the "read" operation.
 func (h *manageMemoryHandler) executeRead(args map[string]any) (ToolResult, error) {
 	name, _ := extractString(args, "name")
-	sanitized := sanitizeMemoryName(name)
+
+	sanitized, err := resolveMemoryName(name)
+	if err != nil {
+		return ToolResult{Output: fmt.Sprintf("manage_memory read: %v", err), IsError: true}, nil
+	}
 
 	memoryDir := getMemoryDir()
 	if memoryDir == "" {
@@ -199,7 +293,7 @@ func (h *manageMemoryHandler) executeList() (ToolResult, error) {
 
 		preview := firstLine(string(contentBytes))
 		if len(preview) > 120 {
-			preview = preview[:117] + "..."
+			preview = truncateRunes(preview, 117)
 		}
 
 		memories = append(memories, memoryEntry{name: name, preview: preview})
@@ -233,7 +327,11 @@ func (h *manageMemoryHandler) executeList() (ToolResult, error) {
 // executeDelete handles the "delete" operation.
 func (h *manageMemoryHandler) executeDelete(args map[string]any) (ToolResult, error) {
 	name, _ := extractString(args, "name")
-	sanitized := sanitizeMemoryName(name)
+
+	sanitized, err := resolveMemoryName(name)
+	if err != nil {
+		return ToolResult{Output: fmt.Sprintf("manage_memory delete: %v", err), IsError: true}, nil
+	}
 
 	memoryDir := getMemoryDir()
 	if memoryDir == "" {
@@ -253,15 +351,13 @@ func (h *manageMemoryHandler) executeDelete(args map[string]any) (ToolResult, er
 
 	result := fmt.Sprintf("Memory '%s' deleted.", sanitized)
 
-	// Embedding removal is handled by the embedding manager's background cleanup.
-
 	return ToolResult{
 		Output:     result,
 		TokenUsage: int64(estimateTokenUsage(result)),
 	}, nil
 }
 
-// executeSearch handles the "search" operation: text matching or semantic search.
+// executeSearch handles the "search" operation: text matching over saved memories.
 func (h *manageMemoryHandler) executeSearch(env ToolEnv, args map[string]any) (ToolResult, error) {
 	query, _ := extractString(args, "query")
 
@@ -296,18 +392,6 @@ func (h *manageMemoryHandler) executeSearch(env ToolEnv, args map[string]any) (T
 		threshold = 1
 	}
 
-	// Try semantic (embedding-based) search first if the embedding manager is available.
-	if env.EmbeddingMgr != nil && env.EmbeddingMgr.IsInitialized() {
-		output, err := h.semanticSearch(env, query, topK, float32(threshold))
-		if err == nil {
-			return ToolResult{
-				Output:     output,
-				TokenUsage: int64(estimateTokenUsage(output)),
-			}, nil
-		}
-	}
-
-	// Fall back to text-based search
 	results, err := SearchMemoriesByText(query, topK, threshold)
 	if err != nil {
 		return ToolResult{
@@ -321,47 +405,4 @@ func (h *manageMemoryHandler) executeSearch(env ToolEnv, args map[string]any) (T
 		Output:     output,
 		TokenUsage: int64(estimateTokenUsage(output)),
 	}, nil
-}
-
-// semanticSearch performs semantic search using the embedding manager's ConversationStore.
-func (h *manageMemoryHandler) semanticSearch(env ToolEnv, query string, topK int, threshold float32) (string, error) {
-	ctx := context.Background()
-
-	convoStore, err := env.EmbeddingMgr.GetConversationStore(ctx)
-	if err != nil {
-		return "", agenterrors.NewAgent("manage_memory", "conversation store unavailable", err)
-	}
-	if convoStore == nil {
-		return "", agenterrors.NewAgent("manage_memory", "conversation store is nil", nil)
-	}
-
-	results, err := convoStore.QueryMemories(ctx, query, topK, threshold)
-	if err != nil {
-		return "", agenterrors.NewAgent("manage_memory", "semantic search failed", err)
-	}
-
-	if len(results) == 0 {
-		return fmt.Sprintf("No memories found matching: %q\n\nTry broadening your search or lowering the threshold (currently %.2f).", query, threshold), nil
-	}
-
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Found %d memory/memories via semantic search for: %q\n\n", len(results), query))
-
-	for i, r := range results {
-		preview := ""
-		if md, ok := r.Record.Metadata["content_preview"].(string); ok {
-			preview = md
-		}
-		if len(preview) > 120 {
-			preview = preview[:117] + "..."
-		}
-		sb.WriteString(fmt.Sprintf("#%d — **%s** (similarity: %.2f)\n", i+1, r.Record.Name, r.Similarity))
-		if preview != "" {
-			sb.WriteString(fmt.Sprintf("   Preview: %s\n", preview))
-		}
-		sb.WriteString("\n")
-	}
-
-	sb.WriteString("Use `manage_memory` with operation=\"read\" to view the full content of any memory.")
-	return sb.String(), nil
 }

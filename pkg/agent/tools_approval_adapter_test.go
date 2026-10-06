@@ -376,13 +376,11 @@ func TestToolsApprovalAdapter_SubagentNeverPromptsCLI(t *testing.T) {
 	}
 }
 
-// TestToolsApprovalAdapter_SkipPromptNeverPromptsCLI pins the headless
-// guard: with SkipPrompt=true and no injected stub, the adapter must fall
-// through to the bus (and its timeout denial), never the terminal.
-func TestToolsApprovalAdapter_SkipPromptNeverPromptsCLI(t *testing.T) {
+func newSkipPromptAdapter(t *testing.T) (*toolsApprovalAdapter, *Agent) {
+	t.Helper()
 	a := newIsolatedTestAgent(t)
 	mgrCfg, cleanup := configuration.NewTestManager(t)
-	defer cleanup()
+	t.Cleanup(cleanup)
 	a.configManager = mgrCfg
 	if err := a.configManager.UpdateConfigNoSave(func(c *configuration.Config) error {
 		c.SkipPrompt = true
@@ -390,28 +388,46 @@ func TestToolsApprovalAdapter_SkipPromptNeverPromptsCLI(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("set SkipPrompt: %v", err)
 	}
-
 	mgr := security.NewApprovalManager()
 	mgr.SetTimeout(50 * time.Millisecond)
+	return &toolsApprovalAdapter{agent: a, approvalMgr: mgr, eventBus: events.NewEventBus()}, a
+}
 
-	adapter := &toolsApprovalAdapter{
-		agent:       a,
-		approvalMgr: mgr,
-		eventBus:    events.NewEventBus(),
-	}
-
+func requestWithin(t *testing.T, adapter *toolsApprovalAdapter, limit time.Duration) tools.ApprovalResult {
+	t.Helper()
 	ch := make(chan tools.ApprovalResult, 1)
 	go func() { ch <- adapter.RequestApproval("id", "shell_command", "CAUTION", "test", nil) }()
-
 	select {
 	case result := <-ch:
-		if result.Approved {
-			t.Error("expected denial (headless: bus timeout applies the safe default)")
-		}
-		if result.Reason != "timed_out" {
-			t.Errorf("expected Reason=%q, got %q", "timed_out", result.Reason)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("headless request blocked past the approval timeout")
+		return result
+	case <-time.After(limit):
+		t.Fatal("approval request blocked")
+		return tools.ApprovalResult{}
+	}
+}
+
+// With prompts off (--yes / headless) and no web UI attached, nothing can
+// answer: the request is denied at once with a reason saying how to allow
+// it, never prompted in the terminal and never left waiting on the bus.
+func TestToolsApprovalAdapter_SkipPromptNoWebUIDeniesImmediately(t *testing.T) {
+	adapter, _ := newSkipPromptAdapter(t)
+	adapter.approvalMgr.SetTimeout(time.Hour)
+	result := requestWithin(t, adapter, 2*time.Second)
+	if result.Approved {
+		t.Error("expected denial with no approval surface")
+	}
+	if result.Reason != noApprovalSurfaceReason {
+		t.Errorf("expected Reason=%q, got %q", noApprovalSurfaceReason, result.Reason)
+	}
+}
+
+// With prompts off but a web UI attached, a browser may still answer, so the
+// request waits on the bus (here: its timeout denial).
+func TestToolsApprovalAdapter_SkipPromptWithWebUIWaitsOnBus(t *testing.T) {
+	adapter, a := newSkipPromptAdapter(t)
+	a.security.SetHasActiveWebUIClients(func() bool { return false })
+	result := requestWithin(t, adapter, 2*time.Second)
+	if result.Approved || result.Reason != "timed_out" {
+		t.Errorf("expected bus timeout denial, got approved=%v reason=%q", result.Approved, result.Reason)
 	}
 }

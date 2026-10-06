@@ -20,7 +20,13 @@ func generateRevisionID(sessionID, instructions string) string {
 
 // determineWriteOperation classifies a write as "create", "write", or "overwrite".
 func determineWriteOperation(originalContent, newContent string) string {
-	if originalContent == "" {
+	return determineWriteOperationState(originalContent, newContent, originalContent != "")
+}
+
+// determineWriteOperationState classifies a write given whether the file
+// existed beforehand.
+func determineWriteOperationState(originalContent, newContent string, existed bool) string {
+	if !existed {
 		return "create"
 	}
 	if originalContent != newContent {

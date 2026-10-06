@@ -219,8 +219,6 @@ func (ws *ReactWebServer) getOrCreateClientContextLocked(clientID string) *webCl
 	//      using the workspace-specific config directory
 	//      (configuration.WorkspaceConfigDir(workspaceRoot)), ensuring
 	//      per-workspace config isolation.
-	//   4. Embedding managers are further isolated per workspace via
-	//      embedding.AcquireManager keyed by (indexDir, workspaceRoot).
 	//
 	// EXCEPTIONS (intentional shared state):
 	//   - The defaultWebClientID context shares ws.terminalManager and

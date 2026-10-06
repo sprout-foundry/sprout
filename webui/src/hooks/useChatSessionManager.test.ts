@@ -13,6 +13,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppStoreSetState } from '../contexts/AppStore';
 import type { AppState } from '../types/app';
 import { onChatReplay } from '../utils/chatReplay';
+import { persistWorkspaceMode, useWorkspaceMode, workspaceModeStorageKey } from '../workspaces/useWorkspaceMode';
 import { useChatSessionManager } from './useChatSessionManager';
 
 const apiDouble = vi.hoisted(() => ({
@@ -633,7 +634,7 @@ describe('queue drain routing', () => {
 
     // Only the chat-A entry fired, and it fired AT chat A.
     expect(apiDouble.sendQuery).toHaveBeenCalledTimes(1);
-    expect(apiDouble.sendQuery).toHaveBeenCalledWith('for A', 'chat-A');
+    expect(apiDouble.sendQuery).toHaveBeenCalledWith('for A', 'chat-A', undefined);
     // The chat-B entry stays queued.
     expect(queuedMessagesRef.current.map((e) => e.message)).toEqual(['for B']);
   });
@@ -665,7 +666,43 @@ describe('queue drain routing', () => {
       await Promise.resolve();
     });
 
-    expect(apiDouble.sendQuery).toHaveBeenCalledWith('untagged', 'chat-A');
+    expect(apiDouble.sendQuery).toHaveBeenCalledWith('untagged', 'chat-A', undefined);
+  });
+
+  it('sends the mode the shell is showing with the query', async () => {
+    persistWorkspaceMode('design');
+    const shell = renderHook(() => useWorkspaceMode({ hasDesignTree: true }));
+    try {
+      let state: AppState = { messages: [], isProcessing: false } as unknown as AppState;
+      const setState: AppStoreSetState = (updater) => {
+        const partial =
+          typeof updater === 'function' ? (updater as (prev: AppState) => Partial<AppState>)(state) : updater;
+        state = { ...state, ...partial };
+      };
+      const queuedMessagesRef = {
+        current: [{ message: 'draw it', chatId: 'chat-A' }] as import('./useChatSessionManager').QueuedMessage[],
+      };
+      apiDouble.sendQuery.mockClear();
+
+      renderHook(() =>
+        useChatSessionManager({
+          setState,
+          activeRequestsRef: { current: 0 },
+          activeChatIdRef: { current: 'chat-A' },
+          queuedMessagesRef,
+          isProcessing: false,
+        }),
+      );
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(apiDouble.sendQuery).toHaveBeenCalledWith('draw it', 'chat-A', 'design');
+    } finally {
+      shell.unmount();
+      window.localStorage.removeItem(workspaceModeStorageKey());
+    }
   });
 });
 

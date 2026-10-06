@@ -78,7 +78,6 @@ const (
 	EventTypeProviderNoCredential = "provider_no_credential"
 	EventTypeWorkspaceChanged     = "workspace_changed"
 	EventTypeSessionTerminated    = "session_terminated"
-	EventTypeDriftDetected        = "drift_detected"
 	// EventTypeSessionChanged signals that a chat session's metadata
 	// (name, pin state, active state) changed and tabs viewing that chat
 	// should reconcile. SP-034-3e.
@@ -103,13 +102,6 @@ const (
 	// substitution does the heavy lifting and the LLM fall-through
 	// stays near zero.
 	EventTypeContextManagementDiagnostic = "context_management_diagnostic"
-	// EventTypeRecallDiagnostic (SP-066 Phase 3) reports the per-turn
-	// semantic-recall pass: how long the embed took, how many candidates
-	// were considered, top scores, and how many items were injected.
-	// Subscribers (WebUI metrics panel, eval pipelines) use it to verify
-	// recall is surfacing useful matches and to tune the half-life and
-	// similarity threshold from real data.
-	EventTypeRecallDiagnostic = "recall_diagnostic"
 
 	// EventTypeCommandOutput (SP-114 Phase 2c) is emitted for every chunk
 	// of stdout captured from a safe slash command executed via

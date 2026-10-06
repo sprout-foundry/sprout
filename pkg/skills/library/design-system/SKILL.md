@@ -1,6 +1,7 @@
 ---
 name: Design System
 description: The design workflow for sprout's design/ tree — brief, tokens, screens, flow sources — with validation between every step. Use for any design work (new designs, extending an existing tree, or reconciling design with code). Persona-agnostic.
+tools: design_assets, design_validate, design_brief, design_export_tokens, design_sync, design_render, design_critique, design_import_sketch
 ---
 
 # Design System — Workflow Knowledge
@@ -331,7 +332,10 @@ output has been *seen*, validated, and the tree reflects it. Run this loop:
    `design_validate`-style static findings marked `visual: false` instead of
    failing the turn. Reach for `design_render` directly when you want the
    rendered image without a rubric pass; use `analyze_ui_screenshot` for
-   screenshots and local HTML you did not author.
+   screenshots and local HTML you did not author. **Hosts without these
+   tools** (the in-browser editor ships only `design_validate` +
+   `design_assets`) skip this step and close the loop at the static check —
+   say so in the summary rather than naming a tool you do not have.
 4. **Fix**, then **repeat** from step 2 — a fix can break a different check,
    so the loop re-enters at the static pass.
 

@@ -63,7 +63,7 @@ var ignoredDirs = map[string]bool{
 
 // isIgnoredDir checks if a directory should be skipped during walks.
 // Uses the canonical shared list from pkg/filesystem so repo_map stays
-// in sync with embedding and codegraph exclusion behavior.
+// in sync with codegraph and search exclusion behavior.
 func isIgnoredDir(name string) bool {
 	if ignoredDirs[name] {
 		return true
@@ -86,23 +86,6 @@ func isIgnoredDir(name string) bool {
 // When the codegraph store is available and populated, it reads from the store
 // for near-instant results on warm cache, falling back to the filesystem walk.
 func GenerateRepoMap(ctx context.Context, rootDir string, depth int, query string) (string, error) {
-	return GenerateRepoMapWithSemanticMatches(ctx, rootDir, depth, query, nil)
-}
-
-// GenerateRepoMapWithSemanticMatches is GenerateRepoMap with an optional set of
-// workspace-relative paths that a semantic search matched for the same query.
-//
-// The plain query filter is a case-insensitive substring match on path and
-// symbol name, so it can only answer questions where the caller already knows
-// the identifier. "Show me the map, filtered to what matters for authentication"
-// is exactly what an agent wants before opening files, and exactly what
-// substring matching cannot do.
-//
-// The semantic set is passed in rather than resolved here so this function
-// stays usable — and testable — with no embedding index present, and so the
-// caller controls the cost. Matches are UNIONed with the substring matches:
-// semantic recall is imperfect, so it should widen the map, never narrow it.
-func GenerateRepoMapWithSemanticMatches(ctx context.Context, rootDir string, depth int, query string, semanticPaths map[string]bool) (string, error) {
 	if depth <= 0 {
 		depth = depthFullSymbols
 	}
@@ -156,7 +139,7 @@ func GenerateRepoMapWithSemanticMatches(ctx context.Context, rootDir string, dep
 	}
 
 	// Fall through to filesystem walk.
-	return generateRepoMapFromFS(ctx, absRoot, depth, query, semanticPaths)
+	return generateRepoMapFromFS(ctx, absRoot, depth, query)
 }
 
 // fileEntry is the per-file record produced by the repo-map walk. Hoisted to
@@ -166,7 +149,7 @@ type fileEntry struct {
 	depth                 int
 }
 
-func generateRepoMapFromFS(ctx context.Context, absRoot string, depth int, query string, semanticPaths map[string]bool) (string, error) {
+func generateRepoMapFromFS(ctx context.Context, absRoot string, depth int, query string) (string, error) {
 
 	allFiles := make([]fileEntry, 0, 4096)
 	// Non-source files and subdirectories, kept for the ls-style fallback when
@@ -244,7 +227,7 @@ func generateRepoMapFromFS(ctx context.Context, absRoot string, depth int, query
 		// Apply query filter to the file list for the tree.
 		treeFiles := allFiles
 		if query != "" {
-			treeFiles = filterByQuery(allFiles, query, semanticPaths)
+			treeFiles = filterByQuery(allFiles, query)
 		}
 		var sb strings.Builder
 		writeRepoMapHeader(&sb, absRoot, len(treeFiles), byExt, 0, 0)
@@ -362,16 +345,10 @@ func generateRepoMapFromFS(ctx context.Context, absRoot string, depth int, query
 			symbols = symbols[:depth2MaxSymbolsPerFile]
 		}
 
-		// Query filter: a file is included if its path matches the query, or a
-		// semantic search matched it, (in which case all symbols are shown) or
-		// if any of its symbols match the query (in which case only matching
-		// symbols are shown).
-		//
-		// A semantic match keeps the whole file: the point of asking
-		// conceptually is that the caller does not know which identifier to
-		// look for, so filtering that file's symbols by the same literal string
-		// would discard exactly what was just found.
-		if query != "" && !semanticPaths[f.relPath] {
+		// Query filter: a file is included if its path matches the query (in
+		// which case all symbols are shown) or if any of its symbols match the
+		// query (in which case only matching symbols are shown).
+		if query != "" {
 			if !strings.Contains(strings.ToLower(f.relPath), strings.ToLower(query)) {
 				// Path doesn't match — filter at symbol level.
 				symbols = filterSymbolsByQuery(symbols, query)

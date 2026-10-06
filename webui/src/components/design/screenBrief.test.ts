@@ -326,7 +326,7 @@ function inputFor(stem: string, overrides: Partial<ScreenBriefInput> = {}): Scre
     stem,
     inventory: inventoryFor(),
     flowTexts: { 'design/flows/sign-up.mmd': SIGN_UP_FLOW },
-    wireframeText: '<svg><!-- {color.primary} --><!-- {motion.dur} --></svg>',
+    screenText: '<!-- {color.primary} --><!-- {motion.dur} -->',
     readmeText: '- `login` — review — sign-in entry point',
     tokenTexts: { 'design/tokens/base.tokens.json': TOKENS_JSON },
     feedback: FEEDBACK_FILE,
@@ -407,7 +407,7 @@ describe('deriveScreenBrief', () => {
     expect(brief.wireframeExists).toBe(false);
     expect(brief.flowsIn).toEqual([]);
     expect(brief.feedback.path).toBe('');
-    expect(brief.guidance).toContain('design/wireframes/ghost.svg');
+    expect(brief.guidance).toContain('design/screens/ghost.html');
     expect(brief.guidance).toContain('ghost');
   });
 
@@ -427,7 +427,7 @@ describe('deriveScreenBrief', () => {
             },
           ],
         }),
-        wireframeText: '',
+        screenText: '',
       }),
     );
     expect(brief.found).toBe(true);

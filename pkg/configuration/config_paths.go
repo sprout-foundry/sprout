@@ -1,7 +1,6 @@
 package configuration
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -97,7 +96,7 @@ func GetConfigLocalPath() (string, error) {
 // produces) writes the full merged config to ~/.sprout/workspace.json on the
 // first settings save. On the next start that machine-written file is read
 // back as a deliberate per-workspace opt-in — which is how a global
-// "embeddings: on" preference turned into indexing the entire home directory.
+// preference turned into a per-home-directory workspace override.
 //
 // Returning "" here makes every caller degrade to "no workspace layer", which
 // NewManagerWithLayers already handles by saving to the global dir instead.
@@ -240,38 +239,4 @@ func IsWorkspaceConfigPresent(workspaceRoot string) bool {
 	}
 	_, err := os.Stat(path)
 	return err == nil
-}
-
-// WorkspaceEmbeddingIndexEnabled reports whether the workspace's stored
-// config explicitly opts into the embedding index (enabled && experimental),
-// decoded tolerantly like RestoreEmbeddingIndex: missing, unreadable, or
-// malformed config is not enabled. SPROUT_EXPERIMENTAL_EMBEDDINGS default-on
-// is deliberately NOT consulted here — the env var is an operator escape
-// hatch for daemon-side restore/socket hosting, while explicit tool
-// operations must require the workspace's own opt-in.
-func WorkspaceEmbeddingIndexEnabled(workspaceRoot string) bool {
-	wsCfgPath := GetWorkspaceConfigPath(workspaceRoot)
-	if wsCfgPath == "" {
-		return false
-	}
-	data, err := os.ReadFile(wsCfgPath)
-	if err != nil {
-		return false
-	}
-	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return false
-	}
-	eiRaw, ok := raw["embedding_index"]
-	if !ok {
-		return false
-	}
-	var eiConfig struct {
-		Enabled      bool `json:"enabled"`
-		Experimental bool `json:"experimental"`
-	}
-	if err := json.Unmarshal(eiRaw, &eiConfig); err != nil {
-		return false
-	}
-	return eiConfig.Enabled && eiConfig.Experimental
 }

@@ -91,8 +91,7 @@ func (ir *InputReader) runExternalEditor(prevState *term.State, nonBlocking bool
 	// Most editors append a trailing newline; strip it so the buffer
 	// looks like the user typed exactly what they see in the editor.
 	newLine := strings.TrimRight(string(content), "\n")
-	ir.line = newLine
-	ir.cursorPos = len(newLine)
+	ir.replaceLine(newLine)
 	ir.hasEditedLine = true
 	ir.historyIndex = -1
 	ir.resetCompletionCycle()

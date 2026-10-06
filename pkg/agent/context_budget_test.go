@@ -65,8 +65,8 @@ func TestCompactionTriggerFractionInRange(t *testing.T) {
 // TestSP125_LowContextMode_32K verifies that an agent created against a 32K
 // context model auto-activates Low-Context Mode with the expected levers:
 // the 13-tool allowlist (ask_user added in a83ced640 for the cloud IDE
-// ask_user/edit-approval flows), the lite system prompt, proactive context
-// disabled, and the tighter compaction trigger.
+// ask_user/edit-approval flows), the lite system prompt, and the tighter
+// compaction trigger.
 func TestSP125_LowContextMode_32K(t *testing.T) {
 	mgr, cleanup := configuration.NewTestManager(t)
 	defer cleanup()
@@ -93,12 +93,14 @@ func TestSP125_LowContextMode_32K(t *testing.T) {
 		"edit_file": true, "search": true, "repo_map": true,
 		"web_search": true, "fetch_url": true,
 		"commit": true, "list_changes": true, "recover_file": true,
-		"run_subagent": true, "ask_user": true,
+		"run_subagent": true, "review_changes": true, "ask_user": true,
 		// SP-140 design loop (pure Go, valid in every tier).
 		"design_assets": true, "design_validate": true,
 		"design_brief": true, "design_export_tokens": true, "design_sync": true,
 		// MCP setup/discovery meta-tools.
 		"mcp_tools": true, "mcp_refresh": true,
+		// Skill activation, which both prompts direct the agent to use.
+		"list_skills": true, "activate_skill": true,
 	}
 	if len(tools) != len(expectedTools) {
 		var names []string
@@ -125,18 +127,13 @@ func TestSP125_LowContextMode_32K(t *testing.T) {
 		t.Errorf("lite prompt + AGENTS.md should be > 1.5K tokens, got ~%d (empty?)", promptTokens)
 	}
 
-	// (d) Proactive context should be disabled.
-	if !agent.contextProfile.SkipProactiveContext {
-		t.Error("expected SkipProactiveContext=true in LCM")
-	}
-
-	// (e) Compaction trigger should be 0.85.
+	// (d) Compaction trigger should be 0.85.
 	trigger := agent.computeCompactionTriggerFraction()
 	if trigger != 0.85 {
 		t.Errorf("expected compaction trigger 0.85, got %.2f", trigger)
 	}
 
-	// (f) Recent turns to preserve should be 2.
+	// (e) Recent turns to preserve should be 2.
 	if agent.recentTurnsToPreserveFor() != 2 {
 		t.Errorf("expected recentTurnsToPreserve=2, got %d", agent.recentTurnsToPreserveFor())
 	}

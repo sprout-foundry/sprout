@@ -182,6 +182,14 @@ func (ct *ChangeTracker) GetRevisionID() string {
 // create). Never re-read filePath here: the write has already happened,
 // so a re-read returns new content and recovery becomes a no-op.
 func (ct *ChangeTracker) TrackFileWrite(filePath string, originalContent string, newContent string) error {
+	return ct.TrackFileWriteState(filePath, originalContent, newContent, originalContent != "")
+}
+
+// TrackFileWriteState is TrackFileWrite for callers that know whether the
+// file existed before the write. An empty original alone can't distinguish
+// a new file from an existing empty one (.gitkeep, __init__.py); recording
+// the latter as a create made revert delete it.
+func (ct *ChangeTracker) TrackFileWriteState(filePath string, originalContent string, newContent string, existed bool) error {
 	if !ct.IsEnabled() {
 		return nil
 	}
@@ -200,7 +208,7 @@ func (ct *ChangeTracker) TrackFileWrite(filePath string, originalContent string,
 		FilePath:     filePath,
 		OriginalCode: originalContent,
 		NewCode:      newContent,
-		Operation:    determineWriteOperation(originalContent, newContent),
+		Operation:    determineWriteOperationState(originalContent, newContent, existed),
 		Timestamp:    time.Now(),
 		ToolCall:     "WriteFile",
 	}
@@ -511,3 +519,29 @@ func (ct *ChangeTracker) ShellCachePrimed() bool {
 // Helper functions
 
 // Helper functions
+
+// RecordRevert records that a revert or recovery restored filePath, so the
+// change history reflects it: list_changes nets the file out (it is back to
+// its original state) instead of still listing the reverted change, and a
+// later revert sees the restored content as current. existsAfter=false
+// records the removal of a file the session created.
+func (ct *ChangeTracker) RecordRevert(filePath, before, after string, existsAfter bool, toolCall string) {
+	if !ct.IsEnabled() {
+		return
+	}
+	op := "write"
+	if !existsAfter {
+		op = "delete"
+		after = ""
+	}
+	ct.mu.Lock()
+	ct.changes = append(ct.changes, TrackedFileChange{
+		FilePath:     ct.resolveAbsPath(filePath),
+		OriginalCode: before,
+		NewCode:      after,
+		Operation:    op,
+		Timestamp:    time.Now(),
+		ToolCall:     toolCall,
+	})
+	ct.mu.Unlock()
+}

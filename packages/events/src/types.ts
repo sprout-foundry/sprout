@@ -294,16 +294,6 @@ export interface ContextManagementDiagnosticData {
   chat_id?: string;
 }
 
-export interface RecallDiagnosticData {
-  embed_duration_ms: number;
-  candidates_considered: number;
-  injected: number;
-  injected_chars: number;
-  top_scores: number[];
-  timestamp: string;
-  chat_id?: string;
-}
-
 export interface WorkspaceChangedData {
   daemon_root?: string;
   workspace_root?: string;
@@ -478,14 +468,6 @@ export interface TerminalPtyExitData {
   reason?: string;
 }
 
-export interface DriftDetectedData {
-  similarity: number;
-  threshold: number;
-  sessionId?: string;
-  timestamp?: string;
-  options?: string[];
-}
-
 // ── Discriminated Union ────────────────────────────────────────────────
 
 export type WsEvent =
@@ -642,12 +624,6 @@ export type WsEvent =
       timestamp?: string;
     }
   | {
-      type: "recall_diagnostic";
-      data?: RecallDiagnosticData;
-      id?: string;
-      timestamp?: string;
-    }
-  | {
       type: "security_approval_request";
       data?: SecurityApprovalRequestData;
       id?: string;
@@ -734,12 +710,6 @@ export type WsEvent =
   | {
       type: "pty_exit";
       data?: TerminalPtyExitData;
-      id?: string;
-      timestamp?: string;
-    }
-  | {
-      type: "drift_detected";
-      data?: DriftDetectedData;
       id?: string;
       timestamp?: string;
     }

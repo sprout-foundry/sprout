@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   __resetCloudChatsForTests,
   handleCloudChatSessionsEndpoint,
@@ -6,7 +6,8 @@ import {
   recordTurn,
   setChatRunning,
 } from './cloudChatSessions';
-import { getCurrentCloudSessionId, saveSession } from './cloudSessionStore';
+import { getCurrentCloudSessionId, resetActiveSessionId, saveSession } from './cloudSessionStore';
+import { __setRepoScopeForTests } from './repoScope';
 
 async function call(path: string, method = 'GET', body?: unknown) {
   const res = handleCloudChatSessionsEndpoint(
@@ -113,5 +114,36 @@ describe('cloud chat sessions', () => {
       { role: 'user', content: 'q1' },
       { role: 'assistant', content: 'a1' },
     ]);
+  });
+});
+
+describe('cloud chat sessions per repository', () => {
+  // Opening another repo reloads the page onto ?repo=; simulate that by
+  // changing the scope and dropping the in-memory active transcript.
+  const openRepo = (url: string | null) => {
+    __setRepoScopeForTests(url);
+    resetActiveSessionId();
+  };
+
+  afterEach(() => openRepo(null));
+
+  it('gives each repo its own chat list and current conversation', async () => {
+    openRepo('https://github.com/acme/web');
+    const webChat = (await call('/api/chat-sessions')).json.active_chat_id;
+    saveSession([msg('user', 'about the web repo', 1)] as never);
+    const webTranscript = getCurrentCloudSessionId();
+
+    openRepo('https://gitlab.com/acme/group/api.git');
+    const apiList = (await call('/api/chat-sessions')).json;
+    expect(apiList.chat_sessions).toHaveLength(1);
+    expect(apiList.active_chat_id).not.toBe(webChat);
+    expect(getCurrentCloudSessionId()).not.toBe(webTranscript);
+    const apiChat = (await call('/api/chat-sessions/switch', 'POST', { id: apiList.active_chat_id })).json;
+    expect(apiChat.chat_session.messages ?? []).toHaveLength(0);
+
+    openRepo('https://github.com/Acme/web/');
+    const back = (await call('/api/chat-sessions')).json;
+    expect(back.active_chat_id).toBe(webChat);
+    expect(getCurrentCloudSessionId()).toBe(webTranscript);
   });
 });

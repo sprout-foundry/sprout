@@ -9,7 +9,8 @@ import (
 )
 
 // RunCommand executes shape #2: `command` runs under /bin/sh -c (Git Bash on
-// Windows) with the workdir as cwd and the inherited environment, and its
+// Windows) with the workdir as cwd and the inherited environment (minus the
+// daemon's own credentials, see runEnv), and its
 // two output streams are captured separately, each capped to the last 256 KiB.
 //
 // The timeout is the ONLY canceller. ctx is deliberately not wired into the
@@ -39,7 +40,7 @@ func RunCommand(ctx context.Context, workdir string, request RunRequest) (RunRes
 
 	cmd := txnShellCommand(request.Command)
 	cmd.Dir = dir
-	cmd.Env = os.Environ()
+	cmd.Env = runEnv(os.Environ())
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	// New process group so the whole tree (shell + compiler children) can

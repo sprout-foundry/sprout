@@ -226,11 +226,35 @@ function gitHubTokenAuth(token: string): string {
   return `Basic ${btoa(`x-access-token:${token}`)}`;
 }
 
-function getAuth() {
-  if (config?.token) {
+/**
+ * Auth headers for a request to remoteURL. The configured token is a GitHub
+ * token, so it is only sent to github.com; for other hosts the platform's git
+ * proxy adds the credential the user connected for that host.
+ */
+function getAuth(remoteURL: string | null | undefined) {
+  if (config?.token && isGitHubURL(remoteURL)) {
     return { headers: { Authorization: gitHubTokenAuth(config.token) } };
   }
   return undefined;
+}
+
+function isGitHubURL(remoteURL: string | null | undefined): boolean {
+  if (!remoteURL) return false;
+  try {
+    return new URL(remoteURL).host.toLowerCase() === 'github.com';
+  } catch {
+    return false;
+  }
+}
+
+/** The origin remote's URL, or null when there is none. */
+async function originURL(): Promise<string | null> {
+  try {
+    const url = await git.getConfig({ fs: getFs().promises, dir: REPO_DIR, path: 'remote.origin.url' });
+    return typeof url === 'string' ? url : null;
+  } catch {
+    return null;
+  }
 }
 
 // ── Public API ──────────────────────────────────────────────────
@@ -519,8 +543,8 @@ export async function gitClone(url: string, opts?: { token?: string }) {
   // Per-call auth (authenticated clone from the GitHub repo picker) wins over
   // the module-level config token. The token is passed straight through to
   // isomorphic-git as a request header — it is never stored or logged here.
-  const headers: Record<string, string> = { ...(getAuth()?.headers ?? {}) };
-  if (opts?.token) {
+  const headers: Record<string, string> = { ...(getAuth(url)?.headers ?? {}) };
+  if (opts?.token && isGitHubURL(url)) {
     headers.Authorization = gitHubTokenAuth(opts.token);
   }
   await git.clone({
@@ -550,7 +574,7 @@ export async function gitPush(remote = 'origin', branch?: string) {
   const remotes = await git.listRemotes({ fs, dir: REPO_DIR });
   if (!remotes.some((r) => r.remote === remote)) {
     throw new Error(
-      `This repository has no "${remote}" remote to push to. Add the repository from GitHub (Files › Add repository) to push.`,
+      `This repository has no "${remote}" remote to push to. Open the repository from its git host (Files › Add repository) to push.`,
     );
   }
   const ref = branch || (await git.currentBranch({ fs, dir: REPO_DIR })) || undefined;
@@ -562,7 +586,7 @@ export async function gitPush(remote = 'origin', branch?: string) {
       dir: REPO_DIR,
       remote,
       ref,
-      headers: getAuth()?.headers,
+      headers: getAuth(await originURL())?.headers,
     });
   } catch (err) {
     throw new Error(describePushError(err));
@@ -574,7 +598,7 @@ export async function gitPush(remote = 'origin', branch?: string) {
 function describePushError(err: unknown): string {
   const status = (err as { data?: { statusCode?: number } })?.data?.statusCode;
   if (status === 401 || status === 403) {
-    return 'GitHub rejected the push. Connect a GitHub account with write access to this repository (Settings › GitHub), then try again.';
+    return 'The git host rejected the push. Connect an account with write access to this repository (Settings › Git providers), then try again.';
   }
   const message = err instanceof Error ? err.message : String(err);
   if (/not a simple fast-forward|rejected/i.test(message)) {
@@ -604,7 +628,7 @@ export async function gitPull() {
       dir: REPO_DIR,
       ref,
       singleBranch: true,
-      headers: getAuth()?.headers,
+      headers: getAuth(await originURL())?.headers,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

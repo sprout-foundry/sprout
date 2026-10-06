@@ -29,26 +29,14 @@ func TestDottedSettingKeysAreApplied(t *testing.T) {
 		body   string
 		verify func(*testing.T, *configuration.Config)
 	}{
-		{`{"embedding_index.enabled":true}`, func(t *testing.T, c *configuration.Config) {
-			// Check the raw pointer: IsEnabled() additionally requires the
-			// Experimental gate (SP-137), which this test doesn't exercise.
-			if c.EmbeddingIndex == nil || c.EmbeddingIndex.Enabled == nil || !*c.EmbeddingIndex.Enabled {
-				t.Errorf("embedding_index.enabled did not persist: %+v", c.EmbeddingIndex)
+		{`{"computer_use.max_actions_per_minute":30}`, func(t *testing.T, c *configuration.Config) {
+			if c.ComputerUse == nil || c.ComputerUse.MaxActionsPerMinute != 30 {
+				t.Errorf("computer_use.max_actions_per_minute did not persist: %+v", c.ComputerUse)
 			}
 		}},
-		{`{"embedding_index.auto_index":true}`, func(t *testing.T, c *configuration.Config) {
-			if c.EmbeddingIndex == nil || c.EmbeddingIndex.AutoIndex == nil || !*c.EmbeddingIndex.AutoIndex {
-				t.Errorf("embedding_index.auto_index did not persist: %+v", c.EmbeddingIndex)
-			}
-		}},
-		{`{"embedding_index.max_results":7}`, func(t *testing.T, c *configuration.Config) {
-			if c.EmbeddingIndex == nil || c.EmbeddingIndex.MaxResults != 7 {
-				t.Errorf("embedding_index.max_results did not persist: %+v", c.EmbeddingIndex)
-			}
-		}},
-		{`{"embedding_index.exclude_paths":["node_modules","dist"]}`, func(t *testing.T, c *configuration.Config) {
-			if c.EmbeddingIndex == nil || len(c.EmbeddingIndex.ExcludePaths) != 2 {
-				t.Errorf("embedding_index.exclude_paths did not persist: %+v", c.EmbeddingIndex)
+		{`{"computer_use.workspace_allowlist":["/a","/b"]}`, func(t *testing.T, c *configuration.Config) {
+			if c.ComputerUse == nil || len(c.ComputerUse.WorkspaceAllowlist) != 2 {
+				t.Errorf("computer_use.workspace_allowlist did not persist: %+v", c.ComputerUse)
 			}
 		}},
 		{`{"mcp.enabled":true}`, func(t *testing.T, c *configuration.Config) {
@@ -83,32 +71,30 @@ func TestDottedSettingKeysAreApplied(t *testing.T) {
 // no-op into a silent wipe of every sibling field.
 func TestDottedWriteDoesNotClobberSiblings(t *testing.T) {
 	cfg := &configuration.Config{
-		EmbeddingIndex: &configuration.EmbeddingIndexConfig{
-			Enabled:      ptrTo(true),
-			Experimental: ptrTo(true),
-			AutoIndex:    ptrTo(true),
-			MaxResults:   5,
-			ExcludePaths: []string{"node_modules", ".git"},
-			IndexDir:     "/tmp/idx",
+		ComputerUse: &configuration.ComputerUseConfig{
+			Enabled:             true,
+			MaxActionsPerMinute: 5,
+			WorkspaceAllowlist:  []string{"/a", "/b"},
+			AuditLogDir:         "/tmp/audit",
 		},
 	}
 
-	if _, err := applyPartialSettings(cfg, decodePatch(t, `{"embedding_index.max_results":9}`)); err != nil {
+	if _, err := applyPartialSettings(cfg, decodePatch(t, `{"computer_use.max_actions_per_minute":9}`)); err != nil {
 		t.Fatalf("applyPartialSettings: %v", err)
 	}
 
-	got := cfg.EmbeddingIndex
-	if got.MaxResults != 9 {
-		t.Errorf("MaxResults = %d, want 9", got.MaxResults)
+	got := cfg.ComputerUse
+	if got.MaxActionsPerMinute != 9 {
+		t.Errorf("MaxActionsPerMinute = %d, want 9", got.MaxActionsPerMinute)
 	}
-	if !got.IsEnabled() || !got.IsAutoIndex() {
-		t.Errorf("booleans clobbered: enabled=%v auto_index=%v", got.IsEnabled(), got.IsAutoIndex())
+	if !got.Enabled {
+		t.Error("Enabled clobbered")
 	}
-	if got.IndexDir != "/tmp/idx" {
-		t.Errorf("IndexDir = %q, want /tmp/idx", got.IndexDir)
+	if got.AuditLogDir != "/tmp/audit" {
+		t.Errorf("AuditLogDir = %q, want /tmp/audit", got.AuditLogDir)
 	}
-	if len(got.ExcludePaths) != 2 {
-		t.Errorf("ExcludePaths = %v, want 2 entries", got.ExcludePaths)
+	if len(got.WorkspaceAllowlist) != 2 {
+		t.Errorf("WorkspaceAllowlist = %v, want 2 entries", got.WorkspaceAllowlist)
 	}
 }
 

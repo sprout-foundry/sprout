@@ -40,8 +40,10 @@ interface GoBrief {
   purpose?: string;
   status?: string;
   listedInReadme: boolean;
-  wireframe: string;
+  wireframe?: string;
   wireframeExists: boolean;
+  screenFile?: string;
+  screenExists?: boolean;
   flowsIn: GoBriefEdge[];
   flowsOut: GoBriefEdge[];
   tokenPaths: Array<{ path: string; known: boolean }>;
@@ -55,7 +57,6 @@ interface GoBrief {
     resolution?: string;
     notes?: string[];
   };
-  screenFile?: string;
   guidance?: string;
 }
 
@@ -129,7 +130,7 @@ function goBriefProjection(go: GoBrief) {
     purpose: go.purpose ?? '',
     status: go.status ?? '',
     listedInReadme: go.listedInReadme,
-    wireframe: go.wireframe,
+    wireframe: go.wireframe ?? '',
     wireframeExists: go.wireframeExists,
     flowsIn: go.flowsIn.map(edge),
     flowsOut: go.flowsOut.map(edge),
@@ -144,7 +145,7 @@ function goBriefProjection(go: GoBrief) {
       resolution: go.feedback.resolution ?? '',
       notes: go.feedback.notes ?? [],
     },
-    screenFileExists: go.screenFile !== undefined && go.screenFile !== '',
+    screenFileExists: Boolean(go.screenExists ?? (go.screenFile !== undefined && go.screenFile !== '')),
     guidance: go.guidance ?? '',
   };
 }
@@ -154,8 +155,8 @@ describe('screen-brief parity with the Go design_brief (shared fixture)', () => 
   const brief = deriveScreenBrief({
     stem: artifact.screen,
     inventory: inventoryFor(tree),
-    flowTexts: Object.fromEntries(Object.entries(tree).filter(([p]) => p.endsWith('.mmd'))),
-    wireframeText: tree['design/wireframes/login.svg'] ?? '',
+    flowTexts: Object.fromEntries(Object.entries(tree).filter(([p]) => p.endsWith('.mmd') || p.endsWith('.json'))),
+    screenText: tree['design/screens/login.html'] ?? '',
     readmeText: tree['design/README.md'] ?? '',
     tokenTexts: Object.fromEntries(Object.entries(tree).filter(([p]) => p.endsWith('.tokens.json'))),
     feedback: tree['design/feedback/login.json']

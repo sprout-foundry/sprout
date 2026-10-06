@@ -1,5 +1,3 @@
-//go:build !js
-
 package tools
 
 // design_sync_helpers.go — helpers for the design-sync handler: the

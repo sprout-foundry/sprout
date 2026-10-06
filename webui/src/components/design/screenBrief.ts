@@ -97,9 +97,9 @@ export interface ScreenFeedbackModel {
 
 /** The §5g brief for one screen, derived for the workbench (§8b's data contract). */
 export interface ScreenBriefModel {
-  /** The wireframe stem the brief was derived for. */
+  /** The screen stem the brief was derived for. */
   screenName: string;
-  /** A wireframe with the stem, or a feedback file targeting it. */
+  /** A screen (or legacy wireframe) with the stem, or a feedback file targeting it. */
   found: boolean;
   /** The screen's purpose from the README listing ('' when unlisted). */
   purpose: string;
@@ -107,19 +107,19 @@ export interface ScreenBriefModel {
   status: string;
   /** Whether the README listing names the screen (an unlisted one is an orphan). */
   listedInReadme: boolean;
-  /** The wireframe path (the inventory entry, or the canonical design/ one). */
+  /** The legacy wireframe path, when one exists (the retired tier). */
   wireframe: string;
   /** Whether that file is in the inventory. */
   wireframeExists: boolean;
-  /** The delivered design/screens/<stem>.html path, when one exists. */
+  /** The primary design/screens/<stem>.html path (canonical even when missing). */
   screenFile: string;
-  /** Whether the screen file is in the inventory. */
+  /** Whether the screen file is in the inventory — the brief's main existence check. */
   screenFileExists: boolean;
   /** The flow edges into the screen, with triggers (sorted, deterministic). */
   flowsIn: ScreenFlowEdge[];
   /** The flow edges out of the screen, with triggers (sorted, deterministic). */
   flowsOut: ScreenFlowEdge[];
-  /** The DTCG tokens the wireframe refers to, sorted by path. */
+  /** The DTCG tokens the screen (or legacy wireframe) refers to, sorted by path. */
   tokenRefs: ScreenTokenRef[];
   /** The top-level token groups available to consume, sorted by the inventory. */
   tokenGroups: string[];
@@ -131,14 +131,14 @@ export interface ScreenBriefModel {
 
 /** Everything `deriveScreenBrief` needs; all read-side, all plain data. */
 export interface ScreenBriefInput {
-  /** The wireframe stem to brief (e.g. "login"). */
+  /** The screen stem to brief (e.g. "login"). */
   stem: string;
   /** The design inventory the workbench renders from. */
   inventory: DesignInventory;
-  /** Flow `.mmd` text keyed by flow path; an unreadable flow is simply absent (skipped, never a hard error — mirroring the Go brief). */
+  /** Flow text keyed by flow path — the .json source (parsed as steps) or a legacy .mmd (parsed as mermaid); an unreadable flow is simply absent (skipped, never a hard error — mirroring the Go brief). */
   flowTexts?: Record<string, string>;
-  /** The wireframe's text for the token-reference scan; '' when missing. */
-  wireframeText?: string;
+  /** The screen artifact's text for the token-reference scan; '' when missing. */
+  screenText?: string;
   /** The README manifest's text; '' when missing. */
   readmeText?: string;
   /** Token file text keyed by file path; an unreadable file is absent. */
@@ -314,6 +314,87 @@ function byBriefEdgeOrder(a: ScreenFlowEdge, b: ScreenFlowEdge): number {
   return a.trigger < b.trigger ? -1 : a.trigger > b.trigger ? 1 : 0;
 }
 
+/**
+ * A parsed flow source step (the v1 schema's step shape that matters to the
+ * brief: the walk's screen and trigger).
+ */
+export interface FlowSourceStep {
+  id: string;
+  label?: string;
+  screen?: string;
+  trigger?: string;
+  next?: string;
+}
+
+/** Parse a flow source document (design/flows/<name>.json); null when malformed. */
+export function parseFlowSource(text: string): { name: string; steps: FlowSourceStep[] } | null {
+  try {
+    const doc = JSON.parse(text) as { name?: unknown; steps?: unknown };
+    if (typeof doc.name !== 'string' || !Array.isArray(doc.steps)) return null;
+    const steps: FlowSourceStep[] = [];
+    for (const raw of doc.steps) {
+      if (typeof raw !== 'object' || raw === null) return null;
+      const step = raw as Record<string, unknown>;
+      if (typeof step.id !== 'string' || step.id === '') return null;
+      steps.push({
+        id: step.id,
+        label: typeof step.label === 'string' ? step.label : undefined,
+        screen: typeof step.screen === 'string' ? step.screen : undefined,
+        trigger: typeof step.trigger === 'string' ? step.trigger : undefined,
+        next: typeof step.next === 'string' ? step.next : undefined,
+      });
+    }
+    return { name: doc.name, steps };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The edges of one flow source document touching the screen: consecutive
+ * steps whose screens are set form the walk edges (source/target are the
+ * SCREENS, the trigger is the step's trigger). Mirrors the Go brief's
+ * flow-source read.
+ */
+export function flowSourceEdgesForBrief(text: string, stem: string): ScreenFlowEdgeBase[] {
+  const edges: ScreenFlowEdgeBase[] = [];
+  const src = parseFlowSource(text);
+  if (!src || !stem) return edges;
+  const byID = new Map(src.steps.map((s) => [s.id, s]));
+  for (const step of src.steps) {
+    if (!step.next) continue;
+    const next = byID.get(step.next);
+    if (!next) continue;
+    const source = step.screen ?? step.id;
+    const target = next.screen ?? next.id;
+    if (source !== stem && target !== stem) continue;
+    if (source === stem && target === stem) {
+      edges.push({ source, target, trigger: step.trigger ?? '', direction: 'both', otherStem: '', otherLabel: '' });
+      continue;
+    }
+    if (source === stem) {
+      edges.push({
+        source,
+        target,
+        trigger: step.trigger ?? '',
+        direction: 'out',
+        otherStem: target,
+        otherLabel: next.label ?? target,
+      });
+    } else {
+      edges.push({
+        source,
+        target,
+        trigger: step.trigger ?? '',
+        direction: 'in',
+        otherStem: source,
+        otherLabel: step.label ?? source,
+      });
+    }
+  }
+  return edges;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Tokens (the §5g "token refs, known vs. unknown")                            */
 /* -------------------------------------------------------------------------- */
@@ -429,8 +510,8 @@ export function deriveScreenBrief(input: ScreenBriefInput): ScreenBriefModel {
   const wireframeEntry = inventory.wireframes.find((entry) => stemOf(entry.name) === stem) ?? null;
   const screenEntry = inventory.screens.find((entry) => stemOf(entry.name) === stem) ?? null;
   // The canonical design/ paths are the not-found pointers (the Go brief
-  // names where the wireframe *would* live); inventory paths win when present.
-  const wireframe = wireframeEntry?.path ?? `design/wireframes/${stem}.svg`;
+  // names where the artifacts *would* live); inventory paths win when present.
+  const wireframe = wireframeEntry?.path ?? '';
   const screenFile = screenEntry?.path ?? `design/screens/${stem}.html`;
 
   const key = stem.toLowerCase();
@@ -440,13 +521,16 @@ export function deriveScreenBrief(input: ScreenBriefInput): ScreenBriefModel {
   const listedInReadme = listings.listed.includes(key);
 
   // Flow edges touching the screen: every readable flow, in inventory order.
+  // A .json path parses as a flow source (steps); a legacy .mmd parses as
+  // mermaid.
   const flowsIn: ScreenFlowEdge[] = [];
   const flowsOut: ScreenFlowEdge[] = [];
   for (const flow of inventory.flows ?? []) {
     const text = input.flowTexts?.[flow.path];
     if (!text) continue; // an unreadable flow is skipped, never a hard error
-    const flowName = (flow.name || flow.path.split('/').pop() || '').replace(/\.mmd$/, '');
-    for (const edge of flowEdgesForBrief(text, stem)) {
+    const flowName = (flow.name || flow.path.split('/').pop() || '').replace(/\.(mmd|json)$/, '');
+    const base = flow.path.endsWith('.json') ? flowSourceEdgesForBrief(text, stem) : flowEdgesForBrief(text, stem);
+    for (const edge of base) {
       const full: ScreenFlowEdge = { ...edge, flow: flow.path, flowName };
       if (edge.direction === 'in' || edge.direction === 'both') flowsIn.push(full);
       if (edge.direction === 'out' || edge.direction === 'both') flowsOut.push(full);
@@ -456,16 +540,16 @@ export function deriveScreenBrief(input: ScreenBriefInput): ScreenBriefModel {
   flowsOut.sort(byBriefEdgeOrder);
 
   const known = knownTokenPaths(input.tokenTexts);
-  const tokenRefs = tokenRefsOf(input.wireframeText ?? '', known);
+  const tokenRefs = tokenRefsOf(input.screenText ?? '', known);
   const tokenGroups = (inventory.tokenGroups ?? []).map((group) => group.name);
 
   const feedbackEntry = (inventory.feedback ?? []).find((entry) => stemOf(entry.name) === stem) ?? null;
   const feedback = feedbackModelOf(feedbackEntry, input.feedback ?? null);
 
-  const found = wireframeEntry !== null || feedback.path !== '';
+  const found = screenEntry !== null || wireframeEntry !== null || feedback.path !== '';
   const guidance = found
     ? ''
-    : `No wireframe ${wireframe} and no feedback targeting "${stem}". Check the screen name, or list the design tree's screens and flows (design_assets).`;
+    : `No screen ${screenFile} and no feedback targeting "${stem}". Check the screen name, or list the design tree's screens and flows (design_assets).`;
 
   return {
     screenName: stem,

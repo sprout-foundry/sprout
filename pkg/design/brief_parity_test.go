@@ -76,8 +76,9 @@ func TestScreenBriefParity_FixtureExercisesTheContract(t *testing.T) {
 	assert.True(t, brief.ListedInReadme)
 	assert.NotEmpty(t, brief.Purpose)
 	assert.NotEmpty(t, brief.Status)
-	assert.True(t, brief.WireframeExists)
-	assert.NotEmpty(t, brief.ScreenFile, "full depth names the delivered screen")
+	assert.True(t, brief.ScreenExists, "the primary screen is the brief's subject (SP-140-9 §9a)")
+	assert.False(t, brief.WireframeExists, "the migrated fixture carries no legacy wireframes")
+	assert.Equal(t, "design/screens/login.html", brief.ScreenFile)
 	assert.NotEmpty(t, brief.FlowsIn)
 	assert.NotEmpty(t, brief.FlowsOut)
 	var labelled bool

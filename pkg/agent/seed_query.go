@@ -242,33 +242,6 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 	// Set conversation start time for duration calculation
 	a.conversationStartTime = time.Now()
 
-	// Proactive context injection: retrieve relevant past work on first turn
-	// or cold session restore. Only inject when the conversation is new (no
-	// prior user messages) or the session was just restored from persistence
-	// AND proactive context has not already been injected this session.
-	existingSupplement := a.state.GetPendingSystemSupplement()
-	// Match the current header from FormatProactiveContext. Kept as a
-	// distinctive substring so cosmetic edits to the wording don't break
-	// the dedup guard (the prior literal drifted and re-injected context
-	// on every cold restore).
-	alreadyInjected := strings.Contains(existingSupplement, "Previous Work (Read-Only Reference)")
-	shouldInjectProactiveContext := !alreadyInjected &&
-		!a.contextProfile.SkipProactiveContext &&
-		(len(a.state.GetMessages()) == 0 || a.state.GetPreviousSummary() != "")
-	if shouldInjectProactiveContext {
-		injectCtx, injectCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		// Semantic consumers embed the query against stripped signatures;
-		// hand them clean text, not the stamped envelope.
-		if err := a.InjectProactiveContext(injectCtx, StripUserMessageTimestamp(processedQuery)); err != nil {
-			a.Logger().Debug("[proactive-context] injection failed: %v\n", err)
-		}
-		injectCancel()
-	}
-
-	// Semantic recall is disabled per-turn. Cross-session memory is handled by InjectProactiveContext above.
-	// The Recall method and instrumentation remain available for the future /recall CLI and webui endpoints.
-	_ = processedQuery // referenced by the commented recall block above
-
 	// Group extracted images for provider registration. All images from this
 	// query are attached to the first user message by attachPastedImages.
 	pastedImageMap := make(map[string][]api.ImageData)
@@ -352,12 +325,16 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 	opts.CompactionTriggerFraction = a.computeCompactionTriggerFraction()
 	opts.SubstitutionTargetFraction = 0.50
 
+	// Folded here, after every prompt rebuild and before the prompt is
+	// handed to the seed agent, so the mode's skills reach this turn.
+	a.autoActivateModeSkills()
+
 	if a.systemPrompt != "" {
 		opts.SystemPrompt = a.systemPrompt
 	}
 
-	// Consume any pending system supplement (previous session context,
-	// proactive context) and append to the system prompt so the seed agent
+	// Consume any pending system supplement (previous session context) and
+	// append to the system prompt so the seed agent
 	// includes it in its first message.
 	if supplement := a.consumePendingSystemSupplement(); supplement != "" {
 		opts.SystemPrompt = opts.SystemPrompt + "\n\n" + supplement

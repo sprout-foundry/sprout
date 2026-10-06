@@ -25,6 +25,7 @@ import {
 } from './cloudProxyRoutes';
 import { handleCloudChatSessionsEndpoint } from './cloudChatSessions';
 import { handleCloudSessionsEndpoint } from './cloudSessionHandlers';
+import { handleWasmImageUpload, uploadBodyBytes } from './cloudWasmBinary';
 import {
   handleWasmLocal,
   handleWasmEditDecision,
@@ -279,7 +280,7 @@ export class CloudAdapter implements APIAdapter {
       await browserGit.whenBrowserGitConfigured();
 
       const origin = await browserGit.gitOriginUrl();
-      const sameRepo = origin !== null && sameRepoRef(origin, want.owner, want.name);
+      const sameRepo = origin !== null && sameRepoRef(origin, want, parseRepoRef);
       if (sameRepo) {
         await browserGit.restoreGitWorkingTree();
       } else {
@@ -412,6 +413,21 @@ export class CloudAdapter implements APIAdapter {
       const bodyStr = typeof init?.body === 'string' ? init.body : await this.extractRequestBody(input);
       const handled = handleCloudChatSessionsEndpoint(urlPath, method, url, bodyStr ?? undefined);
       if (handled) return handled;
+    }
+
+    // ── Image upload (byte-exact into the WASM VFS) ─────────────────
+    // The body is FormData/Blob, which the string-based wasm-local path
+    // would mangle, so it is read here as bytes.
+    if (urlPath === '/api/upload/image' && method === 'POST' && !nativeFs) {
+      const bytes = await uploadBodyBytes(init?.body ?? (input instanceof Request ? await input.blob() : null));
+      if (bytes) {
+        try {
+          const shell = await this.ensureWasmShell();
+          return handleWasmImageUpload(shell, bytes);
+        } catch (err) {
+          console.warn('[CloudAdapter] WASM shell unavailable for image upload, falling through to proxy:', err);
+        }
+      }
     }
 
     // ── Synthetic response interception ────────────────────────────
@@ -573,7 +589,21 @@ export class CloudAdapter implements APIAdapter {
 }
 
 /** Whether a remote URL points at owner/name (case-insensitive, .git optional). */
-function sameRepoRef(remoteURL: string, owner: string, name: string): boolean {
-  const m = remoteURL.replace(/\.git$/, '').match(/[/:]([^/:]+)\/([^/]+)$/);
-  return !!m && m[1].toLowerCase() === owner.toLowerCase() && m[2].toLowerCase() === name.toLowerCase();
+function sameRepoRef(
+  remoteURL: string,
+  want: { host: string; owner: string; name: string },
+  parseRepoRef: (input: string) => { host: string; owner: string; name: string },
+): boolean {
+  // Host and full path must both match: the same owner/name can exist on
+  // several hosts, and owner may span segments (GitLab subgroups).
+  try {
+    const have = parseRepoRef(remoteURL);
+    return (
+      have.host === want.host &&
+      have.owner.toLowerCase() === want.owner.toLowerCase() &&
+      have.name.toLowerCase() === want.name.toLowerCase()
+    );
+  } catch {
+    return false;
+  }
 }

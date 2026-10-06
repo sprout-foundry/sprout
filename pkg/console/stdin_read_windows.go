@@ -215,11 +215,10 @@ func init() {
 		}
 		want := mode | windows.ENABLE_PROCESSED_OUTPUT | windows.ENABLE_VIRTUAL_TERMINAL_PROCESSING
 		if want == mode {
-			return
+			continue
 		}
 		if err := windows.SetConsoleMode(h, want); err != nil {
 			markVTUnsupported()
-			return
 		}
 	}
 }

@@ -295,10 +295,12 @@ needed whatever the integration work does. Spec context: SP-160 §160e.
       plus `wasm-manifest.json`; `wasmShell.ts` reads the manifest and uses
       the hashed URLs, falling back to the fixed names when it is absent and
       honoring explicit URL overrides. Pinned by vitest.
-- [ ] **hyg.3** Single `services/api` import style: `OnboardingDialog.tsx`
+- [x] **hyg.3** Single `services/api` import style: `OnboardingDialog.tsx`
       and `ErrorBoundary.tsx` import it dynamically while about 70 modules
       import it statically, which only produces a Vite warning and no chunk
       split. Use static imports everywhere (or split deliberately).
+      Fixed: both files now import `ApiService` statically; no dynamic
+      `services/api` import remains in `webui/src`.
 
 ## Commit message generation (bug fixes)
 

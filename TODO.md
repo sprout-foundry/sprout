@@ -71,7 +71,7 @@ checkboxes.
       handler tests keep passing). Streaming responses use Huma's SSE
       support where it fits; otherwise they stay plain handlers listed in
       `docs/api/undocumented.txt` with a reason. Spec: SP-160 §160c.
-- [ ] **contract.9** Migrate the files family (`/api/files`, `/api/file*`,
+- [x] **contract.9** Migrate the files family (`/api/files`, `/api/file*`,
       `/api/search*`, `/api/create`, `/api/delete`, `/api/rename`,
       `/api/upload`, `/api/diagnostics`, `/api/lsp*`, `/api/semantic`) to
       Huma, no behavior change. Spec: SP-160 §160c.

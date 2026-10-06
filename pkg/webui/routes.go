@@ -32,7 +32,6 @@ func (ws *ReactWebServer) setupRoutes(ctx context.Context) *http.ServeMux {
 	ws.registerSyncRoutes(mux)
 	ws.registerGitRoutes(mux)
 	ws.registerSessionRoutes(mux)
-	ws.registerSearchRoutes(mux)
 	ws.registerChangesRoutes(mux)
 	ws.registerAutomateRoutes(mux)
 	ws.registerHumaRoutes(mux)
@@ -120,27 +119,23 @@ func (ws *ReactWebServer) registerCommandRoutes(mux *http.ServeMux) {
 }
 
 func (ws *ReactWebServer) registerDiagnosticsRoutes(mux *http.ServeMux) {
-	// /api/stats is now a Huma operation (see registerHumaRoutes); the plain
-	// registration was removed so the method+path pattern is registered once.
+	// /api/stats, /api/diagnostics, and /api/semantic are now Huma operations
+	// (see registerHumaRoutes / registerFilesHumaOperations); their plain
+	// registrations were removed so each method+path pattern is registered once.
 	mux.HandleFunc("/api/providers", ws.handleAPIProviders)
 	mux.HandleFunc("/api/providers/models", ws.handleGetModels)
-	mux.HandleFunc("/api/diagnostics", ws.handleAPIDiagnostics)
-	mux.HandleFunc("/api/semantic", ws.handleAPISemantic)
 	mux.HandleFunc("/api/support-bundle", ws.handleAPISupportBundle)
 	mux.HandleFunc("/api/ws-metrics", ws.handleAPIWSMetrics)
 }
 
 func (ws *ReactWebServer) registerFileRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/files", ws.handleAPIFiles)
-	mux.HandleFunc("/api/files/prettier-config", ws.handleAPIGetPrettierConfig)
-	mux.HandleFunc("/api/create", ws.handleAPICreateFile)
-	mux.HandleFunc("/api/delete", ws.handleAPIDeleteItem)
-	mux.HandleFunc("/api/rename", ws.handleAPIRenameItem)
+	// The /api/files, /api/file, /api/create, /api/delete, /api/rename, and
+	// /api/file/* routes are Huma operations (see registerFilesHumaOperations in
+	// huma_files.go); their plain registrations were removed so each method+path
+	// pattern is registered once. /api/open-in-file-browser and /api/browse are
+	// separate surfaces and stay plain handlers.
 	mux.HandleFunc("/api/open-in-file-browser", ws.handleAPIOpenInFileBrowser)
 	mux.HandleFunc("/api/browse", ws.handleAPIBrowse)
-	mux.HandleFunc("/api/file", ws.handleAPIFile)
-	mux.HandleFunc("/api/file/consent", ws.handleAPIFileConsent)
-	mux.HandleFunc("/api/file/check-modified", ws.handleAPIFileCheckModified)
 }
 
 // registerDesignRoutes mounts SP-140-6 §6b's read-only design endpoint.
@@ -265,7 +260,9 @@ func (ws *ReactWebServer) registerGitRoutes(mux *http.ServeMux) {
 func (ws *ReactWebServer) registerTerminalRoutes(mux *http.ServeMux, ctx context.Context) {
 	ws.lspManager = lspproxy.NewManager(ctx)
 	mux.HandleFunc("/api/lsp/ws", lspproxy.BridgeHandler(ws.lspManager, ws.upgrader, ws.workspaceRoot))
-	mux.HandleFunc("/api/lsp/status", ws.handleLSPStatus)
+	// /api/lsp/status is a Huma operation (see registerFilesHumaOperations in
+	// huma_files.go); its plain registration was removed. /api/lsp/ws is a
+	// WebSocket bridge, not a JSON operation, so it stays a plain handler.
 	mux.HandleFunc("/api/terminal/history", ws.handleTerminalHistory)
 	mux.HandleFunc("/api/terminal/sessions", ws.handleAPITerminalSessions)
 	mux.HandleFunc("/api/terminal/shells", ws.handleAPITerminalShells)
@@ -280,10 +277,4 @@ func (ws *ReactWebServer) registerSessionRoutes(mux *http.ServeMux) {
 	// singular /api/chat-session/ worktree route is a separate surface and
 	// stays a plain handler.
 	mux.HandleFunc("/api/chat-session/", ws.handleAPIChatSessionWorktree)
-}
-
-func (ws *ReactWebServer) registerSearchRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/search", ws.handleAPIQuerySearch)
-	mux.HandleFunc("/api/search/replace", ws.handleAPIQuerySearchReplace)
-	mux.HandleFunc("/api/upload/image", ws.handleUploadImage)
 }

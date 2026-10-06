@@ -24,7 +24,7 @@ checkboxes.
 
 ## SP-160 §160c — Backend contract (`roadmap/SP-160-integration-api.md`)
 
-- [ ] **contract.1** Route inventory: a small generator (e.g.
+- [x] **contract.1** Route inventory: a small generator (e.g.
       `cmd/api_inventory`) lists every route registered in
       `pkg/webui/routes.go` (method, path, handler) and writes
       `docs/api/endpoints.md`, grouped by family, with a "served by" column

@@ -40,9 +40,23 @@ const (
 	contractRoutesGo     = "pkg/webui/routes.go"
 	contractHumaRoutesGo = "pkg/webui/huma_routes.go"
 	contractHumaFilesGo  = "pkg/webui/huma_files.go"
+	contractHumaGitGo    = "pkg/webui/huma_git.go"
 	contractOpenAPIYAML  = "docs/api/openapi.yaml"
 	contractAllowlist    = "docs/api/undocumented.txt"
 )
+
+// contractRouteFiles returns the repo-root-joined paths of every file that
+// registers a route: the plain mux registrations in routes.go and the Huma
+// operations in the huma_*.go files. The contract-test AST walk must read
+// all of them so a new Huma route cannot ship undocumented.
+func contractRouteFiles(root string) []string {
+	return []string{
+		filepath.Join(root, contractRoutesGo),
+		filepath.Join(root, contractHumaRoutesGo),
+		filepath.Join(root, contractHumaFilesGo),
+		filepath.Join(root, contractHumaGitGo),
+	}
+}
 
 // openAPIInfo is the subset of the OpenAPI doc the contract test validates.
 type openAPIInfo struct {
@@ -367,11 +381,7 @@ func TestOpenAPISpecCoversAllRegisteredRoutes(t *testing.T) {
 	specPath := filepath.Join(root, contractOpenAPIYAML)
 	allowPath := filepath.Join(root, contractAllowlist)
 
-	registered := registeredRoutes(t,
-		filepath.Join(root, contractRoutesGo),
-		filepath.Join(root, contractHumaRoutesGo),
-		filepath.Join(root, contractHumaFilesGo),
-	)
+	registered := registeredRoutes(t, contractRouteFiles(root)...)
 	if len(registered) == 0 {
 		t.Fatalf("parsed zero registered routes from the route files; the routes.go parser is broken")
 	}

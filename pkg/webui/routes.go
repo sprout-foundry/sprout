@@ -227,34 +227,9 @@ func (ws *ReactWebServer) registerGitRoutes(mux *http.ServeMux) {
 	// status-only (unauthenticated through the auth middleware), POST is
 	// the only method that may pull — see handleAPISync.
 	mux.HandleFunc("/api/sync", ws.handleAPISync)
-	mux.HandleFunc("/api/git/status", ws.handleAPIGitStatus)
-	mux.HandleFunc("/api/git/stage", ws.handleAPIGitStage)
-	mux.HandleFunc("/api/git/unstage", ws.handleAPIGitUnstage)
-	mux.HandleFunc("/api/git/discard", ws.handleAPIGitDiscard)
-	mux.HandleFunc("/api/git/commit", ws.handleAPIGitCommit)
-	mux.HandleFunc("/api/git/commit-message", ws.handleAPIGitCommitMessage)
-	mux.HandleFunc("/api/git/confirm", ws.handleAPIConfirm)
-	mux.HandleFunc("/api/git/deep-review", ws.handleAPIGitDeepReview)
-	mux.HandleFunc("/api/git/deep-review/fix", ws.handleAPIGitDeepReviewFix)
-	mux.HandleFunc("/api/git/deep-review/fix/start", ws.handleAPIGitDeepReviewFixStart)
-	mux.HandleFunc("/api/git/deep-review/fix/status", ws.handleAPIGitDeepReviewFixStatus)
-	mux.HandleFunc("/api/git/stage-all", ws.handleAPIGitStageAll)
-	mux.HandleFunc("/api/git/unstage-all", ws.handleAPIGitUnstageAll)
-	mux.HandleFunc("/api/git/diff", ws.handleAPIGitDiff)
-	mux.HandleFunc("/api/git/branches", ws.handleAPIGitBranches)
-	mux.HandleFunc("/api/git/worktrees", ws.handleAPIGitWorktrees)
-	mux.HandleFunc("/api/git/worktree/create", ws.handleAPIGitWorktreeCreate)
-	mux.HandleFunc("/api/git/worktree/remove", ws.handleAPIGitWorktreeRemove)
-	mux.HandleFunc("/api/git/worktree/checkout", ws.handleAPIGitWorktreeCheckout)
-	mux.HandleFunc("/api/git/checkout", ws.handleAPIGitCheckout)
-	mux.HandleFunc("/api/git/revert", ws.handleAPIGitRevert)
-	mux.HandleFunc("/api/git/pull-request", ws.handleAPIGitPullRequest)
-	mux.HandleFunc("/api/git/branch/create", ws.handleAPIGitCreateBranch)
-	mux.HandleFunc("/api/git/pull", ws.handleAPIGitPull)
-	mux.HandleFunc("/api/git/push", ws.handleAPIGitPush)
-	mux.HandleFunc("/api/git/log", ws.handleAPIGitLog)
-	mux.HandleFunc("/api/git/commit/show", ws.handleAPIGitCommitShow)
-	mux.HandleFunc("/api/git/commit/show/file", ws.handleAPIGitCommitFileDiff)
+	// The /api/git/* routes are Huma operations (see registerGitHumaOperations
+	// in huma_git.go); their plain registrations were removed so each
+	// method+path pattern is registered once.
 }
 
 func (ws *ReactWebServer) registerTerminalRoutes(mux *http.ServeMux, ctx context.Context) {

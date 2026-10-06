@@ -19,20 +19,11 @@
 # the file is stable and diffs stay readable as entries are removed.
 /
 /api/bootstrap
-/api/browse
 /api/command/complete
 /api/command/execute
 /api/computer-use/test
 /api/config
-/api/create
-/api/delete
 /api/design/status
-/api/diagnostics
-/api/file
-/api/file/check-modified
-/api/file/consent
-/api/files
-/api/files/prettier-config
 /api/git/branch/create
 /api/git/branches
 /api/git/checkout
@@ -77,8 +68,6 @@
 /api/local-llm/models
 /api/local-llm/start
 /api/local-llm/status
-/api/lsp/status
-/api/lsp/ws
 /api/onboarding/complete
 /api/onboarding/skip
 /api/onboarding/status
@@ -90,10 +79,6 @@
 /api/proxy/chat/status
 /api/proxy/chat/stop
 /api/proxy/stats
-/api/rename
-/api/search
-/api/search/replace
-/api/semantic
 /api/settings
 /api/settings/credentials
 /api/settings/credentials/
@@ -123,7 +108,6 @@
 /api/txn/push
 /api/txn/run
 /api/txn/status
-/api/upload/image
 /api/workspace
 /api/workspace/browse
 /api/workspace/projects

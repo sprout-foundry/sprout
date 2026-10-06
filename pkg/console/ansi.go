@@ -3,18 +3,17 @@ package console
 import (
 	"fmt"
 	"os"
-
-	"github.com/sprout-foundry/sprout/pkg/envutil"
-	"golang.org/x/term"
 )
 
 // ANSI escape sequence helpers for consistent terminal control.
 
-// Esc returns an SGR color/style code when color output is enabled and ""
-// under NO_COLOR (or a non-color terminal), so call sites that splice codes
-// into format strings honor the user's preference without their own check.
+// Esc returns an SGR color/style code when color output is enabled (see
+// ColorOn) and "" otherwise, so call sites that splice codes into format
+// strings honor NO_COLOR, FORCE_COLOR, TERM=dumb and fully-redirected
+// output without their own check. Use SGR(w, code) when the destination
+// writer is known.
 func Esc(code string) string {
-	if !envutil.ResolveColorPreference(true) {
+	if !ColorOn() {
 		return ""
 	}
 	return code
@@ -90,12 +89,12 @@ func ClearToEndOfScreenSeq() string { return "\033[J" }
 
 // StdoutIsTerminal returns true if os.Stdout is connected to a terminal.
 func StdoutIsTerminal() bool {
-	return term.IsTerminal(int(os.Stdout.Fd()))
+	return IsTerminalWriter(os.Stdout)
 }
 
 // StderrIsTerminal returns true if os.Stderr is connected to a terminal.
 func StderrIsTerminal() bool {
-	return term.IsTerminal(int(os.Stderr.Fd()))
+	return IsTerminalWriter(os.Stderr)
 }
 
 // BoldText wraps text with bold formatting using ANSI codes.
@@ -103,8 +102,8 @@ func BoldText(text string) string {
 	return Esc(ColorBold) + text + Esc(ColorReset)
 }
 
-func formatYesNoPrompt(yesDefault bool, isTerminal func() bool) string {
-	if !isTerminal() {
+func formatYesNoPrompt(yesDefault bool, colorOn bool) string {
+	if !colorOn {
 		if yesDefault {
 			return "[Y/n]"
 		}
@@ -120,16 +119,12 @@ func formatYesNoPrompt(yesDefault bool, isTerminal func() bool) string {
 // letter bolded. When yesDefault is true, the Y is bolded ([Y/n]).
 // When yesDefault is false, the N is bolded ([y/N]).
 //
-// ANSI codes are only applied when the stderr is a TTY. When stderr is
-// not a terminal (e.g., piped to a file), the plain text is returned
-// without any escape codes.
+// ANSI codes are only applied when color is enabled for stderr.
 func FormatYesNoPrompt(yesDefault bool) string {
-	return formatYesNoPrompt(yesDefault, StderrIsTerminal)
+	return formatYesNoPrompt(yesDefault, ColorEnabled(os.Stderr))
 }
 
-// FormatYesNoPromptStdout returns a [y/N] or [Y/n] prompt string with the default
-// letter bolded, checking stdout for terminal status (same logic as
-// FormatYesNoPrompt but uses os.Stdout instead of os.Stderr for the TTY check).
+// FormatYesNoPromptStdout is FormatYesNoPrompt for prompts written to stdout.
 func FormatYesNoPromptStdout(yesDefault bool) string {
-	return formatYesNoPrompt(yesDefault, StdoutIsTerminal)
+	return formatYesNoPrompt(yesDefault, ColorEnabled(os.Stdout))
 }

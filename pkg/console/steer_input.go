@@ -8,8 +8,6 @@ import (
 	"sync"
 	"syscall"
 	"time"
-
-	"golang.org/x/term"
 )
 
 // isEAGAIN reports whether err is the "no data ready" return from a
@@ -239,7 +237,7 @@ func NewSteerInputReader(footer *StatusFooter, submitFn, queueFn, interruptFn fu
 		fd:           int(os.Stdin.Fd()),
 		autocomplete: newInlineAutocomplete(),
 	}
-	r.isTTY = term.IsTerminal(r.fd)
+	r.isTTY = Interactive(os.Stderr)
 	return r
 }
 

@@ -92,30 +92,32 @@ const (
 	GlyphDim
 )
 
-// glyphRune is the visible character for the glyph. UTF-8; widely
-// supported in terminal fonts.
+// Rune returns the visible character for the glyph from the active
+// symbol set, so a non-UTF-8 locale (or SPROUT_ASCII=1) gets an ASCII
+// rendering instead of mojibake.
 func (g Glyph) Rune() string {
+	s := Sym()
 	switch g {
 	case GlyphSuccess:
-		return "✓"
+		return s.Success
 	case GlyphError:
-		return "✗"
+		return s.Error
 	case GlyphWarning:
-		return "⚠"
+		return s.Warning
 	case GlyphInfo:
-		return "ⓘ"
+		return s.Info
 	case GlyphAction:
-		return "→"
+		return s.Arrow
 	case GlyphPaused:
-		return "⏸"
+		return s.Paused
 	case GlyphStopped:
-		return "⏹"
+		return s.Stopped
 	case GlyphShell:
 		return "$"
 	case GlyphDim:
-		return "·"
+		return s.Middot
 	default:
-		return "·"
+		return s.Middot
 	}
 }
 

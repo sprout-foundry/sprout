@@ -5,7 +5,11 @@ import (
 )
 
 func TestBoldText_WrapsTextWithANSICodes(t *testing.T) {
-	// Arrange
+	// FORCE_COLOR makes the color decision writer-independent so the
+	// assertion holds in a non-TTY test environment.
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("FORCE_COLOR", "1")
+
 	input := "hello"
 	expected := ColorBold + "hello" + ColorReset
 
@@ -19,30 +23,39 @@ func TestBoldText_WrapsTextWithANSICodes(t *testing.T) {
 }
 
 func TestBoldText_EmptyString(t *testing.T) {
-	// Arrange
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("FORCE_COLOR", "1")
+
 	input := ""
 	expected := ColorBold + "" + ColorReset
 
-	// Act
 	result := BoldText(input)
 
-	// Assert
 	if result != expected {
 		t.Errorf("BoldText(%q) = %q, want %q", input, result, expected)
 	}
 }
 
 func TestBoldText_MultiWord(t *testing.T) {
-	// Arrange
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("FORCE_COLOR", "1")
+
 	input := "foo bar baz"
 	expected := ColorBold + "foo bar baz" + ColorReset
 
-	// Act
 	result := BoldText(input)
 
-	// Assert
 	if result != expected {
 		t.Errorf("BoldText(%q) = %q, want %q", input, result, expected)
+	}
+}
+
+func TestBoldText_NoColor_ReturnsPlain(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	t.Setenv("FORCE_COLOR", "")
+
+	if got := BoldText("hello"); got != "hello" {
+		t.Errorf("BoldText under NO_COLOR = %q, want %q", got, "hello")
 	}
 }
 

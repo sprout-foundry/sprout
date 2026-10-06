@@ -7,12 +7,16 @@
 // deploy config (pkg/deployconfig.Resolve); the target only ever receives the
 // built directory — it never rebuilds.
 //
-// The gate is "what was verified is what ships": VerificationSnapshot
-// fingerprints the project tree at the moment verification passed, and
-// BuildAndDeploy refuses with ErrNoPassingVerification (no passing result) or
-// ErrTreeChanged (the tree moved since) before anything is built or uploaded.
-// The check runs again after the build, so a tree that changes while the
-// build runs is refused too and nothing is uploaded.
+// Two gates guard the path. The first is preview vs production: preview
+// deploys may run automatically, while a production deploy is refused with
+// ErrProductionNeedsConfirmation unless the caller supplies an explicit
+// Confirmation (see confirmation.go). The second is "what was verified is
+// what ships": VerificationSnapshot fingerprints the project tree at the
+// moment verification passed, and BuildAndDeploy refuses with
+// ErrNoPassingVerification (no passing result) or ErrTreeChanged (the tree
+// moved since) before anything is built or uploaded. The fingerprint check
+// runs again after the build, so a tree that changes while the build runs is
+// refused too and nothing is uploaded.
 //
 // The orchestrator is deliberately pure: the build runner, the tree
 // fingerprint, and the target are injected seams, so tests exercise every
@@ -124,11 +128,11 @@ type BuildRunner func(ctx context.Context, root, command string) error
 // tree can read as changed.
 type TreeFingerprint func(root string, skip ...string) (string, error)
 
-// Deployer orchestrates a build-and-upload: gate on verification, build in the
-// workspace, hand the built output to a target. Its three collaborators are
-// fields so a caller (and a test) wires them independently; nil Run and
-// Fingerprint fall back to the real defaults, while a nil Target is an error
-// (there is nowhere to ship).
+// Deployer orchestrates a build-and-upload: gate on confirmation and
+// verification, build in the workspace, hand the built output to a target. Its
+// three collaborators are fields so a caller (and a test) wires them
+// independently; nil Run and Fingerprint fall back to the real defaults, while
+// a nil Target is an error (there is nowhere to ship).
 type Deployer struct {
 	// Target receives the built output. Required.
 	Target DeployTarget
@@ -140,11 +144,17 @@ type Deployer struct {
 }
 
 // BuildAndDeploy builds the project in the workspace and uploads the built
-// output through the target, gated on a passing verification of the same tree.
+// output through the target, gated first on the preview/production rule and
+// then on a passing verification of the same tree. confirm is the caller's
+// explicit user confirmation; it is required for a production deploy and
+// ignored for a preview.
 //
-// The order is load-bearing — nothing is built or uploaded until the gate
+// The order is load-bearing — nothing is built or uploaded until every gate
 // holds, and nothing is uploaded if the tree moves:
 //
+//  0. A production deploy without an explicit confirmation is refused with
+//     ErrProductionNeedsConfirmation, before anything else runs. Preview
+//     deploys proceed with no confirmation.
 //  1. snap.Passed must be true, else ErrNoPassingVerification.
 //  2. The request's root/command/build directory/project must be set, else a
 //     plain error (ErrNoBuildCommand for a missing command).
@@ -156,9 +166,16 @@ type Deployer struct {
 //     ran is ErrTreeChanged and the target is never called.
 //  6. Only then is req.BuildDir handed to the target's Deploy, which uploads
 //     it. The target is never asked to build.
-func (d *Deployer) BuildAndDeploy(ctx context.Context, req BuildRequest, snap VerificationSnapshot) (Deployment, error) {
+func (d *Deployer) BuildAndDeploy(ctx context.Context, req BuildRequest, snap VerificationSnapshot, confirm Confirmation) (Deployment, error) {
 	if d.Target == nil {
 		return Deployment{}, ErrNoDeployTarget
+	}
+	// Confirmation is the first gate: a production deploy without an explicit
+	// user confirmation is refused here, before verification is even read,
+	// before a fingerprint, a build, or any call to the target. Preview
+	// deploys are unaffected.
+	if err := confirmProduction(req.Kind, confirm); err != nil {
+		return Deployment{}, err
 	}
 	if !snap.Passed {
 		return Deployment{}, ErrNoPassingVerification

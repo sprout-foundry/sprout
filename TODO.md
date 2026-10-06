@@ -634,10 +634,14 @@ needed whatever the integration work does. Spec context: SP-160 §160e.
       manifest command, re-checks the tree, then uploads through the target;
       any refusal path returns before an upload. Pinned by stub-based Go
       tests.
-- [ ] **156.5** Preview vs production: preview deploys may run
+- [x] **156.5** Preview vs production: preview deploys may run
       automatically after verification passes; production always needs
       explicit user confirmation. Test: unconfirmed production deploy is
       refused. Spec: SP-156 §156a-3.
+      Fixed: `pkg/deploy.Confirmation` (fail-closed) is checked as the first
+      gate in `BuildAndDeploy`; an unconfirmed production request returns
+      `ErrProductionNeedsConfirmation` before any build or upload, while
+      preview proceeds automatically. Pinned by Go tests.
 - [ ] **156.6** CLI: `sprout deploy`, `deploy status`, `deploy history`,
       `deploy rollback <id>` over the fake adapter. Tests. Spec: SP-156
       §156c.

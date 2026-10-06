@@ -13,9 +13,12 @@
 // A build is described by DeployRequest. The build runs in the workspace
 // (from the starter manifest's build command) and the adapter uploads the
 // resulting output — it never rebuilds on the target. The request carries the
-// build output directory. The build-and-upload orchestration, including the
-// "what was verified is what ships" verification gate, lives in build.go; the
-// interface and value types it drives live here.
+// build output directory. The build-and-upload orchestration lives in
+// build.go; the first gate it applies is preview vs production — a production
+// deploy is refused unless the caller supplies an explicit Confirmation
+// (confirmation.go), while a preview may run automatically — followed by the
+// "what was verified is what ships" verification gate; the interface and
+// value types it drives live here.
 package deploy
 
 import (

@@ -2,6 +2,11 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.22.4] - 2026-10-06
+
+- fix(cloud-escalation): the agent run-status no longer sticks on screen — `runTxnCommand` now emits a terminal phase (`done` on success, `error` on any failure), the bridge clears the status on both and adds a phase-aware stall watchdog, and the escalation toast guards in-flight callbacks with an epoch so a dismiss can't be undone by a late phase update (14ee86606)
+- fix(webui): the agent can now discover and use its browser git tools — rewritten `shell_command` description advertising git write subcommands, `gh`, and the full `gittool:` surface; `git config` get/set (`git_config` tool + shell subcommand); default commit/pull author so isomorphic-git merges no longer fail with "No name was provided for author" (14ee86606)
+
 ## [v0.22.3] - 2026-10-06
 
 - fix(wasm): GitHub-first shell — `git` write subcommands (add, commit, checkout, switch, fetch, push, pull, clone, init, rm, mv) and a new `gh` command (repo clone/view, pr list/view/checkout/create/diff/status, auth status) run in-browser via isomorphic-git + the GitHub REST API; PR-branch checkout fetches then checks out (ab79a70d1)

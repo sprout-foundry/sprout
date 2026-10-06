@@ -2,6 +2,16 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.22.3] - 2026-10-06
+
+- fix(wasm): GitHub-first shell — `git` write subcommands (add, commit, checkout, switch, fetch, push, pull, clone, init, rm, mv) and a new `gh` command (repo clone/view, pr list/view/checkout/create/diff/status, auth status) run in-browser via isomorphic-git + the GitHub REST API; PR-branch checkout fetches then checks out (ab79a70d1)
+- fix(wasm): `gitClient.commit` passed the undefined `opts.author` instead of the computed default ("No name was provided for author"); `gitClient.clone` defaulted to depth 1 / single-branch so PR branches were unreachable — now depth 50 multi-branch, with `git_fetch`/`git_refs` agent tools added (ab79a70d1)
+- fix(automate): `list_automate_workflows` crashed with `O_DIRECTORY` on js/wasm — `automate.Discover` now uses an O_DIRECTORY-free directory read (ab79a70d1)
+- fix(agent): subagent spawn failed with "unsupported provider: platform" in the browser build — fall back to the provider string as the ClientType, as the main WASM agent path does (ab79a70d1)
+- fix(webui): the in-browser agent's two-origin network allowlist blocked GitHub — thread the platform-advertised egress proxy (SPROUT_EGRESS_PROXY) through to `setCorsProxy` (ab79a70d1)
+- feat(console): locale-aware glyph set + writer-aware color capability layer (77a1988c7)
+- fix(console): don't skip the second VT handle in Windows init (e6f252d94)
+
 ## [v0.18.10] - 2026-09-22
 
 - perf: stop re-parsing markdown and re-rendering unchanged chat messages (ed3a01f85)

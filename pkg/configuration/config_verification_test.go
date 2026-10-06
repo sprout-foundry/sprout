@@ -74,6 +74,27 @@ func TestConfigVerificationJSONRoundTrip(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, float64(5), section["repair_attempts"])
 
+	// Total repair-rounds cap: serialized when non-zero, omitted when
+	// unset, and read back with the same JSON key.
+	cfg = NewConfig()
+	cfg.Verification = &VerificationConfig{Enabled: true, TotalRepairRounds: 6}
+	data, err = json.Marshal(cfg)
+	require.NoError(t, err)
+	var withTotal map[string]interface{}
+	require.NoError(t, json.Unmarshal(data, &withTotal))
+	section, ok = withTotal["verification"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, float64(6), section["total_repair_rounds"])
+	assert.NotContains(t, section, "repair_attempts", "the unset per-check limit must be omitted")
+
+	var withTotalOut Config
+	require.NoError(t, json.Unmarshal(
+		[]byte(`{"verification":{"enabled":true,"total_repair_rounds":2}}`), &withTotalOut))
+	require.NotNil(t, withTotalOut.Verification)
+	assert.Equal(t, 2, withTotalOut.VerificationRepairTotalRounds())
+	assert.Equal(t, DefaultVerificationRepairAttempts, withTotalOut.VerificationRepairAttempts(),
+		"naming the total alone leaves the per-check limit at its default")
+
 	// Unset: a nil section is omitted from the serialized config.
 	zero := NewConfig()
 	data, err = json.Marshal(zero)
@@ -186,6 +207,34 @@ func TestMergeConfig_Verification(t *testing.T) {
 	assert.False(t, result.VerificationEnabled(), "setting the limit alone must not enable verification")
 	assert.Equal(t, 5, result.VerificationRepairAttempts())
 
+	// The total repair-rounds cap follows the same conventions as the
+	// per-check limit: a section naming only the total never enables the
+	// feature, and non-zero-wins applies between layers.
+	var overrideTotal Config
+	require.NoError(t, unmarshalLayer([]byte(`{"verification":{"total_repair_rounds":7}}`), &overrideTotal))
+	result = MergeConfig(&Config{}, &overrideTotal)
+	assert.False(t, result.VerificationEnabled(), "setting the total alone must not enable verification")
+	assert.Equal(t, 7, result.VerificationRepairTotalRounds())
+	assert.Equal(t, DefaultVerificationRepairAttempts, result.VerificationRepairAttempts(),
+		"the total alone must leave the per-check limit at its default")
+
+	baseTotal := &Config{Verification: &VerificationConfig{Enabled: true, TotalRepairRounds: 4}}
+	result = MergeConfig(baseTotal, &Config{Verification: &VerificationConfig{TotalRepairRounds: 9}})
+	assert.Equal(t, 9, result.VerificationRepairTotalRounds(), "an explicit total must beat the base")
+	result = MergeConfig(baseTotal, &Config{})
+	assert.Equal(t, 4, result.VerificationRepairTotalRounds(), "a silent override must keep the base total")
+
+	// The two numeric caps are independent: naming one never disturbs the
+	// other.
+	result = MergeConfig(baseTotal, &Config{Verification: &VerificationConfig{RepairAttempts: 8}})
+	assert.Equal(t, 8, result.VerificationRepairAttempts())
+	assert.Equal(t, 4, result.VerificationRepairTotalRounds(), "naming the limit must not disturb the base total")
+	result = MergeConfig(
+		&Config{Verification: &VerificationConfig{Enabled: true, RepairAttempts: 2}},
+		&Config{Verification: &VerificationConfig{TotalRepairRounds: 5}})
+	assert.Equal(t, 2, result.VerificationRepairAttempts())
+	assert.Equal(t, 5, result.VerificationRepairTotalRounds())
+
 	// The limit follows non-zero-wins: an explicit override beats a base
 	// limit, and a silent override keeps the base limit.
 	base := &Config{Verification: &VerificationConfig{Enabled: true, RepairAttempts: 3}}
@@ -260,7 +309,33 @@ func TestLoadConfigWithLayers_Verification(t *testing.T) {
 	assert.True(t, cfg.VerificationEnabled())
 	assert.Equal(t, 2, cfg.VerificationRepairAttempts(), "the narrower limit must win")
 
+	// The total repair-rounds cap stacks across layers the same way: a
+	// narrower explicit total wins, a silent narrower layer keeps the
+	// broader total, and the two numeric caps stay independent.
+	writeFile(t, globalPath, `{"version":"2.1","verification":{"enabled":true,"repair_attempts":5,"total_repair_rounds":12}}`)
+	writeFile(t, workspacePath, `{"verification":{"total_repair_rounds":8}}`)
+	cfg = load()
+	assert.Equal(t, 8, cfg.VerificationRepairTotalRounds(), "the narrower (workspace) total must win")
+	assert.Equal(t, 5, cfg.VerificationRepairAttempts(), "the global limit must survive the total-only override")
+
 	writeFile(t, workspacePath, `{"reasoning_effort":"high"}`)
+	cfg = load()
+	assert.Equal(t, 12, cfg.VerificationRepairTotalRounds(), "a silent workspace must keep the global total")
+	assert.Equal(t, 5, cfg.VerificationRepairAttempts())
+
+	// No layer naming the total: it falls back to the derived default
+	// (twice the effective per-check limit, honoring an explicit limit).
+	require.NoError(t, os.Remove(globalPath))
+	writeFile(t, workspacePath, `{"verification":{"enabled":true}}`)
+	cfg = load()
+	assert.True(t, cfg.VerificationEnabled())
+	assert.Equal(t, DefaultVerificationRepairTotalRounds, cfg.VerificationRepairTotalRounds(),
+		"no layer naming the total must fall back to the derived default")
+	assert.Equal(t, DefaultVerificationRepairAttempts, cfg.VerificationRepairAttempts())
+
+	writeFile(t, workspacePath, `{"reasoning_effort":"high"}`)
+
+	writeFile(t, globalPath, `{"version":"2.1","verification":{"enabled":true,"repair_attempts":5}}`)
 	cfg = load()
 	assert.Equal(t, 5, cfg.VerificationRepairAttempts(), "a silent workspace must keep the global limit")
 }
@@ -305,6 +380,35 @@ func TestVerificationAccessors(t *testing.T) {
 			assert.Equal(t, tc.want, tc.cfg.VerificationRepairAttempts())
 		})
 	}
+
+	totalCases := []struct {
+		name string
+		cfg  *Config
+		want int
+	}{
+		{"zero config uses the default", &Config{}, DefaultVerificationRepairTotalRounds},
+		{"new config uses the default", NewConfig(), DefaultVerificationRepairTotalRounds},
+		{"nil section uses the default", &Config{}, DefaultVerificationRepairTotalRounds},
+		{"explicit total is honored", &Config{Verification: &VerificationConfig{TotalRepairRounds: 1}}, 1},
+		{"non-positive total falls back", &Config{Verification: &VerificationConfig{TotalRepairRounds: 0}}, DefaultVerificationRepairTotalRounds},
+		{"negative total falls back", &Config{Verification: &VerificationConfig{TotalRepairRounds: -1}}, DefaultVerificationRepairTotalRounds},
+		{"nil config uses the default", nil, DefaultVerificationRepairTotalRounds},
+		{
+			"unset total derives from an explicit per-check limit",
+			&Config{Verification: &VerificationConfig{RepairAttempts: 5}},
+			10,
+		},
+		{
+			"explicit total wins over the derived default",
+			&Config{Verification: &VerificationConfig{RepairAttempts: 5, TotalRepairRounds: 4}},
+			4,
+		},
+	}
+	for _, tc := range totalCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, tc.cfg.VerificationRepairTotalRounds())
+		})
+	}
 }
 
 // TestVerificationConfigResolve pins the section's default-resolution:
@@ -315,15 +419,35 @@ func TestVerificationConfigResolve(t *testing.T) {
 	resolved := nilCfg.Resolve()
 	assert.False(t, resolved.Enabled, "a nil section must resolve to off")
 	assert.Equal(t, DefaultVerificationRepairAttempts, resolved.RepairAttempts)
+	assert.Equal(t, DefaultVerificationRepairTotalRounds, resolved.TotalRepairRounds)
 
 	zero := (&VerificationConfig{}).Resolve()
 	assert.False(t, zero.Enabled)
 	assert.Equal(t, DefaultVerificationRepairAttempts, zero.RepairAttempts,
 		"a zero limit must fall back to the default")
+	assert.Equal(t, DefaultVerificationRepairTotalRounds, zero.TotalRepairRounds,
+		"a zero total must fall back to the default")
 
 	set := (&VerificationConfig{Enabled: true, RepairAttempts: 5}).Resolve()
 	assert.True(t, set.Enabled)
 	assert.Equal(t, 5, set.RepairAttempts)
+	assert.Equal(t, 10, set.TotalRepairRounds,
+		"an unset total must default to twice the effective per-check limit")
+
+	setBoth := (&VerificationConfig{Enabled: true, RepairAttempts: 5, TotalRepairRounds: 4}).Resolve()
+	assert.Equal(t, 4, setBoth.TotalRepairRounds,
+		"an explicit total must win over the derived default")
+
+	totalOnly := (&VerificationConfig{TotalRepairRounds: 4}).Resolve()
+	assert.Equal(t, DefaultVerificationRepairAttempts, totalOnly.RepairAttempts)
+	assert.Equal(t, 4, totalOnly.TotalRepairRounds,
+		"an explicit total holds even when the per-check limit is at its default")
+
+	negative := (&VerificationConfig{RepairAttempts: -1, TotalRepairRounds: -2}).Resolve()
+	assert.Equal(t, DefaultVerificationRepairAttempts, negative.RepairAttempts,
+		"a negative limit must fall back to the default")
+	assert.Equal(t, DefaultVerificationRepairTotalRounds, negative.TotalRepairRounds,
+		"a negative total must fall back to the derived default")
 }
 
 // TestConfigVerificationCommandsJSON pins the on-disk contract of the

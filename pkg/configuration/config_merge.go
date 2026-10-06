@@ -317,14 +317,14 @@ func MergeConfig(base, override *Config) *Config {
 	// Merge Verification configuration (SP-149 149e/149c/149b). The
 	// feature is off by default; the enable flag carries explicit-key
 	// semantics so a narrower layer can disable a broader layer's
-	// enable, the repair-attempt limit follows the non-zero-wins
-	// convention of the other numeric caps, and the explicit build/test
-	// commands follow the non-empty-wins convention of the other string
-	// fields (a narrower layer's command beats a broader one; a silent
-	// layer keeps it).
+	// enable, the repair-attempt limit and the total repair-rounds cap
+	// follow the non-zero-wins convention of the other numeric caps, and
+	// the explicit build/test commands follow the non-empty-wins
+	// convention of the other string fields (a narrower layer's command
+	// beats a broader one; a silent layer keeps it).
 	if v := override.Verification; v != nil &&
 		(override.overrides("verification.enabled", v.Enabled) || v.RepairAttempts > 0 ||
-			v.BuildCommand != "" || v.TestCommand != "") {
+			v.TotalRepairRounds > 0 || v.BuildCommand != "" || v.TestCommand != "") {
 		if result.Verification == nil {
 			result.Verification = &VerificationConfig{}
 		}
@@ -333,6 +333,9 @@ func MergeConfig(base, override *Config) *Config {
 		}
 		if v.RepairAttempts > 0 {
 			result.Verification.RepairAttempts = v.RepairAttempts
+		}
+		if v.TotalRepairRounds > 0 {
+			result.Verification.TotalRepairRounds = v.TotalRepairRounds
 		}
 		if v.BuildCommand != "" {
 			result.Verification.BuildCommand = v.BuildCommand

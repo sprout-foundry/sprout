@@ -118,9 +118,14 @@ protects.
       the newest held payload via the exported
       `agent.LastLanguageGuardOriginal`, and the terminal replacement
       notice now points at it. Pinned by Go command/CLI tests and vitest.
-- [ ] **fix.12** Cap total repair rounds per turn (not only per check key),
+- [x] **fix.12** Cap total repair rounds per turn (not only per check key),
       so alternating failures or new interaction IDs cannot loop.
       Spec: SP-149.
+      Fixed: a `total_repair_rounds` cap (config, default derived as 2×N)
+      bounds the loop in addition to the per-check rule; the pure
+      `verificationLoopShouldStop` helper ends the turn when either fires,
+      and the §149d failure report still attaches. Pinned by pure stop-rule
+      tests and an alternating-failure integration fixture.
 - [ ] **fix.13** Verification runs only for application-code changes: skip
       docs and `.sprout/` paths in `TurnChangedPaths`. Spec: SP-149 §149a.
 - [ ] **fix.14** Plan revision never decreases: `planstore` `Save` bumps from

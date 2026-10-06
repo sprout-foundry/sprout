@@ -183,6 +183,34 @@ func (a *Agent) RollupSubagentUsage(r *subagents.SubagentResult) {
 	a.state.SetTotalTokens(a.state.GetTotalTokens() + r.TokensUsed)
 }
 
+// BookRoleUsage attributes an external model call's usage to a role in the
+// agent's per-role metrics. It records a cost entry under role — feeding
+// both the per-role bucket and the overall cost totals — and advances the
+// overall prompt/completion/total token counters, exactly as a first-party
+// LLM call would, so the per-role totals keep summing to the overall
+// totals. Used by a role-serving capability that runs its own model client
+// outside the main loop (the progress summarizer), so that spend is visible
+// in /cost-style views under its role. A no-op for a nil agent/state or a
+// fully-zero usage.
+func (a *Agent) BookRoleUsage(role string, promptTokens, completionTokens int, cost float64) {
+	if a == nil || a.state == nil {
+		return
+	}
+	if promptTokens == 0 && completionTokens == 0 && cost <= 0 {
+		return
+	}
+	a.state.AddCostEntry(CostEntry{
+		Role:             role,
+		BillingType:      BillingPayPerToken,
+		ChargedCost:      cost,
+		PromptTokens:     promptTokens,
+		CompletionTokens: completionTokens,
+	})
+	a.state.SetPromptTokens(a.state.GetPromptTokens() + promptTokens)
+	a.state.SetCompletionTokens(a.state.GetCompletionTokens() + completionTokens)
+	a.state.SetTotalTokens(a.state.GetTotalTokens() + promptTokens + completionTokens)
+}
+
 // GetCompletionTokens returns the total completion tokens used
 func (a *Agent) GetCompletionTokens() int {
 	return a.state.GetCompletionTokens()

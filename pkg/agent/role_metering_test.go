@@ -295,3 +295,32 @@ func cellExists(snap []LanguageGuardModelStat, model, role string) bool {
 	}
 	return false
 }
+
+// TestBookRoleUsageMetersExternalRoleCall pins the metering seam a
+// role-serving capability uses to attribute its own model call:
+// BookRoleUsage books the usage into the named role's bucket and
+// advances the overall token totals, so the per-role totals keep summing
+// to the overall totals. A zero usage is a no-op.
+func TestBookRoleUsageMetersExternalRoleCall(t *testing.T) {
+	a := newTestAgent(t)
+	defer a.Shutdown()
+
+	a.BookRoleUsage(configuration.RoleSummarizer, 120, 20, 0.002)
+
+	ru := a.GetRoleUsage()
+	if len(ru) != 1 || ru[0].Role != configuration.RoleSummarizer {
+		t.Fatalf("GetRoleUsage = %+v, want a single %q entry", ru, configuration.RoleSummarizer)
+	}
+	if ru[0].PromptTokens != 120 || ru[0].CompletionTokens != 20 || ru[0].Calls != 1 {
+		t.Errorf("summarizer role = %+v, want 120/20/1", ru[0])
+	}
+	if a.GetPromptTokens() != 120 || a.GetCompletionTokens() != 20 || a.GetTotalTokens() != 140 {
+		t.Errorf("overall tokens = %d/%d/%d, want 120/20/140", a.GetPromptTokens(), a.GetCompletionTokens(), a.GetTotalTokens())
+	}
+
+	// A fully-zero booking is a no-op (no phantom "calls").
+	a.BookRoleUsage(configuration.RoleSummarizer, 0, 0, 0)
+	if got := a.GetRoleUsage()[0].Calls; got != 1 {
+		t.Errorf("Calls after a zero booking = %d, want 1", got)
+	}
+}

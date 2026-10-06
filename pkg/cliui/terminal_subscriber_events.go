@@ -316,11 +316,16 @@ func (s *TerminalSubscriberState) HandleAgentMessageEvent(data map[string]interf
 // for the web UI and webhooks (SP-151 §151c / §151d) — it just isn't
 // printed in the terminal.
 func (s *TerminalSubscriberState) HandleProgressEvent(evtType string, data map[string]interface{}, indicator *console.ActivityIndicator, footer *console.StatusFooter) {
-	summary := ProgressEventSummary(evtType, data)
-	if summary == "" {
+	// The story invariant: a progress_question's "Needs a decision" line is
+	// deliberately not rendered — the interactive ask_user prompt already
+	// shows the decision, so a second line would be redundant. Skip it
+	// before the summary so the optional summarizer is never consulted for
+	// an event the terminal does not print.
+	if evtType == events.EventTypeProgressQuestion {
 		return
 	}
-	if evtType == events.EventTypeProgressQuestion {
+	summary := s.summarizeProgressEvent(evtType, data)
+	if summary == "" {
 		return
 	}
 	// Progress lines are informational; a completed run is a success

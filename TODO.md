@@ -244,9 +244,13 @@ protects.
       early stop); `Runner.Timeout` + `runTurnWithTimeout` stop a hung turn
       through the agent's real interrupt and record it wrapping
       `ErrRunTimeout`, never Passed. Pinned by timeout + CLI tests.
-- [ ] **wire.2** Summarizer role: call the progress summarizer where the spec
+- [x] **wire.2** Summarizer role: call the progress summarizer where the spec
       says, through role metering and with a timeout, or remove it.
       Spec: SP-151 §151.8.
+      Fixed: the progress-event handler now calls the optional model
+      summarizer (bounded by a timeout with template fallback) and books its
+      usage under the `summarizer` role via `BookRoleUsage`; a success
+      summary still requires a passing verification. Pinned by CLI tests.
 
 ## Review fixes — repository rules
 - [ ] **rules.1** Remove item tags from code comments and user-visible

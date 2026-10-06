@@ -120,6 +120,7 @@ func (a *Agent) runTurnEndVerification(qc *queryRunContext, finalResult string) 
 	}
 
 	limit := cfg.VerificationRepairAttempts()
+	totalCap := cfg.VerificationRepairTotalRounds()
 	attempts := make(map[string]int)
 	rounds := 0
 
@@ -138,7 +139,7 @@ func (a *Agent) runTurnEndVerification(qc *queryRunContext, finalResult string) 
 		}
 		// Stored on every run (pass, fail, stop-rule): the result, the
 		// per-check repair attempts consumed so far, the configured
-		// limit, and the repair rounds the hook has run — the state
+		// limits, and the repair rounds the hook has run — the state
 		// 149.6 attaches to the final reply, SP-151 records, and the
 		// SP-154 benchmark reads (154.3). A snapshot of the counters:
 		// the loop keeps counting into its own map across repair
@@ -153,10 +154,12 @@ func (a *Agent) runTurnEndVerification(qc *queryRunContext, finalResult string) 
 			// Passing, or all-skipped where nothing failed — both stand.
 			return finalResult, nil
 		}
-		if verificationStopRuleFired(res, attempts, limit) {
-			// Every failing check has used its repair attempts: the loop
-			// stops and the last result stands (149d: the final reply
-			// states what failed).
+		if verificationLoopShouldStop(res, attempts, limit, rounds, totalCap) {
+			// The stopping rule fired — every failing check has used its
+			// repair attempts (the per-check rule), or the turn's total
+			// repair rounds have reached the cap. The loop stops and the
+			// last result stands (149d: the final reply states what
+			// failed).
 			return finalResult, nil
 		}
 		for _, c := range res.Checks {
@@ -180,6 +183,27 @@ func (a *Agent) runTurnEndVerification(qc *queryRunContext, finalResult string) 
 		}
 		finalResult = repairResult
 	}
+}
+
+// verificationLoopShouldStop reports whether the SP-149 §149c stopping
+// rule has fired for one failing verification run. Either condition ends
+// the loop, whichever fires first:
+//
+//   - the per-check rule: every failing check has used its repair-attempt
+//     limit. A run whose failure comes only from run-level errors (no
+//     failing check) fires immediately — there is nothing to repair per
+//     check.
+//   - the total-rounds cap: the loop has already run totalCap repair
+//     rounds. The per-check counters cannot see failure patterns that
+//     rotate between rounds — two checks alternating failures so neither
+//     key's counter ever reaches the limit, or interaction checks whose
+//     item id (and therefore counter key) is new every round — so the
+//     total bound is what guarantees the loop always terminates.
+func verificationLoopShouldStop(res *verify.Result, attempts map[string]int, limit, rounds, totalCap int) bool {
+	if rounds >= totalCap {
+		return true
+	}
+	return verificationStopRuleFired(res, attempts, limit)
 }
 
 // verificationStopRuleFired reports whether the SP-149 §149c stopping rule

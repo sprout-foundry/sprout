@@ -1,6 +1,6 @@
 # SP-159 — `sprout runner`: Your Own Machine as the Browser Build's Runner
 
-> **Status (2026-10-05):** Proposed.
+> **Status (2026-10-05):** In progress — `sprout runner` link/start/status/mode/install, container/native/bare-metal launchers, host server and the macOS/Linux sandbox are implemented; relay and the browser host picker are next.
 > Platform counterpart: platform SP-BUILDER-14 (runner linking, protocol,
 > security fixes), building on SP-BUILDER-12 (runner-hosted workspaces) and
 > SP-BUILDER-13 (relay tunnels). Related: SP-158 (design loop in the browser
@@ -96,6 +96,27 @@ Native sandbox policy (all platforms, to the extent each OS supports it):
   injected only for the commands that need them (git operations go through
   the runner's credential helper, not an env var).
 
+Native mode on macOS, as built and verified with git, clang, `swift build`
+and `xcodebuild` on a Swift package:
+
+- Default writable set beyond the workspace: the per-user cache dir
+  (clang module and xcrun caches), specific per-user temp entries
+  (`xcrun_db*`, Foundation's `TemporaryItems/`, SwiftPM's
+  `TemporaryDirectory.*`, `ResultBundle_*`) and `/private/tmp`.
+- Home caches (`~/Library/Caches/org.swift.swiftpm`, Xcode DerivedData,
+  `~/.npm`) stay read-only by default — writing a shared host cache from a
+  workspace is a poisoning route. Users allowlist them per runner; npm gets
+  a per-workspace cache via `npm_config_cache`.
+- A sandboxed process cannot create a nested Seatbelt sandbox: SwiftPM
+  needs `--disable-sandbox` (or xcodebuild's
+  `-IDEPackageSupportDisableManifestSandbox=YES`), and Xcode projects with
+  user-script sandboxing likely need `ENABLE_USER_SCRIPT_SANDBOXING=NO`.
+- Not blocked: Mach-service paths (securityd for the System keychain,
+  nsurlsessiond for indirect network). Denying them is a follow-up; it
+  risks breaking code signing.
+- Linux: deny-read paths that don't exist yet are not masked (bwrap needs
+  an existing mount point); Landlock and seccomp are not implemented.
+
 `bare-metal` is opt-in per runner and per machine owner (`sprout runner mode
 bare-metal` requires an interactive confirmation on the machine itself; the
 platform cannot switch a runner into it). Its mode is shown wherever the
@@ -147,12 +168,15 @@ heartbeat; the platform stores it and the browser shows it.
       no copied secrets; the key lands in the OS keyring.
 - [ ] A linked Mac behind NAT, with no public URL, serves the browser build's
       escalations end to end over the relay.
-- [ ] `container`, `native` and `bare-metal` each run `npm test` in a
-      workspace; `native` on macOS runs `xcodebuild` for a sample project.
-- [ ] Native sandbox: a command writing outside the workspace or reading
-      `~/.ssh` fails; the same command succeeds in `bare-metal`.
-- [ ] The platform cannot put a runner into `bare-metal`; the mode is shown in
-      the escalation prompt.
+- [x] `native` and `bare-metal` serve a real workspace daemon end to end
+      through the host server (`TestHostLauncherEndToEnd`, gated on
+      `SPROUT_RUNNER_E2E_BIN`); `native` on macOS builds a Swift package
+      with `xcodebuild` (verified by hand). [ ] `container` end to end.
+- [x] Native sandbox: a command writing outside the workspace or reading
+      `~/.ssh` fails (`pkg/runner/sandbox` tests); bare metal is unconfined.
+- [x] The platform cannot put a runner into `bare-metal`: the mode is set
+      only by `sprout runner mode`, which requires typing a confirmation on
+      the machine. [ ] The mode is shown in the escalation prompt.
 - [ ] Streaming run output appears in the browser terminal as it is produced.
 - [ ] A dev server started through `spawn` renders in the preview pane,
       including HMR.

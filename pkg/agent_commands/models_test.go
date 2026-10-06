@@ -566,10 +566,39 @@ func TestModelsCommandExecute_RoleModelValidation(t *testing.T) {
 	// Whitespace in the role name is rejected.
 	require.Error(t, cmd.Execute([]string{"--role", "pl anner", "m"}, chatAgent))
 
-	// Unknown role names are accepted (the Roles map takes arbitrary
-	// names — the SP-150 open question of user-defined roles).
-	require.NoError(t, cmd.Execute([]string{"--role", "my-custom-role", "m"}, chatAgent))
-	assert.Equal(t, "m", cm.GetConfig().GetRole("my-custom-role").Model)
+	// Unknown role names are rejected — only the built-ins are resolvable,
+	// so an arbitrary name would persist a selection no feature reads.
+	require.Error(t, cmd.Execute([]string{"--role", "my-custom-role", "m"}, chatAgent))
+	assert.Empty(t, cm.GetConfig().GetRole("my-custom-role").Model, "unknown role must not be persisted")
+}
+
+// TestModelsCommandExecute_RoleModelUnknownRoleRejected pins the unknown-role
+// gate: a near-miss name is rejected with the valid roles named in the error
+// and nothing persisted, while every built-in remains accepted.
+func TestModelsCommandExecute_RoleModelUnknownRoleRejected(t *testing.T) {
+	chatAgent := createTestAgentWithTempConfig(t)
+	cm := chatAgent.GetConfigManager()
+	require.NotNil(t, cm)
+
+	var buf bytes.Buffer
+	cmd := &ModelsCommand{}
+	cmd.SetOutput(&buf)
+
+	// A typo'd built-in ("Planer") is rejected, and the error names the
+	// valid roles so the user can correct it.
+	err := cmd.Execute([]string{"--role", "Planer", "glm-4"}, chatAgent)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, `unknown role "Planer"`)
+	for _, valid := range configuration.BuiltInRoles() {
+		assert.Contains(t, err.Error(), valid)
+	}
+	assert.Empty(t, cm.GetConfig().GetRole("Planer").Model, "near-miss role must not be persisted")
+
+	// Every built-in role still passes the gate.
+	for _, role := range configuration.BuiltInRoles() {
+		require.NoError(t, cmd.Execute([]string{"--role", role, "m-" + role}, chatAgent))
+		assert.Equal(t, "m-"+role, cm.GetConfig().GetRole(role).Model)
+	}
 }
 
 func TestParseRoleArgs(t *testing.T) {

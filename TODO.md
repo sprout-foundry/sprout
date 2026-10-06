@@ -603,9 +603,12 @@ needed whatever the integration work does. Spec context: SP-160 §160e.
 
 ## SP-156 — Deploy Targets and Ship Mode (`roadmap/SP-156-deploy-targets.md`)
 
-- [ ] **156.1** Deploy target interface (`Deploy`, `Status`, `List`,
+- [x] **156.1** Deploy target interface (`Deploy`, `Status`, `List`,
       `Rollback`, `PreviewURL`) and a fake adapter. Round-trip tests.
       Spec: SP-156 §156a.
+      Fixed: new `pkg/deploy` with `DeployTarget`, `Deployment`,
+      `DeployRequest`, deployment kinds/states, sentinel errors, and an
+      in-memory `FakeTarget` adapter. Pinned by round-trip Go tests.
 - [ ] **156.2** `.sprout/deploy.json` config and validator; build output
       taken from the starter manifest. Tests. Spec: SP-156 §156a.
 - [ ] **156.3** Credentials from the existing credential store or the

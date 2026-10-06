@@ -2,6 +2,12 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.22.5] - 2026-10-06
+
+- fix(webui): the chat composer steers instead of dead-ending on "already in process" — the send path's steer-vs-new decision now stays in sync with the real run state, and the browser/wasm backend returns a machine-readable `query_in_progress` so a concurrent submit recovers by steering (922592cdd)
+- fix(security): egress redaction is JSON-safe — a serialized request body is redacted per string value and re-encoded, so a secret whose scan boundary spans a JSON escape can no longer corrupt the payload and trip the refuse-to-send guard (c226fb39d)
+- fix(webui): the image preview is mouse-navigable — drag pans at any zoom, the image is clamped to the pane (never off-screen), double-click toggles fit ↔ 100%, and the fit/zoom keyboard shortcuts work (bba4d4383)
+
 ## [v0.22.4] - 2026-10-06
 
 - fix(cloud-escalation): the agent run-status no longer sticks on screen — `runTxnCommand` now emits a terminal phase (`done` on success, `error` on any failure), the bridge clears the status on both and adds a phase-aware stall watchdog, and the escalation toast guards in-flight callbacks with an epoch so a dismiss can't be undone by a late phase update (14ee86606)

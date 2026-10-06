@@ -16,6 +16,7 @@ import {
   CloudTxnError,
   createTxn,
   resolveTxnWorkspace,
+  RunnerUnavailableError,
   txnFinish,
   txnPull,
   txnPush,
@@ -72,6 +73,13 @@ function dispatchTrigger(overrides: Partial<EscalationTriggerEvent> = {}): void 
       },
     }),
   );
+}
+
+/** Click the txn CTA once the runner list has loaded (it is disabled until then). */
+async function clickRunTxn(): Promise<void> {
+  const button = screen.getByTestId('escalation-toast-txn');
+  await waitFor(() => expect(button).toBeEnabled());
+  fireEvent.click(button);
 }
 
 /** Fire a trigger inside act() so its state update lands in act. */
@@ -203,11 +211,11 @@ describe('EscalationListener — ETH-2 txn action', () => {
   it('runs open → push → run → pull → apply → finish and renders the result', async () => {
     render(createElement(EscalationListener));
     fireTrigger();
-    fireEvent.click(screen.getByTestId('escalation-toast-txn'));
+    await clickRunTxn();
 
     await flush();
 
-    expect(resolveTxnWorkspace).toHaveBeenCalledWith('https://github.com/acme/app');
+    expect(resolveTxnWorkspace).toHaveBeenCalledWith('https://github.com/acme/app', { host: 'fly' });
     expect(createTxn).toHaveBeenCalledWith('ws-1');
     expect(txnPush).toHaveBeenCalledWith(
       'ws-1',
@@ -239,7 +247,7 @@ describe('EscalationListener — ETH-2 txn action', () => {
     gitLog.mockResolvedValue([]);
     render(createElement(EscalationListener));
     fireTrigger();
-    fireEvent.click(screen.getByTestId('escalation-toast-txn'));
+    await clickRunTxn();
     await flush();
 
     const manifest = vi.mocked(txnPush).mock.calls[0][2];
@@ -250,7 +258,7 @@ describe('EscalationListener — ETH-2 txn action', () => {
     gitStatus.mockResolvedValue({ staged: [], unstaged: [], untracked: [] });
     render(createElement(EscalationListener));
     fireTrigger();
-    fireEvent.click(screen.getByTestId('escalation-toast-txn'));
+    await clickRunTxn();
     await flush();
 
     expect(vi.mocked(txnPush).mock.calls[0][2].files).toEqual([]);
@@ -260,7 +268,7 @@ describe('EscalationListener — ETH-2 txn action', () => {
     vi.mocked(txnRun).mockRejectedValue(new Error('container died'));
     render(createElement(EscalationListener));
     fireTrigger();
-    fireEvent.click(screen.getByTestId('escalation-toast-txn'));
+    await clickRunTxn();
     await flush();
 
     expect(await screen.findByTestId('escalation-toast-txn-error')).toHaveTextContent(
@@ -275,7 +283,7 @@ describe('EscalationListener — ETH-2 txn action', () => {
     vi.mocked(txnPull).mockRejectedValue(new CloudTxnError('pull failed', 500));
     render(createElement(EscalationListener));
     fireTrigger();
-    fireEvent.click(screen.getByTestId('escalation-toast-txn'));
+    await clickRunTxn();
     await flush();
 
     expect(await screen.findByTestId('escalation-toast-txn-error')).toHaveTextContent(/Pulling results back failed/);
@@ -289,7 +297,7 @@ describe('EscalationListener — ETH-2 txn action', () => {
     );
     render(createElement(EscalationListener));
     fireTrigger();
-    fireEvent.click(screen.getByTestId('escalation-toast-txn'));
+    await clickRunTxn();
     await flush();
 
     expect(await screen.findByTestId('escalation-toast-txn-error')).toHaveTextContent(
@@ -301,7 +309,7 @@ describe('EscalationListener — ETH-2 txn action', () => {
     vi.mocked(createTxn).mockRejectedValue(new CloudTxnError('a transaction is already open', 409));
     render(createElement(EscalationListener));
     fireTrigger();
-    fireEvent.click(screen.getByTestId('escalation-toast-txn'));
+    await clickRunTxn();
     await flush();
 
     expect(await screen.findByTestId('escalation-toast-txn-error')).toHaveTextContent(
@@ -313,7 +321,7 @@ describe('EscalationListener — ETH-2 txn action', () => {
     vi.mocked(resolveTxnWorkspace).mockRejectedValue(new CloudTxnError('Overage spending cap reached.', 402));
     render(createElement(EscalationListener));
     fireTrigger();
-    fireEvent.click(screen.getByTestId('escalation-toast-txn'));
+    await clickRunTxn();
     await flush();
 
     expect(await screen.findByTestId('escalation-toast-txn-error')).toHaveTextContent(
@@ -325,7 +333,7 @@ describe('EscalationListener — ETH-2 txn action', () => {
     vi.mocked(createTxn).mockRejectedValue(new CloudTxnError('workspace not running', 503));
     render(createElement(EscalationListener));
     fireTrigger();
-    fireEvent.click(screen.getByTestId('escalation-toast-txn'));
+    await clickRunTxn();
     await flush();
 
     expect(await screen.findByTestId('escalation-toast-txn-error')).toHaveTextContent(
@@ -337,7 +345,7 @@ describe('EscalationListener — ETH-2 txn action', () => {
     vi.mocked(txnFinish).mockRejectedValue(new Error('stop timeout'));
     render(createElement(EscalationListener));
     fireTrigger();
-    fireEvent.click(screen.getByTestId('escalation-toast-txn'));
+    await clickRunTxn();
     await flush();
 
     expect(await screen.findByTestId('escalation-toast-txn-result')).toHaveTextContent('exit 0');
@@ -357,7 +365,7 @@ describe('EscalationListener — ETH-2 txn action', () => {
     });
     render(createElement(EscalationListener));
     fireTrigger();
-    fireEvent.click(screen.getByTestId('escalation-toast-txn'));
+    await clickRunTxn();
     await flush();
 
     const result = await screen.findByTestId('escalation-toast-txn-result');
@@ -378,7 +386,7 @@ describe('EscalationListener — ETH-2 txn action', () => {
     render(createElement(EscalationListener));
     fireTrigger();
 
-    fireEvent.click(screen.getByTestId('escalation-toast-txn'));
+    await clickRunTxn();
     // The CTA is replaced by the txn progress view, so a second click is
     // impossible (the handler guards on `txn` too).
     expect(screen.queryByTestId('escalation-toast-txn')).toBeNull();
@@ -394,13 +402,75 @@ describe('EscalationListener — ETH-2 txn action', () => {
   it('resets the txn view when a new blocking trigger arrives', async () => {
     render(createElement(EscalationListener));
     fireTrigger();
-    fireEvent.click(screen.getByTestId('escalation-toast-txn'));
+    await clickRunTxn();
     await flush();
     expect(await screen.findByTestId('escalation-toast-txn-result')).toBeInTheDocument();
 
     fireTrigger({ id: 'second', command: 'cargo build' });
     expect(screen.queryByTestId('escalation-toast-txn-result')).toBeNull();
-    expect(screen.getByTestId('escalation-toast-txn')).toBeEnabled();
+    await waitFor(() => expect(screen.getByTestId('escalation-toast-txn')).toBeEnabled());
+  });
+});
+
+describe('EscalationListener — runner host choice', () => {
+  const RUNNERS = [
+    { runner_id: 'r-mac', name: 'MacBook', status: 'online', mode: 'native', sandbox: 'sandbox-exec' },
+    { runner_id: 'r-old', name: 'old', status: 'offline', mode: 'container', sandbox: '' },
+  ];
+
+  beforeEach(() => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) =>
+        String(input) === '/runners' ? jsonResponse(RUNNERS) : jsonResponse({}),
+      ),
+    );
+    window.localStorage.clear();
+  });
+
+  it("offers the user's runners and runs on the selected one", async () => {
+    render(createElement(EscalationListener));
+    fireTrigger();
+    await waitFor(() => expect(screen.getByTestId('escalation-toast-txn')).toHaveTextContent('Run on MacBook'));
+    expect(screen.getAllByTestId('run-host-option').map((o) => o.textContent)).toEqual([
+      'MacBook· native · sandbox-exec',
+      'old· container · offline',
+    ]);
+
+    await clickRunTxn();
+    await flush();
+    expect(resolveTxnWorkspace).toHaveBeenCalledWith('https://github.com/acme/app', {
+      host: 'runner',
+      runnerId: 'r-mac',
+    });
+    expect(await screen.findByTestId('escalation-toast-txn-result')).toHaveTextContent('exit 0');
+  });
+
+  it('runs in the cloud when Cloud is picked', async () => {
+    render(createElement(EscalationListener));
+    fireTrigger();
+    await waitFor(() => expect(screen.getByTestId('escalation-toast-txn')).toBeEnabled());
+    fireEvent.click(screen.getByTestId('run-host-option-cloud'));
+    expect(screen.getByTestId('escalation-toast-txn')).toHaveTextContent('Run in cloud container');
+    await clickRunTxn();
+    await flush();
+    expect(resolveTxnWorkspace).toHaveBeenCalledWith('https://github.com/acme/app', { host: 'fly' });
+  });
+
+  it('explains an unavailable runner and offers the cloud instead', async () => {
+    vi.mocked(resolveTxnWorkspace).mockRejectedValueOnce(new RunnerUnavailableError('r-mac'));
+    render(createElement(EscalationListener));
+    fireTrigger();
+    await clickRunTxn();
+    await flush();
+
+    expect(await screen.findByTestId('escalation-toast-txn-error')).toHaveTextContent('MacBook is offline or busy.');
+    expect(createTxn).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId('escalation-toast-txn-cloud-fallback'));
+    await flush();
+    expect(resolveTxnWorkspace).toHaveBeenLastCalledWith('https://github.com/acme/app', { host: 'fly' });
+    expect(await screen.findByTestId('escalation-toast-txn-result')).toBeInTheDocument();
   });
 });
 
@@ -499,7 +569,7 @@ describe('EscalationListener — Mode A/B regressions', () => {
   it('hides the cloud-task CTA once a txn is in flight for the same toast', async () => {
     render(createElement(EscalationListener));
     fireTrigger();
-    fireEvent.click(screen.getByTestId('escalation-toast-txn'));
+    await clickRunTxn();
     await flush();
     expect(screen.queryByTestId('escalation-toast-cloud-task')).toBeNull();
   });

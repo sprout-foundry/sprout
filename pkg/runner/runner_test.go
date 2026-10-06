@@ -13,6 +13,10 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/gorilla/websocket"
+
+	"github.com/sprout-foundry/sprout/pkg/runner/relay"
 )
 
 // fakePlatform records what a runner reports and serves queued tasks.
@@ -223,10 +227,77 @@ func TestRunnerServesWorkspaceLifecycle(t *testing.T) {
 	}
 }
 
-func TestRunnerRequiresAReachableURL(t *testing.T) {
-	r := &Runner{State: &State{Mode: ModeContainer, ListenAddr: "127.0.0.1:0"}}
-	if err := r.Run(context.Background()); err == nil || !strings.Contains(err.Error(), "public URL") {
-		t.Fatalf("want a clear error about the missing public URL, got %v", err)
+func TestRunnerServesThePlatformThroughTheRelay(t *testing.T) {
+	plat := &fakePlatform{statuses: map[string]string{}, pollStatus: http.StatusOK}
+	tunnels := make(chan *relay.Mux, 1)
+	mux := http.NewServeMux()
+	mux.Handle("/", plat.handler())
+	mux.HandleFunc("GET /internal/runner/tunnel", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Runner-Key") != "srk_key" || r.URL.Query().Get("runner_id") != "r-1" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		conn, err := (&websocket.Upgrader{}).Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		m := relay.NewMux(conn, nil)
+		tunnels <- m
+		_ = m.Serve(context.Background())
+	})
+	platSrv := httptest.NewServer(mux)
+	t.Cleanup(platSrv.Close)
+
+	r := &Runner{
+		State:    &State{PlatformURL: platSrv.URL, RunnerID: "r-1", Mode: ModeBareMetal},
+		Client:   NewClient(platSrv.URL, Credentials{RunnerID: "r-1", APIKey: "srk_key"}),
+		Launcher: &fakeLauncher{port: fakeDaemon(t)},
+		Host:     NewHostServer(),
+		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	go func() { _ = r.Run(ctx) }()
+
+	var tunnel *relay.Mux
+	select {
+	case tunnel = <-tunnels:
+	case <-time.After(10 * time.Second):
+		t.Fatal("a runner without a public URL must dial the platform's relay")
+	}
+
+	plat.push(WorkspaceTask{WorkspaceID: "ws-1", Action: "start", RepoURL: "https://github.com/o/r", TxnSecret: "s3cret"})
+	waitFor(t, "start result", func() bool {
+		plat.mu.Lock()
+		defer plat.mu.Unlock()
+		return len(plat.results) > 0
+	})
+	plat.mu.Lock()
+	res := plat.results[0]
+	plat.mu.Unlock()
+	if res.Status != "running" || res.ConnectionURL != "" {
+		t.Fatalf("a relayed workspace reports no URL; got %+v", res)
+	}
+
+	call := func(bearer string) (int, string) {
+		req, _ := http.NewRequest(http.MethodPost, "http://relay/api/txn/run", strings.NewReader(`{"command":"make"}`))
+		if bearer != "" {
+			req.Header.Set("Authorization", "Bearer "+bearer)
+		}
+		resp, err := (&http.Client{Transport: tunnel.RoundTripper("ws-1")}).Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(body)
+	}
+	if code, _ := call("wrong"); code != http.StatusForbidden {
+		t.Errorf("a relayed call with the wrong secret: %d, want 403", code)
+	}
+	code, body := call("s3cret")
+	if code != http.StatusOK || !strings.Contains(body, "POST /api/txn/run") {
+		t.Fatalf("relayed call: %d %q", code, body)
 	}
 }
 

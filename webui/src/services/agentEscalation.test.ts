@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { escalateCommand, getEscalationPolicy, installEscalationBridge, setEscalationPolicy } from './agentEscalation';
-import type { TxnCommandOutcome } from './cloudTxnEscalate';
+import { HostUnavailableError, type TxnCommandOutcome } from './cloudTxnEscalate';
+import { getRememberedHost, rememberHost } from './escalationHost';
 
 const outcome = (over: Partial<TxnCommandOutcome['result']> = {}): TxnCommandOutcome => ({
   result: { stdout: 'ok\n', stderr: '', exit_code: 0, duration_ms: 10, timed_out: false, truncated: false, ...over },
@@ -18,7 +19,8 @@ describe('escalateCommand', () => {
     const requestConsent = vi.fn().mockResolvedValue('once');
     const res = await escalateCommand('npm test', { repoURL: 'https://github.com/a/b', requestConsent, run });
     expect(requestConsent).toHaveBeenCalledWith('npm test');
-    expect(run).toHaveBeenCalledWith('https://github.com/a/b', 'npm test', expect.any(Function));
+    // A bare decision (embedded hosts) runs on "auto" — the platform picks.
+    expect(run).toHaveBeenCalledWith('https://github.com/a/b', 'npm test', expect.any(Function), { kind: 'auto' });
     expect(res).toEqual({ ran: true, stdout: 'ok\n', stderr: '', exitCode: 0 });
     expect(getEscalationPolicy()).toBe('ask');
   });
@@ -79,5 +81,80 @@ describe('installEscalationBridge', () => {
     expect(typeof g.__sproutEscalate?.run).toBe('function');
     uninstall();
     expect(g.__sproutEscalate).toBeUndefined();
+  });
+});
+
+describe('escalateCommand host choice', () => {
+  const MAC = { kind: 'runner' as const, runnerId: 'r-mac', name: 'MacBook' };
+
+  it('runs on the host the user picked and remembers it for the repo', async () => {
+    const run = vi.fn().mockResolvedValue(outcome());
+    const res = await escalateCommand('make', {
+      repoURL: 'repo',
+      requestConsent: async () => ({ decision: 'once', host: MAC }),
+      run,
+    });
+    expect(res.ran).toBe(true);
+    expect(run).toHaveBeenCalledWith('repo', 'make', expect.any(Function), MAC);
+    expect(getRememberedHost('repo')).toEqual(MAC);
+    expect(getEscalationPolicy()).toBe('ask');
+  });
+
+  it('"always" runs on the remembered host without asking', async () => {
+    setEscalationPolicy('always');
+    rememberHost('repo', MAC);
+    const run = vi.fn().mockResolvedValue(outcome());
+    const requestConsent = vi.fn();
+    await escalateCommand('make', {
+      repoURL: 'repo',
+      requestConsent,
+      alwaysHost: () => getRememberedHost('repo') ?? { kind: 'auto' },
+      isHostAvailable: async () => true,
+      run,
+    });
+    expect(requestConsent).not.toHaveBeenCalled();
+    expect(run).toHaveBeenCalledWith('repo', 'make', expect.any(Function), MAC);
+  });
+
+  it('asks again with the reason when the runner is unavailable, then runs where the user picks', async () => {
+    const run = vi.fn().mockRejectedValueOnce(new HostUnavailableError(MAC)).mockResolvedValueOnce(outcome());
+    const requestConsent = vi
+      .fn()
+      .mockResolvedValueOnce({ decision: 'once', host: MAC })
+      .mockResolvedValueOnce({ decision: 'once', host: { kind: 'cloud' } });
+    const res = await escalateCommand('make', { repoURL: 'repo', requestConsent, run });
+    expect(res.ran).toBe(true);
+    expect(requestConsent).toHaveBeenLastCalledWith('make', {
+      notice: 'MacBook is offline or busy.',
+      unavailableRunnerId: 'r-mac',
+    });
+    expect(run).toHaveBeenLastCalledWith('repo', 'make', expect.any(Function), { kind: 'cloud' });
+  });
+
+  it('an "always" run on an offline runner asks instead of waiting on it', async () => {
+    setEscalationPolicy('always');
+    const run = vi.fn().mockResolvedValue(outcome());
+    const requestConsent = vi.fn().mockResolvedValue('deny');
+    const res = await escalateCommand('make', {
+      repoURL: 'repo',
+      requestConsent,
+      alwaysHost: () => MAC,
+      isHostAvailable: async () => false,
+      run,
+    });
+    expect(run).not.toHaveBeenCalled();
+    expect(requestConsent).toHaveBeenCalledWith('make', expect.objectContaining({ unavailableRunnerId: 'r-mac' }));
+    expect(res).toMatchObject({ ran: false });
+    expect(res.message).toMatch(/MacBook is offline or busy/);
+  });
+
+  it('names the runner when a run there fails', async () => {
+    const run = vi.fn().mockRejectedValue(new Error('daemon unreachable'));
+    const res = await escalateCommand('make', {
+      repoURL: 'repo',
+      requestConsent: async () => ({ decision: 'once', host: MAC }),
+      run,
+    });
+    expect(res.message).toBe('Running this on MacBook failed: daemon unreachable');
   });
 });

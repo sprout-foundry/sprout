@@ -609,8 +609,13 @@ needed whatever the integration work does. Spec context: SP-160 §160e.
       Fixed: new `pkg/deploy` with `DeployTarget`, `Deployment`,
       `DeployRequest`, deployment kinds/states, sentinel errors, and an
       in-memory `FakeTarget` adapter. Pinned by round-trip Go tests.
-- [ ] **156.2** `.sprout/deploy.json` config and validator; build output
+- [x] **156.2** `.sprout/deploy.json` config and validator; build output
       taken from the starter manifest. Tests. Spec: SP-156 §156a.
+      Fixed: new `pkg/deployconfig` loads/validates `.sprout/deploy.json`
+      (target/project required, `build_output` must stay under the project
+      root; missing file is a sentinel) and `Resolve` merges it with the
+      starter manifest into a `deploy.DeployRequest`, defaulting the build
+      output to the manifest's. Pinned by Go tests.
 - [ ] **156.3** Credentials from the existing credential store or the
       embedding environment; never in model context, tool arguments or
       logs. Test asserting no token in model requests or logs. Spec:

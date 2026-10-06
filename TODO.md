@@ -38,7 +38,7 @@ checkboxes.
       in `pkg/webui` fails if a registered route is neither documented in the
       OpenAPI file nor listed in `docs/api/undocumented.txt`; the allowlist
       may only shrink. Spec: SP-160 §160c.
-- [ ] **contract.3** Document the conversation family: `/api/query*`,
+- [x] **contract.3** Document the conversation family: `/api/query*`,
       `/api/chat-sessions*`, `/api/sessions*`, `/api/subagent*`,
       `/api/edits*`, `/api/shell-approvals*`, `/api/completion`. Schemas
       come from the handlers' request/response types; remove these routes

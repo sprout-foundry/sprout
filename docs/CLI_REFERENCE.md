@@ -64,7 +64,8 @@ sprout commit --skip-prompt  # Auto-review and commit
 
 ### `sprout review`
 
-LLM code review for staged Git changes.
+LLM code review for staged Git changes, or with `--base <ref>` for the
+commits on the current branch since that ref.
 
 **Basic Usage:**
 ```bash
@@ -74,6 +75,7 @@ sprout review [flags]
 **Examples:**
 ```bash
 sprout review --model "openai:gpt-5"
+sprout review --base main    # review the branch the way a PR against main would show it
 ```
 
 ### `sprout shell`
@@ -129,6 +131,19 @@ Manage custom OpenAI-compatible providers.
 **Basic Usage:**
 ```bash
 sprout custom [command] [flags]
+```
+
+### `sprout config`
+
+Read and change settings. `set` writes the layer the agent reads: the
+workspace config inside a git repository, the global config elsewhere (or
+always, with `--global`).
+
+```bash
+sprout config show                            # merged config, credentials redacted
+sprout config get output_verbosity --show-origin
+sprout config set output_verbosity compact
+sprout config set --help-keys                 # list settable keys
 ```
 
 ### `sprout diag`
@@ -486,7 +501,6 @@ Thumbs.db
 | Tool | Description |
 |------|-------------|
 | `manage_memory` | Persistent memory system (add/read/list/delete/search operations) |
-| `search_memories` / `save_memory` | Memory search and save |
 | `list_skills` / `activate_skill` | Skill management for loading instruction bundles |
 
 ### Change History

@@ -132,7 +132,7 @@ func StateDirPath() (string, error) {
 }
 
 // DataDir returns the sprout shared data directory path (regenerable
-// artifacts like embeddings, models).
+// artifacts like models).
 //
 // Resolution: $SPROUT_DATA_DIR → $XDG_DATA_HOME/sprout →
 // $HOME/.local/share/sprout.

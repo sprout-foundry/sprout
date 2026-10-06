@@ -73,9 +73,21 @@ func ParsePastedImagePlaceholders(query string) []string {
 	return paths
 }
 
-// legacyPastedImageRe matches the pre-SP-140 free-form placeholder. It
-// cannot span spaces; bracketed placeholders supersede it.
-var legacyPastedImageRe = regexp.MustCompile(`Pasted image saved to disk: (\S+)`)
+// legacyPastedImageRe matches the pre-SP-140 free-form placeholder, which
+// clients still send. The path runs to the first image extension on the
+// line, so a workspace path with spaces in it stays whole.
+var legacyPastedImageRe = regexp.MustCompile(`Pasted image saved to disk: ([^\n]*?\.(?i:png|jpe?g|gif|webp|bmp|avif))`)
+
+// CanonicalizeLegacyImageMarkers rewrites legacy "Pasted image saved to
+// disk: <path>" markers into the bracketed placeholder. The query rewrite
+// that swaps placeholders for image labels matches the bracketed form only,
+// so an unconverted legacy marker reaches the model as a bare file path —
+// which it then tries to open with tools — alongside the attached image.
+func CanonicalizeLegacyImageMarkers(query string) string {
+	return legacyPastedImageRe.ReplaceAllStringFunc(query, func(m string) string {
+		return PastedImagePlaceholder(legacyPastedImageRe.FindStringSubmatch(m)[1])
+	})
+}
 
 // PastedImageDirName is the subdirectory (relative to CWD) where pasted images are saved.
 const PastedImageDirName = ".sprout/pasted-images"

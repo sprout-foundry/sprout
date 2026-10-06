@@ -32,6 +32,7 @@ type SecurityManager interface {
 	SetElevationGate(gate *security.ElevationGate)
 	SetHasActiveWebUIClients(fn func() bool)
 	HasActiveWebUIClients() bool
+	WebUIAttached() bool
 }
 
 // AgentSecurityManager implements SecurityManager, holding all security-related state.
@@ -274,6 +275,14 @@ func (m *AgentSecurityManager) SetHasActiveWebUIClients(fn func() bool) {
 	m.webuiClientsMu.Lock()
 	defer m.webuiClientsMu.Unlock()
 	m.hasActiveWebUIClients = fn
+}
+
+// WebUIAttached reports whether a web UI server is attached that could
+// answer an approval request, now or once a browser connects.
+func (m *AgentSecurityManager) WebUIAttached() bool {
+	m.webuiClientsMu.RLock()
+	defer m.webuiClientsMu.RUnlock()
+	return m.hasActiveWebUIClients != nil
 }
 
 func (m *AgentSecurityManager) HasActiveWebUIClients() bool {

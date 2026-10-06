@@ -3,6 +3,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -20,13 +21,21 @@ var (
 	reviewStagedModel      string
 	reviewStagedProvider   string
 	reviewStagedSkipPrompt bool // Not strictly necessary for review, but consistent with other commands
+	reviewBase             string
 )
 
 var reviewStagedCmd = &cobra.Command{
 	Use:   "review",
-	Short: "Perform an AI-powered code review on staged Git changes",
-	Long: `This command uses an LLM to review your currently staged Git changes.
-It provides feedback on code quality, potential issues, and suggestions for improvement.`,
+	Short: "Perform an AI-powered code review on staged changes or a branch",
+	Long: `Review staged Git changes with an LLM: code quality, likely bugs, and
+suggestions for improvement.
+
+With --base, review the committed work on the current branch instead — the
+same diff a pull request against that ref would show.
+
+Examples:
+  sprout review                 # staged changes
+  sprout review --base main     # everything on this branch since main`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		logger := utils.GetLogger(reviewStagedSkipPrompt)
 
@@ -49,32 +58,9 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 			logger.LogProcessStep(fmt.Sprintf("Using custom provider/model: %s | %s", clientType, resolvedModel))
 		}
 
-		// Check for staged changes
-		cmdCheckStaged := exec.Command("git", "diff", "--cached", "--quiet", "--exit-code")
-		if err := cmdCheckStaged.Run(); err != nil {
-			// If err is not nil, it means there are staged changes (exit code 1) or another error
-			if _, ok := err.(*exec.ExitError); ok {
-				// ExitError means git exited with a non-zero status, which is what we want for staged changes
-				logger.LogProcessStep("Staged changes detected. Performing code review...")
-			} else {
-				return fmt.Errorf("failed to check for staged changes: %w", err)
-			}
-		} else {
-			logger.LogUserInteraction("No staged changes found. Please stage your changes before running 'sprout review'.")
-			return nil
-		}
-
-		// Get the diff of staged changes
-		cmdDiff := exec.Command("git", "diff", "--cached")
-		stagedDiffBytes, err := cmdDiff.Output()
-		if err != nil {
-			return fmt.Errorf("failed to get staged diff: %w", err)
-		}
-		stagedDiff := string(stagedDiffBytes)
-
-		if strings.TrimSpace(stagedDiff) == "" {
-			logger.LogUserInteraction("No actual diff content found in staged changes. Nothing to review.")
-			return nil
+		stagedDiff, err := reviewDiffSource(cmd, logger)
+		if err != nil || stagedDiff == "" {
+			return err
 		}
 
 		// Optimize diff for code review (uses higher thresholds and better filtering)
@@ -94,13 +80,6 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 			reviewDiff += summaryInfo.String()
 		}
 
-		// Extract metadata for enhanced review context
-		// These help the LLM understand intent and avoid false positives
-		projectType := detectProjectType()
-		commitMessage := extractStagedChangesSummary()
-		keyComments := extractKeyCommentsFromDiff(stagedDiff)
-		changeCategories := categorizeChanges(stagedDiff)
-
 		// Create the unified code review service
 		service := codereview.NewCodeReviewService(cfg, logger)
 
@@ -110,27 +89,23 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 			agentClient = service.GetDefaultAgentClient()
 		}
 
-		// This helps avoid false positives when functionality moved across files.
-		fullFileContext := extractFileContextForChanges(stagedDiff)
-
 		// Create the review context with metadata
 		ctx := &codereview.ReviewContext{
-			Diff:             reviewDiff,
-			Config:           cfg,
-			Logger:           logger,
-			AgentClient:      agentClient,
-			ProjectType:      projectType,
-			CommitMessage:    commitMessage,
-			KeyComments:      keyComments,
-			ChangeCategories: changeCategories,
-			FullFileContext:  fullFileContext,
+			Diff:        reviewDiff,
+			Config:      cfg,
+			Logger:      logger,
+			AgentClient: agentClient,
+		}
+		if reviewBase != "" {
+			codereview.BuildRangeContext(context.Background(), "", reviewBase, stagedDiff).Apply(ctx)
+		} else {
+			codereview.BuildStagedContext(context.Background(), "", stagedDiff).Apply(ctx)
 		}
 
 		// Create review options for staged review
 		opts := &codereview.ReviewOptions{
-			Type:             codereview.StagedReview,
-			SkipPrompt:       reviewStagedSkipPrompt,
-			RollbackOnReject: false, // Don't rollback for staged reviews
+			Type:       codereview.StagedReview,
+			SkipPrompt: reviewStagedSkipPrompt,
 		}
 
 		reviewResponse, err := service.PerformReview(ctx, opts)
@@ -145,14 +120,14 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 		// If review needs revision and not in skip-prompt mode, offer agentic review
 		if !reviewStagedSkipPrompt && (reviewResponse.Status == "needs_revision" || reviewResponse.Status == "rejected") {
 			logger.LogUserInteraction("\n")
-			prompt := "The review identified issues that need attention. Would you like to run a deeper agentic review (with file reading tools) for more accurate analysis? This may take longer but can provide better context. (yes/no): "
+			prompt := "The review identified issues that need attention. Would you like to run a stricter evidence-focused review pass to filter out false positives? For a review that opens files to verify findings, use /review-deep in an interactive session. (yes/no): "
 
 			if logger.AskForConfirmation(prompt, false, false) {
 				agenticResponse, err := service.PerformAgenticReview(ctx, opts)
 				if err != nil {
-					logger.LogUserInteraction("Note: Agentic review mode is not yet implemented. Using initial review results.")
+					logger.LogUserInteraction(fmt.Sprintf("Note: evidence-focused review failed (%v). Using initial review results.", err))
 				} else {
-					logger.LogUserInteraction("\n--- Agentic Review Results ---")
+					logger.LogUserInteraction("\n--- Evidence-Focused Review Results ---")
 					logger.LogUserInteraction(fmt.Sprintf("Status: %s", strings.ToUpper(agenticResponse.Status)))
 					logger.LogUserInteraction(fmt.Sprintf("Feedback:\n%s", agenticResponse.Feedback))
 
@@ -173,7 +148,44 @@ It provides feedback on code quality, potential issues, and suggestions for impr
 
 func init() {
 	reviewStagedCmd.Flags().StringVarP(&reviewStagedModel, "model", "m", "", "Model for the review (e.g. 'ollama:llama3')")
-	reviewStagedCmd.Flags().StringVarP(&reviewStagedProvider, "provider", "p", "", "Provider for the review")
+	reviewStagedCmd.Flags().StringVarP(&reviewStagedProvider, "provider", "p", "", providerFlagUsage)
 	reviewStagedCmd.Flags().BoolVarP(&reviewStagedSkipPrompt, "yes", "y", false, "Skip interactive prompts")
+	reviewStagedCmd.Flags().StringVar(&reviewBase, "base", "", "Review commits on this branch since <ref> instead of staged changes")
 	boolFlagAlias(reviewStagedCmd.Flags(), &reviewStagedSkipPrompt, "skip-prompt", "yes", aliasDeprecated)
+}
+
+// reviewDiffSource returns the diff to review: base...HEAD with --base, the
+// staged changes otherwise. An empty diff with a nil error means there is
+// nothing to review and the user has been told.
+func reviewDiffSource(cmd *cobra.Command, logger *utils.Logger) (string, error) {
+	if reviewBase != "" {
+		diff, err := codereview.RangeDiff(context.Background(), "", reviewBase)
+		if err != nil {
+			return "", usageErrorf(cmd, "%v", err)
+		}
+		if strings.TrimSpace(diff) == "" {
+			logger.LogUserInteraction(fmt.Sprintf("No changes on this branch since %s. Nothing to review.", reviewBase))
+			return "", nil
+		}
+		logger.LogProcessStep(fmt.Sprintf("Reviewing changes since %s...", reviewBase))
+		return diff, nil
+	}
+
+	if err := exec.Command("git", "diff", "--cached", "--quiet", "--exit-code").Run(); err == nil {
+		logger.LogUserInteraction("No staged changes found. Stage changes, or pass --base <ref> to review a branch.")
+		return "", nil
+	} else if _, ok := err.(*exec.ExitError); !ok {
+		return "", fmt.Errorf("failed to check for staged changes: %w", err)
+	}
+	logger.LogProcessStep("Staged changes detected. Performing code review...")
+
+	out, err := exec.Command("git", "diff", "--cached").Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get staged diff: %w", err)
+	}
+	if strings.TrimSpace(string(out)) == "" {
+		logger.LogUserInteraction("No actual diff content found in staged changes. Nothing to review.")
+		return "", nil
+	}
+	return string(out), nil
 }

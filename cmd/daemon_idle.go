@@ -30,7 +30,7 @@ type idleServer interface {
 // (`<-ctx.Done()`) and runs the normal graceful-shutdown path.
 //
 // `sockets` carries the activity trackers of the daemon's other listeners
-// (agent socket, embedding socket). The daemon's liveness is not the WebUI's
+// (the agent socket). The daemon's liveness is not the WebUI's
 // liveness: an auto-started daemon actively serving socket requests must not
 // be reaped, or CLI clients silently fall back to in-process execution and
 // load their own model copy — the duplication SP-136 exists to prevent.

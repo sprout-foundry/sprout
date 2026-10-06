@@ -41,6 +41,7 @@ const mockWasmShell = {
   steerAgent: vi.fn(() => ({ steered: true })),
   stopAgent: vi.fn(() => {}),
   respondToEditDecision: vi.fn(() => ({ delivered: true })),
+  saveImage: vi.fn(() => ({ path: '/workspace/.sprout/images/paste.png', filename: 'paste.png' })),
 };
 vi.mock('./wasmShell', () => ({
   initWasmShell: vi.fn(() => Promise.resolve(mockWasmShell)),
@@ -1221,6 +1222,32 @@ describe('CloudAdapter', () => {
       expect(response.status).toBe(400);
       // runAgent must NOT have been called for an empty query.
       expect(mockWasmShell.runAgent).not.toHaveBeenCalled();
+    });
+
+    it('stores an uploaded image in the browser instead of refusing it', async () => {
+      const form = new FormData();
+      form.append('image', new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }));
+      const response = await adapter.fetch('/api/upload/image', { method: 'POST', body: form });
+
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(mockWasmShell.saveImage).toHaveBeenCalledWith(new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ path: '/workspace/.sprout/images/paste.png', filename: 'paste.png' });
+    });
+
+    it('serves design status from the browser runtime, not the platform', async () => {
+      await adapter.fetch('/api/design/status', { method: 'GET' });
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('passes the workspace mode through to the in-browser agent', async () => {
+      await adapter.fetch('/api/query', {
+        method: 'POST',
+        body: JSON.stringify({ query: 'design a login screen', chat_id: 'c1', mode: 'design' }),
+      });
+
+      expect(mockWasmShell.runAgent).toHaveBeenCalledTimes(1);
+      expect(mockWasmShell.runAgent.mock.calls[0][6]).toBe('design');
     });
 
     it('should handle /api/query with URL query parameters (stripped before routing)', async () => {

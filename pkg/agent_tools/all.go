@@ -3,9 +3,10 @@ package tools
 // AllTools returns all available tool handlers for registration.
 // This is the central registration point for the interface-based tool system.
 //
-// browse_url, vision tools, run_automate, design_render,
-// design_import_sketch, and design_critique are registered conditionally via
-// build-tagged stubs (nil on WASM).
+// browse_url, vision tools and run_automate are registered conditionally via
+// build-tagged registrars (reduced or nil on WASM). The design tools are
+// shared: in the browser build design_render rasterizes through the host
+// page (pkg/webcontent/browser_page_js.go).
 //
 // To register all tools with a registry:
 //
@@ -23,7 +24,6 @@ func AllTools() []ToolHandler {
 		&rollbackChangesHandler{},
 		&viewHistoryHandler{},
 		&listSkillsHandler{},
-		&embeddingIndexHandler{},
 		&writeFileHandler{},
 		&writeStructuredFileHandler{},
 		&editFileHandler{},
@@ -39,7 +39,6 @@ func AllTools() []ToolHandler {
 		&activateSkillHandler{},
 		// browse_url is registered via registerBrowseURLTool() (build-tagged)
 		&webSearchHandler{},
-		&semanticSearchHandler{},
 		&listAutomateWorkflowsHandler{},
 		&listChangesHandler{},
 		&revertMyChangesHandler{},
@@ -48,22 +47,25 @@ func AllTools() []ToolHandler {
 		&mcpRefreshHandler{},
 		&runSubagentHandler{},
 		&runParallelSubagentsHandler{},
+		&reviewChangesHandler{},
+		&checkSubagentHandler{},
+		&stopSubagentHandler{},
 		&requestClarificationHandler{},
 		&respondClarificationHandler{},
 		&registerPreviewPortHandler{},
 		&designValidateHandler{},
 		&designAssetsHandler{},
+		&designBriefHandler{},
+		&designExportHandler{},
+		&designSyncHandler{},
+		&designRenderHandler{},
+		&designCritiqueHandler{},
+		&designImportSketchHandler{},
 	}
 	// Platform-specific tools (nil on WASM via build-tagged stubs).
 	tools = append(tools, registerBrowseURLTool()...)
 	tools = append(tools, registerVisionTools()...)
 	tools = append(tools, registerRunAutomateTool()...)
 	tools = append(tools, registerCodegraphTools()...)
-	tools = append(tools, registerDesignRenderTools()...)
-	tools = append(tools, registerDesignImportSketchTools()...)
-	tools = append(tools, registerDesignCritiqueTools()...)
-	tools = append(tools, registerDesignExportTools()...)
-	tools = append(tools, registerDesignSyncTools()...)
-	tools = append(tools, registerDesignBriefTools()...)
 	return append(tools, registerSearchTool()...)
 }

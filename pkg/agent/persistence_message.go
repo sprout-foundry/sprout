@@ -183,7 +183,6 @@ func (a *Agent) SaveStateScoped(sessionID, workingDir string) error {
 		Name:                    sessionName,
 		WorkingDirectory:        cleanWorkingDir,
 		ConfigOverrides:         a.state.GetConfigOverrides(),
-		SessionIntentEmbedding:  a.state.GetSessionIntentEmbedding(),
 		LastProviderError:       a.state.GetLastProviderError(),
 	}
 
@@ -289,9 +288,6 @@ func (a *Agent) ApplyState(state *ConversationState) {
 	// CRITICAL: Reset session state to prevent hanging issues after session restore
 	a.state.SetCurrentIteration(0)
 	a.state.SetContextWarningIssued(false)
-
-	// Restore session intent embedding for drift detection
-	a.state.SetSessionIntentEmbedding(state.SessionIntentEmbedding)
 
 	// Restore last provider error info
 	a.state.SetLastProviderError(state.LastProviderError)

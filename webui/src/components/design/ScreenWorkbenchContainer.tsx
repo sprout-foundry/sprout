@@ -4,12 +4,13 @@
  *
  * Reads the raw files the screen brief derives over (SP-140-3 §3f's zero-new-
  * endpoint rule: everything goes through `designApi`'s `/api/file` path):
- * the selected asset's text (the render facet), the flow `.mmd` files (the
- * flows in/out), the README manifest (status + purpose), the token files
- * (the known-token set), and the screen's §4d feedback file (the open
- * annotations). The derivation itself is pure (`screenBrief.ts`); this
- * component owns only the fetch lifecycle — and the stale-read guard, so a
- * slow flow read for `login` never paints `dashboard`'s brief.
+ * the selected asset's text (the render facet), the flow files (the flows
+ * in/out — .json sources, legacy .mmd both read), the README manifest
+ * (status + purpose), the token files (the known-token set), and the
+ * screen's §4d feedback file (the open annotations). The derivation itself is
+ * pure (`screenBrief.ts`); this component owns only the fetch lifecycle — and
+ * the stale-read guard, so a slow flow read for `login` never paints
+ * `dashboard`'s brief.
  *
  * Unreadable inputs degrade to the brief's empty facets (mirroring the Go
  * brief: an unreadable flow is skipped, a missing file is data) — only a
@@ -113,12 +114,9 @@ export function ScreenWorkbenchContainer({
     (async () => {
       const stem = stemOf(selectedPath);
       const readmePath = inv.manifest?.path ?? 'design/README.md';
-      const wireframePath =
-        inv.wireframes.find((entry) => stemOf(entry.name) === stem)?.path ?? `design/wireframes/${stem}.svg`;
-      // §8b "render first" prefers the delivered HTML screen: a wireframe
-      // selection (the rail's screen buttons select wireframes) renders the
-      // screen file when one exists — the kit's runtime, chrome, and states
-      // live on the HTML tier, and the wireframe is the planning sketch.
+      // §8b "render first" prefers the delivered HTML screen: the kit's
+      // runtime, chrome, and states live on the HTML tier, and the primary
+      // screen is the brief's subject (SP-140-9 §9a).
       const screenEntry = inv.screens.find((entry) => stemOf(entry.name) === stem);
       const renderPath = screenEntry?.path ?? selectedPath;
       // The selected asset's text is the pane's anchor: a transport failure
@@ -128,7 +126,7 @@ export function ScreenWorkbenchContainer({
       // token file drops from the known set — the brief's "missing is data"
       // rule (mirroring the Go brief).
       const renderText = await readAsset(read, renderPath);
-      const [readmeText, feedbackFile, flowTexts, tokenTexts, wireframeText] = await Promise.all([
+      const [readmeText, feedbackFile, flowTexts, tokenTexts, screenText] = await Promise.all([
         readOrEmpty(() => readAsset(read, readmePath)),
         (async () => {
           try {
@@ -146,7 +144,9 @@ export function ScreenWorkbenchContainer({
             await readOrEmpty(() => readAsset(read, tokenFile.path)),
           ]),
         ),
-        readOrEmpty(() => readAsset(read, wireframePath)),
+        // The token-reference scan reads the screen's own bytes (the
+        // `{group.token}` comments live on the screen tier now).
+        readOrEmpty(() => readAsset(read, screenEntry?.path ?? renderPath)),
       ]);
       if (seq !== fetchSeq.current) return; // a newer selection owns the pane now
 
@@ -155,7 +155,7 @@ export function ScreenWorkbenchContainer({
           stem,
           inventory: inv,
           flowTexts: Object.fromEntries(flowTexts),
-          wireframeText,
+          screenText,
           readmeText,
           tokenTexts: Object.fromEntries(tokenTexts),
           feedback: feedbackFile,

@@ -1,5 +1,3 @@
-//go:build !js
-
 package tools
 
 import (
@@ -25,11 +23,8 @@ import (
 // itself is done by the vision tier and the model, which writes the
 // convention-compliant SVG/token/mermaid files with the normal file tools.
 //
-// It depends on the vision tier for the extraction text, so it is a
-// //go:build !js file with a WASM stub in
-// design_import_sketch_handler_js.go (mirroring design_render_handler.go).
-// The registration is build-tagged and lives in neither the shared AllTools
-// list nor the WASM roster (SP-140 invariant 7, SP-140-2 §2c).
+// It is a shared tool (SP-158): it only attaches the image, which the
+// primary model reads directly, so it needs no separate vision tier.
 type designImportSketchHandler struct{}
 
 func (h *designImportSketchHandler) Name() string { return "design_import_sketch" }
@@ -517,14 +512,3 @@ func (h *designImportSketchHandler) Timeout() time.Duration { return 0 }
 func (h *designImportSketchHandler) MaxResultSize() int     { return 0 }
 func (h *designImportSketchHandler) SafeForParallel() bool  { return false }
 func (h *designImportSketchHandler) Interactive() bool      { return false }
-
-// registerDesignImportSketchTools registers the design_import_sketch tool,
-// which needs the vision tier to turn the attached image into extraction text.
-// Excluded from WASM builds via design_import_sketch_handler_js.go, which
-// returns nil — mirroring registerDesignRenderTools (SP-140 invariant 7,
-// SP-140-2 §2c).
-func registerDesignImportSketchTools() []ToolHandler {
-	return []ToolHandler{
-		&designImportSketchHandler{},
-	}
-}

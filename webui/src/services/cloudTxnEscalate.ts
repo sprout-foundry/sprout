@@ -20,12 +20,14 @@ import {
   CloudTxnError,
   createTxn,
   resolveTxnWorkspace,
+  RunnerUnavailableError,
   txnFinish,
   txnPull,
   txnPush,
   txnRun,
   TXN_RUN_TIMEOUT_SECONDS,
 } from './cloudTxn';
+import { AUTO_HOST, hostDisplayName, toTxnHostChoice, type EscalationHost } from './escalationHost';
 
 /** Inline view state while an ETH-2 transaction runs. */
 export interface TxnProgress {
@@ -37,6 +39,8 @@ export interface TxnProgress {
   result?: TxnRunResult;
   pulledFiles?: number;
   skippedFiles?: number;
+  /** Files the push manifest carried (0 = the container ran without the browser's edits). */
+  pushedFiles?: number;
 }
 
 const TXN_PHASE_LABELS: Record<string, string> = {
@@ -46,9 +50,28 @@ const TXN_PHASE_LABELS: Record<string, string> = {
   pulling: 'Pulling results back',
 };
 
-/** Human label for a txn phase, used in both the status line and errors. */
-export function txnPhaseLabel(phase: string): string {
+/**
+ * Human label for a txn phase, used in both the status line and errors. On a
+ * runner the "opening" phase names the runner instead of the cloud container.
+ */
+export function txnPhaseLabel(phase: string, host: EscalationHost = AUTO_HOST): string {
+  if (phase === 'opening' && host.kind === 'runner') return `Starting workspace on ${hostDisplayName(host)}`;
   return TXN_PHASE_LABELS[phase] ?? phase;
+}
+
+/**
+ * The chosen runner could not take the workspace (offline, busy or no
+ * longer the user's). Kept distinct from other failures so the prompt can
+ * offer the cloud instead.
+ */
+export class HostUnavailableError extends Error {
+  readonly runnerId: string;
+
+  constructor(host: Extract<EscalationHost, { kind: 'runner' }>) {
+    super(`${hostDisplayName(host)} is offline or busy.`);
+    this.name = 'HostUnavailableError';
+    this.runnerId = host.runnerId;
+  }
 }
 
 /**
@@ -56,21 +79,25 @@ export function txnPhaseLabel(phase: string): string {
  * error body wins for 402 (credits); 409/502/503 get fixed wording so the
  * user knows what to do next instead of reading a raw gateway error.
  */
-export function describeTxnError(err: unknown, phase: string): string {
+export function describeTxnError(err: unknown, phase: string, host: EscalationHost = AUTO_HOST): string {
   const detail = err instanceof Error && err.message ? err.message : err ? String(err) : 'unknown error';
-  const action = phase === 'error' ? 'Cloud container run' : `${txnPhaseLabel(phase)} failed`;
+  const onRunner = host.kind === 'runner';
+  const where = onRunner ? `the workspace on ${hostDisplayName(host)}` : 'the cloud workspace';
+  const action =
+    phase === 'error' ? (onRunner ? 'Runner run' : 'Cloud container run') : `${txnPhaseLabel(phase, host)} failed`;
   if (err instanceof CloudTxnError) {
     // The platform says so when the workspace runs an outdated sprout
     // (409 workspace_outdated) or the deployment has no workspace compute
     // (503) — both need action, not a retry, so pass its wording through.
     if (err.status === 409 && /older version/i.test(detail)) return capitalize(detail);
-    if (err.status === 409) return 'Another command is already running in the cloud workspace — try again shortly.';
+    if (err.status === 409) return `Another command is already running in ${where} — try again shortly.`;
     if (err.status === 402) return `Not enough credits: ${detail}`;
     if (err.status === 503 && /not available on this deployment/i.test(detail)) {
       return "Cloud workspaces aren't enabled on this deployment.";
     }
     if (err.status === 502 || err.status === 503) {
-      return 'Cloud workspace is unavailable right now — try again shortly.';
+      const subject = onRunner ? `The workspace on ${hostDisplayName(host)}` : 'Cloud workspace';
+      return `${subject} is unavailable right now — try again shortly.`;
     }
   }
   return `${action}: ${detail}`;
@@ -143,26 +170,30 @@ export async function txnPullIO(): Promise<TxnPullIO> {
   };
 }
 
-/** Outcome of one command run transactionally in the cloud workspace. */
+/** Outcome of one command run transactionally in a workspace. */
 export interface TxnCommandOutcome {
   result: TxnRunResult;
   pulledFiles: number;
   skippedFiles: number;
+  /** Files the push manifest carried (0 = the container ran without the browser's edits). */
+  pushedFiles: number;
   /** Non-fatal follow-up problem (e.g. the machine-stop call failed). */
   warning?: string;
 }
 
 /**
- * Run one command in the user's cloud workspace container for repoURL:
- * open → push browser deltas → run → pull container deltas back into the
- * VFS → finish. `finish` always runs once a txn is open (success, failure or
- * timeout) so the pay-per-run machine is never left running. Throws with a
- * phase-aware message (describeTxnError) on failure.
+ * Run one command in the user's workspace for repoURL on the chosen host
+ * (a runner, the cloud, or "auto"): open → push browser deltas → run → pull
+ * deltas back into the VFS → finish. `finish` always runs once a txn is open
+ * (success, failure or timeout) so the pay-per-run machine is never left
+ * running. Throws HostUnavailableError when a chosen runner can't take the
+ * workspace, else an Error with a phase-aware message (describeTxnError).
  */
 export async function runTxnCommand(
   repoURL: string,
   command: string,
   onPhase?: (phase: string) => void,
+  host: EscalationHost = AUTO_HOST,
 ): Promise<TxnCommandOutcome> {
   let workspaceId = '';
   let txnId = '';
@@ -170,7 +201,7 @@ export async function runTxnCommand(
   let phase = 'opening';
   onPhase?.(phase);
   try {
-    const resolved = await resolveTxnWorkspace(repoURL);
+    const resolved = await resolveTxnWorkspace(repoURL, toTxnHostChoice(host));
     workspaceId = resolved.workspaceId;
     const opened = await createTxn(workspaceId);
     txnId = opened.txn_id;
@@ -179,6 +210,7 @@ export async function runTxnCommand(
     onPhase?.(phase);
     const { inputs, deletes } = await collectTxnPushFiles();
     const manifest = await buildPushManifest(() => inputs, { deletes });
+    const pushedFiles = manifest.files.length;
     await txnPush(workspaceId, txnId, manifest);
 
     phase = 'running';
@@ -195,18 +227,19 @@ export async function runTxnCommand(
       await txnFinish(workspaceId, txnId);
       finished = true;
     } catch (err) {
-      warning = `Cloud container stop failed — it will idle out on its own. ${
-        err instanceof Error ? err.message : String(err)
-      }`;
+      const what = host.kind === 'runner' ? 'Closing the runner transaction' : 'Cloud container stop';
+      warning = `${what} failed — it will idle out on its own. ${err instanceof Error ? err.message : String(err)}`;
     }
     return {
       result,
       pulledFiles: applied.applied,
       skippedFiles: applied.skipped.length + pulled.skipped.length,
+      pushedFiles,
       warning,
     };
   } catch (err) {
-    throw new Error(describeTxnError(err, phase));
+    if (err instanceof RunnerUnavailableError && host.kind === 'runner') throw new HostUnavailableError(host);
+    throw new Error(describeTxnError(err, phase, host));
   } finally {
     if (txnId !== '' && !finished) {
       try {

@@ -1,5 +1,3 @@
-//go:build !js
-
 package tools
 
 import (
@@ -166,6 +164,10 @@ type designSyncApplyOutput struct {
 	// have escaped design/ (§5e). Always empty in practice; present so a caller
 	// can assert the invariant.
 	OutsideDesign []string `json:"outsideDesign,omitempty"`
+	// RefreshedFlowExports is the number of derived flow exports (§9b .mmd)
+	// regenerated after the apply wrote their sources, so the tree never sits
+	// with a stale-export error following a successful apply.
+	RefreshedFlowExports int `json:"refreshedFlowExports,omitempty"`
 	// ImplementationUntouched states the §5e invariant explicitly: apply writes
 	// design files and never rewrites the implementation. Always true.
 	ImplementationUntouched bool `json:"implementationUntouched"`
@@ -180,13 +182,3 @@ func (h *designSyncHandler) MaxResultSize() int { return 0 }
 func (h *designSyncHandler) SafeForParallel() bool { return false }
 
 func (h *designSyncHandler) Interactive() bool { return false }
-
-// registerDesignSyncTools registers the design_sync tool. It is pure Go, but
-// SP-140 invariant 7 keeps only design_assets and design_validate on the WASM
-// roster, so this is registered from a build-tagged registrar (excluded from
-// WASM via design_sync_handler_js.go, which returns nil).
-func registerDesignSyncTools() []ToolHandler {
-	return []ToolHandler{
-		&designSyncHandler{},
-	}
-}

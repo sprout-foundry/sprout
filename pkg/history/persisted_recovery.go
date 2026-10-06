@@ -30,6 +30,8 @@ type PersistedOriginal struct {
 	Original string // pre-change content
 	New      string // post-change content
 	Status   string // history status of the newest contributing record
+	// Timestamp is when the oldest contributing change was recorded.
+	Timestamp time.Time
 }
 
 // FindPersistedOriginal returns the OLDEST recorded change for filename
@@ -108,10 +110,11 @@ func FindPersistedOriginal(filename string) (PersistedOriginal, bool, error) {
 			continue
 		}
 		return PersistedOriginal{
-			Filename: m.filename,
-			Original: original,
-			New:      updated,
-			Status:   m.status,
+			Filename:  m.filename,
+			Original:  original,
+			New:       updated,
+			Status:    m.status,
+			Timestamp: m.timestamp,
 		}, true, nil
 	}
 	return PersistedOriginal{}, false, nil

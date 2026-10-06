@@ -5,13 +5,11 @@ package daemon
 import (
 	"bufio"
 	"context"
-	"errors"
 	"net"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/embedding"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -165,99 +163,6 @@ func TestAgentServer_NilActivityServes(t *testing.T) {
 	sessions, err := client.ListSessions(ctx)
 	require.NoError(t, err)
 	require.NotEmpty(t, sessions, "a server without Activity must still serve")
-}
-
-// blockingEmbeddingService blocks Meta until released so the test can
-// observe the activity tracker while an embedding request is in flight.
-type blockingEmbeddingService struct {
-	started chan struct{}
-	release chan struct{}
-	once    sync.Once
-}
-
-func (b *blockingEmbeddingService) Meta(ctx context.Context) (string, int, string, error) {
-	b.once.Do(func() { close(b.started) })
-	select {
-	case <-b.release:
-		return "stub-embedding", 3, "stub-hash", nil
-	case <-ctx.Done():
-		return "", 0, "", ctx.Err()
-	}
-}
-
-func (b *blockingEmbeddingService) Embed(context.Context, string) ([]float32, error) {
-	return nil, errors.New("unused")
-}
-
-func (b *blockingEmbeddingService) EmbedBatch(context.Context, []string) ([][]float32, error) {
-	return nil, errors.New("unused")
-}
-
-func (b *blockingEmbeddingService) QuerySimilar(context.Context, string, string, int, float32) ([]embedding.QueryResult, error) {
-	return nil, errors.New("unused")
-}
-
-func (b *blockingEmbeddingService) BuildIndex(context.Context, string) (*embedding.IndexStats, error) {
-	return nil, errors.New("unused")
-}
-
-func (b *blockingEmbeddingService) CheckDuplicates(context.Context, string, string, string) (*embedding.CheckDuplicatesResult, error) {
-	return nil, errors.New("unused")
-}
-
-// TestEmbeddingServer_UpdatesActivity verifies the embedding socket server
-// marks each request on its Activity tracker: an in-flight request is not
-// idle, and a just-completed request leaves recent activity behind.
-func TestEmbeddingServer_UpdatesActivity(t *testing.T) {
-	svc := &blockingEmbeddingService{
-		started: make(chan struct{}),
-		release: make(chan struct{}),
-	}
-	activity := NewDaemonActivity()
-	sockPath := shortSocketPath(t, "embedding-activity")
-
-	srv := &EmbeddingServer{SocketPath: sockPath, Service: svc, Activity: activity}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	require.NoError(t, srv.Start(ctx))
-	t.Cleanup(func() { srv.Close() })
-
-	conn, err := net.Dial("unix", sockPath)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	done := make(chan error, 1)
-	go func() {
-		if _, err := conn.Write([]byte(`{"id":"1","op":"meta"}` + "\n")); err != nil {
-			done <- err
-			return
-		}
-		_, err := bufio.NewReader(conn).ReadBytes('\n')
-		done <- err
-	}()
-
-	select {
-	case <-svc.started:
-	case <-time.After(5 * time.Second):
-		t.Fatal("request never reached the embedding service")
-	}
-	assert.False(t, activity.Idle(time.Now(), time.Minute),
-		"an in-flight embedding request must keep the daemon alive")
-
-	close(svc.release)
-	require.NoError(t, <-done)
-
-	// End runs after the response is flushed, which can lag the client's
-	// read — wait until the server has drained the in-flight request.
-	require.Eventually(t, func() bool {
-		return activity.Idle(time.Now().Add(time.Minute), time.Minute)
-	}, 5*time.Second, 10*time.Millisecond, "server must finish the request and drain in-flight")
-
-	now := time.Now()
-	assert.False(t, activity.Idle(now, time.Minute),
-		"a just-served embedding request must count as recent activity")
-	assert.True(t, activity.Idle(now.Add(2*time.Minute), time.Minute),
-		"activity must age out of the idle window")
 }
 
 // TestAgentServer_MalformedRequestTouchesActivity verifies a client sending

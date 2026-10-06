@@ -35,15 +35,14 @@ agent or renders its output.
 
 ## Code Intelligence
 
-Semantic code analysis — powers repo mapping, dead code detection, and embedding search.
+Code analysis — powers repo mapping and dead code detection.
 
 | Package | Purpose |
 |---------|---------|
 | `ast` | Tree-sitter AST integration for multi-language symbol extraction. |
 | `codegraph` | Code intelligence graph (callers, callees, dead code). |
 | `codereview` | Automated code review logic. |
-| `embedding` | ONNX-based embedding infrastructure, HNSW vector store, semantic search. |
-| `index` | Embedding index management for duplicate detection. |
+| `index` | Cached workspace symbol index (`.sprout/symbols.json`). |
 
 ## Infrastructure & Operations
 
@@ -115,11 +114,10 @@ Packages that should not be imported externally.
 
 | Package | Purpose |
 |---------|---------|
-| `internal/hnsw` | HNSW (Hierarchical Navigable Small World) graph for approximate nearest neighbor search. Used by `embedding`. |
 
 ## Cross-Cutting Notes
 
 - **No package imports `cmd/`.** The `cmd/` package is the composition root — it wires dependencies and registers cobra commands. All business logic lives in `pkg/`.
 - **`pkg/agent` is the hub.** It imports from most infrastructure packages but nothing imports it except `cmd/` and `webui/`.
-- **`internal/` is underutilized.** Currently only `internal/hnsw`. Candidates for `internal/` migration: packages only consumed by `cmd/` and `pkg/agent` with no external consumers (e.g., `clihooks`, `noninteractive`, `factory`).
+- **`internal/` is underutilized.** Currently only `internal/testgit`. Candidates for `internal/` migration: packages only consumed by `cmd/` and `pkg/agent` with no external consumers (e.g., `clihooks`, `noninteractive`, `factory`).
 - **Platform-specific code** uses Go build tags (`//go:build darwin`, `//go:build linux`, etc.). See `pkg/service/` for the pattern.

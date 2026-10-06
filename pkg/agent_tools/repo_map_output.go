@@ -120,7 +120,7 @@ func writeRepoMapHeader(sb *strings.Builder, absRoot string, totalFiles int, byE
 // When query is non-empty, only files whose path contains it are listed.
 func formatLSFallback(otherFiles []fileEntry, subDirs []string, query string) string {
 	if query != "" {
-		otherFiles = filterByQuery(otherFiles, query, nil)
+		otherFiles = filterByQuery(otherFiles, query)
 	}
 	if len(otherFiles) == 0 && len(subDirs) == 0 {
 		return ""
@@ -304,16 +304,11 @@ func formatConceptSummary(allFiles []fileEntry) string {
 // filterByQuery filters the file list to only those whose path contains the
 // query string (case-insensitive). Symbol-level filtering is applied
 // separately during extraction.
-// filterByQuery keeps files whose path contains the query (case-insensitive)
-// OR that a semantic search matched for the same query. The union matters: a
-// substring hit is precise but literal, a semantic hit is conceptual but
-// approximate, and dropping either shrinks the map an agent uses to decide what
-// to read.
-func filterByQuery(files []fileEntry, query string, semanticPaths map[string]bool) []fileEntry {
+func filterByQuery(files []fileEntry, query string) []fileEntry {
 	q := strings.ToLower(query)
 	var result []fileEntry
 	for _, f := range files {
-		if strings.Contains(strings.ToLower(f.relPath), q) || semanticPaths[f.relPath] {
+		if strings.Contains(strings.ToLower(f.relPath), q) {
 			result = append(result, f)
 		}
 	}

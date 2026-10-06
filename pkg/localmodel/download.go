@@ -15,7 +15,7 @@ type DownloadStatusPayload struct {
 	ModelID string `json:"model_id"`
 	Status  string `json:"status"` // "downloading" | "completed" | "failed" | "canceled"
 	Bytes   int64  `json:"bytes_downloaded"`
-	Total   int64  `json:"total_bytes,omitempty"` // 0 = unknown (see pollDownloadProgress)
+	Total   int64  `json:"total_bytes,omitempty"` // 0 = unknown until the repo file listing completes
 	Error   string `json:"error,omitempty"`
 }
 
@@ -23,8 +23,7 @@ type DownloadStatusPayload struct {
 // goroutines inside sprout's process (the same EnsureModel path the CLI
 // uses — no external llm_download binary), so directory resolution,
 // HFInclude handling, and tokenizer patching can't drift between entry
-// points. Progress is polled from disk (the hf subprocess exposes no
-// total).
+// points.
 type downloadJob struct {
 	mu      sync.Mutex
 	status  string // "downloading" | "completed" | "failed" | "canceled"

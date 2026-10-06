@@ -16,9 +16,22 @@ interface LivePreviewProps {
    * `onContentChange` payload — is always the untouched original.
    */
   previewPath?: string;
+  /**
+   * Workspace-relative asset bytes inlined into the preview copy as data:
+   * URLs (the hosted half of §143.4: the iframe's fetches bypass the page's
+   * fetch interceptor, so referenced CSS/SVG must ride in the document).
+   */
+  inlineAssets?: Record<string, string>;
 }
 
-function LivePreview({ content, language, fileName, onContentChange, previewPath }: LivePreviewProps): JSX.Element {
+function LivePreview({
+  content,
+  language,
+  fileName,
+  onContentChange,
+  previewPath,
+  inlineAssets,
+}: LivePreviewProps): JSX.Element {
   const [editorContent, setEditorContent] = useState(content);
   const [viewMode, setViewMode] = useState<'split' | 'preview'>('split');
   const [splitPercent, setSplitPercent] = useState<number>(50);
@@ -106,9 +119,9 @@ function LivePreview({ content, language, fileName, onContentChange, previewPath
   const previewDoc = useMemo(
     () =>
       previewPath && language === 'html'
-        ? injectPreviewMarker(rewriteScreenRefs(editorContent, { previewPath }))
+        ? injectPreviewMarker(rewriteScreenRefs(editorContent, { previewPath, inline: inlineAssets }))
         : editorContent,
-    [editorContent, previewPath, language],
+    [editorContent, previewPath, language, inlineAssets],
   );
 
   // Build preview pane content

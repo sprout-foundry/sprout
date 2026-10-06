@@ -1,228 +1,76 @@
 package console
 
-import (
-	"slices"
-	"unicode"
-	"unicode/utf8"
-)
+// Steer/queue box editing. The text model is the shared editBuffer, so
+// every edit behaves exactly as at the idle prompt; this file adds the
+// reader's locking, history detach and redraw around it.
 
-// handleBackspace removes the RUNE (not byte) immediately before the
-// cursor so a single backspace on a multi-byte character — Greek "α",
-// Han "字", emoji "🚀" — deletes the whole glyph rather than corrupting
-// it. Walks backward from the cursor skipping UTF-8 continuation bytes
-// (10xxxxxx) until it finds a lead byte (or ASCII) to drop. A no-op
-// when the cursor is at position 0.
-//
-// Also exits history navigation: editing a recalled entry treats it
-// as a fresh in-progress message.
-func (r *SteerInputReader) handleBackspace() {
+// edit applies op under r.mu and redraws when it changed the line.
+// Changing edits detach from history navigation and the completion cycle.
+func (r *SteerInputReader) edit(op func() bool) {
 	r.mu.Lock()
-	if r.cursorPos > 0 {
-		// Find the start of the rune just before the cursor by walking
-		// back over continuation bytes (0x80..0xBF).
-		i := r.cursorPos - 1
-		for i > 0 && r.buffer[i]&0xC0 == 0x80 {
-			i--
-		}
-		r.buffer = slices.Delete(r.buffer, i, r.cursorPos)
-		r.cursorPos = i
+	changed := op()
+	if changed {
+		r.historyIndex = -1
+		r.pendingBuffer = nil
+		r.resetCompletionCycleLocked()
 	}
-	r.historyIndex = -1
-	r.pendingBuffer = nil
-	r.resetCompletionCycleLocked()
 	r.mu.Unlock()
-	r.renderLine()
+	if changed {
+		r.renderLine()
+	}
 }
 
-// insertAtCursor inserts a byte sequence at the cursor position and
-// advances the cursor. Edits exit history navigation. Caller must NOT
-// hold r.mu.
+// move applies a cursor motion under r.mu and redraws.
+func (r *SteerInputReader) move(op func() bool) {
+	r.mu.Lock()
+	changed := op()
+	r.mu.Unlock()
+	if changed {
+		r.renderLine()
+	}
+}
+
+// insertAtCursor inserts text at the cursor. Caller must NOT hold r.mu.
 func (r *SteerInputReader) insertAtCursor(data []byte) {
-	r.mu.Lock()
-	r.buffer = slices.Insert(r.buffer, r.cursorPos, data...)
-	r.cursorPos += len(data)
-	r.historyIndex = -1
-	r.pendingBuffer = nil
-	r.resetCompletionCycleLocked()
-	r.mu.Unlock()
-	r.renderLine()
+	r.edit(func() bool {
+		r.insertText(string(data))
+		return len(data) > 0
+	})
 }
 
-// moveCursorStart moves the cursor to byte 0 (Ctrl+A / Home).
-func (r *SteerInputReader) moveCursorStart() {
-	r.mu.Lock()
-	r.cursorPos = 0
-	r.mu.Unlock()
-	r.renderLine()
-}
-
-// moveCursorEnd moves the cursor to the end of the buffer (Ctrl+E / End).
-func (r *SteerInputReader) moveCursorEnd() {
-	r.mu.Lock()
-	r.cursorPos = len(r.buffer)
-	r.mu.Unlock()
-	r.renderLine()
-}
-
-// moveCursorBackward moves the cursor back one rune (Ctrl+B / Left).
-// A no-op when the cursor is already at the start.
-func (r *SteerInputReader) moveCursorBackward() {
-	r.mu.Lock()
-	if r.cursorPos > 0 {
-		_, sz := utf8.DecodeLastRune(r.buffer[:r.cursorPos])
-		r.cursorPos -= sz
-	}
-	r.mu.Unlock()
-	r.renderLine()
-}
-
-// moveCursorForward moves the cursor forward one rune (Ctrl+F / Right).
-// A no-op when the cursor is already at the end.
-func (r *SteerInputReader) moveCursorForward() {
-	r.mu.Lock()
-	if r.cursorPos < len(r.buffer) {
-		_, sz := utf8.DecodeRune(r.buffer[r.cursorPos:])
-		r.cursorPos += sz
-	}
-	r.mu.Unlock()
-	r.renderLine()
-}
-
-// moveWord moves the cursor by one word (delta -1 = backward, +1 =
-// forward). A word is a maximal run of non-whitespace (unicode.IsSpace),
-// matching the main InputReader's MoveWord semantics.
+func (r *SteerInputReader) handleBackspace()    { r.edit(r.deleteRuneBefore) }
+func (r *SteerInputReader) deleteForward()      { r.edit(r.deleteRuneAt) }
+func (r *SteerInputReader) deleteWordBackward() { r.edit(r.killWordBefore) }
+func (r *SteerInputReader) deleteWordForward()  { r.edit(r.killWordAfter) }
+func (r *SteerInputReader) killToEnd()          { r.edit(r.editBuffer.killToEnd) }
+func (r *SteerInputReader) killToStart()        { r.edit(r.editBuffer.killToStart) }
+func (r *SteerInputReader) undoEdit()           { r.edit(r.undo) }
+func (r *SteerInputReader) moveCursorBackward() { r.move(func() bool { return r.moveRunes(-1) }) }
+func (r *SteerInputReader) moveCursorForward()  { r.move(func() bool { return r.moveRunes(1) }) }
+func (r *SteerInputReader) moveCursorStart()    { r.move(func() bool { return r.moveTo(0) }) }
+func (r *SteerInputReader) moveCursorEnd()      { r.move(func() bool { return r.moveTo(len(r.line)) }) }
 func (r *SteerInputReader) moveWord(delta int) {
-	r.mu.Lock()
-	pos := r.cursorPos
-	buf := r.buffer
-	if delta < 0 {
-		// Skip whitespace backward.
-		for pos > 0 {
-			rr, sz := utf8.DecodeLastRune(buf[:pos])
-			if unicode.IsSpace(rr) {
-				pos -= sz
-			} else {
-				break
-			}
-		}
-		// Skip non-whitespace backward.
-		for pos > 0 {
-			rr, sz := utf8.DecodeLastRune(buf[:pos])
-			if !unicode.IsSpace(rr) {
-				pos -= sz
-			} else {
-				break
-			}
-		}
-	} else {
-		// Skip whitespace forward.
-		for pos < len(buf) {
-			rr, sz := utf8.DecodeRune(buf[pos:])
-			if unicode.IsSpace(rr) {
-				pos += sz
-			} else {
-				break
-			}
-		}
-		// Skip non-whitespace forward.
-		for pos < len(buf) {
-			rr, sz := utf8.DecodeRune(buf[pos:])
-			if !unicode.IsSpace(rr) {
-				pos += sz
-			} else {
-				break
-			}
-		}
-	}
-	r.cursorPos = pos
-	r.mu.Unlock()
-	r.renderLine()
+	r.move(func() bool { return r.editBuffer.moveWord(delta) })
 }
 
-// deleteWordBackward deletes the word before the cursor (Ctrl-W /
-// Alt-Backspace). A no-op when the cursor is at the start or only
-// whitespace precedes it.
-func (r *SteerInputReader) deleteWordBackward() {
-	r.mu.Lock()
-	if r.cursorPos == 0 {
-		r.mu.Unlock()
-		return
-	}
-	pos := r.cursorPos
-	buf := r.buffer
-	// Skip whitespace backward.
-	for pos > 0 {
-		rr, sz := utf8.DecodeLastRune(buf[:pos])
-		if unicode.IsSpace(rr) {
-			pos -= sz
-		} else {
-			break
-		}
-	}
-	// Skip non-whitespace backward.
-	for pos > 0 {
-		rr, sz := utf8.DecodeLastRune(buf[:pos])
-		if !unicode.IsSpace(rr) {
-			pos -= sz
-		} else {
-			break
-		}
-	}
-	r.buffer = slices.Delete(r.buffer, pos, r.cursorPos)
-	r.cursorPos = pos
-	r.historyIndex = -1
-	r.pendingBuffer = nil
-	r.resetCompletionCycleLocked()
-	r.mu.Unlock()
-	r.renderLine()
+// yank inserts the most recently killed text at the cursor (Ctrl-Y).
+func (r *SteerInputReader) yank() {
+	r.edit(func() bool {
+		r.insertText(r.killBuffer)
+		return r.killBuffer != ""
+	})
 }
 
-// killToEnd deletes from the cursor to the end of the buffer (Ctrl-K).
-// A no-op when the cursor is already at the end.
-func (r *SteerInputReader) killToEnd() {
-	r.mu.Lock()
-	if r.cursorPos >= len(r.buffer) {
-		r.mu.Unlock()
-		return
-	}
-	r.buffer = r.buffer[:r.cursorPos]
-	r.historyIndex = -1
-	r.pendingBuffer = nil
-	r.resetCompletionCycleLocked()
-	r.mu.Unlock()
-	r.renderLine()
+// setLineLocked replaces the whole line as one undoable step. Caller MUST
+// hold r.mu.
+func (r *SteerInputReader) setLineLocked(text string) {
+	r.replaceLine(text)
 }
 
-// killToStart deletes from the start of the buffer to the cursor
-// (Ctrl-U). A no-op when the cursor is already at the start.
-func (r *SteerInputReader) killToStart() {
-	r.mu.Lock()
-	if r.cursorPos == 0 {
-		r.mu.Unlock()
-		return
+// repaint redraws the footer chrome and the box (Ctrl-L mid-turn).
+func (r *SteerInputReader) repaint() {
+	if r.footer != nil {
+		r.footer.Refresh()
 	}
-	r.buffer = slices.Delete(r.buffer, 0, r.cursorPos)
-	r.cursorPos = 0
-	r.historyIndex = -1
-	r.pendingBuffer = nil
-	r.resetCompletionCycleLocked()
-	r.mu.Unlock()
-	r.renderLine()
-}
-
-// deleteForward deletes the rune at the cursor (Ctrl-D on non-empty).
-// A no-op when the cursor is at the end.
-func (r *SteerInputReader) deleteForward() {
-	r.mu.Lock()
-	if r.cursorPos >= len(r.buffer) {
-		r.mu.Unlock()
-		return
-	}
-	_, sz := utf8.DecodeRune(r.buffer[r.cursorPos:])
-	r.buffer = slices.Delete(r.buffer, r.cursorPos, r.cursorPos+sz)
-	r.historyIndex = -1
-	r.pendingBuffer = nil
-	r.resetCompletionCycleLocked()
-	r.mu.Unlock()
 	r.renderLine()
 }

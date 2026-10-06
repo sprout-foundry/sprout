@@ -94,7 +94,6 @@ function createDefaultState(): Record<string, unknown> {
     askUserRequest: null,
     passwordRequest: null,
     editApprovalRequest: null,
-    driftNotification: null,
     modelSelectionRequest: null,
     outputVerbosity: 'default' as const,
   };

@@ -72,6 +72,8 @@ export {
   writeLayout,
   DesignWriteConflictError,
   baseMtimeFromResponse,
+  contentHashOf,
+  etagFromResponse,
 } from './designApiWrite';
 export type { SafeWriteOptions, WriteConflict } from './designApiWrite';
 export {
@@ -268,6 +270,23 @@ export async function readAsset(fetchFn: typeof fetch, path: string, readFn?: ty
     throw new ReadAssetError(path, response.status);
   }
   return responseText(response);
+}
+
+/**
+ * Read a binary asset (image, font) as a data: URL, for inlining into a
+ * preview or render document. Empty string when the file is missing.
+ */
+export async function readAssetDataUrl(fetchFn: typeof fetch, path: string, readFn?: typeof fetch): Promise<string> {
+  const response = await (readFn ?? fetchFn)(fileUrl(path));
+  if (!response.ok) {
+    if (response.status === 404) return '';
+    throw new ReadAssetError(path, response.status);
+  }
+  const blob = await response.blob();
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
+  return `data:${blob.type || 'application/octet-stream'};base64,${btoa(binary)}`;
 }
 
 /**

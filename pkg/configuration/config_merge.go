@@ -73,6 +73,12 @@ func MergeConfig(base, override *Config) *Config {
 	if override.ReasoningEffort != "" {
 		result.ReasoningEffort = override.ReasoningEffort
 	}
+	if override.OutputVerbosity != "" {
+		result.OutputVerbosity = override.OutputVerbosity
+	}
+	if override.overrides("show_tool_invocations", override.ShowToolInvocations) {
+		result.ShowToolInvocations = override.ShowToolInvocations
+	}
 	if override.overrides("disable_thinking", override.DisableThinking) {
 		result.DisableThinking = override.DisableThinking
 	}
@@ -159,28 +165,6 @@ func MergeConfig(base, override *Config) *Config {
 		}
 		if override.APITimeouts.CommitMessageTimeoutSec > 0 {
 			result.APITimeouts.CommitMessageTimeoutSec = override.APITimeouts.CommitMessageTimeoutSec
-		}
-	}
-
-	// Merge EmbeddingIndex
-	if override.EmbeddingIndex != nil {
-		if result.EmbeddingIndex == nil {
-			result.EmbeddingIndex = &EmbeddingIndexConfig{}
-		}
-		if override.EmbeddingIndex.Enabled != nil {
-			result.EmbeddingIndex.Enabled = override.EmbeddingIndex.Enabled
-		}
-		if override.EmbeddingIndex.IndexDir != "" {
-			result.EmbeddingIndex.IndexDir = override.EmbeddingIndex.IndexDir
-		}
-		if override.EmbeddingIndex.MaxResults > 0 {
-			result.EmbeddingIndex.MaxResults = override.EmbeddingIndex.MaxResults
-		}
-		if override.EmbeddingIndex.AutoIndex != nil {
-			result.EmbeddingIndex.AutoIndex = override.EmbeddingIndex.AutoIndex
-		}
-		if len(override.EmbeddingIndex.ExcludePaths) > 0 {
-			result.EmbeddingIndex.ExcludePaths = append([]string{}, override.EmbeddingIndex.ExcludePaths...)
 		}
 	}
 

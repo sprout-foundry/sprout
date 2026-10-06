@@ -4,7 +4,6 @@ import { AgentEscalationBridge } from './components/AgentEscalationBridge';
 import AppContent from './components/AppContent';
 import AskUserDialog from './components/AskUserDialog';
 import { DisconnectedOverlay } from './components/DisconnectedOverlay';
-import DriftNotification from './components/DriftNotification';
 import EditApprovalPanel from './components/EditApprovalPanel';
 import ErrorBoundary from './components/ErrorBoundary';
 import { EscalationListener } from './components/EscalationListener';
@@ -100,7 +99,6 @@ function App() {
       editApprovalRequest: null,
       shellApprovalRequest: null,
       modelSelectionRequest: null,
-      driftNotification: null,
       outputVerbosity: 'default' as const,
       inputValue: '',
       workspaceBusy: null,
@@ -354,17 +352,10 @@ function AppInner() {
     setIsTablet,
     setState,
     handleReconnect,
-    // When the persisted workspace mode is Design and that mode has no
-    // pinned chat, boot into a fresh Design chat instead of the most
-    // recent Code session. Switch/pin via the existing chat manager path —
-    // the chat-session id space, never the agent-session restore flow.
-    // The switch result (did it take effect?) drives the stale-pin fallback
-    // to a fresh chat, and a landed fresh switch is recorded as the pin.
-    // SP-142: the fresh chat is stamped with the design lane.
-    createFreshChat: (mode) => chatManager.handleCreateChat(mode ?? 'design'),
-    switchToChat: async (id: string) => {
-      return chatManager.handleActiveChatChange(id, 'design');
-    },
+    // SP-147: one conversation per project — boot has no per-mode chat
+    // restore, so no lane-aware create/switch hooks are passed. The server's
+    // active chat (or the most recent non-empty one) comes back whatever the
+    // mode.
   });
 
   // ── Escalation Triggers (cloud mode) ────────────────────────────
@@ -599,19 +590,6 @@ function AppInner() {
                           }}
                           onSubmit={async (decisions) => {
                             await handleShellApprovalSubmit(state.shellApprovalRequest!.requestId, decisions);
-                          }}
-                        />
-                      )}
-                      {state.driftNotification && (
-                        <DriftNotification
-                          similarity={state.driftNotification.similarity}
-                          threshold={state.driftNotification.threshold}
-                          sessionId={state.driftNotification.sessionId}
-                          options={state.driftNotification.options}
-                          onContinue={() => setState(() => ({ driftNotification: null }))}
-                          onNewChat={() => {
-                            setState(() => ({ driftNotification: null }));
-                            chatManager.handleCreateChat();
                           }}
                         />
                       )}

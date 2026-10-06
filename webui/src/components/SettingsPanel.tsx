@@ -9,13 +9,11 @@ import CredentialsSettingsTab from './CredentialsSettingsTab';
 import AdvancedSettingsTab from './settings/AdvancedSettingsTab';
 import AgentBehaviorSettingsTab from './settings/AgentBehaviorSettingsTab';
 import ComputerUseSettingsTab from './settings/ComputerUseSettingsTab';
-import EmbeddingSettingsTab from './settings/EmbeddingSettingsTab';
 import GeneralSettingsTab from './settings/GeneralSettingsTab';
 import GitHubSettingsTab from './settings/GitHubSettingsTab';
 import LanguageServersSettingsTab from './settings/LanguageServersSettingsTab';
 import MCPSettingsTab from './settings/MCPSettingsTab';
 import NotificationsSettingsTab from './settings/NotificationsSettingsTab';
-import PersistentContextSettingsTab from './settings/PersistentContextSettingsTab';
 import ProviderSettingsTab from './settings/ProviderSettingsTab';
 import { LocalLLMSettingsTab } from './settings/LocalLLMSettingsTab';
 import SecuritySettingsTab from './settings/SecuritySettingsTab';
@@ -70,9 +68,12 @@ function SettingsPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const [activeSubsection, setActiveSubsection] = useState<SettingsSubsection | null>(
-    restored?.activeSubsection ?? null,
-  );
+  // A subsection saved by an older build may no longer exist; fall back to
+  // none rather than rendering an empty panel.
+  const [activeSubsection, setActiveSubsection] = useState<SettingsSubsection | null>(() => {
+    const saved = restored?.activeSubsection ?? null;
+    return saved && getSectionForSubsection(saved) ? saved : null;
+  });
   const [expandedSections, setExpandedSections] = useState<Set<SettingsSection>>(
     new Set(restored?.expanded ?? ['agent']),
   );
@@ -361,22 +362,7 @@ function SettingsPanel({
       case 'agent-skills':
         return <SkillsSettingsTab settings={activeSettings ?? settings} toggleSkill={mutations.toggleSkill} />;
 
-      case 'agent-memory':
-        return (
-          <PersistentContextSettingsTab settings={activeSettings ?? settings} updateSetting={mutations.updateSetting} />
-        );
-
       /* ── Workspace section ─────────────────────────── */
-      case 'workspace-embeddings':
-        return (
-          <EmbeddingSettingsTab
-            settings={activeSettings ?? settings}
-            renderToggle={fieldRenderers.renderToggle}
-            renderTextInput={fieldRenderers.renderTextInput}
-            updateSetting={mutations.updateSetting}
-          />
-        );
-
       case 'workspace-lsp':
         return (
           <LanguageServersSettingsTab settings={activeSettings ?? settings} updateSetting={mutations.updateSetting} />

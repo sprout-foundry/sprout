@@ -53,7 +53,7 @@ var configGetCmd = &cobra.Command{
 
 Examples:
   sprout config get last_used_provider
-  sprout config get embedding_index.enabled
+  sprout config get wakeup.enabled
   sprout config get mcp.enabled
 
 Use --show-origin to print which layer (global, global-local, workspace,

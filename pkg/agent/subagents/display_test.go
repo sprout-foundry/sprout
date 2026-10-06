@@ -11,8 +11,8 @@ import (
 func TestCompactCount(t *testing.T) {
 	cases := map[int]string{0: "0", 999: "999", 1000: "1k", 12500: "12.5k", 1_000_000: "1M", 1_500_000: "1.5M"}
 	for in, want := range cases {
-		if got := compactCount(in); got != want {
-			t.Errorf("compactCount(%d) = %q, want %q", in, got, want)
+		if got := CompactCount(in); got != want {
+			t.Errorf("CompactCount(%d) = %q, want %q", in, got, want)
 		}
 	}
 }

@@ -539,17 +539,10 @@ func TestDesignImportSketchHandler_StructuredJSONShape(t *testing.T) {
 	assert.NotContains(t, raw, "wrote")
 }
 
-// ---------------------------------------------------------------------------
-// Registration: build-tagged (native only), not in the shared roster
-// ---------------------------------------------------------------------------
-
-func TestRegisterDesignImportSketchTools_NativeRoster(t *testing.T) {
+// TestDesignImportSketch_OnSharedRoster: the tool only attaches the image,
+// so it ships to every build (SP-158).
+func TestDesignImportSketch_OnSharedRoster(t *testing.T) {
 	t.Parallel()
-	handlers := registerDesignImportSketchTools()
-	require.Len(t, handlers, 1)
-	assert.Equal(t, "design_import_sketch", handlers[0].Name())
-
-	// AllTools() must include it on native builds (the build-tagged append).
 	found := false
 	for _, h := range AllTools() {
 		if h.Name() == "design_import_sketch" {
@@ -557,22 +550,17 @@ func TestRegisterDesignImportSketchTools_NativeRoster(t *testing.T) {
 			break
 		}
 	}
-	require.True(t, found, "AllTools() must register design_import_sketch on native builds")
+	require.True(t, found, "AllTools() must register design_import_sketch")
 }
 
 // compile-time interface check.
 var _ ToolHandler = (*designImportSketchHandler)(nil)
 
-// The handler must be behind a build tag, like design_render: it is not in the
-// shared literal list in all.go (which is unconditional). Guard that by
-// checking AllTools sources it from the tagged registrar.
-func TestDesignImportSketch_NotInSharedLiteralList(t *testing.T) {
+func TestDesignImportSketch_InSharedLiteralList(t *testing.T) {
 	t.Parallel()
 	src, err := os.ReadFile(filepath.Join("all.go"))
 	require.NoError(t, err)
-	assert.NotContains(t, string(src), "designImportSketchHandler{}",
-		"design_import_sketch must be registered via the build-tagged registrar, not unconditionally in all.go")
-	assert.Contains(t, string(src), "registerDesignImportSketchTools()")
+	assert.Contains(t, string(src), "&designImportSketchHandler{}")
 }
 
 // silence the unused-import guard for context on some build configs.

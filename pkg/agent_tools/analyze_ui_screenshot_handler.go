@@ -8,9 +8,6 @@ import (
 	"time"
 )
 
-// visionModeFrontend is the analysis mode used by the analyze_ui_screenshot tool.
-const visionModeFrontend = "frontend"
-
 type analyzeUIScreenshotHandler struct{}
 
 func (h *analyzeUIScreenshotHandler) Name() string { return "analyze_ui_screenshot" }
@@ -104,20 +101,3 @@ func (h *analyzeUIScreenshotHandler) Timeout() time.Duration { return 0 }
 func (h *analyzeUIScreenshotHandler) MaxResultSize() int     { return 0 }
 func (h *analyzeUIScreenshotHandler) SafeForParallel() bool  { return false }
 func (h *analyzeUIScreenshotHandler) Interactive() bool      { return false }
-
-// viewportDim extracts an integer viewport dimension from tool args, handling
-// both int (direct calls) and float64 (JSON deserialization) representations.
-// Falls back to def when the key is missing or non-positive.
-func viewportDim(args map[string]any, key string, def float64) float64 {
-	switch v := args[key].(type) {
-	case int:
-		if v > 0 {
-			return float64(v)
-		}
-	case float64:
-		if v > 0 {
-			return v
-		}
-	}
-	return def
-}

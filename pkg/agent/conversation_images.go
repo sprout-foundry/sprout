@@ -80,6 +80,7 @@ func (a *Agent) processImagesInQuery(query string) ([]api.ImageData, string, err
 	if a.client == nil {
 		return nil, query, nil
 	}
+	query = console.CanonicalizeLegacyImageMarkers(query)
 
 	if c := a.getClient(); c != nil && api.ResolveVisionCapability(c).AcceptsImages {
 		return a.processImagesAsMultimodal(query)

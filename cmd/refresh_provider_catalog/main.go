@@ -154,9 +154,10 @@ func main() {
 	}
 
 	nextCatalog := providercatalog.Catalog{
-		UpdatedAt: now,
-		Source:    "refresh_provider_catalog",
-		Providers: make([]providercatalog.Provider, 0, len(orderedIDs)),
+		UpdatedAt:       now,
+		Source:          "refresh_provider_catalog",
+		OnboardingOrder: baseCatalog.OnboardingOrder,
+		Providers:       make([]providercatalog.Provider, 0, len(orderedIDs)),
 	}
 
 	for _, providerID := range orderedIDs {

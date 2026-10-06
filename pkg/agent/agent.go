@@ -10,7 +10,6 @@ import (
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
-	"github.com/sprout-foundry/sprout/pkg/embedding"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/security"
 	"github.com/sprout-foundry/sprout/pkg/validation"
@@ -305,10 +304,6 @@ type Agent struct {
 	// Keys are bundle IDs (macOS) or "class:<window_class>" (Linux).
 	computerUseAppAllowlist map[string]bool
 
-	// Embedding index manager for duplicate detection on file writes.
-	embeddingMu  sync.RWMutex // protects embeddingMgr
-	embeddingMgr *embedding.EmbeddingManager
-
 	// Vision processor for image/PDF/OCR analysis. Lazily initialized on first GetVisionProcessor() call.
 	visionProcMu sync.RWMutex // protects visionProcessor
 	visionProc   *tools.VisionProcessor
@@ -319,6 +314,10 @@ type Agent struct {
 	// shutdown records that Shutdown() has run, making it observable and ensuring teardown is once-only.
 	shutdown     atomic.Bool
 	shutdownOnce sync.Once
+
+	// workspaceMode is the host's workspace mode for the current query; its
+	// skills activate at turn start (see workspace_mode_skills.go).
+	workspaceMode atomic.Pointer[string]
 
 	// SubagentRunner manages in-process subagent execution.
 	subagentRunner *SubagentRunner

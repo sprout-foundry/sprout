@@ -124,7 +124,7 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 							agent.SubagentDepth(), agent.MaxSubagentDepth()), nil), name, args)
 				}
 			}
-			if name == "run_subagent" && !agent.CanSpawnSubagents() {
+			if spawnsSubagentsAnyMode(name) && !agent.CanSpawnSubagents() {
 				return wrapSecurityCautionWithLoop(agent, agenterrors.NewSecurityError(
 					fmt.Sprintf("SUBAGENT_RESTRICTION: Agent at depth %d cannot spawn subagents (max depth: %d). "+
 						"This restriction prevents runaway agent chains and ensures proper task delegation. "+

@@ -1,5 +1,3 @@
-//go:build !js
-
 package tools
 
 import (
@@ -420,13 +418,3 @@ func (h *designExportHandler) Timeout() time.Duration { return 60 * time.Second 
 func (h *designExportHandler) MaxResultSize() int     { return 0 }
 func (h *designExportHandler) SafeForParallel() bool  { return false }
 func (h *designExportHandler) Interactive() bool      { return false }
-
-// registerDesignExportTools registers the design_export_tokens tool. It is
-// pure Go, but SP-140 invariant 7 keeps only design_assets and design_validate
-// on the WASM roster, so this is registered from a build-tagged registrar
-// (excluded from WASM via design_export_handler_js.go, which returns nil).
-func registerDesignExportTools() []ToolHandler {
-	return []ToolHandler{
-		&designExportHandler{},
-	}
-}

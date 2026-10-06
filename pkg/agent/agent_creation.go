@@ -12,7 +12,6 @@ import (
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
-	"github.com/sprout-foundry/sprout/pkg/envutil"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/factory"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
@@ -195,34 +194,6 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 			}
 		}
 
-		// Sweep expired persistent context entries based on retention policy.
-		if agent.configManager != nil {
-			cfg := agent.configManager.GetConfig()
-			if cfg != nil && cfg.PersistentContext != nil && cfg.PersistentContext.RetentionDays > 0 {
-				// Resolve storePath using the same logic as EmbeddingManager.initLocked().
-				convoStoreDir := ""
-				if cfg.EmbeddingIndex != nil {
-					convoStoreDir = cfg.EmbeddingIndex.IndexDir
-				}
-				if convoStoreDir == "" {
-					dataDir, err := envutil.DataDir()
-					if err == nil {
-						convoStoreDir = filepath.Join(dataDir, "embeddings")
-					} else {
-						home, _ := os.UserHomeDir()
-						convoStoreDir = filepath.Join(home, ".local", "share", "sprout", "embeddings")
-					}
-				}
-				convoStorePath := filepath.Join(convoStoreDir, "conversation_turns.hnsw")
-				swept, sweepErr := SweepExpiredEntries(cfg.PersistentContext.RetentionDays, convoStorePath)
-				if sweepErr != nil && agent.debug {
-					_, _ = os.Stderr.Write([]byte(fmt.Sprintf("WARNING: Failed to sweep expired context entries: %v\n", sweepErr)))
-				} else if swept > 0 && agent.debug {
-					_, _ = os.Stderr.Write([]byte(fmt.Sprintf("Swept %d expired context entries\n", swept)))
-				}
-			}
-		}
-
 		// Register computer_use desktop-control tools when enabled in config.
 		if agent.configManager != nil {
 			if cuErr := RegisterComputerUseTools(agent.configManager.GetConfig()); cuErr != nil && agent.debug {
@@ -245,9 +216,6 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 
 	// Wire the package-level logger so package-level functions can use structured logging with session context.
 	SetPackageLogger(agent.Logger())
-
-	// Restore embedding index if previously enabled for this workspace
-	agent.RestoreEmbeddingIndex()
 
 	// Coordinator persona is opt-in ('/persona coordinator', or
 	// 'coordinator_auto_activate' in config). It no longer auto-fires
@@ -478,9 +446,7 @@ func newAgentWithConfigManagerInner(configManager *configuration.Manager, worksp
 		}
 		// Check if editor mode is active
 		if resolvedType == api.EditorClientType {
-			return nil, agenterrors.NewProviderError("editor mode is active — no AI provider configured. "+
-				"Set up a provider with: sprout agent --provider <provider> "+
-				"or configure via Settings in the webui (sprout agent -d)", nil, "", "")
+			return nil, agenterrors.NewProviderError(editorModeHint, nil, "", "")
 		}
 		// Provider resolved — ensure API key exists without prompting.
 		if keyErr := configManager.EnsureAPIKey(resolvedType); keyErr != nil {
@@ -525,14 +491,10 @@ func newAgentWithConfigManagerInner(configManager *configuration.Manager, worksp
 				clientType = autoProvider
 				finalModel = autoModel
 			} else {
-				return nil, agenterrors.NewProviderError("editor mode is active — no AI provider configured. "+
-					"Set up a provider with: sprout agent --provider <provider> "+
-					"or configure via Settings in the webui (sprout agent -d)", nil, "", "")
+				return nil, agenterrors.NewProviderError(editorModeHint, nil, "", "")
 			}
 		} else {
-			return nil, agenterrors.NewProviderError("editor mode is active — no AI provider configured. "+
-				"Set up a provider with: sprout agent --provider <provider> "+
-				"or configure via Settings in the webui (sprout agent -d)", nil, "", "")
+			return nil, agenterrors.NewProviderError(editorModeHint, nil, "", "")
 		}
 	}
 
@@ -689,3 +651,8 @@ func (a *Agent) maybeAutoActivateCoordinatorPersona() {
 func isInteractiveTerminal() bool {
 	return term.IsTerminal(int(os.Stdin.Fd()))
 }
+
+// editorModeHint is the error shown when no AI provider is configured.
+// Its opening words are matched by the web UI (pkg/webui/api_query.go).
+const editorModeHint = "editor mode is active — no AI provider configured. Run `sprout keys set <provider>`, " +
+	"or start `sprout agent -d` and add one in the web UI's settings"

@@ -80,6 +80,19 @@ func TestTryZshCommandExecution_AutoExecutePrefix(t *testing.T) {
 	_ = executed
 }
 
+func TestTryZshCommandExecution_ProseGoesToAssistant(t *testing.T) {
+	a := newTestAgent(t)
+	cfg := a.GetConfig()
+	cfg.EnableZshCommandDetection = true
+	cfg.AutoExecuteDetectedCommands = true
+	for _, word := range []string{"go", "make", "ls", "go on", "make sure the tests pass", "find the bug"} {
+		executed, err := TryZshCommandExecution(context.Background(), a, word)
+		if err != nil || executed {
+			t.Errorf("%q: prose must reach the assistant, got executed=%v err=%v", word, executed, err)
+		}
+	}
+}
+
 func TestTryZshCommandExecution_NilConfig(t *testing.T) {
 	a, err := agent.NewAgent()
 	if err != nil {

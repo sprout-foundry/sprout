@@ -14,19 +14,9 @@ import (
 
 // TestMain makes the agent test binary hermetic and fast.
 //
-// Three failure modes used to make `go test ./pkg/agent/` unrunnable:
+// Two failure modes used to make `go test ./pkg/agent/` unrunnable:
 //
-//  1. Resource blowup. Every agent created in a test calls
-//     RestoreEmbeddingIndex(), which auto-enables the embedding index and
-//     spawns a background goroutine that downloads a ~240MB ONNX model and
-//     runs inference. Multiplied across the suite's ~1600 tests, those
-//     leaked download/inference goroutines pinned the machine (~21 cores,
-//     tens of GB RSS) and the suite never finished. We disable the implicit
-//     auto-index here via the same env guard production/headless runs use;
-//     tests that genuinely need embeddings call EnableEmbeddingIndex()
-//     explicitly and already gate on -short / ONNX availability.
-//
-//  2. Prompt hang. A security-approval gate (e.g. highRiskApprovedForCommand)
+//  1. Prompt hang. A security-approval gate (e.g. highRiskApprovedForCommand)
 //     renders an interactive picker when the shared logger is interactive,
 //     then blocks forever on stdin that no test types into. We force the
 //     shared logger non-interactive so those gates resolve deterministically
@@ -34,7 +24,7 @@ import (
 //     factory is the durable guarantee; this is a process-wide backstop for
 //     any path that doesn't go through agent config.
 //
-//  3. Search-index rebuild. The persistence.go init() wires the global
+//  2. Search-index rebuild. The persistence.go init() wires the global
 //     search IndexUpdater to the real ~/.sprout/sessions/search-index.json
 //     before TestMain can intercept it. Any test calling SaveStateScoped
 //     triggers search.MarkSessionDirty, which schedules a debounced
@@ -47,32 +37,20 @@ func TestMain(m *testing.M) {
 	// PR review); redirect git config so those subprocesses never touch the
 	// developer's real ~/.gitconfig.
 	testgit.Configure()
-	os.Setenv("SPROUT_DISABLE_EMBEDDING_AUTOINDEX", "1")
 
 	// Isolate all agent-package tests from the real workspace config.
 	// Inside a git repo, SPROUT_CONFIG is set to .sprout/ by the CLI;
 	// without this override, tests calling NewManagerSilent/NewManager
 	// without per-test SPROUT_CONFIG isolation read/write the real
 	// workspace config file, corrupting it with test fixtures.
-	os.Setenv("SPROUT_CONFIG", filepath.Join(os.TempDir(), "sprout-agent-test-config"))
-
-	// Share one ONNX model/runtime cache across the whole suite. Each test
-	// isolates SPROUT_CONFIG to its own t.TempDir(), and the model dir
-	// normally derives from that — so without this every embedding-dependent
-	// (non -short) test re-downloaded the ~240MB model into a throwaway dir,
-	// turning the full run into a download loop that never finished.
-	// SPROUT_MODELS_DIR takes priority over the config-derived path, so a
-	// stable shared dir means the model is fetched at most once and reused
-	// across tests (and across `go test` invocations).
-	if os.Getenv("SPROUT_MODELS_DIR") == "" {
-		os.Setenv("SPROUT_MODELS_DIR", filepath.Join(os.TempDir(), "sprout-test-models"))
-	}
-
+	// The directory is per-run: a shared fixed path let one interrupted run
+	// leave encrypted keys without their key.age, failing every later run.
 	tmpDir, err := os.MkdirTemp("", "sprout-agent-test-state-*")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "TestMain: create temp state dir: %v\n", err)
 		os.Exit(1)
 	}
+	_ = os.Setenv("SPROUT_CONFIG", filepath.Join(tmpDir, "config"))
 	sessionsDir := filepath.Join(tmpDir, "sessions")
 	if err := os.MkdirAll(sessionsDir, 0o700); err != nil {
 		fmt.Fprintf(os.Stderr, "TestMain: mkdir sessions: %v\n", err)

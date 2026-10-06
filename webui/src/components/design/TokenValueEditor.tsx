@@ -16,7 +16,13 @@
 import { useEffect, useState } from 'react';
 import { useSproutFetch } from '../../contexts/SproutAdapterContext';
 import { applyTokenEdit, coerceTokenValue, referenceCount } from '../../design/tokenEdit';
-import { designRootPath, baseMtimeFromResponse, writeAssetIfUnchanged } from '../../services/api/designApi';
+import {
+  contentHashOf,
+  designRootPath,
+  baseMtimeFromResponse,
+  etagFromResponse,
+  writeAssetIfUnchanged,
+} from '../../services/api/designApi';
 export interface TokenValueEditorProps {
   /** Dotted path of the selected token, e.g. "color.brand.primary". */
   tokenPath: string;
@@ -74,10 +80,14 @@ export default function TokenValueEditor({
       if (!readResponse.ok) throw new Error('could not read the token file');
       const fileText = await readResponse.text();
       const nextText = applyTokenEdit(fileText, tokenPath, coerced.value);
-      // §7a: guard the write with the revision just read, so an agent write
-      // between read and save surfaces as the conflict message, not a loss.
+      // §7a: guard the write with the revision just read (mtime where the
+      // host stamps one; the bytes' hash everywhere — the hash is what makes
+      // the guard real in the hosted editor, whose files carry no mtimes),
+      // so an agent write between read and save surfaces as the conflict
+      // message, not a loss.
       await writeAssetIfUnchanged(transport, filePath, nextText, {
         baseMtime: baseMtimeFromResponse(readResponse),
+        baseHash: (await contentHashOf(fileText)) ?? etagFromResponse(readResponse),
       });
       setStatus('saved');
       onSaved?.();

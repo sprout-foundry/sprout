@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"github.com/sprout-foundry/sprout/pkg/envutil"
@@ -96,17 +97,18 @@ func askForSecurityApprovalWriter(w io.Writer, prompt, command string, analysis 
 		"Critical ops still block. Run /risk-profile permissive to make it persistent.")
 
 	items := []SelectItem{
-		{Label: "Approve once", Detail: "allow this invocation only", Value: "approve_once"},
-		{Label: "Deny", Detail: "reject and surface a security error", Value: "deny"},
-		{Label: "Always approve", Detail: "persist this exact command to your allowlist", Value: "approve_always"},
+		{Label: "Approve once", Detail: "allow this invocation only", Value: "approve_once", Key: 'y'},
+		{Label: "Deny", Detail: "reject and surface a security error", Value: "deny", Key: 'n'},
+		{Label: "Always approve", Detail: "persist this exact command to your allowlist", Value: "approve_always", Key: 'a'},
 		{Label: "Always ask", Detail: "force a prompt for this command every time", Value: "always_ask"},
 		{Label: "Elevate (session)", Detail: "loosen the gate for the rest of this session", Value: "elevate"},
 	}
 
 	sl := NewSelectList(SelectListOptions{
-		Title:  "High-risk operation — choose an action (Esc denies)",
-		Items:  items,
-		Footer: "↑/↓ navigate · Enter confirm · Esc denies",
+		Title:    "High-risk operation — choose an action (Esc denies)",
+		Items:    items,
+		Footer:   approvalFooter(items),
+		ArmDelay: approvalArmDelay,
 	})
 
 	value, ok := approvalPicker(w, sl)
@@ -158,23 +160,24 @@ func askForFilesystemSecurityApprovalWriter(w io.Writer, prompt, path, folder st
 		writeSecurityFootnote(w, "Sensitive location (system dir, or home while CWD is outside home). "+
 			"Cannot be session-allowlisted; every access will prompt.")
 		items = []SelectItem{
-			{Label: "Allow once", Detail: "read/write this path this time only", Value: "approve_once"},
-			{Label: "Deny", Detail: "reject and surface a security error", Value: "deny"},
+			{Label: "Allow once", Detail: "read/write this path this time only", Value: "approve_once", Key: 'y'},
+			{Label: "Deny", Detail: "reject and surface a security error", Value: "deny", Key: 'n'},
 		}
 		title = "Sensitive path access — choose an action (Esc denies)"
 	default: // FilesystemPromptExternal
 		items = []SelectItem{
-			{Label: "Allow once", Detail: "read/write this path this time only", Value: "approve_once"},
-			{Label: "Deny", Detail: "reject and surface a security error", Value: "deny"},
-			{Label: "Allow folder this session", Detail: fmt.Sprintf("auto-approve everything under %s", folder), Value: "allow_folder"},
+			{Label: "Allow once", Detail: "read/write this path this time only", Value: "approve_once", Key: 'y'},
+			{Label: "Deny", Detail: "reject and surface a security error", Value: "deny", Key: 'n'},
+			{Label: "Allow folder this session", Detail: fmt.Sprintf("auto-approve everything under %s", folder), Value: "allow_folder", Key: 'a'},
 		}
 		title = "External path access — choose an action (Esc denies)"
 	}
 
 	sl := NewSelectList(SelectListOptions{
-		Title:  title,
-		Items:  items,
-		Footer: "↑/↓ navigate · Enter confirm · Esc denies",
+		Title:    title,
+		Items:    items,
+		Footer:   approvalFooter(items),
+		ArmDelay: approvalArmDelay,
 	})
 
 	value, ok := approvalPicker(w, sl)
@@ -400,4 +403,19 @@ func truncateForStepper(s string, maxWidth int) string {
 func init() {
 	utils.SecurityPromptHook = askForSecurityApproval
 	utils.FilesystemSecurityPromptHook = askForFilesystemSecurityApproval
+}
+
+// approvalArmDelay keeps keys typed into the steer box as a picker opens
+// from approving a command the user hasn't read yet.
+const approvalArmDelay = 400 * time.Millisecond
+
+// approvalFooter lists the items' shortcut keys ahead of the arrow-key hint.
+func approvalFooter(items []SelectItem) string {
+	var keys []string
+	for _, it := range items {
+		if it.Key != 0 {
+			keys = append(keys, string(it.Key))
+		}
+	}
+	return strings.Join(keys, "/") + " or ↑/↓ + Enter · Esc denies"
 }

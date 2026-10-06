@@ -19,13 +19,6 @@ const chatAndQueryEndpoints: CloudEndpoint[] = [
   },
 ];
 
-// --- Embedding & Semantic Search ---
-// Intentionally empty: these endpoints are not available in browser mode and
-// return synthetic safe-default responses (see synthetic.ts). The earlier
-// foundry-backend duplicates were removed because they caused 401/404 errors
-// in cloud mode and triggered error toasts in the UI.
-const embeddingEndpoints: CloudEndpoint[] = [];
-
 // --- Agent Terminal Sessions ---
 const terminalEndpoints: CloudEndpoint[] = [
   {
@@ -82,24 +75,62 @@ const taskEndpoints: CloudEndpoint[] = [
 ];
 
 // --- Fly workspaces & ETH-2 transactions ---
-// /workspace/fly is platform-only surface (never a local sprout route), used
-// by the escalation paths: list/create workspaces and the txn lifecycle the
-// "Run in cloud container" action drives (push deltas → run → pull deltas →
-// finish). Relative URLs so the CloudAdapter proxies them with session
-// credentials.
+// /workspace/fly is the LEGACY prefix: the live client (cloudTxn.ts) addresses
+// the host-agnostic /workspace/txn surface (SP-BUILDER-12) and only falls back
+// to /workspace/fly for in-flight sessions that resolved a workspace before
+// that change. /workspace/fly remains platform-only surface (never a local
+// sprout route); both prefixes are relative so the CloudAdapter proxies them
+// with session credentials.
 const flyWorkspaceEndpoints: CloudEndpoint[] = [
+  {
+    path: '/workspace/txn',
+    methods: ['GET', 'POST'],
+    category: 'foundry-backend',
+    description:
+      'Resolve/create the caller workspace for a repo, any backend (runner when attached, else Fly) — the escalation entry point',
+  },
+  {
+    path: '/workspace/txn/',
+    methods: ['POST', 'GET'],
+    category: 'foundry-backend',
+    isPrefix: true,
+    description: 'Backend-agnostic txn lifecycle (open/status/push/run/pull/finish)',
+  },
+  {
+    path: '/workspace',
+    methods: ['GET'],
+    category: 'foundry-backend',
+    description: 'List the caller workspaces (backend per row) — picks the workspace on the chosen escalation host',
+  },
+  {
+    path: '/workspace/',
+    methods: ['GET'],
+    category: 'foundry-backend',
+    isPrefix: true,
+    description: 'Get one workspace row (carries runner_id) — confirms a runner-hosted escalation workspace',
+  },
   {
     path: '/workspace/fly',
     methods: ['GET', 'POST'],
     category: 'foundry-backend',
-    description: 'List/create Fly workspaces (escalation + txn workspace resolve)',
+    description: 'Legacy: list/create Fly workspaces (in-flight sessions only)',
   },
   {
     path: '/workspace/fly/',
     methods: ['POST', 'GET'],
     category: 'foundry-backend',
     isPrefix: true,
-    description: 'Fly workspace txn lifecycle (open/status/push/run/pull/finish)',
+    description: 'Legacy: Fly workspace txn lifecycle (in-flight sessions only)',
+  },
+];
+
+// --- Runners (SP-159) ---
+const runnerEndpoints: CloudEndpoint[] = [
+  {
+    path: '/runners',
+    methods: ['GET'],
+    category: 'foundry-backend',
+    description: "List the caller's runners — the escalation host picker",
   },
 ];
 
@@ -173,7 +204,6 @@ const workspaceEndpoints: CloudEndpoint[] = [];
  */
 export const foundryBackendEndpoints: CloudEndpoint[] = [
   ...chatAndQueryEndpoints,
-  ...embeddingEndpoints,
   ...terminalEndpoints,
   ...gitEndpoints,
   ...diagnosticsEndpoints,
@@ -181,6 +211,7 @@ export const foundryBackendEndpoints: CloudEndpoint[] = [
   ...sessionEndpoints,
   ...taskEndpoints,
   ...flyWorkspaceEndpoints,
+  ...runnerEndpoints,
   ...settingsEndpoints,
   ...providerEndpoints,
   ...statsEndpoints,

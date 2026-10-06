@@ -533,56 +533,6 @@ func TestCodegraphCommand_Complete_AgentNil(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// IndexCommand.Complete
-// ---------------------------------------------------------------------------
-
-func TestIndexCommand_Complete_EmptyArgs(t *testing.T) {
-	cmd := &IndexCommand{}
-
-	// No args -> should return ["disable", "enable", "off", "on", "status", "toggle"] sorted
-	expected := []string{"disable", "enable", "off", "on", "status", "toggle"}
-	results := cmd.Complete(nil, nil)
-	assert.Equal(t, expected, results, "empty args should return all subcommands")
-	assert.True(t, sort.StringsAreSorted(results), "results should be sorted")
-}
-
-func TestIndexCommand_Complete_PrefixMatch(t *testing.T) {
-	cmd := &IndexCommand{}
-
-	// args=["e"] -> returns ["enable"] (not "disable")
-	results := cmd.Complete([]string{"e"}, nil)
-	assert.Equal(t, []string{"enable"}, results, "prefix 'e' should match 'enable'")
-
-	// args=["of"] -> returns ["off"]
-	results = cmd.Complete([]string{"of"}, nil)
-	assert.Equal(t, []string{"off"}, results, "prefix 'of' should match 'off'")
-
-	// args=["d"] -> returns ["disable"]
-	results = cmd.Complete([]string{"d"}, nil)
-	assert.Equal(t, []string{"disable"}, results, "prefix 'd' should match 'disable'")
-
-	// args=["st"] -> returns ["status"]
-	results = cmd.Complete([]string{"st"}, nil)
-	assert.Equal(t, []string{"status"}, results, "prefix 'st' should match 'status'")
-
-	// args=["t"] -> returns ["toggle"]
-	results = cmd.Complete([]string{"t"}, nil)
-	assert.Equal(t, []string{"toggle"}, results, "prefix 't' should match 'toggle'")
-
-	// Case insensitive: "E" should match "enable"
-	resultsUpper := cmd.Complete([]string{"E"}, nil)
-	assert.Equal(t, []string{"enable"}, resultsUpper, "case-insensitive prefix 'E' should match 'enable'")
-}
-
-func TestIndexCommand_Complete_NoMatch(t *testing.T) {
-	cmd := &IndexCommand{}
-
-	// args=["zzzz"] -> returns nil
-	results := cmd.Complete([]string{"zzzz"}, nil)
-	assert.Empty(t, results, "no subcommands should match 'zzzz'")
-}
-
-// ---------------------------------------------------------------------------
 // MCPCommand.Complete
 // ---------------------------------------------------------------------------
 
@@ -1129,34 +1079,6 @@ func TestSearchCommand_Complete_TooManyArgs(t *testing.T) {
 
 	results := cmd.Complete([]string{"--reindex", "--cwd", "/tmp", "--since", "2026-01-01", "--until", "x"}, nil)
 	assert.Nil(t, results, "more than six args should return nil")
-}
-
-// ---------------------------------------------------------------------------
-// RecallCommand.Complete
-// ---------------------------------------------------------------------------
-
-func TestRecallCommand_Complete_FlagPrefix(t *testing.T) {
-	cmd := &RecallCommand{}
-
-	// args=["--"] -> returns ["--limit"]
-	results := cmd.Complete([]string{"--"}, nil)
-	assert.Equal(t, []string{"--limit"}, results, "prefix '--' should match '--limit'")
-
-	// args=["--l"] -> returns ["--limit"]
-	results = cmd.Complete([]string{"--l"}, nil)
-	assert.Equal(t, []string{"--limit"}, results, "prefix '--l' should match '--limit'")
-}
-
-func TestRecallCommand_Complete_NonFlagArg(t *testing.T) {
-	cmd := &RecallCommand{}
-
-	// Free-text query tokens are not completed.
-	results := cmd.Complete([]string{"auth"}, nil)
-	assert.Nil(t, results, "free-text query args should return nil")
-
-	// A completed flag followed by its value is not completed either.
-	results = cmd.Complete([]string{"foo", "--limit", "10"}, nil)
-	assert.Nil(t, results, "non-flag last arg should return nil")
 }
 
 // ---------------------------------------------------------------------------

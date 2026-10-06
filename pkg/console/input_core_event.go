@@ -30,8 +30,7 @@ func (ir *InputReader) HandleEvent(event *InputEvent) {
 		case EventTab:
 			text := ir.autocomplete.accept()
 			if text != "" {
-				ir.line = text
-				ir.cursorPos = len(ir.line)
+				ir.replaceLine(text)
 				ir.hasEditedLine = true
 				ir.historyIndex = -1
 				ir.resetCompletionCycle()
@@ -71,6 +70,8 @@ func (ir *InputReader) HandleEvent(event *InputEvent) {
 		ir.MoveWord(1)
 	case EventDeleteWordBackward:
 		ir.DeleteWordBackward()
+	case EventDeleteWordForward:
+		ir.DeleteWordForward()
 	case EventAltLetter:
 		ir.dispatchAltLetter(event.Data)
 	case EventUp:

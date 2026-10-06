@@ -388,6 +388,32 @@ func TestBuildRichSlashCommandCompleter_PerModeFiltering(t *testing.T) {
 	}
 }
 
+func TestRichSlashDropdownListsCanonicalCommandsOnce(t *testing.T) {
+	resetGlobalSlashCache()
+	cands := buildRichSlashCommandCompleter(nil, false)("/c", 2)
+
+	seen := map[string]bool{}
+	for _, c := range cands {
+		if seen[c.Text] {
+			t.Errorf("%s listed twice", c.Text)
+		}
+		seen[c.Text] = true
+		for _, alias := range []string{"/c", "/cg", "/ch", "/cl", "/cp"} {
+			if c.Text == alias {
+				t.Errorf("alias %s listed as its own row", alias)
+			}
+		}
+	}
+	if !seen["/codegraph"] || !seen["/changes"] {
+		t.Errorf("canonical commands missing from %v", seen)
+	}
+
+	cg := buildRichSlashCommandCompleter(nil, false)("/codegraph", 10)
+	if len(cg) == 0 || cg[0].Text != "/codegraph" || !strings.Contains(cg[0].Description, "/cg") {
+		t.Errorf("exact match should sort first and name its alias, got %+v", cg)
+	}
+}
+
 // TestBuildRichSlashCommandCompleter_SteerArgumentGate verifies that in
 // steer-only mode, argument completion is denied for unsafe commands even
 // if the user types a valid command name.

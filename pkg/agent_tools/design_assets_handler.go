@@ -220,8 +220,8 @@ func designMissingOutput(subtree, formatFilter string) designAssetsOutput {
 			"activate the design-system skill and scaffold the tree in this order: " +
 			"design/README.md (manifest: purpose, status markers draft/review/ready, " +
 			"a frames: block), then design/tokens/ (W3C DTCG *.tokens.json), then " +
-			"design/wireframes/ (one SVG per screen), then design/flows/ (mermaid .mmd), " +
-			"then design/screens/ (self-contained HTML). Run design_validate after each step.",
+			"design/screens/ (one self-contained HTML file per screen), then design/flows/. " +
+			"Run design_validate after each step.",
 	}
 }
 
@@ -297,7 +297,7 @@ func buildDesignAssetsOutput(root, subtree, formatFilter string, inv *design.Inv
 	// filter result, not a foreign-folder verdict.
 	if subtree == "" && formatFilter == "" && len(out.Assets) == 0 && !inv.Manifest.Exists {
 		out.Guidance = "design/ exists but holds nothing in Sprout's tree format (no README manifest, " +
-			"no tokens/, wireframes/, screens/, flows/, brand/, icons/, or feedback/ assets). " +
+			"no tokens/, screens/, flows/, brand/, icons/, or feedback/ assets). " +
 			"List the directory's actual contents and ask the user what they are and whether to keep, " +
 			"move, or build around them before writing anything. Never move, rename, overwrite, or " +
 			"delete existing files without the user's explicit go-ahead."

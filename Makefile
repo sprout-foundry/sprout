@@ -77,7 +77,7 @@ prepare-grammars:
 # Test parallelism knobs. Peak test-suite memory is roughly
 #   (TEST_P concurrent test binaries) x (per-binary working set, inflated by
 #   the race detector's ~5-10x shadow memory). Measured per-package peaks with
-#   -race: pkg/embedding 1.15GB, pkg/agent_tools 940MB, pkg/agent 910MB, cmd
+#   -race: pkg/agent_tools 940MB, pkg/agent 910MB, cmd
 #   and pkg/webui ~645MB. With internal -parallel multiplying inside each
 #   binary, the Go defaults (-p / -parallel = GOMAXPROCS) peak this suite at
 #   30-40GB. TEST_P=2 keeps -race runs inside ~10GB (fits a 16GB laptop);
@@ -170,7 +170,7 @@ test-ci: test-unit
 
 # Coverage Check - Run tests with coverage and enforce minimum threshold
 # Note: timeout is the per-test-binary cap, not the wall clock. -race slows
-# pkg/agent + pkg/embedding enough that 10m wasn't enough; 20m gives headroom.
+# pkg/agent enough that 10m wasn't enough; 20m gives headroom.
 #
 # Packages with no *_test.go files are excluded from the coverage run. Go's
 # coverage tooling (go tool covdata) crashes on Windows (STATUS_DLL_INIT_FAILED,
@@ -523,6 +523,14 @@ test-webui:
 test-webui-vitest:
 	@echo "Running webui vitest tests..."
 	@cd webui && npx vitest run --reporter=verbose
+
+# Regenerate the cloud-backend endpoint tables in docs/CLOUD_BACKEND_CONTRACT.md
+# from webui's cloudEndpointRegistry. --check mode (exit 1 when stale) is the
+# CI gate.
+gen-cloud-endpoints:
+	@npx tsx scripts/gen-cloud-endpoints.mjs
+gen-cloud-endpoints-check:
+	@npx tsx scripts/gen-cloud-endpoints.mjs --check
 
 # Build WASM shell module (sprout.wasm + wasm_exec.js)
 build-wasm: prepare-grammars

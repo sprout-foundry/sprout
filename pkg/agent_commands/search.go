@@ -57,7 +57,7 @@ func (c *SearchCommand) Usage() string {
 		"  --json         Output as JSON array instead of formatted text",
 		"",
 		"Examples:",
-		`  /search "embedding index"`,
+		`  /search "rate limit"`,
 		`  /search --reindex "auth error"`,
 		`  /search --cwd /tmp --since 2026-01-01 "foo"`,
 		`  /search --json "test"`,

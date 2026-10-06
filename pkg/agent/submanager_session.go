@@ -22,7 +22,6 @@ type SessionManager interface {
 	SessionConfigStore
 	ConfigOverrideStore
 	IterationStore
-	SessionIntentStore
 }
 
 // AgentSessionManager implements SessionManager, holding all
@@ -30,8 +29,7 @@ type SessionManager interface {
 // MessageStore, SessionStore, CheckpointStore, SummaryStore,
 // OptimizerStore, ContextBudgetStore, ConversationPrunerStore,
 // CommandHistoryStore, PauseStore, SessionConfigStore,
-// ConfigOverrideStore, IterationStore, SessionIntentStore
-// (13 sub-interfaces).
+// ConfigOverrideStore, IterationStore (12 sub-interfaces).
 //
 // All methods are nil-safe: calling any getter/setter on a nil
 // *AgentSessionManager returns the zero value without panicking. This
@@ -84,9 +82,6 @@ type AgentSessionManager struct {
 
 	// IterationStore
 	currentIteration int
-
-	// SessionIntentStore
-	sessionIntentEmbedding []float32
 }
 
 // NewAgentSessionManager creates a new AgentSessionManager with sensible defaults.

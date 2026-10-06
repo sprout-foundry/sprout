@@ -14,7 +14,6 @@ func TestContextProfileZeroValueHasFullModeLeverDefaults(t *testing.T) {
 	assert.Empty(t, profile.Mode, "an unresolved zero-value profile need not name the full preset")
 	assert.Empty(t, profile.ToolAllowlist)
 	assert.Empty(t, profile.SystemPromptPath)
-	assert.False(t, profile.SkipProactiveContext)
 	assert.Zero(t, profile.CompactionTriggerFraction)
 	assert.Zero(t, profile.RecentTurnsToPreserve)
 	assert.Zero(t, profile.RepoMapDefaultDepth)
@@ -42,17 +41,19 @@ func TestResolveContextProfileReturnsExactLowContextPreset(t *testing.T) {
 			"list_changes",
 			"recover_file",
 			"run_subagent",
+			"review_changes",
 			"ask_user",
 			"design_assets",
 			"design_validate",
 			"design_brief",
 			"design_export_tokens",
 			"design_sync",
+			"list_skills",
+			"activate_skill",
 			"mcp_tools",
 			"mcp_refresh",
 		},
 		SystemPromptPath:          "prompts/system_prompt.lite.md",
-		SkipProactiveContext:      true,
 		CompactionTriggerFraction: 0.85,
 		RecentTurnsToPreserve:     2,
 		RepoMapDefaultDepth:       1,
@@ -250,17 +251,19 @@ func assertLowContextProfile(t *testing.T, profile ContextProfile) {
 			"list_changes",
 			"recover_file",
 			"run_subagent",
+			"review_changes",
 			"ask_user",
 			"design_assets",
 			"design_validate",
 			"design_brief",
 			"design_export_tokens",
 			"design_sync",
+			"list_skills",
+			"activate_skill",
 			"mcp_tools",
 			"mcp_refresh",
 		},
 		SystemPromptPath:          "prompts/system_prompt.lite.md",
-		SkipProactiveContext:      true,
 		CompactionTriggerFraction: 0.85,
 		RecentTurnsToPreserve:     2,
 		RepoMapDefaultDepth:       1,

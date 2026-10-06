@@ -34,7 +34,14 @@ func handleRecoverFile(_ context.Context, a *Agent, args map[string]interface{})
 		return recoverBulk(a, rawPath)
 	}
 
-	abs, err := filepath.Abs(rawPath)
+	// Resolve a relative path against the workspace root, as the file
+	// tools do — not the process CWD, which differs in daemon/WebUI use
+	// and made recover_file miss every relative path there.
+	resolved := rawPath
+	if !filepath.IsAbs(rawPath) {
+		resolved = filepath.Join(a.currentWorkspaceRoot(), rawPath)
+	}
+	abs, err := filepath.Abs(resolved)
 	if err != nil {
 		return "", agenterrors.Wrapf(err, "recover_file: resolve %q", rawPath)
 	}
@@ -89,21 +96,25 @@ func handleRecoverFile(_ context.Context, a *Agent, args map[string]interface{})
 			}
 		}
 	}
-	if isStaleForRevertWithOriginal(abs, stalenessNewCode, match.OriginalCode) {
+	if isStaleForRevertWithOriginal(abs, stalenessNewCode, match.OriginalCode, match.Timestamp) {
 		history.AuditRevertSkip("handleRecoverFile", abs, "stale or committed")
 		return jsonRecoverResult(false, abs, "stale_skip", "file was modified since the snapshot — refusing to overwrite (content may have been committed or edited intentionally)"), nil
 	}
 
 	// "create" with no original → recovery is delete.
 	if match.Operation == "create" {
+		before, _ := os.ReadFile(abs)
 		if removeErr := os.Remove(abs); removeErr != nil && !os.IsNotExist(removeErr) {
 			return jsonRecoverResult(false, abs, "delete", fmt.Sprintf("unable to remove created file: %v", removeErr)), nil
 		}
+		tracker.RecordRevert(abs, string(before), "", false, "recover_file")
 		tracker.SyncShellCacheForPath(abs)
 		return jsonRecoverResult(true, abs, "delete", fmt.Sprintf("removed file created via %s", match.ToolCall)), nil
 	}
 
-	if !isRecoverableOriginal(match.OriginalCode) {
+	// Past the create branch, an empty original is a genuinely empty file
+	// (existence is recorded explicitly), so it restores as empty.
+	if match.OriginalCode != "" && !isRecoverableOriginal(match.OriginalCode) {
 		reason := "original content was not captured (file too large, binary, or outside workspace)"
 		return jsonRecoverResult(false, abs, "", reason), nil
 	}
@@ -128,10 +139,12 @@ func handleRecoverFile(_ context.Context, a *Agent, args map[string]interface{})
 	}
 
 	history.AuditRevertWrite("handleRecoverFile", abs, "OriginalCode")
+	before, _ := os.ReadFile(abs)
 	if writeErr := os.WriteFile(abs, []byte(match.OriginalCode), 0o644); writeErr != nil {
 		return jsonRecoverResult(false, abs, "", fmt.Sprintf("write failed: %v", writeErr)), nil
 	}
 
+	tracker.RecordRevert(abs, string(before), match.OriginalCode, true, "recover_file")
 	tracker.SyncShellCacheForPath(abs)
 	verb := "restored"
 	if match.Operation == "delete" {
@@ -160,7 +173,7 @@ func recoverFromPersistedStore(a *Agent, abs string) (string, error) {
 	// Staleness: compare disk against the recorded post-change content.
 	// The persisted original-aware guard allows restores of uncommitted
 	// work that a destructive git command clobbered.
-	if isStaleForRevertWithOriginal(abs, rec.New, rec.Original) {
+	if isStaleForRevertWithOriginal(abs, rec.New, rec.Original, rec.Timestamp) {
 		history.AuditRevertSkip("recoverFromPersistedStore", abs, "stale or committed")
 		return jsonRecoverResult(false, abs, "stale_skip", "file was modified since the recorded change — refusing to overwrite"), nil
 	}
@@ -178,10 +191,12 @@ func recoverFromPersistedStore(a *Agent, abs string) (string, error) {
 		return jsonRecoverResult(false, abs, "", "refusing to write redacted marker to disk"), nil
 	}
 	history.AuditRevertWrite("recoverFromPersistedStore", abs, "OriginalCode")
+	before, _ := os.ReadFile(abs)
 	if writeErr := os.WriteFile(abs, []byte(rec.Original), 0o644); writeErr != nil {
 		return jsonRecoverResult(false, abs, "", fmt.Sprintf("write failed: %v", writeErr)), nil
 	}
 	if tracker := a.GetChangeTracker(); tracker != nil {
+		tracker.RecordRevert(abs, string(before), rec.Original, true, "recover_file")
 		tracker.SyncShellCacheForPath(abs)
 	}
 	msg := fmt.Sprintf("restored file from persisted history (recorded status: %s)", rec.Status)

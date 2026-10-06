@@ -55,7 +55,7 @@ func main() {
 		return
 	}
 
-	// Cancelable via Ctrl-C: the download subprocess dies with the context.
+	// Cancelable via Ctrl-C: the download stops with the context.
 	// No fixed timeout: multi-GB downloads over slow links take longer than
 	// any safe constant — cancellation and process exit are the bounds.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

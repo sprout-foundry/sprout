@@ -689,12 +689,15 @@ func TestCLIPath_LCM_AutoActivatesAt32K(t *testing.T) {
 	// configuration additions alter the loaded prompt's exact text).
 	assertPromptContainsBody(t, ag.GetSystemPrompt(), ag.contextProfile, "lite")
 
-	// Regression sanity: the LCM allowlist (now 20 tools — ask_user was
+	// Regression sanity: the LCM allowlist (now 23 tools — ask_user was
 	// added in a83ced640 for the cloud IDE ask_user/edit-approval flows;
 	// the five pure-Go design loop tools in SP-140 so auto-LCM local
-	// models keep the design workflow the lite prompt instructs; and
+	// models keep the design workflow the lite prompt instructs;
 	// mcp_tools/mcp_refresh so MCP setup stays agent-mediated on the
-	// design empty state's import paths)
+	// design empty state's import paths; and list_skills/activate_skill
+	// (SP-142) so a low-context model can actually activate the
+	// design-system skill the lite prompt tells it to — the skill
+	// mechanism must stay reachable in LCM)
 	// should also be active on the CLI path (proves the profile flowed
 	// all the way through, not just the prompt).
 	tools := ag.getOptimizedToolDefinitions(nil)
@@ -703,9 +706,10 @@ func TestCLIPath_LCM_AutoActivatesAt32K(t *testing.T) {
 		"edit_file": true, "search": true, "repo_map": true,
 		"web_search": true, "fetch_url": true,
 		"commit": true, "list_changes": true, "recover_file": true,
-		"run_subagent": true, "ask_user": true,
+		"run_subagent": true, "review_changes": true, "ask_user": true,
 		"design_assets": true, "design_validate": true, "design_brief": true,
 		"design_export_tokens": true, "design_sync": true,
+		"list_skills": true, "activate_skill": true,
 		"mcp_tools": true, "mcp_refresh": true,
 	}
 	if len(tools) != len(lcmTools) {
@@ -713,7 +717,7 @@ func TestCLIPath_LCM_AutoActivatesAt32K(t *testing.T) {
 		for _, tool := range tools {
 			names = append(names, tool.Function.Name)
 		}
-		t.Errorf("CLI path should produce LCM 20-tool allowlist at 32K; got %d tools: %v", len(tools), names)
+		t.Errorf("CLI path should produce LCM 23-tool allowlist at 32K; got %d tools: %v", len(tools), names)
 	}
 }
 

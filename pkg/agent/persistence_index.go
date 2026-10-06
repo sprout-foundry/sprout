@@ -59,10 +59,6 @@ type ConversationState struct {
 	// Only non-empty values are considered overrides.
 	ConfigOverrides map[string]interface{} `json:"config_overrides,omitempty"`
 
-	// SessionIntentEmbedding stores the embedding of the first user prompt in a session.
-	// Used for drift detection to track conversation intent over time.
-	SessionIntentEmbedding []float32 `json:"session_intent_embedding,omitempty"`
-
 	// LastProviderError captures details about the last API error from the LLM provider.
 	// Persisted in the session file so errors can be diagnosed after the fact.
 	LastProviderError *ProviderErrorInfo `json:"last_provider_error,omitempty"`

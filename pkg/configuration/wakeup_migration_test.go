@@ -2,6 +2,8 @@ package configuration
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -32,7 +34,7 @@ func TestMigrateV2ToV2_1_WakeupArtifactRepair(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(data, cfg))
 	require.True(t, cfg.Wakeup.Enabled, "post-migration config must auto-resume enabled by default")
-	require.Equal(t, 5000, cfg.Wakeup.MaxTokensPerSession)
+	require.Equal(t, DefaultWakeupMaxTokens, cfg.Wakeup.MaxTokensPerSession)
 	require.Equal(t, 10, cfg.Wakeup.MaxResumesPerSession)
 }
 
@@ -119,4 +121,24 @@ func TestMigrateChain_2_1_To_3_0(t *testing.T) {
 		toolSet[tl.(string)] = true
 	}
 	require.True(t, toolSet["shell_command"], "existing tool preserved through chained 2.0→2.1→3.0 migration")
+}
+
+func TestLoadUpgradesLegacyWakeupTokenBudget(t *testing.T) {
+	for name, tc := range map[string]struct {
+		file string
+		want int
+	}{
+		"legacy default raised": {`{"version": "2.1", "wakeup": {"enabled": true, "max_tokens_per_session": 5000, "max_resumes_per_session": 10}}`, DefaultWakeupMaxTokens},
+		"explicit value kept":   {`{"version": "2.1", "wakeup": {"enabled": true, "max_tokens_per_session": 20000, "max_resumes_per_session": 10}}`, 20000},
+		"unlimited kept":        {`{"version": "2.1", "wakeup": {"enabled": true, "max_tokens_per_session": 0, "max_resumes_per_session": 10}}`, 0},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Setenv("SPROUT_CONFIG", dir)
+			require.NoError(t, os.WriteFile(filepath.Join(dir, ConfigFileName), []byte(tc.file), 0600))
+			cfg, err := Load()
+			require.NoError(t, err)
+			require.Equal(t, tc.want, cfg.Wakeup.MaxTokensPerSession)
+		})
+	}
 }

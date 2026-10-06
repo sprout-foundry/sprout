@@ -13,6 +13,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { INSTANCE_PID_STORAGE_KEY, WORKSPACE_MODE_STORAGE_KEY } from '../constants/app';
+import { repoScopedKey } from '../services/repoScope';
 import {
   DEFAULT_WORKSPACE_MODE,
   availableModes,
@@ -35,7 +36,7 @@ export function workspaceModeStorageKey(): string {
     return `${WORKSPACE_MODE_STORAGE_KEY}:default:local`;
   }
   const pid = window.localStorage.getItem(INSTANCE_PID_STORAGE_KEY) || 'default';
-  return `${WORKSPACE_MODE_STORAGE_KEY}:${pid}:${uiContextScope()}`;
+  return repoScopedKey(`${WORKSPACE_MODE_STORAGE_KEY}:${pid}:${uiContextScope()}`);
 }
 
 /** The persisted mode id for this instance, or null when unset/unreadable. */
@@ -58,6 +59,17 @@ export function persistWorkspaceMode(id: WorkspaceModeId): void {
     // Storage unavailable (private mode, quota). The mode still works for this
     // session; only the preference is lost.
   }
+}
+
+let activeModeId: WorkspaceModeId | null = null;
+
+/**
+ * The mode the shell is showing right now, for code outside the shell's
+ * React tree (the chat send path tags each query with it). Null before the
+ * shell mounts.
+ */
+export function activeWorkspaceModeId(): WorkspaceModeId | null {
+  return activeModeId;
 }
 
 export interface UseWorkspaceModeResult {
@@ -87,6 +99,13 @@ export function useWorkspaceMode(ctx: WorkspaceModeContext): UseWorkspaceModeRes
   // the mode list each time.
   const modes = useMemo(() => availableModes({ hasDesignTree }), [hasDesignTree]);
   const mode = useMemo(() => resolveWorkspaceMode(requested, { hasDesignTree }), [requested, hasDesignTree]);
+
+  useEffect(() => {
+    activeModeId = mode.id;
+    return () => {
+      activeModeId = null;
+    };
+  }, [mode.id]);
 
   // Re-persist when availability changes the resolved mode: a workspace that
   // lost its design tree should come back on Code, not keep a stale `design`.

@@ -26,6 +26,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSproutFetch } from '../../contexts/SproutAdapterContext';
 import { parseLayoutSidecarText } from '../../design/sidecar';
 import { readAsset, writeLayout } from '../../services/api/designApi';
+import { flowCanvasText } from '../../design/flowText';
 import type { DesignAssetEntry, DesignLayoutSidecar } from '../../services/api/types';
 import type { DesignTabProps } from './DesignTabProps';
 import FlowsCanvas, { EMPTY_ASSETS, EMPTY_WIREFRAMES, selectCanvasFlow, type FlowCanvasFlow } from './FlowsCanvas';
@@ -119,8 +120,11 @@ export function FlowsCanvasContainer({
     () =>
       flowEntries.map((asset) => ({
         path: asset.path,
-        name: (asset.name ?? asset.path).replace(/\.mmd$/, ''),
-        text: resolvedFlows?.find((flow) => flow.path === asset.path)?.text ?? texts[asset.path] ?? '',
+        name: (asset.name ?? asset.path).replace(/\.(mmd|json)$/, ''),
+        text: flowCanvasText(
+          asset.path,
+          resolvedFlows?.find((flow) => flow.path === asset.path)?.text ?? texts[asset.path] ?? '',
+        ),
       })),
     [flowEntries, resolvedFlows, texts],
   );

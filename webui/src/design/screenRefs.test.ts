@@ -10,7 +10,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { injectPreviewMarker, rewriteScreenRefs } from './screenRefs';
+import { injectPreviewMarker, isBinaryAsset, referencedAssetPaths, rewriteScreenRefs } from './screenRefs';
 
 const PROXY = (path: string) => `/api/file?path=${encodeURIComponent(path)}`;
 const rewrite = (html: string, previewPath = 'design/screens/login.html') => rewriteScreenRefs(html, { previewPath });
@@ -110,5 +110,43 @@ describe('preview composition — marker + rewrite together', () => {
     expect(out).toContain(`href="${PROXY('design/generated/tokens.css')}"`);
     expect(out).toContain(`href="${PROXY('design/runtime/chrome.css')}"`);
     expect(out).toContain(`src="${PROXY('design/runtime/sprout-screens.js')}"`);
+  });
+});
+
+describe('rewriteScreenRefs — srcdoc copies with inlined assets', () => {
+  const previewPath = 'design/screens/login.html';
+
+  it('passes binary assets through as the data: URLs the host read', () => {
+    const html = '<img src="../brand/logo.png">';
+    const out = rewriteScreenRefs(html, {
+      previewPath,
+      inline: { 'design/brand/logo.png': 'data:image/png;base64,AAAA' },
+    });
+    expect(out).toContain('src="data:image/png;base64,AAAA"');
+    expect(isBinaryAsset('design/brand/logo.png')).toBe(true);
+    expect(referencedAssetPaths(html, previewPath)).toEqual(['design/brand/logo.png']);
+  });
+
+  it('keeps the runtime bootable: a non-executing src marker plus the code at the end of body', () => {
+    const html =
+      '<html><head><script src="../runtime/sprout-screens.js" defer></script></head><body><p>x</p></body></html>';
+    const out = rewriteScreenRefs(html, {
+      previewPath,
+      inline: { 'design/runtime/sprout-screens.js': 'window.booted = true;' },
+    });
+    expect(out).toContain(
+      '<script type="text/x-sprout-src" src="/api/file?path=design%2Fruntime%2Fsprout-screens.js"></script>',
+    );
+    expect(out).toMatch(/<script>window\.booted = true;<\/script><\/body>/);
+  });
+
+  it('leaves inline script bodies untouched', () => {
+    const code = 'var s = \'<img src="a.png">\'; var u = "url(b.css)";';
+    const out = rewriteScreenRefs(`<script>${code}</script><link href="x.css">`, {
+      previewPath,
+      inline: { 'design/screens/x.css': 'p{}' },
+    });
+    expect(out).toContain(`<script>${code}</script>`);
+    expect(out).toContain('href="data:text/css;base64,');
   });
 });

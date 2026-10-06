@@ -412,3 +412,13 @@ func requireArgs(toolName string, args map[string]any, required ...string) error
 	}
 	return nil
 }
+
+// codegraphFileParser adapts ExtractCallsAndSymbols to the codegraph.FileParser
+// signature, converting raw extraction results to qualified symbols and edges.
+func codegraphFileParser(path string, content []byte) ([]codegraph.Symbol, []codegraph.Edge, error) {
+	sw, err := ExtractCallsAndSymbols(path, content)
+	if err != nil {
+		return nil, nil, err
+	}
+	return sw.ToCodegraphSymbols(path)
+}

@@ -99,7 +99,8 @@ func TestTerminalSubscriber_AgentMessage_SecurityCaution_NoStderrLeak(t *testing
 	if !strings.Contains(stdoutOutput, "SECURITY CAUTION") {
 		t.Errorf("stdout missing SECURITY CAUTION text; got: %q", stdoutOutput)
 	}
-	if !strings.Contains(stdoutOutput, rawMsg) {
+	// Long notices wrap to the terminal width, so compare word runs.
+	if !strings.Contains(strings.Join(strings.Fields(stdoutOutput), " "), rawMsg) {
 		t.Errorf("stdout missing underlying message body; got: %q", stdoutOutput)
 	}
 }

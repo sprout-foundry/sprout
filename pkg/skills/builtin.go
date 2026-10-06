@@ -27,6 +27,10 @@ import (
 // resolve user/project skills from disk can reuse the same convention.
 const SkillFileName = "SKILL.md"
 
+// SkillIDDesignSystem is the design workflow skill, activated automatically
+// for Design-mode queries and designer subagents.
+const SkillIDDesignSystem = "design-system"
+
 // Builtin is the parsed metadata + body for a single embedded skill.
 // Content is the entire SKILL.md including frontmatter; consumers that
 // only want the body should strip the frontmatter themselves with a

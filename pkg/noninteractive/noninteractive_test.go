@@ -12,10 +12,9 @@ func TestHelpHint(t *testing.T) {
 	}
 
 	keyPhrases := []string{
-		"SPROUT_PROVIDER",
-		"~/.config/sprout/config.json",
-		"sprout agent",
-		"interactively",
+		"sprout keys set",
+		"API key",
+		"guided setup",
 	}
 
 	for _, phrase := range keyPhrases {
@@ -43,7 +42,7 @@ func TestIsNonInteractiveHint(t *testing.T) {
 		},
 		{
 			name: "error with only part of HelpHint returns false",
-			err:  errors.New("error: Set SPROUT_PROVIDER / configure ~/.config/sprout/config.json"),
+			err:  errors.New("error: Run `sprout keys set <provider>`"),
 			want: false,
 		},
 		{

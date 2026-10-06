@@ -30,6 +30,7 @@ export function classify(rel: string): DesignAssetKind | null {
   if (inner.startsWith('screens/')) return 'screen';
   if (inner.startsWith('flows/')) {
     if (name.endsWith('.layout.json')) return 'layout';
+    if (name.endsWith('.json')) return 'flow';
     return name.endsWith('.mmd') || name.endsWith('.mmdc') ? 'flow' : null;
   }
   if (inner.startsWith('tokens/')) return name.endsWith('.tokens.json') ? 'tokens' : null;

@@ -3,7 +3,7 @@
     {
       "id": "designer",
       "name": "Designer",
-      "description": "Open-format UX design specialist: design tokens (DTCG), SVG wireframes, mermaid flows, screens, and brand assets under design/. Validates before declaring done. Carries the 'git_write' capability so a design iteration commits like any other contributor.",
+      "description": "Open-format UX design specialist: design tokens (DTCG), self-contained HTML screens, flow sources, and brand assets under design/. Validates before declaring done. Carries the 'git_write' capability so a design iteration commits like any other contributor.",
       "system_prompt": "pkg/agent/prompts/subagent_prompts/designer.md",
       "aliases": [
         "ux",

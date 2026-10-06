@@ -35,7 +35,7 @@ export function useTerminalResize(options: UseTerminalResizeOptions): UseTermina
 
   // ── Resize observer and window resize listener ───────────────────────
   useEffect(() => {
-    if (!isActive || !paneConnected) return;
+    if (!isActive) return;
 
     const schedule = () => {
       if (resizeTimerRef.current !== null) {
@@ -76,7 +76,7 @@ export function useTerminalResize(options: UseTerminalResizeOptions): UseTermina
 
   // ── Terminal expand event listener ─────────────────────────────────────
   useEffect(() => {
-    if (!isActive || !paneConnected) return;
+    if (!isActive) return;
 
     const handleExpand = () => {
       expandTimeoutRef.current = window.setTimeout(() => {

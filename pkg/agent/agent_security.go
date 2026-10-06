@@ -354,6 +354,14 @@ func (a *Agent) SetHasActiveWebUIClients(fn func() bool) {
 // none is set) to check whether WebUI clients are connected. Returns false
 // when the security submanager is unset (typical for partially-constructed
 // agents in unit tests).
+// WebUIAttached reports whether a web UI server is attached to this agent.
+func (a *Agent) WebUIAttached() bool {
+	if a == nil || a.security == nil {
+		return false
+	}
+	return a.security.WebUIAttached()
+}
+
 func (a *Agent) HasActiveWebUIClients() bool {
 	if a == nil || a.security == nil {
 		return false

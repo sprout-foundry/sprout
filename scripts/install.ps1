@@ -12,6 +12,10 @@ param(
     [switch]$Help
 )
 
+# Errors are raised with `throw`, never `exit`: under `irm | iex` the script
+# runs in the user's session, and `exit` would close their PowerShell window
+# before they could read the error. The top-level handler reports it.
+
 # Color output via Write-Host -ForegroundColor — scoped to a single line so
 # we don't mutate [Console]::ForegroundColor and bleed colors into the host
 # session for the rest of the user's terminal lifetime.
@@ -52,9 +56,8 @@ function Cleanup {
 # need any external binaries — checking the host's PS version is enough.
 function Check-Dependencies {
     if ($PSVersionTable.PSVersion.Major -lt 5) {
-        Write-LogError "PowerShell 5.0+ is required (found $($PSVersionTable.PSVersion))"
         Write-LogError "Install PowerShell 7: https://aka.ms/powershell"
-        exit 1
+        throw "PowerShell 5.0+ is required (found $($PSVersionTable.PSVersion))"
     }
 }
 
@@ -70,10 +73,9 @@ function Detect-OS {
         return "windows"
     }
     # PS 7 on Linux/macOS — not supported by this script.
-    Write-LogError "Unsupported operating system (this script is Windows-only)"
     Write-LogError "On Linux/macOS use install.sh instead:"
     Write-LogError "  curl -fsSL https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/install.sh | sh"
-    exit 1
+    throw "Unsupported operating system (this script is Windows-only)"
 }
 
 # Detect architecture
@@ -86,6 +88,28 @@ function Detect-Arch {
     
     Write-LogWarn "Unsupported architecture: $env:PROCESSOR_ARCHITECTURE (only amd64 and arm64 are available)"
     return "amd64"
+}
+
+# Releases don't always publish a Windows arm64 zip. When it's missing, use
+# the amd64 build, which runs under x64 emulation on Windows 11 arm64.
+function Resolve-ReleaseArch {
+    param(
+        [string]$Version,
+        [string]$Arch
+    )
+
+    if ($Arch -ne "arm64") {
+        return $Arch
+    }
+
+    $arm64Url = "https://github.com/sprout-foundry/sprout/releases/download/${Version}/sprout-windows-arm64.zip"
+    try {
+        Invoke-WebRequest -Uri $arm64Url -Method Head -UseBasicParsing -ErrorAction Stop | Out-Null
+        return "arm64"
+    } catch {
+        Write-LogInfo "No native Windows arm64 build in $Version; using the amd64 build (runs under x64 emulation on Windows 11 arm64)."
+        return "amd64"
+    }
 }
 
 # Determine install directory.
@@ -177,7 +201,7 @@ function Get-Version {
         }
         return $response.tag_name
     } catch {
-        exit 1
+        throw "Could not determine the latest sprout version. Set `$env:SPROUT_VERSION (e.g. 'v0.14.0') and re-run."
     }
 }
 
@@ -201,7 +225,7 @@ function Download-Release {
                 -UseBasicParsing -ErrorAction Stop
         } | Out-Null
     } catch {
-        exit 1
+        throw "Failed to download $downloadUrl. Check that release $Version exists: https://github.com/sprout-foundry/sprout/releases"
     }
 
     return $downloadUrl
@@ -283,9 +307,8 @@ function Install-Binary {
     $exeEntry = $zip.Entries | Where-Object { $_.Name -match '\.exe$' } | Select-Object -First 1
     
     if (-not $exeEntry) {
-        Write-LogError "No .exe file found in the archive"
         $zip.Dispose()
-        exit 1
+        throw "No .exe file found in the archive"
     }
     
     # Extract to temp directory
@@ -300,7 +323,7 @@ function Install-Binary {
     
     # Copy the binary to install directory
     $installPath = Join-Path $InstallDir "sprout.exe"
-    Copy-Item -Path $extractedPath -Destination $installPath -Force
+    Copy-Item -Path $extractedPath -Destination $installPath -Force -ErrorAction Stop
     
     Write-LogSuccess "sprout installed to $installPath"
     
@@ -373,40 +396,20 @@ function Verify-Installation {
     $binaryPath = Join-Path $InstallDir "sprout.exe"
     
     if (-not (Test-Path $binaryPath)) {
-        Write-LogError "sprout binary not found at $binaryPath"
-        exit 1
+        throw "sprout binary not found at $binaryPath"
     }
-    
+
     # Try to run the binary to verify it works
     try {
         $versionOutput = & $binaryPath version 2>&1
-        if ($LASTEXITCODE -ne 0 -and $versionOutput -notmatch "sprout") {
-            Write-LogError "sprout binary verification failed"
-            exit 1
-        }
     } catch {
-        Write-LogError "Failed to verify sprout binary: $_"
-        exit 1
+        throw "Failed to verify sprout binary: $_"
+    }
+    if ($LASTEXITCODE -ne 0 -and $versionOutput -notmatch "sprout") {
+        throw "sprout binary verification failed: $versionOutput"
     }
     
     Write-LogSuccess "sprout binary verified"
-}
-
-# Remove old versions
-function Remove-Old-Versions {
-    param([string]$InstallDir)
-    
-    $binaryPath = Join-Path $InstallDir "sprout.exe"
-    
-    if (Test-Path $binaryPath) {
-        try {
-            $oldVersion = & $binaryPath version 2>&1 | Select-Object -First 1
-            Write-LogInfo "Removing old version: $oldVersion"
-            Remove-Item -Path $binaryPath -Force
-        } catch {
-            Write-LogWarn "Could not remove old version: $_"
-        }
-    }
 }
 
 # Print uninstall instructions
@@ -620,13 +623,9 @@ function Print-Success {
     Write-Host ""
     Write-Host "  Binary location: $InstallDir\sprout.exe"
     Write-Host ""
-    Write-Host "  Run 'sprout version' to verify the installation"
+    Write-Host '  Next: cd into a project and run `sprout` - it will ask for an AI provider key.'
+    Write-Host "  Getting started: https://github.com/sprout-foundry/sprout#get-it-working-about-5-minutes"
     Write-Host ""
-
-    if (-not $NoService.IsPresent) {
-        Write-Host "  Run 'sprout service install' to set up auto-start"
-        Write-Host ""
-    }
 }
 
 # Show version info
@@ -640,8 +639,7 @@ function Show-Version {
             $version = $response.tag_name -replace '^v', ''
             Write-Host "sprout version $version (latest)"
         } catch {
-            Write-LogError "Failed to get version: $_"
-            exit 1
+            throw "Failed to get version: $_"
         }
     }
 }
@@ -652,19 +650,18 @@ function Main {
     # `-Help -Version` still prints help and doesn't fire the GitHub API.
     if ($Help.IsPresent) {
         Show-Help
-        exit 0
+        return
     }
 
     # Show version if requested
     if ($Version.IsPresent) {
         Show-Version
-        exit 0
+        return
     }
 
     # Validate mutual exclusion of service flags
     if ($Service.IsPresent -and $NoService.IsPresent) {
-        Write-LogError "--Service and --NoService are mutually exclusive"
-        exit 1
+        throw "-Service and -NoService are mutually exclusive"
     }
 
     # Handle uninstall
@@ -674,7 +671,7 @@ function Main {
 
         if ($DryRun.IsPresent) {
             Show-UninstallPreview -BinaryPath $binaryPath -KeepConfig $KeepConfig.IsPresent
-            exit 0
+            return
         }
 
         Write-LogInfo "Uninstalling sprout..."
@@ -700,8 +697,7 @@ function Main {
                 Remove-Item -Path $binaryPath -Force
                 Write-LogSuccess "sprout uninstalled successfully"
             } catch {
-                Write-LogError "Cannot remove $binaryPath: $_"
-                exit 1
+                throw "Cannot remove ${binaryPath}: $_"
             }
         } else {
             Write-LogWarn "sprout not found at $binaryPath"
@@ -718,7 +714,7 @@ function Main {
         Remove-ConfigDirs -KeepConfig $KeepConfig.IsPresent
 
         Print-UninstallInstructions $installDir
-        exit 0
+        return
     }
     
     # Check dependencies
@@ -737,7 +733,8 @@ function Main {
     # Get version
     $version = Get-Version
     Write-LogInfo "Installing sprout version: $version"
-    
+    $arch = Resolve-ReleaseArch -Version $version -Arch $arch
+
     # Determine install directory
     $installDir = Get-InstallDir
     Write-LogInfo "Installing to: $installDir"
@@ -747,12 +744,21 @@ function Main {
     # dir picked, PATH status known) for a useful preview.
     if ($DryRun.IsPresent) {
         Show-InstallPreview -Version $version -OS $os -Arch $arch -InstallDir $installDir
-        exit 0
+        return
     }
 
-    # Remove old versions if they exist
-    Remove-Old-Versions $installDir
-    
+    # Download and verify into TEMP_DIR before touching the install dir, so
+    # a failed upgrade leaves the current binary in place.
+    $existingBinary = Join-Path $installDir "sprout.exe"
+    if (Test-Path $existingBinary) {
+        try {
+            $oldVersion = & $existingBinary version 2>&1 | Select-Object -First 1
+        } catch {
+            $oldVersion = "unknown"
+        }
+        Write-LogInfo "Upgrading from: $oldVersion"
+    }
+
     # Download the release
     $downloadUrl = Download-Release -Version $version -OS $os -Arch $arch
     Write-LogInfo "Downloaded from: $downloadUrl"
@@ -764,8 +770,7 @@ function Main {
     try {
         Test-Checksum -ArchivePath $zipPath -ArchiveName $archiveName -Version $version
     } catch {
-        Write-LogError "Refusing to install an unverified binary."
-        exit 1
+        throw "Refusing to install an unverified binary ($_). Nothing was changed."
     }
 
     # Install the binary
@@ -802,12 +807,18 @@ function Main {
     # Cleanup is handled by trap
 }
 
-# Run main function
+# Run main function. Only `exit` with a status when running as a script
+# file ($PSCommandPath set), where it ends the script rather than the
+# user's session; under `irm | iex` the error stays on screen.
+$installFailed = $false
 try {
     Main
 } catch {
-    Write-LogError "Unexpected error: $_"
-    exit 1
+    Write-LogError "Installation failed: $($_.Exception.Message)"
+    $installFailed = $true
 } finally {
     Cleanup
+}
+if ($installFailed -and $PSCommandPath) {
+    exit 1
 }

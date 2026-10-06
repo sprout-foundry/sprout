@@ -75,7 +75,7 @@ func init() {
 	commitCmd.Flags().BoolVarP(&commitSkipPrompt, "yes", "y", false, "Skip confirmation prompts and commit automatically")
 	boolFlagAlias(commitCmd.Flags(), &commitSkipPrompt, "skip-prompt", "yes", aliasSilent)
 	commitCmd.Flags().StringVarP(&commitModel, "model", "m", "", "Model for commit message generation (e.g. 'ollama:llama3')")
-	commitCmd.Flags().StringVarP(&commitProvider, "provider", "p", "", "Provider for commit message generation")
+	commitCmd.Flags().StringVarP(&commitProvider, "provider", "p", "", providerFlagUsage)
 	commitCmd.Flags().BoolVar(&commitAllowSecrets, "allow-secrets", false, "Allow committing files flagged as potentially containing secrets")
 	commitCmd.Flags().BoolVar(&commitDryRun, "dry-run", false, "Generate and display commit message without executing commit")
 }

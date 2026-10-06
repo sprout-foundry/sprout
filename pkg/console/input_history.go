@@ -10,31 +10,32 @@ func (ir *InputReader) NavigateHistory(direction int) {
 		return
 	}
 
+	line := ir.line
 	switch direction {
 	case 1: // Up arrow - older commands
 		if ir.historyIndex == -1 {
 			ir.historyIndex = len(ir.history) - 1
-			ir.line = ir.history[ir.historyIndex]
+			line = ir.history[ir.historyIndex]
 		} else if ir.historyIndex > 0 {
 			ir.historyIndex--
-			ir.line = ir.history[ir.historyIndex]
+			line = ir.history[ir.historyIndex]
 		}
 	case -1: // Down arrow - newer commands
 		if ir.historyIndex == -1 {
-			ir.line = ""
+			line = ""
 		} else if ir.historyIndex < len(ir.history)-1 {
 			ir.historyIndex++
-			ir.line = ir.history[ir.historyIndex]
+			line = ir.history[ir.historyIndex]
 		} else {
 			ir.historyIndex = -1
-			ir.line = ""
+			line = ""
 		}
 	}
 
+	ir.replaceLine(line)
+
 	// Reset edit flag when loading from history
 	ir.hasEditedLine = false
-	ir.collapsedPastes = ir.collapsedPastes[:0]
-	ir.cursorPos = len(ir.line)
 	ir.resetCompletionCycle()
 	ir.Refresh()
 }

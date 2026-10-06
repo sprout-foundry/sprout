@@ -1,4 +1,4 @@
-import { githubRepoSlug, platformHref, repoHubPath } from './platformUrl';
+import { repoName, repoSlug, githubRepoSlug, platformHref, repoHubPath } from './platformUrl';
 import { getPlatformURL } from '../bootstrapAdapter';
 
 // Mock the bootstrap-adapter surface the helper reads — the real module
@@ -54,5 +54,18 @@ describe('repoHubPath', () => {
     expect(repoHubPath(undefined)).toBe('/?from=editor');
     expect(repoHubPath('https://gitlab.com/acme/widgets')).toBe('/?from=editor');
     expect(githubRepoSlug('https://github.com/acme')).toBeNull();
+  });
+});
+
+describe('repoSlug / repoName', () => {
+  it('names repos on any host, keeping GitLab subgroups', () => {
+    expect(repoSlug('https://github.com/acme/app.git')).toBe('acme/app');
+    expect(repoSlug('https://gitlab.com/group/sub/app/-/tree/main')).toBe('group/sub/app');
+    expect(repoSlug('https://bitbucket.org/team/app')).toBe('team/app');
+    expect(repoSlug('git@gitlab.com:group/sub/app.git')).toBe('group/sub/app');
+    expect(repoName('https://gitlab.com/group/sub/app')).toBe('app');
+    expect(repoSlug('not a url')).toBeNull();
+    expect(repoSlug('https://gitlab.com/only')).toBeNull();
+    expect(repoSlug(null)).toBeNull();
   });
 });

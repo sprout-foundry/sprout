@@ -50,8 +50,9 @@ func (h *runSubagentHandler) Definition() ToolDefinition {
 			"For MULTIPLE INDEPENDENT tasks, use run_parallel_subagents instead for faster completion.\n\n" +
 			"**REQUIRED**: You MUST specify a persona parameter. " +
 			"Personas are configured from JSON defaults plus user config " +
-			"(for example: general, coder, refactor, debugger, tester, reviewer, researcher, web_scraper).\n\n" +
+			"(for example: general, coder, designer, tester, reviewer, researcher, web_scraper).\n\n" +
 			"Persona selection guide: `coder` — new features, production code, algorithms; " +
+			"`designer` — design work in the workspace `design/` tree (design tokens, screens, flow sources, brand); " +
 			"`refactor` — behavior-preserving refactors, duplication removal; " +
 			"`tester` — unit tests, coverage; " +
 			"`reviewer` — diff review (security, correctness, quality); " +
@@ -61,7 +62,7 @@ func (h *runSubagentHandler) Definition() ToolDefinition {
 			"`general` — anything else. Pick the closest match; use `general` when nothing fits. " +
 			"Run /persona list for the live set.\n\n" +
 			"Subagents use focused per-persona tool subsets from configuration for more deterministic behavior. " +
-			"NO TIMEOUT - runs until completion. " +
+			"Read-only personas (reviewer, researcher) run in the background by default — you get a task_id and continue working; the result arrives as a notification. " +
 			"Subagent provider and model are configured via config settings (subagent_provider and subagent_model).\n\n" +
 			"**IMPORTANT — interpreting the result**: The subagent's response is a JSON envelope. " +
 			"The `files_modified` array (also mirrored as a `[subagent files modified] … [/subagent files modified]` " +
@@ -93,6 +94,16 @@ func (h *runSubagentHandler) Definition() ToolDefinition {
 				Name:        "files",
 				Type:        "string",
 				Description: "Comma-separated list of relevant file paths (e.g., 'models/user.go,pkg/auth/jwt.go')",
+			},
+			{
+				Name:        "background",
+				Type:        "boolean",
+				Description: "Run in the background: returns a task_id immediately and you are notified with the result when it finishes; use check_subagent for progress or to wait. Defaults to true for read-only personas (reviewer, researcher). A background run of a persona that modifies files always runs isolated (see isolation).",
+			},
+			{
+				Name:        "isolation",
+				Type:        "string",
+				Description: "\"worktree\": run in an isolated git worktree seeded with the current uncommitted changes; its changes are applied back when it finishes cleanly, or kept (with a patch) and reported if they no longer apply. Use it when the subagent's edits could collide with work happening meanwhile.",
 			},
 			{
 				Name:        "working_dir",

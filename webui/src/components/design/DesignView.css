@@ -1390,7 +1390,8 @@
 
 /* Mobile: the column overlays the surface instead of squeezing it.
  * Logical insets — the overlay pins to the inline-end edge
- * (right under LTR, left under dir="rtl"). */
+ * (right under LTR, left under dir="rtl"). The close affordance and the
+ * reopen strip are mobile-only (desktop always shows the docked column). */
 @media (max-width: 768px) {
   .design-side-column {
     position: fixed;
@@ -1399,6 +1400,44 @@
     width: min(92vw, 420px);
     z-index: 30;
     box-shadow: var(--shadow-float);
+  }
+
+  .design-side-column[hidden] {
+    display: none;
+  }
+
+  .design-side-close {
+    margin-inline-start: auto;
+    border: none;
+    background: none;
+    color: var(--text-secondary);
+    font-size: 16px;
+    line-height: 1;
+    padding: 0 var(--space-2, 8px);
+    cursor: pointer;
+  }
+
+  .design-side-reopen {
+    position: fixed;
+    inset-block-start: 50%;
+    inset-inline-end: 0;
+    z-index: 29;
+    writing-mode: vertical-rl;
+    border: 1px solid var(--border-subtle);
+    border-inline-end: none;
+    border-radius: 6px 0 0 6px;
+    background: var(--bg-raised, var(--bg-elevated, #fff));
+    color: var(--text-secondary);
+    padding: var(--space-3, 12px) var(--space-1, 4px);
+    cursor: pointer;
+    box-shadow: var(--shadow-float);
+  }
+}
+
+@media (min-width: 769px) {
+  .design-side-close,
+  .design-side-reopen {
+    display: none;
   }
 }
 

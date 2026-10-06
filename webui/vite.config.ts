@@ -291,7 +291,11 @@ export default defineConfig(({ mode }) => {
             if (id.includes('node_modules/@lezer/')) return 'codemirror';
             if (id.includes('node_modules/@codemirror/')) return 'codemirror';
             if (id.includes('node_modules/react') || id.includes('node_modules/scheduler')) return 'react';
-            if (id.includes('node_modules/onnxruntime')) return 'onnxruntime';
+            // CommonJS interop helpers (vite's commonjs plugin runtime):
+            // without their own chunk they land in the react chunk, and
+            // every module that only needs an interop helper (browserGit
+            // on the standalone pages) then pulls the whole React runtime.
+            if (id.includes('commonjsHelpers') || id.includes('__vite-browser-external')) return 'chunk-helpers';
             return undefined;
           },
         },

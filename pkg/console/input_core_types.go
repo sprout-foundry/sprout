@@ -53,13 +53,15 @@ const (
 	// The letter is in .Data as a single byte (e.g. "T" for Alt+T).
 	// CLI-D uses this to drive the status-footer tooltip toggle.
 	EventAltLetter
+	// EventDeleteWordForward is Alt+D: kill the word after the cursor.
+	EventDeleteWordForward
 )
 
 // InputReader handles interactive input with proper escape sequence handling
 type InputReader struct {
+	editBuffer
+
 	prompt          string
-	line            string
-	cursorPos       int
 	history         []string
 	historyIndex    int
 	termFd          int
@@ -73,14 +75,12 @@ type InputReader struct {
 	hasEditedLine bool
 
 	// Paste detection
-	pasteBuffer     strings.Builder
-	pasteTimer      *time.Timer
-	pasteActive     bool
-	lastCharTime    time.Time
-	bracketedPaste  bool
-	bracketedMatch  int
-	bracketedSawCR  bool
-	collapsedPastes []pasteSpan
+	pasteBuffer    strings.Builder
+	pasteActive    bool
+	lastCharTime   time.Time
+	bracketedPaste bool
+	bracketedMatch int
+	bracketedSawCR bool
 
 	// Raw binary buffer for image paste detection (accumulated alongside text pasteBuffer)
 	rawPasteBuffer []byte

@@ -1,6 +1,7 @@
 import { FileTree, type FileInfo, type FileTreeRefreshOptions } from '@sprout/ui';
 import { Check, TriangleAlert, X } from 'lucide-react';
 import { forwardRef, useImperativeHandle, useRef, useEffect, useState, useCallback, useMemo } from 'react';
+import { isLayeredLayout } from '../config/layout';
 import { isCloud } from '../config/mode';
 import { getShellIdentity, onShellIdentityChange } from '../config/shell';
 import { useOptionalBufferManager } from '../contexts/BufferManagerContext';
@@ -9,6 +10,7 @@ import { setActiveRepoURL } from '../services/activeRepo';
 import { ApiService } from '../services/api';
 import { clientFetch } from '../services/clientSession';
 import { getStoredToken } from '../services/githubService';
+import { searchForRepo } from '../services/homeView';
 import { detectSproutStudio, mapWorkspaceListing, nativeFsGate, workspaceListDepth } from '../services/nativeFs';
 import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
 import { gitCorsProxy } from '../services/gitCorsProxy';
@@ -18,6 +20,7 @@ import { useWorkspaceCwd, setWorkspaceCwd } from '../services/workspaceCwd';
 import { getWorkspaceFs, listWorkspaceRepos } from '../services/workspaceFs/backendsExport';
 import type { FsEntry } from '../services/workspaceFs/types';
 import { parseRepoRef, repoDir } from '../services/workspaceFs/workspaceGit';
+import { repoSlug } from '../utils/platformUrl';
 import GitHubRepoPicker from './GitHubRepoPicker';
 import { showThemedAlert, showThemedPrompt } from './ThemedDialog';
 import WorkspaceCwdBar from './WorkspaceCwdBar';
@@ -158,17 +161,7 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
       // Determine repo name for display
       const repoUrl = repoParam || importing || alreadyImported || '';
       if (repoUrl) {
-        try {
-          const slug = repoUrl
-            .replace(/\.git$/, '')
-            .replace(/\/$/, '')
-            .split('/')
-            .slice(-2)
-            .join('/');
-          setImportRepoName(slug);
-        } catch {
-          setImportRepoName(repoUrl);
-        }
+        setImportRepoName(repoSlug(repoUrl) ?? repoUrl);
       }
 
       if (alreadyImported) {
@@ -245,6 +238,13 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
         return;
       }
 
+      // The hosted editor holds one repository per page: open the new one the
+      // way the repository rail does, so files, chats and tabs follow it.
+      if (gitCorsProxy()) {
+        window.location.search = searchForRepo(url);
+        return;
+      }
+
       try {
         // A real clone (through the platform's git proxy) rather than a file
         // dump: the workspace gets history, the origin remote and branches, so
@@ -267,8 +267,9 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
 
     // "Add repo" trigger for the workspace row. Only in cloud/local webui
     // mode (matches the old tree-header gating); studio dists clone via
-    // the GitHub account panel / device-flow sign-in surface.
-    const cloneTrigger = isCloud ? handleCloneRepo : undefined;
+    // the GitHub account panel / device-flow sign-in surface. The layered
+    // layout opens repositories from its repository rail instead.
+    const cloneTrigger = isCloud && !isLayeredLayout ? handleCloneRepo : undefined;
 
     return (
       <>
@@ -316,6 +317,10 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
           isOpen={isRepoPickerOpen}
           onClose={() => setIsRepoPickerOpen(false)}
           onCloned={(repo, result) => {
+            if (gitCorsProxy()) {
+              window.location.search = searchForRepo(repo.clone_url.replace(/\.git$/, ''));
+              return;
+            }
             setActiveRepoURL(repo.clone_url);
             // Re-pull the repo list so the new clone appears in the cwd
             // selector immediately (no remount needed).

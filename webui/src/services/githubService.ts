@@ -43,7 +43,7 @@ export interface GitHubUser {
 }
 
 export interface GitHubRepo {
-  id: number;
+  id: number | string;
   name: string;
   full_name: string;
   private: boolean;

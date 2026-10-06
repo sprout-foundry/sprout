@@ -52,6 +52,60 @@ function ImageViewer({ filePath, fileName, fileSize }: ImageViewerProps): JSX.El
   const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [translateStart, setTranslateStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
+  // Latest transform in refs so the window-level drag listeners and the
+  // resize observer read current values without re-subscribing each frame.
+  const zoomRef = useRef(zoom);
+  const translateRef = useRef(translate);
+  useEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
+  useEffect(() => {
+    translateRef.current = translate;
+  }, [translate]);
+
+  /**
+   * Clamp a translation so the scaled image never leaves the pane. When the
+   * image is larger than the pane on an axis, panning is bounded to its edges
+   * (the image can slide but a blank gap never appears behind it). When it is
+   * smaller, the image is kept fully inside the pane. Used by every transform
+   * change so the view can never strand the image off-screen.
+   */
+  const clampTranslate = useCallback(
+    (x: number, y: number, z: number): { x: number; y: number } => {
+      const container = containerRef.current;
+      if (!container || !dimensions) return { x, y };
+      const scaledW = dimensions.width * z;
+      const scaledH = dimensions.height * z;
+      const cw = container.clientWidth;
+      const ch = container.clientHeight;
+      // lo = min(0, cw - scaledW); hi = max(0, cw - scaledW). Larger image:
+      // [cw - scaledW, 0]. Smaller image: [0, cw - scaledW].
+      const clampAxis = (v: number, containerSize: number, scaledSize: number): number => {
+        const lo = Math.min(0, containerSize - scaledSize);
+        const hi = Math.max(0, containerSize - scaledSize);
+        return Math.min(hi, Math.max(lo, v));
+      };
+      return { x: clampAxis(x, cw, scaledW), y: clampAxis(y, ch, scaledH) };
+    },
+    [dimensions],
+  );
+
+  /** Zoom about a point (container coords), keeping that point fixed and clamped. */
+  const zoomAtPoint = useCallback(
+    (newZoom: number, pointX: number, pointY: number) => {
+      const z = zoomRef.current;
+      const t = translateRef.current;
+      const clampedZoom = Math.max(0.1, Math.min(newZoom, 10));
+      // Image coordinate under the cursor stays put across the zoom change.
+      const imgX = (pointX - t.x) / z;
+      const imgY = (pointY - t.y) / z;
+      const next = clampTranslate(pointX - imgX * clampedZoom, pointY - imgY * clampedZoom, clampedZoom);
+      setZoom(clampedZoom);
+      setTranslate(next);
+    },
+    [clampTranslate],
+  );
+
   // Fit to window calculation — centers the image within the container
   const fitToWindow = useCallback((imgWidth: number, imgHeight: number) => {
     if (!containerRef.current) {
@@ -71,7 +125,7 @@ function ImageViewer({ filePath, fileName, fileSize }: ImageViewerProps): JSX.El
 
     const scaleWidth = availableWidth / imgWidth;
     const scaleHeight = availableHeight / imgHeight;
-    const scale = Math.min(scaleWidth, scaleHeight, 1); // Don't scale up larger than 100%
+    const scale = Math.max(Math.min(scaleWidth, scaleHeight, 1), 0.1); // Don't scale up larger than 100%
 
     // Center the image within the container
     const tx = (containerWidth - imgWidth * scale) / 2;
@@ -107,9 +161,10 @@ function ImageViewer({ filePath, fileName, fileSize }: ImageViewerProps): JSX.El
         const img = new Image();
         img.onload = () => {
           if (!cancelled) {
+            // Only record dimensions here. The container isn't in the DOM yet
+            // (the empty state renders until dimensions exist), so fitting is
+            // done in the effect below once the pane has mounted and has size.
             setDimensions({ width: img.width, height: img.height });
-            // Fit to window by default
-            fitToWindow(img.width, img.height);
           }
         };
         img.onerror = () => {
@@ -138,16 +193,28 @@ function ImageViewer({ filePath, fileName, fileSize }: ImageViewerProps): JSX.El
       }
     };
     // imageSrc excluded: only used in cleanup, adding it would cause re-fetch loop
-  }, [filePath, fitToWindow]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filePath]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Zoom handlers
+  // Fit the image once its dimensions are known AND the pane is in the DOM.
+  // Running it from the image onload alone was too early: the container only
+  // mounts after `dimensions` is set, so the fit was a no-op and the image
+  // opened at 100% top-left instead of fit-to-window.
+  useEffect(() => {
+    if (dimensions) fitToWindow(dimensions.width, dimensions.height);
+  }, [dimensions, fitToWindow]);
+
+  // Zoom handlers — zoom about the pane center when driven by the toolbar.
   const handleZoomIn = useCallback(() => {
-    setZoom((prev) => Math.min(prev * 1.25, 10));
-  }, []);
+    const c = containerRef.current;
+    if (!c) return;
+    zoomAtPoint(zoomRef.current * 1.25, c.clientWidth / 2, c.clientHeight / 2);
+  }, [zoomAtPoint]);
 
   const handleZoomOut = useCallback(() => {
-    setZoom((prev) => Math.max(prev / 1.25, 0.1));
-  }, []);
+    const c = containerRef.current;
+    if (!c) return;
+    zoomAtPoint(zoomRef.current / 1.25, c.clientWidth / 2, c.clientHeight / 2);
+  }, [zoomAtPoint]);
 
   const handleResetZoom = useCallback(() => {
     if (!dimensions || !containerRef.current) return;
@@ -155,105 +222,118 @@ function ImageViewer({ filePath, fileName, fileSize }: ImageViewerProps): JSX.El
     const tx = (container.clientWidth - dimensions.width) / 2;
     const ty = (container.clientHeight - dimensions.height) / 2;
     setZoom(1);
-    setTranslate({ x: tx, y: ty });
-  }, [dimensions]);
+    setTranslate(clampTranslate(tx, ty, 1));
+  }, [dimensions, clampTranslate]);
 
   // Wheel zoom - zoom centered on cursor
   const handleWheel = useCallback(
     (e: WheelEvent) => {
-      if (!imageRef.current || !containerRef.current) return;
+      if (!containerRef.current) return;
 
       e.preventDefault();
 
-      const container = containerRef.current;
-      const rect = container.getBoundingClientRect();
-
-      // Calculate mouse position relative to container
+      const rect = containerRef.current.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
 
-      // Calculate zoom factor
       const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
-      const newZoom = Math.max(0.1, Math.min(zoom * zoomFactor, 10));
-
-      // Calculate new translation to zoom toward mouse position
-      // Current mouse position in image coordinates
-      const mouseXInImage = (mouseX - translate.x) / zoom;
-      const mouseYInImage = (mouseY - translate.y) / zoom;
-
-      // New translate to keep mouse position stable
-      const newTranslateX = mouseX - mouseXInImage * newZoom;
-      const newTranslateY = mouseY - mouseYInImage * newZoom;
-
-      setZoom(newZoom);
-      setTranslate({ x: newTranslateX, y: newTranslateY });
+      zoomAtPoint(zoomRef.current * zoomFactor, mouseX, mouseY);
     },
-    [zoom, translate],
+    [zoomAtPoint],
   );
 
-  // Pan handlers
-  const handleMouseDown = useCallback(
-    (e: MouseEvent) => {
-      if (zoom <= 1) return; // Only pan when zoomed in
+  // Pan handlers — drag works at any zoom; the image is clamped to the pane so
+  // it can never be thrown off-screen.
+  const handleMouseDown = useCallback((e: MouseEvent) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    // preventDefault suppresses the default focus move, so give the pane focus
+    // explicitly — otherwise the keyboard shortcuts below never fire.
+    containerRef.current?.focus({ preventScroll: true });
+    setIsDragging(true);
+    setDragStart({ x: e.clientX, y: e.clientY });
+    setTranslateStart({ ...translateRef.current });
+  }, []);
 
-      e.preventDefault();
-      setIsDragging(true);
-      setDragStart({ x: e.clientX, y: e.clientY });
-      setTranslateStart({ ...translate });
+  // Double-click toggles fit ↔ 100%, anchored on the click point so it zooms
+  // where the cursor is (matches common image viewers).
+  const handleDoubleClick = useCallback(
+    (e: MouseEvent) => {
+      if (!dimensions || !containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const px = e.clientX - rect.left;
+      const py = e.clientY - rect.top;
+      const atFit = Math.abs(zoomRef.current - 1) < 0.01;
+      if (atFit) {
+        const c = containerRef.current;
+        const padding = 40;
+        const scaleW = (c.clientWidth - padding) / dimensions.width;
+        const scaleH = (c.clientHeight - padding) / dimensions.height;
+        const fit = Math.max(Math.min(scaleW, scaleH, 1), 0.1);
+        zoomAtPoint(fit, px, py);
+      } else {
+        zoomAtPoint(1, px, py);
+      }
     },
-    [zoom, translate],
+    [dimensions, zoomAtPoint],
   );
 
-  const handleMouseMove = useCallback(
-    (e: MouseEvent) => {
-      if (!isDragging) return;
-
+  // Listen on window so releasing outside the pane still ends the drag.
+  useEffect(() => {
+    if (!isDragging) return undefined;
+    const onMove = (e: globalThis.MouseEvent) => {
       const dx = e.clientX - dragStart.x;
       const dy = e.clientY - dragStart.y;
+      setTranslate(clampTranslate(translateStart.x + dx, translateStart.y + dy, zoomRef.current));
+    };
+    const onUp = () => setIsDragging(false);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, [isDragging, dragStart, translateStart, clampTranslate]);
 
-      setTranslate({
-        x: translateStart.x + dx,
-        y: translateStart.y + dy,
-      });
-    },
-    [isDragging, dragStart, translateStart],
-  );
+  // Re-clamp when the pane resizes so a shrink can't strand the image.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(() => {
+      setTranslate((prev) => clampTranslate(prev.x, prev.y, zoomRef.current));
+    });
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, [clampTranslate]);
 
-  const handleMouseUp = useCallback(() => {
-    setIsDragging(false);
-  }, []);
-
-  const handleMouseLeave = useCallback(() => {
-    setIsDragging(false);
-  }, []);
-
-  // Keyboard shortcuts
+  // Keyboard shortcuts. The pane is focusable and focused on click, so both
+  // the bare keys (0/1/+/−/f) and the Mod variants work while it has focus.
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      // Check for Mod (Ctrl/Cmd) key
-      if (!(e.metaKey || e.ctrlKey)) return;
-
       const key = e.key;
 
-      // Prevent default and stop propagation for viewer shortcuts
-      if (key === '=' || key === '-' || key === '0' || key === '1') {
-        e.preventDefault();
-        e.stopPropagation();
-      }
+      // `=` also arrives as `+` with shift; `-` covers both minus keys.
+      const isZoomKey = key === '=' || key === '+' || key === '-' || key === '0' || key === '1' || key === 'f';
+      if (!isZoomKey) return;
+
+      e.preventDefault();
+      e.stopPropagation();
 
       switch (key) {
-        case '=': // Mod+= zoom in
+        case '=': // zoom in
+        case '+':
           handleZoomIn();
           break;
-        case '-': // Mod+- zoom out
+        case '-': // zoom out
           handleZoomOut();
           break;
-        case '0': // Mod+0 fit to window
+        case '0': // fit to window
+        case 'f':
           if (dimensions) {
             fitToWindow(dimensions.width, dimensions.height);
           }
           break;
-        case '1': // Mod+1 actual size
+        case '1': // actual size
           handleResetZoom();
           break;
       }
@@ -404,9 +484,7 @@ function ImageViewer({ filePath, fileName, fileSize }: ImageViewerProps): JSX.El
         className={`image-viewer-container${isDragging ? ' dragging' : ''}`}
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseLeave}
+        onDoubleClick={handleDoubleClick}
         data-testid="image-viewer"
       >
         <div

@@ -37,16 +37,16 @@
   min-height: 0;
   overflow: hidden;
   position: relative;
-  cursor: default;
+  cursor: grab;
   background: var(--editor-pane-bg, #1e1e1e);
-}
-
-.image-viewer-container:active {
-  cursor: default;
 }
 
 .image-viewer-container.dragging {
   cursor: grabbing;
+}
+
+.image-viewer-container.dragging .image-viewer-content {
+  transition: none;
 }
 
 .image-viewer-content {

@@ -59,11 +59,11 @@ jobs:
           # Primary reviewer — deepinfra is the repo's established agent
           # provider (see pricing-audit-agent.yml); secrets overlap.
           primary-provider: "deepinfra"
-          primary-model: "deepseek-ai/DeepSeek-V3.1"
+          primary-model: "deepseek-ai/DeepSeek-V4.1-Flash"
 
           # Subagent overrides (optional cost optimization)
           coder-provider: "deepinfra"
-          coder-model: "deepseek-ai/DeepSeek-V3.1"
+          coder-model: "deepseek-ai/DeepSeek-V4.1-Flash"
 
           deepinfra-api-key: ${{ secrets.DEEPINFRA_API_KEY }}
           openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
@@ -84,9 +84,9 @@ jobs:
           mode: "review"
           github-token: ${{ secrets.GITHUB_TOKEN }}
           primary-provider: "deepinfra"
-          primary-model: "deepseek-ai/DeepSeek-V3.1"
+          primary-model: "deepseek-ai/DeepSeek-V4.1-Flash"
           coder-provider: "deepinfra"
-          coder-model: "deepseek-ai/DeepSeek-V3.1"
+          coder-model: "deepseek-ai/DeepSeek-V4.1-Flash"
           deepinfra-api-key: ${{ secrets.DEEPINFRA_API_KEY }}
           openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
           review-type: "comprehensive"

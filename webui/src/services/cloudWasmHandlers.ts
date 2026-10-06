@@ -6,7 +6,7 @@
  */
 
 import { describeAgentError, notifyCreditsBlocked } from './agentErrorMessage';
-import { historyForChat, recordTurn, setChatRunning } from './cloudChatSessions';
+import { historyForChat, isChatRunning, recordTurn, setChatRunning } from './cloudChatSessions';
 import { NATIVE_CHAT_ENABLED } from './nativeChatStubs/nativeChatFlag';
 import { platformProviderConfig, reportedManagedContextWindow } from './platformProvider';
 import {
@@ -1095,11 +1095,32 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
 
   // Intercept /clear to reset the persistent agent's conversation history.
   // In local mode the backend handles this; in cloud mode we reset the
-  // WASM agent so the next query starts fresh.
+  // WASM agent so the next query starts fresh. This runs BEFORE the
+  // one-run-per-chat guard: /clear is a reset, not a query, and the webui's
+  // clear path stops the running query then immediately clears (setChatRunning
+  // flips false only in the stopped run's async .then), so guarding it would
+  // reject a legitimate clear with "already running".
   if (query.trim().toLowerCase() === '/clear') {
     shell.clearConversation(chatId || undefined);
     dispatch('query_completed', { query: '/clear', response: '' });
     return jsonOk({ status: 'ok', message: 'Conversation cleared' });
+  }
+
+  // One run per chat: a submit while this chat's agent is already answering is
+  // rejected with the same machine-readable code the local backend uses, so
+  // the webui's send path recovers by steering instead of surfacing a raw
+  // "already in process" error. Without this, the WASM /api/query returned 200
+  // and the run rejected asynchronously, leaving the composer (which thought
+  // it was idle) dead-ended on the agent's ErrQueryInProgress.
+  if (isChatRunning(chatId)) {
+    return new Response(
+      JSON.stringify({
+        error: 'A query is already running for this chat',
+        message: 'A query is already running for this chat',
+        code: 'query_in_progress',
+      }),
+      { status: 409, headers: { 'Content-Type': 'application/json' } },
+    );
   }
 
   // Dispatch query_started immediately so the user's message appears in

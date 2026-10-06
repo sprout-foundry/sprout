@@ -564,6 +564,60 @@ describe('/api/query in the browser — a stop is not a failure', () => {
   });
 });
 
+describe('/api/query in the browser — one run per chat', () => {
+  it('rejects a second submit for a running chat with query_in_progress', async () => {
+    const { setChatRunning } = await import('./cloudChatSessions');
+    const shell = createMockShell();
+    setChatRunning('c-busy', true);
+    try {
+      const res = handleWasmLocal(
+        shell,
+        '/api/query',
+        'POST',
+        '/api/query',
+        JSON.stringify({ query: 'steer me', chat_id: 'c-busy' }),
+      );
+      expect(res.status).toBe(409);
+      const body = JSON.parse(await res.text());
+      expect(body.code).toBe('query_in_progress');
+    } finally {
+      setChatRunning('c-busy', false);
+    }
+  });
+
+  it('accepts a submit for an idle chat', () => {
+    const shell = createMockShell();
+    const res = handleWasmLocal(
+      shell,
+      '/api/query',
+      'POST',
+      '/api/query',
+      JSON.stringify({ query: 'hi', chat_id: 'c-idle' }),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it('always accepts /clear, even while the chat is running', async () => {
+    const { setChatRunning } = await import('./cloudChatSessions');
+    const shell = createMockShell();
+    setChatRunning('c-clear', true);
+    try {
+      const res = handleWasmLocal(
+        shell,
+        '/api/query',
+        'POST',
+        '/api/query',
+        JSON.stringify({ query: '/clear', chat_id: 'c-clear' }),
+      );
+      expect(res.status).toBe(200);
+      const body = JSON.parse(await res.text());
+      expect(body.message).toBe('Conversation cleared');
+    } finally {
+      setChatRunning('c-clear', false);
+    }
+  });
+});
+
 describe('handleWasmLocal — /api/search', () => {
   it('reports matches with workspace-relative paths', async () => {
     let ran = '';

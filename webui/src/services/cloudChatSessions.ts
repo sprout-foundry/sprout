@@ -42,6 +42,12 @@ export function setChatRunning(chatId: string | null | undefined, running: boole
   else runningChats.delete(chatId);
 }
 
+/** Whether a chat's in-page agent is answering right now (this page only). */
+export function isChatRunning(chatId: string | null | undefined): boolean {
+  if (!chatId) return false;
+  return runningChats.has(chatId);
+}
+
 /**
  * Record a turn in a chat's own transcript, whether or not the chat is on
  * screen: the question when the query starts, the answer when it finishes.

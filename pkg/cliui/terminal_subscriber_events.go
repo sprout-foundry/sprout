@@ -349,6 +349,26 @@ func (s *TerminalSubscriberState) HandleProgressEvent(evtType string, data map[s
 	footer.Refresh()
 }
 
+// HandleLanguageGuardReplacementEvent renders a language_guard_replacement
+// event: the guard repaired a reply that was already streamed, so the
+// terminal must show the corrected text in place of the prose it already
+// printed. The replacement lands on stdout as an external notice — the
+// streaming turn's prose is already on the screen above it, so a "replaced"
+// marker keeps the two texts distinguishable.
+func (s *TerminalSubscriberState) HandleLanguageGuardReplacementEvent(data map[string]interface{}, indicator *console.ActivityIndicator, footer *console.StatusFooter) {
+	replacement, _ := data["replacement"].(string)
+	if replacement == "" {
+		return
+	}
+	indicator.Stop()
+	s.thinkingActive = false
+	s.flushExternalWrite()
+	console.PrintExternal(console.WrapHanging(
+		console.GlyphInfo.Prefix(), replacement, console.StdoutColumns()))
+	s.run = nil
+	footer.Refresh()
+}
+
 // runEventLoop is the goroutine body for the terminal tool subscriber.
 // It selects on ctx cancellation and incoming events, dispatching each
 // event type to the corresponding handler method.
@@ -383,6 +403,8 @@ func (s *TerminalSubscriberState) runEventLoop(ctx context.Context, ch <-chan ev
 				s.HandleTodoUpdateEvent(data, indicator, footer)
 			case events.EventTypeAgentMessage:
 				s.HandleAgentMessageEvent(data, indicator, footer)
+			case events.EventTypeLanguageGuardReplacement:
+				s.HandleLanguageGuardReplacementEvent(data, indicator, footer)
 			case events.EventTypeProgressMilestone,
 				events.EventTypeProgressVerification,
 				events.EventTypeProgressComplete,

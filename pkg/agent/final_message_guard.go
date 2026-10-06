@@ -149,6 +149,14 @@ const languageGuardRecentMessages = 10
 // original" payload, §152b) is kept on the replaced assistant message.
 const langGuardOriginalMetaKey = "language_guard_original"
 
+// langGuardRepairedMetaKey marks an assistant message the streaming guard
+// already repaired during the stream (a held reply or a mid-stream switch):
+// its content is the delivered replacement, and its mismatch is already
+// recorded. The final-message guard skips such messages — re-running on them
+// would regenerate a second time for the same reply (or re-publish a
+// duplicate replacement event).
+const langGuardRepairedMetaKey = "language_guard_repaired"
+
 // applyLanguageGuard runs the turn's final assistant message through the
 // final-message guard (§152b) and, on a mismatch outcome, replaces the
 // last assistant message in state with the display text. It returns the
@@ -177,10 +185,12 @@ func (a *Agent) applyLanguageGuard(qc *queryRunContext, result string) string {
 	messages := a.state.GetMessages()
 	replaceIndex := -1
 	finalText := ""
+	var finalMessage api.Message
 	for i := len(messages) - 1; i >= 0; i-- {
 		if messages[i].Role == "assistant" {
 			if messages[i].Content != "" {
 				finalText = messages[i].Content
+				finalMessage = messages[i]
 				replaceIndex = i
 			}
 			break
@@ -189,6 +199,15 @@ func (a *Agent) applyLanguageGuard(qc *queryRunContext, result string) string {
 	if finalText == "" {
 		// No assistant message to judge (or an empty one): nothing to
 		// guard and nothing in state to replace.
+		return result
+	}
+	// The streaming guard already repaired this reply during the stream (a
+	// held reply or a mid-stream switch): its content IS the repair (the
+	// regenerated text or the notice) the client received, and its mismatch
+	// is already recorded. Re-judging it would regenerate a second time for
+	// the same reply — or re-publish a duplicate replacement event. What the
+	// user sees and what state carries already agree.
+	if messageRepairedByLanguageGuard(finalMessage) {
 		return result
 	}
 
@@ -238,6 +257,12 @@ func (a *Agent) applyLanguageGuard(qc *queryRunContext, result string) string {
 	return outcome.Display
 }
 
+// messageRepairedByLanguageGuard reports whether msg carries the streaming
+// guard's repaired marker (langGuardRepairedMetaKey).
+func messageRepairedByLanguageGuard(msg api.Message) bool {
+	return msg.Meta != nil && msg.Meta[langGuardRepairedMetaKey] != ""
+}
+
 // recentUserMessages collects the user's recent messages (capped at
 // languageGuardRecentMessages, newest first) in chronological order for
 // ResolveUserLanguage's majority vote. Timestamp envelopes are stripped:
@@ -278,8 +303,21 @@ func (a *Agent) recentUserMessages(messages []api.Message) []string {
 // call carrying the user's last message, the mismatched reply, and an
 // explicit instruction to answer in the user's language (code blocks,
 // URLs, file paths and quoted text stay as-is). It is a focused prompt —
-// one model call, no tool loop.
+// one model call, no tool loop. The run's query (qc.processedQuery) is the
+// user's last message for the turn.
 func (a *Agent) regenerateInUserLanguage(ctx context.Context, qc *queryRunContext, mismatched string, user langguard.Language) (string, error) {
+	return a.regenerateInUserLanguageCore(ctx, qc.processedQuery, mismatched, user)
+}
+
+// regenerateInUserLanguageCore is the shared §152b regeneration primitive: a
+// single model call carrying the user's last message, the mismatched reply,
+// and an explicit instruction to answer in the user's language (code blocks,
+// URLs, file paths and quoted text stay as-is). It is a focused prompt — one
+// model call, no tool loop. Both the final-message guard (via
+// regenerateInUserLanguage, using the run's query) and the streaming path (via
+// the turn's stored user message) call it, so the regeneration prompt is
+// byte-identical across the two guard layers.
+func (a *Agent) regenerateInUserLanguageCore(ctx context.Context, lastUserMessage string, mismatched string, user langguard.Language) (string, error) {
 	client := a.getClient()
 	if client == nil {
 		return "", errors.New("language guard: no client available for regeneration")
@@ -295,7 +333,7 @@ func (a *Agent) regenerateInUserLanguage(ctx context.Context, qc *queryRunContex
 		name, name, name,
 	)
 	req := []api.Message{
-		{Role: "user", Content: StripUserMessageTimestamp(qc.processedQuery)},
+		{Role: "user", Content: StripUserMessageTimestamp(lastUserMessage)},
 		{Role: "assistant", Content: mismatched},
 		{Role: "user", Content: instruction},
 	}

@@ -39,6 +39,7 @@ import (
 const (
 	contractRoutesGo     = "pkg/webui/routes.go"
 	contractHumaRoutesGo = "pkg/webui/huma_routes.go"
+	contractHumaFilesGo  = "pkg/webui/huma_files.go"
 	contractOpenAPIYAML  = "docs/api/openapi.yaml"
 	contractAllowlist    = "docs/api/undocumented.txt"
 )
@@ -369,6 +370,7 @@ func TestOpenAPISpecCoversAllRegisteredRoutes(t *testing.T) {
 	registered := registeredRoutes(t,
 		filepath.Join(root, contractRoutesGo),
 		filepath.Join(root, contractHumaRoutesGo),
+		filepath.Join(root, contractHumaFilesGo),
 	)
 	if len(registered) == 0 {
 		t.Fatalf("parsed zero registered routes from the route files; the routes.go parser is broken")

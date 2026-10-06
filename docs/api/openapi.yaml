@@ -3584,7 +3584,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FileCreateResponse'
-          description: The file or directory was created.
+          description: OK
         "400":
           content:
             application/json:
@@ -3615,6 +3615,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The file or directory could not be created.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Create a file or directory.
       tags:
         - files
@@ -3634,7 +3640,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FileDeleteResponse'
-          description: The item was deleted.
+          description: OK
         "400":
           content:
             application/json:
@@ -3659,6 +3665,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The item could not be deleted.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Delete a file or directory (HTTP DELETE).
       tags:
         - files
@@ -3677,7 +3689,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FileDeleteResponse'
-          description: The item was deleted.
+          description: OK
         "400":
           content:
             application/json:
@@ -3702,6 +3714,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The item could not be deleted.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Delete a file or directory.
       tags:
         - files
@@ -3721,7 +3739,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DiagnosticsResponse'
-          description: The diagnostics for the file.
+          description: OK
         "400":
           content:
             application/json:
@@ -3740,6 +3758,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The route only accepts POST.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Validate Go source content.
       tags:
         - diagnostics
@@ -3856,7 +3880,7 @@ paths:
               schema:
                 format: binary
                 type: string
-          description: The file's content, with a detected MIME type.
+          description: OK
         "304":
           description: Not modified; the client's copy is current.
         "400":
@@ -3895,6 +3919,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The file could not be read.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Read a file's contents.
       tags:
         - files
@@ -3926,7 +3956,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FileWriteResponse'
-          description: The file was written.
+          description: OK
         "400":
           content:
             application/json:
@@ -3957,6 +3987,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The file could not be written.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Write a file's contents.
       tags:
         - files
@@ -3976,7 +4012,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FileCheckModifiedResponse'
-          description: The files that changed on disk.
+          description: OK
         "400":
           content:
             application/json:
@@ -3989,6 +4025,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The route only accepts POST.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Report files that changed on disk.
       tags:
         - files
@@ -4008,7 +4050,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FileConsentResponse'
-          description: The consent token and its expiry.
+          description: OK
         "400":
           content:
             application/json:
@@ -4027,6 +4069,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The consent token could not be created.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Issue a file-consent token for an external path.
       tags:
         - files
@@ -4060,7 +4108,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FilesListResponse'
-          description: The directory listing with git status.
+          description: OK
         "400":
           content:
             application/json:
@@ -4085,6 +4133,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The directory could not be read.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: List a directory with git status.
       tags:
         - files
@@ -4098,7 +4152,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PrettierConfig'
-          description: The merged Prettier configuration (may be empty).
+          description: OK
         "400":
           content:
             application/json:
@@ -4111,6 +4165,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The route only accepts GET.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Discover the workspace's Prettier configuration.
       tags:
         - files
@@ -5130,13 +5190,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LSPStatusResponse'
-          description: The LSP server status.
+          description: OK
         "405":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The route only accepts GET.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Report available and active LSP servers.
       tags:
         - terminal
@@ -5500,7 +5566,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FileRenameResponse'
-          description: The item was renamed.
+          description: OK
         "400":
           content:
             application/json:
@@ -5537,6 +5603,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The rename failed.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Rename or move a file or directory.
       tags:
         - files
@@ -5602,7 +5674,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SearchResponse'
-          description: The matches, grouped by file.
+          description: OK
         "400":
           content:
             application/json:
@@ -5627,6 +5699,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The search failed (for example an invalid regex).
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Search for matches across workspace files.
       tags:
         - search
@@ -5646,7 +5724,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReplaceResponse'
-          description: The changes applied (or previewed).
+          description: OK
         "400":
           content:
             application/json:
@@ -5665,6 +5743,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The replacement failed.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Search and replace across files.
       tags:
         - search
@@ -5684,7 +5768,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SemanticResponse'
-          description: The semantic result for the requested method.
+          description: OK
         "400":
           content:
             application/json:
@@ -5703,6 +5787,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The route only accepts POST.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Run a semantic analysis method on a file.
       tags:
         - diagnostics
@@ -6117,7 +6207,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ImageUploadResponse'
-          description: The image was saved.
+          description: OK
         "400":
           content:
             application/json:
@@ -6136,6 +6226,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The image could not be saved.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Upload an image for use in a chat.
       tags:
         - files

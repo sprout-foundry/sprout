@@ -317,4 +317,7 @@ func registerHumaOperations(api huma.API, ws *ReactWebServer) {
 		Description: "Submits per-part accept/reject choices for a pending shell approval at the /api/shell-approvals/{id}/decision shape, unblocking the agent's shell-approval broker.",
 		Tags:        []string{"conversation/query"},
 	}, ws.shellApprovalDecisionHumaHandler)
+
+	// ---- files family ----------------
+	registerFilesHumaOperations(api, ws)
 }

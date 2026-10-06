@@ -192,6 +192,12 @@ type Runner struct {
 	// to override the default. SuiteModels is the single resolution
 	// point.
 	Models []ModelSpec
+	// Timeout is the per-run wall-clock limit: a run whose turn exceeds
+	// it is stopped through the agent's real interrupt (TriggerInterrupt,
+	// the CLI's Ctrl+C mechanism) and recorded as failed, wrapping
+	// ErrRunTimeout in Run.Err — never Passed. 0 (or negative) →
+	// defaultTaskTimeout (10m). Each run carries its own timer.
+	Timeout time.Duration
 }
 
 // RunTask runs task's request with one model (spec) RunsPerTask times —
@@ -215,12 +221,13 @@ type Runner struct {
 //     (nil task or empty request), the runner is nil, or WorkDir cannot
 //     be created.
 //
-// Cancellation is honored between runs. A cancellation that lands
-// mid-turn does not stop the in-flight turn: the agent's turn entry point
-// offers no synchronous mid-turn cancel, and TriggerInterrupt from here
-// would race the turn's own unwinding (a future CLI entry point, 154.5,
-// can wire it with the CLI's interrupt dance). The loop stops before the
-// next run.
+// Cancellation is honored between runs, the per-run timeout mid-turn: a
+// run whose turn exceeds Runner.Timeout is stopped through the agent's
+// real interrupt (TriggerInterrupt, the CLI's Ctrl+C mechanism) and
+// recorded as a failed run wrapping ErrRunTimeout — the loop moves on. A
+// ctx cancellation that lands mid-turn does not stop the in-flight turn
+// (it cannot reach a turn that is already running); the loop stops before
+// the next run.
 func (r *Runner) RunTask(ctx context.Context, task *Task, spec ModelSpec) ([]Run, error) {
 	if r == nil {
 		return nil, errors.New("benchmark: nil runner")
@@ -372,10 +379,12 @@ func (r *Runner) runOnce(task *Task, spec ModelSpec, runNumber int) Run {
 	langBefore := langGuardStat(agent.GlobalLanguageGuardMetrics().Snapshot(), langModel)
 
 	// The headless turn (the same entry point the non-interactive CLI
-	// uses). The reply is never read for scoring — pass/fail comes only
+	// uses) under the runner's per-run timeout: a turn that exceeds it is
+	// stopped through the agent's real interrupt and recorded as a failed
+	// run. The reply is never read for scoring — pass/fail comes only
 	// from the verification result the turn-end hook stored on the agent
 	// (SP-154 §154a/§154b).
-	_, turnErr := ag.ProcessQueryWithContinuityAs(agent.QuerySourceCLI, task.Request)
+	turnErr := r.runTurnWithTimeout(ag, task, runNumber)
 	res := ag.LastVerificationResult()
 	run.Result = res
 	run.Passed = res != nil && res.Passed()

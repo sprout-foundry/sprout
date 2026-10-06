@@ -354,7 +354,9 @@ func (s *TerminalSubscriberState) HandleProgressEvent(evtType string, data map[s
 // terminal must show the corrected text in place of the prose it already
 // printed. The replacement lands on stdout as an external notice — the
 // streaming turn's prose is already on the screen above it, so a "replaced"
-// marker keeps the two texts distinguishable.
+// marker keeps the two texts distinguishable. A dim hint line follows,
+// pointing at /original — the held original text stays in the session and
+// the notice alone never carries it.
 func (s *TerminalSubscriberState) HandleLanguageGuardReplacementEvent(data map[string]interface{}, indicator *console.ActivityIndicator, footer *console.StatusFooter) {
 	replacement, _ := data["replacement"].(string)
 	if replacement == "" {
@@ -365,6 +367,8 @@ func (s *TerminalSubscriberState) HandleLanguageGuardReplacementEvent(data map[s
 	s.flushExternalWrite()
 	console.PrintExternal(console.WrapHanging(
 		console.GlyphInfo.Prefix(), replacement, console.StdoutColumns()))
+	console.PrintExternal(console.WrapHanging(
+		console.GlyphDim.Prefix(), "Original text available with /original.", console.StdoutColumns()))
 	s.run = nil
 	footer.Refresh()
 }

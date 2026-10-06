@@ -17,6 +17,23 @@ the end, without checkboxes.
 
 ---
 
+## Automation reliability
+
+- [ ] **auto.1** Loop-mode ticking fixes. The TODO workflows now run in the
+      existing `loop` mode (`automate/workflow.json` `loop` block,
+      `automate/workflow_gate.md`, `automate/item_rules.md`). Two runtime
+      gaps remain in `pkg/workflow`:
+      (a) `markTodoDone` (`loop_gate.go`) returns an error when the item line
+      is already `[x]`; treat an already-ticked line as success.
+      (b) The loop ticks an item whenever the agent finishes and the build
+      passes. Recognize a final reply line `INCOMPLETE: …` or `BLOCKED: …`
+      (see `automate/item_rules.md` step 7) and leave the item `[ ]` instead
+      of ticking it, recording the reason in the loop events; make sure an
+      item left unticked this way is not retried forever in the same run.
+      Tests: an already-ticked line does not error; an `INCOMPLETE` reply
+      leaves the item unchecked and the loop moves on; a `BLOCKED` item is
+      skipped for the rest of the run.
+
 ## Review fixes — correctness and spec promises
 Found in the code review of the automated work. Fix these before new feature
 items, in order. Each fix adds a test that tries to break the rule it
@@ -90,9 +107,17 @@ protects.
       with the regenerated text (CLI and web UI) instead of relying on the
       length heuristic; show the notice only for the final (no-tool-call)
       response, not mid-turn preambles. Spec: SP-152 acceptance.
-- [ ] **fix.11** "View original": render the held original in the web UI and
+- [x] **fix.11** "View original": render the held original in the web UI and
       offer it in the CLI, or remove the claim from the notice text.
       Spec: SP-152 §152b.
+      Fixed: the notice's promise is now real on both surfaces. The web UI
+      renders a collapsed "Original reply" disclosure under a guarded
+      assistant message (`MessageItem`, fed by the existing
+      `languageGuardOriginal` the WS handler stores); the CLI gains
+      `/original` (alias `orig`, `pkg/agent_commands/original.go`) reading
+      the newest held payload via the exported
+      `agent.LastLanguageGuardOriginal`, and the terminal replacement
+      notice now points at it. Pinned by Go command/CLI tests and vitest.
 - [ ] **fix.12** Cap total repair rounds per turn (not only per check key),
       so alternating failures or new interaction IDs cannot loop.
       Spec: SP-149.

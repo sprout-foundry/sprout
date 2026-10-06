@@ -22,3 +22,26 @@
   color: var(--text-tertiary);
   font-size: 12px;
 }
+
+/* "View original" for a reply the language guard replaced: a compact
+ * collapsible under the message content, quieter than the message itself. */
+.language-guard-original {
+  margin-top: var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg-secondary);
+  box-shadow: none;
+}
+
+.language-guard-original > .collapsible__summary {
+  padding: var(--space-2) var(--space-3);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.language-guard-original-content {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}

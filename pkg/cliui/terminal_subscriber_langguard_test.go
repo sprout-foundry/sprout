@@ -47,3 +47,40 @@ func TestHandleLanguageGuardReplacementEvent_RendersReplacement(t *testing.T) {
 		t.Errorf("stdout must not show the switched (original) reply; got %q", stdout)
 	}
 }
+
+// TestHandleLanguageGuardReplacementEvent_OriginalHint pins that the
+// rendered replacement is followed by a pointer to /original (so the
+// "view original" promise in the notice is actionable in the terminal),
+// while the switched original text itself is still NOT printed — the
+// handler renders the replacement, never the payload it was given.
+func TestHandleLanguageGuardReplacementEvent_OriginalHint(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	state := NewTerminalSubscriberState(nil, nil)
+	indicator := console.NewActivityIndicator(&bytes.Buffer{})
+	footer := console.NewStatusFooter(&bytes.Buffer{}, nil)
+
+	out := captureStdout(t, func() {
+		state.HandleLanguageGuardReplacementEvent(map[string]interface{}{
+			"replacement": "La respuesta llegó en un idioma diferente. Puedes ver el texto original.",
+			"original":    "The build succeeded after applying the patch.",
+			"reason":      "mid_stream_switch",
+		}, indicator, footer)
+	})
+
+	if !strings.Contains(out, "La respuesta llegó en un idioma diferente") {
+		t.Errorf("stdout missing the replacement text; got %q", out)
+	}
+	if !strings.Contains(out, "/original") {
+		t.Errorf("stdout missing the /original hint; got %q", out)
+	}
+	if strings.Contains(out, "The build succeeded") {
+		t.Errorf("stdout must not show the original text itself; got %q", out)
+	}
+	// Same terminal-state cleanup contract as the render test.
+	if state.run != nil {
+		t.Error("rendered replacement must break the collapse run (s.run = nil)")
+	}
+	if state.thinkingActive {
+		t.Error("rendered replacement must clear the thinking flag")
+	}
+}

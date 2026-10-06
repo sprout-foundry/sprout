@@ -157,6 +157,24 @@ const langGuardOriginalMetaKey = "language_guard_original"
 // duplicate replacement event).
 const langGuardRepairedMetaKey = "language_guard_repaired"
 
+// LastLanguageGuardOriginal returns the most recent "view original" payload
+// the language guard stored (langGuardOriginalMetaKey on an assistant
+// message), scanning the conversation from the end. It returns "" when no
+// message carries one. Exported so the CLI's /original command reads the
+// same key the guard writes — the string literal lives here and in the
+// write sites above, nowhere else.
+func LastLanguageGuardOriginal(messages []api.Message) string {
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role != "assistant" {
+			continue
+		}
+		if original := messages[i].Meta[langGuardOriginalMetaKey]; original != "" {
+			return original
+		}
+	}
+	return ""
+}
+
 // applyLanguageGuard runs the turn's final assistant message through the
 // final-message guard (§152b) and, on a mismatch outcome, replaces the
 // last assistant message in state with the display text. It returns the

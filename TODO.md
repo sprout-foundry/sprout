@@ -642,9 +642,13 @@ needed whatever the integration work does. Spec context: SP-160 §160e.
       gate in `BuildAndDeploy`; an unconfirmed production request returns
       `ErrProductionNeedsConfirmation` before any build or upload, while
       preview proceeds automatically. Pinned by Go tests.
-- [ ] **156.6** CLI: `sprout deploy`, `deploy status`, `deploy history`,
+- [x] **156.6** CLI: `sprout deploy`, `deploy status`, `deploy history`,
       `deploy rollback <id>` over the fake adapter. Tests. Spec: SP-156
       §156c.
+      Fixed: `cmd/deploy.go` registers the command + subcommands, resolves
+      `.sprout/deploy.json`, and drives `deploy.Deployer.BuildAndDeploy`
+      against a persisted fake target; `--production` is gated on `--yes`.
+      Verified end to end and pinned by Go tests.
 - [ ] **156.7** Agent tools `deploy_status` and `deploy` with the
       verification and confirmation gates; deploy outcomes emit progress
       events (SP-151). Tests. Spec: SP-156 §156c.

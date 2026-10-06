@@ -53,41 +53,71 @@ checkboxes.
 - [ ] **contract.6** Document the git family, write endpoints (commit,
       stage, branch create/switch, push/pull and other mutating routes).
       Spec: SP-160 §160c.
-- [ ] **contract.7** Document settings and configuration: `/api/settings*`,
-      `/api/providers*`, `/api/onboarding*`, `/api/config`, `/api/hotkeys*`,
-      `/api/skills*`, `/api/local-llm*`, `/api/password`. Spec: SP-160 §160c.
-- [ ] **contract.8** Document the remaining families: `/api/workspace*`,
+- [ ] **contract.7** Adopt Huma: add `github.com/danielgtaylor/huma/v2`
+      (v2.39.1, the version `../msg/server` uses) with the `humago` adapter
+      mounted on the existing `ServeMux` in `pkg/webui/routes.go`, so Huma
+      operations and plain handlers coexist. Add `cmd/genapi` (modelled on
+      `../msg/server/cmd/genapi/main.go`) that writes `docs/api/openapi.yaml`
+      from the registered operations; a Go test fails when the committed
+      file is stale. Prove it by migrating one small family (`/api/stats`,
+      `/api/config`). The hand-written schemas already in `openapi.yaml`
+      (contract.3-6) are the reference types for the migrations below; the
+      file becomes generated output once every family is migrated.
+      Spec: SP-160 §160c.
+- [ ] **contract.8** Migrate the conversation family (`/api/query*`,
+      `/api/chat-sessions*`, `/api/sessions*`, `/api/subagent*`,
+      `/api/edits*`, `/api/shell-approvals*`, `/api/completion`) to Huma
+      operations with typed input/output, no behavior change (existing
+      handler tests keep passing). Streaming responses use Huma's SSE
+      support where it fits; otherwise they stay plain handlers listed in
+      `docs/api/undocumented.txt` with a reason. Spec: SP-160 §160c.
+- [ ] **contract.9** Migrate the files family (`/api/files`, `/api/file*`,
+      `/api/search*`, `/api/create`, `/api/delete`, `/api/rename`,
+      `/api/upload`, `/api/diagnostics`, `/api/lsp*`, `/api/semantic`) to
+      Huma, no behavior change. Spec: SP-160 §160c.
+- [ ] **contract.10** Migrate the git family (`/api/git/*`, read and write)
+      to Huma, no behavior change. Spec: SP-160 §160c.
+- [ ] **contract.11** Migrate settings and configuration (`/api/settings*`,
+      `/api/providers*`, `/api/onboarding*`, `/api/config`,
+      `/api/hotkeys*`, `/api/skills*`, `/api/local-llm*`, `/api/password`)
+      to Huma, no behavior change. Spec: SP-160 §160c.
+- [ ] **contract.12** Migrate the remaining families (`/api/workspace*`,
       `/api/instances*`, `/api/terminal*`, `/api/txn*`, `/api/sync*`,
-      `/api/command*`, `/api/proxy*`, `/api/stats`, `/api/ws-metrics`,
+      `/api/command*`, `/api/proxy*`, `/api/ws-metrics`,
       `/api/support-bundle`, `/api/open-in-file-browser`,
-      `/api/computer-use`, `/api/design`, `/api/starters*`. When done,
-      `undocumented.txt` lists only routes deliberately kept internal, each
-      with a one-line reason. Spec: SP-160 §160c.
-- [ ] **contract.9** Event schema: `docs/api/events.schema.json` (JSON
+      `/api/computer-use`, `/api/design`, `/api/starters*`) to Huma. When
+      done, `openapi.yaml` is fully generated (delete the hand-written
+      parts), and `undocumented.txt` lists only WebSocket, streaming and
+      deliberately internal routes, each with a reason; the route-coverage
+      test (contract.2) checks that every registered route is a Huma
+      operation or on that list. Spec: SP-160 §160c.
+- [ ] **contract.13** Event schema: `docs/api/events.schema.json` (JSON
       Schema) generated from the `@sprout/events` types
       (`packages/events/src/types.ts`) by a script in `packages/events`; a Go
       test marshals representative Go event payloads and validates them
       against the schema, so Go and TypeScript cannot drift.
       Spec: SP-160 §160c.
-- [ ] **contract.10** Conformance suite package (`pkg/apiconformance`):
-      given a base URL, it checks each documented endpoint that has a safe
-      read-only probe (status code and response shape validated against
-      `openapi.yaml`), and reports per family. Mutating endpoints are
-      checked only against an explicitly disposable workspace. Pick a
-      maintained, permissively licensed OpenAPI validator and record the
-      choice in the package doc. Spec: SP-160 §160c.
-- [ ] **contract.11** Run the conformance suite against the local daemon in
-      a bounded Go test (in-process server on a temp workspace, no
-      browsers, no containers), and fix or document every failure it
-      finds. Spec: SP-160 §160c.
-- [ ] **contract.12** Command for hosts: `sprout api conformance
+- [ ] **contract.14** Conformance suite package (`pkg/apiconformance`):
+      given a base URL, it checks each operation in the generated
+      `openapi.yaml` that has a safe read-only probe (status code and
+      response shape), and reports per family. Mutating endpoints are
+      checked only against an explicitly disposable workspace. Use a
+      maintained, permissively licensed validator (Huma's own schema
+      tooling if it fits) and record the choice in the package doc.
+      Spec: SP-160 §160c.
+- [ ] **contract.15** Run the conformance suite against the local daemon
+      in a bounded Go test (in-process server on a temp workspace, no
+      browsers, no containers), and fix or document every failure.
+      Spec: SP-160 §160c.
+- [ ] **contract.16** Command for hosts: `sprout api conformance
       --base-url <url> [--families …]` runs the suite against any
-      implementation and exits non-zero on failure; usage documented in
+      implementation and exits non-zero on failure; usage in
       `docs/api/README.md` (how a host runs it in CI). Spec: SP-160 §160c.
-- [ ] **contract.13** Contract version negotiation: `/api/bootstrap`
-      returns `contractVersion` (from `openapi.yaml`); the web UI refuses to
-      start on an incompatible major version with a clear message, and
-      warns on a newer minor. Tests on both sides. Spec: SP-160 §160c.
+- [ ] **contract.17** Contract version negotiation: `/api/bootstrap`
+      returns `contractVersion` (from the generated `openapi.yaml`); the web
+      UI refuses to start on an incompatible major version with a clear
+      message, and warns on a newer minor. Tests on both sides.
+      Spec: SP-160 §160c.
 
 ## Not automatable
 

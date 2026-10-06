@@ -18,14 +18,43 @@
  * request over postMessage, with a 30s timeout counting as decline. Hosts
  * that don't answer keep the default-safe behavior (nothing runs).
  */
-import { setActiveRepoURL } from '../../services/activeRepo';
-import { installEscalationBridge, type ConsentDecision } from '../../services/agentEscalation';
+import { setActiveRepoURL } from './standaloneRepo';
+import {
+  getEscalationPolicy,
+  installEscalationBridge,
+  setEscalationPolicy,
+  type ConsentDecision,
+} from '../../services/agentEscalation';
 import { configureBrowserGit } from '../../services/browserGit';
-import { trackFileWrite } from '../../services/cloudWasmHandlers';
+import { trackFileWrite } from '../../services/vfsFiles';
+import { isFromTrustedParent, postTargetOrigin } from './standaloneOrigin';
 import type { WasmShell } from '../../services/wasmShell';
 
 /** Consent asks the host and time out rather than hanging the agent loop. */
 const CONSENT_TIMEOUT_MS = 30_000;
+
+/**
+ * Host policy, from the page URL (same pattern as ?repo=):
+ *   ?escalation=never   — read-only embeds: no commands run remotely
+ *   ?escalation=always  — trusted consoles: skip the consent round-trip
+ *   ?consentTimeout=<ms> — hosts with their own slow approval UI
+ * The user's localStorage policy (set through the full app or a prior
+ * 'always' answer) still wins — these only set the DEFAULT the first
+ * time, before any user choice exists.
+ */
+function hostEscalationDefaults(): { policy: 'ask' | 'always' | 'never' | null; consentTimeoutMs: number | null } {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const escalation = params.get('escalation')?.trim();
+    const timeout = Number(params.get('consentTimeout') ?? '');
+    return {
+      policy: escalation === 'never' || escalation === 'always' ? escalation : null,
+      consentTimeoutMs: Number.isFinite(timeout) && timeout >= 1000 ? timeout : null,
+    };
+  } catch {
+    return { policy: null, consentTimeoutMs: null };
+  }
+}
 
 export interface StandaloneEscalationBoot {
   /** The repo URL escalation will resolve workspaces against ('' when none). */
@@ -55,6 +84,14 @@ export function repoURLFromLocation(): string {
  */
 export function bootStandaloneEscalation(shell: WasmShell): StandaloneEscalationBoot {
   const repoURL = repoURLFromLocation();
+  const hostDefaults = hostEscalationDefaults();
+
+  // Host policy only seeds the DEFAULT — an existing user choice (set via
+  // the full app or a prior 'always' answer) wins.
+  if (hostDefaults.policy && getEscalationPolicy() === 'ask') {
+    setEscalationPolicy(hostDefaults.policy);
+  }
+  const consentTimeoutMs = hostDefaults.consentTimeoutMs ?? CONSENT_TIMEOUT_MS;
 
   // 1. The VFS bridge: browser-git (clone/push/commit UI paths) and the txn
   //    push manifest both read the visitor's files through here.
@@ -62,7 +99,7 @@ export function bootStandaloneEscalation(shell: WasmShell): StandaloneEscalation
     name: 'Browser IDE',
     email: 'browser-ide@sprout.dev',
     readVfsFiles: async () => {
-      const { listAllVfsFiles } = await import('../../services/cloudWasmHandlers');
+      const { listAllVfsFiles } = await import('../../services/vfsFiles');
       return listAllVfsFiles(shell);
     },
     writeVfsFiles: async (files) => {
@@ -94,17 +131,15 @@ export function bootStandaloneEscalation(shell: WasmShell): StandaloneEscalation
           window.removeEventListener('message', onMessage);
           resolve(decision);
         };
-        const timer = window.setTimeout(() => done('deny'), CONSENT_TIMEOUT_MS);
+        const timer = window.setTimeout(() => done('deny'), consentTimeoutMs);
         const onMessage = (ev: MessageEvent) => {
+          if (!isFromTrustedParent(ev)) return;
           const data = ev.data;
           if (!data || data.source !== 'sprout-host' || data.type !== 'confirmResult') return;
           done(data.decision === 'always' ? 'always' : data.decision === 'once' ? 'once' : 'deny');
         };
         window.addEventListener('message', onMessage);
-        window.parent?.postMessage(
-          { source: 'sprout-editor', type: 'confirm', command },
-          window.location.origin === 'null' ? '*' : window.location.origin,
-        );
+        window.parent?.postMessage({ source: 'sprout-editor', type: 'confirm', command }, postTargetOrigin());
       }),
   });
 

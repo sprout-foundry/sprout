@@ -162,6 +162,7 @@ export function EscalationListener() {
               result: outcome.result,
               pulledFiles: outcome.pulledFiles,
               skippedFiles: outcome.skippedFiles,
+              pushedFiles: outcome.pushedFiles,
               warning: outcome.warning,
             });
           }
@@ -328,6 +329,11 @@ export function EscalationListener() {
                     {txn.result.stdout ? <pre className="escalation-toast-txn-pre">{txn.result.stdout}</pre> : null}
                     {txn.result.stderr ? (
                       <pre className="escalation-toast-txn-pre is-stderr">{txn.result.stderr}</pre>
+                    ) : null}
+                    {txn.pushedFiles === 0 ? (
+                      <p className="escalation-toast-task-error" data-testid="escalation-toast-txn-empty-push">
+                        0 files were pushed — the container ran WITHOUT your browser edits (no git state in this page).
+                      </p>
                     ) : null}
                     <p className="escalation-toast-task-status" data-testid="escalation-toast-txn-pulled">
                       {txn.pulledFiles ?? 0} file{txn.pulledFiles === 1 ? '' : 's'} pulled back

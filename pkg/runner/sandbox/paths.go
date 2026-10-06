@@ -40,20 +40,6 @@ func canonicalPath(p string) (string, error) {
 	}
 }
 
-// pathVariants returns the canonical path plus the cleaned absolute path
-// when they differ, so a deny rule still holds if a symlink is swapped.
-func pathVariants(p string) ([]string, error) {
-	c, err := canonicalPath(p)
-	if err != nil {
-		return nil, err
-	}
-	abs, _ := filepath.Abs(p)
-	if abs != "" && abs != c {
-		return []string{c, abs}, nil
-	}
-	return []string{c}, nil
-}
-
 func exists(p string) bool {
 	_, err := os.Lstat(p)
 	return err == nil

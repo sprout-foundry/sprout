@@ -355,6 +355,33 @@ func TestLanguageGuardMismatchRecordedPerModel(t *testing.T) {
 	}
 }
 
+// TestLastLanguageGuardOriginal pins the helper the CLI's /original command
+// reads through: it returns the newest assistant message's held original and
+// "" when no message carries one.
+func TestLastLanguageGuardOriginal(t *testing.T) {
+	older := api.Message{Role: "assistant", Content: "notice"}
+	older.SetMeta(langGuardOriginalMetaKey, "older original")
+	newest := api.Message{Role: "assistant", Content: "notice"}
+	newest.SetMeta(langGuardOriginalMetaKey, "newest original")
+
+	msgs := []api.Message{
+		{Role: "user", Content: "hola"},
+		older,
+		{Role: "assistant", Content: "a normal reply"},
+		{Role: "user", Content: "otra pregunta"},
+		newest,
+	}
+	if got := LastLanguageGuardOriginal(msgs); got != "newest original" {
+		t.Errorf("LastLanguageGuardOriginal() = %q, want the newest payload", got)
+	}
+	if got := LastLanguageGuardOriginal(nil); got != "" {
+		t.Errorf("LastLanguageGuardOriginal(nil) = %q, want \"\"", got)
+	}
+	if got := LastLanguageGuardOriginal(msgs[:2]); got != "older original" {
+		t.Errorf("LastLanguageGuardOriginal() = %q, want the only payload", got)
+	}
+}
+
 // metricKeyFor maps an agent's model ID to the key the recorder buckets it
 // under (an empty model ID is recorded as "unknown").
 func metricKeyFor(ag *Agent) string {

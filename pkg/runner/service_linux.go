@@ -48,7 +48,7 @@ func InstallService() (string, error) {
 		return "", err
 	}
 	for _, args := range [][]string{{"--user", "daemon-reload"}, {"--user", "enable", "--now", systemdUnit}} {
-		if out, err := exec.Command("systemctl", args...).CombinedOutput(); err != nil {
+		if out, err := exec.Command("systemctl", args...).CombinedOutput(); err != nil { //nolint:gosec // G204: fixed systemctl subcommands for the runner's own unit
 			return "", fmt.Errorf("systemctl %s: %s", strings.Join(args, " "), out)
 		}
 	}

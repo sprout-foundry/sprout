@@ -32,7 +32,7 @@ func probeBwrap() Capability {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, path, "--ro-bind", "/", "/", "/bin/true").CombinedOutput()
+	out, err := exec.CommandContext(ctx, path, "--ro-bind", "/", "/", "/bin/true").CombinedOutput() //nolint:gosec // G204: probing the bwrap found on PATH
 	if err != nil {
 		c.Detail = fmt.Sprintf("bubblewrap cannot create a sandbox here (user namespaces may be disabled, or this is a container): %s", firstLine(out, err))
 		return c
@@ -52,7 +52,7 @@ func commandContext(ctx context.Context, p Policy, name string, args ...string) 
 	}
 	argv := append(bwArgs, "--", name)
 	argv = append(argv, args...)
-	return exec.CommandContext(ctx, bwrapPath, argv...), nil
+	return exec.CommandContext(ctx, bwrapPath, argv...), nil //nolint:gosec // G204: bwrap with generated args wrapping the caller's command
 }
 
 // bwrapArgs renders p as bubblewrap flags. Mount order matters: later

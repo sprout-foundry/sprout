@@ -79,6 +79,11 @@ func passingSnapshot(fp string) VerificationSnapshot {
 	return VerificationSnapshot{Passed: true, Fingerprint: fp}
 }
 
+// previewOK is the confirmation a preview deploy is given: preview deploys
+// run automatically and need none, so the shared tests pass the zero value to
+// prove the gate does not demand one. Production tests build their own.
+var previewOK = Confirmation{}
+
 // ---------------------------------------------------------------------------
 // Happy path
 // ---------------------------------------------------------------------------
@@ -97,7 +102,7 @@ func TestBuildAndDeploy_BuildsInWorkspaceThenUploads(t *testing.T) {
 
 	d := &Deployer{Target: target, Run: runner.run, Fingerprint: fp.fingerprint}
 
-	got, err := d.BuildAndDeploy(context.Background(), req, passingSnapshot("tree-at-verification"))
+	got, err := d.BuildAndDeploy(context.Background(), req, passingSnapshot("tree-at-verification"), previewOK)
 	require.NoError(t, err)
 
 	// The build ran once, in the workspace, with the manifest's command.
@@ -129,7 +134,7 @@ func TestBuildAndDeploy_FingerprintCheckedBeforeAndAfterBuild(t *testing.T) {
 	target := NewFake()
 
 	d := &Deployer{Target: target, Run: runner.run, Fingerprint: fp.fingerprint}
-	_, err := d.BuildAndDeploy(context.Background(), req, passingSnapshot("same"))
+	_, err := d.BuildAndDeploy(context.Background(), req, passingSnapshot("same"), previewOK)
 	require.NoError(t, err)
 
 	assert.Equal(t, 2, fp.calls, "fingerprint read before and after the build")
@@ -154,7 +159,7 @@ func TestBuildAndDeploy_TreeChangedSinceVerificationRefused(t *testing.T) {
 
 	d := &Deployer{Target: target, Run: runner.run, Fingerprint: fp.fingerprint}
 
-	_, err := d.BuildAndDeploy(context.Background(), buildReq(root), passingSnapshot("tree-at-verification"))
+	_, err := d.BuildAndDeploy(context.Background(), buildReq(root), passingSnapshot("tree-at-verification"), previewOK)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrTreeChanged)
 
@@ -174,7 +179,7 @@ func TestBuildAndDeploy_NoPassingVerificationRefused(t *testing.T) {
 	d := &Deployer{Target: target, Run: runner.run, Fingerprint: fp.fingerprint}
 
 	_, err := d.BuildAndDeploy(context.Background(), buildReq(root),
-		VerificationSnapshot{Passed: false, Fingerprint: "any"})
+		VerificationSnapshot{Passed: false, Fingerprint: "any"}, previewOK)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrNoPassingVerification)
 
@@ -199,7 +204,7 @@ func TestBuildAndDeploy_BuildFailureUploadsNothing(t *testing.T) {
 
 	d := &Deployer{Target: target, Run: runner.run, Fingerprint: fp.fingerprint}
 
-	_, err := d.BuildAndDeploy(context.Background(), buildReq(root), passingSnapshot("same"))
+	_, err := d.BuildAndDeploy(context.Background(), buildReq(root), passingSnapshot("same"), previewOK)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrBuildFailed)
 	assert.ErrorIs(t, err, buildErr, "the underlying build error is preserved")
@@ -225,7 +230,7 @@ func TestBuildAndDeploy_TreeChangedDuringBuildRefused(t *testing.T) {
 
 	d := &Deployer{Target: target, Run: runner.run, Fingerprint: fp.fingerprint}
 
-	_, err := d.BuildAndDeploy(context.Background(), buildReq(root), passingSnapshot("tree-at-verification"))
+	_, err := d.BuildAndDeploy(context.Background(), buildReq(root), passingSnapshot("tree-at-verification"), previewOK)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrTreeChanged)
 
@@ -248,7 +253,7 @@ func TestBuildAndDeploy_NoBuildCommandRefused(t *testing.T) {
 
 	req := buildReq(t.TempDir())
 	req.Command = "  "
-	_, err := d.BuildAndDeploy(context.Background(), req, passingSnapshot("same"))
+	_, err := d.BuildAndDeploy(context.Background(), req, passingSnapshot("same"), previewOK)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrNoBuildCommand)
 	assert.Zero(t, runner.calls)
@@ -261,7 +266,7 @@ func TestBuildAndDeploy_NoTargetRefused(t *testing.T) {
 	runner := &stubRunner{}
 	d := &Deployer{Run: runner.run, Fingerprint: (&stubFingerprint{values: []string{"same"}}).fingerprint}
 
-	_, err := d.BuildAndDeploy(context.Background(), buildReq(t.TempDir()), passingSnapshot("same"))
+	_, err := d.BuildAndDeploy(context.Background(), buildReq(t.TempDir()), passingSnapshot("same"), previewOK)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrNoDeployTarget)
 	assert.Zero(t, runner.calls)
@@ -277,7 +282,7 @@ func TestBuildAndDeploy_FingerprintErrorIsReported(t *testing.T) {
 	target := NewFake()
 	d := &Deployer{Target: target, Run: runner.run, Fingerprint: fp.fingerprint}
 
-	_, err := d.BuildAndDeploy(context.Background(), buildReq(t.TempDir()), passingSnapshot("same"))
+	_, err := d.BuildAndDeploy(context.Background(), buildReq(t.TempDir()), passingSnapshot("same"), previewOK)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, fpErr)
 	assert.Zero(t, runner.calls)
@@ -399,7 +404,7 @@ func TestBuildAndDeploy_BuildOutputDoesNotTripGate(t *testing.T) {
 	target := NewFake()
 	d := &Deployer{Target: target, Run: runner, Fingerprint: DefaultTreeFingerprint}
 
-	got, err := d.BuildAndDeploy(context.Background(), req, passingSnapshot(snap))
+	got, err := d.BuildAndDeploy(context.Background(), req, passingSnapshot(snap), previewOK)
 	require.NoError(t, err, "the build's own output is not a tree change")
 	assert.Equal(t, "web-app", got.Project)
 	require.Len(t, target.Calls(), 1, "the built output was uploaded")
@@ -426,7 +431,7 @@ func TestBuildAndDeploy_SourceChangedDuringBuildRefusedWithRealFingerprint(t *te
 	target := NewFake()
 	d := &Deployer{Target: target, Run: runner, Fingerprint: DefaultTreeFingerprint}
 
-	_, err = d.BuildAndDeploy(context.Background(), req, passingSnapshot(snap))
+	_, err = d.BuildAndDeploy(context.Background(), req, passingSnapshot(snap), previewOK)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrTreeChanged)
 	assert.Empty(t, target.Calls(), "nothing is uploaded when the source tree moved during the build")

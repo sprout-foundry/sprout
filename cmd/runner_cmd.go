@@ -39,6 +39,7 @@ var (
 	runnerName      string
 	runnerPublicURL string
 	runnerListen    string
+	runnerNoBrowser bool
 )
 
 func init() {
@@ -49,8 +50,9 @@ func init() {
 	}
 	linkCmd.Flags().StringVar(&runnerPlatform, "platform", "", "platform URL (default $SPROUT_PLATFORM_URL)")
 	linkCmd.Flags().StringVar(&runnerName, "name", "", "name shown on the platform (default: this machine's hostname)")
-	linkCmd.Flags().StringVar(&runnerPublicURL, "public-url", "", "HTTPS URL the platform reaches this runner at (e.g. a Tailscale Funnel)")
+	linkCmd.Flags().StringVar(&runnerPublicURL, "public-url", "", "HTTPS URL the platform reaches this runner at; omit to connect through the platform relay")
 	linkCmd.Flags().StringVar(&runnerListen, "listen", "", "address the runner listens on (default "+runner.DefaultListenAddr+")")
+	linkCmd.Flags().BoolVar(&runnerNoBrowser, "no-browser", false, "print the approval URL without opening a browser (SSH sessions, headless machines)")
 
 	runnerCmd.AddCommand(
 		linkCmd,
@@ -101,7 +103,9 @@ func runRunnerLink(cmd *cobra.Command, _ []string) error {
 	}
 	verify := firstNonEmpty(start.VerificationURIComplete, start.VerificationURI)
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "To link %q, approve it on the platform:\n\n  %s\n\nand check the code matches: %s\n\nWaiting for approval…\n", name, verify, start.UserCode)
-	runner.OpenURL(verify)
+	if !runnerNoBrowser {
+		runner.OpenURL(verify)
+	}
 
 	creds, err := pollLink(ctx, client, start)
 	if err != nil {
@@ -224,7 +228,7 @@ func runRunnerStatus(cmd *cobra.Command, _ []string) error {
 	case c.Weak:
 		_, _ = fmt.Fprint(out, " (weak isolation)")
 	}
-	_, _ = fmt.Fprintf(out, "\nListen:    %s\nPublic URL: %s\n", st.ListenAddr, firstNonEmpty(st.PublicURL, "(none — set with `link --public-url`)"))
+	_, _ = fmt.Fprintf(out, "\nListen:    %s\nPublic URL: %s\n", st.ListenAddr, firstNonEmpty(st.PublicURL, "(none — connects through the platform relay)"))
 	if st.Mode == runner.ModeContainer {
 		if err := runner.DockerAvailable(cmd.Context(), ""); err != nil {
 			_, _ = fmt.Fprintf(out, "Container: %v\n", err)

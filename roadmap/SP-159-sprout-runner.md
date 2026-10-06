@@ -1,6 +1,6 @@
 # SP-159 — `sprout runner`: Your Own Machine as the Browser Build's Runner
 
-> **Status (2026-10-05):** In progress — `sprout runner` link/start/status/mode/install, container/native/bare-metal launchers, host server and the macOS/Linux sandbox are implemented; relay and the browser host picker are next.
+> **Status (2026-10-05):** In progress — `sprout runner` link/start/status/mode/install, container/native/bare-metal launchers, host server and the macOS/Linux sandbox are implemented; the platform relay is implemented and verified end to end (txn calls); the browser host picker is in progress; preview over relay is next.
 > Platform counterpart: platform SP-BUILDER-14 (runner linking, protocol,
 > security fixes), building on SP-BUILDER-12 (runner-hosted workspaces) and
 > SP-BUILDER-13 (relay tunnels). Related: SP-158 (design loop in the browser
@@ -166,8 +166,9 @@ heartbeat; the platform stores it and the browser shows it.
 
 - [ ] `sprout runner link` on macOS and Linux pairs through the browser with
       no copied secrets; the key lands in the OS keyring.
-- [ ] A linked Mac behind NAT, with no public URL, serves the browser build's
-      escalations end to end over the relay.
+- [x] A linked Mac behind NAT, with no public URL, serves the browser build's
+      escalations end to end over the relay (verified live: platform txn
+      API → relay → native-mode workspace; teardown included).
 - [x] `native` and `bare-metal` serve a real workspace daemon end to end
       through the host server (`TestHostLauncherEndToEnd`, gated on
       `SPROUT_RUNNER_E2E_BIN`); `native` on macOS builds a Swift package

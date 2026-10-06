@@ -38,30 +38,18 @@ func (r *Runner) Run(ctx context.Context) error {
 	if r.Log == nil {
 		r.Log = slog.Default()
 	}
-	if r.State.PublicURL == "" {
-		return errors.New("no public URL configured: set one with `sprout runner link --public-url https://…` " +
-			"(a Tailscale Funnel or Cloudflare Tunnel URL); the platform relay that removes this step is not available yet")
-	}
 	r.running = make(map[string]*Workspace)
 	r.busy = make(map[string]*sync.Mutex)
 
-	ln, err := net.Listen("tcp", r.State.ListenAddr)
-	if err != nil {
-		return fmt.Errorf("listening on %s: %w", r.State.ListenAddr, err)
-	}
-	srv := &http.Server{Handler: r.Host.Handler(), ReadHeaderTimeout: 10 * time.Second}
-	go func() { //nolint:gosec // G118: shutdown starts after ctx is done, so it needs its own deadline
-		<-ctx.Done()
-		shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = srv.Shutdown(shutdown)
-	}()
-	go func() {
-		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			r.Log.Error("host server stopped", "err", err)
+	if r.relayed() {
+		go r.relayLoop(ctx)
+		r.Log.Info("runner online via platform relay", "mode", r.State.Mode, "sandbox", r.Sandbox)
+	} else {
+		if err := r.listen(ctx); err != nil {
+			return err
 		}
-	}()
-	r.Log.Info("runner online", "mode", r.State.Mode, "sandbox", r.Sandbox, "listen", r.State.ListenAddr, "public_url", r.State.PublicURL)
+		r.Log.Info("runner online", "mode", r.State.Mode, "sandbox", r.Sandbox, "listen", r.State.ListenAddr, "public_url", r.State.PublicURL)
+	}
 
 	r.heartbeat(ctx)
 	hb := time.NewTicker(heartbeatInterval)
@@ -93,6 +81,7 @@ func (r *Runner) heartbeat(ctx context.Context) {
 		Status: status, RunningTasks: n,
 		Mode: r.State.Mode, Sandbox: r.Sandbox, RunnerVersion: r.Version,
 		DirectURL: r.State.PublicURL,
+		Relayed:   r.relayed(),
 	})
 	if err != nil && ctx.Err() == nil {
 		r.Log.Warn("heartbeat failed", "err", err)
@@ -170,11 +159,15 @@ func (r *Runner) start(ctx context.Context, t WorkspaceTask, log *slog.Logger) {
 	r.mu.Unlock()
 	r.Host.Bind(t.WorkspaceID, ws.Port, t.TxnSecret)
 	result := WorkspaceResult{
-		WorkspaceID:   t.WorkspaceID,
-		ContainerID:   ws.Handle,
-		Port:          ws.Port,
-		ConnectionURL: strings.TrimRight(r.State.PublicURL, "/") + "/daemon/" + t.WorkspaceID,
-		Status:        "running",
+		WorkspaceID: t.WorkspaceID,
+		ContainerID: ws.Handle,
+		Port:        ws.Port,
+		Status:      "running",
+	}
+	if !r.relayed() {
+		// Relayed workspaces report no URL: the platform reaches them
+		// through this runner's tunnel.
+		result.ConnectionURL = strings.TrimRight(r.State.PublicURL, "/") + "/daemon/" + t.WorkspaceID
 	}
 	if err := r.Client.SubmitWorkspaceResult(ctx, result); err != nil {
 		// The platform never learned about it: don't leave it serving.
@@ -211,4 +204,29 @@ func (r *Runner) stopAll() {
 		r.Host.Unbind(id)
 		_ = r.Launcher.Stop(ctx, ws)
 	}
+}
+
+// relayed reports whether the platform reaches this runner through the
+// tunnel it dials (no public URL configured) rather than directly.
+func (r *Runner) relayed() bool { return r.State.PublicURL == "" }
+
+// listen serves the host server for direct mode.
+func (r *Runner) listen(ctx context.Context) error {
+	ln, err := net.Listen("tcp", r.State.ListenAddr)
+	if err != nil {
+		return fmt.Errorf("listening on %s: %w", r.State.ListenAddr, err)
+	}
+	srv := &http.Server{Handler: r.Host.Handler(), ReadHeaderTimeout: 10 * time.Second}
+	go func() { //nolint:gosec // G118: shutdown starts after ctx is done, so it needs its own deadline
+		<-ctx.Done()
+		shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(shutdown)
+	}()
+	go func() {
+		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			r.Log.Error("host server stopped", "err", err)
+		}
+	}()
+	return nil
 }

@@ -1,36 +1,56 @@
 /**
  * AgentEscalationBridge — cloud mode only. Installs the bridge the WASM agent
  * calls when one of its shell commands can't run in the browser, and asks the
- * user (per the escalation policy) before running it in the cloud workspace.
+ * user (per the escalation policy) before running it on one of their runners
+ * or in the cloud workspace.
  */
 
-import { Cloud } from 'lucide-react';
+import { Cloud, Server } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { isCloud } from '../config/mode';
-import { installEscalationBridge, type ConsentDecision } from '../services/agentEscalation';
+import { useRunHostChoice } from '../hooks/useRunHostChoice';
+import {
+  installEscalationBridge,
+  type ConsentAnswer,
+  type ConsentContext,
+  type ConsentDecision,
+} from '../services/agentEscalation';
 import { txnPhaseLabel } from '../services/cloudTxnEscalate';
+import { AUTO_HOST, getRememberedHost, hostDisplayName, type EscalationHost } from '../services/escalationHost';
+import { isRunnerSelectable, listRunners } from '../services/runners';
+import { RunHostPicker } from './RunHostPicker';
 import './ThemedDialog.css';
 import './AgentEscalationBridge.css';
 
 interface PendingConsent {
   command: string;
-  resolve: (decision: ConsentDecision) => void;
+  context?: ConsentContext;
+  resolve: (answer: ConsentAnswer) => void;
+}
+
+/** Whether a runner host is still on the user's account and able to take work. */
+async function runnerAvailable(host: EscalationHost): Promise<boolean> {
+  if (host.kind !== 'runner') return true;
+  const runner = (await listRunners()).find((r) => r.runner_id === host.runnerId);
+  return Boolean(runner && isRunnerSelectable(runner));
 }
 
 export function AgentEscalationBridge({ repoURL }: { repoURL?: string }) {
   const [pending, setPending] = useState<PendingConsent[]>([]);
-  const [progress, setProgress] = useState<{ command: string; phase: string } | null>(null);
+  const [progress, setProgress] = useState<{ command: string; phase: string; host: EscalationHost } | null>(null);
   const allowRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!isCloud) return undefined;
     return installEscalationBridge({
       repoURL,
-      requestConsent: (command) =>
-        new Promise<ConsentDecision>((resolve) => {
-          setPending((q) => [...q, { command, resolve }]);
+      requestConsent: (command, context) =>
+        new Promise<ConsentAnswer>((resolve) => {
+          setPending((q) => [...q, { command, context, resolve }]);
         }),
-      onPhase: (command, phase) => setProgress(phase === 'done' ? null : { command, phase }),
+      alwaysHost: () => getRememberedHost(repoURL) ?? AUTO_HOST,
+      isHostAvailable: runnerAvailable,
+      onPhase: (command, phase, host) => setProgress(phase === 'done' ? null : { command, phase, host }),
     });
   }, [repoURL]);
 
@@ -43,19 +63,26 @@ export function AgentEscalationBridge({ repoURL }: { repoURL?: string }) {
   }, [progress]);
 
   const current = pending[0];
+  const choice = useRunHostChoice(repoURL, current ?? null, current?.context?.unavailableRunnerId);
+  const { host } = choice;
 
   const answer = useCallback(
     (decision: ConsentDecision) => {
       if (!current) return;
-      current.resolve(decision);
+      current.resolve(decision === 'deny' ? { decision } : { decision, host });
       setPending((q) => q.slice(1));
     },
-    [current],
+    [current, host],
   );
+
+  // Focus the primary action once it is enabled (runners loaded).
+  const ready = choice.loaded;
+  useEffect(() => {
+    if (current && ready) allowRef.current?.focus();
+  }, [current, ready]);
 
   useEffect(() => {
     if (!current) return undefined;
-    allowRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
@@ -68,11 +95,15 @@ export function AgentEscalationBridge({ repoURL }: { repoURL?: string }) {
 
   if (!isCloud) return null;
 
+  const onRunner = host.kind === 'runner';
+  const HostIcon = onRunner ? Server : Cloud;
+
   return (
     <>
       {progress && !current && (
         <div className="agent-escalation-status" role="status">
-          <Cloud size={14} /> {txnPhaseLabel(progress.phase)}: <code>{progress.command}</code>
+          {progress.host.kind === 'runner' ? <Server size={14} /> : <Cloud size={14} />}{' '}
+          {txnPhaseLabel(progress.phase, progress.host)}: <code>{progress.command}</code>
         </div>
       )}
       {current && (
@@ -85,20 +116,28 @@ export function AgentEscalationBridge({ repoURL }: { repoURL?: string }) {
           <div className="security-approval-card">
             <div className="security-approval-header">
               <span className="security-approval-shield security-approval-shield--caution">
-                <Cloud size={18} />
+                <HostIcon size={18} />
               </span>
               <div className="security-approval-header-row">
                 <h2 id="agent-escalation-title" className="security-approval-title">
-                  Run this in your cloud workspace?
+                  {onRunner ? `Run this on ${hostDisplayName(host)}?` : 'Run this in your cloud workspace?'}
                 </h2>
               </div>
             </div>
             <div className="security-approval-body">
+              {current.context?.notice ? (
+                <p className="run-host-notice" role="alert" data-testid="run-host-notice">
+                  {current.context.notice} You can run it in the cloud instead.
+                </p>
+              ) : null}
               <div className="security-approval-reasoning">
-                The agent wants to run a command the in-browser shell can&apos;t. Your files are copied to your cloud
-                workspace, the command runs there, and any changes come back here. This uses workspace time from your
-                plan.
+                {onRunner
+                  ? `The agent wants to run a command the in-browser shell can't. Your files are copied to a workspace on ${hostDisplayName(host)}, the command runs there, and any changes come back here. Runs on your own runner don't use workspace time from your plan.`
+                  : "The agent wants to run a command the in-browser shell can't. Your files are copied to your cloud workspace, the command runs there, and any changes come back here. This uses workspace time from your plan."}
               </div>
+              {choice.runners.length > 0 ? (
+                <RunHostPicker runners={choice.runners} value={host} onChange={choice.setHost} />
+              ) : null}
               <div className="security-approval-command-wrapper">
                 <div className="security-approval-command-label">Command</div>
                 <pre className="security-approval-command-box">{current.command}</pre>
@@ -116,6 +155,7 @@ export function AgentEscalationBridge({ repoURL }: { repoURL?: string }) {
                 type="button"
                 className="security-approval-btn security-approval-btn--allow"
                 onClick={() => answer('always')}
+                disabled={!ready}
               >
                 Always allow
               </button>
@@ -124,6 +164,7 @@ export function AgentEscalationBridge({ repoURL }: { repoURL?: string }) {
                 type="button"
                 className="security-approval-btn security-approval-btn--allow"
                 onClick={() => answer('once')}
+                disabled={!ready}
               >
                 Run once
               </button>

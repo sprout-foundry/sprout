@@ -53,8 +53,11 @@ type Heartbeat struct {
 	Sandbox       string   `json:"sandbox"`
 	RunnerVersion string   `json:"runner_version"`
 	Toolchains    []string `json:"toolchains,omitempty"`
-	// DirectURL is where the platform reaches the host server now.
+	// DirectURL is where the platform reaches the host server now; empty
+	// for a relayed runner.
 	DirectURL string `json:"direct_url,omitempty"`
+	// Relayed reports that the runner serves the platform over its tunnel.
+	Relayed bool `json:"relayed,omitempty"`
 }
 
 // WorkspaceTask is a start/stop/destroy instruction for one workspace.

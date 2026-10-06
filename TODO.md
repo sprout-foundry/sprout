@@ -43,7 +43,7 @@ checkboxes.
       `/api/edits*`, `/api/shell-approvals*`, `/api/completion`. Schemas
       come from the handlers' request/response types; remove these routes
       from `undocumented.txt`. Spec: SP-160 §160c.
-- [ ] **contract.4** Document the files family: `/api/files`, `/api/file*`,
+- [x] **contract.4** Document the files family: `/api/files`, `/api/file*`,
       `/api/search*`, `/api/create`, `/api/delete`, `/api/rename`,
       `/api/upload`, `/api/diagnostics`, `/api/lsp*`, `/api/semantic`.
       Spec: SP-160 §160c.

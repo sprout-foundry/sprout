@@ -1338,6 +1338,900 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /api/browse:
+    get:
+      tags: [files]
+      summary: List a directory's contents.
+      description: >-
+        Lists the files and directories inside a path, always skipping the .git
+        directory. When `path` is omitted the workspace root is listed. Set
+        `ignore=true` to also filter out entries matched by the workspace's
+        gitignore rules.
+      operationId: browse
+      parameters:
+        - name: path
+          in: query
+          required: false
+          description: The directory to list, relative to the workspace root; defaults to the root.
+          schema:
+            type: string
+        - name: ignore
+          in: query
+          required: false
+          description: Filter out entries matched by gitignore rules when "true".
+          schema:
+            type: string
+            default: "false"
+      responses:
+        "200":
+          description: The directory listing.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrowseResponse"
+        "400":
+          description: The directory path is not valid.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: The directory is outside the workspace, or the home-workspace gate was not consented.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts GET.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The directory could not be read.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/create:
+    post:
+      tags: [files]
+      summary: Create a file or directory.
+      description: >-
+        Creates a file or a directory at `path` (or `directory`, which is an
+        interchangeable alias). A trailing slash on the path, or a non-empty
+        `directory`, makes it a directory. Fails with 409 when the target
+        already exists.
+      operationId: createFile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FileCreateRequest"
+      responses:
+        "200":
+          description: The file or directory was created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileCreateResponse"
+        "400":
+          description: Malformed body, neither path nor directory given, or an invalid path.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: The path is outside the workspace.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts POST.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: The target path already exists.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The file or directory could not be created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/delete:
+    post:
+      tags: [files]
+      summary: Delete a file or directory.
+      description: >-
+        Recursively deletes the file or directory at `path`. Both POST and
+        DELETE are accepted; POST is the browser-friendly form.
+      operationId: deleteItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FileDeleteRequest"
+      responses:
+        "200":
+          description: The item was deleted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileDeleteResponse"
+        "400":
+          description: Malformed body, missing path, or an invalid path.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: The path is outside the workspace.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts POST or DELETE.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The item could not be deleted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      tags: [files]
+      summary: Delete a file or directory (HTTP DELETE).
+      description: The HTTP-DELETE form of the delete operation; same semantics as POST.
+      operationId: deleteItemHttp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FileDeleteRequest"
+      responses:
+        "200":
+          description: The item was deleted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileDeleteResponse"
+        "400":
+          description: Malformed body, missing path, or an invalid path.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: The path is outside the workspace.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts POST or DELETE.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The item could not be deleted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/file:
+    get:
+      tags: [files]
+      summary: Read a file's contents.
+      description: >-
+        Reads and returns the raw content of the file at the `path` query
+        parameter, with a detected Content-Type. Serves a conditional 304 when
+        the `If-Modified-Since` header matches the file's mtime. External paths
+        (outside the workspace and app-config directory) require an
+        unconsumed file-consent token.
+      operationId: fileRead
+      parameters:
+        - name: path
+          in: query
+          required: true
+          description: The file to read, relative to the workspace root.
+          schema:
+            type: string
+        - name: consent_token
+          in: query
+          required: false
+          description: A file-consent token for an external (non-workspace) path.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The file's content, with a detected MIME type.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "304":
+          description: Not modified; the client's copy is current.
+        "400":
+          description: Missing path, an invalid path, or the path is a directory.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: The external path requires an unconsumed file-consent token.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: The file does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          description: The file is too large to open in the editor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileTooLargeResponse"
+        "405":
+          description: The route only accepts GET or POST.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The file could not be read.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      tags: [files]
+      summary: Write a file's contents.
+      description: >-
+        Writes `content` to the file at the `path` query parameter, creating
+        parent directories as needed. When `baseMtime` or `baseHash` is
+        supplied the write is conditional on the file still being at the
+        revision the caller last read; a mismatch returns 409 with the current
+        revision and writes nothing. External paths require an unconsumed
+        file-consent token.
+      operationId: fileWrite
+      parameters:
+        - name: path
+          in: query
+          required: true
+          description: The file to write, relative to the workspace root.
+          schema:
+            type: string
+        - name: consent_token
+          in: query
+          required: false
+          description: A file-consent token for an external (non-workspace) path.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FileWriteRequest"
+      responses:
+        "200":
+          description: The file was written.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileWriteResponse"
+        "400":
+          description: Missing path, an invalid path, or a malformed or oversized body.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: The external path requires an unconsumed file-consent token.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: The base-revision guard failed; nothing was written.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileWriteConflictResponse"
+        "405":
+          description: The route only accepts GET or POST.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The file could not be written.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/file/check-modified:
+    post:
+      tags: [files]
+      summary: Report files that changed on disk.
+      description: >-
+        For each path in `files` (mapped to its last-known mtime in unix
+        seconds), reports the files whose on-disk mtime or size has since
+        changed, or that are now inaccessible. Also registers each existing
+        file with the file watcher so changes can be pushed in real time.
+      operationId: fileCheckModified
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FileCheckModifiedRequest"
+      responses:
+        "200":
+          description: The files that changed on disk.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileCheckModifiedResponse"
+        "400":
+          description: The request body is not valid JSON.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts POST.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/file/consent:
+    post:
+      tags: [files]
+      summary: Issue a file-consent token for an external path.
+      description: >-
+        Mints a short-lived consent token that authorizes a read or write of a
+        file outside the workspace and the app-config directory. Paths that
+        are already within the workspace (or the app-config directory) need no
+        consent and are rejected with 400.
+      operationId: fileConsent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FileConsentRequest"
+      responses:
+        "200":
+          description: The consent token and its expiry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileConsentResponse"
+        "400":
+          description: Malformed body, an invalid operation or path, or a path that needs no external consent.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts POST.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The consent token could not be created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/files:
+    get:
+      tags: [files]
+      summary: List a directory with git status.
+      description: >-
+        Lists the entries of a directory, computing per-entry git status
+        (modified, untracked, ignored) unless `git_status=false` is set for a
+        faster, status-free listing. Defaults to the workspace root when
+        `path` (or `dir`) is omitted.
+      operationId: filesList
+      parameters:
+        - name: path
+          in: query
+          required: false
+          description: The directory to list, relative to the workspace root; defaults to the root.
+          schema:
+            type: string
+        - name: dir
+          in: query
+          required: false
+          description: An alias for `path`.
+          schema:
+            type: string
+        - name: git_status
+          in: query
+          required: false
+          description: Set to "false" to skip git-status computation.
+          schema:
+            type: string
+            default: "true"
+      responses:
+        "200":
+          description: The directory listing with git status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FilesListResponse"
+        "400":
+          description: The directory path is not valid.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: The directory is outside the workspace, or the home-workspace gate was not consented.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts GET.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The directory could not be read.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/files/prettier-config:
+    get:
+      tags: [files]
+      summary: Discover the workspace's Prettier configuration.
+      description: >-
+        Merges the Prettier configuration found in the workspace (the
+        .prettierrc family of files and the `prettier` key in package.json)
+        into a single object, with later sources overriding earlier ones. Only
+        the formats the Go backend can parse are read; JS and TOML config
+        files are intentionally skipped.
+      operationId: prettierConfig
+      responses:
+        "200":
+          description: The merged Prettier configuration (may be empty).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrettierConfig"
+        "400":
+          description: No workspace is configured.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts GET.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/rename:
+    post:
+      tags: [files]
+      summary: Rename or move a file or directory.
+      description: >-
+        Renames (or moves) the item at `old_path` to `new_path`, creating the
+        target's parent directory as needed. Fails with 404 when the source is
+        missing and 409 when the target already exists.
+      operationId: renameItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FileRenameRequest"
+      responses:
+        "200":
+          description: The item was renamed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileRenameResponse"
+        "400":
+          description: Malformed body, missing paths, or an invalid path.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: A path is outside the workspace.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: The source path does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts POST.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: The target path already exists.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The rename failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/search:
+    get:
+      tags: [search]
+      summary: Search for matches across workspace files.
+      description: >-
+        Searches the workspace files for matches of `query`, returning the
+        matched lines with surrounding context. The search is bounded by a
+        timeout and by a file-walk and match cap; when any cap is hit the
+        result is marked truncated.
+      operationId: searchQuery
+      parameters:
+        - name: query
+          in: query
+          required: true
+          description: The text (or regex, when `regex=true`) to search for.
+          schema:
+            type: string
+        - name: case_sensitive
+          in: query
+          required: false
+          description: Match case exactly when "true".
+          schema:
+            type: string
+            default: "false"
+        - name: whole_word
+          in: query
+          required: false
+          description: Match whole words when "true".
+          schema:
+            type: string
+            default: "false"
+        - name: regex
+          in: query
+          required: false
+          description: Treat `query` as a regular expression when "true".
+          schema:
+            type: string
+            default: "false"
+        - name: max_results
+          in: query
+          required: false
+          description: Maximum number of matches; when omitted the default is 500, capped at 5000.
+          schema:
+            type: string
+        - name: context_lines
+          in: query
+          required: false
+          description: Number of context lines before and after a match; when omitted the default is 2.
+          schema:
+            type: string
+        - name: include
+          in: query
+          required: false
+          description: Comma-separated path patterns to include.
+          schema:
+            type: string
+        - name: exclude
+          in: query
+          required: false
+          description: Comma-separated path patterns to exclude.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The matches, grouped by file.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResponse"
+        "400":
+          description: Missing query, or a query that is too long.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts GET.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "408":
+          description: The search timed out.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The search failed (for example an invalid regex).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/search/replace:
+    post:
+      tags: [search]
+      summary: Search and replace across files.
+      description: >-
+        Replaces matches of `search` with `replace` within the listed
+        `files`, honoring the same case/whole-word/regex modifiers as the
+        search. When `preview` is true the changes are computed but not
+        written. Files are restricted to the workspace.
+      operationId: searchReplace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReplaceRequest"
+      responses:
+        "200":
+          description: The changes applied (or previewed).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReplaceResponse"
+        "400":
+          description: Malformed body, a missing or oversized pattern, a file outside the workspace, or an invalid search pattern.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts POST.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The replacement failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/upload/image:
+    post:
+      tags: [files]
+      summary: Upload an image for use in a chat.
+      description: >-
+        Accepts an image either as a raw body or as a multipart form field
+        named `image`. The image format is validated by magic bytes and the
+        file is saved into the workspace; the response returns the absolute
+        path and filename so the client can reference it in a message.
+      operationId: uploadImage
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                image:
+                  type: string
+                  format: binary
+                  description: The image to upload (form field `image`).
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+              description: The raw image bytes.
+      responses:
+        "200":
+          description: The image was saved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImageUploadResponse"
+        "400":
+          description: The body could not be read, or is not a recognized image format.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts POST.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The image could not be saved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/diagnostics:
+    post:
+      tags: [diagnostics]
+      summary: Validate Go source content.
+      description: >-
+        Runs Go validation (syntax and import checks) over `content` for the
+        file at `path` and returns diagnostics with byte-offset positions
+        compatible with Monaco editors. When no agent or validator is
+        available, an empty diagnostics list is returned.
+      operationId: diagnosticsValidate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DiagnosticsRequest"
+      responses:
+        "200":
+          description: The diagnostics for the file.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiagnosticsResponse"
+        "400":
+          description: Malformed body, a missing path, or an invalid path.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: The path is outside the workspace.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts POST.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/semantic:
+    post:
+      tags: [diagnostics]
+      summary: Run a semantic analysis method on a file.
+      description: >-
+        Runs one language-semantic method (diagnostics, definition, hover,
+        rename, references, code_actions, inlay_hints, or signature_help) for
+        the file at `path` in `language_id`, dispatched to the matching
+        language-server adapter. The position-dependent methods (definition,
+        hover, rename, references, code_actions, signature_help) require
+        `position`. An unknown language returns an empty capabilities set.
+      operationId: semanticRun
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SemanticRequest"
+      responses:
+        "200":
+          description: The semantic result for the requested method.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SemanticResponse"
+        "400":
+          description: Malformed body, a missing path, an invalid method, a missing position, or an invalid path.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: The path is outside the workspace.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts POST.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/lsp/status:
+    get:
+      tags: [terminal]
+      summary: Report available and active LSP servers.
+      description: >-
+        Lists the configured language servers with their supported languages,
+        binary, install hint, and whether the binary is resolvable on PATH,
+        plus the count of currently active LSP sessions and the workspace
+        root.
+      operationId: lspStatus
+      responses:
+        "200":
+          description: The LSP server status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LSPStatusResponse"
+        "405":
+          description: The route only accepts GET.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/lsp/ws:
+    get:
+      tags: [terminal]
+      summary: Open an LSP WebSocket bridge.
+      description: >-
+        Upgrades the request to a WebSocket (101 Switching Protocols) and
+        bridges it to the language-server process for the `language` in the
+        `workspace`. Raw LSP messages then flow over the frame channel; there
+        is no JSON request/response body. Both `language` and `workspace` are
+        required.
+      operationId: lspWebSocket
+      parameters:
+        - name: language
+          in: query
+          required: true
+          description: The language ID for the language server to bridge.
+          schema:
+            type: string
+        - name: workspace
+          in: query
+          required: true
+          description: The workspace path the language server serves.
+          schema:
+            type: string
+      responses:
+        "101":
+          description: The connection was upgraded to a WebSocket; LSP messages flow over the frame channel.
+        "400":
+          description: The `language` or `workspace` query parameter is missing.
+          content:
+            text/plain:
+              schema:
+                type: string
+        "403":
+          description: The workspace path is not allowed.
+          content:
+            text/plain:
+              schema:
+                type: string
+        "500":
+          description: The language server could not be started.
+          content:
+            text/plain:
+              schema:
+                type: string
 components:
   schemas:
     Error:
@@ -2343,6 +3237,902 @@ components:
         - provider
         - model
         - tokens_used
+    # ---- files family -------------------------------------------------
+    BrowseResponse:
+      type: object
+      description: The response from /api/browse.
+      properties:
+        message:
+          type: string
+        path:
+          type: string
+          description: The canonical directory that was listed.
+        files:
+          type: array
+          description: The entries in the directory (.git is always skipped).
+          items:
+            $ref: "#/components/schemas/BrowseEntry"
+      required:
+        - message
+        - path
+        - files
+    BrowseEntry:
+      type: object
+      description: A single entry in a /api/browse listing.
+      properties:
+        name:
+          type: string
+        path:
+          type: string
+        type:
+          type: string
+          enum: [file, directory]
+        size:
+          type: integer
+          format: int64
+        modified:
+          type: integer
+          format: int64
+          description: The mtime in unix seconds.
+      required:
+        - name
+        - path
+        - type
+    FilesListResponse:
+      type: object
+      description: The response from /api/files.
+      properties:
+        message:
+          type: string
+        files:
+          type: array
+          description: The entries in the directory.
+          items:
+            $ref: "#/components/schemas/FilesEntry"
+        path:
+          type: string
+          description: The canonical directory that was listed.
+        directory:
+          type: string
+          description: The canonical directory that was listed (an alias of path).
+      required:
+        - message
+        - files
+        - path
+        - directory
+    FilesEntry:
+      type: object
+      description: A single entry in a /api/files listing.
+      properties:
+        name:
+          type: string
+        path:
+          type: string
+        relative:
+          type: string
+          description: The path relative to the workspace root.
+        is_dir:
+          type: boolean
+        size:
+          type: integer
+          format: int64
+        mod_time:
+          type: integer
+          format: int64
+          description: The mtime in unix seconds.
+        git_status:
+          type: string
+          description: The git status when git-status computation is enabled; omitted when empty.
+      required:
+        - name
+        - path
+        - relative
+        - is_dir
+        - size
+        - mod_time
+    FileCreateRequest:
+      type: object
+      description: The request body for /api/create.
+      properties:
+        path:
+          type: string
+          description: The file or directory to create.
+        directory:
+          type: string
+          description: An alias of path; a non-empty value makes the target a directory.
+    FileCreateResponse:
+      type: object
+      description: The response from /api/create.
+      properties:
+        message:
+          type: string
+        path:
+          type: string
+          description: The canonical path that was created.
+      required:
+        - message
+        - path
+    FileDeleteRequest:
+      type: object
+      description: The request body for /api/delete.
+      properties:
+        path:
+          type: string
+          description: The file or directory to delete. Required.
+      required:
+        - path
+    FileDeleteResponse:
+      type: object
+      description: The response from /api/delete.
+      properties:
+        message:
+          type: string
+        path:
+          type: string
+          description: The canonical path that was deleted.
+      required:
+        - message
+        - path
+    FileRenameRequest:
+      type: object
+      description: The request body for /api/rename.
+      properties:
+        old_path:
+          type: string
+          description: The source path. Required.
+        new_path:
+          type: string
+          description: The target path. Required.
+      required:
+        - old_path
+        - new_path
+    FileRenameResponse:
+      type: object
+      description: The response from /api/rename.
+      properties:
+        message:
+          type: string
+        old_path:
+          type: string
+        new_path:
+          type: string
+      required:
+        - message
+        - old_path
+        - new_path
+    FileWriteRequest:
+      type: object
+      description: The request body for the /api/file write (POST).
+      properties:
+        content:
+          type: string
+          description: The content to write to the file.
+        baseMtime:
+          type: integer
+          format: int64
+          description: The mtime (unix seconds) the caller last read; when supplied the write is conditional on the file still being at that revision.
+        baseHash:
+          type: string
+          description: The sha256 of the content the caller last read; when supplied the write is conditional on the file still having that hash.
+    FileWriteResponse:
+      type: object
+      description: The response from the /api/file write (POST).
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        path:
+          type: string
+          description: The canonical path that was written.
+        size:
+          type: integer
+        mod_time:
+          type: integer
+          format: int64
+          description: The mtime (unix seconds) of the written file.
+      required:
+        - success
+        - message
+        - path
+        - size
+        - mod_time
+    FileTooLargeResponse:
+      type: object
+      description: The 413 payload from the /api/file read when the file exceeds the editor's read-size cap.
+      properties:
+        error:
+          type: string
+        size:
+          type: integer
+          format: int64
+          description: The file's size in bytes.
+        max_size:
+          type: integer
+          format: int64
+          description: The maximum allowed size in bytes.
+      required:
+        - error
+        - size
+        - max_size
+    FileWriteConflictResponse:
+      type: object
+      description: The 409 payload from the /api/file write when the base-revision guard fails.
+      properties:
+        error:
+          type: string
+          description: Either base_file_missing or revision_conflict.
+        message:
+          type: string
+        path:
+          type: string
+        currentMtime:
+          type: integer
+          format: int64
+          description: The current on-disk mtime (unix seconds); present on revision_conflict.
+        currentHash:
+          type: string
+          description: The current on-disk sha256; present on revision_conflict.
+      required:
+        - error
+        - message
+        - path
+    FileCheckModifiedRequest:
+      type: object
+      description: The request body for /api/file/check-modified.
+      properties:
+        files:
+          type: object
+          description: Maps each file path to its last-known mtime in unix seconds.
+          additionalProperties:
+            type: integer
+            format: int64
+      required:
+        - files
+    FileCheckModifiedFile:
+      type: object
+      description: A single file in a /api/file/check-modified response.
+      properties:
+        path:
+          type: string
+        mod_time:
+          type: integer
+          format: int64
+          description: The current on-disk mtime (unix seconds); 0 when the file is inaccessible.
+        size:
+          type: integer
+          format: int64
+          description: The current on-disk size; 0 when the file is inaccessible.
+      required:
+        - path
+        - mod_time
+        - size
+    FileCheckModifiedResponse:
+      type: object
+      description: The response from /api/file/check-modified.
+      properties:
+        modified:
+          type: array
+          description: The files that changed on disk (or are now inaccessible).
+          items:
+            $ref: "#/components/schemas/FileCheckModifiedFile"
+      required:
+        - modified
+    FileConsentRequest:
+      type: object
+      description: The request body for /api/file/consent.
+      properties:
+        path:
+          type: string
+          description: The external path the consent token authorizes.
+        operation:
+          type: string
+          enum: [read, write]
+          description: The file operation the token authorizes.
+      required:
+        - path
+        - operation
+    FileConsentResponse:
+      type: object
+      description: The response from /api/file/consent.
+      properties:
+        token:
+          type: string
+          description: The consent token to present on a later read or write.
+        path:
+          type: string
+          description: The canonical path the token was issued for.
+        operation:
+          type: string
+          enum: [read, write]
+        expires_at:
+          type: string
+          format: date-time
+          description: The token's expiry (RFC3339, UTC).
+      required:
+        - token
+        - path
+        - operation
+        - expires_at
+    PrettierConfig:
+      type: object
+      description: The merged Prettier configuration from /api/files/prettier-config (may be empty; keys are Prettier options and are open).
+    ImageUploadResponse:
+      type: object
+      description: The response from /api/upload/image.
+      properties:
+        path:
+          type: string
+          description: The absolute path of the saved image.
+        filename:
+          type: string
+          description: The base filename of the saved image.
+      required:
+        - path
+        - filename
+    # ---- search family ------------------------------------------------
+    SearchMatch:
+      type: object
+      description: A single match within a file.
+      properties:
+        line_number:
+          type: integer
+        line:
+          type: string
+        column_start:
+          type: integer
+          description: The 1-based start column of the match.
+        column_end:
+          type: integer
+          description: The 1-based end column of the match.
+        context_before:
+          type: array
+          items:
+            type: string
+        context_after:
+          type: array
+          items:
+            type: string
+      required:
+        - line_number
+        - line
+        - column_start
+        - column_end
+    SearchResult:
+      type: object
+      description: The matches within a single file.
+      properties:
+        file:
+          type: string
+        matches:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchMatch"
+        match_count:
+          type: integer
+      required:
+        - file
+        - matches
+        - match_count
+    SearchResponse:
+      type: object
+      description: The response from /api/search.
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchResult"
+        total_matches:
+          type: integer
+        total_files:
+          type: integer
+        truncated:
+          type: boolean
+          description: True when a match, file-count, or timeout cap was hit.
+        query:
+          type: string
+      required:
+        - results
+        - total_matches
+        - total_files
+        - truncated
+        - query
+    ReplaceRequest:
+      type: object
+      description: The request body for /api/search/replace.
+      properties:
+        search:
+          type: string
+          description: The text or regex to match. Required.
+        replace:
+          type: string
+          description: The replacement text.
+        files:
+          type: array
+          description: The files (workspace-relative or absolute) to search and replace in.
+          items:
+            type: string
+        case_sensitive:
+          type: boolean
+        whole_word:
+          type: boolean
+        regex:
+          type: boolean
+          description: Treat search as a regular expression.
+        preview:
+          type: boolean
+          description: When true the changes are computed but not written.
+      required:
+        - search
+    ReplaceMatch:
+      type: object
+      description: A single replacement within a file.
+      properties:
+        line_number:
+          type: integer
+        old_line:
+          type: string
+        new_line:
+          type: string
+        column_start:
+          type: integer
+        column_end:
+          type: integer
+      required:
+        - line_number
+        - old_line
+        - new_line
+        - column_start
+        - column_end
+    ReplaceFileChange:
+      type: object
+      description: The changes applied to a single file.
+      properties:
+        file:
+          type: string
+        matches:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReplaceMatch"
+        changed_lines:
+          type: integer
+      required:
+        - file
+        - matches
+        - changed_lines
+    ReplaceResponse:
+      type: object
+      description: The response from /api/search/replace.
+      properties:
+        changes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReplaceFileChange"
+        total_changes:
+          type: integer
+        preview:
+          type: boolean
+          description: True when the changes were computed but not written.
+      required:
+        - changes
+        - total_changes
+        - preview
+    # ---- diagnostics family -------------------------------------------
+    DiagnosticsRequest:
+      type: object
+      description: The request body for /api/diagnostics.
+      properties:
+        path:
+          type: string
+          description: The Go source file to validate (workspace-relative or absolute). Required.
+        content:
+          type: string
+          description: The file content to validate.
+      required:
+        - path
+    Diagnostic:
+      type: object
+      description: A single diagnostic with editor (byte-offset) positions, shared by /api/diagnostics and /api/semantic.
+      properties:
+        from:
+          type: integer
+        to:
+          type: integer
+        severity:
+          type: string
+        message:
+          type: string
+        source:
+          type: string
+      required:
+        - from
+        - to
+        - severity
+        - message
+        - source
+    DiagnosticsResponse:
+      type: object
+      description: The response from /api/diagnostics.
+      properties:
+        message:
+          type: string
+        path:
+          type: string
+        diagnostics:
+          type: array
+          items:
+            $ref: "#/components/schemas/Diagnostic"
+        version:
+          type: string
+          format: date-time
+          description: The validation timestamp (RFC3339 with nanoseconds).
+      required:
+        - message
+        - path
+        - diagnostics
+        - version
+    SemanticPosition:
+      type: object
+      description: A 1-based position within a document.
+      properties:
+        line:
+          type: integer
+          description: The 1-based line.
+        column:
+          type: integer
+          description: The 1-based column.
+      required:
+        - line
+        - column
+    SemanticRequest:
+      type: object
+      description: The request body for /api/semantic.
+      properties:
+        path:
+          type: string
+          description: The file to analyze (workspace-relative or absolute). Required.
+        content:
+          type: string
+          description: The file content.
+        language_id:
+          type: string
+          description: The language ID (e.g. go, typescript, python, rust, c, cpp).
+        method:
+          type: string
+          enum: [diagnostics, definition, hover, rename, references, code_actions, inlay_hints, signature_help]
+          description: The semantic method to run. Required.
+        trigger:
+          type: string
+          enum: [edit, save]
+          description: How the request was initiated.
+        position:
+          $ref: "#/components/schemas/SemanticPosition"
+          description: Required for the position-dependent methods (definition, hover, rename, references, code_actions, signature_help).
+      required:
+        - path
+        - method
+    SemanticCapabilities:
+      type: object
+      description: Which semantic features are available for a language.
+      properties:
+        diagnostics:
+          type: boolean
+        definition:
+          type: boolean
+        hover:
+          type: boolean
+        rename:
+          type: boolean
+        references:
+          type: boolean
+        code_actions:
+          type: boolean
+        inlay_hints:
+          type: boolean
+        signature_help:
+          type: boolean
+      required:
+        - diagnostics
+        - definition
+        - hover
+        - rename
+        - references
+        - code_actions
+        - inlay_hints
+        - signature_help
+    SemanticDefinition:
+      type: object
+      description: The target of a go-to-definition.
+      properties:
+        path:
+          type: string
+        line:
+          type: integer
+          description: The 1-based line.
+        column:
+          type: integer
+          description: The 1-based column.
+      required:
+        - path
+        - line
+        - column
+    SemanticHover:
+      type: object
+      description: A hover tooltip with markdown content.
+      properties:
+        contents:
+          type: string
+          description: The markdown content.
+        start_line:
+          type: integer
+        start_column:
+          type: integer
+        end_line:
+          type: integer
+        end_column:
+          type: integer
+      required:
+        - contents
+    SemanticRenameLocation:
+      type: object
+      description: A single rename edit location.
+      properties:
+        filePath:
+          type: string
+        from:
+          type: integer
+          description: The 0-based byte offset of the range start.
+        to:
+          type: integer
+          description: The 0-based byte offset of the range end.
+      required:
+        - filePath
+        - from
+        - to
+    SemanticRename:
+      type: object
+      description: The rename preview result.
+      properties:
+        locations:
+          type: array
+          items:
+            $ref: "#/components/schemas/SemanticRenameLocation"
+      required:
+        - locations
+    SemanticReferenceLocation:
+      type: object
+      description: A single reference location.
+      properties:
+        filePath:
+          type: string
+        line:
+          type: integer
+          description: The 1-based line.
+        startCol:
+          type: integer
+          description: The 1-based start column.
+        endCol:
+          type: integer
+          description: The 1-based end column.
+        lineText:
+          type: string
+      required:
+        - filePath
+        - line
+        - startCol
+        - endCol
+        - lineText
+    SemanticReferences:
+      type: object
+      description: The find-all-references result.
+      properties:
+        locations:
+          type: array
+          items:
+            $ref: "#/components/schemas/SemanticReferenceLocation"
+        symbolName:
+          type: string
+          description: The resolved name of the referenced symbol.
+      required:
+        - locations
+        - symbolName
+    SemanticCodeActionEdit:
+      type: object
+      description: A single text edit within a code action.
+      properties:
+        filePath:
+          type: string
+        from:
+          type: integer
+          description: The 0-based byte offset of the range start.
+        to:
+          type: integer
+          description: The 0-based byte offset of the range end.
+        newText:
+          type: string
+      required:
+        - filePath
+        - from
+        - to
+        - newText
+    SemanticCodeAction:
+      type: object
+      description: A single code action available at a position.
+      properties:
+        title:
+          type: string
+        kind:
+          type: string
+          description: The action kind (e.g. quickfix, refactor.extract, source.organizeImports).
+        edits:
+          type: array
+          items:
+            $ref: "#/components/schemas/SemanticCodeActionEdit"
+      required:
+        - title
+        - kind
+        - edits
+    SemanticInlayHint:
+      type: object
+      description: A single inlay hint.
+      properties:
+        from:
+          type: integer
+          description: The 0-based byte offset where the hint is displayed.
+        to:
+          type: integer
+          description: The 0-based byte offset (end of the hint range).
+        label:
+          type: string
+        kind:
+          type: string
+          description: type, parameter, or none.
+      required:
+        - from
+        - to
+        - label
+        - kind
+    SemanticSignatureHelpParameter:
+      type: object
+      description: A single parameter in a function signature.
+      properties:
+        label:
+          type: string
+        documentation:
+          type: string
+      required:
+        - label
+    SemanticSignatureHelpSignature:
+      type: object
+      description: A single function signature.
+      properties:
+        label:
+          type: string
+        documentation:
+          type: string
+        parameters:
+          type: array
+          items:
+            $ref: "#/components/schemas/SemanticSignatureHelpParameter"
+      required:
+        - label
+        - parameters
+    SemanticSignatureHelp:
+      type: object
+      description: The signature help result.
+      properties:
+        signatures:
+          type: array
+          items:
+            $ref: "#/components/schemas/SemanticSignatureHelpSignature"
+        activeSignature:
+          type: integer
+        activeParameter:
+          type: integer
+      required:
+        - signatures
+        - activeSignature
+        - activeParameter
+    SemanticResponse:
+      type: object
+      description: The response from /api/semantic.
+      properties:
+        message:
+          type: string
+        path:
+          type: string
+        language_id:
+          type: string
+        method:
+          type: string
+        capabilities:
+          $ref: "#/components/schemas/SemanticCapabilities"
+        diagnostics:
+          type: array
+          items:
+            $ref: "#/components/schemas/Diagnostic"
+        definition:
+          $ref: "#/components/schemas/SemanticDefinition"
+        hover:
+          $ref: "#/components/schemas/SemanticHover"
+        rename:
+          $ref: "#/components/schemas/SemanticRename"
+        references:
+          $ref: "#/components/schemas/SemanticReferences"
+        code_actions:
+          type: array
+          items:
+            $ref: "#/components/schemas/SemanticCodeAction"
+        inlay_hints:
+          type: array
+          items:
+            $ref: "#/components/schemas/SemanticInlayHint"
+        signature_help:
+          $ref: "#/components/schemas/SemanticSignatureHelp"
+        error:
+          type: string
+          description: Present when the language-server adapter reported an error.
+        version:
+          type: string
+          format: date-time
+          description: The response timestamp (RFC3339 with nanoseconds).
+        duration_ms:
+          type: integer
+          format: int64
+          description: The adapter run time in milliseconds.
+      required:
+        - message
+        - path
+        - language_id
+        - method
+        - capabilities
+        - version
+    # ---- terminal family (LSP) -----------------------------------------
+    LSPServerInfo:
+      type: object
+      description: A single language server entry in /api/lsp/status.
+      properties:
+        id:
+          type: string
+        languages:
+          type: array
+          items:
+            type: string
+        binary:
+          type: string
+          description: The binary name or path expected on PATH.
+        available:
+          type: boolean
+          description: Whether the binary was resolved on PATH.
+        binaryPath:
+          type: string
+          description: The resolved binary path; present when available.
+        installHint:
+          type: string
+          description: How to install the missing binary; present when applicable.
+      required:
+        - id
+        - languages
+        - binary
+        - available
+    LSPStatusResponse:
+      type: object
+      description: The response from /api/lsp/status.
+      properties:
+        servers:
+          type: array
+          items:
+            $ref: "#/components/schemas/LSPServerInfo"
+        active:
+          type: integer
+          description: The number of currently active LSP sessions.
+        workspace:
+          type: string
+          description: The workspace root.
+      required:
+        - servers
+        - active
+        - workspace
   parameters:
     chatId:
       # Shared query-parameter form of the chat-scoping knob: the chat session

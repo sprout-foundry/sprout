@@ -103,6 +103,7 @@ function createMockFetch(responseOverrides?: Map<string, Partial<Response>>) {
       ok: true,
       status: 200,
       arrayBuffer: async () => new ArrayBuffer(0),
+      text: async () => '',
     } as Response;
   };
 }

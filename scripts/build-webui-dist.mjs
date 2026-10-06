@@ -9,11 +9,71 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
+import { createHash } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+
+// ── Content-hashed WASM asset names ────────────────────────────────
+// sprout.wasm and wasm_exec.js keep fixed names unless we rewrite them,
+// so a host that caches the bundle as immutable can serve an old WASM
+// binary next to new JS after an upgrade. Emit content-hashed names plus
+// a small manifest the loader reads (wasmShell.ts). The hashing lives in
+// pure functions so a unit test can drive it without running a build.
+
+/** Filename of the manifest describing the content-hashed WASM assets. */
+export const WASM_MANIFEST_FILE = "wasm-manifest.json";
+
+/**
+ * Short content hash of a file's bytes. The first 10 hex characters of
+ * sha256 — long enough to make collisions vanishingly unlikely, short
+ * enough to stay readable in a URL.
+ */
+export function computeContentHash(content) {
+  const bytes =
+    typeof content === "string" ? Buffer.from(content, "utf8") : content;
+  return createHash("sha256").update(bytes).digest("hex").slice(0, 10);
+}
+
+/**
+ * Deterministically rename a fixed asset name to its content-hashed
+ * sibling: `sprout.wasm` → `sprout.<hash>.wasm`, `wasm_exec.js` →
+ * `wasm_exec.<hash>.js`. The extension is preserved (including a
+ * compound `.wasm`/`.js`). Unknown/extensionless names get the hash
+ * appended.
+ */
+export function hashedAssetName(name, content) {
+  const hash = computeContentHash(content);
+  const dot = name.lastIndexOf(".");
+  if (dot <= 0) return `${name}.${hash}`;
+  return `${name.slice(0, dot)}.${hash}${name.slice(dot)}`;
+}
+
+/**
+ * Build the manifest the loader consumes. Input is a map of logical
+ * asset key → file bytes; output is `{ version, files, wasm, wasmExec }`
+ * where every value is the content-hashed filename. Pure — no fs access.
+ */
+export function buildWasmManifest(entries) {
+  const files = {};
+  for (const [key, content] of Object.entries(entries)) {
+    files[key] = hashedAssetName(key, content);
+  }
+  return {
+    version: 1,
+    files,
+    wasm: files["sprout.wasm"],
+    wasmExec: files["wasm_exec.js"],
+  };
+}
+
+/** Serialize a WASM manifest (stable, newline-terminated, 2-space JSON). */
+export function serializeWasmManifest(manifest) {
+  return `${JSON.stringify(manifest, null, 2)}\n`;
+}
 
 const repoRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const webuiDir = join(repoRoot, "webui");
@@ -806,14 +866,65 @@ function copyWasmFiles(targetDir) {
     rmSync(staleVersionJson);
   }
 
+  // Content-hash the WASM assets so a cache that treats the bundle as
+  // immutable can never pair an old binary with new JS. Fixed names stay
+  // in place (the loader falls back to them when the manifest is absent).
+  writeWasmHashedAssets(targetWasmDir);
+
   // Verify WASM files were successfully copied to the output directory
   verifyWasmFiles(targetWasmDir);
+}
+
+/**
+ * Emit content-hashed copies of the WASM assets plus the manifest the
+ * loader reads. The fixed-name copies remain authority-free fallbacks.
+ * Any pre-existing hashed asset or manifest is removed first so reruns
+ * don't accumulate stale files in a reused output directory.
+ */
+export function writeWasmHashedAssets(targetWasmDir) {
+  console.log("🔑 Hashing WASM assets...");
+
+  const fixedFiles = ["sprout.wasm", "wasm_exec.js"];
+  const entries = {};
+  for (const name of fixedFiles) {
+    const filePath = join(targetWasmDir, name);
+    if (existsSync(filePath)) entries[name] = readFileSync(filePath);
+  }
+
+  if (Object.keys(entries).length === 0) {
+    console.log("  ⚠ no WASM assets to hash, skipping");
+    return;
+  }
+
+  // Drop any previous hashed asset (or manifest) so a reused output dir
+  // doesn't keep a stale hash around. Narrowed to the assets this function
+  // owns so a co-located hashed file is never deleted by accident.
+  for (const entry of readdirSync(targetWasmDir)) {
+    if (
+      entry === WASM_MANIFEST_FILE ||
+      /^(sprout|wasm_exec)\.[0-9a-f]{10}\.(wasm|js)$/.test(entry)
+    ) {
+      rmSync(join(targetWasmDir, entry), { force: true });
+    }
+  }
+
+  const manifest = buildWasmManifest(entries);
+  for (const [fixedName, hashedName] of Object.entries(manifest.files)) {
+    cpSync(join(targetWasmDir, fixedName), join(targetWasmDir, hashedName));
+    console.log(`  ✓ ${hashedName}`);
+  }
+
+  const manifestPath = join(targetWasmDir, WASM_MANIFEST_FILE);
+  writeFileSync(manifestPath, serializeWasmManifest(manifest));
+  console.log(
+    `  ✓ ${WASM_MANIFEST_FILE} (wasm: ${manifest.wasm}, wasmExec: ${manifest.wasmExec})`,
+  );
 }
 
 function verifyWasmFiles(targetWasmDir) {
   console.log("🔍 Verifying WASM files in output...");
 
-  const expectedFiles = ["sprout.wasm", "wasm_exec.js"];
+  const expectedFiles = ["sprout.wasm", "wasm_exec.js", WASM_MANIFEST_FILE];
   let allPresent = true;
 
   for (const file of expectedFiles) {
@@ -822,6 +933,32 @@ function verifyWasmFiles(targetWasmDir) {
       console.log(`  ✓ ${file} present in ${targetWasmDir}`);
     } else {
       console.error(`  ✗ ${file} MISSING from ${targetWasmDir}`);
+      allPresent = false;
+    }
+  }
+
+  // The manifest must point at files that actually exist in the output.
+  const manifestPath = join(targetWasmDir, WASM_MANIFEST_FILE);
+  if (existsSync(manifestPath)) {
+    try {
+      const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+      for (const [key, hashed] of Object.entries(manifest.files || {})) {
+        if (
+          typeof hashed !== "string" ||
+          !existsSync(join(targetWasmDir, hashed))
+        ) {
+          console.error(
+            `  ✗ manifest ${key} → ${hashed} MISSING from ${targetWasmDir}`,
+          );
+          allPresent = false;
+        } else {
+          console.log(`  ✓ manifest ${key} → ${hashed}`);
+        }
+      }
+    } catch (err) {
+      console.error(
+        `  ✗ ${WASM_MANIFEST_FILE} is not valid JSON: ${err.message}`,
+      );
       allPresent = false;
     }
   }
@@ -968,13 +1105,23 @@ function verifyDistLayout(outputDir) {
     { path: "index.html", desc: "SPA entry point" },
     { path: "assets", desc: "Vite build output (JS/CSS)", isDir: true },
     { path: "wasm", desc: "Go WASM modules", isDir: true },
-    { path: "wasm/wasm_exec.js", desc: "Go WASM runtime" },
+    {
+      path: "wasm/wasm_exec.js",
+      desc: "Go WASM runtime (fixed-name fallback)",
+    },
     { path: "version.json", desc: "Build metadata" },
   ];
 
   // Optional files — warn if missing but don't fail
   const optional = [
-    { path: "wasm/sprout.wasm", desc: "Shell WASM binary" },
+    {
+      path: "wasm/sprout.wasm",
+      desc: "Shell WASM binary (fixed-name fallback)",
+    },
+    {
+      path: "wasm/wasm-manifest.json",
+      desc: "Content-hashed WASM asset manifest",
+    },
     { path: "manifest.json", desc: "PWA manifest" },
     { path: "sw.js", desc: "Service worker" },
     {
@@ -1265,7 +1412,7 @@ function main(opts) {
   console.log("  index.html      - Application entry point");
   console.log("  assets/         - Vite build output (JS, CSS, fonts)");
   console.log(
-    "  wasm/           - Go WASM modules (sprout.wasm, wasm_exec.js)",
+    "  wasm/           - Go WASM modules (content-hashed + fixed-name fallbacks)",
   );
   console.log("  version.json    - Version and build metadata");
   console.log("  manifest.json   - PWA manifest");

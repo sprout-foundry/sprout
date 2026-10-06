@@ -84,6 +84,27 @@ echo ""
 # 1. Check index.html
 check_url "${BASE_URL}/index.html" "index.html"
 
+# 1b. A LOCAL-mode bundle must reference its assets root-absolute (/assets/…),
+# not /webui/… — the local daemon serves the UI at /. This catches an
+# accidental `--mode cloud` on a local build (or a base-path drift). Skipped
+# for the cloud bundle, which is intentionally served under /webui/ (the
+# release pipeline's `scripts/verify-webui-dist-base.mjs` checks that one).
+if [ "$(basename "$DIST_DIR")" = "local" ]; then
+    LOCAL_HTML=$(curl -s "${BASE_URL}/index.html" || echo "")
+    if ! echo "$LOCAL_HTML" | grep -qE '(src|href)="[^"]*assets/'; then
+        echo "  ❌ index.html has no asset URLs to check (unexpected for a built bundle)"
+        FAILED_ASSETS+=("index.html (no asset URLs found)")
+        TOTAL_ASSETS=$((TOTAL_ASSETS + 1))
+    elif echo "$LOCAL_HTML" | grep -qE '(src|href)="/webui/'; then
+        echo "  ❌ index.html references /webui/ asset URLs in a local build (expected /)"
+        FAILED_ASSETS+=("index.html (unexpected /webui/ base path)")
+        TOTAL_ASSETS=$((TOTAL_ASSETS + 1))
+    else
+        echo "  ✅ index.html references root-absolute /assets/ URLs (local base)"
+        TOTAL_ASSETS=$((TOTAL_ASSETS + 1))
+    fi
+fi
+
 # 2. Extract and verify assets from index.html
 echo ""
 echo "Checking assets from index.html..."

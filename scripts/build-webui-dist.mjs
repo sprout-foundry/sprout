@@ -90,6 +90,12 @@ function printHelp() {
   console.log(
     "            Produces cloud-mode bundle (remote terminal/SSH enabled)",
   );
+  console.log(
+    "            Vite runs with --mode cloud: assets are referenced from",
+  );
+  console.log(
+    "            /webui/ (the host mount path), not root-absolute /assets/.",
+  );
   console.log("  local   - Sets VITE_SPROUT_MODE=local during build");
   console.log(
     "            Produces local-mode bundle (local terminal enabled)",
@@ -390,6 +396,39 @@ export function parseArgs(argv) {
   return opts;
 }
 
+/**
+ * Extra CLI args appended to `npm run build` in webui/ for a given mode
+ * (pure). Cloud builds pass `-- --mode cloud` so npm forwards `--mode cloud`
+ * to the script (Vite then selects base /webui/); the `--` separator is
+ * required, because without it npm treats `--mode` as an npm config flag and
+ * passes only `cloud` positionally (`vite build cloud` — a broken invocation).
+ * Any other mode gets no extra args (plain production build at base /). Vite
+ * keeps production NODE_ENV for `build` regardless of mode, so this stays a
+ * minified production build.
+ */
+export function resolveViteBuildArgs(mode) {
+  return mode === "cloud" ? ["--", "--mode", "cloud"] : [];
+}
+
+/**
+ * Extract the asset URLs referenced by a built index.html (pure). Returns
+ * every `src`/`href` value — module scripts, stylesheets, icons, the PWA
+ * manifest, etc. — so callers can assert their base path (e.g. every URL
+ * starts with /webui/ in a cloud bundle). Comments are stripped first so a
+ * URL mentioned only in prose is not mistaken for a real reference.
+ */
+export function parseAssetRefs(html) {
+  const withoutComments = html.replace(/<!--[\s\S]*?-->/g, "");
+  const refs = [];
+  // Quoted or unquoted attribute values; comments are stripped first.
+  const re = /\b(?:src|href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/gi;
+  let match;
+  while ((match = re.exec(withoutComments)) !== null) {
+    refs.push(match[1] ?? match[2] ?? match[3]);
+  }
+  return refs;
+}
+
 /** Validate parsed options. Returns an array of error strings (empty = valid). */
 export function validateArgs(opts) {
   const errors = [];
@@ -570,10 +609,9 @@ export function buildCapabilityManifest(opts) {
   // capability flags the shell may truthfully report (the native
   // pickWorkspace/createWorkspace ops ship with the fs exclusion). Any
   // other combination emits no `capabilities` key at all.
-  const capabilities =
-    opts.nativeFs
-      ? { supportsWorkspaceSwitching: true, supportsFolderPicker: true }
-      : undefined;
+  const capabilities = opts.nativeFs
+    ? { supportsWorkspaceSwitching: true, supportsFolderPicker: true }
+    : undefined;
 
   return {
     schemaVersion: 1,
@@ -1055,10 +1093,23 @@ function main(opts) {
     process.exit(0);
   }
 
+  const viteBuildArgs = resolveViteBuildArgs(mode);
+
   if (mode === "cloud") {
     buildEnv.VITE_SPROUT_MODE = "cloud";
     console.log(
       "🔨 Building React app with Vite in cloud mode (VITE_SPROUT_MODE=cloud)...",
+    );
+    // The hosted bundle is mounted at /webui/, not /, by every host that
+    // serves it. Pass `--mode cloud` through to Vite so webui/vite.config.ts
+    // selects base /webui/ for its asset URLs — a bare `vite build` would
+    // default to production mode with base / and emit root-absolute
+    // /assets/* URLs the host answers with its own dashboard HTML. Vite's
+    // build command keeps production NODE_ENV regardless of --mode (its
+    // defaultNodeEnv is "production"), so this stays a minified production
+    // build; only the config hook's `mode` changes.
+    console.log(
+      "    base: /webui/ (--mode cloud; assets referenced as /webui/assets/*)",
     );
   } else {
     // Explicitly override to prevent env var leak from the shell
@@ -1163,8 +1214,13 @@ function main(opts) {
     console.log(`    VITE_FOUNDRY_WS_URL=${foundryWsUrl}`);
   }
 
-  // Build React app with Vite
-  run("npm", ["run", "build"], webuiDir, buildEnv);
+  // Build React app with Vite. Cloud builds append `-- --mode cloud` so npm
+  // forwards `--mode cloud` to the script (`tsc && vite build --mode cloud`)
+  // and the config hook's base /webui/ applies. Without the `--` separator
+  // npm consumes `--mode` as its own config flag and passes only `cloud` as a
+  // positional argument, yielding a broken `vite build cloud`. Local builds
+  // keep the plain `npm run build` (production mode, base /).
+  run("npm", ["run", "build", ...viteBuildArgs], webuiDir, buildEnv);
   console.log("");
 
   // Copy build output

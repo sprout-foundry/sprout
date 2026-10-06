@@ -3,6 +3,7 @@
 package webui
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,9 +14,21 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/agent"
 )
 
-// handleAPIQueryRewind handles POST /api/query/rewind to truncate the
-// conversation history back to a prior turn, optionally reverting file
-// changes made during the discarded turns.
+// rewindRequest is the request body for POST /api/query/rewind. It mirrors the
+// QueryRewindRequest schema documented in docs/api/openapi.base.yaml. to_turn is
+// required (0-based: rewind to BEFORE this turn); revert_files defaults to true.
+type rewindRequest struct {
+	ToTurn      *int   `json:"to_turn"`
+	RevertFiles *bool  `json:"revert_files"`
+	ChatID      string `json:"chat_id"`
+}
+
+// buildAPIQueryRewind is the shared backend for POST /api/query/rewind. It
+// truncates the conversation history back to a prior turn (optionally reverting
+// file changes made during the discarded turns), then syncs agent state and
+// notifies the UI of the session change, writing the result through w. The HTTP
+// method gate is enforced by the Huma operation (registerHumaOperations in
+// routes.go); a wrong method reaches the SPA catch-all and 404s.
 //
 // Request body:
 //
@@ -23,24 +36,7 @@ import (
 //
 // to_turn is required (0-based: rewind to BEFORE this turn).
 // revert_files defaults to true.
-func (ws *ReactWebServer) handleAPIQueryRewind(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
-		return
-	}
-
-	var req struct {
-		ToTurn      *int   `json:"to_turn"`
-		RevertFiles *bool  `json:"revert_files"`
-		ChatID      string `json:"chat_id"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		ws.log().Warn("invalid rewind request JSON", slog.Any("err", err))
-		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
-		return
-	}
-
+func (ws *ReactWebServer) buildAPIQueryRewind(w http.ResponseWriter, r *http.Request, req rewindRequest) {
 	if req.ToTurn == nil {
 		writeJSONErr(w, http.StatusBadRequest, "to_turn_required", "to_turn is required")
 		return
@@ -118,4 +114,29 @@ func (ws *ReactWebServer) handleAPIQueryRewind(w http.ResponseWriter, r *http.Re
 		"files_skipped":       result.FilesSkipped,
 		"checkpoints_dropped": result.CheckpointsDropped,
 	})
+}
+
+// rewindInput is the input for the Huma POST /api/query/rewind operation.
+type rewindInput struct {
+	humaRequestInput
+}
+
+// rewindHumaHandler is the Huma handler for POST /api/query/rewind. It parses
+// the body (a single rewindRequest, decoded without a size cap, matching the
+// pre-migration behavior) and writes the response through in.Resp, so the
+// migrated operation is byte-identical to the plain handler it replaced; the
+// body is a no-op callback.
+func (ws *ReactWebServer) rewindHumaHandler(ctx context.Context, in *rewindInput) (*writtenResponseOutput, error) {
+	w := in.Resp
+	r := in.Req
+
+	var req rewindRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		ws.log().Warn("invalid rewind request JSON", slog.Any("err", err))
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
+		return &writtenResponseOutput{Body: noopWrittenResponse}, nil
+	}
+
+	ws.buildAPIQueryRewind(w, r, req)
+	return &writtenResponseOutput{Body: noopWrittenResponse}, nil
 }

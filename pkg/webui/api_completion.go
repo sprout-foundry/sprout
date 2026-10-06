@@ -3,6 +3,7 @@
 package webui
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,24 +16,21 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/factory"
 )
 
-// handleAPICompletion generates a code completion for the given prefix/suffix.
-func (ws *ReactWebServer) handleAPICompletion(w http.ResponseWriter, r *http.Request) {
-	if !requireMethod(w, r, http.MethodPost) {
-		return
-	}
+// completionRequest is the request body for POST /api/completion. It mirrors
+// the CompletionRequest schema documented in docs/api/openapi.base.yaml.
+type completionRequest struct {
+	Prefix    string `json:"prefix"`     // code before cursor (required)
+	Suffix    string `json:"suffix"`     // code after cursor
+	Language  string `json:"language"`   // language ID
+	FilePath  string `json:"file_path"`  // file being edited
+	MaxTokens int    `json:"max_tokens"` // optional, default 128
+}
 
-	r.Body = http.MaxBytesReader(w, r.Body, maxQueryBodyBytes)
-	var req struct {
-		Prefix    string `json:"prefix"`     // code before cursor (required)
-		Suffix    string `json:"suffix"`     // code after cursor
-		Language  string `json:"language"`   // language ID
-		FilePath  string `json:"file_path"`  // file being edited
-		MaxTokens int    `json:"max_tokens"` // optional, default 128
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
-		return
-	}
+// buildAPICompletion is the shared backend for POST /api/completion. It resolves
+// the client agent and completion client, generates the completion, and writes
+// the result through w. The Huma operation (registerHumaOperations in
+// routes.go) and the plain handler both drive this builder.
+func (ws *ReactWebServer) buildAPICompletion(w http.ResponseWriter, r *http.Request, req completionRequest) {
 	if strings.TrimSpace(req.Prefix) == "" {
 		writeJSONErr(w, http.StatusBadRequest, "prefix_required", "Prefix is required")
 		return
@@ -78,6 +76,50 @@ func (ws *ReactWebServer) handleAPICompletion(w http.ResponseWriter, r *http.Req
 		"model":       client.GetModel(),
 		"tokens_used": result.TokensUsed,
 	})
+}
+
+// handleAPICompletion generates a code completion for the given prefix/suffix.
+// It is a thin wrapper over buildAPICompletion — the method gate and body
+// parsing stay here (the plain route), and the shared builder runs the logic.
+// The Huma operation (registerHumaOperations in routes.go) drives the same
+// builder, so the two surfaces cannot drift.
+func (ws *ReactWebServer) handleAPICompletion(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxQueryBodyBytes)
+	var req completionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
+		return
+	}
+
+	ws.buildAPICompletion(w, r, req)
+}
+
+// completionInput is the input for the Huma POST /api/completion operation.
+type completionInput struct {
+	humaRequestInput
+}
+
+// completionHumaHandler is the Huma handler for POST /api/completion. It parses
+// the body exactly as the plain handler did and writes the response through
+// in.Resp, so the migrated operation is byte-identical to the plain handler;
+// the body is a no-op callback.
+func (ws *ReactWebServer) completionHumaHandler(ctx context.Context, in *completionInput) (*writtenResponseOutput, error) {
+	w := in.Resp
+	r := in.Req
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxQueryBodyBytes)
+	var req completionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
+		return &writtenResponseOutput{Body: noopWrittenResponse}, nil
+	}
+
+	ws.buildAPICompletion(w, r, req)
+	return &writtenResponseOutput{Body: noopWrittenResponse}, nil
 }
 
 // Sentinel errors for resolveCompletionClient's main-provider fallback so

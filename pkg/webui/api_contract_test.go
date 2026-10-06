@@ -32,11 +32,15 @@ import (
 // huma.Operation Path). The docs live at the repo root, so these tests walk up
 // to the directory holding go.mod before reading them.
 
-// contractFiles are the repo-root-relative paths the contract test reads.
+// contractFiles are the repo-root-relative paths the contract test reads. The
+// registered routes live in two files: the plain mux registrations in routes.go
+// and the Huma operations in huma_routes.go; the AST walk reads both so a new
+// Huma route cannot ship undocumented.
 const (
-	contractRoutesGo    = "pkg/webui/routes.go"
-	contractOpenAPIYAML = "docs/api/openapi.yaml"
-	contractAllowlist   = "docs/api/undocumented.txt"
+	contractRoutesGo     = "pkg/webui/routes.go"
+	contractHumaRoutesGo = "pkg/webui/huma_routes.go"
+	contractOpenAPIYAML  = "docs/api/openapi.yaml"
+	contractAllowlist    = "docs/api/undocumented.txt"
 )
 
 // openAPIInfo is the subset of the OpenAPI doc the contract test validates.
@@ -150,64 +154,72 @@ func repoRootFromWorkingDir(t *testing.T) string {
 	return root
 }
 
-// registeredRoutes extracts every route registration from the routes.go source
+// registeredRoutes extracts every route registration from the given route
+// files (absolute paths, e.g. the plain mux registrations in
+// pkg/webui/routes.go and the Huma operations in pkg/webui/huma_routes.go)
 // with a minimal AST walk, in source order. It finds both registration styles
-// that coexist in routes.go: plain mux.HandleFunc("<pattern>", ...) calls, and
-// Huma operations (huma.Register(api, huma.Operation{..., Path: "<path>", ...},
-// handler)). The two are combined into a single registered set so the contract
-// invariant holds regardless of how a route is mounted: a Huma operation and a
-// plain handler both describe one registered route.
-func registeredRoutes(t *testing.T, routesPath string) []string {
+// that coexist across those files: plain mux.HandleFunc("<pattern>", ...)
+// calls, and Huma operations (huma.Register with a huma.Operation Path). The
+// two are combined into a single registered set so the contract invariant
+// holds regardless of how a route is mounted: a Huma operation and a plain
+// handler both describe one registered route. The first file (routes.go)
+// holds the plain registrations; the second (huma_routes.go) holds the Huma
+// operations. Callers pass the repo-root-joined paths, or a single synthetic
+// path for the negative parser test.
+func registeredRoutes(t *testing.T, routesPaths ...string) []string {
 	t.Helper()
 	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, routesPath, nil, 0)
-	if err != nil {
-		t.Fatalf("parse %s: %v", routesPath, err)
-	}
 	var patterns []string
-	ast.Inspect(f, func(n ast.Node) bool {
-		call, ok := n.(*ast.CallExpr)
-		if !ok || len(call.Args) < 1 {
+	for _, routesPath := range routesPaths {
+		f, err := parser.ParseFile(fset, routesPath, nil, 0)
+		if err != nil {
+			t.Fatalf("parse %s: %v", routesPath, err)
+		}
+		base := filepath.Base(routesPath)
+		ast.Inspect(f, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok || len(call.Args) < 1 {
+				return true
+			}
+			sel, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok || sel.Sel == nil {
+				return true
+			}
+			switch sel.Sel.Name {
+			case "HandleFunc":
+				// Plain mux.HandleFunc("<pattern>", ...) registration. The receiver
+				// variable name is irrelevant to the pattern.
+				lit, ok := call.Args[0].(*ast.BasicLit)
+				if !ok || lit.Kind != token.STRING {
+					// A non-literal pattern cannot be matched against the contract by
+					// name; surface it so a refactor that drops the literal is caught.
+					t.Errorf("%s: mux.HandleFunc pattern is not a string literal (at %s); the contract test cannot match it",
+						base, fset.Position(lit.Pos()))
+					return true
+				}
+				patterns = append(patterns, lit.Value[1:len(lit.Value)-1])
+			case "Register":
+				// Huma operation: huma.Register(api, huma.Operation{..., Path: "<path>", ...}, handler).
+				// Only the huma package's Register is a route registration.
+				if pkg, ok := sel.X.(*ast.Ident); !ok || pkg.Name != "huma" {
+					return true
+				}
+				if len(call.Args) < 2 {
+					return true
+				}
+				op, ok := call.Args[1].(*ast.CompositeLit)
+				if !ok {
+					return true
+				}
+				path, ok := humaOperationPath(op)
+				if !ok {
+					return true
+				}
+				patterns = append(patterns, path)
+			}
 			return true
-		}
-		sel, ok := call.Fun.(*ast.SelectorExpr)
-		if !ok || sel.Sel == nil {
-			return true
-		}
-		switch sel.Sel.Name {
-		case "HandleFunc":
-			// Plain mux.HandleFunc("<pattern>", ...) registration. The receiver
-			// variable name is irrelevant to the pattern.
-			lit, ok := call.Args[0].(*ast.BasicLit)
-			if !ok || lit.Kind != token.STRING {
-				// A non-literal pattern cannot be matched against the contract by
-				// name; surface it so a refactor that drops the literal is caught.
-				t.Errorf("%s: mux.HandleFunc pattern is not a string literal (at %s); the contract test cannot match it",
-					filepath.Base(routesPath), fset.Position(lit.Pos()))
-				return true
-			}
-			patterns = append(patterns, lit.Value[1:len(lit.Value)-1])
-		case "Register":
-			// Huma operation: huma.Register(api, huma.Operation{..., Path: "<path>", ...}, handler).
-			// Only the huma package's Register is a route registration.
-			if pkg, ok := sel.X.(*ast.Ident); !ok || pkg.Name != "huma" {
-				return true
-			}
-			if len(call.Args) < 2 {
-				return true
-			}
-			op, ok := call.Args[1].(*ast.CompositeLit)
-			if !ok {
-				return true
-			}
-			path, ok := humaOperationPath(op)
-			if !ok {
-				return true
-			}
-			patterns = append(patterns, path)
-		}
-		return true
-	})
+		})
+	}
 	return patterns
 }
 
@@ -351,13 +363,15 @@ func contractIssues(registered []string, info openAPIInfo, allowlist []string) [
 // only shrink), and the OpenAPI info.version must be a semantic version.
 func TestOpenAPISpecCoversAllRegisteredRoutes(t *testing.T) {
 	root := repoRootFromWorkingDir(t)
-	routesPath := filepath.Join(root, contractRoutesGo)
 	specPath := filepath.Join(root, contractOpenAPIYAML)
 	allowPath := filepath.Join(root, contractAllowlist)
 
-	registered := registeredRoutes(t, routesPath)
+	registered := registeredRoutes(t,
+		filepath.Join(root, contractRoutesGo),
+		filepath.Join(root, contractHumaRoutesGo),
+	)
 	if len(registered) == 0 {
-		t.Fatalf("parsed zero registered routes from %s; the routes.go parser is broken", routesPath)
+		t.Fatalf("parsed zero registered routes from the route files; the routes.go parser is broken")
 	}
 	info := readOpenAPIInfo(t, specPath)
 	allowlist := readAllowlist(t, allowPath)

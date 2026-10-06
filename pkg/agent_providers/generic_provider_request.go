@@ -323,16 +323,20 @@ func (p *GenericProvider) buildHTTPRequestCtx(ctx context.Context, body []byte, 
 	// — third-party logging/training — only applies to remote endpoints.
 	if !isLocalInstance && len(body) > 0 {
 		original := body
-		if redacted := secretdetect.RedactOpaque(string(body)); redacted != string(body) {
+		if redacted := secretdetect.RedactOpaqueJSON(string(body)); redacted != string(body) {
 			utils.GetLogger(false).Logf("[security] egress backstop redacted secrets from outbound LLM request payload (per-tool redaction missed something — investigate if frequent)")
 			body = []byte(redacted)
-			// Defense in depth: RedactOpaque is now
-			// boundary-safe, but if any future rule still turns a valid
-			// payload into invalid JSON, refuse to send rather than emit
-			// corrupt bytes (the provider rejects them with a hard 400
-			// anyway) or leak the original secret by reverting.
+			// Defense in depth: RedactOpaqueJSON redacts each JSON string
+			// value in its decoded form and re-encodes the document, so a
+			// secret whose scan boundary spans a JSON escape can never
+			// orphan the escape (the "rule boundary bug"). This check is
+			// the final backstop: if a future change regresses that
+			// guarantee and the body is no longer valid JSON, refuse to
+			// send rather than emit corrupt bytes (the provider rejects
+			// them with a hard 400 anyway) or leak the original secret by
+			// reverting.
 			if json.Valid(original) && !json.Valid(body) {
-				utils.GetLogger(false).Logf("[security] egress redaction corrupted JSON body (secret boundary spans escape sequence); refusing to send")
+				utils.GetLogger(false).Logf("[security] egress redaction corrupted JSON body; refusing to send")
 				return nil, body, agenterrors.NewValidation("egress redaction produced invalid JSON; refusing to send (rule boundary bug)", nil)
 			}
 		}

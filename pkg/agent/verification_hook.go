@@ -5,7 +5,9 @@
 // verification report and the turn continues; after N repair attempts on
 // the same failing check the loop stops and the failure stands (SP-149
 // §149d). The last verification result is stored on the agent for the
-// final-reply contract (149.6) and the SP-151 verification event.
+// final-reply contract (149.6) and the SP-151 verification event. The
+// gate is Agent.TurnChangedApplicationPaths (turn_application_code.go):
+// documentation and .sprout bookkeeping changes never open it.
 
 package agent
 
@@ -73,7 +75,9 @@ func snapshotVerificationAttempts(attempts map[string]int) map[string]int {
 //   - the agent has no configuration, or verification is disabled — the
 //     default (SP-149 §149e: enabling it changes no other behavior);
 //   - the turn changed no application code (§149a: the run gates on the
-//     turn's own changes, Agent.TurnChangedPaths);
+//     turn's own changes, Agent.TurnChangedApplicationPaths — a turn
+//     that touched only documentation or .sprout bookkeeping skips the
+//     run);
 //   - the agent is a subagent (subagent turns run through subagent_runner
 //     and never own the final reply; belt-and-braces since that path does
 //     not reach this hook).
@@ -91,7 +95,7 @@ func (a *Agent) runTurnEndVerification(qc *queryRunContext, finalResult string) 
 	if cfg == nil || !cfg.VerificationEnabled() {
 		return finalResult, nil
 	}
-	if len(a.TurnChangedPaths()) == 0 {
+	if len(a.TurnChangedApplicationPaths()) == 0 {
 		return finalResult, nil
 	}
 	if a.subagentDepth > 0 {

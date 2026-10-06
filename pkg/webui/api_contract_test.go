@@ -321,6 +321,156 @@ func TestOpenAPISpecCoversAllRegisteredRoutes(t *testing.T) {
 		len(registered), len(info.Paths), len(allowlist), info.Version)
 }
 
+// gitReadRoutes are the git read endpoints the daemon exposes over GET. They
+// are the routes this file's OpenAPI paths document under the git tag.
+var gitReadRoutes = []string{
+	"/api/git/status",
+	"/api/git/diff",
+	"/api/git/log",
+	"/api/git/branches",
+	"/api/git/worktrees",
+	"/api/git/deep-review/fix/status",
+	"/api/git/commit/show",
+	"/api/git/commit/show/file",
+}
+
+// readOpenAPIDoc parses the full OpenAPI document into a generic tree so a
+// test can inspect individual path operations and components.
+func readOpenAPIDoc(t *testing.T, specPath string) map[string]interface{} {
+	t.Helper()
+	data, err := os.ReadFile(specPath) // #nosec G304 -- specPath is the repo-root-joined spec path
+	if err != nil {
+		t.Fatalf("read %s: %v", specPath, err)
+	}
+	var doc map[string]interface{}
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("parse %s: %v", specPath, err)
+	}
+	return doc
+}
+
+// asMap is a helper that type-asserts a value to a map, failing the test on a
+// mismatch so navigation errors surface with a clear message.
+func asMap(t *testing.T, v interface{}, what string) map[string]interface{} {
+	t.Helper()
+	m, ok := v.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected %s to be a map, got %T", what, v)
+	}
+	return m
+}
+
+// gitReadOp resolves the GET operation object for a documented path. It fails
+// the test if the path or its GET operation is absent.
+func gitReadOp(t *testing.T, doc map[string]interface{}, route string) map[string]interface{} {
+	t.Helper()
+	paths := asMap(t, doc["paths"], "paths")
+	path, ok := paths[route]
+	if !ok {
+		t.Fatalf("route %q is not a documented path in openapi.yaml", route)
+	}
+	ops := asMap(t, path, "path "+route)
+	op, ok := ops["get"]
+	if !ok {
+		t.Fatalf("route %q has no GET operation in openapi.yaml", route)
+	}
+	return asMap(t, op, "GET operation for "+route)
+}
+
+// assertOperationTaggedGit fails the test unless the path operation carries
+// the git tag.
+func assertOperationTaggedGit(t *testing.T, op map[string]interface{}, route string) {
+	t.Helper()
+	tags, ok := op["tags"]
+	if !ok {
+		t.Fatalf("GET operation for %q has no tags in openapi.yaml", route)
+		return
+	}
+	list, ok := tags.([]interface{})
+	if !ok {
+		t.Fatalf("GET operation for %q has a tags that is not a list", route)
+		return
+	}
+	for _, e := range list {
+		if s, ok := e.(string); ok && s == "git" {
+			return
+		}
+	}
+	t.Fatalf("GET operation for %q is not tagged git (tags: %v)", route, list)
+}
+
+// get200Ref returns the $ref string of a path operation's 200 JSON response,
+// failing the test if that response or its schema $ref is absent.
+func get200Ref(t *testing.T, op map[string]interface{}, route string) string {
+	t.Helper()
+	responses := asMap(t, op["responses"], "responses for GET "+route)
+	r200, ok := responses["200"]
+	if !ok {
+		t.Fatalf("GET operation for %q has no 200 response", route)
+	}
+	content := asMap(t, asMap(t, r200, "200 response for "+route)["content"], "200 content for "+route)
+	jsonMedia, found := content["application/json"]
+	if !found {
+		t.Fatalf("GET operation for %q 200 response has no application/json content", route)
+	}
+	schema := asMap(t, jsonMedia, "application/json media for "+route)["schema"]
+	schemaMap := asMap(t, schema, "200 schema for "+route)
+	ref, found := schemaMap["$ref"]
+	if !found {
+		t.Fatalf("GET operation for %q 200 schema is not a $ref", route)
+	}
+	refStr, ok := ref.(string)
+	if !ok {
+		t.Fatalf("GET operation for %q 200 schema $ref is not a string", route)
+	}
+	return refStr
+}
+
+// assertRefResolvesToComponentSchema fails the test unless a $ref of the form
+// #/components/schemas/<name> names a schema defined in the document.
+func assertRefResolvesToComponentSchema(t *testing.T, doc map[string]interface{}, ref string, route string) {
+	t.Helper()
+	const prefix = "#/components/schemas/"
+	if !strings.HasPrefix(ref, prefix) {
+		t.Fatalf("200 schema $ref for %q does not target components.schemas (got %q)", route, ref)
+	}
+	name := strings.TrimPrefix(ref, prefix)
+	components := asMap(t, doc["components"], "components")
+	schemas := asMap(t, components["schemas"], "components.schemas")
+	if _, found := schemas[name]; !found {
+		t.Fatalf("200 schema $ref %q for %q does not resolve to a defined component schema", ref, route)
+	}
+}
+
+// TestGitReadRoutesDocumentedAsGET pins the git read endpoints: each is a
+// documented GET operation tagged git with a 200 response that $refs a defined
+// component schema, and each has been removed from the undocumented allowlist.
+// The general lockstep test already proves the routes exist somewhere in the
+// contract; this one proves they are documented in the git-read shape this
+// family requires.
+func TestGitReadRoutesDocumentedAsGET(t *testing.T) {
+	root := repoRootFromWorkingDir(t)
+	specPath := filepath.Join(root, contractOpenAPIYAML)
+	allowPath := filepath.Join(root, contractAllowlist)
+
+	doc := readOpenAPIDoc(t, specPath)
+	allowlist := readAllowlist(t, allowPath)
+	allowSet := make(map[string]bool, len(allowlist))
+	for _, p := range allowlist {
+		allowSet[p] = true
+	}
+
+	for _, route := range gitReadRoutes {
+		if allowSet[route] {
+			t.Errorf("route %q is documented but still listed in undocumented.txt (the allowlist must shrink)", route)
+		}
+		op := gitReadOp(t, doc, route)
+		assertOperationTaggedGit(t, op, route)
+		ref := get200Ref(t, op, route)
+		assertRefResolvesToComponentSchema(t, doc, ref, route)
+	}
+}
+
 // TestOpenAPIContractTagsMirrorInventoryFamilies guards the tag set that later
 // items attach paths to: one tag per family, named exactly as the route
 // inventory groups them.

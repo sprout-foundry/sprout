@@ -457,6 +457,11 @@ type Agent struct {
 
 	// securityAnalysisCacheMu guards securityAnalysisCache against concurrent lazy-init and reset.
 	securityAnalysisCacheMu sync.Mutex
+
+	// workflowRun marks a workflow/automate run: non-interactive for approval
+	// purposes regardless of the console's TTY status. See
+	// workflow_run_approval.go for the policy and the accessors.
+	workflowRun atomic.Bool
 }
 
 // InjectWebUIManagers replaces the agent's internal approval and ask-user managers with the webui-owned instances.

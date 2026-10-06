@@ -220,8 +220,9 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 		return ctx, false
 	}
 
-	// Prefer webui approval path when a browser tab is connected.
-	if mgr := agent.GetSecurityApprovalMgr(); mgr != nil && agent.GetEventBus() != nil && agent.HasActiveWebUIClients() {
+	// Prefer webui approval path when a browser tab is connected. A
+	// workflow/automate run is excluded so it never blocks on the dialog.
+	if mgr := agent.GetSecurityApprovalMgr(); mgr != nil && agent.GetEventBus() != nil && !agent.IsWorkflowRun() && agent.HasActiveWebUIClients() {
 		// Suspend CLI spinner and steer reader before blocking on the
 		// webui response — same rationale as the tool approval path above.
 		clihooks.SuspendIndicator()
@@ -253,7 +254,7 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 	// CLI: prompt user interactively via terminal stdin
 	agentConfig := agent.GetConfig()
 	logger := utils.GetLogger(agentConfig != nil && agentConfig.SkipPrompt)
-	canPrompt := logger != nil && logger.IsInteractive()
+	canPrompt := logger != nil && logger.IsInteractive() && !agent.IsWorkflowRun()
 
 	if canPrompt {
 		promptTier := utils.FilesystemPromptExternal

@@ -128,7 +128,7 @@ func (a *Agent) promptForDestructiveApp(action string, args map[string]any, fg c
 	}
 
 	// ---- WebUI path ----
-	if mgr := a.GetSecurityApprovalMgr(); mgr != nil && a.GetEventBus() != nil && a.HasActiveWebUIClients() {
+	if mgr := a.GetSecurityApprovalMgr(); mgr != nil && a.GetEventBus() != nil && a.HasActiveWebUIClients() && !a.IsWorkflowRun() {
 		clihooks.SuspendIndicator()
 		clihooks.PauseSteer()
 		defer clihooks.ResumeIndicator()
@@ -167,8 +167,10 @@ func (a *Agent) promptForDestructiveApp(action string, args map[string]any, fg c
 	}
 
 	// ---- CLI fallback ----
+	// A workflow/automate run never prompts: resolve as deny (safe default)
+	// rather than blocking on a prompt nobody answers.
 	logger := utils.GetLogger(false)
-	if logger != nil && logger.IsInteractive() {
+	if logger != nil && logger.IsInteractive() && !a.IsWorkflowRun() {
 		if logger.AskForConfirmation(prompt, false, true) {
 			computer_use.RecordSafetyEvent("destructive_app_prompt", map[string]any{
 				"app":      matchedApp,

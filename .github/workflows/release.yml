@@ -296,6 +296,13 @@ jobs:
     - name: Build cloud-mode webui bundle for platform vendoring
       run: node scripts/build-webui-dist.mjs --mode cloud --output dist/sprout-webui-cloud
 
+    - name: Verify cloud bundle base path is /webui/
+      # Hosts serve this bundle under /webui/, so every asset URL in the
+      # released index.html must be /webui/-rooted; a root-absolute /assets/*
+      # URL would be answered by the host's dashboard SPA and break the page.
+      # Exits non-zero on a regression (e.g. the bundle built at base /).
+      run: node scripts/verify-webui-dist-base.mjs dist/sprout-webui-cloud
+
     - name: Package cloud-mode webui bundle
       # Stable filename (no version embedded) so platform's vendor workflow
       # can fetch the latest with `gh release download --pattern`. The

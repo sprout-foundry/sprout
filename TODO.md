@@ -257,6 +257,12 @@ protects.
       strings added by the automated work ("TODO 153.6", "item 149.5",
       "(152.7)", "SP-149 §149a" in the manual-check reason). Spec-level
       references in docs are fine.
+      Remaining: ~690 tagged comment/string occurrences across `pkg/`,
+      `cmd/`, `webui/src/`, `test/` (the SP-148..157 series, plus some
+      pre-existing). A scripted sweep was attempted and rejected: naive
+      tag-stripping corrupts real code/strings (e.g. `.sprout`, `Load()`)
+      and leaves ungrammatical prose, so this needs per-file review.
+      Newly authored tags this session were already cleaned. Not yet done.
 - [ ] **rules.2** Split files over 500 lines introduced or grown by the
       automated work (`pkg/agent/seed_provider_chat.go`,
       `pkg/benchmark/runner_test.go`, `config_roles_test.go`,
@@ -267,13 +273,18 @@ protects.
 Small fixes to how the hosted web UI bundle is built and cached; they are
 needed whatever the integration work does. Spec context: SP-160 §160e.
 
-- [ ] **hyg.1** Release cloud bundle base path and mode: `.github/workflows/release.yml`
+- [x] **hyg.1** Release cloud bundle base path and mode: `.github/workflows/release.yml`
       runs `scripts/build-webui-dist.mjs --mode cloud`, which builds in
       production mode at base `/`, while hosts serve the bundle under
       `/webui/` (root-absolute `/assets/*` URLs break there; see the comment
       in `webui/vite.config.ts`). Build the released cloud bundle at
       `/webui/` in production mode, and add a test or CI check that the
       released `index.html` references only `/webui/` asset URLs.
+      Fixed: the cloud branch passes `-- --mode cloud` to `npm run build`, so
+      Vite selects base `/webui/` while staying a production build
+      (`isProd` now keys on the build command, not the mode label). A CI
+      check (`scripts/verify-webui-dist-base.mjs`) fails when the released
+      `index.html` carries non-`/webui/` asset URLs; pinned by vitest.
 - [ ] **hyg.2** Content-hash the WASM assets: `sprout.wasm` and
       `wasm_exec.js` keep fixed names in the bundle (`build-webui-dist.mjs`,
       `services/wasmShell.ts` probes `/webui/wasm` and `/wasm`), so a host

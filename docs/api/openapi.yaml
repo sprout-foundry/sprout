@@ -2552,6 +2552,765 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /api/git/branch/create:
+    post:
+      tags: [git]
+      summary: Create a new branch and check it out.
+      description: >-
+        Validates the branch name with git check-ref-format and then runs
+        git checkout -b to create and switch to the new branch. The branch
+        name is validated as a valid ref before the checkout is attempted.
+      operationId: gitBranchCreate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GitBranchCreateRequest"
+      responses:
+        "200":
+          description: The branch was created and checked out.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitBranchCreateResponse"
+        "400":
+          description: Invalid JSON, a missing branch name, or an invalid branch name.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts POST.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The branch could not be created or checked out.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/git/checkout:
+    post:
+      tags: [git]
+      summary: Switch to an existing branch.
+      description: >-
+        Checks out the named branch in the active workspace. The branch name
+        must be non-empty and must not start with a hyphen.
+      operationId: gitCheckout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GitBranchSwitchRequest"
+      responses:
+        "200":
+          description: The branch was checked out.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitBranchSwitchResponse"
+        "400":
+          description: Invalid JSON, a missing branch name, or an invalid branch name.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts POST.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The branch could not be checked out.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/git/commit:
+    post:
+      tags: [git]
+      summary: Commit the currently staged changes.
+      description: >-
+        Creates a commit from the staged changes using the provided message.
+        Fails when there are no staged changes. The response echoes the git
+        commit output.
+      operationId: gitCommit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GitCommitRequest"
+      responses:
+        "200":
+          description: The commit was created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitCommitCreateResponse"
+        "400":
+          description: Invalid JSON, a missing commit message, or no staged changes to commit.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts POST.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The commit could not be created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/git/commit-message:
+    post:
+      tags: [git]
+      summary: Generate an AI commit message from the staged changes.
+      description: >-
+        Generates a commit message for the currently staged changes without
+        creating a commit. Requires a staged diff and at least one staged
+        file change; the configured provider and model are used. Takes no
+        request body.
+      operationId: gitCommitMessage
+      responses:
+        "200":
+          description: The generated commit message and the model that produced it.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitCommitMessageResponse"
+        "400":
+          description: No staged changes to generate a message from.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts POST.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The staged diff could not be read, the provider could not be resolved, or generation failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: No AI agent or its configuration is available.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/git/confirm:
+    post:
+      tags: [git]
+      summary: Respond to a pending security approval or prompt.
+      description: >-
+        Records the user's response to a pending security approval or file
+        security prompt, identified by request_id. The optional action
+        carries the multi-option dialog choice; when it is empty the boolean
+        response is used instead. Legal action values are approve_once,
+        approve_always, elevate, allow_folder_session, and deny. Returns 404
+        when the request_id is unknown or already handled.
+      operationId: gitConfirm
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GitConfirmRequest"
+      responses:
+        "200":
+          description: The response was recorded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitSuccessResponse"
+        "400":
+          description: Invalid JSON or a missing request_id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: The request_id is not found or was already handled.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts POST.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/git/deep-review:
+    post:
+      tags: [git]
+      summary: Review the staged changes with reviewer subagents.
+      description: >-
+        Reviews the staged change with reviewer subagents (the same
+        review_changes pipeline) and returns structured verdict and guidance
+        for the review tab's fix picker. Requires staged changes. Takes no
+        request body.
+      operationId: gitDeepReview
+      responses:
+        "200":
+          description: The review completed; the verdict and guidance for the fix picker.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitDeepReviewResponse"
+        "400":
+          description: No staged changes were found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts POST.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The review failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: No AI agent is available.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/git/deep-review/fix:
+    post:
+      tags: [git]
+      summary: Run the deep-review fix workflow and block until it completes.
+      description: >-
+        Runs the fix workflow for the given deep-review output and blocks
+        until it completes, then returns the workflow's final result. This is
+        the legacy synchronous form; the /api/git/deep-review/fix/start and
+        /api/git/deep-review/fix/status pair is the preferred job-based form.
+      operationId: gitDeepReviewFix
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GitDeepReviewFixRequest"
+      responses:
+        "200":
+          description: The fix workflow completed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitDeepReviewFixResponse"
+        "400":
+          description: Invalid JSON or a missing review_output.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts POST.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The fix workflow could not be started, failed to run, or produced no result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/git/deep-review/fix/start:
+    post:
+      tags: [git]
+      summary: Start an isolated deep-review fix job.
+      description: >-
+        Starts an isolated full-agent fix workflow job for the given
+        deep-review output and returns its job_id and session_id so the
+        client can poll /api/git/deep-review/fix/status.
+      operationId: gitDeepReviewFixStart
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GitDeepReviewFixRequest"
+      responses:
+        "200":
+          description: The fix job was started.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitDeepReviewFixStartResponse"
+        "400":
+          description: Invalid JSON or a missing review_output.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts POST.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The fix job could not be started.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/git/discard:
+    post:
+      tags: [git]
+      summary: Discard changes to a file.
+      description: >-
+        Reverts a file's changes back to HEAD, regardless of whether they are
+        staged, unstaged, both, or the file is untracked (untracked files are
+        deleted). The path must name a file that is part of the git changes.
+      operationId: gitDiscard
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GitFileOperationRequest"
+      responses:
+        "200":
+          description: The changes were discarded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitFileOperationResponse"
+        "400":
+          description: Invalid JSON, a missing or invalid path, or the file is not part of the git changes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts POST.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The changes could not be discarded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/git/pull:
+    post:
+      tags: [git]
+      summary: Pull the latest changes from the upstream branch.
+      description: >-
+        Runs git pull --ff-only in the active workspace. Takes no request
+        body. The response echoes the git pull output.
+      operationId: gitPull
+      responses:
+        "200":
+          description: The pull completed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitPullPushResponse"
+        "405":
+          description: The route only accepts POST.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The pull failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/git/pull-request:
+    post:
+      tags: [git]
+      summary: Create a pull request.
+      description: >-
+        Creates a pull request via the gh CLI or the GitHub API. The title is
+        required; body, base, and head are optional and fall back to the
+        repository default branch and current branch. On success the response
+        carries the PR url and number; on failure it carries success=false and
+        an error string instead.
+      operationId: gitPullRequest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GitPullRequestCreate"
+      responses:
+        "200":
+          description: The pull request was created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitPullRequestResponse"
+        "400":
+          description: Invalid JSON or a missing PR title.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts POST.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Pull request creation failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitPullRequestResponse"
+  /api/git/push:
+    post:
+      tags: [git]
+      summary: Push the current branch to its upstream.
+      description: >-
+        Runs git push in the active workspace. Takes no request body. The
+        response echoes the git push output.
+      operationId: gitPush
+      responses:
+        "200":
+          description: The push completed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitPullPushResponse"
+        "405":
+          description: The route only accepts POST.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The push failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/git/revert:
+    post:
+      tags: [git]
+      summary: Revert a commit.
+      description: >-
+        Runs git revert --no-edit for the given commit hash. The hash must be
+        non-empty and must not start with a hyphen. The response echoes the
+        reverted commit hash.
+      operationId: gitRevert
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GitCommitRevertRequest"
+      responses:
+        "200":
+          description: The commit was reverted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitCommitRevertResponse"
+        "400":
+          description: Invalid JSON, a missing commit hash, or an invalid commit hash.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts POST.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The commit could not be reverted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/git/stage:
+    post:
+      tags: [git]
+      summary: Stage a file.
+      description: >-
+        Stages the file at the given path with git add. The path must be
+        non-empty and must name a file that is part of the git changes.
+      operationId: gitStage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GitFileOperationRequest"
+      responses:
+        "200":
+          description: The file was staged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitFileOperationResponse"
+        "400":
+          description: Invalid JSON, a missing or invalid path, or the file is not part of the git changes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts POST.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The file could not be staged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/git/stage-all:
+    post:
+      tags: [git]
+      summary: Stage all changes.
+      description: >-
+        Stages all changes with git add -A in the active workspace. Takes no
+        request body.
+      operationId: gitStageAll
+      responses:
+        "200":
+          description: All changes were staged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitMessageResponse"
+        "405":
+          description: The route only accepts POST.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The changes could not be staged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/git/unstage:
+    post:
+      tags: [git]
+      summary: Unstage a file.
+      description: >-
+        Unstages the file at the given path with git reset HEAD. The path must
+        be non-empty and must name a file that is part of the git changes.
+      operationId: gitUnstage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GitFileOperationRequest"
+      responses:
+        "200":
+          description: The file was unstaged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitFileOperationResponse"
+        "400":
+          description: Invalid JSON, a missing or invalid path, or the file is not part of the git changes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts POST.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The file could not be unstaged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/git/unstage-all:
+    post:
+      tags: [git]
+      summary: Unstage all changes.
+      description: >-
+        Unstages all changes with git reset HEAD in the active workspace.
+        Takes no request body.
+      operationId: gitUnstageAll
+      responses:
+        "200":
+          description: All changes were unstaged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitMessageResponse"
+        "405":
+          description: The route only accepts POST.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The changes could not be unstaged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/git/worktree/checkout:
+    post:
+      tags: [git]
+      summary: Switch to an existing worktree.
+      description: >-
+        Switches the active workspace to the worktree at the given path. The
+        path must resolve to a worktree that git already knows about. Chat
+        sessions are preserved and the workspace is re-rooted to the target.
+      operationId: gitWorktreeCheckout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GitWorktreePathRequest"
+      responses:
+        "200":
+          description: Switched to the worktree.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitWorktreeCheckoutResponse"
+        "400":
+          description: Invalid JSON, a missing or invalid path, or the worktree was not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts POST.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The worktree list could not be read.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/git/worktree/create:
+    post:
+      tags: [git]
+      summary: Create a new worktree.
+      description: >-
+        Creates a new worktree at the given path on a new branch. When
+        base_ref is provided the branch is created from that ref; otherwise it
+        is created from the current HEAD. The path must stay within the
+        workspace or sit beside it. Returns 409 when the branch already exists.
+      operationId: gitWorktreeCreate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GitWorktreeCreateRequest"
+      responses:
+        "200":
+          description: The worktree was created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitWorktreeCreateResponse"
+        "400":
+          description: Invalid JSON, a missing path or branch, an invalid path, or an invalid branch name.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts POST.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: A branch with that name already exists.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The worktree could not be created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/git/worktree/remove:
+    post:
+      tags: [git]
+      summary: Remove an existing worktree.
+      description: >-
+        Removes the worktree at the given path. The path must not be the
+        current workspace and must stay within the workspace or sit beside it.
+      operationId: gitWorktreeRemove
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GitWorktreePathRequest"
+      responses:
+        "200":
+          description: The worktree was removed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitWorktreeRemoveResponse"
+        "400":
+          description: Invalid JSON, a missing or invalid path, or the path is the current worktree.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "405":
+          description: The route only accepts POST.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: The worktree could not be removed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 components:
   schemas:
     Error:
@@ -4831,6 +5590,399 @@ components:
         - original_content
         - modified_content
         - contents_truncated
+    GitSuccessResponse:
+      type: object
+      description: A boolean success acknowledgement from a mutating git endpoint.
+      properties:
+        success:
+          type: boolean
+          description: Whether the operation succeeded.
+        message:
+          type: string
+          description: A human-readable status message.
+      required:
+        - success
+        - message
+    GitMessageResponse:
+      type: object
+      description: A message-only acknowledgement from a mutating git endpoint (no success flag).
+      properties:
+        message:
+          type: string
+          description: A human-readable status message.
+      required:
+        - message
+    GitBranchCreateRequest:
+      type: object
+      description: The request body for /api/git/branch/create.
+      properties:
+        name:
+          type: string
+          description: The name of the new branch. Required.
+      required:
+        - name
+    GitBranchCreateResponse:
+      type: object
+      description: The response from /api/git/branch/create.
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        branch:
+          type: string
+          description: The branch that was created and checked out.
+      required:
+        - success
+        - message
+        - branch
+    GitBranchSwitchRequest:
+      type: object
+      description: The request body for /api/git/checkout.
+      properties:
+        branch:
+          type: string
+          description: The branch to check out. Required.
+      required:
+        - branch
+    GitBranchSwitchResponse:
+      type: object
+      description: The response from /api/git/checkout.
+      properties:
+        message:
+          type: string
+        branch:
+          type: string
+          description: The branch that was checked out.
+      required:
+        - message
+        - branch
+    GitCommitRequest:
+      type: object
+      description: The request body for /api/git/commit.
+      properties:
+        message:
+          type: string
+          description: The commit message. Required.
+        files:
+          type: array
+          items:
+            type: string
+          description: The file paths associated with the commit.
+      required:
+        - message
+    GitCommitCreateResponse:
+      type: object
+      description: The response from /api/git/commit.
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        commit:
+          type: string
+          description: The git commit output.
+      required:
+        - success
+        - message
+        - commit
+    GitCommitMessageResponse:
+      type: object
+      description: The response from /api/git/commit-message.
+      properties:
+        message:
+          type: string
+        commit_message:
+          type: string
+          description: The generated commit message.
+        provider:
+          type: string
+          description: The provider the message was generated with.
+        model:
+          type: string
+          description: The model the message was generated with.
+        warnings:
+          type: array
+          items:
+            type: string
+          description: Warnings produced while budgeting the staged diff.
+      required:
+        - message
+        - commit_message
+        - provider
+        - model
+        - warnings
+    GitCommitRevertRequest:
+      type: object
+      description: The request body for /api/git/revert.
+      properties:
+        commit:
+          type: string
+          description: The commit hash to revert. Required.
+      required:
+        - commit
+    GitCommitRevertResponse:
+      type: object
+      description: The response from /api/git/revert.
+      properties:
+        message:
+          type: string
+        commit:
+          type: string
+          description: The commit hash that was reverted.
+      required:
+        - message
+        - commit
+    GitConfirmRequest:
+      type: object
+      description: The request body for /api/git/confirm.
+      properties:
+        request_id:
+          type: string
+          description: The security approval or prompt to respond to. Required.
+        response:
+          type: boolean
+          description: The boolean response used when action is empty.
+        action:
+          type: string
+          description: The multi-option dialog choice; falls back to response when empty.
+          enum: [approve_once, approve_always, elevate, allow_folder_session, deny]
+      required:
+        - request_id
+    GitDeepReviewResponse:
+      type: object
+      description: The response from /api/git/deep-review.
+      properties:
+        message:
+          type: string
+        status:
+          type: string
+          description: The review verdict, mapped to approved, needs_revision, or inconclusive.
+          enum: [approved, needs_revision, inconclusive]
+        feedback:
+          type: string
+          description: The one-line verdict and finding counts.
+        detailed_guidance:
+          type: string
+          description: The structured guidance (a JSON object keyed by severity) for the fix picker.
+        review_output:
+          type: string
+          description: The full markdown review.
+        provider:
+          type: string
+          description: The provider that ran the review.
+        model:
+          type: string
+          description: The model that ran the review.
+      required:
+        - message
+        - status
+        - feedback
+        - detailed_guidance
+        - review_output
+        - provider
+        - model
+    GitDeepReviewFixRequest:
+      type: object
+      description: The request body for /api/git/deep-review/fix and /api/git/deep-review/fix/start.
+      properties:
+        review_output:
+          type: string
+          description: The deep-review output to fix. Required.
+        fix_prompt:
+          type: string
+          description: Additional fix instructions from the user.
+        selected_items:
+          type: array
+          items:
+            type: string
+          description: The selected review items to use as input.
+      required:
+        - review_output
+    GitDeepReviewFixResponse:
+      type: object
+      description: The response from /api/git/deep-review/fix (the synchronous, blocking form).
+      properties:
+        message:
+          type: string
+        result:
+          type: string
+          description: The fix workflow's final result.
+        session_id:
+          type: string
+          description: The isolated fix session ID.
+      required:
+        - message
+        - result
+        - session_id
+    GitDeepReviewFixStartResponse:
+      type: object
+      description: The response from /api/git/deep-review/fix/start.
+      properties:
+        message:
+          type: string
+        job_id:
+          type: string
+          description: The fix-job ID to poll for status.
+        session_id:
+          type: string
+          description: The isolated fix session ID.
+      required:
+        - message
+        - job_id
+        - session_id
+    GitFileOperationRequest:
+      type: object
+      description: The request body for the per-file git staging endpoints (/api/git/stage, /api/git/unstage, /api/git/discard).
+      properties:
+        path:
+          type: string
+          description: The file to operate on, relative to the workspace root. Required.
+      required:
+        - path
+    GitFileOperationResponse:
+      type: object
+      description: The response from the per-file git staging endpoints.
+      properties:
+        message:
+          type: string
+        path:
+          type: string
+          description: The file the operation applied to.
+      required:
+        - message
+        - path
+    GitPullPushResponse:
+      type: object
+      description: The response from /api/git/pull and /api/git/push.
+      properties:
+        message:
+          type: string
+        output:
+          type: string
+          description: The git command output.
+      required:
+        - message
+        - output
+    GitPullRequestCreate:
+      type: object
+      description: The request body for /api/git/pull-request.
+      properties:
+        title:
+          type: string
+          description: The pull request title. Required.
+        body:
+          type: string
+          description: The pull request body.
+        base:
+          type: string
+          description: The target branch.
+        head:
+          type: string
+          description: The source branch.
+        draft:
+          type: boolean
+          description: Whether to create the pull request as a draft.
+      required:
+        - title
+    GitPullRequestResponse:
+      type: object
+      description: The response from /api/git/pull-request (both the success and the 500 failure shape).
+      properties:
+        success:
+          type: boolean
+          description: Whether the pull request was created.
+        url:
+          type: string
+          description: The pull request URL.
+        number:
+          type: integer
+          description: The pull request number.
+        state:
+          type: string
+          description: The pull request state (open or closed).
+        error:
+          type: string
+          description: The failure reason; present when success is false.
+      required:
+        - success
+    GitWorktreePathRequest:
+      type: object
+      description: The request body for /api/git/worktree/checkout and /api/git/worktree/remove.
+      properties:
+        path:
+          type: string
+          description: The worktree path. Required.
+      required:
+        - path
+    GitWorktreeCreateRequest:
+      type: object
+      description: The request body for /api/git/worktree/create.
+      properties:
+        path:
+          type: string
+          description: The worktree path, relative to the workspace root. Required.
+        branch:
+          type: string
+          description: The new branch to check out in the worktree. Required.
+        base_ref:
+          type: string
+          description: The ref to base the new branch on; defaults to the current HEAD.
+      required:
+        - path
+        - branch
+    GitWorktreeCreateResponse:
+      type: object
+      description: The response from /api/git/worktree/create.
+      properties:
+        message:
+          type: string
+        path:
+          type: string
+          description: The resolved absolute worktree path.
+        branch:
+          type: string
+          description: The branch checked out in the worktree.
+        output:
+          type: string
+          description: The git worktree add output.
+      required:
+        - message
+        - path
+        - branch
+        - output
+    GitWorktreeRemoveResponse:
+      type: object
+      description: The response from /api/git/worktree/remove.
+      properties:
+        message:
+          type: string
+        path:
+          type: string
+          description: The resolved absolute worktree path.
+        output:
+          type: string
+          description: The git worktree remove output.
+      required:
+        - message
+        - path
+        - output
+    GitWorktreeCheckoutResponse:
+      type: object
+      description: The response from /api/git/worktree/checkout.
+      properties:
+        message:
+          type: string
+        path:
+          type: string
+          description: The resolved absolute worktree path.
+        workspace:
+          type: string
+          description: The workspace root after the switch.
+      required:
+        - message
+        - path
+        - workspace
   parameters:
     chatId:
       # Shared query-parameter form of the chat-scoping knob: the chat session

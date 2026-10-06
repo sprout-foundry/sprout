@@ -30,12 +30,23 @@ type fakeModelClient struct {
 	calls  int
 	system string
 	user   string
+	// block, when non-nil, holds Complete until it is closed (or the
+	// derived call context is done) so the timeout-fallback path can be
+	// exercised deterministically.
+	block chan struct{}
 }
 
 func (f *fakeModelClient) Complete(ctx context.Context, systemPrompt, userPrompt string) (string, error) {
 	f.calls++
 	f.system = systemPrompt
 	f.user = userPrompt
+	if f.block != nil {
+		select {
+		case <-f.block:
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+	}
 	return f.result, f.err
 }
 

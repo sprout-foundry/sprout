@@ -192,4 +192,58 @@ describe('AgentEscalationBridge', () => {
     await expect(pending).resolves.toMatchObject({ ran: true });
     expect(runTxnCommand).toHaveBeenLastCalledWith(REPO, 'npm test', expect.any(Function), { kind: 'cloud' });
   });
+
+  describe('inline run status lifecycle', () => {
+    /** Start a run whose phases the test drives, returning the phase emitter. */
+    async function runWithPhases(): Promise<{ emit: (phase: string) => void; settle: () => void }> {
+      let emitPhase!: (phase: string) => void;
+      let resolveRun!: (v: typeof OK) => void;
+      runTxnCommand.mockImplementation((_repo: string, _cmd: string, onPhase: (p: string) => void) => {
+        emitPhase = onPhase;
+        return new Promise((resolve) => {
+          resolveRun = resolve;
+        });
+      });
+      render(<AgentEscalationBridge repoURL={REPO} />);
+      await ask('npm test');
+      fireEvent.click(screen.getByRole('button', { name: 'Run once' }));
+      await waitFor(() => expect(emitPhase).toBeDefined());
+      return {
+        emit: (phase) => act(() => emitPhase(phase)),
+        settle: () => act(() => resolveRun(OK)),
+      };
+    }
+
+    it('shows a status during a run and clears it on the terminal "done" phase', async () => {
+      const { emit, settle } = await runWithPhases();
+      emit('opening');
+      expect(screen.getByRole('status')).toHaveTextContent(/Starting cloud container/);
+      emit('running');
+      expect(screen.getByRole('status')).toHaveTextContent(/Running command/);
+      emit('done');
+      expect(screen.queryByRole('status')).toBeNull();
+      settle();
+    });
+
+    it('clears the status on the terminal "error" phase (a run that failed before pulling)', async () => {
+      const { emit } = await runWithPhases();
+      emit('opening');
+      expect(screen.getByRole('status')).toBeTruthy();
+      emit('error');
+      expect(screen.queryByRole('status')).toBeNull();
+    });
+
+    it('clears a stalled status when no next phase arrives (watchdog)', async () => {
+      vi.useFakeTimers();
+      try {
+        const { emit } = await runWithPhases();
+        emit('opening');
+        expect(screen.getByRole('status')).toBeTruthy();
+        act(() => vi.advanceTimersByTime(120_000));
+        expect(screen.queryByRole('status')).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
 });

@@ -17,6 +17,8 @@ const mockGitClient = {
   log: vi.fn().mockResolvedValue([]),
   listBranches: vi.fn().mockResolvedValue([]),
   listRemoteBranches: vi.fn().mockResolvedValue([]),
+  getConfig: vi.fn().mockResolvedValue(null),
+  setConfig: vi.fn().mockResolvedValue(undefined),
   currentBranch: vi.fn().mockResolvedValue('main'),
   branch: vi.fn().mockResolvedValue(undefined),
   checkout: vi.fn().mockResolvedValue(undefined),
@@ -56,6 +58,8 @@ beforeEach(() => {
   mockGitClient.log.mockResolvedValue([]);
   mockGitClient.listBranches.mockResolvedValue([]);
   mockGitClient.listRemoteBranches.mockResolvedValue([]);
+  mockGitClient.getConfig.mockResolvedValue(null);
+  mockGitClient.setConfig.mockResolvedValue(undefined);
   mockGitClient.currentBranch.mockResolvedValue('main');
   mockGitClient.branch.mockResolvedValue(undefined);
   mockGitClient.checkout.mockResolvedValue(undefined);
@@ -93,8 +97,8 @@ function findTool(name: string): AgentGitToolDefinition {
 // ── Structure tests ──────────────────────────────────────────────────
 
 describe('AGENT_GIT_TOOLS structure', () => {
-  it('has 17 tool definitions', () => {
-    expect(AGENT_GIT_TOOLS).toHaveLength(17);
+  it('has 18 tool definitions', () => {
+    expect(AGENT_GIT_TOOLS).toHaveLength(18);
   });
 
   it('each tool has required fields', () => {
@@ -117,7 +121,7 @@ describe('AGENT_GIT_TOOLS structure', () => {
   });
 
   it('AGENT_GIT_TOOL_NAMES matches all tool names', () => {
-    expect(AGENT_GIT_TOOL_NAMES.size).toBe(17);
+    expect(AGENT_GIT_TOOL_NAMES.size).toBe(18);
     for (const tool of AGENT_GIT_TOOLS) {
       expect(AGENT_GIT_TOOL_NAMES.has(tool.name)).toBe(true);
     }
@@ -129,6 +133,7 @@ describe('AGENT_GIT_TOOLS structure', () => {
       'git_diff',
       'git_log',
       'git_branch_list',
+      'git_config',
       'git_read_file',
       'git_write_file',
       'git_list_files',
@@ -477,6 +482,31 @@ describe('git_refs', () => {
     mockGitClient.listRemoteBranches.mockRejectedValue(new Error('no remote'));
     const result = await findTool('git_refs').execute({ repo: 'owner/repo' });
     expect(result).toContain('(none fetched)');
+  });
+});
+
+describe('git_config', () => {
+  it('reads a config value', async () => {
+    mockGitClient.getConfig.mockResolvedValue('Alice');
+    const result = await findTool('git_config').execute({ repo: 'owner/repo', key: 'user.name' });
+    expect(result).toBe('user.name = Alice');
+    expect(mockGitClient.getConfig).toHaveBeenCalledWith('/repos/owner/repo', 'user.name');
+  });
+
+  it('reports an unset key', async () => {
+    mockGitClient.getConfig.mockResolvedValue(null);
+    const result = await findTool('git_config').execute({ repo: 'owner/repo', key: 'user.email' });
+    expect(result).toBe('user.email is not set in owner/repo');
+  });
+
+  it('sets a config value', async () => {
+    const result = await findTool('git_config').execute({
+      repo: 'owner/repo',
+      key: 'user.name',
+      value: 'Alice',
+    });
+    expect(result).toBe('Set user.name = Alice in owner/repo');
+    expect(mockGitClient.setConfig).toHaveBeenCalledWith('/repos/owner/repo', 'user.name', 'Alice');
   });
 });
 

@@ -739,6 +739,24 @@ export async function gitMove(from: string, to: string) {
   return { message: 'ok', from, to };
 }
 
+/** git list-branches helper mirroring the shell's ref view. */
+export async function gitConfigGet(key: string): Promise<string | null> {
+  await ensureInitialized();
+  try {
+    const value = await git.getConfig({ fs: getFs().promises, dir: REPO_DIR, path: key });
+    return typeof value === 'string' ? value : null;
+  } catch {
+    // best-effort: an unset key reads as null.
+    return null;
+  }
+}
+
+/** Set a git config value (e.g. user.name) on the browser repo. */
+export async function gitConfigSet(key: string, value: string): Promise<void> {
+  await ensureInitialized();
+  await git.setConfig({ fs: getFs().promises, dir: REPO_DIR, path: key, value });
+}
+
 /**
  * Git operations that browser mode does NOT support.
  *

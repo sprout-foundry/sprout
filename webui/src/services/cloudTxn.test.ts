@@ -52,6 +52,27 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('cloudTxn open-phase timeout', () => {
+  it('createTxn rejects when the open request hangs past the budget', async () => {
+    vi.useFakeTimers();
+    // A fetch that never settles until aborted — simulates a hung platform.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        (_input: RequestInfo | URL, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+          }),
+      ),
+    );
+    const pending = createTxn('ws-1');
+    const assertion = expect(pending).rejects.toThrow(/timed out/);
+    await vi.advanceTimersByTimeAsync(120_000);
+    await assertion;
+    vi.useRealTimers();
+  });
+});
+
 describe('cloudTxn base64 helpers', () => {
   it('roundtrips arbitrary bytes (binary-safe, no chunk boundaries hit)', () => {
     const bytes = new Uint8Array(0x9000);

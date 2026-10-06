@@ -26,6 +26,8 @@ import {
   gitCheckout,
   gitClone,
   gitCommit,
+  gitConfigGet,
+  gitConfigSet,
   gitCreateBranch,
   gitDiff,
   gitFetch,
@@ -364,6 +366,26 @@ async function runMv(args: string[]): Promise<ShellGitResult> {
   return ok('');
 }
 
+/** git config <key> [<value>] [--list] — read/write repo config (identity). */
+async function runConfig(args: string[]): Promise<ShellGitResult> {
+  const positional = args.filter((a) => !a.startsWith('-'));
+  if (args.includes('--list') || args.includes('-l')) {
+    const name = await gitConfigGet('user.name');
+    const email = await gitConfigGet('user.email');
+    const lines = [name ? `user.name=${name}` : '', email ? `user.email=${email}` : ''].filter(Boolean);
+    return ok(lines.length ? lines.join('\n') + '\n' : '');
+  }
+  const key = positional[0];
+  if (!key) return fail('error: key required\n', 1);
+  if (positional.length >= 2) {
+    await gitConfigSet(key, positional[1]);
+    return ok('');
+  }
+  const value = await gitConfigGet(key);
+  if (value === null) return fail('', 1);
+  return ok(value + '\n');
+}
+
 // ── Registry & global installation ───────────────────────────────────────
 
 export const SHELL_GIT_SUBCOMMANDS: Record<string, (args: string[]) => Promise<ShellGitResult>> = {
@@ -389,6 +411,7 @@ export const SHELL_GIT_SUBCOMMANDS: Record<string, (args: string[]) => Promise<S
   clone: runClone,
   rm: runRm,
   mv: runMv,
+  config: runConfig,
 };
 
 export interface SproutShellGitGlobal {

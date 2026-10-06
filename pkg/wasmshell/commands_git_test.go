@@ -385,7 +385,7 @@ func TestGit_WriteSubcommandsAreAllowed(t *testing.T) {
 	// 127, not the "unknown subcommand" ESCALATE 127 with its distinct message.
 	RegisterGitExecutor(nil)
 	defer RegisterGitExecutor(nil)
-	for _, sub := range []string{"add", "commit", "checkout", "fetch", "push", "pull", "init", "clone", "rm", "mv"} {
+	for _, sub := range []string{"add", "commit", "checkout", "fetch", "push", "pull", "init", "clone", "rm", "mv", "config"} {
 		if !GitSubcommands[sub] {
 			t.Errorf("git %s should be an allowed subcommand", sub)
 		}

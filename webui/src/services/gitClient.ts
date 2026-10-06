@@ -105,6 +105,11 @@ function tokenAuth(token: string | undefined): GitAuth {
   return { username: 'x-access-token', password: token ?? '' };
 }
 
+// Fallback identity for commit/pull when no author is supplied and no
+// user.name/user.email is configured. Without it isomorphic-git refuses to
+// write a commit ("No name was provided for author").
+const DEFAULT_AUTHOR: GitAuthor = { name: 'Sprout User', email: 'user@sprout.local' };
+
 class GitClient {
   private fs: LightningFS;
   private pfs: LightningFS['promises'];
@@ -179,10 +184,29 @@ class GitClient {
         dir,
         ref: opts.branch,
         singleBranch: true,
-        author: opts.author,
+        // A pull that merges creates a commit, and isomorphic-git requires an
+        // author for it. Without a default, a merge needs a configured
+        // user.name/user.email and otherwise fails with "No name was provided".
+        author: opts.author ?? DEFAULT_AUTHOR,
         onAuth: opts.token ? () => Promise.resolve(tokenAuth(opts.token)) : undefined,
       });
     });
+  }
+
+  /** Read a git config value (e.g. "user.name"), or null when unset. */
+  async getConfig(dir: string, path: string): Promise<string | null> {
+    try {
+      const value = await git.getConfig({ fs: this.fs, dir, path });
+      return typeof value === 'string' ? value : null;
+    } catch {
+      // best-effort: an unset key reads as null.
+      return null;
+    }
+  }
+
+  /** Set a git config value (e.g. "user.name") for the repo. */
+  async setConfig(dir: string, path: string, value: string): Promise<void> {
+    await git.setConfig({ fs: this.fs, dir, path, value });
   }
 
   /**
@@ -283,10 +307,7 @@ class GitClient {
 
   /** Create a commit with staged changes. Returns the commit oid. */
   async commit(dir: string, message: string, opts: CommitOptions = {}): Promise<string> {
-    const author = opts.author ?? {
-      name: 'Sprout User',
-      email: 'user@sprout.local',
-    };
+    const author = opts.author ?? DEFAULT_AUTHOR;
     const oid = await git.commit({
       fs: this.fs,
       dir,

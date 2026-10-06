@@ -545,9 +545,13 @@ needed whatever the integration work does. Spec context: SP-160 §160e.
       `@sprout/ui` (or a documented entry point) with typed props; run
       `cd packages/ui && npm run build` before webui type-check. Spec:
       SP-155 §155c.
-- [ ] **155.8** Layout configuration accepts an embedding-supplied
+- [x] **155.8** Layout configuration accepts an embedding-supplied
       arrangement; an example embedding composes chat + preview from the
       exported views. Vitest. Spec: SP-155 §155c.
+      Fixed: `ViewsLayout` + `resolveViewsArrangement` merge an
+      embedding-supplied `ViewsArrangement` per slot onto the built-in
+      composition (unknown kinds throw); `ExampleEmbedding` composes chat +
+      preview from the views entry exports. Pinned by vitest.
 - [ ] **155.9** Move primary UI strings to copy keys with today's text as
       defaults; visual regression shows no change. Spec: SP-155 §155d.
 

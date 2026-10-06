@@ -7,7 +7,19 @@
  * `tsc` here, not just at the consumer).
  */
 import { describe, expect, it } from 'vitest';
-import { AgentChangesPanel, ChatView, Editor, FileTree, PreviewPane, PreviewPanel, usePreviewStatus } from './index';
+import { DEFAULT_VIEWS_ARRANGEMENT, SLOT_ORDER, VIEWS_BY_KIND, resolveViewsArrangement } from './ViewsLayout';
+import type { ExampleEmbeddingProps, ViewKind, ViewSlot, ViewsArrangement, ViewsLayoutProps } from './ViewsLayout';
+import {
+  AgentChangesPanel,
+  ChatView,
+  Editor,
+  FileTree,
+  PreviewPane,
+  PreviewPanel,
+  ExampleEmbedding,
+  ViewsLayout,
+  usePreviewStatus,
+} from './index';
 import type {
   AgentChangesPanelProps,
   ChatProps,
@@ -47,6 +59,29 @@ describe('views entry exports', () => {
 
   it('exports the preview lifecycle hook as a function', () => {
     expect(typeof usePreviewStatus).toBe('function');
+  });
+
+  // ── Layout configuration ──────────────────────────────────────────────
+
+  it('exports the layout + example embedding as components', () => {
+    expect(isReactComponent(ViewsLayout)).toBe(true);
+    expect(isReactComponent(ExampleEmbedding)).toBe(true);
+  });
+
+  it('exports the arrangement resolver as a function', () => {
+    expect(typeof resolveViewsArrangement).toBe('function');
+  });
+
+  it('defines the default arrangement, slot order, and the kind registry', () => {
+    expect(DEFAULT_VIEWS_ARRANGEMENT).toBeDefined();
+    expect(SLOT_ORDER).toEqual(['left', 'center', 'right', 'overlay']);
+    expect(Object.keys(VIEWS_BY_KIND).sort()).toEqual(
+      ['chat', 'changes', 'editor', 'fileTree', 'previewPane', 'previewPanel'].sort(),
+    );
+    // Each registered kind maps to something renderable.
+    for (const kind of Object.keys(VIEWS_BY_KIND) as ViewKind[]) {
+      expect(VIEWS_BY_KIND[kind]).toBeDefined();
+    }
   });
 });
 
@@ -103,5 +138,36 @@ describe('views entry typed props', () => {
       stop: () => undefined,
     };
     expect(hookReturn.status).toBe('stopped');
+  });
+
+  // ── Layout configuration types ────────────────────────────────────────
+
+  it('accepts minimal arrangement + layout + example-embedding values', () => {
+    const slot: ViewSlot = 'left';
+    const kind: ViewKind = 'chat';
+    const arrangement: ViewsArrangement = { center: [kind], overlay: [] };
+    const layoutProps: ViewsLayoutProps = {
+      arrangement,
+      props: { chat: { inputValue: 'hi' } },
+      className: 'host-shell',
+    };
+    const exampleProps: ExampleEmbeddingProps = {
+      chat: {
+        messages: [{ id: 'm1', type: 'user', content: 'hello', timestamp: new Date(0) }],
+        onSendMessage: () => undefined,
+        onQueueMessage: () => undefined,
+        queuedMessagesCount: 0,
+        inputValue: '',
+        onInputChange: () => undefined,
+      },
+      preview: { open: true, onClose: () => undefined },
+      arrangement: { left: [] },
+    };
+    expect(slot).toBe('left');
+    expect(arrangement.center).toEqual(['chat']);
+    expect(layoutProps.className).toBe('host-shell');
+    expect(exampleProps.arrangement).toEqual({ left: [] });
+    // The resolver round-trips the minimal value.
+    expect(resolveViewsArrangement({ center: [kind] }).center).toEqual(['chat']);
   });
 });

@@ -49,9 +49,45 @@
  * alone. `usePreviewStatus` is re-exported here so a host can drive the
  * presentational `PreviewPane` itself instead of using `PreviewPanel`.
  *
+ * Layout configuration: rather than composing
+ * the views one by one, a host can hand `ViewsLayout` a
+ * `ViewsArrangement` — which `ViewKind`s go in which `ViewSlot`
+ * (`left`/`center`/`right`/`overlay`) — and the layout renders the shell.
+ * The arrangement is merged against `DEFAULT_VIEWS_ARRANGEMENT` (the
+ * built-in webui composition) per slot: an omitted slot keeps the
+ * default's kinds, a provided slot replaces them wholesale (an explicit
+ * `[]` empties the slot). An unknown kind throws a `TypeError` naming the
+ * kind and the valid ones — a typo fails fast instead of silently dropping
+ * a view. `ExampleEmbedding` demonstrates the smallest arrangement:
+ * composing chat + preview from the exports above.
+ *
  * Import direction: everything here is exported FROM webui; nothing in
  * `@sprout/ui` imports back from webui.
  */
+
+/**
+ * ViewsLayout — layout configuration.
+ *
+ * A host does not have to place the views one by one: it hands
+ * `ViewsLayout` an arrangement (`ViewsArrangement`) — which view kinds go
+ * in which slot (`left`/`center`/`right`/`overlay`) — and the layout
+ * renders them. Slots merge against `DEFAULT_VIEWS_ARRANGEMENT` per slot:
+ * an omitted slot keeps the default's kinds; a provided slot (including an
+ * explicit `[]`) replaces the default's. An unknown kind throws a
+ * `TypeError` naming the kind — a typo must fail fast, not silently drop a
+ * view. `ExampleEmbedding` is the spec's worked example: it composes chat +
+ * preview from these very exports.
+ */
+export {
+  ViewsLayout,
+  resolveViewsArrangement,
+  DEFAULT_VIEWS_ARRANGEMENT,
+  VIEWS_BY_KIND,
+  SLOT_ORDER,
+} from './ViewsLayout';
+export type { ViewSlot, ViewKind, ViewsArrangement, ViewComponent, ViewsLayoutProps } from './ViewsLayout';
+export { ExampleEmbedding } from './ExampleEmbedding';
+export type { ExampleEmbeddingProps } from './ExampleEmbedding';
 
 // Chat view (composite — requires the webui context stack).
 export { default as ChatView } from '../components/ChatView';

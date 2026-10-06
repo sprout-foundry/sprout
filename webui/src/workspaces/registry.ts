@@ -15,11 +15,20 @@
  * mode's shell component, which composes its surface and its own chrome. The
  * surfaces stay inside their shells, not here.
  *
- * Modes are defined by one public registration API (SP-155 §155b): the
- * built-in Code and Design modes register through it at module load, and an
- * embedding shell registers further modes with the same call. Adding a mode
- * is: one registration, one rail, one shell. No new
+ * Modes are defined by one public registration API (SP-155 §155b): an
+ * embedding shell registers its modes with it, and the built-in Code and
+ * Design modes register at module load through the same write path (minus the
+ * API's built-in guard, which exists to protect them). Adding a mode is: one
+ * registration, one rail, one shell. No new
  * `currentView === 'x'` exception in the app.
+ *
+ * Two invariants hold for the whole module. First, the built-ins are always
+ * registered and irremovable: they cannot be replaced (registration rejects
+ * their ids) or disposed (disposal refuses built-in entries), so the registry
+ * is never without them — `availableModes` can only ever be empty if a
+ * mode's `available` predicate hides it, and the built-ins are `() => true`.
+ * Second, mode resolution never returns nothing: with the built-ins
+ * guaranteed present, there is always something to resolve to.
  */
 
 import { Code2, Palette, type LucideIcon } from 'lucide-react';
@@ -73,8 +82,9 @@ export interface WorkspaceMode {
  * Public registration payload (SP-155 §155b): id, label, icon, shell
  * component, and an availability predicate.
  *
- * This is the only way a mode gets into the registry — built-ins and
- * extensions share the call, so the registry has one write path. `hint` is
+ * This is the only way an extension's mode gets into the registry; the
+ * built-ins go through the same write path at module load (via the internal
+ * entry point that the public API's built-in guard exempts). `hint` is
  * the only optional field: the switcher's secondary text is a hint, and a
  * mode without one simply renders none.
  */
@@ -102,6 +112,21 @@ export type UnregisterWorkspaceMode = () => void;
 export const BUILTIN_DEFAULT_WORKSPACE_MODE: WorkspaceModeId = 'code';
 
 /**
+ * The built-in mode ids. These entries are part of the app's contract with
+ * every workspace: the mode switcher, the default-mode resolution, and the
+ * surfaces themselves all assume Code and Design exist. They are protected in
+ * both directions — `registerWorkspaceMode` refuses to register over them,
+ * and the returned disposers refuse to remove them — so no embedding shell or
+ * accidental double-registration can leave the app without a usable mode.
+ */
+export const BUILTIN_WORKSPACE_MODE_IDS: readonly WorkspaceModeId[] = ['code', 'design'];
+
+/** True when `id` names a built-in mode that cannot be replaced or removed. */
+export function isBuiltinWorkspaceModeId(id: WorkspaceModeId): boolean {
+  return (BUILTIN_WORKSPACE_MODE_IDS as readonly string[]).includes(id);
+}
+
+/**
  * Mode registry.
  *
  * The live array registrations write into: the built-ins register into it at
@@ -123,13 +148,33 @@ export const WORKSPACE_MODES: WorkspaceMode[] = [];
  * A new id is appended, after the built-ins, in switcher order. Re-registering
  * an existing id replaces that entry in place (the mode keeps its position),
  * so registration is idempotent and an embedding shell can override a
- * built-in's label, icon, or shell without reordering the switcher.
+ * non-built-in mode's label, icon, or shell without reordering the switcher.
+ *
+ * Built-in ids are rejected: the app's baseline modes cannot be replaced, so
+ * a definition offered under `code` or `design` keeps the built-in one. The
+ * rejection is a warned no-op rather than a throw because registration is a
+ * boot-time concern — a misbehaving embedder must not crash the app before it
+ * renders. The returned disposer removes nothing (nothing was added or
+ * replaced).
  *
  * Returns a disposer that removes the entry this call created. It checks
  * identity, so a disposer held across a re-registration of the same id removes
  * nothing — the newer definition stays.
  */
 export function registerWorkspaceMode(definition: WorkspaceModeRegistration): UnregisterWorkspaceMode {
+  if (isBuiltinWorkspaceModeId(definition.id)) {
+    console.warn(`registerWorkspaceMode: '${definition.id}' is a built-in mode and cannot be replaced; ignoring.`);
+    return () => {};
+  }
+  return registerMode(definition);
+}
+
+/**
+ * The one registry write path: append `definition` or replace its id's entry
+ * in place, and return the matching disposer. Both registration entries point
+ * here, so the public and built-in paths cannot drift.
+ */
+function registerMode(definition: WorkspaceModeRegistration): UnregisterWorkspaceMode {
   const mode: WorkspaceMode = {
     id: definition.id,
     label: definition.label,
@@ -146,12 +191,17 @@ export function registerWorkspaceMode(definition: WorkspaceModeRegistration): Un
   }
   return () => {
     const index = WORKSPACE_MODES.findIndex((entry) => entry === mode);
-    if (index !== -1) WORKSPACE_MODES.splice(index, 1);
+    // Identity, not id: a stale disposer held across a re-registration of the
+    // same id must remove nothing, so the newest definition stays. Refusing to
+    // remove a built-in entry keeps the baseline in place even if a built-in
+    // disposer is somehow invoked.
+    if (index !== -1 && !isBuiltinWorkspaceModeId(WORKSPACE_MODES[index].id)) WORKSPACE_MODES.splice(index, 1);
   };
 }
 
 /**
- * Built-in modes, registered through the same public API an extension uses.
+ * Built-in modes, registered through the internal registration path (the
+ * public API refuses their ids).
  *
  * `code` is always available: it is the baseline experience over any root.
  * `design` is also always offered: an empty workspace gets the Design empty
@@ -160,7 +210,7 @@ export function registerWorkspaceMode(definition: WorkspaceModeRegistration): Un
  * absent tree looks like; hiding the mode only meant the tree could never be
  * started from the UI.
  */
-registerWorkspaceMode({
+registerMode({
   id: 'code',
   label: 'Code',
   icon: Code2,
@@ -169,7 +219,7 @@ registerWorkspaceMode({
   Shell: CodeShell,
 });
 
-registerWorkspaceMode({
+registerMode({
   id: 'design',
   label: 'Design',
   icon: Palette,
@@ -205,9 +255,19 @@ export function resolveWorkspaceMode(id: WorkspaceModeId | null | undefined, ctx
   const modes = availableModes(ctx);
   const match = modes.find((mode) => mode.id === id);
   if (match) return match;
-  // The default is always an available id (an available configured mode, or the
-  // built-in baseline); the trailing `modes[0]` covers a registry where even
-  // the baseline has been removed.
+  // No match: degrade to the configured default if the workspace offers it,
+  // then the built-in baseline, then any registered built-in, then the first
+  // mode at all — each rung guarantees a usable mode rather than `undefined`
+  // (whose return type forbids and whose dereference would crash the shell).
   const fallback = modes.find((mode) => mode.id === defaultWorkspaceMode(ctx));
-  return fallback ?? modes[0];
+  if (fallback) return fallback;
+  const builtin = modes.find((mode) => isBuiltinWorkspaceModeId(mode.id));
+  if (builtin) return builtin;
+  if (modes[0]) return modes[0];
+  // Unreachable while the built-ins are registered and always available, but
+  // the module must still return a WorkspaceMode, so recreate the built-in
+  // default's definition rather than return nothing.
+  const code = WORKSPACE_MODES.find((mode) => mode.id === BUILTIN_DEFAULT_WORKSPACE_MODE);
+  if (code) return code;
+  throw new Error('resolveWorkspaceMode: no workspace modes registered');
 }

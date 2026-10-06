@@ -166,8 +166,13 @@ protects.
       so a stale caller can never move the revision backwards. Pinned by
       stale-caller, monotonic, first-write, corrupt-file, and
       never-decreases-sequence tests.
-- [ ] **fix.15** Mode registry: reject re-registering built-in mode ids and
+- [x] **fix.15** Mode registry: reject re-registering built-in mode ids and
       never leave zero modes (`webui/src/workspaces/registry.ts`).
+      Fixed: `code`/`design` are protected in both directions (registration
+      rejects their ids as a warned no-op, disposal refuses built-in
+      entries); the disposer keeps its identity check for non-built-ins; and
+      `resolveWorkspaceMode` never returns undefined (layered fallback to a
+      registered built-in). Pinned by vitest.
 - [ ] **fix.16** Plan snapshot for milestones refreshes on plan revision, and
       a scope that goes pending→completed in one write emits both events
       (`scope_milestones.go`).

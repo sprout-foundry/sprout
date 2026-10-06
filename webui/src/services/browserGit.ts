@@ -660,6 +660,86 @@ export async function gitInit() {
 }
 
 /**
+ * Update the remote-tracking refs without touching the working tree.
+ * isomorphic-git has no standalone "fetch command"; git.fetch is the
+ * primitive. This is what makes a PR branch reachable after a shallow clone.
+ */
+export async function gitFetch(opts?: {
+  remote?: string;
+  ref?: string;
+  depth?: number;
+  tags?: boolean;
+  prune?: boolean;
+}) {
+  await ensureInitialized();
+  const fs = getFs().promises;
+  const remote = opts?.remote || 'origin';
+  await git.fetch({
+    fs,
+    http,
+    corsProxy: gitCorsProxy(),
+    dir: REPO_DIR,
+    remote,
+    ref: opts?.ref,
+    singleBranch: false,
+    depth: opts?.depth,
+    tags: opts?.tags ?? false,
+    prune: opts?.prune ?? false,
+    headers: getAuth(await originURL())?.headers,
+  });
+  return { message: 'ok', fetched: true };
+}
+
+/**
+ * The remote-tracking branches under <remote>/ that are reachable locally.
+ * Reads the packed/loose refs isomorphic-git can resolve, so it reflects the
+ * most recent fetch.
+ */
+export async function gitRemoteBranches(remote = 'origin'): Promise<string[]> {
+  await ensureInitialized();
+  try {
+    const refs = await git.listBranches({ fs: getFs().promises, dir: REPO_DIR, remote });
+    return refs.map((b) => `${remote}/${b}`);
+  } catch {
+    // No remote configured (or no fetched refs yet): report none rather than
+    // failing the caller.
+    return [];
+  }
+}
+
+/** Stage one or more removals (git rm); the VFS files are deleted too. */
+export async function gitRemove(filepaths: string[]) {
+  await ensureInitialized();
+  await syncVfsToGitFs();
+  for (const filepath of filepaths) {
+    await git.remove({ fs: getFs().promises, dir: REPO_DIR, filepath });
+  }
+  await config?.deleteVfsFiles?.(filepaths);
+  return { message: 'ok', removed: filepaths.length };
+}
+
+/** Move/rename a tracked file (git mv), reflecting the move in the VFS. */
+export async function gitMove(from: string, to: string) {
+  await ensureInitialized();
+  await syncVfsToGitFs();
+  const fs = getFs().promises;
+  await ensureDir(`${REPO_DIR}/${to}`.substring(0, `${REPO_DIR}/${to}`.lastIndexOf('/')));
+  try {
+    await fs.rename(`${REPO_DIR}/${from}`, `${REPO_DIR}/${to}`);
+  } catch {
+    // Fall back to read+write+unlink when rename isn't available.
+    const content = String(await fs.readFile(`${REPO_DIR}/${from}`, 'utf8'));
+    await fs.writeFile(`${REPO_DIR}/${to}`, content, 'utf8');
+    await fs.unlink(`${REPO_DIR}/${from}`);
+  }
+  // Reflect the move in the VFS: the destination is written, the source removed.
+  const moved = String(await fs.readFile(`${REPO_DIR}/${to}`, 'utf8'));
+  await config?.writeVfsFiles?.([{ path: to, content: moved }]);
+  await config?.deleteVfsFiles?.([from]);
+  return { message: 'ok', from, to };
+}
+
+/**
  * Git operations that browser mode does NOT support.
  *
  * Used by the UI to disable/hide buttons in cloud mode so users never

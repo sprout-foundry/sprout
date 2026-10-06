@@ -82,10 +82,19 @@ func init() {
 	})
 
 	// Back the wasmshell "git" command with browser-side isomorphic-git.
-	// wasmshell's cmdGit answers only read-only subcommands; everything else
-	// stays a 127 so the escalation surface can take it to a container.
+	// wasmshell's cmdGit answers the read-only and local/remote write
+	// subcommands; everything else stays a 127 so the escalation surface can
+	// take it to a container.
 	wasmshell.RegisterGitExecutor(func(subcommand string, args []string) wasmshell.CmdResult {
 		return callShellGitJS(subcommand, args)
+	})
+
+	// Back the wasmshell "gh" command with browser-side GitHub support
+	// (isomorphic-git clone/checkout + GitHub REST). Subcommands the adapter
+	// doesn't implement stay a 127 so the escalation surface takes them to a
+	// container.
+	wasmshell.RegisterGhExecutor(func(subcommand string, args []string) wasmshell.CmdResult {
+		return callShellGhJS(subcommand, args)
 	})
 }
 
@@ -134,8 +143,54 @@ func callShellGitJS(subcommand string, args []string) wasmshell.CmdResult {
 	}
 }
 
+// callShellGhJS runs one gh subcommand via
+// globalThis.__sproutShellGh.execute(subcommand, args), installed by the
+// webui on top of browserGit (isomorphic-git) + GitHub REST. Blocks until
+// the Promise resolves or the timeout elapses, mirroring callShellGitJS.
+func callShellGhJS(subcommand string, args []string) wasmshell.CmdResult {
+	shellGh := js.Global().Get("__sproutShellGh")
+	if !shellGh.Truthy() {
+		return wasmshell.CmdResult{Stdout: "", Stderr: "gh: browser GitHub bridge not registered\n", ExitCode: 127}
+	}
+
+	promise := shellGh.Call("execute", subcommand, stringSliceToJS(args))
+
+	resultCh := make(chan wasmshell.CmdResult, 1)
+	errCh := make(chan string, 1)
+
+	then := js.FuncOf(func(_ js.Value, pargs []js.Value) interface{} {
+		if len(pargs) > 0 {
+			resultCh <- shellGitResultFromJS(pargs[0])
+		} else {
+			resultCh <- wasmshell.CmdResult{Stdout: "", Stderr: "", ExitCode: 0}
+		}
+		return nil
+	})
+	catch := js.FuncOf(func(_ js.Value, pargs []js.Value) interface{} {
+		if len(pargs) > 0 {
+			errCh <- pargs[0].String()
+		} else {
+			errCh <- "unknown error"
+		}
+		return nil
+	})
+	defer then.Release()
+	defer catch.Release()
+	promise.Call("then", then, catch)
+
+	select {
+	case result := <-resultCh:
+		return result
+	case errMsg := <-errCh:
+		return wasmshell.CmdResult{Stdout: "", Stderr: "gh: " + errMsg + "\n", ExitCode: 1}
+	case <-time.After(30 * time.Second):
+		return wasmshell.CmdResult{Stdout: "", Stderr: "gh: timeout (30s)\n", ExitCode: 1}
+	}
+}
+
 // shellGitResultFromJS reads {stdout, stderr, exitCode} from a resolved
-// __sproutShellGit result object, defaulting missing fields to zero values.
+// __sproutShellGit / __sproutShellGh result object, defaulting missing fields
+// to zero values.
 func shellGitResultFromJS(obj js.Value) wasmshell.CmdResult {
 	if obj.Type() != js.TypeObject {
 		return wasmshell.CmdResult{Stdout: "", Stderr: "", ExitCode: 0}

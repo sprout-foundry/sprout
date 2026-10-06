@@ -82,6 +82,23 @@ export interface PullOptions {
   author?: GitAuthor;
 }
 
+export interface FetchOptions {
+  /** Omitted when the git proxy supplies the account's credentials. */
+  token?: string;
+  /** Remote to fetch from (default: "origin"). */
+  remote?: string;
+  /** Single ref to fetch (e.g. "refs/heads/feature"); omitted fetches all. */
+  ref?: string;
+  /** Fetch only the ref's own branch. Default false (all branches). */
+  singleBranch?: boolean;
+  /** Shallow-fetch depth. Omitted fetches full history for the refs. */
+  depth?: number;
+  /** Also fetch tags. Default false. */
+  tags?: boolean;
+  /** Prune remote-tracking refs that no longer exist on the remote. */
+  prune?: boolean;
+}
+
 // isomorphic-git reads username/password (sent as Basic auth); GitHub takes
 // a token as the password with any username.
 function tokenAuth(token: string | undefined): GitAuth {
@@ -121,6 +138,11 @@ class GitClient {
   /**
    * Clone a repository into lightning-fs.
    * Stores the repo at /repos/<owner>/<name>/.
+   *
+   * Defaults to a multi-branch clone (all remote refs) at a bounded depth so
+   * origin/<branch> refs exist for checkout — a depth-1 single-branch clone
+   * leaves only the default branch reachable, so PR branches fail to resolve.
+   * Callers wanting a shallow single-branch clone pass the options explicitly.
    */
   async clone(url: string, dir: string, opts: CloneOptions = {}): Promise<void> {
     return this.withLock(dir, async () => {
@@ -135,9 +157,9 @@ class GitClient {
         http,
         dir,
         url,
-        depth: opts.depth ?? 1,
-        singleBranch: opts.singleBranch ?? true,
-        ref: opts.branch ?? 'main',
+        depth: opts.depth ?? 50,
+        singleBranch: opts.singleBranch ?? false,
+        ref: opts.branch,
         corsProxy: gitCorsProxy(),
         onAuth: opts.token ? () => Promise.resolve(tokenAuth(opts.token)) : undefined,
         onProgress: opts.onProgress
@@ -158,6 +180,32 @@ class GitClient {
         ref: opts.branch,
         singleBranch: true,
         author: opts.author,
+        onAuth: opts.token ? () => Promise.resolve(tokenAuth(opts.token)) : undefined,
+      });
+    });
+  }
+
+  /**
+   * Fetch refs from a remote without touching the working tree.
+   *
+   * isomorphic-git has no standalone "fetch command"; git.fetch is the
+   * underlying primitive. A shallow clone (depth 1) carries only the default
+   * branch, so origin/<branch> can't be resolved until those refs are fetched
+   * — this is what makes PR branches reachable after a shallow clone.
+   */
+  async fetch(dir: string, opts: FetchOptions = {}): Promise<void> {
+    return this.withLock(dir, async () => {
+      await git.fetch({
+        fs: this.fs,
+        http,
+        corsProxy: gitCorsProxy(),
+        dir,
+        remote: opts.remote ?? 'origin',
+        ref: opts.ref,
+        singleBranch: opts.singleBranch ?? false,
+        depth: opts.depth,
+        tags: opts.tags ?? false,
+        prune: opts.prune ?? false,
         onAuth: opts.token ? () => Promise.resolve(tokenAuth(opts.token)) : undefined,
       });
     });
@@ -243,7 +291,7 @@ class GitClient {
       fs: this.fs,
       dir,
       message,
-      author: opts.author,
+      author,
       committer: opts.committer ?? author,
     });
     return oid;
@@ -260,9 +308,18 @@ class GitClient {
     return commits as GitLogEntry[];
   }
 
-  /** List branches. */
-  async listBranches(dir: string): Promise<string[]> {
-    return git.listBranches({ fs: this.fs, dir });
+  /** List branches. Pass a remote to list that remote's tracking branches. */
+  async listBranches(dir: string, opts: { remote?: string } = {}): Promise<string[]> {
+    return git.listBranches({ fs: this.fs, dir, remote: opts.remote });
+  }
+
+  /**
+   * List remote-tracking refs as "<remote>/<branch>" names.
+   * Useful after a fetch to see which PR branches are now reachable.
+   */
+  async listRemoteBranches(dir: string, remote: string = 'origin'): Promise<string[]> {
+    const branches = await git.listBranches({ fs: this.fs, dir, remote });
+    return branches.map((b) => `${remote}/${b}`);
   }
 
   /** Get current branch. */

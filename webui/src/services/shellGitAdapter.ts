@@ -1,13 +1,15 @@
 /**
  * shellGitAdapter.ts — backs the WASM shell's `git` command with
- * browser-side isomorphic-git (read-only subcommands only).
+ * browser-side isomorphic-git: the read-only subcommands plus the local and
+ * remote write subcommands (add, commit, checkout, branch, fetch, push, pull,
+ * clone, init, rm, mv).
  *
- * The WASM shell (pkg/wasmshell/commands_git.go) answers `git status`,
- * `git diff`, … in-browser instead of exiting 127 — which is the trigger
- * for the transactional container escalation (ETH-2). Without this
- * adapter, every git call would cost a container txn; with it, the
- * read-only subcommands the agent audit shows dominating usage run free
- * in the browser.
+ * The WASM shell (pkg/wasmshell/commands_git.go) answers these in-browser
+ * instead of exiting 127 — which is the trigger for the transactional
+ * container escalation (ETH-2). Without this adapter, every git call would
+ * cost a container txn; with it, the read-only and write subcommands the
+ * agent audit shows dominating usage run free in the browser. Subcommands it
+ * does not implement (rebase, merge, reset, stash, …) stay a 127 and escalate.
  *
  * Contract with the Go side (cmd/wasm/shell_executor.go):
  *   globalThis.__sproutShellGit.execute(subcommand, args)
@@ -18,7 +20,25 @@
  * labels, `git log --oneline` shape, branch markers).
  */
 
-import { gitBranch, gitDiff, gitLog, gitStatus } from './browserGit';
+import {
+  gitAdd,
+  gitBranch,
+  gitCheckout,
+  gitClone,
+  gitCommit,
+  gitCreateBranch,
+  gitDiff,
+  gitFetch,
+  gitInit,
+  gitLog,
+  gitMove,
+  gitOriginUrl,
+  gitPull,
+  gitPush,
+  gitRemoteBranches,
+  gitRemove,
+  gitStatus,
+} from './browserGit';
 
 /** Shape the Go bridge expects from execute(). */
 export interface ShellGitResult {
@@ -162,9 +182,21 @@ function firstLine(s: string): string {
   return idx === -1 ? s : s.slice(0, idx);
 }
 
-/** git branch — list with the current-branch marker; -a accepted. */
+/** git branch — list with the current-branch marker; create/delete branches. */
 async function runBranch(args: string[]): Promise<ShellGitResult> {
-  void args; // -a/-v list the same refs browser-side (no remotes cached).
+  const positional = args.filter((a) => !a.startsWith('-'));
+  const create = args.includes('-c') || (positional.length === 1 && !args.includes('-d') && !args.includes('-m'));
+  if (create && positional.length >= 1) {
+    const name = positional[positional.length - 1];
+    await gitCreateBranch(name);
+    return ok(`Switched to a new branch '${name}'\n`);
+  }
+  if (args.includes('-r') || args.includes('--remotes') || args.includes('-a') || args.includes('--all')) {
+    const remote = await gitRemoteBranches('origin');
+    const local = args.includes('-a') || args.includes('--all') ? (await gitBranch()).map((b) => b.name) : [];
+    const lines = [...local.map((b) => `  ${b}`), ...remote.map((b) => `  ${b}`)];
+    return ok(lines.length ? lines.join('\n') + '\n' : '');
+  }
   const branches = await gitBranch();
   if (branches.length === 0) return ok('');
   return ok(branches.map((b) => (b.current ? `* ${b.name}` : `  ${b.name}`)).join('\n') + '\n');
@@ -173,6 +205,8 @@ async function runBranch(args: string[]): Promise<ShellGitResult> {
 /** git remote — origin with the clone URL when known, else empty. */
 async function runRemote(args: string[]): Promise<ShellGitResult> {
   if (args.includes('-v')) {
+    const url = await gitOriginUrl();
+    if (url) return ok(`origin\t${url} (fetch)\norigin\t${url} (push)\n`);
     return ok('origin\t(push/fetch not tracked in browser git)\n');
   }
   return ok('origin\n');
@@ -226,6 +260,110 @@ async function runSymbolicRef(_args: string[]): Promise<ShellGitResult> {
   return ok(current.name + '\n');
 }
 
+// ── Write subcommands ────────────────────────────────────────────────────
+
+/** git add — stage the named paths (or every changed path with -A/.). */
+async function runAdd(args: string[]): Promise<ShellGitResult> {
+  const paths = args.filter((a) => !a.startsWith('-'));
+  if (args.includes('-A') || args.includes('--all') || paths.includes('.')) {
+    const { staged, unstaged, untracked = [] } = await gitStatus();
+    const all = [...staged, ...unstaged, ...untracked].map((f) => f.path);
+    if (all.length === 0) return ok('');
+    await gitAdd(all);
+    return ok('');
+  }
+  if (paths.length === 0) return fail('Nothing specified, nothing added.\n', 1);
+  await gitAdd(paths);
+  return ok('');
+}
+
+/** git commit -m <msg> — commit staged changes. */
+async function runCommit(args: string[]): Promise<ShellGitResult> {
+  const mIdx = args.findIndex((a) => a === '-m' || a === '--message');
+  const message = mIdx >= 0 ? args[mIdx + 1] : undefined;
+  if (!message) return fail('error: switch `m` requires a value\n', 128);
+  const res = (await gitCommit(message)) as { sha?: string };
+  const sha = res.sha ?? '';
+  return ok(`[${await currentBranchLabel()} ${sha.slice(0, 7)}] ${message}\n`);
+}
+
+async function currentBranchLabel(): Promise<string> {
+  const branches = await gitBranch();
+  return branches.find((b) => b.current)?.name ?? 'HEAD';
+}
+
+/** git checkout / git switch — switch to an existing branch or ref. */
+async function runCheckout(args: string[]): Promise<ShellGitResult> {
+  const create = args.includes('-b') || args.includes('-c') || args.includes('--create');
+  const positional = args.filter((a) => !a.startsWith('-'));
+  const target = positional[positional.length - 1];
+  if (!target) return fail('fatal: missing branch or commit argument\n', 128);
+  if (create) {
+    await gitCreateBranch(target);
+    return ok(`Switched to a new branch '${target}'\n`);
+  }
+  await gitCheckout(target);
+  return ok(`Switched to branch '${target}'\n`);
+}
+
+/** git fetch — update remote-tracking refs without touching the working tree. */
+async function runFetch(args: string[]): Promise<ShellGitResult> {
+  const depthIdx = args.indexOf('--depth');
+  const depth = depthIdx >= 0 ? parseInt(args[depthIdx + 1], 10) : undefined;
+  await gitFetch({
+    depth: Number.isNaN(depth as number) ? undefined : depth,
+    tags: args.includes('--tags'),
+    prune: args.includes('--prune') || args.includes('-p'),
+  });
+  return ok('');
+}
+
+/** git push [remote] [branch] — push the current (or named) branch. */
+async function runPush(args: string[]): Promise<ShellGitResult> {
+  const setArgs = args.filter((a) => !a.startsWith('-'));
+  const remote = setArgs[0];
+  const branch = setArgs[1];
+  await gitPush(remote, branch);
+  const target = branch ?? (await currentBranchLabel());
+  return ok(`To ${remote ?? 'origin'}\n   ${target} -> ${target}\n`);
+}
+
+/** git pull — fast-forward the current branch from its remote. */
+async function runPull(_args: string[]): Promise<ShellGitResult> {
+  await gitPull();
+  return ok('Already up to date.\n');
+}
+
+/** git init — initialize a repository in the workspace. */
+async function runInit(_args: string[]): Promise<ShellGitResult> {
+  await gitInit();
+  return ok(`Initialized empty Git repository\n`);
+}
+
+/** git clone <url> [dir] — clone a repository into the workspace. */
+async function runClone(args: string[]): Promise<ShellGitResult> {
+  const url = args.find((a) => !a.startsWith('-'));
+  if (!url) return fail('fatal: repository URL not given\n', 128);
+  const res = (await gitClone(url)) as { branch?: string | null; files?: number };
+  return ok(`Cloning into '${url}'...\n` + `done.${res.files != null ? ` (${res.files} files)` : ''}\n`);
+}
+
+/** git rm <path> — stage a deletion. */
+async function runRm(args: string[]): Promise<ShellGitResult> {
+  const paths = args.filter((a) => !a.startsWith('-'));
+  if (paths.length === 0) return fail('fatal: No pathspec was given.\n', 128);
+  await gitRemove(paths);
+  return ok(paths.map((p) => `rm '${p}'`).join('\n') + '\n');
+}
+
+/** git mv <from> <to> — move/rename a tracked file. */
+async function runMv(args: string[]): Promise<ShellGitResult> {
+  const paths = args.filter((a) => !a.startsWith('-'));
+  if (paths.length < 2) return fail('fatal: bad source, or missing destination\n', 128);
+  await gitMove(paths[0], paths[1]);
+  return ok('');
+}
+
 // ── Registry & global installation ───────────────────────────────────────
 
 export const SHELL_GIT_SUBCOMMANDS: Record<string, (args: string[]) => Promise<ShellGitResult>> = {
@@ -239,6 +377,18 @@ export const SHELL_GIT_SUBCOMMANDS: Record<string, (args: string[]) => Promise<S
   'rev-list': runRevList,
   'rev-parse': runRevParse,
   'symbolic-ref': runSymbolicRef,
+  // write commands
+  add: runAdd,
+  commit: runCommit,
+  checkout: runCheckout,
+  switch: runCheckout,
+  fetch: runFetch,
+  push: runPush,
+  pull: runPull,
+  init: runInit,
+  clone: runClone,
+  rm: runRm,
+  mv: runMv,
 };
 
 export interface SproutShellGitGlobal {
@@ -266,7 +416,7 @@ export function registerShellGitGlobal(): void {
       if (!fn) {
         return {
           stdout: '',
-          stderr: `git: '${subcommand}' is not available in this shell (read-only subcommands only)\n`,
+          stderr: `git: '${subcommand}' is not available in this shell (run it in a cloud container)\n`,
           exitCode: 127,
         };
       }

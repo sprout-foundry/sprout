@@ -53,3 +53,41 @@ func TestHandleAPIBootstrap_PlatformURL(t *testing.T) {
 		t.Errorf("appMode = %q, want local", config.AppMode)
 	}
 }
+
+// TestHandleAPIBootstrap_EgressProxy pins the egress-proxy contract: the
+// field is served from SPROUT_EGRESS_PROXY and omitted (not empty) when the
+// env var is unset — the in-browser agent then keeps its two-origin network
+// restriction.
+func TestHandleAPIBootstrap_EgressProxy(t *testing.T) {
+	t.Setenv("SPROUT_STATE_DIR", t.TempDir())
+	server := newSyncTestWebServer(t, t.TempDir())
+	request := httptest.NewRequest(http.MethodGet, "/api/bootstrap", nil)
+
+	t.Setenv("SPROUT_EGRESS_PROXY", "")
+	rec := httptest.NewRecorder()
+	server.handleAPIBootstrap(rec, request)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("bootstrap body not JSON: %v", err)
+	}
+	if _, ok := payload["egressProxy"]; ok {
+		t.Errorf("empty SPROUT_EGRESS_PROXY must omit the field, got %s", payload["egressProxy"])
+	}
+
+	t.Setenv("SPROUT_EGRESS_PROXY", "https://app.example.dev/git-proxy")
+	rec = httptest.NewRecorder()
+	server.handleAPIBootstrap(rec, request)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var config RuntimeConfig
+	if err := json.Unmarshal(rec.Body.Bytes(), &config); err != nil {
+		t.Fatal(err)
+	}
+	if config.EgressProxy != "https://app.example.dev/git-proxy" {
+		t.Errorf("egressProxy = %q, want %q", config.EgressProxy, "https://app.example.dev/git-proxy")
+	}
+}

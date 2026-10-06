@@ -213,6 +213,18 @@ export function useAppInitialization({
                   .catch((err) => {
                     debugLog('[startup] shellGitAdapter import failed:', err);
                   });
+                // Back the WASM shell's `gh` command with browser GitHub support
+                // (clone/checkout via isomorphic-git + PR ops via the REST API)
+                // so `gh pr checkout`/`gh repo clone` run in-browser instead of
+                // exiting 127 into a container txn.
+                import('../services/shellGhAdapter')
+                  .then(({ registerShellGhGlobal }) => {
+                    registerShellGhGlobal();
+                    debugLog('[startup] Shell gh adapter installed (__sproutShellGh)');
+                  })
+                  .catch((err) => {
+                    debugLog('[startup] shellGhAdapter import failed:', err);
+                  });
               }
             }
             // The design tools' screenshots render in this page (SP-158).

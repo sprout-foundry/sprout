@@ -45,14 +45,28 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.
 		}
 	}
 
-	// Resolve client type from config
-	clientType, finalModel, err := r.shared.ConfigManager.ResolveProviderModel(provider, model)
-	if err != nil {
-		return nil, agenterrors.Wrap(err, "resolve provider/model")
+	// Resolve client type from config. When resolution fails but the caller
+	// named a provider, fall back to treating the provider string as the
+	// ClientType directly — this is exactly what the main agent path does
+	// (cmd/wasm/agent_funcs.go: factory.CreateProviderClient(ClientType(provider), model)).
+	// It matters for providers the browser build supplies as config files
+	// rather than built-ins (e.g. the WASM in-browser "platform" provider):
+	// MapProviderStringToClientType only knows built-ins, cfg.CustomProviders
+	// and factory-embedded configs, so it reports "unsupported provider:
+	// platform" even though the factory can build that client fine. Without
+	// this fallback the parent agent runs but every subagent spawn fails.
+	clientType, finalModel, resolveErr := r.shared.ConfigManager.ResolveProviderModel(provider, model)
+	if resolveErr != nil {
+		if strings.TrimSpace(provider) == "" {
+			return nil, agenterrors.Wrap(resolveErr, "resolve provider/model")
+		}
+		clientType = agent_api.ClientType(provider)
+		finalModel = model
 	}
 
 	// Create client via factory (or test hook for testing)
 	var client agent_api.ClientInterface
+	var err error
 	if r.testClientFactory != nil {
 		client, err = r.testClientFactory(clientType, finalModel)
 	} else {

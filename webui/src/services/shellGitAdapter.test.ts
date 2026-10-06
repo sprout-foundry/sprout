@@ -14,19 +14,66 @@ vi.mock('./browserGit', () => ({
   gitLog: vi.fn(),
   gitBranch: vi.fn(),
   getBrowserGitVfsBridge: vi.fn(),
+  // write-command backing
+  gitAdd: vi.fn(),
+  gitCommit: vi.fn(),
+  gitCheckout: vi.fn(),
+  gitCreateBranch: vi.fn(),
+  gitFetch: vi.fn(),
+  gitPush: vi.fn(),
+  gitPull: vi.fn(),
+  gitInit: vi.fn(),
+  gitClone: vi.fn(),
+  gitRemove: vi.fn(),
+  gitMove: vi.fn(),
+  gitRemoteBranches: vi.fn(),
+  gitOriginUrl: vi.fn(),
 }));
 
+import {
+  gitAdd,
+  gitBranch,
+  gitCheckout,
+  gitClone,
+  gitCommit,
+  gitDiff,
+  gitFetch,
+  gitLog,
+  gitMove,
+  gitOriginUrl,
+  gitPull,
+  gitPush,
+  gitRemoteBranches,
+  gitRemove,
+  gitStatus,
+} from './browserGit';
 import { SHELL_GIT_SUBCOMMANDS, registerShellGitGlobal } from './shellGitAdapter';
-import { gitStatus, gitDiff, gitLog, gitBranch } from './browserGit';
 
 const mockStatus = vi.mocked(gitStatus);
 const mockDiff = vi.mocked(gitDiff);
 const mockLog = vi.mocked(gitLog);
 const mockBranch = vi.mocked(gitBranch);
+const mockAdd = vi.mocked(gitAdd);
+const mockCommit = vi.mocked(gitCommit);
+const mockCheckout = vi.mocked(gitCheckout);
+const mockFetch = vi.mocked(gitFetch);
+const mockPush = vi.mocked(gitPush);
+const mockPull = vi.mocked(gitPull);
+const mockClone = vi.mocked(gitClone);
+const mockRemove = vi.mocked(gitRemove);
+const mockMove = vi.mocked(gitMove);
+const mockRemoteBranches = vi.mocked(gitRemoteBranches);
+const mockOriginUrl = vi.mocked(gitOriginUrl);
 
 beforeEach(() => {
   vi.clearAllMocks();
   mockBranch.mockResolvedValue([{ name: 'master', current: true }]);
+  mockRemoteBranches.mockResolvedValue([]);
+  mockOriginUrl.mockResolvedValue(null);
+  mockCommit.mockResolvedValue({ message: 'ok', sha: 'abcdef1234567890' } as never);
+  mockPush.mockResolvedValue({ message: 'ok', pushed: true } as never);
+  mockPull.mockResolvedValue({ message: 'ok', pulled: true } as never);
+  mockClone.mockResolvedValue({ message: 'ok', url: '', branch: 'main', files: 3 } as never);
 });
 
 describe('git status', () => {
@@ -187,7 +234,7 @@ describe('global registration', () => {
 
   it('unknown subcommands stay 127 (escalate to container)', async () => {
     registerShellGitGlobal();
-    const r = await globalThis.__sproutShellGit!.execute('commit', ['-m', 'x']);
+    const r = await globalThis.__sproutShellGit!.execute('rebase', []);
     expect(r.exitCode).toBe(127);
   });
 
@@ -197,5 +244,100 @@ describe('global registration', () => {
     const r = await globalThis.__sproutShellGit!.execute('status', []);
     expect(r.exitCode).toBe(1);
     expect(r.stderr).toContain('IndexedDB unavailable');
+  });
+});
+
+describe('git add / commit', () => {
+  it('add stages the named paths', async () => {
+    const r = await SHELL_GIT_SUBCOMMANDS.add(['src/main.ts']);
+    expect(r.exitCode).toBe(0);
+    expect(mockAdd).toHaveBeenCalledWith(['src/main.ts']);
+  });
+
+  it('add -A stages every changed path', async () => {
+    mockStatus.mockResolvedValue({
+      staged: [{ path: 'a.go', status: 'modified', staged: true }],
+      unstaged: [{ path: 'b.ts', status: 'modified', staged: false }],
+      untracked: [{ path: 'c.txt', status: 'new', staged: false }],
+    });
+    const r = await SHELL_GIT_SUBCOMMANDS.add(['-A']);
+    expect(r.exitCode).toBe(0);
+    expect(mockAdd).toHaveBeenCalledWith(['a.go', 'b.ts', 'c.txt']);
+  });
+
+  it('commit -m commits and reports the short sha', async () => {
+    const r = await SHELL_GIT_SUBCOMMANDS.commit(['-m', 'feat: thing']);
+    expect(r.exitCode).toBe(0);
+    expect(mockCommit).toHaveBeenCalledWith('feat: thing');
+    expect(r.stdout).toContain('abcdef1');
+    expect(r.stdout).toContain('feat: thing');
+  });
+
+  it('commit without -m fails', async () => {
+    const r = await SHELL_GIT_SUBCOMMANDS.commit([]);
+    expect(r.exitCode).not.toBe(0);
+    expect(mockCommit).not.toHaveBeenCalled();
+  });
+});
+
+describe('git checkout / branch / fetch / push / pull / clone', () => {
+  it('checkout switches to a branch', async () => {
+    const r = await SHELL_GIT_SUBCOMMANDS.checkout(['feature']);
+    expect(r.exitCode).toBe(0);
+    expect(mockCheckout).toHaveBeenCalledWith('feature');
+  });
+
+  it('checkout -b creates and switches', async () => {
+    const r = await SHELL_GIT_SUBCOMMANDS.checkout(['-b', 'feature']);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("Switched to a new branch 'feature'");
+  });
+
+  it('branch -r lists remote-tracking branches', async () => {
+    mockRemoteBranches.mockResolvedValue(['origin/main', 'origin/pr-1']);
+    const r = await SHELL_GIT_SUBCOMMANDS.branch(['-r']);
+    expect(r.stdout).toContain('origin/pr-1');
+  });
+
+  it('fetch updates refs', async () => {
+    const r = await SHELL_GIT_SUBCOMMANDS.fetch([]);
+    expect(r.exitCode).toBe(0);
+    expect(mockFetch).toHaveBeenCalled();
+  });
+
+  it('push pushes the current branch', async () => {
+    const r = await SHELL_GIT_SUBCOMMANDS.push([]);
+    expect(r.exitCode).toBe(0);
+    expect(mockPush).toHaveBeenCalled();
+    expect(r.stdout).toContain('master');
+  });
+
+  it('pull fast-forwards', async () => {
+    const r = await SHELL_GIT_SUBCOMMANDS.pull([]);
+    expect(r.exitCode).toBe(0);
+    expect(mockPull).toHaveBeenCalled();
+  });
+
+  it('clone clones the given url', async () => {
+    const r = await SHELL_GIT_SUBCOMMANDS.clone(['https://github.com/o/r.git']);
+    expect(r.exitCode).toBe(0);
+    expect(mockClone).toHaveBeenCalledWith('https://github.com/o/r.git');
+  });
+
+  it('clone without a url fails', async () => {
+    const r = await SHELL_GIT_SUBCOMMANDS.clone([]);
+    expect(r.exitCode).not.toBe(0);
+  });
+
+  it('rm stages deletions', async () => {
+    const r = await SHELL_GIT_SUBCOMMANDS.rm(['gone.txt']);
+    expect(r.exitCode).toBe(0);
+    expect(mockRemove).toHaveBeenCalledWith(['gone.txt']);
+  });
+
+  it('mv moves a file', async () => {
+    const r = await SHELL_GIT_SUBCOMMANDS.mv(['a.txt', 'b.txt']);
+    expect(r.exitCode).toBe(0);
+    expect(mockMove).toHaveBeenCalledWith('a.txt', 'b.txt');
   });
 });

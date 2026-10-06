@@ -412,6 +412,21 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.07,
+        "context_length": 1048576,
+        "description": "Mistral Large 4 is a frontier multimodal (text and image input) model from Mistral AI built for reasoning, coding, and agentic workloads. It offers a 1M-token context window with up to 256K output tokens, and supports tool calling and structured outputs.",
+        "id": "mistral-large-4-0",
+        "input_cost": 0.68,
+        "name": "Mistral: Mistral Large 4",
+        "output_cost": 2.09,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

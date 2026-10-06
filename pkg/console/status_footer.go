@@ -5,8 +5,6 @@ import (
 	"os"
 	"sync"
 	"sync/atomic"
-
-	"golang.org/x/term"
 )
 
 // footerResetAll resets all ANSI formatting. Used by drawLocked to
@@ -185,8 +183,8 @@ func NewStatusFooter(w io.Writer, source ContentSource) *StatusFooter {
 	fd := -1
 	if f, ok := w.(*os.File); ok {
 		fd = int(f.Fd())
-		isTTY = term.IsTerminal(fd)
 	}
+	isTTY = SupportsCursorControl(w)
 	return &StatusFooter{
 		w:           w,
 		isTTY:       isTTY,

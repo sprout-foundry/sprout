@@ -90,9 +90,9 @@ func (s *TerminalSubscriberState) HandleQueryCompletedEvent(data map[string]inte
 	s.flushExternalWrite()
 	line := fmt.Sprintf("%s%sturn complete · %s%s",
 		console.GlyphSuccess.Prefix(),
-		console.Esc(console.ColorDim),
+		console.SGR(os.Stderr, console.ColorDim),
 		strings.Join(parts, " · "),
-		console.Esc(console.ColorReset))
+		console.SGR(os.Stderr, console.ColorReset))
 	fmt.Fprintln(os.Stderr, line)
 }
 

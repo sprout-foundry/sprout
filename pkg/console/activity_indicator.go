@@ -6,8 +6,6 @@ import (
 	"os"
 	"sync"
 	"time"
-
-	"golang.org/x/term"
 )
 
 // spinnerFrames is the braille animation cycle used by ActivityIndicator.
@@ -53,10 +51,7 @@ func NewActivityIndicator(w io.Writer) *ActivityIndicator {
 	if w == nil {
 		w = os.Stderr
 	}
-	isTTY := false
-	if f, ok := w.(*os.File); ok {
-		isTTY = term.IsTerminal(int(f.Fd()))
-	}
+	isTTY := SupportsCursorControl(w)
 	return &ActivityIndicator{
 		w:     w,
 		isTTY: isTTY,

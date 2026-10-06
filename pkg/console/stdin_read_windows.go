@@ -204,7 +204,9 @@ func restoreStartupConsoleModes() {
 // console window can start with processing off (Windows Terminal and
 // pwsh usually leave it on), which prints them as literal "←[" text.
 // startupModes has already captured the original modes for
-// RestoreTerminal.
+// RestoreTerminal. If VT processing cannot be enabled the process-wide
+// markVTUnsupported flips so color and cursor control fall back to plain
+// output instead of emitting raw escapes.
 func init() {
 	for _, h := range []windows.Handle{windows.Handle(os.Stdout.Fd()), windows.Handle(os.Stderr.Fd())} {
 		var mode uint32
@@ -212,8 +214,12 @@ func init() {
 			continue
 		}
 		want := mode | windows.ENABLE_PROCESSED_OUTPUT | windows.ENABLE_VIRTUAL_TERMINAL_PROCESSING
-		if want != mode {
-			_ = windows.SetConsoleMode(h, want)
+		if want == mode {
+			return
+		}
+		if err := windows.SetConsoleMode(h, want); err != nil {
+			markVTUnsupported()
+			return
 		}
 	}
 }

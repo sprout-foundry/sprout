@@ -9,6 +9,10 @@
  *   - All five built-in roles render, pre-filled from settings.roles.
  *   - Editing a role's model/provider and clicking Save calls
  *     updateSetting('roles', <full map>) with empty rows dropped.
+ *   - Custom (non-built-in) role entries in the persisted map survive every
+ *     save untouched, and an emptied built-in row is still dropped.
+ *   - The draft re-syncs when the persisted roles map changes by value, and
+ *     in-flight typing survives refreshes that carry an unchanged map.
  *   - The section hides entirely when no updateSetting is provided
  *     (mirrors ProviderPrioritySection).
  */
@@ -31,7 +35,16 @@ function render(props: { settings: SproutSettings; updateSetting?: (k: string, v
     root = createRoot(mountPoint);
     root.render(<RoleModelsSection settings={props.settings} updateSetting={updateSetting} />);
   });
-  return { updateSetting };
+  // Re-render the same root with a new settings object but the SAME
+  // updateSetting mock — the config-refresh scenario the draft re-sync
+  // tests exercise.
+  const rerender = (nextSettings: SproutSettings) => {
+    // eslint-disable-next-line testing-library/no-unnecessary-act
+    act(() => {
+      root!.render(<RoleModelsSection settings={nextSettings} updateSetting={updateSetting} />);
+    });
+  };
+  return { updateSetting, rerender };
 }
 
 function details(): HTMLDetailsElement {
@@ -58,6 +71,15 @@ function setInputValue(selector: string, value: string) {
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
 }
+
+function inputValue(testid: string): string {
+  const el = document.querySelector(`[data-testid="${testid}"]`) as HTMLInputElement | null;
+  if (!el) throw new Error(`input not found: ${testid}`);
+  return el.value;
+}
+
+const modelValue = (role: string) => inputValue(`role-model-input-${role}`);
+const providerValue = (role: string) => inputValue(`role-provider-input-${role}`);
 
 function clickSelector(selector: string) {
   const el = document.querySelector(selector) as HTMLElement;
@@ -173,6 +195,78 @@ describe('RoleModelsSection', () => {
     clickSelector('[data-testid="role-model-save-reviewer"]');
     expect(updateSetting).toHaveBeenCalledWith('roles', {
       reviewer: { provider: 'openai' },
+    });
+  });
+
+  it('re-syncs the draft when the persisted roles map changes by value', () => {
+    const { rerender } = render({
+      settings: { roles: { coder: { provider: 'anthropic', model: 'old-model' } } } as SproutSettings,
+    });
+    clickSummary();
+    expect(modelValue('coder')).toBe('old-model');
+
+    // Another surface persists different roles; the next render carries the
+    // new map and the inputs must follow it.
+    rerender({ roles: { coder: { provider: 'openai', model: 'gpt-5' } } } as SproutSettings);
+    expect(modelValue('coder')).toBe('gpt-5');
+    expect(providerValue('coder')).toBe('openai');
+
+    // Clearing a role externally resets its row to empty too.
+    rerender({ roles: { planner: { model: 'gpt-5' } } } as SproutSettings);
+    expect(modelValue('coder')).toBe('');
+    expect(providerValue('coder')).toBe('');
+    expect(modelValue('planner')).toBe('gpt-5');
+  });
+
+  it('keeps in-flight typing on refreshes that carry an unchanged roles map', () => {
+    // Two distinct objects with identical contents — the settings surface is
+    // re-created on every fetch, so the draft must compare by value.
+    const roles = { coder: { provider: 'anthropic', model: 'm1' } };
+    const { rerender } = render({ settings: { roles } as SproutSettings });
+    clickSummary();
+
+    setInputValue('[data-testid="role-model-input-coder"]', 'typed-but-unsaved');
+    // A refresh re-creates the whole settings object with the same value.
+    rerender({ roles: { ...roles } } as SproutSettings);
+    expect(modelValue('coder')).toBe('typed-but-unsaved');
+  });
+
+  it('preserves a custom role entry when saving a built-in row', () => {
+    const { updateSetting } = render({
+      settings: {
+        roles: {
+          'my-custom-role': { provider: 'zai', model: 'glm-4' },
+          coder: { model: 'old-coder-model' },
+        },
+      } as SproutSettings,
+    });
+    clickSummary();
+    setInputValue('[data-testid="role-model-input-coder"]', 'new-coder-model');
+    clickSelector('[data-testid="role-model-save-coder"]');
+
+    expect(updateSetting).toHaveBeenCalledTimes(1);
+    expect(updateSetting).toHaveBeenCalledWith('roles', {
+      coder: { model: 'new-coder-model' },
+      'my-custom-role': { provider: 'zai', model: 'glm-4' },
+    });
+  });
+
+  it('preserves custom roles even when the saved built-in row is emptied', () => {
+    const { updateSetting } = render({
+      settings: {
+        roles: {
+          'team-role': { model: 'kept' },
+          coder: { model: 'dropped' },
+        },
+      } as SproutSettings,
+    });
+    clickSummary();
+    // Clear the coder row entirely, then save: the empty built-in row is
+    // dropped, but the custom entry must survive.
+    setInputValue('[data-testid="role-model-input-coder"]', '');
+    clickSelector('[data-testid="role-model-save-coder"]');
+    expect(updateSetting).toHaveBeenCalledWith('roles', {
+      'team-role': { model: 'kept' },
     });
   });
 

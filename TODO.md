@@ -189,9 +189,14 @@ protects.
       `ProgressMilestoneData` now models both the flat payload and the
       coalesced batch (optional `plan_revision`/`elapsed_ms`/`phase`, route
       keys). Pinned by vitest.
-- [ ] **fix.18** Role models settings: re-sync the draft when config changes
+- [x] **fix.18** Role models settings: re-sync the draft when config changes
       and keep custom role names on save (`RoleModelsSection.tsx`); reject
       unknown role names in `/model --role`.
+      Fixed: the draft re-syncs from `settings.roles` on a value change only
+      (canonical-JSON compare, so unrelated refreshes never clobber typing);
+      saves seed from the persisted map so custom roles survive; `/model
+      --role` rejects names outside `configuration.BuiltInRoles()` with the
+      valid set in the message. Pinned by vitest and Go command tests.
 
 ## Review fixes — finish ticked items that are not wired
 - [ ] **wire.1** Benchmark: `sprout benchmark` CLI entry and a per-task

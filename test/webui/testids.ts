@@ -584,6 +584,15 @@ const TESTIDS = {
   // Preview placement (SP-155 §155a, item 155.6: the Code-mode panel)
   "preview-panel": "preview-panel", // the Code-mode preview panel container
   "preview-panel-toggle": "preview-panel-toggle", // the HeaderBar toggle button
+
+  // Views layout configuration:
+  // webui/src/views/ViewsLayout.tsx + ExampleEmbedding.tsx
+  "views-layout": "views-layout", // the arrangement renderer's root
+  "views-slot-left": "views-slot-left", // pattern views-slot-${slot}, slot ∈ ViewSlot
+  "views-slot-center": "views-slot-center",
+  "views-slot-right": "views-slot-right",
+  "views-slot-overlay": "views-slot-overlay",
+  "views-example-embedding": "views-example-embedding", // the example composition's root
 } as const;
 
 // Derived set for O(1) coverage lookups

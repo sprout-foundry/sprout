@@ -157,6 +157,9 @@ describe('cloudEndpointRegistry', () => {
         { path: '/workspace/txn/ws-1/txn/t-1/push', method: 'POST' },
         { path: '/workspace/fly', method: 'GET' },
         { path: '/workspace/fly/ws-1/txn/t-1/run', method: 'POST' },
+        { path: '/runners', method: 'GET' },
+        { path: '/workspace', method: 'GET' },
+        { path: '/workspace/ws-1', method: 'GET' },
       ];
 
       for (const { path, method } of testCases) {

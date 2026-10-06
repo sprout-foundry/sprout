@@ -97,6 +97,19 @@ const flyWorkspaceEndpoints: CloudEndpoint[] = [
     description: 'Backend-agnostic txn lifecycle (open/status/push/run/pull/finish)',
   },
   {
+    path: '/workspace',
+    methods: ['GET'],
+    category: 'foundry-backend',
+    description: 'List the caller workspaces (backend per row) — picks the workspace on the chosen escalation host',
+  },
+  {
+    path: '/workspace/',
+    methods: ['GET'],
+    category: 'foundry-backend',
+    isPrefix: true,
+    description: 'Get one workspace row (carries runner_id) — confirms a runner-hosted escalation workspace',
+  },
+  {
     path: '/workspace/fly',
     methods: ['GET', 'POST'],
     category: 'foundry-backend',
@@ -108,6 +121,16 @@ const flyWorkspaceEndpoints: CloudEndpoint[] = [
     category: 'foundry-backend',
     isPrefix: true,
     description: 'Legacy: Fly workspace txn lifecycle (in-flight sessions only)',
+  },
+];
+
+// --- Runners (SP-159) ---
+const runnerEndpoints: CloudEndpoint[] = [
+  {
+    path: '/runners',
+    methods: ['GET'],
+    category: 'foundry-backend',
+    description: "List the caller's runners — the escalation host picker",
   },
 ];
 
@@ -188,6 +211,7 @@ export const foundryBackendEndpoints: CloudEndpoint[] = [
   ...sessionEndpoints,
   ...taskEndpoints,
   ...flyWorkspaceEndpoints,
+  ...runnerEndpoints,
   ...settingsEndpoints,
   ...providerEndpoints,
   ...statsEndpoints,

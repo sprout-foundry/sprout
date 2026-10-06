@@ -20,44 +20,30 @@
  * mode and proxies to the Foundry backend with session credentials (same
  * convention as cloudTasks.ts).
  *
- * Also hosts the delta-manifest builders so the browser and the container
- * agree on the pinned shape: caps (5 MiB/file, 2000 files, 100 MiB total)
- * are honored client-side and over-cap entries are reported in `skipped`
- * instead of failing the whole transfer.
+ * The delta-manifest builders live in cloudTxnManifest.ts and are
+ * re-exported here so callers keep one import surface.
  *
  * Side-effect free and framework agnostic (no React imports).
  */
 
-// ── Caps (mirrored from the daemon contract) ───────────────────────────────
+import type { TxnManifest, TxnSkipped } from './cloudTxnManifest';
 
-export const TXN_MAX_FILE_BYTES = 5 * 1024 * 1024;
-export const TXN_MAX_FILES = 2000;
-export const TXN_MAX_TOTAL_BYTES = 100 * 1024 * 1024;
+export {
+  applyPullManifest,
+  base64ToBytes,
+  buildPushManifest,
+  bytesToBase64,
+  txnPathSkipReason,
+  TXN_MAX_FILE_BYTES,
+  TXN_MAX_FILES,
+  TXN_MAX_TOTAL_BYTES,
+} from './cloudTxnManifest';
+export type { TxnFile, TxnManifest, TxnPullApplyResult, TxnPullIO, TxnPushInput, TxnSkipped } from './cloudTxnManifest';
 
 /** Default run timeout for an escalation-spawned command (seconds). */
 export const TXN_RUN_TIMEOUT_SECONDS = 600;
 
 // ── Contract shapes ─────────────────────────────────────────────────────────
-
-export interface TxnSkipped {
-  path: string;
-  reason: string;
-}
-
-export interface TxnFile {
-  path: string;
-  content_base64: string;
-  size: number;
-  mode?: string;
-}
-
-export interface TxnManifest {
-  base: { git_sha: string; client: string };
-  files: TxnFile[];
-  deletes: string[];
-  truncated: boolean;
-  skipped: TxnSkipped[];
-}
 
 export interface TxnRunResult {
   stdout: string;
@@ -93,27 +79,11 @@ export interface TxnWorkspace {
   workspace_id?: string;
   repo_url?: string;
   status?: string;
+  /** "fly" | "runner" | "docker" (legacy). */
+  backend?: string;
+  /** Set on runner-hosted rows; only GET /workspace/{id} returns it. */
+  runner_id?: string;
   [key: string]: unknown;
-}
-
-/** A file the browser side can hand to buildPushManifest. */
-export interface TxnPushInput {
-  path: string;
-  content: string | Uint8Array;
-}
-
-/** Result of applying a pulled manifest to the browser VFS. */
-export interface TxnPullApplyResult {
-  applied: number;
-  deleted: number;
-  skipped: TxnSkipped[];
-}
-
-/** VFS bridge the pull applier needs. Deletes are optional (the browser VFS
- *  bridge only knows how to write today). */
-export interface TxnPullIO {
-  writeFiles: (files: Array<{ path: string; content: string | Uint8Array }>) => Promise<void>;
-  deleteFiles?: (paths: string[]) => Promise<void>;
 }
 
 // ── Errors ──────────────────────────────────────────────────────────────────
@@ -140,210 +110,105 @@ async function toTxnError(res: Response, action: string): Promise<Error> {
   }
 }
 
-// ── base64 helpers ──────────────────────────────────────────────────────────
+// ── Workspace resolution ────────────────────────────────────────────────────
 
-const B64_CHUNK = 0x8000;
+/**
+ * Where the workspace should live (SP-159 §159d): "auto" lets the platform
+ * pick (the user's runner when one is available, else Fly), "fly" is the
+ * cloud, "runner" pins one of the user's runners by id.
+ */
+export type TxnHostChoice = { host: 'auto' } | { host: 'fly' } | { host: 'runner'; runnerId: string };
 
-export function bytesToBase64(bytes: Uint8Array): string {
-  let binary = '';
-  for (let i = 0; i < bytes.length; i += B64_CHUNK) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + B64_CHUNK));
+const AUTO_CHOICE: TxnHostChoice = { host: 'auto' };
+
+/**
+ * 409 from a create pinned to one runner: the runner is not the caller's,
+ * offline, or at capacity. Escalation offers the cloud instead.
+ */
+export class RunnerUnavailableError extends CloudTxnError {
+  readonly runnerId: string;
+
+  constructor(runnerId: string) {
+    super('runner_unavailable', 409);
+    this.name = 'RunnerUnavailableError';
+    this.runnerId = runnerId;
   }
-  return btoa(binary);
 }
 
-export function base64ToBytes(b64: string): Uint8Array | null {
+async function getJSON<T>(url: string): Promise<T | null> {
   try {
-    const binary = atob(b64);
-    const out = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i += 1) out[i] = binary.charCodeAt(i);
-    return out;
+    const res = await fetch(url, { method: 'GET', credentials: 'include' });
+    if (!res.ok) return null;
+    return (await res.json()) as T;
   } catch {
-    // best-effort: invalid base64 reads as null (caller treats as absent).
+    // best-effort lookup: the caller falls through to create.
     return null;
   }
 }
 
-/** Path rules shared by both manifest directions (see txn-protocol.md). */
-export function txnPathSkipReason(path: unknown): string | null {
-  if (typeof path !== 'string' || path.trim() === '') return 'empty_path';
-  if (path.includes('\0')) return 'nul_in_path';
-  if (path.startsWith('/') || path.startsWith('\\') || /^[a-zA-Z]:/.test(path)) return 'absolute_path';
-  for (const segment of path.split('/')) {
-    if (segment === '..') return 'path_traversal';
-    if (segment === '.git') return 'git_path';
-    if (segment === '' || segment === '.') return 'invalid_path';
-  }
-  return null;
-}
-
-function toBytes(content: string | Uint8Array): Uint8Array {
-  if (typeof content === 'string') return new TextEncoder().encode(content);
-  return content;
-}
-
-// ── Manifest builders ───────────────────────────────────────────────────────
-
 /**
- * Build a push manifest from the browser's files, honoring the daemon caps
- * client-side: per-file 5 MiB, 2000 files, 100 MiB total. Over-cap entries
- * land in `skipped` (with the contract's reason strings) instead of failing
- * the transfer, and `truncated` marks any skip. `opts.deletes` carries files
- * the browser removed relative to HEAD so the container converges.
- * `opts.maxFileBytes`/`opts.maxFiles`/`opts.maxTotalBytes` exist for tests;
- * production callers use the contract defaults.
+ * GET /workspace/txn/resolve — the caller's live workspace for the repo on
+ * the chosen host (the platform filters by host and runner, newest first).
  */
-export async function buildPushManifest(
-  readFiles: () => Promise<TxnPushInput[]> | TxnPushInput[],
-  opts: {
-    deletes?: string[];
-    gitSha?: string;
-    maxFileBytes?: number;
-    maxFiles?: number;
-    maxTotalBytes?: number;
-  } = {},
-): Promise<TxnManifest> {
-  const maxFileBytes = opts.maxFileBytes ?? TXN_MAX_FILE_BYTES;
-  const maxFiles = opts.maxFiles ?? TXN_MAX_FILES;
-  const maxTotalBytes = opts.maxTotalBytes ?? TXN_MAX_TOTAL_BYTES;
-  const inputs = await readFiles();
-  const files: TxnFile[] = [];
-  const skipped: TxnSkipped[] = [];
-  let total = 0;
-
-  for (const input of Array.isArray(inputs) ? inputs : []) {
-    const pathReason = txnPathSkipReason(input?.path);
-    if (pathReason) {
-      skipped.push({ path: String(input?.path ?? ''), reason: pathReason });
-      continue;
-    }
-    if (files.length >= maxFiles) {
-      skipped.push({ path: input.path, reason: 'exceeds_file_count_cap' });
-      continue;
-    }
-    const bytes = toBytes(input.content);
-    if (bytes.byteLength > maxFileBytes) {
-      skipped.push({ path: input.path, reason: 'exceeds_per_file_cap' });
-      continue;
-    }
-    if (total + bytes.byteLength > maxTotalBytes) {
-      skipped.push({ path: input.path, reason: 'exceeds_total_cap' });
-      continue;
-    }
-    total += bytes.byteLength;
-    files.push({ path: input.path, content_base64: bytesToBase64(bytes), size: bytes.byteLength, mode: '0644' });
-  }
-
-  const deletes: string[] = [];
-  for (const path of opts.deletes ?? []) {
-    const pathReason = txnPathSkipReason(path);
-    if (pathReason) {
-      skipped.push({ path: String(path), reason: pathReason });
-      continue;
-    }
-    deletes.push(path);
-  }
-
-  return {
-    base: { git_sha: opts.gitSha ?? '', client: 'wasm' },
-    files,
-    deletes,
-    truncated: skipped.length > 0,
-    skipped,
-  };
+function resolveWorkspace(repoURL: string, choice: TxnHostChoice): Promise<TxnWorkspace | null> {
+  const params = new URLSearchParams({ repo_url: repoURL });
+  if (choice.host !== 'auto') params.set('host', choice.host);
+  if (choice.host === 'runner') params.set('runner_id', choice.runnerId);
+  return getJSON<TxnWorkspace>('/workspace/txn/resolve?' + params.toString());
 }
 
-/**
- * Apply a pulled manifest to the browser side: decode each file (an entry
- * whose base64 does not decode is skipped, never fatal), validate paths, hand
- * the batch to `io.writeFiles`, then process deletes via `io.deleteFiles`
- * when the bridge supports it.
- */
-export async function applyPullManifest(manifest: TxnManifest, io: TxnPullIO): Promise<TxnPullApplyResult> {
-  const skipped: TxnSkipped[] = [];
-  const files: Array<{ path: string; content: string | Uint8Array }> = [];
-  const deletes: string[] = [];
-
-  for (const file of manifest?.files ?? []) {
-    const pathReason = txnPathSkipReason(file?.path);
-    if (pathReason) {
-      skipped.push({ path: String(file?.path ?? ''), reason: pathReason });
-      continue;
-    }
-    const bytes = base64ToBytes(file.content_base64 ?? '');
-    if (bytes === null) {
-      skipped.push({ path: file.path, reason: 'invalid_base64' });
-      continue;
-    }
-    files.push({ path: file.path, content: bytes });
-  }
-
-  for (const path of manifest?.deletes ?? []) {
-    const pathReason = txnPathSkipReason(path);
-    if (pathReason) {
-      skipped.push({ path: String(path), reason: pathReason });
-      continue;
-    }
-    deletes.push(path);
-  }
-
-  if (files.length > 0) await io.writeFiles(files);
-
-  let deleted = 0;
-  if (deletes.length > 0) {
-    if (typeof io.deleteFiles === 'function') {
-      await io.deleteFiles(deletes);
-      deleted = deletes.length;
-    } else {
-      for (const path of deletes) skipped.push({ path, reason: 'delete_unsupported' });
-    }
-  }
-
-  return { applied: files.length, deleted, skipped };
-}
-
-// ── Workspace resolution ────────────────────────────────────────────────────
-
-/**
- * Find the caller's workspace for `repoURL` (any backend — the user's own
- * runner when one is attached, else Fly), creating one when none exists.
- * Resolution goes through the host-agnostic /workspace/txn surface
- * (SP-BUILDER-12); the platform picks the host.
- */
-export async function resolveTxnWorkspace(repoURL: string): Promise<{ workspaceId: string; created: boolean }> {
-  if (typeof repoURL !== 'string' || repoURL.trim() === '') {
-    throw new TypeError('repoURL is required');
-  }
-
-  const listRes = await fetch('/workspace/txn/resolve?repo_url=' + encodeURIComponent(repoURL), {
-    method: 'GET',
-    credentials: 'include',
-  });
-  if (listRes.ok) {
-    const body = (await listRes.json()) as TxnWorkspace | null;
-    if (typeof body?.workspace_id === 'string' && body.workspace_id !== '') {
-      noteWorkspaceBackend(body.workspace_id, typeof body.backend === 'string' ? body.backend : 'fly');
-      return { workspaceId: body.workspace_id, created: false };
-    }
-  }
-  // A failed list is not fatal — fall through to create, which reports its
-  // own (more specific) error.
-
+async function createWorkspace(repoURL: string, choice: TxnHostChoice): Promise<TxnWorkspace> {
+  const body: Record<string, string> = { repo_url: repoURL, host: choice.host };
+  if (choice.host === 'runner') body.runner_id = choice.runnerId;
   const createRes = await fetch('/workspace/txn', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ repo_url: repoURL }),
+    body: JSON.stringify(body),
   });
   if (!createRes.ok) {
-    throw await toTxnError(createRes, 'Cloud workspace resolve');
+    const err = await toTxnError(createRes, 'Cloud workspace resolve');
+    if (choice.host === 'runner' && createRes.status === 409 && err.message === 'runner_unavailable') {
+      throw new RunnerUnavailableError(choice.runnerId);
+    }
+    throw err;
   }
   const created = (await createRes.json()) as TxnWorkspace;
   if (typeof created?.workspace_id !== 'string' || created.workspace_id === '') {
     throw new TypeError('Cloud workspace resolve response is missing workspace_id');
   }
-  noteWorkspaceBackend(created.workspace_id, typeof created.backend === 'string' ? created.backend : 'fly');
-  return { workspaceId: created.workspace_id, created: true };
+  return created;
+}
+
+/**
+ * Find the caller's workspace for `repoURL` on the chosen host, creating one
+ * when none exists. With "auto" the platform picks the host (resolve any
+ * backend, else create where it decides). With "fly" or a pinned runner the
+ * chosen host wins even when the user also has a workspace for the repo
+ * elsewhere. A pinned runner that cannot take the workspace rejects with
+ * RunnerUnavailableError.
+ */
+export async function resolveTxnWorkspace(
+  repoURL: string,
+  choice: TxnHostChoice = AUTO_CHOICE,
+): Promise<{ workspaceId: string; created: boolean }> {
+  if (typeof repoURL !== 'string' || repoURL.trim() === '') {
+    throw new TypeError('repoURL is required');
+  }
+
+  // A failed resolve is not fatal — fall through to create, which reports
+  // its own (more specific) error. Create is idempotent for a runner, and
+  // resumes the existing Fly workspace for the cloud.
+  const existing = await resolveWorkspace(repoURL, choice);
+  if (typeof existing?.workspace_id === 'string' && existing.workspace_id !== '') {
+    noteWorkspaceBackend(existing.workspace_id, typeof existing.backend === 'string' ? existing.backend : 'fly');
+    return { workspaceId: existing.workspace_id, created: false };
+  }
+
+  const created = await createWorkspace(repoURL, choice);
+  const workspaceId = created.workspace_id as string;
+  noteWorkspaceBackend(workspaceId, typeof created.backend === 'string' ? created.backend : 'fly');
+  return { workspaceId, created: true };
 }
 
 // ── Backend-aware txn addressing (SP-BUILDER-12) ────────────────────────────

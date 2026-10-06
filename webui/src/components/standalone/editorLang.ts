@@ -1,17 +1,26 @@
 /**
- * E-M3 standalone editor language support — the CodeMirror 6 language
- * packages already in the webui's dependency tree, wired by file
- * extension. Standalone counterpart of the app editor's language
- * resolution (useEditorExtensions/buildExtensions languageId path).
+ * standalone editor language support — CodeMirror 6 language packages,
+ * loaded on demand.
+ *
+ * Language packages are code-split: `languageExtensionFor` is async and
+ * dynamic-imports only the package the opened file needs. The synchronous
+ * base extensions (gutters, history, search, bracket matching) load with
+ * the page; the ~270KB of language grammars load per language, first use.
+ * Unknown/plain-text files never fetch any grammar.
+ *
+ * `editorExtensionsFor` stays synchronous (the editor builds immediately);
+ * `loadLanguageExtension` resolves and the caller swaps the language
+ * compartment when it lands.
  */
 import type { Extension } from '@codemirror/state';
-import { EditorView, keymap } from '@codemirror/view';
+import { Compartment } from '@codemirror/state';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { bracketMatching, indentOnInput, syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
 import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from '@codemirror/autocomplete';
-import { lintGutter } from '@codemirror/lint';
+import { keymap } from '@codemirror/view';
 import {
+  EditorView,
   lineNumbers,
   highlightActiveLine,
   highlightActiveLineGutter,
@@ -22,21 +31,13 @@ import {
   highlightSpecialChars,
 } from '@codemirror/view';
 
-import { python } from '@codemirror/lang-python';
-import { javascript } from '@codemirror/lang-javascript';
-import { json } from '@codemirror/lang-json';
-import { html } from '@codemirror/lang-html';
-import { css } from '@codemirror/lang-css';
-import { markdown } from '@codemirror/lang-markdown';
-import { go } from '@codemirror/lang-go';
-import { cpp } from '@codemirror/lang-cpp';
-import { rust } from '@codemirror/lang-rust';
-import { sql } from '@codemirror/lang-sql';
-import { yaml } from '@codemirror/lang-yaml';
+export { EditorView };
 
-/** Map a file path to its language extension. */
+/** The language compartment: the one slice of the config that swaps async. */
+export const languageCompartment = new Compartment();
+
+/** The synchronous base: everything except the language grammar. */
 export function editorExtensionsFor(path: string): Extension[] {
-  const lang = languageExtensionFor(path);
   return [
     lineNumbers(),
     highlightActiveLineGutter(),
@@ -66,53 +67,53 @@ export function editorExtensionsFor(path: string): Extension[] {
       '&': { backgroundColor: 'transparent' },
       '.cm-content': { caretColor: 'var(--editor-fg, #d4d4d4)' },
     }),
-    ...(lang ? [lang] : []),
+    // Placeholder compartment — swapped for the real grammar when
+    // loadLanguageExtension resolves. Empty until then (plain-textColors).
+    languageCompartment.of([]),
   ];
 }
 
-function languageExtensionFor(path: string): Extension | null {
+type LanguageLoader = () => Promise<{ [k: string]: Extension }>;
+
+/** ext → dynamic importer. The default export name varies per package. */
+const LANGUAGE_LOADERS: Record<string, LanguageLoader> = {
+  py: () => import('@codemirror/lang-python').then((m) => ({ python: m.python() })),
+  js: () => import('@codemirror/lang-javascript').then((m) => ({ javascript: m.javascript() })),
+  mjs: () => import('@codemirror/lang-javascript').then((m) => ({ javascript: m.javascript() })),
+  cjs: () => import('@codemirror/lang-javascript').then((m) => ({ javascript: m.javascript() })),
+  ts: () => import('@codemirror/lang-javascript').then((m) => ({ javascript: m.javascript({ typescript: true }) })),
+  tsx: () => import('@codemirror/lang-javascript').then((m) => ({ javascript: m.javascript({ typescript: true }) })),
+  jsx: () => import('@codemirror/lang-javascript').then((m) => ({ javascript: m.javascript({ jsx: true }) })),
+  json: () => import('@codemirror/lang-json').then((m) => ({ json: m.json() })),
+  jsonc: () => import('@codemirror/lang-json').then((m) => ({ json: m.json() })),
+  html: () => import('@codemirror/lang-html').then((m) => ({ html: m.html() })),
+  htm: () => import('@codemirror/lang-html').then((m) => ({ html: m.html() })),
+  css: () => import('@codemirror/lang-css').then((m) => ({ css: m.css() })),
+  md: () => import('@codemirror/lang-markdown').then((m) => ({ markdown: m.markdown() })),
+  markdown: () => import('@codemirror/lang-markdown').then((m) => ({ markdown: m.markdown() })),
+  go: () => import('@codemirror/lang-go').then((m) => ({ go: m.go() })),
+  c: () => import('@codemirror/lang-cpp').then((m) => ({ cpp: m.cpp() })),
+  h: () => import('@codemirror/lang-cpp').then((m) => ({ cpp: m.cpp() })),
+  cpp: () => import('@codemirror/lang-cpp').then((m) => ({ cpp: m.cpp() })),
+  hpp: () => import('@codemirror/lang-cpp').then((m) => ({ cpp: m.cpp() })),
+  cc: () => import('@codemirror/lang-cpp').then((m) => ({ cpp: m.cpp() })),
+  rs: () => import('@codemirror/lang-rust').then((m) => ({ rust: m.rust() })),
+  sql: () => import('@codemirror/lang-sql').then((m) => ({ sql: m.sql() })),
+  yml: () => import('@codemirror/lang-yaml').then((m) => ({ yaml: m.yaml() })),
+  yaml: () => import('@codemirror/lang-yaml').then((m) => ({ yaml: m.yaml() })),
+};
+
+/**
+ * Load the grammar for `path`. Resolves null for plain-text extensions —
+ * the caller leaves the compartment empty.
+ */
+export async function loadLanguageExtension(path: string): Promise<Extension | null> {
   const ext = path.split('.').pop()?.toLowerCase() ?? '';
-  switch (ext) {
-    case 'py':
-      return python();
-    case 'js':
-    case 'mjs':
-    case 'cjs':
-      return javascript();
-    case 'ts':
-    case 'tsx':
-      return javascript({ typescript: true });
-    case 'jsx':
-      return javascript({ jsx: true });
-    case 'json':
-    case 'jsonc':
-      return json();
-    case 'html':
-    case 'htm':
-      return html();
-    case 'css':
-      return css();
-    case 'md':
-    case 'markdown':
-      return markdown();
-    case 'go':
-      return go();
-    case 'c':
-    case 'h':
-    case 'cpp':
-    case 'hpp':
-    case 'cc':
-      return cpp();
-    case 'rs':
-      return rust();
-    case 'sql':
-      return sql();
-    case 'yml':
-    case 'yaml':
-      return yaml();
-    default:
-      return null;
-  }
+  const loader = LANGUAGE_LOADERS[ext];
+  if (!loader) return null;
+  const bag = await loader();
+  const first = Object.values(bag)[0];
+  return first ?? null;
 }
 
 /** Human label for the status bar. */
@@ -144,7 +145,3 @@ export function languageTitleFor(path: string): string {
   };
   return names[ext] ?? (ext.toUpperCase() || 'Plain Text');
 }
-
-// (lintGutter imported for parity with app editor; not in the base set to
-// keep the standalone bundle lean — remove the import if linting is added.)
-void lintGutter;

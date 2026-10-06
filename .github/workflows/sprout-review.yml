@@ -71,18 +71,13 @@ jobs:
           review-type: "comprehensive"
           comment-threshold: "medium"
 
-          # Repo-specific review context, verbatim in the reviewer's brief.
-          #
-          # Known false positive to avoid: pkg/webui/security_headers.go
-          # reads envutil.GetEnvSimple("FRAME_ANCESTORS"), and GetEnvSimple
+          # Known false positive the reviewer must avoid (there is no
+          # review-context input in sprout-agent@v1, so this lives here as
+          # documentation): pkg/webui/security_headers.go reads
+          # envutil.GetEnvSimple("FRAME_ANCESTORS"), and GetEnvSimple
           # prepends SPROUT_ (pkg/envutil/env.go: os.Getenv("SPROUT_"+suffix)).
-          # So the configured variable IS SPROUT_FRAME_ANCESTORS. Docs that
-          # say SPROUT_FRAME_ANCESTORS are correct; do not flag a mismatch.
-          review-context: |
-            Env-var naming in this repo: configuration helpers in
-            pkg/envutil take the SUFFIX only and prepend SPROUT_
-            (GetEnvSimple("X") reads SPROUT_X). When checking docs against
-            code, resolve helper semantics before claiming a name mismatch.
+          # The configured variable IS SPROUT_FRAME_ANCESTORS; docs that say
+          # SPROUT_FRAME_ANCESTORS are correct — do not flag a mismatch.
 
           timeout-minutes: "30"
           debug: "false"

@@ -8,10 +8,13 @@
  */
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { __resetActiveRepoForTests, getActiveRepoURL } from '../../services/activeRepo';
+import {
+  __resetStandaloneRepo as __resetActiveRepoForTests,
+  getStandaloneRepoURL as getActiveRepoURL,
+} from './standaloneRepo';
 import { getEscalationPolicy, setEscalationPolicy } from '../../services/agentEscalation';
 import { __resetBrowserGitForTest, getBrowserGitVfsBridge } from '../../services/browserGit';
-import { getVfsManifestSnapshot } from '../../services/cloudWasmHandlers';
+import { getVfsManifestSnapshot } from '../../services/vfsFiles';
 import type { WasmShell } from '../../services/wasmShell';
 import { bootStandaloneEscalation, repoURLFromLocation } from './standaloneEscalation';
 
@@ -180,6 +183,29 @@ describe('standaloneEscalation', () => {
       }, 100);
       await waitFor(() => getEscalationPolicy() === 'always');
       await pending;
+    });
+
+    describe('host escalation defaults', () => {
+      it('seeds the never policy from ?escalation=never when the user has no choice', () => {
+        window.history.replaceState(null, '', '/editor.html?repo=https://github.com/acme/widget&escalation=never');
+        bootStandaloneEscalation(stubShell());
+        expect(getEscalationPolicy()).toBe('never');
+      });
+
+      it('an existing user choice (always) wins over the host default', () => {
+        // 'always' is a real user choice; the host default only replaces
+        // the pristine 'ask' state.
+        window.localStorage.setItem('sprout.agentEscalationPolicy', 'always');
+        window.history.replaceState(null, '', '/editor.html?repo=https://github.com/acme/widget&escalation=never');
+        bootStandaloneEscalation(stubShell());
+        expect(getEscalationPolicy()).toBe('always');
+      });
+
+      it('unknown escalation values are ignored (default ask stays)', () => {
+        window.history.replaceState(null, '', '/editor.html?repo=https://github.com/acme/widget&escalation=yolo');
+        bootStandaloneEscalation(stubShell());
+        expect(getEscalationPolicy()).toBe('ask');
+      });
     });
   });
 });

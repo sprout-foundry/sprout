@@ -8,30 +8,19 @@ const ASSET_CACHE = `${CACHE_VERSION}-assets`;
 
 // Assets to pre-cache on install (app shell only — WASM is too large for
 // precache; it gets cached on first fetch via the cache-first strategy).
-const APP_SHELL = [
-  './',
-  './index.html',
-  './manifest.json',
-];
+const APP_SHELL = ['./', './index.html', './manifest.json'];
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
-  event.waitUntil(
-    caches.open(SHELL_CACHE).then((cache) =>
-      cache.addAll(APP_SHELL).catch(() => {})
-    )
-  );
+  event.waitUntil(caches.open(SHELL_CACHE).then((cache) => cache.addAll(APP_SHELL).catch(() => {})));
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys
-          .filter((k) => !k.startsWith(CACHE_VERSION))
-          .map((k) => caches.delete(k))
-      )
-    ).then(() => self.clients.claim())
+    caches
+      .keys()
+      .then((keys) => Promise.all(keys.filter((k) => !k.startsWith(CACHE_VERSION)).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim()),
   );
 });
 
@@ -58,9 +47,7 @@ self.addEventListener('fetch', (event) => {
           caches.open(SHELL_CACHE).then((cache) => cache.put(request, copy));
           return resp;
         })
-        .catch(() =>
-          caches.match(request).then((r) => r || caches.match('./index.html'))
-        )
+        .catch(() => caches.match(request).then((r) => r || caches.match('./index.html'))),
     );
     return;
   }
@@ -72,6 +59,7 @@ self.addEventListener('fetch', (event) => {
     path.startsWith('/webui/assets/') ||
     path.startsWith('/assets/') ||
     path.startsWith('/webui/wasm/') ||
+    path === '/wasm/wasm_exec.js' ||
     path.endsWith('.wasm') ||
     path.endsWith('.js') ||
     path.endsWith('.css') ||
@@ -90,7 +78,7 @@ self.addEventListener('fetch', (event) => {
           }
           return resp;
         });
-      })
+      }),
     );
     return;
   }

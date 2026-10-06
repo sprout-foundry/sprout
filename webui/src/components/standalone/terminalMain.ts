@@ -19,6 +19,8 @@ import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { terminalText } from '../../services/terminalText';
 import { bootStandaloneEscalation } from './standaloneEscalation';
+import { buildReadyPayload as readyPayload } from './standaloneReady';
+import { isFromTrustedParent, postTargetOrigin } from './standaloneOrigin';
 import type { WasmShell } from '../../services/wasmShell';
 
 const host = document.getElementById('terminal')!;
@@ -51,7 +53,7 @@ function prompt() {
 }
 
 function post(type: string, payload: Record<string, unknown> = {}) {
-  window.parent?.postMessage({ source: 'sprout-terminal', type, ...payload }, '*');
+  window.parent?.postMessage({ source: 'sprout-terminal', type, ...payload }, postTargetOrigin());
 }
 
 let busy = false;
@@ -158,6 +160,7 @@ term.onData((data) => {
 });
 
 window.addEventListener('message', (ev: MessageEvent) => {
+  if (!isFromTrustedParent(ev)) return;
   const data = ev.data;
   if (!data || data.source !== 'sprout-host') return;
   if (data.type === 'run') {
@@ -193,7 +196,7 @@ async function boot() {
   }
   prompt();
   term.focus();
-  post('ready');
+  post('ready', readyPayload('terminal', wasm));
 }
 
 boot();

@@ -625,10 +625,15 @@ needed whatever the integration work does. Spec context: SP-160 §160e.
       error; `Credential` masks on `%v`/`%#v` and marshals without its
       secret, so it cannot ride into model context or logs. Pinned by tests
       using a sentinel token across serialized types and redacted payloads.
-- [ ] **156.4** Build and upload: build in the workspace with the
+- [x] **156.4** Build and upload: build in the workspace with the
       manifest's `build` command after verification passed on the same
       tree; refuse if the tree changed since verification. Tests. Spec:
       SP-156 §156a-2.
+      Fixed: `pkg/deploy.Deployer.BuildAndDeploy` gates on a passing-
+      verification tree fingerprint, builds in the workspace via the
+      manifest command, re-checks the tree, then uploads through the target;
+      any refusal path returns before an upload. Pinned by stub-based Go
+      tests.
 - [ ] **156.5** Preview vs production: preview deploys may run
       automatically after verification passes; production always needs
       explicit user confirmation. Test: unconfirmed production deploy is

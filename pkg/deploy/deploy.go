@@ -2,19 +2,20 @@
 // fake adapter used by tests: deploy, status, history (list), rollback, and
 // per-deployment preview URLs.
 //
-// The package is a pure contract: it holds the DeployTarget interface and
-// the value types that cross it (Deployment, DeployRequest, DeploymentKind).
-// It performs no I/O and reaches for nothing outside the standard library,
-// so real adapters and consumers (CLI, agent tools, Ship mode) can depend on
-// it without dragging in a network client. An adapter is a small package
-// that implements the interface; the fake (fake.go) is one such adapter,
-// for tests.
+// The package is a pure contract: it holds the DeployTarget interface, the
+// value types that cross it (Deployment, DeployRequest, DeploymentKind), and
+// the build-and-upload orchestrator (build.go). It reaches for nothing outside
+// the standard library and the shell-exec helper the build runner needs, so
+// real adapters and consumers (CLI, agent tools, Ship mode) can depend on it
+// without dragging in a network client. An adapter is a small package that
+// implements the interface; the fake (fake.go) is one such adapter, for tests.
 //
 // A build is described by DeployRequest. The build runs in the workspace
 // (from the starter manifest's build command) and the adapter uploads the
-// resulting output — it never rebuilds on the target. This package carries
-// only the build output directory in the request for now; wiring it to the
-// manifest and the verification gate is later work.
+// resulting output — it never rebuilds on the target. The request carries the
+// build output directory. The build-and-upload orchestration, including the
+// "what was verified is what ships" verification gate, lives in build.go; the
+// interface and value types it drives live here.
 package deploy
 
 import (

@@ -159,8 +159,13 @@ protects.
       not-verified reason read the filtered window, so docs-only or
       bookkeeping-only turns never start a build while a code+docs turn
       still runs. Pinned by a predicate table and full-turn tests.
-- [ ] **fix.14** Plan revision never decreases: `planstore` `Save` bumps from
+- [x] **fix.14** Plan revision never decreases: `planstore` `Save` bumps from
       `max(stored, given)`.
+      Fixed: `Save` now bumps from the higher of the caller's revision and
+      the revision on disk (unreadable stored file contributes no floor),
+      so a stale caller can never move the revision backwards. Pinned by
+      stale-caller, monotonic, first-write, corrupt-file, and
+      never-decreases-sequence tests.
 - [ ] **fix.15** Mode registry: reject re-registering built-in mode ids and
       never leave zero modes (`webui/src/workspaces/registry.ts`).
 - [ ] **fix.16** Plan snapshot for milestones refreshes on plan revision, and

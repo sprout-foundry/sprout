@@ -19,21 +19,22 @@ the end, without checkboxes.
 
 ## Automation reliability
 
-- [ ] **auto.1** Loop-mode ticking fixes. The TODO workflows now run in the
-      existing `loop` mode (`automate/workflow.json` `loop` block,
-      `automate/workflow_gate.md`, `automate/item_rules.md`). Two runtime
-      gaps remain in `pkg/workflow`:
-      (a) `markTodoDone` (`loop_gate.go`) returns an error when the item line
-      is already `[x]`; treat an already-ticked line as success.
-      (b) The loop ticks an item whenever the agent finishes and the build
-      passes. Recognize a final reply line `INCOMPLETE: …` or `BLOCKED: …`
-      (see `automate/item_rules.md` step 7) and leave the item `[ ]` instead
-      of ticking it, recording the reason in the loop events; make sure an
-      item left unticked this way is not retried forever in the same run.
-      Tests: an already-ticked line does not error; an `INCOMPLETE` reply
-      leaves the item unchecked and the loop moves on; a `BLOCKED` item is
-      skipped for the rest of the run.
-
+- [ ] **auto.1** Coordinator sessions stop early: runs of
+      `automate/workflow.json` (`initial` mode, one coordinator session)
+      end with status `success` after one or a few items while runnable
+      `[ ]` items remain (Oct 5: sessions ended at 18:13, 20:34 and 23:33
+      with 30+ items open; the platform runner did the same). The
+      coordinator treats "finished an item and summarized" as done. Keep the
+      coordinator approach (the `loop` mode is not used); fix it in the
+      runtime: after the coordinator's final answer, re-read the todo file;
+      while runnable `[ ]` items remain and the session made progress (a new
+      commit or a newly ticked item), continue with a new turn using a short
+      continuation prompt; stop when nothing runnable is left or a session
+      makes no progress, so permanently skipped items cannot loop forever.
+      Record the stop reason in the run record (`.sprout/automate/*.json`).
+      Tests: a scripted coordinator that stops after each item still
+      completes three items; a run whose only remaining items are skipped
+      stops after one no-progress turn.
 - [ ] **auto.2** Workflow runs never wait on approvals, and a blocked
       command does not end the run. Three fixes in the security path
       (`pkg/agent/seed_tool_security.go`,
@@ -59,6 +60,19 @@ the end, without checkboxes.
       approval; a hard-blocked command returns an error and the next tool
       call still runs; `grep -n "/api/git/" file` in the workspace is not
       flagged while `cat /etc/hosts` still is.
+
+- [ ] **auto.3** Cache savings show $0: `calculateCachedTokenSavings`
+      (`pkg/agent/metrics.go`) returns 0 whenever the model has no cached
+      price in the catalog, which is the case for the recommended models (a
+      session with 99% cache reuse reported "Cost savings: $0.000000").
+      (a) Populate `cached_input_cost` per model in
+      `pkg/providercatalog/providers.json` from the providers' published
+      cache-read prices (`cmd/refresh_provider_catalog`; e.g. DeepInfra
+      DeepSeek-V4.1-Flash $0.006/M vs $0.20/M input), keeping it on refresh.
+      (b) When the provider reports the request's actual cost (OpenRouter
+      `cost`), compute savings as the uncached cost of the prompt minus the
+      actual cost instead of from catalog rates. Tests for both paths and
+      for the unknown-price case (shown as "unknown", not $0).
 
 ## Review fixes — correctness and spec promises
 Found in the code review of the automated work. Fix these before new feature
@@ -199,9 +213,14 @@ protects.
       valid set in the message. Pinned by vitest and Go command tests.
 
 ## Review fixes — finish ticked items that are not wired
-- [ ] **wire.1** Benchmark: `sprout benchmark` CLI entry and a per-task
+- [x] **wire.1** Benchmark: `sprout benchmark` CLI entry and a per-task
       timeout that stops a hung turn. (The ≥5 tasks per starter wait for the
       starter frameworks — see Not automatable.) Spec: SP-154.
+      Fixed: `cmd/benchmark.go` registers `sprout benchmark` (suite/model/
+      output/runs/timeout flags, report.md+report.json, partial report on
+      early stop); `Runner.Timeout` + `runTurnWithTimeout` stop a hung turn
+      through the agent's real interrupt and record it wrapping
+      `ErrRunTimeout`, never Passed. Pinned by timeout + CLI tests.
 - [ ] **wire.2** Summarizer role: call the progress summarizer where the spec
       says, through role metering and with a timeout, or remove it.
       Spec: SP-151 §151.8.

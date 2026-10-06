@@ -32,7 +32,7 @@ checkboxes.
       web UI's routing (`webui/src/services/cloudAdapter.ts`,
       `webui/src/services/cloudEndpointRegistry/`). A Go test fails when the
       generated file is stale. Spec: SP-160 §160c.
-- [ ] **contract.2** OpenAPI skeleton: `docs/api/openapi.yaml` (OpenAPI
+- [x] **contract.2** OpenAPI skeleton: `docs/api/openapi.yaml` (OpenAPI
       3.1) with `info.version` as the contract version (start at `1.0.0`),
       one tag per family, shared components (errors, pagination). A Go test
       in `pkg/webui` fails if a registered route is neither documented in the

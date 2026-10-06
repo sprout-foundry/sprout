@@ -1,0 +1,89 @@
+# Sprout backend contract (OpenAPI 3.1).
+#
+# This is the versioned, machine-readable description of the HTTP API the
+# spaces talk to. It is the single source of truth for the contract version:
+# `info.version` is reported by `/api/bootstrap` and compared by clients to
+# detect incompatible major-version drift. Bump it deliberately.
+#
+# Skeleton: no per-route schemas yet. Path entries with request/response
+# schemas are added family by family; the `tags` below name those families
+# (matching the grouping in docs/api/endpoints.md) so later paths can be tagged
+# into them. Routes not yet documented are tracked in docs/api/undocumented.txt
+# and a Go test in pkg/webui keeps the two in lockstep.
+openapi: 3.1.0
+info:
+  title: Sprout backend contract
+  description: >-
+    HTTP API that Sprout's spaces call against a host. Versioned by
+    info.version and checked by the conformance suite (docs/api). Path entries
+    are added per family; see the tags below and docs/api/undocumented.txt for
+    routes still being documented.
+  version: 1.0.0
+tags:
+  - name: conversation/query
+    description: Query lifecycle, steering, command execution, and completions.
+  - name: files
+    description: File browsing, reads/writes, create/delete/rename, and edits.
+  - name: git
+    description: Git status, history, diffs, commits, branches, and worktrees.
+  - name: settings
+    description: Settings, providers, onboarding, hotkeys, skills, and config.
+  - name: terminal
+    description: Terminal, agent-session, and language-server (LSP) surfaces.
+  - name: workspace/instances
+    description: Workspace metadata and remote instance/SSH management.
+  - name: sync/txn
+    description: File sync operations and container-side git transactions.
+  - name: sessions
+    description: Chat sessions and worktree session mappings.
+  - name: search
+    description: Search and search-and-replace across files.
+  - name: diagnostics
+    description: Diagnostics, semantic analysis, stats, and support bundles.
+  - name: design
+    description: Design-tree status and signals.
+  - name: starters
+    description: Starter project catalogue and instantiation.
+  - name: misc/static
+    description: Bootstrap, static assets, and other non-family routes.
+paths: {}
+components:
+  schemas:
+    Error:
+      # The standard error envelope every handler returns on failure: a
+      # human-readable message plus a stable machine-readable code (the `code`
+      # string passed to writeJSONErr). Family items reference this from their
+      # error responses.
+      type: object
+      properties:
+        error:
+          type: string
+          description: Human-readable error message.
+        code:
+          type: string
+          description: Stable machine-readable error code.
+      required:
+        - error
+        - code
+  parameters:
+    limit:
+      # Shared pagination: number of results per page. Mirrors the limit
+      # semantics used by the paginated list endpoints (default 30, capped at
+      # 100). Family items reference via $ref.
+      name: limit
+      in: query
+      required: false
+      description: Maximum number of results to return per page.
+      schema:
+        type: integer
+        default: 30
+        maximum: 100
+    offset:
+      # Shared pagination: number of results to skip before the first page.
+      name: offset
+      in: query
+      required: false
+      description: Number of results to skip before returning the page.
+      schema:
+        type: integer
+        default: 0

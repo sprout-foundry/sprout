@@ -315,6 +315,20 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 
 		workflowState.HasError = workflowState.HasError || err != nil
 
+		// Coordinator continuation: an "initial" coordinator run has no
+		// steps and used to exit the moment its one turn answered, even
+		// with runnable `[ ]` items left. Keep issuing continuation turns
+		// until nothing runnable remains or a turn makes no progress, then
+		// record the stop reason on the run record. Loop mode is the other
+		// TODO driver; when it is configured, continuation defers to it.
+		if err == nil && workflowConfig != nil && workflowConfig.Continuation != nil && workflowConfig.Loop == nil {
+			contResult, contErr := workflow.RunInitialContinuation(ctx, chatAgent, eventBus, workflowConfig, workflowState, workflow.QueryExecutor(ProcessQuery))
+			recordContinuationStopReason(contResult)
+			if contErr != nil {
+				return contErr
+			}
+		}
+
 		// Loop mode: iterate over TODO items with stateless gate + context reset.
 		if workflowConfig != nil && workflowConfig.Loop != nil {
 			workflowYielded, workflowErr := workflow.RunAgentWorkflowLoop(ctx, chatAgent, eventBus, workflowConfig, workflowState, workflow.QueryExecutor(ProcessQuery), workflowOverrides)

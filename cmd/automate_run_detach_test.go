@@ -219,6 +219,10 @@ func TestAutomateRun_Attach_DoesNotPassSessionFileFlag(t *testing.T) {
 	args := readCapturedArgs(t, capturePath)
 	assert.NotContains(t, args, "--automate-session-file",
 		"attached child argv must not contain --automate-session-file, got %v", args)
+	// Attached runs still get the record path so the child can annotate the
+	// record with the continuation stop reason before it exits.
+	assert.Contains(t, args, "--automate-record-file",
+		"attached child argv must contain --automate-record-file, got %v", args)
 
 	sessionID := findOnlySessionID(t, sproutDir)
 	info, err := automate.ReadSessionFile(sproutDir, sessionID)

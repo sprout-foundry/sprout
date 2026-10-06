@@ -48,10 +48,16 @@ var (
 	// `automate run --detach` sets it (via --automate-session-file); an
 	// empty value means this process owns no session record.
 	agentAutomateSessionFile string
-	agentNoConnectionCheck   bool
-	agentTraceDatasetDir     string
-	agentPromptStdin         bool
-	agentRiskProfile         string
+	// Path of the session record to annotate with the continuation loop's
+	// stop reason. Set by `automate run` in every mode (via
+	// --automate-record-file) so attached runs — whose end state is
+	// finalized by the launcher — still carry why the run stopped. The
+	// child only writes the stop-reason fields; it never finalizes.
+	agentAutomateRecordFile string
+	agentNoConnectionCheck  bool
+	agentTraceDatasetDir    string
+	agentPromptStdin        bool
+	agentRiskProfile        string
 	// Workflow budget overrides — populated from CLI flags on `sprout
 	// automate` and applied on top of the workflow JSON's budget block.
 	// Only positive values apply; pass 0 (or omit) to inherit the workflow
@@ -334,6 +340,8 @@ func init() {
 	agentCmd.Flags().StringVar(&agentWorkflowConfig, "workflow-config", "", "JSON file that defines agent workflow steps for non-interactive runs")
 	agentCmd.Flags().StringVar(&agentAutomateSessionFile, "automate-session-file", "", "Session record JSON path to finalize when this run exits (set by 'automate run --detach'; empty = no finalization)")
 	_ = agentCmd.Flags().MarkHidden("automate-session-file")
+	agentCmd.Flags().StringVar(&agentAutomateRecordFile, "automate-record-file", "", "Session record JSON path to annotate with the continuation stop reason (set by 'automate run'; empty = none)")
+	_ = agentCmd.Flags().MarkHidden("automate-record-file")
 	agentCmd.Flags().Float64Var(&agentBudgetUSD, "budget-usd", 0, "Hard cap on workflow USD spend (overrides workflow JSON budget.usd; 0 = no cap)")
 	agentCmd.Flags().StringVar(&agentBudgetWarn, "budget-warn", "", "Comma-separated warning thresholds as fractions of the budget, e.g. '0.5,0.8'")
 	agentCmd.Flags().IntVar(&agentHeartbeatSeconds, "heartbeat", 0, "Print [budget] progress every N seconds during the run (overrides progress.heartbeat_seconds)")

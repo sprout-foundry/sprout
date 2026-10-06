@@ -4,9 +4,11 @@ package automate
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -25,6 +27,17 @@ type AutomateSessionInfo struct {
 	EndedAt  *time.Time `json:"ended_at,omitempty"`
 	ExitCode *int       `json:"exit_code,omitempty"`
 	Status   string     `json:"status,omitempty"`
+
+	// StopReason explains why a coordinator/automate run finished when it
+	// did. Set by the runtime's continuation loop (e.g. no_runnable_items,
+	// no_progress); empty for runs that did not use continuation.
+	StopReason string `json:"stop_reason,omitempty"`
+	// ContinuationTurns is the number of continuation turns issued after
+	// the initial coordinator turn.
+	ContinuationTurns int `json:"continuation_turns,omitempty"`
+	// RunnableItemsRemaining is the number of runnable `[ ]` items left
+	// when the run stopped (0 for a clean finish).
+	RunnableItemsRemaining int `json:"runnable_items_remaining,omitempty"`
 }
 
 // GetAutomateSessionDir returns the .sprout/automate/ directory path.
@@ -159,6 +172,28 @@ func FinalizeSessionFileByPath(path string, exitCode int) error {
 	} else {
 		info.Status = "error"
 	}
+	return writeSessionFileAt(path, info)
+}
+
+// RecordSessionStopReason annotates an existing session record with why the
+// run's continuation loop stopped. It is deliberately tolerant: a missing or
+// unreadable record (e.g. a foreground run with no session file, or a run
+// that was never detached) is not an error — the stop reason is best-effort
+// metadata for post-mortems. Returns nil when there is no record to update.
+func RecordSessionStopReason(path, stopReason string, turns, runnableRemaining int) error {
+	if strings.TrimSpace(path) == "" {
+		return nil
+	}
+	info, err := readSessionFileAt(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("record stop reason %s: %w", filepath.Base(path), err)
+	}
+	info.StopReason = strings.TrimSpace(stopReason)
+	info.ContinuationTurns = turns
+	info.RunnableItemsRemaining = runnableRemaining
 	return writeSessionFileAt(path, info)
 }
 

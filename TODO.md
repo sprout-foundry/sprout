@@ -19,7 +19,7 @@ the end, without checkboxes.
 
 ## Automation reliability
 
-- [ ] **auto.1** Coordinator sessions stop early: runs of
+- [x] **auto.1** Coordinator sessions stop early: runs of
       `automate/workflow.json` (`initial` mode, one coordinator session)
       end with status `success` after one or a few items while runnable
       `[ ]` items remain (Oct 5: sessions ended at 18:13, 20:34 and 23:33
@@ -35,6 +35,13 @@ the end, without checkboxes.
       Tests: a scripted coordinator that stops after each item still
       completes three items; a run whose only remaining items are skipped
       stops after one no-progress turn.
+      Fixed: `pkg/workflow/continuation.go` adds `RunInitialContinuation`,
+      invoked after the initial coordinator turn; it re-reads the TODO file
+      and issues continuation turns while runnable `[ ]` items remain and the
+      turn made progress (new commit or newly ticked item), stopping on
+      no-runnable-items / no-progress / budget / cancel / cap and recording
+      the reason in the run record. Opt-in via a `continuation` block in the
+      workflow config. Pinned by scripted loop tests.
 - [ ] **auto.2** Workflow runs never wait on approvals, and a blocked
       command does not end the run. Three fixes in the security path
       (`pkg/agent/seed_tool_security.go`,

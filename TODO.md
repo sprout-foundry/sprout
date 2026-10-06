@@ -76,7 +76,7 @@ the end, without checkboxes.
       route/search patterns are not flagged. `IsCriticalOperation` unchanged.
       Pinned by Go tests.
 
-- [ ] **auto.3** Cache savings show $0: `calculateCachedTokenSavings`
+- [x] **auto.3** Cache savings show $0: `calculateCachedTokenSavings`
       (`pkg/agent/metrics.go`) returns 0 whenever the model has no cached
       price in the catalog, which is the case for the recommended models (a
       session with 99% cache reuse reported "Cost savings: $0.000000").
@@ -88,6 +88,14 @@ the end, without checkboxes.
       `cost`), compute savings as the uncached cost of the prompt minus the
       actual cost instead of from catalog rates. Tests for both paths and
       for the unknown-price case (shown as "unknown", not $0).
+      Fixed: `cached_input_cost` is populated per model in
+      `pkg/providercatalog/providers.json` and kept by the refresh tool;
+      `ResolveModelPricing` falls back to the curated catalog for a missing
+      cached rate; `calculateCachedTokenSavings` prefers the provider's
+      reported actual cost (inverting the cache discount to reconstruct the
+      uncached prompt cost) and otherwise uses the catalog rate, returning an
+      explicit unknown (rendered as "unknown", never $0) when neither applies.
+      Pinned by Go tests.
 
 ## Review fixes — correctness and spec promises
 Found in the code review of the automated work. Fix these before new feature

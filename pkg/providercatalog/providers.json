@@ -284,7 +284,8 @@
             "tools"
           ],
           "input_cost": 0.3,
-          "output_cost": 1.2
+          "output_cost": 1.2,
+          "cached_input_cost": 0.03
         },
         {
           "id": "MiniMax-M2-Stable",
@@ -304,7 +305,8 @@
             "tools"
           ],
           "input_cost": 0.3,
-          "output_cost": 1.2
+          "output_cost": 1.2,
+          "cached_input_cost": 0.03
         },
         {
           "id": "MiniMax-M2.1-highspeed",
@@ -315,7 +317,8 @@
             "tools"
           ],
           "input_cost": 0.6,
-          "output_cost": 2.4
+          "output_cost": 2.4,
+          "cached_input_cost": 0.03
         },
         {
           "id": "MiniMax-M2.5",
@@ -327,7 +330,8 @@
             "reasoning"
           ],
           "input_cost": 0.3,
-          "output_cost": 1.2
+          "output_cost": 1.2,
+          "cached_input_cost": 0.03
         },
         {
           "id": "MiniMax-M2.5-highspeed",
@@ -338,7 +342,8 @@
             "tools"
           ],
           "input_cost": 0.6,
-          "output_cost": 2.4
+          "output_cost": 2.4,
+          "cached_input_cost": 0.03
         },
         {
           "id": "MiniMax-M2.5-Lightning",
@@ -359,7 +364,8 @@
             "reasoning"
           ],
           "input_cost": 0.3,
-          "output_cost": 1.2
+          "output_cost": 1.2,
+          "cached_input_cost": 0.06
         },
         {
           "id": "MiniMax-M2.7-highspeed",
@@ -370,7 +376,8 @@
             "tools"
           ],
           "input_cost": 0.6,
-          "output_cost": 2.4
+          "output_cost": 2.4,
+          "cached_input_cost": 0.06
         },
         {
           "id": "MiniMax-M3",
@@ -382,7 +389,8 @@
             "reasoning"
           ],
           "input_cost": 0.3,
-          "output_cost": 1.2
+          "output_cost": 1.2,
+          "cached_input_cost": 0.06
         },
         {
           "id": "MiniMax-VL-01",
@@ -413,7 +421,8 @@
           "description": "DeepSeek Chat - General purpose chat model (alias for V4 Flash non-thinking)",
           "context_length": 1000000,
           "input_cost": 0.32,
-          "output_cost": 0.8899999999999999
+          "output_cost": 0.8899999999999999,
+          "cached_input_cost": 0.014
         },
         {
           "id": "deepseek-coder",
@@ -432,7 +441,8 @@
             "reasoning"
           ],
           "input_cost": 0.3,
-          "output_cost": 1.2
+          "output_cost": 1.2,
+          "cached_input_cost": 0.006
         },
         {
           "id": "deepseek-reasoner",
@@ -458,7 +468,8 @@
             "tools"
           ],
           "input_cost": 0.055439999999999996,
-          "output_cost": 0.11087999999999999
+          "output_cost": 0.11087999999999999,
+          "cached_input_cost": 0.006
         },
         {
           "id": "deepseek-v4-flash-max",
@@ -481,7 +492,8 @@
             "reasoning"
           ],
           "input_cost": 0.22,
-          "output_cost": 0.66
+          "output_cost": 0.66,
+          "cached_input_cost": 0.006
         },
         {
           "id": "deepseek-v4-pro",
@@ -493,7 +505,8 @@
             "reasoning"
           ],
           "input_cost": 1.32,
-          "output_cost": 3.96
+          "output_cost": 3.96,
+          "cached_input_cost": 0.044
         }
       ]
     },
@@ -543,7 +556,8 @@
             "reasoning"
           ],
           "input_cost": 0.055439999999999996,
-          "output_cost": 0.11087999999999999
+          "output_cost": 0.11087999999999999,
+          "cached_input_cost": 0.007
         },
         {
           "id": "deepseek-v4-flash:0731",
@@ -555,7 +569,8 @@
             "reasoning"
           ],
           "input_cost": 0.22,
-          "output_cost": 0.66
+          "output_cost": 0.66,
+          "cached_input_cost": 0.007
         },
         {
           "id": "deepseek-v4-flash:preview",
@@ -577,7 +592,8 @@
             "reasoning"
           ],
           "input_cost": 0.9396,
-          "output_cost": 1.8792
+          "output_cost": 1.8792,
+          "cached_input_cost": 0.022
         },
         {
           "id": "deepseek-v4-pro:0813",
@@ -589,7 +605,8 @@
             "reasoning"
           ],
           "input_cost": 0.66,
-          "output_cost": 1.98
+          "output_cost": 1.98,
+          "cached_input_cost": 0.022
         },
         {
           "id": "deepseek-v4-pro:preview",
@@ -612,7 +629,8 @@
             "reasoning"
           ],
           "input_cost": 0.15,
-          "output_cost": 0.6
+          "output_cost": 0.6,
+          "cached_input_cost": 0.003
         },
         {
           "id": "gemma4:31b",
@@ -625,7 +643,8 @@
             "reasoning"
           ],
           "input_cost": 0.14,
-          "output_cost": 0.4
+          "output_cost": 0.4,
+          "cached_input_cost": 0.05
         },
         {
           "id": "glm-5.1",
@@ -636,7 +655,8 @@
             "tools"
           ],
           "input_cost": 1,
-          "output_cost": 3.2
+          "output_cost": 3.2,
+          "cached_input_cost": 0.2
         },
         {
           "id": "glm-5.2",
@@ -647,7 +667,8 @@
             "tools"
           ],
           "input_cost": 1.4,
-          "output_cost": 4.4
+          "output_cost": 4.4,
+          "cached_input_cost": 0.26
         },
         {
           "id": "glm-5.3",
@@ -660,7 +681,8 @@
             "structured_output"
           ],
           "input_cost": 1.4,
-          "output_cost": 4.4
+          "output_cost": 4.4,
+          "cached_input_cost": 0.26
         },
         {
           "id": "glm-5.3-flash",
@@ -673,7 +695,8 @@
             "reasoning"
           ],
           "input_cost": 0.15,
-          "output_cost": 0.5
+          "output_cost": 0.5,
+          "cached_input_cost": 0.03
         },
         {
           "id": "gpt-oss:120b",
@@ -685,7 +708,8 @@
             "reasoning"
           ],
           "input_cost": 0.15,
-          "output_cost": 0.6
+          "output_cost": 0.6,
+          "cached_input_cost": 0.014
         },
         {
           "id": "gpt-oss:20b",
@@ -697,7 +721,8 @@
             "reasoning"
           ],
           "input_cost": 0.07,
-          "output_cost": 0.3
+          "output_cost": 0.3,
+          "cached_input_cost": 0.035
         },
         {
           "id": "kimi-k2.6",
@@ -710,7 +735,8 @@
             "reasoning"
           ],
           "input_cost": 0.95,
-          "output_cost": 4
+          "output_cost": 4,
+          "cached_input_cost": 0.16
         },
         {
           "id": "kimi-k2.7-code",
@@ -721,7 +747,8 @@
             "tools"
           ],
           "input_cost": 0.95,
-          "output_cost": 4
+          "output_cost": 4,
+          "cached_input_cost": 0.19
         },
         {
           "id": "kimi-k3",
@@ -733,7 +760,8 @@
             "reasoning"
           ],
           "input_cost": 3,
-          "output_cost": 15
+          "output_cost": 15,
+          "cached_input_cost": 0.3
         },
         {
           "id": "minimax-m2.7",
@@ -744,7 +772,8 @@
             "tools"
           ],
           "input_cost": 0.3,
-          "output_cost": 1.2
+          "output_cost": 1.2,
+          "cached_input_cost": 0.06
         },
         {
           "id": "minimax-m3",
@@ -755,7 +784,8 @@
             "tools"
           ],
           "input_cost": 0.6,
-          "output_cost": 2.4
+          "output_cost": 2.4,
+          "cached_input_cost": 0.12
         },
         {
           "id": "mistral-large-3:675b",
@@ -788,7 +818,8 @@
             "tools"
           ],
           "input_cost": 0.015,
-          "output_cost": 0.6
+          "output_cost": 0.6,
+          "cached_input_cost": 0.015
         },
         {
           "id": "nemotron-3-ultra",
@@ -800,7 +831,8 @@
             "reasoning"
           ],
           "input_cost": 0.1,
-          "output_cost": 3
+          "output_cost": 3,
+          "cached_input_cost": 0.1
         },
         {
           "id": "qwen3.5:397b",
@@ -877,7 +909,8 @@
             "structured_output"
           ],
           "input_cost": 0.7999999999999999,
-          "output_cost": 1.5999999999999999
+          "output_cost": 1.5999999999999999,
+          "cached_input_cost": 0.2
         },
         {
           "id": "aion-labs/aion-3.0",
@@ -890,7 +923,8 @@
             "structured_output"
           ],
           "input_cost": 3,
-          "output_cost": 6
+          "output_cost": 6,
+          "cached_input_cost": 0.75
         },
         {
           "id": "aion-labs/aion-3.0-mini",
@@ -903,7 +937,8 @@
             "structured_output"
           ],
           "input_cost": 0.7,
-          "output_cost": 1.4
+          "output_cost": 1.4,
+          "cached_input_cost": 0.18
         },
         {
           "id": "aion-labs/aion-rp-llama-3.1-8b",
@@ -969,7 +1004,8 @@
             "vision"
           ],
           "input_cost": 2.5,
-          "output_cost": 12.5
+          "output_cost": 12.5,
+          "cached_input_cost": 0.625
         },
         {
           "id": "amazon/nova-pro-v1",
@@ -1004,7 +1040,8 @@
             "vision"
           ],
           "input_cost": 0.25,
-          "output_cost": 1.25
+          "output_cost": 1.25,
+          "cached_input_cost": 0.03
         },
         {
           "id": "anthropic/claude-fable-5",
@@ -1018,7 +1055,8 @@
             "structured_output"
           ],
           "input_cost": 10,
-          "output_cost": 50
+          "output_cost": 50,
+          "cached_input_cost": 1
         },
         {
           "id": "anthropic/claude-fable-5.1",
@@ -1032,7 +1070,8 @@
             "structured_output"
           ],
           "input_cost": 10,
-          "output_cost": 50
+          "output_cost": 50,
+          "cached_input_cost": 0.25
         },
         {
           "id": "anthropic/claude-fable-5.1:batch",
@@ -1046,7 +1085,8 @@
             "structured_output"
           ],
           "input_cost": 5,
-          "output_cost": 25
+          "output_cost": 25,
+          "cached_input_cost": 0.125
         },
         {
           "id": "anthropic/claude-fable-5:batch",
@@ -1060,7 +1100,8 @@
             "structured_output"
           ],
           "input_cost": 5,
-          "output_cost": 25
+          "output_cost": 25,
+          "cached_input_cost": 0.5
         },
         {
           "id": "anthropic/claude-haiku-4.5",
@@ -1074,7 +1115,8 @@
             "structured_output"
           ],
           "input_cost": 1,
-          "output_cost": 5
+          "output_cost": 5,
+          "cached_input_cost": 0.1
         },
         {
           "id": "anthropic/claude-haiku-4.5:batch",
@@ -1088,7 +1130,8 @@
             "structured_output"
           ],
           "input_cost": 0.5,
-          "output_cost": 2.5
+          "output_cost": 2.5,
+          "cached_input_cost": 0.05
         },
         {
           "id": "anthropic/claude-opus-4",
@@ -1101,7 +1144,8 @@
             "reasoning"
           ],
           "input_cost": 15,
-          "output_cost": 75
+          "output_cost": 75,
+          "cached_input_cost": 1.5
         },
         {
           "id": "anthropic/claude-opus-4.1",
@@ -1114,7 +1158,8 @@
             "reasoning"
           ],
           "input_cost": 15,
-          "output_cost": 75
+          "output_cost": 75,
+          "cached_input_cost": 1.5
         },
         {
           "id": "anthropic/claude-opus-4.1:batch",
@@ -1128,7 +1173,8 @@
             "structured_output"
           ],
           "input_cost": 7.5,
-          "output_cost": 37.5
+          "output_cost": 37.5,
+          "cached_input_cost": 0.75
         },
         {
           "id": "anthropic/claude-opus-4.5",
@@ -1142,7 +1188,8 @@
             "structured_output"
           ],
           "input_cost": 5,
-          "output_cost": 25
+          "output_cost": 25,
+          "cached_input_cost": 0.5
         },
         {
           "id": "anthropic/claude-opus-4.5:batch",
@@ -1156,7 +1203,8 @@
             "structured_output"
           ],
           "input_cost": 2.5,
-          "output_cost": 12.5
+          "output_cost": 12.5,
+          "cached_input_cost": 0.25
         },
         {
           "id": "anthropic/claude-opus-4.6",
@@ -1170,7 +1218,8 @@
             "structured_output"
           ],
           "input_cost": 5,
-          "output_cost": 25
+          "output_cost": 25,
+          "cached_input_cost": 0.5
         },
         {
           "id": "anthropic/claude-opus-4.6:batch",
@@ -1184,7 +1233,8 @@
             "structured_output"
           ],
           "input_cost": 2.5,
-          "output_cost": 12.5
+          "output_cost": 12.5,
+          "cached_input_cost": 0.25
         },
         {
           "id": "anthropic/claude-opus-4.7",
@@ -1198,7 +1248,8 @@
             "structured_output"
           ],
           "input_cost": 5,
-          "output_cost": 25
+          "output_cost": 25,
+          "cached_input_cost": 0.5
         },
         {
           "id": "anthropic/claude-opus-4.7-fast",
@@ -1224,7 +1275,8 @@
             "structured_output"
           ],
           "input_cost": 2.5,
-          "output_cost": 12.5
+          "output_cost": 12.5,
+          "cached_input_cost": 0.25
         },
         {
           "id": "anthropic/claude-opus-4.8",
@@ -1238,7 +1290,8 @@
             "structured_output"
           ],
           "input_cost": 5,
-          "output_cost": 25
+          "output_cost": 25,
+          "cached_input_cost": 0.5
         },
         {
           "id": "anthropic/claude-opus-4.8-fast",
@@ -1264,7 +1317,8 @@
             "structured_output"
           ],
           "input_cost": 2.5,
-          "output_cost": 12.5
+          "output_cost": 12.5,
+          "cached_input_cost": 0.25
         },
         {
           "id": "anthropic/claude-opus-5",
@@ -1278,7 +1332,8 @@
             "structured_output"
           ],
           "input_cost": 5,
-          "output_cost": 25
+          "output_cost": 25,
+          "cached_input_cost": 0.5
         },
         {
           "id": "anthropic/claude-opus-5-fast",
@@ -1304,7 +1359,8 @@
             "structured_output"
           ],
           "input_cost": 2.5,
-          "output_cost": 12.5
+          "output_cost": 12.5,
+          "cached_input_cost": 0.25
         },
         {
           "id": "anthropic/claude-sonnet-4",
@@ -1317,7 +1373,8 @@
             "reasoning"
           ],
           "input_cost": 3,
-          "output_cost": 15
+          "output_cost": 15,
+          "cached_input_cost": 0.3
         },
         {
           "id": "anthropic/claude-sonnet-4.5",
@@ -1331,7 +1388,8 @@
             "structured_output"
           ],
           "input_cost": 3,
-          "output_cost": 15
+          "output_cost": 15,
+          "cached_input_cost": 0.3
         },
         {
           "id": "anthropic/claude-sonnet-4.5:batch",
@@ -1345,7 +1403,8 @@
             "structured_output"
           ],
           "input_cost": 1.5,
-          "output_cost": 7.5
+          "output_cost": 7.5,
+          "cached_input_cost": 0.15
         },
         {
           "id": "anthropic/claude-sonnet-4.6",
@@ -1359,7 +1418,8 @@
             "structured_output"
           ],
           "input_cost": 3,
-          "output_cost": 15
+          "output_cost": 15,
+          "cached_input_cost": 0.3
         },
         {
           "id": "anthropic/claude-sonnet-4.6:batch",
@@ -1373,7 +1433,8 @@
             "structured_output"
           ],
           "input_cost": 1.5,
-          "output_cost": 7.5
+          "output_cost": 7.5,
+          "cached_input_cost": 0.15
         },
         {
           "id": "anthropic/claude-sonnet-5",
@@ -1387,7 +1448,8 @@
             "structured_output"
           ],
           "input_cost": 2,
-          "output_cost": 10
+          "output_cost": 10,
+          "cached_input_cost": 0.2
         },
         {
           "id": "anthropic/claude-sonnet-5:batch",
@@ -1401,7 +1463,8 @@
             "structured_output"
           ],
           "input_cost": 1,
-          "output_cost": 5
+          "output_cost": 5,
+          "cached_input_cost": 0.1
         },
         {
           "id": "arcee-ai/trinity-large-thinking",
@@ -1413,7 +1476,8 @@
             "reasoning"
           ],
           "input_cost": 0.25,
-          "output_cost": 0.7999999999999999
+          "output_cost": 0.7999999999999999,
+          "cached_input_cost": 0.06
         },
         {
           "id": "arcee-ai/virtuoso-large",
@@ -1530,7 +1594,8 @@
             "structured_output"
           ],
           "input_cost": 0.09999999999999999,
-          "output_cost": 0.19999999999999998
+          "output_cost": 0.19999999999999998,
+          "cached_input_cost": 0.1
         },
         {
           "id": "cognitivecomputations/dolphin-mistral-24b-venice-edition",
@@ -1644,7 +1709,8 @@
             "structured_output"
           ],
           "input_cost": 0.25,
-          "output_cost": 0.95
+          "output_cost": 0.95,
+          "cached_input_cost": 0.13
         },
         {
           "id": "deepseek/deepseek-r1",
@@ -1670,7 +1736,8 @@
             "structured_output"
           ],
           "input_cost": 0.5,
-          "output_cost": 2.1500000000000004
+          "output_cost": 2.1500000000000004,
+          "cached_input_cost": 0.35
         },
         {
           "id": "deepseek/deepseek-r1-distill-llama-70b",
@@ -1694,7 +1761,8 @@
             "structured_output"
           ],
           "input_cost": 0.27,
-          "output_cost": 1
+          "output_cost": 1,
+          "cached_input_cost": 0.135
         },
         {
           "id": "deepseek/deepseek-v3.2",
@@ -1707,7 +1775,8 @@
             "structured_output"
           ],
           "input_cost": 0.26899999999999996,
-          "output_cost": 0.39999999999999997
+          "output_cost": 0.39999999999999997,
+          "cached_input_cost": 0.1345
         },
         {
           "id": "deepseek/deepseek-v3.2-exp",
@@ -1733,7 +1802,8 @@
             "structured_output"
           ],
           "input_cost": 0.055439999999999996,
-          "output_cost": 0.11087999999999999
+          "output_cost": 0.11087999999999999,
+          "cached_input_cost": 0.011088
         },
         {
           "id": "deepseek/deepseek-v4-flash-0731",
@@ -1746,7 +1816,8 @@
             "structured_output"
           ],
           "input_cost": 0.04,
-          "output_cost": 0.16
+          "output_cost": 0.16,
+          "cached_input_cost": 0.016
         },
         {
           "id": "deepseek/deepseek-v4-flash-0731:batch",
@@ -1759,7 +1830,8 @@
             "structured_output"
           ],
           "input_cost": 0.11,
-          "output_cost": 0.33
+          "output_cost": 0.33,
+          "cached_input_cost": 0.0035
         },
         {
           "id": "deepseek/deepseek-v4-flash-vision-exp",
@@ -1773,7 +1845,8 @@
             "structured_output"
           ],
           "input_cost": 0.22,
-          "output_cost": 0.66
+          "output_cost": 0.66,
+          "cached_input_cost": 0.007
         },
         {
           "id": "deepseek/deepseek-v4-flash-vision-exp:batch",
@@ -1787,7 +1860,8 @@
             "structured_output"
           ],
           "input_cost": 0.11,
-          "output_cost": 0.33
+          "output_cost": 0.33,
+          "cached_input_cost": 0.0035
         },
         {
           "id": "deepseek/deepseek-v4-pro",
@@ -1800,7 +1874,8 @@
             "structured_output"
           ],
           "input_cost": 0.9396,
-          "output_cost": 1.8792
+          "output_cost": 1.8792,
+          "cached_input_cost": 0.0783
         },
         {
           "id": "deepseek/deepseek-v4-pro-0813",
@@ -1813,7 +1888,8 @@
             "structured_output"
           ],
           "input_cost": 0.5755199999999999,
-          "output_cost": 1.72656
+          "output_cost": 1.72656,
+          "cached_input_cost": 0.019184
         },
         {
           "id": "deepseek/deepseek-v4-pro-0813:batch",
@@ -1826,7 +1902,8 @@
             "structured_output"
           ],
           "input_cost": 0.66,
-          "output_cost": 1.9800000000000002
+          "output_cost": 1.9800000000000002,
+          "cached_input_cost": 0.022
         },
         {
           "id": "deepseek/deepseek-v4.1-flash",
@@ -1840,7 +1917,8 @@
             "structured_output"
           ],
           "input_cost": 0.15,
-          "output_cost": 0.6
+          "output_cost": 0.6,
+          "cached_input_cost": 0.003
         },
         {
           "id": "dots-studio/dots-3-note-preview:free",
@@ -1866,7 +1944,8 @@
             "structured_output"
           ],
           "input_cost": 0.3,
-          "output_cost": 2.5
+          "output_cost": 2.5,
+          "cached_input_cost": 0.03
         },
         {
           "id": "google/gemini-2.5-flash-image",
@@ -1878,7 +1957,8 @@
             "structured_output"
           ],
           "input_cost": 0.3,
-          "output_cost": 2.5
+          "output_cost": 2.5,
+          "cached_input_cost": 0.03
         },
         {
           "id": "google/gemini-2.5-flash-lite",
@@ -1892,7 +1972,8 @@
             "structured_output"
           ],
           "input_cost": 0.09999999999999999,
-          "output_cost": 0.39999999999999997
+          "output_cost": 0.39999999999999997,
+          "cached_input_cost": 0.01
         },
         {
           "id": "google/gemini-2.5-flash-lite:batch",
@@ -1906,7 +1987,8 @@
             "structured_output"
           ],
           "input_cost": 0.049999999999999996,
-          "output_cost": 0.19999999999999998
+          "output_cost": 0.19999999999999998,
+          "cached_input_cost": 0.01
         },
         {
           "id": "google/gemini-2.5-flash:batch",
@@ -1920,7 +2002,8 @@
             "structured_output"
           ],
           "input_cost": 0.15,
-          "output_cost": 1.25
+          "output_cost": 1.25,
+          "cached_input_cost": 0.03
         },
         {
           "id": "google/gemini-2.5-pro",
@@ -1934,7 +2017,8 @@
             "structured_output"
           ],
           "input_cost": 1.25,
-          "output_cost": 10
+          "output_cost": 10,
+          "cached_input_cost": 0.125
         },
         {
           "id": "google/gemini-2.5-pro-preview",
@@ -1948,7 +2032,8 @@
             "structured_output"
           ],
           "input_cost": 1.25,
-          "output_cost": 10
+          "output_cost": 10,
+          "cached_input_cost": 0.125
         },
         {
           "id": "google/gemini-2.5-pro-preview-05-06",
@@ -1974,7 +2059,8 @@
             "structured_output"
           ],
           "input_cost": 0.625,
-          "output_cost": 5
+          "output_cost": 5,
+          "cached_input_cost": 0.125
         },
         {
           "id": "google/gemini-3-flash-preview",
@@ -1988,7 +2074,8 @@
             "structured_output"
           ],
           "input_cost": 0.5,
-          "output_cost": 3
+          "output_cost": 3,
+          "cached_input_cost": 0.05
         },
         {
           "id": "google/gemini-3-flash-preview:batch",
@@ -2016,7 +2103,8 @@
             "structured_output"
           ],
           "input_cost": 2,
-          "output_cost": 12
+          "output_cost": 12,
+          "cached_input_cost": 0.2
         },
         {
           "id": "google/gemini-3-pro-image-preview",
@@ -2029,7 +2117,8 @@
             "structured_output"
           ],
           "input_cost": 2,
-          "output_cost": 12
+          "output_cost": 12,
+          "cached_input_cost": 0.2
         },
         {
           "id": "google/gemini-3.1-flash-image",
@@ -2069,7 +2158,8 @@
             "structured_output"
           ],
           "input_cost": 0.25,
-          "output_cost": 1.5
+          "output_cost": 1.5,
+          "cached_input_cost": 0.025
         },
         {
           "id": "google/gemini-3.1-flash-lite-image",
@@ -2096,7 +2186,8 @@
             "structured_output"
           ],
           "input_cost": 0.25,
-          "output_cost": 1.5
+          "output_cost": 1.5,
+          "cached_input_cost": 0.025
         },
         {
           "id": "google/gemini-3.1-flash-lite:batch",
@@ -2110,7 +2201,8 @@
             "structured_output"
           ],
           "input_cost": 0.125,
-          "output_cost": 0.75
+          "output_cost": 0.75,
+          "cached_input_cost": 0.0125
         },
         {
           "id": "google/gemini-3.1-pro-preview",
@@ -2124,7 +2216,8 @@
             "structured_output"
           ],
           "input_cost": 2,
-          "output_cost": 12
+          "output_cost": 12,
+          "cached_input_cost": 0.2
         },
         {
           "id": "google/gemini-3.1-pro-preview-customtools",
@@ -2138,7 +2231,8 @@
             "structured_output"
           ],
           "input_cost": 2,
-          "output_cost": 12
+          "output_cost": 12,
+          "cached_input_cost": 0.2
         },
         {
           "id": "google/gemini-3.1-pro-preview:batch",
@@ -2166,7 +2260,8 @@
             "structured_output"
           ],
           "input_cost": 1.5,
-          "output_cost": 9
+          "output_cost": 9,
+          "cached_input_cost": 0.15
         },
         {
           "id": "google/gemini-3.5-flash-lite",
@@ -2180,7 +2275,8 @@
             "structured_output"
           ],
           "input_cost": 0.3,
-          "output_cost": 2.5
+          "output_cost": 2.5,
+          "cached_input_cost": 0.03
         },
         {
           "id": "google/gemini-3.5-flash-lite:batch",
@@ -2194,7 +2290,8 @@
             "structured_output"
           ],
           "input_cost": 0.15,
-          "output_cost": 1.25
+          "output_cost": 1.25,
+          "cached_input_cost": 0.015
         },
         {
           "id": "google/gemini-3.5-flash:batch",
@@ -2208,7 +2305,8 @@
             "structured_output"
           ],
           "input_cost": 0.75,
-          "output_cost": 4.5
+          "output_cost": 4.5,
+          "cached_input_cost": 0.075
         },
         {
           "id": "google/gemini-3.6-flash",
@@ -2222,7 +2320,8 @@
             "structured_output"
           ],
           "input_cost": 0.75,
-          "output_cost": 3.75
+          "output_cost": 3.75,
+          "cached_input_cost": 0.075
         },
         {
           "id": "google/gemini-3.6-flash:batch",
@@ -2236,7 +2335,8 @@
             "structured_output"
           ],
           "input_cost": 0.375,
-          "output_cost": 1.875
+          "output_cost": 1.875,
+          "cached_input_cost": 0.0375
         },
         {
           "id": "google/gemini-3.7-flash",
@@ -2250,7 +2350,8 @@
             "structured_output"
           ],
           "input_cost": 0.75,
-          "output_cost": 3.75
+          "output_cost": 3.75,
+          "cached_input_cost": 0.075
         },
         {
           "id": "google/gemini-3.7-flash:batch",
@@ -2264,7 +2365,8 @@
             "structured_output"
           ],
           "input_cost": 0.375,
-          "output_cost": 1.875
+          "output_cost": 1.875,
+          "cached_input_cost": 0.0375
         },
         {
           "id": "google/gemini-3.8-flash",
@@ -2278,7 +2380,8 @@
             "structured_output"
           ],
           "input_cost": 0.75,
-          "output_cost": 3.75
+          "output_cost": 3.75,
+          "cached_input_cost": 0.075
         },
         {
           "id": "google/gemini-3.8-flash:batch",
@@ -2292,7 +2395,8 @@
             "structured_output"
           ],
           "input_cost": 0.375,
-          "output_cost": 1.875
+          "output_cost": 1.875,
+          "cached_input_cost": 0.0375
         },
         {
           "id": "google/gemma-2-27b-it",
@@ -2329,7 +2433,8 @@
             "structured_output"
           ],
           "input_cost": 0.08,
-          "output_cost": 0.44999999999999996
+          "output_cost": 0.44999999999999996,
+          "cached_input_cost": 0.04
         },
         {
           "id": "google/gemma-3-4b-it",
@@ -2364,7 +2469,8 @@
             "structured_output"
           ],
           "input_cost": 0.09,
-          "output_cost": 0.3
+          "output_cost": 0.3,
+          "cached_input_cost": 0.05
         },
         {
           "id": "google/gemma-4-26b-a4b-it:free",
@@ -2390,7 +2496,8 @@
             "structured_output"
           ],
           "input_cost": 0.09,
-          "output_cost": 0.33999999999999997
+          "output_cost": 0.33999999999999997,
+          "cached_input_cost": 0.05
         },
         {
           "id": "google/gemma-4-31b-it:batch",
@@ -2479,7 +2586,8 @@
             "structured_output"
           ],
           "input_cost": 0.09999999999999999,
-          "output_cost": 0.15
+          "output_cost": 0.15,
+          "cached_input_cost": 0.05
         },
         {
           "id": "inception/mercury-2",
@@ -2492,7 +2600,8 @@
             "structured_output"
           ],
           "input_cost": 0.25,
-          "output_cost": 0.75
+          "output_cost": 0.75,
+          "cached_input_cost": 0.025
         },
         {
           "id": "inception/mercury-2.5",
@@ -2505,7 +2614,8 @@
             "structured_output"
           ],
           "input_cost": 0.04,
-          "output_cost": 0.15
+          "output_cost": 0.15,
+          "cached_input_cost": 0.004
         },
         {
           "id": "inception/mercury-2.5-preview",
@@ -2549,7 +2659,8 @@
             "structured_output"
           ],
           "input_cost": 0.020999999999999998,
-          "output_cost": 0.063
+          "output_cost": 0.063,
+          "cached_input_cost": 0.0042
         },
         {
           "id": "inclusionai/ling-3.0-flash-fin",
@@ -2562,7 +2673,8 @@
             "structured_output"
           ],
           "input_cost": 0.06,
-          "output_cost": 0.18
+          "output_cost": 0.18,
+          "cached_input_cost": 0.012
         },
         {
           "id": "inclusionai/ling-3.0-flash-fin:free",
@@ -2596,7 +2708,8 @@
             "structured_output"
           ],
           "input_cost": 0.06,
-          "output_cost": 0.18
+          "output_cost": 0.18,
+          "cached_input_cost": 0.012
         },
         {
           "id": "inclusionai/ling-3.0-flash-vl:free",
@@ -2649,7 +2762,8 @@
             "structured_output"
           ],
           "input_cost": 0.049999999999999996,
-          "output_cost": 0.22999999999999998
+          "output_cost": 0.22999999999999998,
+          "cached_input_cost": 0.05
         },
         {
           "id": "inference-net/schematron-v2-turbo",
@@ -2660,7 +2774,8 @@
             "structured_output"
           ],
           "input_cost": 0.03,
-          "output_cost": 0.15
+          "output_cost": 0.15,
+          "cached_input_cost": 0.03
         },
         {
           "id": "kwaipilot/kat-coder-air-v2.5",
@@ -2682,7 +2797,8 @@
             "structured_output"
           ],
           "input_cost": 0.3,
-          "output_cost": 1.2
+          "output_cost": 1.2,
+          "cached_input_cost": 0.06
         },
         {
           "id": "kwaipilot/kat-coder-pro-v2.5",
@@ -2694,7 +2810,8 @@
             "structured_output"
           ],
           "input_cost": 0.74,
-          "output_cost": 2.96
+          "output_cost": 2.96,
+          "cached_input_cost": 0.15
         },
         {
           "id": "liquid/lfm-2.5-2.6b:free",
@@ -2728,7 +2845,8 @@
             "reasoning"
           ],
           "input_cost": 0.3,
-          "output_cost": 1.2
+          "output_cost": 1.2,
+          "cached_input_cost": 0.006
         },
         {
           "id": "meta-llama/llama-3.1-70b-instruct",
@@ -2752,7 +2870,8 @@
             "structured_output"
           ],
           "input_cost": 0.049999999999999996,
-          "output_cost": 0.08
+          "output_cost": 0.08,
+          "cached_input_cost": 0.025
         },
         {
           "id": "meta-llama/llama-3.2-1b-instruct",
@@ -2834,7 +2953,8 @@
             "structured_output"
           ],
           "input_cost": 0.3,
-          "output_cost": 1.2
+          "output_cost": 1.2,
+          "cached_input_cost": 0.04
         },
         {
           "id": "meta/muse-glimmer-30b:batch",
@@ -2848,7 +2968,8 @@
             "structured_output"
           ],
           "input_cost": 0.175,
-          "output_cost": 0.75
+          "output_cost": 0.75,
+          "cached_input_cost": 0.02
         },
         {
           "id": "meta/muse-spark-1.1",
@@ -2862,7 +2983,8 @@
             "structured_output"
           ],
           "input_cost": 1.25,
-          "output_cost": 4.25
+          "output_cost": 4.25,
+          "cached_input_cost": 0.15
         },
         {
           "id": "meta/muse-spark-1.2",
@@ -2876,7 +2998,8 @@
             "structured_output"
           ],
           "input_cost": 1.25,
-          "output_cost": 4.25
+          "output_cost": 4.25,
+          "cached_input_cost": 0.15
         },
         {
           "id": "meta/muse-spark-1.2-contributor",
@@ -2890,7 +3013,8 @@
             "structured_output"
           ],
           "input_cost": 0.09999999999999999,
-          "output_cost": 0.19999999999999998
+          "output_cost": 0.19999999999999998,
+          "cached_input_cost": 0.002
         },
         {
           "id": "meta/muse-spark-1.3",
@@ -2904,7 +3028,8 @@
             "structured_output"
           ],
           "input_cost": 1.25,
-          "output_cost": 4.25
+          "output_cost": 4.25,
+          "cached_input_cost": 0.15
         },
         {
           "id": "meta/muse-spark-1.3-contributor",
@@ -2918,7 +3043,8 @@
             "structured_output"
           ],
           "input_cost": 0.09999999999999999,
-          "output_cost": 0.19999999999999998
+          "output_cost": 0.19999999999999998,
+          "cached_input_cost": 0.002
         },
         {
           "id": "microsoft/phi-4",
@@ -2984,7 +3110,8 @@
           "description": "MiniMax M2-her is a dialogue-first large language model built for immersive roleplay, character-driven chat, and expressive multi-turn conversations. Designed to stay consistent in tone and personality, it supports rich message...",
           "context_length": 65536,
           "input_cost": 0.3,
-          "output_cost": 1.2
+          "output_cost": 1.2,
+          "cached_input_cost": 0.03
         },
         {
           "id": "minimax/minimax-m2.1",
@@ -2997,7 +3124,8 @@
             "structured_output"
           ],
           "input_cost": 0.3,
-          "output_cost": 1.2
+          "output_cost": 1.2,
+          "cached_input_cost": 0.03
         },
         {
           "id": "minimax/minimax-m2.5",
@@ -3010,7 +3138,8 @@
             "structured_output"
           ],
           "input_cost": 0.27,
-          "output_cost": 1.08
+          "output_cost": 1.08,
+          "cached_input_cost": 0.027
         },
         {
           "id": "minimax/minimax-m2.7",
@@ -3023,7 +3152,8 @@
             "structured_output"
           ],
           "input_cost": 0.3,
-          "output_cost": 1.2
+          "output_cost": 1.2,
+          "cached_input_cost": 0.06
         },
         {
           "id": "minimax/minimax-m2.7:free",
@@ -3048,7 +3178,8 @@
             "structured_output"
           ],
           "input_cost": 0.3,
-          "output_cost": 1.2
+          "output_cost": 1.2,
+          "cached_input_cost": 0.06
         },
         {
           "id": "minimax/minimax-m3:batch",
@@ -3062,7 +3193,8 @@
             "structured_output"
           ],
           "input_cost": 0.3,
-          "output_cost": 1.2
+          "output_cost": 1.2,
+          "cached_input_cost": 0.06
         },
         {
           "id": "minimax/minimax-m3:free",
@@ -3086,7 +3218,8 @@
             "structured_output"
           ],
           "input_cost": 0.3,
-          "output_cost": 0.8999999999999999
+          "output_cost": 0.8999999999999999,
+          "cached_input_cost": 0.03
         },
         {
           "id": "mistralai/codestral-2508:batch",
@@ -3098,7 +3231,8 @@
             "structured_output"
           ],
           "input_cost": 0.15,
-          "output_cost": 0.44999999999999996
+          "output_cost": 0.44999999999999996,
+          "cached_input_cost": 0.015
         },
         {
           "id": "mistralai/devstral-2512",
@@ -3110,7 +3244,8 @@
             "structured_output"
           ],
           "input_cost": 0.39999999999999997,
-          "output_cost": 2
+          "output_cost": 2,
+          "cached_input_cost": 0.04
         },
         {
           "id": "mistralai/ministral-14b-2512",
@@ -3123,7 +3258,8 @@
             "structured_output"
           ],
           "input_cost": 0.19999999999999998,
-          "output_cost": 0.19999999999999998
+          "output_cost": 0.19999999999999998,
+          "cached_input_cost": 0.02
         },
         {
           "id": "mistralai/ministral-3b-2512",
@@ -3136,7 +3272,8 @@
             "structured_output"
           ],
           "input_cost": 0.09999999999999999,
-          "output_cost": 0.09999999999999999
+          "output_cost": 0.09999999999999999,
+          "cached_input_cost": 0.01
         },
         {
           "id": "mistralai/ministral-8b",
@@ -3158,7 +3295,8 @@
             "structured_output"
           ],
           "input_cost": 0.15,
-          "output_cost": 0.15
+          "output_cost": 0.15,
+          "cached_input_cost": 0.015
         },
         {
           "id": "mistralai/ministral-8b-2512:batch",
@@ -3171,7 +3309,8 @@
             "structured_output"
           ],
           "input_cost": 0.075,
-          "output_cost": 0.075
+          "output_cost": 0.075,
+          "cached_input_cost": 0.0075
         },
         {
           "id": "mistralai/mistral-large",
@@ -3183,7 +3322,8 @@
             "structured_output"
           ],
           "input_cost": 2,
-          "output_cost": 6
+          "output_cost": 6,
+          "cached_input_cost": 0.2
         },
         {
           "id": "mistralai/mistral-large-2407",
@@ -3195,7 +3335,8 @@
             "structured_output"
           ],
           "input_cost": 2,
-          "output_cost": 6
+          "output_cost": 6,
+          "cached_input_cost": 0.2
         },
         {
           "id": "mistralai/mistral-large-2512",
@@ -3219,7 +3360,8 @@
             "structured_output"
           ],
           "input_cost": 0.25,
-          "output_cost": 0.75
+          "output_cost": 0.75,
+          "cached_input_cost": 0.025
         },
         {
           "id": "mistralai/mistral-medium-3",
@@ -3232,7 +3374,8 @@
             "structured_output"
           ],
           "input_cost": 0.39999999999999997,
-          "output_cost": 2
+          "output_cost": 2,
+          "cached_input_cost": 0.04
         },
         {
           "id": "mistralai/mistral-medium-3-5",
@@ -3273,7 +3416,8 @@
             "structured_output"
           ],
           "input_cost": 0.39999999999999997,
-          "output_cost": 2
+          "output_cost": 2,
+          "cached_input_cost": 0.04
         },
         {
           "id": "mistralai/mistral-medium-3.1:batch",
@@ -3286,7 +3430,8 @@
             "structured_output"
           ],
           "input_cost": 0.19999999999999998,
-          "output_cost": 1
+          "output_cost": 1,
+          "cached_input_cost": 0.02
         },
         {
           "id": "mistralai/mistral-nemo",
@@ -3310,7 +3455,8 @@
             "structured_output"
           ],
           "input_cost": 0.19999999999999998,
-          "output_cost": 0.6
+          "output_cost": 0.6,
+          "cached_input_cost": 0.02
         },
         {
           "id": "mistralai/mistral-small-24b-instruct-2501",
@@ -3335,7 +3481,8 @@
             "structured_output"
           ],
           "input_cost": 0.15,
-          "output_cost": 0.6
+          "output_cost": 0.6,
+          "cached_input_cost": 0.015
         },
         {
           "id": "mistralai/mistral-small-2603:batch",
@@ -3349,7 +3496,8 @@
             "structured_output"
           ],
           "input_cost": 0.075,
-          "output_cost": 0.3
+          "output_cost": 0.3,
+          "cached_input_cost": 0.0075
         },
         {
           "id": "mistralai/mistral-small-3.1-24b-instruct",
@@ -3386,7 +3534,8 @@
             "structured_output"
           ],
           "input_cost": 2,
-          "output_cost": 6
+          "output_cost": 6,
+          "cached_input_cost": 0.2
         },
         {
           "id": "mistralai/voxtral-small-24b-2507",
@@ -3398,7 +3547,8 @@
             "structured_output"
           ],
           "input_cost": 0.09999999999999999,
-          "output_cost": 0.3
+          "output_cost": 0.3,
+          "cached_input_cost": 0.01
         },
         {
           "id": "moonshotai/kimi-k2",
@@ -3434,7 +3584,8 @@
             "structured_output"
           ],
           "input_cost": 0.6,
-          "output_cost": 2.5
+          "output_cost": 2.5,
+          "cached_input_cost": 0.15
         },
         {
           "id": "moonshotai/kimi-k2.5",
@@ -3448,7 +3599,8 @@
             "structured_output"
           ],
           "input_cost": 0.44999999999999996,
-          "output_cost": 2.25
+          "output_cost": 2.25,
+          "cached_input_cost": 0.07
         },
         {
           "id": "moonshotai/kimi-k2.6",
@@ -3462,7 +3614,8 @@
             "structured_output"
           ],
           "input_cost": 0.95,
-          "output_cost": 4
+          "output_cost": 4,
+          "cached_input_cost": 0.16
         },
         {
           "id": "moonshotai/kimi-k2.7-code",
@@ -3476,7 +3629,8 @@
             "structured_output"
           ],
           "input_cost": 0.7062,
-          "output_cost": 3.21
+          "output_cost": 3.21,
+          "cached_input_cost": 0.18
         },
         {
           "id": "moonshotai/kimi-k2.7-code:batch",
@@ -3502,7 +3656,8 @@
             "structured_output"
           ],
           "input_cost": 1.7,
-          "output_cost": 8.5
+          "output_cost": 8.5,
+          "cached_input_cost": 0.17
         },
         {
           "id": "moonshotai/kimi-k3:batch",
@@ -3516,7 +3671,8 @@
             "structured_output"
           ],
           "input_cost": 3,
-          "output_cost": 15
+          "output_cost": 15,
+          "cached_input_cost": 0.3
         },
         {
           "id": "morph/morph-v3-fast",
@@ -3697,7 +3853,8 @@
             "structured_output"
           ],
           "input_cost": 0.6,
-          "output_cost": 2.4
+          "output_cost": 2.4,
+          "cached_input_cost": 0.12
         },
         {
           "id": "nvidia/nemotron-3-ultra-550b-a55b:batch",
@@ -3753,7 +3910,8 @@
             "structured_output"
           ],
           "input_cost": 0.07,
-          "output_cost": 0.19999999999999998
+          "output_cost": 0.19999999999999998,
+          "cached_input_cost": 0.04
         },
         {
           "id": "nvidia/nemotron-3.5-lightning:free",
@@ -3905,7 +4063,8 @@
             "structured_output"
           ],
           "input_cost": 2,
-          "output_cost": 8
+          "output_cost": 8,
+          "cached_input_cost": 0.5
         },
         {
           "id": "openai/gpt-4.1-mini",
@@ -3918,7 +4077,8 @@
             "structured_output"
           ],
           "input_cost": 0.39999999999999997,
-          "output_cost": 1.5999999999999999
+          "output_cost": 1.5999999999999999,
+          "cached_input_cost": 0.1
         },
         {
           "id": "openai/gpt-4.1-mini:batch",
@@ -3931,7 +4091,8 @@
             "structured_output"
           ],
           "input_cost": 0.19999999999999998,
-          "output_cost": 0.7999999999999999
+          "output_cost": 0.7999999999999999,
+          "cached_input_cost": 0.05
         },
         {
           "id": "openai/gpt-4.1-nano",
@@ -3944,7 +4105,8 @@
             "structured_output"
           ],
           "input_cost": 0.09999999999999999,
-          "output_cost": 0.39999999999999997
+          "output_cost": 0.39999999999999997,
+          "cached_input_cost": 0.025
         },
         {
           "id": "openai/gpt-4.1-nano:batch",
@@ -3957,7 +4119,8 @@
             "structured_output"
           ],
           "input_cost": 0.049999999999999996,
-          "output_cost": 0.19999999999999998
+          "output_cost": 0.19999999999999998,
+          "cached_input_cost": 0.0125
         },
         {
           "id": "openai/gpt-4.1:batch",
@@ -3970,7 +4133,8 @@
             "structured_output"
           ],
           "input_cost": 1,
-          "output_cost": 4
+          "output_cost": 4,
+          "cached_input_cost": 0.25
         },
         {
           "id": "openai/gpt-4o",
@@ -3983,7 +4147,8 @@
             "structured_output"
           ],
           "input_cost": 2.5,
-          "output_cost": 10
+          "output_cost": 10,
+          "cached_input_cost": 1.25
         },
         {
           "id": "openai/gpt-4o-2024-05-13",
@@ -4009,7 +4174,8 @@
             "structured_output"
           ],
           "input_cost": 2.5,
-          "output_cost": 10
+          "output_cost": 10,
+          "cached_input_cost": 1.25
         },
         {
           "id": "openai/gpt-4o-2024-11-20",
@@ -4022,7 +4188,8 @@
             "structured_output"
           ],
           "input_cost": 2.5,
-          "output_cost": 10
+          "output_cost": 10,
+          "cached_input_cost": 1.25
         },
         {
           "id": "openai/gpt-4o-mini",
@@ -4035,7 +4202,8 @@
             "structured_output"
           ],
           "input_cost": 0.15,
-          "output_cost": 0.6
+          "output_cost": 0.6,
+          "cached_input_cost": 0.075
         },
         {
           "id": "openai/gpt-4o-mini-2024-07-18",
@@ -4048,7 +4216,8 @@
             "structured_output"
           ],
           "input_cost": 0.15,
-          "output_cost": 0.6
+          "output_cost": 0.6,
+          "cached_input_cost": 0.075
         },
         {
           "id": "openai/gpt-4o-mini:batch",
@@ -4061,7 +4230,8 @@
             "structured_output"
           ],
           "input_cost": 0.075,
-          "output_cost": 0.3
+          "output_cost": 0.3,
+          "cached_input_cost": 0.0375
         },
         {
           "id": "openai/gpt-4o:batch",
@@ -4074,7 +4244,8 @@
             "structured_output"
           ],
           "input_cost": 1.25,
-          "output_cost": 5
+          "output_cost": 5,
+          "cached_input_cost": 0.625
         },
         {
           "id": "openai/gpt-5",
@@ -4088,7 +4259,8 @@
             "structured_output"
           ],
           "input_cost": 1.25,
-          "output_cost": 10
+          "output_cost": 10,
+          "cached_input_cost": 0.125
         },
         {
           "id": "openai/gpt-5-codex:batch",
@@ -4113,7 +4285,8 @@
             "structured_output"
           ],
           "input_cost": 10,
-          "output_cost": 10
+          "output_cost": 10,
+          "cached_input_cost": 1.25
         },
         {
           "id": "openai/gpt-5-image-mini",
@@ -4126,7 +4299,8 @@
             "structured_output"
           ],
           "input_cost": 2.5,
-          "output_cost": 2
+          "output_cost": 2,
+          "cached_input_cost": 0.25
         },
         {
           "id": "openai/gpt-5-mini",
@@ -4140,7 +4314,8 @@
             "structured_output"
           ],
           "input_cost": 0.25,
-          "output_cost": 2
+          "output_cost": 2,
+          "cached_input_cost": 0.025
         },
         {
           "id": "openai/gpt-5-mini:batch",
@@ -4154,7 +4329,8 @@
             "structured_output"
           ],
           "input_cost": 0.125,
-          "output_cost": 1
+          "output_cost": 1,
+          "cached_input_cost": 0.0125
         },
         {
           "id": "openai/gpt-5-nano",
@@ -4168,7 +4344,8 @@
             "structured_output"
           ],
           "input_cost": 0.049999999999999996,
-          "output_cost": 0.39999999999999997
+          "output_cost": 0.39999999999999997,
+          "cached_input_cost": 0.005
         },
         {
           "id": "openai/gpt-5-nano:batch",
@@ -4182,7 +4359,8 @@
             "structured_output"
           ],
           "input_cost": 0.024999999999999998,
-          "output_cost": 0.19999999999999998
+          "output_cost": 0.19999999999999998,
+          "cached_input_cost": 0.0025
         },
         {
           "id": "openai/gpt-5-pro",
@@ -4224,7 +4402,8 @@
             "structured_output"
           ],
           "input_cost": 1.25,
-          "output_cost": 10
+          "output_cost": 10,
+          "cached_input_cost": 0.125
         },
         {
           "id": "openai/gpt-5.1-codex",
@@ -4238,7 +4417,8 @@
             "structured_output"
           ],
           "input_cost": 1.25,
-          "output_cost": 10
+          "output_cost": 10,
+          "cached_input_cost": 0.13
         },
         {
           "id": "openai/gpt-5.1-codex-max",
@@ -4252,7 +4432,8 @@
             "structured_output"
           ],
           "input_cost": 1.25,
-          "output_cost": 10
+          "output_cost": 10,
+          "cached_input_cost": 0.125
         },
         {
           "id": "openai/gpt-5.1-codex-mini",
@@ -4266,7 +4447,8 @@
             "structured_output"
           ],
           "input_cost": 0.25,
-          "output_cost": 2
+          "output_cost": 2,
+          "cached_input_cost": 0.03
         },
         {
           "id": "openai/gpt-5.1:batch",
@@ -4280,7 +4462,8 @@
             "structured_output"
           ],
           "input_cost": 0.625,
-          "output_cost": 5
+          "output_cost": 5,
+          "cached_input_cost": 0.0625
         },
         {
           "id": "openai/gpt-5.2",
@@ -4294,7 +4477,8 @@
             "structured_output"
           ],
           "input_cost": 1.75,
-          "output_cost": 14
+          "output_cost": 14,
+          "cached_input_cost": 0.175
         },
         {
           "id": "openai/gpt-5.2-chat",
@@ -4307,7 +4491,8 @@
             "structured_output"
           ],
           "input_cost": 1.75,
-          "output_cost": 14
+          "output_cost": 14,
+          "cached_input_cost": 0.175
         },
         {
           "id": "openai/gpt-5.2-codex",
@@ -4321,7 +4506,8 @@
             "structured_output"
           ],
           "input_cost": 1.75,
-          "output_cost": 14
+          "output_cost": 14,
+          "cached_input_cost": 0.175
         },
         {
           "id": "openai/gpt-5.2-pro",
@@ -4363,7 +4549,8 @@
             "structured_output"
           ],
           "input_cost": 0.875,
-          "output_cost": 7
+          "output_cost": 7,
+          "cached_input_cost": 0.0875
         },
         {
           "id": "openai/gpt-5.3-chat",
@@ -4388,7 +4575,8 @@
             "structured_output"
           ],
           "input_cost": 1.75,
-          "output_cost": 14
+          "output_cost": 14,
+          "cached_input_cost": 0.175
         },
         {
           "id": "openai/gpt-5.4",
@@ -4402,7 +4590,8 @@
             "structured_output"
           ],
           "input_cost": 2.5,
-          "output_cost": 15
+          "output_cost": 15,
+          "cached_input_cost": 0.25
         },
         {
           "id": "openai/gpt-5.4-image-2",
@@ -4415,7 +4604,8 @@
             "structured_output"
           ],
           "input_cost": 8,
-          "output_cost": 15
+          "output_cost": 15,
+          "cached_input_cost": 2
         },
         {
           "id": "openai/gpt-5.4-mini",
@@ -4429,7 +4619,8 @@
             "structured_output"
           ],
           "input_cost": 0.75,
-          "output_cost": 4.5
+          "output_cost": 4.5,
+          "cached_input_cost": 0.075
         },
         {
           "id": "openai/gpt-5.4-mini:batch",
@@ -4443,7 +4634,8 @@
             "structured_output"
           ],
           "input_cost": 0.375,
-          "output_cost": 2.25
+          "output_cost": 2.25,
+          "cached_input_cost": 0.0375
         },
         {
           "id": "openai/gpt-5.4-nano",
@@ -4457,7 +4649,8 @@
             "structured_output"
           ],
           "input_cost": 0.19999999999999998,
-          "output_cost": 1.25
+          "output_cost": 1.25,
+          "cached_input_cost": 0.02
         },
         {
           "id": "openai/gpt-5.4-nano:batch",
@@ -4471,7 +4664,8 @@
             "structured_output"
           ],
           "input_cost": 0.09999999999999999,
-          "output_cost": 0.625
+          "output_cost": 0.625,
+          "cached_input_cost": 0.01
         },
         {
           "id": "openai/gpt-5.4-pro",
@@ -4513,7 +4707,8 @@
             "structured_output"
           ],
           "input_cost": 1.25,
-          "output_cost": 7.5
+          "output_cost": 7.5,
+          "cached_input_cost": 0.125
         },
         {
           "id": "openai/gpt-5.5",
@@ -4527,7 +4722,8 @@
             "structured_output"
           ],
           "input_cost": 5,
-          "output_cost": 30
+          "output_cost": 30,
+          "cached_input_cost": 0.5
         },
         {
           "id": "openai/gpt-5.5-pro",
@@ -4569,7 +4765,8 @@
             "structured_output"
           ],
           "input_cost": 2.5,
-          "output_cost": 15
+          "output_cost": 15,
+          "cached_input_cost": 0.25
         },
         {
           "id": "openai/gpt-5.6-luna",
@@ -4583,7 +4780,8 @@
             "structured_output"
           ],
           "input_cost": 0.19999999999999998,
-          "output_cost": 1.2
+          "output_cost": 1.2,
+          "cached_input_cost": 0.02
         },
         {
           "id": "openai/gpt-5.6-luna-pro",
@@ -4597,7 +4795,8 @@
             "structured_output"
           ],
           "input_cost": 0.19999999999999998,
-          "output_cost": 1.2
+          "output_cost": 1.2,
+          "cached_input_cost": 0.02
         },
         {
           "id": "openai/gpt-5.6-luna-pro:batch",
@@ -4611,7 +4810,8 @@
             "structured_output"
           ],
           "input_cost": 0.09999999999999999,
-          "output_cost": 0.6
+          "output_cost": 0.6,
+          "cached_input_cost": 0.01
         },
         {
           "id": "openai/gpt-5.6-luna:batch",
@@ -4625,7 +4825,8 @@
             "structured_output"
           ],
           "input_cost": 0.09999999999999999,
-          "output_cost": 0.6
+          "output_cost": 0.6,
+          "cached_input_cost": 0.01
         },
         {
           "id": "openai/gpt-5.6-sol",
@@ -4639,7 +4840,8 @@
             "structured_output"
           ],
           "input_cost": 2,
-          "output_cost": 10
+          "output_cost": 10,
+          "cached_input_cost": 0.2
         },
         {
           "id": "openai/gpt-5.6-sol-pro",
@@ -4653,7 +4855,8 @@
             "structured_output"
           ],
           "input_cost": 2,
-          "output_cost": 10
+          "output_cost": 10,
+          "cached_input_cost": 0.2
         },
         {
           "id": "openai/gpt-5.6-sol-pro:batch",
@@ -4667,7 +4870,8 @@
             "structured_output"
           ],
           "input_cost": 1,
-          "output_cost": 5
+          "output_cost": 5,
+          "cached_input_cost": 0.1
         },
         {
           "id": "openai/gpt-5.6-sol:batch",
@@ -4681,7 +4885,8 @@
             "structured_output"
           ],
           "input_cost": 1,
-          "output_cost": 5
+          "output_cost": 5,
+          "cached_input_cost": 0.1
         },
         {
           "id": "openai/gpt-5.6-terra",
@@ -4695,7 +4900,8 @@
             "structured_output"
           ],
           "input_cost": 2,
-          "output_cost": 12
+          "output_cost": 12,
+          "cached_input_cost": 0.2
         },
         {
           "id": "openai/gpt-5.6-terra-pro",
@@ -4709,7 +4915,8 @@
             "structured_output"
           ],
           "input_cost": 2,
-          "output_cost": 12
+          "output_cost": 12,
+          "cached_input_cost": 0.2
         },
         {
           "id": "openai/gpt-5.6-terra-pro:batch",
@@ -4723,7 +4930,8 @@
             "structured_output"
           ],
           "input_cost": 1,
-          "output_cost": 6
+          "output_cost": 6,
+          "cached_input_cost": 0.1
         },
         {
           "id": "openai/gpt-5.6-terra:batch",
@@ -4737,7 +4945,8 @@
             "structured_output"
           ],
           "input_cost": 1,
-          "output_cost": 6
+          "output_cost": 6,
+          "cached_input_cost": 0.1
         },
         {
           "id": "openai/gpt-5:batch",
@@ -4751,7 +4960,8 @@
             "structured_output"
           ],
           "input_cost": 0.625,
-          "output_cost": 5
+          "output_cost": 5,
+          "cached_input_cost": 0.0625
         },
         {
           "id": "openai/gpt-6-astra",
@@ -4765,7 +4975,8 @@
             "structured_output"
           ],
           "input_cost": 10,
-          "output_cost": 50
+          "output_cost": 50,
+          "cached_input_cost": 1
         },
         {
           "id": "openai/gpt-6-astra-pro",
@@ -4779,7 +4990,8 @@
             "structured_output"
           ],
           "input_cost": 10,
-          "output_cost": 50
+          "output_cost": 50,
+          "cached_input_cost": 1
         },
         {
           "id": "openai/gpt-6-astra-pro:batch",
@@ -4793,7 +5005,8 @@
             "structured_output"
           ],
           "input_cost": 5,
-          "output_cost": 25
+          "output_cost": 25,
+          "cached_input_cost": 0.5
         },
         {
           "id": "openai/gpt-6-astra:batch",
@@ -4807,7 +5020,8 @@
             "structured_output"
           ],
           "input_cost": 5,
-          "output_cost": 25
+          "output_cost": 25,
+          "cached_input_cost": 0.5
         },
         {
           "id": "openai/gpt-audio",
@@ -4844,7 +5058,8 @@
             "structured_output"
           ],
           "input_cost": 5,
-          "output_cost": 30
+          "output_cost": 30,
+          "cached_input_cost": 0.5
         },
         {
           "id": "openai/gpt-oss-120b",
@@ -4857,7 +5072,8 @@
             "structured_output"
           ],
           "input_cost": 0.15,
-          "output_cost": 0.6
+          "output_cost": 0.6,
+          "cached_input_cost": 0.075
         },
         {
           "id": "openai/gpt-oss-120b:batch",
@@ -4883,7 +5099,8 @@
             "structured_output"
           ],
           "input_cost": 0.03,
-          "output_cost": 0.13
+          "output_cost": 0.13,
+          "cached_input_cost": 0.03
         },
         {
           "id": "openai/gpt-oss-20b:batch",
@@ -4917,7 +5134,8 @@
             "structured_output"
           ],
           "input_cost": 0.075,
-          "output_cost": 0.3
+          "output_cost": 0.3,
+          "cached_input_cost": 0.0375
         },
         {
           "id": "openai/o1",
@@ -4931,7 +5149,8 @@
             "structured_output"
           ],
           "input_cost": 15,
-          "output_cost": 60
+          "output_cost": 60,
+          "cached_input_cost": 7.5
         },
         {
           "id": "openai/o1-pro",
@@ -4981,7 +5200,8 @@
             "structured_output"
           ],
           "input_cost": 2,
-          "output_cost": 8
+          "output_cost": 8,
+          "cached_input_cost": 0.5
         },
         {
           "id": "openai/o3-mini",
@@ -4994,7 +5214,8 @@
             "structured_output"
           ],
           "input_cost": 1.1,
-          "output_cost": 4.4
+          "output_cost": 4.4,
+          "cached_input_cost": 0.55
         },
         {
           "id": "openai/o3-mini-high",
@@ -5007,7 +5228,8 @@
             "structured_output"
           ],
           "input_cost": 1.1,
-          "output_cost": 4.4
+          "output_cost": 4.4,
+          "cached_input_cost": 0.55
         },
         {
           "id": "openai/o3-mini-high:batch",
@@ -5031,7 +5253,8 @@
             "structured_output"
           ],
           "input_cost": 0.55,
-          "output_cost": 2.2
+          "output_cost": 2.2,
+          "cached_input_cost": 0.275
         },
         {
           "id": "openai/o3-pro",
@@ -5071,7 +5294,8 @@
             "structured_output"
           ],
           "input_cost": 1,
-          "output_cost": 4
+          "output_cost": 4,
+          "cached_input_cost": 0.25
         },
         {
           "id": "openai/o4-mini",
@@ -5085,7 +5309,8 @@
             "structured_output"
           ],
           "input_cost": 1.1,
-          "output_cost": 4.4
+          "output_cost": 4.4,
+          "cached_input_cost": 0.275
         },
         {
           "id": "openai/o4-mini-high",
@@ -5099,7 +5324,8 @@
             "structured_output"
           ],
           "input_cost": 1.1,
-          "output_cost": 4.4
+          "output_cost": 4.4,
+          "cached_input_cost": 0.275
         },
         {
           "id": "openai/o4-mini-high:batch",
@@ -5125,7 +5351,8 @@
             "structured_output"
           ],
           "input_cost": 0.55,
-          "output_cost": 2.2
+          "output_cost": 2.2,
+          "cached_input_cost": 0.1375
         },
         {
           "id": "openrouter/free",
@@ -5220,7 +5447,8 @@
             "reasoning"
           ],
           "input_cost": 0.09,
-          "output_cost": 0.18
+          "output_cost": 0.18,
+          "cached_input_cost": 0.009
         },
         {
           "id": "poolside/laguna-s-2.1:free",
@@ -5242,7 +5470,8 @@
             "reasoning"
           ],
           "input_cost": 0.06,
-          "output_cost": 0.12
+          "output_cost": 0.12,
+          "cached_input_cost": 0.03
         },
         {
           "id": "poolside/laguna-xs-2.1:free",
@@ -5313,7 +5542,8 @@
             "structured_output"
           ],
           "input_cost": 0.26,
-          "output_cost": 0.78
+          "output_cost": 0.78,
+          "cached_input_cost": 0.052
         },
         {
           "id": "qwen/qwen-plus-2025-07-28",
@@ -5348,7 +5578,8 @@
             "structured_output"
           ],
           "input_cost": 0.7999999999999999,
-          "output_cost": 1
+          "output_cost": 1,
+          "cached_input_cost": 0.4
         },
         {
           "id": "qwen/qwen3-14b",
@@ -5386,7 +5617,8 @@
             "structured_output"
           ],
           "input_cost": 0.0875,
-          "output_cost": 0.35
+          "output_cost": 0.35,
+          "cached_input_cost": 0.0175
         },
         {
           "id": "qwen/qwen3-235b-a22b-thinking-2507",
@@ -5475,7 +5707,8 @@
             "structured_output"
           ],
           "input_cost": 0.3,
-          "output_cost": 1
+          "output_cost": 1,
+          "cached_input_cost": 0.1
         },
         {
           "id": "qwen/qwen3-coder-30b-a3b-instruct",
@@ -5499,7 +5732,8 @@
             "structured_output"
           ],
           "input_cost": 0.195,
-          "output_cost": 0.975
+          "output_cost": 0.975,
+          "cached_input_cost": 0.039
         },
         {
           "id": "qwen/qwen3-coder-next",
@@ -5511,7 +5745,8 @@
             "structured_output"
           ],
           "input_cost": 0.12,
-          "output_cost": 0.7999999999999999
+          "output_cost": 0.7999999999999999,
+          "cached_input_cost": 0.07
         },
         {
           "id": "qwen/qwen3-coder-plus",
@@ -5523,7 +5758,8 @@
             "structured_output"
           ],
           "input_cost": 0.65,
-          "output_cost": 3.25
+          "output_cost": 3.25,
+          "cached_input_cost": 0.13
         },
         {
           "id": "qwen/qwen3-max",
@@ -5535,7 +5771,8 @@
             "structured_output"
           ],
           "input_cost": 0.78,
-          "output_cost": 3.9
+          "output_cost": 3.9,
+          "cached_input_cost": 0.156
         },
         {
           "id": "qwen/qwen3-max-thinking",
@@ -5586,7 +5823,8 @@
             "structured_output"
           ],
           "input_cost": 0.21,
-          "output_cost": 1.9
+          "output_cost": 1.9,
+          "cached_input_cost": 0.1
         },
         {
           "id": "qwen/qwen3-vl-235b-a22b-thinking",
@@ -5709,7 +5947,8 @@
             "structured_output"
           ],
           "input_cost": 0.3125,
-          "output_cost": 1.25
+          "output_cost": 1.25,
+          "cached_input_cost": 0.15625
         },
         {
           "id": "qwen/qwen3.5-397b-a17b",
@@ -5723,7 +5962,8 @@
             "structured_output"
           ],
           "input_cost": 0.55,
-          "output_cost": 3.5
+          "output_cost": 3.5,
+          "cached_input_cost": 0.225
         },
         {
           "id": "qwen/qwen3.5-9b",
@@ -5807,7 +6047,8 @@
             "structured_output"
           ],
           "input_cost": 0.3,
-          "output_cost": 2
+          "output_cost": 2,
+          "cached_input_cost": 0.03
         },
         {
           "id": "qwen/qwen3.6-35b-a3b",
@@ -5821,7 +6062,8 @@
             "structured_output"
           ],
           "input_cost": 0.15,
-          "output_cost": 1
+          "output_cost": 1,
+          "cached_input_cost": 0.05
         },
         {
           "id": "qwen/qwen3.6-flash",
@@ -5876,7 +6118,8 @@
             "structured_output"
           ],
           "input_cost": 0.03,
-          "output_cost": 0.13
+          "output_cost": 0.13,
+          "cached_input_cost": 0.006
         },
         {
           "id": "qwen/qwen3.7-max",
@@ -5889,7 +6132,8 @@
             "structured_output"
           ],
           "input_cost": 1.475,
-          "output_cost": 4.425
+          "output_cost": 4.425,
+          "cached_input_cost": 0.295
         },
         {
           "id": "qwen/qwen3.7-plus",
@@ -5903,7 +6147,8 @@
             "structured_output"
           ],
           "input_cost": 0.32,
-          "output_cost": 1.28
+          "output_cost": 1.28,
+          "cached_input_cost": 0.064
         },
         {
           "id": "qwen/qwen3.8-2.4t-a95b",
@@ -5916,7 +6161,8 @@
             "structured_output"
           ],
           "input_cost": 2,
-          "output_cost": 6
+          "output_cost": 6,
+          "cached_input_cost": 0.25
         },
         {
           "id": "qwen/qwen3.8-2.4t-a95b:batch",
@@ -5929,7 +6175,8 @@
             "structured_output"
           ],
           "input_cost": 2,
-          "output_cost": 6
+          "output_cost": 6,
+          "cached_input_cost": 0.25
         },
         {
           "id": "qwen/qwen3.8-27b",
@@ -5943,7 +6190,8 @@
             "structured_output"
           ],
           "input_cost": 0.19999999999999998,
-          "output_cost": 2.5
+          "output_cost": 2.5,
+          "cached_input_cost": 0.05
         },
         {
           "id": "qwen/qwen3.8-27b:free",
@@ -5969,7 +6217,8 @@
             "structured_output"
           ],
           "input_cost": 0.15,
-          "output_cost": 0.47
+          "output_cost": 0.47,
+          "cached_input_cost": 0.016
         },
         {
           "id": "qwen/qwen3.8-max",
@@ -5995,7 +6244,8 @@
             "structured_output"
           ],
           "input_cost": 2,
-          "output_cost": 6
+          "output_cost": 6,
+          "cached_input_cost": 0.25
         },
         {
           "id": "rekaai/reka-edge",
@@ -6054,7 +6304,8 @@
             "structured_output"
           ],
           "input_cost": 2,
-          "output_cost": 6
+          "output_cost": 6,
+          "cached_input_cost": 0.25
         },
         {
           "id": "sakana/fugu-ultra",
@@ -6068,7 +6319,8 @@
             "structured_output"
           ],
           "input_cost": 5,
-          "output_cost": 30
+          "output_cost": 30,
+          "cached_input_cost": 0.5
         },
         {
           "id": "sakana/fugu-ultra-v2",
@@ -6082,7 +6334,8 @@
             "structured_output"
           ],
           "input_cost": 5,
-          "output_cost": 30
+          "output_cost": 30,
+          "cached_input_cost": 0.5
         },
         {
           "id": "sakana/sakana-namazu",
@@ -6096,7 +6349,8 @@
             "structured_output"
           ],
           "input_cost": 0.95,
-          "output_cost": 4
+          "output_cost": 4,
+          "cached_input_cost": 0.15
         },
         {
           "id": "sao10k/l3-lunaris-8b",
@@ -6179,7 +6433,8 @@
             "structured_output"
           ],
           "input_cost": 0.19999999999999998,
-          "output_cost": 1.15
+          "output_cost": 1.15,
+          "cached_input_cost": 0.04
         },
         {
           "id": "tencent/hunyuan-a13b-instruct",
@@ -6234,7 +6489,8 @@
             "structured_output"
           ],
           "input_cost": 0.13199999999999998,
-          "output_cost": 0.5279999999999999
+          "output_cost": 0.5279999999999999,
+          "cached_input_cost": 0.033
         },
         {
           "id": "tencent/hy3-preview",
@@ -6246,7 +6502,8 @@
             "reasoning"
           ],
           "input_cost": 0.18,
-          "output_cost": 0.6
+          "output_cost": 0.6,
+          "cached_input_cost": 0.06
         },
         {
           "id": "tencent/hy4-preview",
@@ -6259,7 +6516,8 @@
             "structured_output"
           ],
           "input_cost": 0.834,
-          "output_cost": 2.501
+          "output_cost": 2.501,
+          "cached_input_cost": 0.042
         },
         {
           "id": "thedrummer/cydonia-24b-v4.1",
@@ -6270,7 +6528,8 @@
             "structured_output"
           ],
           "input_cost": 0.3,
-          "output_cost": 0.5
+          "output_cost": 0.5,
+          "cached_input_cost": 0.15
         },
         {
           "id": "thedrummer/rocinante-12b",
@@ -6290,7 +6549,8 @@
             "structured_output"
           ],
           "input_cost": 0.55,
-          "output_cost": 0.7999999999999999
+          "output_cost": 0.7999999999999999,
+          "cached_input_cost": 0.25
         },
         {
           "id": "thedrummer/unslopnemo-12b",
@@ -6314,7 +6574,8 @@
             "reasoning"
           ],
           "input_cost": 1,
-          "output_cost": 4.05
+          "output_cost": 4.05,
+          "cached_input_cost": 0.17
         },
         {
           "id": "thinkingmachines/inkling-small",
@@ -6327,7 +6588,8 @@
             "reasoning"
           ],
           "input_cost": 0.44999999999999996,
-          "output_cost": 1.2
+          "output_cost": 1.2,
+          "cached_input_cost": 0.1
         },
         {
           "id": "thinkingmachines/inkling-small:batch",
@@ -6362,7 +6624,8 @@
             "reasoning"
           ],
           "input_cost": 1,
-          "output_cost": 4.05
+          "output_cost": 4.05,
+          "cached_input_cost": 0.17
         },
         {
           "id": "thinkingmachines/inkling:free",
@@ -6385,7 +6648,8 @@
             "vision"
           ],
           "input_cost": 2.5,
-          "output_cost": 7.5
+          "output_cost": 7.5,
+          "cached_input_cost": 0.25
         },
         {
           "id": "undi95/remm-slerp-l2-13b",
@@ -6409,7 +6673,8 @@
             "structured_output"
           ],
           "input_cost": 0.15,
-          "output_cost": 0.6
+          "output_cost": 0.6,
+          "cached_input_cost": 0.015
         },
         {
           "id": "upstage/solar-pro4",
@@ -6422,7 +6687,8 @@
             "structured_output"
           ],
           "input_cost": 0.09,
-          "output_cost": 0.36
+          "output_cost": 0.36,
+          "cached_input_cost": 0.018
         },
         {
           "id": "writer/palmyra-x5",
@@ -6444,7 +6710,8 @@
             "structured_output"
           ],
           "input_cost": 1.25,
-          "output_cost": 2.5
+          "output_cost": 2.5,
+          "cached_input_cost": 0.2
         },
         {
           "id": "x-ai/grok-4.20-multi-agent",
@@ -6457,7 +6724,8 @@
             "structured_output"
           ],
           "input_cost": 1.25,
-          "output_cost": 2.5
+          "output_cost": 2.5,
+          "cached_input_cost": 0.2
         },
         {
           "id": "x-ai/grok-4.3",
@@ -6471,7 +6739,8 @@
             "structured_output"
           ],
           "input_cost": 1.25,
-          "output_cost": 2.5
+          "output_cost": 2.5,
+          "cached_input_cost": 0.2
         },
         {
           "id": "x-ai/grok-4.3:batch",
@@ -6485,7 +6754,8 @@
             "structured_output"
           ],
           "input_cost": 1,
-          "output_cost": 2
+          "output_cost": 2,
+          "cached_input_cost": 0.16
         },
         {
           "id": "x-ai/grok-4.5",
@@ -6499,7 +6769,8 @@
             "structured_output"
           ],
           "input_cost": 2,
-          "output_cost": 6
+          "output_cost": 6,
+          "cached_input_cost": 0.3
         },
         {
           "id": "x-ai/grok-4.6",
@@ -6513,7 +6784,8 @@
             "structured_output"
           ],
           "input_cost": 2,
-          "output_cost": 6
+          "output_cost": 6,
+          "cached_input_cost": 0.5
         },
         {
           "id": "x-ai/grok-build-0.1",
@@ -6527,7 +6799,8 @@
             "structured_output"
           ],
           "input_cost": 1,
-          "output_cost": 2
+          "output_cost": 2,
+          "cached_input_cost": 0.2
         },
         {
           "id": "xiaomi/mimo-v2.5",
@@ -6541,7 +6814,8 @@
             "structured_output"
           ],
           "input_cost": 0.14,
-          "output_cost": 0.28
+          "output_cost": 0.28,
+          "cached_input_cost": 0.0028
         },
         {
           "id": "xiaomi/mimo-v2.5-pro",
@@ -6554,7 +6828,8 @@
             "structured_output"
           ],
           "input_cost": 0.435,
-          "output_cost": 0.87
+          "output_cost": 0.87,
+          "cached_input_cost": 0.0036
         },
         {
           "id": "z-ai/glm-4.5",
@@ -6567,7 +6842,8 @@
             "structured_output"
           ],
           "input_cost": 0.6,
-          "output_cost": 2.2
+          "output_cost": 2.2,
+          "cached_input_cost": 0.11
         },
         {
           "id": "z-ai/glm-4.5-air",
@@ -6579,7 +6855,8 @@
             "reasoning"
           ],
           "input_cost": 0.13,
-          "output_cost": 0.85
+          "output_cost": 0.85,
+          "cached_input_cost": 0.025
         },
         {
           "id": "z-ai/glm-4.5v",
@@ -6593,7 +6870,8 @@
             "structured_output"
           ],
           "input_cost": 0.6,
-          "output_cost": 1.7999999999999998
+          "output_cost": 1.7999999999999998,
+          "cached_input_cost": 0.11
         },
         {
           "id": "z-ai/glm-4.6",
@@ -6606,7 +6884,8 @@
             "structured_output"
           ],
           "input_cost": 0.43,
-          "output_cost": 1.75
+          "output_cost": 1.75,
+          "cached_input_cost": 0.08
         },
         {
           "id": "z-ai/glm-4.6v",
@@ -6620,7 +6899,8 @@
             "structured_output"
           ],
           "input_cost": 0.3,
-          "output_cost": 0.8999999999999999
+          "output_cost": 0.8999999999999999,
+          "cached_input_cost": 0.055
         },
         {
           "id": "z-ai/glm-4.7",
@@ -6633,7 +6913,8 @@
             "structured_output"
           ],
           "input_cost": 0.39999999999999997,
-          "output_cost": 1.75
+          "output_cost": 1.75,
+          "cached_input_cost": 0.08
         },
         {
           "id": "z-ai/glm-4.7-flash",
@@ -6659,7 +6940,8 @@
             "structured_output"
           ],
           "input_cost": 0.6,
-          "output_cost": 1.92
+          "output_cost": 1.92,
+          "cached_input_cost": 0.12
         },
         {
           "id": "z-ai/glm-5-turbo",
@@ -6672,7 +6954,8 @@
             "structured_output"
           ],
           "input_cost": 1.2,
-          "output_cost": 4
+          "output_cost": 4,
+          "cached_input_cost": 0.24
         },
         {
           "id": "z-ai/glm-5.1",
@@ -6685,7 +6968,8 @@
             "structured_output"
           ],
           "input_cost": 0.966,
-          "output_cost": 3.036
+          "output_cost": 3.036,
+          "cached_input_cost": 0.1794
         },
         {
           "id": "z-ai/glm-5.2",
@@ -6698,7 +6982,8 @@
             "structured_output"
           ],
           "input_cost": 0.6496,
-          "output_cost": 2.0416
+          "output_cost": 2.0416,
+          "cached_input_cost": 0.12064
         },
         {
           "id": "z-ai/glm-5.2:batch",
@@ -6711,7 +6996,8 @@
             "structured_output"
           ],
           "input_cost": 0.7,
-          "output_cost": 2.2
+          "output_cost": 2.2,
+          "cached_input_cost": 0.07
         },
         {
           "id": "z-ai/glm-5.2:free",
@@ -6733,7 +7019,8 @@
             "structured_output"
           ],
           "input_cost": 0.9099999999999999,
-          "output_cost": 2.8600000000000003
+          "output_cost": 2.8600000000000003,
+          "cached_input_cost": 0.169
         },
         {
           "id": "z-ai/glm-5.3-flash",
@@ -6747,7 +7034,8 @@
             "structured_output"
           ],
           "input_cost": 0.09,
-          "output_cost": 0.3
+          "output_cost": 0.3,
+          "cached_input_cost": 0.018
         },
         {
           "id": "z-ai/glm-5.3-flash:batch",
@@ -6761,7 +7049,8 @@
             "structured_output"
           ],
           "input_cost": 0.075,
-          "output_cost": 0.25
+          "output_cost": 0.25,
+          "cached_input_cost": 0.015
         },
         {
           "id": "z-ai/glm-5.3-flashx",
@@ -6775,7 +7064,8 @@
             "structured_output"
           ],
           "input_cost": 0.37,
-          "output_cost": 1.25
+          "output_cost": 1.25,
+          "cached_input_cost": 0.075
         },
         {
           "id": "z-ai/glm-5.3:batch",
@@ -6788,7 +7078,8 @@
             "structured_output"
           ],
           "input_cost": 0.7,
-          "output_cost": 2.2
+          "output_cost": 2.2,
+          "cached_input_cost": 0.13
         },
         {
           "id": "z-ai/glm-5v-turbo",
@@ -6802,7 +7093,8 @@
             "structured_output"
           ],
           "input_cost": 1.2,
-          "output_cost": 4
+          "output_cost": 4,
+          "cached_input_cost": 0.24
         },
         {
           "id": "~anthropic/claude-fable-latest",
@@ -6816,7 +7108,8 @@
             "structured_output"
           ],
           "input_cost": 10,
-          "output_cost": 50
+          "output_cost": 50,
+          "cached_input_cost": 0.25
         },
         {
           "id": "~anthropic/claude-haiku-latest",
@@ -6830,7 +7123,8 @@
             "structured_output"
           ],
           "input_cost": 1,
-          "output_cost": 5
+          "output_cost": 5,
+          "cached_input_cost": 0.1
         },
         {
           "id": "~anthropic/claude-opus-latest",
@@ -6844,7 +7138,8 @@
             "structured_output"
           ],
           "input_cost": 5,
-          "output_cost": 25
+          "output_cost": 25,
+          "cached_input_cost": 0.5
         },
         {
           "id": "~anthropic/claude-sonnet-latest",
@@ -6858,7 +7153,8 @@
             "structured_output"
           ],
           "input_cost": 2,
-          "output_cost": 10
+          "output_cost": 10,
+          "cached_input_cost": 0.2
         },
         {
           "id": "~deepseek/deepseek-flash-latest",
@@ -6872,7 +7168,8 @@
             "structured_output"
           ],
           "input_cost": 0.12,
-          "output_cost": 0.48
+          "output_cost": 0.48,
+          "cached_input_cost": 0.0036
         },
         {
           "id": "~deepseek/deepseek-pro-latest",
@@ -6885,7 +7182,8 @@
             "structured_output"
           ],
           "input_cost": 0.5755199999999999,
-          "output_cost": 1.72656
+          "output_cost": 1.72656,
+          "cached_input_cost": 0.019184
         },
         {
           "id": "~deepseek/deepseek-v4-flash-latest",
@@ -6898,7 +7196,8 @@
             "structured_output"
           ],
           "input_cost": 0.04,
-          "output_cost": 0.16
+          "output_cost": 0.16,
+          "cached_input_cost": 0.016
         },
         {
           "id": "~google/gemini-flash-latest",
@@ -6912,7 +7211,8 @@
             "structured_output"
           ],
           "input_cost": 0.75,
-          "output_cost": 3.75
+          "output_cost": 3.75,
+          "cached_input_cost": 0.075
         },
         {
           "id": "~google/gemini-pro-latest",
@@ -6926,7 +7226,8 @@
             "structured_output"
           ],
           "input_cost": 2,
-          "output_cost": 12
+          "output_cost": 12,
+          "cached_input_cost": 0.2
         },
         {
           "id": "~moonshotai/kimi-latest",
@@ -6940,7 +7241,8 @@
             "structured_output"
           ],
           "input_cost": 1.7,
-          "output_cost": 8.5
+          "output_cost": 8.5,
+          "cached_input_cost": 0.17
         },
         {
           "id": "~openai/gpt-astra-latest",
@@ -6954,7 +7256,8 @@
             "structured_output"
           ],
           "input_cost": 10,
-          "output_cost": 50
+          "output_cost": 50,
+          "cached_input_cost": 1
         },
         {
           "id": "~openai/gpt-latest",
@@ -6980,7 +7283,8 @@
             "structured_output"
           ],
           "input_cost": 0.19999999999999998,
-          "output_cost": 1.2
+          "output_cost": 1.2,
+          "cached_input_cost": 0.02
         },
         {
           "id": "~openai/gpt-mini-latest",
@@ -6994,7 +7298,8 @@
             "structured_output"
           ],
           "input_cost": 0.75,
-          "output_cost": 4.5
+          "output_cost": 4.5,
+          "cached_input_cost": 0.075
         },
         {
           "id": "~openai/gpt-sol-latest",
@@ -7008,7 +7313,8 @@
             "structured_output"
           ],
           "input_cost": 2,
-          "output_cost": 10
+          "output_cost": 10,
+          "cached_input_cost": 0.2
         },
         {
           "id": "~openai/gpt-terra-latest",
@@ -7022,7 +7328,8 @@
             "structured_output"
           ],
           "input_cost": 2,
-          "output_cost": 12
+          "output_cost": 12,
+          "cached_input_cost": 0.2
         },
         {
           "id": "~x-ai/grok-latest",
@@ -7036,7 +7343,8 @@
             "structured_output"
           ],
           "input_cost": 2,
-          "output_cost": 6
+          "output_cost": 6,
+          "cached_input_cost": 0.5
         },
         {
           "id": "~z-ai/glm-flash-latest",
@@ -7050,7 +7358,8 @@
             "structured_output"
           ],
           "input_cost": 0.075,
-          "output_cost": 0.25
+          "output_cost": 0.25,
+          "cached_input_cost": 0.015
         },
         {
           "id": "~z-ai/glm-latest",
@@ -7063,7 +7372,8 @@
             "structured_output"
           ],
           "input_cost": 0.7728,
-          "output_cost": 2.4288
+          "output_cost": 2.4288,
+          "cached_input_cost": 0.14352
         }
       ]
     },
@@ -7191,7 +7501,8 @@
             "structured_output"
           ],
           "input_cost": 0.25,
-          "output_cost": 2
+          "output_cost": 2,
+          "cached_input_cost": 0.05
         },
         {
           "id": "ByteDance/Seed-2.0-code",
@@ -7205,7 +7516,8 @@
             "structured_output"
           ],
           "input_cost": 0.5,
-          "output_cost": 2.9999999999999996
+          "output_cost": 2.9999999999999996,
+          "cached_input_cost": 0.1
         },
         {
           "id": "ByteDance/Seed-2.0-mini",
@@ -7219,7 +7531,8 @@
             "structured_output"
           ],
           "input_cost": 0.1,
-          "output_cost": 0.4
+          "output_cost": 0.4,
+          "cached_input_cost": 0.02
         },
         {
           "id": "ByteDance/Seed-2.0-pro",
@@ -7233,7 +7546,8 @@
             "structured_output"
           ],
           "input_cost": 0.5,
-          "output_cost": 2.9999999999999996
+          "output_cost": 2.9999999999999996,
+          "cached_input_cost": 0.1
         },
         {
           "id": "deepseek-ai/DeepSeek-R1-0528",
@@ -7246,7 +7560,8 @@
             "structured_output"
           ],
           "input_cost": 0.5,
-          "output_cost": 2.15
+          "output_cost": 2.15,
+          "cached_input_cost": 0.35
         },
         {
           "id": "deepseek-ai/DeepSeek-V3",
@@ -7270,7 +7585,8 @@
             "structured_output"
           ],
           "input_cost": 0.24000000000000002,
-          "output_cost": 0.9
+          "output_cost": 0.9,
+          "cached_input_cost": 0.135
         },
         {
           "id": "deepseek-ai/DeepSeek-V3.1",
@@ -7283,7 +7599,8 @@
             "structured_output"
           ],
           "input_cost": 0.25,
-          "output_cost": 0.9500000000000001
+          "output_cost": 0.9500000000000001,
+          "cached_input_cost": 0.13
         },
         {
           "id": "deepseek-ai/DeepSeek-V3.1-Terminus",
@@ -7306,7 +7623,8 @@
             "structured_output"
           ],
           "input_cost": 0.26,
-          "output_cost": 0.38
+          "output_cost": 0.38,
+          "cached_input_cost": 0.13
         },
         {
           "id": "deepseek-ai/DeepSeek-V4-Flash",
@@ -7319,7 +7637,8 @@
             "structured_output"
           ],
           "input_cost": 0.09,
-          "output_cost": 0.18
+          "output_cost": 0.18,
+          "cached_input_cost": 0.018
         },
         {
           "id": "deepseek-ai/DeepSeek-V4-Flash-0731",
@@ -7332,7 +7651,8 @@
             "structured_output"
           ],
           "input_cost": 0.060000000000000005,
-          "output_cost": 0.18
+          "output_cost": 0.18,
+          "cached_input_cost": 0.015
         },
         {
           "id": "deepseek-ai/DeepSeek-V4-Flash-Vision-Exp",
@@ -7346,7 +7666,8 @@
             "structured_output"
           ],
           "input_cost": 0.44,
-          "output_cost": 1.32
+          "output_cost": 1.32,
+          "cached_input_cost": 0.014
         },
         {
           "id": "deepseek-ai/DeepSeek-V4-Pro",
@@ -7358,7 +7679,8 @@
             "structured_output"
           ],
           "input_cost": 1.2999999999999998,
-          "output_cost": 2.5999999999999996
+          "output_cost": 2.5999999999999996,
+          "cached_input_cost": 0.1
         },
         {
           "id": "deepseek-ai/DeepSeek-V4-Pro-0813",
@@ -7370,7 +7692,8 @@
             "structured_output"
           ],
           "input_cost": 1.2999999999999998,
-          "output_cost": 2.5999999999999996
+          "output_cost": 2.5999999999999996,
+          "cached_input_cost": 0.1
         },
         {
           "id": "deepseek-ai/DeepSeek-V4.1-Flash",
@@ -7384,7 +7707,8 @@
             "structured_output"
           ],
           "input_cost": 0.2,
-          "output_cost": 0.6
+          "output_cost": 0.6,
+          "cached_input_cost": 0.006
         },
         {
           "id": "google/gemini-2.5-flash",
@@ -7555,7 +7879,8 @@
             "structured_output"
           ],
           "input_cost": 0.09,
-          "output_cost": 0.34
+          "output_cost": 0.34,
+          "cached_input_cost": 0.05
         },
         {
           "id": "google/gemma-4-31B-it-Ultra",
@@ -7605,7 +7930,8 @@
             "structured_output"
           ],
           "input_cost": 0.16,
-          "output_cost": 0.6499999999999999
+          "output_cost": 0.6499999999999999,
+          "cached_input_cost": 0.04
         },
         {
           "id": "ibm-granite/granite-4.2-3b",
@@ -7618,7 +7944,8 @@
             "structured_output"
           ],
           "input_cost": 0.030000000000000002,
-          "output_cost": 0.12000000000000001
+          "output_cost": 0.12000000000000001,
+          "cached_input_cost": 0.0075
         },
         {
           "id": "ibm-granite/granite-4.2-8b",
@@ -7631,7 +7958,8 @@
             "structured_output"
           ],
           "input_cost": 0.060000000000000005,
-          "output_cost": 0.25
+          "output_cost": 0.25,
+          "cached_input_cost": 0.015
         },
         {
           "id": "inclusionAI/Ling-3.0-flash",
@@ -7644,7 +7972,8 @@
             "structured_output"
           ],
           "input_cost": 0.060000000000000005,
-          "output_cost": 0.18
+          "output_cost": 0.18,
+          "cached_input_cost": 0.012
         },
         {
           "id": "inclusionAI/Ling-3.0-flash-Fin",
@@ -7657,7 +7986,8 @@
             "structured_output"
           ],
           "input_cost": 0.060000000000000005,
-          "output_cost": 0.18
+          "output_cost": 0.18,
+          "cached_input_cost": 0.012
         },
         {
           "id": "inclusionAI/Ling-3.0-flash-VL",
@@ -7671,7 +8001,8 @@
             "structured_output"
           ],
           "input_cost": 0.060000000000000005,
-          "output_cost": 0.18
+          "output_cost": 0.18,
+          "cached_input_cost": 0.012
         },
         {
           "id": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
@@ -7757,7 +8088,8 @@
             "structured_output"
           ],
           "input_cost": 0.3,
-          "output_cost": 1.2
+          "output_cost": 1.2,
+          "cached_input_cost": 0.04
         },
         {
           "id": "microsoft/phi-4",
@@ -7792,7 +8124,8 @@
             "structured_output"
           ],
           "input_cost": 0.38,
-          "output_cost": 1.7000000000000002
+          "output_cost": 1.7000000000000002,
+          "cached_input_cost": 0.07
         },
         {
           "id": "MiniMaxAI/MiniMax-M3",
@@ -7806,7 +8139,8 @@
             "structured_output"
           ],
           "input_cost": 0.27999999999999997,
-          "output_cost": 1.1
+          "output_cost": 1.1,
+          "cached_input_cost": 0.056
         },
         {
           "id": "mistralai/Mistral-Nemo-Instruct-2407",
@@ -7868,7 +8202,8 @@
             "structured_output"
           ],
           "input_cost": 0.7499999999999999,
-          "output_cost": 3.5
+          "output_cost": 3.5,
+          "cached_input_cost": 0.15
         },
         {
           "id": "moonshotai/Kimi-K2.7-Code",
@@ -7882,7 +8217,8 @@
             "structured_output"
           ],
           "input_cost": 0.68,
-          "output_cost": 3.4000000000000004
+          "output_cost": 3.4000000000000004,
+          "cached_input_cost": 0.136
         },
         {
           "id": "moonshotai/Kimi-K3",
@@ -7895,7 +8231,8 @@
             "structured_output"
           ],
           "input_cost": 2.85,
-          "output_cost": 14.25
+          "output_cost": 14.25,
+          "cached_input_cost": 0.285
         },
         {
           "id": "NousResearch/Hermes-3-Llama-3.1-405B",
@@ -7929,7 +8266,8 @@
             "reasoning"
           ],
           "input_cost": 0.05,
-          "output_cost": 0.2
+          "output_cost": 0.2,
+          "cached_input_cost": 0.025
         },
         {
           "id": "nvidia/Nemotron-Content-Safety-3.5",
@@ -7967,7 +8305,8 @@
             "structured_output"
           ],
           "input_cost": 0.5,
-          "output_cost": 2.2
+          "output_cost": 2.2,
+          "cached_input_cost": 0.1
         },
         {
           "id": "nvidia/NVIDIA-Nemotron-3.5-Lightning",
@@ -7980,7 +8319,8 @@
             "structured_output"
           ],
           "input_cost": 0.08,
-          "output_cost": 0.2
+          "output_cost": 0.2,
+          "cached_input_cost": 0.04
         },
         {
           "id": "openai/gpt-oss-120b",
@@ -8118,7 +8458,8 @@
             "structured_output"
           ],
           "input_cost": 0.3,
-          "output_cost": 1
+          "output_cost": 1,
+          "cached_input_cost": 0.1
         },
         {
           "id": "Qwen/Qwen3-Max",
@@ -8130,7 +8471,8 @@
             "structured_output"
           ],
           "input_cost": 1.2,
-          "output_cost": 5.999999999999999
+          "output_cost": 5.999999999999999,
+          "cached_input_cost": 0.24
         },
         {
           "id": "Qwen/Qwen3-Max-Thinking",
@@ -8142,7 +8484,8 @@
             "structured_output"
           ],
           "input_cost": 1.2,
-          "output_cost": 5.999999999999999
+          "output_cost": 5.999999999999999,
+          "cached_input_cost": 0.24
         },
         {
           "id": "Qwen/Qwen3-Next-80B-A3B-Instruct",
@@ -8167,7 +8510,8 @@
             "structured_output"
           ],
           "input_cost": 0.2,
-          "output_cost": 0.88
+          "output_cost": 0.88,
+          "cached_input_cost": 0.11
         },
         {
           "id": "Qwen/Qwen3-VL-30B-A3B-Instruct",
@@ -8222,7 +8566,8 @@
             "structured_output"
           ],
           "input_cost": 0.13999999999999999,
-          "output_cost": 1
+          "output_cost": 1,
+          "cached_input_cost": 0.05
         },
         {
           "id": "Qwen/Qwen3.5-397B-A17B",
@@ -8236,7 +8581,8 @@
             "structured_output"
           ],
           "input_cost": 0.45,
-          "output_cost": 2.9999999999999996
+          "output_cost": 2.9999999999999996,
+          "cached_input_cost": 0.22
         },
         {
           "id": "Qwen/Qwen3.5-9B",
@@ -8289,7 +8635,8 @@
             "structured_output"
           ],
           "input_cost": 2.5,
-          "output_cost": 7.5
+          "output_cost": 7.5,
+          "cached_input_cost": 0.5
         },
         {
           "id": "Qwen/Qwen3.8-2.4T-A95B",
@@ -8302,7 +8649,8 @@
             "structured_output"
           ],
           "input_cost": 2,
-          "output_cost": 5.999999999999999
+          "output_cost": 5.999999999999999,
+          "cached_input_cost": 0.2
         },
         {
           "id": "Qwen/Qwen3.8-27B",
@@ -8316,7 +8664,8 @@
             "structured_output"
           ],
           "input_cost": 0.2,
-          "output_cost": 2.5
+          "output_cost": 2.5,
+          "cached_input_cost": 0.05
         },
         {
           "id": "Qwen/Qwen3.8-Flash",
@@ -8328,7 +8677,8 @@
             "structured_output"
           ],
           "input_cost": 0.113,
-          "output_cost": 0.382
+          "output_cost": 0.382,
+          "cached_input_cost": 0.014
         },
         {
           "id": "Qwen/Qwen3.8-Max",
@@ -8340,7 +8690,8 @@
             "structured_output"
           ],
           "input_cost": 1.65,
-          "output_cost": 4.9510000000000005
+          "output_cost": 4.9510000000000005,
+          "cached_input_cost": 0.206
         },
         {
           "id": "Sao10K/L3-8B-Lunaris-v1-Turbo",
@@ -8374,7 +8725,8 @@
             "vision"
           ],
           "input_cost": 0.2,
-          "output_cost": 1.1500000000000001
+          "output_cost": 1.1500000000000001,
+          "cached_input_cost": 0.04
         },
         {
           "id": "tencent/Hy3",
@@ -8387,7 +8739,8 @@
             "structured_output"
           ],
           "input_cost": 0.13999999999999999,
-          "output_cost": 0.58
+          "output_cost": 0.58,
+          "cached_input_cost": 0.035
         },
         {
           "id": "thinkingmachines/Inkling",
@@ -8401,7 +8754,8 @@
             "structured_output"
           ],
           "input_cost": 0.9500000000000001,
-          "output_cost": 4.05
+          "output_cost": 4.05,
+          "cached_input_cost": 0.16
         },
         {
           "id": "thinkingmachines/Inkling-Small",
@@ -8415,7 +8769,8 @@
             "structured_output"
           ],
           "input_cost": 0.45,
-          "output_cost": 1.2
+          "output_cost": 1.2,
+          "cached_input_cost": 0.1
         },
         {
           "id": "XiaomiMiMo/MiMo-V2.5",
@@ -8429,7 +8784,8 @@
             "structured_output"
           ],
           "input_cost": 0.13999999999999999,
-          "output_cost": 0.27999999999999997
+          "output_cost": 0.27999999999999997,
+          "cached_input_cost": 0.0028
         },
         {
           "id": "XiaomiMiMo/MiMo-V2.5-Pro",
@@ -8442,7 +8798,8 @@
             "structured_output"
           ],
           "input_cost": 1,
-          "output_cost": 2.9999999999999996
+          "output_cost": 2.9999999999999996,
+          "cached_input_cost": 0.2
         },
         {
           "id": "zai-org/GLM-4.6",
@@ -8455,7 +8812,8 @@
             "structured_output"
           ],
           "input_cost": 0.5,
-          "output_cost": 2
+          "output_cost": 2,
+          "cached_input_cost": 0.1
         },
         {
           "id": "zai-org/GLM-4.7",
@@ -8468,7 +8826,8 @@
             "structured_output"
           ],
           "input_cost": 0.4,
-          "output_cost": 1.75
+          "output_cost": 1.75,
+          "cached_input_cost": 0.08
         },
         {
           "id": "zai-org/GLM-4.7-Flash",
@@ -8503,7 +8862,8 @@
             "structured_output"
           ],
           "input_cost": 1.05,
-          "output_cost": 3.5
+          "output_cost": 3.5,
+          "cached_input_cost": 0.205
         },
         {
           "id": "zai-org/GLM-5.2",
@@ -8516,7 +8876,8 @@
             "structured_output"
           ],
           "input_cost": 0.7499999999999999,
-          "output_cost": 2.4
+          "output_cost": 2.4,
+          "cached_input_cost": 0.14
         },
         {
           "id": "zai-org/GLM-5.3",
@@ -8529,7 +8890,8 @@
             "structured_output"
           ],
           "input_cost": 1.2,
-          "output_cost": 4
+          "output_cost": 4,
+          "cached_input_cost": 0.2
         },
         {
           "id": "zai-org/GLM-5.3-Flash",
@@ -8543,7 +8905,8 @@
             "structured_output"
           ],
           "input_cost": 0.15,
-          "output_cost": 0.5
+          "output_cost": 0.5,
+          "cached_input_cost": 0.03
         }
       ]
     },
@@ -8902,7 +9265,8 @@
             "structured_output"
           ],
           "input_cost": 2.5,
-          "output_cost": 10
+          "output_cost": 10,
+          "cached_input_cost": 1.25
         },
         {
           "id": "gpt-4o-2024-11-20",
@@ -8914,7 +9278,8 @@
             "structured_output"
           ],
           "input_cost": 2.5,
-          "output_cost": 10
+          "output_cost": 10,
+          "cached_input_cost": 1.25
         },
         {
           "id": "gpt-4o-mini",
@@ -8938,7 +9303,8 @@
             "structured_output"
           ],
           "input_cost": 0.15,
-          "output_cost": 0.6
+          "output_cost": 0.6,
+          "cached_input_cost": 0.075
         },
         {
           "id": "gpt-5",
@@ -9023,7 +9389,8 @@
             "structured_output"
           ],
           "input_cost": 1.25,
-          "output_cost": 10
+          "output_cost": 10,
+          "cached_input_cost": 0.125
         },
         {
           "id": "gpt-5.1-2025-11-13",
@@ -9044,7 +9411,8 @@
             "structured_output"
           ],
           "input_cost": 1.75,
-          "output_cost": 14
+          "output_cost": 14,
+          "cached_input_cost": 0.175
         },
         {
           "id": "gpt-5.2-2025-12-11",
@@ -9086,7 +9454,8 @@
             "structured_output"
           ],
           "input_cost": 2.5,
-          "output_cost": 15
+          "output_cost": 15,
+          "cached_input_cost": 0.25
         },
         {
           "id": "gpt-5.4-2026-03-05",
@@ -9103,7 +9472,8 @@
             "structured_output"
           ],
           "input_cost": 0.75,
-          "output_cost": 4.5
+          "output_cost": 4.5,
+          "cached_input_cost": 0.075
         },
         {
           "id": "gpt-5.4-mini-2026-03-17",
@@ -9120,7 +9490,8 @@
             "structured_output"
           ],
           "input_cost": 0.19999999999999998,
-          "output_cost": 1.25
+          "output_cost": 1.25,
+          "cached_input_cost": 0.02
         },
         {
           "id": "gpt-5.4-nano-2026-03-17",
@@ -9154,7 +9525,8 @@
             "structured_output"
           ],
           "input_cost": 5,
-          "output_cost": 30
+          "output_cost": 30,
+          "cached_input_cost": 0.5
         },
         {
           "id": "gpt-5.5-2026-04-23",
@@ -9188,7 +9560,8 @@
             "structured_output"
           ],
           "input_cost": 15,
-          "output_cost": 60
+          "output_cost": 60,
+          "cached_input_cost": 7.5
         },
         {
           "id": "o1-2024-12-17",

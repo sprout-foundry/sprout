@@ -116,6 +116,8 @@ type CacheStats interface {
 	SetCacheWriteTokens(int)
 	GetCachedCostSavings() float64
 	SetCachedCostSavings(float64)
+	GetCacheSavingsUnknown() bool
+	SetCacheSavingsUnknown(bool)
 	GetImageTokens() int
 	SetImageTokens(int)
 }

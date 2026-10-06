@@ -104,7 +104,11 @@ type AgentState struct {
 	CachedTokens            int     `json:"cached_tokens"`
 	CacheWriteTokens        int     `json:"cache_write_tokens,omitempty"`
 	CachedCostSavings       float64 `json:"cached_cost_savings"`
-	ImageTokens             int     `json:"image_tokens,omitempty"`
+	// CacheSavingsUnknown records that at least one cached response had no
+	// determinable savings (no actual cost and no usable catalog rate), so the
+	// cost views render "unknown" rather than a misleading $0 after a restore.
+	CacheSavingsUnknown bool `json:"cache_savings_unknown,omitempty"`
+	ImageTokens         int  `json:"image_tokens,omitempty"`
 	// Billing-model-aware cost tracking
 	ChargedCostTotal   float64 `json:"charged_cost_total,omitempty"`
 	TokenCostTotal     float64 `json:"token_cost_total,omitempty"`

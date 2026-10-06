@@ -113,7 +113,7 @@ func (a *Agent) PrintConversationSummary(forceFull bool) {
 		if a.state.GetCacheWriteTokens() > 0 {
 			console.GlyphInfo.Fprintf(os.Stdout, "Cache written:     %s", a.formatTokenCount(a.state.GetCacheWriteTokens()))
 		}
-		console.GlyphInfo.Fprintf(os.Stdout, "Cost savings:       $%.6f", a.state.GetCachedCostSavings())
+		console.GlyphInfo.Fprintf(os.Stdout, "Cost savings:       %s", a.FormatCacheSavings())
 		console.GlyphInfo.Fprintf(os.Stdout, "Efficiency:        %.1f%% tokens cached", efficiency)
 
 		// Add efficiency rating

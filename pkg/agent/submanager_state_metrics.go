@@ -60,7 +60,12 @@ type AgentMetricsManager struct {
 	cachedTokens      int
 	cacheWriteTokens  int
 	cachedCostSavings float64
-	imageTokens       int
+	// cacheSavingsUnknown is set when at least one cached response had no
+	// determinable savings (no actual cost and no usable catalog rate). The
+	// cost views render "unknown" instead of a misleading $0 when this is set
+	// and no determined savings were recorded.
+	cacheSavingsUnknown bool
+	imageTokens         int
 }
 
 // NewAgentMetricsManager creates a new AgentMetricsManager with zero-initialized fields.
@@ -437,6 +442,29 @@ func (m *AgentMetricsManager) SetCachedCostSavings(c float64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.cachedCostSavings = c
+}
+
+// GetCacheSavingsUnknown reports whether any cached response had no
+// determinable savings (missing actual cost and missing catalog rate).
+func (m *AgentMetricsManager) GetCacheSavingsUnknown() bool {
+	if m == nil {
+		return false
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.cacheSavingsUnknown
+}
+
+// SetCacheSavingsUnknown records that a cached response had no determinable
+// savings. Monotonic within a session — once unknown, the session's savings
+// display stays "unknown" until a determined value is set.
+func (m *AgentMetricsManager) SetCacheSavingsUnknown(unknown bool) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.cacheSavingsUnknown = unknown
 }
 func (m *AgentMetricsManager) GetImageTokens() int {
 	if m == nil {

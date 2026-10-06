@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent/subagents"
@@ -85,7 +86,9 @@ func (a *Agent) GetPromptTokens() int {
 
 // TrackMetricsFromResponse updates agent metrics from API response usage data.
 // cacheWriteTokens: prompt tokens written to provider cache. imageTokens: tokens from image inputs (display only, not for budget).
-func (a *Agent) TrackMetricsFromResponse(promptTokens, completionTokens, totalTokens int, estimatedCost float64, cachedTokens, cacheWriteTokens, imageTokens int) {
+// actualCost is the provider-reported cost for this request (OpenRouter
+// `usage.cost`); 0 when the provider does not report one.
+func (a *Agent) TrackMetricsFromResponse(promptTokens, completionTokens, totalTokens int, estimatedCost float64, cachedTokens, cacheWriteTokens, imageTokens int, actualCost float64) {
 	a.state.IncrementLLMCallCount()
 	a.state.SetTotalTokens(a.state.GetTotalTokens() + totalTokens)
 	a.state.SetPromptTokens(a.state.GetPromptTokens() + promptTokens)
@@ -133,8 +136,14 @@ func (a *Agent) TrackMetricsFromResponse(promptTokens, completionTokens, totalTo
 
 	// Fleet USD budget NOT debited here — subagents already debit via accumulateResponseCost.
 
-	// Calculate cost savings from cached tokens.
-	a.state.SetCachedCostSavings(a.state.GetCachedCostSavings() + a.calculateCachedTokenSavings(cachedTokens, totalTokens, estimatedCost))
+	// Calculate cost savings from cached tokens. Prefer the provider-reported
+	// actual cost; when neither it nor the catalog rates can determine
+	// savings, record "unknown" instead of a misleading $0.
+	if savings, known := a.calculateCachedTokenSavings(cachedTokens, promptTokens, actualCost); known {
+		a.state.SetCachedCostSavings(a.state.GetCachedCostSavings() + savings)
+	} else {
+		a.markCacheSavingsUnknown()
+	}
 
 	// Trigger stats update callback if registered
 	if callback, ok := a.statsUpdateCallback.Load().(func(int, float64)); ok && callback != nil {
@@ -275,29 +284,116 @@ func (a *Agent) GetCachedCostSavings() float64 {
 	return a.state.GetCachedCostSavings()
 }
 
-// calculateCachedTokenSavings estimates the cost savings from cached prompt tokens.
-// Returns exact savings when (provider, model) has a known cached-input rate; returns 0 when unknown.
-func (a *Agent) calculateCachedTokenSavings(cachedTokens, totalTokens int, estimatedCost float64) float64 {
-	if cachedTokens <= 0 || totalTokens <= 0 || estimatedCost <= 0 {
-		return 0
+// GetCacheSavingsUnknown reports whether any cached response in this session
+// had no determinable savings. When true and no savings were determined, the
+// cost views render "unknown" rather than a misleading $0.
+func (a *Agent) GetCacheSavingsUnknown() bool {
+	return a.state.GetCacheSavingsUnknown()
+}
+
+// FormatCacheSavings renders the session's cache savings for display. When
+// savings are known it is the USD amount; when any cached response had no
+// determinable savings (no actual cost, no catalog rate) and nothing was
+// determined, it is "unknown" — never a misleading "$0.000000".
+func (a *Agent) FormatCacheSavings() string {
+	savings := a.GetCachedCostSavings()
+	if savings > 0 {
+		return fmt.Sprintf("$%.6f", savings)
+	}
+	if a.GetCacheSavingsUnknown() {
+		return "unknown"
+	}
+	return "$0.000000"
+}
+
+// markCacheSavingsUnknown records that a cached response had no determinable
+// savings (no actual cost and no usable catalog rate).
+func (a *Agent) markCacheSavingsUnknown() {
+	a.state.SetCacheSavingsUnknown(true)
+}
+
+// calculateCachedTokenSavings estimates the cost saved by prompt-cache hits.
+//
+// Two paths, in priority order:
+//
+//  1. actual-cost: when the provider reports the request's real cost (OpenRouter
+//     `usage.cost`), savings = the uncached cost of the prompt minus that actual
+//     cost. The uncached cost is what the full prompt would have cost at the
+//     standard input rate, reconstructed by inverting the cache discount on the
+//     reported cost (see uncachedPromptCost). This needs both catalog rates;
+//     when they're unknown it falls through to path 2.
+//
+//  2. catalog-rate: with a known cached rate strictly below the input rate,
+//     savings = cachedTokens × (inputRate − cachedRate) / 1M.
+//
+// Returns (0, true) when a path determined there was no saving, and (0, false)
+// when neither path can determine savings — the caller renders that as
+// "unknown" rather than a fabricated $0.
+func (a *Agent) calculateCachedTokenSavings(cachedTokens, promptTokens int, actualCost float64) (float64, bool) {
+	if cachedTokens <= 0 || promptTokens <= 0 {
+		return 0, true
+	}
+	// Providers occasionally report cachedTokens > promptTokens on inconsistent
+	// usage; clamp so the reconstruction can't go degenerate.
+	if cachedTokens > promptTokens {
+		cachedTokens = promptTokens
 	}
 
-	// Try exact savings from per-model pricing.
-	provider := a.GetProvider()
-	model := a.GetModel()
-	if inputPerM, _, cachedPerM, ok := api.ResolveModelPricing(provider, model); ok && inputPerM > 0 {
-		switch {
-		case cachedPerM > 0 && cachedPerM < inputPerM:
-			return float64(cachedTokens) * (inputPerM - cachedPerM) / 1e6
-		case cachedPerM >= inputPerM:
-			return 0
-		default:
-			return 0
+	inputPerM, _, cachedPerM, pricingKnown := api.ResolveModelPricing(a.GetProvider(), a.GetModel())
+
+	// Path 1: the provider reported the request's actual cost.
+	if actualCost > 0 {
+		uncachedCost, ok := uncachedPromptCost(actualCost, cachedTokens, promptTokens, inputPerM, cachedPerM, pricingKnown)
+		if ok {
+			savings := uncachedCost - actualCost
+			if savings < 0 {
+				// The actual cost exceeded the uncached-cost estimate (rate
+				// drift, a cache-write premium, or a bad report). Never show a
+				// negative "saving"; report zero rather than a bogus value.
+				return 0, true
+			}
+			return savings, true
+		}
+		// No usable rates to reconstruct the uncached cost — fall through to
+		// the catalog-rate path, which may still yield exact savings.
+	}
+
+	// Path 2: exact savings from per-model catalog rates. The rate delta alone
+	// determines the saving, so no reported cost is required.
+	if pricingKnown && inputPerM > 0 {
+		if cachedPerM > 0 && cachedPerM < inputPerM {
+			return float64(cachedTokens) * (inputPerM - cachedPerM) / 1e6, true
+		}
+		if cachedPerM >= inputPerM {
+			// Provider reports cache hits but bills at (or above) the standard
+			// rate — no discount to count.
+			return 0, true
 		}
 	}
 
-	// Resolver miss: no reliable pricing to compute against.
-	return 0
+	// Neither an actual cost nor a usable catalog rate: savings are unknown.
+	return 0, false
+}
+
+// uncachedPromptCost reconstructs what the prompt would have cost with no cache
+// hits, from the provider-reported actual cost. It needs the input and cached
+// rates: the actual cost is a weighted sum of the two, so inverting it
+// recovers the uncached total. Returns ok=false when the rates are unusable
+// (unknown, or the cached rate is not strictly below the input rate).
+func uncachedPromptCost(actualCost float64, cachedTokens, promptTokens int, inputPerM, cachedPerM float64, pricingKnown bool) (float64, bool) {
+	if !pricingKnown || inputPerM <= 0 || cachedPerM < 0 || cachedPerM >= inputPerM {
+		return 0, false
+	}
+	// Cost = inputRate/1M × (promptTokens − cachedTokens) + cachedRate/1M × cachedTokens
+	// effectiveTokens = promptTokens − cachedTokens × (1 − ratio)
+	ratio := cachedPerM / inputPerM
+	effectiveTokens := float64(promptTokens) - float64(cachedTokens)*(1-ratio)
+	if effectiveTokens <= 0 {
+		return 0, false
+	}
+	// Solves Cost = inputRate/1M × effectiveTokens for inputRate/1M.
+	inputRatePerToken := actualCost / effectiveTokens
+	return inputRatePerToken * float64(promptTokens), true
 }
 
 // GetContextWarningIssued returns whether a context warning has been issued

@@ -46,7 +46,7 @@ func TestCostEntryRoleStampedByBuildSites(t *testing.T) {
 	sp := &sproutProvider{agent: a}
 	sp.accumulateResponseCost(chatResponseWithUsage(20, 10))
 	// Metrics path (metrics.go TrackMetricsFromResponse).
-	a.TrackMetricsFromResponse(30, 15, 45, 0.001, 0, 0, 0)
+	a.TrackMetricsFromResponse(30, 15, 45, 0.001, 0, 0, 0, 0)
 
 	ru := a.GetRoleUsage()
 	if len(ru) != 1 || ru[0].Role != configuration.RoleCoder {

@@ -13,7 +13,7 @@ import { createLogEntry, type EventHandlerContext, lastPrimaryAssistantIndex } f
 
 // Handle query_started event
 export const handleQueryStarted = (ctx: EventHandlerContext): void => {
-  const { event, setState } = ctx;
+  const { event, setState, activeRequestsRef } = ctx;
   const logEntry = createLogEntry(event);
   logEntry.category = 'query';
   logEntry.level = 'info';
@@ -45,6 +45,16 @@ export const handleQueryStarted = (ctx: EventHandlerContext): void => {
     debugLog('[>>] Subagent query started (suppressed from chat):', startedQuery);
     return;
   }
+
+  // A query is running: reflect it in the request counter that the send path
+  // reads to choose steer-vs-new (handleSendMessage). Not every query_started
+  // is preceded by handleSendMessage — an auto-resume/wakeup turn starts
+  // server-side — so without this the counter stays 0 while isProcessing (and
+  // the spinner) is true, and a submit dead-ends on the agent's
+  // ErrQueryInProgress ("already in process") instead of steering. Clamp to 1
+  // (not += 1): one primary run per chat, and handleSendMessage has usually
+  // already set it.
+  if (activeRequestsRef.current < 1) activeRequestsRef.current = 1;
 
   setState((prev) => {
     // Avoid duplicating the user message: handleSendMessage may have already

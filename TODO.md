@@ -285,12 +285,16 @@ needed whatever the integration work does. Spec context: SP-160 §160e.
       (`isProd` now keys on the build command, not the mode label). A CI
       check (`scripts/verify-webui-dist-base.mjs`) fails when the released
       `index.html` carries non-`/webui/` asset URLs; pinned by vitest.
-- [ ] **hyg.2** Content-hash the WASM assets: `sprout.wasm` and
+- [x] **hyg.2** Content-hash the WASM assets: `sprout.wasm` and
       `wasm_exec.js` keep fixed names in the bundle (`build-webui-dist.mjs`,
       `services/wasmShell.ts` probes `/webui/wasm` and `/wasm`), so a host
       that caches them as immutable can mix old WASM with new code after an
       upgrade. Emit hashed file names plus a small manifest the loader reads;
       test that changing the WASM changes its URL.
+      Fixed: the dist build emits `sprout.<hash>.wasm` / `wasm_exec.<hash>.js`
+      plus `wasm-manifest.json`; `wasmShell.ts` reads the manifest and uses
+      the hashed URLs, falling back to the fixed names when it is absent and
+      honoring explicit URL overrides. Pinned by vitest.
 - [ ] **hyg.3** Single `services/api` import style: `OnboardingDialog.tsx`
       and `ErrorBoundary.tsx` import it dynamically while about 70 modules
       import it statically, which only produces a Vite warning and no chunk

@@ -86,7 +86,7 @@ protects.
       `FileCount` still address the fixture by id (tests + benchmark). Pinned
       by `TestListForUsers`, the updated CLI/web-UI list tests, and the CLI
       flag help no longer naming the hidden fixture.
-- [ ] **fix.10** Language guard in streaming mode: emit a replacement event
+- [x] **fix.10** Language guard in streaming mode: emit a replacement event
       with the regenerated text (CLI and web UI) instead of relying on the
       length heuristic; show the notice only for the final (no-tool-call)
       response, not mid-turn preambles. Spec: SP-152 acceptance.

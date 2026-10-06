@@ -133,6 +133,11 @@ type Agent struct {
 	turnLangMu           sync.RWMutex
 	turnUserLanguage     langguard.Language
 	streamHoldbackActive bool
+	// turnUserQuery is the current turn's user message (the user's last
+	// message), stored so the streaming regeneration prompt can carry it
+	// without a query-run context. Set once per turn in prepareQueryRun
+	// (setTurnLanguageGuard).
+	turnUserQuery string
 
 	// Configuration
 	configManager *configuration.Manager

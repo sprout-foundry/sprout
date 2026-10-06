@@ -179,13 +179,22 @@ func (h *StreamHoldback) State() HoldbackState { return h.state }
 // too, so callers must also confirm the streaming buffer is empty.
 func (h *StreamHoldback) RawLen() int { return h.buf.Len() }
 
+// Deliver writes content through the hold-back's sink — the same
+// client-facing delivery as released content — so the user sees the
+// regenerated text instead of the held wrong-language stream. It bypasses
+// the hold-back state: the reply is already judged and held, and the
+// regenerated text must reach the client regardless of which delivery
+// mechanisms the sink wires up.
+func (h *StreamHoldback) Deliver(content string) {
+	h.deliver(content)
+}
+
 // DeliverNotice writes notice through the hold-back's sink — the same
 // client-facing delivery as released content — so the user sees the §152b
-// notice instead of the held wrong-language stream. It bypasses the hold-back
-// state: the reply is already judged and held, and the notice must reach the
-// client regardless of which delivery mechanisms the sink wires up.
+// notice instead of the held wrong-language stream. It is a thin wrapper over
+// Deliver for the templated-notice case.
 func (h *StreamHoldback) DeliverNotice(notice string) {
-	h.deliver(notice)
+	h.Deliver(notice)
 }
 
 // Held returns the held (wrong-language) content — the whole reply,
@@ -220,14 +229,16 @@ func (h *StreamHoldback) deliver(content string) {
 // Agent wiring
 // ---------------------------------------------------------------------------
 
-// setTurnLanguageGuard stores the turn's resolved user language and whether
-// the streaming hold-back applies to it. Called once per turn from
-// prepareQueryRun (via resolveTurnLanguageGuard), before the seed conversation
-// loop runs, so the streaming provider path can read it during the turn.
-func (a *Agent) setTurnLanguageGuard(user langguard.Language, active bool) {
+// setTurnLanguageGuard stores the turn's resolved user language, whether the
+// streaming hold-back applies to it, and the turn's user message. Called once
+// per turn from prepareQueryRun (via resolveTurnLanguageGuard), before the
+// seed conversation loop runs, so the streaming provider path can read them
+// during the turn.
+func (a *Agent) setTurnLanguageGuard(user langguard.Language, active bool, userQuery string) {
 	a.turnLangMu.Lock()
 	a.turnUserLanguage = user
 	a.streamHoldbackActive = active
+	a.turnUserQuery = userQuery
 	a.turnLangMu.Unlock()
 }
 
@@ -242,6 +253,16 @@ func (a *Agent) turnUserLanguageGuard() (langguard.Language, bool) {
 	return a.turnUserLanguage, a.streamHoldbackActive
 }
 
+// turnUserQuery returns the current turn's user message (the user's last
+// message), stored by setTurnLanguageGuard. The streaming regeneration prompt
+// carries it so the regeneration is grounded in the user's own request, the
+// way the final-message guard's regeneration is grounded in the run's query.
+func (a *Agent) storedTurnUserQuery() string {
+	a.turnLangMu.RLock()
+	defer a.turnLangMu.RUnlock()
+	return a.turnUserQuery
+}
+
 // resolveTurnLanguageGuard resolves the turn's user language once (§152a)
 // and stores it on the agent for the streaming hold-back. It reuses the same
 // resolution as the final-message guard (152.5): the user's recent messages
@@ -253,14 +274,14 @@ func (a *Agent) resolveTurnLanguageGuard(currentQuery string) {
 	if a.IsSubagent() {
 		// Subagent output goes to the orchestrator, not the end user; the
 		// user-facing hold-back never applies to it.
-		a.setTurnLanguageGuard(langguard.Language{}, false)
+		a.setTurnLanguageGuard(langguard.Language{}, false, currentQuery)
 		return
 	}
 	cfg := a.GetConfig()
 	// LanguageGuardEnabled is nil-safe: a nil config resolves to the
 	// default (enabled, §152f).
 	if !cfg.LanguageGuardEnabled() {
-		a.setTurnLanguageGuard(langguard.Language{}, false)
+		a.setTurnLanguageGuard(langguard.Language{}, false, currentQuery)
 		return
 	}
 	configured := langguard.Language{}
@@ -274,5 +295,5 @@ func (a *Agent) resolveTurnLanguageGuard(currentQuery string) {
 		recent = append(recent, q)
 	}
 	user, _ := langguard.ResolveUserLanguage(recent, configured)
-	a.setTurnLanguageGuard(user, user.Code != "")
+	a.setTurnLanguageGuard(user, user.Code != "", currentQuery)
 }

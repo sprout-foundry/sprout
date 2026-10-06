@@ -66,6 +66,14 @@ describe('progressMilestoneSummary', () => {
     expect(progressMilestoneSummary(milestone({ phase: 'started', scope_title: 'billing' }))).toBe('Started: billing');
   });
 
+  it('started milestone as emitted on the wire (no plan_revision, no elapsed_ms)', () => {
+    // The runtime omits elapsed_ms for started milestones and the stream
+    // coalescer's batch envelope omits both fields at the top level, so
+    // the template must not depend on either.
+    const bare: ProgressMilestoneData = { run_id: 'run-1', phase: 'started', scope_title: 'billing' };
+    expect(progressMilestoneSummary(bare)).toBe('Started: billing');
+  });
+
   it('scope id falls back when the title is absent', () => {
     expect(progressMilestoneSummary(milestone({ phase: 'started', scope_id: 'item-3' }))).toBe('Started: item-3');
   });
@@ -92,6 +100,23 @@ describe('progressMilestoneSummary', () => {
         }),
       ),
     ).toBe('Milestones: 3');
+  });
+
+  it('coalesced batch envelope as emitted on the wire (route keys, no top-level plan fields)', () => {
+    // mergeMilestones builds exactly this shape: run_id + milestones +
+    // the route keys at the top level, with no plan_revision/phase/
+    // elapsed_ms there — the flat entries carry them.
+    const batch: ProgressMilestoneData = {
+      run_id: 'run-1',
+      milestones: [
+        { run_id: 'run-1', plan_revision: 3, scope_id: 'a', phase: 'finished', elapsed_ms: 1 },
+        { run_id: 'run-1', plan_revision: 3, scope_id: 'b', phase: 'started' },
+      ],
+      client_id: 'client-1',
+      chat_id: 'chat-1',
+      user_id: 'user-1',
+    };
+    expect(progressMilestoneSummary(batch)).toBe('Milestones: 2');
   });
 
   it('unknown phase with no title says nothing', () => {

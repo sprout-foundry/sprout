@@ -180,9 +180,15 @@ protects.
       revision/titles when it changes (a vanished plan refreshes to rev 0);
       the extracted pure transition helper emits started-then-finished for a
       scope completed in a single write. Pinned by milestone tests.
-- [ ] **fix.17** Progress strip filters by the active chat (`ProgressStrip.tsx`);
+- [x] **fix.17** Progress strip filters by the active chat (`ProgressStrip.tsx`);
       TS event types match the Go payloads (optional `plan_revision`,
       `elapsed_ms`, batched `milestones`).
+      Fixed: the strip takes the chat id from `ChatProps`, accepts
+      chatless or matching-chat events, drops foreign-chat events, and
+      clears on chat switch (batches filter on the top-level envelope).
+      `ProgressMilestoneData` now models both the flat payload and the
+      coalesced batch (optional `plan_revision`/`elapsed_ms`/`phase`, route
+      keys). Pinned by vitest.
 - [ ] **fix.18** Role models settings: re-sync the draft when config changes
       and keep custom role names on save (`RoleModelsSection.tsx`); reject
       unknown role names in `/model --role`.

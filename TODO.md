@@ -616,10 +616,15 @@ needed whatever the integration work does. Spec context: SP-160 §160e.
       root; missing file is a sentinel) and `Resolve` merges it with the
       starter manifest into a `deploy.DeployRequest`, defaulting the build
       output to the manifest's. Pinned by Go tests.
-- [ ] **156.3** Credentials from the existing credential store or the
+- [x] **156.3** Credentials from the existing credential store or the
       embedding environment; never in model context, tool arguments or
       logs. Test asserting no token in model requests or logs. Spec:
       SP-156 §156b.
+      Fixed: `pkg/deploy.ResolveCredential` prefers the credential store and
+      falls back to an embedding-supplied env var, with a typed missing
+      error; `Credential` masks on `%v`/`%#v` and marshals without its
+      secret, so it cannot ride into model context or logs. Pinned by tests
+      using a sentinel token across serialized types and redacted payloads.
 - [ ] **156.4** Build and upload: build in the workspace with the
       manifest's `build` command after verification passed on the same
       tree; refuse if the tree changed since verification. Tests. Spec:

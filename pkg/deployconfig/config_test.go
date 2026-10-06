@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -277,6 +278,22 @@ func TestResolveRejectsInvalidConfig(t *testing.T) {
 	_, err = Resolve(&DeployConfig{Project: "p"}, root) // no target
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "target is required")
+}
+
+// TestDeployConfigCarriesNoCredential pins that the on-disk config and the
+// resolved shape never name or carry a credential. A token belongs in the
+// credential store (or the embedding environment), not in .sprout/deploy.json
+// or anything derived from it, so the marshalled document must not grow a
+// credential field.
+func TestDeployConfigCarriesNoCredential(t *testing.T) {
+	c := DeployConfig{Target: "cloudflare", Project: "my-site", BuildOutput: "dist"}
+	raw, err := json.Marshal(c)
+	require.NoError(t, err)
+
+	lower := strings.ToLower(string(raw))
+	for _, forbidden := range []string{"token", "api_key", "apikey", "secret", "password", "credential"} {
+		assert.NotContains(t, lower, forbidden, "DeployConfig JSON must not name a credential field (%q)", forbidden)
+	}
 }
 
 // jsonString quotes s as a JSON string, so a case table can build a document

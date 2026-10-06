@@ -11,6 +11,15 @@
 // de-duplicate and correlate the started/finished pair (SP-151 §151a:
 // "stable IDs (run, plan revision, scope item)").
 //
+// The plan snapshot behind the payload is not frozen at the first load: the
+// milestone path re-reads .sprout/plan.json and refreshes the cached
+// revision and titles whenever the stored revision differs, so a scope
+// write-back that bumps the plan mid-run is reflected by the very next
+// milestone instead of every event reporting the revision first seen. And a
+// scope whose todos go from open straight to all-terminal inside one
+// todo_write — never observed in_progress — emits its whole lifecycle,
+// started then finished, in that order.
+//
 // An absent or corrupt plan never fails a todo_write: it means "no plan"
 // (revision 0, no titles) and milestones still fire for the scope ids the
 // todos carry.
@@ -37,11 +46,17 @@ type scopeMilestoneTracker struct {
 	// scopes maps a plan scope item id to its milestone state.
 	scopes map[string]*scopeMilestoneState
 
-	planMu     sync.Mutex
+	planMu sync.Mutex
+	// planLoaded records whether the plan has ever been looked up. The
+	// cached revision and titles below are refreshed on the milestone path
+	// whenever the stored plan's revision differs from planRev, so the
+	// payloads always describe the plan as it stands: a mid-run write-back
+	// that bumps the revision is carried by the very next milestone.
 	planLoaded bool
 	planRev    int
 	// scopeTitles maps a plan scope item id to its title (the scope_title
-	// payload field). nil when the project has no plan.
+	// payload field). nil when the project has no plan — or none anymore
+	// (a deleted or corrupt plan refreshes the cache to "no plan").
 	scopeTitles map[string]string
 }
 
@@ -75,17 +90,45 @@ func (t *scopeMilestoneTracker) Reset() {
 	t.planMu.Unlock()
 }
 
+// scopeTodoStatus is one plan scope item's aggregated todo statuses in a
+// single todo_write snapshot.
+type scopeTodoStatus struct {
+	hasInProgress bool
+	hasOpen       bool // any todo still pending or in_progress
+}
+
+// scopeEmit is one decided progress_milestone event: the scope id and phase,
+// plus the finished-only payload (the files-touched delta and the elapsed
+// wall time; both ignored for started events).
+type scopeEmit struct {
+	scopeID   string
+	phase     string
+	files     int
+	elapsedMs int64
+}
+
 // observe reconciles the previous and next todo snapshots against the tracked
 // scope state and emits a progress_milestone event for every scope item that
 // just started or just finished.
 //
+// The transitions, per scope item present in next:
+//
 //   - Started: the scope has an in_progress todo in next, was not already
 //     started, and was not already finished. The state is seeded with the
 //     current tracked-file count so the finished event can report the delta.
-//   - Finished: none of the scope's todos in next is pending/in_progress
-//     (all terminal), the scope was started, and it was not already finished.
-//     files_touched is the tracked-file delta since the scope started and
-//     elapsed_ms its wall time, both clamped to >= 0.
+//   - Started + finished, in that order: none of the scope's todos in next
+//     is pending/in_progress (all terminal) but the scope was never started —
+//     a scope written from open (or from nothing) straight to terminal in
+//     this single write. Its whole lifecycle happened inside one write, so
+//     both phases are emitted back-to-back, started first, and the finished
+//     event's delta is measured from that same instant: files_touched 0
+//     (omitted) and elapsed ~0.
+//   - Finished: all-terminal in next, the scope was started in an earlier
+//     write, and it was not already finished. files_touched is the
+//     tracked-file delta since the scope started and elapsed_ms its wall
+//     time, both clamped to >= 0.
+//   - Nothing: the scope's state is unchanged — already started, or already
+//     finished — so re-writing the same snapshot de-duplicates.
 //
 // Scope ids that appear only in prev (removed from next) are ignored:
 // milestones are driven by the current snapshot, and the tracker's own state
@@ -96,20 +139,12 @@ func (t *scopeMilestoneTracker) observe(a *Agent, prev, next []tools.TodoItem) {
 		return
 	}
 
-	type scopeStatus struct {
-		hasInProgress bool
-		hasOpen       bool // any todo still pending or in_progress
-	}
-	statuses := make(map[string]*scopeStatus)
+	statuses := make(map[string]scopeTodoStatus)
 	for _, td := range next {
 		if td.Scope == "" {
 			continue
 		}
 		st := statuses[td.Scope]
-		if st == nil {
-			st = &scopeStatus{}
-			statuses[td.Scope] = st
-		}
 		switch td.Status {
 		case "in_progress":
 			st.hasInProgress = true
@@ -117,6 +152,7 @@ func (t *scopeMilestoneTracker) observe(a *Agent, prev, next []tools.TodoItem) {
 		case "pending":
 			st.hasOpen = true
 		}
+		statuses[td.Scope] = st
 	}
 	if len(statuses) == 0 {
 		return
@@ -124,13 +160,6 @@ func (t *scopeMilestoneTracker) observe(a *Agent, prev, next []tools.TodoItem) {
 
 	// Decide and record the transitions under t.mu; publish after releasing
 	// it so publishEvent never runs under the tracker lock.
-	type emit struct {
-		scopeID   string
-		phase     string
-		files     int
-		elapsedMs int64
-	}
-
 	now := time.Now()
 	filesNow := 0
 	if ct := a.GetChangeTracker(); ct != nil {
@@ -138,35 +167,18 @@ func (t *scopeMilestoneTracker) observe(a *Agent, prev, next []tools.TodoItem) {
 	}
 
 	t.mu.Lock()
-	var emits []emit
+	var emits []scopeEmit
 	ids := make([]string, 0, len(statuses))
 	for id := range statuses {
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)
 	for _, id := range ids {
-		st := statuses[id]
-		ms := t.scopes[id]
-		switch {
-		case st.hasInProgress && (ms == nil || !ms.started) && (ms == nil || !ms.finished):
-			t.scopes[id] = &scopeMilestoneState{
-				startedAt:  now,
-				startFiles: filesNow,
-				started:    true,
-			}
-			emits = append(emits, emit{scopeID: id, phase: events.MilestonePhaseStarted})
-		case !st.hasOpen && ms != nil && ms.started && !ms.finished:
-			ms.finished = true
-			files := filesNow - ms.startFiles
-			if files < 0 {
-				files = 0
-			}
-			elapsed := now.Sub(ms.startedAt).Milliseconds()
-			if elapsed < 0 {
-				elapsed = 0
-			}
-			emits = append(emits, emit{scopeID: id, phase: events.MilestonePhaseFinished, files: files, elapsedMs: elapsed})
+		nextState, evts := scopeMilestoneTransitions(id, statuses[id], t.scopes[id], now, filesNow)
+		if nextState != nil {
+			t.scopes[id] = nextState
 		}
+		emits = append(emits, evts...)
 	}
 	t.mu.Unlock()
 
@@ -174,7 +186,7 @@ func (t *scopeMilestoneTracker) observe(a *Agent, prev, next []tools.TodoItem) {
 		return
 	}
 
-	// Load the plan (once per session) only now that an emit is certain — a
+	// Refresh the plan snapshot only now that an emit is certain — a
 	// todo_write with no milestone must not pay for plan I/O.
 	planRev, titles := t.planSnapshot(a)
 	runID := a.GetSessionID()
@@ -203,33 +215,148 @@ func (t *scopeMilestoneTracker) observe(a *Agent, prev, next []tools.TodoItem) {
 	}
 }
 
-// planSnapshot lazily loads the project plan once (revision + scope
-// id→title) and caches it for the session. It mirrors the planContextSummary
-// guard: an absent or unreadable plan means "no plan" (rev 0, no titles),
-// never an error.
+// scopeMilestoneTransitions decides the milestone events one todo_write
+// produces for a single plan scope item, from the item's aggregated todo
+// statuses in the next snapshot (st), the tracker's previous state for that
+// scope (ms; nil when the scope was never seen), and the instant and
+// tracked-file count of the write. It returns the scope's new state (nil
+// means "unchanged — keep the previous state") and the events in lifecycle
+// order: started before finished for a scope that starts and finishes in the
+// same write.
+//
+// Pure: no locks, no I/O, no reads outside its arguments — the observe loop
+// stays a thin record-and-collect shell over this decision.
+func scopeMilestoneTransitions(id string, st scopeTodoStatus, ms *scopeMilestoneState, now time.Time, filesNow int) (*scopeMilestoneState, []scopeEmit) {
+	fresh := ms == nil || !ms.started
+	alreadyFinished := ms != nil && ms.finished
+
+	switch {
+	case st.hasInProgress && fresh && !alreadyFinished:
+		// One of the scope's todos just went in_progress for the first
+		// time: the scope starts.
+		return &scopeMilestoneState{
+			startedAt:  now,
+			startFiles: filesNow,
+			started:    true,
+		}, []scopeEmit{{scopeID: id, phase: events.MilestonePhaseStarted}}
+
+	case !st.hasOpen && !alreadyFinished:
+		if fresh {
+			// The scope went from never-started straight to all-terminal
+			// in this one write. Report the whole lifecycle in order —
+			// started, then finished — seeding the start at this instant
+			// so the finish's delta is measured from it (files 0, elapsed
+			// ~0). Skipping the started phase here would hide a scope
+			// that was completed without ever being seen in_progress.
+			seed := &scopeMilestoneState{
+				startedAt:  now,
+				startFiles: filesNow,
+				started:    true,
+			}
+			files, elapsed := milestoneDelta(seed, now, filesNow)
+			seed.finished = true
+			return seed, []scopeEmit{
+				{scopeID: id, phase: events.MilestonePhaseStarted},
+				{scopeID: id, phase: events.MilestonePhaseFinished, files: files, elapsedMs: elapsed},
+			}
+		}
+		// Started in an earlier write, now all-terminal: report the finish
+		// with the delta since that start. The state pointer is kept (and
+		// marked finished) so a re-write of the same snapshot is a no-op.
+		files, elapsed := milestoneDelta(ms, now, filesNow)
+		ms.finished = true
+		return ms, []scopeEmit{{scopeID: id, phase: events.MilestonePhaseFinished, files: files, elapsedMs: elapsed}}
+	}
+	return nil, nil
+}
+
+// milestoneDelta computes the finished-event payload for a scope that started
+// at ms: the tracked-file delta since the start and the elapsed wall time,
+// both clamped to >= 0. A nil ms means the scope is starting and finishing in
+// the same write, so both values are measured from now: 0 and 0.
+func milestoneDelta(ms *scopeMilestoneState, now time.Time, filesNow int) (int, int64) {
+	if ms == nil {
+		return 0, 0
+	}
+	files := filesNow - ms.startFiles
+	if files < 0 {
+		files = 0
+	}
+	elapsed := now.Sub(ms.startedAt).Milliseconds()
+	if elapsed < 0 {
+		elapsed = 0
+	}
+	return files, elapsed
+}
+
+// planSnapshot returns the plan's revision and scope id→title map for the
+// milestone payloads, refreshing the cached snapshot when the stored plan's
+// revision differs from the cached one.
+//
+// The plan is re-read on every call: this sits on the milestone path only —
+// observe calls it after the transitions are decided, at most once per
+// todo_write and only when at least one milestone is about to be published —
+// so the cost is one read of a tiny JSON document per milestone-bearing
+// write, a handful of times per run. Stat-based change detection would add a
+// second syscall per read plus invalidation state, and cannot tell a
+// rewritten-but-identical file from an untouched one; loading outright is the
+// simpler and equally cheap choice here.
+//
+// The refresh decision is the loaded revision against the cached one:
+//
+//   - A plan that appeared, or was written back at a higher revision,
+//     refreshes the cache so the next payload carries the revision and
+//     titles the plan has now.
+//   - A plan that vanished or became unreadable refreshes the cache to "no
+//     plan" (revision 0, no titles): a milestone's plan_revision should
+//     describe the plan as it stands, not the last one that happened to be
+//     readable. Load errors are never surfaced — "no plan" is a state, not
+//     a failure.
+//   - An unchanged revision keeps the cached titles: the store bumps the
+//     revision on every write, so a same-revision rewrite is outside this
+//     cache's contract, and keeping the map avoids rebuilding it.
 func (t *scopeMilestoneTracker) planSnapshot(a *Agent) (int, map[string]string) {
 	t.planMu.Lock()
 	defer t.planMu.Unlock()
-	if t.planLoaded {
-		return t.planRev, t.scopeTitles
-	}
-	t.planLoaded = true
-	root := a.currentWorkspaceRoot()
-	if root == "" {
-		return 0, nil
-	}
-	plan, err := planstore.New().Load(root)
-	if err != nil {
-		return 0, nil
-	}
-	t.planRev = plan.Revision
-	if len(plan.Scope) > 0 {
-		t.scopeTitles = make(map[string]string, len(plan.Scope))
-		for _, s := range plan.Scope {
-			t.scopeTitles[s.ID] = s.Title
-		}
+	t.refreshPlanLocked(a)
+	return t.planRev, t.scopeTitles
+}
+
+// cachedPlanSnapshot returns the cached plan revision and titles without
+// refreshing them, loading the plan once if it was never looked up. It is
+// the read side for the question context: answering a mid-run decision must
+// not pay for disk I/O, and the cache is already kept current by the
+// milestone path, which refreshes it at every milestone-bearing todo_write.
+func (t *scopeMilestoneTracker) cachedPlanSnapshot(a *Agent) (int, map[string]string) {
+	t.planMu.Lock()
+	defer t.planMu.Unlock()
+	if !t.planLoaded {
+		t.refreshPlanLocked(a)
 	}
 	return t.planRev, t.scopeTitles
+}
+
+// refreshPlanLocked re-reads the plan from the agent's workspace and updates
+// the cached revision and titles when the loaded revision differs from the
+// cached one. planMu must be held.
+func (t *scopeMilestoneTracker) refreshPlanLocked(a *Agent) {
+	rev, titles := 0, map[string]string(nil)
+	if root := a.currentWorkspaceRoot(); root != "" {
+		if plan, err := planstore.New().Load(root); err == nil {
+			rev = plan.Revision
+			if len(plan.Scope) > 0 {
+				titles = make(map[string]string, len(plan.Scope))
+				for _, s := range plan.Scope {
+					titles[s.ID] = s.Title
+				}
+			}
+		}
+	}
+	t.planLoaded = true
+	if rev != t.planRev {
+		t.planRev = rev
+		t.scopeTitles = titles
+	}
 }
 
 // observeScopeMilestones records the milestone transitions a todo_write just
@@ -257,16 +384,16 @@ func (a *Agent) observeScopeMilestones(prev, next []tools.TodoItem) {
 // lexicographically greater scope id wins, keeping the choice deterministic
 // regardless of map iteration order. With no active scope it is "".
 //
-// Locking mirrors observe and Reset: planSnapshot is called first (it takes
-// t.planMu and releases it before returning — and returns the cached revision
-// without I/O once loaded), then t.mu is taken to read scopes. The two locks
-// are never held together, so there is no deadlock and no plan I/O runs under
-// the scope lock.
+// Locking mirrors observe and Reset: cachedPlanSnapshot is called first (it
+// takes t.planMu and releases it before returning — it serves the cache,
+// loading once if the plan was never looked up), then t.mu is taken to read
+// scopes. The two locks are never held together, so there is no deadlock and
+// no plan I/O runs under the scope lock.
 func (t *scopeMilestoneTracker) questionContext(a *Agent) (scopeID string, planRev int) {
 	if t == nil {
 		return "", 0
 	}
-	planRev, _ = t.planSnapshot(a)
+	planRev, _ = t.cachedPlanSnapshot(a)
 	t.mu.Lock()
 	active := ""
 	var latest time.Time

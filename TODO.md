@@ -173,9 +173,13 @@ protects.
       entries); the disposer keeps its identity check for non-built-ins; and
       `resolveWorkspaceMode` never returns undefined (layered fallback to a
       registered built-in). Pinned by vitest.
-- [ ] **fix.16** Plan snapshot for milestones refreshes on plan revision, and
+- [x] **fix.16** Plan snapshot for milestones refreshes on plan revision, and
       a scope that goes pending→completed in one write emits both events
       (`scope_milestones.go`).
+      Fixed: the milestone path re-reads the plan and refreshes the cached
+      revision/titles when it changes (a vanished plan refreshes to rev 0);
+      the extracted pure transition helper emits started-then-finished for a
+      scope completed in a single write. Pinned by milestone tests.
 - [ ] **fix.17** Progress strip filters by the active chat (`ProgressStrip.tsx`);
       TS event types match the Go payloads (optional `plan_revision`,
       `elapsed_ms`, batched `milestones`).

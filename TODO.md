@@ -50,10 +50,10 @@ checkboxes.
 - [x] **contract.5** Document the git family, read endpoints
       (`/api/git/*` status, log, diff, branches and other GETs).
       Spec: SP-160 §160c.
-- [ ] **contract.6** Document the git family, write endpoints (commit,
+- [x] **contract.6** Document the git family, write endpoints (commit,
       stage, branch create/switch, push/pull and other mutating routes).
       Spec: SP-160 §160c.
-- [ ] **contract.7** Adopt Huma: add `github.com/danielgtaylor/huma/v2`
+- [x] **contract.7** Adopt Huma: add `github.com/danielgtaylor/huma/v2`
       (v2.39.1, the version `../msg/server` uses) with the `humago` adapter
       mounted on the existing `ServeMux` in `pkg/webui/routes.go`, so Huma
       operations and plain handlers coexist. Add `cmd/genapi` (modelled on

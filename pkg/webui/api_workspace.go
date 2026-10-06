@@ -56,13 +56,11 @@ func cachedProjectsIn(root string) (projects []ProjectInfo, wasCached bool) {
 	return projects, false
 }
 
-// handleAPIStats handles API requests for server statistics
-func (ws *ReactWebServer) handleAPIStats(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
-		return
-	}
-
+// buildAPIStats gathers the server-statistics payload for the client the
+// request belongs to. Both the plain /api/stats handler and the Huma
+// operation build the response through this helper so the two paths cannot
+// drift. r is the originating request (never nil in either path).
+func (ws *ReactWebServer) buildAPIStats(r *http.Request) map[string]interface{} {
 	clientID := ws.resolveClientID(r)
 	chatID := ws.resolveChatID(r, clientID)
 	// Ensure the client context exists before gathering stats and build the
@@ -109,7 +107,7 @@ func (ws *ReactWebServer) handleAPIStats(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	writeJSON(w, http.StatusOK, stats)
+	return stats
 }
 
 // handleAPIWorkspace handles API requests for reading and updating the active workspace root.

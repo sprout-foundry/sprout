@@ -75,7 +75,7 @@ checkboxes.
       `/api/search*`, `/api/create`, `/api/delete`, `/api/rename`,
       `/api/upload`, `/api/diagnostics`, `/api/lsp*`, `/api/semantic`) to
       Huma, no behavior change. Spec: SP-160 §160c.
-- [ ] **contract.10** Migrate the git family (`/api/git/*`, read and write)
+- [x] **contract.10** Migrate the git family (`/api/git/*`, read and write)
       to Huma, no behavior change. Spec: SP-160 §160c.
 - [ ] **contract.11** Migrate settings and configuration (`/api/settings*`,
       `/api/providers*`, `/api/onboarding*`, `/api/config`,

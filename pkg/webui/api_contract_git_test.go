@@ -283,7 +283,6 @@ func getRequestBodyRef(t *testing.T, op map[string]interface{}, route string) st
 // family requires.
 func TestGitWriteRoutesDocumentedAsPOST(t *testing.T) {
 	root := repoRootFromWorkingDir(t)
-	routesPath := filepath.Join(root, contractRoutesGo)
 	specPath := filepath.Join(root, contractOpenAPIYAML)
 	allowPath := filepath.Join(root, contractAllowlist)
 
@@ -293,7 +292,7 @@ func TestGitWriteRoutesDocumentedAsPOST(t *testing.T) {
 	for _, p := range allowlist {
 		allowSet[p] = true
 	}
-	registeredPatterns := registeredRoutes(t, routesPath)
+	registeredPatterns := registeredRoutes(t, contractRouteFiles(root)...)
 	registered := make(map[string]bool, len(registeredPatterns))
 	for _, p := range registeredPatterns {
 		registered[p] = true

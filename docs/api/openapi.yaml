@@ -4176,7 +4176,7 @@ paths:
         - files
   /api/git/branch/create:
     post:
-      description: Validates the branch name with git check-ref-format and then runs git checkout -b to create and switch to the new branch. The branch name is validated as a valid ref before the checkout is attempted.
+      description: Creates a new branch at `branch` (based on `base` or the current branch) and checks it out.
       operationId: gitBranchCreate
       requestBody:
         content:
@@ -4190,7 +4190,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GitBranchCreateResponse'
-          description: The branch was created and checked out.
+          description: OK
         "400":
           content:
             application/json:
@@ -4209,12 +4209,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The branch could not be created or checked out.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Create a new branch and check it out.
       tags:
         - git
   /api/git/branches:
     get:
-      description: Returns the current branch plus the combined, local, and remote branch lists for the active workspace. Remote symrefs such as `origin/HEAD` are skipped. When the workspace is not a git repository the lists come back empty and `message` is `not_git_repo` rather than an error.
+      description: Lists the local and remote branches with the current branch flagged.
       operationId: gitBranches
       responses:
         "200":
@@ -4222,7 +4228,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GitBranchesResponse'
-          description: The current and available branches.
+          description: OK
         "405":
           content:
             application/json:
@@ -4235,12 +4241,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: A branch list could not be read.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: List local and remote branches.
       tags:
         - git
   /api/git/checkout:
     post:
-      description: Checks out the named branch in the active workspace. The branch name must be non-empty and must not start with a hyphen.
+      description: Checks out the branch at `branch` in the workspace.
       operationId: gitCheckout
       requestBody:
         content:
@@ -4254,7 +4266,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GitBranchSwitchResponse'
-          description: The branch was checked out.
+          description: OK
         "400":
           content:
             application/json:
@@ -4273,12 +4285,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The branch could not be checked out.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Switch to an existing branch.
       tags:
         - git
   /api/git/commit:
     post:
-      description: Creates a commit from the staged changes using the provided message. Fails when there are no staged changes. The response echoes the git commit output.
+      description: Commits the staged changes with `message`. A dry-run first surfaces the files that would be committed.
       operationId: gitCommit
       requestBody:
         content:
@@ -4292,7 +4310,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GitCommitCreateResponse'
-          description: The commit was created.
+          description: OK
         "400":
           content:
             application/json:
@@ -4311,12 +4329,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The commit could not be created.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Commit the currently staged changes.
       tags:
         - git
   /api/git/commit-message:
     post:
-      description: Generates a commit message for the currently staged changes without creating a commit. Requires a staged diff and at least one staged file change; the configured provider and model are used. Takes no request body.
+      description: Generates an AI commit message for the currently staged changes using the active agent.
       operationId: gitCommitMessage
       responses:
         "200":
@@ -4324,7 +4348,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GitCommitMessageResponse'
-          description: The generated commit message and the model that produced it.
+          description: OK
         "400":
           content:
             application/json:
@@ -4349,12 +4373,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: No AI agent or its configuration is available.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Generate an AI commit message from the staged changes.
       tags:
         - git
   /api/git/commit/show:
     get:
-      description: Returns the full hash, short hash, author, date, refs, and subject of the commit at the `hash` query parameter, along with its unified diff, a diff-tree file list, and a stat summary. This daemon endpoint is a GET; the in-browser browser-git path lists the same operation as a POST in the web UI's cloud endpoint registry, but the daemon handler itself requires GET.
+      description: Shows a commit's metadata, diff, and file list for the commit at `sha`.
       operationId: gitCommitShow
       parameters:
         - description: The commit hash to show.
@@ -4369,7 +4399,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GitCommitShowResponse'
-          description: The commit's metadata, diff, files, and stat summary.
+          description: OK
         "400":
           content:
             application/json:
@@ -4388,12 +4418,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The commit's metadata, diff, or file list could not be read.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Show a commit's metadata, diff, and file list.
       tags:
         - git
   /api/git/commit/show/file:
     get:
-      description: Returns the unified diff for the file at `path` within the commit at `hash`, plus the full before/after contents used by the read-only merge view. Both `hash` and `path` are required. This daemon endpoint is a GET; the in-browser browser-git path lists the same operation as a POST in the web UI's cloud endpoint registry, but the daemon handler itself requires GET.
+      description: Shows the diff of the single file at `path` within the commit at `sha`.
       operationId: gitCommitFileDiff
       parameters:
         - description: The commit hash to inspect.
@@ -4414,7 +4450,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GitCommitFileDiffResponse'
-          description: The single-file diff and before/after contents.
+          description: OK
         "400":
           content:
             application/json:
@@ -4439,12 +4475,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The commit's file diff could not be read.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Show the diff of a single file within a commit.
       tags:
         - git
   /api/git/confirm:
     post:
-      description: Records the user's response to a pending security approval or file security prompt, identified by request_id. The optional action carries the multi-option dialog choice; when it is empty the boolean response is used instead. Legal action values are approve_once, approve_always, elevate, allow_folder_session, and deny. Returns 404 when the request_id is unknown or already handled.
+      description: Responds to a pending security approval or prompt (the `request_id`/`response` pair), unblocking the agent that was waiting for it.
       operationId: gitConfirm
       requestBody:
         content:
@@ -4458,7 +4500,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GitSuccessResponse'
-          description: The response was recorded.
+          description: OK
         "400":
           content:
             application/json:
@@ -4477,12 +4519,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The route only accepts POST.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Respond to a pending security approval or prompt.
       tags:
         - git
   /api/git/deep-review:
     post:
-      description: Reviews the staged change with reviewer subagents (the same review_changes pipeline) and returns structured verdict and guidance for the review tab's fix picker. Requires staged changes. Takes no request body.
+      description: Reviews the staged changes with reviewer subagents and returns the aggregated findings.
       operationId: gitDeepReview
       responses:
         "200":
@@ -4490,7 +4538,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GitDeepReviewResponse'
-          description: The review completed; the verdict and guidance for the fix picker.
+          description: OK
         "400":
           content:
             application/json:
@@ -4515,12 +4563,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: No AI agent is available.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Review the staged changes with reviewer subagents.
       tags:
         - git
   /api/git/deep-review/fix:
     post:
-      description: Runs the fix workflow for the given deep-review output and blocks until it completes, then returns the workflow's final result. This is the legacy synchronous form; the /api/git/deep-review/fix/start and /api/git/deep-review/fix/status pair is the preferred job-based form.
+      description: Runs the deep-review fix workflow in the foreground and blocks until it completes, returning the final report.
       operationId: gitDeepReviewFix
       requestBody:
         content:
@@ -4534,7 +4588,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GitDeepReviewFixResponse'
-          description: The fix workflow completed.
+          description: OK
         "400":
           content:
             application/json:
@@ -4553,12 +4607,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The fix workflow could not be started, failed to run, or produced no result.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Run the deep-review fix workflow and block until it completes.
       tags:
         - git
   /api/git/deep-review/fix/start:
     post:
-      description: Starts an isolated full-agent fix workflow job for the given deep-review output and returns its job_id and session_id so the client can poll /api/git/deep-review/fix/status.
+      description: Starts an isolated deep-review fix job and returns its job ID so the status endpoint can be polled.
       operationId: gitDeepReviewFixStart
       requestBody:
         content:
@@ -4572,7 +4632,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GitDeepReviewFixStartResponse'
-          description: The fix job was started.
+          description: OK
         "400":
           content:
             application/json:
@@ -4591,12 +4651,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The fix job could not be started.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Start an isolated deep-review fix job.
       tags:
         - git
   /api/git/deep-review/fix/status:
     get:
-      description: Returns incremental status and log lines for a running deep-review fix job, identified by `job_id`. The `since` parameter (a log index) requests only the log lines after that index; the response's `next_index` is the next value to pass as `since` to continue polling. Only the client that started the job can query it; other clients are told the job is not found.
+      description: Polls the status and incremental logs of a running deep-review fix job.
       operationId: gitDeepReviewFixStatus
       parameters:
         - description: The fix-job ID to poll.
@@ -4618,7 +4684,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GitDeepReviewFixStatusResponse'
-          description: The job's current status, incremental logs, and result.
+          description: OK
         "400":
           content:
             application/json:
@@ -4637,12 +4703,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The route only accepts GET.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Poll the status and logs of a running deep-review fix job.
       tags:
         - git
   /api/git/diff:
     get:
-      description: Returns the staged and unstaged diff for the file at the `path` query parameter, plus a combined diff and the full before/after file contents used by the editable merge view. When the workspace is not a git repository the diffs come back empty and the contents are unavailable.
+      description: Returns the staged and unstaged diff for the file at `path` (or the whole index when `path` is omitted).
       operationId: gitDiff
       parameters:
         - description: The file to diff, relative to the workspace root.
@@ -4657,7 +4729,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GitDiffResponse'
-          description: The staged, unstaged, and combined diffs for the file.
+          description: OK
         "400":
           content:
             application/json:
@@ -4676,12 +4748,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: A diff could not be read.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Return the staged and unstaged diff for a file.
       tags:
         - git
   /api/git/discard:
     post:
-      description: Reverts a file's changes back to HEAD, regardless of whether they are staged, unstaged, both, or the file is untracked (untracked files are deleted). The path must name a file that is part of the git changes.
+      description: Reverts the file at `path` to its committed state.
       operationId: gitDiscard
       requestBody:
         content:
@@ -4695,7 +4773,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GitFileOperationResponse'
-          description: The changes were discarded.
+          description: OK
         "400":
           content:
             application/json:
@@ -4714,12 +4792,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The changes could not be discarded.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Discard changes to a file.
       tags:
         - git
   /api/git/log:
     get:
-      description: Returns a page of commit entries (hash, author, date, subject, and branch/HEAD refs) plus the page's `offset`, `limit`, and the total commit count. The `limit` defaults to 30 and is capped at 100; the `offset` defaults to 0. Returns an error when the workspace is not a git repository.
+      description: Lists recent commits, paginated by `page` and `per_page`, optionally filtered to a `ref`.
       operationId: gitLog
       parameters:
         - $ref: '#/components/parameters/limit'
@@ -4730,7 +4814,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GitLogResponse'
-          description: The page of commits.
+          description: OK
         "400":
           content:
             application/json:
@@ -4749,12 +4833,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The git log could not be read.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: List recent commits, paginated.
       tags:
         - git
   /api/git/pull:
     post:
-      description: Runs git pull --ff-only in the active workspace. Takes no request body. The response echoes the git pull output.
+      description: Pulls the latest changes for the current branch from its upstream.
       operationId: gitPull
       responses:
         "200":
@@ -4762,7 +4852,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GitPullPushResponse'
-          description: The pull completed.
+          description: OK
         "405":
           content:
             application/json:
@@ -4775,12 +4865,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The pull failed.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Pull the latest changes from the upstream branch.
       tags:
         - git
   /api/git/pull-request:
     post:
-      description: Creates a pull request via the gh CLI or the GitHub API. The title is required; body, base, and head are optional and fall back to the repository default branch and current branch. On success the response carries the PR url and number; on failure it carries success=false and an error string instead.
+      description: Creates a pull request for the current branch against `base`.
       operationId: gitPullRequest
       requestBody:
         content:
@@ -4794,7 +4890,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GitPullRequestResponse'
-          description: The pull request was created.
+          description: OK
         "400":
           content:
             application/json:
@@ -4813,12 +4909,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/GitPullRequestResponse'
           description: Pull request creation failed.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Create a pull request.
       tags:
         - git
   /api/git/push:
     post:
-      description: Runs git push in the active workspace. Takes no request body. The response echoes the git push output.
+      description: Pushes the current branch to its upstream, optionally with `-u` to set it on the first push.
       operationId: gitPush
       responses:
         "200":
@@ -4826,7 +4928,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GitPullPushResponse'
-          description: The push completed.
+          description: OK
         "405":
           content:
             application/json:
@@ -4839,12 +4941,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The push failed.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Push the current branch to its upstream.
       tags:
         - git
   /api/git/revert:
     post:
-      description: Runs git revert --no-edit for the given commit hash. The hash must be non-empty and must not start with a hyphen. The response echoes the reverted commit hash.
+      description: Reverts the commit at `sha`, producing a new commit that undoes it.
       operationId: gitRevert
       requestBody:
         content:
@@ -4858,7 +4966,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GitCommitRevertResponse'
-          description: The commit was reverted.
+          description: OK
         "400":
           content:
             application/json:
@@ -4877,12 +4985,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The commit could not be reverted.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Revert a commit.
       tags:
         - git
   /api/git/stage:
     post:
-      description: Stages the file at the given path with git add. The path must be non-empty and must name a file that is part of the git changes.
+      description: Adds the file at `path` to the git index.
       operationId: gitStage
       requestBody:
         content:
@@ -4896,7 +5010,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GitFileOperationResponse'
-          description: The file was staged.
+          description: OK
         "400":
           content:
             application/json:
@@ -4915,12 +5029,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The file could not be staged.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Stage a file.
       tags:
         - git
   /api/git/stage-all:
     post:
-      description: Stages all changes with git add -A in the active workspace. Takes no request body.
+      description: Adds every changed file to the git index.
       operationId: gitStageAll
       responses:
         "200":
@@ -4928,7 +5048,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GitMessageResponse'
-          description: All changes were staged.
+          description: OK
         "405":
           content:
             application/json:
@@ -4941,12 +5061,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The changes could not be staged.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Stage all changes.
       tags:
         - git
   /api/git/status:
     get:
-      description: 'Returns the current branch, ahead/behind tracking, and the staged, modified, untracked, deleted, and renamed file lists for the active workspace. When the workspace is not a git repository the response reports `in_git_repo: false` and empty lists rather than an error.'
+      description: 'Reports the workspace''s git status: staged, unstaged, and untracked changes, plus branch and ahead/behind counts.'
       operationId: gitStatus
       responses:
         "200":
@@ -4954,7 +5080,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GitStatusResponse'
-          description: The git status.
+          description: OK
         "405":
           content:
             application/json:
@@ -4967,12 +5093,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The git status could not be read.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Report the workspace's git status.
       tags:
         - git
   /api/git/unstage:
     post:
-      description: Unstages the file at the given path with git reset HEAD. The path must be non-empty and must name a file that is part of the git changes.
+      description: Removes the file at `path` from the git index.
       operationId: gitUnstage
       requestBody:
         content:
@@ -4986,7 +5118,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GitFileOperationResponse'
-          description: The file was unstaged.
+          description: OK
         "400":
           content:
             application/json:
@@ -5005,12 +5137,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The file could not be unstaged.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Unstage a file.
       tags:
         - git
   /api/git/unstage-all:
     post:
-      description: Unstages all changes with git reset HEAD in the active workspace. Takes no request body.
+      description: Removes every staged file from the git index.
       operationId: gitUnstageAll
       responses:
         "200":
@@ -5018,7 +5156,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GitMessageResponse'
-          description: All changes were unstaged.
+          description: OK
         "405":
           content:
             application/json:
@@ -5031,12 +5169,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The changes could not be unstaged.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Unstage all changes.
       tags:
         - git
   /api/git/worktree/checkout:
     post:
-      description: Switches the active workspace to the worktree at the given path. The path must resolve to a worktree that git already knows about. Chat sessions are preserved and the workspace is re-rooted to the target.
+      description: Switches the client's active workspace to the git worktree at `path`.
       operationId: gitWorktreeCheckout
       requestBody:
         content:
@@ -5050,7 +5194,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GitWorktreeCheckoutResponse'
-          description: Switched to the worktree.
+          description: OK
         "400":
           content:
             application/json:
@@ -5069,12 +5213,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The worktree list could not be read.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Switch to an existing worktree.
       tags:
         - git
   /api/git/worktree/create:
     post:
-      description: Creates a new worktree at the given path on a new branch. When base_ref is provided the branch is created from that ref; otherwise it is created from the current HEAD. The path must stay within the workspace or sit beside it. Returns 409 when the branch already exists.
+      description: Creates a new git worktree at `path` from `branch` (or a new branch based on the current one).
       operationId: gitWorktreeCreate
       requestBody:
         content:
@@ -5088,7 +5238,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GitWorktreeCreateResponse'
-          description: The worktree was created.
+          description: OK
         "400":
           content:
             application/json:
@@ -5113,12 +5263,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The worktree could not be created.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Create a new worktree.
       tags:
         - git
   /api/git/worktree/remove:
     post:
-      description: Removes the worktree at the given path. The path must not be the current workspace and must stay within the workspace or sit beside it.
+      description: Removes the git worktree at `path`.
       operationId: gitWorktreeRemove
       requestBody:
         content:
@@ -5132,7 +5288,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GitWorktreeRemoveResponse'
-          description: The worktree was removed.
+          description: OK
         "400":
           content:
             application/json:
@@ -5151,12 +5307,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The worktree could not be removed.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: Remove an existing worktree.
       tags:
         - git
   /api/git/worktrees:
     get:
-      description: Returns the set of worktrees in the repository with each worktree's path, branch, whether it is the main worktree, whether it is the active workspace, and its parent worktree's path and branch. When the workspace is not a git repository the list comes back empty and `message` is `not_git_repo` rather than an error.
+      description: Lists the repository's git worktrees.
       operationId: gitWorktrees
       responses:
         "200":
@@ -5164,7 +5326,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/GitWorktreesResponse'
-          description: The worktrees in the repository.
+          description: OK
         "405":
           content:
             application/json:
@@ -5177,6 +5339,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: The worktree list could not be read.
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
       summary: List git worktrees.
       tags:
         - git

@@ -320,4 +320,7 @@ func registerHumaOperations(api huma.API, ws *ReactWebServer) {
 
 	// ---- files family ----------------
 	registerFilesHumaOperations(api, ws)
+
+	// ---- git family ----------------
+	registerGitHumaOperations(api, ws)
 }

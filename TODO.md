@@ -117,7 +117,7 @@ standalone local build keeps embedding into `pkg/webui/static`.
       `packages/design`, version kept equal to the sprout release. Wired
       into the npm workspaces and `make build-all`. A test checks the build
       emits the entry, types and no unexpected files. Spec: SP-160 §160a.
-- [ ] **ws.2** `SproutProviders`: one wrapper for the provider stack the
+- [x] **ws.2** `SproutProviders`: one wrapper for the provider stack the
       views need (extracted from the app root), exported from the package;
       the local app uses it. Vitest. Spec: SP-160 §160a.
 - [ ] **ws.3** `SproutWorkspace`: mounts one project's workspace with props

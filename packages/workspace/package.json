@@ -16,6 +16,7 @@
     "dist/index.js",
     "dist/index.d.ts",
     "dist/views.js",
+    "dist/providers.js",
     "dist/design.js",
     "dist/chunks/",
     "README.md"

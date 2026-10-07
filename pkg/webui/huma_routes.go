@@ -323,4 +323,8 @@ func registerHumaOperations(api huma.API, ws *ReactWebServer) {
 
 	// ---- git family ----------------
 	registerGitHumaOperations(api, ws)
+
+	// ---- settings/configuration family ----------------
+	registerSettingsHumaOperations(api, ws)
+	registerSettingsMiscHumaOperations(api, ws)
 }

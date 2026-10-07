@@ -657,10 +657,18 @@ needed whatever the integration work does. Spec context: SP-160 §160e.
       passed and routes production through the approval gate (no model-
       supplied confirmation), emitting a progress event on the outcome.
       Pinned by Go tests.
-- [ ] **156.8** Cloudflare adapter (Pages for static output, Workers where
+- [x] **156.8** Cloudflare adapter (Pages for static output, Workers where
       needed) against the user's own account token; unit tests against
       an `httptest` fake of the Cloudflare API, no live account. Spec:
       SP-156 §156a-1.
+      Fixed: `pkg/deploy` gains a Cloudflare adapter implementing
+      `DeployTarget`: Pages is the fully implemented path (deploy, list,
+      status, per-deployment preview URL, rollback) and Workers covers the
+      single-script shape. It takes an injected base URL/`http.Client` and
+      the resolved `deploy.Credential` (never reads the environment); the
+      token reaches only the auth header and is scrubbed from errors.
+      Pinned by `httptest`-backed tests (round trip, typed non-2xx errors,
+      token absence, project binding, concurrency).
 - [ ] **156.9** Ship mode through the 155.1 registry: live URL and
       version, deploy action, history with change summaries, roll back;
       Code/Design unaffected. Vitest. Spec: SP-156 §156d.

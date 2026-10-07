@@ -97,7 +97,7 @@ checkboxes.
       test marshals representative Go event payloads and validates them
       against the schema, so Go and TypeScript cannot drift.
       Spec: SP-160 §160c.
-- [ ] **contract.14** Conformance suite package (`pkg/apiconformance`):
+- [x] **contract.14** Conformance suite package (`pkg/apiconformance`):
       given a base URL, it checks each operation in the generated
       `openapi.yaml` that has a safe read-only probe (status code and
       response shape), and reports per family. Mutating endpoints are

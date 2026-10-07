@@ -2,7 +2,7 @@ import { FileTree, type FileInfo, type FileTreeRefreshOptions } from '@sprout/ui
 import { Check, TriangleAlert, X } from 'lucide-react';
 import { forwardRef, useImperativeHandle, useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { isLayeredLayout } from '../config/layout';
-import { isCloud } from '../config/mode';
+import { useHostCapabilities } from '../host';
 import { getShellIdentity, onShellIdentityChange } from '../config/shell';
 import { useOptionalBufferManager } from '../contexts/BufferManagerContext';
 import { useFileTreeAutoRefresh } from '../hooks/useFileTreeAutoRefresh';
@@ -75,6 +75,7 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
 
     const api = ApiService.getInstance();
     const bufferManager = useOptionalBufferManager();
+    const { localTerminal } = useHostCapabilities();
 
     // ── Working directory (session-level cwd) ─────────────────────
     // Shared with the terminal / git / agent surfaces via the workspaceCwd
@@ -265,11 +266,12 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
       }
     };
 
-    // "Add repo" trigger for the workspace row. Only in cloud/local webui
-    // mode (matches the old tree-header gating); studio dists clone via
-    // the GitHub account panel / device-flow sign-in surface. The layered
-    // layout opens repositories from its repository rail instead.
-    const cloneTrigger = isCloud && !isLayeredLayout ? handleCloneRepo : undefined;
+    // "Add repo" trigger for the workspace row. Clone is a hosted capability
+    // (the host holds one repository per page); local builds manage files on
+    // disk. Studio dists clone via the GitHub account panel / device-flow
+    // sign-in surface; the layered layout opens repositories from its
+    // repository rail instead.
+    const cloneTrigger = !localTerminal && !isLayeredLayout ? handleCloneRepo : undefined;
 
     return (
       <>

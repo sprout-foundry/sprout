@@ -55,7 +55,7 @@ checkboxes.
       `useHost().capabilities` (or a non-React accessor for services). No
       behavior change in either build. Vitest for the touched components.
       Spec: SP-160 §160b.
-- [ ] **host.4** Convert `isCloud`/`appMode` branches in the workspace UI
+- [x] **host.4** Convert `isCloud`/`appMode` branches in the workspace UI
       (sidebar sections, `SettingsPanel.tsx`, `StatusBar.tsx`,
       `WorkspaceBar.tsx`, `Terminal.tsx`, security and escalation hooks) to
       capabilities. List the full set first with

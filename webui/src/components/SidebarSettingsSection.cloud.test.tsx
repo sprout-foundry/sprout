@@ -2,8 +2,15 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { HostProvider } from '../host/HostProvider';
+import { makeTestHost } from '../host/testHost';
 
-vi.mock('../config/mode', () => ({ isCloud: true }));
+// The section's platform-managed-model flag is a module-scope const that reads
+// the live `supportsLocalTerminal` binding at import time; a hosted shell has
+// no local terminal, so pin it to false here (the HostProvider below drives
+// the per-render branches). `isCloud` is still read by the un-converted
+// transitive gitCorsProxy (GitHub section), so keep it true.
+vi.mock('../config/mode', () => ({ isCloud: true, supportsLocalTerminal: false }));
 vi.mock('./CredentialsSettingsTab', () => ({ default: () => <div data-testid="credentials-tab" /> }));
 vi.mock('./GitHubAccountPanel', () => ({ default: () => null }));
 vi.mock('./SettingsPanel', () => ({ default: () => null }));
@@ -39,30 +46,32 @@ describe('SidebarSettingsSection on a platform-hosted browser workspace', () => 
   it('offers the account-level model choice instead of the local provider pickers', async () => {
     await act(async () => {
       root.render(
-        <SidebarSettingsSection
-          themePack={{ id: 'default' }}
-          availableThemePacks={[{ id: 'default', name: 'Default' }]}
-          setThemePack={noop}
-          importTheme={() => ({ success: true })}
-          removeTheme={noop}
-          uiScale="default"
-          setUIScale={noop}
-          applyPreset={async () => undefined}
-          autoSaveEnabled={false}
-          whitespaceRenderingMode="none"
-          formatOnSaveEnabled={false}
-          setAutoSaveEnabled={noop}
-          setWhitespaceRenderingMode={noop}
-          setFormatOnSaveEnabled={noop}
-          selectedProvider=""
-          selectedModel=""
-          providers={[]}
-          availableModels={[]}
-          isLoadingProviders={false}
-          isConnected
-          onProviderChange={noop}
-          onModelChange={noop}
-        />,
+        <HostProvider host={makeTestHost({ localTerminal: false })}>
+          <SidebarSettingsSection
+            themePack={{ id: 'default' }}
+            availableThemePacks={[{ id: 'default', name: 'Default' }]}
+            setThemePack={noop}
+            importTheme={() => ({ success: true })}
+            removeTheme={noop}
+            uiScale="default"
+            setUIScale={noop}
+            applyPreset={async () => undefined}
+            autoSaveEnabled={false}
+            whitespaceRenderingMode="none"
+            formatOnSaveEnabled={false}
+            setAutoSaveEnabled={noop}
+            setWhitespaceRenderingMode={noop}
+            setFormatOnSaveEnabled={noop}
+            selectedProvider=""
+            selectedModel=""
+            providers={[]}
+            availableModels={[]}
+            isLoadingProviders={false}
+            isConnected
+            onProviderChange={noop}
+            onModelChange={noop}
+          />
+        </HostProvider>,
       );
     });
     expect(container.querySelector('[data-testid="editor-model-section"]')).not.toBeNull();

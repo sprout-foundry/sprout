@@ -27,7 +27,7 @@ import type {
   SettingsPanelProps,
 } from './settings/types';
 import { SECTION_GROUPS, getSectionForSubsection, scopeToLayer } from './settings/types';
-import { isCloud } from '../config/mode';
+import { useHostCapabilities } from '../host';
 import { useSettingsFieldRenderers } from './settings/useSettingsFieldRenderers';
 import { useSettingsMutation } from './settings/useSettingsMutation';
 import { useSettingsState } from './settings/useSettingsState';
@@ -45,6 +45,7 @@ function SettingsPanel({
   agentConfig,
 }: SettingsPanelProps): JSX.Element {
   // Track settings ref for async mutation callbacks
+  const { localTerminal } = useHostCapabilities();
   const settingsRef = useRef<SproutSettings | null>(settings);
   useEffect(() => {
     settingsRef.current = settings;
@@ -148,7 +149,7 @@ function SettingsPanel({
     ]);
 
     let groups = SECTION_GROUPS;
-    if (isCloud) {
+    if (!localTerminal) {
       groups = SECTION_GROUPS.map((section) => ({
         ...section,
         subsections: section.subsections.filter((sub) => !cloudHiddenSubsections.has(sub.id)),
@@ -172,7 +173,7 @@ function SettingsPanel({
         return null;
       })
       .filter((s): s is (typeof SECTION_GROUPS)[number] => s !== null);
-  }, [normalizedQuery]);
+  }, [normalizedQuery, localTerminal]);
 
   // Auto-expand any section that has matches while filtering.
   useEffect(() => {

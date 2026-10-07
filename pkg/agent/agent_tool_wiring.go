@@ -50,6 +50,7 @@ func wireAgentToolFuncs(agent *Agent, isProduction bool) {
 	tools.RecoverFileFunc = set.RecoverFile
 	tools.RevertMyChangesFunc = set.RevertMyChanges
 	tools.MCPRefreshFunc = set.MCPRefresh
+	tools.GenerateCommitMessageFunc = set.GenerateCommitMessage
 }
 
 // buildAgentToolFuncs returns the per-agent dispatch set for agent's
@@ -93,6 +94,12 @@ func buildAgentToolFuncs(agent *Agent) *tools.ToolFuncSet {
 		MCPRefresh: func(ctx context.Context, args map[string]any) (string, error) {
 			return handleMCPRefresh(ctx, agent, args)
 		},
+		// GenerateCommitMessage reuses the sprout commit generator so the
+		// commit tool's auto-message path and the CLI flow share one
+		// prompt + LLM call (see tool_handlers_commit_message.go).
+		GenerateCommitMessage: func(diff []byte, notes string) (string, error) {
+			return handleGenerateCommitMessage(agent, diff, notes)
+		},
 		// ChangeTracker hooks: keep session file-mutation tracking working
 		// now that write/edit execution lives in pkg/agent_tools. Without
 		// these the Agent Changes panel and revert tooling see nothing.
@@ -103,5 +110,16 @@ func buildAgentToolFuncs(agent *Agent) *tools.ToolFuncSet {
 			return agent.TrackShellCommand(command)
 		},
 		PrepareShellCommand: agent.PrepareShellCommand,
+		// The starter-manifest write guard: the live
+		// write/edit handlers (pkg/agent_tools) invoke this closure so the
+		// agent's per-agent guard is applied to the model's file mutations.
+		GuardStarterManifestWrite: agent.refuseStarterManifestWrite,
+		// Deploy verification gate: the deploy tool reads the
+		// agent's latest verification result so a deploy is refused unless
+		// verification passed. haveResult is false when the hook produced no
+		// result for the current work (verification disabled, no code change,
+		// or not yet run), which the tool treats as fail-closed when
+		// verification is enabled.
+		DeployVerification: agent.lastVerificationOutcome,
 	}
 }

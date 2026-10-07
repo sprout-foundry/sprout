@@ -1,6 +1,6 @@
 # SP-155 — Live Preview and UI Extension Points
 
-> **Status (2026-10-03):** Proposed.
+> **Status (2026-10-07):** Partially shipped — preview pane, hosted preview embedding and the public mode registry ship; the visual-regression check for the default UI remains.
 > Depends on SP-153 (dev command and port). Related: SP-147 (modes),
 > SP-143 (screen kit preview).
 

@@ -98,6 +98,14 @@ var allowedOutboundMessageTypes = map[string]struct{}{
 	events.EventTypeSessionChanged:                 {}, // SP-034-3e
 	events.EventTypeCompactStarted:                 {},
 	events.EventTypeCompactCompleted:               {},
+	events.EventTypeLanguageGuardReplacement:       {},
+	// Progress events: structured run-progress
+	// signals. They are registered for the WS stream;
+	// runtime emission lands in the event producers.
+	events.EventTypeProgressMilestone:    {},
+	events.EventTypeProgressQuestion:     {},
+	events.EventTypeProgressVerification: {},
+	events.EventTypeProgressComplete:     {},
 
 	// Cold hydration (SP-046) — server streams workspace files on first-load
 	AllowedMessageTypeHydrateManifest: {},

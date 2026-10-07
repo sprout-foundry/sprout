@@ -254,6 +254,52 @@ function FileExplorer() {
 }
 ```
 
+### PreviewPane
+
+Embed a running app in a preview pane (SP-155). The pane is purely
+presentational: the parent supplies the lifecycle `status`, the embed `url`,
+and the restart/close callbacks, so it works with any dev-server lifecycle
+behind it (a local dev server, a hosted preview port, a stub):
+
+```tsx
+import { PreviewPane } from '@sprout/ui';
+
+function Preview() {
+  const [status, setStatus] = useState<'starting' | 'running' | 'stopped' | 'failed'>('stopped');
+  const [url, setUrl] = useState<string>();
+
+  return (
+    <PreviewPane
+      status={status}
+      url={url}
+      onRestart={() => {
+        // Start or restart your dev server, then set status/url.
+        setStatus('starting');
+      }}
+      reloadKey={0}
+      title="My App"
+    />
+  );
+}
+```
+
+The iframe re-mounts (reloading the app) whenever `reloadKey` changes, and
+passing `onClose` adds a close affordance in the header. For a complete
+wired-up panel — lifecycle polling, file-change reloads, restart routing —
+see the application-level views entry point below.
+
+### Application-Level Views (SP-155)
+
+The composite views a host composes — `ChatView` (chat), `AgentChangesPanel`
+(changes), `PreviewPanel` (preview) — and the files views `FileTree`/`Editor`
+are exposed through a documented entry point at `webui/src/views` (source:
+the Sprout webui app). `PreviewPane` above, `FileTree`, and `Editor` are
+fully standalone `@sprout/ui` exports; `ChatView`, `AgentChangesPanel`, and
+`PreviewPanel` are application-level composites that require the Sprout
+webui context stack (adapter provider, event bridge, notifications) and, for
+`PreviewPanel`, the `/api/preview/*` backend endpoints. See `webui/src/views/index.ts`
+for the per-view contract documentation.
+
 ### Notifications
 
 Show toast notifications using `NotificationProvider` and `NotificationStack`:
@@ -415,7 +461,7 @@ function GitView() {
 
 | Category | Components |
 |----------|------------|
-| **Panels** | `ChatPanel`, `Terminal`, `TerminalPane`, `TerminalTabBar` |
+| **Panels** | `ChatPanel`, `Terminal`, `TerminalPane`, `TerminalTabBar`, `PreviewPane` |
 | **Editors** | `Editor` |
 | **Trees** | `FileTree` |
 | **Navigation** | `Sidebar`, `MenuBar`, `StatusBar`, `CommandPalette` |
@@ -465,6 +511,7 @@ function GitView() {
 | Type | Description |
 |------|-------------|
 | `ChatProps`, `Message`, `ToolExecution`, `SubagentRun`, `SubagentActivity`, `LogEntry`, `TodoItem`, `TodoStatus`, `FileEdit`, `LiveLogLine` | Chat system |
+| `PreviewPaneProps`, `PreviewPaneStatus` | Preview pane |
 | `TextSegment`, `ToolCallSegment`, `TodoUpdateSegment`, `ProgressSegment`, `ResultSegment`, `MessageSegment` | Message segment types |
 | `EditorProps`, `EditorState`, `EditorBuffer`, `EditorPane`, `PaneLayout`, `PaneSize` | Editor |
 | `FileTreeProps`, `FileInfo` | File tree |

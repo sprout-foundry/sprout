@@ -7,6 +7,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/factory"
 )
 
@@ -36,22 +37,7 @@ func generateCommitReview(ctx context.Context, chatAgent *agent.Agent) (string, 
 	// Use LLM if available to generate review
 	var client api.ClientInterface
 	if chatAgent != nil {
-		configManager := chatAgent.GetConfigManager()
-		if configManager != nil {
-			if cfg := configManager.GetConfig(); cfg != nil && strings.TrimSpace(cfg.GetReviewProvider()) != "" {
-				if cl, ce := factory.CreateProviderClient(api.ClientType(cfg.GetReviewProvider()), cfg.GetReviewModel()); ce == nil {
-					client = cl
-				}
-			}
-			if client == nil {
-				if ct, e := configManager.GetProvider(); e == nil {
-					model := configManager.GetModelForProvider(ct)
-					if cl, ce := factory.CreateProviderClient(ct, model); ce == nil {
-						client = cl
-					}
-				}
-			}
-		}
+		client = reviewFlowClient(chatAgent.GetConfigManager())
 	}
 
 	// If no client available, do simple heuristic review
@@ -106,6 +92,34 @@ IMPORTANT RULES:
 
 	review := strings.TrimSpace(resp.Choices[0].Message.Content)
 	return review, nil
+}
+
+// reviewFlowClient resolves the LLM client the commit-review flow uses: when
+// the reviewer role is an explicit user selection (HasExplicitRole — a
+// roles.reviewer entry or the legacy review settings), the role-resolved
+// provider/model; otherwise the conversation's provider
+// (configManager.GetProvider). The gate is on HasExplicitRole, not on the
+// resolver's output: ResolveRole always fills an empty provider from the
+// last-used fallback, so a `!= ""` check on it fires in every live session
+// even when the user never configured a reviewer.
+func reviewFlowClient(configManager *configuration.Manager) api.ClientInterface {
+	if configManager == nil {
+		return nil
+	}
+	if cfg := configManager.GetConfig(); cfg != nil && cfg.HasExplicitRole(configuration.RoleReviewer) {
+		if reviewProvider, reviewModel := cfg.ResolveRole(configuration.RoleReviewer); strings.TrimSpace(reviewProvider) != "" {
+			if cl, ce := factory.CreateProviderClient(api.ClientType(reviewProvider), reviewModel); ce == nil {
+				return cl
+			}
+		}
+	}
+	if ct, e := configManager.GetProvider(); e == nil {
+		model := configManager.GetModelForProvider(ct)
+		if cl, ce := factory.CreateProviderClient(ct, model); ce == nil {
+			return cl
+		}
+	}
+	return nil
 }
 
 // doHeuristicReview performs a simple heuristic review when LLM is unavailable

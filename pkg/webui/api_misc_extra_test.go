@@ -3,6 +3,7 @@
 package webui
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,19 +12,39 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// handleAPIConfig
+// GET /api/config (Huma operation)
+//
+// /api/config is registered as a Huma operation, so these tests drive it
+// end-to-end through the real router (setupRoutes → mux → Huma handler) rather
+// than calling a plain handler directly.
 // ---------------------------------------------------------------------------
 
-func TestHandleAPIConfig_MethodNotAllowed(t *testing.T) {
+// configTestMux builds the live route table for a test server and serves req
+// through it, returning the recorder. It exercises the real Huma registration
+// (the same registerHumaOperations call the daemon uses), so a regression that
+// drops the registration fails the request.
+func configTestMux(t *testing.T, ws *ReactWebServer, req *http.Request) *httptest.ResponseRecorder {
+	t.Helper()
+	mux := ws.setupRoutes(context.Background())
+	if mux == nil {
+		t.Fatal("setupRoutes returned nil")
+	}
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestHandleAPIConfig_WrongMethod_ReturnsNotFound(t *testing.T) {
 	ws, _ := newTestWebServer(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/config", nil)
 	req.Header.Set(webClientIDHeader, "test-client")
-	rec := httptest.NewRecorder()
-	ws.handleAPIConfig(rec, req)
+	rec := configTestMux(t, ws, req)
 
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("expected 405, got %d: %s", rec.Code, rec.Body.String())
+	// A wrong-method request does not reach the Huma handler; the SPA
+	// catch-all returns the app's standard unknown-API 404.
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -32,8 +53,7 @@ func TestHandleAPIConfig_Success(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/config", nil)
 	req.Header.Set(webClientIDHeader, "test-client")
-	rec := httptest.NewRecorder()
-	ws.handleAPIConfig(rec, req)
+	rec := configTestMux(t, ws, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())

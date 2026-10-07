@@ -1,6 +1,6 @@
 # SP-151 — Progress Events
 
-> **Status (2026-10-03):** Proposed.
+> **Status (2026-10-07):** Shipped.
 > Depends on SP-148 (plan scope IDs) and SP-149 (verification results).
 > Summaries use the `summarizer` role from SP-150 when configured.
 

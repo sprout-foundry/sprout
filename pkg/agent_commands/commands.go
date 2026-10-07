@@ -141,6 +141,10 @@ func NewCommandRegistry() *CommandRegistry {
 	// Register transcript / diagnostics command
 	registry.Register(&TranscriptCommand{})
 
+	// Register the language guard's "view original" command
+	registry.Register(&OriginalCommand{})
+	registry.RegisterAlias("orig", "original")
+
 	// Register search command
 	registry.Register(&SearchCommand{})
 

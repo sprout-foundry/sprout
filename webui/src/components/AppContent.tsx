@@ -1150,6 +1150,15 @@ const AppContent: React.FC<AppContentProps> = ({
       gitStatus,
       workspaceRoot,
     },
+    // Ship payload. The deploy data source is the backend deploy API via the
+    // app's services; until it is wired, Ship renders its not-yet-deployed
+    // state. The shape is final, so wiring the source is a supply-side change
+    // only — the shell and surface read this prop and nothing else.
+    ship: {
+      live: {},
+      availability: { canDeploy: false, blockedReason: 'Deploy target not configured' },
+      history: [],
+    },
   };
   // Capital alias so the registry-supplied component renders as a component.
   const ModeShell = workspaceMode.Shell;

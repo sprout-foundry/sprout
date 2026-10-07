@@ -20,24 +20,19 @@ func (ws *ReactWebServer) setupRoutes(ctx context.Context) *http.ServeMux {
 
 	ws.registerCoreRoutes(mux)
 	ws.registerTerminalRoutes(mux, ctx)
-	ws.registerQueryRoutes(mux)
-	ws.registerCommandRoutes(mux)
-	ws.registerDiagnosticsRoutes(mux)
-	ws.registerFileRoutes(mux)
-	ws.registerDesignRoutes(mux)
-	ws.registerSettingsRoutes(mux)
-	ws.registerWorkspaceRoutes(mux)
-	ws.registerSyncRoutes(mux)
-	ws.registerGitRoutes(mux)
-	ws.registerSessionRoutes(mux)
-	ws.registerSearchRoutes(mux)
+	ws.registerPreviewRoutes(mux)
 	ws.registerChangesRoutes(mux)
 	ws.registerAutomateRoutes(mux)
-	ws.registerCompletionRoutes(mux)
+	ws.registerHumaRoutes(mux)
 
 	return mux
 }
 
+// The Huma operations (every huma.Register call) live in huma_routes.go,
+// which registerHumaRoutes (huma_api.go) mounts on the same ServeMux. Each
+// operation is registered once by the humago adapter as a method+path pattern,
+// so the plain mux registrations for those routes were removed. The contract
+// test's AST walk reads the Huma paths from huma_routes.go.
 func (ws *ReactWebServer) registerCoreRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/ws", ws.handleWebSocket)
 	mux.HandleFunc("/terminal", ws.handleTerminalWebSocket)
@@ -88,215 +83,15 @@ func (ws *ReactWebServer) registerCoreRoutes(mux *http.ServeMux) {
 	})
 }
 
-func (ws *ReactWebServer) registerQueryRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/query", ws.handleAPIQuery)
-	mux.HandleFunc("/api/query/steer", ws.handleAPIQuerySteer)
-	mux.HandleFunc("/api/query/steer/retract", ws.handleAPIQuerySteerRetract)
-	mux.HandleFunc("/api/query/stop", ws.handleAPIQueryStop)
-	mux.HandleFunc("/api/query/status", ws.handleAPIQueryStatus)
-	// SP-071-3: rewind the conversation to a prior turn.
-	mux.HandleFunc("/api/query/rewind", ws.handleAPIQueryRewind)
-	// SP-072-4: per-hunk edit approval endpoints.
-	mux.HandleFunc("/api/edits/", ws.handleAPIEdits)
-	// SP-093-3: per-part shell approval decision endpoint.
-	mux.HandleFunc("/api/shell-approvals/", ws.handleAPIShellApprovals)
-	// SP-089-3: password prompt endpoints.
-	mux.HandleFunc("/api/password/", ws.handleAPIPasswordRoutes)
-	// SP-059: per-subagent cancel; path is /api/subagent/{id}/cancel.
-	mux.HandleFunc("/api/subagent/", ws.handleAPISubagentCancel)
-	// Foundry proxy endpoints — accept the translated chat format from CloudAdapter
-	mux.HandleFunc("/api/proxy/chat", ws.handleAPIProxyChat)
-	mux.HandleFunc("/api/proxy/chat/stop", ws.handleAPIProxyChatStop)
-	mux.HandleFunc("/api/proxy/chat/status", ws.handleAPIProxyChatStatus)
-	mux.HandleFunc("/api/proxy/stats", ws.handleAPIProxyStats)
-}
-
-// registerCommandRoutes mounts SP-114 Phase 2 endpoints. /api/command/execute
-// is the dedicated command surface (separate from /api/query/steer which is
-// for mid-turn steering of an active LLM query). Commands here must be
-// SteerCapable — destructive commands stay CLI-only. /api/command/complete
-// is the command-bar argument/name completion endpoint (mirrors the
-// terminal's cmd/slash_completer.go over HTTP).
-func (ws *ReactWebServer) registerCommandRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/command/execute", ws.handleAPICommandExecute)
-	mux.HandleFunc("/api/command/complete", ws.handleAPICommandComplete)
-}
-
-func (ws *ReactWebServer) registerDiagnosticsRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/stats", ws.handleAPIStats)
-	mux.HandleFunc("/api/providers", ws.handleAPIProviders)
-	mux.HandleFunc("/api/providers/models", ws.handleGetModels)
-	mux.HandleFunc("/api/diagnostics", ws.handleAPIDiagnostics)
-	mux.HandleFunc("/api/semantic", ws.handleAPISemantic)
-	mux.HandleFunc("/api/support-bundle", ws.handleAPISupportBundle)
-	mux.HandleFunc("/api/ws-metrics", ws.handleAPIWSMetrics)
-}
-
-func (ws *ReactWebServer) registerFileRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/files", ws.handleAPIFiles)
-	mux.HandleFunc("/api/files/prettier-config", ws.handleAPIGetPrettierConfig)
-	mux.HandleFunc("/api/create", ws.handleAPICreateFile)
-	mux.HandleFunc("/api/delete", ws.handleAPIDeleteItem)
-	mux.HandleFunc("/api/rename", ws.handleAPIRenameItem)
-	mux.HandleFunc("/api/open-in-file-browser", ws.handleAPIOpenInFileBrowser)
-	mux.HandleFunc("/api/browse", ws.handleAPIBrowse)
-	mux.HandleFunc("/api/file", ws.handleAPIFile)
-	mux.HandleFunc("/api/file/consent", ws.handleAPIFileConsent)
-	mux.HandleFunc("/api/file/check-modified", ws.handleAPIFileCheckModified)
-}
-
-// registerDesignRoutes mounts SP-140-6 §6b's read-only design endpoint.
-// GET /api/design/status aggregates the tree's validation/drift/feedback
-// signals for the webui health strip (§6c) — the same pkg/design scanners
-// the agent tools read, so both surfaces share one truth.
-func (ws *ReactWebServer) registerDesignRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/design/status", ws.handleAPIDesignStatus)
-}
-
-func (ws *ReactWebServer) registerSettingsRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/onboarding/status", ws.handleAPIOnboardingStatus)
-	mux.HandleFunc("/api/onboarding/complete", ws.handleAPIOnboardingComplete)
-	mux.HandleFunc("/api/onboarding/skip", ws.handleAPIOnboardingSkip)
-	mux.HandleFunc("/api/config", ws.handleAPIConfig)
-	mux.HandleFunc("/api/settings", ws.handleAPISettings)
-	mux.HandleFunc("/api/settings/mcp", ws.handleAPISettingsMCP)
-	mux.HandleFunc("/api/settings/mcp/servers/", ws.handleAPISettingsMCPServers)
-	mux.HandleFunc("/api/settings/providers", ws.handleAPISettingsProviders)
-	mux.HandleFunc("/api/settings/providers/", ws.handleAPISettingsProviders)
-	mux.HandleFunc("/api/settings/credentials", ws.handleAPISettingsCredentials)
-	mux.HandleFunc("/api/settings/credentials/", ws.handleAPISettingsCredentials)
-	mux.HandleFunc("/api/settings/skills", ws.handleAPISettingsSkills)
-	mux.HandleFunc("/api/skills", ws.handleAPIListSkills)
-	mux.HandleFunc("/api/skills/", ws.handleAPISkillsRoutes)
-	mux.HandleFunc("/api/settings/subagent-types", ws.handleAPISettingsSubagentTypes)
-	mux.HandleFunc("/api/settings/subagent-types/", ws.handleAPISettingsSubagentTypes)
-	mux.HandleFunc("/api/hotkeys", ws.handleAPIHotkeys)
-	mux.HandleFunc("/api/hotkeys/validate", ws.handleAPIHotkeysValidate)
-	mux.HandleFunc("/api/hotkeys/preset", ws.handleAPIHotkeysPreset)
-	mux.HandleFunc("/api/computer-use/test", ws.handleAPIComputerUseTest)
-	mux.HandleFunc("/api/local-llm/status", ws.handleLocalLLMStatus)
-	mux.HandleFunc("/api/local-llm/start", ws.handleLocalLLMStart)
-	mux.HandleFunc("/api/local-llm/models", ws.handleLocalLLMModels)
-	mux.HandleFunc("/api/local-llm/download", ws.handleLocalLLMDownload)
-	mux.HandleFunc("/api/local-llm/download/cancel", ws.handleLocalLLMDownloadCancel)
-}
-
-func (ws *ReactWebServer) registerWorkspaceRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/workspace", ws.handleAPIWorkspace)
-	mux.HandleFunc("/api/workspace/browse", ws.handleAPIWorkspaceBrowse)
-	mux.HandleFunc("/api/workspace/symbols", ws.handleAPIWorkspaceSymbols)
-	mux.HandleFunc("/api/workspace/projects", ws.handleAPIWorkspaceProjects)
-	// SP-046: workspace sync handlers
-	mux.HandleFunc("/api/workspace/sync", ws.handleAPIWorkspaceSync)
-	mux.HandleFunc("/api/workspace/takeover", ws.handleAPIWorkspaceTakeover)
-	mux.HandleFunc("/api/instances", ws.handleAPIInstances)
-	mux.HandleFunc("/api/instances/select", ws.handleAPIInstanceSelect)
-	mux.HandleFunc("/api/instances/ssh-hosts", ws.handleAPISSHHosts)
-	mux.HandleFunc("/api/instances/ssh-open", ws.handleAPISSHOpen)
-	mux.HandleFunc("/api/instances/ssh-launch-status", ws.handleAPISSHLaunchStatus)
-	mux.HandleFunc("/api/instances/ssh-browse", ws.handleAPISSHBrowse)
-	mux.HandleFunc("/api/instances/ssh-sessions", ws.handleAPISSHSessions)
-	mux.HandleFunc("/api/instances/ssh-close", ws.handleAPISSHSessionDelete)
-}
-
-func (ws *ReactWebServer) registerSyncRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/sync/op", ws.handleAPISyncOp)
-	mux.HandleFunc("/api/sync/batch", ws.handleAPISyncBatch)
-	mux.HandleFunc("/api/sync/status", ws.handleAPISyncStatus)
-}
-
-func (ws *ReactWebServer) registerGitRoutes(mux *http.ServeMux) {
-	// ETH-2 transactional escalation: the container-side execution surface
-	// the platform drives a push/run/pull transaction against. Exact-match
-	// patterns. Method semantics are load-bearing: GET/HEAD on /api/txn/status
-	// is read-only (unauthenticated through the auth middleware); the three
-	// POSTs mutate or execute and sit behind the Bearer boundary — see
-	// api_txn.go.
-	mux.HandleFunc("/api/txn/push", ws.handleAPITxnPush)
-	mux.HandleFunc("/api/txn/run", ws.handleAPITxnRun)
-	mux.HandleFunc("/api/txn/status", ws.handleAPITxnStatus)
-	mux.HandleFunc("/api/txn/pull", ws.handleAPITxnPull)
-
-	// ETH-1 sync-on-resume: workspace git reconciliation report (same JSON
-	// as `sprout sync`). Exact-match pattern — it does not collide with the
-	// /api/sync/op|batch|status agent file-sync routes registered in
-	// registerSyncRoutes. Method semantics are load-bearing: GET/HEAD is
-	// status-only (unauthenticated through the auth middleware), POST is
-	// the only method that may pull — see handleAPISync.
-	mux.HandleFunc("/api/sync", ws.handleAPISync)
-	mux.HandleFunc("/api/git/status", ws.handleAPIGitStatus)
-	mux.HandleFunc("/api/git/stage", ws.handleAPIGitStage)
-	mux.HandleFunc("/api/git/unstage", ws.handleAPIGitUnstage)
-	mux.HandleFunc("/api/git/discard", ws.handleAPIGitDiscard)
-	mux.HandleFunc("/api/git/commit", ws.handleAPIGitCommit)
-	mux.HandleFunc("/api/git/commit-message", ws.handleAPIGitCommitMessage)
-	mux.HandleFunc("/api/git/confirm", ws.handleAPIConfirm)
-	mux.HandleFunc("/api/git/deep-review", ws.handleAPIGitDeepReview)
-	mux.HandleFunc("/api/git/deep-review/fix", ws.handleAPIGitDeepReviewFix)
-	mux.HandleFunc("/api/git/deep-review/fix/start", ws.handleAPIGitDeepReviewFixStart)
-	mux.HandleFunc("/api/git/deep-review/fix/status", ws.handleAPIGitDeepReviewFixStatus)
-	mux.HandleFunc("/api/git/stage-all", ws.handleAPIGitStageAll)
-	mux.HandleFunc("/api/git/unstage-all", ws.handleAPIGitUnstageAll)
-	mux.HandleFunc("/api/git/diff", ws.handleAPIGitDiff)
-	mux.HandleFunc("/api/git/branches", ws.handleAPIGitBranches)
-	mux.HandleFunc("/api/git/worktrees", ws.handleAPIGitWorktrees)
-	mux.HandleFunc("/api/git/worktree/create", ws.handleAPIGitWorktreeCreate)
-	mux.HandleFunc("/api/git/worktree/remove", ws.handleAPIGitWorktreeRemove)
-	mux.HandleFunc("/api/git/worktree/checkout", ws.handleAPIGitWorktreeCheckout)
-	mux.HandleFunc("/api/git/checkout", ws.handleAPIGitCheckout)
-	mux.HandleFunc("/api/git/revert", ws.handleAPIGitRevert)
-	mux.HandleFunc("/api/git/pull-request", ws.handleAPIGitPullRequest)
-	mux.HandleFunc("/api/git/branch/create", ws.handleAPIGitCreateBranch)
-	mux.HandleFunc("/api/git/pull", ws.handleAPIGitPull)
-	mux.HandleFunc("/api/git/push", ws.handleAPIGitPush)
-	mux.HandleFunc("/api/git/log", ws.handleAPIGitLog)
-	mux.HandleFunc("/api/git/commit/show", ws.handleAPIGitCommitShow)
-	mux.HandleFunc("/api/git/commit/show/file", ws.handleAPIGitCommitFileDiff)
-}
-
+// registerTerminalRoutes keeps the LSP manager initialization and the /api/lsp/ws
+// WebSocket bridge (a non-JSON route that stays a plain handler). The
+// /api/terminal/* routes and /api/lsp/status are Huma operations (see
+// registerTerminalHumaOperations in huma_terminal.go and
+// registerFilesHumaOperations in huma_files.go); their plain registrations were
+// removed so each method+path pattern is registered once.
 func (ws *ReactWebServer) registerTerminalRoutes(mux *http.ServeMux, ctx context.Context) {
 	ws.lspManager = lspproxy.NewManager(ctx)
+	// /api/lsp/ws is a WebSocket bridge, not a JSON operation, so it stays a
+	// plain handler.
 	mux.HandleFunc("/api/lsp/ws", lspproxy.BridgeHandler(ws.lspManager, ws.upgrader, ws.workspaceRoot))
-	mux.HandleFunc("/api/lsp/status", ws.handleLSPStatus)
-	mux.HandleFunc("/api/terminal/history", ws.handleTerminalHistory)
-	mux.HandleFunc("/api/terminal/sessions", ws.handleAPITerminalSessions)
-	mux.HandleFunc("/api/terminal/shells", ws.handleAPITerminalShells)
-	mux.HandleFunc("/api/terminal/agent-sessions", ws.handleAPIAgentSessions)
-	mux.HandleFunc("/api/terminal/agent-sessions/", ws.handleAPIAgentSessionActions)
-}
-
-func (ws *ReactWebServer) registerSessionRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/sessions", ws.handleAPISessions)
-	mux.HandleFunc("/api/sessions/restore", ws.handleAPIRestoreSession)
-	mux.HandleFunc("/api/sessions/search", ws.handleAPISessionsSearch)
-	mux.HandleFunc("/api/sessions/{id}/export", ws.handleAPISessionExport)
-	// Revision history + rollback now flow through /api/changes/* (the
-	// ChangeTracker session buffer) and the LLM rollback_changes tool.
-	// The old /api/history/* endpoints were removed with RevisionListPanel.
-	mux.HandleFunc("/api/chat-sessions", ws.handleAPIChatSessions)
-	mux.HandleFunc("/api/chat-sessions/create", ws.handleAPIChatSessionsCreate)
-	mux.HandleFunc("/api/chat-sessions/create-in-worktree", ws.handleAPIChatSessionCreateInWorktree)
-	mux.HandleFunc("/api/chat-sessions/delete", ws.handleAPIChatSessionsDelete)
-	mux.HandleFunc("/api/chat-sessions/delete-all", ws.handleAPIChatSessionsDeleteAll)
-	mux.HandleFunc("/api/chat-sessions/rename", ws.handleAPIChatSessionsRename)
-	mux.HandleFunc("/api/chat-sessions/pin", ws.handleAPIChatSessionsPin)
-	mux.HandleFunc("/api/chat-sessions/unpin", ws.handleAPIChatSessionsUnpin)
-	mux.HandleFunc("/api/chat-sessions/switch", ws.handleAPIChatSessionsSwitch)
-	mux.HandleFunc("/api/chat-sessions/messages", ws.handleAPIChatSessionMessages)
-	mux.HandleFunc("/api/chat-sessions/compact", ws.handleAPIChatSessionsCompact)
-	mux.HandleFunc("/api/chat-sessions/history", ws.handleAPIChatSessionClearHistory)
-	mux.HandleFunc("/api/chat-sessions/fork", ws.handleAPIChatSessionFork)
-	mux.HandleFunc("/api/chat-sessions/breakpoints", ws.handleAPIChatSessionBreakpoints)
-	mux.HandleFunc("/api/chat-sessions/worktree-mappings", ws.handleAPIChatSessionWorktreeList)
-	mux.HandleFunc("/api/chat-session/", ws.handleAPIChatSessionWorktree)
-}
-
-func (ws *ReactWebServer) registerSearchRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/search", ws.handleAPIQuerySearch)
-	mux.HandleFunc("/api/search/replace", ws.handleAPIQuerySearchReplace)
-	mux.HandleFunc("/api/upload/image", ws.handleUploadImage)
-}
-
-func (ws *ReactWebServer) registerCompletionRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/completion", ws.handleAPICompletion)
 }

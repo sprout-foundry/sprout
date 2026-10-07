@@ -36,7 +36,7 @@ func TestTokenTrackingAccuracy(t *testing.T) {
 	}
 
 	// TrackMetricsFromResponse should work correctly
-	agent.TrackMetricsFromResponse(1000, 200, 1200, 0.01, 500, 0, 0)
+	agent.TrackMetricsFromResponse(1000, 200, 1200, 0.01, 500, 0, 0, 0)
 	if agent.state.GetTotalTokens() != 88400 { // 87200 + 1200
 		t.Errorf("Expected totalTokens to be 88400, got %d", agent.state.GetTotalTokens())
 	}
@@ -258,5 +258,32 @@ func TestPrintConversationSummaryShowsEstimatedTokenNote(t *testing.T) {
 	}
 	if !strings.Contains(output, "Processed (estimated):") {
 		t.Fatalf("expected estimated marker on processed line, got: %s", output)
+	}
+}
+
+// TestPrintConversationSummaryShowsUnknownCacheSavings pins that when cache
+// savings are undeterminable the summary renders "unknown" rather than a
+// misleading $0.000000.
+func TestPrintConversationSummaryShowsUnknownCacheSavings(t *testing.T) {
+	agent := &Agent{
+		state: NewAgentStateManager(false),
+	}
+	agent.state.SetMessages([]api.Message{{Role: "user", Content: "hello"}})
+	agent.state.SetTotalTokens(1000)
+	agent.state.SetPromptTokens(800)
+	agent.state.SetCompletionTokens(200)
+	agent.state.SetCachedTokens(600)
+	agent.state.SetCachedCostSavings(0)
+	agent.state.SetCacheSavingsUnknown(true)
+
+	output := testutil.CaptureStdout(t, func() {
+		agent.PrintConversationSummary(true)
+	})
+
+	if !strings.Contains(output, "Cost savings:       unknown") {
+		t.Fatalf("expected unknown savings label, got: %s", output)
+	}
+	if strings.Contains(output, "Cost savings:       $0.000000") {
+		t.Fatalf("expected no misleading $0.000000 savings, got: %s", output)
 	}
 }

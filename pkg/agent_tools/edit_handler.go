@@ -85,6 +85,14 @@ func (h *editFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 		return ToolResult{Output: err.Error(), IsError: true}, err
 	}
 
+	// While verification is enabled, refuse a mid-turn edit to
+	// the starter manifest (the trusted source for the verification
+	// commands). Applied before any routing, read, or write; a no-op when
+	// verification is disabled or the path is not the manifest.
+	if guardErr := guardStarterManifestWrite(env, path); guardErr != nil {
+		return ToolResult{Output: guardErr.Error(), IsError: true}, guardErr
+	}
+
 	oldStr, err := extractString(args, "old_str")
 	if err != nil {
 		return ToolResult{Output: err.Error(), IsError: true}, err

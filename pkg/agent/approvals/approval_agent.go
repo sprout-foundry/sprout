@@ -27,6 +27,9 @@ type ApprovalAgent interface {
 	GetUnsafeShellMode() bool
 	IsSessionElevated() bool
 	IsSubagent() bool
+	// IsWorkflowRun reports a workflow/automate run, which is non-interactive
+	// for approval purposes even when launched from a terminal.
+	IsWorkflowRun() bool
 
 	// Interactive-approval surfaces.
 	HasActiveWebUIClients() bool

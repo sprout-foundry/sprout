@@ -157,6 +157,12 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 		// publishClientEventWithChat) are captured for WebSocket reattach replay.
 		ws.startRunBufferSubscriber()
 
+		// Record hosted-preview registrations:
+		// the agent's register_preview_port tool publishes preview_port_registered
+		// on the shared bus; this subscriber keeps the active hosted preview on
+		// the server so /api/preview/status reports the platform URL.
+		ws.startHostedPreviewSubscriber()
+
 		// SP-108: Start wakeup poller for auto-resume on background completions.
 		go ws.startWakeupPoller(ctx, 2*time.Second)
 
@@ -230,6 +236,16 @@ func (ws *ReactWebServer) Shutdown() error {
 		ws.log().Warn("terminal session shutdown failed", slog.Any("err", err))
 	}
 	ws.log().Info("all terminal sessions closed")
+
+	// Stop any preview dev servers the managers started:
+	// they are owned child processes that would otherwise
+	// outlive the daemon and hold the dev port.
+	ws.stopPreviewManagers()
+
+	// Forget the active hosted preview: it is
+	// in-memory state derived from agent events and must not survive a
+	// process restart.
+	ws.clearHostedPreview()
 
 	// Stop the local LLM server if it was running. The server is a detached
 	// process that survives CLI sessions, but when the daemon shuts down

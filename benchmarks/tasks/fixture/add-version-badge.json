@@ -1,0 +1,54 @@
+{
+  "id": "add-version-badge",
+  "request": "The fixture starter's page shows only a bare heading, so there is no way to tell which starter was opened or which version it is. Add a small one-line version badge under the page heading on the '/' route that reads \"fixture 0.1.0\" (the starter id and version from starter.json), and make sure the starter still builds and the page still loads.",
+  "starter": "fixture",
+  "plan": {
+    "version": 1,
+    "revision": 1,
+    "created": "2026-10-01T09:00:00Z",
+    "updated": "2026-10-01T09:00:00Z",
+    "goal": "Show which starter and version the fixture starter is, so a reader can tell at a glance from the page itself.",
+    "scope": [
+      {
+        "id": "version-badge",
+        "title": "Version badge on the '/' page",
+        "description": "Add a one-line visible badge under the page heading that reads \"fixture 0.1.0\", matching the embedded starter descriptor (pkg/starters/data/fixture/starter.json)."
+      }
+    ],
+    "steps": [
+      {
+        "scope": "version-badge",
+        "description": "Add an element with data-testid=\"starter-badge\" directly under the page heading in index.html."
+      },
+      {
+        "scope": "version-badge",
+        "description": "Have src/main.js set the badge text to the starter id and version, \"fixture 0.1.0\"."
+      }
+    ],
+    "starter": "fixture",
+    "acceptance": [
+      {
+        "id": "build-passes",
+        "scope": "version-badge",
+        "check": "npm run build",
+        "kind": "build"
+      },
+      {
+        "id": "page-renders",
+        "scope": "version-badge",
+        "check": "/",
+        "kind": "page"
+      }
+    ],
+    "out_of_scope": [
+      {
+        "item": "More routes or pages on the fixture starter",
+        "reason": "The fixture starter is a single-page, test-only starter; extra routes belong to a larger task size (SP-154 §154a: small change, new feature, from-scratch app)."
+      },
+      {
+        "item": "Reading the starter id and version from starter.json at runtime",
+        "reason": "The fixture's badge may hard-code the value; runtime manifest reading is product-starter work (SP-153 §153c), not part of this small change."
+      }
+    ]
+  }
+}

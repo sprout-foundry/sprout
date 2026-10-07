@@ -12,17 +12,26 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
-// resolveSubagentProviderModel resolves the provider, model, and system
-// prompt text for the given persona. Applies persona-specific config,
-// global subagent config, and parent fallback in that priority order.
-// Loads the system prompt from file if needed.
-func resolveSubagentProviderModel(a *Agent, persona string, personaExplicitlyProvided bool, subagentWorkspaceRoot string) (provider, model, systemPromptText string, _ error) {
+// resolveSubagentProviderModel resolves the provider, model, role, and
+// system prompt text for the given persona. Applies persona-specific
+// config, global subagent config, and parent fallback in that priority
+// order. Loads the system prompt from file if needed.
+//
+// role is the role the subagent's usage is attributed to —
+// the role whose resolution drove the chosen model: the reviewer role
+// when the reviewer-persona override fires
+// (the review settings alias the reviewer role), the coder role otherwise
+// (the default subagent resolution and any persona's explicit provider/
+// model are not a role, so they attribute to the coder role).
+func resolveSubagentProviderModel(a *Agent, persona string, personaExplicitlyProvided bool, subagentWorkspaceRoot string) (provider, model, role, systemPromptText string, _ error) {
 	var systemPromptPath string
 	personaProviderExplicit := false
 	personaModelExplicit := false
+	role = configuration.RoleCoder
 
 	if a.configManager != nil {
 		config := a.configManager.GetConfig()
@@ -33,7 +42,7 @@ func resolveSubagentProviderModel(a *Agent, persona string, personaExplicitlyPro
 			if subagentType != nil {
 				// Check LocalOnly flag - reject in cloud mode
 				if subagentType.LocalOnly && !a.IsLocalMode() {
-					return "", "", "", agenterrors.NewValidation(fmt.Sprintf("persona '%s' is local-only and cannot be used as a subagent in cloud mode", persona), nil)
+					return "", "", "", "", agenterrors.NewValidation(fmt.Sprintf("persona '%s' is local-only and cannot be used as a subagent in cloud mode", persona), nil)
 				}
 				// Spawnability check: a Delegatable=false target may only be
 				// spawned when the active persona explicitly lists it in
@@ -45,12 +54,12 @@ func resolveSubagentProviderModel(a *Agent, persona string, personaExplicitlyPro
 				// orchestrator-can't-spawn-coordinator) are needed: the
 				// missing entries express the policy directly.
 				if !subagentType.Delegatable && !a.canSpawnNonDelegatable(persona) {
-					return "", "", "", agenterrors.NewValidation(fmt.Sprintf("persona '%s' is not spawnable from %q (delegatable=false and not listed in spawner's can_spawn_non_delegatable)", persona, a.GetActivePersona()), nil)
+					return "", "", "", "", agenterrors.NewValidation(fmt.Sprintf("persona '%s' is not spawnable from %q (delegatable=false and not listed in spawner's can_spawn_non_delegatable)", persona, a.GetActivePersona()), nil)
 				}
 				// No persona can spawn itself — orthogonal to spawn_policy.
 				currentPersona := a.GetActivePersona()
 				if currentPersona != "" && currentPersona == persona {
-					return "", "", "", agenterrors.NewValidation(fmt.Sprintf("persona '%s' cannot spawn itself (prevents self-recursion)", persona), nil)
+					return "", "", "", "", agenterrors.NewValidation(fmt.Sprintf("persona '%s' cannot spawn itself (prevents self-recursion)", persona), nil)
 				}
 				provider = config.GetSubagentTypeProvider(persona)
 				model = config.GetSubagentTypeModel(persona)
@@ -71,21 +80,28 @@ func resolveSubagentProviderModel(a *Agent, persona string, personaExplicitlyPro
 				a.warnSubagentFallback(fmt.Sprintf("persona '%s'", persona), strings.TrimSpace(subagentType.Provider), strings.TrimSpace(subagentType.Model), strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), provider, model)
 			} else {
 				a.Logger().Debug("Warning: Persona '%s' not found or disabled, using default subagent config\n", persona)
-				provider = config.GetSubagentProvider()
-				model = config.GetSubagentModel()
+				// The default subagent config resolves through
+				// the coder role (the subagent settings alias it).
+				provider, model = config.ResolveRole(configuration.RoleCoder)
 				a.warnSubagentFallback("default subagent config", "", "", strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), provider, model)
 			}
 		} else {
-			// No persona specified, use default subagent config
-			provider = config.GetSubagentProvider()
-			model = config.GetSubagentModel()
+			// No persona specified, use default subagent config:
+			// resolved through the coder role, which aliases the subagent
+			// settings.
+			provider, model = config.ResolveRole(configuration.RoleCoder)
 			a.Logger().Debug("Using subagent provider=%s model=%s from config\n", provider, model)
 			a.warnSubagentFallback("default subagent config", "", "", strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), provider, model)
 		}
 
 		// Inherit from parent agent for each field not explicitly set by persona
 		// or global subagent config. Field-by-field: setting SubagentProvider
-		// doesn't block model inheritance, and vice versa.
+		// doesn't block model inheritance, and vice versa. The gate stays on
+		// the RAW legacy subagent fields (not the role-resolved value, which
+		// falls back to the last-used provider): when the subagent settings are
+		// unset, the parent agent's provider/model still wins —
+		// in a normal session the last-used provider is the conversation
+		// provider, so the two are equivalent).
 		parentProvider := a.GetProvider()
 		parentModel := a.GetModel()
 		if !personaProviderExplicit && config.SubagentProvider == "" {
@@ -102,15 +118,26 @@ func resolveSubagentProviderModel(a *Agent, persona string, personaExplicitlyPro
 			a.Logger().Debug("Inheriting parent agent provider/model: provider=%s model=%s\n", provider, model)
 		}
 
-		// Reviews share one model setting: an explicit review_provider covers
-		// the reviewer persona too, ahead of the generic subagent settings.
-		if reviewProvider := strings.TrimSpace(config.GetReviewProvider()); reviewProvider != "" &&
+		// Reviews share one model setting: an explicit review selection
+		// (roles.reviewer or the legacy review settings) covers the
+		// reviewer persona too, ahead of the generic subagent settings.
+		// The gate is on HasExplicitRole, not on the resolver's output —
+		// ResolveRole always fills an empty provider from the last-used
+		// fallback, so a `!= ""` check fired in every live session and
+		// re-attributed the reviewer persona to the reviewer role even
+		// when the user never configured a reviewer. Without an explicit
+		// selection the persona keeps the regular subagent resolution above
+		// (its provider/model and coder-role attribution).
+		if config.HasExplicitRole(configuration.RoleReviewer) &&
 			!personaProviderExplicit && isReviewerPersona(a, persona) {
-			provider = reviewProvider
-			if !personaModelExplicit {
-				model = config.GetReviewModel()
+			if reviewProvider, reviewModel := config.ResolveRole(configuration.RoleReviewer); strings.TrimSpace(reviewProvider) != "" {
+				provider = strings.TrimSpace(reviewProvider)
+				if !personaModelExplicit {
+					model = reviewModel
+				}
+				role = configuration.RoleReviewer
+				a.Logger().Debug("Using review provider/model for reviewer persona: provider=%s model=%s\n", provider, model)
 			}
-			a.Logger().Debug("Using review provider/model for reviewer persona: provider=%s model=%s\n", provider, model)
 		}
 
 		// Log no-persona spawn resolution for observability. persona is defaulted
@@ -156,7 +183,7 @@ func resolveSubagentProviderModel(a *Agent, persona string, personaExplicitlyPro
 		}
 	}
 
-	return provider, model, systemPromptText, nil
+	return provider, model, role, systemPromptText, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -197,13 +224,13 @@ func extractAndTrackSubagentSummary(a *Agent, resultMap map[string]string, resul
 	}
 
 	// Roll the subagent's token/cost into the parent agent's totals from
-	// the structured SubagentResult — no stdout scraping. Prompt /
-	// completion / cached splits are not exposed by SubagentResult today,
-	// so they're left at zero; TrackMetricsFromResponse treats them as
-	// "unknown split" and still applies the totals correctly.
+	// the structured SubagentResult — no stdout scraping. The rollup is
+	// attributed to the role that drove the subagent's model choice, with
+	// the subagent's real prompt/completion token split, so the per-role
+	// totals keep summing to the overall totals.
 	if result.TokensUsed > 0 || result.Cost > 0 {
-		a.TrackMetricsFromResponse(0, 0, int(result.TokensUsed), result.Cost, 0, 0, 0)
-		a.Logger().Debug("Tracked subagent costs: %d tokens, $%.6f\n", result.TokensUsed, result.Cost)
+		a.RollupSubagentUsage(result)
+		a.Logger().Debug("Tracked subagent costs: %d tokens, $%.6f (role %s)\n", result.TokensUsed, result.Cost, result.Role)
 	}
 }
 

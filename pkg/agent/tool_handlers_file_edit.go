@@ -23,6 +23,13 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 		return "", agenterrors.Wrap(err, "failed to get file path")
 	}
 
+	// While verification is enabled, refuse a mid-turn edit to the starter
+	// manifest (the trusted source for the verification commands). Covered
+	// before any read or write below, including the JSON normalization path.
+	if err := a.refuseStarterManifestWrite(path); err != nil {
+		return "", err
+	}
+
 	oldStr, err := getRequiredString(args, "old_str")
 	if err != nil {
 		return "", agenterrors.Wrap(err, "failed to get old_str parameter")

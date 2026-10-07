@@ -109,6 +109,7 @@ func (a *Agent) BuildTranscriptSnapshot(label string, includePreview bool) *Tran
 		ContinuationNudges:      a.state.GetContinuationNudges(),
 		CachedTokens:            a.state.GetCachedTokens(),
 		CachedCostSavings:       a.state.GetCachedCostSavings(),
+		CacheSavingsUnknown:     a.state.GetCacheSavingsUnknown(),
 		LastUpdated:             time.Now(),
 		SessionID:               sessionID,
 		Name:                    a.generateSessionName(),

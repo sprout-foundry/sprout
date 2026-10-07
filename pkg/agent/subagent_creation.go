@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	agent_api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/factory"
 	"github.com/sprout-foundry/sprout/pkg/personas"
@@ -17,6 +18,18 @@ import (
 // stops runaway loops within a reasonable window. Can be overridden per-call
 // via SubagentOptions.MaxIterations once that field exists.
 const defaultSubagentMaxIterations = 200
+
+// subagentRole returns the role a subagent's metered usage is attributed to
+// (the role its model was resolved through
+// (opts.Role, set by the spawn handler), or the coder role when empty —
+// the default subagent resolution is the coder role, so an unset role is
+// attributed to coder rather than dropped.
+func subagentRole(role string) string {
+	if strings.TrimSpace(role) != "" {
+		return role
+	}
+	return configuration.RoleCoder
+}
 
 // createSubagent creates a new in-process agent for subagent execution.
 // parentCtx is used as the base for the subagent's interrupt context so
@@ -126,6 +139,11 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.
 		// Shared resources
 		todoMgr:  r.shared.TodoManager,
 		eventBus: r.shared.EventBus,
+		// The subagent's metered usage is attributed to the role that drove
+		// its model choice: the role the spawn
+		// handler resolved (opts.Role), or the coder role when unset (the
+		// default subagent resolution).
+		role: subagentRole(opts.Role),
 	}
 
 	// Share the parent's clarificationManager so subagents can call

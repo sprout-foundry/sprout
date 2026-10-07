@@ -1,6 +1,6 @@
 # SP-150 — Model Roles
 
-> **Status (2026-10-03):** Proposed.
+> **Status (2026-10-07):** Shipped.
 > Related: SP-137 (no provider names in product logic), SP-125
 > (low-context mode resolves from each agent's own model window).
 

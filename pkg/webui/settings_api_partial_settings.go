@@ -354,6 +354,57 @@ func applyProviderRoutingSettings(cfg *configuration.Config, patch map[string]in
 }
 
 // ---------------------------------------------------------------------------
+// Per-role model selection
+// ---------------------------------------------------------------------------
+
+// applyRolesSettings owns the top-level "roles" section: a map of role name
+// to {provider, model}. It round-trips the incoming value through JSON so we
+// get type-safe decoding into map[string]configuration.RoleConfig without
+// map[string]any gymnastics for the nested struct — the same technique
+// applyRiskAndSafetySettings uses for risk_profiles. A nil value clears the
+// section. A literal "test" provider is dropped per entry (defense-in-depth,
+// matching Config.SetRole / Manager.SetRole) and fully-empty entries are
+// dropped so an all-empty map stores nothing.
+func applyRolesSettings(cfg *configuration.Config, patch map[string]interface{}, knownKeys map[string]bool) error {
+	v, ok := patch["roles"]
+	if !ok {
+		return nil
+	}
+	knownKeys["roles"] = true
+	if v == nil {
+		cfg.Roles = nil
+		return nil
+	}
+	raw, mErr := json.Marshal(v)
+	if mErr != nil {
+		return fmt.Errorf("validate roles: encode incoming value: %w", mErr)
+	}
+	var decoded map[string]configuration.RoleConfig
+	if uErr := json.Unmarshal(raw, &decoded); uErr != nil {
+		return fmt.Errorf("validate roles: %w", uErr)
+	}
+	out := make(map[string]configuration.RoleConfig, len(decoded))
+	for name, rc := range decoded {
+		if rc.Provider == "test" {
+			continue
+		}
+		name = truncateString(name, maxSettingNameLength)
+		rc.Provider = truncateString(rc.Provider, maxSettingNameLength)
+		rc.Model = truncateString(rc.Model, maxSettingNameLength)
+		if name == "" || (rc.Provider == "" && rc.Model == "") {
+			continue
+		}
+		out[name] = rc
+	}
+	if len(out) == 0 {
+		cfg.Roles = nil
+	} else {
+		cfg.Roles = out
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
 // Shell command detection
 // ---------------------------------------------------------------------------
 
@@ -454,6 +505,7 @@ var partialSettingsAppliers = []func(*configuration.Config, map[string]interface
 	applyRiskAndSafetySettings,
 	applySubagentSettings,
 	applyProviderRoutingSettings,
+	applyRolesSettings,
 	applyShellDetectionSettings,
 	applyAPITimeoutsSettings,
 	applyVersionSettings,

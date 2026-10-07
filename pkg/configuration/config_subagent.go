@@ -9,18 +9,32 @@ import (
 )
 
 // GetSubagentProvider returns the configured provider for subagents.
-// Returns an empty string if no explicit subagent provider is set; callers
-// inherit from the parent agent's provider or treat empty as a signal that
-// no explicit subagent provider is configured.
+// An explicit subagent_provider wins; otherwise the coder role's provider
+// (roles.coder — subagents do the coder role's
+// work, so the subagent settings alias the coder role) when set. Returns
+// an empty string when neither is set; callers inherit from the parent
+// agent's provider or treat empty as a signal that no explicit subagent
+// provider is configured.
 func (c *Config) GetSubagentProvider() string {
-	return c.SubagentProvider
+	if c.SubagentProvider != "" {
+		return c.SubagentProvider
+	}
+	if rc := c.GetRole(RoleCoder); rc.Provider != "" {
+		return rc.Provider
+	}
+	return ""
 }
 
-// GetSubagentModel returns the configured model for subagents
-// If not explicitly set, falls back to the provider's default model
+// GetSubagentModel returns the configured model for subagents. An explicit
+// subagent_model wins; otherwise the coder role's model (roles.coder)
+// when set; otherwise falls back to the
+// provider's default model.
 func (c *Config) GetSubagentModel() string {
 	if c.SubagentModel != "" {
 		return c.SubagentModel
+	}
+	if rc := c.GetRole(RoleCoder); rc.Model != "" {
+		return rc.Model
 	}
 	// Use the provider for subagents
 	provider := c.GetSubagentProvider()
@@ -197,7 +211,8 @@ func normalizePersonaID(raw string) string {
 }
 
 // GetSubagentTypeProvider returns the provider for a specific subagent type
-// Falls back to the general subagent provider if not specified
+// Falls back to the general subagent provider if not specified, which
+// aliases the coder role.
 func (c *Config) GetSubagentTypeProvider(id string) string {
 	if st := c.GetSubagentType(id); st != nil && st.Provider != "" {
 		return st.Provider
@@ -206,7 +221,8 @@ func (c *Config) GetSubagentTypeProvider(id string) string {
 }
 
 // GetSubagentTypeModel returns the model for a specific subagent type
-// Falls back to the general subagent model if not specified
+// Falls back to the general subagent model if not specified, which
+// aliases the coder role.
 func (c *Config) GetSubagentTypeModel(id string) string {
 	if st := c.GetSubagentType(id); st != nil && st.Model != "" {
 		return st.Model

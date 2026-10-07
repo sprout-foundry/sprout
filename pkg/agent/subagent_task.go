@@ -330,6 +330,13 @@ func (r *SubagentRunner) finalizeSubagentResult(
 		result.ID = taskID
 		result.TokensUsed = tokensUsed
 		result.Cost = cost
+		// Carry the subagent's role and its
+		// prompt/completion token split so the parent can roll the usage up
+		// under the correct role with real token counts, not a zero-split
+		// aggregate stamped with the parent's role.
+		result.Role = subAgent.GetRole()
+		result.PromptTokens = subAgent.state.GetPromptTokens()
+		result.CompletionTokens = subAgent.state.GetCompletionTokens()
 		result.ToolCalls = toolCalls
 		result.Iterations = iterations
 		result.Cancelled = cancelled

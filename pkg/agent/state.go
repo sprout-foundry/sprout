@@ -66,10 +66,12 @@ func (a *Agent) ExportState() ([]byte, error) {
 		CachedTokens:                   a.state.GetCachedTokens(),
 		CacheWriteTokens:               a.state.GetCacheWriteTokens(),
 		CachedCostSavings:              a.state.GetCachedCostSavings(),
+		CacheSavingsUnknown:            a.state.GetCacheSavingsUnknown(),
 		ChargedCostTotal:               a.state.GetChargedCostTotal(),
 		TokenCostTotal:                 a.state.GetTokenCostTotal(),
 		SubscriptionTokens:             a.state.GetSubscriptionTokens(),
 		FreeTokens:                     a.state.GetFreeTokens(),
+		RoleUsage:                      a.GetRoleUsage(),
 		PendingBackgroundNotifications: a.snapshotPendingNotifications(),
 	}
 	return json.Marshal(state)
@@ -102,11 +104,16 @@ func (a *Agent) ImportState(data []byte) error {
 	a.state.SetCachedTokens(state.CachedTokens)
 	a.state.SetCacheWriteTokens(state.CacheWriteTokens)
 	a.state.SetCachedCostSavings(state.CachedCostSavings)
+	a.state.SetCacheSavingsUnknown(state.CacheSavingsUnknown)
 	a.state.SetImageTokens(state.ImageTokens)
 	a.state.SetChargedCostTotal(state.ChargedCostTotal)
 	a.state.SetTokenCostTotal(state.TokenCostTotal)
 	a.state.SetSubscriptionTokens(state.SubscriptionTokens)
 	a.state.SetFreeTokens(state.FreeTokens)
+	// Restore the per-role totals so they keep
+	// summing to the restored overall totals; markUsageBooked below then
+	// marks the restored per-role totals as already booked.
+	a.state.SetRoleUsage(state.RoleUsage)
 	a.markUsageBooked()
 	a.restorePendingNotifications(state.PendingBackgroundNotifications)
 	return nil
@@ -410,6 +417,14 @@ func (a *Agent) RotateSession() (string, error) {
 	if a.changeTracker != nil {
 		a.changeTracker.Reset("session rotated")
 		a.changeTracker.SetSessionID(newID)
+	}
+
+	// The new run has a new run id (session id): the prior run's
+	// started/finished plan-scope state must not leak in —
+	// it would emit a "finished" milestone for a scope that merely looks
+	// terminal in the new run.
+	if a.scopeMilestones != nil {
+		a.scopeMilestones.Reset()
 	}
 
 	return newID, nil

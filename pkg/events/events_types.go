@@ -159,6 +159,36 @@ const (
 	// process count or total RSS exceeds configured thresholds. The payload
 	// carries the current counts, thresholds, and which threshold(s) triggered.
 	EventTypeOOMWatchdogAlert = "oom_watchdog_alert"
+	// EventTypeLanguageGuardReplacement is
+	// published when a streamed reply that was RELEASED by the streaming
+	// hold-back (its start passed the language check) is re-checked at
+	// completion and found to have switched language mid-stream. The reply
+	// was already streamed to the client and cannot be un-streamed, so the
+	// client is told to REPLACE the already-streamed assistant message. The
+	// payload carries chat_id, the replacement notice, the original (full
+	// switched content, for "view original"), and the reason.
+	EventTypeLanguageGuardReplacement = "language_guard_replacement"
+	// Progress events: structured run-progress signals
+	// emitted by the runtime (NOT parsed from model text). Each payload
+	// carries the stable correlation IDs (run, plan revision, scope
+	// item) so consumers can de-duplicate and correlate.
+	EventTypeProgressMilestone    = "progress_milestone"
+	EventTypeProgressQuestion     = "progress_question"
+	EventTypeProgressVerification = "progress_verification"
+	EventTypeProgressComplete     = "progress_complete"
+	// EventTypePreviewPortRegistered is
+	// published by the register_preview_port tool after it successfully
+	// registers a preview port with the platform. In hosted workspaces the
+	// agent runs in-process inside the webui server, so the webui server
+	// subscribes to this on the shared event bus and records the returned
+	// preview URL as the active hosted preview — the preview pane embeds
+	// it instead of only printing it to the model. The payload carries
+	// preview_url, port, and label.
+	//
+	// This is an in-process signal (agent -> webui server), not a
+	// WebSocket-forwarded event, so it is intentionally absent from the
+	// WS outbound registry (websocket_outbound_registry.go).
+	EventTypePreviewPortRegistered = "preview_port_registered"
 )
 
 // EventBus manages event distribution between CLI and Web UI.

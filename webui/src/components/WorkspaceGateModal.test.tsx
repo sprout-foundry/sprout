@@ -25,11 +25,17 @@ vi.mock('./WorkspaceBrowser.css', () => ({}));
 // modal tests stay offline.
 const browseMock = vi.hoisted(() => vi.fn());
 const setWorkspaceMock = vi.hoisted(() => vi.fn());
+const getWorkspaceMock = vi.hoisted(() => vi.fn());
+const listStartersMock = vi.hoisted(() => vi.fn());
+const instantiateStarterMock = vi.hoisted(() => vi.fn());
 vi.mock('../services/api', () => ({
   ApiService: {
     getInstance: () => ({
       browseDirectory: browseMock,
       setWorkspace: setWorkspaceMock,
+      getWorkspace: getWorkspaceMock,
+      listStarters: listStartersMock,
+      instantiateStarter: instantiateStarterMock,
     }),
   },
 }));
@@ -82,6 +88,9 @@ beforeEach(() => {
   pickWorkspaceMock.mockReset();
   createWorkspaceMock.mockReset();
   setWorkspaceMock.mockReset();
+  getWorkspaceMock.mockReset();
+  listStartersMock.mockReset();
+  instantiateStarterMock.mockReset();
   container = document.createElement('div');
   document.body.appendChild(container);
 });
@@ -133,6 +142,43 @@ function setInputValue(input: HTMLInputElement, value: string): void {
   const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
   setter.call(input, value);
   input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+/**
+ * Set a React controlled `<select>`'s value in jsdom. As with the input
+ * helper, the native setter must run first, then the bubbling `change`
+ * event is what React's onChange listens for.
+ */
+function setSelectValue(select: HTMLSelectElement, value: string): void {
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')!.set!;
+  setter.call(select, value);
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+/** The text of every option in the starter chooser ('' if not rendered). */
+function starterSelectOptions(): string[] {
+  const select = container!.querySelector<HTMLSelectElement>('[data-testid="workspace-gate-starter-select"]');
+  if (!select) return [];
+  return Array.from(select.querySelectorAll('option')).map((o) => o.textContent ?? '');
+}
+
+/**
+ * Reveal the studio create form and flush the starter-list fetch + the
+ * options re-render it triggers, so the chooser is fully populated when the
+ * test inspects it.
+ */
+async function revealCreateForm(): Promise<void> {
+  act(() => {
+    container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-new-btn"]')!.click();
+  });
+  await act(async () => {});
+}
+
+/** Stub window.location.reload (jsdom does not implement it). */
+function stubReload(): ReturnType<typeof vi.fn> {
+  const reloadSpy = vi.fn();
+  Object.defineProperty(window, 'location', { value: { reload: reloadSpy }, writable: true });
+  return reloadSpy;
 }
 
 // ---------------------------------------------------------------------------
@@ -411,5 +457,138 @@ describe('WorkspaceGateModal', () => {
     // POSTs /api/workspace with { path, consent_home: true }.
     expect(setWorkspaceMock).toHaveBeenCalledTimes(1);
     expect(setWorkspaceMock).toHaveBeenCalledWith('/home/alice', true);
+  });
+
+  // ── Starter chooser ────────────────────────────────────────────────
+  //
+  // The studio create form offers the embedded starter catalogue. "Blank"
+  // (no starter) is the default; picking a starter instantiates it into the
+  // new workspace root on create. A failed/empty list degrades to "blank".
+
+  describe('starter chooser', () => {
+    it('fetches the starter list on reveal and renders the options (blank first)', async () => {
+      modeState.studio = true;
+      listStartersMock.mockResolvedValue([{ id: 'fixture', version: '0.1.0', files: 4, has_manifest: true }]);
+
+      renderModal();
+      await revealCreateForm();
+
+      const options = starterSelectOptions();
+      expect(options.length).toBeGreaterThanOrEqual(2);
+      expect(options[0]).toMatch(/blank/i); // "blank" is always first
+      expect(options).toContain('fixture (v0.1.0, 4 files)');
+      // Default selection is "blank".
+      const select = container!.querySelector<HTMLSelectElement>('[data-testid="workspace-gate-starter-select"]')!;
+      expect(select.value).toBe('');
+      expect(listStartersMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('reflects a starter selection in the select', async () => {
+      modeState.studio = true;
+      listStartersMock.mockResolvedValue([{ id: 'fixture', version: '0.1.0', files: 4, has_manifest: true }]);
+
+      renderModal();
+      await revealCreateForm();
+      const select = container!.querySelector<HTMLSelectElement>('[data-testid="workspace-gate-starter-select"]')!;
+      await act(async () => {
+        setSelectValue(select, 'fixture');
+      });
+      expect(select.value).toBe('fixture');
+    });
+
+    it('instantiates the selected starter into the new workspace root on create', async () => {
+      modeState.studio = true;
+      const reloadSpy = stubReload();
+      createWorkspaceMock.mockResolvedValue({ ok: true, rootName: 'myproj' });
+      listStartersMock.mockResolvedValue([{ id: 'fixture', version: '0.1.0', files: 4, has_manifest: true }]);
+      getWorkspaceMock.mockResolvedValue({
+        workspace_root: '/home/alice/myproj',
+        daemon_root: '/home/alice/.sprout',
+      });
+      instantiateStarterMock.mockResolvedValue({
+        root: '/home/alice/myproj',
+        starter: 'fixture',
+        files: 4,
+        manifest: { starter: { id: 'fixture', version: '0.1.0' } },
+      });
+
+      renderModal();
+      await revealCreateForm();
+      const input = container!.querySelector<HTMLInputElement>('[data-testid="workspace-gate-create-input"]')!;
+      await act(async () => {
+        setInputValue(input, 'myproj');
+      });
+      const select = container!.querySelector<HTMLSelectElement>('[data-testid="workspace-gate-starter-select"]')!;
+      await act(async () => {
+        setSelectValue(select, 'fixture');
+      });
+      await act(async () => {
+        container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-create-submit"]')!.click();
+      });
+      await act(async () => {}); // flush getWorkspace + instantiateStarter + reload.
+
+      expect(createWorkspaceMock).toHaveBeenCalledWith('myproj');
+      expect(getWorkspaceMock).toHaveBeenCalledTimes(1);
+      expect(instantiateStarterMock).toHaveBeenCalledTimes(1);
+      // Exact arguments: the new workspace root path + the chosen starter.
+      expect(instantiateStarterMock).toHaveBeenCalledWith({
+        starter: 'fixture',
+        path: '/home/alice/myproj',
+        name: 'myproj',
+      });
+      expect(reloadSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT call instantiate when "blank" is selected (create flow unchanged)', async () => {
+      modeState.studio = true;
+      const reloadSpy = stubReload();
+      createWorkspaceMock.mockResolvedValue({ ok: true, rootName: 'myproj' });
+      listStartersMock.mockResolvedValue([{ id: 'fixture', version: '0.1.0', files: 4, has_manifest: true }]);
+
+      renderModal();
+      await revealCreateForm();
+      const input = container!.querySelector<HTMLInputElement>('[data-testid="workspace-gate-create-input"]')!;
+      await act(async () => {
+        setInputValue(input, 'myproj');
+      });
+      // Leave the select at its default ("blank").
+      await act(async () => {
+        container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-create-submit"]')!.click();
+      });
+      await act(async () => {});
+
+      expect(instantiateStarterMock).not.toHaveBeenCalled();
+      expect(getWorkspaceMock).not.toHaveBeenCalled();
+      // The plain folder-create + reload still happens.
+      expect(reloadSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('degrades to "blank" only when the starter list fetch fails', async () => {
+      modeState.studio = true;
+      const reloadSpy = stubReload();
+      createWorkspaceMock.mockResolvedValue({ ok: true, rootName: 'myproj' });
+      listStartersMock.mockRejectedValue(new Error('network down'));
+
+      renderModal();
+      await revealCreateForm();
+
+      // The form is still rendered and the chooser offers only "blank".
+      const options = starterSelectOptions();
+      expect(options.length).toBe(1);
+      expect(options[0]).toMatch(/blank/i);
+
+      // Create still works (as a blank folder create).
+      const input = container!.querySelector<HTMLInputElement>('[data-testid="workspace-gate-create-input"]')!;
+      await act(async () => {
+        setInputValue(input, 'myproj');
+      });
+      await act(async () => {
+        container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-create-submit"]')!.click();
+      });
+      await act(async () => {});
+
+      expect(instantiateStarterMock).not.toHaveBeenCalled();
+      expect(reloadSpy).toHaveBeenCalledTimes(1);
+    });
   });
 });

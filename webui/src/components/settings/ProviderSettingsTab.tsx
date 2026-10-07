@@ -5,6 +5,7 @@ import { ApiService, type SproutSettings, type ProviderOption } from '../../serv
 import { showThemedConfirm } from '../ThemedDialog';
 import ListFilter from './ListFilter';
 import ProviderKeySourceField, { type ProviderKeySource } from './ProviderKeySourceField';
+import RoleModelsSection from './RoleModelsSection';
 
 const PROVIDER_FILTER_THRESHOLD = 4;
 
@@ -270,6 +271,8 @@ export default function ProviderSettingsTab({
         availableProviders={availableProviders ?? []}
         updateSetting={updateSetting}
       />
+
+      <RoleModelsSection settings={settings} updateSetting={updateSetting} />
 
       <h4 className="settings-h4-spaced">Custom Providers ({providerEntries.length})</h4>
 

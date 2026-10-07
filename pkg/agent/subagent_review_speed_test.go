@@ -89,7 +89,7 @@ func TestResolveSubagentProviderModel_FallsBackToEmbeddedPersonaPrompt(t *testin
 
 	// A workspace that is not the sprout source tree: the repo-relative
 	// persona prompt path does not exist on disk there.
-	_, _, prompt, err := resolveSubagentProviderModel(parent, "reviewer", true, t.TempDir())
+	_, _, _, prompt, err := resolveSubagentProviderModel(parent, "reviewer", true, t.TempDir())
 	if err != nil {
 		t.Fatalf("resolveSubagentProviderModel: %v", err)
 	}

@@ -322,13 +322,19 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 	if err != nil {
 		c.printf("%sFailed to load configuration: %v\n", console.GlyphWarning.Prefix(), err)
 	}
+	// The commit flow resolves the commit role (the commit
+	// settings alias it).
+	var commitProvider, commitModel string
+	if cfg != nil {
+		commitProvider, commitModel = cfg.ResolveRole(configuration.RoleCommit)
+	}
 	switch {
 	case chatAgent == nil && c.agentError != nil:
 		c.printf("%sManual commit mode — AI agent unavailable: %v\n", console.GlyphWarning.Prefix(), c.agentError)
 	case chatAgent == nil:
 		c.println(console.GlyphWarning.Prefix() + "Manual commit mode — no AI agent available")
-	case cfg != nil && cfg.GetCommitProvider() != "":
-		c.printf("%sCommit message via %s · %s\n", console.GlyphInfo.Prefix(), cfg.GetCommitProvider(), cfg.GetCommitModel())
+	case commitProvider != "":
+		c.printf("%sCommit message via %s · %s\n", console.GlyphInfo.Prefix(), commitProvider, commitModel)
 	}
 
 	// Get staged diff

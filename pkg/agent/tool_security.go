@@ -139,7 +139,8 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 				approvedViaWebUI := false
 
 				// Prefer webui approval path when a browser tab is connected.
-				if mgr := agent.GetSecurityApprovalMgr(); mgr != nil && agent.GetEventBus() != nil && !isSubagent && agent.HasActiveWebUIClients() {
+				// A workflow run is excluded so it never waits on a dialog.
+				if mgr := agent.GetSecurityApprovalMgr(); mgr != nil && agent.GetEventBus() != nil && !isSubagent && !agent.IsWorkflowRun() && agent.HasActiveWebUIClients() {
 					// Suspend the CLI spinner and pause the steer reader before blocking on the webui response.
 					clihooks.SuspendIndicator()
 					clihooks.PauseSteer()
@@ -197,7 +198,7 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 					// CLI: prompt user interactively via terminal stdin
 					agentConfig := agent.GetConfig()
 					logger := utils.GetLogger(agentConfig != nil && agentConfig.SkipPrompt)
-					canPrompt := logger != nil && logger.IsInteractive() && !isSubagent
+					canPrompt := logger != nil && logger.IsInteractive() && !isSubagent && !agent.IsWorkflowRun()
 
 					if canPrompt {
 						var prompt string
@@ -215,7 +216,13 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 							}
 						}
 					} else if secResult.ShouldBlock {
-						// NON-INTERACTIVE + DANGEROUS, no approval mechanism: always block
+						// NON-INTERACTIVE + DANGEROUS, no approval mechanism: reject
+						// this one command with a clear tool error. The run continues
+						// so the agent can pick a different approach; hard blocks
+						// (critical tier) are named as such and stay absolute.
+						if secResult.IsHardBlock {
+							return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("hard security block: %s — %s. This operation is unconditionally blocked and cannot be approved by any profile or flag; the command was rejected — choose a different approach.", toolName, secResult.Reasoning), nil)
+						}
 						return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("security hard block: %s — %s. This operation cannot be approved by any profile or flag.", toolName, secResult.Reasoning), nil)
 					} else if secResult.IntentConfirmation {
 						// NON-INTERACTIVE + intent confirmation required: must ask user first

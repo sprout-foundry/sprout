@@ -268,6 +268,42 @@ describe('bootstrapAdapter', () => {
         const cached = getBootstrapConfig();
         expect(cached).toEqual(serverConfig);
       });
+
+      it('carries the daemon-reported contractVersion onto the resolved config', async () => {
+        const serverConfig = {
+          apiBaseURL: 'http://server:8080',
+          wsURL: 'ws://server:8080/ws',
+          authMode: 'none',
+          appMode: 'local',
+          buildVersion: '1.0.0',
+          sharedMode: false,
+          // The API contract version (docs/api OpenAPI info.version) the daemon
+          // serves; the startup gate negotiates its major version before the
+          // app renders.
+          contractVersion: '2.1.0',
+        };
+        fetchSpy.mockResolvedValue({
+          json: () => Promise.resolve(serverConfig),
+        } as any);
+
+        const { fetchRuntimeConfig } = await import('./bootstrapAdapter');
+        const config = await fetchRuntimeConfig();
+
+        expect(config.contractVersion).toBe('2.1.0');
+      });
+
+      it('leaves contractVersion undefined when the daemon predates the field', async () => {
+        // Pre-contract daemons have no contractVersion; the negotiation treats
+        // a missing field as "cannot judge" and allows startup.
+        fetchSpy.mockResolvedValue({
+          json: () => Promise.resolve({ apiBaseURL: 'http://server:8080' }),
+        } as any);
+
+        const { fetchRuntimeConfig } = await import('./bootstrapAdapter');
+        const config = await fetchRuntimeConfig();
+
+        expect(config.contractVersion).toBeUndefined();
+      });
     });
 
     describe('Tier 2: VITE env vars fallback', () => {

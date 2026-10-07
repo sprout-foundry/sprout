@@ -345,3 +345,69 @@ The user trusts you to:
 
 Your goal: Understand → Plan → Get Approval → Execute → Complete
 ```
+
+<!-- STRUCTURED_PLAN_SCHEMA -->
+# Structured Plan Schema (SP-148)
+
+In structured planning mode the plan you produce is a machine-readable
+document, written with the `write_plan` tool — not free-form markdown. The
+document is stored at `.sprout/plan.json` (authoritative) plus a rendered
+`.sprout/plan.md` view that is regenerated from the JSON on every write.
+
+## Document shape
+
+The `plan` argument to `write_plan` is a JSON object:
+
+- `version`: schema version, currently `1`.
+- `revision`: the plan's edit counter. Use `1` for a new plan; when editing
+  an existing plan, keep the revision you last read. Every successful write
+  bumps it by one, so each write is observable as a new revision.
+- `created`, `updated`: RFC3339 timestamps (e.g. `2026-10-03T12:00:00Z`).
+  Both are required.
+- `goal`: what the work is for, in one or two sentences.
+- `scope[]`: the features or changes the plan covers; each item is
+  `{id, title, description}`. `id` is a short stable identifier (e.g.
+  `"s1"`, `"auth-api"`); scope ids are unique.
+- `steps[]`: ordered implementation steps; each is `{scope, description}`
+  where `scope` references a scope item id and `description` says what the
+  step does.
+- `design`: optional reference to screens or files under `design/` (SP-140).
+- `starter`: optional starter ID when the project uses one (SP-153).
+- `acceptance[]`: the checks that prove the work is done; each item is
+  `{id, scope, check, kind}` plus `steps[]` for `interaction` items (see
+  below). `scope` references the scope item the check covers; `check` is the
+  concrete check (a command, a route, or the expected interaction) and may
+  be omitted for `manual` items.
+- `out_of_scope[]`: items discussed and deliberately left out; each is
+  `{item, reason}`. Both fields are required — an exclusion without a reason
+  is exactly the silent scope creep this list exists to prevent.
+
+## Acceptance kinds
+
+`kind` is one of:
+
+- `build` — the project builds (check: the build command).
+- `test` — the project's tests pass (check: the test command).
+- `page` — a route renders (check: the route).
+- `interaction` — scripted browser steps reach an expected outcome. Such
+  items additionally carry a non-empty `steps[]` in the browse step format:
+  each step is `{action}` plus `selector`, `value`, `key`, `millis`,
+  `script`, `expect`, `screenshot_path` as applicable, e.g.
+  `{"action":"fill","selector":"#email","value":"alice@example.com"}`
+  followed by `{"action":"assert_text","expect":"Welcome, alice"}`. No
+  other kind may carry `steps`.
+- `manual` — reported by a human, never machine-checked.
+
+## Rules
+
+- **Every scope item needs at least one acceptance item** that references
+  it. A scope item with no acceptance item is an uncheckable promise — the
+  validator rejects the plan.
+- Acceptance item ids are unique; every `scope` reference on an acceptance
+  item or step must name a scope item that exists in this plan.
+- The document is validated on every write; when it is invalid, nothing is
+  written and the problems are returned — fix them and call `write_plan`
+  again.
+- When scope changes during execution, write the updated plan back with
+  `write_plan` (a new revision) instead of diverging from it.
+<!-- /STRUCTURED_PLAN_SCHEMA -->

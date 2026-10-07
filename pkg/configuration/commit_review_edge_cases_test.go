@@ -44,14 +44,14 @@ func TestCommitProviderEdgeCases(t *testing.T) {
 			expectedModel:    "", // Empty when provider not found
 		},
 		{
-			name: "all fallback levels exhausted returns empty",
+			name: "empty commit and last-used providers returns empty",
 			config: &Config{
 				CommitProvider:   "",
 				LastUsedProvider: "",
 				ProviderPriority: []string{},
 				ProviderModels:   map[string]string{"ollama-local": "qwen3-coder:30b"},
 			},
-			expectedProvider: "", // No fallback
+			expectedProvider: "", // Neither commit nor last-used provider set
 			expectedModel:    "", // No provider → no model
 		},
 		{
@@ -61,18 +61,18 @@ func TestCommitProviderEdgeCases(t *testing.T) {
 				LastUsedProvider: "",
 				ProviderPriority: []string{"", "openai"},
 			},
-			expectedProvider: "", // Empty string is first in priority (but no fallback)
+			expectedProvider: "", // fallback stops at LastUsedProvider; no ProviderPriority fallback
 			expectedModel:    "",
 		},
 		{
-			name: "multiple fallback levels returns empty",
+			name: "provider priority is not a fallback for the commit provider",
 			config: &Config{
 				CommitProvider:   "",
 				LastUsedProvider: "",
 				ProviderPriority: []string{"deepinfra", "zai", "openai"},
 				ProviderModels:   map[string]string{"deepinfra": "deepseek-ai/DeepSeek-V3.1-Terminus"},
 			},
-			expectedProvider: "", // No fallback
+			expectedProvider: "", // fallback stops at LastUsedProvider (empty here)
 			expectedModel:    "", // No provider → no model
 		},
 	}
@@ -231,10 +231,12 @@ func TestCommitReviewConfigEmptyStringHandling(t *testing.T) {
 		},
 	}
 
-	// All return empty — no fallback
-	assert.Equal(t, "", cfg.GetCommitProvider())
+	// The commit getters fall back to the last-used provider (and its model)
+	// when the explicit commit settings are empty; the review getters have no
+	// such fallback and return empty.
+	assert.Equal(t, "openrouter", cfg.GetCommitProvider())
 	assert.Equal(t, "", cfg.GetReviewProvider())
-	assert.Equal(t, "", cfg.GetCommitModel())
+	assert.Equal(t, "openai/gpt-5", cfg.GetCommitModel())
 	assert.Equal(t, "", cfg.GetReviewModel())
 }
 

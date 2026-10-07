@@ -33,6 +33,7 @@ func (sp *sproutProvider) accumulateResponseCost(resp *core.ChatResponse) {
 		BillingType:      billingType,
 		Provider:         sp.agent.GetProvider(),
 		Model:            sp.agent.GetModel(),
+		Role:             sp.agent.GetRole(),
 		ChargedCost:      chargedCost,
 		TokenCost:        tokenCost,
 		PromptTokens:     resp.Usage.PromptTokens,
@@ -65,6 +66,14 @@ func (sp *sproutProvider) accumulateResponseCost(resp *core.ChatResponse) {
 
 	if n := resp.Usage.CachedTokens; n > 0 {
 		sp.agent.state.SetCachedTokens(sp.agent.state.GetCachedTokens() + n)
+		// Cache-savings: prefer the provider-reported actual cost (OpenRouter
+		// `usage.cost`) over catalog rates, and record "unknown" when neither
+		// can determine savings.
+		if savings, known := sp.agent.calculateCachedTokenSavings(n, resp.Usage.PromptTokens, resp.Usage.Cost); known {
+			sp.agent.state.SetCachedCostSavings(sp.agent.state.GetCachedCostSavings() + savings)
+		} else {
+			sp.agent.markCacheSavingsUnknown()
+		}
 	}
 	if resp.Usage.CacheWriteTokens != nil {
 		if n := *resp.Usage.CacheWriteTokens; n > 0 {

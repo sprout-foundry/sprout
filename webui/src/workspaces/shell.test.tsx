@@ -45,6 +45,19 @@ vi.mock('../components/design/DesignSurface', () => ({
   default: () => createElement('div', { className: 'mock-design-surface' }),
 }));
 
+// The preview panel (rendered by CodeShell) drives the dev-server lifecycle API
+// through the adapter fetch. Freeze it so the shell smoke tests stay hermetic:
+// no provider is mounted and no request is ever issued. importOriginal keeps
+// the real exports (useSproutAdapter, the provider) for anything else that reads
+// them.
+vi.mock('../contexts/SproutAdapterContext', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../contexts/SproutAdapterContext')>();
+  return {
+    ...actual,
+    useSproutFetch: () => () => new Promise<Response>(() => {}),
+  };
+});
+
 // ---------------------------------------------------------------------------
 // Import AFTER mocks are set up
 // ---------------------------------------------------------------------------

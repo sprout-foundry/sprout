@@ -1,6 +1,6 @@
 //go:build !js
 
-// agent_verification_exit_test.go — the SP-149 §149e tests: a
+// agent_verification_exit_test.go — the tests: a
 // non-interactive `sprout agent` run exits non-zero when verification
 // is enabled and fails; disabled verification changes no behavior.
 //
@@ -10,7 +10,7 @@
 // cases drive the real RunAgent direct-mode path with a scripted model
 // and a real workspace fixture whose manifest build command runs
 // through the default executor (sh -c), mirroring the pkg/agent
-// turn-end hook fixtures (149.5/149.6):
+// turn-end hook fixtures:
 //
 //   - a broken build → RunAgent returns the verification-failure
 //     error (exit code 1) and the stored result is the failing run;
@@ -165,7 +165,7 @@ func vaShAvailable(t *testing.T) {
 }
 
 // vaWriteStarterManifest writes the project's starter manifest fixture
-// (SP-153) with the given build command and no test command, so a
+// with the given build command and no test command, so a
 // baseline verification run executes the build and skips the test check.
 func vaWriteStarterManifest(t *testing.T, root, buildCommand string) {
 	t.Helper()
@@ -255,7 +255,7 @@ func TestRunAgentVerificationFailureExitsNonZero(t *testing.T) {
 
 	err := vaRunAgentNonInteractive(t, ag, "make the change")
 	if err == nil {
-		t.Fatal("RunAgent = nil error, want the verification-failure error (non-interactive run exits non-zero when verification fails, SP-149 §149e)")
+		t.Fatal("RunAgent = nil error, want the verification-failure error (non-interactive run exits non-zero when verification fails)")
 	}
 	if !strings.Contains(err.Error(), "verification failed") {
 		t.Errorf("RunAgent error = %q, want it to name the verification failure", err)
@@ -317,7 +317,7 @@ func TestRunAgentVerificationDisabledIsNoOp(t *testing.T) {
 		vaWriteToolCall(t, root, "src/app.js"),
 		agent.NewStopResponse("done"),
 	)
-	// No verification section: the default-off path (SP-149 §149e) —
+	// No verification section: the default-off path —
 	// a broken build must not change the exit behavior at all.
 	ag := vaAgent(t, client, root, nil)
 

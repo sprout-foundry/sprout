@@ -2,8 +2,8 @@ import { Collapsible } from '@sprout/ui';
 import { useEffect, useRef, useState } from 'react';
 import type { SproutSettings } from '../../services/api';
 
-// Built-in role names (SP-150 §150a). Mirrors configuration.BuiltInRoles() in
-// pkg/configuration/config_roles.go. The set is fixed for SP-150 — keep this
+// Built-in role names. Mirrors configuration.BuiltInRoles() in
+// pkg/configuration/config_roles.go. The role set is fixed — keep this
 // list in sync with the Go side if roles are added there.
 const BUILTIN_ROLES = ['planner', 'coder', 'summarizer', 'reviewer', 'commit'] as const;
 
@@ -48,7 +48,7 @@ function rolesKey(roles: RolesMap | undefined): string {
 }
 
 /**
- * Role models section (SP-150 §150d). Pin a specific provider or model to a
+ * Role models section. Pin a specific provider or model to a
  * built-in role (planner, coder, summarizer, reviewer, commit). Collapsed by
  * default so it stays out of the way of the primary provider settings.
  *

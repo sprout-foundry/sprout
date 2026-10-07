@@ -210,17 +210,16 @@ func summaryEventFields(data map[string]interface{}) string {
 }
 
 // progressVerificationPassed reports whether the event carries a
-// passing verification result — the gate for the success invariant
-// (SP-151 §151c, item 151.8): a summary never states success unless
-// this returns true.
+// passing verification result — the gate for the success invariant:
+// a summary never states success unless this returns true.
 //
 //   - progress_complete: the payload's "verified" flag (true only when
-//     a passing verification result exists, SP-151 §151a).
+//     a passing verification result exists).
 //   - progress_verification: the payload's "passed" flag when present
 //     as a bool; otherwise derived from "checks" — every non-skipped
 //     check must have passed, and at least one non-skipped check must
 //     have run (all skipped → false). A skipped check never counts as
-//     passed, matching the 151.6 template.
+//     passed, matching the completion template.
 //   - anything else (milestone, question): true — these are progress
 //     notes, not final success claims, so the invariant does not
 //     constrain them.
@@ -270,8 +269,8 @@ func progressSummaryPrompt(eventTypeName string, data map[string]interface{}) (s
 }
 
 // NewSummarizerModelClient builds the optional model client for
-// progress summaries (SP-151 §151c, item 151.8). It makes the model
-// summary OPTIONAL: it returns nil when the `summarizer` role (SP-150)
+// progress summaries. It makes the model
+// summary OPTIONAL: it returns nil when the `summarizer` role
 // is not configured or when no client can be created for the resolved
 // (provider, model) — in either case the caller uses the deterministic
 // template.

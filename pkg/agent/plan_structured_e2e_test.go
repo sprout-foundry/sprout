@@ -1,6 +1,6 @@
 //go:build !js
 
-// plan_structured_e2e_test.go — the SP-148 §148b item-148.4 acceptance
+// plan_structured_e2e_test.go — the acceptance
 // tests for `sprout plan --structured`: the planning agent's write path for
 // the structured plan document.
 //
@@ -30,7 +30,7 @@ import (
 // Fixtures
 // ---------------------------------------------------------------------------
 
-// pseValidPlanJSON is a minimal valid SP-148 plan document: one scope item
+// pseValidPlanJSON is a minimal valid plan document: one scope item
 // covered by one acceptance item, with the fields and timestamps the
 // validator requires. revision is 1 — a new plan per the plancontract.New
 // convention (the store bumps it on the write).
@@ -54,7 +54,7 @@ const pseValidPlanJSON = `{
 
 // pseInvalidPlanJSON is the same plan with a second scope item (s2) that no
 // acceptance item covers — the validator's "every scope item needs at
-// least one acceptance item" rule (SP-148 §148b) must reject it.
+// least one acceptance item" rule must reject it.
 const pseInvalidPlanJSON = `{
   "version": 1,
   "revision": 1,
@@ -117,7 +117,7 @@ func pseToolMessage(t *testing.T, ag *Agent, callID string) string {
 }
 
 // ---------------------------------------------------------------------------
-// The §148b scripted write path
+// The scripted write path
 // ---------------------------------------------------------------------------
 
 // TestWritePlanStructured_ValidPlanIsWrittenAndRendered is the positive
@@ -163,7 +163,7 @@ func TestWritePlanStructured_ValidPlanIsWrittenAndRendered(t *testing.T) {
 	}
 	// The model's new plan carries revision 1; the store bumps on every
 	// write, so the first persisted plan is revision 2 (pinned by the
-	// planstore round-trip tests, SP-148 §148b).
+	// planstore round-trip tests).
 	if plan.Revision != 2 {
 		t.Errorf("stored revision = %d, want 2 (first write of a revision-1 plan)", plan.Revision)
 	}

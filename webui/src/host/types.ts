@@ -1,0 +1,244 @@
+import type { ReactNode } from 'react';
+
+/**
+ * The host account, when one exists. Absent (or `null`) means the host has
+ * no account concept and no user is signed in.
+ */
+export interface HostUser {
+  /** Stable host-side identifier for the account. */
+  id: string;
+  /** Host-provided display name; absent when the host does not expose one. */
+  displayName?: string;
+  /** Host-provided avatar image URL; absent when the host does not expose one. */
+  avatarUrl?: string;
+}
+
+/**
+ * A generic usage summary for the account's entitlement, without any
+ * platform-specific concept. The host decides what "usage" means and what
+ * running out of it does; Sprout only renders the label, links, and the
+ * out-of-usage action.
+ */
+export interface HostEntitlements {
+  /**
+   * The usage summary to display. Absent when the host has no entitlement to
+   * surface; in that case Sprout renders nothing.
+   */
+  usageSummary?: {
+    /** The remaining share of the entitlement (e.g. a number or a host-formatted string). */
+    remaining: number | string;
+    /** Human-readable label describing the entitlement (e.g. what the remaining amount is). */
+    label: string;
+    /** Destination the host opens when the summary is followed (account, plan, etc.). */
+    linkTarget: string;
+    /** Invoked by Sprout when usage runs out; the host decides what that means. */
+    onOutOfUsage?: () => void;
+  };
+}
+
+/**
+ * Where Sprout's backend calls go. Transport is host-provided so Sprout never
+ * infers its backend from build flags or URLs.
+ */
+export interface HostTransport {
+  /** Base URL for HTTP API calls (or '' for same-origin). */
+  apiBaseURL: string;
+  /** WebSocket URL for the agent event stream. */
+  wsURL: string;
+  /** How the transport authenticates requests. */
+  authMode: 'none' | 'bearer';
+  /**
+   * Endpoint for the in-browser agent's model calls; absent when the host does
+   * not supply one (the agent falls back to the default endpoint).
+   */
+  modelEndpoint?: string;
+}
+
+/**
+ * An account-related intent Sprout can request; the host resolves it however
+ * it wants (open an account page, focus an existing one, no-op).
+ */
+export interface HostAccountIntent {
+  type: 'account';
+}
+
+/**
+ * A usage-related intent (e.g. "view usage"); the host resolves it.
+ */
+export interface HostUsageIntent {
+  type: 'usage';
+}
+
+/**
+ * A help intent; the host resolves it.
+ */
+export interface HostHelpIntent {
+  type: 'help';
+}
+
+/**
+ * A sign-out intent; the host performs the sign-out.
+ */
+export interface HostSignOutIntent {
+  type: 'signOut';
+}
+
+/**
+ * A deep link back into a specific project.
+ */
+export interface HostProjectIntent {
+  type: 'project';
+  /** The project to open. */
+  project: string;
+}
+
+/**
+ * A deep link back into a project space (one of the registered spaces).
+ */
+export interface HostSpaceIntent {
+  type: 'space';
+  /** The project the space belongs to. */
+  project: string;
+  /** The space to open (e.g. a registered space id). */
+  space: string;
+}
+
+/**
+ * The intents a host can be asked to resolve. Sprout requests an intent by
+ * calling `HostNavigation.open`; the host resolves it.
+ */
+export type HostNavigationIntent =
+  | HostAccountIntent
+  | HostUsageIntent
+  | HostHelpIntent
+  | HostSignOutIntent
+  | HostProjectIntent
+  | HostSpaceIntent;
+
+/**
+ * Outward navigation: Sprout requests intents and the host resolves them; the
+ * host also provides deep links back into a project/space.
+ */
+export interface HostNavigation {
+  /** Resolve an intent the host owns (account, usage, help, signOut) or a deep link into a project/space. */
+  open(intent: HostNavigationIntent): void;
+}
+
+/**
+ * A single notification posted to the host sink.
+ */
+export interface HostNotification {
+  /** Severity used by the host to render the notification. */
+  level: 'info' | 'warning' | 'error';
+  /** Short, user-facing title. */
+  title: string;
+  /** The notification body. */
+  message: string;
+}
+
+/**
+ * A sink Sprout posts notifications to; the host may display an optional
+ * unread count of its own.
+ */
+export interface HostNotifications {
+  /** Post a notification for the host to display. */
+  post(notification: HostNotification): void;
+  /** An optional unread count the host surfaces in its own chrome. */
+  count?: number;
+}
+
+/**
+ * Chrome slots the host can fill in Sprout's own header areas, or an
+ * instruction for the host to render the chrome itself (hiding Sprout's).
+ */
+export interface HostChrome {
+  /** A node the host supplies for Sprout's right header area (e.g. an account menu). */
+  headerRight?: ReactNode;
+  /** A node the host supplies for Sprout's left header area. */
+  headerLeft?: ReactNode;
+  /** When true the host renders Sprout's chrome and Sprout hides its own. */
+  renderOwnChrome?: boolean;
+}
+
+/**
+ * Theming the host applies. Sprout follows the tokens or mode live; a theme
+ * name is accepted in addition to raw token values.
+ */
+export interface HostTheme {
+  /** The preferred color mode; 'system' follows the OS/browser setting. */
+  mode?: 'light' | 'dark' | 'system';
+  /**
+   * Design-token overrides as `{ tokenName: value }` (or a theme name the host
+   * resolves to tokens). Sprout applies them live.
+   */
+  tokens?: Record<string, string>;
+}
+
+/**
+ * Explicit, flat flags for what this host supports. These are the
+ * capability switches that replace the build-time mode flags; every current
+ * mode flag maps to one of these.
+ */
+export interface HostCapabilities {
+  /** Shell-over-SSH transport for remote/terminal sessions. */
+  ssh: boolean;
+  /** Git operations (in-browser or host-provided). */
+  git: boolean;
+  /** Agent chat. */
+  chat: boolean;
+  /** Switching between workspaces (the workspace switcher UI). */
+  workspaceSwitching: boolean;
+  /** A native folder picker (host shells only; off for in-browser hosts). */
+  folderPicker: boolean;
+  /** Exporting the workspace to a local filesystem (no local FS means off). */
+  export: boolean;
+  /** Instance management (the instance list and its actions). */
+  instances: boolean;
+  /** A local PTY terminal (the host provides the terminal transport). */
+  localTerminal: boolean;
+  /** The settings panel. */
+  settings: boolean;
+  /** Automation workflows and their scheduling UI. */
+  automations: boolean;
+  /** Agent change history (the change history tab). */
+  agentChanges: boolean;
+  /** Model Context Protocol tool configuration. */
+  mcp: boolean;
+  /** Locally-hosted model selection and management. */
+  localModels: boolean;
+  /** Verification flows and their results UI. */
+  verification: boolean;
+  /** Server-side git, distinct from in-browser git. */
+  serverGit: boolean;
+}
+
+/**
+ * The host contract: the single channel between Sprout and whatever hosts it.
+ * A host supplies this object; Sprout never infers its host from build flags
+ * or URLs.
+ */
+export interface SproutHost {
+  /** The host account, or null/absent for no account. */
+  user?: HostUser | null;
+
+  /** A generic usage summary and out-of-usage behavior. */
+  entitlements?: HostEntitlements;
+
+  /** Where backend calls go (API base, WebSocket, auth mode, model endpoint). */
+  transport: HostTransport;
+
+  /** Outward intents Sprout can request and deep links into a project/space. */
+  navigation: HostNavigation;
+
+  /** A sink Sprout posts notifications to. */
+  notifications: HostNotifications;
+
+  /** Optional chrome slots the host fills in Sprout's header, or host-rendered chrome. */
+  chrome?: HostChrome;
+
+  /** Theming (tokens or a theme name); Sprout follows live. */
+  theme?: HostTheme;
+
+  /** Explicit capability flags for what this host supports. */
+  capabilities: HostCapabilities;
+}

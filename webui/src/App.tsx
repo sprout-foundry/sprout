@@ -47,6 +47,7 @@ import { useSecurityHandlers } from './hooks/useSecurityHandlers';
 import { useSidebarState } from './hooks/useSidebarState';
 import type { UseWebSocketEventHandlerRefs } from './hooks/useWebSocketEventHandler';
 import { useWebSocketEventHandler } from './hooks/useWebSocketEventHandler';
+import { HostProvider, defaultHost } from './host';
 import { useActiveRepoURL } from './services/activeRepo';
 import { ApiService } from './services/api';
 import { loadPersistedAppState } from './services/appStatePersistence';
@@ -108,13 +109,17 @@ function App() {
   const eventsProvider = useMemo(() => new LocalEventsProvider(), []);
 
   return (
-    <AppStoreProvider initialState={initialState}>
-      <NotificationProvider>
-        <EventsContextProvider provider={eventsProvider}>
-          <AppInner />
-        </EventsContextProvider>
-      </NotificationProvider>
-    </AppStoreProvider>
+    // Mounted with the minimal default host: the provider only wraps the
+    // children, so the tree renders unchanged until real host wiring replaces it.
+    <HostProvider host={defaultHost}>
+      <AppStoreProvider initialState={initialState}>
+        <NotificationProvider>
+          <EventsContextProvider provider={eventsProvider}>
+            <AppInner />
+          </EventsContextProvider>
+        </NotificationProvider>
+      </AppStoreProvider>
+    </HostProvider>
   );
 }
 

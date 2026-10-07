@@ -21,9 +21,9 @@ import (
 // config, global subagent config, and parent fallback in that priority
 // order. Loads the system prompt from file if needed.
 //
-// role is the SP-150 §150c role the subagent's usage is attributed to —
-// the role whose resolution drove the chosen model (SP-150 §150c, item
-// 150.5): the reviewer role when the reviewer-persona override fires
+// role is the role the subagent's usage is attributed to —
+// the role whose resolution drove the chosen model: the reviewer role
+// when the reviewer-persona override fires
 // (the review settings alias the reviewer role), the coder role otherwise
 // (the default subagent resolution and any persona's explicit provider/
 // model are not a role, so they attribute to the coder role).
@@ -80,15 +80,15 @@ func resolveSubagentProviderModel(a *Agent, persona string, personaExplicitlyPro
 				a.warnSubagentFallback(fmt.Sprintf("persona '%s'", persona), strings.TrimSpace(subagentType.Provider), strings.TrimSpace(subagentType.Model), strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), provider, model)
 			} else {
 				a.Logger().Debug("Warning: Persona '%s' not found or disabled, using default subagent config\n", persona)
-				// SP-150 §150b: the default subagent config resolves through
+				// The default subagent config resolves through
 				// the coder role (the subagent settings alias it).
 				provider, model = config.ResolveRole(configuration.RoleCoder)
 				a.warnSubagentFallback("default subagent config", "", "", strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), provider, model)
 			}
 		} else {
-			// No persona specified, use default subagent config (SP-150 §150b:
+			// No persona specified, use default subagent config:
 			// resolved through the coder role, which aliases the subagent
-			// settings).
+			// settings.
 			provider, model = config.ResolveRole(configuration.RoleCoder)
 			a.Logger().Debug("Using subagent provider=%s model=%s from config\n", provider, model)
 			a.warnSubagentFallback("default subagent config", "", "", strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), provider, model)
@@ -99,7 +99,7 @@ func resolveSubagentProviderModel(a *Agent, persona string, personaExplicitlyPro
 		// doesn't block model inheritance, and vice versa. The gate stays on
 		// the RAW legacy subagent fields (not the role-resolved value, which
 		// falls back to the last-used provider): when the subagent settings are
-		// unset, the parent agent's provider/model still wins (SP-150 §150b —
+		// unset, the parent agent's provider/model still wins —
 		// in a normal session the last-used provider is the conversation
 		// provider, so the two are equivalent).
 		parentProvider := a.GetProvider()
@@ -226,9 +226,8 @@ func extractAndTrackSubagentSummary(a *Agent, resultMap map[string]string, resul
 	// Roll the subagent's token/cost into the parent agent's totals from
 	// the structured SubagentResult — no stdout scraping. The rollup is
 	// attributed to the role that drove the subagent's model choice, with
-	// the subagent's real prompt/completion token split (SP-150 §150c,
-	// item 150.5), so the per-role totals keep summing to the overall
-	// totals.
+	// the subagent's real prompt/completion token split, so the per-role
+	// totals keep summing to the overall totals.
 	if result.TokensUsed > 0 || result.Cost > 0 {
 		a.RollupSubagentUsage(result)
 		a.Logger().Debug("Tracked subagent costs: %d tokens, $%.6f (role %s)\n", result.TokensUsed, result.Cost, result.Role)

@@ -14,7 +14,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// write_plan (SP-148 §148b) conformance tests.
+// write_plan conformance tests.
 //
 // The handler is the agent-facing write path for the structured plan:
 // model document → plancontract.ValidateJSON → planstore.Save. The store
@@ -24,7 +24,7 @@ import (
 // fails here.
 // ---------------------------------------------------------------------------
 
-// wphValidPlan is a minimal valid SP-148 plan document (one scope item
+// wphValidPlan is a minimal valid plan document (one scope item
 // covered by one acceptance item), shaped exactly as the JSON-decoded
 // `plan` argument arrives from a tool call (numbers as the values
 // json.Unmarshal produces are fine — the handler re-marshals to bytes).
@@ -48,7 +48,7 @@ var wphValidPlan = map[string]any{
 
 // wphInvalidPlan is the same document with a second scope item that no
 // acceptance item covers — the validator's "every scope item needs at
-// least one acceptance item" rule (SP-148 §148b).
+// least one acceptance item" rule.
 var wphInvalidPlan = map[string]any{
 	"version":  float64(1),
 	"revision": float64(1),
@@ -151,7 +151,7 @@ func TestWritePlanHandlerConformance_ValidPlanWritesBothFiles(t *testing.T) {
 	}
 	// The model's new plan carries revision 1; the store bumps on every
 	// write, so the first persisted plan is revision 2 (pinned by the
-	// planstore round-trip tests, SP-148 §148b).
+	// planstore round-trip tests).
 	if plan.Revision != 2 {
 		t.Errorf("stored revision = %d, want 2", plan.Revision)
 	}
@@ -178,7 +178,7 @@ func TestWritePlanHandlerConformance_ValidPlanWritesBothFiles(t *testing.T) {
 }
 
 // TestWritePlanHandlerConformance_EditingBumpsRevisionAgain pins the
-// write-back semantics (SP-148 §148c): editing an existing plan and saving
+// write-back semantics: editing an existing plan and saving
 // through the handler produces the next revision, with the markdown view
 // regenerated on the edit.
 func TestWritePlanHandlerConformance_EditingBumpsRevisionAgain(t *testing.T) {
@@ -239,7 +239,7 @@ func TestWritePlanHandlerConformance_EditingBumpsRevisionAgain(t *testing.T) {
 }
 
 // TestWritePlanHandlerConformance_InvalidPlanRejectedNamesEveryProblem
-// covers the failure half of the SP-148 §148b acceptance: an invalid
+// covers the failure half of the acceptance rule: an invalid
 // document is rejected with the aggregated validation problems, so the
 // model knows exactly what to fix, and nothing is written.
 func TestWritePlanHandlerConformance_InvalidPlanRejectedNamesEveryProblem(t *testing.T) {
@@ -301,7 +301,8 @@ func TestWritePlanHandlerConformance_RejectedWriteLeavesExistingPlanUntouched(t 
 	}
 }
 
-// TestWritePlanHandlerConformance_InteractionKindRules pin the §148d rules
+// TestWritePlanHandlerConformance_InteractionKindRules pin the interaction
+// step rules
 // through the handler: an interaction item needs non-empty steps, and a
 // non-interaction item may not carry steps.
 func TestWritePlanHandlerConformance_InteractionKindRules(t *testing.T) {

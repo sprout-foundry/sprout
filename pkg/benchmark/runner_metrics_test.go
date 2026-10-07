@@ -1,6 +1,6 @@
 //go:build !js
 
-// runner_metrics_test.go — the SP-154 §154b per-task metrics tests: the run's
+// runner_metrics_test.go — the per-task metrics tests: the run's
 // tokens and cost come from the conversation totals, the run carries its role
 // usage, and the language-guard mismatch is counted. The fixtures and helpers
 // live in runner_test.go (same package).
@@ -19,7 +19,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Per-task metrics (SP-154 §154b, 154.3): tokens, cost, language guard
+// Per-task metrics: tokens, cost, language guard
 // ---------------------------------------------------------------------------
 
 // Reliably detectable prose fixtures, mirrored from pkg/agent's
@@ -32,7 +32,7 @@ const (
 )
 
 // TestRunner_TokensAndCostAreTheConversationTotals pins the token and
-// cost capture (SP-154 §154b's "existing cost tracking"): the run's
+// cost capture (the benchmark's "existing cost tracking"): the run's
 // agent is fresh, so the agent's conversation totals ARE the run's
 // usage. Every scripted response of one passing turn carries an
 // explicit non-zero Usage (resolveUsage would otherwise fall back to
@@ -123,7 +123,7 @@ func TestRunner_TokensAndCostAreTheConversationTotals(t *testing.T) {
 }
 
 // TestRunner_RunCarriesRoleUsage pins the run's per-role token/cost
-// breakdown (SP-150 §150c, 150.5 / SP-154 §154b, 154.3): the Run record
+// breakdown: the Run record
 // carries the run's agent's per-role usage, so a benchmark can attribute
 // spend to the model role each call was made under. A scripted passing
 // turn is consumed entirely by the primary agent (the coder role), so the
@@ -223,14 +223,14 @@ func TestRunner_RunCarriesRoleUsage(t *testing.T) {
 }
 
 // TestRunner_LanguageGuardMismatchCounted pins the run's share of the
-// process-wide language-guard metric (SP-152 §152e, recorded by the
-// guard's existing Record call site — 154.3 reads the delta, it does
+// process-wide language-guard metric (recorded by the
+// guard's existing Record call site — the benchmark reads the delta, it does
 // not build new meters): a scripted run whose final message is in a
 // different language than the request records one check and one
 // mismatch for the run's model (a fresh recorder is installed so the
 // delta is isolated from other tests), and the matching-language mirror
 // records the check with no mismatch. The scripts carry the
-// regeneration response the guard path consumes (mirroring the 152.5
+// regeneration response the guard path consumes (mirroring the same
 // pattern).
 func TestRunner_LanguageGuardMismatchCounted(t *testing.T) {
 	mgr, cleanup := configuration.NewTestManager(t)

@@ -1,8 +1,8 @@
 package agent
 
-// Unit tests for the SP-149 §149c/§149d verification machinery: the
-// report builder, the per-check attempt key (item 149.5), and the
-// final-reply attachment renderer (item 149.6). They are pure — no
+// Unit tests for the verification machinery: the
+// report builder, the per-check attempt key, and the
+// final-reply attachment renderer. They are pure — no
 // agent, no fixture, no shell — so they run in every build including
 // js/wasm.
 
@@ -24,7 +24,7 @@ import (
 // checkAttemptKey
 // ---------------------------------------------------------------------------
 
-// TestCheckAttemptKey pins the counter keys (SP-149 §149c): build/test/
+// TestCheckAttemptKey pins the counter keys: build/test/
 // page are keyed by kind; interaction checks carry their item id so two
 // scripted flows count their own attempts separately.
 func TestCheckAttemptKey(t *testing.T) {
@@ -99,8 +99,8 @@ Failing checks:
 	}
 }
 
-// TestBuildVerificationReport_Exhausted pins the stop-rule report (SP-149
-// §149d): an exhausted check moves from the repairable bullets to the
+// TestBuildVerificationReport_Exhausted pins the stop-rule report:
+// an exhausted check moves from the repairable bullets to the
 // explicit DONE section telling the model to stop and state the failure.
 func TestBuildVerificationReport_Exhausted(t *testing.T) {
 	res := vhFailedBuildResult()
@@ -182,20 +182,21 @@ Failing checks:
 }
 
 // TestBuildVerificationReport_SkippedManualCheckNeverAppears pins
-// §149a: a manual check is listed in the result but never gated, so it
-// never shows up in the repair report (it can never be "failing").
+// the manual-check rule: a manual check is listed in the result but never
+// gated, so it never shows up in the repair report (it can never be
+// "failing").
 func TestBuildVerificationReport_SkippedManualCheckNeverAppears(t *testing.T) {
 	res := vhFailedBuildResult()
 	res.Checks = append(res.Checks, verify.Check{
 		Kind:    plancontract.KindManual,
 		Items:   []string{"m1"},
 		Skipped: true,
-		Reason:  "manual: verified by a human, not machine-gated (SP-149 §149a)",
+		Reason:  "manual: verified by a human, not machine-gated",
 	})
 	got := buildVerificationReport(res, map[string]int{"build": 1}, 3)
 	want := `<verification-report>
 Turn-end verification found failing checks. Fix the repairable ones, then finish the turn.
-Summary: baseline: build: failed (make build); test: skipped — no test command available; manual: skipped [1 manual item] — manual: verified by a human, not machine-gated (SP-149 §149a)
+Summary: baseline: build: failed (make build); test: skipped — no test command available; manual: skipped [1 manual item] — manual: verified by a human, not machine-gated
 
 Failing checks:
 - build 1/3 — command failed
@@ -245,7 +246,7 @@ func TestVerificationHook_CancelledRunContextReportsInterrupt(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// verificationReplyAttachment (SP-149 §149d / 149.6 final-reply contract)
+// verificationReplyAttachment (the final-reply contract)
 // ---------------------------------------------------------------------------
 
 // TestVerificationReplyAttachment_NilStateNoOp pins the behavioral
@@ -261,7 +262,7 @@ func TestVerificationReplyAttachment_NilStateNoOp(t *testing.T) {
 
 // TestVerificationReplyAttachment_Passing pins the passing shape: success
 // is reported only with a passing result attached — the one-line block
-// carrying the run's summary (SP-149 §149c).
+// carrying the run's summary.
 func TestVerificationReplyAttachment_Passing(t *testing.T) {
 	res := &verify.Result{
 		Baseline: true,
@@ -277,7 +278,7 @@ func TestVerificationReplyAttachment_Passing(t *testing.T) {
 	}
 }
 
-// TestVerificationReplyAttachment_Failing pins the §149d failure report
+// TestVerificationReplyAttachment_Failing pins the failure report
 // for the canonical broken-build run: the header carries the configured
 // repair limit N, the Passed section states nothing passed, the Failed
 // line names the check and its reason, and the Tried line states the
@@ -293,7 +294,7 @@ func TestVerificationReplyAttachment_Failing(t *testing.T) {
 		"Failed: build — command failed\n" +
 		"Tried: build: 2/2 repair attempts"
 	if got != want {
-		t.Errorf("attachment = %q,\nwant %q (§149d: what passes, what fails, what was tried)", got, want)
+		t.Errorf("attachment = %q,\nwant %q (what passes, what fails, what was tried)", got, want)
 	}
 }
 
@@ -350,7 +351,7 @@ func TestVerificationReplyAttachment_FailingRunLevelError(t *testing.T) {
 // TestVerificationReplyAttachment_AllSkipped pins the all-skipped shape:
 // the run verified nothing, so the attachment states that no passing
 // result exists (success is not corroborated) and lists what could not
-// be verified (SP-149 §149d).
+// be verified.
 func TestVerificationReplyAttachment_AllSkipped(t *testing.T) {
 	res := &verify.Result{
 		Baseline: true,

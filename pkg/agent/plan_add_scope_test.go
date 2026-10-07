@@ -1,18 +1,18 @@
 //go:build !js
 
-// plan_add_scope_test.go — the SP-148 §148c item-148.7 acceptance tests for
-// scope write-back: when scope changes during execution, the agent updates
+// plan_add_scope_test.go — the scope write-back acceptance tests: when scope
+// changes during execution, the agent updates
 // the plan through the plan store (the plan_add_scope tool) with a new
 // revision instead of silently diverging.
 //
 // The tests drive REAL agent turns with a scripted model (the same
-// conventions as plan_structured_e2e_test.go, item 148.4): the fixture plan
+// conventions as plan_structured_e2e_test.go): the fixture plan
 // lives on disk under the project's .sprout/ directory, the scripted model
 // calls plan_add_scope, and the assertions are on the on-disk state (the
 // plan revision, the stored scope/acceptance items, and the regenerated
 // .sprout/plan.md view) rather than on the scripted fixture. A rejected
 // write leaves the plan byte-identical — no revision bump, no markdown
-// change — which is the "never diverge" guarantee of §148c.
+// change — which is the "never diverge" guarantee.
 
 package agent
 
@@ -32,7 +32,7 @@ import (
 // Fixtures
 // ---------------------------------------------------------------------------
 
-// pasFixturePlanJSON is a minimal valid SP-148 plan document: one scope item
+// pasFixturePlanJSON is a minimal valid plan document: one scope item
 // (s1) covered by one acceptance item (a1). revision is 1 — the revision
 // the fixture carries before the write-back (the store bumps it on the
 // write, so the stored plan after a successful plan_add_scope call is
@@ -123,7 +123,7 @@ func pasToolMessage(t *testing.T, ag *Agent, callID string) string {
 }
 
 // ---------------------------------------------------------------------------
-// The §148c scripted write-back: scope addition → revision bump + markdown
+// The scripted write-back: scope addition → revision bump + markdown
 // ---------------------------------------------------------------------------
 
 // TestPlanAddScope_ScriptedScopeAdditionBumpsRevisionAndMarkdown is the
@@ -131,7 +131,7 @@ func pasToolMessage(t *testing.T, ag *Agent, callID string) string {
 // add a NEW scope item (s2) with a covering acceptance item, and the plan
 // on disk now carries the incremented revision, the new scope/acceptance
 // items, and the regenerated markdown view. The follow-up turn re-reads the
-// plan (item 148.5): the updated summary reaches the model's context, so
+// plan: the updated summary reaches the model's context, so
 // execution continues from the written-back plan instead of diverging.
 func TestPlanAddScope_ScriptedScopeAdditionBumpsRevisionAndMarkdown(t *testing.T) {
 	root := t.TempDir()
@@ -197,7 +197,7 @@ func TestPlanAddScope_ScriptedScopeAdditionBumpsRevisionAndMarkdown(t *testing.T
 		t.Errorf("plan.md must show the stored revision, got:\n%s", md)
 	}
 
-	// The next turn re-reads the plan (item 148.5): the written-back scope
+	// The next turn re-reads the plan: the written-back scope
 	// item reaches the model's context, so execution continues from the
 	// updated plan instead of diverging from it.
 	if _, err := ag.ProcessQuery("Continue with the plan."); err != nil {

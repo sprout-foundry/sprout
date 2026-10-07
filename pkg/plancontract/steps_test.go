@@ -11,7 +11,7 @@ import (
 
 // interactionStepsPlanJSON is a standalone, valid plan document whose single
 // acceptance item is an interaction item carrying browse steps. It is the
-// "valid plan with interaction steps passes" fixture for SP-148 §148d.
+// "valid plan with interaction steps passes" fixture.
 const interactionStepsPlanJSON = `{
   "version": 1,
   "revision": 1,
@@ -40,8 +40,8 @@ const interactionStepsPlanJSON = `{
   "out_of_scope": []
 }`
 
-// TestInteractionStepsValidJSON is the JSON-fixture half of the SP-148 §148d
-// table: a valid plan with an interaction acceptance item carrying browse
+// TestInteractionStepsValidJSON is the JSON-fixture half of the
+// interaction-steps table: a valid plan with an interaction acceptance item carrying browse
 // steps (fill + click + assert_text) passes.
 func TestInteractionStepsValidJSON(t *testing.T) {
 	plan, err := ValidateJSON([]byte(interactionStepsPlanJSON))
@@ -73,7 +73,7 @@ func interactionBasePlan() *Plan {
 	return p
 }
 
-// TestInteractionStepsTable covers the SP-148 §148d validator rules at the
+// TestInteractionStepsTable covers the interaction-steps validator rules at the
 // struct level: an interaction item requires a non-empty steps list whose
 // steps each carry a non-empty action, and no other kind may carry steps.
 func TestInteractionStepsTable(t *testing.T) {
@@ -186,7 +186,7 @@ func jsonRoundTripPlan(t *testing.T, fn func(p *Plan)) *Plan {
 }
 
 // TestInteractionStepsMalformedJSON is the invalid-fixture half of the
-// SP-148 §148d table: the same rules over raw .sprout/plan.json documents.
+// interaction-steps table: the same rules over raw .sprout/plan.json documents.
 func TestInteractionStepsMalformedJSON(t *testing.T) {
 	cases := []struct {
 		name       string
@@ -222,8 +222,8 @@ func TestInteractionStepsMalformedJSON(t *testing.T) {
 	}
 }
 
-// TestBrowseStepWireFormat pins the JSON wire format of BrowseStep (SP-148
-// §148d): the field names, tags, and omitempty rules must mirror
+// TestBrowseStepWireFormat pins the JSON wire format of BrowseStep:
+// the field names, tags, and omitempty rules must mirror
 // webcontent.BrowseStep, which the cross-package pin test in pkg/agent
 // (plan_browse_compat_test.go) enforces against parseBrowseSteps.
 func TestBrowseStepWireFormat(t *testing.T) {

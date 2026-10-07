@@ -1,16 +1,16 @@
-// Package agent — SP-148 §148c plan-context injection.
+// Package agent — plan-context injection.
 //
 // When a structured plan (.sprout/plan.json) exists for the project, the agent
 // reads it at the start of a turn and injects a compact plan summary — the goal
 // plus each scope item (id + title) with a status — into the turn's context so
-// the model works scope item by scope item (SP-148 §148c). When there is no
+// the model works scope item by scope item. When there is no
 // plan, or the plan cannot be read or validated, nothing is injected and the
 // turn is never failed: an absent or corrupt plan is "no plan", not an error.
 //
-// The per-scope status is deliberately self-contained. Item 148.5 must not
-// depend on the todo scope-ID work (148.6) nor on scope write-back (148.7), so
+// The per-scope status is deliberately self-contained. Completion tracking must
+// not depend on the todo scope-ID work nor on scope write-back, so
 // the plan carries no completion data and every scope item is reported as
-// "pending" (not yet confirmed done) until a later item tracks progress.
+// "pending" (not yet confirmed done) until a later change tracks progress.
 package agent
 
 import (
@@ -22,16 +22,16 @@ import (
 )
 
 // planScopeStatusPending is the per-scope status shown in the compact plan
-// summary while completion tracking (SP-148 items 148.6/148.7) does not yet
-// exist. Item 148.5 is self-contained: the plan carries no completion data and
-// this item must not read the todo scope IDs, so every scope item is reported
-// as "pending" (not yet confirmed done). A later item will replace this value
+// summary while completion tracking does not yet
+// exist. The status is self-contained: the plan carries no completion data and
+// this code must not read the todo scope IDs, so every scope item is reported
+// as "pending" (not yet confirmed done). A later change will replace this value
 // with a derived status (e.g. from todo scope IDs); the renderer stays the
 // same.
 const planScopeStatusPending = "pending"
 
 // planContextSummary loads the project's structured plan and renders a compact
-// summary for injection into the turn's context (SP-148 §148c). It returns ""
+// summary for injection into the turn's context. It returns ""
 // when the project has no plan (missing file) or when the plan is unreadable or
 // invalid — an absent or corrupt plan never fails a turn.
 //
@@ -53,14 +53,14 @@ func (a *Agent) planContextSummary() string {
 }
 
 // renderPlanSummary renders a compact, deterministic summary of plan for
-// context injection (SP-148 §148c): the goal, then each scope item (id +
+// context injection: the goal, then each scope item (id +
 // title) with its status. It is pure (no I/O) and short — a few lines of
 // context, not the full plan document. It returns "" for a nil plan.
 //
 // The per-scope status is the plan's own default (planScopeStatusPending):
-// item 148.5 does not track completion (that arrives with 148.6 todo scope
-// IDs and 148.7 write-back), so every scope item renders as "pending" until a
-// later item records progress.
+// completion is not tracked yet (that arrives with todo scope
+// IDs and write-back), so every scope item renders as "pending" until a
+// later change records progress.
 func renderPlanSummary(plan *plancontract.Plan) string {
 	if plan == nil {
 		return ""

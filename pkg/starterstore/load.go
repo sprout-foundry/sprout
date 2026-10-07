@@ -1,4 +1,4 @@
-// Package starterstore is the file-system-facing half of the SP-153 starter
+// Package starterstore is the file-system-facing half of the starter
 // manifest: it reads the machine-readable document stored at
 // .sprout/starter.json under a project root.
 //
@@ -11,14 +11,14 @@
 //     ErrNoManifest sentinel, not a failure.
 //
 // LoadStarterManifest is the single source of build/test/dev/preview commands
-// for the manifest's consumers (SP-149 verification, SP-155 preview, SP-156
+// for the manifest's consumers (verification, preview, and
 // deploys). A missing manifest means "no commands" — the loader never guesses
 // or fills in defaults, and an invalid manifest is a hard error, so no caller
 // can ever observe a guessed manifest.
 //
 // The on-disk location is project-relative (.sprout/ under the project root),
-// so a manifest travels with the code and lands in git history (SP-153
-// §153a). The package is standard-library-only, so it can be imported by the
+// so a manifest travels with the code and lands in git history.
+// The package is standard-library-only, so it can be imported by the
 // CLI, by WASM (browser) builds, and by the manifest's consumers.
 package starterstore
 
@@ -36,7 +36,7 @@ import (
 // distinguishable not-found (not a failure): callers detect it with
 // errors.Is(err, ErrNoManifest) and treat it as "no starter manifest, no
 // commands", exactly as planstore.ErrNoPlan marks a missing plan. A project
-// without a starter manifest works as it does today (SP-153: projects without
+// without a starter manifest works as it does today (projects without
 // a starter keep working), so a missing file is the normal "this project has
 // no starter" case rather than an error callers must special-case.
 var ErrNoManifest = errors.New("no starter manifest found")
@@ -51,8 +51,8 @@ func StarterManifestPath(root string) string {
 // .sprout/starter.json under projectRoot. It is the single source of
 // build/test/dev/preview commands for the manifest's consumers: the fields of
 // the returned manifest are the authoritative values, and the loader never
-// fills in defaults for absent fields (SP-153 §153a: "missing file → none,
-// never guessed").
+// fills in defaults for absent fields (a missing file yields no commands,
+// never a guess).
 //
 //   - When the file does not exist (or .sprout/ does not exist),
 //     LoadStarterManifest returns (nil, ErrNoManifest) — the normal "project

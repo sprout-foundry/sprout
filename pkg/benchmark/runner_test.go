@@ -1,17 +1,17 @@
 //go:build !js
 
-// runner_test.go — the SP-154 §154a/§154b runner acceptance tests: the
-// pass/fail contract (the recorded pass/fail comes only from the SP-149
+// runner_test.go — the runner acceptance tests: the
+// pass/fail contract (the recorded pass/fail comes only from the
 // verification result — never from the model's own reply), the fresh
 // starter copy per run, the 3-runs-per-model default, and the
 // record-and-continue behavior (one bad setup never aborts the suite).
 //
-// The harness mirrors the SP-149 fixture tests (pkg/agent/
+// The harness mirrors the verification fixture tests (pkg/agent/
 // verification_hook_test.go): a scripted model, a real workspace copy
 // (the embedded fixture starter), and real shell execution of the
 // deterministic build command that ShapeCopy writes into the copy's
 // .sprout/starter.json. The copy's manifest wins over the configuration
-// in the verify runner's command resolution (SP-149 §149b), so the run's
+// in the verify runner's command resolution, so the run's
 // only check is `sh -c <build>` — the tests never depend on npm, a dev
 // server, or a browser. The fixture's page-check fixture task is NOT the
 // test's task: an in-memory build-only plan keeps the verification run to
@@ -52,8 +52,8 @@ func shAvailable(t *testing.T) {
 	}
 }
 
-// benchPlan returns a valid SP-148 plan with a single build acceptance
-// item (SP-154 §154a: acceptance criteria inside the plan). The
+// benchPlan returns a valid plan with a single build acceptance
+// item (the acceptance criteria live inside the plan). The
 // build-only shape is deliberate: the verification run executes exactly
 // one shell command (the one ShapeCopy pins into the copy's manifest)
 // and nothing else — no dev server, no browser, no npm.
@@ -93,8 +93,8 @@ func benchTask() *Task {
 // .sprout/starter.json with the given deterministic build command and no
 // test command. The fixture starter's manifest carries npm commands
 // (not runnable deterministically under go test), and the verify runner
-// gives the manifest's commands precedence over the configuration
-// (SP-149 §149b) — so pinning the manifest is what makes the run's only
+// gives the manifest's commands precedence over the configuration —
+// so pinning the manifest is what makes the run's only
 // check a plain sh command.
 func shapeManifest(build string) func(runDir string, task *Task) error {
 	return func(runDir string, task *Task) error {
@@ -164,7 +164,7 @@ func scriptedFactory(t *testing.T, mgr *configuration.Manager, withWrite bool, c
 	}
 }
 
-// assertWallTime pins the run's wall-time anchors (SP-154 §154b): a
+// assertWallTime pins the run's wall-time anchors: a
 // non-zero start and a finish at or after it.
 func assertWallTime(t *testing.T, run Run) {
 	t.Helper()
@@ -181,11 +181,11 @@ func assertWallTime(t *testing.T, run Run) {
 // ---------------------------------------------------------------------------
 
 // TestRunner_DefaultRunsPerTask pins the runs-per-model normalization:
-// 0 (the zero value) and negative values fall back to 3 (SP-154 §154b);
+// 0 (the zero value) and negative values fall back to 3;
 // a positive value stands.
 func TestRunner_DefaultRunsPerTask(t *testing.T) {
 	if got := (&Runner{}).runsPerTask(); got != 3 {
-		t.Errorf("(&Runner{}).runsPerTask() = %d, want 3 (SP-154 §154b)", got)
+		t.Errorf("(&Runner{}).runsPerTask() = %d, want 3", got)
 	}
 	if got := (&Runner{RunsPerTask: 5}).runsPerTask(); got != 5 {
 		t.Errorf("RunsPerTask=5 → runsPerTask() = %d, want 5", got)
@@ -254,7 +254,7 @@ func TestRunner_NilOrEmptyTaskRejected(t *testing.T) {
 // TestRunner_ConfigureRun pins the runner's per-run configuration step:
 // verification is forced on (the benchmark's pass/fail source must run)
 // while the manager's other verification settings (repair limit, the
-// explicit commands of SP-149 §149b) are preserved; the spec's
+// explicit commands) are preserved; the spec's
 // model/provider are written into the manager (no save); an empty spec
 // narrows nothing (the manager's values stand); a nil ConfigManager
 // skips the step.

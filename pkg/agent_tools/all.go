@@ -21,6 +21,7 @@ func AllTools() []ToolHandler {
 		&searchFilesHandler{},
 		&repoMapHandler{},
 		&rollbackChangesHandler{},
+		&checkpointHandler{},
 		&viewHistoryHandler{},
 		&listSkillsHandler{},
 		&writeFileHandler{},

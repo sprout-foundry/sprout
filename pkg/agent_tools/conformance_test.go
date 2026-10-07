@@ -1204,7 +1204,7 @@ func TestAllToolsConformance_InterfaceContract(t *testing.T) {
 				require.Error(t, err, "Validate(nil) should return error for tools with required params")
 			case "list_directory", "repo_map", "list_skills", "rollback_changes", "view_history",
 				"list_automate_workflows", "list_changes", "revert_my_changes", "find_dead_code", "design_validate", "design_assets", "design_export_tokens", "design_sync",
-				"review_changes", "check_subagent", "deploy", "deploy_status":
+				"review_changes", "check_subagent", "deploy", "deploy_status", "checkpoint":
 				require.NoError(t, err, "Validate(nil) should succeed for tools with no required params")
 			default:
 				require.Error(t, err, "Validate(nil) should return error for tool %q", name)
@@ -1217,7 +1217,7 @@ func TestAllToolsConformance_InterfaceContract(t *testing.T) {
 				require.Error(t, err, "Validate({}) should return error for tools with required params")
 			case "list_directory", "repo_map", "list_skills", "rollback_changes", "view_history",
 				"list_automate_workflows", "list_changes", "revert_my_changes", "find_dead_code", "design_validate", "design_assets", "design_export_tokens", "design_sync",
-				"review_changes", "check_subagent", "deploy", "deploy_status":
+				"review_changes", "check_subagent", "deploy", "deploy_status", "checkpoint":
 				require.NoError(t, err, "Validate({}) should succeed for tools with no required params")
 			default:
 				require.Error(t, err, "Validate({}) should return error for tool %q", name)

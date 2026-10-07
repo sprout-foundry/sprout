@@ -206,6 +206,48 @@ func SummarizeDeploy(d deploy.Deployment) string {
 	return b.String()
 }
 
+// SummarizeCheckpoint renders a checkpoint as a short deterministic template
+// summary. The summary names why the checkpoint exists and what it captured:
+// the origin phrase, then the file count / captured revision identity.
+//
+//	checkpoint (verification): changed 3 files @ rev-123
+//	restored checkpoint: no files
+//
+// It is a pure function of the checkpoint's fields — no model call, no
+// invented detail.
+func SummarizeCheckpoint(cp history.Checkpoint) string {
+	var b strings.Builder
+	switch cp.Origin {
+	case history.CheckpointRestore:
+		b.WriteString("restored checkpoint")
+	case history.CheckpointVerification:
+		b.WriteString("checkpoint (verification)")
+	case history.CheckpointDeploy:
+		b.WriteString("checkpoint (deploy)")
+	case history.CheckpointManual:
+		b.WriteString("checkpoint (manual)")
+	default:
+		b.WriteString("checkpoint")
+		if cp.Origin != "" {
+			b.WriteString(" (")
+			b.WriteString(string(cp.Origin))
+			b.WriteString(")")
+		}
+	}
+
+	b.WriteString(": ")
+	if len(cp.Files) == 0 {
+		b.WriteString("no files")
+	} else {
+		b.WriteString(fileCountNoun(len(cp.Files), "file"))
+	}
+	if cp.RevisionID != "" {
+		b.WriteString(" @ ")
+		b.WriteString(cp.RevisionID)
+	}
+	return b.String()
+}
+
 // diffOp is a single line-oriented diff operation.
 type diffOp struct {
 	kind  diffOpKind

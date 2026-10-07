@@ -392,7 +392,7 @@ check-needs-react-rebuild:
 	@bash scripts/check-needs-react-rebuild.sh
 
 # Lint frontend code
-lint: build-workspace-package
+lint:
 	@echo "Linting frontend code..."
 	@cd webui && npm run lint && npm run format:check && npm run type-check && echo "Lint completed successfully"
 	@echo "Validating docs/CONSUMPTION_GUIDE.md against packages/ui..."
@@ -590,7 +590,7 @@ studio-providers:
 # The artifact assertions (docs/__tests__/workspace-package.test.js) run from
 # `make lint` and from the `install` step below, so the built dist is always
 # checked before it is used.
-build-workspace-package: deploy-ui
+build-workspace-package: deploy-ui build-wasm
 	@echo "Building @sprout-foundry/workspace package..."
 	@npm run build -w @sprout-foundry/workspace || { echo "@sprout-foundry/workspace build failed" >&2; exit 1; }
 	@echo "Validating the @sprout-foundry/workspace build artifact..."

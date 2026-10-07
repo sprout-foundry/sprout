@@ -14,7 +14,12 @@ import { clientFetch } from '../services/clientSession';
 // The action names must match the server-side ApprovalDecisionFromString in
 // pkg/security/approval_manager.go.
 export type SecurityApprovalAction =
-  'approve_once' | 'approve_always' | 'always_ask' | 'elevate' | 'allow_folder_session' | 'deny';
+  | 'approve_once'
+  | 'approve_always'
+  | 'always_ask'
+  | 'elevate'
+  | 'allow_folder_session'
+  | 'deny';
 
 export interface UseSecurityHandlersOptions {
   eventsProvider: EventsProvider;

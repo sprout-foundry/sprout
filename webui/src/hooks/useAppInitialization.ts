@@ -193,7 +193,8 @@ export function useAppInitialization({
                       registerGitToolGlobal();
                       // The WASM binary exposes setToolExecutionHook on SproutWasm.
                       const wasmApi = shell.wasm?.SproutWasm as
-                        { setToolExecutionHook?: (fn: (cmd: string) => unknown) => void } | undefined;
+                        | { setToolExecutionHook?: (fn: (cmd: string) => unknown) => void }
+                        | undefined;
                       if (wasmApi?.setToolExecutionHook) {
                         installGitToolBridge(wasmApi);
                         debugLog('[startup] Agent git tool bridge installed');

@@ -88,7 +88,7 @@ checkboxes.
       provides one; the theme follows `host.theme` live (token values or a
       theme name), replacing any DOM observation. Vitest.
       Spec: SP-160 §160b, §160d.
-- [ ] **host.8** Guard: remove the `isCloud` and `appMode` exports, and add
+- [x] **host.8** Guard: remove the `isCloud` and `appMode` exports, and add
       a check (ESLint `no-restricted-imports`/`no-restricted-syntax` or a
       vitest that scans `webui/src`) that fails if any module outside
       `webui/src/host/` reads the build mode, `appMode`, or names a host.

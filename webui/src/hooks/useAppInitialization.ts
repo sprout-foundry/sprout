@@ -12,8 +12,7 @@ import type { EventsProvider } from '@sprout/events';
 import { useEffect } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { fetchRuntimeConfig, getBootstrapUser } from '../bootstrapAdapter';
-import { isCloud } from '../config/mode';
-import { useHostCapabilities } from '../host';
+import { useHost, useHostCapabilities } from '../host';
 import type { AppStoreSetState } from '../contexts/AppStore';
 import { ApiService } from '../services/api';
 import type { StatsResponse, FilesResponse } from '../services/api';
@@ -65,6 +64,11 @@ export function useAppInitialization({
   handleReconnect,
 }: UseAppInitializationOptions): void {
   const { workspaceSwitching: supportsWorkspaceSwitching } = useHostCapabilities();
+  // host.8: the hosted build's agent runs in the browser (WASM shell + browser
+  // git) and its transport authenticates against a platform (authMode
+  // 'bearer'). This single flag replaces every former isCloud read in this
+  // hook.
+  const hosted = useHost().transport.authMode === 'bearer';
   const log = useLog();
   const apiService = ApiService.getInstance();
 
@@ -76,10 +80,10 @@ export function useAppInitialization({
     // bootstrap has resolved and the app is about to mount.
     // All other initialization (WebSocket, data loading, WASM) is
     // gated behind this check to avoid 401 error spam.
-    if (isCloud) {
+    if (hosted) {
       fetchRuntimeConfig()
         .then((config) => {
-          if (config.appMode === 'cloud' && !config.user) {
+          if (!config.user) {
             // No session — redirect to platform login with return_to so the
             // user comes back to the browser IDE (on the same project and
             // page) after authenticating, not stranded on the dashboard.
@@ -122,7 +126,7 @@ export function useAppInitialization({
       // short-circuits into a dead branch and the block below runs
       // exactly as before (byte-identical behavior).
       if (!NATIVE_FS_ENABLED) {
-        const wasmPreloadPromise: Promise<boolean> = isCloud
+        const wasmPreloadPromise: Promise<boolean> = hosted
           ? ((getAdapter() as CloudAdapter | null)?.preloadWasmShell() ?? Promise.resolve(false))
           : Promise.resolve(false);
 
@@ -145,7 +149,7 @@ export function useAppInitialization({
             // and the three git boot blocks below run exactly as before
             // (byte-identical behavior).
             if (!NATIVE_GIT_ENABLED) {
-              if (isCloud) {
+              if (hosted) {
                 import('../services/cloudWasmHandlers').then(({ listAllVfsFiles }) => {
                   import('../services/browserGit').then(({ configureBrowserGit }) => {
                     const shell = (getAdapter() as CloudAdapter | null)?.getWasmShell?.();
@@ -181,7 +185,7 @@ export function useAppInitialization({
             // NATIVE_GIT_ENABLED — see the guard above; default build runs
             // this exactly as before.)
             if (!NATIVE_GIT_ENABLED) {
-              if (isCloud) {
+              if (hosted) {
                 import('../services/agentGitToolBridge')
                   .then(({ registerGitToolGlobal, installGitToolBridge }) => {
                     const shell = (getAdapter() as CloudAdapter | null)?.getWasmShell?.();
@@ -217,12 +221,12 @@ export function useAppInitialization({
                   });
               }
             }
-          } else if (isCloud) {
+          } else if (hosted) {
             console.warn('[startup] WASM shell preload failed — falling through to server safety-net');
             setState((prev) => ({ ...prev, wasmLoading: false, wasmError: 'Failed to load browser runtime' }));
           }
         });
-        if (isCloud) {
+        if (hosted) {
           setState((prev) => ({ ...prev, wasmLoading: true }));
         }
       }
@@ -232,7 +236,7 @@ export function useAppInitialization({
       // from the agent are dispatched via the agentEventDispatcher,
       // which feeds them into the same handleEvent that WebSocket
       // events use. This makes agent responses render in the chat UI.
-      if (isCloud) {
+      if (hosted) {
         import('../services/cloudWasmHandlers').then(({ setAgentEventDispatcher }) => {
           // Through the event bus, not straight to handleEvent: other
           // listeners (the git panel's refresh after an agent edit) missed
@@ -252,7 +256,7 @@ export function useAppInitialization({
         apiService
           .getStats()
           .then((stats: StatsResponse) => {
-            const patch = polledStatsPatch(stats, isCloud);
+            const patch = polledStatsPatch(stats, hosted);
             setState((prev) => {
               const merged = { ...prev.stats, ...patch };
               return {
@@ -377,7 +381,7 @@ export function useAppInitialization({
           );
           const currentHasMessages = Number(currentSession?.message_count || 0) > 0;
 
-          if (isCloud && currentHasMessages && currentSessionId) {
+          if (hosted && currentHasMessages && currentSessionId) {
             // Cloud mode: the "current" session id points at the most recently
             // active localStorage-backed conversation, but its transcript is
             // not loaded into React state on a fresh page load. When that
@@ -404,7 +408,7 @@ export function useAppInitialization({
             const chats = await listChatSessions()
               .then((resp) => resp.chat_sessions ?? [])
               .catch(() => []);
-            const allowFallback = (!isCloud || !hasExplicitCurrent) && canAutoRestoreLatestSession(chats);
+            const allowFallback = (!hosted || !hasExplicitCurrent) && canAutoRestoreLatestSession(chats);
             if (allowFallback) {
               // Never a conversation the user cleared: that was "start fresh".
               const restorable = sessions.find(

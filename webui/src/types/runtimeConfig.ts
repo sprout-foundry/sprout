@@ -55,9 +55,6 @@ export interface RuntimeConfig {
   /** Authentication mode: "none" (local) or "bearer" (cloud/token) */
   authMode: 'none' | 'bearer';
 
-  /** Application mode: "local" (desktop/self-hosted) or "cloud" (managed) */
-  appMode: 'local' | 'cloud';
-
   /** Version string embedded at build time */
   buildVersion: string;
 

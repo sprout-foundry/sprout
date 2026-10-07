@@ -10,9 +10,10 @@
  *   3. localhost defaults       →  hardcoded dev defaults
  */
 
+import { getActiveHost, registerHostChangeHook } from './host/accessor';
+import { CLOUD_NAV_ITEMS } from './host/platformNav';
 import { installAdapter } from './services/apiAdapter';
 import type { PlatformNavItem } from './services/apiAdapter';
-import { CLOUD_NAV_ITEMS } from './host/platformNav';
 import type { GitSyncReport, RuntimeConfig } from './types/runtimeConfig';
 
 /** Shape of the JSON returned by /api/bootstrap (all fields optional). */
@@ -29,7 +30,6 @@ interface BootstrapResponse {
   apiBaseURL?: string;
   wsURL?: string;
   authMode?: 'none' | 'bearer';
-  appMode?: 'local' | 'cloud';
   buildVersion?: string;
   sharedMode?: boolean;
   navItems?: PlatformNavItem[];
@@ -54,7 +54,6 @@ const LOCALHOST_DEFAULTS: RuntimeConfig = {
   apiBaseURL: 'http://localhost:56000',
   wsURL: 'ws://localhost:56000/ws',
   authMode: 'none',
-  appMode: 'local',
   buildVersion: 'dev',
 };
 
@@ -127,8 +126,8 @@ export function getBootstrapSync(): GitSyncReport | null {
 
 /**
  * Derive same-origin API/WS URLs from the current page location. Used when
- * cloud mode is active but no Foundry URL is baked in — e.g. the webui is
- * served from Cloudflare Pages and the Pages Functions proxy forwards
+ * the hosted build is active but no Foundry URL is baked in — e.g. the webui
+ * is served from Cloudflare Pages and the Pages Functions proxy forwards
  * /api/*, /.ory/*, and /ws to the Foundry tunnel on the same origin.
  */
 function sameOriginDefaults(): { apiBaseURL: string; wsURL: string } {
@@ -143,31 +142,50 @@ function sameOriginDefaults(): { apiBaseURL: string; wsURL: string } {
 }
 
 /**
+ * Whether the ACTIVE host is the hosted build (its transport authenticates
+ * against a platform). This is the host-contract form of the former
+ * `VITE_SPROUT_MODE === 'cloud'` check: cloudHost.transport.authMode is
+ * 'bearer', localHost's is 'none'. The null host (pure test contexts, and the
+ * instant before the entry calls setActiveHost) falls to the local shape.
+ */
+function hostedTransport(): boolean {
+  return getActiveHost()?.transport.authMode === 'bearer';
+}
+
+/**
  * Build a RuntimeConfig from Vite env vars, using per-field defaults.
  * Returns null when ALL env vars are unset (caller should fall to localhost defaults).
  *
  * Env var names match the build pipeline (sprout/scripts/build-webui-dist.mjs
- * and sprout/webui/.env.cloud): VITE_SPROUT_MODE, VITE_FOUNDRY_API_URL,
- * VITE_FOUNDRY_WS_URL.
+ * and sprout/webui/.env.cloud): VITE_FOUNDRY_API_URL, VITE_FOUNDRY_WS_URL,
+ * VITE_BUILD_VERSION.
+ *
+ * host.8: this used to read VITE_SPROUT_MODE to choose the fallback
+ * (cloud → same-origin, local → localhost). Reading the build mode is now
+ * host-tree-only (a guard test enforces it), so the fallback asks the ACTIVE
+ * HOST instead — the same source of truth installAdapterForConfig uses and
+ * the same one the spec mandates ("Sprout never infers its host from build
+ * flags or URLs"). When a Foundry URL is baked in, the missing field falls
+ * back to the localhost dev defaults; when no URL is configured, the hosted
+ * build is served same-origin (the Cloudflare Pages Functions proxy case) and
+ * the local build uses localhost. Behavior matches the former mode-based
+ * branch for both builds.
  */
 function fromEnvVars(): RuntimeConfig | null {
   const apiBaseURL = import.meta.env.VITE_FOUNDRY_API_URL;
   const wsURL = import.meta.env.VITE_FOUNDRY_WS_URL;
-  const appMode = (import.meta.env.VITE_SPROUT_MODE as 'local' | 'cloud' | undefined) ?? undefined;
   const buildVersion = import.meta.env.VITE_BUILD_VERSION;
 
-  if (!apiBaseURL && !wsURL && !appMode && !buildVersion) {
+  if (!apiBaseURL && !wsURL && !buildVersion) {
     return null;
   }
 
-  const resolvedMode = appMode ?? 'local';
-  const fallback = resolvedMode === 'cloud' ? sameOriginDefaults() : LOCALHOST_DEFAULTS;
+  const fallback = apiBaseURL || wsURL || !hostedTransport() ? LOCALHOST_DEFAULTS : sameOriginDefaults();
 
   return {
     apiBaseURL: apiBaseURL || fallback.apiBaseURL,
     wsURL: wsURL || fallback.wsURL,
     authMode: 'none',
-    appMode: resolvedMode,
     buildVersion: buildVersion ?? 'dev',
   };
 }
@@ -180,25 +198,75 @@ function fromEnvVars(): RuntimeConfig | null {
  *
  * The resolved config is cached and also used to install the adapter.
  *
- * Memoized: the first call performs the tier fallback, installs the adapter,
- * and caches the resulting promise. Subsequent calls return the same promise
- * so awaiting bootstrap from multiple places (the module auto-run plus
- * useAppInitialization's auth gate) does NOT trigger duplicate /api/bootstrap
- * requests or re-install the adapter.
+ * Memoized: the first call performs the tier fallback and caches the
+ * resulting promise, so awaiting bootstrap from multiple places (the module
+ * auto-run plus useAppInitialization's auth gate) does NOT trigger duplicate
+ * /api/bootstrap requests.
+ *
+ * The adapter INSTALL is not part of that memo: it now depends on the active
+ * host's transport (host.8), and the entry point imports this module (whose
+ * auto-run fires immediately) BEFORE it calls setActiveHost. Installing only
+ * inside the memoized resolve would therefore install against the pre-host
+ * state and never recover. So installation happens in this wrapper on every
+ * call and whenever the active host changes, always against the current host
+ * and the last-resolved config.
  */
 let bootstrapPromise: Promise<RuntimeConfig> | null = null;
 
+/** The config the most recent resolve produced; used by the host-change install. */
+let lastResolvedConfig: RuntimeConfig | null = null;
+
 export function fetchRuntimeConfig(): Promise<RuntimeConfig> {
   if (!bootstrapPromise) {
-    bootstrapPromise = resolveRuntimeConfig().catch((err) => {
-      // resolveRuntimeConfig never rejects in practice (it falls back to
-      // localhost defaults), but clear the cache defensively so a transient
-      // throw allows a future retry rather than caching the failure forever.
-      bootstrapPromise = null;
-      throw err;
-    });
+    bootstrapPromise = resolveRuntimeConfig()
+      .then((config) => {
+        lastResolvedConfig = config;
+        return config;
+      })
+      .catch((err) => {
+        // resolveRuntimeConfig never rejects in practice (it falls back to
+        // localhost defaults), but clear the cache defensively so a transient
+        // throw allows a future retry rather than caching the failure forever.
+        bootstrapPromise = null;
+        throw err;
+      });
   }
-  return bootstrapPromise;
+  // Install (idempotently) against the CURRENT host on every call: by the time
+  // the entry calls this after setActiveHost, a hosted build installs its
+  // CloudAdapter; a local build installs nothing. Re-installing the same host's
+  // adapter is safe (installAdapter replaces the singleton).
+  return bootstrapPromise.then(async (config) => {
+    await installAdapterForConfig(config);
+    return config;
+  });
+}
+
+// The host is recorded after this module's auto-run in the production order
+// (import bootstrapAdapter → import the host → setActiveHost), so the auto-run
+// may have resolved its URL fallback against the pre-host state. The accessor
+// calls this hook when the host changes: drop the memo so the next
+// fetchRuntimeConfig() re-resolves with the host in place, and install from the
+// already-resolved config so the hosted build's adapter appears.
+//
+// This is a direct function hook (not a window event listener) so it is
+// deterministically scoped to this module instance — a window listener would
+// survive vi.resetModules() in tests and fire against a torn module graph.
+export function onActiveHostChanged(): void {
+  bootstrapPromise = null;
+  const config = lastResolvedConfig;
+  if (config) void installAdapterForConfig(config);
+  // Re-resolve eagerly (not merely on the next consumer call) so
+  // getBootstrapConfig() reflects the host by the time the tree renders: the
+  // fresh memo re-runs the URL fallback with the host in place, and any late
+  // reader sees the host-correct config rather than the pre-host one.
+  void fetchRuntimeConfig().catch(() => undefined);
+}
+
+// The accessor (host/accessor) owns the host lifecycle; it calls the hook above
+// through this registration to avoid importing bootstrapAdapter (which would be
+// a cycle: bootstrapAdapter → host/accessor → bootstrapAdapter).
+if (typeof window !== 'undefined') {
+  registerHostChangeHook(onActiveHostChanged);
 }
 
 async function resolveRuntimeConfig(): Promise<RuntimeConfig> {
@@ -214,7 +282,6 @@ async function resolveRuntimeConfig(): Promise<RuntimeConfig> {
         apiBaseURL: data.apiBaseURL,
         wsURL: data.wsURL ?? '',
         authMode: data.authMode ?? 'none',
-        appMode: data.appMode ?? 'local',
         buildVersion: data.buildVersion ?? 'dev',
         sharedMode: data.sharedMode ?? false,
         navItems: data.navItems,
@@ -229,8 +296,6 @@ async function resolveRuntimeConfig(): Promise<RuntimeConfig> {
       currentUserIdentity = config.user;
       currentSyncSnapshot = data.sync;
       currentPlatformURL = config.platformURL;
-      // eslint-disable-next-line no-console
-      await installAdapterForConfig(config);
 
       // Load any plugin scripts advertised by the server.
       if (data.pluginScripts && Array.isArray(data.pluginScripts)) {
@@ -250,15 +315,17 @@ async function resolveRuntimeConfig(): Promise<RuntimeConfig> {
     lastConfig = fromEnv;
     // eslint-disable-next-line no-console
     console.warn('bootstrap: using VITE env vars (fetch failed: %s)', fetchError);
-    await installAdapterForConfig(fromEnv);
     return fromEnv;
   }
 
-  // — Tier 3: localhost defaults —
-  lastConfig = LOCALHOST_DEFAULTS;
-  // eslint-disable-next-line no-console
-  await installAdapterForConfig(LOCALHOST_DEFAULTS);
-  return LOCALHOST_DEFAULTS;
+  // — Tier 3: last-resort URL defaults —
+  // The local build's daemon lives on localhost:56000; the hosted build (no
+  // bootstrap endpoint reachable, no baked Foundry URL) is served same-origin
+  // through the Pages Functions proxy. host.8: the choice comes from the host
+  // contract, not the build flag.
+  const defaults = hostedTransport() ? { ...LOCALHOST_DEFAULTS, ...sameOriginDefaults() } : LOCALHOST_DEFAULTS;
+  lastConfig = defaults;
+  return defaults;
 }
 
 /**
@@ -270,16 +337,21 @@ export function getBootstrapConfig(): RuntimeConfig {
 }
 
 /**
- * Install the appropriate adapter based on the resolved config's appMode.
+ * Install the appropriate adapter based on the ACTIVE HOST, not the resolved
+ * config's mode (host.8 removed appMode).
  *
  * Cloud-adapter-only rule (Trust-Boundary Principle, see root AGENTS.md):
  * platform-auth behaviors (401 → /login?return_to=) live inside the
  * CloudAdapter proxy path only — they must NOT be in local-mode entry chunks.
  * The dynamic import below ensures cloudAdapter code is excluded from the
  * local-mode build entirely.
+ *
+ * The hosted build's host authenticates against a platform
+ * (cloudHost.transport.authMode === 'bearer'); the local host is 'none'. This
+ * is exactly the split the former `config.appMode === 'cloud'` branch made.
  */
 async function installAdapterForConfig(config: RuntimeConfig): Promise<void> {
-  if (config.appMode === 'cloud') {
+  if (getActiveHost()?.transport.authMode === 'bearer') {
     const { CloudAdapter } = await import('./services/cloudAdapter');
     // eslint-disable-next-line no-console
     const adapter = new CloudAdapter({

@@ -1,6 +1,6 @@
 import { Settings, CloudOff } from 'lucide-react';
 import { forwardRef } from 'react';
-import { isCloud } from '../../config/mode';
+import { useHost } from '../../host/useHost';
 import { useActiveRepoURL } from '../../services/activeRepo';
 import SproutLogo from '../SproutLogo';
 import { OpenRepositoryPanel } from './OpenRepositoryPanel';
@@ -19,6 +19,11 @@ export const EmptyChatPanel = forwardRef<HTMLDivElement, EmptyChatPanelProps>(fu
   ref,
 ) {
   const activeRepo = useActiveRepoURL();
+  // The hosted build's repo is cloned from GitHub, so an empty chat offers the
+  // "open a repository" panel; the local build already has a filesystem.
+  // host.8: the hosted transport authenticates against a platform
+  // (authMode 'bearer') — the former isCloud branch.
+  const hosted = useHost().transport.authMode === 'bearer';
   if (showOffline) {
     return (
       <div className="chat-container chat-container--empty" ref={ref}>
@@ -71,7 +76,7 @@ export const EmptyChatPanel = forwardRef<HTMLDivElement, EmptyChatPanelProps>(fu
     );
   }
 
-  if (isCloud && !activeRepo) {
+  if (hosted && !activeRepo) {
     return (
       <div className="chat-container chat-container--empty" ref={ref}>
         <OpenRepositoryPanel />

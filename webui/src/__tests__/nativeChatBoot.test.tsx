@@ -292,27 +292,19 @@ vi.mock('react-virtuoso', () => ({
   ),
 }));
 
-// isCloud: control via env (same pattern as the boot tests).
-vi.mock('../config/mode', () => ({
-  get isCloud() {
-    return import.meta.env.VITE_SPROUT_MODE === 'cloud';
-  },
-  supportsWorkspaceSwitching: false,
-  supportsExport: false,
-  supportsSSH: false,
-}));
+// config/mode: no longer read by ChatView (host.8 moved it to the host
+// contract). Kept empty so an accidental deep import still resolves.
+vi.mock('../config/mode', () => ({}));
 
 // bootstrapAdapter: return a safe default config.
 vi.mock('../bootstrapAdapter', () => ({
   getPlatformURL: () => undefined,
   getBootstrapConfig: () => ({
-    appMode: 'cloud',
     user: { id: 'test-user', tier: 'pro' },
     foundryApiUrl: undefined,
     foundryWsUrl: undefined,
   }),
   fetchRuntimeConfig: async () => ({
-    appMode: 'cloud',
     user: { id: 'test-user', tier: 'pro' },
   }),
 }));
@@ -471,6 +463,18 @@ async function loadChatView(chatFlagOn: boolean): Promise<ChatViewModule['defaul
   return mod.default;
 }
 
+/** A hosted-shaped host so ChatView's capability reads match a cloud build. */
+async function hostedProvider(): Promise<{
+  HostProvider: React.ComponentType<{ host: unknown; children?: React.ReactNode }>;
+  host: unknown;
+}> {
+  const { HostProvider } = await import('../host/HostProvider');
+  const { headlessHost } = await import('../host');
+  const host = headlessHost();
+  (host as { transport: { authMode: string } }).transport = { ...host.transport, authMode: 'bearer' };
+  return { HostProvider, host };
+}
+
 describe('ChatView — R-4 render conditions', () => {
   it('flag ON: renders the shell-provided placeholder and NOT chat-main', async () => {
     const ChatView = await loadChatView(true);
@@ -478,15 +482,18 @@ describe('ChatView — R-4 render conditions', () => {
     // resetModules in loadChatView), so the context matches the one its
     // ProgressStrip reads.
     const { EventsContextProvider } = await import('../contexts/EventsContext');
+    const { HostProvider, host } = await hostedProvider();
     const provider = createMockEventsProvider();
     const props = makeChatViewProps();
 
     let rendered!: ReturnType<typeof render>;
     await act(async () => {
       rendered = render(
-        <EventsContextProvider provider={provider}>
-          <ChatView {...props} />
-        </EventsContextProvider>,
+        <HostProvider host={host}>
+          <EventsContextProvider provider={provider}>
+            <ChatView {...props} />
+          </EventsContextProvider>
+        </HostProvider>,
       );
     });
     await act(async () => {
@@ -502,15 +509,18 @@ describe('ChatView — R-4 render conditions', () => {
   it('flag OFF: renders chat-main and NOT the shell-provided placeholder', async () => {
     const ChatView = await loadChatView(false);
     const { EventsContextProvider } = await import('../contexts/EventsContext');
+    const { HostProvider, host } = await hostedProvider();
     const provider = createMockEventsProvider();
     const props = makeChatViewProps();
 
     let rendered!: ReturnType<typeof render>;
     await act(async () => {
       rendered = render(
-        <EventsContextProvider provider={provider}>
-          <ChatView {...props} />
-        </EventsContextProvider>,
+        <HostProvider host={host}>
+          <EventsContextProvider provider={provider}>
+            <ChatView {...props} />
+          </EventsContextProvider>
+        </HostProvider>,
       );
     });
     await act(async () => {

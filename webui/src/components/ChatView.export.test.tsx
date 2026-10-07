@@ -45,11 +45,8 @@ vi.mock('react-virtuoso', () => ({
 }));
 
 /* --- config/mode --- */
-vi.mock('../config/mode', () => ({
-  supportsSSH: false,
-  supportsExport: true,
-  isCloud: false,
-}));
+// host.8: ChatView reads capabilities from the host, not config/mode.
+vi.mock('../config/mode', () => ({}));
 
 /* --- services/apiAdapter --- */
 vi.mock('../services/apiAdapter', () => ({
@@ -119,6 +116,7 @@ vi.mock('../utils/log', () => ({
 
 import { EventsContextProvider } from '../contexts/EventsContext';
 import ChatView from './ChatView';
+import { HostProvider, headlessHost } from '../host/HostProvider';
 
 // ---------------------------------------------------------------------------
 // Test setup
@@ -142,8 +140,11 @@ const provider = {
   flushQueuedMessages: vi.fn(() => 0),
 };
 
+// host.8: ChatView reads capabilities (ssh/export) from the host contract.
+const testHost = { ...headlessHost(), capabilities: { ...headlessHost().capabilities, ssh: false, export: true } };
+
 function wrap(node: React.ReactNode) {
-  return createElement(EventsContextProvider, { provider }, node);
+  return createElement(HostProvider, { host: testHost }, createElement(EventsContextProvider, { provider }, node));
 }
 
 // ---------------------------------------------------------------------------

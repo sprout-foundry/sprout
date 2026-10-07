@@ -1,6 +1,5 @@
 import type { TodoItem, LogEntry } from '@sprout/ui';
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
-import { isCloud } from '../config/mode';
 import { useHost, useHostCapabilities } from '../host';
 import { useAppStateField, useAppStoreSetState } from '../contexts/AppStore';
 import { useEditorManager } from '../contexts/EditorManagerContext';
@@ -177,6 +176,10 @@ const AppContent: React.FC<AppContentProps> = ({
   // The host provides a Home surface (its work places) when it has platform
   // pages to embed; the frame is only reachable through that surface.
   const host = useHost();
+  // host.8: the hosted build (authMode 'bearer') polls the platform's own
+  // notifications and shows the phone tab bar; the local build does neither.
+  // This replaces the former isCloud branch.
+  const hosted = host.transport.authMode === 'bearer';
   const hasHomeSurface = (host.navigation.workItems?.length ?? 0) > 0;
   const {
     buffers,
@@ -213,7 +216,7 @@ const AppContent: React.FC<AppContentProps> = ({
     onSwipeRight: onToggleSidebar,
     enabled: isMobile,
   });
-  useEffect(() => (isCloud ? startPlatformNotifications() : undefined), []);
+  useEffect(() => (hosted ? startPlatformNotifications() : undefined), [hosted]);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [commandPaletteMode, setCommandPaletteMode] = useState<PaletteMode>('all');
   // The layered layout's header search opens the palette from outside this tree.
@@ -1306,7 +1309,7 @@ const AppContent: React.FC<AppContentProps> = ({
       ) : null}
       {isLayeredLayout && hasHomeSurface && <PlatformHome isMobile={isMobile} onOpenMenu={onToggleSidebar} />}
       <NotificationCenterHost />
-      {isLayeredLayout && isCloud && isMobile && (
+      {isLayeredLayout && hosted && isMobile && (
         <PhoneTabBar
           drawerOpen={isSidebarOpen}
           onToggleDrawer={onToggleSidebar}

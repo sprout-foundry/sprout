@@ -1,10 +1,9 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-
-vi.mock('../../bootstrapAdapter', () => ({ getPlatformURL: () => undefined }));
-
 import { OpenRepositoryPanel } from './OpenRepositoryPanel';
+
+vi.mock('../../bootstrapAdapter', () => ({}));
 
 let container: HTMLDivElement;
 let root: Root;

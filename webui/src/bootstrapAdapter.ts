@@ -94,22 +94,6 @@ export function getBootstrapUser(): BootstrapUser | undefined {
 }
 
 /**
- * Most recently resolved platform web-UI base URL (SP-016 P0.3) from the
- * bootstrap response. Undefined when the host did not provide one —
- * account-surface exits (back-link, escalation task links, avatar menu)
- * then keep their relative URLs (today's behavior).
- */
-let currentPlatformURL: string | undefined;
-
-/**
- * Return the platform base URL resolved at bootstrap, or undefined when
- * absent. Safe to call before bootstrap resolves.
- */
-export function getPlatformURL(): string | undefined {
-  return currentPlatformURL;
-}
-
-/**
  * Most recently resolved workspace git snapshot (ETH-1 sync-on-resume) from
  * the bootstrap response. null when the platform/daemon did not provide one
  * or bootstrap has not resolved yet — callers wanting fresher state should
@@ -150,6 +134,23 @@ function sameOriginDefaults(): { apiBaseURL: string; wsURL: string } {
  */
 function hostedTransport(): boolean {
   return getActiveHost()?.transport.authMode === 'bearer';
+}
+
+/**
+ * Record the platform base URL resolved at bootstrap on the ACTIVE host's
+ * transport (SP-016 P0.3). The host object carries the value as data, so the
+ * URL builder and any other consumer read it from the transport instead of
+ * reaching into the bootstrap fetch. Absent when the host did not provide one —
+ * the transport keeps no platform URL and account-surface exits stay relative
+ * (today's behavior). No-op when no host is active yet (the entry records its
+ * host after this module's auto-run; the host-change hook re-applies).
+ *
+ * Only writes when a base was resolved: a host that declared its own
+ * `transport.platformURL` keeps it when the bootstrap has none.
+ */
+function recordHostPlatformURL(platformURL: string | undefined): void {
+  const host = getActiveHost();
+  if (host && platformURL) host.transport.platformURL = platformURL;
 }
 
 /**
@@ -295,7 +296,6 @@ async function resolveRuntimeConfig(): Promise<RuntimeConfig> {
       lastConfig = config;
       currentUserIdentity = config.user;
       currentSyncSnapshot = data.sync;
-      currentPlatformURL = config.platformURL;
 
       // Load any plugin scripts advertised by the server.
       if (data.pluginScripts && Array.isArray(data.pluginScripts)) {
@@ -351,6 +351,11 @@ export function getBootstrapConfig(): RuntimeConfig {
  * is exactly the split the former `config.appMode === 'cloud'` branch made.
  */
 async function installAdapterForConfig(config: RuntimeConfig): Promise<void> {
+  // The host's transport carries the resolved platform base as data, so the
+  // URL builder never touches the bootstrap fetch. Applied on every install
+  // and whenever the host changes (the entry records its host after this
+  // module's auto-run) so the value lands on the live host.
+  recordHostPlatformURL(config.platformURL);
   if (getActiveHost()?.transport.authMode === 'bearer') {
     const { CloudAdapter } = await import('./services/cloudAdapter');
     // eslint-disable-next-line no-console

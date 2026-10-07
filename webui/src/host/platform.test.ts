@@ -7,8 +7,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { platformEntitlements, intentPath, PLATFORM_ACCOUNT_ITEMS, PLATFORM_WORK_ITEMS } from './platform';
 
-vi.mock('../bootstrapAdapter', () => ({ getPlatformURL: () => undefined }));
-
 afterEach(() => vi.unstubAllGlobals());
 
 describe('intentPath', () => {

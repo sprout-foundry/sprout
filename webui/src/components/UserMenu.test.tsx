@@ -5,9 +5,11 @@
  */
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { setActiveHost } from '../host/accessor';
 import { HostProvider } from '../host/HostProvider';
-import { makeTestHost } from '../host/testHost';
+import { localHost } from '../host/localHost';
 import { PLATFORM_ACCOUNT_ITEMS, intentPath } from '../host/platform';
+import { makeTestHost } from '../host/testHost';
 import type { SproutHost } from '../host/types';
 import { __resetHomeViewForTests, getHomeView } from '../services/homeView';
 import { UserMenu } from './UserMenu';
@@ -20,13 +22,15 @@ const platformURLState: { value: string | undefined } = { value: undefined };
 
 vi.mock('../bootstrapAdapter', () => ({
   getBootstrapUser: () => userState.user,
-  getPlatformURL: () => platformURLState.value,
 }));
 
 /** A host with the cloud account surface, no platform strings in the test. */
 function cloudNavHost(): SproutHost {
   return {
     ...makeTestHost(),
+    // The platform base is host-provided transport data: the menu
+    // reads it from the host's transport, not the bootstrap adapter.
+    transport: { ...makeTestHost().transport, authMode: 'bearer', platformURL: platformURLState.value },
     navigation: {
       open: () => undefined,
       accountItems: PLATFORM_ACCOUNT_ITEMS,
@@ -63,6 +67,10 @@ function stubLocation() {
 }
 
 function render(host: SproutHost) {
+  // The component reads nav items from the provider but resolves exit URLs
+  // through the module-level active host (platformHref reads the accessor), so
+  // record the same host in both channels.
+  setActiveHost(host);
   act(() => {
     root.render(createElement(HostProvider, { host }, createElement(UserMenu)));
   });
@@ -76,6 +84,9 @@ function openMenu() {
 
 beforeEach(() => {
   __resetHomeViewForTests();
+  // Clear the module-level active host so a previous test's host (or the
+  // platform base it carried) cannot leak into this one.
+  setActiveHost(localHost);
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);

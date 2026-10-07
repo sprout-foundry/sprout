@@ -19,7 +19,8 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
@@ -384,6 +385,50 @@ describe('lazy loading: the entry loads no editor or WASM code', { skip: !built 
       reachableFromViews.length > 0,
       `the views entry must load the heavy chunks (heavy: ${heavyChunks.join(', ')})`,
     );
+  });
+});
+
+// ── No platform calls on import ────────────────────────────────────────
+
+describe('no platform calls on import', { skip: !built && 'packages/workspace/dist not built' }, () => {
+  // Importing the package must not reach the bootstrap adapter (its module
+  // scope fetches /api/bootstrap and installs an adapter) nor resolve platform
+  // entitlements (the cloud host's /billing/status). Both used to sit in the
+  // entry's static graph and run at module scope; the resolved data now arrives
+  // through the host's transport instead, and entitlements resolve lazily.
+  const graph = staticImportGraph('dist/index.js');
+  const sources = [...graph].map((file) => [file, fs.readFileSync(path.join(PACKAGE_DIR, file), 'utf-8')]);
+
+  test('the entry graph reaches files (the walk is real, not vacuous)', () => {
+    assert.ok(graph.size >= 2, `the entry statically imports at least one chunk, reached ${graph.size}`);
+  });
+
+  test('no file in the entry graph carries the bootstrap-adapter fetch on import', () => {
+    const offenders = sources
+      .filter(([, source]) => /bootstrapAdapter/.test(source) || /\/api\/bootstrap/.test(source))
+      .map(([file]) => file);
+    assert.deepEqual(offenders, [], `the bootstrap adapter is in the entry graph: ${offenders.join(', ')}`);
+  });
+
+  test('importing the built entry performs no fetch', () => {
+    // The behavioral guard: a child node process stubs global.fetch before
+    // importing the built entry, then asserts no call was made at import time.
+    // Out-of-process keeps the runner's own module cache and globals untouched,
+    // and the assertion is exactly what a host observes. A module-scope
+    // /api/bootstrap or /billing/status call would make `calls` non-empty.
+    const probe = `
+      const calls = [];
+      globalThis.fetch = (...args) => { calls.push(args); return Promise.resolve({ ok: false }); };
+      await import(${JSON.stringify(pathToFileURL(path.join(PACKAGE_DIR, 'dist/index.js')).href)});
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      process.stdout.write(String(calls.length));
+    `;
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', probe], {
+      encoding: 'utf-8',
+      timeout: 30_000,
+    });
+    assert.equal(result.status, 0, `the entry import probe exited ${result.status}: ${result.stderr}`);
+    assert.equal(result.stdout.trim(), '0', 'importing the package performed a fetch at module scope');
   });
 });
 

@@ -5,25 +5,35 @@
  * "View task on platform" links, avatar-menu exits) must not self-loop
  * into this daemon's own SPA on a Fly workspace (Mode B): relative hrefs
  * resolve against the workspace origin and land back in the editor.
- * When the host knows the platform base URL (bootstrap `platformURL`,
- * from the daemon's SPROUT_PLATFORM_URL env or the platform's cloud
- * bootstrap), exits build absolute URLs against it. When the host does
- * not know it, the relative path is returned verbatim — today's behavior.
+ * When the host's transport carries a platform base URL (its outward
+ * platform surface), exits build absolute URLs against it. When the host
+ * has no platform surface — the local build, or a hosted build that did not
+ * provide one — the relative path is returned verbatim (today's behavior).
+ *
+ * The base is host-provided data read from the active host's transport, not
+ * fetched: this module is part of the package's import graph, so it must not
+ * reach the bootstrap fetch. A caller may pass the host whose transport to
+ * read (the React path, where the host is at hand); otherwise the active
+ * host's transport is consulted. The entry point records the same host
+ * instance on the accessor and the provider, so both channels agree.
  */
 
-import { getPlatformURL } from '../bootstrapAdapter';
+import { getActiveHost } from './accessor';
+import type { HostTransport } from './types';
 
 /**
  * Resolve the exit URL for a platform SPA path (e.g. '/tasks/abc').
  *
  * @param platformPath  A platform-SPA path, with or without leading slash.
- * @returns The absolute URL `platformURL + path` when a platform base was
- *          resolved at bootstrap; otherwise the path verbatim (existing
+ * @param transport     The host transport to read the platform base from;
+ *                      defaults to the active host's transport.
+ * @returns The absolute URL `platformURL + path` when the host supplies a
+ *          platform base; otherwise the path verbatim (existing
  *          relative-exit behavior). Trailing slashes on the base are
  *          stripped so paths append cleanly.
  */
-export function platformHref(platformPath: string): string {
-  const base = getPlatformURL();
+export function platformHref(platformPath: string, transport?: HostTransport): string {
+  const base = transport ? transport.platformURL : getActiveHost()?.transport.platformURL;
   if (!base) {
     return platformPath;
   }

@@ -129,7 +129,7 @@ standalone local build keeps embedding into `pkg/webui/static`.
       optional `layout` (SP-155 arrangement) and `onSpaceChange`; exported
       with the registered spaces and the individual views
       (`webui/src/views/index.ts`). Vitest. Spec: SP-160 §160a.
-- [ ] **host.11** No platform calls on import: `webui/src/host/cloudHost.ts`
+- [x] **host.11** No platform calls on import: `webui/src/host/cloudHost.ts`
       calls `resolveEntitlementsNow()` at module scope (fetches
       `/billing/status`, `host/platform.ts`), and `host/platformUrl.ts`
       imports `bootstrapAdapter`, which fetches `/api/bootstrap` and

@@ -15,12 +15,35 @@ func TestBuiltinsContainsKnownSkills(t *testing.T) {
 		"project-planning",
 		"self-help",
 		"workflow-automation",
+		"static-site",
 	}
 	got := Builtins()
 	for _, id := range required {
 		if _, ok := got[id]; !ok {
 			t.Errorf("Builtins() missing required skill %q", id)
 		}
+	}
+}
+
+// TestBuiltinsContainsStaticSiteStackSkill is the stack-skill discovery
+// gate: the static-site starter's skill must be discoverable as a builtin
+// (a directory under library/ with valid SKILL.md frontmatter). The
+// starter's auto-activation path (pkg/agent) looks the skill up by the
+// starter ID, so the ID must match the starter's id — "static-site".
+func TestBuiltinsContainsStaticSiteStackSkill(t *testing.T) {
+	got := Builtins()
+	b, ok := got["static-site"]
+	if !ok {
+		t.Fatal("Builtins() missing the static-site stack skill")
+	}
+	if b.Name == "" {
+		t.Error("static-site skill has an empty Name")
+	}
+	if b.Description == "" {
+		t.Error("static-site skill has an empty Description")
+	}
+	if b.Path != LogicalPath+"/static-site" {
+		t.Errorf("static-site Path = %q, want %q", b.Path, LogicalPath+"/static-site")
 	}
 }
 

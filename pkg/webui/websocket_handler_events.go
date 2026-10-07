@@ -50,6 +50,18 @@ func (ws *ReactWebServer) shouldForwardEventToConnection(event events.UIEvent, c
 		return true
 	}
 
+	// ask_user_request (and its cancelled companion) fans out to every
+	// connection of the session, regardless of client/chat targeting: it is
+	// a question to *the user*, and with multiple windows open the owning
+	// window is often not the one on screen — the strict client/chat match
+	// left the question displayed nowhere while the agent blocked until
+	// timeout. Answers are request-ID scoped and single-winner
+	// (AskUserManager.RespondToAskUser), so rendering the dialog on every
+	// window is safe; the cancel event dismisses the losers.
+	if event.Type == events.EventTypeAskUserRequest {
+		return true
+	}
+
 	// Extract target client_id and chat_id from event
 	targetClientID, _ := data["client_id"].(string)
 	targetChatID, _ := data["chat_id"].(string)

@@ -97,6 +97,12 @@ func (ws *ReactWebServer) handleAskUserResponse(safeConn *SafeConn, data *AskUse
 
 	if ws.askUserMgr.RespondToAskUser(data.RequestID, data.Response) {
 		ws.log().Info("ask user response received", slog.String("request_id", data.RequestID), slog.Int("response_length", len(data.Response)))
+		// Dismiss the dialog on the session's OTHER windows: with the
+		// ask_user fan-out (shouldForwardEventToConnection) every window
+		// shows the question, and the losers must close when the winner
+		// answers. "responded" is the status the frontend already treats
+		// as dismiss-without-render (handleAskUserRequest).
+		ws.broadcastAskUserDismissed(clientID, data.RequestID)
 	} else {
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
@@ -138,4 +144,21 @@ func (ws *ReactWebServer) handlePasswordResponse(safeConn *SafeConn, data *Passw
 			"responded":  true,
 		},
 	})
+}
+
+// broadcastAskUserDismissed publishes the terminal status for an answered
+// ask_user request so every window that received the fan-out question can
+// dismiss its dialog. handleAskUserRequest treats both "responded" and
+// "cancelled" as close signals.
+func (ws *ReactWebServer) broadcastAskUserDismissed(clientID, requestID string) {
+	if ws.eventBus == nil {
+		return
+	}
+	payload := map[string]interface{}{
+		"request_id": requestID,
+		"status":     "responded",
+	}
+	// No client_id scoping: the fan-out that delivered the question is the
+	// same audience that must receive the dismissal.
+	ws.eventBus.Publish(eventTypeAskUser, payload)
 }

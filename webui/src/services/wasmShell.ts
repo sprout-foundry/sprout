@@ -7,7 +7,7 @@
  *   console.log(result.stdout);
  */
 
-import { safeJsonParse } from '../utils/json';
+import { safeJsonParse, safeJsonParseOrNull } from '../utils/json';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -214,6 +214,60 @@ function resolveWasmBase(): string {
 const DEFAULT_WASM_URL = `${resolveWasmBase()}/sprout.wasm`;
 const DEFAULT_WASM_EXEC_URL = `${resolveWasmBase()}/wasm_exec.js`;
 
+/** Name of the content-hashed WASM asset manifest emitted by the dist build. */
+export const WASM_MANIFEST_FILE = 'wasm-manifest.json';
+
+/** Manifest emitted alongside the WASM assets by the dist build. */
+export interface WasmManifest {
+  version?: number;
+  /** Logical asset name (e.g. `sprout.wasm`) → content-hashed filename. */
+  files?: Record<string, string>;
+  /** Content-hashed sprout WASM filename. */
+  wasm?: string;
+  /** Content-hashed wasm_exec.js filename. */
+  wasmExec?: string;
+}
+
+/**
+ * Pure translation of a manifest (or nothing) into concrete loader URLs.
+ *
+ * When a manifest is present and names an asset, the returned URL points at
+ * the content-hashed file; otherwise it falls back to the fixed name so an
+ * older bundle (or a local dev server without a manifest) keeps working.
+ * Exported so the fallback rules can be unit-tested without a DOM.
+ */
+export function resolveWasmUrls(
+  base: string,
+  manifest: WasmManifest | null | undefined,
+): {
+  wasmUrl: string;
+  wasmExecUrl: string;
+} {
+  const wasmName = manifest?.wasm || manifest?.files?.['sprout.wasm'] || 'sprout.wasm';
+  const wasmExecName = manifest?.wasmExec || manifest?.files?.['wasm_exec.js'] || 'wasm_exec.js';
+  return {
+    wasmUrl: `${base}/${wasmName}`,
+    wasmExecUrl: `${base}/${wasmExecName}`,
+  };
+}
+
+/**
+ * Fetch the content-hashed WASM manifest for a base, degrading to null on
+ * any failure (missing file on an older bundle, cache, network hiccup) so
+ * the loader falls back to the fixed asset names.
+ */
+export async function loadWasmManifest(base: string, fetchImpl: typeof fetch = fetch): Promise<WasmManifest | null> {
+  try {
+    const response = await fetchImpl(`${base}/${WASM_MANIFEST_FILE}`);
+    if (!response.ok) return null;
+    const text = await response.text();
+    const parsed = safeJsonParseOrNull(text);
+    return parsed && typeof parsed === 'object' ? (parsed as WasmManifest) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Debug logger — only logs when localStorage flag is set or VITE_DEBUG is enabled. */
 // eslint-disable-next-line no-console
 const debug = (...args: unknown[]) => {
@@ -338,10 +392,30 @@ export async function initWasmShell(config?: {
 
     window.__sproutStore = store;
 
-    // 2. Load wasm_exec.js.
+    // 2. Resolve asset URLs. The dist bundle emits content-hashed WASM
+    //    names plus a manifest so a host caching the bundle as immutable
+    //    can never serve an old binary next to new JS. Read the manifest
+    //    first; when it is absent (older bundle / local dev) fall back to
+    //    the fixed names. An explicit config override always wins.
+    const wasmBase = resolveWasmBase();
+    let resolvedWasmUrl = DEFAULT_WASM_URL;
+    let resolvedWasmExecUrl = DEFAULT_WASM_EXEC_URL;
+    if (!config?.wasmUrl || !config?.wasmExecUrl) {
+      const manifest = await loadWasmManifest(wasmBase);
+      const urls = resolveWasmUrls(wasmBase, manifest);
+      resolvedWasmUrl = urls.wasmUrl;
+      resolvedWasmExecUrl = urls.wasmExecUrl;
+      if (manifest) {
+        debug(' manifest resolved:', WASM_MANIFEST_FILE, urls);
+      } else {
+        debug(' no manifest — using fixed WASM asset names');
+      }
+    }
+
+    // 3. Load wasm_exec.js.
     debug(' Step 1: Loading wasm_exec.js...');
     const script = document.createElement('script');
-    const execUrl = config?.wasmExecUrl ?? DEFAULT_WASM_EXEC_URL;
+    const execUrl = config?.wasmExecUrl ?? resolvedWasmExecUrl;
     script.src = execUrl;
     document.head.appendChild(script);
     await new Promise<void>((resolve, reject) => {
@@ -352,10 +426,10 @@ export async function initWasmShell(config?: {
       script.onerror = () => reject(new Error(`Failed to load wasm_exec.js from ${execUrl}`));
     });
 
-    // 3. Fetch and instantiate the WASM binary.
+    // 4. Fetch and instantiate the WASM binary.
     debug(' Step 2: Creating Go instance...');
     const go = new window.Go();
-    const wasmUrl = config?.wasmUrl ?? DEFAULT_WASM_URL;
+    const wasmUrl = config?.wasmUrl ?? resolvedWasmUrl;
     debug(' Step 3: Fetching sprout.wasm from', wasmUrl);
     const wasmResponse = await fetch(wasmUrl);
     if (!wasmResponse.ok) {

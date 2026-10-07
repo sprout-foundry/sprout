@@ -28,7 +28,7 @@ func TestPopulateAgentStats_IncludesRoleUsage(t *testing.T) {
 	if role == "" {
 		t.Fatalf("precondition: agent role = %q, want non-empty", role)
 	}
-	a.TrackMetricsFromResponse(200, 80, 280, 0.02, 0, 0, 0)
+	a.TrackMetricsFromResponse(200, 80, 280, 0.02, 0, 0, 0, 0)
 
 	stats := map[string]interface{}{}
 	populateAgentStats(stats, a)

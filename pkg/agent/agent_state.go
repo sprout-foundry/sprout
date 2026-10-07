@@ -63,7 +63,7 @@ func (a *Agent) GetTokenCostTotal() float64 {
 	return a.state.GetTokenCostTotal()
 }
 
-// GetRole returns the SP-150 §150c role whose model selection this agent's
+// GetRole returns the role whose model selection this agent's
 // usage is attributed to (a configuration.Role* constant, "coder" for the
 // primary agent). Empty when the agent was built before role stamping
 // (callers bucket it under "unknown").
@@ -71,7 +71,7 @@ func (a *Agent) GetRole() string {
 	return a.role
 }
 
-// SetRole sets the SP-150 §150c role the agent's model calls are attributed
+// SetRole sets the role the agent's model calls are attributed
 // to. The primary constructor stamps the coder role (the main conversation
 // loop is the coder's); entry points whose loop serves a different purpose
 // re-stamp it here — e.g. the planning entry point stamps the planner role
@@ -83,8 +83,8 @@ func (a *Agent) SetRole(role string) {
 	a.role = role
 }
 
-// GetRoleUsage returns the per-role token/cost totals (SP-150 §150c,
-// item 150.5) accumulated for this agent, sorted by role. Nil when no cost
+// GetRoleUsage returns the per-role token/cost totals
+// accumulated for this agent, sorted by role. Nil when no cost
 // entry carried a role yet.
 func (a *Agent) GetRoleUsage() []RoleUsage {
 	if a.state == nil {

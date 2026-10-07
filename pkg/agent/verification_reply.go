@@ -1,11 +1,11 @@
-// verification_reply.go — the SP-149 §149c/§149d final-reply contract
-// (item 149.6): a final reply may report success only with a passing
+// verification_reply.go — the final-reply contract:
+// a final reply may report success only with a passing
 // verification result attached, and when the stopping rule fires the reply
 // states plainly what passes, what fails, and what was tried. The
 // attachment is a deterministic block rendered from the stored per-turn
 // verification state (turnVerification) — no NLP rewrites of the model's
-// own prose: the failing attachment itself states the failure, which is
-// what §149d requires. It is delivered in handleQueryResult, after the
+// own prose: the failing attachment itself states the failure. It is
+// delivered in handleQueryResult, after the
 // language guard, through deliverVerificationResult: appended to the final
 // reply, written into the last assistant message in state, and — when the
 // reply string is suppressed by streaming — emitted as a stream chunk.
@@ -21,8 +21,8 @@ import (
 )
 
 // attachVerificationReply appends the turn's verification attachment to the
-// final reply (SP-149 §149c/§149d / 149.6): a passing result carries its
-// summary, a failing result carries the §149d report (what passes, what
+// final reply: a passing result carries its
+// summary, a failing result carries the failure report (what passes, what
 // fails, what was tried), and an all-skipped run states that no passing
 // result exists — success is never reported without a passing result. It
 // returns the reply byte-identical when the turn-end hook never ran for
@@ -98,14 +98,14 @@ func (a *Agent) appendVerificationAttachmentToLastAssistantMessage(attachment st
 	a.state.SetMessages(updated)
 }
 
-// verificationReplyAttachment renders the SP-149 §149d final-reply
+// verificationReplyAttachment renders the final-reply
 // attachment for one stored turn-verification state. Pure and
 // deterministic over the state, so the contract is asserted
 // byte-for-byte in the tests. It renders:
 //
 //   - a passing result: the one-line "passed" block with the run summary;
 //   - a failing result (the stopping rule fired, or the turn ended on a
-//     failing run): the §149d report — what passes, what fails, and what
+//     failing run): the failure report — what passes, what fails, and what
 //     was tried;
 //   - an all-skipped run (nothing failed, nothing ran): the "no passing
 //     result" block — success is not corroborated;
@@ -124,7 +124,7 @@ func verificationReplyAttachment(tv turnVerification) string {
 	}
 }
 
-// verificationFailedAttachment renders the §149d failure report for a
+// verificationFailedAttachment renders the failure report for a
 // failing run: what passes, what fails, and what was tried. The header
 // carries the configured repair limit N (the stopping rule's parameter);
 // the Passed and Failed sections carry one line per check (keyed like the
@@ -167,7 +167,7 @@ func verificationFailedAttachment(tv turnVerification) string {
 // verified nothing: every check was skipped and no run-level error was
 // recorded. Success is NOT corroborated, so the block states plainly that
 // no passing result exists, and lists each skipped check with its reason
-// so the reply says what could not be verified (SP-149 §149d).
+// so the reply says what could not be verified.
 func verificationAllSkippedAttachment(res *verify.Result) string {
 	var b strings.Builder
 	b.WriteString("Verification: ran, but no checks applied (all skipped) — no passing result\n")

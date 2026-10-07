@@ -1,9 +1,9 @@
 //go:build !js
 
-// Starter API — SP-153 §153b (TODO 153.6).
+// Starter API.
 //
 // Two endpoints back the web UI's new-project flow (the dialog wiring
-// lands in 153.7):
+// lands separately):
 //
 //   - GET  /api/starters             — the embedded, versioned starter
 //     catalogue (starters.List, plus per-starter tree facts).
@@ -63,7 +63,7 @@ type instantiateResponse struct {
 }
 
 // handleAPIStartersList handles GET /api/starters: the embedded starter
-// catalogue (SP-153 §153b, TODO 153.6).
+// catalogue.
 func (ws *ReactWebServer) handleAPIStartersList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
@@ -160,8 +160,8 @@ func validateStarterName(name string) error {
 	return nil
 }
 
-// handleAPIStartersInstantiate handles POST /api/starters/instantiate
-// (SP-153 §153b, TODO 153.6): populate a fresh project directory with
+// handleAPIStartersInstantiate handles POST /api/starters/instantiate:
+// populate a fresh project directory with
 // the embedded starter named in the body.
 //
 // Body: {"starter": "<id>", "path": "<absolute target dir>", "name":
@@ -174,7 +174,7 @@ func validateStarterName(name string) error {
 //	unknown starter id                                         → 404
 //	target directory non-empty (refused before any write)      → 400
 //
-// The 404 for an unknown starter mirrors the CLI half (153.4): the
+// The 404 for an unknown starter mirrors the CLI half: the
 // client can see what is available via GET /api/starters.
 func (ws *ReactWebServer) handleAPIStartersInstantiate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -220,7 +220,7 @@ func (ws *ReactWebServer) handleAPIStartersInstantiate(w http.ResponseWriter, r 
 		return
 	}
 
-	// Contain the instantiate target to the daemon root (SP-153, TODO fix.8).
+	// Contain the instantiate target to the daemon root.
 	// Without this, a client could point `path` anywhere the daemon process
 	// can write and drop a full project tree there. Mirror
 	// handleAPIWorkspaceBrowse: resolve the daemon root's symlinks and reject

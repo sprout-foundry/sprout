@@ -1,6 +1,6 @@
 package configuration
 
-// RoleConfig is the per-role model selection (SP-150 §150a). Either
+// RoleConfig is the per-role model selection. Either
 // field is optional: an empty provider falls back to the
 // conversation's last-used provider, and an empty model falls back
 // to the resolved provider's configured model — the same fallback
@@ -10,14 +10,14 @@ type RoleConfig struct {
 	Model    string `json:"model,omitempty"`
 }
 
-// Built-in role names (SP-150 §150a). The set is fixed for now; the
+// Built-in role names. The set is fixed for now; the
 // config's map shape still accepts arbitrary names (the open
 // question of user-defined roles), but only these are resolved by
 // features.
 const (
-	RolePlanner    = "planner"    // plan mode and plan edits (SP-148)
+	RolePlanner    = "planner"    // plan mode and plan edits
 	RoleCoder      = "coder"      // the main agent loop
-	RoleSummarizer = "summarizer" // progress & change summaries (SP-151, SP-157)
+	RoleSummarizer = "summarizer" // progress & change summaries
 	RoleReviewer   = "reviewer"   // code review
 	RoleCommit     = "commit"     // commit message generation
 )
@@ -56,14 +56,14 @@ func (c *Config) SetRole(name string, rc RoleConfig) {
 }
 
 // roleSelection returns the effective stored selection for a role name
-// (SP-150 §150a, item 150.2 — "read as aliases"): the role's explicit
+// ("read as aliases"): the role's explicit
 // roles-section entry field-wise merged with the legacy setting that
 // aliases the role, expressed as a RoleConfig (zero when neither is set).
 // The merge is field-wise, mirroring the legacy getters: each role field
 // wins, and a field the role left unset falls back to the corresponding
 // legacy alias field (never a whole-pair swap, so a provider-only role
 // entry still inherits the legacy model it did not override). The alias
-// mapping (a binding decision of item 150.2):
+// mapping (a binding decision):
 //
 //   - coder: the subagent settings (subagent_provider/model — subagents
 //     do the coding work). The completion settings are the completion
@@ -128,11 +128,11 @@ func (c *Config) HasExplicitRole(name string) bool {
 }
 
 // ResolveRole resolves a role to a (provider, model) pair with
-// field-wise fallback (SP-150 §150a): an empty provider falls back to
+// field-wise fallback: an empty provider falls back to
 // the conversation's last-used provider, and an empty model falls back
 // to the resolved provider's configured model. A role that is unset or
 // unknown resolves to exactly the conversation's (provider, model)
-// unless a legacy setting aliases it (roleSelection, item 150.2). The
+// unless a legacy setting aliases it (roleSelection). The
 // model may be empty when nothing is configured for the resolved
 // provider; callers then offer interactive model selection, the same
 // contract as the pre-role getters. A nil receiver resolves to ("","").

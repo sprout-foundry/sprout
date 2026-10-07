@@ -53,8 +53,8 @@ func TestPrepareCommitClient_NoProviderAtAll(t *testing.T) {
 	assert.Nil(t, client, "no provider at all must resolve to a nil client")
 }
 
-// TestPrepareCommitClient_RoleCommitResolvesProviderModel verifies (SP-150
-// §150b) that with only the commit role set (no legacy commit settings and
+// TestPrepareCommitClient_RoleCommitResolvesProviderModel verifies
+// that with only the commit role set (no legacy commit settings and
 // no last-used provider), the commit path resolves the commit role's
 // provider/model through ResolveRole.
 func TestPrepareCommitClient_RoleCommitResolvesProviderModel(t *testing.T) {

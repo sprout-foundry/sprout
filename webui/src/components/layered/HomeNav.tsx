@@ -17,28 +17,29 @@ import {
 } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { getBootstrapUser } from '../../bootstrapAdapter';
+import { copy, formatCopy, type CopyKey } from '../../config/copy';
 import { useFullWorkspacesAvailable } from '../../services/fullWorkspace';
 import { homeRoute, openHome } from '../../services/homeView';
 
 interface HomeEntry {
   path: string;
-  label: string;
+  labelKey: CopyKey;
   icon: LucideIcon;
   /** Other routes that belong to this entry (a task page is under Tasks). */
   also?: string[];
 }
 
 const WORK: HomeEntry[] = [
-  { path: '/', label: 'Dashboard', icon: LayoutDashboard, also: ['/repos'] },
-  { path: '/tasks', label: 'Tasks', icon: ListChecks, also: ['/scheduled'] },
-  { path: '/workspaces', label: 'Workspaces', icon: Monitor },
+  { path: '/', labelKey: 'home.dashboard', icon: LayoutDashboard, also: ['/repos'] },
+  { path: '/tasks', labelKey: 'home.tasks', icon: ListChecks, also: ['/scheduled'] },
+  { path: '/workspaces', labelKey: 'home.workspaces', icon: Monitor },
 ];
 
 const ACCOUNT: HomeEntry[] = [
-  { path: '/account/billing', label: 'Usage & billing', icon: CreditCard },
-  { path: '/team', label: 'Team', icon: Users },
-  { path: '/runners', label: 'Runners', icon: Server },
-  { path: '/settings', label: 'Settings', icon: Settings },
+  { path: '/account/billing', labelKey: 'home.billing', icon: CreditCard },
+  { path: '/team', labelKey: 'home.team', icon: Users },
+  { path: '/runners', labelKey: 'home.runners', icon: Server },
+  { path: '/settings', labelKey: 'home.settings', icon: Settings },
 ];
 
 function isActive(entry: HomeEntry, fullPath: string): boolean {
@@ -50,9 +51,9 @@ function isActive(entry: HomeEntry, fullPath: string): boolean {
 /** The Home page a route belongs to, by its nav label ("Tasks" for a task). */
 export function homePageLabel(path: string): string {
   const entry = [...WORK, ...ACCOUNT].find((e) => isActive(e, path));
-  if (entry) return entry.label;
+  if (entry) return copy(entry.labelKey);
   const route = homeRoute(path);
-  return route === '/admin' || route.startsWith('/admin/') ? 'Admin' : 'Home';
+  return route === '/admin' || route.startsWith('/admin/') ? copy('home.admin') : copy('home.title');
 }
 
 interface HomeNavProps {
@@ -67,7 +68,9 @@ export default function HomeNav({ path, projectLabel, onBackToProject, onNavigat
   // Workspaces only where the deployment offers them, as on the platform.
   const workspacesAvailable = useFullWorkspacesAvailable(true);
   const work = workspacesAvailable ? WORK : WORK.filter((e) => e.path !== '/workspaces');
-  const account = getBootstrapUser()?.admin ? [...ACCOUNT, { path: '/admin', label: 'Admin', icon: Shield }] : ACCOUNT;
+  const account = getBootstrapUser()?.admin
+    ? [...ACCOUNT, { path: '/admin', labelKey: 'home.admin' as const, icon: Shield }]
+    : ACCOUNT;
   const item = (entry: HomeEntry) => (
     <button
       key={entry.path}
@@ -79,28 +82,28 @@ export default function HomeNav({ path, projectLabel, onBackToProject, onNavigat
       }}
     >
       <entry.icon size={15} />
-      <span>{entry.label}</span>
+      <span>{copy(entry.labelKey)}</span>
     </button>
   );
   return (
     <div className="project-nav" data-testid="home-nav">
       <div className="project-nav-header">
-        <span className="project-nav-title">Home</span>
+        <span className="project-nav-title">{copy('home.title')}</span>
       </div>
       <div className="project-nav-scroll">
         <button type="button" className="project-nav-item project-nav-return" onClick={onBackToProject}>
           <ChevronLeft size={15} />
-          <span>Back to {projectLabel}</span>
+          <span>{formatCopy('home.backToProject', { project: projectLabel })}</span>
         </button>
         <div className="project-nav-section">
           <div className="project-nav-heading">
-            <span>Work</span>
+            <span>{copy('home.work')}</span>
           </div>
           {work.map(item)}
         </div>
         <div className="project-nav-section">
           <div className="project-nav-heading">
-            <span>Account</span>
+            <span>{copy('home.account')}</span>
           </div>
           {account.map(item)}
         </div>

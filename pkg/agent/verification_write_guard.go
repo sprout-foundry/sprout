@@ -1,4 +1,4 @@
-// verification_write_guard.go — the SP-149 §149b write rail: while
+// verification_write_guard.go — the verification write rail: while
 // verification is enabled for a turn, the model may not write or edit the
 // project's starter manifest. The manifest is the project's trusted source
 // for the verification commands (build, test, dev, port, routes), so a
@@ -24,7 +24,7 @@ import (
 // or edit the project's starter manifest during a turn in which
 // verification is enabled. The manifest is the project's trusted source for
 // the verification commands; a mid-turn rewrite would change what "passing"
-// means (SP-149 §149b). It returns nil — leaving the write to proceed
+// means. It returns nil — leaving the write to proceed
 // unchanged — when verification is disabled (the default) or when the path
 // does not resolve to the manifest. Call it at the top of the write and edit
 // handlers, right after the path is extracted, so both the plain and the

@@ -1,5 +1,5 @@
 // Package starters owns the embedded, versioned starter trees that sprout
-// ships (SP-153 §153b) and the discovery entry points over them.
+// ships and the discovery entry points over them.
 // Instantiating a starter into a project directory lives in
 // instantiate.go; this file is the catalogue: which starters are embedded,
 // what version each tree carries, and what its manifest declares.
@@ -11,19 +11,19 @@
 // manifest that instantiation writes into the new project. Because the
 // version lives inside the tree, a tree and its version always move
 // together: bumping a starter's version is a change to its data/
-// directory, and SP-153 §153d upgrade detection compares a project's
+// directory, and starter upgrade detection compares a project's
 // manifest version against Version() (the embedded version).
 //
 // The trees are embedded with //go:embed, so the package is a pure,
-// stdlib-only consumer of the repository: the CLI (sprout new --starter,
-// 153.4), the web UI starter list and instantiation endpoint (153.6), and
+// stdlib-only consumer of the repository: the CLI (sprout new --starter),
+// the web UI starter list and instantiation endpoint, and
 // WASM builds all link the same trees with no on-disk dependency at
 // runtime.
 //
-// This item (TODO 153.3) ships a single minimal, test-only fixture
+// This package ships a single minimal, test-only fixture
 // starter that proves the mechanism. The product starters (static site,
-// web app, web app with data) and their stack skills land in later items
-// (153.4–153.8, SP-153 §153b/§153c): a new starter is added by dropping a
+// web app, web app with data) and their stack skills land later:
+// a new starter is added by dropping a
 // directory with a valid descriptor into data/ — no Go code change.
 package starters
 
@@ -79,8 +79,8 @@ var dataFS embed.FS
 //
 // A malformed embedded tree (a starter directory with a missing, corrupt,
 // or id-mismatched descriptor) is a build bug in this repository, so it
-// is surfaced as an error, never skipped: the catalogue is what 153.4
-// (`sprout new --starter`) and 153.6 (GET /api/starters) display, and a
+// is surfaced as an error, never skipped: the catalogue is what
+// `sprout new --starter` and GET /api/starters display, and a
 // silently dropped entry would be a worse failure than a loud one.
 func List() ([]Starter, error) {
 	entries, err := fs.ReadDir(dataFS, dataRoot)
@@ -107,7 +107,7 @@ func List() ([]Starter, error) {
 // references the fixture by id). They stay fully addressable by id —
 // Instantiate, Version, Manifest, FileCount, and the complete List — but are
 // withheld from the user-facing choosers, because their commands (the
-// fixture's npm steps) cannot run in a real project (SP-153 §153b, item 153.9).
+// fixture's npm steps) cannot run in a real project.
 var testOnlyStarters = map[string]bool{
 	"fixture": true,
 }
@@ -115,7 +115,7 @@ var testOnlyStarters = map[string]bool{
 // ListForUsers returns the embedded starters a user can actually start a new
 // project from: the full catalogue (List) minus the test-only trees named in
 // testOnlyStarters, still sorted by id. It is what `sprout new --starter`
-// (153.4) and GET /api/starters (153.6) display, so a test-only starter whose
+// and GET /api/starters display, so a test-only starter whose
 // commands cannot run never reaches a chooser. Addressing a starter by id
 // (Instantiate and friends) is unaffected, so tests and the benchmark keep
 // reaching the fixture directly.
@@ -134,7 +134,7 @@ func ListForUsers() ([]Starter, error) {
 }
 
 // Version returns the version of the embedded tree for starterID. It is
-// the "embedded version" side of the SP-153 §153d upgrade check: an
+// the "embedded version" side of the starter upgrade check: an
 // existing project whose manifest names an older version than this one
 // may be offered an upgrade (and the upgrade is never applied silently).
 func Version(starterID string) (string, error) {
@@ -147,7 +147,7 @@ func Version(starterID string) (string, error) {
 
 // Manifest returns the embedded starter's manifest (its descriptor,
 // validated) for starterID. Consumers that need the starter's commands
-// without instantiating anything — e.g. the web UI starter list (153.6) —
+// without instantiating anything — e.g. the web UI starter list —
 // use this instead of reading the tree.
 func Manifest(starterID string) (*startermanifest.StarterManifest, error) {
 	return manifestFor(starterID)
@@ -159,7 +159,7 @@ func Manifest(starterID string) (*startermanifest.StarterManifest, error) {
 // .sprout/starter.json instead of a copied file. The manifest writeManifest
 // produces is not counted — it is not a tree file.
 //
-// The embedded catalogue (List) and the web UI starter list (153.6)
+// The embedded catalogue (List) and the web UI starter list
 // report this number, so a caller sees the tree's size without
 // instantiating anything. A tree whose descriptor is missing or invalid
 // is not a starter the catalogue would list, so FileCount refuses it

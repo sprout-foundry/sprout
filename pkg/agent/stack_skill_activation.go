@@ -1,6 +1,6 @@
-// Package agent — SP-153 §153c stack-skill auto-activation.
+// Package agent — stack-skill auto-activation.
 //
-// When a project's starter manifest (.sprout/starter.json, SP-153 §153a,
+// When a project's starter manifest (.sprout/starter.json,
 // loaded through pkg/starterstore) names a starter, the starter's own stack
 // skill — the skill under pkg/skills/library/<starter>/ that carries the
 // stack's conventions (formatter/linter, test conventions, the commands
@@ -13,8 +13,8 @@
 // for the rest of the session — so the per-turn cost is one manifest read
 // and one registry lookup.
 //
-// The upgrade-note half of §153c/§153d (the agent may propose an upgrade,
-// never apply it silently) arrives in SP-153 item 153.8; this file is the
+// The upgrade-note half (the agent may propose an upgrade,
+// never apply it silently) arrives later; this file is the
 // auto-activation mechanism only.
 package agent
 
@@ -24,8 +24,8 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/starterstore"
 )
 
-// autoActivateStarterSkill activates the project's stack skill (SP-153
-// §153c) at the start of a turn. It reads the starter manifest from the
+// autoActivateStarterSkill activates the project's stack skill
+// at the start of a turn. It reads the starter manifest from the
 // project root; when the manifest names a starter and a skill with that ID
 // is registered, the skill is activated through the same core as the
 // activate_skill tool (activateSkillByID): load, add to the active-skill

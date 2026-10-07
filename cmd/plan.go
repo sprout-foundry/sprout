@@ -35,7 +35,7 @@ func init() {
 	planCmd.Flags().StringVarP(&planOutputFile, "output", "o", "", "Output file for the plan (default: plan.md)")
 	planCmd.Flags().BoolVarP(&planContinue, "continue", "c", false, "Continue from an existing plan file")
 	planCmd.Flags().BoolVarP(&planCreateTodos, "todos", "t", true, "Create todos from plan items during planning")
-	planCmd.Flags().BoolVarP(&planStructured, "structured", "s", false, "Structured plan (SP-148): the agent writes .sprout/plan.json (plus the rendered .sprout/plan.md) through the write_plan tool")
+	planCmd.Flags().BoolVarP(&planStructured, "structured", "s", false, "Structured plan: the agent writes .sprout/plan.json (plus the rendered .sprout/plan.md) through the write_plan tool")
 }
 
 var planCmd = &cobra.Command{
@@ -73,7 +73,7 @@ Examples:
   # Use specific model
   sprout plan -p openrouter -m "qwen/qwen3-coder-30b" "Build REST API"
 
-  # Structured plan (SP-148): .sprout/plan.json + rendered .sprout/plan.md
+  # Structured plan: .sprout/plan.json + rendered .sprout/plan.md
   sprout plan --structured "Build REST API"
 
 The agent will seamlessly transition from planning to execution upon your approval.`,
@@ -169,7 +169,7 @@ func createPlanningAgent() (*agent.Agent, error) {
 		return nil, fmt.Errorf("failed to initialize agent: %w", err)
 	}
 
-	// Stamp the planner role (SP-150 §150c, item 150.5): the planning loop
+	// Stamp the planner role: the planning loop
 	// serves the "planning" purpose, so its metering is attributed to the
 	// planner role even when an explicit -p/-m flag (rather than the
 	// configured planner role) selected the model.
@@ -178,7 +178,7 @@ func createPlanningAgent() (*agent.Agent, error) {
 	// Set planning-focused system prompt (now includes execution workflow)
 	var planningPrompt string
 	if planStructured {
-		// Structured mode (SP-148 §148b): the prompt carries the plan schema
+		// Structured mode: the prompt carries the plan schema
 		// section so the agent writes .sprout/plan.json via write_plan.
 		planningPrompt, err = agent.GetStructuredPlanningPrompt(planCreateTodos)
 	} else {
@@ -196,7 +196,7 @@ func createPlanningAgent() (*agent.Agent, error) {
 
 // planningAgentSpec returns the "provider:model" (or bare model) specifier
 // the planning agent is created with, or "" to fall back to the
-// conversation's provider and model (SP-150 §150a, item 150.4).
+// conversation's provider and model.
 // Explicit flags always win: -p plus -m wins as "provider:model", -m alone
 // wins as a bare model, and a bare -p keeps today's fall-through to the
 // conversation model (it must not be overridden by the planner role). Only
@@ -218,7 +218,7 @@ func planningAgentSpec() string {
 }
 
 // plannerRoleSpec returns the planner role's resolved "provider:model"
-// specifier (SP-150 §150a, item 150.4) when the roles section sets the
+// specifier when the roles section sets the
 // planner explicitly, or "" when it does not. ResolveRole applies the field
 // fallbacks (empty provider → last-used provider, empty model → that
 // provider's configured model); providerModelSpec then shapes the pair so a

@@ -1,7 +1,7 @@
 // verification_state.go — the accessor for the turn-end hook's stored
-// per-turn verification state (SP-149 §149c/§149d, item 149.6) for
-// consumers outside pkg/agent: the SP-154 benchmark per-task metrics
-// (154.3) and the SP-151 verification event. The hook stores a fresh
+// per-turn verification state for
+// consumers outside pkg/agent: the benchmark per-task metrics
+// and the verification event. The hook stores a fresh
 // snapshot on every verification run (pass, fail, stop-rule);
 // prepareQueryRun resets the state at each turn start, so a previous
 // turn's result never attaches to a later turn's reply.
@@ -12,9 +12,9 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/verify"
 )
 
-// TurnVerification is one turn's end-verification state (SP-149
-// §149c/§149d) for consumers outside pkg/agent (the SP-154 benchmark
-// metrics, and the SP-151 verification event later): the run's
+// TurnVerification is one turn's end-verification state
+// for consumers outside pkg/agent (the benchmark
+// metrics, and the verification event later): the run's
 // result, the per-check repair attempts consumed against the
 // stopping rule, the configured limit, and how many repair rounds
 // the hook ran.
@@ -41,7 +41,7 @@ type TurnVerification struct {
 }
 
 // LastTurnVerification returns the turn's stored end-verification state
-// (SP-149 §149c/§149d, stored by the turn-end hook on every
+// (stored by the turn-end hook on every
 // verification run), or nil when the hook never ran for the turn
 // (verification disabled, the turn changed no code, a subagent turn,
 // or a runner setup error) — including on a nil receiver. Attempts is

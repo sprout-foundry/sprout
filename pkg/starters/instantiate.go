@@ -29,7 +29,7 @@ const (
 // so the new project immediately carries a manifest that
 // pkg/starterstore.LoadStarterManifest loads — the manifest is the single
 // source of build/test/dev/preview commands for the project's later
-// consumers (SP-149 verification, SP-155 preview, SP-156 deploys).
+// consumers (verification, preview, deploys).
 //
 // Destination contract:
 //

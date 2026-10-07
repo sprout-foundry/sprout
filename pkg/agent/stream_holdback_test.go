@@ -1,5 +1,5 @@
 // stream_holdback_test.go — unit tests for the streaming language-guard
-// hold-back (SP-152 §152c): a correct-language stream is buffered until the
+// hold-back: a correct-language stream is buffered until the
 // prose threshold, released, and streamed live; a wrong-language stream never
 // reaches the sink; short and code-only streams are released (never held);
 // and an undetermined user language is a pure passthrough.
@@ -16,7 +16,7 @@ import (
 // fixtures). The English fixture is reliably detected even at ~45+ runes, so
 // it drives a reliable mismatch; the Spanish fixture is undetermined below
 // ~56 runes, so a Spanish stream is released on the first (undetermined)
-// check — both are "not a mismatch" and release per §152c.
+// check — both are "not a mismatch" and are released.
 const (
 	hbSpanishProse = "El paquete está listo para compilar ahora mismo y las pruebas pasan sin errores."
 	hbEnglishProse = "The build succeeded after applying the patch, so the tests can run and the release is ready to ship."
@@ -123,7 +123,7 @@ func TestStreamHoldbackWrongLanguage(t *testing.T) {
 }
 
 // TestStreamHoldbackShortStream pins that a reply below the prose threshold is
-// not judged (§152a) and is released on Finish — never held.
+// not judged and is released on Finish — never held.
 func TestStreamHoldbackShortStream(t *testing.T) {
 	rec := &sinkRecorder{}
 	hb := NewStreamHoldback(esUser, rec.sink)
@@ -146,7 +146,7 @@ func TestStreamHoldbackShortStream(t *testing.T) {
 }
 
 // TestStreamHoldbackCodeOnlyStream pins that a long code-only stream (no prose
-// — code is excluded from the judgment, §152a) is not held and is released on
+// — code is excluded from the judgment) is not held and is released on
 // Finish.
 func TestStreamHoldbackCodeOnlyStream(t *testing.T) {
 	code := "```go\n" + strings.Repeat("x := 1;\n", 20) + "```"
@@ -263,7 +263,7 @@ func TestStreamHoldbackResetDiscardsState(t *testing.T) {
 }
 
 // TestStreamHoldbackUserExposesUserLanguage pins the User() accessor used to
-// build the §152b notice.
+// build the language notice.
 func TestStreamHoldbackUserExposesUserLanguage(t *testing.T) {
 	hb := NewStreamHoldback(enUser, func(string) {})
 	if got := hb.User(); got != enUser {
@@ -272,7 +272,7 @@ func TestStreamHoldbackUserExposesUserLanguage(t *testing.T) {
 }
 
 // TestStreamHoldbackFullAccumulatesEntireReply pins Full(): the completion
-// re-check (item 152.7) needs the WHOLE streamed reply — including chunks
+// re-check needs the WHOLE streamed reply — including chunks
 // delivered live after the buffer was released — not just the held/buffered
 // prefix. A released hold-back resets its buffer, so Full() must be tracked
 // separately and keep the entire reply.
@@ -308,7 +308,7 @@ func TestStreamHoldbackFullAccumulatesEntireReply(t *testing.T) {
 // TestStreamHoldbackFullTracksHeldStream pins that Full() also accumulates a
 // HELD reply (the wrong-language content), so the completion re-check sees the
 // whole reply even when it is held. (The held path is terminal — handled by
-// the 152.6 notice — but Full() must still be correct.)
+// the notice — but Full() must still be correct.)
 func TestStreamHoldbackFullTracksHeldStream(t *testing.T) {
 	rec := &sinkRecorder{}
 	hb := NewStreamHoldback(esUser, rec.sink)

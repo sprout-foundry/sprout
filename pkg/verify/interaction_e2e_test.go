@@ -80,8 +80,8 @@ func TestInteractionCheckRealBrowser_StepsPass(t *testing.T) {
 	assertPortClosed(t, port)
 }
 
-// TestInteractionCheckRealBrowser_FailingAssert pins the honest-failure path
-// (SP-149 §149d): a scripted flow whose expected outcome is wrong fails the
+// TestInteractionCheckRealBrowser_FailingAssert pins the honest-failure path:
+// a scripted flow whose expected outcome is wrong fails the
 // check, the reason names the item and the failing step, and the dev server
 // is stopped afterwards.
 func TestInteractionCheckRealBrowser_FailingAssert(t *testing.T) {

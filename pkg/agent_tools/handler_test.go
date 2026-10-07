@@ -781,8 +781,8 @@ func TestAllToolsRegistration(t *testing.T) {
 	if tools == nil {
 		t.Fatal("AllTools() returned nil")
 	}
-	if len(tools) != 54 {
-		t.Fatalf("AllTools() returned %d tools, want 54", len(tools))
+	if len(tools) != 57 {
+		t.Fatalf("AllTools() returned %d tools, want 57", len(tools))
 	}
 
 	expectedNames := map[string]string{
@@ -793,6 +793,7 @@ func TestAllToolsRegistration(t *testing.T) {
 		"search_files":            "search_files",
 		"repo_map":                "repo_map",
 		"rollback_changes":        "rollback_changes",
+		"checkpoint":              "checkpoint",
 		"view_history":            "view_history",
 		"list_skills":             "list_skills",
 		"write_file":              "write_file",
@@ -843,6 +844,8 @@ func TestAllToolsRegistration(t *testing.T) {
 		"get_callers":           "get_callers",
 		"get_callees":           "get_callees",
 		"find_dead_code":        "find_dead_code",
+		"deploy":                "deploy",
+		"deploy_status":         "deploy_status",
 	}
 
 	var foundNames []string

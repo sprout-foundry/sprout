@@ -80,6 +80,8 @@ func (m *mockStateManager) GetCacheWriteTokens() int                   { return 
 func (m *mockStateManager) SetCacheWriteTokens(int)                    {}
 func (m *mockStateManager) GetCachedCostSavings() float64              { return 0 }
 func (m *mockStateManager) SetCachedCostSavings(float64)               {}
+func (m *mockStateManager) GetCacheSavingsUnknown() bool               { return false }
+func (m *mockStateManager) SetCacheSavingsUnknown(bool)                {}
 func (m *mockStateManager) GetImageTokens() int                        { return 0 }
 func (m *mockStateManager) SetImageTokens(int)                         {}
 func (m *mockStateManager) GetActiveSkills() []string                  { return nil }

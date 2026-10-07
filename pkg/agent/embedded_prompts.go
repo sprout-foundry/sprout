@@ -193,7 +193,7 @@ func GetEmbeddedPlanningPrompt(createTodos bool) (string, error) {
 }
 
 // GetStructuredPlanningPrompt returns the planning prompt with the
-// structured-plan schema section (SP-148 §148b) appended after the base
+// structured-plan schema section appended after the base
 // prompt body and before the todo-integration suffix. The schema section
 // describes the .sprout/plan.json document the write_plan tool persists,
 // including the rule that every scope item needs at least one acceptance
@@ -215,7 +215,7 @@ func GetStructuredPlanningPrompt(createTodos bool) (string, error) {
 }
 
 // structuredPlanSchemaStart and structuredPlanSchemaEnd delimit the
-// SP-148 structured-plan schema section inside planning_prompt.md. The
+// structured-plan schema section inside planning_prompt.md. The
 // section is written after the main prompt body's closing fence, so the
 // base extraction (extractPlanningPrompt, which ends at the first fenced
 // code block after the body's start marker) never sees it; only
@@ -228,7 +228,7 @@ const (
 )
 
 // extractStructuredPlanSchemaSection extracts the structured-plan schema
-// section (SP-148 §148b) from the embedded planning prompt file. The
+// section from the embedded planning prompt file. The
 // returned string is ready to append to the base prompt ("\n\n" prefix
 // included). A missing or empty section is a permanent error: structured
 // mode must not silently degrade to a prompt without the schema the

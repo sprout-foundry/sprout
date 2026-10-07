@@ -1,6 +1,6 @@
 package agent
 
-// Item 150.5 (SP-150 §150c): metering — every model call carries its role.
+// Metering: every model call carries its role.
 // These tests pin the per-role dimension on the cost model, the metrics
 // manager, the usage ledger, the agent/subagent role stamping, and the
 // language-guard metric (the per-model metric gains a role axis).
@@ -31,8 +31,7 @@ func addRoleTurn(t *testing.T, a *Agent, role string, prompt, completion int, ch
 }
 
 // TestCostEntryRoleStampedByBuildSites pins that each of the three cost build
-// sites stamps the agent's own role on the CostEntry (SP-150 §150c,
-// item 150.5). The primary agent's role is the coder role.
+// sites stamps the agent's own role on the CostEntry. The primary agent's role is the coder role.
 func TestCostEntryRoleStampedByBuildSites(t *testing.T) {
 	a := newTestAgent(t)
 	defer a.Shutdown()
@@ -46,7 +45,7 @@ func TestCostEntryRoleStampedByBuildSites(t *testing.T) {
 	sp := &sproutProvider{agent: a}
 	sp.accumulateResponseCost(chatResponseWithUsage(20, 10))
 	// Metrics path (metrics.go TrackMetricsFromResponse).
-	a.TrackMetricsFromResponse(30, 15, 45, 0.001, 0, 0, 0)
+	a.TrackMetricsFromResponse(30, 15, 45, 0.001, 0, 0, 0, 0)
 
 	ru := a.GetRoleUsage()
 	if len(ru) != 1 || ru[0].Role != configuration.RoleCoder {
@@ -114,7 +113,7 @@ func TestMetricsManagerPerRoleAggregation(t *testing.T) {
 }
 
 // TestPrimaryAgentRoleIsCoder pins that a primary (main-loop) agent is
-// attributed to the coder role (SP-150 §150c, item 150.5).
+// attributed to the coder role.
 func TestPrimaryAgentRoleIsCoder(t *testing.T) {
 	a := newTestAgent(t)
 	defer a.Shutdown()
@@ -294,4 +293,33 @@ func cellExists(snap []LanguageGuardModelStat, model, role string) bool {
 		}
 	}
 	return false
+}
+
+// TestBookRoleUsageMetersExternalRoleCall pins the metering seam a
+// role-serving capability uses to attribute its own model call:
+// BookRoleUsage books the usage into the named role's bucket and
+// advances the overall token totals, so the per-role totals keep summing
+// to the overall totals. A zero usage is a no-op.
+func TestBookRoleUsageMetersExternalRoleCall(t *testing.T) {
+	a := newTestAgent(t)
+	defer a.Shutdown()
+
+	a.BookRoleUsage(configuration.RoleSummarizer, 120, 20, 0.002)
+
+	ru := a.GetRoleUsage()
+	if len(ru) != 1 || ru[0].Role != configuration.RoleSummarizer {
+		t.Fatalf("GetRoleUsage = %+v, want a single %q entry", ru, configuration.RoleSummarizer)
+	}
+	if ru[0].PromptTokens != 120 || ru[0].CompletionTokens != 20 || ru[0].Calls != 1 {
+		t.Errorf("summarizer role = %+v, want 120/20/1", ru[0])
+	}
+	if a.GetPromptTokens() != 120 || a.GetCompletionTokens() != 20 || a.GetTotalTokens() != 140 {
+		t.Errorf("overall tokens = %d/%d/%d, want 120/20/140", a.GetPromptTokens(), a.GetCompletionTokens(), a.GetTotalTokens())
+	}
+
+	// A fully-zero booking is a no-op (no phantom "calls").
+	a.BookRoleUsage(configuration.RoleSummarizer, 0, 0, 0)
+	if got := a.GetRoleUsage()[0].Calls; got != 1 {
+		t.Errorf("Calls after a zero booking = %d, want 1", got)
+	}
 }

@@ -1,7 +1,7 @@
 import { Check, Download, Star, X } from 'lucide-react';
 import { useState, useRef, useEffect, useCallback, type ReactElement } from 'react';
 import type { WindowsOnboardingGuidance } from '../hooks/useOnboarding';
-import type { OnboardingProviderOption } from '../services/api';
+import { ApiService, type OnboardingProviderOption } from '../services/api';
 import { useWorkspaceGateOpen } from '../services/workspaceGate';
 import type { OnboardingState } from '../types/app';
 
@@ -60,7 +60,6 @@ function OnboardingDialog({
     let cancelled = false;
     const checkStatus = async () => {
       try {
-        const { ApiService } = await import('../services/api');
         const status = await ApiService.getInstance().getLocalLLMStatus();
         if (!cancelled) {
           setLocalLLMModelPresent(status.model_present);
@@ -81,7 +80,6 @@ function OnboardingDialog({
     if (!downloadingModel || onboarding.provider !== 'sprout-local') return;
     const interval = setInterval(async () => {
       try {
-        const { ApiService } = await import('../services/api');
         const status = await ApiService.getInstance().getLocalLLMStatus();
         if (status.model_present) {
           setLocalLLMModelPresent(true);
@@ -353,7 +351,6 @@ function OnboardingDialog({
                         setDownloadingModel(true);
                         setDownloadMessage('Starting download...');
                         try {
-                          const { ApiService } = await import('../services/api');
                           const result = await ApiService.getInstance().downloadLocalLLMModel();
                           setDownloadMessage(result.message || 'Download in progress...');
                         } catch (e) {

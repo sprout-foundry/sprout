@@ -1,35 +1,35 @@
-// Package benchmark owns the task suite of the SP-154 agent benchmark
-// (SP-154 §154a): the on-disk task fixture format and the loader that
+// Package benchmark owns the task suite of the agent benchmark:
+// the on-disk task fixture format and the loader that
 // reads and validates it.
 //
 // A benchmark task is three things pinned together:
 //
 //   - a plain-language request (what the agent receives);
-//   - a frozen SP-148 plan (pkg/plancontract), whose acceptance criteria
+//   - a frozen plan (pkg/plancontract), whose acceptance criteria
 //     are the task's acceptance criteria;
-//   - a starter reference (SP-153) — the starter the task runs against.
+//   - a starter reference — the starter the task runs against.
 //
 // Task files are static JSON fixtures committed to the repository under
 // benchmarks/tasks/<starter-id>/<task-id>.json. The freeze is what makes
 // benchmark runs comparable across models and over time: the request, the
 // plan, and the starter never drift between runs. Pass/fail for a task
-// comes only from the SP-149 verification of the plan's acceptance
+// comes only from the verification of the plan's acceptance
 // criteria — never from the model's own report — and the runner (runner.go)
 // enforces that contract.
 //
-// TODO 154.1 shipped the skeleton (the format, the loader, validation, and
-// the committed fixture task); TODO 154.2 adds the runner: headless
+// The first implementation shipped the skeleton (the format, the loader,
+// validation, and the committed fixture task); the runner adds headless
 // non-interactive runs of a task through the existing agent path, one
 // fresh starter copy per run, 3 runs per model by default. Per-task
-// metrics (154.3) and the default model list from the provider catalog
-// (154.4) have landed; reports (154.5) are still to come.
+// metrics and the default model list from the provider catalog
+// have landed; reports are still to come.
 //
 // The package's dependencies (pkg/plancontract, and for the runner
 // pkg/agent, pkg/verify, pkg/starters, pkg/planstore, pkg/factory,
 // pkg/configuration) are all supported on the js/wasm target, so the
 // whole package builds for js/wasm. The runner's tests drive real shell
 // commands and real (scripted) agent turns and are !js-only, like the
-// SP-149 fixture tests.
+// verification fixture tests.
 package benchmark
 
 import (
@@ -63,8 +63,8 @@ func (e *ValidationError) Error() string {
 	return fmt.Sprintf("benchmark: %d problem(s): %s", len(e.Problems), strings.Join(e.Problems, "; "))
 }
 
-// Task is one SP-154 benchmark task (SP-154 §154a): a plain-language
-// request, a frozen SP-148 plan, and a starter reference. Task files
+// Task is one benchmark task: a plain-language
+// request, a frozen plan, and a starter reference. Task files
 // are static fixtures committed to the repo — that is what "frozen"
 // means: runs are comparable across models and over time because the
 // request, the plan, and the starter never drift.
@@ -74,9 +74,9 @@ type Task struct {
 	ID string `json:"id"`
 	// Request is the plain-language request the agent receives.
 	Request string `json:"request"`
-	// Starter is the starter ID (SP-153) the task runs against.
+	// Starter is the starter ID the task runs against.
 	Starter string `json:"starter"`
-	// Plan is the frozen SP-148 plan: the machine-readable
+	// Plan is the frozen plan: the machine-readable
 	// plancontract.Plan. It must validate (plancontract.Validate);
 	// its acceptance criteria are the task's acceptance criteria.
 	Plan plancontract.Plan `json:"plan"`
@@ -104,7 +104,7 @@ func validate(t *Task) *ValidationError {
 
 	starter := strings.TrimSpace(t.Starter)
 	if starter == "" {
-		problems = append(problems, "starter is required (the SP-153 starter id the task runs against)")
+		problems = append(problems, "starter is required (the starter id the task runs against)")
 	} else if !safePathSegment(starter) {
 		problems = append(problems,
 			fmt.Sprintf("starter %q must be a single safe path segment (no path separators, not \".\" or \"..\")", t.Starter))

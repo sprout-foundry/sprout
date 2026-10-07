@@ -336,6 +336,7 @@ In interactive `sprout` or `sprout agent`, use `/` for commands (tab-complete).
 | `/clear` | Clear conversation history |
 | `/sessions [session_num]` | Show and load previous conversation sessions |
 | `/log` | View changes |
+| `/original` | Show the original text of the last language-corrected reply |
 
 ### Models & Providers
 

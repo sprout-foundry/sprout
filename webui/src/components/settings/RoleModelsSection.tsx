@@ -1,14 +1,17 @@
 import { Collapsible } from '@sprout/ui';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { SproutSettings } from '../../services/api';
 
-// Built-in role names (SP-150 §150a). Mirrors configuration.BuiltInRoles() in
-// pkg/configuration/config_roles.go. The set is fixed for SP-150 — keep this
+// Built-in role names. Mirrors configuration.BuiltInRoles() in
+// pkg/configuration/config_roles.go. The role set is fixed — keep this
 // list in sync with the Go side if roles are added there.
 const BUILTIN_ROLES = ['planner', 'coder', 'summarizer', 'reviewer', 'commit'] as const;
 
+const BUILTIN_ROLE_SET: ReadonlySet<string> = new Set(BUILTIN_ROLES);
+
 type RoleName = (typeof BUILTIN_ROLES)[number];
 type RoleSelection = { provider?: string; model?: string };
+type RolesMap = Record<string, RoleSelection>;
 type RoleDraft = Record<RoleName, { provider: string; model: string }>;
 
 interface RoleModelsSectionProps {
@@ -19,7 +22,7 @@ interface RoleModelsSectionProps {
 // Seed the local draft from the persisted roles map, defaulting every
 // built-in role to empty fields (absent = fall back to the conversation's
 // provider/model).
-function draftFromRoles(roles: Record<string, RoleSelection> | undefined): RoleDraft {
+function draftFromRoles(roles: RolesMap | undefined): RoleDraft {
   const draft = {} as RoleDraft;
   for (const role of BUILTIN_ROLES) {
     const entry = roles?.[role];
@@ -28,18 +31,54 @@ function draftFromRoles(roles: Record<string, RoleSelection> | undefined): RoleD
   return draft;
 }
 
+// Stable string form of a roles map, used to detect *value* changes in
+// settings.roles. The settings object is re-created on many refreshes with
+// unchanged content, so reference comparison would re-sync (and clobber
+// in-flight typing) on every such refresh; comparing the canonical form only
+// fires the re-sync when a role entry actually changed. Entries are flattened
+// to sorted [key, value] pairs (outer role names and inner field names both
+// sorted) so the comparison is insensitive to property insertion order.
+function rolesKey(roles: RolesMap | undefined): string {
+  const pairs = Object.entries(roles ?? {}).map(([role, entry]) => [
+    role,
+    Object.entries(entry ?? {}).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+  ]);
+  pairs.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return JSON.stringify(pairs);
+}
+
 /**
- * Role models section (SP-150 §150d). Pin a specific provider or model to a
+ * Role models section. Pin a specific provider or model to a
  * built-in role (planner, coder, summarizer, reviewer, commit). Collapsed by
  * default so it stays out of the way of the primary provider settings.
  *
  * Typing updates local draft state only; each row's Save button commits the
- * whole roles map via updateSetting('roles', next), dropping rows whose
- * provider+model are both empty so an all-empty result stores nothing (the
- * backend stores nothing for an empty map too).
+ * whole roles map via updateSetting('roles', next), dropping built-in rows
+ * whose provider+model are both empty so an all-empty result stores nothing
+ * (the backend stores nothing for an empty map too). Custom role entries —
+ * any persisted key outside the built-in set — have no input row here and are
+ * preserved untouched through saves.
+ *
+ * Draft re-sync policy: the draft is reset from settings.roles whenever the
+ * persisted map *changes by value* (canonical-JSON comparison, not reference —
+ * the settings object is re-created on every render). This keeps the inputs
+ * in step with external config changes (config refresh, another surface
+ * saving roles, a settings reload) without clobbering in-flight typing on
+ * unrelated refreshes: while the persisted value is unchanged, user edits win;
+ * once another surface persists different roles, the inputs follow the
+ * persisted state, which is the conventional controlled-adjacent behavior —
+ * the last writer to the persisted map is shown.
  */
 export default function RoleModelsSection({ settings, updateSetting }: RoleModelsSectionProps) {
   const [draft, setDraft] = useState<RoleDraft>(() => draftFromRoles(settings.roles));
+  const rolesKeyRef = useRef(rolesKey(settings.roles));
+
+  useEffect(() => {
+    const nextKey = rolesKey(settings.roles);
+    if (nextKey === rolesKeyRef.current) return; // value unchanged — keep local edits
+    rolesKeyRef.current = nextKey;
+    setDraft(draftFromRoles(settings.roles));
+  }, [settings.roles]);
 
   // Hide the section entirely if there's no way to persist (no updateSetting),
   // mirroring ProviderPrioritySection.
@@ -49,10 +88,18 @@ export default function RoleModelsSection({ settings, updateSetting }: RoleModel
     setDraft((prev) => ({ ...prev, [role]: { ...prev[role], [field]: value } }));
   };
 
-  // Build the full roles map from the current draft, dropping roles whose
-  // provider+model are both empty so an all-empty result stores nothing.
-  const buildRolesMap = (): Record<string, RoleSelection> => {
-    const next: Record<string, RoleSelection> = {};
+  // Build the full roles map to persist: start from the current persisted map
+  // so custom roles (persisted keys outside the built-in set — no input row
+  // here) survive every save untouched, then overlay the draft's built-in
+  // rows. A built-in row whose provider+model are both empty is dropped, so
+  // an all-empty built-in result stores nothing; a custom entry is never
+  // touched by this component, so it is kept as-is even when every built-in
+  // row is empty.
+  const buildRolesMap = (): RolesMap => {
+    const next: RolesMap = {};
+    for (const [role, entry] of Object.entries(settings.roles ?? {})) {
+      if (!BUILTIN_ROLE_SET.has(role)) next[role] = entry;
+    }
     for (const role of BUILTIN_ROLES) {
       const p = draft[role].provider.trim();
       const m = draft[role].model.trim();

@@ -1,6 +1,6 @@
 // stream_holdback_agent_test.go — agent-level scripted tests for the
-// streaming language-guard hold-back (SP-152 §152c): a wrong-language streamed
-// reply never reaches the client's streaming buffer (the user sees the §152b
+// streaming language-guard hold-back: a wrong-language streamed
+// reply never reaches the client's streaming buffer (the user sees the language
 // notice instead), while a correct-language stream is delivered. These drive
 // the real provider streaming path (doChatStream → SendChatRequestStream) with
 // the scripted streaming client (StreamConfig.Chunks playback).
@@ -46,12 +46,14 @@ var (
 // turn where the user writes in Spanish (configured fallback) and the reply
 // streams back in English. The hold-back holds the wrong-language stream, so
 // the English content never reaches the client's streaming buffer — the user
-// sees the localized §152b notice instead. The held content is kept on the
-// message Meta for "view original".
+// sees the regenerated (Spanish) reply instead, and state carries the same
+// text (one regeneration: the final-message guard does not re-run on the
+// repaired reply). The held content is kept on the message Meta for
+// "view original".
 func TestStreamHoldbackWrongLanguageNeverReachesClient(t *testing.T) {
-	ag, _ := newLanguageGuardAgent(t, "es", false,
+	ag, client := newLanguageGuardAgent(t, "es", false,
 		newStreamingResponse(hbEnglishProse, englishChunks), // the turn's answer: wrong language
-		NewStopResponse(hbSpanishProse),                     // the §152b regeneration
+		NewStopResponse(hbSpanishProse),                     // the regeneration: correct
 	)
 	ag.SetStreamingEnabled(true)
 
@@ -67,16 +69,25 @@ func TestStreamHoldbackWrongLanguageNeverReachesClient(t *testing.T) {
 	if strings.Contains(buffer, hbEnglishProse) {
 		t.Errorf("the held English reply leaked into the client's buffer: %q", buffer)
 	}
-	// The user sees the localized §152b notice (in their Spanish) instead.
-	wantNotice := LanguageMismatchNotice(langguard.Language{Code: "es", Name: "Spanish"})
-	if !strings.Contains(buffer, wantNotice) {
-		t.Errorf("buffer does not carry the §152b notice %q; got %q", wantNotice, buffer)
+	// The user sees the regenerated Spanish reply as normal streamed content.
+	if !strings.Contains(buffer, hbSpanishProse) {
+		t.Errorf("buffer does not carry the regenerated reply %q; got %q", hbSpanishProse, buffer)
 	}
 	// The held content is kept available for "view original" (the final
-	// message's Meta, mirroring 152.5's language_guard_original).
+	// message's Meta, mirroring the language_guard_original payload).
 	last := lastAssistantMessage(t, ag)
 	if original := last.Meta[langGuardOriginalMetaKey]; original != hbEnglishProse {
 		t.Errorf("view-original payload = %q, want the held reply %q", original, hbEnglishProse)
+	}
+	// State and the client agree: the final message carries the regenerated
+	// text, not the held original and not a second repair.
+	if last.Content != hbSpanishProse {
+		t.Errorf("final assistant message = %q, want the regenerated %q", last.Content, hbSpanishProse)
+	}
+	// Exactly one regeneration happened (the turn's call + the regeneration);
+	// the final-message guard must not re-run on the repaired reply.
+	if calls := len(client.GetSentRequests()); calls != 2 {
+		t.Errorf("model calls = %d, want 2 (the turn + one regeneration)", calls)
 	}
 }
 
@@ -110,7 +121,7 @@ func TestStreamHoldbackCorrectLanguageStreamsLive(t *testing.T) {
 
 // TestStreamHoldbackDisabledIsByteIdentical pins the opt-out: with the guard
 // disabled, a wrong-language stream is NOT held — it streams through
-// unchanged (byte-for-byte), and no §152b notice is delivered.
+// unchanged (byte-for-byte), and no language notice is delivered.
 func TestStreamHoldbackDisabledIsByteIdentical(t *testing.T) {
 	ag, _ := newLanguageGuardAgent(t, "es", true,
 		newStreamingResponse(hbEnglishProse, englishChunks),
@@ -128,7 +139,7 @@ func TestStreamHoldbackDisabledIsByteIdentical(t *testing.T) {
 	}
 	wantNotice := LanguageMismatchNotice(langguard.Language{Code: "es", Name: "Spanish"})
 	if strings.Contains(buffer, wantNotice) {
-		t.Errorf("with the guard disabled no §152b notice should be delivered; buffer = %q", buffer)
+		t.Errorf("with the guard disabled no language notice should be delivered; buffer = %q", buffer)
 	}
 }
 
@@ -196,15 +207,15 @@ func newReasoningModelAgent(t *testing.T, configuredLanguage string, guardDisabl
 }
 
 // TestStreamHoldbackReasoningModelFallbackHeld pins the reasoning-model
-// fallback interaction (SP-152 §152c): when the model streams its visible
+// fallback interaction: when the model streams its visible
 // prose as reasoning_content (no assistant-text), the provider's fallback is
 // the only path that delivers the content. The fallback must route it through
 // the hold-back, so a wrong-language reply is held (not delivered) and the
-// user sees the §152b notice instead.
+// user sees the regenerated reply — with state carrying the same text.
 func TestStreamHoldbackReasoningModelFallbackHeld(t *testing.T) {
 	ag := newReasoningModelAgent(t, "es", false,
 		newStreamingResponse(hbEnglishProse, englishChunks), // the turn's answer: wrong language
-		NewStopResponse(hbSpanishProse),                     // the §152b regeneration
+		NewStopResponse(hbSpanishProse),                     // the regeneration: correct
 	)
 	ag.SetStreamingEnabled(true)
 
@@ -221,10 +232,16 @@ func TestStreamHoldbackReasoningModelFallbackHeld(t *testing.T) {
 	if strings.Contains(buffer, hbEnglishProse) {
 		t.Errorf("the held English reply leaked into the client's buffer: %q", buffer)
 	}
-	// The user sees the localized §152b notice (in their Spanish) instead.
-	wantNotice := LanguageMismatchNotice(langguard.Language{Code: "es", Name: "Spanish"})
-	if !strings.Contains(buffer, wantNotice) {
-		t.Errorf("buffer does not carry the §152b notice %q; got %q", wantNotice, buffer)
+	// The user sees the regenerated Spanish reply instead.
+	if !strings.Contains(buffer, hbSpanishProse) {
+		t.Errorf("buffer does not carry the regenerated reply %q; got %q", hbSpanishProse, buffer)
+	}
+	// State and the client agree; one regeneration, no second pass.
+	if last := lastAssistantMessage(t, ag); last.Content != hbSpanishProse {
+		t.Errorf("final assistant message = %q, want the regenerated %q", last.Content, hbSpanishProse)
+	}
+	if calls := len(ag.getClient().(*reasoningModelClient).GetSentRequests()); calls != 2 {
+		t.Errorf("model calls = %d, want 2 (the turn + one regeneration)", calls)
 	}
 }
 
@@ -254,7 +271,7 @@ func TestStreamHoldbackReasoningModelFallbackCorrectLanguageReleased(t *testing.
 }
 
 // ---------------------------------------------------------------------------
-// Completion re-check (SP-152 §152c, item 152.7)
+// Completion re-check
 //
 // The hold-back only judges the START of a streamed reply. A reply whose start
 // passes (and is released) but which switches language later in the stream is
@@ -320,12 +337,13 @@ func languageGuardReplacementEvents(evs []events.UIEvent) []events.UIEvent {
 // scripted turn: the user writes in Spanish (configured fallback), the reply
 // STARTS in Spanish (so the hold-back releases it and it streams live) and then
 // switches to English. At completion the full reply is a reliable mismatch, so
-// a language_guard_replacement event is published carrying the replacement
-// notice, the original (full switched content), the reason, and the chat_id.
+// a language_guard_replacement event is published carrying the REGENERATED
+// (Spanish) replacement text, the original (full switched content), the
+// reason, and the chat_id — and state carries the same replacement text.
 func TestStreamCompletionRecheckMidStreamSwitchPublishesReplacement(t *testing.T) {
-	ag, _ := newLanguageGuardAgent(t, "es", false,
+	ag, client := newLanguageGuardAgent(t, "es", false,
 		newStreamingResponse(midStreamFullReply, []string{midStreamSpanishStart, midStreamEnglishRest}),
-		NewStopResponse(hbSpanishProse), // the 152.5 regeneration (always runs on a mismatch)
+		NewStopResponse(hbSpanishProse), // the regeneration: correct
 	)
 	ag.SetStreamingEnabled(true)
 	sub := wireLanguageGuardEventBus(t, ag)
@@ -353,9 +371,8 @@ func TestStreamCompletionRecheckMidStreamSwitchPublishesReplacement(t *testing.T
 	if !ok {
 		t.Fatalf("replacement event data is not a map: %T", repl[0].Data)
 	}
-	wantReplacement := LanguageMismatchNotice(langguard.Language{Code: "es", Name: "Spanish"})
-	if got := data["replacement"]; got != wantReplacement {
-		t.Errorf("replacement = %v, want the localized notice %q", got, wantReplacement)
+	if got := data["replacement"]; got != hbSpanishProse {
+		t.Errorf("replacement = %v, want the regenerated reply %q", got, hbSpanishProse)
 	}
 	if got := data["original"]; got != midStreamFullReply {
 		t.Errorf("original = %v, want the full switched reply %q", got, midStreamFullReply)
@@ -367,10 +384,20 @@ func TestStreamCompletionRecheckMidStreamSwitchPublishesReplacement(t *testing.T
 		t.Errorf("chat_id = %v, want %q", got, "chat-lgt-1")
 	}
 
-	// The full switched content is kept on the message Meta for "view original".
+	// State agrees with the replacement event: the final message carries the
+	// regenerated text, and the full switched content is kept on the message
+	// Meta for "view original".
 	last := lastAssistantMessage(t, ag)
+	if last.Content != hbSpanishProse {
+		t.Errorf("final assistant message = %q, want the replacement %q", last.Content, hbSpanishProse)
+	}
 	if original := last.Meta[langGuardOriginalMetaKey]; original != midStreamFullReply {
 		t.Errorf("view-original payload = %q, want the full switched reply %q", original, midStreamFullReply)
+	}
+	// Exactly one regeneration happened; the final-message guard must not
+	// re-run on the replaced reply (which would duplicate the event).
+	if calls := len(client.GetSentRequests()); calls != 2 {
+		t.Errorf("model calls = %d, want 2 (the turn + one regeneration)", calls)
 	}
 }
 
@@ -394,13 +421,13 @@ func TestStreamCompletionRecheckCorrectLanguageNoEvent(t *testing.T) {
 }
 
 // TestStreamCompletionRecheckHeldStreamNoEvent pins that a HELD stream (a
-// reliable mismatch at the START, handled by the 152.6 notice) is NOT
+// reliable mismatch at the START, handled by the notice) is NOT
 // re-checked: the held path is terminal, so no language_guard_replacement event
 // is published (it would be a duplicate of the notice already delivered).
 func TestStreamCompletionRecheckHeldStreamNoEvent(t *testing.T) {
 	ag, _ := newLanguageGuardAgent(t, "es", false,
 		newStreamingResponse(hbEnglishProse, englishChunks), // wrong language from the start
-		NewStopResponse(hbSpanishProse),                     // the §152b regeneration
+		NewStopResponse(hbSpanishProse),                     // the regeneration
 	)
 	ag.SetStreamingEnabled(true)
 	sub := wireLanguageGuardEventBus(t, ag)
@@ -420,7 +447,7 @@ func TestStreamCompletionRecheckHeldStreamNoEvent(t *testing.T) {
 }
 
 // TestStreamCompletionRecheckShortStreamNoEvent pins that a reply below the
-// prose threshold is not judged (§152a): it is released on Finish and the
+// prose threshold is not judged: it is released on Finish and the
 // completion re-check does not run — so no replacement event is published.
 func TestStreamCompletionRecheckShortStreamNoEvent(t *testing.T) {
 	ag, _ := newLanguageGuardAgent(t, "es", false,
@@ -435,5 +462,213 @@ func TestStreamCompletionRecheckShortStreamNoEvent(t *testing.T) {
 
 	if repl := languageGuardReplacementEvents(drainEvents(sub)); len(repl) != 0 {
 		t.Errorf("a below-threshold (short) stream must not publish a replacement event; got %d", len(repl))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Rule-probing tests: each one tries to break a rule this item protects.
+// ---------------------------------------------------------------------------
+
+// TestStreamHoldbackHeldFinalStateMatchesBuffer is the no-double-regeneration
+// rule: a held FINAL reply delivers the regenerated text to the client buffer
+// AND state carries the same text — no notice, no second model call, and the
+// metric counts the mismatch exactly once (here, not again in the
+// final-message guard).
+func TestStreamHoldbackHeldFinalStateMatchesBuffer(t *testing.T) {
+	metrics := NewLanguageGuardMetrics()
+	cleanup := SetGlobalLanguageGuardMetricsForTest(metrics)
+	defer cleanup()
+
+	ag, client := newLanguageGuardAgent(t, "es", false,
+		newStreamingResponse(hbEnglishProse, englishChunks), // the turn's answer: wrong language
+		NewStopResponse(hbSpanishProse),                     // the regeneration: correct
+	)
+	ag.SetStreamingEnabled(true)
+
+	if _, err := ag.ProcessQuery("Hola"); err != nil {
+		t.Fatalf("ProcessQuery: %v", err)
+	}
+
+	// The client buffer carries the regenerated text — no language notice.
+	buffer := ag.output.GetStreamingBuffer().String()
+	if wantNotice := LanguageMismatchNotice(langguard.Language{Code: "es", Name: "Spanish"}); strings.Contains(buffer, wantNotice) {
+		t.Errorf("buffer carries the fallback notice; want the regenerated reply only: %q", buffer)
+	}
+	if buffer != hbSpanishProse {
+		t.Errorf("buffer = %q, want exactly the regenerated %q", buffer, hbSpanishProse)
+	}
+	// State carries the SAME text: display and state agree.
+	if last := lastAssistantMessage(t, ag); last.Content != hbSpanishProse {
+		t.Errorf("state content = %q, want the regenerated %q (display-vs-state split)", last.Content, hbSpanishProse)
+	}
+	// One regeneration: exactly two model calls.
+	if calls := len(client.GetSentRequests()); calls != 2 {
+		t.Errorf("model calls = %d, want 2 (the turn + one regeneration, no double repair)", calls)
+	}
+	// The mismatch is counted exactly once for the turn's model.
+	totalChecks, totalMismatches := 0, 0
+	for _, s := range metrics.Snapshot() {
+		totalChecks += int(s.Checks)
+		totalMismatches += int(s.Mismatches)
+	}
+	if totalChecks != 1 || totalMismatches != 1 {
+		t.Errorf("language-guard metric = %d checks / %d mismatches, want exactly 1 / 1 (no double count)", totalChecks, totalMismatches)
+	}
+}
+
+// TestStreamHoldbackHeldPreambleShowsNothing is the mid-turn-preamble rule:
+// a streamed reply that carries TOOL CALLS is a mid-turn preamble — when it
+// is held (wrong language), nothing is shown for it (no regenerated text, no
+// notice): the repair belongs to the turn's final answer. The turn continues
+// (the tool executes) and the final (Spanish) answer is what the user sees.
+func TestStreamHoldbackHeldPreambleShowsNothing(t *testing.T) {
+	ag, client := newLanguageGuardAgent(t, "es", false,
+		NewScriptedResponseBuilder().
+			Content(hbEnglishProse).
+			ToolCalls([]api.ToolCall{{
+				ID:   "call_preamble_1",
+				Type: "function",
+				Function: api.ToolCallFunction{
+					Name:      "read_file",
+					Arguments: `{"path":"main.go"}`,
+				},
+			}}).
+			FinishReason("tool_calls").
+			StreamConfig(&StreamConfig{Chunks: englishChunks, FinishReason: "tool_calls"}).
+			Build(),
+		NewStopResponse(hbSpanishProse), // the turn's final answer: Spanish
+	)
+	ag.SetStreamingEnabled(true)
+	sub := wireLanguageGuardEventBus(t, ag)
+
+	if _, err := ag.ProcessQuery("Hola"); err != nil {
+		t.Fatalf("ProcessQuery: %v", err)
+	}
+
+	// The held preamble shows NOTHING: no regenerated preamble text, no
+	// notice — the only streamed content is the turn's final answer.
+	buffer := ag.output.GetStreamingBuffer().String()
+	if strings.Contains(buffer, "The build succeeded") || strings.Contains(buffer, hbEnglishProse) {
+		t.Errorf("the held preamble reached the client's buffer: %q", buffer)
+	}
+	if wantNotice := LanguageMismatchNotice(langguard.Language{Code: "es", Name: "Spanish"}); strings.Contains(buffer, wantNotice) {
+		t.Errorf("a held mid-turn preamble must show nothing, not the notice; buffer = %q", buffer)
+	}
+	if !strings.Contains(buffer, hbSpanishProse) {
+		t.Errorf("buffer does not carry the final answer %q; got %q", hbSpanishProse, buffer)
+	}
+	// No replacement event for the preamble.
+	if repl := languageGuardReplacementEvents(drainEvents(sub)); len(repl) != 0 {
+		t.Errorf("a held preamble must not publish a replacement event; got %d", len(repl))
+	}
+	// Two model calls: the preamble + the final answer (no preamble repair).
+	if calls := len(client.GetSentRequests()); calls != 2 {
+		t.Errorf("model calls = %d, want 2 (preamble + final answer, no repair rounds)", calls)
+	}
+}
+
+// TestStreamCompletionRecheckFailingRegenerationFallsBackToNotice pins the
+// regeneration-failure fallback: a mid-stream switch whose regeneration
+// ERRORS falls back to the localized notice in the replacement event (and in
+// state), never to silence or to the switched reply.
+func TestStreamCompletionRecheckFailingRegenerationFallsBackToNotice(t *testing.T) {
+	ag, _ := newLanguageGuardAgent(t, "es", false,
+		newStreamingResponse(midStreamFullReply, []string{midStreamSpanishStart, midStreamEnglishRest}),
+		&ScriptedResponse{ // the regeneration: injected error
+			FinishReason: "stop",
+			Error:        context.DeadlineExceeded,
+		},
+	)
+	ag.SetStreamingEnabled(true)
+	sub := wireLanguageGuardEventBus(t, ag)
+
+	if _, err := ag.ProcessQuery("Hola"); err != nil {
+		t.Fatalf("ProcessQuery: %v", err)
+	}
+
+	repl := languageGuardReplacementEvents(drainEvents(sub))
+	if len(repl) != 1 {
+		t.Fatalf("expected exactly 1 language_guard_replacement event, got %d", len(repl))
+	}
+	data, ok := repl[0].Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("replacement event data is not a map: %T", repl[0].Data)
+	}
+	wantNotice := LanguageMismatchNotice(langguard.Language{Code: "es", Name: "Spanish"})
+	if got := data["replacement"]; got != wantNotice {
+		t.Errorf("replacement = %v, want the fallback notice %q", got, wantNotice)
+	}
+	if got := data["original"]; got != midStreamFullReply {
+		t.Errorf("original = %v, want the full switched reply %q", got, midStreamFullReply)
+	}
+	// State carries the fallback notice too (the client and state agree).
+	if last := lastAssistantMessage(t, ag); last.Content != wantNotice {
+		t.Errorf("final assistant message = %q, want the fallback notice %q", last.Content, wantNotice)
+	}
+}
+
+// TestStreamCompletionRecheckNeverPublishesTwice is the duplicate-event rule:
+// the final-message guard must not re-run on a reply the streaming guard
+// already replaced. The replaced reply is left in state as the final message
+// (a mismatch), so a second pass would re-generate AND re-publish — this test
+// fails if the repaired marker is ever dropped.
+func TestStreamCompletionRecheckNeverPublishesTwice(t *testing.T) {
+	ag, client := newLanguageGuardAgent(t, "es", false,
+		newStreamingResponse(midStreamFullReply, []string{midStreamSpanishStart, midStreamEnglishRest}),
+		NewStopResponse(hbSpanishProse),  // the streaming regeneration: correct
+		NewStopResponse(lgEnglishProse2), // a second repair would consume this
+	)
+	ag.SetStreamingEnabled(true)
+	sub := wireLanguageGuardEventBus(t, ag)
+
+	if _, err := ag.ProcessQuery("Hola"); err != nil {
+		t.Fatalf("ProcessQuery: %v", err)
+	}
+
+	if repl := languageGuardReplacementEvents(drainEvents(sub)); len(repl) != 1 {
+		t.Errorf("replacement events = %d, want exactly 1 (no duplicate)", len(repl))
+	}
+	if calls := len(client.GetSentRequests()); calls != 2 {
+		t.Errorf("model calls = %d, want 2 (the turn + one regeneration)", calls)
+	}
+}
+
+// TestStreamCompletionRecheckSwitchedPreambleNoEvent mirrors the held path's
+// preamble rule for the completion re-check: a RELEASED mid-turn preamble (a
+// tool-call reply whose Spanish start passed the hold-back) that switches to
+// English mid-stream gets NO replacement event and NO repair — the turn
+// continues with tool execution and the final answer is what gets guarded.
+func TestStreamCompletionRecheckSwitchedPreambleNoEvent(t *testing.T) {
+	ag, client := newLanguageGuardAgent(t, "es", false,
+		NewScriptedResponseBuilder().
+			Content(midStreamFullReply).
+			ToolCalls([]api.ToolCall{{
+				ID:   "call_switched_1",
+				Type: "function",
+				Function: api.ToolCallFunction{
+					Name:      "read_file",
+					Arguments: `{"path":"main.go"}`,
+				},
+			}}).
+			FinishReason("tool_calls").
+			StreamConfig(&StreamConfig{Chunks: []string{midStreamSpanishStart, midStreamEnglishRest}, FinishReason: "tool_calls"}).
+			Build(),
+		NewStopResponse(hbSpanishProse), // the turn's final answer: Spanish
+	)
+	ag.SetStreamingEnabled(true)
+	sub := wireLanguageGuardEventBus(t, ag)
+
+	if _, err := ag.ProcessQuery("Hola"); err != nil {
+		t.Fatalf("ProcessQuery: %v", err)
+	}
+
+	// The preamble streamed live (its start passed), but the switch is NOT
+	// repaired: no replacement event for a mid-turn preamble.
+	if repl := languageGuardReplacementEvents(drainEvents(sub)); len(repl) != 0 {
+		t.Errorf("a switched mid-turn preamble must not publish a replacement event; got %d", len(repl))
+	}
+	// No repair rounds: two model calls (preamble + final answer).
+	if calls := len(client.GetSentRequests()); calls != 2 {
+		t.Errorf("model calls = %d, want 2 (preamble + final answer, no repair)", calls)
 	}
 }

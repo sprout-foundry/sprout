@@ -1,10 +1,10 @@
 /**
- * Deterministic template summaries for the SP-151 progress events
- * (SP-151 §151c, item 151.7). Mirror the Go templates in
- * pkg/cliui/progress_summary.go (item 151.6) exactly so the CLI and the
+ * Deterministic template summaries for the progress events.
+ * Mirror the Go templates in
+ * pkg/cliui/progress_summary.go exactly so the CLI and the
  * web UI progress strip render the same text. Each template is a pure
  * function of the event payload fields: no model call, no invented
- * detail. The optional summarizer-role model summary (item 151.8) is a
+ * detail. The optional summarizer-role model summary is a
  * separate item and is not implemented here.
  */
 
@@ -17,8 +17,8 @@ import type {
 } from '@sprout/events';
 
 /**
- * Render a progress_milestone event (SP-151 §151a) as a single line. A
- * coalesced batch (SP-151 §151b — the payload carries a "milestones"
+ * Render a progress_milestone event as a single line. A
+ * coalesced batch (the payload carries a "milestones"
  * array of flat payloads) renders as a count only; a flat milestone
  * renders the scope item's phase. Returns "" when there is nothing to
  * say.
@@ -46,7 +46,7 @@ export function progressMilestoneSummary(data?: ProgressMilestoneData): string {
 }
 
 /**
- * Shared passed/total logic over a checks list (SP-151 §151c):
+ * Shared passed/total logic over a checks list:
  * "Checks: <passed>/<total> passed", or "" when the list is empty. A
  * check counts as passed only when its `passed` field is true — a
  * skipped check is never passed.
@@ -58,7 +58,7 @@ function verificationChecksSummary(checks?: ProgressVerificationCheck[]): string
 }
 
 /**
- * Render a progress_verification event (SP-151 §151a) as a single
+ * Render a progress_verification event as a single
  * "Checks: <passed>/<total> passed" line. A skipped check is listed,
  * never counted as passed. Returns "" when nothing ran.
  */
@@ -67,7 +67,7 @@ export function progressVerificationSummary(data?: ProgressVerificationData): st
 }
 
 /**
- * Render a progress_complete event (SP-151 §151a) as a single line: a
+ * Render a progress_complete event as a single line: a
  * verified run carries the final check count when the nested
  * verification has checks, an unverified run carries its reason when
  * one is present. A run that is not verified and carries no reason
@@ -87,7 +87,7 @@ export function progressCompleteSummary(data?: ProgressCompleteData): string {
 }
 
 /**
- * Render a progress_question event (SP-151 §151a) as a single line.
+ * Render a progress_question event as a single line.
  * Returns "" when the question is empty.
  */
 export function progressQuestionSummary(data?: ProgressQuestionData): string {
@@ -97,8 +97,8 @@ export function progressQuestionSummary(data?: ProgressQuestionData): string {
 }
 
 /**
- * Dispatch a progress event to its deterministic template summary
- * (SP-151 §151c). Returns "" for non-progress event types or when the
+ * Dispatch a progress event to its deterministic template summary.
+ * Returns "" for non-progress event types or when the
  * template has nothing to say.
  */
 export function progressEventSummary(type: string, data: unknown): string {

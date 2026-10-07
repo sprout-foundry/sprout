@@ -124,7 +124,7 @@ type Agent struct {
 	turnTimestamp         time.Time
 	turnTimestampMu       sync.RWMutex
 
-	// Outbound language guard (SP-152 §152c): the resolved user language for
+	// Outbound language guard: the resolved user language for
 	// the active turn and whether the streaming hold-back applies to it
 	// (guard enabled, not a subagent, and the language was determined).
 	// Set once per turn in prepareQueryRun (resolveTurnLanguageGuard); read
@@ -133,6 +133,11 @@ type Agent struct {
 	turnLangMu           sync.RWMutex
 	turnUserLanguage     langguard.Language
 	streamHoldbackActive bool
+	// turnUserQuery is the current turn's user message (the user's last
+	// message), stored so the streaming regeneration prompt can carry it
+	// without a query-run context. Set once per turn in prepareQueryRun
+	// (setTurnLanguageGuard).
+	turnUserQuery string
 
 	// Configuration
 	configManager *configuration.Manager
@@ -140,7 +145,7 @@ type Agent struct {
 	workspaceRootMu sync.RWMutex
 	workspaceRoot   string
 	debug           bool
-	// role is the SP-150 §150c role whose model selection this agent's
+	// role is the role whose model selection this agent's
 	// usage is attributed to (a configuration.Role* constant such as
 	// "coder" or "reviewer"). Set once at creation: the primary agent is
 	// the coder role; a subagent carries the role its model was resolved
@@ -260,8 +265,8 @@ type Agent struct {
 	security SecurityManager    // Approvals, redaction, elevation, bypass
 	mcpSub   MCPSubManager      // MCP server lifecycle and tool caching
 	todoMgr  *tools.TodoManager // Per-agent todo manager for session isolation
-	// scopeMilestones tracks SP-148 plan scope items that started or
-	// finished this session (SP-151 §151a, item 151.2): the per-scope
+	// scopeMilestones tracks plan scope items that started or
+	// finished this session: the per-scope
 	// started/finished state that decides which progress_milestone events a
 	// todo_write emits. Initialized at agent creation, lazily for bare test
 	// agents, and reset on session rotation so stale scope state never leaks
@@ -278,10 +283,10 @@ type Agent struct {
 	changeTracker         *ChangeTracker
 	preparedTools         sync.RWMutex
 	lastToolNames         []string
-	// turnVerification is this agent's per-turn verification state (SP-149
-	// §149c/§149d): the last run's result, the per-check repair attempts
+	// turnVerification is this agent's per-turn verification state:
+	// the last run's result, the per-check repair attempts
 	// it consumed, and the configured repair limit N — the single access
-	// the final-reply contract (149.6) and the SP-151 verification event
+	// the final-reply contract and the verification event
 	// read. The turn-end hook stores a fresh state on every verification
 	// run (pass, fail, or stop-rule); prepareQueryRun resets it at each
 	// turn start so a previous turn's result never attaches to a later
@@ -291,7 +296,7 @@ type Agent struct {
 	turnVerificationMu sync.Mutex
 	turnVerification   turnVerification
 	// turnVerifySnapshot is the frozen verification input captured once at
-	// the turn's start (SP-149 §149b): the starter manifest's commands and
+	// the turn's start: the starter manifest's commands and
 	// the plan's acceptance that every verification run of the turn
 	// executes against. It is stored under turnVerificationMu and reset at
 	// each turn's start (prepareQueryRun) so a turn's verification never
@@ -301,6 +306,14 @@ type Agent struct {
 	// one at hook entry only if none was stored), so the model cannot
 	// change what "passing" means mid-turn.
 	turnVerifySnapshot *verify.Snapshot
+	// turnQuality is this agent's per-turn quality-after-edits state: the
+	// last quality run's structured result, or nil when the hook never ran
+	// for this turn (quality disabled, no code change, subagent, or a
+	// runner setup error). The turn-end hook stores a fresh result on every
+	// quality run; prepareQueryRun resets it at each turn start so a
+	// previous turn's result never attaches to a later one.
+	turnQualityMu sync.Mutex
+	turnQuality   *verify.QualityResult
 	// toolFuncs is this agent's per-agent tool dispatch set, built by
 	// wireAgentToolFuncs and carried into ToolEnv so agent-dependent tools
 	// route to THIS agent, not the most recently constructed one.
@@ -452,6 +465,11 @@ type Agent struct {
 
 	// securityAnalysisCacheMu guards securityAnalysisCache against concurrent lazy-init and reset.
 	securityAnalysisCacheMu sync.Mutex
+
+	// workflowRun marks a workflow/automate run: non-interactive for approval
+	// purposes regardless of the console's TTY status. See
+	// workflow_run_approval.go for the policy and the accessors.
+	workflowRun atomic.Bool
 }
 
 // InjectWebUIManagers replaces the agent's internal approval and ask-user managers with the webui-owned instances.

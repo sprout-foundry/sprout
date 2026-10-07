@@ -1,6 +1,6 @@
 //go:build !js
 
-// verification_state_test.go — the SP-154 §154b (154.3) accessor tests
+// verification_state_test.go — the accessor tests
 // for the turn-end hook's stored per-turn verification state
 // (Agent.LastTurnVerification): the nil contract (a nil receiver and a
 // fresh agent with no completed turn), the stored state of a scripted
@@ -24,7 +24,7 @@ import (
 // nil alongside it (no behavior change).
 func TestLastTurnVerification_NilAndFreshAgent(t *testing.T) {
 	// The nil-receiver contract is the new accessor's (LastTurnVerification);
-	// LastVerificationResult keeps its exact pre-154.3 behavior (no nil
+	// LastVerificationResult keeps its exact prior behavior (no nil
 	// handling), so it is not exercised on a nil receiver here.
 	var nilAgent *Agent
 	if tv := nilAgent.LastTurnVerification(); tv != nil {
@@ -42,7 +42,7 @@ func TestLastTurnVerification_NilAndFreshAgent(t *testing.T) {
 }
 
 // TestLastTurnVerification_FailingTurnStoresState pins the stored state
-// of a scripted failing-verification turn (the 149.5 fixture pattern,
+// of a scripted failing-verification turn (the shared fixture pattern,
 // N=1): the last (still failing) verification run, the per-check repair
 // attempts consumed against the stopping rule, the configured limit,
 // and the one repair round the hook ran. The returned Attempts map is
@@ -92,7 +92,7 @@ func TestLastTurnVerification_FailingTurnStoresState(t *testing.T) {
 		t.Errorf("after mutating the returned map, re-read Attempts = %v, want {build: 1} (a copy, not the stored state)", tv2.Attempts)
 	}
 
-	// LastVerificationResult keeps its exact behavior (the 149.5/149.6
+	// LastVerificationResult keeps its exact behavior (the preceding
 	// tests depend on it): the same stored result.
 	if res := ag.LastVerificationResult(); res != tv.Result {
 		t.Errorf("LastVerificationResult = %+v, want the same result the state carries (%+v)", res, tv.Result)

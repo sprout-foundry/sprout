@@ -1,6 +1,6 @@
 //go:build !js
 
-// starter_upgrade_test.go — the SP-153 §153d acceptance tests for starter
+// starter_upgrade_test.go — the acceptance tests for starter
 // upgrade proposals: when .sprout/starter.json names an older version of its
 // starter than the embedded starter tree, the agent is told (an upgrade
 // notice reaches the turn's context) and may propose the upgrade using the
@@ -25,7 +25,7 @@
 //
 // The version fixtures are pinned against the embedded fixture starter tree
 // (pkg/starters/data/fixture, version 0.1.0) — the "embedded version" side
-// of the §153d comparison.
+// of the version comparison.
 
 package agent
 
@@ -179,7 +179,7 @@ func suAssertSnapshotsEqual(t *testing.T, label string, before, after []string) 
 		return
 	}
 	onlyBefore, onlyAfter := suDiffLines(before, after)
-	t.Errorf("%s changed the project files (§153d: the notice is advisory-only, "+
+	t.Errorf("%s changed the project files (the notice is advisory-only, "+
 		"no file changes) — removed/modified: %q; added/modified: %q",
 		label, onlyBefore, onlyAfter)
 }

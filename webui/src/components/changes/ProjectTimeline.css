@@ -1,0 +1,236 @@
+/* ProjectTimeline — styled with the design-system tokens defined in
+   webui/src/App.css so it theme-switches with the rest of the changes
+   surface. No raw colors. */
+
+.project-timeline {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.project-timeline--empty {
+  padding: var(--space-4) 0;
+}
+
+.ptl-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-6) var(--space-3);
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
+.ptl-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ptl-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.ptl-row:hover {
+  background: var(--bg-hover);
+}
+
+.ptl-gutter {
+  display: inline-flex;
+  align-items: center;
+  padding-top: 2px;
+}
+
+.ptl-icon {
+  flex-shrink: 0;
+}
+
+.ptl-icon--change_set {
+  color: var(--accent-primary);
+}
+
+.ptl-icon--deploy {
+  color: var(--accent-success);
+}
+
+.ptl-icon--checkpoint {
+  color: var(--accent-info);
+}
+
+.ptl-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ptl-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.ptl-kind {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.ptl-kind--checkpoint {
+  color: var(--accent-info);
+}
+
+.ptl-kind--deploy {
+  color: var(--accent-success);
+}
+
+.ptl-chip {
+  padding: 1px 6px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.ptl-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.ptl-summary-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.ptl-summary {
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ptl-summary--button {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text-primary);
+}
+
+.ptl-summary--button:hover {
+  text-decoration: underline;
+}
+
+.ptl-files {
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ptl-url {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--accent-info);
+  font-size: var(--text-xs);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ptl-url:hover {
+  text-decoration: underline;
+}
+
+.ptl-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: 2px;
+}
+
+.ptl-actions--confirm {
+  align-items: center;
+  flex-wrap: wrap;
+  padding: var(--space-2);
+  background: color-mix(in srgb, var(--accent-error) 10%, transparent);
+  border: 1px solid var(--accent-error);
+  border-radius: var(--radius-sm);
+}
+
+.ptl-confirm-msg {
+  flex: 1 1 220px;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.ptl-restore-btn,
+.ptl-confirm-btn,
+.ptl-cancel-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition:
+    background var(--ease-out) 150ms,
+    border-color var(--ease-out) 150ms;
+}
+
+.ptl-restore-btn {
+  background: transparent;
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+}
+
+.ptl-restore-btn:hover {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.ptl-confirm-btn {
+  background: var(--accent-error);
+  border: 1px solid var(--accent-error);
+  color: var(--accent-fg);
+  font-weight: 600;
+}
+
+.ptl-cancel-btn {
+  background: transparent;
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+}
+
+.ptl-cancel-btn:hover {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.ptl-open-affordance {
+  color: var(--text-muted);
+  margin-top: 2px;
+}

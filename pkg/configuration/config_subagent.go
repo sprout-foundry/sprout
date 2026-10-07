@@ -10,7 +10,7 @@ import (
 
 // GetSubagentProvider returns the configured provider for subagents.
 // An explicit subagent_provider wins; otherwise the coder role's provider
-// (roles.coder, SP-150 §150a item 150.2 — subagents do the coder role's
+// (roles.coder — subagents do the coder role's
 // work, so the subagent settings alias the coder role) when set. Returns
 // an empty string when neither is set; callers inherit from the parent
 // agent's provider or treat empty as a signal that no explicit subagent
@@ -26,8 +26,8 @@ func (c *Config) GetSubagentProvider() string {
 }
 
 // GetSubagentModel returns the configured model for subagents. An explicit
-// subagent_model wins; otherwise the coder role's model (roles.coder,
-// SP-150 §150a item 150.2) when set; otherwise falls back to the
+// subagent_model wins; otherwise the coder role's model (roles.coder)
+// when set; otherwise falls back to the
 // provider's default model.
 func (c *Config) GetSubagentModel() string {
 	if c.SubagentModel != "" {
@@ -212,7 +212,7 @@ func normalizePersonaID(raw string) string {
 
 // GetSubagentTypeProvider returns the provider for a specific subagent type
 // Falls back to the general subagent provider if not specified, which
-// aliases the coder role (SP-150 §150a item 150.2).
+// aliases the coder role.
 func (c *Config) GetSubagentTypeProvider(id string) string {
 	if st := c.GetSubagentType(id); st != nil && st.Provider != "" {
 		return st.Provider
@@ -222,7 +222,7 @@ func (c *Config) GetSubagentTypeProvider(id string) string {
 
 // GetSubagentTypeModel returns the model for a specific subagent type
 // Falls back to the general subagent model if not specified, which
-// aliases the coder role (SP-150 §150a item 150.2).
+// aliases the coder role.
 func (c *Config) GetSubagentTypeModel(id string) string {
 	if st := c.GetSubagentType(id); st != nil && st.Model != "" {
 		return st.Model

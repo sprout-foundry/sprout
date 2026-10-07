@@ -44,8 +44,9 @@ type ConversationState struct {
 	CachedTokens            int              `json:"cached_tokens"`
 	CacheWriteTokens        int              `json:"cache_write_tokens,omitempty"`
 	CachedCostSavings       float64          `json:"cached_cost_savings"`
+	CacheSavingsUnknown     bool             `json:"cache_savings_unknown,omitempty"`
 	ImageTokens             int              `json:"image_tokens,omitempty"`
-	// Per-role token/cost totals (SP-150 §150c, item 150.5). Persisted so a
+	// Per-role token/cost totals. Persisted so a
 	// restored session keeps its per-role attribution and the per-role
 	// totals keep summing to the restored overall totals.
 	RoleUsage            []RoleUsage `json:"role_usage,omitempty"`

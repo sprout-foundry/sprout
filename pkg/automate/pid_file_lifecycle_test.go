@@ -16,6 +16,74 @@ func writeTestSession(t *testing.T, dir, id string, info *AutomateSessionInfo) {
 	}
 }
 
+func TestRecordSessionStopReason(t *testing.T) {
+	dir := t.TempDir()
+	writeTestSession(t, dir, "r1", &AutomateSessionInfo{Workflow: "wf.json", PID: 42, StartedAt: time.Now(), Kind: "automate"})
+
+	path := filepath.Join(dir, "automate", "r1.json")
+	if err := RecordSessionStopReason(path, "no_progress", 3, 7); err != nil {
+		t.Fatalf("RecordSessionStopReason: %v", err)
+	}
+	info, err := ReadSessionFile(dir, "r1")
+	if err != nil {
+		t.Fatalf("ReadSessionFile: %v", err)
+	}
+	if info.StopReason != "no_progress" {
+		t.Errorf("StopReason = %q, want no_progress", info.StopReason)
+	}
+	if info.ContinuationTurns != 3 {
+		t.Errorf("ContinuationTurns = %d, want 3", info.ContinuationTurns)
+	}
+	if info.RunnableItemsRemaining != 7 {
+		t.Errorf("RunnableItemsRemaining = %d, want 7", info.RunnableItemsRemaining)
+	}
+	// The record must remain finalized-agnostic: recording a stop reason on
+	// a running record must not clobber its status.
+	if info.Status != "running" {
+		t.Errorf("Status = %q, want running (untouched)", info.Status)
+	}
+}
+
+func TestRecordSessionStopReason_MissingRecordIsNotAnError(t *testing.T) {
+	dir := t.TempDir()
+	// A foreground run has no session file; recording must be a silent no-op.
+	if err := RecordSessionStopReason(filepath.Join(dir, "automate", "absent.json"), "no_progress", 1, 1); err != nil {
+		t.Fatalf("RecordSessionStopReason on missing record = %v, want nil", err)
+	}
+	// Empty path is also a no-op.
+	if err := RecordSessionStopReason("", "no_progress", 1, 1); err != nil {
+		t.Fatalf("RecordSessionStopReason on empty path = %v, want nil", err)
+	}
+}
+
+func TestFinalizeSessionFile_PreservesStopReason(t *testing.T) {
+	dir := t.TempDir()
+	writeTestSession(t, dir, "rf", &AutomateSessionInfo{Workflow: "wf.json", PID: 42, StartedAt: time.Now(), Kind: "automate"})
+
+	path := filepath.Join(dir, "automate", "rf.json")
+	// The child records the stop reason before exiting; the launcher then
+	// finalizes the same record. Finalization must not clobber it.
+	if err := RecordSessionStopReason(path, "no_runnable_items", 4, 1); err != nil {
+		t.Fatalf("RecordSessionStopReason: %v", err)
+	}
+	if err := FinalizeSessionFile(dir, "rf", 0); err != nil {
+		t.Fatalf("FinalizeSessionFile: %v", err)
+	}
+	info, err := ReadSessionFile(dir, "rf")
+	if err != nil {
+		t.Fatalf("ReadSessionFile: %v", err)
+	}
+	if info.StopReason != "no_runnable_items" {
+		t.Errorf("StopReason = %q, want no_runnable_items (finalize clobbered it)", info.StopReason)
+	}
+	if info.ContinuationTurns != 4 || info.RunnableItemsRemaining != 1 {
+		t.Errorf("continuation fields = (%d, %d), want (4, 1)", info.ContinuationTurns, info.RunnableItemsRemaining)
+	}
+	if info.Status != "success" {
+		t.Errorf("Status = %q, want success", info.Status)
+	}
+}
+
 func TestFinalizeSessionFile_Success(t *testing.T) {
 	dir := t.TempDir()
 	writeTestSession(t, dir, "s1", &AutomateSessionInfo{Workflow: "wf.json", PID: 42, StartedAt: time.Now(), Kind: "automate"})

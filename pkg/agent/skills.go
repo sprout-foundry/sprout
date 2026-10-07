@@ -192,7 +192,7 @@ func handleListSkills(ctx context.Context, a *Agent, args map[string]interface{}
 
 // activateSkillByID is the skill-activation core shared by the
 // activate_skill tool (handleActivateSkill) and the turn-start stack-skill
-// auto-activation (SP-153 §153c, autoActivateStarterSkill): load the skill,
+// auto-activation (autoActivateStarterSkill): load the skill,
 // add its ID to the active-skill set, and fold its instructions into the
 // system prompt.
 //

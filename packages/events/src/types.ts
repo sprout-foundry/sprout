@@ -328,29 +328,59 @@ export interface LanguageGuardReplacementData {
  * started or finished, with the files-touched count and the scope item's
  * elapsed wall time.
  *
+ * This one interface models BOTH wire shapes the event type carries:
+ * a flat single-milestone payload (mirrors the Go struct below) and the
+ * coalesced batch envelope, which is built by the webui stream coalescer
+ * (pkg/webui/stream_coalesce.go::mergeMilestones), not by the Go struct.
+ * The batch carries only run_id, the milestones array, and the route keys
+ * at the top level — plan_revision, phase, and elapsed_ms exist only on
+ * the per-entry flat payloads — which is why those fields are optional.
+ *
  * Go: pkg/events/progress_events.go::ProgressMilestoneData
  */
 export interface ProgressMilestoneData {
-  /** Stable run identifier correlating every event of one run. */
+  /** Stable run identifier correlating every event of one run. Present on flat and batched payloads alike. */
   run_id: string;
-  /** Revision of the SP-148 plan (0 when the run has no active plan). */
-  plan_revision: number;
+  /**
+   * Revision of the SP-148 plan (0 when the run has no active plan).
+   * Optional: a coalesced batch envelope has no top-level plan_revision —
+   * only the per-milestone entries inside `milestones` carry it.
+   */
+  plan_revision?: number;
   /** Scope item id (plancontract.ScopeItem.ID); absent without plan scope. */
   scope_id?: string;
   /** Scope item's title, for display. */
   scope_title?: string;
-  /** "started" | "finished" — which milestone phase this reports. */
-  phase: string;
+  /**
+   * "started" | "finished" — which milestone phase this reports. Optional:
+   * a coalesced batch envelope has no top-level phase — each flat entry in
+   * `milestones` carries its own.
+   */
+  phase?: string;
   /** How many files the scope item changed. */
   files_touched?: number;
-  /** Scope item's elapsed wall time in milliseconds. */
-  elapsed_ms: number;
+  /**
+   * Scope item's elapsed wall time in milliseconds. Optional: the coalesced
+   * batch envelope has no top-level elapsed_ms, and a flat "started"
+   * milestone omits it on the wire (only "finished" emits it).
+   */
+  elapsed_ms?: number;
   /**
    * Present only when the stream coalesced a run of milestone events
    * (SP-151 §151b); each entry is a flat ProgressMilestoneData. A single
    * (non-coalesced) milestone event omits this field.
    */
   milestones?: ProgressMilestoneData[];
+  /**
+   * Route keys. Stamped onto every flat payload by the event metadata
+   * decorator, and copied onto a batch envelope so the coalesced event
+   * still reaches its destination. Consumers scope a milestone to a chat
+   * by the TOP-LEVEL chat_id — it is present on both flat and batched
+   * payloads, so one check covers both shapes.
+   */
+  client_id?: string;
+  chat_id?: string;
+  user_id?: string;
 }
 
 /**

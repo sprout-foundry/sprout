@@ -30,7 +30,7 @@ func NewTestAgent() *Agent {
 
 // NewTestAgentWithConfigManager is NewTestAgent with the configuration
 // manager wired in, for tests that exercise config-gated behavior (e.g.
-// the SP-149 verification flag) without a full NewAgent.
+// the verification flag) without a full NewAgent.
 func NewTestAgentWithConfigManager(mgr *configuration.Manager) *Agent {
 	ag := NewTestAgent()
 	ag.configManager = mgr
@@ -39,7 +39,7 @@ func NewTestAgentWithConfigManager(mgr *configuration.Manager) *Agent {
 
 // PublishTurnProgressComplete exposes the turn-completion progress emit —
 // the progress_verification / progress_complete pair built from the stored
-// turn-end verification result (SP-151 §151a) — for cross-package tests
+// turn-end verification result — for cross-package tests
 // and embedding turn loops. It is the same path handleQueryResult calls on
 // the success path; a no-op when no event bus is wired or the turn is a
 // subagent turn.

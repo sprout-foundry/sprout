@@ -25,7 +25,7 @@ func handleAskUser(ctx context.Context, a *Agent, args map[string]interface{}) (
 		return response, nil
 	}
 
-	// Emit the SP-151 §151a progress_question (plan context) before the ask
+	// Emit the progress_question (plan context) before the ask
 	// channel is engaged, so it precedes the ask_user_request for this
 	// question.
 	a.publishProgressQuestion(req)

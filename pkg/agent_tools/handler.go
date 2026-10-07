@@ -237,6 +237,14 @@ type ToolFuncSet struct {
 	// write/edit handlers skip the guard. The turn-start snapshot is the
 	// enforcement; this is the polite rail that refuses the write.
 	GuardStarterManifestWrite func(path string) error
+	// DeployVerification reports the agent's latest SP-149 verification
+	// outcome: whether it passed, and whether a result exists at all
+	// (haveResult is false when verification has not produced a result for
+	// the current work). The deploy tool reads it to gate a deploy on a
+	// passing verification; when it is nil and verification is enabled, the
+	// tool fails closed and refuses. Set by pkg/agent (wireAgentToolFuncs);
+	// nil in standalone runs (verification disabled), where the gate is open.
+	DeployVerification func() (passed bool, haveResult bool)
 }
 
 // ResolveToolFuncs returns the tool func set to dispatch through. It prefers

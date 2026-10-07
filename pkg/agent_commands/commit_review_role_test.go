@@ -18,7 +18,7 @@ func newCommitReviewTestManager(t *testing.T) *configuration.Manager {
 	return mgr
 }
 
-// TestReviewFlowClient_RoleReviewerResolvesClient verifies (SP-150 §150b)
+// TestReviewFlowClient_RoleReviewerResolvesClient verifies
 // that the commit-review flow resolves its LLM client through the reviewer
 // role: with only roles.reviewer set (no legacy review settings, no
 // last-used provider), the role's provider is used.
@@ -36,7 +36,7 @@ func TestReviewFlowClient_RoleReviewerResolvesClient(t *testing.T) {
 	assert.Equal(t, string(api.TestClientType), client.GetProvider())
 }
 
-// TestReviewFlowClient_ReviewSettingsAliasReviewerRole verifies the 150.2
+// TestReviewFlowClient_ReviewSettingsAliasReviewerRole verifies the
 // alias direction at the call site: the legacy review settings resolve the
 // reviewer role, so the pre-role configuration keeps working through the
 // role resolver.

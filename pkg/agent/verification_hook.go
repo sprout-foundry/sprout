@@ -1,34 +1,35 @@
-// verification_hook.go — the SP-149 §149c / 149.5 turn-end verification
+// verification_hook.go — the turn-end verification
 // hook: after a turn that changed application code, and before the final
 // reply, the runtime (not the model) runs the project's verification
 // checks. A failing gated check is fed back to the model as a structured
 // verification report and the turn continues; after N repair attempts on
-// the same failing check the loop stops and the failure stands (SP-149
-// §149d). The last verification result is stored on the agent for the
-// final-reply contract (149.6) and the SP-151 verification event.
+// the same failing check the loop stops and the failure stands.
+// The last verification result is stored on the agent for the
+// final-reply contract and the verification event. The
+// gate is Agent.TurnChangedApplicationPaths (turn_application_code.go):
+// documentation and .sprout bookkeeping changes never open it.
 
 package agent
 
 import (
 	"fmt"
-	"strings"
 
 	core "github.com/sprout-foundry/seed/core"
 
-	"github.com/sprout-foundry/sprout/pkg/plancontract"
+	"github.com/sprout-foundry/sprout/pkg/history"
 	"github.com/sprout-foundry/sprout/pkg/verify"
 )
 
 // Explicit envelope of the structured verification report the hook feeds
-// back to the model (SP-149 §149c).
+// back to the model.
 const (
 	verificationReportOpenTag  = "<verification-report>"
 	verificationReportCloseTag = "</verification-report>"
 )
 
 // turnVerification is the per-turn verification state the final-reply
-// contract (SP-149 §149c/§149d, item 149.6) and the consumers outside
-// pkg/agent (the SP-154 benchmark metrics, 154.3) read in one access:
+// contract and the consumers outside
+// pkg/agent (the benchmark metrics) read in one access:
 // the turn's last verification run, the per-check repair attempts that
 // run consumed, the configured repair limit N, and the number of repair
 // rounds the hook ran for the turn. The turn-end hook stores a fresh
@@ -63,17 +64,19 @@ func snapshotVerificationAttempts(attempts map[string]int) map[string]int {
 	return snapshot
 }
 
-// runTurnEndVerification implements the SP-149 §149c gate and repair loop
-// (item 149.5). processQueryWithSeed invokes it on the success path,
+// runTurnEndVerification implements the gate and repair loop.
+// processQueryWithSeed invokes it on the success path,
 // between the turn's first seedAgent.Run and handleQueryResult:
 // finalResult is the turn's answer, and this method either returns it
 // unchanged or continues the turn through repair rounds.
 //
 // No-ops (returns finalResult untouched, no stored result) when:
 //   - the agent has no configuration, or verification is disabled — the
-//     default (SP-149 §149e: enabling it changes no other behavior);
-//   - the turn changed no application code (§149a: the run gates on the
-//     turn's own changes, Agent.TurnChangedPaths);
+//     default (enabling it changes no other behavior);
+//   - the turn changed no application code (the run gates on the
+//     turn's own changes, Agent.TurnChangedApplicationPaths — a turn
+//     that touched only documentation or .sprout bookkeeping skips the
+//     run);
 //   - the agent is a subagent (subagent turns run through subagent_runner
 //     and never own the final reply; belt-and-braces since that path does
 //     not reach this hook).
@@ -91,7 +94,7 @@ func (a *Agent) runTurnEndVerification(qc *queryRunContext, finalResult string) 
 	if cfg == nil || !cfg.VerificationEnabled() {
 		return finalResult, nil
 	}
-	if len(a.TurnChangedPaths()) == 0 {
+	if len(a.TurnChangedApplicationPaths()) == 0 {
 		return finalResult, nil
 	}
 	if a.subagentDepth > 0 {
@@ -99,13 +102,13 @@ func (a *Agent) runTurnEndVerification(qc *queryRunContext, finalResult string) 
 	}
 
 	// The runner resolves commands only from the starter manifest and the
-	// explicit project configuration (SP-149 §149b) — never from model
+	// explicit project configuration — never from model
 	// output.
 	runner := verify.New()
 	runner.ConfigCommands = verify.ConfigurationCommands(cfg)
 
 	// Every verification run of the turn executes against the turn's frozen
-	// snapshot (SP-149 §149b): the manifest's commands and the plan's
+	// snapshot: the manifest's commands and the plan's
 	// acceptance captured at the turn's start. The snapshot is taken in
 	// prepareQueryRun; if it is missing for some reason (verification was
 	// enabled after the turn started), take one now at hook entry. Either
@@ -120,6 +123,19 @@ func (a *Agent) runTurnEndVerification(qc *queryRunContext, finalResult string) 
 	}
 
 	limit := cfg.VerificationRepairAttempts()
+	totalCap := cfg.VerificationRepairTotalRounds()
+
+	// The require-a-test-for-new-behavior check is opted in through the
+	// verification section; its mechanical input is frozen once, at hook
+	// entry: the turn's changed application-code paths and whether the frozen
+	// plan declares a test acceptance item. A disabled requirement leaves the
+	// runner's checks unchanged.
+	runner.RequireTest = verify.RequireTestInput{
+		Enabled:                 cfg.RequireTest(),
+		PlanHasTestItem:         snapshotHasTestItem(snap),
+		ChangedApplicationPaths: a.TurnChangedApplicationPaths(),
+	}
+
 	attempts := make(map[string]int)
 	rounds := 0
 
@@ -138,9 +154,9 @@ func (a *Agent) runTurnEndVerification(qc *queryRunContext, finalResult string) 
 		}
 		// Stored on every run (pass, fail, stop-rule): the result, the
 		// per-check repair attempts consumed so far, the configured
-		// limit, and the repair rounds the hook has run — the state
-		// 149.6 attaches to the final reply, SP-151 records, and the
-		// SP-154 benchmark reads (154.3). A snapshot of the counters:
+		// limits, and the repair rounds the hook has run — the state
+		// the final-reply contract attaches to the reply, the verification
+		// event records, and the benchmark reads. A snapshot of the counters:
 		// the loop keeps counting into its own map across repair
 		// rounds, so the stored state never mutates after it is stored.
 		a.setTurnVerification(turnVerification{
@@ -151,12 +167,21 @@ func (a *Agent) runTurnEndVerification(qc *queryRunContext, finalResult string) 
 		})
 		if !res.Failed() {
 			// Passing, or all-skipped where nothing failed — both stand.
+			// A result that Passed() captures a checkpoint of the state the
+			// turn left behind: the checkpoint ties a known-good project
+			// state to the revision that produced it. A vacuous run (all
+			// checks skipped) is not a pass, so it records nothing.
+			if res.Passed() {
+				a.CaptureVerificationCheckpoint(res)
+			}
 			return finalResult, nil
 		}
-		if verificationStopRuleFired(res, attempts, limit) {
-			// Every failing check has used its repair attempts: the loop
-			// stops and the last result stands (149d: the final reply
-			// states what failed).
+		if verificationLoopShouldStop(res, attempts, limit, rounds, totalCap) {
+			// The stopping rule fired — every failing check has used its
+			// repair attempts (the per-check rule), or the turn's total
+			// repair rounds have reached the cap. The loop stops and the
+			// last result stands (149d: the final reply states what
+			// failed).
 			return finalResult, nil
 		}
 		for _, c := range res.Checks {
@@ -182,122 +207,64 @@ func (a *Agent) runTurnEndVerification(qc *queryRunContext, finalResult string) 
 	}
 }
 
-// verificationStopRuleFired reports whether the SP-149 §149c stopping rule
-// has fired: every failing check has used its repair-attempt limit. A run
-// whose failure comes only from run-level errors (no failing check) fires
-// immediately — there is nothing to repair per check.
-func verificationStopRuleFired(res *verify.Result, attempts map[string]int, limit int) bool {
-	for _, c := range res.Checks {
-		if c.Skipped || c.Passed {
-			continue
-		}
-		if attempts[checkAttemptKey(c)] < limit {
-			return false
-		}
-	}
-	return true
-}
+// captureCheckpoint is the checkpoint seam the turn-end verification hook
+// calls when a verification run passes. It is a package-level variable so a
+// test can observe the capture without constructing a workspace; production
+// uses captureCheckpointForWorkspace. revisionID is the revision the turn
+// left behind — the state the checkpoint must identify — so the capture does
+// not have to guess it from the process history store.
+var captureCheckpoint func(workspace, revisionID string, res *verify.Result) error
 
-// checkAttemptKey is the per-check counter key for the repair loop
-// (SP-149 §149c): the kind string, plus the interaction item id for
-// interaction checks (each scripted flow is its own check and counts its
-// own attempts, so two flows never share a counter). Manual checks never
-// fail — they are pre-filled skipped — so they never need a key.
-func checkAttemptKey(c verify.Check) string {
-	if c.Kind == plancontract.KindInteraction && len(c.Items) > 0 {
-		return string(c.Kind) + ":" + c.Items[0]
-	}
-	return string(c.Kind)
-}
-
-// buildVerificationReport renders the structured verification report
-// (SP-149 §149c) the hook feeds back to continue the turn. It is
-// deterministic over (result, attempts, limit): an explicit
-// <verification-report> envelope carrying
+// CaptureVerificationCheckpoint creates a checkpoint of the project's
+// current state after the agent's verification run passed. It is the seam
+// the automatic trigger goes through: the turn-end hook calls it on a
+// passing run (res.Passed()), so a passing verification leaves a restorable
+// marker on the timeline.
 //
-//  1. a one-line framing (failing checks found; fix the repairable ones),
-//  2. the run summary (res.Summary),
-//  3. one bullet per still-repairable failing check: key, attempts used
-//     (n/limit), the failure reason, and the check's bounded output
-//     excerpt, indented,
-//  4. when any check is exhausted, an explicit section telling the model
-//     those checks are DONE after the repair limit: stop trying to fix
-//     them and state the remaining failure plainly in the final reply
-//     (SP-149 §149d).
+// The checkpoint captures the agent's current revision (the change set the
+// turn produced), not whichever revision happens to be most recent in the
+// process history store: the marker must identify the state verification
+// passed on.
 //
-// The report is the query of the continued seedAgent.Run call, so it is
-// sent to the model as a user-role message.
-func buildVerificationReport(res *verify.Result, attempts map[string]int, limit int) string {
-	var b strings.Builder
-	b.WriteString(verificationReportOpenTag + "\n")
-	b.WriteString("Turn-end verification found failing checks. Fix the repairable ones, then finish the turn.\n")
-	b.WriteString("Summary: " + res.Summary() + "\n")
-
-	var repairable, exhausted []verify.Check
-	for _, c := range res.Checks {
-		if c.Skipped || c.Passed {
-			continue
-		}
-		if attempts[checkAttemptKey(c)] >= limit {
-			exhausted = append(exhausted, c)
-		} else {
-			repairable = append(repairable, c)
-		}
+// It is a no-op for a nil or non-passing result. A capture failure is logged
+// and swallowed: the checkpoint is a convenience over a run that already
+// passed, and a store failure must never turn a good turn into an error.
+func (a *Agent) CaptureVerificationCheckpoint(res *verify.Result) {
+	if res == nil || !res.Passed() {
+		return
 	}
-
-	if len(repairable) > 0 {
-		b.WriteString("\nFailing checks:\n")
-		for _, c := range repairable {
-			key := checkAttemptKey(c)
-			fmt.Fprintf(&b, "- %s %d/%d — %s\n", key, attempts[key], limit, checkFailureReason(c))
-			b.WriteString(indentVerificationExcerpt(c.Excerpt))
-		}
+	workspace := a.currentWorkspaceRoot()
+	capture := captureCheckpoint
+	if capture == nil {
+		capture = captureCheckpointForWorkspace
 	}
-
-	if len(exhausted) > 0 {
-		b.WriteString("\nChecks that are DONE after the repair limit — stop trying to fix them and state the remaining failure plainly in your final reply:\n")
-		for _, c := range exhausted {
-			key := checkAttemptKey(c)
-			fmt.Fprintf(&b, "- %s %d/%d\n", key, attempts[key], limit)
-		}
+	if err := capture(workspace, a.GetRevisionID(), res); err != nil && a.Logger() != nil {
+		// Warn, not Debug: the turn passed, but no restorable marker was
+		// recorded — a silently lost checkpoint is worth surfacing even
+		// though it never gates the turn.
+		a.Logger().Warn("verification checkpoint capture failed: %v", err)
 	}
-
-	b.WriteString("\n" + verificationReportCloseTag + "\n")
-	return b.String()
 }
 
-// checkFailureReason is the one-line reason for a failing check's report
-// bullet: the check's own reason where one exists (an executor error,
-// timeout, or cancellation), otherwise a plain "command failed" — the
-// excerpt below the bullet carries the output evidence there.
-func checkFailureReason(c verify.Check) string {
-	if c.Reason != "" {
-		return c.Reason
+// captureCheckpointForWorkspace is the production checkpoint capture: it
+// stores a verification checkpoint under the workspace's
+// .sprout/checkpoints/ directory, capturing revisionID — the revision the
+// turn produced — so the marker identifies the state verification passed on.
+func captureCheckpointForWorkspace(workspace, revisionID string, res *verify.Result) error {
+	summary := "verification passed"
+	if res != nil {
+		summary = "verification passed: " + res.Summary()
 	}
-	return "command failed"
+	_, err := history.CreateCheckpointForRevision(workspace, history.CheckpointVerification, revisionID, summary, nil)
+	return err
 }
 
-// indentVerificationExcerpt indents a check's bounded output excerpt so it
-// reads as a block under its report bullet. An empty excerpt renders
-// nothing (a failure whose output was empty still carries its reason).
-func indentVerificationExcerpt(excerpt string) string {
-	excerpt = strings.TrimRight(excerpt, "\n")
-	if excerpt == "" {
-		return ""
-	}
-	var b strings.Builder
-	for _, line := range strings.Split(excerpt, "\n") {
-		b.WriteString("  " + line + "\n")
-	}
-	return b.String()
-}
-
-// LastVerificationResult returns the last turn-end verification result
-// (SP-149 §149c), stored on every verification run (pass, fail, or
+// LastVerificationResult returns the last turn-end verification result,
+// stored on every verification run (pass, fail, or
 // stop-rule), or nil when the turn-end hook never ran for this agent
 // (verification disabled, the turn changed no code, a subagent turn, or a
-// runner setup error). The final-reply contract (149.6) and the SP-151
-// verification event report from it.
+// runner setup error). The final-reply contract and the verification
+// event report from it.
 func (a *Agent) LastVerificationResult() *verify.Result {
 	a.turnVerificationMu.Lock()
 	defer a.turnVerificationMu.Unlock()
@@ -308,8 +275,7 @@ func (a *Agent) LastVerificationResult() *verify.Result {
 }
 
 // setTurnVerification stores the per-turn verification state (the hook's
-// per-run store: result + repair attempts + limit + repair rounds,
-// SP-149 §149d).
+// per-run store: result + repair attempts + limit + repair rounds).
 func (a *Agent) setTurnVerification(tv turnVerification) {
 	a.turnVerificationMu.Lock()
 	defer a.turnVerificationMu.Unlock()
@@ -320,7 +286,7 @@ func (a *Agent) setTurnVerification(tv turnVerification) {
 // turn's start (prepareQueryRun), so a previous turn's stored result,
 // attempts, and limit never attach to this turn's reply: a turn's final
 // reply may only carry that turn's verification outcome. It also clears
-// the turn's frozen verification snapshot (SP-149 §149b) so a previous
+// the turn's frozen verification snapshot so a previous
 // turn's snapshot never feeds a later turn's verification runs.
 func (a *Agent) resetTurnVerification() {
 	a.turnVerificationMu.Lock()
@@ -329,8 +295,8 @@ func (a *Agent) resetTurnVerification() {
 	a.turnVerifySnapshot = nil
 }
 
-// setTurnVerifySnapshot stores the turn's frozen verification input
-// (SP-149 §149b): the starter manifest's commands and the plan's acceptance
+// setTurnVerifySnapshot stores the turn's frozen verification input:
+// the starter manifest's commands and the plan's acceptance
 // captured once at the turn's start. It is guarded by turnVerificationMu and
 // cleared at each turn's start (resetTurnVerification), so a turn's
 // verification runs against the inputs the turn began with.
@@ -340,8 +306,8 @@ func (a *Agent) setTurnVerifySnapshot(snap *verify.Snapshot) {
 	a.turnVerifySnapshot = snap
 }
 
-// getTurnVerifySnapshot returns the turn's frozen verification input
-// (SP-149 §149b), or nil when none was captured for the turn (verification
+// getTurnVerifySnapshot returns the turn's frozen verification input,
+// or nil when none was captured for the turn (verification
 // was not enabled at the turn's start). The turn-end hook reads it to run
 // every repair round against the turn-start inputs instead of re-reading
 // the files.
@@ -351,14 +317,29 @@ func (a *Agent) getTurnVerifySnapshot() *verify.Snapshot {
 	return a.turnVerifySnapshot
 }
 
-// currentTurnVerification returns the stored per-turn verification state
-// (SP-149 §149d): the single access the final-reply contract reads. The
+// currentTurnVerification returns the stored per-turn verification state:
+// the single access the final-reply contract reads. The
 // struct copy is all that is needed — the hook stores snapshots, so a
 // stored attempts map is never mutated after it is stored.
 func (a *Agent) currentTurnVerification() turnVerification {
 	a.turnVerificationMu.Lock()
 	defer a.turnVerificationMu.Unlock()
 	return a.turnVerification
+}
+
+// lastVerificationOutcome reports the agent's latest verification result as
+// the pair the deploy tool gates on: whether it passed, and
+// whether a result exists at all. haveResult is false when the turn-end hook
+// produced no result for the current work (a nil stored result — verification
+// disabled, no code change, or not yet run). The deploy tool combines this
+// with the session's verification-enabled state: enabled + no result is a
+// fail-closed refusal, so a deploy never rides on a guess.
+func (a *Agent) lastVerificationOutcome() (passed bool, haveResult bool) {
+	res := a.currentTurnVerification().result
+	if res == nil {
+		return false, false
+	}
+	return res.Passed(), true
 }
 
 // lastTurnVerificationSnapshot returns a defensive copy of the stored

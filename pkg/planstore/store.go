@@ -1,4 +1,4 @@
-// Package planstore is the file-system-facing half of the SP-148 structured
+// Package planstore is the file-system-facing half of the structured
 // plan: it reads and writes the machine-readable plan document stored at
 // .sprout/plan.json and the rendered .sprout/plan.md view.
 //
@@ -15,7 +15,7 @@
 //     truth.
 //
 // The on-disk location is project-relative (.sprout/ under the project root),
-// so a plan travels with the code and lands in git history (SP-148 §148a).
+// so a plan travels with the code and lands in git history.
 package planstore
 
 import (
@@ -53,7 +53,9 @@ var ErrNoPlan = errors.New("no structured plan found")
 
 // Store reads and writes the structured plan for a project. It is safe for
 // concurrent use by a single writer; it holds no mutable state beyond the
-// (optional) clock.
+// (optional) clock. With multiple concurrent writers the revision floor is
+// read before the write rather than atomically with it, so monotonicity is
+// guaranteed for a single writer only.
 type Store struct {
 	// Clock supplies the current time used to stamp `updated` on every Save.
 	// When nil, time.Now is used. Tests pin it to a fixed instant for
@@ -100,9 +102,20 @@ func (s *Store) Load(root string) (*plancontract.Plan, error) {
 // regenerates the .sprout/plan.md view from it. It returns the stored plan —
 // a copy with the bumped revision and stamped `updated` — on success.
 //
-// Every save bumps the plan's revision by one (from the revision the plan
-// already carries) and stamps `updated` with s.now(), so each write is
-// observable as a new revision and `created` stays as set on first creation.
+// Every save bumps the plan's revision by one, from the higher of the
+// revision the plan carries and the revision currently stored on disk, and
+// stamps `updated` with s.now(), so each write is observable as a new
+// revision and the revision never decreases. The floor matters because a
+// caller can legitimately arrive with a stale plan — one loaded before
+// another process wrote, or assembled by hand — and bumping only from the
+// caller's value would move the revision backwards. A stored file that
+// cannot be read or parsed contributes no floor: the save proceeds from the
+// caller's revision alone. Overwriting a mangled stored file with a valid
+// plan is the better recovery here — refusing to save would break the normal
+// flow for an unrelated defect the write is about to repair anyway — and it
+// means a failed floor read never masks the outcome of the write itself.
+// `created` stays as set on the caller's plan.
+//
 // The caller's plan is left unmodified: Save works on a copy.
 //
 // An invalid plan is rejected before any file is touched: neither
@@ -122,7 +135,7 @@ func (s *Store) Save(root string, plan *plancontract.Plan) (*plancontract.Plan, 
 	// Work on a copy: Save never mutates the caller's plan. Only the scalar
 	// fields (Revision, Updated) change, so a shallow copy is sufficient.
 	stored := *plan
-	stored.Revision = plan.Revision + 1
+	stored.Revision = s.revisionFloor(root, plan.Revision) + 1
 	stored.Updated = s.now()
 
 	jsonBytes, err := planJSONBytes(&stored)
@@ -140,6 +153,25 @@ func (s *Store) Save(root string, plan *plancontract.Plan) (*plancontract.Plan, 
 		return nil, err
 	}
 	return &stored, nil
+}
+
+// revisionFloor returns the lowest revision the next write may bump from:
+// the higher of given and the revision currently stored at the project's
+// plan.json. When no plan is stored yet (no file, or no .sprout/ directory),
+// or the stored file cannot be read or parsed into a valid plan, the floor
+// is just given — the caller's revision is the only input. A floor read
+// failure is deliberately swallowed: the stored file contributes an
+// optimization-grade floor, not a precondition, and Save overwrites whatever
+// is there on its next write anyway.
+func (s *Store) revisionFloor(root string, given int) int {
+	stored, err := s.Load(root)
+	if err != nil {
+		return given
+	}
+	if stored.Revision > given {
+		return stored.Revision
+	}
+	return given
 }
 
 // now returns the current time per the store's clock, falling back to

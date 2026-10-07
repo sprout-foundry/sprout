@@ -1,6 +1,6 @@
 //go:build !js
 
-// todo_plan_scope_test.go — the SP-148 §148c item-148.6 acceptance tests:
+// todo_plan_scope_test.go — the acceptance tests:
 // todo items carry an optional plan scope ID (the id of a scope[] entry in
 // .sprout/plan.json, owned by pkg/plancontract). The scope ID links a todo
 // back to the structured plan so progress maps to the plan and survives
@@ -18,7 +18,7 @@
 //     no scope yields an empty Scope.
 //
 // The scripted run mirrors the conventions in plan_structured_e2e_test.go
-// (148.4) and plan_context_test.go (148.5): a fixture plan on disk, a scripted
+// and plan_context_test.go: a fixture plan on disk, a scripted
 // model client, and assertions on the on-struct state rather than the
 // scripted fixture.
 
@@ -41,7 +41,7 @@ import (
 // Fixture
 // ---------------------------------------------------------------------------
 
-// tpsFixturePlanJSON is a minimal valid SP-148 plan with two scope items (s1,
+// tpsFixturePlanJSON is a minimal valid plan with two scope items (s1,
 // s2), each covered by one acceptance item (the validator's "every scope item
 // needs at least one acceptance item" rule). revision is 2 — a persisted plan,
 // so planstore returns it as-is. The scope ids are the ids a todo's "scope"
@@ -146,7 +146,7 @@ func tpsRoundTripTodos(t *testing.T, todos []tools.TodoItem) []tools.TodoItem {
 }
 
 // ---------------------------------------------------------------------------
-// The §148c scripted run: todos carry plan scope IDs
+// The scripted run: todos carry plan scope IDs
 // ---------------------------------------------------------------------------
 
 // TestTodoWriteEmitsTodosWithScopeIDs is the item's acceptance test: a scripted

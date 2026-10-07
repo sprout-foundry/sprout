@@ -2,7 +2,7 @@
 
 package webui
 
-// SP-153 §153b (TODO 153.6) starter API tests: the embedded catalogue
+// Starter API tests: the embedded catalogue
 // endpoint and the instantiate endpoint, exercised the same way the
 // neighboring api_*_test.go files do their handlers — a real (unserved)
 // server, requests through httptest, responses unmarshalled from the

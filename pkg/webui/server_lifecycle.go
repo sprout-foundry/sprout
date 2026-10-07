@@ -157,7 +157,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 		// publishClientEventWithChat) are captured for WebSocket reattach replay.
 		ws.startRunBufferSubscriber()
 
-		// Record hosted-preview registrations (SP-155 §155a, TODO 155.5):
+		// Record hosted-preview registrations:
 		// the agent's register_preview_port tool publishes preview_port_registered
 		// on the shared bus; this subscriber keeps the active hosted preview on
 		// the server so /api/preview/status reports the platform URL.
@@ -237,12 +237,12 @@ func (ws *ReactWebServer) Shutdown() error {
 	}
 	ws.log().Info("all terminal sessions closed")
 
-	// Stop any preview dev servers the managers started (SP-155 §155a,
-	// TODO 155.4): they are owned child processes that would otherwise
+	// Stop any preview dev servers the managers started:
+	// they are owned child processes that would otherwise
 	// outlive the daemon and hold the dev port.
 	ws.stopPreviewManagers()
 
-	// Forget the active hosted preview (SP-155 §155a, TODO 155.5): it is
+	// Forget the active hosted preview: it is
 	// in-memory state derived from agent events and must not survive a
 	// process restart.
 	ws.clearHostedPreview()

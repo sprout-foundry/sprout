@@ -16,8 +16,8 @@ import (
 // holds it plus every descendant (the Windows analogue of a process group).
 // Killing only the shell would leave children holding the output pipes open,
 // and cmd.Wait would block until they exit on their own. See
-// devserver_process_unix.go for the exported-type rationale (the SP-149
-// page checks and the SP-155 preview manager share this process type).
+// devserver_process_unix.go for the exported-type rationale (the
+// page checks and the preview manager share this process type).
 type DevProcess struct {
 	cmd *exec.Cmd
 	job windows.Handle
@@ -27,7 +27,7 @@ type DevProcess struct {
 // capturing combined output to out, and assigns the started shell to a Job
 // Object so the whole tree can be terminated.
 func StartDevProcess(root, command string, out *bytes.Buffer) (*DevProcess, error) {
-	cmd := shellexec.Command(command) //nolint:gosec // G204: the dev command is trusted starter-manifest configuration (SP-149 149b), by design
+	cmd := shellexec.Command(command) //nolint:gosec // G204: the dev command is trusted starter-manifest configuration, by design
 	if root != "" {
 		cmd.Dir = root
 	}

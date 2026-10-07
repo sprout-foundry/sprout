@@ -5,8 +5,8 @@ import (
 	"sync"
 )
 
-// RoleUsage is the per-role token/cost aggregate for one role (SP-150 §150c,
-// item 150.5): the tokens the agent's model calls attributed to that role
+// RoleUsage is the per-role token/cost aggregate for one role:
+// the tokens the agent's model calls attributed to that role
 // consumed and what they cost. Tokens is PromptTokens+CompletionTokens.
 // Exposed via AgentMetricsManager.GetRoleUsage and Agent.GetRoleUsage so
 // /usage-style views and embedding surfaces can attribute spend per role.
@@ -32,7 +32,7 @@ type AgentMetricsManager struct {
 	tokenCostTotal     float64
 	subscriptionTokens int
 	freeTokens         int
-	// Per-role cost/token accumulator (SP-150 §150c, item 150.5). Keyed by
+	// Per-role cost/token accumulator. Keyed by
 	// the CostEntry's role; an empty role is bucketed under "unknown".
 	roleUsage map[string]*RoleUsage
 
@@ -60,7 +60,12 @@ type AgentMetricsManager struct {
 	cachedTokens      int
 	cacheWriteTokens  int
 	cachedCostSavings float64
-	imageTokens       int
+	// cacheSavingsUnknown is set when at least one cached response had no
+	// determinable savings (no actual cost and no usable catalog rate). The
+	// cost views render "unknown" instead of a misleading $0 when this is set
+	// and no determined savings were recorded.
+	cacheSavingsUnknown bool
+	imageTokens         int
 }
 
 // NewAgentMetricsManager creates a new AgentMetricsManager with zero-initialized fields.
@@ -116,8 +121,8 @@ func (m *AgentMetricsManager) AddCostEntry(entry CostEntry) {
 	m.addCostEntryRole(entry)
 }
 
-// addCostEntryRole rolls one cost entry into the per-role accumulator
-// (SP-150 §150c, item 150.5). The caller must hold m.mu (AddCostEntry
+// addCostEntryRole rolls one cost entry into the per-role accumulator.
+// The caller must hold m.mu (AddCostEntry
 // does). The per-role ChargedCost/TokenCost use the same > 0 guards as the
 // aggregate totals, so the per-role sums agree with the aggregate sums.
 func (m *AgentMetricsManager) addCostEntryRole(entry CostEntry) {
@@ -163,7 +168,7 @@ func (m *AgentMetricsManager) GetRoleUsage() []RoleUsage {
 	return out
 }
 
-// SetRoleUsage replaces the per-role usage map (SP-150 §150c, item 150.5).
+// SetRoleUsage replaces the per-role usage map.
 // Used by state restore to rehydrate the per-role totals so they keep summing
 // to the restored overall totals. An empty/nil slice clears the map.
 func (m *AgentMetricsManager) SetRoleUsage(usages []RoleUsage) {
@@ -437,6 +442,29 @@ func (m *AgentMetricsManager) SetCachedCostSavings(c float64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.cachedCostSavings = c
+}
+
+// GetCacheSavingsUnknown reports whether any cached response had no
+// determinable savings (missing actual cost and missing catalog rate).
+func (m *AgentMetricsManager) GetCacheSavingsUnknown() bool {
+	if m == nil {
+		return false
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.cacheSavingsUnknown
+}
+
+// SetCacheSavingsUnknown records that a cached response had no determinable
+// savings. Monotonic within a session — once unknown, the session's savings
+// display stays "unknown" until a determined value is set.
+func (m *AgentMetricsManager) SetCacheSavingsUnknown(unknown bool) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.cacheSavingsUnknown = unknown
 }
 func (m *AgentMetricsManager) GetImageTokens() int {
 	if m == nil {

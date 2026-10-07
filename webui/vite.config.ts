@@ -9,17 +9,25 @@ const useSwc = process.platform !== 'android' && !process.env.TERMUX_VERSION;
 const reactPlugin = useSwc ? require('@vitejs/plugin-react-swc').default : require('@vitejs/plugin-react').default;
 
 // https://vite.dev/config/
-export default defineConfig(({ mode }) => {
-  const isProd = mode === 'production';
+export default defineConfig(({ mode, command }) => {
+  // Production optimizations key off the build command, NOT the mode label.
+  // Cloud/local builds run `vite build --mode cloud|localbuild` — a mode name
+  // is a config-selection label, not a production signal, so
+  // `mode === 'production'` would silently disable treeshake/debugger-dropping
+  // for exactly the shipped bundles. Vite keeps NODE_ENV=production for
+  // `build` whatever the mode, so `command === 'build'` is the reliable test.
+  const isProd = command === 'build';
 
   // Cloud-mode builds are served by the platform under /webui/ (Mode C
   // browser IDE). The platform's root catch-all is the dashboard SPA, so
   // root-absolute asset URLs (/assets/*) from this build would be answered
   // with the dashboard's index.html (text/html) and the browser would
   // reject the module scripts — blank page. Local E2E builds already pass
-  // --base=/webui/ explicitly (platform/scripts/run-e2e-tests.sh); this
-  // default makes plain `vite build --mode cloud` (platform CI's
-  // build:cloud) correct too. An explicit --base flag still wins.
+  // --base=/webui/ explicitly (platform/scripts/run-e2e-tests.sh), and the
+  // release bundle builder (scripts/build-webui-dist.mjs --mode cloud, used
+  // by .github/workflows/release.yml) passes --mode cloud for the same
+  // reason; this default makes plain `vite build --mode cloud` (platform
+  // CI's build:cloud) correct too. An explicit --base flag still wins.
   const isCloud = mode === 'cloud';
 
   // Track R (--native-fs): set by scripts/build-webui-dist.mjs when invoked

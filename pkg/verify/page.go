@@ -16,7 +16,7 @@ import (
 )
 
 // PageBrowser is the verify package's narrow browser seam for page checks
-// (SP-149 §149a/§149.3): it opens one route in a headless browser and reports
+// it opens one route in a headless browser and reports
 // what it observed. The production implementation adapts pkg/webcontent
 // (NewWebcontentPageBrowser); tests inject a fake so a run is deterministic
 // and needs no Chromium.
@@ -80,18 +80,18 @@ func (b *webcontentPageBrowser) Open(ctx context.Context, url string, screenshot
 	}, nil
 }
 
-// runPageCheck executes one page check (SP-149 §149a/§149.3): start the
+// runPageCheck executes one page check: start the
 // manifest's dev server, open each listed route headless, and fail on a
 // status-probe error, a browser-open error, or any console/page error.
 //
 // Skipped checks (no manifest, no dev command, no dev port, no routes, no
 // browser, or an unavailable browser) are recorded with a reason and never
-// gate the result (SP-149 §149d: the result says what could not be
+// gate the result (the result says what could not be
 // verified). A failed check is only ever one that started the server and
 // found a concrete problem. The dev server is always stopped (the caller
 // defers it), even on failure or cancellation.
 //
-// Routes come only from the starter manifest (SP-149 §149b): the plan's
+// Routes come only from the starter manifest: the plan's
 // acceptance Check fields are never read for a route or a command.
 func (r *Runner) runPageCheck(ctx context.Context, root string, c *Check, manifest *startermanifest.StarterManifest) {
 	switch {
@@ -105,7 +105,7 @@ func (r *Runner) runPageCheck(ctx context.Context, root string, c *Check, manife
 		return
 	case manifest.DevPort == 0:
 		c.Skipped = true
-		c.Reason = "no dev port in the starter manifest (dev_port is 0; runtime port discovery is SP-155)"
+		c.Reason = "no dev port in the starter manifest (dev_port is 0; runtime port discovery is not implemented)"
 		return
 	case len(manifest.Routes) == 0:
 		c.Skipped = true

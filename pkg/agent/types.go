@@ -104,14 +104,18 @@ type AgentState struct {
 	CachedTokens            int     `json:"cached_tokens"`
 	CacheWriteTokens        int     `json:"cache_write_tokens,omitempty"`
 	CachedCostSavings       float64 `json:"cached_cost_savings"`
-	ImageTokens             int     `json:"image_tokens,omitempty"`
+	// CacheSavingsUnknown records that at least one cached response had no
+	// determinable savings (no actual cost and no usable catalog rate), so the
+	// cost views render "unknown" rather than a misleading $0 after a restore.
+	CacheSavingsUnknown bool `json:"cache_savings_unknown,omitempty"`
+	ImageTokens         int  `json:"image_tokens,omitempty"`
 	// Billing-model-aware cost tracking
 	ChargedCostTotal   float64 `json:"charged_cost_total,omitempty"`
 	TokenCostTotal     float64 `json:"token_cost_total,omitempty"`
 	SubscriptionTokens int     `json:"subscription_tokens,omitempty"`
 	FreeTokens         int     `json:"free_tokens,omitempty"`
 
-	// Per-role token/cost totals (SP-150 §150c, item 150.5). Persisted so a
+	// Per-role token/cost totals. Persisted so a
 	// restored conversation keeps its per-role attribution and the per-role
 	// totals keep summing to the restored overall totals.
 	RoleUsage []RoleUsage `json:"role_usage,omitempty"`

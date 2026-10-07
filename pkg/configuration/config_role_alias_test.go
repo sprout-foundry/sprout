@@ -7,9 +7,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file pins item 150.2: the existing per-setting model fields
-// (subagent_model, commit_model, review and completion models) are read as
-// aliases for their roles (SP-150 §150a). The alias mapping:
+// This file pins the per-setting role aliases: the existing per-setting
+// model fields (subagent_model, commit_model, review and completion models)
+// are read as aliases for their roles. The alias mapping:
 //
 //	subagent settings   ⇔ coder role
 //	commit settings     ⇔ commit role
@@ -369,7 +369,7 @@ func TestRoleSelection_PreferenceOrder(t *testing.T) {
 
 // TestRoleAlias_LegacyOnlyNoBreakage is the no-breakage guarantee: a
 // legacy-only config (subagent + commit + review + completion fields set, no
-// roles section) makes every legacy getter return exactly the pre-150.2
+// roles section) makes every legacy getter return exactly the legacy
 // value — the field it was always configured to return. With the roles
 // section absent the alias layer contributes nothing, so a pre-role config
 // behaves byte-for-byte as it did today.

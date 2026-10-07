@@ -911,3 +911,152 @@ func TestEnrichFromOpenRouter_MixedZeroAndNil(t *testing.T) {
 		t.Errorf("m3: InputPerMTok = %f, want 99.0 (should be preserved)", out[2].Pricing.InputPerMTok)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Cached-input-rate preservation across refresh
+// ---------------------------------------------------------------------------
+
+// TestNormalizeModels_CarriesCachedInputCost verifies normalizeModels emits the
+// cached-input rate so it survives into the baked providers.json catalog.
+func TestNormalizeModels_CarriesCachedInputCost(t *testing.T) {
+	models := []api.ModelInfo{
+		{ID: "m", Name: "M", InputCost: 0.2, OutputCost: 0.6, CachedInputCost: 0.006},
+	}
+	out := normalizeModels(models)
+	if len(out) != 1 {
+		t.Fatalf("expected 1 model, got %d", len(out))
+	}
+	if out[0].CachedInputCost != 0.006 {
+		t.Errorf("CachedInputCost = %v, want 0.006", out[0].CachedInputCost)
+	}
+}
+
+// TestNormalizeModels_OmitsZeroCachedInputCost verifies an absent cached rate
+// stays zero (omitempty drops it from the JSON) rather than a spurious $0.
+func TestNormalizeModels_OmitsZeroCachedInputCost(t *testing.T) {
+	out := normalizeModels([]api.ModelInfo{{ID: "m", InputCost: 0.2, OutputCost: 0.6}})
+	if out[0].CachedInputCost != 0 {
+		t.Errorf("CachedInputCost = %v, want 0", out[0].CachedInputCost)
+	}
+}
+
+// TestEnrichFromConfig_FillsMissingCachedRate verifies that when the API priced
+// input/output but omitted the cached-input rate, the config's cached fee is
+// merged in without disturbing the API-provided prices.
+func TestEnrichFromConfig_FillsMissingCachedRate(t *testing.T) {
+	dir := t.TempDir()
+	cfgDir := filepath.Join(dir, "pkg", "agent_providers", "configs")
+	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	cfg := map[string]any{
+		"models": map[string]any{
+			"model_info": []map[string]any{
+				{"id": "cfgm", "input_cost": 0.2, "output_cost": 0.6, "cached_input_cost": 0.006},
+			},
+		},
+	}
+	data, _ := json.Marshal(cfg)
+	if err := os.WriteFile(filepath.Join(cfgDir, "testprov.json"), data, 0o644); err != nil {
+		t.Fatalf("write cfg: %v", err)
+	}
+	t.Chdir(dir)
+
+	models := []modelcontract.CanonicalModel{
+		{ID: "cfgm", Pricing: &modelcontract.Pricing{InputPerMTok: 0.2, OutputPerMTok: 0.6, Currency: "USD"}},
+	}
+	out := enrichFromConfig("testprov", models)
+	if out[0].Pricing == nil {
+		t.Fatalf("pricing lost")
+	}
+	if out[0].Pricing.CachedPerMTok != 0.006 {
+		t.Errorf("CachedPerMTok = %v, want 0.006 (filled from config)", out[0].Pricing.CachedPerMTok)
+	}
+	if out[0].Pricing.InputPerMTok != 0.2 || out[0].Pricing.OutputPerMTok != 0.6 {
+		t.Errorf("API-provided input/output disturbed: in=%v out=%v", out[0].Pricing.InputPerMTok, out[0].Pricing.OutputPerMTok)
+	}
+}
+
+// TestEnrichFromOpenRouter_FillsMissingCachedRate verifies that a model already
+// priced for input/output gets only its missing cached-input rate filled from
+// OpenRouter's cache-read price.
+func TestEnrichFromOpenRouter_FillsMissingCachedRate(t *testing.T) {
+	helperResetOpenRouterCache(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"data":[{"id":"deepseek/deepseek-v4-flash","pricing":{"prompt":"0.00000009","completion":"0.00000018","input_cache_read":"0.000000018"}}]}`)
+	}))
+	defer srv.Close()
+	openRouterModelsURL = srv.URL
+
+	models := []modelcontract.CanonicalModel{
+		{ID: "deepseek-v4-flash", Pricing: &modelcontract.Pricing{InputPerMTok: 0.09, OutputPerMTok: 0.18, Currency: "USD", Source: "native-api"}},
+	}
+	out := enrichFromOpenRouter(context.Background(), models)
+	if out[0].Pricing.CachedPerMTok != 0.018 {
+		t.Errorf("CachedPerMTok = %v, want 0.018 (filled from OpenRouter)", out[0].Pricing.CachedPerMTok)
+	}
+	if out[0].Pricing.InputPerMTok != 0.09 || out[0].Pricing.OutputPerMTok != 0.18 {
+		t.Errorf("existing input/output disturbed: in=%v out=%v", out[0].Pricing.InputPerMTok, out[0].Pricing.OutputPerMTok)
+	}
+	if out[0].Pricing.Source != "native-api" {
+		t.Errorf("Source = %q, want native-api (preserved)", out[0].Pricing.Source)
+	}
+}
+
+// TestEnrichFromOpenRouter_DoesNotOverwriteCachedRate verifies an existing
+// cached rate is never overwritten by the OpenRouter cross-ref fill.
+func TestEnrichFromOpenRouter_DoesNotOverwriteCachedRate(t *testing.T) {
+	helperResetOpenRouterCache(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"data":[{"id":"m","pricing":{"prompt":"0.00000009","completion":"0.00000018","input_cache_read":"0.000000099"}}]}`)
+	}))
+	defer srv.Close()
+	openRouterModelsURL = srv.URL
+
+	models := []modelcontract.CanonicalModel{
+		{ID: "m", Pricing: &modelcontract.Pricing{InputPerMTok: 0.09, OutputPerMTok: 0.18, CachedPerMTok: 0.005, Currency: "USD"}},
+	}
+	out := enrichFromOpenRouter(context.Background(), models)
+	if out[0].Pricing.CachedPerMTok != 0.005 {
+		t.Errorf("CachedPerMTok = %v, want 0.005 (preserved)", out[0].Pricing.CachedPerMTok)
+	}
+}
+
+// TestMergeConfigOnlyModels_CarriesPricing verifies config-only models keep
+// their pricing (including the cached-input rate) so the metrics path can
+// compute exact cache savings for models the provider API doesn't list.
+func TestMergeConfigOnlyModels_CarriesPricing(t *testing.T) {
+	dir := t.TempDir()
+	cfgDir := filepath.Join(dir, "pkg", "agent_providers", "configs")
+	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	cfg := map[string]any{
+		"models": map[string]any{
+			"model_info": []map[string]any{
+				{"id": "only-in-config", "input_cost": 0.3, "output_cost": 0.9, "cached_input_cost": 0.006},
+			},
+		},
+	}
+	data, _ := json.Marshal(cfg)
+	if err := os.WriteFile(filepath.Join(cfgDir, "testprov.json"), data, 0o644); err != nil {
+		t.Fatalf("write cfg: %v", err)
+	}
+	t.Chdir(dir)
+
+	out := mergeConfigOnlyModels("testprov", nil)
+	if len(out) != 1 {
+		t.Fatalf("expected 1 model, got %d", len(out))
+	}
+	if out[0].Pricing == nil {
+		t.Fatalf("config-only model lost its pricing")
+	}
+	if out[0].Pricing.CachedPerMTok != 0.006 {
+		t.Errorf("CachedPerMTok = %v, want 0.006", out[0].Pricing.CachedPerMTok)
+	}
+	if out[0].Pricing.InputPerMTok != 0.3 || out[0].Pricing.OutputPerMTok != 0.9 {
+		t.Errorf("input/output = %v/%v, want 0.3/0.9", out[0].Pricing.InputPerMTok, out[0].Pricing.OutputPerMTok)
+	}
+}

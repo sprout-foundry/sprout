@@ -24,8 +24,8 @@ func (e *ValidationError) Error() string {
 // *ValidationError when the plan is invalid, or nil when it is valid.
 //
 // It is a pure function over the in-memory struct, so it can be used both
-// when building a new plan and on every write (SP-148 §148b: "every write
-// validates and bumps revision"). The invariants enforced are:
+// when building a new plan and on every write (every write
+// validates and bumps revision). The invariants enforced are:
 //
 //   - version is a supported schema version;
 //   - revision >= 1 (a persisted plan has been written at least once);
@@ -36,12 +36,10 @@ func (e *ValidationError) Error() string {
 //   - every acceptance item has a non-empty id, a known kind, references a
 //     known scope id, and acceptance ids are unique;
 //   - an interaction acceptance item carries a non-empty steps list whose
-//     steps each have a non-empty action, and no other kind carries steps
-//     (SP-148 §148d);
-//   - every scope item is covered by at least one acceptance item
-//     (SP-148 §148b);
+//     steps each have a non-empty action, and no other kind carries steps;
+//   - every scope item is covered by at least one acceptance item;
 //   - every out_of_scope item names an item and records why it was
-//     excluded (SP-148 §148a: "with the reason").
+//     excluded ("with the reason").
 func Validate(plan *Plan) error {
 	if plan == nil {
 		return &ValidationError{Problems: []string{"plan is nil"}}
@@ -141,7 +139,7 @@ func Validate(plan *Plan) error {
 			}
 		}
 
-		// steps (SP-148 §148d): an interaction item carries a non-empty
+		// steps: an interaction item carries a non-empty
 		// list of browse steps, every one of which needs an action; no
 		// other kind may carry steps.
 		//
@@ -177,7 +175,7 @@ func Validate(plan *Plan) error {
 	}
 
 	// out_of_scope: each must name the excluded item and record why it was
-	// excluded (SP-148 §148a: "with the reason"), so the exclusion is
+	// excluded ("with the reason"), so the exclusion is
 	// deliberate and auditable.
 	for i, o := range plan.OutOfScope {
 		if strings.TrimSpace(o.Item) == "" {

@@ -48,6 +48,16 @@ func (a *Agent) IsNonInteractive() bool {
 	return a.isNonInteractive()
 }
 
+// IsWorkflowRun reports whether this agent is executing a workflow/automate
+// run, which is non-interactive for approval purposes even when launched from
+// a terminal.
+func (a *Agent) IsWorkflowRun() bool {
+	if a == nil {
+		return false
+	}
+	return a.workflowRun.Load()
+}
+
 // GetSecurityAnalysisCache returns the lazily-created LLM security-analysis
 // cache (the nil-agent guard is preserved by the underlying getter).
 func (a *Agent) GetSecurityAnalysisCache() *SecurityAnalysisCache {

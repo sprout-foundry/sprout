@@ -119,3 +119,79 @@ func TestOffWorkspacePathRegex(t *testing.T) {
 		t.Fatalf("unexpected tokens: %v", paths)
 	}
 }
+
+// TestOffWorkspacePathInCommandPatternArguments pins the rule that a rooted
+// token whose top-level directory does not exist on this machine is treated as
+// a pattern/route string, not a file target. Quoted grep patterns like
+// `grep -n "/api/git/"` must not trigger an "outside the workspace root" prompt,
+// while a genuine outside path with an existing top-level directory (e.g.
+// /etc/hosts) must still be flagged.
+func TestOffWorkspacePathInCommandPatternArguments(t *testing.T) {
+	ws := "/home/dev/ws"
+
+	// A route-style pattern argument under a nonexistent top-level dir is not a
+	// path: it must not be flagged.
+	patternCases := []string{
+		`grep -n "/api/git/" file`,
+		`grep -rn '/api/git/' internal/`,
+		`rg "/api/git/"`,
+		`git grep -n "/api/v1/users/"`,
+	}
+	for _, cmd := range patternCases {
+		if offWorkspacePathInCommand(cmd, ws, nil) {
+			t.Errorf("route/pattern argument must not be flagged: %q", cmd)
+		}
+	}
+
+	// Genuine outside paths have an existing top-level directory and stay flagged.
+	realCases := []string{
+		"cat /etc/hosts",
+		"cat /etc/passwd",
+		"ls /usr/local/foo",
+		// A ".." under a nonexistent top-level dir must NOT be excused by the
+		// top-level-existence shortcut: the shell resolves it against the
+		// filesystem root, so this reaches /etc/hosts.
+		"cat /nonexistent/../etc/hosts",
+		"cat /no-such-dir/../../etc/passwd",
+	}
+	for _, cmd := range realCases {
+		if !offWorkspacePathInCommand(cmd, ws, nil) {
+			t.Errorf("real outside path must still be flagged: %q", cmd)
+		}
+	}
+
+	// Intended boundary: an outside path under a top-level tree that does not
+	// exist locally is treated as a pattern and NOT flagged. This is a
+	// deliberate trade-off, pinned here so a future change cannot widen it
+	// silently.
+	if offWorkspacePathInCommand("cat /prod/data", ws, nil) {
+		t.Error("path under a nonexistent top-level dir is treated as a pattern and must not be flagged")
+	}
+
+	// And confirm the classifier escalation behaves the same way end to end.
+	prompted := ClassifyToolCallWithWorkspace("shell_command", map[string]interface{}{"command": `grep -n "/api/git/" file`}, ws)
+	if prompted.ShouldPrompt {
+		t.Errorf("grep route pattern must not prompt, got risk=%v reason=%q", prompted.Risk, prompted.Reasoning)
+	}
+	outside := ClassifyToolCallWithWorkspace("shell_command", map[string]interface{}{"command": "cat /etc/hosts"}, ws)
+	if !outside.ShouldPrompt || outside.Risk != SecurityCaution {
+		t.Errorf("cat /etc/hosts must prompt as Caution, got risk=%v prompt=%v", outside.Risk, outside.ShouldPrompt)
+	}
+}
+
+// TestTopLevelDirExists pins the existence probe used to distinguish pattern
+// arguments from real paths. It must check only the top-level component.
+func TestTopLevelDirExists(t *testing.T) {
+	if !topLevelDirExists("/usr/bin/env") {
+		t.Errorf("top-level /usr must exist")
+	}
+	if !topLevelDirExists("/") {
+		t.Errorf("root must exist")
+	}
+	if topLevelDirExists("/api/git/") {
+		t.Errorf("/api must not exist on this machine (pattern argument)")
+	}
+	if topLevelDirExists("/sprout-nonexistent-xyz/deep/path") {
+		t.Errorf("nonexistent top-level dir must report false")
+	}
+}

@@ -28,14 +28,14 @@ func (e *ValidationError) Error() string {
 // It is a pure function over the in-memory struct, so it can be used both
 // when building a new manifest and on every read/write of
 // .sprout/starter.json. The invariants are deliberately lenient (any
-// project can add the file by hand — SP-153 §153a): the starter identity is
+// project can add the file by hand): the starter identity is
 // the only required content, and every command is optional. What is
 // enforced is:
 //
 //   - starter.id and starter.version are required (non-blank);
-//   - build, test, dev and preview, if present, are not whitespace-only
-//     (a present-but-blank command is a mistake, an absent field is a
-//     deliberate "no such step");
+//   - build, test, dev, preview, format and lint, if present, are not
+//     whitespace-only (a present-but-blank command is a mistake, an absent
+//     field is a deliberate "no such step");
 //   - dev_port, if present and non-zero, is a valid port (1-65535); zero
 //     means "no fixed port" and is allowed;
 //   - every routes entry is non-blank;
@@ -74,6 +74,12 @@ func Validate(m *StarterManifest) error {
 	}
 	if presentButBlank(m.Preview) {
 		add("preview: command must not be whitespace-only (omit the field when the project has no preview step)")
+	}
+	if presentButBlank(m.Format) {
+		add("format: command must not be whitespace-only (omit the field when the project has no formatter)")
+	}
+	if presentButBlank(m.Lint) {
+		add("lint: command must not be whitespace-only (omit the field when the project has no linter)")
 	}
 
 	// dev_port: 0 (absent) means no fixed port; a present port must be

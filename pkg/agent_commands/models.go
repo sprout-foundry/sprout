@@ -45,7 +45,7 @@ func (m *ModelsCommand) Usage() string {
 		"/model              List all available models for the current provider.",
 		"/model select       Interactive model picker (searchable).",
 		"/model <model_id>   Set model directly by ID.",
-		"/model --role <role> <model_id>   Set the model for a role (SP-150).",
+		"/model --role <role> <model_id>   Set the model for a role.",
 		"",
 		"Use /provider select to switch providers first.",
 		"Alias: /m",
@@ -64,7 +64,7 @@ func (m *ModelsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	}
 
 	// Optional --role flag: set the model for a role instead of the
-	// active conversation model (SP-150 §150d, item 150.6).
+	// active conversation model.
 	if role, modelID, found, err := parseRoleArgs(args); err != nil {
 		return err
 	} else if found {
@@ -85,7 +85,7 @@ func (m *ModelsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 }
 
 // parseRoleArgs extracts the optional `--role <role>` flag and the model ID
-// from /model arguments (SP-150 §150d, item 150.6). The flag may appear
+// from /model arguments. The flag may appear
 // anywhere in the arguments (the last occurrence wins); its value is the
 // role name and the model ID is the single argument that is neither a flag
 // nor the role value. When the flag is absent, found is false and the

@@ -101,7 +101,7 @@ func TestRunRealBaseline(t *testing.T) {
 // TestRunRealTimeoutPropagatesReason proves the timeout path through the
 // full runner flow: a slow real command is stopped by the runner's
 // per-check timeout, the check fails with the timeout reason, and the
-// run is reported as failed (SP-149 §149c evidence).
+// run is reported as failed (the verification evidence).
 func TestRunRealTimeoutPropagatesReason(t *testing.T) {
 	shAvailable(t)
 	root := t.TempDir()

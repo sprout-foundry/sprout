@@ -3,13 +3,13 @@
  *
  * The registry decides which modes a workspace offers; `registerWorkspaceMode`
  * is the one public way to put a mode in there (SP-155 §155b — the built-ins
- * register through it too); and the resolution rule decides what a stale
- * persisted id degrades to. All three are worth pinning directly — a
- * regression here silently strands a user in a mode whose surface has nothing
- * to render.
+ * go through the same write path at load, minus the public API's built-in
+ * guard); and the resolution rule decides what a stale persisted id degrades
+ * to. All three are worth pinning directly — a regression here silently
+ * strands a user in a mode whose surface has nothing to render.
  */
 
-import { MonitorPlay } from 'lucide-react';
+import { Code2, MonitorPlay, Palette } from 'lucide-react';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { vi, beforeAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -20,9 +20,11 @@ import DesignShell from './DesignShell';
 import ModeSwitcher from './ModeSwitcher';
 import {
   BUILTIN_DEFAULT_WORKSPACE_MODE,
+  BUILTIN_WORKSPACE_MODE_IDS,
   WORKSPACE_MODES,
   availableModes,
   defaultWorkspaceMode,
+  isBuiltinWorkspaceModeId,
   registerWorkspaceMode,
   resolveWorkspaceMode,
   type UnregisterWorkspaceMode,
@@ -37,6 +39,16 @@ import {
 
 const withDesign = { hasDesignTree: true };
 const withoutDesign = { hasDesignTree: false };
+
+/** The test-mode payload the resolution tests register inline. */
+const previewMode: WorkspaceModeRegistration = {
+  id: 'preview',
+  label: 'Preview',
+  icon: MonitorPlay,
+  hint: 'Live app preview',
+  available: () => true,
+  Shell: () => null,
+};
 
 describe('registry', () => {
   it('offers code in every workspace', () => {
@@ -208,9 +220,92 @@ describe('registerWorkspaceMode (SP-155 §155b)', () => {
     expect(WORKSPACE_MODES.find((m) => m.id === 'preview')?.hint).toBe('');
   });
 
+  it('rejects re-registering a built-in id — the built-in keeps its original definition', () => {
+    // The ids the public API refuses, via the predicate an embedder checks first.
+    expect(BUILTIN_WORKSPACE_MODE_IDS).toEqual(['code', 'design']);
+    for (const id of BUILTIN_WORKSPACE_MODE_IDS) expect(isBuiltinWorkspaceModeId(id)).toBe(true);
+    expect(isBuiltinWorkspaceModeId('preview')).toBe(false);
+    expect(isBuiltinWorkspaceModeId(null as unknown as string)).toBe(false);
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const builtins = WORKSPACE_MODES.slice();
+
+      // An embedding shell trying to take over the Code entry is refused; the
+      // payload replaces every field a hijack would want to change.
+      const disposeCode = registerTestMode({
+        ...testMode,
+        id: 'code',
+        label: 'Code (hijacked)',
+        hint: 'Not the real Code mode',
+        available: () => false,
+      });
+
+      // No duplicate, no replacement: same entry object, same label/icon/shell.
+      expect(WORKSPACE_MODES.map((m) => m.id)).toEqual(['code', 'design']);
+      const code = WORKSPACE_MODES.find((m) => m.id === 'code')!;
+      expect(code).toBe(builtins[0]);
+      expect(code.label).toBe('Code');
+      expect(code.icon).toBe(Code2);
+      expect(code.hint).toBe('Chat, editor, git, terminal');
+      expect(code.Shell).toBe(CodeShell);
+      expect(code.available(withDesign)).toBe(true);
+
+      // The disposer returned by the rejected call removes nothing.
+      disposeCode();
+      expect(WORKSPACE_MODES.map((m) => m.id)).toEqual(['code', 'design']);
+      expect(WORKSPACE_MODES.find((m) => m.id === 'code')).toBe(builtins[0]);
+
+      // Same for the Design built-in.
+      const disposeDesign = registerTestMode({ ...testMode, id: 'design', label: 'Design (hijacked)' });
+      expect(WORKSPACE_MODES.map((m) => m.id)).toEqual(['code', 'design']);
+      const design = WORKSPACE_MODES.find((m) => m.id === 'design')!;
+      expect(design).toBe(builtins[1]);
+      expect(design.label).toBe('Design');
+      expect(design.icon).toBe(Palette);
+      expect(design.Shell).toBe(DesignShell);
+
+      disposeDesign();
+      expect(WORKSPACE_MODES.map((m) => m.id)).toEqual(['code', 'design']);
+
+      expect(warn).toHaveBeenCalledTimes(2);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('never leaves the registry with zero modes across register/dispose orders', () => {
+    // The built-ins are always registered and always offered, in any order.
+    const ids = () => availableModes(withDesign).map((m) => m.id);
+    expect(ids()).toEqual(['code', 'design']);
+
+    const first = registerTestMode({ ...testMode, id: 'preview' });
+    const second = registerTestMode({ ...testMode, id: 'extra' });
+    expect(ids()).toEqual(['code', 'design', 'preview', 'extra']);
+
+    first();
+    second();
+    expect(ids()).toEqual(['code', 'design']);
+    expect(availableModes(withoutDesign).map((m) => m.id)).toEqual(['code', 'design']);
+
+    // Disposing both generations of a re-registered id still leaves the built-ins.
+    const stale = registerTestMode({ ...testMode, id: 'preview' });
+    const fresh = registerTestMode({ ...testMode, id: 'preview' });
+    stale();
+    expect(ids()).toEqual(['code', 'design', 'preview']);
+    fresh();
+    expect(ids()).toEqual(['code', 'design']);
+
+    // Double-dispose is harmless too.
+    fresh();
+    expect(ids()).toEqual(['code', 'design']);
+  });
+
   it('leaves only the built-ins in the registry', () => {
     // Every test above disposed its registrations (explicitly or via
-    // afterEach); nothing this block registered may outlive it.
+    // afterEach); nothing this block registered may outlive it — including
+    // the rejected built-in registrations, whose no-op disposers cannot
+    // remove the built-ins they pointed at.
     expect(WORKSPACE_MODES.map((m) => m.id)).toEqual(['code', 'design']);
   });
 });
@@ -232,6 +327,50 @@ describe('resolveWorkspaceMode', () => {
     expect(resolveWorkspaceMode('ship', withDesign).id).toBe(BUILTIN_DEFAULT_WORKSPACE_MODE);
     expect(resolveWorkspaceMode(null, withDesign).id).toBe(BUILTIN_DEFAULT_WORKSPACE_MODE);
     expect(resolveWorkspaceMode(undefined, withDesign).id).toBe(BUILTIN_DEFAULT_WORKSPACE_MODE);
+  });
+
+  it('returns a real mode for every id a register/dispose sequence can produce', () => {
+    // Through the public API alone the built-ins are irremovable, so whatever
+    // is registered and disposed in between, resolution always has the
+    // built-ins to fall back on. Registered inline (not via `registerTestMode`,
+    // which lives in the other block) and disposed exhaustively.
+    const register = (id: string) => registerWorkspaceMode({ ...previewMode, id });
+    // `?.` fails the assert rather than throwing, if resolution ever broke.
+    const assertResolves = (ids: (string | null | undefined)[]) => {
+      for (const id of ids) expect(resolveWorkspaceMode(id, withDesign)?.Shell).toBeTypeOf('function');
+    };
+    const first = register('preview');
+    const second = register('extra');
+    assertResolves([null, undefined, 'preview', 'extra', 'design', 'missing-id']);
+    first();
+    assertResolves([null, undefined, 'preview', 'design']);
+    second();
+    expect(availableModes(withDesign).map((m) => m.id)).toEqual(['code', 'design']);
+    expect(resolveWorkspaceMode(null, withDesign).id).toBe(BUILTIN_DEFAULT_WORKSPACE_MODE);
+  });
+
+  it('yields the registered built-in default when nothing is available, and never undefined', () => {
+    const snapshot = WORKSPACE_MODES.slice();
+    const originals = WORKSPACE_MODES.map((mode) => mode.available);
+    try {
+      // Both states below are unreachable through the public API (the
+      // built-ins cannot be removed, and ship as `() => true`), but resolution
+      // must never return undefined: hidden modes yield the registered
+      // built-in default; an emptied registry throws.
+      WORKSPACE_MODES.forEach((mode) => (mode.available = () => false));
+      expect(availableModes(withDesign)).toEqual([]);
+      expect(resolveWorkspaceMode(null, withDesign)).toBe(snapshot[0]);
+      expect(resolveWorkspaceMode(null, withDesign).id).toBe(BUILTIN_DEFAULT_WORKSPACE_MODE);
+
+      WORKSPACE_MODES.splice(0, WORKSPACE_MODES.length);
+      expect(() => resolveWorkspaceMode(null, withDesign)).toThrow(/no workspace modes registered/);
+    } finally {
+      WORKSPACE_MODES.splice(0, WORKSPACE_MODES.length, ...snapshot);
+      WORKSPACE_MODES.forEach((mode, index) => (mode.available = originals[index]));
+    }
+    // Fully restored for the surrounding tests.
+    expect(WORKSPACE_MODES.map((m) => m.id)).toEqual(['code', 'design']);
+    expect(availableModes(withDesign).map((m) => m.id)).toEqual(['code', 'design']);
   });
 });
 

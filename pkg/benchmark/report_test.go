@@ -1,6 +1,6 @@
 //go:build !js
 
-// report_test.go — the SP-154 §154c report tests.
+// report_test.go — the report tests.
 //
 // TestReportGolden pins the report's JSON and Markdown byte-for-byte
 // against testdata/report.json and testdata/report.md, built from a
@@ -61,7 +61,7 @@ func goldenTime(min, sec, ms int) time.Time {
 
 // goldenBuildPass / goldenBuildFail are the fixture's verification
 // results (the build-only shape keeps the golden slim; the failed
-// checks carry a one-line excerpt — the SP-149 evidence).
+// checks carry a one-line excerpt — the verification evidence).
 func goldenBuildPass() *verify.Result {
 	return &verify.Result{PlanRevision: 1, Checks: []verify.Check{
 		{Kind: plancontract.KindBuild, Command: "npm run build", Passed: true},
@@ -131,7 +131,7 @@ func goldenRuns() []Run {
 	r := base("add-badge", "alpha", "prov-a", 1, goldenTime(0, 0, 0), goldenTime(0, 1, 234), 250, 0.0011)
 	r.Passed = true
 	r.Result = goldenBuildPass()
-	// The run's per-role usage (SP-150 §150c, 150.5): a single coder-role
+	// The run's per-role usage: a single coder-role
 	// entry whose split sums to the run's totals (250 tokens, 0.0011
 	// cost, 2 model calls). Every other golden run leaves RoleUsage
 	// empty (the serialized "RoleUsage": null) — this one pins the

@@ -28,7 +28,7 @@ type Outcome struct {
 // Executor executes one trusted verification command and reports its
 // outcome. Implementations must honor ctx (a cancelled or timed-out
 // context stops the command), bound their work, and capture combined
-// output. The command string is trusted input (SP-149 §149b): it comes
+// output. The command string is trusted input: it comes
 // only from the starter manifest or the explicit project configuration.
 type Executor interface {
 	// Run executes command in dir (the project root) and returns its
@@ -44,7 +44,7 @@ type Executor interface {
 // carries the partial output up to the stop.
 //
 // It is deliberately the only executor in this package: verification
-// commands are trusted by design (SP-149 §149b), and running them under
+// commands are trusted by design, and running them under
 // a shell is the mechanism the project's own build and test commands
 // assume.
 type ShellExecutor struct {
@@ -61,7 +61,7 @@ func (e *ShellExecutor) Run(ctx context.Context, dir, command string) (Outcome, 
 	if e != nil && e.Shell != "" {
 		shell = e.Shell
 	}
-	cmd := exec.CommandContext(ctx, shell, "-c", command) //nolint:gosec // G204: the command is trusted project configuration (SP-149 149b), by design
+	cmd := exec.CommandContext(ctx, shell, "-c", command) //nolint:gosec // G204: the command is trusted project configuration, by design
 	if dir != "" {
 		cmd.Dir = dir
 	}

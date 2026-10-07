@@ -40,7 +40,7 @@ func (c *Config) GetMCPTimeout() time.Duration {
 
 // GetCommitModel returns the configured model for commit message generation.
 // An explicit commit_model wins; otherwise the commit role's model
-// (roles.commit, SP-150 §150a item 150.2 — the commit settings alias the
+// (the commit settings alias the
 // commit role) when set; otherwise falls back to the provider's default
 // model.
 func (c *Config) GetCommitModel() string {
@@ -57,7 +57,7 @@ func (c *Config) GetCommitModel() string {
 
 // GetCommitProvider returns the configured provider for commit message
 // generation. An explicit commit_provider wins; otherwise the commit role's
-// provider (roles.commit, SP-150 §150a item 150.2) when set; otherwise
+// provider when set; otherwise
 // falls back to the last-used provider (the documented default for the
 // CommitProvider field), so the commit model resolves to the last-used
 // provider's model. Returns an empty string only when none of the three
@@ -85,7 +85,7 @@ func (c *Config) SetCommitModel(model string) {
 
 // GetReviewProvider returns the configured provider for review commands.
 // An explicit review_provider wins; otherwise the reviewer role's provider
-// (roles.reviewer, SP-150 §150a item 150.2 — the review settings alias
+// (the review settings alias
 // the reviewer role) when set. No last-used fallback is applied (the
 // pre-role shape is preserved); returns an empty string when neither is
 // set, and callers should surface this and offer interactive provider
@@ -102,7 +102,7 @@ func (c *Config) GetReviewProvider() string {
 
 // GetReviewModel returns the configured model for review commands. An
 // explicit review_model wins; otherwise the reviewer role's model
-// (roles.reviewer, SP-150 §150a item 150.2) when set; otherwise falls
+// when set; otherwise falls
 // back to the provider's default model.
 func (c *Config) GetReviewModel() string {
 	if c.ReviewModel != "" {
@@ -128,7 +128,7 @@ func (c *Config) SetReviewModel(model string) {
 
 // GetCompletionProvider returns the configured provider for code completions.
 // An explicit completion_provider wins; otherwise the coder role's provider
-// (roles.coder, SP-150 §150a item 150.2 — inline completion is code
+// (inline completion is code
 // generation and the built-in role set has no completion-specific role, so
 // the completion settings alias the coder role) when set. No last-used
 // fallback is introduced (the pre-role shape is preserved); returns an empty
@@ -145,7 +145,7 @@ func (c *Config) GetCompletionProvider() string {
 
 // GetCompletionModel returns the configured model for code completions. An
 // explicit completion_model wins; otherwise the coder role's model
-// (roles.coder, SP-150 §150a item 150.2) when set; otherwise falls back
+// when set; otherwise falls back
 // to the provider's default model.
 func (c *Config) GetCompletionModel() string {
 	if c.CompletionModel != "" {

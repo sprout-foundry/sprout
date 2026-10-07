@@ -13,18 +13,20 @@ func estimateRequestTokens(messages []api.Message, tools []api.Tool) int {
 // to heuristic estimation when the provider does not include usage data.
 // cacheWriteTokens is the number of prompt tokens written to the provider cache
 // on this request (0 when the provider does not report it or when estimating).
+// actualCost is the provider-reported request cost (OpenRouter `usage.cost`),
+// distinct from the derived estimate in cost.
 func deriveUsageMetrics(
 	resp *api.ChatResponse,
 	messages []api.Message,
 	tools []api.Tool,
-) (promptTokens, completionTokens, totalTokens int, cost float64, cachedTokens, cacheWriteTokens int, estimated bool) {
+) (promptTokens, completionTokens, totalTokens int, cost float64, cachedTokens, cacheWriteTokens int, actualCost float64, estimated bool) {
 	if resp != nil && resp.Usage.TotalTokens > 0 {
 		writeTokens := 0
 		if resp.Usage.CacheWriteTokens != nil {
 			writeTokens = *resp.Usage.CacheWriteTokens
 		}
 		return resp.Usage.PromptTokens, resp.Usage.CompletionTokens, resp.Usage.TotalTokens,
-			resp.Usage.EstimatedCost, resp.Usage.CachedTokens, writeTokens, false
+			resp.Usage.EstimatedCost, resp.Usage.CachedTokens, writeTokens, resp.Usage.Cost, false
 	}
 
 	// Estimate prompt tokens from the full message set (including tools).
@@ -39,7 +41,7 @@ func deriveUsageMetrics(
 	}
 
 	totalTokens = promptTokens + completionTokens
-	return promptTokens, completionTokens, totalTokens, 0, 0, 0, true
+	return promptTokens, completionTokens, totalTokens, 0, 0, 0, 0, true
 }
 
 // collapseSystemMessagesToFront merges all system messages into a single message

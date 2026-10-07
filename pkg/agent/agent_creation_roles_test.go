@@ -7,7 +7,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
-// These tests exercise the SP-150 §150a item 150.4 coder-role gate in
+// These tests exercise the coder-role gate in
 // newAgentWithConfigManagerInner: the main conversation loop uses the
 // explicitly-set roles.coder entry, explicit model arguments always win,
 // and legacy aliases must not leak into the primary conversation. They
@@ -79,7 +79,7 @@ func TestCoderRole_UnsetKeepsConversation(t *testing.T) {
 }
 
 // TestCoderRole_LegacyAliasDoesNotLeak verifies case (c): legacy subagent
-// settings alias the coder role for RESOLUTION (item 150.2) but must not
+// settings alias the coder role for RESOLUTION but must not
 // select the primary conversation's model — only an explicit roles.coder
 // entry does that. A subagent_model setting alone leaves the conversation
 // model untouched.
@@ -103,8 +103,8 @@ func TestCoderRole_LegacyAliasDoesNotLeak(t *testing.T) {
 		t.Errorf("GetModel() = %q, want %q — legacy aliases must not select the main conversation's model", got, cliTestModel)
 	}
 
-	// Sanity: the same settings DO alias the role for ResolveRole (item
-	// 150.2) — the leak is specifically in the main-loop gate.
+	// Sanity: the same settings DO alias the role for ResolveRole — the
+	// leak is specifically in the main-loop gate.
 	if provider, model := manager.GetConfig().ResolveRole(configuration.RoleCoder); provider != cliTestProviderName || model != cliRoleModel {
 		t.Errorf("ResolveRole(coder) with legacy aliases = (%q, %q), want (%q, %q)", provider, model, cliTestProviderName, cliRoleModel)
 	}

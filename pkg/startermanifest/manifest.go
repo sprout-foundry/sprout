@@ -1,25 +1,26 @@
-// Package startermanifest owns the schema for the SP-153 starter manifest:
+// Package startermanifest owns the schema for the starter manifest:
 // the machine-readable document stored at .sprout/starter.json that
-// declares how a project is built and run (SP-153 §153a), plus the
+// declares how a project is built and run, plus the
 // validator that every reader and writer of that file must run.
 //
-// The manifest is the single source of commands for SP-149 verification
-// (build and test commands, the routes to check), SP-155 preview (the dev
-// command and port), and SP-156 deploys (the build command and output
-// directory). Any project can add the file by hand — it is not limited to
+// The manifest is the single source of commands for verification
+// (build and test commands, the routes to check), preview (the dev
+// command and port), deploys (the build command and output
+// directory), and the quality-after-edits step (the formatter and linter
+// commands). Any project can add the file by hand — it is not limited to
 // projects created from a starter — so the validator is deliberately
 // lenient: only the starter identity (id + version) is required, and every
 // command is optional.
 //
 // The package is a pure data + validation contract, mirroring
 // pkg/plancontract: it holds no I/O. Callers read the JSON file through
-// pkg/starterstore (the SP-153 manifest loader); this package defines its
+// pkg/starterstore (the manifest loader); this package defines its
 // shape and enforces its invariants. It is imported by the CLI, by WASM
-// builds, and by the SP-149/SP-155/SP-156 consumers, so it must stay
+// builds, and by the verification/preview/deploy consumers, so it must stay
 // standard-library-only.
 //
 // JSON field names are part of the on-disk contract and must stay in sync
-// with the spec (roadmap/SP-153-starters-and-stack-skills.md §153a).
+// with the spec (roadmap/SP-153-starters-and-stack-skills.md).
 package startermanifest
 
 // On-disk location of the manifest, under the project root.
@@ -38,7 +39,7 @@ const maxDevPort = 65535
 
 // StarterRef identifies the starter a project carries: the starter id and
 // the version of the starter tree it was instantiated from. The version is
-// the key for SP-153 §153d upgrades: when a project's manifest names an
+// the key for starter upgrades: when a project's manifest names an
 // older version than the embedded starter, the agent may propose an upgrade
 // (and never apply one silently).
 type StarterRef struct {
@@ -51,9 +52,9 @@ type StarterRef struct {
 	Version string `json:"version"`
 }
 
-// StarterManifest is the in-memory form of .sprout/starter.json (SP-153
-// §153a). It declares how a project is built and run and is the single
-// source of commands for SP-149 verification, SP-155 preview, and SP-156
+// StarterManifest is the in-memory form of .sprout/starter.json.
+// It declares how a project is built and run and is the single
+// source of commands for verification, preview, and
 // deploys.
 //
 // JSON field names are the on-disk contract; see the package doc. The
@@ -80,15 +81,25 @@ type StarterManifest struct {
 	// (e.g. "npx serve dist"). Optional: absent when the project has no
 	// preview step.
 	Preview string `json:"preview,omitempty"`
+	// Format is the command that formats the project's code (e.g. "gofmt
+	// -w ."). Optional: absent when the project has no formatter. It is
+	// the trusted source for the quality-after-edits step, whose formatter
+	// may rewrite files in place.
+	Format string `json:"format,omitempty"`
+	// Lint is the command that lints the project's code (e.g. "golangci-lint
+	// run"). Optional: absent when the project has no linter. It is the
+	// trusted source for the quality-after-edits step; a non-zero exit is
+	// reported as findings.
+	Lint string `json:"lint,omitempty"`
 
 	// DevPort is the fixed port the dev server listens on. Zero (absent)
 	// means "no fixed port": the preview tooling must discover the port at
-	// runtime instead (SP-155). A present port must be a valid one
+	// runtime instead. A present port must be a valid one
 	// (1-65535).
 	DevPort int `json:"dev_port,omitempty"`
 
 	// Routes are the routes to check on the dev server (the "routes to
-	// check" of SP-153 §153a; consumed by SP-149 page checks). Each entry
+	// check" of the manifest schema; consumed by the page checks). Each entry
 	// must be non-empty. Entries are expected to be route paths relative to
 	// the dev server (e.g. "/login"); a leading "/" is the convention but
 	// is deliberately NOT enforced, so hand-authored files may also list
@@ -96,7 +107,7 @@ type StarterManifest struct {
 	Routes []string `json:"routes,omitempty"`
 
 	// BuildOutput is the directory a build produces its deployable output
-	// in (e.g. "dist"); SP-156 deploys take their build output from here.
+	// in (e.g. "dist"); deploys take their build output from here.
 	// Optional: absent when the project has no static build output.
 	BuildOutput string `json:"build_output,omitempty"`
 }

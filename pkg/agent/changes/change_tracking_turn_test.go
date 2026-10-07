@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-// The per-turn change window (SP-149 §149a): MarkTurnStart opens it,
+// The per-turn change window: MarkTurnStart opens it,
 // TurnChangedPaths reads it without consuming it.
 
 // trackWrite and trackEdit record changes and fail the test if the

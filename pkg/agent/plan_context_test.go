@@ -1,6 +1,6 @@
 //go:build !js
 
-// plan_context_test.go — the SP-148 §148c item-148.5 acceptance tests for
+// plan_context_test.go — the acceptance tests for
 // plan-context injection. When .sprout/plan.json exists for the project, the
 // agent reads it at the start of a turn and injects a compact plan summary
 // (goal + scope items with status) into the turn's context; when there is no
@@ -32,7 +32,7 @@ import (
 // Fixtures
 // ---------------------------------------------------------------------------
 
-// pcFixturePlanJSON is a minimal valid SP-148 plan: two scope items, each
+// pcFixturePlanJSON is a minimal valid plan: two scope items, each
 // covered by one acceptance item (the validator's "every scope item needs at
 // least one acceptance item" rule). revision is 2 — a persisted plan (the
 // store bumps on each write), so Load returns it as-is and the renderer is

@@ -12,8 +12,8 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/planstore"
 )
 
-// planAddScopeHandler implements ToolHandler for plan_add_scope (SP-148
-// §148c): the agent-facing scope write-back path for the project's structured
+// planAddScopeHandler implements ToolHandler for plan_add_scope:
+// the agent-facing scope write-back path for the project's structured
 // plan.
 //
 // When the scope of the work changes during execution, the agent calls this
@@ -21,11 +21,11 @@ import (
 // its acceptance items are appended to the current plan and persisted through
 // the plan store (planstore.Store.Save), which re-validates, bumps the
 // revision, stamps `updated`, and regenerates the derived .sprout/plan.md
-// view. The compact plan summary (item 148.5) is re-read at the start of the
+// view. The compact plan summary is re-read at the start of the
 // next turn, so the model immediately sees the written-back plan.
 //
 // Coverage is enforced end to end: every scope item must be covered by at
-// least one acceptance item (SP-148 §148b), so the tool requires the
+// least one acceptance item, so the tool requires the
 // acceptance items for the new scope (each is wired to the new scope id by
 // the store, not by the model) and the store's validation is the final gate
 // — a rejected write (duplicate scope id, unknown kind, an interaction item
@@ -49,7 +49,7 @@ func (h *planAddScopeHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name: "plan_add_scope",
 		Description: "Add a scope item to the project's structured plan (.sprout/plan.json) and persist it " +
-			"through the plan store — scope write-back (SP-148 §148c). Use it when the scope of the work " +
+			"through the plan store — scope write-back. Use it when the scope of the work " +
 			"changes during execution, so the plan is updated with a new revision instead of silently " +
 			"diverging. Every scope item must be covered by at least one acceptance item, so the call " +
 			"always includes the acceptance items for the new scope. On success the plan is saved " +
@@ -69,7 +69,7 @@ func (h *planAddScopeHandler) Definition() ToolDefinition {
 				Name:     "acceptance",
 				Type:     "array",
 				Required: true,
-				Description: "The acceptance items covering the new scope item — at least one (SP-148 §148b); " +
+				Description: "The acceptance items covering the new scope item — at least one; " +
 					"the store wires each item's scope to the new scope id, so an item's own scope field is " +
 					"ignored. Each item: {id, check?, kind, steps?}. kind is one of build|test|page|" +
 					"interaction|manual; an interaction item carries a non-empty steps[] (browse step format: " +
@@ -272,7 +272,7 @@ func pasScopeFromArgs(args map[string]any) (plancontract.ScopeItem, error) {
 // pasAcceptanceFromArgs extracts the acceptance items from the tool
 // arguments: `acceptance` must be a non-empty array of objects
 // {id, check?, kind, steps?}. Each item is wired to the new scope id
-// (SP-148 §148c write-back: the items cover the new scope item, so the
+// (write-back: the items cover the new scope item, so the
 // store's "every scope item needs at least one acceptance item" rule is
 // satisfied by construction). A scope without any covering acceptance item
 // is rejected up front with a clear error (nothing is written).
@@ -280,7 +280,7 @@ func pasAcceptanceFromArgs(args map[string]any, scopeID string) ([]plancontract.
 	raw, ok := lookupKey(args, "acceptance")
 	if !ok || raw == nil {
 		return nil, fmt.Errorf(
-			"plan_add_scope: 'acceptance' is required (at least one acceptance item covering the new scope; a scope item without an acceptance item is an invalid plan, SP-148 §148b)")
+			"plan_add_scope: 'acceptance' is required (at least one acceptance item covering the new scope; a scope item without an acceptance item is an invalid plan)")
 	}
 	accArr, ok := raw.([]any)
 	if !ok {
@@ -288,7 +288,7 @@ func pasAcceptanceFromArgs(args map[string]any, scopeID string) ([]plancontract.
 	}
 	if len(accArr) == 0 {
 		return nil, fmt.Errorf(
-			"plan_add_scope: 'acceptance' must contain at least one item: every scope item needs at least one acceptance item (SP-148 §148b)")
+			"plan_add_scope: 'acceptance' must contain at least one item: every scope item needs at least one acceptance item")
 	}
 
 	out := make([]plancontract.Acceptance, 0, len(accArr))
@@ -299,7 +299,7 @@ func pasAcceptanceFromArgs(args map[string]any, scopeID string) ([]plancontract.
 		}
 		a := plancontract.Acceptance{
 			ID:    strings.TrimSpace(pasString(itemMap["id"])),
-			Scope: scopeID, // wired to the new scope item (SP-148 §148c)
+			Scope: scopeID, // wired to the new scope item
 			Check: strings.TrimSpace(pasString(itemMap["check"])),
 			Kind:  plancontract.Kind(strings.TrimSpace(pasString(itemMap["kind"]))),
 		}
@@ -324,7 +324,7 @@ func pasAcceptanceFromArgs(args map[string]any, scopeID string) ([]plancontract.
 }
 
 // pasStepsFromValue converts a raw steps array (as it arrives in a tool call)
-// to the plancontract browse-step form (SP-148 §148d). The action set
+// to the plancontract browse-step form. The action set
 // itself is not validated here: the plan validator requires non-empty
 // actions on interaction items, and the browse executor is the source of
 // truth for which actions exist.

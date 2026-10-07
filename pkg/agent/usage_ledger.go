@@ -3,8 +3,8 @@ package agent
 import "sync"
 
 // Usage is an amount of model usage: tokens and what they cost. Role is the
-// SP-150 §150c role the usage is attributed to; it is empty on the overall
-// ledger view (TakeUnbookedUsage) and set on the per-role view.
+// role the usage is attributed to; it is empty on the overall ledger view
+// (TakeUnbookedUsage) and set on the per-role view.
 type Usage struct {
 	Role             string
 	PromptTokens     int
@@ -33,7 +33,7 @@ func (a *Agent) usageTotals() Usage {
 }
 
 // roleUsageTotals returns the agent's per-role running usage totals as a map
-// keyed by role (SP-150 §150c, item 150.5). Each value carries its Role.
+// keyed by role. Each value carries its Role.
 // When every LLM call records a cost entry with its role, the per-role totals
 // sum to the overall totals (the metrics manager accumulates both from the
 // same entries).
@@ -74,7 +74,7 @@ func (a *Agent) TakeUnbookedUsage() Usage {
 }
 
 // TakeUnbookedUsageByRole returns the per-role usage accrued since the
-// previous call (SP-150 §150c, item 150.5) and marks each role booked. The
+// previous call and marks each role booked. The
 // delta for each role is computed against that role's own mark, with the
 // same reset detection as the overall view (a per-role total below its mark
 // means it was reset, so everything since the reset is new). The values are

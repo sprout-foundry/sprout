@@ -11,7 +11,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/plancontract"
 )
 
-// TestRunExcerptIsBounded pins the output-excerpt bound (SP-149 §149c):
+// TestRunExcerptIsBounded pins the output-excerpt bound:
 // a verbose output is truncated to the configured size, keeping head and
 // tail.
 func TestRunExcerptIsBounded(t *testing.T) {
@@ -74,7 +74,7 @@ func TestBoundedExcerptDirect(t *testing.T) {
 // TestResultAggregates pins the pass/fail aggregate semantics: a run
 // fails when any executed check failed or an error was recorded; it
 // passes only when nothing failed and at least one check ran; an
-// all-skipped run is neither (SP-149 §149d: vacuous success is not
+// all-skipped run is neither (vacuous success is not
 // success).
 func TestResultAggregates(t *testing.T) {
 	// A single executed, passing check is a pass.
@@ -116,7 +116,7 @@ func TestResultAggregates(t *testing.T) {
 }
 
 // TestResultSummaryPageCheck pins the deterministic rendering of a page check
-// in the final-reply summary (SP-149 §149d): a page check that ran reports
+// in the final-reply summary: a page check that ran reports
 // its route count, a skipped one its reason, and screenshot references stay
 // off the one-line summary (they are the structured evidence).
 func TestResultSummaryPageCheck(t *testing.T) {
@@ -167,7 +167,7 @@ func TestResultSummaryPageCheck(t *testing.T) {
 }
 
 // TestResultSummaryInteractionAndManual pins the deterministic rendering of
-// interaction and manual checks in the final-reply summary (SP-149 §149d): a
+// interaction and manual checks in the final-reply summary: a
 // run interaction check reports its step count, and a manual check reports the
 // manual items it lists.
 func TestResultSummaryInteractionAndManual(t *testing.T) {
@@ -216,13 +216,13 @@ func TestResultSummaryInteractionAndManual(t *testing.T) {
 				Kind:    plancontract.KindManual,
 				Items:   []string{"m1", "m2"},
 				Skipped: true,
-				Reason:  "manual: verified by a human, not machine-gated (SP-149 §149a)",
+				Reason:  "manual: verified by a human, not machine-gated",
 			},
 		},
 	}
 	assert.Equal(
 		t,
-		"plan rev 0: manual: skipped [2 manual items] — manual: verified by a human, not machine-gated (SP-149 §149a)",
+		"plan rev 0: manual: skipped [2 manual items] — manual: verified by a human, not machine-gated",
 		manual.Summary(),
 	)
 }

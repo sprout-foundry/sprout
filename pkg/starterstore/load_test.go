@@ -72,8 +72,8 @@ func TestLoadValidManifest(t *testing.T) {
 	assert.Equal(t, "dist", m.BuildOutput)
 }
 
-// TestLoadMinimalManifestNeverGuessed pins the "never guessed" contract of
-// SP-153 §153a: a valid-but-minimal manifest (starter identity only) loads
+// TestLoadMinimalManifestNeverGuessed pins the "never guessed" contract:
+// a valid-but-minimal manifest (starter identity only) loads
 // with every command field empty — the loader did not invent commands, ports,
 // routes, or a build output for the absent fields.
 func TestLoadMinimalManifestNeverGuessed(t *testing.T) {

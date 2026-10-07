@@ -1,19 +1,19 @@
-// models.go — the SP-154 §154b model list (154.4): the benchmark's
+// models.go — the model list: the benchmark's
 // default model list (the provider catalog's recommended_model entries)
 // and the Runner's configurable override (Runner.Models, resolved by
 // Runner.SuiteModels in runner.go).
 //
-// The §154b property: the default follows the live provider catalog, so
+// The defining property: the default follows the live provider catalog, so
 // when the catalog (embedded, or remote-refreshed) changes its
 // recommendations the benchmark follows without code changes. The
-// suite-level report (154.5) iterates SuiteModels() × tasks; RunTask's
-// 3-run rule per (model, task) (154.2) is what each pair consumes.
+// suite-level report iterates SuiteModels() × tasks; RunTask's
+// 3-run rule per (model, task) is what each pair consumes.
 package benchmark
 
 import "github.com/sprout-foundry/sprout/pkg/providercatalog"
 
-// DefaultModels derives the benchmark's default model list from catalog
-// (SP-154 §154b): one ModelSpec per provider whose RecommendedModel is
+// DefaultModels derives the benchmark's default model list from catalog:
+// one ModelSpec per provider whose RecommendedModel is
 // non-empty, in catalog provider order, pairing the provider's id with
 // its recommended_model. Providers without a recommended_model are
 // skipped. A catalog with no recommended entries (no providers, or
@@ -30,10 +30,10 @@ func DefaultModels(catalog providercatalog.Catalog) []ModelSpec {
 }
 
 // DefaultModelList is the production entry point for the benchmark's
-// default model list (SP-154 §154b): the live provider catalog's
+// default model list: the live provider catalog's
 // recommended_model entries. The list follows the catalog — embedded or
 // remote-refreshed — so a change of recommendations flows into the
-// benchmark without code changes; that is the §154b property.
+// benchmark without code changes; that is the defining property.
 func DefaultModelList() []ModelSpec {
 	return DefaultModels(providercatalog.Current())
 }

@@ -322,7 +322,7 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 	if err != nil {
 		c.printf("%sFailed to load configuration: %v\n", console.GlyphWarning.Prefix(), err)
 	}
-	// SP-150 §150b: the commit flow resolves the commit role (the commit
+	// The commit flow resolves the commit role (the commit
 	// settings alias it).
 	var commitProvider, commitModel string
 	if cfg != nil {

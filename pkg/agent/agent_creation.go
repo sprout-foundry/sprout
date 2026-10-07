@@ -89,7 +89,7 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 		rootPersonaID:       params.rootPersonaID,
 		shellCwd:            &shellCwdTracker{},
 		// The primary (main-loop) agent's usage is attributed to the coder
-		// role (SP-150 §150c, item 150.5): the main conversation loop is
+		// role: the main conversation loop is
 		// the coder's. Subagents carry the role their model was resolved
 		// through instead (createSubagent).
 		role: configuration.RoleCoder,
@@ -443,7 +443,7 @@ func newAgentWithConfigManagerInner(configManager *configuration.Manager, worksp
 		})
 	}
 
-	// SP-150 §150a (item 150.4): the main conversation loop uses the
+	// The main conversation loop uses the
 	// coder role. Only the explicit roles-section entry gates the
 	// override — legacy aliases (subagent/completion settings) must not
 	// leak into the primary conversation. An explicit model from the

@@ -104,8 +104,8 @@ const fixtureScopeNoAcceptance = `{
   ]
 }`
 
-// TestValidateJSON is the table test over JSON fixtures required by SP-148
-// §148a: a valid plan passes, and duplicate IDs, an acceptance item without a
+// TestValidateJSON is the table test over JSON fixtures for the schema:
+// a valid plan passes, and duplicate IDs, an acceptance item without a
 // kind, an unknown kind, and a scope item with no acceptance item each fail
 // with a clear message.
 func TestValidateJSON(t *testing.T) {

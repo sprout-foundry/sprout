@@ -18,6 +18,8 @@ const fixtureValid = `{
   "test": "npm test",
   "dev": "npm run dev",
   "preview": "npx serve dist",
+  "format": "npm run format",
+  "lint": "npm run lint",
   "dev_port": 5173,
   "routes": ["/", "/login", "/dashboard"],
   "build_output": "dist"
@@ -25,11 +27,11 @@ const fixtureValid = `{
 
 // fixtureMinimal is the leanest valid manifest: just the starter identity.
 // Every command, the port, the routes, and the build output are optional
-// (SP-153 §153a: any project can add the file by hand).
+// (any project can add the file by hand).
 const fixtureMinimal = `{"starter": {"id": "static-site", "version": "0.1.0"}}`
 
-// TestValidateJSON is the table test over JSON fixtures required by SP-153
-// §153a: a fully-populated manifest and the minimal manifest pass, and every
+// TestValidateJSON is the table test over JSON fixtures for the schema:
+// a fully-populated manifest and the minimal manifest pass, and every
 // invalid case fails with a clear message.
 func TestValidateJSON(t *testing.T) {
 	cases := []struct {
@@ -87,6 +89,18 @@ func TestValidateJSON(t *testing.T) {
 			jsonStr:    strings.Replace(fixtureValid, `"preview": "npx serve dist"`, `"preview": "   "`, 1),
 			wantValid:  false,
 			wantSubstr: "preview: command must not be whitespace-only",
+		},
+		{
+			name:       "whitespace-only format command fails",
+			jsonStr:    strings.Replace(fixtureValid, `"format": "npm run format"`, `"format": "   "`, 1),
+			wantValid:  false,
+			wantSubstr: "format: command must not be whitespace-only",
+		},
+		{
+			name:       "whitespace-only lint command fails",
+			jsonStr:    strings.Replace(fixtureValid, `"lint": "npm run lint"`, `"lint": "   "`, 1),
+			wantValid:  false,
+			wantSubstr: "lint: command must not be whitespace-only",
 		},
 		{
 			name:       "out-of-range dev_port fails",
@@ -155,6 +169,8 @@ func baseManifest() *StarterManifest {
 	m.Test = "npm test"
 	m.Dev = "npm run dev"
 	m.Preview = "npx serve dist"
+	m.Format = "npm run format"
+	m.Lint = "npm run lint"
 	m.DevPort = 5173
 	m.Routes = []string{"/", "/login", "/dashboard"}
 	m.BuildOutput = "dist"
@@ -204,6 +220,18 @@ func TestValidateTable(t *testing.T) {
 			m:          mutate(func(m *StarterManifest) { m.Test = "  " }),
 			wantValid:  false,
 			wantSubstr: "test: command must not be whitespace-only",
+		},
+		{
+			name:       "whitespace-only format command fails",
+			m:          mutate(func(m *StarterManifest) { m.Format = "  " }),
+			wantValid:  false,
+			wantSubstr: "format: command must not be whitespace-only",
+		},
+		{
+			name:       "whitespace-only lint command fails",
+			m:          mutate(func(m *StarterManifest) { m.Lint = "  " }),
+			wantValid:  false,
+			wantSubstr: "lint: command must not be whitespace-only",
 		},
 		{
 			name:      "dev_port of 0 (no fixed port) passes",
@@ -286,7 +314,7 @@ func TestJSONFieldNamesMatchSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(b, &m))
 
 	wantTopLevel := []string{
-		"starter", "build", "test", "dev", "preview", "dev_port", "routes", "build_output",
+		"starter", "build", "test", "dev", "preview", "format", "lint", "dev_port", "routes", "build_output",
 	}
 	for _, k := range wantTopLevel {
 		assert.Contains(t, m, k, "missing top-level JSON key %q", k)

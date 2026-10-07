@@ -22,8 +22,7 @@ func newRolesTestManager(t *testing.T) *Manager {
 }
 
 // TestManagerSetRole_Persists verifies the round-trip: SetRole writes the
-// roles section to the on-disk config, and a fresh Load sees it
-// (SP-150 item 150.6).
+// roles section to the on-disk config, and a fresh Load sees it.
 func TestManagerSetRole_Persists(t *testing.T) {
 	m := newRolesTestManager(t)
 

@@ -81,7 +81,7 @@ func writePlanFile(t *testing.T, root string, p *plancontract.Plan) *plancontrac
 }
 
 // TestRunBaseline runs the build and test commands as a baseline when no
-// active plan exists (SP-149 §149a), with the commands coming only from
+// active plan exists, with the commands coming only from
 // the starter manifest.
 func TestRunBaseline(t *testing.T) {
 	root := t.TempDir()
@@ -111,7 +111,7 @@ func TestRunBaseline(t *testing.T) {
 // TestRunBaselineNoCommands pins the "never guessed" contract: with no
 // starter manifest and no explicit configuration there is nothing to
 // run, so both checks are skipped with a reason and the run is not a
-// pass (SP-149 §149b/§149d).
+// pass.
 func TestRunBaselineNoCommands(t *testing.T) {
 	root := t.TempDir()
 
@@ -133,7 +133,7 @@ func TestRunBaselineNoCommands(t *testing.T) {
 	assert.False(t, res.Failed(), "skipping is not failing")
 }
 
-// TestModelProposedCommandHasNoEffect is the SP-149 §149b acceptance
+// TestModelProposedCommandHasNoEffect is the acceptance
 // test: a command proposed by the model (here carried in the plan's
 // acceptance Check fields — plans are written by the model) has no
 // effect. The runner resolves commands only from the starter manifest
@@ -201,8 +201,8 @@ func TestModelProposedCommandHasNoEffect(t *testing.T) {
 	})
 }
 
-// TestRunExplicitConfigCommands covers the second trusted source
-// (SP-149 §149b): with no starter manifest, the build and test commands
+// TestRunExplicitConfigCommands covers the second trusted source:
+// with no starter manifest, the build and test commands
 // come from the project's explicit configuration.
 func TestRunExplicitConfigCommands(t *testing.T) {
 	root := t.TempDir()

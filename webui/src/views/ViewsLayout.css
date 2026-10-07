@@ -1,0 +1,25 @@
+/*
+ * ViewsLayout slot scaffolding.
+ *
+ * Minimal by design: this only makes the slot model visible (a row of
+ * flexed slots, the overlay slot a full-size positioning context). A host
+ * application's CSS governs real placement — override the slot styles or
+ * lay the slots out yourself with the `sprout-views-layout` hooks; do not
+ * grow this stylesheet into a layout framework.
+ */
+
+.sprout-views-layout {
+  display: flex;
+  height: 100%;
+}
+
+.sprout-views-layout__slot {
+  flex: 1;
+  min-width: 0;
+}
+
+.sprout-views-layout__slot[data-slot='overlay'] {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}

@@ -7,6 +7,7 @@
 
 import { TriangleAlert } from 'lucide-react';
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { ApiService } from '../services/api';
 import { error as logError } from '../utils/log';
 
 interface ErrorBoundaryProps {
@@ -104,13 +105,13 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
               </button>
               <button
                 className="error-reload-button"
-                onClick={() =>
-                  import('../services/api')
-                    .then(({ ApiService }) => ApiService.getInstance().exportSupportBundle())
+                onClick={() => {
+                  ApiService.getInstance()
+                    .exportSupportBundle()
                     .catch((err) => {
                       logError('Failed to export support bundle: ' + String(err));
-                    })
-                }
+                    });
+                }}
               >
                 Export Diagnostics
               </button>

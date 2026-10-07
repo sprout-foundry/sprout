@@ -162,7 +162,7 @@ type SubagentOptions struct {
 	WorkingDir             string        // optional: override workspace root (must be within $HOME)
 	MaxConcurrentSubagents int           // max parallel subagents (0 = unlimited, default unlimited)
 	FleetTokenBudget       int           // shared token budget across all parallel subagents (0 = unlimited)
-	// Role is the SP-150 §150c role the subagent's usage is attributed to
+	// Role is the role the subagent's usage is attributed to
 	// (the role its model was resolved through; a configuration.Role*
 	// constant). Set by the spawn handler from the same resolution that
 	// picked the provider/model; empty → createSubagent attributes the
@@ -189,7 +189,7 @@ type SubagentResult struct {
 	Error      error
 	TokensUsed int
 	Cost       float64
-	// Role is the SP-150 §150c role the subagent's model was resolved
+	// Role is the role the subagent's model was resolved
 	// through. The parent rolls the subagent's usage up under this role so
 	// its spend is attributed to the purpose it served (empty → the coder
 	// fallback, matching subagentRole's default resolution).
@@ -281,7 +281,7 @@ type SubagentTask struct {
 	// SystemPrompt is the resolved persona system prompt; empty falls back to
 	// SubagentOptions.SystemPrompt.
 	SystemPrompt string
-	// Role is the SP-150 §150c role this task's subagent usage is
+	// Role is the role this task's subagent usage is
 	// attributed to (the role its model was resolved through). Empty → the
 	// coder role (createSubagent's fallback). Set by the caller that
 	// resolved the model (e.g. the reviewer path sets "reviewer").

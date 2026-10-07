@@ -9,9 +9,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestProgressEventConstants pins the SP-151 §151a event type strings.
-// They are the public wire contract (SP-151 §151d — mirrored by the
-// @sprout/events TypeScript union), so a rename must be a deliberate spec
+// TestProgressEventConstants pins the progress event type strings.
+// They are the public wire contract (mirrored by the
+// @sprout/events TypeScript union), so a rename must be a deliberate contract
 // change, not a typo.
 func TestProgressEventConstants(t *testing.T) {
 	for _, tc := range []struct {
@@ -54,7 +54,7 @@ func sortedKeys(m map[string]any) []string {
 }
 
 // TestProgressMilestone_MarshalJSONFieldNames pins the JSON wire names of
-// the progress_milestone payload (SP-151 §151d). A json-tag change is a
+// the progress_milestone payload. A json-tag change is a
 // breaking change for consumers of the public event schema.
 func TestProgressMilestone_MarshalJSONFieldNames(t *testing.T) {
 	payload := marshalEventPayload(t, EventTypeProgressMilestone, ProgressMilestoneData{
@@ -146,7 +146,7 @@ func TestProgressQuestion_OmitemptyFreeform(t *testing.T) {
 
 // TestProgressVerification_MarshalJSONFieldNames pins the JSON wire names
 // of the progress_verification payload: the checks, pass/fail, and
-// evidence references (SP-149 result, compacted).
+// evidence references (the verification result, compacted).
 func TestProgressVerification_MarshalJSONFieldNames(t *testing.T) {
 	payload := marshalEventPayload(t, EventTypeProgressVerification, ProgressVerificationData{
 		RunID:        "run-1",
@@ -216,7 +216,7 @@ func TestProgressComplete_Verified(t *testing.T) {
 	)
 }
 
-// TestProgressComplete_NotVerified pins the wire shape when SP-149 is
+// TestProgressComplete_NotVerified pins the wire shape when verification is
 // disabled or was not run: verification is absent (nil pointer), and
 // not_verified_reason explains why.
 func TestProgressComplete_NotVerified(t *testing.T) {

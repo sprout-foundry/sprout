@@ -1,6 +1,6 @@
 //go:build !js
 
-// models_test.go — the SP-154 §154b (154.4) model-list tests: the pure
+// models_test.go — the model-list tests: the pure
 // DefaultModels derivation (synthetic catalogs, no global state), the
 // embedded-catalog entry point (DefaultModelList against the shipped
 // catalog), and the Runner's configurable override (SuiteModels).
@@ -139,7 +139,7 @@ func TestDefaultModelListFollowsEmbeddedCatalog(t *testing.T) {
 	}
 }
 
-// TestDefaultModelListFollowsSetCatalog pins the §154b live-catalog
+// TestDefaultModelListFollowsSetCatalog pins the live-catalog
 // property under a global swap: after SetCatalog the default list
 // follows the swapped catalog (the benchmark follows recommendations
 // without code changes), and the capture/restore cleanup brings the

@@ -21,6 +21,7 @@
 import { Check } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { copy } from '../config/copy';
 import type { WorkspaceMode, WorkspaceModeId } from './registry';
 import './ModeSwitcher.css';
 
@@ -156,11 +157,11 @@ export default function ModeSwitcher({ modes, activeId, onSelect, trigger, trigg
               ref={menuRef}
               className="mode-switcher-menu"
               role="listbox"
-              aria-label="Switch mode"
+              aria-label={copy('modeSwitcher.label')}
               data-testid="sidebar-brand-menu"
               style={{ top: menuPos.top, left: menuPos.left }}
             >
-              <div className="mode-switcher-header">Switch mode</div>
+              <div className="mode-switcher-header">{copy('modeSwitcher.label')}</div>
               {modes.map((mode) => {
                 const Icon = mode.icon;
                 const active = mode.id === activeId;

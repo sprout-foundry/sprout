@@ -7,10 +7,30 @@
  * `tsc` here, not just at the consumer).
  */
 import { describe, expect, it } from 'vitest';
-import { AgentChangesPanel, ChatView, Editor, FileTree, PreviewPane, PreviewPanel, usePreviewStatus } from './index';
+import { DEFAULT_VIEWS_ARRANGEMENT, SLOT_ORDER, VIEWS_BY_KIND, resolveViewsArrangement } from './ViewsLayout';
+import type { ExampleEmbeddingProps, ViewKind, ViewSlot, ViewsArrangement, ViewsLayoutProps } from './ViewsLayout';
+import {
+  AgentChangesPanel,
+  ChatView,
+  Editor,
+  FileTree,
+  PreviewPane,
+  PreviewPanel,
+  ExampleEmbedding,
+  ViewsLayout,
+  usePreviewStatus,
+  copy,
+  formatCopy,
+  installCopy,
+  resetCopyForTests,
+  DEFAULT_COPY,
+  COPY_KEYS,
+} from './index';
 import type {
   AgentChangesPanelProps,
   ChatProps,
+  CopyKey,
+  CopyOverrides,
   EditorProps,
   FileTreeProps,
   PreviewPaneProps,
@@ -47,6 +67,49 @@ describe('views entry exports', () => {
 
   it('exports the preview lifecycle hook as a function', () => {
     expect(typeof usePreviewStatus).toBe('function');
+  });
+
+  // ── Layout configuration ──────────────────────────────────────────────
+
+  it('exports the layout + example embedding as components', () => {
+    expect(isReactComponent(ViewsLayout)).toBe(true);
+    expect(isReactComponent(ExampleEmbedding)).toBe(true);
+  });
+
+  it('exports the arrangement resolver as a function', () => {
+    expect(typeof resolveViewsArrangement).toBe('function');
+  });
+
+  it('defines the default arrangement, slot order, and the kind registry', () => {
+    expect(DEFAULT_VIEWS_ARRANGEMENT).toBeDefined();
+    expect(SLOT_ORDER).toEqual(['left', 'center', 'right', 'overlay']);
+    expect(Object.keys(VIEWS_BY_KIND).sort()).toEqual(
+      ['chat', 'changes', 'editor', 'fileTree', 'previewPane', 'previewPanel'].sort(),
+    );
+    // Each registered kind maps to something renderable.
+    for (const kind of Object.keys(VIEWS_BY_KIND) as ViewKind[]) {
+      expect(VIEWS_BY_KIND[kind]).toBeDefined();
+    }
+  });
+
+  // ── Copy keys (the embedding's wording seam) ─────────────────────────
+
+  it('exports the copy registry API for the embedding to install wording', () => {
+    expect(typeof copy).toBe('function');
+    expect(typeof formatCopy).toBe('function');
+    expect(typeof installCopy).toBe('function');
+    expect(typeof resetCopyForTests).toBe('function');
+    expect(COPY_KEYS.length).toBeGreaterThan(0);
+    expect(copy('app.name')).toBe(DEFAULT_COPY['app.name']);
+  });
+
+  it('installs an override through the entry export, then resets', () => {
+    const overrides: CopyOverrides = { 'app.name': 'acme' };
+    const key: CopyKey = 'app.name';
+    installCopy(overrides);
+    expect(copy(key)).toBe('acme');
+    resetCopyForTests();
+    expect(copy(key)).toBe('sprout');
   });
 });
 
@@ -103,5 +166,36 @@ describe('views entry typed props', () => {
       stop: () => undefined,
     };
     expect(hookReturn.status).toBe('stopped');
+  });
+
+  // ── Layout configuration types ────────────────────────────────────────
+
+  it('accepts minimal arrangement + layout + example-embedding values', () => {
+    const slot: ViewSlot = 'left';
+    const kind: ViewKind = 'chat';
+    const arrangement: ViewsArrangement = { center: [kind], overlay: [] };
+    const layoutProps: ViewsLayoutProps = {
+      arrangement,
+      props: { chat: { inputValue: 'hi' } },
+      className: 'host-shell',
+    };
+    const exampleProps: ExampleEmbeddingProps = {
+      chat: {
+        messages: [{ id: 'm1', type: 'user', content: 'hello', timestamp: new Date(0) }],
+        onSendMessage: () => undefined,
+        onQueueMessage: () => undefined,
+        queuedMessagesCount: 0,
+        inputValue: '',
+        onInputChange: () => undefined,
+      },
+      preview: { open: true, onClose: () => undefined },
+      arrangement: { left: [] },
+    };
+    expect(slot).toBe('left');
+    expect(arrangement.center).toEqual(['chat']);
+    expect(layoutProps.className).toBe('host-shell');
+    expect(exampleProps.arrangement).toEqual({ left: [] });
+    // The resolver round-trips the minimal value.
+    expect(resolveViewsArrangement({ center: [kind] }).center).toEqual(['chat']);
   });
 });

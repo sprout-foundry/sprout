@@ -1,10 +1,10 @@
-// The Unicode script pass (SP-152 §152d): identify the dominant writing
+// The Unicode script pass: identify the dominant writing
 // script of a prose string using the standard library's unicode range
 // tables. This is the cheap, exact first half of the guard: it catches
 // the common failure mode — a reply that is entirely in the wrong script
 // (e.g. Chinese in a Spanish conversation). Languages that share a
 // script (Spanish vs English) are not distinguishable here by design;
-// that is the same-script detector's job (SP-152 152.2).
+// that is the same-script detector's job.
 package langguard
 
 import (
@@ -52,8 +52,7 @@ const (
 )
 
 // MinScriptRunes is the minimum number of runes of the dominant script
-// for DominantScript to call its result reliable. It is tuned together
-// with the detector tests of SP-152 152.2.
+// for DominantScript to call its result reliable.
 const MinScriptRunes = 8
 
 // scriptDef pairs a script with its Unicode range table.
@@ -80,7 +79,7 @@ var scriptDefs = []scriptDef{
 	{ScriptHan, unicode.Scripts["Han"]},
 }
 
-// scriptNames maps each script to its diagnostic name; SP-152 152.9 logs
+// scriptNames maps each script to its diagnostic name; the guard logs
 // mismatches with a model ID and role, and this is the readable part.
 var scriptNames = map[Script]string{
 	ScriptUnknown:    "unknown",
@@ -111,7 +110,7 @@ func (s Script) IsJapanese() bool {
 	return s == ScriptHiragana || s == ScriptKatakana
 }
 
-// DominantScript identifies the dominant writing script of prose (§152d).
+// DominantScript identifies the dominant writing script of prose.
 // It returns the dominant script, the number of runes of that script,
 // and whether the result is reliable.
 //

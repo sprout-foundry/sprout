@@ -1,4 +1,4 @@
-import { Plus, X, ChevronRight, ChevronDown, GitBranch, AlertCircle, RefreshCw } from 'lucide-react';
+import { Plus, X, GitBranch, AlertCircle, RefreshCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useWorktrees } from '../hooks/useWorktrees';
 import { showThemedConfirm } from './ThemedDialog';
@@ -130,11 +130,9 @@ function CreateWorktreeDialog({ isOpen, onClose, onCreate }: CreateWorktreeDialo
 }
 
 export default function WorktreePanel({ onClose: _onClose }: WorktreePanelProps) {
-  const { worktrees, currentBranch, isLoading, error, refresh, createWorktree, removeWorktree, checkoutWorktree } =
-    useWorktrees();
+  const { worktrees, isLoading, error, refresh, createWorktree, removeWorktree, checkoutWorktree } = useWorktrees();
 
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [expandedWorktrees, setExpandedWorktrees] = useState<boolean>(true);
 
   const handleCreate = async (path: string, branch: string, baseRef?: string) => {
     await createWorktree(path, branch, baseRef);
@@ -151,12 +149,15 @@ export default function WorktreePanel({ onClose: _onClose }: WorktreePanelProps)
   };
 
   const handleCheckout = async (path: string) => {
+    const confirmed = await showThemedConfirm(
+      `Switch the workspace to this worktree?\n\nPath: ${path}\n\nThis changes the working directory, closes terminals, and rebinds chats to the new workspace.`,
+      { title: 'Switch worktree?', confirmLabel: 'Switch', cancelLabel: 'Cancel' },
+    );
+    if (!confirmed) {
+      return;
+    }
     await checkoutWorktree(path);
     // Panel will close automatically after workspace switch
-  };
-
-  const toggleExpand = () => {
-    setExpandedWorktrees(!expandedWorktrees);
   };
 
   if (isLoading) {
@@ -204,53 +205,46 @@ export default function WorktreePanel({ onClose: _onClose }: WorktreePanelProps)
           </div>
         ) : (
           <div className="worktree-list" data-testid="worktree-list">
-            <div className="worktree-item is-main" data-testid="worktree-item">
-              <div className="worktree-item-header">
-                <button
-                  className="worktree-expand-btn"
-                  onClick={toggleExpand}
-                  aria-label={expandedWorktrees ? 'Collapse' : 'Expand'}
-                >
-                  {expandedWorktrees ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                </button>
-                <div className="worktree-item-info">
+            {worktrees.map((wt) => (
+              <div
+                key={wt.path}
+                className={`worktree-item${wt.is_current ? ' is-current' : ''}`}
+                data-testid="worktree-item"
+              >
+                <div className="worktree-item-header">
                   <GitBranch size={16} className="worktree-branch-icon" />
-                  <span className="worktree-branch">{currentBranch || 'HEAD'}</span>
-                  {expandedWorktrees && worktrees[0] && <span className="worktree-path">{worktrees[0].path}</span>}
+                  <div className="worktree-item-info">
+                    <span className="worktree-branch-line">
+                      <span className="worktree-branch">{wt.branch || 'HEAD'}</span>
+                      {wt.is_current && <span className="worktree-badge worktree-badge-current">current</span>}
+                      {wt.is_main && <span className="worktree-badge worktree-badge-main">main</span>}
+                    </span>
+                    <span className="worktree-path">{wt.path}</span>
+                    {wt.parent_branch && <span className="worktree-parent"> from {wt.parent_branch}</span>}
+                  </div>
+                  {!wt.is_current && (
+                    <>
+                      <button
+                        className="worktree-switch-btn"
+                        onClick={() => handleCheckout(wt.path)}
+                        aria-label="Switch to worktree"
+                        data-testid="worktree-switch"
+                      >
+                        Switch
+                      </button>
+                      <button
+                        className="worktree-remove-btn"
+                        onClick={() => handleRemove(wt.path)}
+                        aria-label="Remove worktree"
+                        data-testid="worktree-delete"
+                      >
+                        <X size={14} />
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
-            </div>
-
-            {worktrees
-              .filter((wt) => !wt.is_current)
-              .map((wt) => (
-                <div key={wt.path} className="worktree-item" data-testid="worktree-item">
-                  <div className="worktree-item-header">
-                    <button
-                      className="worktree-expand-btn"
-                      onClick={() => handleCheckout(wt.path)}
-                      aria-label="Switch to worktree"
-                      data-testid="worktree-switch"
-                    >
-                      <ChevronRight size={16} />
-                    </button>
-                    <div className="worktree-item-info">
-                      <GitBranch size={16} className="worktree-branch-icon" />
-                      <span className="worktree-branch">{wt.branch || 'HEAD'}</span>
-                      <span className="worktree-path">{wt.path}</span>
-                      {wt.parent_branch && <span className="worktree-parent"> from {wt.parent_branch}</span>}
-                    </div>
-                    <button
-                      className="worktree-remove-btn"
-                      onClick={() => handleRemove(wt.path)}
-                      aria-label="Remove worktree"
-                      data-testid="worktree-delete"
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                </div>
-              ))}
+            ))}
           </div>
         )}
       </div>

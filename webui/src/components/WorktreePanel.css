@@ -212,6 +212,37 @@
   border-color: var(--border-color-hover);
 }
 
+/* The worktree the workspace is currently rooted in: not switchable. */
+.worktree-item.is-current .worktree-item-header {
+  cursor: default;
+  border-color: var(--accent-color);
+}
+
+.worktree-item.is-current .worktree-item-header:hover {
+  background: var(--item-bg);
+  border-color: var(--accent-color);
+}
+
+.worktree-badge {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.worktree-badge-current {
+  background: var(--accent-color-opacity);
+  color: var(--accent-color);
+}
+
+.worktree-badge-main {
+  background: var(--item-hover-bg);
+  color: var(--text-secondary);
+}
+
 .worktree-expand-btn {
   background: none;
   border: none;

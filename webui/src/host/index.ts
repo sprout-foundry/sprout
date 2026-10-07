@@ -22,6 +22,8 @@ export type {
 export { HostContext, HostProvider, headlessHost };
 export type { HostProviderProps } from './HostProvider';
 export { useHost } from './useHost';
+export { localHost } from './localHost';
+export { cloudHost } from './cloudHost';
 
 /**
  * A stable, pre-built headless host for hosts that want a single default

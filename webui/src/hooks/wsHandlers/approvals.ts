@@ -92,7 +92,13 @@ export const handleAskUserRequest = (ctx: EventHandlerContext): void => {
   logEntry.category = 'system';
   logEntry.level = 'info';
   const data = (event.data ?? {}) as AskUserRequestData;
-  if (data.status === 'responded') return;
+  if (data.status === 'responded') {
+    // Another window answered the fan-out question — close this dialog.
+    setState((prev) =>
+      prev.askUserRequest?.requestId === String(data.request_id || '') ? { askUserRequest: null } : prev,
+    );
+    return;
+  }
   if (data.status === 'cancelled') {
     setState((prev) => ({ askUserRequest: null }));
     return;

@@ -29,7 +29,7 @@ checkboxes.
 
 ## SP-160 §160b — Host contract (`roadmap/SP-160-integration-api.md`)
 
-- [ ] **host.1** `SproutHost` interface in `webui/src/host/` (`types.ts`):
+- [x] **host.1** `SproutHost` interface in `webui/src/host/` (`types.ts`):
       the areas in §160b's table — identity, entitlements (generic usage
       summary: remaining share, label, link target, out-of-usage action),
       transport (backend base URL, WebSocket URL, auth mode, model endpoint

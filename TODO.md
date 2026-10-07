@@ -111,7 +111,7 @@ checkboxes.
 Starts after host.9. The package is the only hosted artifact (§160e); the
 standalone local build keeps embedding into `pkg/webui/static`.
 
-- [ ] **ws.1** Package scaffold `packages/workspace` (`@sprout-foundry/workspace`):
+- [x] **ws.1** Package scaffold `packages/workspace` (`@sprout-foundry/workspace`):
       Vite library build (ESM, code-split, type declarations), `exports`
       for the entry points, `publishConfig` for GitHub Packages like
       `packages/design`, version kept equal to the sprout release. Wired

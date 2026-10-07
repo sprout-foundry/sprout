@@ -722,10 +722,17 @@ needed whatever the integration work does. Spec context: SP-160 §160e.
       `summarizer` role only when the model actually ran. Pinned by tests
       including the fallback and no-fabrication rules. Consumers (a timeline
       rendering surface that books the usage) land with that surface.
-- [ ] **157.5** Quality after edits (off by default in the CLI): run the
+- [x] **157.5** Quality after edits (off by default in the CLI): run the
       manifest's or project's formatter and linter after a code-changing
       turn and fix findings in the same turn. Scripted test with a seeded
       lint violation. Spec: SP-157 §157b.
+      Fixed: the starter manifest gains `format`/`lint` commands and config
+      an off-by-default `quality` section; `pkg/verify.QualityRunner` runs
+      formatter then linter under the same trusted-command discipline, and
+      the turn-end hook (`runTurnEndQuality`) runs it only for a
+      code-changing, non-subagent turn and feeds linter findings back
+      through the shared repair loop. Pinned by a scripted seeded-lint
+      test, off-by-default, and formatter-failure cases.
 - [ ] **157.6** Require a test for new behavior (a `test` acceptance item
       or a test added in the turn); enforced through verification when
       enabled. Test. Spec: SP-157 §157b.

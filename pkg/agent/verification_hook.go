@@ -218,12 +218,37 @@ func verificationLoopShouldStop(res *verify.Result, attempts map[string]int, lim
 	return verificationStopRuleFired(res, attempts, limit)
 }
 
+// repairLoopShouldStop is the shared stopping rule for a turn-end repair loop
+// over a set of checks: the total-rounds cap fires first (when the loop has
+// already run totalCap repair rounds), then the per-check rule (every failing
+// check has used its repair-attempt limit). Both the verification loop and
+// the quality loop read it, so the two feed a failing check back to the model
+// through exactly one mechanism. A check set whose failure comes only from
+// run-level findings (no failing check) fires the per-check rule immediately —
+// there is nothing to repair per check.
+func repairLoopShouldStop(checks []verify.Check, attempts map[string]int, limit, rounds, totalCap int) bool {
+	if rounds >= totalCap {
+		return true
+	}
+	return repairStopRuleFired(checks, attempts, limit)
+}
+
 // verificationStopRuleFired reports whether the SP-149 §149c stopping rule
 // has fired: every failing check has used its repair-attempt limit. A run
 // whose failure comes only from run-level errors (no failing check) fires
 // immediately — there is nothing to repair per check.
 func verificationStopRuleFired(res *verify.Result, attempts map[string]int, limit int) bool {
-	for _, c := range res.Checks {
+	if res == nil {
+		return true
+	}
+	return repairStopRuleFired(res.Checks, attempts, limit)
+}
+
+// repairStopRuleFired is the per-check half of the stopping rule: every
+// failing check has used its repair-attempt limit. A check set with no failing
+// check fires immediately.
+func repairStopRuleFired(checks []verify.Check, attempts map[string]int, limit int) bool {
+	for _, c := range checks {
 		if c.Skipped || c.Passed {
 			continue
 		}

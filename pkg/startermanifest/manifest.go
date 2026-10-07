@@ -5,8 +5,9 @@
 //
 // The manifest is the single source of commands for SP-149 verification
 // (build and test commands, the routes to check), SP-155 preview (the dev
-// command and port), and SP-156 deploys (the build command and output
-// directory). Any project can add the file by hand — it is not limited to
+// command and port), SP-156 deploys (the build command and output
+// directory), and the quality-after-edits step (the formatter and linter
+// commands). Any project can add the file by hand — it is not limited to
 // projects created from a starter — so the validator is deliberately
 // lenient: only the starter identity (id + version) is required, and every
 // command is optional.
@@ -80,6 +81,16 @@ type StarterManifest struct {
 	// (e.g. "npx serve dist"). Optional: absent when the project has no
 	// preview step.
 	Preview string `json:"preview,omitempty"`
+	// Format is the command that formats the project's code (e.g. "gofmt
+	// -w ."). Optional: absent when the project has no formatter. It is
+	// the trusted source for the quality-after-edits step, whose formatter
+	// may rewrite files in place.
+	Format string `json:"format,omitempty"`
+	// Lint is the command that lints the project's code (e.g. "golangci-lint
+	// run"). Optional: absent when the project has no linter. It is the
+	// trusted source for the quality-after-edits step; a non-zero exit is
+	// reported as findings.
+	Lint string `json:"lint,omitempty"`
 
 	// DevPort is the fixed port the dev server listens on. Zero (absent)
 	// means "no fixed port": the preview tooling must discover the port at

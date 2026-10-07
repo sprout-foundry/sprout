@@ -306,6 +306,14 @@ type Agent struct {
 	// one at hook entry only if none was stored), so the model cannot
 	// change what "passing" means mid-turn.
 	turnVerifySnapshot *verify.Snapshot
+	// turnQuality is this agent's per-turn quality-after-edits state: the
+	// last quality run's structured result, or nil when the hook never ran
+	// for this turn (quality disabled, no code change, subagent, or a
+	// runner setup error). The turn-end hook stores a fresh result on every
+	// quality run; prepareQueryRun resets it at each turn start so a
+	// previous turn's result never attaches to a later one.
+	turnQualityMu sync.Mutex
+	turnQuality   *verify.QualityResult
 	// toolFuncs is this agent's per-agent tool dispatch set, built by
 	// wireAgentToolFuncs and carried into ToolEnv so agent-dependent tools
 	// route to THIS agent, not the most recently constructed one.

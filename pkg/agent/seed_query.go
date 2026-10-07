@@ -158,6 +158,15 @@ func (a *Agent) processQueryWithSeed(source, userQuery string) (string, error) {
 
 	result, err := qc.seedAgent.Run(qc.runCtx, qc.processedQuery)
 	if err == nil {
+		// Quality after edits: on the success path only, the turn-end
+		// quality hook may run the project's formatter and linter and
+		// continue the turn (a repair round). It runs before verification
+		// so a formatter's in-place rewrite is what verification then
+		// builds and tests. A hard error from the first Run flows to
+		// handleQueryResult unchanged (skipping both hooks).
+		result, err = a.runTurnEndQuality(qc, result)
+	}
+	if err == nil {
 		// SP-149 §149c / 149.5: on the success path only, the turn-end
 		// verification hook may continue the turn (a repair round). A
 		// hard error from the first Run flows to handleQueryResult
@@ -216,6 +225,11 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 	// turn's verification outcome (the turn-end hook stores it at the
 	// turn's end).
 	a.resetTurnVerification()
+
+	// Quality after edits: reset the per-turn quality state at the same
+	// per-turn point, so a previous turn's quality result never attaches to
+	// this turn.
+	a.resetTurnQuality()
 
 	// SP-149 §149b: capture the turn's verification inputs — the starter
 	// manifest's commands and the plan's acceptance — once, at the turn's

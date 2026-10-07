@@ -105,7 +105,7 @@ checkboxes.
       maintained, permissively licensed validator (Huma's own schema
       tooling if it fits) and record the choice in the package doc.
       Spec: SP-160 §160c.
-- [ ] **contract.15** Run the conformance suite against the local daemon
+- [x] **contract.15** Run the conformance suite against the local daemon
       in a bounded Go test (in-process server on a temp workspace, no
       browsers, no containers), and fix or document every failure.
       Spec: SP-160 §160c.

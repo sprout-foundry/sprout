@@ -153,13 +153,21 @@ func isWithinWorkspace(filename string) bool {
 // isFileStale reports whether the file on disk differs from the content
 // the agent wrote (change.NewCode). When true, the file was modified
 // after the snapshot and rolling it back would clobber that change.
+//
+// A read error other than "not found" (permission denied, I/O error) is
+// treated as STALE (true = do not proceed): we cannot prove the on-disk
+// content matches the snapshot, so a destructive write-back must not be
+// considered safe. Only a genuinely missing file is safe to restore.
 func isFileStale(filename, newCode string) bool {
 	if newCode == "" || newCode == RedactedContentMarker {
 		return false
 	}
 	current, err := os.ReadFile(filename)
 	if err != nil {
-		return false // file doesn't exist — safe to restore
+		if os.IsNotExist(err) {
+			return false // file doesn't exist — safe to restore
+		}
+		return true // unreadable — cannot verify, refuse to clobber
 	}
 	return string(current) != newCode
 }
@@ -194,10 +202,15 @@ func IsRevertSafeAt(filename, newCode, originalCode string, changedAt time.Time)
 		return true
 	}
 	// 2. Read disk content. A missing file means the revert is
-	//    restoring/creating it — safe.
+	//    restoring/creating it — safe. Any OTHER read error (permission,
+	//    I/O) means we cannot verify the on-disk state, so refuse rather
+	//    than risk clobbering content we failed to read.
 	current, err := os.ReadFile(filename)
 	if err != nil {
-		return true // file doesn't exist — safe to restore/create
+		if os.IsNotExist(err) {
+			return true // file doesn't exist — safe to restore/create
+		}
+		return false // unreadable — cannot verify, do not proceed
 	}
 	// 3. disk != newCode: the file was modified after the snapshot
 	//    (git commit, manual edit, another session) — STALE, skip.
@@ -296,10 +309,12 @@ func handleRevisionRollback(group RevisionGroup) error {
 
 	// Deduplicate by filename: keep the earliest OriginalCode and the latest NewCode.
 	deduped := dedupChangesByFilename(getActiveChanges(group.Changes))
+	var rolledBack, skipped, failed int
 	for _, change := range deduped {
 		// Skip files with redacted content (external files)
 		if change.OriginalCode == RedactedContentMarker {
 			fmt.Printf("  Skipping %s: content was redacted (external file)\n", change.Filename)
+			skipped++
 			continue
 		}
 
@@ -309,6 +324,7 @@ func handleRevisionRollback(group RevisionGroup) error {
 		// intentional changes outside this project.
 		if !isWithinWorkspace(change.Filename) {
 			fmt.Printf("  Skipping %s: outside current workspace (safety check)\n", change.Filename)
+			skipped++
 			continue
 		}
 
@@ -318,6 +334,7 @@ func handleRevisionRollback(group RevisionGroup) error {
 		if !IsRevertSafeAt(change.Filename, change.NewCode, change.OriginalCode, change.Timestamp) {
 			AuditRevertSkip("handleRevisionRollback", change.Filename, "stale or committed")
 			fmt.Printf("  Skipping %s: file modified since snapshot (safety check)\n", change.Filename)
+			skipped++
 			continue
 		}
 
@@ -328,14 +345,27 @@ func handleRevisionRollback(group RevisionGroup) error {
 		AuditRevertWrite("handleRevisionRollback", change.Filename, "OriginalCode")
 		err := filesystem.WriteFileWithDir(change.Filename, []byte(change.OriginalCode), 0644)
 		if err != nil {
-			return fmt.Errorf("failed to rollback %s: %w", change.Filename, err)
+			// Do NOT abort the whole rollback on one file: continue so the
+			// rest of the revision is handled, then report a summary. Aborting
+			// mid-way left the tree part-reverted with no accounting.
+			fmt.Printf("  Failed to roll back %s: %v\n", change.Filename, err)
+			failed++
+			continue
 		}
+		// The write succeeded — the file IS reverted. A status-update failure
+		// is recorded but must not report the write as failed (that would
+		// diverge the DB from disk and invite a double-revert later).
 		if err := updateChangeStatus(change.FileRevisionHash, "reverted"); err != nil {
-			return fmt.Errorf("failed to update status for %s: %w", change.Filename, err)
+			fmt.Printf("  Warning: %s rolled back but status update failed: %v\n", change.Filename, err)
+			AuditRevertSkip("handleRevisionRollback", change.Filename, "status update failed after write")
 		}
+		rolledBack++
 	}
 
-	fmt.Println("Revision rollback successful.")
+	fmt.Printf("Revision rollback finished: %d rolled back, %d skipped, %d failed.\n", rolledBack, skipped, failed)
+	if failed > 0 {
+		return fmt.Errorf("%d file(s) failed to roll back (see output above)", failed)
+	}
 	return nil
 }
 
@@ -344,10 +374,12 @@ func handleRevisionRestore(group RevisionGroup) error {
 
 	// Deduplicate by filename (see handleRevisionRollback for rationale).
 	deduped := dedupChangesByFilename(group.Changes)
+	var restored, skipped, failed int
 	for _, change := range deduped {
 		// Skip files with redacted content (external files)
 		if change.NewCode == RedactedContentMarker {
 			fmt.Printf("  Skipping %s: content was redacted (external file)\n", change.Filename)
+			skipped++
 			continue
 		}
 
@@ -355,6 +387,7 @@ func handleRevisionRestore(group RevisionGroup) error {
 		// See handleRevisionRollback for rationale.
 		if !isWithinWorkspace(change.Filename) {
 			fmt.Printf("  Skipping %s: outside current workspace (safety check)\n", change.Filename)
+			skipped++
 			continue
 		}
 
@@ -364,6 +397,7 @@ func handleRevisionRestore(group RevisionGroup) error {
 		if isFileStaleForRestore(change.Filename, change.OriginalCode, change.NewCode) {
 			AuditRevertSkip("handleRevisionRestore", change.Filename, "stale")
 			fmt.Printf("  Skipping %s: file modified since snapshot (safety check)\n", change.Filename)
+			skipped++
 			continue
 		}
 
@@ -373,15 +407,25 @@ func handleRevisionRestore(group RevisionGroup) error {
 		AuditRevertWrite("handleRevisionRestore", change.Filename, "NewCode")
 		err := filesystem.WriteFileWithDir(change.Filename, []byte(change.NewCode), 0644)
 		if err != nil {
-			return fmt.Errorf("failed to restore %s: %w", change.Filename, err)
+			// Continue rather than abort — see handleRevisionRollback.
+			fmt.Printf("  Failed to restore %s: %v\n", change.Filename, err)
+			failed++
+			continue
 		}
 
-		// Update status to restored regardless of previous status
+		// Update status to restored regardless of previous status. The write
+		// already succeeded; a status failure is a warning, not a restore
+		// failure (keeps DB and disk consistent in intent).
 		if err := updateChangeStatus(change.FileRevisionHash, "restored"); err != nil {
-			return fmt.Errorf("failed to update status for %s: %w", change.Filename, err)
+			fmt.Printf("  Warning: %s restored but status update failed: %v\n", change.Filename, err)
+			AuditRevertSkip("handleRevisionRestore", change.Filename, "status update failed after write")
 		}
+		restored++
 	}
 
-	fmt.Println("Revision restore successful.")
+	fmt.Printf("Revision restore finished: %d restored, %d skipped, %d failed.\n", restored, skipped, failed)
+	if failed > 0 {
+		return fmt.Errorf("%d file(s) failed to restore (see output above)", failed)
+	}
 	return nil
 }

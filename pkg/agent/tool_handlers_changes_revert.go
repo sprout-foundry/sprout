@@ -52,17 +52,20 @@ func handleRevertMyChanges(_ context.Context, a *Agent, args map[string]interfac
 		OK      bool   `json:"ok"`
 	}
 	results := make([]entry, 0, len(candidates))
-	var restored, failed int
+	var restored, failed, skipped int
 	for _, ch := range candidates {
 		action, ok, msg := a.revertOne(ch)
 		results = append(results, entry{Path: ch.FilePath, Action: action, OK: ok, Message: msg})
-		if ok {
+		switch {
+		case action == "skip":
+			skipped++
+		case ok:
 			restored++
-		} else {
+		default:
 			failed++
 		}
 	}
-	summary := fmt.Sprintf("%d restored, %d failed (scope=%s)", restored, failed, describeScope(scope, sinceStr))
+	summary := fmt.Sprintf("%d restored, %d failed, %d skipped (scope=%s)", restored, failed, skipped, describeScope(scope, sinceStr))
 	return revertResult(restored, failed, summary, results), nil
 }
 
@@ -152,7 +155,7 @@ func (a *Agent) revertOne(ch TrackedFileChange) (string, bool, string) {
 	// failures) so a bulk revert still succeeds for the in-workspace
 	// majority without aborting on a single stray path.
 	if a.IsPathOutsideWorkspace(abs) {
-		return "", false, "path is outside the workspace — skipped"
+		return "skip", false, "path is outside the workspace — skipped"
 	}
 
 	// Already at its pre-session state (e.g. a later `git checkout`

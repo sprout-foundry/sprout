@@ -1,6 +1,6 @@
 import type { TodoItem, LogEntry } from '@sprout/ui';
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
-import { isCloud, supportsLocalTerminal } from '../config/mode';
+import { useHost, useHostCapabilities } from '../host';
 import { useAppStateField, useAppStoreSetState } from '../contexts/AppStore';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
@@ -30,10 +30,9 @@ import type { AppState, PerChatState, ViewType } from '../types/app';
 import { fuzzyFilter } from '../utils/fuzzyMatch';
 import { useLog } from '../utils/log';
 import { extractSymbols } from '../utils/symbolUtils';
-import type { WorkspaceModeId } from '../workspaces/registry';
-import type { WorkspaceShellProps } from '../workspaces/shell';
+import type { WorkspaceModeId, WorkspaceShellProps } from '../views';
+import { SproutWorkspace, useWorkspaceMode } from '../views';
 import { useDesignSectionPersistence } from '../workspaces/useDesignSectionPersistence';
-import { useWorkspaceMode } from '../workspaces/useWorkspaceMode';
 import CommandPalette, { type PaletteMode } from './CommandPalette';
 import { visibleCommands } from './CommandPalette/constants';
 import useFileIndex from './CommandPalette/useFileIndex';
@@ -172,6 +171,15 @@ const AppContent: React.FC<AppContentProps> = ({
   onDeleteAllChats,
   onRenameChat,
 }) => {
+  const { localTerminal: supportsLocalTerminal } = useHostCapabilities();
+  // The host provides a Home surface (its work places) when it has platform
+  // pages to embed; the frame is only reachable through that surface.
+  const host = useHost();
+  // host.8: the hosted build (authMode 'bearer') polls the platform's own
+  // notifications and shows the phone tab bar; the local build does neither.
+  // This replaces the former isCloud branch.
+  const hosted = host.transport.authMode === 'bearer';
+  const hasHomeSurface = (host.navigation.workItems?.length ?? 0) > 0;
   const {
     buffers,
     buffersRef,
@@ -207,7 +215,7 @@ const AppContent: React.FC<AppContentProps> = ({
     onSwipeRight: onToggleSidebar,
     enabled: isMobile,
   });
-  useEffect(() => (isCloud ? startPlatformNotifications() : undefined), []);
+  useEffect(() => (hosted ? startPlatformNotifications() : undefined), [hosted]);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [commandPaletteMode, setCommandPaletteMode] = useState<PaletteMode>('all');
   // The layered layout's header search opens the palette from outside this tree.
@@ -1160,8 +1168,26 @@ const AppContent: React.FC<AppContentProps> = ({
       history: [],
     },
   };
-  // Capital alias so the registry-supplied component renders as a component.
-  const ModeShell = workspaceMode.Shell;
+
+  // The workspace composition (SP-160 §160a): the app renders the active space
+  // through `SproutWorkspace` — the same component a host mounts — rather than
+  // assembling the registry shell itself. The space is the app's resolved
+  // mode; the app owns "which space" (its switcher lives in the Sidebar) and
+  // feeds the resolved id down, so the switcher and the mounted space agree.
+  //
+  // `providers="ambient"`: the app root already mounted `HostProvider`
+  // (`localHost` in `index.tsx`) and `SproutProviders` (in `App.tsx`), and the
+  // app-level chrome (Sidebar, dialogs, terminal) shares those contexts with
+  // the space. A second stack here would fork them, so the composition reuses
+  // the ambient one and renders only the space.
+  //
+  // `project` mirrors how the web UI already identifies a project: the local
+  // workspace root (falling back to the workspace metadata's root), which is
+  // the stable identifier a local/daemon host uses.
+  const project = useMemo(
+    () => ({ id: workspaceRoot || workspaceInfo.workspace_root || '' }),
+    [workspaceRoot, workspaceInfo.workspace_root],
+  );
 
   return (
     <div className="app">
@@ -1291,16 +1317,24 @@ const AppContent: React.FC<AppContentProps> = ({
             }}
           />
         </ErrorBoundary>
-        <ModeShell {...shellProps} />
+        <SproutWorkspace
+          providers="ambient"
+          project={project}
+          space={workspaceMode.id}
+          shellProps={shellProps}
+          hasDesignTree={hasDesignTree}
+          onSpaceChange={selectWorkspaceMode}
+          className="app-workspace"
+        />
       </DesignWorkspaceProvider>
       {supportsLocalTerminal ? (
         <ErrorBoundary panelName="Terminal">
           <Terminal isExpanded={isTerminalExpanded} onToggleExpand={onTerminalExpandedChange} />
         </ErrorBoundary>
       ) : null}
-      {isLayeredLayout && isCloud && <PlatformHome isMobile={isMobile} onOpenMenu={onToggleSidebar} />}
+      {isLayeredLayout && hasHomeSurface && <PlatformHome isMobile={isMobile} onOpenMenu={onToggleSidebar} />}
       <NotificationCenterHost />
-      {isLayeredLayout && isCloud && isMobile && (
+      {isLayeredLayout && hosted && isMobile && (
         <PhoneTabBar
           drawerOpen={isSidebarOpen}
           onToggleDrawer={onToggleSidebar}

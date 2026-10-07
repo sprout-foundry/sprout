@@ -7,13 +7,23 @@
  * the platform's cached copy of the account's repo list.
  */
 
-import { platformHref } from '../utils/platformUrl';
-import { gitCorsProxy } from './gitCorsProxy';
-import type { GitHubRepo } from './githubService';
+import { gitCorsProxy } from '../services/gitCorsProxy';
+import type { GitHubRepo } from '../services/githubService';
+import { getActiveHost } from './accessor';
+import { platformHref } from './platformUrl';
 
 /** True when GitHub access comes from the Foundry account, not a local token. */
 export function usesPlatformGitHub(): boolean {
   return gitCorsProxy() !== undefined;
+}
+
+/**
+ * The account's platform API base, read from the active host's transport (the
+ * platform's outward surface). '' (same-origin) when the host records none —
+ * the platform serves this editor and its account API from the same origin.
+ */
+function accountApiBase(): string {
+  return getActiveHost()?.transport.platformURL ?? '';
 }
 
 /** Where the account's GitHub connection is managed. */
@@ -22,7 +32,7 @@ export function platformGitHubSettingsHref(): string {
 }
 
 export async function fetchPlatformGitHubConnected(): Promise<boolean> {
-  const res = await fetch(platformHref('/user/me'), { credentials: 'include' });
+  const res = await fetch(`${accountApiBase()}/user/me`, { credentials: 'include' });
   if (!res.ok) throw new Error(`Could not load your account (HTTP ${res.status}).`);
   const me = (await res.json()) as { github_connected?: boolean };
   return me.github_connected === true;
@@ -51,7 +61,7 @@ export async function listPlatformRepos(): Promise<GitHubRepo[]> {
   for (let page = 0; page < MAX_PAGES; page++) {
     const qs = new URLSearchParams({ limit: '100' });
     if (cursor) qs.set('cursor', cursor);
-    const res = await fetch(platformHref(`/user/me/repos?${qs}`), { credentials: 'include' });
+    const res = await fetch(`${accountApiBase()}/user/me/repos?${qs}`, { credentials: 'include' });
     if (!res.ok) throw new Error(`Could not list your repositories (HTTP ${res.status}).`);
     const body = (await res.json()) as { repos?: PlatformRepo[]; next_cursor?: string | null };
     for (const r of body.repos ?? []) repos.push(toGitHubRepo(r));
@@ -95,7 +105,7 @@ export class CreateRepoError extends Error {
  * opens straight away) and returns its web URL.
  */
 export async function createPlatformRepo(opts: { name: string; private: boolean }): Promise<string> {
-  const res = await fetch(platformHref('/user/me/repos'), {
+  const res = await fetch(`${accountApiBase()}/user/me/repos`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },

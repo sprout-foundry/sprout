@@ -4,7 +4,6 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 vi.mock('../../hooks/useUnreadNotificationCount', () => ({ useUnreadNotificationCount: () => 0 }));
 vi.mock('../../config/mode', () => ({
-  isCloud: false,
   supportsGit: true,
   supportsSettings: true,
   supportsAutomations: true,
@@ -21,6 +20,8 @@ vi.mock('../ThemedDialog', () => ({
 import LayeredSidebar, { type LayeredSidebarProps } from './LayeredSidebar';
 import { __resetHomeViewForTests, closeHome, getHomeView, openHome } from '../../services/homeView';
 import { showThemedConfirm, showThemedPrompt } from '../ThemedDialog';
+import { HostProvider } from '../../host/HostProvider';
+import { makeTestHost } from '../../host/testHost';
 
 let container: HTMLDivElement;
 let root: Root;
@@ -66,7 +67,13 @@ function renderSidebar(overrides: Partial<LayeredSidebarProps> = {}) {
     renderSection: () => <div data-testid="section-panel">panel</div>,
     ...overrides,
   };
-  act(() => root.render(<LayeredSidebar {...props} />));
+  act(() =>
+    root.render(
+      <HostProvider host={makeTestHost({ git: true, settings: true, automations: true })}>
+        <LayeredSidebar {...props} />
+      </HostProvider>,
+    ),
+  );
   return props;
 }
 

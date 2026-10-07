@@ -1,12 +1,13 @@
 import { MonitorPlay, PanelRightClose } from 'lucide-react';
 import React, { useState } from 'react';
-import { isCloud } from '../config/mode';
 import { isLayeredLayout } from '../config/layout';
 import { LayeredSearchButton } from './layered/LayeredTopBar';
+import { useHost } from '../host';
 import { useActiveRepoURL } from '../services/activeRepo';
 import { startFullWorkspace, useFullWorkspacesAvailable } from '../services/fullWorkspace';
 import { notificationBus } from '../services/notificationBus';
-import { githubRepoSlug, platformHref, repoHubPath } from '../utils/platformUrl';
+import HostNotificationCount from '../host/HostNotificationCount';
+import { githubRepoSlug } from '../host/repoName';
 import MenuBar from './MenuBar';
 import { CreditsChip } from './CreditsChip';
 import { UsageChip } from './UsageChip';
@@ -40,12 +41,25 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
   previewPanelOpen = false,
 }) => {
   const [busy, setBusy] = useState(false);
+  // host.8: the hosted build (authMode 'bearer') shows the platform's header
+  // affordances (back-to-dashboard, Start Building, credits); the local build
+  // shows its own MenuBar. This replaces the former isCloud branch.
+  const host = useHost();
+  const hosted = host.transport.authMode === 'bearer';
   const repoURL = useActiveRepoURL() ?? null;
-  // The back-link returns to the hub page of the repo being edited.
+  // The back-link returns to the hub page of the repo being edited. The route
+  // is host data: Sprout asks for the repo's hub destination by (generic) nav
+  // intent and the host resolves it to its own page URL. With no repo open it
+  // falls back to the host's account/dashboard page.
   const repoSlug = githubRepoSlug(repoURL);
+  const backPath =
+    (repoSlug ? host.navigation.intentPath?.({ type: 'nav', id: 'repos', detail: repoSlug }) : null) ??
+    host.navigation.intentPath?.({ type: 'account' }) ??
+    null;
+  const backHref = backPath ? (host.navigation.platformPagePath?.(backPath) ?? backPath) : undefined;
   // Hidden on deployments without workspace compute rather than offering an
   // action that can only fail.
-  const workspacesAvailable = useFullWorkspacesAvailable(isCloud);
+  const workspacesAvailable = useFullWorkspacesAvailable(hosted);
 
   const retry = () => {
     // Defer so the toast's dismiss finishes before the next request starts.
@@ -98,19 +112,19 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
   return (
     <div className="header-bar">
       {/* Phones in the hosted editor search from the tab bar. */}
-      {isLayeredLayout && !(isCloud && isMobile) && <LayeredSearchButton />}
-      {isCloud && !isLayeredLayout && (
+      {isLayeredLayout && !(hosted && isMobile) && <LayeredSearchButton />}
+      {hosted && !isLayeredLayout && (
         <a
-          href={platformHref(repoHubPath(repoURL))}
+          href={backHref}
           className="header-back-to-dashboard"
           title={repoSlug ? `Back to ${repoSlug} on the dashboard` : 'Back to Dashboard'}
         >
           ← <span className="header-back-to-dashboard-label">{repoSlug ?? 'Dashboard'}</span>
         </a>
       )}
-      {!isCloud && <MenuBar />}
+      {!hosted && <MenuBar />}
       <div className="header-bar-actions">
-        {isCloud && workspacesAvailable && (
+        {hosted && workspacesAvailable && (
           <button
             className="btn btn-sm btn-accent start-building-btn"
             onClick={handleStartBuilding}
@@ -120,7 +134,9 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
             {busy ? 'Starting…' : 'Start Building'}
           </button>
         )}
-        {!(isLayeredLayout && isCloud && isMobile) && <CreditsChip />}
+        {!(isLayeredLayout && hosted && isMobile) && <CreditsChip />}
+        {/* host.7: the host's unread-notification count, when it supplies one. */}
+        {!isLayeredLayout && <HostNotificationCount />}
         {/* SP-016 P0.5: avatar menu — cloud mode only, renders nothing in
          * local mode or without a bootstrap identity. */}
         {!isLayeredLayout && <UserMenu />}

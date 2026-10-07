@@ -29,7 +29,7 @@ export const TRANSLATE_BODY_PATHS = new Set(['/api/query']);
 // (401 → /login?return_to=) live inside the CloudAdapter proxy path only,
 // never in shared fetch/session code — local-mode builds must not contain
 // these code paths. This module is cloud-only and is dynamically imported
-// only when appMode === 'cloud'.
+// only when the hosted transport is active.
 
 /** CustomEvent name dispatched when a Foundry backend response returns 401. */
 export const SESSION_EXPIRED_EVENT = 'sprout:session-expired';

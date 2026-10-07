@@ -66,11 +66,10 @@ vi.mock('react-virtuoso', () => ({
 }));
 
 /* --- config/mode --- */
-vi.mock('../config/mode', () => ({
-  supportsSSH: false,
-  supportsExport: true,
-  isCloud: false,
-}));
+// host.8: ChatView reads its capabilities from the host (useHostCapabilities),
+// not from config/mode; the mock only keeps the module resolvable for any
+// transitive importer.
+vi.mock('../config/mode', () => ({}));
 
 /* --- services/apiAdapter --- */
 vi.mock('../services/apiAdapter', () => ({
@@ -134,6 +133,7 @@ vi.mock('../utils/log', () => ({
 import { EventsContextProvider } from '../contexts/EventsContext';
 import ChatView from './ChatView';
 import type { Message } from './chat/types';
+import { HostProvider, headlessHost } from '../host/HostProvider';
 
 // ---------------------------------------------------------------------------
 // Test setup
@@ -200,21 +200,29 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+// host.8: ChatView reads capabilities (ssh/export) from the host contract,
+// not from config/mode. This host mirrors the former mock's values.
+const testHost = { ...headlessHost(), capabilities: { ...headlessHost().capabilities, ssh: false, export: true } };
+
 function renderChat(messages: Message[], overrides: Record<string, unknown> = {}) {
   act(() => {
     root.render(
       createElement(
-        EventsContextProvider,
-        { provider },
-        createElement(ChatView, {
-          messages,
-          onSendMessage: vi.fn(),
-          onInputChange: vi.fn(),
-          inputValue: '',
-          isProcessing: false,
-          chatId: undefined,
-          ...overrides,
-        }),
+        HostProvider,
+        { host: testHost },
+        createElement(
+          EventsContextProvider,
+          { provider },
+          createElement(ChatView, {
+            messages,
+            onSendMessage: vi.fn(),
+            onInputChange: vi.fn(),
+            inputValue: '',
+            isProcessing: false,
+            chatId: undefined,
+            ...overrides,
+          }),
+        ),
       ),
     );
   });
@@ -229,16 +237,20 @@ function rerenderMessages(messages: Message[]) {
   act(() => {
     root.render(
       createElement(
-        EventsContextProvider,
-        { provider },
-        createElement(ChatView, {
-          messages,
-          onSendMessage: vi.fn(),
-          onInputChange: vi.fn(),
-          inputValue: '',
-          isProcessing: false,
-          chatId: undefined,
-        }),
+        HostProvider,
+        { host: testHost },
+        createElement(
+          EventsContextProvider,
+          { provider },
+          createElement(ChatView, {
+            messages,
+            onSendMessage: vi.fn(),
+            onInputChange: vi.fn(),
+            inputValue: '',
+            isProcessing: false,
+            chatId: undefined,
+          }),
+        ),
       ),
     );
   });

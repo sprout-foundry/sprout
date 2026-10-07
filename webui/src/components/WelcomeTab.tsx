@@ -1,6 +1,6 @@
 import { Terminal, GitBranch, MessageSquare, Zap, BookOpen, Settings, Command, X } from 'lucide-react';
 import { copy } from '../config/copy';
-import { supportsWorkspaceSwitching } from '../config/mode';
+import { useHostCapabilities } from '../host';
 import { useWorkspace } from '../hooks/useWorkspace';
 import WorkspacePicker from './WorkspacePicker';
 import './WelcomeTab.css';
@@ -32,6 +32,7 @@ function WorkspacePickerView({
   homeDir: string;
   setWorkspace: (path: string) => Promise<void>;
 }): JSX.Element {
+  const { workspaceSwitching: supportsWorkspaceSwitching } = useHostCapabilities();
   const handleBrowse = () => {
     window.dispatchEvent(new CustomEvent('sprout:open-workspace-switcher'));
   };

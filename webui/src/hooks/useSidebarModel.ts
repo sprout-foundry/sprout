@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { supportsSettings } from '../config/mode';
+import { useHostCapabilities } from '../host';
 import { useProviderCatalog } from '../contexts/ProviderCatalogContext';
 import { ApiService, type ProviderOption, type SproutSettings } from '../services/api';
 import { debugLog } from '../utils/log';
@@ -43,6 +43,7 @@ export function useSidebarModel({
   onProviderChange: _onProviderChange,
   onModelChange,
 }: UseSidebarModelParams): UseSidebarModelReturn {
+  const { settings: supportsSettings } = useHostCapabilities();
   const apiService = ApiService.getInstance();
 
   const catalog = useProviderCatalog();

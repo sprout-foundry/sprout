@@ -108,3 +108,19 @@ export { PreviewPanel } from '../components/PreviewPanel';
 export type { PreviewPanelProps } from '../components/PreviewPanel';
 export { usePreviewStatus } from '../hooks/usePreviewStatus';
 export type { UsePreviewStatusReturn } from '../hooks/usePreviewStatus';
+
+// The registered spaces a host mounts, re-exported so mounting a space needs
+// the views entry point only (no reach into the workspace registry module). A
+// host that registers its own space gets the registration API here too; the
+// built-in spaces (`code`, `design`) are always present. The registry imports
+// the built-in shells, so importing this entry pulls the shell graph with it —
+// the price of making the spaces reachable from the one documented import
+// point rather than through a private module path.
+export { WORKSPACE_MODES, availableModes, registerWorkspaceMode, resolveWorkspaceMode } from '../workspaces/registry';
+export type {
+  UnregisterWorkspaceMode,
+  WorkspaceMode,
+  WorkspaceModeContext,
+  WorkspaceModeId,
+  WorkspaceModeRegistration,
+} from '../workspaces/registry';

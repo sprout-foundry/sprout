@@ -1,7 +1,10 @@
 import { WebSocketService } from './websocket';
+import { makeTestHost } from '../host/testHost';
+import type { SproutHost } from '../host/types';
 
 // ---------------------------------------------------------------------------
-// Mock config/mode so cloud mode can be toggled per test (INT-3)
+// Mock config/mode so the mode-aware fallbacks can be toggled per test (INT-3)
+// and the capability fallback reads the mode-aware default (no adapter here).
 // ---------------------------------------------------------------------------
 const { cloudModeRef } = vi.hoisted(() => ({ cloudModeRef: { value: false } }));
 vi.mock('../config/mode', () => ({
@@ -11,6 +14,20 @@ vi.mock('../config/mode', () => ({
   get mode() {
     return cloudModeRef.value ? 'cloud' : 'local';
   },
+  capability: (_key, localDefault, cloudDefault) => (cloudModeRef.value ? cloudDefault : localDefault),
+}));
+
+// ---------------------------------------------------------------------------
+// Mock the non-React host accessor so a test can drive the capability through
+// an active host (the host-or-fallback read the service performs at freeze()).
+// ---------------------------------------------------------------------------
+const activeHostRef = vi.hoisted(() => ({ value: null }));
+vi.mock('../host/accessor', () => ({
+  getActiveHost: () => activeHostRef.value,
+  setActiveHost: (host: SproutHost) => {
+    activeHostRef.value = host;
+  },
+  HOST_UPDATED_EVENT: 'sprout:host-updated',
 }));
 
 // Mock the modules that websocket.ts depends on
@@ -105,6 +122,11 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
   vi.spyOn(Math, 'random').mockReturnValue(0.5);
+
+  // No active host by default — the host-or-fallback reads fall back to the
+  // mode-aware capability default (overridable per test below).
+  activeHostRef.value = null;
+  cloudModeRef.value = false;
 
   // Reset WebSocket mock state
   mockReadyState = MockWebSocket.CLOSED;
@@ -1158,6 +1180,50 @@ describe('WebSocketService - control frames in cloud mode (INT-3)', () => {
 
     // session_close is fire-and-forget; platform hub tolerates it (no error)
     expect(mockSend).toHaveBeenCalledWith(JSON.stringify({ type: 'session_close' }));
+  });
+});
+
+describe('WebSocketService - freeze() pause gated on the host localTerminal capability', () => {
+  it('sends the pause dead-letter when the active host has a local terminal', () => {
+    activeHostRef.value = makeTestHost({ localTerminal: true });
+    const ws = WebSocketService.getInstance();
+    ws.connect();
+    mockReadyState = MockWebSocket.OPEN;
+    triggerWebSocketOpen();
+    mockSend.mockClear();
+
+    ws.freeze();
+
+    expect(mockSend).toHaveBeenCalledWith(JSON.stringify({ type: 'pause' }));
+  });
+
+  it('skips the pause dead-letter when the active host has no local terminal', () => {
+    activeHostRef.value = makeTestHost({ localTerminal: false });
+    const ws = WebSocketService.getInstance();
+    ws.connect();
+    mockReadyState = MockWebSocket.OPEN;
+    triggerWebSocketOpen();
+    mockSend.mockClear();
+
+    ws.freeze();
+
+    expect(mockSend).not.toHaveBeenCalledWith(JSON.stringify({ type: 'pause' }));
+    // freeze() still closes the connection either way
+    expect(ws.isConnected()).toBe(false);
+  });
+
+  it('falls back to the mode-aware capability when no host is active (local build sends pause)', () => {
+    // No active host (reset in beforeEach) and cloud mode off → the local
+    // capability default (true) governs, so the pause dead-letter is sent.
+    const ws = WebSocketService.getInstance();
+    ws.connect();
+    mockReadyState = MockWebSocket.OPEN;
+    triggerWebSocketOpen();
+    mockSend.mockClear();
+
+    ws.freeze();
+
+    expect(mockSend).toHaveBeenCalledWith(JSON.stringify({ type: 'pause' }));
   });
 });
 

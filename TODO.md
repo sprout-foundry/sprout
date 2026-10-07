@@ -63,7 +63,7 @@ checkboxes.
       record in the commit which capability each branch became. Split into
       a second commit if the diff grows past ~600 lines.
       Spec: SP-160 §160b.
-- [ ] **host.5** Convert the remaining `isCloud`/`appMode` branches in
+- [x] **host.5** Convert the remaining `isCloud`/`appMode` branches in
       startup and transport (`useAppInitialization.ts`, `websocket.ts`,
       `WasmLoadingOverlay.tsx`, `serviceWorkerRegistration.ts`,
       `useCloudSessionPersistence.ts`, `runtimeConfig.ts`) to the host's

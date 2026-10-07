@@ -1,9 +1,10 @@
 import type { WsEvent } from '@sprout/events';
+import { capability } from '../config/mode';
+import { getActiveHost } from '../host/accessor';
 import { debugLog } from '../utils/log';
 import { getAdapter } from './apiAdapter';
 import { appendClientIdToUrl, clientFetch, getProxyBase } from './clientSession';
 import { notificationBus } from './notificationBus';
-import { isCloud } from '../config/mode';
 
 export type { WsEvent };
 
@@ -425,9 +426,12 @@ class WebSocketService {
     // Tell the server we're backgrounding (not closing) so it keeps any
     // in-flight query running and reattaches when we return, rather than
     // cancelling it on heartbeat staleness. Sent before the close below.
-    // In cloud mode the platform hub ignores this frame (lifecycle-only WS) and
-    // the in-browser WASM agent keeps running by construction — skip the dead-letter.
-    if (!isCloud) {
+    // Only a shell with a local terminal dead-letters this frame: in a hosted
+    // shell the platform hub ignores it (lifecycle-only WS) and the in-browser
+    // WASM agent keeps running by construction — skip the dead-letter.
+    const localTerminal =
+      getActiveHost()?.capabilities.localTerminal ?? capability('supportsLocalTerminal', true, false);
+    if (localTerminal) {
       this.sendControl('pause');
     }
     this.intentionalClose = true;

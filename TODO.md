@@ -41,7 +41,7 @@ checkboxes.
       today). Add `HostProvider` and `useHost()`, and mount the provider at
       the app root. Doc comments on every field. Vitest for the provider.
       Spec: SP-160 §160b.
-- [ ] **host.2** `localHost` and `cloudHost` (`webui/src/host/`):
+- [x] **host.2** `localHost` and `cloudHost` (`webui/src/host/`):
       `localHost` = no account, local backend at the current origin, all
       local capabilities on. `cloudHost` reproduces today's hosted behavior
       from the existing bootstrap and adapters (`bootstrapAdapter.ts`,

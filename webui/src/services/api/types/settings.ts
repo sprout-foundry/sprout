@@ -14,7 +14,7 @@ export interface SproutSettings {
   history_scope: string;
   subagent_provider: string;
   subagent_model: string;
-  /** Per-role model selection (SP-150 §150a). Maps a role name (e.g. "coder",
+  /** Per-role model selection. Maps a role name (e.g. "coder",
    *  "planner") to an optional provider/model override. An absent or
    *  empty entry means the role falls back to the conversation's
    *  provider/model. */

@@ -7,7 +7,7 @@ import { handleLanguageGuardReplacement } from './streaming';
 // mid-stream is already on the client and cannot be un-streamed — so the
 // language_guard_replacement event replaces the already-streamed assistant
 // message's content with the localized notice and keeps the full switched
-// content for "view original" (SP-152 §152c, item 152.7).
+// content for "view original".
 const msg = (type: Message['type'], content: string, extra: Partial<Message> = {}): Message => ({
   id: `${type}-${content}`,
   type,
@@ -16,7 +16,7 @@ const msg = (type: Message['type'], content: string, extra: Partial<Message> = {
   ...extra,
 });
 
-describe('handleLanguageGuardReplacement (SP-152 §152c, item 152.7)', () => {
+describe('handleLanguageGuardReplacement', () => {
   function replace(data: Record<string, unknown>, messages: Message[]) {
     let state: Record<string, unknown> = { messages };
     const ctx = {

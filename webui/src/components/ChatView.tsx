@@ -575,7 +575,7 @@ function Chat(props: ChatProps): JSX.Element {
               onUploadImage={handleUploadImage}
             />
             <ChatMetricsStrip stats={stats} isConnected={isConnected} onModelClick={onModelClick} />
-            {/* Progress strip (item 151.7): compact latest-progress line for the active run,
+            {/* Progress strip: compact latest-progress line for the active run,
                 scoped to this pane's chat so other chats' progress events don't leak in. */}
             <ProgressStrip chatId={chatId} />
           </div>

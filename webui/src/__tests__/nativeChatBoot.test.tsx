@@ -390,8 +390,8 @@ vi.mock('./chat/ToolTimelineBar', () => ({
 const PLACEHOLDER = 'Chat provided by the native shell';
 const CHAT_MAIN_SELECTOR = '[data-testid="chat-main"]';
 
-/** Mock events transport: the real ChatView renders ProgressStrip
- *  (SP-151), which subscribes via useEvents — provide a no-op provider
+/** Mock events transport: the real ChatView renders ProgressStrip, which
+ *  subscribes via useEvents — provide a no-op provider
  *  like the app's EventsContextProvider does. */
 function createMockEventsProvider() {
   return {

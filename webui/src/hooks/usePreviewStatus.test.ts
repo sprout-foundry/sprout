@@ -1,6 +1,5 @@
 /**
- * usePreviewStatus — the preview pane's polling + actions (SP-155 §155a,
- * item 155.6).
+ * usePreviewStatus — the preview pane's polling + actions.
  *
  * Pins the load-bearing behaviors:
  *   1. Polls once on open and reflects the current state (stopped/failed/

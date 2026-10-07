@@ -65,7 +65,7 @@ function WorkspaceGateModal({
   // name input; `newName` is its controlled value.
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
-  // The embedded starter catalogue (SP-153 §153b) for the studio create form.
+  // The embedded starter catalogue for the studio create form.
   // `starterOptions` is populated when the form is revealed; `selectedStarter`
   // is the chosen starter id, or '' for "blank" (no starter — the default).
   const [starterOptions, setStarterOptions] = useState<Starter[]>([]);
@@ -99,7 +99,7 @@ function WorkspaceGateModal({
     return () => setWorkspaceGateOpen(false);
   }, []);
 
-  // Studio create form: load the embedded starter catalogue (SP-153 §153b)
+  // Studio create form: load the embedded starter catalogue
   // when the form is revealed, so the chooser offers the starters. The create
   // form is only reachable in the studio variant, so `creating` implies
   // studio mode. A fetch failure (or an empty catalogue) degrades to "blank"

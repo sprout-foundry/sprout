@@ -1,5 +1,5 @@
 /**
- * PreviewPanel — the Code-mode preview panel (SP-155 §155a, item 155.6).
+ * PreviewPanel — the Code-mode preview panel.
  *
  * Pins the wiring between the panel and the presentational PreviewPane:
  *   1. Closed renders nothing; open renders the pane.

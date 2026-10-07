@@ -45,7 +45,7 @@ const TESTIDS = {
   "turn-changes-strip": "turn-changes-strip",
   "diff-view": "diff-view",
   "chat-metrics-strip": "chat-metrics-strip",
-  "progress-strip": "progress-strip", // SP-151 §151c (item 151.7) active-run progress strip
+  "progress-strip": "progress-strip", // active-run progress strip
   "chs-trigger": "chs-trigger",
   "chs-popover": "chs-popover",
   "chs-search-input": "chs-search-input",
@@ -162,7 +162,7 @@ const TESTIDS = {
   // Editor footer whitespace mode
   "settings-whitespace-mode": "settings-whitespace-mode",
 
-  // Role models (SP-150 §150d, RoleModelsSection.tsx). Row/input/save testids
+  // Role models (RoleModelsSection.tsx). Row/input/save testids
   // are generated per role: `role-model-{row,input,save}-${role}` and
   // `role-provider-input-${role}` (BUILTIN_ROLES: planner|coder|summarizer|
   // reviewer|commit); `coder` is the representative registered value.
@@ -214,7 +214,7 @@ const TESTIDS = {
   "workspace-gate-create-input": "workspace-gate-create-input",
   "workspace-gate-create-cancel": "workspace-gate-create-cancel",
   "workspace-gate-create-submit": "workspace-gate-create-submit",
-  // SP-153 §153b: starter chooser in the studio new-project create form.
+  // Starter chooser in the studio new-project create form.
   "workspace-gate-starter-select": "workspace-gate-starter-select",
 
   // Command output
@@ -569,7 +569,7 @@ const TESTIDS = {
   "design-status-set-login-clear": "design-status-set-login-clear", // pattern design-status-set-${stem}-clear
   "design-status-error-login": "design-status-error-login", // pattern design-status-error-${stem}
 
-  // Preview (SP-155 §155a: the preview pane's dev-server lifecycle surface,
+  // Preview (the preview pane's dev-server lifecycle surface,
   // packages/ui/src/components/PreviewPane.tsx)
   "preview-pane": "preview-pane", // the pane root
   "preview-pane-title": "preview-pane-title", // the pane header
@@ -580,8 +580,8 @@ const TESTIDS = {
   "preview-pane-restart": "preview-pane-restart", // the restart action
   "preview-pane-failed": "preview-pane-failed", // the failure reason surface
   "preview-pane-no-url": "preview-pane-no-url", // running-but-no-URL guard
-  "preview-pane-close": "preview-pane-close", // the close affordance (155.6 panel)
-  // Preview placement (SP-155 §155a, item 155.6: the Code-mode panel)
+  "preview-pane-close": "preview-pane-close", // the close affordance (panel)
+  // Preview placement (the Code-mode panel)
   "preview-panel": "preview-panel", // the Code-mode preview panel container
   "preview-panel-toggle": "preview-panel-toggle", // the HeaderBar toggle button
 

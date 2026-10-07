@@ -88,7 +88,7 @@ class ApiService {
     return workspaceApi.browseDirectory(clientFetch, path);
   }
 
-  // ── Starters (SP-153 §153b) ─────────────────────────────────────
+  // ── Starters ────────────────────────────────────────────────────
 
   /** List the embedded starters (id, version, file count, manifest). */
   async listStarters(): Promise<Starter[]> {

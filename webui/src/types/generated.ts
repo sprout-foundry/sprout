@@ -94,7 +94,7 @@ export type ServerEventType =
   | 'progress_question'
   | 'progress_verification'
   | 'progress_complete'
-  // SP-155 §155a (item 155.5): the agent's register_preview_port tool
+  // The agent's register_preview_port tool
   // publishes this on the shared event bus after a successful platform
   // registration. In hosted workspaces the agent runs in-process in the
   // webui server, which subscribes to it to record the hosted preview URL
@@ -178,9 +178,9 @@ export interface WorkspaceBusyData {
   running_chat_name: string;
 }
 
-// ── SP-151 progress event payloads ───────────────────────────────────
+// ── Progress event payloads ──────────────────────────────────────────
 //
-// The four progress event types (SP-151 §151a) are structured run-progress
+// The four progress event types are structured run-progress
 // signals emitted by the runtime, not parsed from model text. Each carries
 // the stable correlation IDs (run, plan revision, scope item) so consumers
 // can de-duplicate and correlate. Field names mirror the Go json tags 1:1
@@ -203,8 +203,8 @@ export interface AskUserRequestOption {
 }
 
 /**
- * Payload of a `progress_milestone` event (SP-151 §151a): a plan scope
- * item (SP-148) started or finished, with the files-touched count and the
+ * Payload of a `progress_milestone` event: a plan scope
+ * item started or finished, with the files-touched count and the
  * scope item's elapsed wall time.
  *
  * This one interface models BOTH wire shapes the event type carries:
@@ -221,7 +221,7 @@ export interface ProgressMilestoneData {
   /** Stable run identifier correlating every event of one run. Present on flat and batched payloads alike. */
   run_id: string;
   /**
-   * Revision of the SP-148 plan (0 when the run has no active plan).
+   * Revision of the active plan (0 when the run has no active plan).
    * Optional: a coalesced batch envelope has no top-level plan_revision —
    * only the per-milestone entries inside `milestones` carry it.
    */
@@ -245,8 +245,8 @@ export interface ProgressMilestoneData {
    */
   elapsed_ms?: number;
   /**
-   * Present only when the stream coalesced a run of milestone events
-   * (SP-151 §151b); each entry is a flat ProgressMilestoneData. A single
+   * Present only when the stream coalesced a run of milestone events;
+   * each entry is a flat ProgressMilestoneData. A single
    * (non-coalesced) milestone event omits this field.
    */
   milestones?: ProgressMilestoneData[];
@@ -263,7 +263,7 @@ export interface ProgressMilestoneData {
 }
 
 /**
- * Payload of a `progress_question` event (SP-151 §151a): the agent needs a
+ * Payload of a `progress_question` event: the agent needs a
  * decision. Carries the question, options if any, and why it matters —
  * complementing `ask_user_request` with plan context.
  *
@@ -285,7 +285,7 @@ export interface ProgressQuestionData {
 }
 
 /**
- * Compact evidence a single verification check carries (SP-149). Mirrors
+ * Compact evidence a single verification check carries. Mirrors
  * the consumer-facing fields of verify.Check; the full result (routes,
  * screenshots, steps, duration) stays server-side.
  *
@@ -309,17 +309,17 @@ export interface ProgressVerificationCheck {
 }
 
 /**
- * Payload of a `progress_verification` event (SP-151 §151a): the SP-149
- * verification result — the checks, pass/fail, and evidence references.
+ * Payload of a `progress_verification` event: the verification
+ * result — the checks, pass/fail, and evidence references.
  *
  * Go: pkg/events/progress_events.go::ProgressVerificationData
  */
 export interface ProgressVerificationData {
   run_id: string;
   plan_revision: number;
-  /** Run happened without an active SP-148 plan (SP-149 baseline mode). */
+  /** Run happened without an active plan (baseline mode). */
   baseline?: boolean;
-  /** Nothing failed and at least one check actually ran (SP-149 §149d). */
+  /** Nothing failed and at least one check actually ran. */
   passed?: boolean;
   /** Individual check outcomes, in run order. */
   checks: ProgressVerificationCheck[];
@@ -328,11 +328,11 @@ export interface ProgressVerificationData {
 }
 
 /**
- * Payload of a `progress_complete` event (SP-151 §151a): the run
+ * Payload of a `progress_complete` event: the run
  * finished. `verified` is true only when a passing verification result
- * exists (SP-149 §149d / SP-151 §151c). `not_verified_reason` says why
+ * exists. `not_verified_reason` says why
  * only when verification is enabled and the turn was not verified (e.g.
- * "no code changes this turn"); when SP-149 is disabled (the CLI
+ * "no code changes this turn"); when verification is disabled (the CLI
  * default) both `verification` and `not_verified_reason` are absent — the
  * payload carries just `run_id`, so the default UI is unchanged.
  *
@@ -343,7 +343,7 @@ export interface ProgressCompleteData {
   plan_revision: number;
   /** True only when a passing verification result exists. */
   verified?: boolean;
-  /** Final verification result; absent when SP-149 is disabled or was not run. */
+  /** Final verification result; absent when verification is disabled or was not run. */
   verification?: ProgressVerificationData;
   /** Why the run is not verified (e.g. "no code changes this turn"); absent when verification is disabled. */
   not_verified_reason?: string;

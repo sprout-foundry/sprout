@@ -1,5 +1,5 @@
 /**
- * Starters domain API — SP-153 §153b (TODO 153.7).
+ * Starters domain API.
  *
  * Adapter-aware access to the embedded, versioned starter catalogue
  * (pkg/webui/api_starters.go):

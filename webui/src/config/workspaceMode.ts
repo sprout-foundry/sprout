@@ -1,5 +1,5 @@
 /**
- * Configured default workspace mode (SP-155 §155b).
+ * Configured default workspace mode.
  *
  * An embedding shell — or the build itself — can point new sessions at a mode
  * other than the built-in default by setting `VITE_DEFAULT_WORKSPACE_MODE`.

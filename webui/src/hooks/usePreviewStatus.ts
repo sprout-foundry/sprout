@@ -1,5 +1,5 @@
 /**
- * usePreviewStatus — drives the preview pane (SP-155 §155a, TODO 155.6) from
+ * usePreviewStatus — drives the preview pane from
  * the dev-server lifecycle API (pkg/webui/api_preview.go).
  *
  * Polling lifecycle (the pane's states): poll once when the surface becomes

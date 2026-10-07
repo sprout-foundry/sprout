@@ -68,7 +68,7 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
 
   // On a local daemon the panel holds the agent's change history.
   const hasContextPanel = supportsAgentChanges;
-  // SP-155 §155a: the Code-mode preview panel (the running-app dev server),
+  // The Code-mode preview panel (the running-app dev server),
   // collapsed by default so it never steals editor space or polls.
   const [previewPanelOpen, setPreviewPanelOpen] = useState(false);
   // On phones the project sidebar lives in the drawer, so name the project

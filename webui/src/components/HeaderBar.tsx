@@ -22,7 +22,7 @@ export interface HeaderBarProps {
   onToggleContextPanel: () => void;
   /** Whether there is a context panel to toggle. */
   hasContextPanel?: boolean;
-  /** Toggle the preview panel (SP-155 §155a). Rendered when provided. */
+  /** Toggle the preview panel. Rendered when provided. */
   onTogglePreviewPanel?: () => void;
   /** Whether the preview panel is currently open (drives the toggle's state). */
   previewPanelOpen?: boolean;
@@ -124,7 +124,7 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
         {/* SP-016 P0.5: avatar menu — cloud mode only, renders nothing in
          * local mode or without a bootstrap identity. */}
         {!isLayeredLayout && <UserMenu />}
-        {/* SP-155 §155a: toggle the Code-mode preview panel (the running-app
+        {/* Toggle the Code-mode preview panel (the running-app
          * dev server). Rendered only when the host wires it in (Code mode). */}
         {!isMobile && onTogglePreviewPanel && (
           <button

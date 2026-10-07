@@ -1,6 +1,6 @@
 /**
- * RoleModelsSection.test.tsx — SP-150 §150d "role models in settings,
- * collapsed by default".
+ * RoleModelsSection.test.tsx — role models in settings,
+ * collapsed by default.
  *
  * Pins:
  *   - The section is collapsed on initial render (the shared Collapsible

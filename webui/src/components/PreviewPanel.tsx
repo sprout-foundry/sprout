@@ -11,11 +11,11 @@ export interface PreviewPanelProps {
 }
 
 /**
- * PreviewPanel — the Code-mode preview panel (SP-155 §155a, TODO 155.6).
+ * PreviewPanel — the Code-mode preview panel.
  *
- * Places the presentational PreviewPane (155.3) into the Code surface and
- * drives it from the dev-server lifecycle API through usePreviewStatus
- * (155.6): it polls the status while open, wires the pane's Restart action
+ * Places the presentational PreviewPane into the Code surface and
+ * drives it from the dev-server lifecycle API through usePreviewStatus:
+ * it polls the status while open, wires the pane's Restart action
  * to the right lifecycle call (a running app is restarted; a stopped or
  * failed one is started), bumps the reload token on file changes, and
  * disables restart for a hosted (platform-registered) preview, which the

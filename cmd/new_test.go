@@ -46,7 +46,7 @@ func TestRunNewProject_InstallsFixture(t *testing.T) {
 }
 
 // TestRunNewProject_UnknownStarterListsAvailable pins the "listing available
-// starters on unknown ID" requirement (153.4): an unknown id prints the
+// starters on unknown ID" requirement: an unknown id prints the
 // user-facing catalogue (test-only starters such as the fixture are
 // withheld) and returns an error, and writes nothing to the destination.
 func TestRunNewProject_UnknownStarterListsAvailable(t *testing.T) {
@@ -69,8 +69,7 @@ func TestRunNewProject_UnknownStarterListsAvailable(t *testing.T) {
 
 // TestRunNewProject_EmptyStarterListsAvailable covers the no-starter path:
 // the user-facing catalogue is printed (test-only starters withheld) and an
-// error is returned; a project cannot be created without naming a starter
-// (153.4).
+// error is returned; a project cannot be created without naming a starter.
 func TestRunNewProject_EmptyStarterListsAvailable(t *testing.T) {
 	dest := t.TempDir()
 	var out bytes.Buffer

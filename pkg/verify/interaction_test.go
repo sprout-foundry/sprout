@@ -423,7 +423,7 @@ func TestManualCheckAlongsideInteraction(t *testing.T) {
 
 // ---------------------------------------------------------------------------
 // (f) the plan's model-proposed Check field on an interaction item has NO
-//     effect: the check's Command is still the manifest's dev command (§149b).
+//     effect: the check's Command is still the manifest's dev command.
 // ---------------------------------------------------------------------------
 
 func TestInteractionCheckModelProposedCommandHasNoEffect(t *testing.T) {

@@ -19,7 +19,7 @@ const (
 
 var fmSpanish = langguard.Language{Code: "es", Name: "Spanish"}
 
-// TestFinalMessageGuardBehaviorMatrix is the §152b acceptance contract:
+// TestFinalMessageGuardBehaviorMatrix is the language-guard acceptance contract:
 // the full pass / undetermined / mismatch matrix with the regenerate call
 // count, and the Display / Original / Regenerated / Mismatched fields
 // for every branch.

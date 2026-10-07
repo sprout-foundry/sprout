@@ -263,16 +263,18 @@ protects.
       naive tag-stripping corrupts real code/strings (e.g. `.sprout`,
       `Load()`) and leaves ungrammatical prose, so this needs per-file
       review.
-      Progress: three verified batches cleaned ~65 of the densest files
-      (benchmark, verify, plancontract, events, startermanifest,
-      configuration, langguard, starters, cliui, preview, agent/agent_tools
-      verification + plan, webui preview/progress) — comment/string-only,
+      Progress: five verified batches cleaned ~220 of the densest files
+      (benchmark, verify, plancontract, planstore, events, startermanifest,
+      starters, starterstore, configuration, langguard, cliui, preview,
+      agent + agent_tools verification/plan/roles, agent_commands,
+      subagents, changes, webui preview/progress) — comment/string-only,
       prose rewritten grammatically, non-comment tokens unchanged, touched
       suites pass; the item's named examples (TODO 153.6, item 149.5,
-      (152.7), the manual-check reason) are cleaned. The bulk (182 files,
-      mostly 1–5 tags each) remains and needs further per-file passes before
-      this can be ticked. `webui/src/types/generated.ts` must be regenerated
-      via the token exporter, not hand-edited.
+      (152.7), the manual-check reason) are cleaned. Reduced the automated-
+      work series from ~755 to ~155 occurrences across ~91 files (mostly
+      1–3 tags each); the remainder needs further per-file passes before
+      this can be ticked. `webui/src/types/generated.ts` must be
+      regenerated via the token exporter, not hand-edited.
 - [x] **rules.2** Split files over 500 lines introduced or grown by the
       automated work (`pkg/agent/seed_provider_chat.go`,
       `pkg/benchmark/runner_test.go`, `config_roles_test.go`,

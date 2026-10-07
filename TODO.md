@@ -96,6 +96,22 @@ the end, without checkboxes.
       uncached prompt cost) and otherwise uses the catalog rate, returning an
       explicit unknown (rendered as "unknown", never $0) when neither applies.
       Pinned by Go tests.
+- [ ] **auto.4** Continuation stops on a single verification-only turn:
+      `RunInitialContinuation` (`pkg/workflow/continuation.go`) stops with
+      `no_progress` the first time a turn ends without a new commit or a
+      newly ticked item, even when that turn left verified, uncommitted
+      work in the tree (it happened after a subagent hit its iteration cap
+      and the coordinator spent its turn re-verifying). Allow a configurable
+      number of consecutive no-progress turns before stopping
+      (`continuation.max_idle_turns`, default 2), and when the previous turn
+      made no progress, send a continuation prompt that names the state
+      ("the last turn did not commit; finish and commit the in-progress
+      item, or leave a note under it and move on"). Count a turn as
+      progress only for commits or ticks, never for working-tree edits
+      alone. Tests: one idle turn then a commit continues; idle turns up to
+      the limit stop with `no_progress`; the nudge prompt is sent after an
+      idle turn.
+
 
 ## Review fixes — correctness and spec promises
 Found in the code review of the automated work. Fix these before new feature

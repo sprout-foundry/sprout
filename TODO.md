@@ -682,9 +682,16 @@ needed whatever the integration work does. Spec context: SP-160 §160e.
 
 ## SP-157 — Checkpoints and Project Health (`roadmap/SP-157-checkpoints-and-project-health.md`)
 
-- [ ] **157.1** Timeline model on `pkg/history`: change sets with template
+- [x] **157.1** Timeline model on `pkg/history`: change sets with template
       summaries (diff + plan scope IDs) and deploy entries. Go tests with
       a fixture history. Spec: SP-157 §157a.
+      Added `pkg/history/timeline`: change sets (history revisions with
+      deterministic template summaries of files/insertions/deletions and
+      optional plan scope IDs) plus deploy entries carrying
+      `deploy.Deployment`. Ordered oldest-first or newest-first, with a
+      stable tie-break. A subpackage (not the history package itself) so
+      the history data layer stays free of the deploy/plancontract
+      dependencies. Pinned by Go tests over a seeded temp history.
 - [ ] **157.2** Checkpoints: created automatically on passing verification
       and on deploy, and on demand; restoring is one action and is itself
       a timeline entry. Tests. Spec: SP-157 §157a.

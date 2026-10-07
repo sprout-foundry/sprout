@@ -210,10 +210,18 @@ func TestShouldForwardEventToConnection_PersistentWSChatSwitch_NoSubscribe(t *te
 }
 
 // TestShouldForwardEventToConnection_SecurityEventStrictWithSubscribe
-// verifies that security-scoped events (ask_user_request, security_approval_request,
-// security_prompt_request) do NOT benefit from chatSubscribers subscription.
-// Even when the connection has subscribed to the target chat, security events
-// still require the connection's primary chatID to match (or be unfiltered).
+// verifies that security-scoped events (security_approval_request,
+// security_prompt_request, edit_approval_request) do NOT benefit from
+// chatSubscribers subscription. Even when the connection has subscribed to
+// the target chat, security events still require the connection's primary
+// chatID to match (or be unfiltered).
+//
+// ask_user_request is deliberately EXEMPT: it is a question to the user,
+// not an action on session state, and with multiple windows open the owning
+// window is often not the one the user is looking at — the strict client
+// match left the question displayed nowhere while the agent blocked until
+// timeout. Answers are request-ID scoped and single-winner, so showing the
+// dialog on every window is safe (SP-fix: multi-window ask_user invisible).
 func TestShouldForwardEventToConnection_SecurityEventStrictWithSubscribe(t *testing.T) {
 	ws := &ReactWebServer{
 		chatSubscribers: newChatSubscribersRegistry(),
@@ -229,8 +237,8 @@ func TestShouldForwardEventToConnection_SecurityEventStrictWithSubscribe(t *test
 	// Connection subscribed to chat-B.
 	ws.chatSubscribers.Subscribe("chat-B", conn)
 
-	// Security event for chat-B with matching clientID.
-	// This should NOT be forwarded because security events are strict.
+	// ask_user_request for chat-B: forwarded even though the connection's
+	// primary chat is chat-A — the exempt-ask_user contract.
 	ev := events.UIEvent{
 		Type: events.EventTypeAskUserRequest,
 		Data: map[string]interface{}{
@@ -241,8 +249,8 @@ func TestShouldForwardEventToConnection_SecurityEventStrictWithSubscribe(t *test
 		},
 	}
 
-	if ws.shouldForwardEventToConnection(ev, connInfo) {
-		t.Error("ask_user_request must NOT be forwarded via chatSubscribers even when subscribed")
+	if !ws.shouldForwardEventToConnection(ev, connInfo) {
+		t.Error("ask_user_request must fan out (chatSubscribers or not): a question to the user must render somewhere the user is looking")
 	}
 
 	// Same for security_approval_request.
@@ -386,8 +394,9 @@ func TestShouldForwardEventToConnection_SecurityEventStaleChatIDLiveChatMatch(t 
 	}
 }
 
-// Stale snapshot AND the live active chat differs → still dropped (the
-// dialog belongs to another chat's pane).
+// Stale snapshot AND the live active chat differs → still dropped for
+// strictly-scoped events. ask_user is exempt (fan-out contract above), so
+// this case is pinned with edit_approval_request, which stays strict.
 func TestShouldForwardEventToConnection_SecurityEventStaleChatIDLiveChatMiss(t *testing.T) {
 	ws := &ReactWebServer{
 		chatSubscribers: newChatSubscribersRegistry(),
@@ -400,17 +409,16 @@ func TestShouldForwardEventToConnection_SecurityEventStaleChatIDLiveChatMiss(t *
 		ChatID:   "chat-X",
 	}
 	ev := events.UIEvent{
-		Type: events.EventTypeAskUserRequest,
+		Type: events.EventTypeEditApprovalRequest,
 		Data: map[string]interface{}{
 			"client_id":  "client-A",
 			"chat_id":    "chat-Y",
-			"request_id": "ask_2",
-			"question":   "Proceed?",
+			"request_id": "edit_2",
 		},
 	}
 
 	if ws.shouldForwardEventToConnection(ev, connInfo) {
-		t.Error("ask_user_request for a chat that is neither the snapshot nor the live active chat must stay dropped")
+		t.Error("edit_approval for a chat that is neither the snapshot nor the live active chat must stay dropped")
 	}
 }
 
@@ -444,8 +452,9 @@ func TestShouldForwardEventToConnection_SecurityEventLiveChatFallbackNoCrossClie
 	}
 }
 
-// No client context for the connection's client → fallback finds nothing →
-// behavior matches the old strict rule (drop).
+// No client context for the connection → the live-chat fallback finds
+// nothing. For a strictly-scoped event that means drop; ask_user is exempt
+// and still forwards, so this case is pinned with security_prompt_request.
 func TestShouldForwardEventToConnection_SecurityEventStaleChatIDNoContext(t *testing.T) {
 	ws := &ReactWebServer{
 		chatSubscribers: newChatSubscribersRegistry(),
@@ -456,12 +465,12 @@ func TestShouldForwardEventToConnection_SecurityEventStaleChatIDNoContext(t *tes
 		ChatID:   "chat-X",
 	}
 	ev := events.UIEvent{
-		Type: events.EventTypeAskUserRequest,
+		Type: events.EventTypeSecurityPromptRequest,
 		Data: map[string]interface{}{
 			"client_id":  "client-A",
 			"chat_id":    "chat-Y",
-			"request_id": "ask_3",
-			"question":   "Proceed?",
+			"request_id": "prompt_3",
+			"file_path":  "/tmp/x",
 		},
 	}
 
@@ -470,8 +479,8 @@ func TestShouldForwardEventToConnection_SecurityEventStaleChatIDNoContext(t *tes
 	}
 }
 
-// chat_id-only security event (no client_id) takes the same fallback:
-// stale snapshot + live chat match → forward.
+// chat_id-only ask_user (no client_id) forwards regardless of the
+// connection's stale snapshot — same exempt fan-out contract as above.
 func TestShouldForwardEventToConnection_SecurityEventNoClientIDStaleChatIDLiveChatMatch(t *testing.T) {
 	ws := &ReactWebServer{
 		chatSubscribers: newChatSubscribersRegistry(),
@@ -493,6 +502,6 @@ func TestShouldForwardEventToConnection_SecurityEventNoClientIDStaleChatIDLiveCh
 	}
 
 	if !ws.shouldForwardEventToConnection(ev, connInfo) {
-		t.Error("client-less ask_user_request for the live active chat must not be dropped by a stale ChatID")
+		t.Error("client-less ask_user_request must fan out to the user's windows, not be dropped by a stale ChatID")
 	}
 }

@@ -56,6 +56,16 @@ const ssStaticSiteManifestJSON = `{"starter": {"id": "static-site", "version": "
 // prompt when the static-site skill activates (the skill's frontmatter name).
 const ssStaticSiteMarker = "[Skill Activated: Static Site Starter"
 
+// ssWebAppManifestJSON names the shipped web-app starter, whose stack skill
+// lives under pkg/skills/library/web-app/. Like static-site it is a real
+// user-facing starter: the manifest ID ("web-app") must resolve to the
+// embedded skill of the same ID.
+const ssWebAppManifestJSON = `{"starter": {"id": "web-app", "version": "1.0.0"}}`
+
+// ssWebAppMarker is the marker activateSkillByID folds into the system prompt
+// when the web-app skill activates (the skill's frontmatter name).
+const ssWebAppMarker = "[Skill Activated: Web App Starter"
+
 // ssCorruptManifestJSON is not valid JSON at all. It exercises the
 // "unreadable manifest" path (logged, never fails the turn).
 const ssCorruptManifestJSON = `{"starter": {`
@@ -181,6 +191,26 @@ func TestStackSkillAutoActivation_StaticSiteStarter(t *testing.T) {
 	}
 	if !strings.Contains(ag.GetSystemPrompt(), ssStaticSiteMarker) {
 		t.Errorf("static-site skill instructions not folded into the system prompt:\n%s", ag.GetSystemPrompt())
+	}
+}
+
+// TestStackSkillAutoActivation_WebAppStarter is the web-app counterpart: a
+// manifest naming the shipped web-app starter activates the web-app stack
+// skill under pkg/skills/library/web-app/ — the embedded skill whose ID
+// matches the manifest's starter ID. It guards the starter→skill mapping for
+// the React starter.
+func TestStackSkillAutoActivation_WebAppStarter(t *testing.T) {
+	root := t.TempDir()
+	ssWriteStarterManifest(t, root, ssWebAppManifestJSON)
+
+	ag := ssAgent(t, NewScriptedClient(NewScriptedTextResponse("ok.")), root)
+	ag.autoActivateStarterSkill()
+
+	if got := ssCountActiveSkills(ag, "web-app"); got != 1 {
+		t.Errorf("web-app skill active count = %d, want 1 (active skills: %v)", got, ag.state.GetActiveSkills())
+	}
+	if !strings.Contains(ag.GetSystemPrompt(), ssWebAppMarker) {
+		t.Errorf("web-app skill instructions not folded into the system prompt:\n%s", ag.GetSystemPrompt())
 	}
 }
 

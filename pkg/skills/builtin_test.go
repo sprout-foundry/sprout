@@ -16,6 +16,7 @@ func TestBuiltinsContainsKnownSkills(t *testing.T) {
 		"self-help",
 		"workflow-automation",
 		"static-site",
+		"web-app",
 	}
 	got := Builtins()
 	for _, id := range required {
@@ -44,6 +45,27 @@ func TestBuiltinsContainsStaticSiteStackSkill(t *testing.T) {
 	}
 	if b.Path != LogicalPath+"/static-site" {
 		t.Errorf("static-site Path = %q, want %q", b.Path, LogicalPath+"/static-site")
+	}
+}
+
+// TestBuiltinsContainsWebAppStackSkill is the counterpart discovery gate
+// for the web-app starter: its skill must be a builtin whose ID matches
+// the starter's id — "web-app" — because the starter's auto-activation
+// path (pkg/agent) looks the skill up by that ID.
+func TestBuiltinsContainsWebAppStackSkill(t *testing.T) {
+	got := Builtins()
+	b, ok := got["web-app"]
+	if !ok {
+		t.Fatal("Builtins() missing the web-app stack skill")
+	}
+	if b.Name == "" {
+		t.Error("web-app skill has an empty Name")
+	}
+	if b.Description == "" {
+		t.Error("web-app skill has an empty Description")
+	}
+	if b.Path != LogicalPath+"/web-app" {
+		t.Errorf("web-app Path = %q, want %q", b.Path, LogicalPath+"/web-app")
 	}
 }
 

@@ -36,6 +36,11 @@ func resetDeploySeams(t *testing.T) {
 	savedTargetFor, savedRun := deployTargetFor, deployBuildRunner
 	savedFp, savedSnap := deployFingerprint, deployVerificationSnapshot
 	t.Cleanup(func() {
+		// nil (not os.Stdout) so later tests that capture stdout see cobra
+		// output: SetOut(os.Stdout) pins the *os.File of that moment.
+		rootCmd.SetOut(nil)
+		rootCmd.SetErr(nil)
+		rootCmd.SetArgs(nil)
 		deployDir, deployTargetOverride = savedDir, savedTarget
 		deployProduction, deployAssumeYes = savedProd, savedYes
 		deployTargetFor, deployBuildRunner = savedTargetFor, savedRun
@@ -53,8 +58,8 @@ func resetDeploySeams(t *testing.T) {
 			_ = f.Value.Set("false")
 		}
 	}
-	rootCmd.SetOut(os.Stdout)
-	rootCmd.SetErr(os.Stderr)
+	rootCmd.SetOut(nil)
+	rootCmd.SetErr(nil)
 	if f := deployCmd.Flags().Lookup("production"); f != nil {
 		_ = f.Value.Set("false")
 	}

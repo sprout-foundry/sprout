@@ -2,7 +2,8 @@ import { SkeletonText } from '@sprout/ui';
 import { Keyboard, Upload, Trash2 } from 'lucide-react';
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import { isCloud } from '../config/mode';
+import { supportsLocalTerminal } from '../config/mode';
+import { useHostCapabilities } from '../host';
 import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
 import { ApiService } from '../services/api';
 import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
@@ -206,8 +207,12 @@ function CloudProviderModelSection({
  * platform proxy, which routes by the account's editor model (managed, or the
  * user's own key — EditorModelSection). Studio's native build keeps the local
  * provider pickers: its shell serves BYOK providers itself.
+ *
+ * `supportsLocalTerminal` is a live ESM binding (re-derived from the active
+ * host at startup), so this module-scope const resolves it at module load and
+ * is frozen for the page lifetime.
  */
-const PLATFORM_MANAGED_MODEL = isCloud && !NATIVE_FS_ENABLED;
+const PLATFORM_MANAGED_MODEL = !supportsLocalTerminal && !NATIVE_FS_ENABLED;
 
 interface SidebarSettingsSectionProps {
   themePack: { id: string };
@@ -266,6 +271,7 @@ export default function SidebarSettingsSection({
   onModelChange,
 }: SidebarSettingsSectionProps): JSX.Element {
   const log = useLog();
+  const { localTerminal } = useHostCapabilities();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [gitHubUser, setGitHubUser] = useState<GitHubUser | null>(() => getStoredUser());
@@ -396,7 +402,7 @@ export default function SidebarSettingsSection({
         </div>
         {/* Presets and custom bindings are stored by the daemon; browser
             mode uses the built-in shortcuts only. */}
-        {!isCloud && (
+        {localTerminal && (
           <>
             <div className="config-item">
               <label htmlFor="hotkey-preset-select">Apply Hotkey Preset:</label>
@@ -432,7 +438,7 @@ export default function SidebarSettingsSection({
       </div>
 
       {/* ─── Cloud mode: simplified settings ──────────────────── */}
-      {isCloud ? (
+      {!localTerminal ? (
         <>
           {PLATFORM_MANAGED_MODEL ? (
             <div className="section">

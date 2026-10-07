@@ -6,7 +6,7 @@
 
 import { Cloud } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { isCloud } from '../config/mode';
+import { useHostCapabilities } from '../host';
 import { installEscalationBridge, type ConsentDecision } from '../services/agentEscalation';
 import { txnPhaseLabel } from '../services/cloudTxnEscalate';
 import './ThemedDialog.css';
@@ -18,12 +18,13 @@ interface PendingConsent {
 }
 
 export function AgentEscalationBridge({ repoURL }: { repoURL?: string }) {
+  const { localTerminal } = useHostCapabilities();
   const [pending, setPending] = useState<PendingConsent[]>([]);
   const [progress, setProgress] = useState<{ command: string; phase: string } | null>(null);
   const allowRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (!isCloud) return undefined;
+    if (localTerminal) return undefined;
     return installEscalationBridge({
       repoURL,
       requestConsent: (command) =>
@@ -32,7 +33,7 @@ export function AgentEscalationBridge({ repoURL }: { repoURL?: string }) {
         }),
       onPhase: (command, phase) => setProgress(phase === 'done' ? null : { command, phase }),
     });
-  }, [repoURL]);
+  }, [repoURL, localTerminal]);
 
   // The run reports opening → pushing → running → pulling; clear the status
   // shortly after the last phase since runTxnCommand has no "done" callback.
@@ -66,7 +67,7 @@ export function AgentEscalationBridge({ repoURL }: { repoURL?: string }) {
     return () => document.removeEventListener('keydown', onKey);
   }, [current, answer]);
 
-  if (!isCloud) return null;
+  if (localTerminal) return null;
 
   return (
     <>

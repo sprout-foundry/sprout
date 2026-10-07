@@ -2,6 +2,7 @@ import { act, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { HostProvider } from '../host/HostProvider';
 import { makeTestHost } from '../host/testHost';
+import type { SproutHost } from '../host/types';
 import StatusBar from './StatusBar';
 
 // ---------------------------------------------------------------------------
@@ -97,11 +98,16 @@ function queryByText(parent: HTMLElement, text: string) {
   return els.find((el) => el.textContent === text && el.children.length === 0) ?? null;
 }
 
-// StatusBar reads its capability flags through the host; the suite runs in
-// local mode, where git support is on (the assertions below expect a git
-// branch surface). The provider carries that host.
-function renderStatusBar(node: ReactNode) {
-  root.render(<HostProvider host={makeTestHost({ git: true })}>{node}</HostProvider>);
+// StatusBar reads its capability flags through the host. The default host is
+// the LOCAL shape: git support on (the assertions below expect a git branch
+// surface), workspace-switching on, and a local terminal — so the workspace
+// indicator derives from workspacePath (not the repo slug) and a missing
+// branch reads as "No Git" from the git bar, matching the local build. Flip
+// tests override the host to exercise the hosted branches.
+const localStatusBarHost = makeTestHost({ git: true, workspaceSwitching: true, localTerminal: true });
+
+function renderStatusBar(node: ReactNode, host: SproutHost = localStatusBarHost) {
+  root.render(<HostProvider host={host}>{node}</HostProvider>);
 }
 
 // ---------------------------------------------------------------------------
@@ -412,6 +418,31 @@ describe('StatusBar', () => {
       const indicator = container.querySelector('.statusbar-item-workspace');
       expect(indicator).toBeTruthy();
       expect(indicator?.textContent).toContain('myproject');
+    });
+
+    // Host capability flips the workspace indicator's data source. A
+    // workspace-switching shell derives the name from workspacePath (the local
+    // build's behavior); a hosted shell with no workspace switching derives it
+    // from the active repository URL. Without a repo URL and without a
+    // workspacePath, the hosted shell hides the indicator entirely.
+    test('hosted shell with no workspace switching and no repo: indicator hidden', async () => {
+      await act(async () => {
+        renderStatusBar(<StatusBar />, makeTestHost({ git: true, workspaceSwitching: false, localTerminal: false }));
+      });
+      expect(container.querySelector('.statusbar-item-workspace')).toBeNull();
+    });
+
+    test('workspace-switching shell: indicator derives from workspacePath', async () => {
+      await act(async () => {
+        renderStatusBar(
+          <StatusBar workspacePath="/home/user/myproject" />,
+          makeTestHost({ git: true, workspaceSwitching: true, localTerminal: true }),
+        );
+      });
+      const indicator = container.querySelector('.statusbar-item-workspace');
+      expect(indicator).toBeTruthy();
+      expect(indicator?.textContent).toContain('myproject');
+      expect(indicator?.getAttribute('aria-label')).toContain('Workspace:');
     });
 
     test('does not render for root path', async () => {

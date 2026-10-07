@@ -1,14 +1,24 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
+import { HostProvider } from '../host/HostProvider';
+import { makeTestHost } from '../host/testHost';
 import { AgentEscalationBridge } from './AgentEscalationBridge';
-
-vi.mock('../config/mode', () => ({ isCloud: true, mode: 'cloud' }));
 
 const runTxnCommand = vi.fn();
 vi.mock('../services/cloudTxnEscalate', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/cloudTxnEscalate')>()),
   runTxnCommand: (...args: unknown[]) => runTxnCommand(...args),
 }));
+
+// The bridge reads its host capability through the provider; this suite
+// exercises the hosted (WASM) shell, which has no local terminal.
+function renderBridge(props: { repoURL?: string }) {
+  return render(
+    <HostProvider host={makeTestHost({ localTerminal: false })}>
+      <AgentEscalationBridge repoURL={props.repoURL} />
+    </HostProvider>,
+  );
+}
 
 type Bridge = { run: (c: string) => Promise<{ ran: boolean; stdout?: string; exitCode?: number; message?: string }> };
 const bridge = () => (globalThis as unknown as { __sproutEscalate?: Bridge }).__sproutEscalate;
@@ -25,7 +35,7 @@ describe('AgentEscalationBridge', () => {
       pulledFiles: 0,
       skippedFiles: 0,
     });
-    render(<AgentEscalationBridge repoURL="https://github.com/a/b" />);
+    renderBridge({ repoURL: 'https://github.com/a/b' });
 
     let pending!: ReturnType<Bridge['run']>;
     act(() => {
@@ -41,7 +51,7 @@ describe('AgentEscalationBridge', () => {
   });
 
   it('Escape declines', async () => {
-    render(<AgentEscalationBridge repoURL="https://github.com/a/b" />);
+    renderBridge({ repoURL: 'https://github.com/a/b' });
     let pending!: ReturnType<Bridge['run']>;
     act(() => {
       pending = bridge()!.run('make');
@@ -53,7 +63,7 @@ describe('AgentEscalationBridge', () => {
   });
 
   it('removes the bridge on unmount', () => {
-    const { unmount } = render(<AgentEscalationBridge repoURL="r" />);
+    const { unmount } = renderBridge({ repoURL: 'r' });
     expect(bridge()).toBeDefined();
     unmount();
     expect(bridge()).toBeUndefined();

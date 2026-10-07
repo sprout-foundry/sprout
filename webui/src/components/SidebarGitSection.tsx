@@ -1,8 +1,8 @@
 import { GitBranch, GitFork, History } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { isCloud } from '../config/mode';
 import { type SectionTab } from '../hooks/useSidebarState';
+import { useHostCapabilities } from '../host';
 import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
 import GitHistoryPanel from './GitHistoryPanel';
 import GitSidebarPanel from './GitSidebarPanel';
@@ -56,6 +56,7 @@ export default function SidebarGitSection({
   onSectionChange,
 }: SidebarGitSectionProps): JSX.Element {
   const [gitSubTab, setGitSubTab] = useState<GitSubTab>('changes');
+  const { localTerminal } = useHostCapabilities();
 
   // Auto-switch to git tab and changes sub-tab when currentView === 'git'
   useEffect(() => {
@@ -120,8 +121,8 @@ export default function SidebarGitSection({
         </button>
         {/* Worktrees are extra checkouts on the host's disk; the browser's
             in-memory git has no such disk and the platform serves no
-            worktree API, so cloud builds don't offer the tab. */}
-        {!isCloud && (
+            worktree API, so the hosted editor doesn't offer the tab. */}
+        {localTerminal && (
           <button
             type="button"
             role="tab"
@@ -172,7 +173,7 @@ export default function SidebarGitSection({
       )}
 
       {/* Worktrees sub-tab: WorktreePanel */}
-      {!isCloud && gitSubTab === 'worktrees' && (
+      {localTerminal && gitSubTab === 'worktrees' && (
         <div id="git-panel-worktrees" role="tabpanel" aria-labelledby="git-tab-worktrees" className="git-subtab-panel">
           <WorktreePanel onClose={() => setGitSubTab('changes')} />
         </div>

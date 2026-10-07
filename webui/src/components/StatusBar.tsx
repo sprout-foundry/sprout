@@ -71,7 +71,7 @@ function StatusBar({
   workspacePath,
   onWorkspaceClick,
 }: WebuiStatusBarProps): JSX.Element {
-  const { git: supportsGit } = useHostCapabilities();
+  const { git: supportsGit, workspaceSwitching, localTerminal } = useHostCapabilities();
   // Notification context — derive unread count for the bell badge
   const { notifications } = useNotifications();
   const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
@@ -92,17 +92,17 @@ function StatusBar({
   // open repository names it instead.
   const activeRepoURL = useActiveRepoURL();
   const repoSlug = repoSlugFromURL(activeRepoURL);
-  const workspaceLabel = isCloud ? repoSlug : workspacePath;
+  const workspaceLabel = !workspaceSwitching ? repoSlug : workspacePath;
 
   // SP-022-W2.3: derive workspace basename from the full path
   const workspaceName = useMemo(() => {
-    if (isCloud) return repoNameFromURL(activeRepoURL) ?? '';
+    if (!workspaceSwitching) return repoNameFromURL(activeRepoURL) ?? '';
     if (!workspacePath || workspacePath.trim() === '') return '';
     // Handle trailing slashes and extract last non-empty segment
     const trimmed = workspacePath.replace(/\/+$/, '');
     const segments = trimmed.split('/');
     return segments[segments.length - 1] || '';
-  }, [workspacePath, repoSlug]);
+  }, [workspacePath, repoSlug, workspaceSwitching]);
 
   // Language name — derived from buffer metadata using local language registry
   const language = useMemo(() => {
@@ -137,8 +137,8 @@ function StatusBar({
           onClick={onWorkspaceClick}
           role="button"
           tabIndex={0}
-          title={isCloud ? `Repository: ${workspaceLabel}` : `Workspace: ${workspacePath}`}
-          aria-label={isCloud ? `Repository: ${workspaceName}` : `Workspace: ${workspaceName}`}
+          title={!workspaceSwitching ? `Repository: ${workspaceLabel}` : `Workspace: ${workspacePath}`}
+          aria-label={!workspaceSwitching ? `Repository: ${workspaceName}` : `Workspace: ${workspaceName}`}
           data-testid="status-bar-workspace"
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
@@ -167,7 +167,7 @@ function StatusBar({
           );
         })()}
       <SproutStatusBar
-        branch={supportsGit ? branch || (isCloud ? 'No repository' : undefined) : 'Browser IDE'}
+        branch={supportsGit ? branch || (!localTerminal ? 'No repository' : undefined) : 'Browser IDE'}
         cursorPosition={buffer?.cursorPosition}
         language={language}
         encoding={encoding}

@@ -13,7 +13,7 @@
  */
 
 import { useCallback, useEffect, useRef } from 'react';
-import { isCloud } from '../config/mode';
+import { useHostCapabilities } from '../host';
 
 export interface EscalationTriggerEvent {
   /** Unique trigger identifier */
@@ -99,6 +99,7 @@ export function useEscalationTriggers({
   onInfoTrigger,
   repoURL,
 }: UseEscalationTriggersOptions = {}): void {
+  const { localTerminal } = useHostCapabilities();
   const repoURLRef = useRef(repoURL);
   repoURLRef.current = repoURL;
 
@@ -127,7 +128,7 @@ export function useEscalationTriggers({
   );
 
   useEffect(() => {
-    if (!isCloud) return;
+    if (localTerminal) return;
 
     // ── Intercept git push responses from CloudAdapter ──────────
     // Wrap the global fetch to detect push failures.
@@ -150,7 +151,7 @@ export function useEscalationTriggers({
     };
 
     // Only patch if we haven't already (idempotent mount).
-    if (isCloud && window.fetch !== pushFailureDetector) {
+    if (!localTerminal && window.fetch !== pushFailureDetector) {
       window.fetch = pushFailureDetector;
     }
 
@@ -224,5 +225,5 @@ export function useEscalationTriggers({
       window.removeEventListener('sprout:terminal-timeout', handleTerminalTimeout);
       window.removeEventListener('sprout:terminal-command', handleTerminalCommand);
     };
-  }, [fireTrigger]);
+  }, [fireTrigger, localTerminal]);
 }

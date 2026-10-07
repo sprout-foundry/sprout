@@ -2,6 +2,11 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.22.7] - 2026-10-07
+
+- fix(webui): the git worktree panel no longer hides the worktree the workspace is rooted in — the list was hard-coded to worktrees[0] as "main" plus a current-filtered remainder, so a non-main checkout showed a branch/path mismatch and hid the active worktree; rows now render from the real list with current/main badges and switch/remove only on non-current rows (dd057426f)
+- fix(webui): switching worktrees now asks for confirmation (it silently changed the workspace root, CWD, terminals, and chat bindings); a failed "Create Worktree" keeps the dialog open with the inline error instead of closing as if it succeeded; worktree remove uses --force + prune, matching the sibling removal paths, so dirty worktrees no longer dead-end and stale registrations can't block a later add (dd057426f)
+
 ## [v0.22.6] - 2026-10-06
 
 - fix(history): the revert-write audit no longer dumps a full stack trace per file — a bulk recover/revert flooded the console with hundreds of goroutine dumps; the concise audit line stays by default and the stack is available with SPROUT_DEBUG (8bf8dd955)

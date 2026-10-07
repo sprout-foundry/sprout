@@ -1,0 +1,41 @@
+# Cloudflare Workers configuration for the web app plus its API.
+#
+# The Worker in src/worker/index.ts serves the Hono API under /api/* and the
+# built client-side app from ./dist as static assets. `not_found_handling`
+# is set to "single-page-application" so any path that is not a real file
+# falls back to dist/index.html, which is what a client-side router (React
+# Router here) needs for a direct visit to a route such as /about.
+#
+# `wrangler dev` runs the Worker and the assets locally, backed by local D1
+# state under .wrangler/state — no Cloudflare account needed.
+
+name = "web-app-data"
+main = "src/worker/index.ts"
+compatibility_date = "2024-12-01"
+# Required by @cloudflare/vitest-pool-workers (and harmless in production).
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "web-app-data-db"
+# Replace with the id `wrangler d1 create web-app-data-db` prints. Local
+# development and tests use an emulated D1 keyed by this name and never
+# contact the remote database, so the placeholder works until you deploy.
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "drizzle/migrations"
+
+# Optional bindings. They are documented here so a feature that needs them
+# can turn one on by uncommenting the block; nothing is wired by default.
+#
+# [[kv_namespaces]]
+# binding = "KV"
+# id = "REPLACE_WITH_KV_NAMESPACE_ID"
+#
+# [[r2_buckets]]
+# binding = "BUCKET"
+# bucket_name = "web-app-data-bucket"

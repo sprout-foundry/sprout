@@ -288,11 +288,18 @@ func (ws *ReactWebServer) handleAPIGitWorktreeRemove(w http.ResponseWriter, r *h
 		return
 	}
 
-	cmd := ws.gitCommandForWorkspace(workspaceRoot, "worktree", "remove", absPath)
+	cmd := ws.gitCommandForWorkspace(workspaceRoot, "worktree", "remove", "--force", absPath)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_remove_worktree", fmt.Sprintf("Failed to remove worktree: %v\nOutput: %s", err, string(output)))
 		return
+	}
+
+	// Prune now that the worktree is gone so a stale .git/worktrees/<name>
+	// registration can't make a later `worktree add` to the same path fail
+	// with "already exists". Mirrors the subagent-isolation cleanup path.
+	if pruneCmd := ws.gitCommandForWorkspace(workspaceRoot, "worktree", "prune"); pruneCmd != nil {
+		_ = pruneCmd.Run()
 	}
 
 	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, userFileChanged("", "git_worktree_remove", absPath))

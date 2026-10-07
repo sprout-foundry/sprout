@@ -24,7 +24,7 @@ export interface UseWorktreesReturn {
   isLoading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
-  createWorktree: (path: string, branch: string, baseRef?: string) => Promise<string | null>;
+  createWorktree: (path: string, branch: string, baseRef?: string) => Promise<string>;
   removeWorktree: (path: string) => Promise<void>;
   checkoutWorktree: (path: string) => Promise<void>;
 }
@@ -60,9 +60,9 @@ export function useWorktrees(): UseWorktreesReturn {
   }, []);
 
   const createWorktreeHandler = useCallback(
-    async (path: string, branch: string, baseRef?: string): Promise<string | null> => {
+    async (path: string, branchName: string, baseRefName?: string): Promise<string> => {
       try {
-        await createWorktree(path, branch, baseRef);
+        await createWorktree(path, branchName, baseRefName);
         // Refresh the list after creating
         await refresh();
         return path;
@@ -70,7 +70,10 @@ export function useWorktrees(): UseWorktreesReturn {
         const message = err instanceof Error ? err.message : 'Failed to create worktree';
         setError(message);
         debugLog('[worktrees] Failed to create worktree:', err);
-        return null;
+        // Re-throw so the create dialog can keep itself open and show the
+        // error inline. Swallowing here made a failed create look like a
+        // success (the dialog closed and reset).
+        throw err instanceof Error ? err : new Error(message);
       }
     },
     [refresh],

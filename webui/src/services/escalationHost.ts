@@ -76,7 +76,7 @@ export function sameHost(a: EscalationHost, b: EscalationHost): boolean {
  * runner that just turned the request down (409 runner_unavailable); the
  * prompt then starts on the cloud, which is the offered way out.
  */
-export function defaultHost(repoURL: string | undefined, runners: Runner[], avoidRunnerId?: string): EscalationHost {
+export function defaultRunHost(repoURL: string | undefined, runners: Runner[], avoidRunnerId?: string): EscalationHost {
   if (avoidRunnerId) return CLOUD_HOST;
   const remembered = getRememberedHost(repoURL);
   if (remembered?.kind === 'cloud') return CLOUD_HOST;

@@ -741,9 +741,14 @@ needed whatever the integration work does. Spec context: SP-160 §160e.
       neither had a plan `test` acceptance item nor added/changed a test
       file; disabled it changes nothing, and a docs-only turn is not
       flagged. Pinned by five end-to-end tests (one per rule).
-- [ ] **157.7** `sprout health`: size and complexity signals and failing
+- [x] **157.7** `sprout health`: size and complexity signals and failing
       checks; findings proposed as small, separately approvable fixes.
       Fixture test. Spec: SP-157 §157c.
+      Fixed: new `pkg/health` scans the tree for oversized files and
+      high-complexity functions and adapts `pkg/verify` checks into
+      findings, each carrying a proposed fix; `cmd/health.go` registers
+      `sprout health` (text + `--json`) in the Diagnostics group. Pinned by
+      a fixture-project test.
 - [ ] **157.8** `sprout health`: duplicated code (SP-016 embedding index)
       and outdated dependencies. Fixture test. Spec: SP-157 §157c.
 - [ ] **157.9** Build/runtime error classifier (missing dependency, syntax

@@ -9,10 +9,14 @@ read `roadmap/SP-160-integration-api.md` (the cited section and Phases)
 before starting.
 Completed work lives in git history; finished sections are removed.
 
-Validation gate for every item: `make vet && make fmt-check && make lint &&
-make lint-go-new && make build-all`, plus `cd webui && npm run typecheck`,
-`npx prettier --check` on changed files and only the specific vitest files
-the item touched (`npx vitest run <file>`).
+Validation gate, scoped by what the item changed:
+- **No `.go` file changed:** `make lint` (eslint, prettier, tsc), `cd webui
+  && npm run typecheck`, `make build-workspace-package` (builds the package
+  and runs its artifact tests), `npx prettier --check` on changed files and
+  only the specific vitest files the item touched (`npx vitest run <file>`).
+- **Any `.go` file changed, or the last `[ ]` item of this file:** the full
+  gate `make vet && make fmt-check && make lint && make lint-go-new && make
+  build-all`, plus the vitest files the item touched.
 
 **This machine runs other automation in parallel; keep tests light.** Never
 run the full Go or vitest suites, never start browsers or containers, and
@@ -222,7 +226,7 @@ standalone local build keeps embedding into `pkg/webui/static`.
       `packages/design` (`@sprout-foundry/design`); theme packs layer on
       top; the web UI imports them from the package. No visual change: a
       test checks every token the UI uses is defined by the package.
-      Spec: SP-160 §160d.
+      Spec: SP-160 §160d. (batch with next)
 - [ ] **tok.2** `host.theme` token values map onto the package's token
       names (documented in `docs/integration/host-contract.md`); a host
       theme overrides tokens only inside the workspace root. Vitest.

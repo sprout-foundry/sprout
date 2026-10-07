@@ -263,11 +263,21 @@ protects.
       tag-stripping corrupts real code/strings (e.g. `.sprout`, `Load()`)
       and leaves ungrammatical prose, so this needs per-file review.
       Newly authored tags this session were already cleaned. Not yet done.
-- [ ] **rules.2** Split files over 500 lines introduced or grown by the
+- [x] **rules.2** Split files over 500 lines introduced or grown by the
       automated work (`pkg/agent/seed_provider_chat.go`,
       `pkg/benchmark/runner_test.go`, `config_roles_test.go`,
       `verification_hook_test.go`, and the others the review listed), no
       behavior change.
+      Fixed: split the named files (and their test counterparts) by
+      responsibility into cohesive files all under 500 lines —
+      `seed_provider_chat.go` 682→252 plus a stream file (234) and a
+      language-guard file (228); `runner_test.go` 1128→323 plus contract
+      (387), metrics (289) and suite (188) files; `verification_hook_test.go`
+      600→433 plus a guards file (187); `config_roles_test.go` 651→182 plus
+      a resolve file (481). Move-only (assertion counts unchanged; the agent,
+      benchmark and configuration suites pass). Large pre-existing files not
+      grown by the automated work (e.g. `pkg/webui/chat_sessions.go`,
+      `pkg/design/*`) were deliberately left untouched.
 
 ## Web UI delivery hygiene (before SP-160)
 Small fixes to how the hosted web UI bundle is built and cached; they are

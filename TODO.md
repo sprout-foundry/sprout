@@ -669,9 +669,14 @@ needed whatever the integration work does. Spec context: SP-160 §160e.
       token reaches only the auth header and is scrubbed from errors.
       Pinned by `httptest`-backed tests (round trip, typed non-2xx errors,
       token absence, project binding, concurrency).
-- [ ] **156.9** Ship mode through the 155.1 registry: live URL and
+- [x] **156.9** Ship mode through the 155.1 registry: live URL and
       version, deploy action, history with change summaries, roll back;
       Code/Design unaffected. Vitest. Spec: SP-156 §156d.
+      Fixed: a `ship` workspace mode registers through the public mode API
+      and renders a pure `ShipSurface` (live URL/version/last deploy, deploy
+      action, linkable history with a change-summary slot, rollback) driven
+      entirely by a `ship` slice on `WorkspaceShellProps`. Code and Design
+      are untouched and still register/switch. Pinned by vitest.
 
 ---
 

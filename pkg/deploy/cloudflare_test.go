@@ -87,7 +87,7 @@ func (f *cloudflareFake) handle(w http.ResponseWriter, r *http.Request) {
 	if f.failStatus != 0 && (f.failPath == "" || strings.Contains(r.URL.Path, f.failPath)) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(f.failStatus)
-		io.WriteString(w, f.failBody)
+		_, _ = io.WriteString(w, f.failBody)
 		return
 	}
 
@@ -184,7 +184,7 @@ func (f *cloudflareFake) requestsSnapshot() []fakeRequest {
 
 func writeCFOK(w http.ResponseWriter, result any) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"success": true,
 		"errors":  []any{},
 		"result":  result,
@@ -193,7 +193,7 @@ func writeCFOK(w http.ResponseWriter, result any) {
 
 func writeCFErr(w http.ResponseWriter, code int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"success": false,
 		"errors":  []map[string]any{{"code": code, "message": msg}},
 		"result":  nil,

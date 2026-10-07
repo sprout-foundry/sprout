@@ -22,7 +22,7 @@ import (
 // for a Cloudflare API token. It is only a fallback hint for callers building
 // a DeployCredentialConfig; the adapter never reads the environment itself —
 // it receives an already-resolved Credential.
-const CloudflareAPITokenEnvVar = "CLOUDFLARE_API_TOKEN"
+const CloudflareAPITokenEnvVar = "CLOUDFLARE_API_TOKEN" //nolint:gosec // G101: an env var *name*, not a credential value
 
 // DefaultCloudflareAPIBaseURL is the production Cloudflare API root. The
 // adapter appends the versioned path and resource segments to it.

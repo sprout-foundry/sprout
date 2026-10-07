@@ -237,6 +237,157 @@ func TestStaticSiteTasksPinToStarterCatalogue(t *testing.T) {
 	}
 }
 
+// loadStarterTasks loads the committed suite root and returns every task
+// whose starter field names starterID, in suite order, failing the test if
+// none matched. Callers filter the shared suite root rather than pointing the
+// loader at one starter directory, because LoadSuite's argument is the suite
+// root (<root>/<starter-id>/<task-id>.json is one level down).
+func loadStarterTasks(t *testing.T, starterID string) []*Task {
+	t.Helper()
+	suiteDir := filepath.Join(repoRoot(t), "benchmarks", "tasks")
+	tasks, err := LoadSuite(suiteDir)
+	if err != nil {
+		t.Fatalf("LoadSuite(%s): %v", suiteDir, err)
+	}
+	var matched []*Task
+	for _, task := range tasks {
+		if task.Starter == starterID {
+			matched = append(matched, task)
+		}
+	}
+	if len(matched) == 0 {
+		t.Fatalf("no %q tasks loaded from %s; the suite must carry at least five", starterID, suiteDir)
+	}
+	return matched
+}
+
+// assertStarterTasksLoad pins one starter's committed task set: at least five
+// tasks, unique ids, every frozen plan valid and naming the same starter as
+// the task, and a deterministic reload (same count and same order). It returns
+// the matched tasks so a caller can further pin the acceptance checks.
+func assertStarterTasksLoad(t *testing.T, starterID string) []*Task {
+	t.Helper()
+	tasks := loadStarterTasks(t, starterID)
+	if len(tasks) < 5 {
+		t.Fatalf("%s has %d task(s); want at least five", starterID, len(tasks))
+	}
+
+	seen := make(map[string]bool, len(tasks))
+	for _, task := range tasks {
+		if seen[task.ID] {
+			t.Errorf("duplicate %s task id %q", starterID, task.ID)
+		}
+		seen[task.ID] = true
+		if err := plancontract.Validate(&task.Plan); err != nil {
+			t.Errorf("task %q frozen plan does not validate: %v", task.ID, err)
+		}
+		if task.Plan.Starter != task.Starter {
+			t.Errorf("task %q plan starter %q disagrees with task starter %q",
+				task.ID, task.Plan.Starter, task.Starter)
+		}
+	}
+
+	again, err := LoadSuite(filepath.Join(repoRoot(t), "benchmarks", "tasks"))
+	if err != nil {
+		t.Fatalf("LoadSuite (second load): %v", err)
+	}
+	var againIDs []string
+	for _, task := range again {
+		if task.Starter == starterID {
+			againIDs = append(againIDs, task.ID)
+		}
+	}
+	var gotIDs []string
+	for _, task := range tasks {
+		gotIDs = append(gotIDs, task.ID)
+	}
+	if !slices.Equal(gotIDs, againIDs) {
+		t.Errorf("%s load order differs across loads: %v then %v (loader must be deterministic)", starterID, gotIDs, againIDs)
+	}
+	return tasks
+}
+
+// assertStarterAcceptancePinnedToManifest is the coherence pin for one
+// starter: every task's acceptance uses checks the verification runner can
+// actually run from that starter's manifest — the build command, the test
+// command, or a page route the manifest declares — so a task can never
+// reference a check the starter cannot run. It also confirms the starter id
+// resolves in the embedded catalogue.
+func assertStarterAcceptancePinnedToManifest(t *testing.T, starterID string, tasks []*Task) {
+	t.Helper()
+	m, err := starters.Manifest(starterID)
+	if err != nil {
+		t.Fatalf("starters.Manifest(%q): %v", starterID, err)
+	}
+	if m.Starter.ID != starterID {
+		t.Errorf("catalogue starter id = %q, task names %q", m.Starter.ID, starterID)
+	}
+
+	routes := make(map[string]bool, len(m.Routes))
+	for _, r := range m.Routes {
+		routes[r] = true
+	}
+
+	for _, task := range tasks {
+		for _, a := range task.Plan.Acceptance {
+			switch a.Kind {
+			case plancontract.KindBuild:
+				if a.Check != m.Build {
+					t.Errorf("task %q acceptance %q build check = %q, want the manifest build command %q",
+						task.ID, a.ID, a.Check, m.Build)
+				}
+			case plancontract.KindTest:
+				if a.Check != m.Test {
+					t.Errorf("task %q acceptance %q test check = %q, want the manifest test command %q",
+						task.ID, a.ID, a.Check, m.Test)
+				}
+			case plancontract.KindPage:
+				if !routes[a.Check] {
+					t.Errorf("task %q acceptance %q page check = %q, want one of the manifest routes %v",
+						task.ID, a.ID, a.Check, m.Routes)
+				}
+			default:
+				t.Errorf("task %q acceptance %q has kind %q; the committed task set uses only build, test, and page",
+					task.ID, a.ID, a.Kind)
+			}
+		}
+	}
+}
+
+// TestLoadSuiteWebApp pins the committed web-app tasks: at least five of them,
+// unique ids, every frozen plan valid and naming web-app, and a deterministic
+// reload — the suite-level counterpart of TestStaticSiteTasksPinToStarterCatalogue
+// for the React starter.
+func TestLoadSuiteWebApp(t *testing.T) {
+	assertStarterTasksLoad(t, "web-app")
+}
+
+// TestWebAppTasksPinToStarterCatalogue is the web-app coherence pin: every
+// committed web-app task's acceptance runs against checks the web-app starter's
+// manifest declares (its build command, its test command, or one of its
+// routes), so the task set can never ask the runner to check something the
+// starter cannot run.
+func TestWebAppTasksPinToStarterCatalogue(t *testing.T) {
+	tasks := assertStarterTasksLoad(t, "web-app")
+	assertStarterAcceptancePinnedToManifest(t, "web-app", tasks)
+}
+
+// TestLoadSuiteWebAppData pins the committed web-app-data tasks: at least five
+// of them, unique ids, every frozen plan valid and naming web-app-data, and a
+// deterministic reload.
+func TestLoadSuiteWebAppData(t *testing.T) {
+	assertStarterTasksLoad(t, "web-app-data")
+}
+
+// TestWebAppDataTasksPinToStarterCatalogue is the web-app-data coherence pin:
+// every committed web-app-data task's acceptance runs against checks the
+// starter's manifest declares (its build command, its test command, or one of
+// its routes, including the API route).
+func TestWebAppDataTasksPinToStarterCatalogue(t *testing.T) {
+	tasks := assertStarterTasksLoad(t, "web-app-data")
+	assertStarterAcceptancePinnedToManifest(t, "web-app-data", tasks)
+}
+
 // TestTaskRoundTripStability proves the frozen format is stable: a marshal
 // cycle of the committed fixture reproduces the same task, byte for byte.
 // The fixture uses second-granularity UTC timestamps so the time.Time JSON

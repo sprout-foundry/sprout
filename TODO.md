@@ -609,7 +609,7 @@ passes the manifest validator (`pkg/startermanifest`).
       manifest (e.g. add a page, add a form field, change the layout, add a
       content collection entry, fix a broken link), under the benchmark
       suite directory; the runner lists and loads them. Spec: SP-154 §154a.
-- [ ] **154.7** Benchmark tasks for `web-app` and `web-app-data`: at least
+- [x] **154.7** Benchmark tasks for `web-app` and `web-app-data`: at least
       five each, same format (for data: add a column with a migration, a
       new API route with a test, list and create through the UI).
       Spec: SP-154 §154a.

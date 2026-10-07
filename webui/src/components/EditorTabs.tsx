@@ -2,6 +2,9 @@ import { ContextMenu } from '@sprout/ui';
 import {
   X,
   FolderOpen,
+  FolderTree,
+  Copy,
+  CopyPlus,
   ArrowRightLeft,
   PanelRightOpen,
   Eye,
@@ -19,6 +22,7 @@ import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useTabDragReorder } from '../hooks/useTabDragReorder';
 import { readFileWithConsent } from '../services/fileAccess';
 import { notificationBus } from '../services/notificationBus';
+import { ApiService } from '../services/api/apiService';
 import { type EditorBuffer } from '../types/editor';
 import { isSharedMode } from '../utils/sharedMode';
 import { catchIfAsync, getBufferIcon, getChatId, getFileIcon, getFileIconColor } from './editorTabIcons';
@@ -86,6 +90,10 @@ function EditorTabs({
   } = useEditorManager();
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; bufferId: string } | null>(null);
   const [emptyAreaContextMenu, setEmptyAreaContextMenu] = useState<{ x: number; y: number } | null>(null);
+  // Workspace root for Copy Absolute Path (the editor context menu keeps the
+  // same root fetch; file.path is root-relative or already absolute).
+  const apiServiceRef = useRef(ApiService.getInstance()).current;
+  const [workspaceRoot, setWorkspaceRoot] = useState('');
   const tabRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const buffersRef = useRef(buffers);
   useEffect(() => {
@@ -101,6 +109,51 @@ function EditorTabs({
       if (!live.has(id)) delete tabRefs.current[id];
     }
   }, [buffers]);
+
+  // Workspace root backs Copy Absolute Path on the tab menu. Best-effort:
+  // a failed fetch leaves the root empty and the item falls back to the
+  // stored path (the editor context menu behaves the same way).
+  useEffect(() => {
+    let cancelled = false;
+    apiServiceRef
+      .getWorkspace()
+      .then((ws) => {
+        if (!cancelled) setWorkspaceRoot(ws.workspace_root || '');
+      })
+      .catch(() => {
+        /* best-effort */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiServiceRef]);
+
+  const handleCopyRelativePath = useCallback((buffer: EditorBuffer) => {
+    const path = buffer.file?.path;
+    if (!path) return;
+    void navigator.clipboard?.writeText(path).catch(() => {
+      notificationBus.notify('error', 'Editor', 'Failed to copy path', 3000);
+    });
+  }, []);
+
+  const handleCopyAbsolutePath = useCallback(
+    (buffer: EditorBuffer) => {
+      const path = buffer.file?.path;
+      if (!path) return;
+      const root = workspaceRoot.replace(/\/+$/, '');
+      const absolute = path.startsWith('/') || !root ? path : `${root}/${path}`;
+      void navigator.clipboard?.writeText(absolute).catch(() => {
+        notificationBus.notify('error', 'Editor', 'Failed to copy path', 3000);
+      });
+    },
+    [workspaceRoot],
+  );
+
+  const handleRevealInFileTree = useCallback((buffer: EditorBuffer) => {
+    const path = buffer.file?.path;
+    if (!path) return;
+    window.dispatchEvent(new CustomEvent('sprout:reveal-in-explorer', { detail: { path } }));
+  }, []);
 
   // ── Drag-and-drop tab reorder ─────────────────────────────────
   const { handleDragStart, handleDrop, resolveDraggedBufferId, handlePaneDrop, handleDragEnd } = useTabDragReorder({
@@ -662,6 +715,32 @@ function EditorTabs({
               <Eye size={14} />
               <span>Reveal tab</span>
             </button>
+            {/* ── File-path actions (file tabs only) ──────────────── */}
+            {activeContextBuffer.kind === 'file' && !activeContextBuffer.file.path.startsWith('__workspace/') && (
+              <>
+                <button
+                  className="context-menu-item"
+                  onClick={() => handleContextAction(() => handleRevealInFileTree(activeContextBuffer))}
+                >
+                  <FolderTree size={14} />
+                  <span>Open in file list</span>
+                </button>
+                <button
+                  className="context-menu-item"
+                  onClick={() => handleContextAction(() => handleCopyRelativePath(activeContextBuffer))}
+                >
+                  <Copy size={14} />
+                  <span>Copy relative path</span>
+                </button>
+                <button
+                  className="context-menu-item"
+                  onClick={() => handleContextAction(() => handleCopyAbsolutePath(activeContextBuffer))}
+                >
+                  <CopyPlus size={14} />
+                  <span>Copy absolute path</span>
+                </button>
+              </>
+            )}
             {/* Take the on-disk version: shown for file buffers with an
              * external-change conflict (click = arbitration) or a clean
              * buffer (harmless refresh). Deliberately NOT shown for a

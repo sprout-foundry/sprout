@@ -44,6 +44,9 @@ vi.mock('lucide-react', () => {
     'Pencil',
     'RefreshCw',
     'Trash2',
+    'FolderTree',
+    'Copy',
+    'CopyPlus',
     'ImageIcon',
     'Video',
     'Headphones',
@@ -104,6 +107,12 @@ vi.mock('./ThemedDialog', () => ({
 
 vi.mock('../services/fileAccess', () => ({
   readFileWithConsent: vi.fn(),
+}));
+
+// EditorTabs fetches the workspace root (for Copy Absolute Path).
+const mockGetWorkspace = vi.fn().mockResolvedValue({ workspace_root: '/repo', daemon_root: '/repo' });
+vi.mock('../services/api/apiService', () => ({
+  ApiService: { getInstance: () => ({ getWorkspace: mockGetWorkspace }) },
 }));
 
 vi.mock('../services/notificationBus', () => ({
@@ -609,6 +618,95 @@ describe('EditorTabs empty area context menu', () => {
       const menusAfter = getContextMenuElements().length;
       expect(menusAfter).toBe(0);
     });
+  });
+});
+
+describe('EditorTabs file-path context menu items', () => {
+  function setupFileTab() {
+    const buf = makeMockBuffer('buf-1', 'pane-1');
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([['buf-1', buf]]),
+      panes: [{ id: 'pane-1', bufferId: 'buf-1', isActive: true }],
+      activeBufferId: 'buf-1',
+      activePaneId: 'pane-1',
+    });
+    renderEditorTabs({ paneId: 'pane-1' });
+    fireContextMenu(container!.querySelector('.tab') as HTMLElement, 100, 200);
+  }
+
+  function menuItem(label: string): HTMLElement | undefined {
+    return getContextMenuElements()
+      .flatMap((m) => Array.from(m.querySelectorAll('.context-menu-item')))
+      .find((item) => item.textContent?.trim() === label) as HTMLElement | undefined;
+  }
+
+  test('offers Open in file list, Copy relative path and Copy absolute path on a file tab', () => {
+    setupFileTab();
+    const labels = getContextMenuElements().flatMap((m) => getMenuTexts(m));
+    expect(labels).toContain('Open in file list');
+    expect(labels).toContain('Copy relative path');
+    expect(labels).toContain('Copy absolute path');
+  });
+
+  test('Copy relative path writes the buffer path to the clipboard', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    setupFileTab();
+    await act(async () => {
+      menuItem('Copy relative path')!.click();
+      await Promise.resolve();
+    });
+    expect(writeText).toHaveBeenCalledWith('src/buf-1.tsx');
+  });
+
+  test('Copy absolute path prefixes the workspace root', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    setupFileTab();
+    // Let the workspace-root fetch resolve before clicking.
+    await act(async () => {
+      await Promise.resolve();
+    });
+    await act(async () => {
+      menuItem('Copy absolute path')!.click();
+      await Promise.resolve();
+    });
+    expect(writeText).toHaveBeenCalledWith('/repo/src/buf-1.tsx');
+  });
+
+  test('Open in file list dispatches the reveal event with the file path', async () => {
+    const events: CustomEvent[] = [];
+    const listener = (e: Event) => events.push(e as CustomEvent);
+    window.addEventListener('sprout:reveal-in-explorer', listener);
+    try {
+      setupFileTab();
+      await act(async () => {
+        menuItem('Open in file list')!.click();
+        await Promise.resolve();
+      });
+      expect(events).toHaveLength(1);
+      expect(events[0].detail).toEqual({ path: 'src/buf-1.tsx' });
+    } finally {
+      window.removeEventListener('sprout:reveal-in-explorer', listener);
+    }
+  });
+
+  test('hides the file-path items on a chat tab', () => {
+    const chatBuf = makeChatBufferWithId('buf-chat', 'chat-1');
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([['buf-chat', chatBuf]]),
+      panes: [{ id: 'pane-1', bufferId: 'buf-chat', isActive: true }],
+      activeBufferId: 'buf-chat',
+      activePaneId: 'pane-1',
+    });
+    renderEditorTabs({ paneId: 'pane-1' });
+    fireContextMenu(container!.querySelector('.tab') as HTMLElement, 100, 200);
+    const labels = getContextMenuElements().flatMap((m) => getMenuTexts(m));
+    expect(labels).not.toContain('Copy relative path');
+    expect(labels).not.toContain('Copy absolute path');
+    expect(labels).not.toContain('Open in file list');
   });
 });
 

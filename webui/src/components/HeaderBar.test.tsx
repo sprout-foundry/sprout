@@ -13,6 +13,7 @@ vi.mock('../services/activeRepo', () => ({ useActiveRepoURL: () => activeRepo })
 
 import { HostProvider, headlessHost } from '../host';
 import { setActiveHost } from '../host/accessor';
+import { cloudHost } from '../host/platform';
 import { __resetFullWorkspaceForTests } from '../services/fullWorkspace';
 import HeaderBar from './HeaderBar';
 
@@ -55,6 +56,8 @@ async function renderHeader(status: number, body: string) {
   // it renders inside the app's HostProvider, so the tests mount one too.
   const host = headlessHost();
   host.transport = { ...host.transport, authMode: 'bearer' };
+  // The hosted build's navigation (back-link targets) comes from cloudHost.
+  host.navigation = cloudHost.navigation;
   await act(async () => {
     root.render(
       <HostProvider host={host}>

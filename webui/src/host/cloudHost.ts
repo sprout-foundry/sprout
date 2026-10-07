@@ -1,17 +1,18 @@
 import { notificationBus as rawNotificationBus } from '@sprout/ui';
-import { CLOUD_NAV_ITEMS } from './platform';
+// Concrete modules, not the './platform' index: the index re-exports
+// cloudHost, so importing through it is a cycle that leaves these bindings
+// undefined while this module evaluates under some module loaders.
 import {
   PLATFORM_ACCOUNT_ITEMS,
   PLATFORM_WORK_ITEMS,
-  createPlatformRepo,
-  fetchPlatformGitHubConnected,
   intentPath as platformIntentPath,
-  listPlatformRepos,
   platformEntitlements,
-  platformHref,
   platformPagePath,
   platformEmbedPagePath,
-} from './platform';
+} from './platform/pages';
+import { CLOUD_NAV_ITEMS } from './platformNav';
+import { platformHref } from './platformUrl';
+import { createPlatformRepo, fetchPlatformGitHubConnected, listPlatformRepos } from './platformGitHub';
 import { platformChrome } from './platform/platformChrome';
 import type { HostEntitlements, SproutHost } from './types';
 

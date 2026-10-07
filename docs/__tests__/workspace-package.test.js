@@ -18,6 +18,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -1128,25 +1129,119 @@ describe(
       );
     });
 
-    test(
-      "declarations resolve without paths outside the package",
-      { todo: "declarations are not yet bundled (SP-160 §160e)" },
-      () => {
-        const declarations = walk(DIST).filter((file) =>
-          file.endsWith(".d.ts"),
+    test("declarations resolve entirely within the package", () => {
+      // The published `types` entry must resolve for a host that has only the
+      // package's `dist/`: no `../../../webui/...` path out of the package, no
+      // nonexistent `@sprout-foundry/workspace-webui` namespace, and no bare
+      // import of a package the host does not install (the bundled `@sprout/ui`
+      // must be inlined). `react`/`react-dom` are the only allowed externals —
+      // they are peer dependencies the host provides.
+      const declarations = walk(DIST).filter((file) => file.endsWith(".d.ts"));
+      assert.ok(declarations.length > 0, "the package emits declarations");
+      const offenders = declarations.filter((file) => {
+        const source = fs.readFileSync(path.join(PACKAGE_DIR, file), "utf-8");
+        return /from\s*["'](?:(?:\.\.\/)+webui\/|@sprout-foundry\/workspace-webui)/.test(
+          source,
         );
-        const offenders = declarations.filter((file) => {
-          const source = fs.readFileSync(path.join(PACKAGE_DIR, file), "utf-8");
-          return /from\s*["'](?:(?:\.\.\/)+webui\/|@sprout-foundry\/workspace-webui)/.test(
-            source,
-          );
-        });
-        assert.deepEqual(
-          offenders,
-          [],
-          `declarations reference files outside the package: ${offenders.join(", ")}`,
+      });
+      assert.deepEqual(
+        offenders,
+        [],
+        `declarations reference files outside the package: ${offenders.join(", ")}`,
+      );
+
+      // Every bare import specifier that survives must be a peer (react).
+      const bareOffenders = [];
+      for (const file of declarations) {
+        const source = fs.readFileSync(path.join(PACKAGE_DIR, file), "utf-8");
+        for (const match of source.matchAll(/from\s*["']([^"'.][^"']*)["']/g)) {
+          const spec = match[1];
+          if (!/^react(-dom)?(\/|$)/.test(spec))
+            bareOffenders.push(`${file}: ${spec}`);
+        }
+      }
+      assert.deepEqual(
+        bareOffenders,
+        [],
+        `declarations import a package a host does not install: ${bareOffenders.join(", ")}`,
+      );
+    });
+
+    test("a scratch TypeScript project type-checks the package against dist/ alone", () => {
+      // The end-to-end proof of self-containment: a host project that maps
+      // `@sprout-foundry/workspace` to `packages/workspace/dist` (and has only
+      // the repo's React types available — no `webui/src`) must type-check
+      // importing the package's public surface. This is what a real host does.
+      const scratch = fs.mkdtempSync(
+        path.join(os.tmpdir(), "workspace-types-"),
+      );
+      try {
+        fs.writeFileSync(
+          path.join(scratch, "tsconfig.json"),
+          JSON.stringify(
+            {
+              compilerOptions: {
+                strict: true,
+                noEmit: true,
+                skipLibCheck: true,
+                module: "ESNext",
+                moduleResolution: "bundler",
+                jsx: "react-jsx",
+                lib: ["DOM", "DOM.Iterable", "ES2020"],
+                target: "ES2020",
+                baseUrl: scratch,
+                paths: {
+                  "@sprout-foundry/workspace": [path.join(DIST, "index.d.ts")],
+                  react: [path.join(ROOT, "node_modules/react")],
+                  "react/jsx-runtime": [
+                    path.join(ROOT, "node_modules/react/jsx-runtime"),
+                  ],
+                },
+              },
+              include: ["index.ts"],
+            },
+            null,
+            2,
+          ),
         );
-      },
-    );
+        fs.writeFileSync(
+          path.join(scratch, "index.ts"),
+          [
+            "import {",
+            "  localHost,",
+            "  HostProvider,",
+            "  useHost,",
+            "  headlessHost,",
+            "  type SproutHost,",
+            "  type HostCapabilities,",
+            "} from '@sprout-foundry/workspace';",
+            "",
+            "const host: SproutHost = localHost;",
+            "const caps: HostCapabilities = host.capabilities;",
+            "void headlessHost();",
+            "export function useIt(): unknown {",
+            "  return [HostProvider, useHost, caps];",
+            "}",
+            "",
+          ].join("\n"),
+        );
+
+        const tsc = path.join(ROOT, "node_modules/.bin/tsc");
+        const result = spawnSync(
+          tsc,
+          ["-p", path.join(scratch, "tsconfig.json")],
+          {
+            encoding: "utf-8",
+          },
+        );
+        assert.equal(
+          result.status,
+          0,
+          `a host importing the package's types failed to type-check:\n${result.stdout}${result.stderr}`,
+        );
+      } finally {
+        fs.rmSync(scratch, { recursive: true, force: true });
+      }
+    });
   },
 );

@@ -712,8 +712,16 @@ needed whatever the integration work does. Spec context: SP-160 §160e.
       sort/restorability helpers. It is an additive tab in
       `AgentChangesPanel`; the existing per-file views are unchanged.
       Pinned by vitest.
-- [ ] **157.4** Optional `summarizer`-role change summaries with template
+- [x] **157.4** Optional `summarizer`-role change summaries with template
       fallback. Test. Spec: SP-157 §157a.
+      Fixed: `pkg/history/timeline` gains an opt-in model summary
+      (`SummarizeEntry`/`SummarizeEntryWithUsageFn`) that builds the prompt
+      from the entry's own fields only, bounds the call, falls back to the
+      deterministic template on a nil client, error, timeout, empty output,
+      or an entry with nothing to summarize, and books usage under the
+      `summarizer` role only when the model actually ran. Pinned by tests
+      including the fallback and no-fabrication rules. Consumers (a timeline
+      rendering surface that books the usage) land with that surface.
 - [ ] **157.5** Quality after edits (off by default in the CLI): run the
       manifest's or project's formatter and linter after a code-changing
       turn and fix findings in the same turn. Scripted test with a seeded

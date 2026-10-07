@@ -1,13 +1,13 @@
-import { act, createElement } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
-import { vi } from 'vitest';
-import { waitFor } from '@testing-library/react';
-import CommandInput from './CommandInput';
-import type { CommandInputProps } from './CommandInput';
+import { act, createElement } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { vi } from "vitest";
+import { waitFor } from "@testing-library/react";
+import CommandInput from "./CommandInput";
+import type { CommandInputProps } from "./CommandInput";
 
 // ── Mock dependencies ────────────────────────────────────────────────
 
-vi.mock('../utils/log', () => ({
+vi.mock("../utils/log", () => ({
   useLog: () => ({
     debug: vi.fn(),
     warn: vi.fn(),
@@ -18,21 +18,41 @@ vi.mock('../utils/log', () => ({
   debugLog: vi.fn(),
 }));
 
-vi.mock('./command_input_history', () => ({
-  createEmptyState: () => ({ commands: [], index: -1, tempInput: '' }),
+vi.mock("./command_input_history", () => ({
+  createEmptyState: () => ({ commands: [], index: -1, tempInput: "" }),
   dedupeCommands: (arr: string[]) => [...new Set(arr)],
-  loadCommandHistory: vi.fn().mockResolvedValue({ commands: [], index: -1, tempInput: '' }),
+  loadCommandHistory: vi
+    .fn()
+    .mockResolvedValue({ commands: [], index: -1, tempInput: "" }),
   persistCommandHistory: vi.fn(),
 }));
 
-vi.mock('./QueuedMessagesPanel', () => {
-  const MockPanel = ({ messages, onClose }: { messages: string[]; onClose: () => void }) => {
-    return createElement('div', {
-      'data-testid': 'queued-messages-panel',
-      'data-message-count': messages.length,
-    },
-      createElement('button', { onClick: onClose, type: 'button' }, 'Close Queue'),
-      messages.map((msg, i) => createElement('div', { key: i, 'data-testid': 'queued-msg', 'data-msg': msg }, msg)),
+vi.mock("./QueuedMessagesPanel", () => {
+  const MockPanel = ({
+    messages,
+    onClose,
+  }: {
+    messages: string[];
+    onClose: () => void;
+  }) => {
+    return createElement(
+      "div",
+      {
+        "data-testid": "queued-messages-panel",
+        "data-message-count": messages.length,
+      },
+      createElement(
+        "button",
+        { onClick: onClose, type: "button" },
+        "Close Queue",
+      ),
+      messages.map((msg, i) =>
+        createElement(
+          "div",
+          { key: i, "data-testid": "queued-msg", "data-msg": msg },
+          msg,
+        ),
+      ),
     );
   };
   return { __esModule: true, default: MockPanel };
@@ -43,22 +63,28 @@ const localStorageMock = (() => {
   let store: Record<string, string> = {};
   return {
     getItem: vi.fn((key: string) => store[key] ?? null),
-    setItem: vi.fn((key: string, value: string) => { store[key] = value; }),
-    removeItem: vi.fn((key: string) => { delete store[key]; }),
-    clear: vi.fn(() => { store = {}; }),
+    setItem: vi.fn((key: string, value: string) => {
+      store[key] = value;
+    }),
+    removeItem: vi.fn((key: string) => {
+      delete store[key];
+    }),
+    clear: vi.fn(() => {
+      store = {};
+    }),
   };
 })();
-Object.defineProperty(global, 'localStorage', { value: localStorageMock });
+Object.defineProperty(global, "localStorage", { value: localStorageMock });
 
 // ── Mock clipboard API ───────────────────────────────────────────────
-Object.defineProperty(global.navigator, 'clipboard', {
+Object.defineProperty(global.navigator, "clipboard", {
   value: { writeText: vi.fn().mockResolvedValue(undefined) },
   writable: true,
 });
 
 // ── Test Setup ───────────────────────────────────────────────────────
 
-describe('CommandInput', () => {
+describe("CommandInput", () => {
   let container: HTMLDivElement;
   let root: Root;
 
@@ -67,8 +93,8 @@ describe('CommandInput', () => {
   });
 
   beforeEach(() => {
-    container = document.createElement('div');
-    container.id = 'command-input-test-root';
+    container = document.createElement("div");
+    container.id = "command-input-test-root";
     document.body.appendChild(container);
     root = createRoot(container);
   });
@@ -82,298 +108,368 @@ describe('CommandInput', () => {
   });
 
   const baseProps: CommandInputProps = {
-    value: '',
+    value: "",
     onChange: vi.fn(),
     onSend: vi.fn(),
-    placeholder: 'Ask me anything about your code...',
+    placeholder: "Ask me anything about your code...",
   };
 
-  it('renders textarea with correct placeholder', () => {
+  it("renders textarea with correct placeholder", () => {
     act(() => {
       root.render(createElement(CommandInput, baseProps));
     });
-    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
     expect(textarea).not.toBeNull();
-    expect(textarea?.placeholder).toBe('Ask me anything about your code...');
+    expect(textarea?.placeholder).toBe("Ask me anything about your code...");
   });
 
-  it('renders with initial value', () => {
+  it("renders with initial value", () => {
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        value: 'pre-filled text',
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          value: "pre-filled text",
+        }),
+      );
     });
-    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
-    expect(textarea?.value).toBe('pre-filled text');
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
+    expect(textarea?.value).toBe("pre-filled text");
   });
 
-  it('calls onSend when Enter is pressed (multiline mode)', () => {
+  it("calls onSend when Enter is pressed (multiline mode)", () => {
     const onSend = vi.fn();
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        value: 'test message',
-        onSend,
-        multiline: true,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          value: "test message",
+          onSend,
+          multiline: true,
+        }),
+      );
     });
-    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
     act(() => {
-      const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
+      const event = new KeyboardEvent("keydown", {
+        key: "Enter",
+        bubbles: true,
+      });
       textarea!.dispatchEvent(event);
     });
-    expect(onSend).toHaveBeenCalledWith('test message');
+    expect(onSend).toHaveBeenCalledWith("test message");
   });
 
-  it('inserts newline when Shift+Enter is pressed', () => {
+  it("inserts newline when Shift+Enter is pressed", () => {
     const onChange = vi.fn();
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        value: 'hello',
-        onChange,
-        multiline: true,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          value: "hello",
+          onChange,
+          multiline: true,
+        }),
+      );
     });
-    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
     act(() => {
       textarea!.selectionStart = 5;
       textarea!.selectionEnd = 5;
-      const event = new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true });
+      const event = new KeyboardEvent("keydown", {
+        key: "Enter",
+        shiftKey: true,
+        bubbles: true,
+      });
       textarea!.dispatchEvent(event);
     });
-    expect(onChange).toHaveBeenCalledWith('hello\n');
+    expect(onChange).toHaveBeenCalledWith("hello\n");
   });
 
-  it('sends message when form is submitted', () => {
+  it("sends message when form is submitted", () => {
     const onSend = vi.fn();
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        value: 'form submit test',
-        onSend,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          value: "form submit test",
+          onSend,
+        }),
+      );
     });
-    const form = container.querySelector('form');
+    const form = container.querySelector("form");
     act(() => {
-      form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      form!.dispatchEvent(
+        new Event("submit", { bubbles: true, cancelable: true }),
+      );
     });
-    expect(onSend).toHaveBeenCalledWith('form submit test');
+    expect(onSend).toHaveBeenCalledWith("form submit test");
   });
 
-  it('does not send empty messages', () => {
+  it("does not send empty messages", () => {
     const onSend = vi.fn();
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        value: '   ',
-        onSend,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          value: "   ",
+          onSend,
+        }),
+      );
     });
-    const form = container.querySelector('form');
+    const form = container.querySelector("form");
     act(() => {
-      form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      form!.dispatchEvent(
+        new Event("submit", { bubbles: true, cancelable: true }),
+      );
     });
     expect(onSend).not.toHaveBeenCalled();
   });
 
-  it('clears input after sending', () => {
+  it("clears input after sending", () => {
     const onChange = vi.fn();
     const onSend = vi.fn();
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        value: 'send this',
-        onChange,
-        onSend,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          value: "send this",
+          onChange,
+          onSend,
+        }),
+      );
     });
-    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
     act(() => {
-      const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
+      const event = new KeyboardEvent("keydown", {
+        key: "Enter",
+        bubbles: true,
+      });
       textarea!.dispatchEvent(event);
     });
-    expect(onChange).toHaveBeenCalledWith('');
+    expect(onChange).toHaveBeenCalledWith("");
   });
 
-  it('shows stop button when isProcessing is true', () => {
+  it("shows stop button when isProcessing is true", () => {
     const onStop = vi.fn();
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        isProcessing: true,
-        onStop,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          isProcessing: true,
+          onStop,
+        }),
+      );
     });
-    const stopBtn = container.querySelector('.stop-button');
+    const stopBtn = container.querySelector(".stop-button");
     expect(stopBtn).not.toBeNull();
   });
 
-  it('does not show stop button when isProcessing is false', () => {
+  it("does not show stop button when isProcessing is false", () => {
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        isProcessing: false,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          isProcessing: false,
+        }),
+      );
     });
-    const stopBtn = container.querySelector('.stop-button');
+    const stopBtn = container.querySelector(".stop-button");
     expect(stopBtn).toBeNull();
   });
 
-  it('shows queue button when isProcessing and onQueue provided', () => {
+  it("shows queue button when isProcessing and onQueue provided", () => {
     const onQueue = vi.fn();
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        value: 'queued msg',
-        isProcessing: true,
-        onQueue,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          value: "queued msg",
+          isProcessing: true,
+          onQueue,
+        }),
+      );
     });
-    const queueBtn = container.querySelector('.queue-add-button');
+    const queueBtn = container.querySelector(".queue-add-button");
     expect(queueBtn).not.toBeNull();
   });
 
-  it('does not show queue button when isProcessing is false', () => {
+  it("does not show queue button when isProcessing is false", () => {
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        onQueue: vi.fn(),
-        isProcessing: false,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          onQueue: vi.fn(),
+          isProcessing: false,
+        }),
+      );
     });
-    const queueBtn = container.querySelector('.queue-add-button');
+    const queueBtn = container.querySelector(".queue-add-button");
     expect(queueBtn).toBeNull();
   });
 
-  it('disables input when disabled=true', () => {
+  it("disables input when disabled=true", () => {
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        disabled: true,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          disabled: true,
+        }),
+      );
     });
-    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
     expect(textarea?.disabled).toBe(true);
   });
 
-  it('handles Escape key to clear input', () => {
+  it("handles Escape key to clear input", () => {
     const onChange = vi.fn();
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        value: 'will be cleared',
-        onChange,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          value: "will be cleared",
+          onChange,
+        }),
+      );
     });
-    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
     act(() => {
-      const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true });
+      const event = new KeyboardEvent("keydown", {
+        key: "Escape",
+        bubbles: true,
+      });
       textarea!.dispatchEvent(event);
     });
-    expect(onChange).toHaveBeenCalledWith('');
+    expect(onChange).toHaveBeenCalledWith("");
   });
 
-  it('shows keyboard shortcuts hints popover when info button clicked', () => {
+  it("shows keyboard shortcuts hints popover when info button clicked", () => {
     act(() => {
       root.render(createElement(CommandInput, baseProps));
     });
-    let hintsPopover = container.querySelector('.hints-popover');
+    let hintsPopover = container.querySelector(".hints-popover");
     expect(hintsPopover).toBeNull();
 
-    const infoBtn = container.querySelector('.hints-button')!;
+    const infoBtn = container.querySelector(".hints-button")!;
     act(() => {
-      infoBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      infoBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    hintsPopover = container.querySelector('.hints-popover');
+    hintsPopover = container.querySelector(".hints-popover");
     expect(hintsPopover).not.toBeNull();
-    expect(hintsPopover?.textContent).toContain('Keyboard Shortcuts');
-    expect(hintsPopover?.textContent).toContain('Enter');
-    expect(hintsPopover?.textContent).toContain('Shift+Enter');
+    expect(hintsPopover?.textContent).toContain("Keyboard Shortcuts");
+    expect(hintsPopover?.textContent).toContain("Enter");
+    expect(hintsPopover?.textContent).toContain("Shift+Enter");
   });
 
-  it('respects disabled and isConnected props on send button', () => {
+  it("respects disabled and isConnected props on send button", () => {
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        value: 'test',
-        disabled: true,
-        isConnected: true,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          value: "test",
+          disabled: true,
+          isConnected: true,
+        }),
+      );
     });
-    const sendBtn = container.querySelector('.send-button') as HTMLButtonElement;
+    const sendBtn = container.querySelector(
+      ".send-button",
+    ) as HTMLButtonElement;
     expect(sendBtn?.disabled).toBe(true);
 
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        value: 'test',
-        disabled: false,
-        isConnected: false,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          value: "test",
+          disabled: false,
+          isConnected: false,
+        }),
+      );
     });
-    const sendBtn2 = container.querySelector('.send-button') as HTMLButtonElement;
+    const sendBtn2 = container.querySelector(
+      ".send-button",
+    ) as HTMLButtonElement;
     expect(sendBtn2?.disabled).toBe(true);
 
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        value: 'test',
-        disabled: false,
-        isConnected: true,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          value: "test",
+          disabled: false,
+          isConnected: true,
+        }),
+      );
     });
-    const sendBtn3 = container.querySelector('.send-button') as HTMLButtonElement;
+    const sendBtn3 = container.querySelector(
+      ".send-button",
+    ) as HTMLButtonElement;
     expect(sendBtn3?.disabled).toBe(false);
   });
 
-  it('sends onSendCommand when onSend is not provided', () => {
+  it("sends onSendCommand when onSend is not provided", () => {
     const onSendCommand = vi.fn();
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        value: 'alt send',
-        onSend: undefined,
-        onSendCommand,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          value: "alt send",
+          onSend: undefined,
+          onSendCommand,
+        }),
+      );
     });
-    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
     act(() => {
-      const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
+      const event = new KeyboardEvent("keydown", {
+        key: "Enter",
+        bubbles: true,
+      });
       textarea!.dispatchEvent(event);
     });
-    expect(onSendCommand).toHaveBeenCalledWith('alt send');
+    expect(onSendCommand).toHaveBeenCalledWith("alt send");
   });
 
-  it('handles Tab key for tab completion', () => {
+  it("handles Tab key for tab completion", () => {
     const onChange = vi.fn();
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        value: 'hello',
-        onChange,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          value: "hello",
+          onChange,
+        }),
+      );
     });
-    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
     act(() => {
       textarea!.selectionStart = 5;
       textarea!.selectionEnd = 5;
-      const event = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+      const event = new KeyboardEvent("keydown", {
+        key: "Tab",
+        bubbles: true,
+        cancelable: true,
+      });
       textarea!.dispatchEvent(event);
     });
     expect(onChange).toHaveBeenCalled();
     const callArg = onChange.mock.calls[onChange.mock.calls.length - 1][0];
-    expect(callArg).toContain('\t');
+    expect(callArg).toContain("\t");
   });
 
-  it('lets Tab leave an empty input and Shift+Tab always leave', () => {
+  it("lets Tab leave an empty input and Shift+Tab always leave", () => {
     const onChange = vi.fn();
     act(() => {
-      root.render(createElement(CommandInput, { ...baseProps, value: '', onChange }));
+      root.render(
+        createElement(CommandInput, { ...baseProps, value: "", onChange }),
+      );
     });
-    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
-    const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
+    const tab = new KeyboardEvent("keydown", {
+      key: "Tab",
+      bubbles: true,
+      cancelable: true,
+    });
     act(() => {
       textarea.dispatchEvent(tab);
     });
@@ -381,82 +477,99 @@ describe('CommandInput', () => {
     expect(onChange).not.toHaveBeenCalled();
 
     act(() => {
-      root.render(createElement(CommandInput, { ...baseProps, value: 'hello', onChange }));
+      root.render(
+        createElement(CommandInput, { ...baseProps, value: "hello", onChange }),
+      );
     });
-    const shiftTab = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true });
+    const shiftTab = new KeyboardEvent("keydown", {
+      key: "Tab",
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
     act(() => {
       textarea.dispatchEvent(shiftTab);
     });
     expect(shiftTab.defaultPrevented).toBe(false);
   });
 
-  it('shows new session button', () => {
+  it("shows new session button", () => {
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+        }),
+      );
     });
-    const newSessionBtn = container.querySelector('.new-session-button');
+    const newSessionBtn = container.querySelector(".new-session-button");
     expect(newSessionBtn).not.toBeNull();
   });
 
-  it('handles new session button click (not processing)', () => {
+  it("handles new session button click (not processing)", () => {
     const onSend = vi.fn();
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        value: 'some text',
-        onSend,
-        isProcessing: false,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          value: "some text",
+          onSend,
+          isProcessing: false,
+        }),
+      );
     });
-    const newSessionBtn = container.querySelector('.new-session-button')!;
+    const newSessionBtn = container.querySelector(".new-session-button")!;
     act(() => {
-      newSessionBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      newSessionBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    expect(onSend).toHaveBeenCalledWith('/clear');
+    expect(onSend).toHaveBeenCalledWith("/clear");
   });
 
-  it('handles new session button click with confirm when processing', () => {
+  it("handles new session button click with confirm when processing", () => {
     const onSend = vi.fn();
     const originalConfirm = window.confirm;
     window.confirm = vi.fn(() => true);
     try {
       act(() => {
-        root.render(createElement(CommandInput, {
-          ...baseProps,
-          value: 'some text',
-          onSend,
-          isProcessing: true,
-        }));
+        root.render(
+          createElement(CommandInput, {
+            ...baseProps,
+            value: "some text",
+            onSend,
+            isProcessing: true,
+          }),
+        );
       });
-      const newSessionBtn = container.querySelector('.new-session-button')!;
+      const newSessionBtn = container.querySelector(".new-session-button")!;
       act(() => {
-        newSessionBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        newSessionBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       });
-      expect(window.confirm).toHaveBeenCalledWith('A request is currently processing. Stop it and start a new session?');
-      expect(onSend).toHaveBeenCalledWith('/clear');
+      expect(window.confirm).toHaveBeenCalledWith(
+        "A request is currently processing. Stop it and start a new session?",
+      );
+      expect(onSend).toHaveBeenCalledWith("/clear");
     } finally {
       window.confirm = originalConfirm;
     }
   });
 
-  it('aborts new session when confirm returns false', () => {
+  it("aborts new session when confirm returns false", () => {
     const onSend = vi.fn();
     const originalConfirm = window.confirm;
     window.confirm = vi.fn(() => false);
     try {
       act(() => {
-        root.render(createElement(CommandInput, {
-          ...baseProps,
-          value: 'some text',
-          onSend,
-          isProcessing: true,
-        }));
+        root.render(
+          createElement(CommandInput, {
+            ...baseProps,
+            value: "some text",
+            onSend,
+            isProcessing: true,
+          }),
+        );
       });
-      const newSessionBtn = container.querySelector('.new-session-button')!;
+      const newSessionBtn = container.querySelector(".new-session-button")!;
       act(() => {
-        newSessionBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        newSessionBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       });
       expect(onSend).not.toHaveBeenCalled();
     } finally {
@@ -464,141 +577,175 @@ describe('CommandInput', () => {
     }
   });
 
-  it('queues message when queue button is clicked', () => {
+  it("queues message when queue button is clicked", () => {
     const onQueue = vi.fn();
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        value: 'queued message',
-        isProcessing: true,
-        onQueue,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          value: "queued message",
+          isProcessing: true,
+          onQueue,
+        }),
+      );
     });
-    const queueBtn = container.querySelector('.queue-add-button')!;
+    const queueBtn = container.querySelector(".queue-add-button")!;
     act(() => {
-      queueBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      queueBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    expect(onQueue).toHaveBeenCalledWith('queued message');
+    expect(onQueue).toHaveBeenCalledWith("queued message");
   });
 
-  it('does not queue empty messages', () => {
+  it("does not queue empty messages", () => {
     const onQueue = vi.fn();
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        value: '   ',
-        isProcessing: true,
-        onQueue,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          value: "   ",
+          isProcessing: true,
+          onQueue,
+        }),
+      );
     });
-    const queueBtn = container.querySelector('.queue-add-button')!;
+    const queueBtn = container.querySelector(".queue-add-button")!;
     act(() => {
-      queueBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      queueBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(onQueue).not.toHaveBeenCalled();
   });
 
-  it('pressing Escape clears input when in history mode', () => {
+  it("pressing Escape clears input when in history mode", () => {
     const onChange = vi.fn();
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        value: '',
-        onChange,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          value: "",
+          onChange,
+        }),
+      );
     });
-    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
     // Press ArrowUp to attempt history navigation (empty history → no-op)
     act(() => {
       textarea!.selectionStart = 0;
       textarea!.selectionEnd = 0;
-      const event = new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true });
+      const event = new KeyboardEvent("keydown", {
+        key: "ArrowUp",
+        bubbles: true,
+      });
       textarea!.dispatchEvent(event);
     });
     // Press Escape — verifies no crash when history guard exits early
     act(() => {
-      const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+      const event = new KeyboardEvent("keydown", {
+        key: "Escape",
+        bubbles: true,
+        cancelable: true,
+      });
       textarea!.dispatchEvent(event);
     });
     // Component still renders without error (history guard exercised)
-    expect(container.querySelector('textarea')).not.toBeNull();
+    expect(container.querySelector("textarea")).not.toBeNull();
   });
 
-  it('does not change value on ArrowDown when history is empty', () => {
+  it("does not change value on ArrowDown when history is empty", () => {
     const onChange = vi.fn();
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        value: '',
-        onChange,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          value: "",
+          onChange,
+        }),
+      );
     });
-    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
     // Navigate up (empty history → no-op)
     act(() => {
       textarea!.selectionStart = 0;
       textarea!.selectionEnd = 0;
-      const event = new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true });
+      const event = new KeyboardEvent("keydown", {
+        key: "ArrowUp",
+        bubbles: true,
+      });
       textarea!.dispatchEvent(event);
     });
     // Navigate down
     act(() => {
-      const event = new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true });
+      const event = new KeyboardEvent("keydown", {
+        key: "ArrowDown",
+        bubbles: true,
+      });
       textarea!.dispatchEvent(event);
     });
     // Should not have changed value since history is empty
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it('does not navigate history when cursor is not at start', () => {
+  it("does not navigate history when cursor is not at start", () => {
     const onChange = vi.fn();
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        value: 'hello world',
-        onChange,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          value: "hello world",
+          onChange,
+        }),
+      );
     });
-    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
     // Cursor in middle, not at start
     act(() => {
       textarea!.selectionStart = 6;
       textarea!.selectionEnd = 6;
-      const event = new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true });
+      const event = new KeyboardEvent("keydown", {
+        key: "ArrowUp",
+        bubbles: true,
+      });
       textarea!.dispatchEvent(event);
     });
     // Should not navigate history
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it('does not send when disabled', () => {
+  it("does not send when disabled", () => {
     const onSend = vi.fn();
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        value: 'test',
-        onSend,
-        disabled: true,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          value: "test",
+          onSend,
+          disabled: true,
+        }),
+      );
     });
-    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
     act(() => {
-      const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+      const event = new KeyboardEvent("keydown", {
+        key: "Enter",
+        bubbles: true,
+        cancelable: true,
+      });
       textarea!.dispatchEvent(event);
     });
     expect(onSend).not.toHaveBeenCalled();
   });
 
-  it('handles composition start/end for IME', () => {
+  it("handles composition start/end for IME", () => {
     const onSend = vi.fn();
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        value: 'composition test',
-        onSend,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          value: "composition test",
+          onSend,
+        }),
+      );
     });
-    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
 
     // Composition start and end are handled via isComposingRef
     // In the actual component, these are React event handlers that work with IME input
@@ -608,288 +755,400 @@ describe('CommandInput', () => {
     // by checking that the composition handler methods exist
     // (The actual composition behavior depends on browser IME which is hard to test in jsdom)
     act(() => {
-      const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+      const event = new KeyboardEvent("keydown", {
+        key: "Enter",
+        bubbles: true,
+        cancelable: true,
+      });
       textarea!.dispatchEvent(event);
     });
-    expect(onSend).toHaveBeenCalledWith('composition test');
+    expect(onSend).toHaveBeenCalledWith("composition test");
   });
 
-  it('handles submit form with disabled=false and valid content', () => {
+  it("handles submit form with disabled=false and valid content", () => {
     const onSend = vi.fn();
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        value: 'form submit',
-        onSend,
-        disabled: false,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          value: "form submit",
+          onSend,
+          disabled: false,
+        }),
+      );
     });
-    const form = container.querySelector('form');
+    const form = container.querySelector("form");
     act(() => {
-      form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      form!.dispatchEvent(
+        new Event("submit", { bubbles: true, cancelable: true }),
+      );
     });
-    expect(onSend).toHaveBeenCalledWith('form submit');
+    expect(onSend).toHaveBeenCalledWith("form submit");
   });
 
-  it('does not submit when canSend is false (empty value)', () => {
+  it("does not submit when canSend is false (empty value)", () => {
     const onSend = vi.fn();
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        value: '',
-        onSend,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          value: "",
+          onSend,
+        }),
+      );
     });
-    const form = container.querySelector('form');
+    const form = container.querySelector("form");
     act(() => {
-      form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      form!.dispatchEvent(
+        new Event("submit", { bubbles: true, cancelable: true }),
+      );
     });
     expect(onSend).not.toHaveBeenCalled();
   });
 
-  it('handles multiline=false (single line mode)', () => {
+  it("handles multiline=false (single line mode)", () => {
     const onSend = vi.fn();
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        value: 'single line',
-        onSend,
-        multiline: false,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          value: "single line",
+          onSend,
+          multiline: false,
+        }),
+      );
     });
-    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
     act(() => {
-      const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+      const event = new KeyboardEvent("keydown", {
+        key: "Enter",
+        bubbles: true,
+        cancelable: true,
+      });
       textarea!.dispatchEvent(event);
     });
-    expect(onSend).toHaveBeenCalledWith('single line');
+    expect(onSend).toHaveBeenCalledWith("single line");
   });
 
-  it('renders upload button', () => {
+  it("renders upload button", () => {
     act(() => {
       root.render(createElement(CommandInput, baseProps));
     });
-    const uploadBtn = container.querySelector('.upload-button');
+    const uploadBtn = container.querySelector(".upload-button");
     expect(uploadBtn).not.toBeNull();
   });
 
-  it('renders queue button wrapper when queuedCount > 0', () => {
-    act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        queuedCount: 3,
-      }));
-    });
-    const queueWrapper = container.querySelector('.queue-button-wrapper');
-    expect(queueWrapper).not.toBeNull();
-    const queueCount = container.querySelector('.queue-count');
-    expect(queueCount?.textContent).toBe('3');
-  });
-
-  it('opens queue panel when queue button clicked', () => {
-    act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        queuedCount: 2,
-        queuedMessages: ['msg1', 'msg2'],
-      }));
-    });
-    expect(container.querySelector('.queue-popover-overlay')).toBeNull();
-
-    const queueBtn = container.querySelector('.queue-button')!;
-    act(() => {
-      queueBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    expect(container.querySelector('.queue-popover-overlay')).not.toBeNull();
-  });
-
-  it('toggles hints popover on button click', () => {
+  it("upload button click opens the hidden file input", () => {
     act(() => {
       root.render(createElement(CommandInput, baseProps));
     });
-    expect(container.querySelector('.hints-popover')).toBeNull();
-
-    const hintsBtn = container.querySelector('.hints-button')!;
+    const input = container.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
+    expect(input).not.toBeNull();
+    const clickSpy = vi.fn();
+    input.click = clickSpy;
+    const uploadBtn = container.querySelector(
+      ".upload-button",
+    ) as HTMLButtonElement;
     act(() => {
-      hintsBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      uploadBtn.click();
     });
-    expect(container.querySelector('.hints-popover')).not.toBeNull();
-
-    act(() => {
-      hintsBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    expect(container.querySelector('.hints-popover')).toBeNull();
+    expect(clickSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('shows length indicator when draft exceeds 100 chars', () => {
-    const longValue = 'a'.repeat(150);
+  it("attaches a dropped image file and prevents the browser navigation default", () => {
+    const onUploadImage = vi.fn().mockResolvedValue({ path: "/uploads/x.png" });
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        value: longValue,
-      }));
+      root.render(createElement(CommandInput, { ...baseProps, onUploadImage }));
     });
-    const lengthIndicator = container.querySelector('.length-indicator');
+    const form = container.querySelector(
+      "form.command-input",
+    ) as HTMLFormElement;
+    const file = new File(["png"], "shot.png", { type: "image/png" });
+    const preventDefault = vi.fn();
+    act(() => {
+      form.dispatchEvent(
+        new Event("dragover", { bubbles: true, cancelable: true }),
+      );
+    });
+    act(() => {
+      // jsdom has no DragEvent constructor — a plain Event with a dataTransfer
+      // property reproduces what the browser hands the handler.
+      const drop = new Event("drop", { bubbles: true, cancelable: true });
+      Object.defineProperty(drop, "dataTransfer", {
+        value: { files: [file], types: ["Files"] },
+      });
+      Object.defineProperty(drop, "preventDefault", { value: preventDefault });
+      form.dispatchEvent(drop);
+    });
+    expect(preventDefault).toHaveBeenCalled();
+    const chip = container.querySelector(".image-preview-chip");
+    expect(chip).not.toBeNull();
+    // The auto-upload effect kicks in for the new attachment.
+    expect(onUploadImage).toHaveBeenCalledWith(file);
+  });
+
+  it("ignores non-image drops", () => {
+    const onUploadImage = vi.fn().mockResolvedValue({ path: "/uploads/x.pdf" });
+    act(() => {
+      root.render(createElement(CommandInput, { ...baseProps, onUploadImage }));
+    });
+    const form = container.querySelector(
+      "form.command-input",
+    ) as HTMLFormElement;
+    const file = new File(["pdf"], "doc.pdf", { type: "application/pdf" });
+    act(() => {
+      const drop = new Event("drop", { bubbles: true, cancelable: true });
+      Object.defineProperty(drop, "dataTransfer", {
+        value: { files: [file], types: ["Files"] },
+      });
+      form.dispatchEvent(drop);
+    });
+    expect(container.querySelector(".image-preview-chip")).toBeNull();
+  });
+
+  it("renders queue button wrapper when queuedCount > 0", () => {
+    act(() => {
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          queuedCount: 3,
+        }),
+      );
+    });
+    const queueWrapper = container.querySelector(".queue-button-wrapper");
+    expect(queueWrapper).not.toBeNull();
+    const queueCount = container.querySelector(".queue-count");
+    expect(queueCount?.textContent).toBe("3");
+  });
+
+  it("opens queue panel when queue button clicked", () => {
+    act(() => {
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          queuedCount: 2,
+          queuedMessages: ["msg1", "msg2"],
+        }),
+      );
+    });
+    expect(container.querySelector(".queue-popover-overlay")).toBeNull();
+
+    const queueBtn = container.querySelector(".queue-button")!;
+    act(() => {
+      queueBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(container.querySelector(".queue-popover-overlay")).not.toBeNull();
+  });
+
+  it("toggles hints popover on button click", () => {
+    act(() => {
+      root.render(createElement(CommandInput, baseProps));
+    });
+    expect(container.querySelector(".hints-popover")).toBeNull();
+
+    const hintsBtn = container.querySelector(".hints-button")!;
+    act(() => {
+      hintsBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(container.querySelector(".hints-popover")).not.toBeNull();
+
+    act(() => {
+      hintsBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(container.querySelector(".hints-popover")).toBeNull();
+  });
+
+  it("shows length indicator when draft exceeds 100 chars", () => {
+    const longValue = "a".repeat(150);
+    act(() => {
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          value: longValue,
+        }),
+      );
+    });
+    const lengthIndicator = container.querySelector(".length-indicator");
     expect(lengthIndicator).not.toBeNull();
-    expect(lengthIndicator?.textContent).toBe('150');
+    expect(lengthIndicator?.textContent).toBe("150");
   });
 
-  it('hides length indicator when draft is short', () => {
+  it("hides length indicator when draft is short", () => {
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        value: 'short',
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          value: "short",
+        }),
+      );
     });
-    expect(container.querySelector('.length-indicator')).toBeNull();
+    expect(container.querySelector(".length-indicator")).toBeNull();
   });
 
   // ── Image upload state tests ───────────────────────────────────────
 
-  it('disables send button while an image is uploading', () => {
+  it("disables send button while an image is uploading", () => {
     // Use a never-resolving promise to simulate an in-flight upload.
     const onUploadImage = vi.fn(() => new Promise(() => {}));
 
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        value: 'test',
-        onUploadImage,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          value: "test",
+          onUploadImage,
+        }),
+      );
     });
 
-    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
-    const file = new File(['test'], 'test.png', { type: 'image/png' });
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
+    const file = new File(["test"], "test.png", { type: "image/png" });
     const dataTransfer = new DataTransfer();
-    dataTransfer.items.push(new DataTransferItem(file, 'image/png'));
+    dataTransfer.items.push(new DataTransferItem(file, "image/png"));
     dataTransfer.files.push(file);
-    dataTransfer.types.push('Files');
+    dataTransfer.types.push("Files");
 
     // Dispatch synchronously inside act() so React commits the attachedImages
     // update before the assertion runs. We do NOT await the auto-upload
     // effect — a never-resolving upload would block act() forever.
     act(() => {
-      const pasteEvent = new Event('paste', { bubbles: true }) as unknown as {
+      const pasteEvent = new Event("paste", { bubbles: true }) as unknown as {
         clipboardData: DataTransfer;
       };
-      Object.defineProperty(pasteEvent, 'clipboardData', {
+      Object.defineProperty(pasteEvent, "clipboardData", {
         value: dataTransfer,
         writable: false,
       });
       textarea!.dispatchEvent(pasteEvent as unknown as ClipboardEvent);
     });
 
-    const sendBtn = container.querySelector('.send-button') as HTMLButtonElement;
+    const sendBtn = container.querySelector(
+      ".send-button",
+    ) as HTMLButtonElement;
     expect(sendBtn?.disabled).toBe(true);
   });
 
-  it('shows uploading status and tooltip while image is uploading', () => {
+  it("shows uploading status and tooltip while image is uploading", () => {
     const onUploadImage = vi.fn(() => new Promise(() => {}));
 
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        value: 'test',
-        onUploadImage,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          value: "test",
+          onUploadImage,
+        }),
+      );
     });
 
-    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
-    const file = new File(['test'], 'test.png', { type: 'image/png' });
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
+    const file = new File(["test"], "test.png", { type: "image/png" });
     const dataTransfer = new DataTransfer();
-    dataTransfer.items.push(new DataTransferItem(file, 'image/png'));
+    dataTransfer.items.push(new DataTransferItem(file, "image/png"));
     dataTransfer.files.push(file);
-    dataTransfer.types.push('Files');
+    dataTransfer.types.push("Files");
 
     act(() => {
-      const pasteEvent = new Event('paste', { bubbles: true }) as unknown as {
+      const pasteEvent = new Event("paste", { bubbles: true }) as unknown as {
         clipboardData: DataTransfer;
       };
-      Object.defineProperty(pasteEvent, 'clipboardData', {
+      Object.defineProperty(pasteEvent, "clipboardData", {
         value: dataTransfer,
         writable: false,
       });
       textarea!.dispatchEvent(pasteEvent as unknown as ClipboardEvent);
     });
 
-    const sendBtn = container.querySelector('.send-button') as HTMLButtonElement;
-    expect(sendBtn?.getAttribute('data-tooltip')).toBe('Attaching image…');
-    expect(container.querySelector('.uploading-status')).not.toBeNull();
+    const sendBtn = container.querySelector(
+      ".send-button",
+    ) as HTMLButtonElement;
+    expect(sendBtn?.getAttribute("data-tooltip")).toBe("Attaching image…");
+    expect(container.querySelector(".uploading-status")).not.toBeNull();
   });
 
-  it('re-enables send button after image upload completes', async () => {
-    const onUploadImage = vi.fn().mockResolvedValue({ path: '/tmp/test.png' });
+  it("re-enables send button after image upload completes", async () => {
+    const onUploadImage = vi.fn().mockResolvedValue({ path: "/tmp/test.png" });
 
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        value: 'test',
-        onUploadImage,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          value: "test",
+          onUploadImage,
+        }),
+      );
     });
 
-    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
-    const file = new File(['test'], 'test.png', { type: 'image/png' });
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
+    const file = new File(["test"], "test.png", { type: "image/png" });
     const dataTransfer = new DataTransfer();
-    dataTransfer.items.push(new DataTransferItem(file, 'image/png'));
+    dataTransfer.items.push(new DataTransferItem(file, "image/png"));
     dataTransfer.files.push(file);
-    dataTransfer.types.push('Files');
+    dataTransfer.types.push("Files");
 
     // Dispatch synchronously, then poll for the auto-upload to land.
     // The useEffect fires uploadImageAsync without awaiting, so the
     // resolved promise resolves outside React's act; waitFor handles
     // the resulting re-renders.
     act(() => {
-      const pasteEvent = new Event('paste', { bubbles: true }) as unknown as {
+      const pasteEvent = new Event("paste", { bubbles: true }) as unknown as {
         clipboardData: DataTransfer;
       };
-      Object.defineProperty(pasteEvent, 'clipboardData', {
+      Object.defineProperty(pasteEvent, "clipboardData", {
         value: dataTransfer,
         writable: false,
       });
       textarea!.dispatchEvent(pasteEvent as unknown as ClipboardEvent);
     });
 
-    const sendBtn = container.querySelector('.send-button') as HTMLButtonElement;
+    const sendBtn = container.querySelector(
+      ".send-button",
+    ) as HTMLButtonElement;
     await waitFor(() => {
       expect(onUploadImage).toHaveBeenCalled();
       expect(sendBtn.disabled).toBe(false);
     });
   });
 
-  it('enables send button when only failed images are attached', async () => {
-    const onUploadImage = vi.fn().mockRejectedValue(new Error('Upload failed'));
+  it("enables send button when only failed images are attached", async () => {
+    const onUploadImage = vi.fn().mockRejectedValue(new Error("Upload failed"));
 
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        value: 'test',
-        onUploadImage,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          value: "test",
+          onUploadImage,
+        }),
+      );
     });
 
-    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
-    const file = new File(['test'], 'test.png', { type: 'image/png' });
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
+    const file = new File(["test"], "test.png", { type: "image/png" });
     const dataTransfer = new DataTransfer();
-    dataTransfer.items.push(new DataTransferItem(file, 'image/png'));
+    dataTransfer.items.push(new DataTransferItem(file, "image/png"));
     dataTransfer.files.push(file);
-    dataTransfer.types.push('Files');
+    dataTransfer.types.push("Files");
 
     act(() => {
-      const pasteEvent = new Event('paste', { bubbles: true }) as unknown as {
+      const pasteEvent = new Event("paste", { bubbles: true }) as unknown as {
         clipboardData: DataTransfer;
       };
-      Object.defineProperty(pasteEvent, 'clipboardData', {
+      Object.defineProperty(pasteEvent, "clipboardData", {
         value: dataTransfer,
         writable: false,
       });
       textarea!.dispatchEvent(pasteEvent as unknown as ClipboardEvent);
     });
 
-    const sendBtn = container.querySelector('.send-button') as HTMLButtonElement;
+    const sendBtn = container.querySelector(
+      ".send-button",
+    ) as HTMLButtonElement;
     await waitFor(() => {
       expect(sendBtn.disabled).toBe(false);
-      expect(sendBtn.getAttribute('aria-label')).toContain('failed to attach');
+      expect(sendBtn.getAttribute("aria-label")).toContain("failed to attach");
     });
   });
 });
@@ -901,7 +1160,7 @@ describe('CommandInput', () => {
 // input events (React synthesizes onChange); the textarea is focused first
 // so the sync-from-parent effect does not clobber the local draft with the
 // (empty) parent value.
-describe('CommandInput argument completion', () => {
+describe("CommandInput argument completion", () => {
   let container: HTMLDivElement;
   let root: Root;
 
@@ -910,8 +1169,8 @@ describe('CommandInput argument completion', () => {
   });
 
   beforeEach(() => {
-    container = document.createElement('div');
-    container.id = 'command-input-arg-test-root';
+    container = document.createElement("div");
+    container.id = "command-input-arg-test-root";
     document.body.appendChild(container);
     root = createRoot(container);
   });
@@ -926,10 +1185,10 @@ describe('CommandInput argument completion', () => {
   });
 
   const completionApiProps = {
-    command: 'risk-profile',
+    command: "risk-profile",
     completions: [
-      { text: 'permissive', description: '' },
-      { text: 'readonly', description: '' },
+      { text: "permissive", description: "" },
+      { text: "readonly", description: "" },
     ],
   };
 
@@ -940,153 +1199,178 @@ describe('CommandInput argument completion', () => {
     // prototype's native setter bypasses the tracker and makes the input
     // event reach the controlled component's onChange — same approach
     // @testing-library/userEvent uses internally.
-    const nativeSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+    const nativeSetter = Object.getOwnPropertyDescriptor(
+      HTMLTextAreaElement.prototype,
+      "value",
+    )?.set;
     act(() => {
       textarea.focus();
       nativeSetter?.call(textarea, value);
       textarea.selectionStart = value.length;
       textarea.selectionEnd = value.length;
-      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
     });
   }
 
   it('shows server argument completions (without a "/" prefix) and accepts via Enter', async () => {
-    const completionApi = { completeCommand: vi.fn().mockResolvedValue(completionApiProps) };
+    const completionApi = {
+      completeCommand: vi.fn().mockResolvedValue(completionApiProps),
+    };
     const onChange = vi.fn();
     act(() => {
       root.render(
         createElement(CommandInput, {
-          value: '',
+          value: "",
           onChange,
           onSend: vi.fn(),
-          placeholder: 'Ask me anything about your code...',
+          placeholder: "Ask me anything about your code...",
           completionApi,
         }),
       );
     });
-    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
 
     // Dispatch typing synchronously, then poll — the same waitFor pattern
     // the image-upload tests above use. (Repeated awaited act() blocks
     // hang in this React 18 + jsdom environment.)
-    setInputValue(textarea, '/risk-profile per');
+    setInputValue(textarea, "/risk-profile per");
     await waitFor(() => {
-      expect(completionApi.completeCommand).toHaveBeenCalledWith('/risk-profile per');
+      expect(completionApi.completeCommand).toHaveBeenCalledWith(
+        "/risk-profile per",
+      );
     });
 
-    const items = container.querySelectorAll('.slash-autocomplete-item');
+    const items = container.querySelectorAll(".slash-autocomplete-item");
     expect(items.length).toBe(2);
-    expect(items[0]?.textContent).toContain('permissive');
-    expect(items[0]?.textContent).not.toContain('/permissive');
-    expect(items[1]?.textContent).toContain('readonly');
+    expect(items[0]?.textContent).toContain("permissive");
+    expect(items[0]?.textContent).not.toContain("/permissive");
+    expect(items[1]?.textContent).toContain("readonly");
 
     act(() => {
-      textarea.selectionStart = '/risk-profile per'.length;
-      textarea.selectionEnd = '/risk-profile per'.length;
-      const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+      textarea.selectionStart = "/risk-profile per".length;
+      textarea.selectionEnd = "/risk-profile per".length;
+      const event = new KeyboardEvent("keydown", {
+        key: "Enter",
+        bubbles: true,
+        cancelable: true,
+      });
       textarea.dispatchEvent(event);
     });
 
-    expect(onChange).toHaveBeenLastCalledWith('/risk-profile permissive ');
-    expect(container.querySelector('.slash-autocomplete')).toBeNull();
+    expect(onChange).toHaveBeenLastCalledWith("/risk-profile permissive ");
+    expect(container.querySelector(".slash-autocomplete")).toBeNull();
   }, 10000);
 
-  it('accepts an argument candidate on click', async () => {
-    const completionApi = { completeCommand: vi.fn().mockResolvedValue(completionApiProps) };
+  it("accepts an argument candidate on click", async () => {
+    const completionApi = {
+      completeCommand: vi.fn().mockResolvedValue(completionApiProps),
+    };
     const onChange = vi.fn();
     act(() => {
       root.render(
         createElement(CommandInput, {
-          value: '',
+          value: "",
           onChange,
           onSend: vi.fn(),
-          placeholder: 'Ask me anything about your code...',
+          placeholder: "Ask me anything about your code...",
           completionApi,
         }),
       );
     });
-    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
 
-    setInputValue(textarea, '/risk-profile per');
+    setInputValue(textarea, "/risk-profile per");
     await waitFor(() => {
-      expect(container.querySelectorAll('.slash-autocomplete-item').length).toBe(2);
+      expect(
+        container.querySelectorAll(".slash-autocomplete-item").length,
+      ).toBe(2);
     });
 
-    const firstItem = container.querySelectorAll('.slash-autocomplete-item')[0] as HTMLElement;
+    const firstItem = container.querySelectorAll(
+      ".slash-autocomplete-item",
+    )[0] as HTMLElement;
     act(() => {
-      firstItem.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      firstItem.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(onChange).toHaveBeenLastCalledWith('/risk-profile permissive ');
-    expect(container.querySelector('.slash-autocomplete')).toBeNull();
+    expect(onChange).toHaveBeenLastCalledWith("/risk-profile permissive ");
+    expect(container.querySelector(".slash-autocomplete")).toBeNull();
   }, 10000);
 
-  it('keeps the dropdown closed when the server returns zero completions', async () => {
+  it("keeps the dropdown closed when the server returns zero completions", async () => {
     const completionApi = {
-      completeCommand: vi.fn().mockResolvedValue({ command: 'risk-profile', completions: [] }),
+      completeCommand: vi
+        .fn()
+        .mockResolvedValue({ command: "risk-profile", completions: [] }),
     };
     act(() => {
       root.render(
         createElement(CommandInput, {
-          value: '',
+          value: "",
           onChange: vi.fn(),
           onSend: vi.fn(),
-          placeholder: 'Ask me anything about your code...',
+          placeholder: "Ask me anything about your code...",
           completionApi,
         }),
       );
     });
-    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
 
-    setInputValue(textarea, '/risk-profile per');
+    setInputValue(textarea, "/risk-profile per");
     await waitFor(() => {
-      expect(completionApi.completeCommand).toHaveBeenCalledWith('/risk-profile per');
+      expect(completionApi.completeCommand).toHaveBeenCalledWith(
+        "/risk-profile per",
+      );
     });
     // Debounce window fully elapsed and no re-render opened the dropdown.
     await new Promise((r) => setTimeout(r, 300));
 
-    expect(container.querySelector('.slash-autocomplete')).toBeNull();
+    expect(container.querySelector(".slash-autocomplete")).toBeNull();
   }, 10000);
 
-  it('does NOT call the completion API during the name phase (no space)', async () => {
-    const completionApi = { completeCommand: vi.fn().mockResolvedValue(completionApiProps) };
+  it("does NOT call the completion API during the name phase (no space)", async () => {
+    const completionApi = {
+      completeCommand: vi.fn().mockResolvedValue(completionApiProps),
+    };
     act(() => {
       root.render(
         createElement(CommandInput, {
-          value: '',
+          value: "",
           onChange: vi.fn(),
           onSend: vi.fn(),
-          placeholder: 'Ask me anything about your code...',
+          placeholder: "Ask me anything about your code...",
           completionApi,
         }),
       );
     });
-    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
 
-    setInputValue(textarea, '/risk-profile');
+    setInputValue(textarea, "/risk-profile");
     await new Promise((r) => setTimeout(r, 400));
 
     expect(completionApi.completeCommand).not.toHaveBeenCalled();
   }, 10000);
 
-  it('debounces: typing the argument quickly fires at most one request', async () => {
-    const completionApi = { completeCommand: vi.fn().mockResolvedValue(completionApiProps) };
+  it("debounces: typing the argument quickly fires at most one request", async () => {
+    const completionApi = {
+      completeCommand: vi.fn().mockResolvedValue(completionApiProps),
+    };
     act(() => {
       root.render(
         createElement(CommandInput, {
-          value: '',
+          value: "",
           onChange: vi.fn(),
           onSend: vi.fn(),
-          placeholder: 'Ask me anything about your code...',
+          placeholder: "Ask me anything about your code...",
           completionApi,
         }),
       );
     });
-    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
 
     // Type the whole command with <150ms between keystrokes so the trailing
     // debounce collapses them into a single request.
-    const typed = '/risk-profile per';
+    const typed = "/risk-profile per";
     for (let i = 0; i < typed.length; i++) {
       setInputValue(textarea, typed.slice(0, i + 1));
       await new Promise((r) => setTimeout(r, 20));
@@ -1094,97 +1378,127 @@ describe('CommandInput argument completion', () => {
     await new Promise((r) => setTimeout(r, 300));
 
     expect(completionApi.completeCommand).toHaveBeenCalledTimes(1);
-    expect(completionApi.completeCommand).toHaveBeenCalledWith('/risk-profile per');
+    expect(completionApi.completeCommand).toHaveBeenCalledWith(
+      "/risk-profile per",
+    );
   }, 15000);
 
-  it('navigates argument candidates with ArrowDown and accepts the highlighted one', async () => {
-    const completionApi = { completeCommand: vi.fn().mockResolvedValue(completionApiProps) };
+  it("navigates argument candidates with ArrowDown and accepts the highlighted one", async () => {
+    const completionApi = {
+      completeCommand: vi.fn().mockResolvedValue(completionApiProps),
+    };
     const onChange = vi.fn();
     act(() => {
       root.render(
         createElement(CommandInput, {
-          value: '',
+          value: "",
           onChange,
           onSend: vi.fn(),
-          placeholder: 'Ask me anything about your code...',
+          placeholder: "Ask me anything about your code...",
           completionApi,
         }),
       );
     });
-    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
 
-    setInputValue(textarea, '/risk-profile per');
+    setInputValue(textarea, "/risk-profile per");
     await waitFor(() => {
-      expect(container.querySelectorAll('.slash-autocomplete-item').length).toBe(2);
+      expect(
+        container.querySelectorAll(".slash-autocomplete-item").length,
+      ).toBe(2);
     });
 
     act(() => {
-      const event = new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true });
+      const event = new KeyboardEvent("keydown", {
+        key: "ArrowDown",
+        bubbles: true,
+      });
       textarea.dispatchEvent(event);
-    });    const items = container.querySelectorAll('.slash-autocomplete-item');
-    expect(items[1]).toHaveClass('slash-autocomplete-highlight');
+    });
+    const items = container.querySelectorAll(".slash-autocomplete-item");
+    expect(items[1]).toHaveClass("slash-autocomplete-highlight");
 
     act(() => {
-      const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+      const event = new KeyboardEvent("keydown", {
+        key: "Enter",
+        bubbles: true,
+        cancelable: true,
+      });
       textarea.dispatchEvent(event);
     });
 
-    expect(onChange).toHaveBeenLastCalledWith('/risk-profile readonly ');
-    expect(container.querySelector('.slash-autocomplete')).toBeNull();
+    expect(onChange).toHaveBeenLastCalledWith("/risk-profile readonly ");
+    expect(container.querySelector(".slash-autocomplete")).toBeNull();
   }, 10000);
 
-  it('Enter during the argument phase with in-flight (empty) completions sends instead of inserting a newline', async () => {
-    const completionApi = { completeCommand: vi.fn().mockImplementation(() => new Promise(() => {})) };
+  it("Enter during the argument phase with in-flight (empty) completions sends instead of inserting a newline", async () => {
+    const completionApi = {
+      completeCommand: vi.fn().mockImplementation(() => new Promise(() => {})),
+    };
     const onSend = vi.fn();
     act(() => {
       root.render(
         createElement(CommandInput, {
-          value: '',
+          value: "",
           onChange: vi.fn(),
           onSend,
-          placeholder: 'Ask me anything about your code...',
+          placeholder: "Ask me anything about your code...",
           completionApi,
         }),
       );
     });
-    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
 
-    setInputValue(textarea, '/risk-profile per');
+    setInputValue(textarea, "/risk-profile per");
     // Open the dropdown via Tab (name phase would have matched), then let
     // the argument request stay in flight (never resolving).
     act(() => {
-      const event = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+      const event = new KeyboardEvent("keydown", {
+        key: "Tab",
+        bubbles: true,
+        cancelable: true,
+      });
       textarea.dispatchEvent(event);
     });
     await new Promise((r) => setTimeout(r, 300));
 
     // Enter must NOT be swallowed into a newline; it should send.
     act(() => {
-      const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+      const event = new KeyboardEvent("keydown", {
+        key: "Enter",
+        bubbles: true,
+        cancelable: true,
+      });
       textarea.dispatchEvent(event);
     });
 
-    expect(onSend).toHaveBeenCalledWith('/risk-profile per');
+    expect(onSend).toHaveBeenCalledWith("/risk-profile per");
   }, 10000);
 
-  it('calls onRetractSteer on ArrowUp when processing with empty input', async () => {
+  it("calls onRetractSteer on ArrowUp when processing with empty input", async () => {
     const baseProps: CommandInputProps = {
-      value: '',
+      value: "",
       onChange: vi.fn(),
       onSend: vi.fn(),
-      placeholder: 'Ask me anything about your code...',
+      placeholder: "Ask me anything about your code...",
     };
     const onRetractSteer = vi.fn().mockResolvedValue(true);
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        isProcessing: true,
-        onRetractSteer,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          isProcessing: true,
+          onRetractSteer,
+        }),
+      );
     });
-    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
     act(() => {
-      const event = new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true });
+      const event = new KeyboardEvent("keydown", {
+        key: "ArrowUp",
+        bubbles: true,
+        cancelable: true,
+      });
       textarea.dispatchEvent(event);
     });
     await waitFor(() => {
@@ -1192,76 +1506,98 @@ describe('CommandInput argument completion', () => {
     });
   });
 
-  it('does not call onRetractSteer when not processing', () => {
+  it("does not call onRetractSteer when not processing", () => {
     const baseProps: CommandInputProps = {
-      value: '',
+      value: "",
       onChange: vi.fn(),
       onSend: vi.fn(),
-      placeholder: 'Ask me anything about your code...',
+      placeholder: "Ask me anything about your code...",
     };
     const onRetractSteer = vi.fn().mockResolvedValue(true);
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        isProcessing: false,
-        onRetractSteer,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          isProcessing: false,
+          onRetractSteer,
+        }),
+      );
     });
-    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
     act(() => {
-      const event = new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true });
+      const event = new KeyboardEvent("keydown", {
+        key: "ArrowUp",
+        bubbles: true,
+        cancelable: true,
+      });
       textarea.dispatchEvent(event);
     });
     expect(onRetractSteer).not.toHaveBeenCalled();
   });
 
-  it('does not call onRetractSteer when input is non-empty', () => {
+  it("does not call onRetractSteer when input is non-empty", () => {
     const baseProps: CommandInputProps = {
-      value: '',
+      value: "",
       onChange: vi.fn(),
       onSend: vi.fn(),
-      placeholder: 'Ask me anything about your code...',
+      placeholder: "Ask me anything about your code...",
     };
     const onRetractSteer = vi.fn().mockResolvedValue(true);
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        value: 'typing something',
-        isProcessing: true,
-        onRetractSteer,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          value: "typing something",
+          isProcessing: true,
+          onRetractSteer,
+        }),
+      );
     });
-    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
     act(() => {
-      const event = new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true });
+      const event = new KeyboardEvent("keydown", {
+        key: "ArrowUp",
+        bubbles: true,
+        cancelable: true,
+      });
       textarea.dispatchEvent(event);
     });
     expect(onRetractSteer).not.toHaveBeenCalled();
   });
 
-  it('falls back to history navigation when retract returns false', async () => {
+  it("falls back to history navigation when retract returns false", async () => {
     const baseProps: CommandInputProps = {
-      value: '',
+      value: "",
       onChange: vi.fn(),
       onSend: vi.fn(),
-      placeholder: 'Ask me anything about your code...',
+      placeholder: "Ask me anything about your code...",
     };
     const historyApi = {
-      load: vi.fn().mockResolvedValue({ commands: ['older command'], index: -1, tempInput: '' }),
+      load: vi.fn().mockResolvedValue({
+        commands: ["older command"],
+        index: -1,
+        tempInput: "",
+      }),
       persist: vi.fn(),
     };
     const onRetractSteer = vi.fn().mockResolvedValue(false);
     act(() => {
-      root.render(createElement(CommandInput, {
-        ...baseProps,
-        isProcessing: true,
-        onRetractSteer,
-        historyApi,
-      }));
+      root.render(
+        createElement(CommandInput, {
+          ...baseProps,
+          isProcessing: true,
+          onRetractSteer,
+          historyApi,
+        }),
+      );
     });
-    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
     act(() => {
-      const event = new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true });
+      const event = new KeyboardEvent("keydown", {
+        key: "ArrowUp",
+        bubbles: true,
+        cancelable: true,
+      });
       textarea.dispatchEvent(event);
     });
     await waitFor(() => {
@@ -1272,7 +1608,6 @@ describe('CommandInput argument completion', () => {
     // is limited to the retract attempt itself — assert no crash and the
     // input remains empty (no history entry to show).
     await new Promise((r) => setTimeout(r, 50));
-    expect(textarea.value).toBe('');
+    expect(textarea.value).toBe("");
   });
 });
-

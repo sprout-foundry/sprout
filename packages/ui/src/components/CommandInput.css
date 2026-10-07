@@ -6,12 +6,34 @@
   border-radius: var(--radius-sm, 4px);
   overflow: visible;
   box-shadow: var(--shadow-subtle);
+  min-height: 110px;
   transition:
     border-color 0.2s ease,
     box-shadow 0.2s ease,
     transform 0.2s ease;
   position: relative;
-  min-height: 110px;
+}
+
+/* Drag-and-drop image attach affordance */
+.command-input.drag-over {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--accent-primary-alpha);
+}
+
+.command-input.drag-over::after {
+  content: "Drop image to attach";
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--bg-secondary) 80%, transparent);
+  color: var(--accent-primary);
+  font-size: 13px;
+  font-weight: 600;
+  pointer-events: none;
+  border-radius: inherit;
 }
 
 .command-input:focus-within {
@@ -20,7 +42,9 @@
      system focus pattern (preview/spacing-shadows.html). The previous
      solid `--border-focus` border alone read as a hard blue outline that
      fought with the persona chip and model hint stacked above the input. */
-  box-shadow: 0 0 0 3px var(--accent-primary-alpha), var(--shadow-elevated);
+  box-shadow:
+    0 0 0 3px var(--accent-primary-alpha),
+    var(--shadow-elevated);
 }
 
 .input-header {
@@ -178,7 +202,7 @@
 
 /* Small arrow for tooltip */
 .input-actions button[data-tooltip]::before {
-  content: '';
+  content: "";
   position: absolute;
   bottom: 100%;
   left: 50%;
@@ -227,7 +251,8 @@
 .stop-button {
   background: transparent;
   color: var(--accent-error);
-  border: 1px solid color-mix(in srgb, var(--accent-error) 50%, var(--border-default));
+  border: 1px solid
+    color-mix(in srgb, var(--accent-error) 50%, var(--border-default));
   padding: 8px;
   border-radius: var(--radius-sm, 4px);
   cursor: pointer;
@@ -645,7 +670,7 @@
 }
 
 .upload-button[data-tooltip]::before {
-  content: '';
+  content: "";
   position: absolute;
   bottom: 100%;
   left: 50%;

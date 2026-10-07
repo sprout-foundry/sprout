@@ -8,7 +8,6 @@ import (
 )
 
 const (
-	routesRel   = "pkg/webui/routes.go"
 	webuiRel    = "pkg/webui"
 	registryRel = "webui/src/services/cloudEndpointRegistry/endpoints"
 	docRel      = "docs/api/endpoints.md"
@@ -40,13 +39,30 @@ func main() {
 	fmt.Printf("wrote %s\n", outPath)
 }
 
+// buildRouteSet assembles the full registered route table for root: the plain
+// mux routes parsed from the registerXxxRoutes functions plus the Huma
+// operations read straight from the in-process API object. The two are merged
+// (de-duplicated) so the result is the complete route set and cannot drift
+// from the handlers as the Huma registration moves between files.
+func buildRouteSet(root string) ([]Route, error) {
+	plain, err := parsePlainRoutes(root)
+	if err != nil {
+		return nil, err
+	}
+	huma, err := humaOpsInProcess()
+	if err != nil {
+		return nil, err
+	}
+	return combineRoutes(plain, huma), nil
+}
+
 // Generate builds the full endpoints.md content in memory from the repo root.
 // It is deterministic (stable family order, sorted rows, no timestamps) so a
 // staleness test can byte-compare against the committed doc.
 func Generate(root string) (string, error) {
-	routes, err := parseRoutes(filepath.Join(root, routesRel))
+	routes, err := buildRouteSet(root)
 	if err != nil {
-		return "", fmt.Errorf("parse routes: %w", err)
+		return "", fmt.Errorf("build route set: %w", err)
 	}
 	registry, err := parseRegistryFiles(filepath.Join(root, registryRel))
 	if err != nil {
@@ -60,10 +76,10 @@ func Generate(root string) (string, error) {
 	return renderDocument(rows), nil
 }
 
-// GenerateRoutes returns just the parsed route table, exposed for tests that
+// GenerateRoutes returns just the combined route table, exposed for tests that
 // want to assert on the registration set without rendering the doc.
 func GenerateRoutes(root string) ([]Route, error) {
-	return parseRoutes(filepath.Join(root, routesRel))
+	return buildRouteSet(root)
 }
 
 // DocPath returns the repo-relative path of the generated doc.

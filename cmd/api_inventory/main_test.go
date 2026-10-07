@@ -44,14 +44,14 @@ func TestEndpointsDocIsNotStale(t *testing.T) {
 	}
 }
 
-// TestEveryRegisteredRouteAppearsInDoc is a sanity check: every path
-// registered in pkg/webui/routes.go must show up in the generated doc, so a
-// parser regression that silently drops a route cannot slip through.
+// TestEveryRegisteredRouteAppearsInDoc is a sanity check: every registered
+// route (plain mux plus Huma operations) must show up in the generated doc, so
+// a parser regression that silently drops a route cannot slip through.
 func TestEveryRegisteredRouteAppearsInDoc(t *testing.T) {
 	root := testRoot(t)
 	routes, err := GenerateRoutes(root)
 	if err != nil {
-		t.Fatalf("parse routes: %v", err)
+		t.Fatalf("build route set: %v", err)
 	}
 	if len(routes) == 0 {
 		t.Fatal("parsed zero routes; the routes.go parser is broken")
@@ -71,16 +71,20 @@ func TestEveryRegisteredRouteAppearsInDoc(t *testing.T) {
 }
 
 // TestRouteCountIsStable pins the number of registered routes so an accidental
-// drop of a registration is caught even if the doc happens to render.
+// drop of a registration is caught even if the doc happens to render. The
+// count is the full registered set: the plain mux routes parsed from the
+// registerXxxRoutes functions plus the Huma operations read from the
+// in-process API object (the Huma set is the live registration set, so it
+// tracks the handlers even as the huma.Register calls move between files).
 func TestRouteCountIsStable(t *testing.T) {
 	root := testRoot(t)
 	routes, err := GenerateRoutes(root)
 	if err != nil {
-		t.Fatalf("parse routes: %v", err)
+		t.Fatalf("build route set: %v", err)
 	}
-	// The inventory must cover every mux.HandleFunc registration in
-	// pkg/webui/routes.go.
-	const want = 159
+	// The inventory must cover every plain mux.HandleFunc registration plus
+	// every registered Huma operation.
+	const want = 195
 	if len(routes) != want {
 		t.Errorf("parsed %d routes, want %d (a registration was added or dropped)", len(routes), want)
 	}
@@ -167,27 +171,31 @@ func TestMethodDerivation(t *testing.T) {
 		t.Fatalf("build handler index: %v", err)
 	}
 	cases := []struct {
-		path    string
-		handler string
-		want    []string
+		path           string
+		handler        string
+		explicitMethod string
+		want           []string
 	}{
 		// Not in the registry; multi-method via requireMethods(GET, HEAD, POST).
-		{"/api/sync", "handleAPISync", []string{"GET", "HEAD", "POST"}},
+		{"/api/sync", "handleAPISync", "", []string{"GET", "HEAD", "POST"}},
 		// Not in the registry; GET+HEAD via requireMethods.
-		{"/api/txn/status", "handleAPITxnStatus", []string{"GET", "HEAD"}},
+		{"/api/txn/status", "handleAPITxnStatus", "", []string{"GET", "HEAD"}},
 		// In the registry (synthetic, isPrefix) — confirms registry methods win
 		// over the handler for a prefix-covered route.
-		{"/api/settings/mcp/servers/", "handleAPISettingsMCPServers", []string{"GET", "POST", "PUT", "DELETE"}},
+		{"/api/settings/mcp/servers/", "handleAPISettingsMCPServers", "", []string{"GET", "POST", "PUT", "DELETE"}},
 		// No method check in the handler -> "any".
-		{"/health", "", []string{"any"}},
+		{"/health", "", "", []string{"any"}},
+		// A Huma operation with an explicit registered method wins over the
+		// registry and the handler source (the spec is authoritative).
+		{"/api/command/complete", "commandComplete", "POST", []string{"POST"}},
 	}
 	for _, c := range cases {
 		if c.want == nil {
 			continue
 		}
-		got := resolveRouteMethod(c.path, c.handler, registry, idx)
+		got := resolveRouteMethod(c.path, c.handler, c.explicitMethod, registry, idx)
 		if !equalStrings(got, c.want) {
-			t.Errorf("resolveRouteMethod(%q, %q) = %v, want %v", c.path, c.handler, got, c.want)
+			t.Errorf("resolveRouteMethod(%q, %q, %q) = %v, want %v", c.path, c.handler, c.explicitMethod, got, c.want)
 		}
 	}
 }

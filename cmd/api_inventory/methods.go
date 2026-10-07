@@ -199,11 +199,16 @@ func calleeName(call *ast.CallExpr) string {
 	return ""
 }
 
-// resolveRouteMethod determines the Method cell for a route. The registry's
-// methods take precedence when the route (or a prefix entry covering it) is
-// listed; otherwise the method is derived from the handler source, with "any"
-// for a handler that performs no method check.
-func resolveRouteMethod(routePath, handlerBase string, registry []RegistryEntry, idx *handlerIndex) []string {
+// resolveRouteMethod determines the Method cell for a route. For a Huma
+// operation (explicitMethod set) the registered method from the OpenAPI spec
+// is authoritative; otherwise the registry's methods take precedence when the
+// route (or a prefix entry covering it) is listed; and otherwise the method is
+// derived from the handler source, with "any" for a handler that performs no
+// method check.
+func resolveRouteMethod(routePath, handlerBase, explicitMethod string, registry []RegistryEntry, idx *handlerIndex) []string {
+	if explicitMethod != "" {
+		return normalizeMethods([]string{explicitMethod})
+	}
 	if methods, ok := registryMethodsForPath(routePath, registry); ok && len(methods) > 0 {
 		return normalizeMethods(methods)
 	}

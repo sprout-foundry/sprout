@@ -23,7 +23,7 @@
  */
 
 import { gitClient } from './gitClient';
-import { usesPlatformGitHub } from './platformGitHub';
+import { usesPlatformGitHub } from '../host/platformGitHub';
 
 /**
  * A single git tool definition with its executor.

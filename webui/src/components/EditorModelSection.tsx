@@ -6,6 +6,8 @@
 
 import { useEffect, useId, useState } from 'react';
 import type { FormEvent, ReactElement } from 'react';
+import { useHost } from '../host/useHost';
+import { platformHref } from '../host/platformUrl';
 import { onPlatformLinkClick } from '../services/homeView';
 import {
   getEditorModel,
@@ -15,10 +17,14 @@ import {
   type EditorModelState,
   type ProviderModel,
 } from '../services/editorModel';
-import { platformHref } from '../utils/platformUrl';
 import './EditorModelSection.css';
 
 export default function EditorModelSection(): ReactElement {
+  const { navigation } = useHost();
+  // Destinations come from the host's intent resolution; the paths live only
+  // on the host side.
+  const accountSettingsPath = navigation.intentPath?.({ type: 'account' }) ?? null;
+  const usagePath = navigation.intentPath?.({ type: 'usage' }) ?? null;
   const [state, setState] = useState<EditorModelState | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mode, setMode] = useState<'managed' | 'own'>('managed');
@@ -125,9 +131,13 @@ export default function EditorModelSection(): ReactElement {
         (noKeys ? (
           <p className="settings-section-desc">
             Save an API key first, in{' '}
-            <a href={platformHref('/?from=editor#/settings')} onClick={onPlatformLinkClick('/settings')}>
-              account settings
-            </a>
+            {accountSettingsPath ? (
+              <a href={platformHref(accountSettingsPath)} onClick={onPlatformLinkClick(accountSettingsPath)}>
+                account settings
+              </a>
+            ) : (
+              'account settings'
+            )}
             .
           </p>
         ) : (
@@ -172,10 +182,10 @@ export default function EditorModelSection(): ReactElement {
         </button>
         <a
           className="editor-model-billing"
-          href={platformHref('/#/account/billing')}
+          href={usagePath ? platformHref(usagePath) : undefined}
           target="_blank"
           rel="noopener noreferrer"
-          onClick={onPlatformLinkClick('/account/billing')}
+          onClick={usagePath ? onPlatformLinkClick(usagePath) : undefined}
         >
           Usage and billing
         </a>

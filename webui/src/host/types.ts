@@ -34,6 +34,14 @@ export interface HostEntitlements {
     /** Invoked by Sprout when usage runs out; the host decides what that means. */
     onOutOfUsage?: () => void;
   };
+  /**
+   * Re-resolve the usage summary with the host (re-fetch the account's
+   * balance, etc.). Sprout calls this on mount, on focus, while the tab is
+   * visible, and when it leaves the host's Home surface — the host owns the
+   * fetch and updates its own summary. Absent when the host's summary is
+   * static; Sprout then just renders the supplied value.
+   */
+  resolve?: () => Promise<void>;
 }
 
 /**
@@ -104,6 +112,18 @@ export interface HostSpaceIntent {
 }
 
 /**
+ * A host-defined nav destination identified by the host's own id. The host
+ * resolves it (usually to one of its pages); Sprout never interprets the id,
+ * it only renders the item and dispatches the intent. Used for items that
+ * don't fit one of the semantic intents (e.g. Team, Runners).
+ */
+export interface HostNavIntent {
+  type: 'nav';
+  /** The host's own identifier for the destination. */
+  id: string;
+}
+
+/**
  * The intents a host can be asked to resolve. Sprout requests an intent by
  * calling `HostNavigation.open`; the host resolves it.
  */
@@ -113,15 +133,48 @@ export type HostNavigationIntent =
   | HostHelpIntent
   | HostSignOutIntent
   | HostProjectIntent
-  | HostSpaceIntent;
+  | HostSpaceIntent
+  | HostNavIntent;
+
+/**
+ * A navigation item the host offers Sprout to render. The host owns the label
+ * and the destination: Sprout only renders the item and dispatches its intent,
+ * so no platform page name or URL ever lives in Sprout's own components.
+ */
+export interface HostNavItem {
+  /** The host's own label for the item (Sprout renders it verbatim). */
+  label: string;
+  /** The intent to dispatch when the item is chosen. */
+  intent: HostNavigationIntent;
+}
 
 /**
  * Outward navigation: Sprout requests intents and the host resolves them; the
  * host also provides deep links back into a project/space.
+ *
+ * The optional item lists let the host hand Sprout its account-area exits and
+ * the Home "Work" places as data (labels + intents) instead of Sprout
+ * hard-coding platform page names. The host resolves each item's destination;
+ * Sprout only renders the item and dispatches `open(item.intent)`.
  */
 export interface HostNavigation {
   /** Resolve an intent the host owns (account, usage, help, signOut) or a deep link into a project/space. */
   open(intent: HostNavigationIntent): void;
+  /**
+   * The account-area exit items the host offers (Dashboards, Usage & billing,
+   * Team, Runners, Settings, …), each carrying the host's label and intent.
+   * Absent when the host has no account area to surface.
+   */
+  accountItems?: HostNavItem[];
+  /** The Home "Work" section items the host offers (Dashboard, Tasks, Workspaces, …). */
+  workItems?: HostNavItem[];
+  /**
+   * The host's own resolution of an intent to a platform page path (e.g.
+   * `'/?from=editor#/account/billing'`), or null when the host has no page for
+   * it. Sprout reads this only to give a link an href; the path string stays
+   * entirely on the host side.
+   */
+  intentPath?(intent: HostNavigationIntent): string | null;
 }
 
 /**

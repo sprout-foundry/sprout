@@ -7,6 +7,8 @@ vi.mock('./MenuBar', () => ({ default: () => null }));
 vi.mock('./UserMenu', () => ({ UserMenu: () => null }));
 vi.mock('./UsageChip', () => ({ UsageChip: () => null }));
 vi.mock('./WorkspaceBar', () => ({ default: () => null }));
+// CreditsChip reads the host; HeaderBar's own tests don't provide one.
+vi.mock('./CreditsChip', () => ({ CreditsChip: () => null }));
 let activeRepo: string | undefined;
 vi.mock('../services/activeRepo', () => ({ useActiveRepoURL: () => activeRepo }));
 

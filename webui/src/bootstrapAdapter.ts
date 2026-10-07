@@ -12,6 +12,7 @@
 
 import { installAdapter } from './services/apiAdapter';
 import type { PlatformNavItem } from './services/apiAdapter';
+import { CLOUD_NAV_ITEMS } from './host/platformNav';
 import type { GitSyncReport, RuntimeConfig } from './types/runtimeConfig';
 
 /** Shape of the JSON returned by /api/bootstrap (all fields optional). */
@@ -46,21 +47,8 @@ interface BootstrapResponse {
   update?: RuntimeConfig['update'];
 }
 
-// Fallback platform nav items when the platform did not serve navItems
-// (older platform versions). SP-016 P0.4: items that have a registered
-// plugin view (all but "admin") stay unflagged so the host switches them
-// in-editor — exactly today's behavior for this fallback list. "admin"
-// has no plugin view, so today it exits via the href; the explicit
-// external flag preserves that on the new contract.
-const CLOUD_NAV_ITEMS: PlatformNavItem[] = [
-  { id: 'dashboard', label: 'Dashboard', href: '/', icon: 'layout-dashboard', order: 0 },
-  { id: 'tasks', label: 'Tasks', href: '/tasks', icon: 'list-checks', order: 1 },
-  { id: 'billing', label: 'Billing', href: '/account/billing', icon: 'credit-card', order: 2 },
-  { id: 'team', label: 'Team', href: '/team', icon: 'users', order: 3 },
-  { id: 'runners', label: 'Runners', href: '/runners', icon: 'server', order: 4 },
-  { id: 'workspaces', label: 'Workspaces', href: '/workspaces', icon: 'monitor', order: 5 },
-  { id: 'admin', label: 'Admin', href: '/admin', icon: 'shield', order: 6, external: true },
-];
+// Fallback platform nav items live in the host tree (they name the platform's
+// pages); see host/platformNav.ts. Imported above.
 
 const LOCALHOST_DEFAULTS: RuntimeConfig = {
   apiBaseURL: 'http://localhost:56000',

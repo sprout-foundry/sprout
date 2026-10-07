@@ -23,7 +23,7 @@ import { isLayeredLayout } from '../config/layout';
 import { isCloud } from '../config/mode';
 import { useHostCapabilities } from '../host';
 import { useActiveRepoURL } from '../services/activeRepo';
-import { repoSlug } from '../utils/platformUrl';
+import { repoSlug } from '../host/platformUrl';
 
 const CodeShell: React.FC<WorkspaceShellProps> = ({
   isMobile,

@@ -7,9 +7,9 @@
  * the platform's cached copy of the account's repo list.
  */
 
-import { platformHref } from '../utils/platformUrl';
-import { gitCorsProxy } from './gitCorsProxy';
-import type { GitHubRepo } from './githubService';
+import { gitCorsProxy } from '../services/gitCorsProxy';
+import type { GitHubRepo } from '../services/githubService';
+import { platformHref } from './platformUrl';
 
 /** True when GitHub access comes from the Foundry account, not a local token. */
 export function usesPlatformGitHub(): boolean {

@@ -9,7 +9,7 @@ import { ApiService } from '../services/api';
 import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
 import type { SproutSettings } from '../services/api';
 import { useLog } from '../utils/log';
-import { usesPlatformGitHub } from '../services/platformGitHub';
+import { usesPlatformGitHub } from '../host/platformGitHub';
 import EditorModelSection from './EditorModelSection';
 import CredentialsSettingsTab from './CredentialsSettingsTab';
 import GitHubAccountPanel from './GitHubAccountPanel';

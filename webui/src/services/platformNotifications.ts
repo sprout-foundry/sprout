@@ -6,7 +6,7 @@
  * read on the platform.
  */
 
-import { platformHref } from '../utils/platformUrl';
+import { platformHref } from '../host/platformUrl';
 import { openPlatformPage } from './homeView';
 import { notificationBus, type NotificationType } from './notificationBus';
 

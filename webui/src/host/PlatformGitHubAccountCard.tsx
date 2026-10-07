@@ -8,11 +8,11 @@
 import { ExternalLink, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
-import './GitHubAccountPanel.css';
+import '../components/GitHubAccountPanel.css';
 import { isLayeredLayout } from '../config/layout';
 import { isCloud } from '../config/mode';
 import { onPlatformLinkClick } from '../services/homeView';
-import { fetchPlatformGitHubConnected, platformGitHubSettingsHref } from '../services/platformGitHub';
+import { fetchPlatformGitHubConnected, platformGitHubSettingsHref } from './platformGitHub';
 
 interface PlatformGitHubAccountCardProps {
   /** Connection state when the parent already knows it; fetched otherwise. */

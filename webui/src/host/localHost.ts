@@ -22,8 +22,12 @@ export const localHost: SproutHost = {
     authMode: 'none',
   },
   navigation: {
-    // No outward platform links exist yet; a no-op is honest.
+    // The local build has no outward platform pages; a no-op open plus an
+    // intentPath that always reports "no page" is honest.
     open() {},
+    intentPath() {
+      return null;
+    },
   },
   notifications: {
     // The local UI keeps its own in-app toast/center; the host sink is a

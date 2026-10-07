@@ -1,5 +1,6 @@
+import { getActiveHost } from '../host/accessor';
+import { platformHref } from '../host/platformUrl';
 import { openPlatformPage } from './homeView';
-import { platformHref } from '../utils/platformUrl';
 import { notificationBus } from './notificationBus';
 
 /**
@@ -15,9 +16,21 @@ export function describeAgentError(raw: string): { message: string; creditsBlock
 }
 
 /**
+ * The destination for the "buy credits" exit. The host owns the path: use its
+ * entitlements link target, else its account intent resolution. Null when the
+ * host has no account surface.
+ */
+function creditsLinkTarget(): string | null {
+  const host = getActiveHost();
+  const summary = host?.entitlements?.usageSummary;
+  if (summary?.linkTarget) return summary.linkTarget;
+  return host?.navigation.intentPath?.({ type: 'usage' }) ?? null;
+}
+
+/**
  * Offer the way out of a credit block. When the platform suggests your own
  * key (free tier, managed credits used up), the action opens the editor's
- * model setting; otherwise it opens billing.
+ * model setting; otherwise it opens the host's billing page.
  */
 export function notifyCreditsBlocked(message: string): void {
   const ownKey = /own API key/i.test(message);
@@ -28,7 +41,8 @@ export function notifyCreditsBlocked(message: string): void {
         window.dispatchEvent(new CustomEvent('sprout:open-settings-focus', { detail: { focus: 'provider' } }));
         return;
       }
-      if (!openPlatformPage('/account/billing')) window.open(platformHref('/#/account/billing'), '_blank', 'noopener');
+      const target = creditsLinkTarget();
+      if (target && !openPlatformPage(target)) window.open(platformHref(target), '_blank', 'noopener');
     },
   });
 }

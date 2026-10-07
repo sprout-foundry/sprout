@@ -6,7 +6,7 @@ import { isCloud } from '../config/mode';
 import { useHostCapabilities } from '../host';
 import { getBootstrapConfig } from '../bootstrapAdapter';
 import { useActiveRepoURL } from '../services/activeRepo';
-import { repoName as repoNameFromURL, repoSlug as repoSlugFromURL } from '../utils/platformUrl';
+import { repoName as repoNameFromURL, repoSlug as repoSlugFromURL } from '../host/platformUrl';
 import { useNotifications } from '../contexts/NotificationContext';
 import { allLanguageEntries, resolveLanguageId } from '../extensions/languageRegistry';
 import NotificationHistoryPanel from './NotificationHistoryPanel';

@@ -29,8 +29,8 @@ import { type CloneResult } from '../services/workspaceFs/backendsExport';
 import { debugLog } from '../utils/log';
 import './GitHubRepoPicker.css';
 import GitHubAccountPanel from './GitHubAccountPanel';
-import PlatformGitHubAccountCard from './PlatformGitHubAccountCard';
-import { fetchPlatformGitHubConnected, listPlatformRepos, usesPlatformGitHub } from '../services/platformGitHub';
+import PlatformGitHubAccountCard from '../host/PlatformGitHubAccountCard';
+import { fetchPlatformGitHubConnected, listPlatformRepos, usesPlatformGitHub } from '../host/platformGitHub';
 import { showThemedConfirm } from './ThemedDialog';
 
 export interface GitHubRepoPickerProps {

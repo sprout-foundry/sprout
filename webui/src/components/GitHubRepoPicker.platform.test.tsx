@@ -12,7 +12,7 @@ vi.mock('../services/workspaceClone', () => ({
 }));
 vi.mock('./ThemedDialog', () => ({ showThemedConfirm: vi.fn() }));
 vi.mock('../utils/log', () => ({ debugLog: vi.fn() }));
-vi.mock('../services/platformGitHub', () => ({
+vi.mock('../host/platformGitHub', () => ({
   usesPlatformGitHub: () => true,
   platformGitHubSettingsHref: () => '/?from=editor#/settings',
   fetchPlatformGitHubConnected: () => Promise.resolve(platform.connected),

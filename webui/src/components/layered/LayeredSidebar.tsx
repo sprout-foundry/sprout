@@ -5,7 +5,6 @@
  */
 
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
-import { isCloud } from '../../config/mode';
 import { useHostCapabilities } from '../../host';
 import type { SectionTab } from '../../hooks/useSidebarState';
 import type { SproutInstance } from '../../services/api';
@@ -15,13 +14,13 @@ import { useRecentRepos } from '../../services/recentRepos';
 import { parseRepoRef } from '../../services/workspaceFs/workspaceGit';
 import { showThemedAlert, showThemedPrompt } from '../ThemedDialog';
 import type { ViewType } from '../../types/app';
-import { repoSlug as repoSlugFromURL } from '../../utils/platformUrl';
+import { repoSlug as repoSlugFromURL } from '../../host/platformUrl';
 import type { WorkspaceMode, WorkspaceModeId } from '../../workspaces/registry';
 import ProjectNav, { NAV_ICONS, type ProjectNavConversations, type ProjectNavTarget } from './ProjectNav';
 import HomeNav from './HomeNav';
 import NewProjectDialog from './NewProjectDialog';
 import GitHubRepoPicker from '../GitHubRepoPicker';
-import { fetchPlatformGitHubConnected } from '../../services/platformGitHub';
+import { fetchPlatformGitHubConnected } from '../../host/platformGitHub';
 import ProjectRail, { type RailProject } from './ProjectRail';
 import './Layered.css';
 
@@ -95,7 +94,15 @@ async function promptForRepo(): Promise<void> {
 }
 
 export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement {
-  const { git: supportsGit, settings: supportsSettings, automations: supportsAutomations } = useHostCapabilities();
+  const {
+    git: supportsGit,
+    settings: supportsSettings,
+    automations: supportsAutomations,
+    instances: supportsInstances,
+  } = useHostCapabilities();
+  // In the hosted build "projects" are repositories and the rail's account
+  // menu is the host's; the local daemon uses running workspaces instead.
+  const hosted = supportsInstances;
   const [open, setOpen] = useState<ProjectNavTarget | null>(null);
   const [creating, setCreating] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -118,7 +125,7 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
     if (homeShown !== null && homeShown !== lastHomeShown.current) onCloseDrawer?.();
     lastHomeShown.current = homeShown;
   }, [homeShown, onCloseDrawer]);
-  const title = isCloud ? (repoSlug ?? 'No repository open') : basename(props.workspaceRoot);
+  const title = hosted ? (repoSlug ?? 'No repository open') : basename(props.workspaceRoot);
 
   const inCode = props.activeModeId !== 'design';
   const conversationInMain = inCode && !!props.conversations?.inMain;
@@ -191,7 +198,7 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
     entry('section', 'search', 'Search'),
     ...(supportsGit ? [entry('section', 'git', 'Source control')] : []),
     // Hosted: the in-browser terminal stays hidden until asked for.
-    ...(isCloud ? [entry('section', 'terminal', 'Terminal')] : []),
+    ...(hosted ? [entry('section', 'terminal', 'Terminal')] : []),
   ];
   const designEntries = props.modes.some((m) => m.id === 'design')
     ? [
@@ -212,7 +219,7 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
   // for the rail's icons.
   const drillContent = props.renderSection();
 
-  const projects: RailProject[] = isCloud
+  const projects: RailProject[] = hosted
     ? recentRepos.map((url) => ({
         id: url,
         label: repoSlugFromURL(url) ?? url,
@@ -242,7 +249,7 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
         collapsed={props.collapsed}
         onToggleCollapsed={props.isMobile ? undefined : props.onToggleCollapsed}
         addActions={
-          isCloud
+          hosted
             ? [
                 { label: 'New project…', onSelect: () => setCreating(true) },
                 { label: 'Open a repository…', onSelect: () => void chooseRepo() },
@@ -262,7 +269,7 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
       {!props.collapsed && home.open && (
         <HomeNav
           path={home.path}
-          projectLabel={isCloud && !repoSlug ? 'the editor' : title}
+          projectLabel={hosted && !repoSlug ? 'the editor' : title}
           onBackToProject={() => {
             closeHome();
             props.onCloseDrawer?.();

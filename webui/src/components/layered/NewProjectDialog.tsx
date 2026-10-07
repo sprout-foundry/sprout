@@ -6,7 +6,7 @@
 import { FolderPlus } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent, type ReactElement } from 'react';
 import { openHome } from '../../services/homeView';
-import { CreateRepoError, createPlatformRepo, fetchPlatformGitHubConnected } from '../../services/platformGitHub';
+import { CreateRepoError, createPlatformRepo, fetchPlatformGitHubConnected } from '../../host/platformGitHub';
 import '../ThemedDialog.css';
 
 const NAME_PATTERN = /^[A-Za-z0-9._-]{1,100}$/;

@@ -18,13 +18,14 @@
 
 import { Cloud, Container, Loader2, Rocket, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useHost } from '../host/useHost';
+import { platformHref } from '../host/platformUrl';
 import type { EscalationTriggerEvent } from '../hooks/useEscalationTriggers';
 import { ESCALATION_TRIGGER_EVENT } from '../hooks/useEscalationTriggers';
 import { isTerminalCloudTaskStatus, pollCloudTask, submitCloudTask, type CloudTask } from '../services/cloudTasks';
 import { runTxnCommand, txnPhaseLabel, type TxnProgress } from '../services/cloudTxnEscalate';
 import { startFullWorkspace, useFullWorkspacesAvailable } from '../services/fullWorkspace';
 import { onPlatformLinkClick, openPlatformPage } from '../services/homeView';
-import { platformHref } from '../utils/platformUrl';
 import './EscalationToast.css';
 
 interface EscalationState {
@@ -75,6 +76,7 @@ interface CloudTaskProgress {
 }
 
 export function EscalationListener() {
+  const { navigation } = useHost();
   const [escalation, setEscalation] = useState<EscalationState | null>(null);
   const [cloudTask, setCloudTask] = useState<CloudTaskProgress | null>(null);
   const [txn, setTxn] = useState<TxnProgress | null>(null);
@@ -207,9 +209,10 @@ export function EscalationListener() {
   const handleStartWorkspace = useCallback(() => {
     const repoURL = escalation?.trigger?.repoURL;
     if (!repoURL) {
-      // No repo context: the dashboard is where a workspace gets picked.
-      // `?from=editor` keeps the platform SPA from bouncing back here.
-      if (!openPlatformPage('/')) window.location.href = platformHref('/?from=editor');
+      // No repo context: the host's account/dashboard page is where a
+      // workspace gets picked. The host owns the path.
+      const dashboard = navigation.intentPath?.({ type: 'account' }) ?? null;
+      if (dashboard && !openPlatformPage(dashboard)) window.location.href = platformHref(dashboard);
       return;
     }
     setWorkspaceError(null);
@@ -232,7 +235,7 @@ export function EscalationListener() {
       .finally(() => {
         if (mountedRef.current) setStartingWorkspace(false);
       });
-  }, [escalation]);
+  }, [escalation, navigation]);
 
   if (!escalation?.visible) return null;
 

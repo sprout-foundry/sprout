@@ -18,6 +18,8 @@ const fixtureValid = `{
   "test": "npm test",
   "dev": "npm run dev",
   "preview": "npx serve dist",
+  "format": "npm run format",
+  "lint": "npm run lint",
   "dev_port": 5173,
   "routes": ["/", "/login", "/dashboard"],
   "build_output": "dist"
@@ -89,6 +91,18 @@ func TestValidateJSON(t *testing.T) {
 			wantSubstr: "preview: command must not be whitespace-only",
 		},
 		{
+			name:       "whitespace-only format command fails",
+			jsonStr:    strings.Replace(fixtureValid, `"format": "npm run format"`, `"format": "   "`, 1),
+			wantValid:  false,
+			wantSubstr: "format: command must not be whitespace-only",
+		},
+		{
+			name:       "whitespace-only lint command fails",
+			jsonStr:    strings.Replace(fixtureValid, `"lint": "npm run lint"`, `"lint": "   "`, 1),
+			wantValid:  false,
+			wantSubstr: "lint: command must not be whitespace-only",
+		},
+		{
 			name:       "out-of-range dev_port fails",
 			jsonStr:    strings.Replace(fixtureValid, `"dev_port": 5173,`, `"dev_port": 70000,`, 1),
 			wantValid:  false,
@@ -155,6 +169,8 @@ func baseManifest() *StarterManifest {
 	m.Test = "npm test"
 	m.Dev = "npm run dev"
 	m.Preview = "npx serve dist"
+	m.Format = "npm run format"
+	m.Lint = "npm run lint"
 	m.DevPort = 5173
 	m.Routes = []string{"/", "/login", "/dashboard"}
 	m.BuildOutput = "dist"
@@ -204,6 +220,18 @@ func TestValidateTable(t *testing.T) {
 			m:          mutate(func(m *StarterManifest) { m.Test = "  " }),
 			wantValid:  false,
 			wantSubstr: "test: command must not be whitespace-only",
+		},
+		{
+			name:       "whitespace-only format command fails",
+			m:          mutate(func(m *StarterManifest) { m.Format = "  " }),
+			wantValid:  false,
+			wantSubstr: "format: command must not be whitespace-only",
+		},
+		{
+			name:       "whitespace-only lint command fails",
+			m:          mutate(func(m *StarterManifest) { m.Lint = "  " }),
+			wantValid:  false,
+			wantSubstr: "lint: command must not be whitespace-only",
 		},
 		{
 			name:      "dev_port of 0 (no fixed port) passes",
@@ -286,7 +314,7 @@ func TestJSONFieldNamesMatchSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(b, &m))
 
 	wantTopLevel := []string{
-		"starter", "build", "test", "dev", "preview", "dev_port", "routes", "build_output",
+		"starter", "build", "test", "dev", "preview", "format", "lint", "dev_port", "routes", "build_output",
 	}
 	for _, k := range wantTopLevel {
 		assert.Contains(t, m, k, "missing top-level JSON key %q", k)

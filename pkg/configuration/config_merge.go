@@ -345,6 +345,29 @@ func MergeConfig(base, override *Config) *Config {
 		}
 	}
 
+	// Merge Quality configuration. The feature is off by default; the
+	// enable flag carries explicit-key semantics so a narrower layer can
+	// disable a broader layer's enable, and the explicit formatter/linter
+	// commands follow the non-empty-wins convention of the other string
+	// fields (a narrower layer's command beats a broader one; a silent
+	// layer keeps it).
+	if q := override.Quality; q != nil &&
+		(override.overrides("quality.enabled", q.Enabled) ||
+			q.FormatCommand != "" || q.LintCommand != "") {
+		if result.Quality == nil {
+			result.Quality = &QualityConfig{}
+		}
+		if override.overrides("quality.enabled", q.Enabled) {
+			result.Quality.Enabled = q.Enabled
+		}
+		if q.FormatCommand != "" {
+			result.Quality.FormatCommand = q.FormatCommand
+		}
+		if q.LintCommand != "" {
+			result.Quality.LintCommand = q.LintCommand
+		}
+	}
+
 	return result
 }
 

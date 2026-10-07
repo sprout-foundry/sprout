@@ -234,6 +234,14 @@ type Config struct {
 	// (149e). Nil means off with the default repair-attempt limit.
 	Verification *VerificationConfig `json:"verification,omitempty"`
 
+	// Quality controls the quality-after-edits step: the turn-end gate that
+	// runs the project's formatter and linter after a turn that changed
+	// application code and repairs the findings in the same turn. Off by
+	// default in the CLI; any config layer — global, project (workspace),
+	// or an embedding environment writing the same layers — enables it
+	// through the same "quality" section. Nil means off.
+	Quality *QualityConfig `json:"quality,omitempty"`
+
 	// OutputVerbosity controls how much inter-tool-call narration and
 	// streaming detail the UI shows. Valid values: "compact" (hide
 	// interim model messages, show only tool results and final text),

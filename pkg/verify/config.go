@@ -20,3 +20,18 @@ func ConfigurationCommands(cfg *configuration.Config) ConfigCommandsProvider {
 		}, nil
 	}
 }
+
+// QualityConfigurationCommands returns a QualityConfigCommandsProvider backed
+// by a merged *configuration.Config — the "explicit project configuration"
+// source of the quality-after-edits step: quality.format_command and
+// quality.lint_command, set by a human in the project layer
+// (.sprout/workspace.json) or in global config. The provider ignores root:
+// the config is already the merged result for the project.
+func QualityConfigurationCommands(cfg *configuration.Config) QualityConfigCommandsProvider {
+	return func(string) (QualityCommands, error) {
+		return QualityCommands{
+			Format: strings.TrimSpace(cfg.QualityFormatCommand()),
+			Lint:   strings.TrimSpace(cfg.QualityLintCommand()),
+		}, nil
+	}
+}

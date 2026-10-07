@@ -182,7 +182,7 @@ standalone local build keeps embedding into `pkg/webui/static`.
       the package, in both the package and the cloud build; the local embed
       keeps working. A test fails if the WASM URL does not change when its
       content changes. Spec: SP-160 §160e, Acceptance criteria 6.
-- [ ] **ws.7** The local web UI becomes a thin app: its shell renders around
+- [x] **ws.7** The local web UI becomes a thin app: its shell renders around
       `SproutWorkspace` with `localHost` and `SproutProviders`, importing
       only the package's public entry points; anything missing is added to
       the package exports, not imported privately. No feature loss.

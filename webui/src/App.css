@@ -348,6 +348,18 @@ body {
   transition: padding-bottom 200ms var(--ease-out);
 }
 
+/* SP-160 §160a: the app renders its space through `SproutWorkspace`, which
+ * wraps the space shell in a `.sprout-workspace` root (the host-page scoping
+ * element the package stylesheet targets). In the app the wrapper is
+ * redundant — the app owns its own scoping and lays its flex children out
+ * directly — so it participates as `display: contents`: its children (the
+ * space's `<main class="main-content">`) become the flex items they are today,
+ * keeping the layout byte-identical. Custom properties (the theme on
+ * `data-theme`) still inherit through it, so the theme attribute stays live. */
+.app > .sprout-workspace {
+  display: contents;
+}
+
 /* Touch-large band (tablets —
  * coarse pointer wider than the phone breakpoint), give the app shell
  * breathing room at the top so the first row of chrome doesn't sit

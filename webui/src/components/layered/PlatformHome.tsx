@@ -62,7 +62,12 @@ export default function PlatformHome({ isMobile, onOpenMenu }: PlatformHomeProps
       setTop(0);
       return;
     }
-    const bar = document.querySelector<HTMLElement>('.app > main .header-bar');
+    // Descendant, not direct-child: the space's <main> now sits inside the
+    // `SproutWorkspace` root (`.app > .sprout-workspace > main`), so
+    // `.app > main .header-bar` would no longer match and `top` would drop to
+    // 0, hiding Home under the editor bar. The only <main> in the app is the
+    // space shell's (see components/layered/Layered.css for the CSS twin).
+    const bar = document.querySelector<HTMLElement>('.app main .header-bar');
     setTop(bar?.offsetHeight ?? 0);
   }, [open, isMobile]);
 

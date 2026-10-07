@@ -125,6 +125,14 @@ export type {
   WorkspaceModeRegistration,
 } from '../workspaces/registry';
 
+// The active-space state a host drives with its own switcher: it reads the
+// resolved mode and the offered modes, and calls `select`. A host that owns
+// its chrome (Sprout's own app root does) keeps the requested-space state here
+// and feeds the resolved id to `SproutWorkspace`'s `space` prop, so the
+// switcher and the mounted space cannot disagree.
+export { useWorkspaceMode } from '../workspaces/useWorkspaceMode';
+export type { UseWorkspaceModeResult } from '../workspaces/useWorkspaceMode';
+
 // The provider wrapper a host wraps the composed views in, so it does not
 // assemble the web UI context stack by hand. Its own entry point and chunk
 // (the `providers` library entry) keep it out of the static entry; the local

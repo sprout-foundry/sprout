@@ -29,6 +29,25 @@ export default defineConfig({
       tsconfigPath: "./tsconfig.build.json",
     }),
   ],
+  resolve: {
+    // The workspace bundles `@sprout/ui` (its host modules import the
+    // notification bus from it). Resolve the package to its source barrel,
+    // not its pre-built `dist/index.esm.js`: a built barrel is a monolith
+    // Rollup cannot tree-shake, so importing the bus would drag the whole
+    // component graph — the editor included — into the package entry. From
+    // source, only the modules the entry actually reaches are bundled; the
+    // heavy view graph stays in the lazily loaded chunks.
+    alias: [
+      {
+        find: /^@sprout\/ui$/,
+        replacement: resolve(__dirname, "../ui/src/index.ts"),
+      },
+      {
+        find: /^@sprout\/ui\/(.*)$/,
+        replacement: resolve(__dirname, "../ui/src/$1"),
+      },
+    ],
+  },
   build: {
     lib: {
       entry: {

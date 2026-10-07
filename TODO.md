@@ -703,9 +703,15 @@ needed whatever the integration work does. Spec context: SP-160 §160e.
       on-demand `checkpoint` agent tool lists/creates/restores. Pinned by
       Go tests (including that capture uses the given revision, not the
       store head, and that reads never create the store).
-- [ ] **157.3** Timeline UI with restore action in the changes surface
+- [x] **157.3** Timeline UI with restore action in the changes surface
       (the SP-145 Changes surface if it has landed, otherwise the current
       Changes panel); file-level views remain. Vitest. Spec: SP-157 §157a.
+      Fixed: `ProjectTimeline` renders change sets, deploys and checkpoints
+      from a typed prop (mirroring the backend timeline entry), with a
+      two-step restore confirm (a single click never restores) and pure
+      sort/restorability helpers. It is an additive tab in
+      `AgentChangesPanel`; the existing per-file views are unchanged.
+      Pinned by vitest.
 - [ ] **157.4** Optional `summarizer`-role change summaries with template
       fallback. Test. Spec: SP-157 §157a.
 - [ ] **157.5** Quality after edits (off by default in the CLI): run the

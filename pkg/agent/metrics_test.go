@@ -263,7 +263,8 @@ func TestTrackMetricsFromResponse_UsdBudgetWiring(t *testing.T) {
 }
 
 func TestTrackMetricsFromResponse(t *testing.T) {
-	t.Parallel()
+	// Not parallel: subtests reset and seed the process-wide pricing
+	// resolver, which would race with any other test doing the same.
 
 	t.Run("updates all token metrics", func(t *testing.T) {
 		a := newMetricsTestAgent(t)
@@ -476,7 +477,8 @@ func TestGetCachedCostSavings(t *testing.T) {
 // never fabricates a number, and the unknown case is surfaced as (0,false) so
 // the cost views can render "unknown" rather than $0.
 func TestCalculateCachedTokenSavings(t *testing.T) {
-	t.Parallel()
+	// Not parallel: subtests reset and seed the process-wide pricing
+	// resolver, which would race with any other test doing the same.
 
 	setSessionProviderModel := func(a *Agent, provider, model string) {
 		a.state.SetSessionProvider(api.ClientType(provider))

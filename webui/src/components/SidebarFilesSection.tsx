@@ -2,7 +2,7 @@ import { FileTree, type FileInfo, type FileTreeRefreshOptions } from '@sprout/ui
 import { Check, TriangleAlert, X } from 'lucide-react';
 import { forwardRef, useImperativeHandle, useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { isLayeredLayout } from '../config/layout';
-import { useHostCapabilities } from '../host';
+import { useHost, useHostCapabilities } from '../host';
 import { getShellIdentity, onShellIdentityChange } from '../config/shell';
 import { useOptionalBufferManager } from '../contexts/BufferManagerContext';
 import { useFileTreeAutoRefresh } from '../hooks/useFileTreeAutoRefresh';
@@ -14,13 +14,12 @@ import { searchForRepo } from '../services/homeView';
 import { detectSproutStudio, mapWorkspaceListing, nativeFsGate, workspaceListDepth } from '../services/nativeFs';
 import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
 import { gitCorsProxy } from '../services/gitCorsProxy';
-import { fetchPlatformGitHubConnected, usesPlatformGitHub } from '../host/platformGitHub';
 import { cloneIntoWorkspace } from '../services/workspaceClone';
 import { useWorkspaceCwd, setWorkspaceCwd } from '../services/workspaceCwd';
 import { getWorkspaceFs, listWorkspaceRepos } from '../services/workspaceFs/backendsExport';
 import type { FsEntry } from '../services/workspaceFs/types';
 import { parseRepoRef, repoDir } from '../services/workspaceFs/workspaceGit';
-import { repoSlug } from '../host/platformUrl';
+import { repoSlug } from '../host/repoName';
 import GitHubRepoPicker from './GitHubRepoPicker';
 import { showThemedAlert, showThemedPrompt } from './ThemedDialog';
 import WorkspaceCwdBar from './WorkspaceCwdBar';
@@ -75,6 +74,7 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
 
     const api = ApiService.getInstance();
     const bufferManager = useOptionalBufferManager();
+    const host = useHost();
     const { localTerminal } = useHostCapabilities();
 
     // ── Working directory (session-level cwd) ─────────────────────
@@ -211,7 +211,11 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
     const [isRepoPickerOpen, setIsRepoPickerOpen] = useState(false);
 
     const handleCloneRepo = async () => {
-      const accountConnected = usesPlatformGitHub() && (await fetchPlatformGitHubConnected().catch(() => false));
+      // GitHub is "connected" when a token is stored, or when the host manages
+      // GitHub on its account and reports a live connection. The host owns the
+      // account check; Sprout only asks.
+      const hostGithub = host.github;
+      const accountConnected = hostGithub ? await hostGithub.isConnected().catch(() => false) : false;
       if (getStoredToken() || accountConnected) {
         setIsRepoPickerOpen(true);
         return;

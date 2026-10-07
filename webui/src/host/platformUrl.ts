@@ -16,9 +16,16 @@
  * read (the React path, where the host is at hand); otherwise the active
  * host's transport is consulted. The entry point records the same host
  * instance on the accessor and the provider, so both channels agree.
+ *
+ * This module is part of the platform implementation (the internal host
+ * module): `platformHref` resolves a platform page, so it must not be imported
+ * from outside the host tree. Repository NAMING (repoSlug/repoName/
+ * githubRepoSlug) is host-agnostic and lives in `host/repoName.ts`, exported
+ * from the public entry.
  */
 
-import { getActiveHost } from './accessor';
+import { outwardURL } from './outwardURL';
+import { githubRepoSlug } from './repoName';
 import type { HostTransport } from './types';
 
 /**
@@ -29,17 +36,10 @@ import type { HostTransport } from './types';
  *                      defaults to the active host's transport.
  * @returns The absolute URL `platformURL + path` when the host supplies a
  *          platform base; otherwise the path verbatim (existing
- *          relative-exit behavior). Trailing slashes on the base are
- *          stripped so paths append cleanly.
+ *          relative-exit behavior).
  */
 export function platformHref(platformPath: string, transport?: HostTransport): string {
-  const base = transport ? transport.platformURL : getActiveHost()?.transport.platformURL;
-  if (!base) {
-    return platformPath;
-  }
-  const cleanBase = base.replace(/\/+$/, '');
-  const normalizedPath = platformPath.startsWith('/') ? platformPath : `/${platformPath}`;
-  return cleanBase + normalizedPath;
+  return outwardURL(platformPath, transport);
 }
 
 /**
@@ -54,42 +54,10 @@ export function repoHubPath(repoURL: string | null | undefined): string {
 }
 
 /**
- * The repository path for display — "owner/name", or "group/sub/name" on
- * hosts that nest repos (GitLab) — from an https or scp-style git URL on any
- * host, otherwise null. Links into the platform's GitHub-only repo pages use
- * githubRepoSlug instead.
+ * The platform's own full page URL for a route the editor embeds or opens: the
+ * platform SPA path with the platform's embed decoration (`?embed=1` plus the
+ * route in the hash) applied. Keeps the embed query literal on the host side.
  */
-export function repoSlug(repoURL: string | null | undefined): string | null {
-  if (!repoURL) return null;
-  const raw = repoURL.trim();
-  let path: string;
-  const scp = /^git@[^:]+:(.+)$/.exec(raw);
-  if (scp) {
-    path = scp[1];
-  } else {
-    try {
-      path = new URL(raw).pathname;
-    } catch {
-      return null;
-    }
-  }
-  path = path.replace(/^\/+|\/+$/g, '');
-  const viewAt = path.indexOf('/-/');
-  if (viewAt >= 0) path = path.slice(0, viewAt);
-  path = path.replace(/\.git$/, '');
-  const segments = path.split('/').filter(Boolean);
-  return segments.length >= 2 ? segments.join('/') : null;
-}
-
-/** The repository's own name (last path segment), or null. */
-export function repoName(repoURL: string | null | undefined): string | null {
-  const slug = repoSlug(repoURL);
-  return slug ? slug.slice(slug.lastIndexOf('/') + 1) : null;
-}
-
-/** "owner/name" for a github.com repository URL, otherwise null. */
-export function githubRepoSlug(repoURL: string | null | undefined): string | null {
-  if (!repoURL) return null;
-  const match = /^(?:https?:\/\/|git@)github\.com[/:]([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/i.exec(repoURL.trim());
-  return match ? `${match[1]}/${match[2]}` : null;
+export function platformEmbedPath(route: string): string {
+  return platformHref(`/?embed=1#${route}`);
 }

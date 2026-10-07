@@ -45,6 +45,17 @@ describe('importing the host performs no fetch', () => {
 
   it('importing the host barrel (./index) makes no fetch', async () => {
     const mod = await import('./index');
+    // The barrel carries the contract; the platform implementation is not part
+    // of it (it lives in the internal platform module).
+    expect(mod.localHost).toBeDefined();
+    expect(mod.useHost).toBeTypeOf('function');
+    expect(mod.setActiveHost).toBeTypeOf('function');
+    expect((mod as Record<string, unknown>).cloudHost).toBeUndefined();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('importing the internal platform module makes no fetch', async () => {
+    const mod = await import('./platform');
     expect(mod.cloudHost).toBeDefined();
     expect(mod.platformHref).toBeTypeOf('function');
     expect(fetchSpy).not.toHaveBeenCalled();

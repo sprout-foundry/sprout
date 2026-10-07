@@ -146,15 +146,96 @@ describe('cloudHost', () => {
     expect(cloudHost.navigation.intentPath?.({ type: 'usage' })).toBe('/?from=editor#/account/billing');
   });
 
-  it('leaves platform-provided identity/chrome/theme absent but supplies live entitlements', () => {
-    // Identity, chrome, and theme are host-provided at runtime by a later item;
-    // the constant declares the shape, so these are absent. Entitlements are
-    // live: the summary is resolved from the platform's billing status, so the
-    // object exists with a resolver and (initially, in tests) no summary.
+  it('resolves a task deep link by nav intent detail (the host owns the path)', () => {
+    // The escalation toast asks for the task page by (generic) nav intent +
+    // detail; the host resolves it, so no component hardcodes '#/tasks/'.
+    expect(cloudHost.navigation.intentPath?.({ type: 'nav', id: 'tasks', detail: '42' })).toBe(
+      '/?from=editor#/tasks/42',
+    );
+    expect(cloudHost.navigation.intentPath?.({ type: 'nav', id: 'repos', detail: 'acme/widgets' })).toBe(
+      '/?from=editor#/repos/acme/widgets',
+    );
+  });
+
+  it('supplies the platform GitHub surface as host data (account card + repo list)', () => {
+    // GitHub is account-managed: the host supplies the account card (chrome) and
+    // the connection/repo data, so the picker holds no platform call.
+    expect(cloudHost.chrome?.githubAccount).toBeTruthy();
+    expect(typeof cloudHost.github?.isConnected).toBe('function');
+    expect(typeof cloudHost.github?.listRepos).toBe('function');
+    expect(typeof cloudHost.github?.createRepo).toBe('function');
+    // The embed decoration lives on the host side (PlatformHome holds no literal).
+    expect(cloudHost.navigation.embedPagePath?.('/tasks')).toContain('/?embed=1');
+    // The outward page URL carries the platform base but no embed decoration.
+    expect(cloudHost.navigation.platformPagePath?.('/?from=editor#/admin')).toBe('/?from=editor#/admin');
+  });
+
+  it('leaves platform-provided identity/theme absent but supplies live entitlements', () => {
+    // Identity and theme are host-provided at runtime by a later item; the
+    // constant declares the shape, so these are absent. Entitlements are live:
+    // the summary is resolved from the platform's billing status, so the object
+    // exists with a resolver and (initially, in tests) no summary.
     expect(cloudHost.user).toBeUndefined();
-    expect(cloudHost.chrome).toBeUndefined();
     expect(cloudHost.theme).toBeUndefined();
     expect(typeof cloudHost.entitlements?.resolve).toBe('function');
     expect(cloudHost.entitlements?.usageSummary).toBeUndefined();
+  });
+
+  describe('the signOut intent', () => {
+    const originalLocation = window.location;
+
+    beforeEach(() => {
+      // jsdom's location.href assignment is a no-op; stub it so the redirect is
+      // observable and a throwing assignment can be simulated.
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        writable: true,
+        value: { ...originalLocation, href: '' },
+      });
+    });
+
+    afterEach(() => {
+      Object.defineProperty(window, 'location', { configurable: true, writable: true, value: originalLocation });
+      vi.unstubAllGlobals();
+    });
+
+    it('posts the platform logout and lands on the login page', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      await cloudHost.navigation.open({ type: 'signOut' });
+
+      expect(fetchMock).toHaveBeenCalledWith('/webui/auth/logout', { method: 'POST', credentials: 'include' });
+      expect(window.location.href).toBe('/login');
+    });
+
+    it('rejects when the logout POST fails, leaving the redirect untouched', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
+
+      await expect(cloudHost.navigation.open({ type: 'signOut' })).rejects.toThrow('network down');
+      expect(window.location.href).toBe('');
+    });
+
+    it('does not treat a navigation failure as a sign-out failure', async () => {
+      // The logout POST succeeds (the cookie is already cleared server-side);
+      // a redirect the browser throttles must NOT surface as a failed sign-out
+      // that would reopen the menu and claim the user is still signed in.
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 200 })));
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        writable: true,
+        value: {
+          ...originalLocation,
+          get href() {
+            return '';
+          },
+          set href(_value: string) {
+            throw new Error('navigation throttled');
+          },
+        },
+      });
+
+      await expect(cloudHost.navigation.open({ type: 'signOut' })).resolves.toBeUndefined();
+    });
   });
 });

@@ -5,7 +5,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { useHost, useHostCapabilities } from '../host';
 import { getBootstrapConfig } from '../bootstrapAdapter';
 import { useActiveRepoURL } from '../services/activeRepo';
-import { repoName as repoNameFromURL, repoSlug as repoSlugFromURL } from '../host/platformUrl';
+import { repoName as repoNameFromURL, repoSlug as repoSlugFromURL } from '../host/repoName';
 import { useNotifications } from '../contexts/NotificationContext';
 import { allLanguageEntries, resolveLanguageId } from '../extensions/languageRegistry';
 import NotificationHistoryPanel from './NotificationHistoryPanel';

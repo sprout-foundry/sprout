@@ -3,13 +3,12 @@ import { Keyboard, Upload, Trash2 } from 'lucide-react';
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { supportsLocalTerminal } from '../config/mode';
-import { useHostCapabilities } from '../host';
+import { useHost, useHostCapabilities } from '../host';
 import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
 import { ApiService } from '../services/api';
 import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
 import type { SproutSettings } from '../services/api';
 import { useLog } from '../utils/log';
-import { usesPlatformGitHub } from '../host/platformGitHub';
 import EditorModelSection from './EditorModelSection';
 import CredentialsSettingsTab from './CredentialsSettingsTab';
 import GitHubAccountPanel from './GitHubAccountPanel';
@@ -271,7 +270,12 @@ export default function SidebarSettingsSection({
   onModelChange,
 }: SidebarSettingsSectionProps): JSX.Element {
   const log = useLog();
+  const host = useHost();
   const { localTerminal } = useHostCapabilities();
+  // The host's GitHub account surface, when the host manages GitHub on its own
+  // account: the account card below says it all, so the token sign-in copy is
+  // hidden. The host owns the decision (it supplies the node).
+  const hostManagedGitHub = Boolean(host.chrome?.githubAccount);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [gitHubUser, setGitHubUser] = useState<GitHubUser | null>(() => getStoredUser());
@@ -473,7 +477,7 @@ export default function SidebarSettingsSection({
           <div className="section">
             <h4>GitHub</h4>
             {/* Hosted, the account card below says it all. */}
-            {!usesPlatformGitHub() && (
+            {!hostManagedGitHub && (
               <p className="settings-section-desc">
                 Connect a GitHub account to browse and clone your repositories (including private ones) and to let the
                 agent push and pull on your behalf.

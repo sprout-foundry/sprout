@@ -23,8 +23,7 @@ import type { CSSProperties } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { getBootstrapUser } from '../bootstrapAdapter';
 import { isLayeredLayout } from '../config/layout';
-import { platformHref } from '../host/platformUrl';
-import type { HostNavItem } from '../host/types';
+import type { HostNavItem, HostNavigationIntent } from '../host/types';
 import { useHost } from '../host/useHost';
 import { ADAPTER_INSTALLED_EVENT } from '../services/apiAdapter';
 import { openHome } from '../services/homeView';
@@ -77,23 +76,18 @@ export function UserMenu({ label }: UserMenuProps = {}): JSX.Element | null {
   const handleSignOut = async () => {
     setSigningOut(true);
     setOpen(false);
+    // The host performs the sign-out (logout + redirect); Sprout only requests
+    // the intent. A network failure propagates to the caller: the session
+    // cookie is intact, so staying here is the honest outcome. Surface it
+    // rather than stranding the user in a logged-in state pretending to be
+    // signed out.
     try {
-      await fetch(platformHref('/webui/auth/logout'), {
-        method: 'POST',
-        credentials: 'include',
-      });
+      await navigation.open({ type: 'signOut' } satisfies HostNavigationIntent);
     } catch (e) {
-      // Network failure only — the session cookie is intact, so staying
-      // here is the honest outcome. Surface it rather than stranding the
-      // user in a logged-in state pretending to be signed out.
       setSigningOut(false);
       setOpen(true);
       notificationBus.notify('error', 'Sign out failed', e instanceof Error ? e.message : String(e));
-      return;
     }
-    // The server cleared the session cookie. A hard navigation drops any
-    // cached client-side session state and lands on the login screen.
-    window.location.href = platformHref('/login');
   };
 
   // The header bar clips overflow, so the list is fixed-positioned under the
@@ -157,16 +151,20 @@ export function UserMenu({ label }: UserMenuProps = {}): JSX.Element | null {
             </div>
             {items.map((item) => {
               const path = navigation.intentPath?.(item.intent) ?? undefined;
+              // The host resolves the path to a full page URL (its outward
+              // surface); Sprout only renders the href the host supplies.
+              const href = path ? (navigation.platformPagePath?.(path) ?? path) : undefined;
               return (
                 <a
                   key={item.label}
                   role="menuitem"
                   className="user-menu-item"
-                  href={path ? platformHref(path) : undefined}
+                  href={href}
                   onClick={(e) => {
                     setOpen(false);
                     // Layered layout: platform pages open inside the shell
-                    // (Home) instead of leaving the editor.
+                    // (Home) instead of leaving the editor. The host owns the
+                    // path; Sprout decides only where to show it.
                     if (isLayeredLayout && path && !e.metaKey && !e.ctrlKey) {
                       e.preventDefault();
                       openHome(path);

@@ -1,11 +1,18 @@
 import { notificationBus as rawNotificationBus } from '@sprout/ui';
+import { CLOUD_NAV_ITEMS } from './platform';
 import {
   PLATFORM_ACCOUNT_ITEMS,
   PLATFORM_WORK_ITEMS,
+  createPlatformRepo,
+  fetchPlatformGitHubConnected,
   intentPath as platformIntentPath,
+  listPlatformRepos,
   platformEntitlements,
+  platformHref,
+  platformPagePath,
+  platformEmbedPagePath,
 } from './platform';
-import { platformHref } from './platformUrl';
+import { platformChrome } from './platform/platformChrome';
 import type { HostEntitlements, SproutHost } from './types';
 
 /**
@@ -28,6 +35,49 @@ const entitlements: HostEntitlements = {
     else delete entitlements.usageSummary;
   },
 };
+
+/**
+ * The platform sign-out: the server-side logout path (POST the platform's
+ * logout endpoint — the Kratos two-step browser logout the platform SPA's
+ * signOut uses), then a hard navigation to the login screen (which drops any
+ * cached client-side session state). Kept on the host side: the paths are the
+ * platform's, and the host owns the resolution of a `signOut` intent.
+ *
+ * A network failure propagates to the caller (the intent's dispatcher), which
+ * surfaces it: the session cookie is intact, so staying is the honest outcome.
+ */
+async function signOut(): Promise<void> {
+  const res = await fetch(platformHref('/webui/auth/logout'), {
+    method: 'POST',
+    credentials: 'include',
+  });
+  if (!res.ok) throw new Error(`Sign out failed (HTTP ${res.status}).`);
+}
+
+/**
+ * Perform the sign-out: server-side logout, then a hard navigation to the
+ * login screen. The redirect is deliberately OUTSIDE the failure surface: the
+ * logout POST decides success, so a navigation that the browser throttles or a
+ * test stubs never masquerades as a failed sign-out (the cookie is already
+ * cleared at that point; the caller must not reopen the menu and claim the
+ * user is still signed in).
+ */
+function signOutAndRedirect(): Promise<void> {
+  return signOut().then(() => {
+    // The redirect runs after the sign-out promise settles, outside the
+    // failure surface: the logout POST decides success, so a navigation the
+    // browser throttles (or a stub throws on) never rejects this promise and
+    // masquerades as a failed sign-out.
+    if (typeof window !== 'undefined') {
+      try {
+        window.location.href = platformHref('/login');
+      } catch {
+        // A blocked navigation leaves the page on the signed-out screen; the
+        // session is already cleared, so there is nothing the caller must do.
+      }
+    }
+  });
+}
 
 /**
  * The cloud host: the hosted build's contract.
@@ -55,8 +105,19 @@ export const cloudHost: SproutHost = {
   // The platform usage summary, resolved live from the platform's billing
   // status via `platformEntitlements`; `resolve()` refreshes it in place.
   entitlements,
-  // Platform-supplied header slots, host-provided at runtime.
-  chrome: undefined,
+  // Platform-supplied header slots, host-provided at runtime; the GitHub
+  // account card is the one chrome surface the platform supplies today (the
+  // platform manages the account's GitHub connection), so Sprout renders it
+  // wherever it shows a GitHub account panel.
+  chrome: platformChrome,
+  // GitHub is managed on the platform account, not a per-user token: the
+  // platform supplies the connection check and the account's repository list
+  // as data, so the picker holds no platform call of its own.
+  github: {
+    isConnected: fetchPlatformGitHubConnected,
+    listRepos: listPlatformRepos,
+    createRepo: createPlatformRepo,
+  },
   // The platform theme/tokens, host-provided at runtime.
   theme: undefined,
   transport: {
@@ -70,16 +131,31 @@ export const cloudHost: SproutHost = {
   navigation: {
     // The platform resolves an intent to its own SPA page and opens it. The
     // destination path is built here (the platform strings stay on the host
-    // side); callers that render a link read it via intentPath.
+    // side); callers that render a link read it via intentPath. A sign-out
+    // intent runs the platform's two-step browser logout (POST the logout
+    // endpoint, then land on the login page) — the host owns it, so no Sprout
+    // component holds the sign-out paths. The sign-out promise is returned so
+    // the caller can surface a failure.
     open(intent) {
+      if (intent.type === 'signOut') return signOutAndRedirect();
       const path = platformIntentPath(intent);
       if (path) window.location.href = platformHref(path);
+      return undefined;
     },
     // The platform's account exits and Home "Work" places, as data.
     accountItems: PLATFORM_ACCOUNT_ITEMS,
     workItems: PLATFORM_WORK_ITEMS,
+    // The platform's fallback nav items (used by the hosted adapter when the
+    // runtime bootstrap did not provide its own list).
+    navItems: CLOUD_NAV_ITEMS,
     // The host's own intent → platform page path resolution.
     intentPath: platformIntentPath,
+    // The host's own route → full outward page URL (platform base applied, no
+    // embed decoration): what a link's href uses.
+    platformPagePath,
+    // The host's own route → full embeddable page URL (the `?embed=1`
+    // decoration lives on the platform side): what the Home frame loads.
+    embedPagePath: platformEmbedPagePath,
   },
   notifications: {
     // The platform's own sink is a later item. Until it is wired, the honest

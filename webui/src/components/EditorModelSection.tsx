@@ -7,7 +7,6 @@
 import { useEffect, useId, useState } from 'react';
 import type { FormEvent, ReactElement } from 'react';
 import { useHost } from '../host/useHost';
-import { platformHref } from '../host/platformUrl';
 import { onPlatformLinkClick } from '../services/homeView';
 import {
   getEditorModel,
@@ -22,9 +21,11 @@ import './EditorModelSection.css';
 export default function EditorModelSection(): ReactElement {
   const { navigation } = useHost();
   // Destinations come from the host's intent resolution; the paths live only
-  // on the host side.
+  // on the host side. The host also resolves a path to a full page URL (its
+  // outward surface); Sprout only renders what the host supplies.
   const accountSettingsPath = navigation.intentPath?.({ type: 'account' }) ?? null;
   const usagePath = navigation.intentPath?.({ type: 'usage' }) ?? null;
+  const pageHref = (path: string): string => navigation.platformPagePath?.(path) ?? path;
   const [state, setState] = useState<EditorModelState | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mode, setMode] = useState<'managed' | 'own'>('managed');
@@ -132,7 +133,7 @@ export default function EditorModelSection(): ReactElement {
           <p className="settings-section-desc">
             Save an API key first, in{' '}
             {accountSettingsPath ? (
-              <a href={platformHref(accountSettingsPath)} onClick={onPlatformLinkClick(accountSettingsPath)}>
+              <a href={pageHref(accountSettingsPath)} onClick={onPlatformLinkClick(accountSettingsPath)}>
                 account settings
               </a>
             ) : (
@@ -182,7 +183,7 @@ export default function EditorModelSection(): ReactElement {
         </button>
         <a
           className="editor-model-billing"
-          href={usagePath ? platformHref(usagePath) : undefined}
+          href={usagePath ? pageHref(usagePath) : undefined}
           target="_blank"
           rel="noopener noreferrer"
           onClick={usagePath ? onPlatformLinkClick(usagePath) : undefined}

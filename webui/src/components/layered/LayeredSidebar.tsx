@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
-import { useHostCapabilities } from '../../host';
+import { useHost, useHostCapabilities } from '../../host';
 import type { SectionTab } from '../../hooks/useSidebarState';
 import type { SproutInstance } from '../../services/api';
 import { useActiveRepoURL } from '../../services/activeRepo';
@@ -14,13 +14,12 @@ import { useRecentRepos } from '../../services/recentRepos';
 import { parseRepoRef } from '../../services/workspaceFs/workspaceGit';
 import { showThemedAlert, showThemedPrompt } from '../ThemedDialog';
 import type { ViewType } from '../../types/app';
-import { repoSlug as repoSlugFromURL } from '../../host/platformUrl';
+import { repoSlug as repoSlugFromURL } from '../../host/repoName';
 import type { WorkspaceMode, WorkspaceModeId } from '../../workspaces/registry';
 import ProjectNav, { NAV_ICONS, type ProjectNavConversations, type ProjectNavTarget } from './ProjectNav';
 import HomeNav from './HomeNav';
 import NewProjectDialog from './NewProjectDialog';
 import GitHubRepoPicker from '../GitHubRepoPicker';
-import { fetchPlatformGitHubConnected } from '../../host/platformGitHub';
 import ProjectRail, { type RailProject } from './ProjectRail';
 import './Layered.css';
 
@@ -100,16 +99,20 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
     automations: supportsAutomations,
     instances: supportsInstances,
   } = useHostCapabilities();
+  const host = useHost();
   // In the hosted build "projects" are repositories and the rail's account
   // menu is the host's; the local daemon uses running workspaces instead.
   const hosted = supportsInstances;
   const [open, setOpen] = useState<ProjectNavTarget | null>(null);
   const [creating, setCreating] = useState(false);
   const [picking, setPicking] = useState(false);
-  // With GitHub connected, pick from the account's repositories (typing any
-  // public one still works there); otherwise type one in.
+  // With the host managing GitHub on its account (and connected), pick from
+  // the account's repositories (typing any public one still works there);
+  // otherwise type one in. The host owns the connection check.
   const chooseRepo = async () => {
-    if (await fetchPlatformGitHubConnected().catch(() => false)) setPicking(true);
+    const hostGithub = host.github;
+    const connected = hostGithub ? await hostGithub.isConnected().catch(() => false) : false;
+    if (connected) setPicking(true);
     else await promptForRepo();
   };
   const activeRepo = useActiveRepoURL();

@@ -19,7 +19,6 @@
 import { Cloud, Container, Loader2, Rocket, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useHost } from '../host/useHost';
-import { platformHref } from '../host/platformUrl';
 import type { EscalationTriggerEvent } from '../hooks/useEscalationTriggers';
 import { ESCALATION_TRIGGER_EVENT } from '../hooks/useEscalationTriggers';
 import { isTerminalCloudTaskStatus, pollCloudTask, submitCloudTask, type CloudTask } from '../services/cloudTasks';
@@ -210,9 +209,11 @@ export function EscalationListener() {
     const repoURL = escalation?.trigger?.repoURL;
     if (!repoURL) {
       // No repo context: the host's account/dashboard page is where a
-      // workspace gets picked. The host owns the path.
+      // workspace gets picked. The host owns the path (and its outward URL).
       const dashboard = navigation.intentPath?.({ type: 'account' }) ?? null;
-      if (dashboard && !openPlatformPage(dashboard)) window.location.href = platformHref(dashboard);
+      if (dashboard && !openPlatformPage(dashboard)) {
+        window.location.href = navigation.platformPagePath?.(dashboard) ?? dashboard;
+      }
       return;
     }
     setWorkspaceError(null);
@@ -247,6 +248,12 @@ export function EscalationListener() {
   // Shown only when there is repo context (same gate the Mode B path uses for
   // a meaningful task) and no txn/cloud task is already in flight.
   const showCloudTaskButton = Boolean(repoURL) && !cloudTask && !txn;
+  // The task page's platform route for the deep link. Resolved once, guarded:
+  // when the host has no page for it the link is not rendered rather than
+  // degrading to the host's bare origin.
+  const taskLinkPath = cloudTask?.taskId
+    ? (navigation.intentPath?.({ type: 'nav', id: 'tasks', detail: cloudTask.taskId }) ?? null)
+    : null;
 
   return (
     <div className="escalation-toast-overlay">
@@ -324,11 +331,11 @@ export function EscalationListener() {
                     Cloud task {cloudTask.status || 'pending'}
                   </p>
                 )}
-                {cloudTask.taskId ? (
+                {cloudTask.taskId && taskLinkPath ? (
                   <a
                     className="escalation-toast-task-link"
-                    href={platformHref('/#/tasks/' + cloudTask.taskId)}
-                    onClick={onPlatformLinkClick('/tasks/' + cloudTask.taskId)}
+                    href={navigation.platformPagePath?.(taskLinkPath) ?? taskLinkPath}
+                    onClick={onPlatformLinkClick(taskLinkPath)}
                     data-testid="escalation-toast-cloud-task-link"
                   >
                     View task on platform

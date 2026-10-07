@@ -9,7 +9,10 @@ import './index.css';
 import './workspaces/ship-mode'; // Registers the Ship mode through the public mode API
 import App from './App';
 import { applyShellAttribute, isStudioShellSync, resolveShellIdentity } from './config/shell';
-import { HostProvider, localHost, cloudHost, setActiveHost } from './host';
+import { HostProvider, localHost, setActiveHost } from './host';
+// The cloud host is a platform implementation detail (not part of the public
+// host contract), so the entry imports it from the internal platform module.
+import { cloudHost } from './host/platform';
 import { resolveClientIdentity } from './services/clientSession';
 
 // External plugins (e.g. the platform IIFE bundle) externalize 'react' and

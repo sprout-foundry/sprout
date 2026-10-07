@@ -1,6 +1,6 @@
 import { AlertTriangle, FolderPlus, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { supportsFolderPicker, supportsWorkspaceSwitching } from '../config/mode';
+import { useHostCapabilities } from '../host';
 import type { WorkspaceInfo } from '../hooks/useWorkspace';
 import { ApiService, type Starter } from '../services/api';
 import { createWorkspaceNative, pickWorkspaceNative } from '../services/nativeFs';
@@ -48,6 +48,7 @@ function WorkspaceGateModal({
   onSelectWorkspace,
   onConsentHome,
 }: WorkspaceGateModalProps): JSX.Element | null {
+  const { folderPicker: supportsFolderPicker, workspaceSwitching: supportsWorkspaceSwitching } = useHostCapabilities();
   // Browsing happens inside the modal. Delegating to the chrome's location
   // switcher (as this used to) opened that popover *behind* the gate — it sits
   // far below this overlay in the stacking order, anchored to a trigger the

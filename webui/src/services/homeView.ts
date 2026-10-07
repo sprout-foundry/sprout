@@ -7,7 +7,7 @@
 
 import { useSyncExternalStore } from 'react';
 import { isLayeredLayout } from '../config/layout';
-import { isCloud } from '../config/mode';
+import { getActiveHost } from '../host/accessor';
 
 export interface HomeViewState {
   open: boolean;
@@ -75,7 +75,10 @@ export function openHome(path = '/'): void {
  * should navigate instead.
  */
 export function openPlatformPage(path: string): boolean {
-  if (!isLayeredLayout || !isCloud) return false;
+  // The host's transport tells us whether outward platform pages exist at all:
+  // the hosted build authenticates (authMode 'bearer') and has a platform SPA
+  // to embed; the local build does not (host.8 replaced the isCloud branch).
+  if (!isLayeredLayout || getActiveHost()?.transport.authMode !== 'bearer') return false;
   openHome(path);
   return true;
 }

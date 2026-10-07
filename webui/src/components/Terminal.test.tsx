@@ -2,6 +2,8 @@
 
 import { act, forwardRef, useImperativeHandle } from 'react';
 import { createRoot } from 'react-dom/client';
+import { HostProvider } from '../host/HostProvider';
+import { makeTestHost } from '../host/testHost';
 import Terminal, { nextActiveAfterClose } from './Terminal';
 import { defaultTerminalHeight } from './terminalPref';
 
@@ -59,14 +61,21 @@ vi.mock('./TerminalTabBar', () => {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function renderTerminal(props: Record<string, any> = {}) {
+function renderTerminal(
+  props: Record<string, any> = {},
+  host: ReturnType<typeof makeTestHost> = makeTestHost({ localTerminal: true }),
+) {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
 
   // eslint-disable-next-line testing-library/no-unnecessary-act
   act(() => {
-    root.render(<Terminal isConnected={true} isExpanded={false} {...props} />);
+    root.render(
+      <HostProvider host={host}>
+        <Terminal isConnected={true} isExpanded={false} {...props} />
+      </HostProvider>,
+    );
   });
 
   return { container, root };
@@ -1558,5 +1567,47 @@ describe('Terminal exit-pane cleanup paths', () => {
 
     // Verify focus switched: the surviving pane is now the active one.
     expect(panesAfter[0]?.getAttribute('data-active')).toBe('true');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WASM "browser terminal limited" notice — gated by the host's localTerminal
+// capability. Shown on a hosted shell (no local terminal) when expanded; hidden
+// on a local-terminal build.
+// ---------------------------------------------------------------------------
+describe('Terminal WASM "limited command support" notice', () => {
+  let container: HTMLDivElement;
+  let root: any;
+
+  beforeAll(() => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
+  afterEach(() => {
+    if (root) {
+      act(() => {
+        root.unmount();
+      });
+    }
+    if (container) {
+      container.remove();
+    }
+    // The notice lives in a portal attached to <body>; clear leftovers.
+    document.body.querySelectorAll('.terminal-cloud-notice').forEach((n) => n.remove());
+  });
+
+  it('shows the notice on a hosted shell (no local terminal) when expanded', () => {
+    const view = renderTerminal({ isExpanded: true }, makeTestHost({ localTerminal: false }));
+    container = view.container;
+    root = view.root;
+    expect(document.body.querySelector('.terminal-cloud-notice')).not.toBeNull();
+    expect(document.body.querySelector('.terminal-cloud-notice')?.textContent).toContain('limited command support');
+  });
+
+  it('hides the notice on a local-terminal build even when expanded', () => {
+    const view = renderTerminal({ isExpanded: true }, makeTestHost({ localTerminal: true }));
+    container = view.container;
+    root = view.root;
+    expect(document.body.querySelector('.terminal-cloud-notice')).toBeNull();
   });
 });

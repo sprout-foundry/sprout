@@ -16,7 +16,7 @@ import {
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './Terminal.css';
 import { TerminalTabBar } from '@sprout/ui';
-import { isCloud } from '../config/mode';
+import { useHostCapabilities } from '../host';
 import { usePersistedBoolean, usePersistedNumber, useOutsideClickDismiss } from '../hooks/usePersistedPref';
 import { useTerminalPanes } from '../hooks/useTerminalPanes';
 import { useAvailableShells } from '../hooks/useAvailableShells';
@@ -58,6 +58,7 @@ function Terminal({
   onToggleExpand,
   hideWhenCollapsed = false,
 }: TerminalProps): JSX.Element {
+  const { localTerminal } = useHostCapabilities();
   const getCollapsedHeight = useCallback(() => {
     if (typeof window === 'undefined') return 42;
     return window.innerWidth <= 768 ? 34 : 42;
@@ -361,7 +362,7 @@ function Terminal({
 
         {/* Body */}
         <div className="terminal-body">
-          {isCloud && isExpanded && (
+          {!localTerminal && isExpanded && (
             <div
               className="terminal-cloud-notice"
               title="The browser terminal runs commands in a WASM sandbox. Process-spawning commands may not work."

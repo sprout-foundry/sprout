@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import type { RefObject } from 'react';
 import type { FileTreeHandle } from '../components/SidebarFilesSection';
-import { supportsSettings } from '../config/mode';
+import { useHostCapabilities } from '../host';
 import type { SectionTab } from './useSidebarState';
 
 interface OpenSettingsFocusEventDetail {
@@ -29,6 +29,7 @@ export function useSidebarEventHandlers({
   settingsFocusTarget,
   setSettingsFocusTarget,
 }: UseSidebarEventHandlersParams): void {
+  const { settings: supportsSettings } = useHostCapabilities();
   // Ctrl+\ or Cmd+\ to toggle sidebar width (collapsed/expanded)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

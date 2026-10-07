@@ -6,11 +6,22 @@
  * read on the platform.
  */
 
-import { platformHref } from '../utils/platformUrl';
+import { getActiveHost } from '../host/accessor';
+import { outwardURL } from '../host/outwardURL';
 import { openPlatformPage } from './homeView';
 import { notificationBus, type NotificationType } from './notificationBus';
 
 const POLL_MS = 60_000;
+
+/**
+ * Resolve a platform **account API** path ('/notifications') against the
+ * host's outward platform origin. The transport-level resolver: the API base
+ * is the same origin as the platform's pages but is not one of them, so this
+ * does not go through the page-route hook.
+ */
+function platformApi(path: string): string {
+  return outwardURL(path);
+}
 
 interface PlatformNotification {
   id: string;
@@ -35,11 +46,15 @@ function openAction(url: string): void {
     window.open(url, '_blank', 'noopener');
     return;
   }
-  if (!openPlatformPage(url)) window.location.href = platformHref(`/#${url}`);
+  // A platform page route: try to show it in the shell, else navigate outward.
+  if (!openPlatformPage(url)) {
+    const navigation = getActiveHost()?.navigation;
+    window.location.href = navigation?.platformPagePath?.(`/#${url}`) ?? `/#${url}`;
+  }
 }
 
 export async function pollPlatformNotifications(raised: Set<string>): Promise<void> {
-  const res = await fetch(platformHref('/notifications'), { credentials: 'include' });
+  const res = await fetch(platformApi('/notifications'), { credentials: 'include' });
   if (!res.ok) return;
   const body = (await res.json()) as { notifications?: PlatformNotification[] };
   for (const n of body.notifications ?? []) {
@@ -57,7 +72,7 @@ export async function pollPlatformNotifications(raised: Set<string>): Promise<vo
       undefined,
       url ? { label: n.action_label || 'View', onClick: () => openAction(url) } : undefined,
     );
-    void fetch(platformHref(`/notifications/${encodeURIComponent(n.id)}/read`), {
+    void fetch(platformApi(`/notifications/${encodeURIComponent(n.id)}/read`), {
       method: 'POST',
       credentials: 'include',
     }).catch(() => undefined);

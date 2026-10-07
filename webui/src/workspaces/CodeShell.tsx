@@ -21,9 +21,9 @@ import Terminal from '../components/Terminal';
 import type { WorkspaceShellProps } from './shell';
 import { isLayeredLayout } from '../config/layout';
 import { copy } from '../config/copy';
-import { isCloud, supportsAgentChanges } from '../config/mode';
+import { useHost, useHostCapabilities } from '../host';
 import { useActiveRepoURL } from '../services/activeRepo';
-import { repoSlug } from '../utils/platformUrl';
+import { repoSlug } from '../host/repoName';
 
 const CodeShell: React.FC<WorkspaceShellProps> = ({
   isMobile,
@@ -51,6 +51,11 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
   chat,
   git,
 }) => {
+  const { agentChanges: supportsAgentChanges } = useHostCapabilities();
+  // host.8: the hosted build names the project by its repo slug (the browser
+  // IDE has no local workspace root); the hosted transport authenticates
+  // against a platform (authMode 'bearer') — the former isCloud branch.
+  const hosted = useHost().transport.authMode === 'bearer';
   const {
     perChatCache,
     activeChatId,
@@ -74,7 +79,7 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
   // On phones the project sidebar lives in the drawer, so name the project
   // on the toolbar; tapping it opens the drawer.
   const activeRepoSlug = repoSlug(useActiveRepoURL());
-  const projectTitle = isCloud
+  const projectTitle = hosted
     ? (activeRepoSlug ?? copy('workspace.none'))
     : (git.workspaceRoot?.split('/').filter(Boolean).pop() ?? '');
 
@@ -111,7 +116,7 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
                 </button>
               )}
               {/* The phone header row gives way to the tab bar; the balance moves here. */}
-              {isLayeredLayout && isCloud && <CreditsChip />}
+              {isLayeredLayout && hosted && <CreditsChip />}
               {currentView !== 'chat' && (
                 <button
                   className="top-mobile-chat-btn"

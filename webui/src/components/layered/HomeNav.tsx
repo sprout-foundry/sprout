@@ -1,6 +1,11 @@
 /**
- * Layer 2 while Home is open: the platform's places (dashboard, tasks,
- * workspaces) and the account pages, plus the way back to the project.
+ * Layer 2 while Home is open: the host's work places (dashboard, tasks,
+ * workspaces) and account pages, plus the way back to the project.
+ *
+ * The item lists come from the host (`host.navigation.workItems` /
+ * `accountItems`): the host owns the labels and each item's destination, and
+ * Sprout renders the items and dispatches their intents through
+ * `host.navigation`. No platform page name lives in this component.
  */
 
 import {
@@ -17,42 +22,58 @@ import {
 } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { getBootstrapUser } from '../../bootstrapAdapter';
-import { copy, formatCopy, type CopyKey } from '../../config/copy';
+import { copy, formatCopy } from '../../config/copy';
+import type { HostNavItem } from '../../host/types';
+import { useHost } from '../../host/useHost';
 import { useFullWorkspacesAvailable } from '../../services/fullWorkspace';
-import { homeRoute, openHome } from '../../services/homeView';
+import { homeRoute, normalizeHomePath } from '../../services/homeView';
 
-interface HomeEntry {
-  path: string;
-  labelKey: CopyKey;
-  icon: LucideIcon;
-  /** Other routes that belong to this entry (a task page is under Tasks). */
-  also?: string[];
+/** An icon for a host-provided item, chosen by its label (icons are Sprout's). */
+const ICONS: Record<string, LucideIcon> = {
+  Dashboard: LayoutDashboard,
+  Tasks: ListChecks,
+  Workspaces: Monitor,
+  'Usage & billing': CreditCard,
+  Team: Users,
+  Runners: Server,
+  Settings: Settings,
+  Admin: Shield,
+};
+
+function iconFor(label: string): LucideIcon {
+  return ICONS[label] ?? LayoutDashboard;
 }
 
-const WORK: HomeEntry[] = [
-  { path: '/', labelKey: 'home.dashboard', icon: LayoutDashboard, also: ['/repos'] },
-  { path: '/tasks', labelKey: 'home.tasks', icon: ListChecks, also: ['/scheduled'] },
-  { path: '/workspaces', labelKey: 'home.workspaces', icon: Monitor },
-];
-
-const ACCOUNT: HomeEntry[] = [
-  { path: '/account/billing', labelKey: 'home.billing', icon: CreditCard },
-  { path: '/team', labelKey: 'home.team', icon: Users },
-  { path: '/runners', labelKey: 'home.runners', icon: Server },
-  { path: '/settings', labelKey: 'home.settings', icon: Settings },
-];
-
-function isActive(entry: HomeEntry, fullPath: string): boolean {
-  const path = homeRoute(fullPath);
-  const roots = [entry.path, ...(entry.also ?? [])];
-  return roots.some((root) => (root === '/' ? path === '/' : path === root || path.startsWith(`${root}/`)));
+/** The Home route a host-resolved path names (a link's SPA route in its hash). */
+function routeOf(path: string): string {
+  return homeRoute(normalizeHomePath(path));
 }
 
-/** The Home page a route belongs to, by its nav label ("Tasks" for a task). */
-export function homePageLabel(path: string): string {
-  const entry = [...WORK, ...ACCOUNT].find((e) => isActive(e, path));
-  if (entry) return copy(entry.labelKey);
-  const route = homeRoute(path);
+/** Whether the current Home path belongs to the resolved item path. */
+function isActive(itemPath: string, currentPath: string): boolean {
+  const root = routeOf(itemPath);
+  const route = routeOf(currentPath);
+  return root === '/' ? route === '/' : route === root || route.startsWith(`${root}/`);
+}
+
+/**
+ * The Home page a route belongs to, by its nav label ("Tasks" for a task).
+ * Pure: takes the host's nav items and intent resolver so it can be called
+ * outside React (the embedded frame's mobile bar) and in tests. The fallback
+ * labels the reserved admin area.
+ */
+export function homePageLabel(
+  path: string,
+  items: HostNavItem[] = [],
+  resolve: (intent: HostNavItem['intent']) => string | null = () => null,
+): string {
+  const route = routeOf(path);
+  for (const item of items) {
+    const itemPath = resolve(item.intent);
+    if (!itemPath) continue;
+    const root = routeOf(itemPath);
+    if (root === '/' ? route === '/' : route === root || route.startsWith(`${root}/`)) return item.label;
+  }
   return route === '/admin' || route.startsWith('/admin/') ? copy('home.admin') : copy('home.title');
 }
 
@@ -65,26 +86,40 @@ interface HomeNavProps {
 }
 
 export default function HomeNav({ path, projectLabel, onBackToProject, onNavigated }: HomeNavProps): ReactElement {
+  const { navigation } = useHost();
+  const user = getBootstrapUser();
   // Workspaces only where the deployment offers them, as on the platform.
   const workspacesAvailable = useFullWorkspacesAvailable(true);
-  const work = workspacesAvailable ? WORK : WORK.filter((e) => e.path !== '/workspaces');
-  const account = getBootstrapUser()?.admin
-    ? [...ACCOUNT, { path: '/admin', labelKey: 'home.admin' as const, icon: Shield }]
-    : ACCOUNT;
-  const item = (entry: HomeEntry) => (
-    <button
-      key={entry.path}
-      type="button"
-      className={`project-nav-item${isActive(entry, path) ? ' active' : ''}`}
-      onClick={() => {
-        openHome(entry.path);
-        onNavigated?.();
-      }}
-    >
-      <entry.icon size={15} />
-      <span>{copy(entry.labelKey)}</span>
-    </button>
-  );
+  const work = (navigation.workItems ?? []).filter((i) => workspacesAvailable || i.label !== 'Workspaces');
+  const baseAccount = navigation.accountItems ?? [];
+  // Admins get the host's Admin item when it supplies one; otherwise Sprout
+  // adds a generic admin entry (the host resolves its destination).
+  const hasAdmin = baseAccount.some((i) => i.label === 'Admin');
+  const account =
+    user?.admin && !hasAdmin
+      ? [...baseAccount, { label: 'Admin', intent: { type: 'nav' as const, id: 'admin' } }]
+      : baseAccount;
+
+  const item = (entry: HostNavItem) => {
+    const itemPath = navigation.intentPath?.(entry.intent);
+    const active = itemPath ? isActive(itemPath, path) : false;
+    const Icon = iconFor(entry.label);
+    return (
+      <button
+        key={entry.label}
+        type="button"
+        className={`project-nav-item${active ? ' active' : ''}`}
+        onClick={() => {
+          navigation.open(entry.intent);
+          onNavigated?.();
+        }}
+      >
+        <Icon size={15} />
+        <span>{entry.label}</span>
+      </button>
+    );
+  };
+
   return (
     <div className="project-nav" data-testid="home-nav">
       <div className="project-nav-header">

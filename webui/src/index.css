@@ -1,8 +1,10 @@
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+/* The design tokens are the package's single source of truth: the web UI
+ * consumes them here, and theme packs layer their variables on top at runtime
+ * (ThemeContext). Import order matters — tokens before the rules that use
+ * them. The reset is the same `* { margin: 0; padding: 0; box-sizing: … }`
+ * this file carried. */
+@import '@sprout-foundry/design/reset.css';
+@import '@sprout-foundry/design/tokens.css';
 
 body {
   font-family:

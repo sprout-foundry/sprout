@@ -1,5 +1,65 @@
 # TODO
 
+## Host-contract lane — publish blockers for `@sprout-foundry/workspace`
+
+Branch `feat/host-contract` (worktree `../sprout-host`). Read
+`roadmap/SP-160-integration-api.md` §160a/§160e and
+`docs/integration/workspace-package.md`. Every `[ ]` item in this section is
+in scope for this lane. Validation gate: no `.go` change → `make lint`,
+`cd webui && npm run type-check`, `make build-workspace-package` (package
+build + `docs/__tests__/workspace-package.test.js`), prettier on changed
+files, and only the vitest files the item touched; any `.go` change → the
+full gate `make vet && make fmt-check && make lint && make lint-go-new &&
+make build-all`.
+
+- [x] **ws.9** Expose the composition API: the package's `exports` map has
+      only `.` (host contract), `./styles.css` and `./wasm/`, so a host
+      cannot import `SproutWorkspace`, `SproutProviders` or the space
+      registry (they exist only in `dist/views.js` / `dist/providers.js`
+      with no declarations). Add `./views` and `./providers` subpath
+      exports (keep `.` small — lazy loading, ws.4) with self-contained
+      declarations rolled up across the views and providers graphs (the
+      API Extractor approach ws.7c uses for the host entry), update
+      `docs/integration/workspace-package.md` imports, and add a
+      consumer test to `docs/__tests__/workspace-package.test.js` (or a
+      script it runs): `npm pack`, install the tarball into a scratch
+      TypeScript + Vite React 18 app outside the repo, import
+      `SproutWorkspace`, `SproutProviders` and the host types from their
+      public paths, and require `tsc --noEmit` and `vite build` to pass
+      and the built app to contain a single React copy.
+      Spec: SP-160 §160a, Acceptance criteria 3 and 5.
+      Fixed: the package exposes `./views` and `./providers` subpath
+      exports (each `types` + ESM `import`, no `require`), and the
+      declaration rollup (`scripts/bundle-dts.mjs`) now rolls one
+      API Extractor pass per entry (`.`, `./views`, `./providers`),
+      inlining the bundled workspace and non-peer third-party type
+      graphs so `dist/views.d.ts` and `dist/providers.d.ts` reference
+      only `react`. `.` stays small — the entry's lazy-loading graph is
+      unchanged. `docs/integration/workspace-package.md` documents the
+      three entry points and their imports, and
+      `docs/__tests__/workspace-consumer.test.mjs` (run from the artifact
+      test) packs the tarball, installs it into a scratch Vite React 18
+      app outside the repo, and requires `tsc --noEmit` and `vite build`
+      to pass with a single React copy.
+- [x] **ws.10** Package size: the 62 MB WASM ships twice (hashed and a
+      fixed-name fallback, `emit-wasm-assets.mjs`), 132 MB unpacked. Ship
+      only the content-hashed WASM and `wasm_exec.js` in the package
+      (referenced through the manifest); keep the fixed-name copies only
+      where the local embed (`pkg/webui/static`) needs them. Artifact test
+      asserts one WASM file in the package and a size budget.
+      Spec: SP-160 §160e.
+      Fixed: `packages/workspace/scripts/emit-wasm-assets.mjs` now emits
+      only the content-hashed `sprout.<hash>.wasm`, `wasm_exec.<hash>.js`
+      and `wasm-manifest.json` into `dist/wasm/` — the fixed-name
+      duplicates are gone (dist/wasm/ 118 MB → 59 MB). The
+      cloud/standalone build path is untouched, so the local embed
+      (`pkg/webui/static`, `webui/public/wasm`) still ships the fixed-name
+      copies, and the loader already resolves the hashed name from the
+      manifest. Pinned by the package emit test and the artifact test
+      (exactly one WASM binary and one `wasm_exec`, plus a single-copy
+      size budget derived from the emitted binary).
+
+
 Active work tracked here. Each item is a small, independently committable
 unit for the workflow automation (~30 min – 2 h). Every item cites its spec
 section — read the cited spec before starting. Completed work lives in git

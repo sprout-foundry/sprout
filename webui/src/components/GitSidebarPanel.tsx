@@ -1,6 +1,6 @@
 import { AlertTriangle, CheckSquare, MinusSquare, PlusSquare, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { isCloud } from '../config/mode';
+import { getActiveHost } from '../host/accessor';
 import { MAX_FILES_INITIAL, LOAD_MORE_INCREMENT } from '../constants/git-constants';
 import { BROWSER_GIT_UNSUPPORTED_OPS } from '../services/browserGit';
 import type { FileSection, GitBranchesState, GitFile, GitStatusData } from '../types/git-types';
@@ -16,13 +16,23 @@ import { showThemedPrompt } from './ThemedDialog';
 const BROWSER_UNSUPPORTED_TOOLTIP = 'Not available in browser mode';
 
 /**
+ * Whether the active host serves git from the browser (the hosted build's
+ * WASM/browser git) rather than from a local daemon. host.8: this replaces the
+ * former isCloud read with the host contract — the hosted transport
+ * authenticates against a platform (authMode 'bearer').
+ */
+function hostUsesBrowserGit(): boolean {
+  return getActiveHost()?.transport.authMode === 'bearer';
+}
+
+/**
  * Whether a given git op (by the names used in browserGit's
  * executeGitOp switch) is unavailable in cloud/browser mode. Returns
  * false everywhere except browser mode so local-mode callers always
  * report full support.
  */
 export function isGitOpUnsupported(op: string): boolean {
-  return isCloud && BROWSER_GIT_UNSUPPORTED_OPS.has(op);
+  return hostUsesBrowserGit() && BROWSER_GIT_UNSUPPORTED_OPS.has(op);
 }
 
 // Re-export types so existing consumers (tests, Sidebar, etc.) don't break.
@@ -205,7 +215,7 @@ function GitSidebarPanel({
     revert: isGitOpUnsupported('revert'),
     pullRequest: isGitOpUnsupported('pull-request'),
   } as const;
-  const unsupportedTooltip = isCloud ? BROWSER_UNSUPPORTED_TOOLTIP : undefined;
+  const unsupportedTooltip = hostUsesBrowserGit() ? BROWSER_UNSUPPORTED_TOOLTIP : undefined;
 
   const totalFiles =
     (gitStatus?.staged.length ?? 0) +

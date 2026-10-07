@@ -11,6 +11,8 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { HostProvider } from '../host/HostProvider';
+import { makeTestHost } from '../host/testHost';
 import { ProviderCatalogProvider, useProviderCatalog } from './ProviderCatalogContext';
 
 const mockGetProviders = vi.fn();
@@ -33,7 +35,11 @@ vi.mock('../utils/log', () => ({
 
 function makeWrapper(initialConnected: boolean) {
   return function Wrapper({ children }: { children: ReactNode }) {
-    return <ProviderCatalogProvider isConnected={initialConnected}>{children}</ProviderCatalogProvider>;
+    return (
+      <HostProvider host={makeTestHost({ settings: true })}>
+        <ProviderCatalogProvider isConnected={initialConnected}>{children}</ProviderCatalogProvider>
+      </HostProvider>
+    );
   };
 }
 

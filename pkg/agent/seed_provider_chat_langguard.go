@@ -15,7 +15,7 @@ import (
 )
 
 // finalizeStreamHoldback finalizes the streaming hold-back for one streamed
-// response (SP-152 §152c). It releases a stream that never reached the prose
+// response. It releases a stream that never reached the prose
 // threshold (short or code-only — not judged, so it must not be held). If the
 // stream was held (a reliable language mismatch at the START), it keeps the
 // held content on the response message's Meta (langGuardOriginalMetaKey) for
@@ -24,7 +24,7 @@ import (
 // regenerated text through the hold-back's sink (the same client-facing
 // delivery as released content), so the user sees the corrected language as
 // normal streamed content; when the regeneration errors or still mismatches
-// it delivers the localized §152b notice instead. The delivered text —
+// it delivers the localized notice instead. The delivered text —
 // regenerated or notice — is also written back onto the response message
 // (the message seed's chat loop records in state and returns as the turn
 // result), so the client's buffer and the agent's state carry the SAME text
@@ -63,7 +63,7 @@ func (sp *sproutProvider) finalizeStreamHoldback(ctx context.Context, holdback *
 		// same client-facing delivery as released content — so the CLI and
 		// the web UI receive the corrected language as normal streamed content
 		// instead of a notice. When the regeneration errors or still
-		// mismatches, fall back to the localized §152b notice.
+		// mismatches, fall back to the localized notice.
 		display := LanguageMismatchNotice(holdback.User())
 		if regenerated, ok := sp.regenerateStreamedReply(ctx, held, holdback.User()); ok {
 			display = regenerated
@@ -84,7 +84,7 @@ func (sp *sproutProvider) finalizeStreamHoldback(ctx context.Context, holdback *
 		if resp != nil && len(resp.Choices) > 0 {
 			resp.Choices[0].Message.Content = display
 			resp.Choices[0].Message.SetMeta(langGuardRepairedMetaKey, "held_stream")
-			// SP-152 §152e: the model produced a mismatched user-facing reply;
+			// The model produced a mismatched user-facing reply;
 			// record one check + one mismatch here (the reply was repaired during
 			// the stream, so applyLanguageGuard will not judge it again — this is
 			// the only count it gets).
@@ -98,7 +98,7 @@ func (sp *sproutProvider) finalizeStreamHoldback(ctx context.Context, holdback *
 }
 
 // recordLanguageGuardMetric records one check + one mismatch for the agent's
-// (model, role) cell (SP-152 §152e). The streaming repair sites call it for a
+// (model, role) cell. The streaming repair sites call it for a
 // reply they detected as a mismatch and repaired themselves — the final-message
 // guard skips already-repaired replies (the meta marker), so this is the one
 // count those replies get.
@@ -115,7 +115,7 @@ func streamResponseHasToolCalls(resp *api.ChatResponse) bool {
 }
 
 // regenerateStreamedReply issues the single regeneration for a held or
-// mid-stream-switched streamed reply (SP-152 §152b): it regenerates content
+// mid-stream-switched streamed reply: it regenerates content
 // once in the user's language — one model call, grounded in the turn's user
 // message (the streaming path has no query-run context, so it uses the turn's
 // stored user message and the agent's client) — and reports whether the
@@ -143,7 +143,7 @@ func (sp *sproutProvider) regenerateStreamedReply(ctx context.Context, content s
 }
 
 // recheckStreamedReply re-checks a RELEASED (non-held) streamed reply at
-// completion (SP-152 §152c, item 152.7). The hold-back only judged the START
+// completion. The hold-back only judged the START
 // of the stream; a reply whose start was fine but which switched language
 // later is already streamed to the client and cannot be un-streamed. So it is
 // re-judged here on its FULL content: when the full reply is a reliable
@@ -152,12 +152,12 @@ func (sp *sproutProvider) regenerateStreamedReply(ctx context.Context, content s
 // to replace the already-streamed message. The replacement carries the
 // REGENERATED text when the regeneration passes the language check (so the
 // client shows the corrected reply, not just a notice), falling back to the
-// localized §152b-style notice when the regeneration errors or still
+// localized notice when the regeneration errors or still
 // mismatches; the original (full switched content) is always carried for
 // "view original" and kept on the message Meta.
 //
 // No event is published when:
-//   - the full content is not judgable (short or code-only — §152a: not
+//   - the full content is not judgable (short or code-only — not
 //     judged);
 //   - the full content is not a reliable mismatch (the reply is in the user's
 //     language, or detection is undetermined); or
@@ -170,7 +170,7 @@ func (sp *sproutProvider) regenerateStreamedReply(ctx context.Context, content s
 func (sp *sproutProvider) recheckStreamedReply(ctx context.Context, holdback *StreamHoldback, resp *api.ChatResponse) {
 	full := holdback.Full()
 	if !langguard.Judgable(langguard.ExtractProse(full)) {
-		// Below the prose threshold: §152a says not judged — no re-check.
+		// Below the prose threshold: not judged — no re-check.
 		return
 	}
 	if langguard.CheckLanguage(full, holdback.User()) != langguard.VerdictMismatch {
@@ -187,7 +187,7 @@ func (sp *sproutProvider) recheckStreamedReply(ctx context.Context, holdback *St
 	// A reliable mid-stream switch: regenerate the full reply once in the
 	// user's language. The replacement carries the regenerated text when it
 	// passes the language check (the corrected reply, not just a notice),
-	// falling back to the localized §152b-style notice when the regeneration
+	// falling back to the localized notice when the regeneration
 	// errors or still mismatches.
 	replacement := LanguageMismatchNotice(holdback.User())
 	if regenerated, ok := sp.regenerateStreamedReply(ctx, full, holdback.User()); ok {

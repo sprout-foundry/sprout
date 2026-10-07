@@ -1,17 +1,17 @@
 package configuration
 
-// VerificationConfig controls the SP-149 verification run ("verified done").
-// The section is off by default in the CLI (SP-149 149e); a config layer —
+// VerificationConfig controls the verification run ("verified done").
+// The section is off by default in the CLI; a config layer —
 // global, project (workspace), or an embedding environment writing the
 // same layers — opts in with `{"verification": {"enabled": true}}`.
 type VerificationConfig struct {
-	// Enabled gates the turn-end verification run (SP-149 149e). Off by
+	// Enabled gates the turn-end verification run. Off by
 	// default; an explicit false in a narrower layer disables a broader
 	// layer's enable (explicit-key merge semantics).
 	Enabled bool `json:"enabled,omitempty"`
 
 	// RepairAttempts is the repair-attempt limit N for the stopping rule
-	// (SP-149 149c): how many repair attempts on the same failing check
+	// how many repair attempts on the same failing check
 	// before the verification loop stops. Zero means "use the default"
 	// (DefaultVerificationRepairAttempts).
 	RepairAttempts int `json:"repair_attempts,omitempty"`
@@ -29,7 +29,7 @@ type VerificationConfig struct {
 	TotalRepairRounds int `json:"total_repair_rounds,omitempty"`
 
 	// BuildCommand is the explicit build command for the project's
-	// verification run (SP-149 149b). It is the "explicit project
+	// verification run. It is the "explicit project
 	// configuration" source: a human sets it in the project layer
 	// (.sprout/workspace.json) or in global config for projects without a
 	// starter manifest (or one that declares no build command). Model
@@ -38,7 +38,7 @@ type VerificationConfig struct {
 	BuildCommand string `json:"build_command,omitempty"`
 
 	// TestCommand is the explicit test command for the project's
-	// verification run (SP-149 149b). Same source and semantics as
+	// verification run. Same source and semantics as
 	// BuildCommand.
 	TestCommand string `json:"test_command,omitempty"`
 
@@ -52,9 +52,9 @@ type VerificationConfig struct {
 	RequireTest bool `json:"require_test,omitempty"`
 }
 
-// DefaultVerificationRepairAttempts is the small default for the SP-149
-// 149c stopping rule: after this many repair attempts on the same failing
-// check the loop stops and reports the failure (149d).
+// DefaultVerificationRepairAttempts is the small default for the
+// stopping rule: after this many repair attempts on the same failing
+// check the loop stops and reports the failure.
 const DefaultVerificationRepairAttempts = 3
 
 // DefaultVerificationRepairTotalRounds is the default total cap on repair
@@ -101,8 +101,8 @@ func (c *VerificationConfig) Resolve() VerificationConfig {
 	return result
 }
 
-// VerificationEnabled reports whether the SP-149 verification run is enabled
-// for this config. Off by default in the CLI (SP-149 149e); it becomes
+// VerificationEnabled reports whether the verification run is enabled
+// for this config. Off by default in the CLI; it becomes
 // enabled only when a config layer names "verification.enabled" with a
 // truthy value that survives the layer merge. A nil config resolves to off.
 func (c *Config) VerificationEnabled() bool {
@@ -112,8 +112,8 @@ func (c *Config) VerificationEnabled() bool {
 	return c.Verification != nil && c.Verification.Enabled
 }
 
-// VerificationRepairAttempts returns the repair-attempt limit N (SP-149
-// 149c) for the verification stopping rule. Unset or non-positive values
+// VerificationRepairAttempts returns the repair-attempt limit N
+// for the verification stopping rule. Unset or non-positive values
 // fall back to DefaultVerificationRepairAttempts.
 func (c *Config) VerificationRepairAttempts() int {
 	if c == nil || c.Verification == nil {
@@ -126,7 +126,7 @@ func (c *Config) VerificationRepairAttempts() int {
 }
 
 // VerificationRepairTotalRounds returns the total cap on repair rounds the
-// verification loop may run in one turn (SP-149 149c). It is a separate,
+// verification loop may run in one turn. It is a separate,
 // explicit bound on top of the per-check limit: whichever of the two
 // stopping rules fires first ends the loop, so alternating-failure or
 // fresh-counter-key patterns cannot keep the loop alive indefinitely.
@@ -147,7 +147,7 @@ func (c *Config) VerificationRepairTotalRounds() int {
 }
 
 // VerificationBuildCommand returns the explicit build command for the
-// SP-149 verification run (149b) after layer merge, or "" when no layer
+// verification run after layer merge, or "" when no layer
 // set it. It is the "explicit project configuration" source of commands,
 // set by a human — never by model output.
 func (c *Config) VerificationBuildCommand() string {
@@ -157,8 +157,8 @@ func (c *Config) VerificationBuildCommand() string {
 	return c.Verification.BuildCommand
 }
 
-// VerificationTestCommand returns the explicit test command for the SP-149
-// verification run (149b) after layer merge, or "" when no layer set it.
+// VerificationTestCommand returns the explicit test command for the
+// verification run after layer merge, or "" when no layer set it.
 func (c *Config) VerificationTestCommand() string {
 	if c == nil || c.Verification == nil {
 		return ""

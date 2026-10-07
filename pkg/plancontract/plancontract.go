@@ -1,11 +1,11 @@
-// Package plancontract owns the schema for SP-148 structured plans: the
+// Package plancontract owns the schema for structured plans: the
 // machine-readable plan document stored at .sprout/plan.json (plus a
 // rendered .sprout/plan.md view that is regenerated from the JSON on every
 // write) and the validator that every reader and writer of that file must run.
 //
 // A plan is the single source of truth that links planned work to machine-
-// checkable acceptance criteria, so that later tooling (SP-149 verified
-// done, SP-151 progress events, SP-154 benchmark) can tell whether the work
+// checkable acceptance criteria, so that later tooling (verified
+// done, progress events, benchmark) can tell whether the work
 // a plan describes is actually finished. The package is a pure data +
 // validation contract: it holds no I/O. Callers read and write the JSON
 // file; this package defines its shape and enforces its invariants.
@@ -32,12 +32,12 @@ const SchemaVersion = 1
 // being silently misread.
 var SupportedVersions = []int{SchemaVersion}
 
-// Kind classifies an acceptance item (SP-148 §148a). It is stored as a string
+// Kind classifies an acceptance item. It is stored as a string
 // in the JSON document so unknown values round-trip and can be reported as
 // "unknown kind" by the validator instead of failing the JSON decode.
 type Kind string
 
-// The acceptance kinds defined by SP-148 §148a.
+// The acceptance kinds defined by the plan schema.
 const (
 	// KindBuild: the project builds.
 	KindBuild Kind = "build"
@@ -45,7 +45,7 @@ const (
 	KindTest Kind = "test"
 	// KindPage: a route renders (a page check).
 	KindPage Kind = "page"
-	// KindInteraction: scripted browser steps (SP-148 §148d; reuse of the
+	// KindInteraction: scripted browser steps (reuse of the
 	// browse step format).
 	KindInteraction Kind = "interaction"
 	// KindManual: reported by a human, never machine-checked.
@@ -54,7 +54,7 @@ const (
 
 // AllKinds returns every defined acceptance kind, in canonical order. It is
 // intended for consumers that must enumerate or display the kinds (e.g. the
-// planning prompt's schema section, SP-148 §148b).
+// planning prompt's schema section).
 func AllKinds() []Kind {
 	return []Kind{KindBuild, KindTest, KindPage, KindInteraction, KindManual}
 }
@@ -90,14 +90,14 @@ func ValidKind(k Kind) bool {
 // String renders the kind as its JSON token, for diagnostics.
 func (k Kind) String() string { return string(k) }
 
-// Plan is a versioned, machine-readable implementation plan (SP-148). It is
+// Plan is a versioned, machine-readable implementation plan. It is
 // the in-memory form of .sprout/plan.json. JSON field names are the on-disk
 // contract; see the package doc.
 type Plan struct {
 	// Version is the schema version of this document.
 	Version int `json:"version"`
-	// Revision increments on every edit to the plan; the store (SP-148
-	// §148b) bumps it on each write. A persisted plan is always >= 1.
+	// Revision increments on every edit to the plan; the store
+	// bumps it on each write. A persisted plan is always >= 1.
 	Revision int `json:"revision"`
 	// Created and Updated are the plan's lifecycle timestamps (RFC3339 in
 	// JSON).
@@ -114,7 +114,7 @@ type Plan struct {
 	// Design is an optional reference to screens or files under design/
 	// (SP-140 directory contract).
 	Design string `json:"design,omitempty"`
-	// Starter is an optional starter ID when the project uses one (SP-153).
+	// Starter is an optional starter ID when the project uses one.
 	Starter string `json:"starter,omitempty"`
 
 	// Acceptance are the machine- or human-checkable criteria. Every scope
@@ -141,8 +141,8 @@ type Step struct {
 	Description string `json:"description"`
 }
 
-// BrowseStep is one scripted browser step of an interaction acceptance item
-// (SP-148 §148d). It mirrors the JSON wire format of
+// BrowseStep is one scripted browser step of an interaction acceptance item.
+// It mirrors the JSON wire format of
 // webcontent.BrowseStep — the browse tool's step language — field for field
 // (same fields, same JSON tags, same omitempty rules), so a plan's steps can
 // be handed to the browse step parser (parseBrowseSteps in
@@ -184,8 +184,8 @@ type BrowseStep struct {
 	ScreenshotPath string `json:"screenshot_path,omitempty"`
 }
 
-// Acceptance is one check that proves a scope item is done (SP-148 §148a).
-// Kind selects which verifier applies (SP-149); an empty or unknown kind is
+// Acceptance is one check that proves a scope item is done.
+// Kind selects which verifier applies; an empty or unknown kind is
 // a validation error.
 type Acceptance struct {
 	ID    string `json:"id"`
@@ -195,7 +195,7 @@ type Acceptance struct {
 	Check string `json:"check,omitempty"`
 	Kind  Kind   `json:"kind"`
 	// Steps are the scripted browser steps for KindInteraction items
-	// (SP-148 §148d), in execution order. They are empty for every other
+	// in execution order. They are empty for every other
 	// kind; the validator enforces both rules (required non-empty for
 	// interaction, forbidden otherwise).
 	Steps []BrowseStep `json:"steps,omitempty"`
@@ -203,7 +203,7 @@ type Acceptance struct {
 
 // OutOfScope is an item that was discussed and deliberately left out of the
 // plan. Item is the excluded feature/change; Reason records why it was
-// excluded, so the exclusion is deliberate and auditable (SP-148 §148a:
+// excluded, so the exclusion is deliberate and auditable
 // "with the reason"). Both are required for a valid plan — an exclusion
 // without a reason is exactly the silent scope creep the list exists to
 // prevent.
@@ -260,7 +260,7 @@ func (p *Plan) AcceptanceForScope(scopeID string) []Acceptance {
 }
 
 // BumpRevision records an edit: it advances the revision by one and sets
-// Updated to now. The store (SP-148 §148b) calls this before writing so that
+// Updated to now. The store calls this before writing so that
 // every write is observable as a new revision.
 func (p *Plan) BumpRevision(now time.Time) {
 	if p == nil {
@@ -271,7 +271,7 @@ func (p *Plan) BumpRevision(now time.Time) {
 }
 
 // Summary is a compact, deterministic rendering of the plan for context
-// injection and display (SP-148 §148c). It never includes raw free-form
+// injection and display. It never includes raw free-form
 // fields beyond goal/scope, so it is safe to place in a model context.
 func (p *Plan) Summary() string {
 	if p == nil {

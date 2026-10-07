@@ -1,7 +1,7 @@
-// report.go — the SP-154 §154c benchmark report: one structured source
+// report.go — the benchmark report: one structured source
 // (Report) rendering as both JSON and Markdown, comparing the suite's
 // models and starters, with the pass rate per starter per model
-// computed over the 3 runs (154.2) and the failure categories that
+// computed over the 3 runs and the failure categories that
 // guide skill and prompt fixes.
 //
 // The report is a pure, deterministic function of its inputs — the run
@@ -27,7 +27,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/plancontract"
 )
 
-// Meta is the report's run metadata (SP-154 §154c): the run date the
+// Meta is the report's run metadata: the run date the
 // results are published under and the sprout version the runs used
 // (production passes buildinfo.Version; tests pass fixed values, so
 // the report is a pure function of its inputs).
@@ -36,9 +36,9 @@ type Meta struct {
 	Version string
 }
 
-// Report is the SP-154 §154c benchmark report: one structured source
+// Report is the benchmark report: one structured source
 // rendering as both JSON and Markdown — comparing models and starters,
-// with the pass rate per starter per model over the 3 runs (154.2) and
+// with the pass rate per starter per model over the 3 runs and
 // the failure categories that guide skill and prompt fixes.
 type Report struct {
 	Meta Meta `json:"meta"`
@@ -50,7 +50,7 @@ type Report struct {
 	// RunSuite).
 	Tasks []TaskReport `json:"tasks"`
 	// Starters pool the (task × run) matrix per (starter, model,
-	// provider) in first-seen order — the §154c "pass rate per starter
+	// provider) in first-seen order — the "pass rate per starter
 	// per model".
 	Starters []StarterReport `json:"starters"`
 	// FailureCategories counts the failed runs per failure mode (see
@@ -60,7 +60,7 @@ type Report struct {
 }
 
 // TaskReport is one (task, model) pair's slice of the report: the
-// pair's runs in run order (the full 154.3 metrics per run), the
+// pair's runs in run order (the full per-run metrics), the
 // pair's pass count, and the pair's pass rate (Passed over len(Runs);
 // 0 when the pair has no runs).
 type TaskReport struct {
@@ -78,7 +78,7 @@ type TaskReport struct {
 }
 
 // StarterReport pools one (starter, model) pair's task × run matrix:
-// the §154c "pass rate per starter per model" over the 3 runs (154.2)
+// the "pass rate per starter per model" over the 3 runs
 // — the pooled rate a product's readiness bar would read.
 type StarterReport struct {
 	Starter  string
@@ -94,14 +94,14 @@ type StarterReport struct {
 	PassRate float64
 }
 
-// BuildReport assembles the SP-154 §154c report from the suite's runs.
+// BuildReport assembles the report from the suite's runs.
 // It is pure and deterministic: the same inputs always yield
 // byte-identical JSON and Markdown (no clock, no network, no reordering
 // beyond the sorted failure-category keys). Tasks group the runs by
 // (TaskID, Model, Provider) in first-seen order — the suite's model ×
 // task order when the runs come from RunSuite — and each pair's Runs
 // keep run order. Starters pool the (task × run) matrix per (Starter,
-// Model, Provider) in first-seen order: the §154c pass rate per starter
+// Model, Provider) in first-seen order: the pass rate per starter
 // per model (pooled — the number a product's readiness bar reads).
 // models is the suite's model list (SuiteModels order) — it is recorded
 // as-is, never re-derived from the runs.
@@ -187,8 +187,8 @@ type starterAggregate struct {
 	passed int
 }
 
-// failureCategories counts the failed runs' failure categories (SP-154
-// §154c: the categories that guide skill and prompt fixes). One failed
+// failureCategories counts the failed runs' failure categories
+// (the categories that guide skill and prompt fixes). One failed
 // run may contribute to several categories; a passed run contributes
 // nothing. It returns nil when no category was counted — the report
 // omits the field then (omitempty).
@@ -256,8 +256,8 @@ func (rep Report) JSON() ([]byte, error) {
 	return append(data, '\n'), nil
 }
 
-// Markdown renders the report as deterministic Markdown (SP-154
-// §154c): no clock and no map iteration — the models line and the task
+// Markdown renders the report as deterministic Markdown:
+// no clock and no map iteration — the models line and the task
 // detail follow the report's slice order, and the failure categories
 // iterate in sorted key order. The starter table carries the pooled
 // pass rate per starter per model, and each task table carries the

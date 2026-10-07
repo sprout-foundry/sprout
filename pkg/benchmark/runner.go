@@ -1,11 +1,11 @@
-// runner.go — the SP-154 §154b runner: headless non-interactive runs of a
+// runner.go — the benchmark runner: headless non-interactive runs of a
 // benchmark task through the existing agent path, one fresh copy of the
 // task's starter per run, 3 runs per model by default (so one lucky or
 // unlucky run does not decide the result), with the run's pass/fail taken
-// only from the SP-149 verification result of the turn (never from the
-// model's own reply — SP-154 §154a).
+// only from the turn's verification result (never from the
+// model's own reply).
 //
-// The turn-end verification hook (SP-149 §149c / 149.5) is the verifier:
+// The turn-end verification hook is the verifier:
 // the run's configuration enables verification, the hook runs the
 // project's checks after the turn, and the runner reads the result the
 // hook stored on the agent (Agent.LastVerificationResult). The runner
@@ -38,13 +38,13 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/verify"
 )
 
-// defaultRunsPerTask is the SP-154 §154b runs-per-model default: 3, so one
+// defaultRunsPerTask is the runs-per-model default: 3, so one
 // lucky or unlucky run does not decide the result.
 const defaultRunsPerTask = 3
 
 // ModelSpec selects the model (and optionally the provider) one set of
-// benchmark runs uses. The suite-level model list (SP-154 §154b, 154.4)
-// is a []ModelSpec: Runner.Models, resolved by Runner.SuiteModels — the
+// benchmark runs uses. The suite-level model list (Runner.Models)
+// is a []ModelSpec, resolved by Runner.SuiteModels — the
 // default list (the provider catalog's recommended_model entries,
 // models.go) when unset.
 type ModelSpec struct {
@@ -66,10 +66,10 @@ type ModelSpec struct {
 type AgentFactory func(runDir string, spec ModelSpec) (*agent.Agent, error)
 
 // Run is one benchmark run: one headless agent turn for one task with one
-// model in one fresh copy of the task's starter (SP-154 §154b).
+// model in one fresh copy of the task's starter.
 //
-// Passed is derived ONLY from the SP-149 verification result (Result) —
-// never from the model's own reply (SP-154 §154a/§154b): a run whose
+// Passed is derived ONLY from the turn's verification result (Result) —
+// never from the model's own reply: a run whose
 // reply claims success but whose verification failed, or never produced a
 // passing result, records Passed = false.
 //
@@ -80,14 +80,14 @@ type AgentFactory func(runDir string, spec ModelSpec) (*agent.Agent, error)
 // code (the hook's change gate never opened), and a run whose turn or
 // setup ended in an error all record as fail: no passing result, no pass.
 //
-// The per-task metrics (SP-154 §154b, 154.3) are the fields below the
+// The per-task metrics are the fields below the
 // wall-time anchors: the repair data the turn-end hook stored on the
 // agent, the runner's turn count, the run's token and cost totals (the
 // agent's existing conversation cost tracking — the run's agent is
 // fresh, so the conversation total is the run's usage), the run's
-// per-role token/cost breakdown (SP-150 §150c, 150.5 — the agent's
+// per-role token/cost breakdown (the agent's
 // per-role usage), and the run's share of the process-wide
-// language-guard metric (SP-152 §152e). A setup-error run (Err set before
+// language-guard metric. A setup-error run (Err set before
 // the agent was built) leaves every metric zero; a run whose agent was
 // built but whose turn errored still records its metrics (the turn was
 // issued and may have consumed usage).
@@ -106,7 +106,7 @@ type Run struct {
 	RunNumber int
 	// Passed is the run's acceptance outcome, derived only from Result.
 	Passed bool
-	// Result is the turn's SP-149 verification result, stored by the
+	// Result is the turn's verification result, stored by the
 	// turn-end hook, or nil when the hook never ran (verification
 	// disabled, the turn changed no code, a setup error before the turn,
 	// or a verify runner setup error).
@@ -135,24 +135,24 @@ type Run struct {
 	RepairLimit int
 	// Tokens is the run's total token usage: the agent's conversation
 	// total — the run's agent is fresh, so the conversation total is the
-	// run's usage (existing cost tracking, SP-154 §154b).
+	// run's usage (existing cost tracking).
 	Tokens int
 	// Cost is the run's total cost (the agent's conversation total cost).
 	Cost float64
-	// LangChecks is how many final messages the SP-152 language guard
+	// LangChecks is how many final messages the language guard
 	// judged for the run's model during the run (a delta of the
 	// process-wide per-model metric).
 	LangChecks int64
 	// LangMismatches is how many of those judged messages were a
 	// reliable language mismatch (a delta).
 	LangMismatches int64
-	// RoleUsage is the run's per-role token/cost breakdown (SP-150 §150c,
-	// 150.5): the run's agent's per-role usage, captured from its metrics.
+	// RoleUsage is the run's per-role token/cost breakdown: the run's
+	// agent's per-role usage, captured from its metrics.
 	// Empty when the run errored before the agent's turn recorded usage.
 	RoleUsage []agent.RoleUsage
 }
 
-// Runner runs a benchmark task's headless runs (SP-154 §154b).
+// Runner runs a benchmark task's headless runs.
 //
 // A zero-value Runner is usable with a custom AgentFactory (tests and
 // custom harnesses); the default factory additionally needs ConfigManager
@@ -180,13 +180,13 @@ type Runner struct {
 	// e.g. to override the copy's .sprout/starter.json commands. nil by
 	// default: production runs use the starter's own manifest.
 	ShapeCopy func(runDir string, task *Task) error
-	// RunsPerTask is the runs-per-model count (SP-154 §154b). 0 (or
+	// RunsPerTask is the runs-per-model count. 0 (or
 	// negative) → defaultRunsPerTask (3).
 	RunsPerTask int
 	// WorkDir is the parent directory for the fresh copies. "" →
 	// os.TempDir(). It is created (with parents) if missing.
 	WorkDir string
-	// Models is the suite's model list (SP-154 §154b): the models a
+	// Models is the suite's model list: the models a
 	// suite run benchmarks against. Empty → the default list (the
 	// provider catalog's recommended_model entries, models.go); set it
 	// to override the default. SuiteModels is the single resolution
@@ -202,15 +202,14 @@ type Runner struct {
 
 // RunTask runs task's request with one model (spec) RunsPerTask times —
 // 3 by default, so one lucky or unlucky run does not decide the result
-// (SP-154 §154b) — and returns one Run record per run, in run order.
+// — and returns one Run record per run, in run order.
 //
 // Each run is headless (the existing non-interactive agent path: one
 // ProcessQuery turn with the task's request) and isolated: a fresh copy
 // of the task's starter, one per run, with the task's frozen plan written
-// into it. The run's pass/fail comes only from that turn's SP-149
+// into it. The run's pass/fail comes only from that turn's
 // verification result — the turn-end hook runs the checks against the
-// copy, and the model's own reply is never read for scoring (SP-154
-// §154a/§154b).
+// copy, and the model's own reply is never read for scoring.
 //
 // Return contract:
 //   - (runs, nil): every scheduled run was attempted. A run's own failure
@@ -258,10 +257,10 @@ func (r *Runner) RunTask(ctx context.Context, task *Task, spec ModelSpec) ([]Run
 	return runs, nil
 }
 
-// RunSuite runs the suite (SP-154 §154c): each model in the runner's
-// model list (SuiteModels — the 154.4 override, or the default list)
+// RunSuite runs the suite: each model in the runner's
+// model list (SuiteModels — the override, or the default list)
 // against every task, RunTask per (model, task) pair (RunsPerTask
-// runs each — 154.2's 3-run rule), returning the aggregated runs in
+// runs each — the 3-run rule), returning the aggregated runs in
 // suite order: models in list order, tasks in slice order, run
 // number within the pair. It is the on-demand path for the report —
 // real models cost network and money, so tests exercise it only
@@ -296,12 +295,12 @@ func (r *Runner) RunSuite(ctx context.Context, tasks []*Task) ([]Run, error) {
 	return runs, nil
 }
 
-// SuiteModels returns the suite's model list (SP-154 §154b, 154.4):
+// SuiteModels returns the suite's model list:
 // Models when non-empty, otherwise the default list (the provider
 // catalog's recommended_model entries, models.go). nil receiver → the
 // default list. This is the single resolution point for the model list
-// and the seam the SP-154 report (154.5) iterates: models × tasks, each
-// (model, task) pair through RunTask's 3-run rule (154.2).
+// and the seam the report iterates: models × tasks, each
+// (model, task) pair through RunTask's 3-run rule.
 func (r *Runner) SuiteModels() []ModelSpec {
 	if r != nil && len(r.Models) > 0 {
 		return r.Models
@@ -343,7 +342,7 @@ func (r *Runner) runOnce(task *Task, spec ModelSpec, runNumber int) Run {
 	// The frozen plan lands in the copy: planstore.Save validates it and
 	// works on a copy (the caller's task is never mutated). The
 	// verification run in the turn-end hook reads it for the task's
-	// acceptance criteria (SP-154 §154a).
+	// acceptance criteria.
 	if _, err := planstore.New().Save(dir, &task.Plan); err != nil {
 		return fail(fmt.Errorf("benchmark: write frozen plan for task %s run %d: %w", task.ID, runNumber, err))
 	}
@@ -368,7 +367,7 @@ func (r *Runner) runOnce(task *Task, spec ModelSpec, runNumber int) Run {
 	defer ag.Shutdown()
 
 	// The language-guard delta is a diff of the process-wide per-model
-	// metric (SP-152 §152e): snapshot the run's model's stat before the
+	// metric: snapshot the run's model's stat before the
 	// turn and diff it after. The guard records under the agent's model
 	// id (an empty model id bucketed under "unknown" by the recorder),
 	// so the lookup mirrors that bucketing to find the guard's entries.
@@ -382,8 +381,7 @@ func (r *Runner) runOnce(task *Task, spec ModelSpec, runNumber int) Run {
 	// uses) under the runner's per-run timeout: a turn that exceeds it is
 	// stopped through the agent's real interrupt and recorded as a failed
 	// run. The reply is never read for scoring — pass/fail comes only
-	// from the verification result the turn-end hook stored on the agent
-	// (SP-154 §154a/§154b).
+	// from the verification result the turn-end hook stored on the agent.
 	turnErr := r.runTurnWithTimeout(ag, task, runNumber)
 	res := ag.LastVerificationResult()
 	run.Result = res
@@ -395,7 +393,7 @@ func (r *Runner) runOnce(task *Task, spec ModelSpec, runNumber int) Run {
 		run.Passed = false
 	}
 
-	// Per-task metrics (SP-154 §154b, 154.3), captured after the turn
+	// Per-task metrics, captured after the turn
 	// while the run's agent still owns its conversation totals: the
 	// repair data from the turn-end hook's stored state (nil when the
 	// hook never ran — the fields stay zero), the runner's own count of
@@ -406,7 +404,7 @@ func (r *Runner) runOnce(task *Task, spec ModelSpec, runNumber int) Run {
 	run.Turns = 1
 	run.Tokens = ag.GetTotalTokens()
 	run.Cost = ag.GetTotalCost()
-	// Per-role token/cost breakdown (SP-150 §150c, 150.5): the run's
+	// Per-role token/cost breakdown: the run's
 	// agent's per-role usage (fresh agent → the conversation total is the
 	// run's usage, so the per-role split is the run's per-role usage).
 	run.RoleUsage = ag.GetRoleUsage()
@@ -424,11 +422,11 @@ func (r *Runner) runOnce(task *Task, spec ModelSpec, runNumber int) Run {
 }
 
 // configureRun applies the run's requirements to the runner's
-// ConfigManager (SP-154 §154b): verification forced on — the
+// ConfigManager: verification forced on — the
 // benchmark's pass/fail source must run for every run — and the spec's
 // model/provider where set. The manager's other verification settings
-// (the repair-attempt limit, the explicit build/test commands of SP-149
-// §149b) are preserved, and an empty spec field leaves the manager's
+// (the repair-attempt limit, the explicit build/test commands)
+// are preserved, and an empty spec field leaves the manager's
 // current value: the spec narrows, it never clears. A nil ConfigManager
 // skips the step (a custom AgentFactory owns the run's configuration
 // entirely).
@@ -488,7 +486,7 @@ func (r *Runner) defaultAgentFactory(runDir string, spec ModelSpec) (*agent.Agen
 	return ag, nil
 }
 
-// runsPerTask is the effective runs-per-model count (SP-154 §154b):
+// runsPerTask is the effective runs-per-model count:
 // RunsPerTask where positive, defaultRunsPerTask (3) otherwise.
 func (r *Runner) runsPerTask() int {
 	if r != nil && r.RunsPerTask > 0 {

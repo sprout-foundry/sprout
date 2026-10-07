@@ -1,5 +1,5 @@
-// Package verify implements the SP-149 verification check runner for the
-// "build", "test", "page", and "interaction" check kinds (SP-149 §149a):
+// Package verify implements the verification check runner for the
+// "build", "test", "page", and "interaction" check kinds:
 // after a turn that changed application code, the runtime (not the model)
 // runs the project's build and test commands, and — for page and
 // interaction checks — starts the app from the manifest's dev command and
@@ -8,10 +8,10 @@
 // browser steps and confirm the expected outcome. Manual items are listed in
 // the result and never gated. It reports a structured result (checks,
 // pass/fail, output excerpts, screenshot references) that the turn-end hook
-// (SP-149 §149c / 149.5) and the final-reply contract (149.6) consume.
+// and the final-reply contract consume.
 //
-// Where commands come from (SP-149 §149b): a check command comes only
-// from (1) the project's starter manifest (.sprout/starter.json, SP-153)
+// Where commands come from: a check command comes only
+// from (1) the project's starter manifest (.sprout/starter.json)
 // or (2) the project's explicit configuration
 // (configuration.VerificationConfig.BuildCommand / .TestCommand, set by a
 // human in the project layer .sprout/workspace.json or in global config) —
@@ -20,7 +20,7 @@
 // their ids and kinds, and their Check field (which may carry
 // model-proposed commands, because plans are written by the model) is
 // ignored. Without an active plan, the build and test commands still run
-// as a baseline (§149a).
+// as a baseline.
 //
 // The package is stdlib plus the pure-data packages (plancontract,
 // startermanifest) and their file-system halves (planstore, starterstore),
@@ -39,21 +39,21 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/starterstore"
 )
 
-// ManifestLoader loads a project's starter manifest (SP-153). A missing
+// ManifestLoader loads a project's starter manifest. A missing
 // manifest must surface starterstore.ErrNoManifest so the runner can fall
 // back to the explicit project configuration.
 type ManifestLoader func(root string) (*startermanifest.StarterManifest, error)
 
-// PlanLoader loads a project's active SP-148 plan. A missing plan must
+// PlanLoader loads a project's active plan. A missing plan must
 // surface planstore.ErrNoPlan so the runner can run the baseline.
 type PlanLoader func(root string) (*plancontract.Plan, error)
 
 // ConfigCommandsProvider resolves a project's explicit build and test
-// commands (SP-149 §149b) — the trusted source a human sets in the
+// commands — the trusted source a human sets in the
 // project's configuration. Model output never reaches this provider.
 type ConfigCommandsProvider func(root string) (Commands, error)
 
-// Runner runs the build, test, page, and interaction checks of a SP-149
+// Runner runs the build, test, page, and interaction checks of a
 // verification run.
 //
 // Every field is injectable so the run is testable without a shell; New()
@@ -65,20 +65,20 @@ type Runner struct {
 	// Manifest loads the project's starter manifest. Default:
 	// starterstore.LoadStarterManifest (.sprout/starter.json).
 	Manifest ManifestLoader
-	// Plans loads the active SP-148 plan. Default: planstore
+	// Plans loads the active plan. Default: planstore
 	// (.sprout/plan.json), not-found as planstore.ErrNoPlan.
 	Plans PlanLoader
-	// ConfigCommands resolves the project's explicit build/test commands
-	// (SP-149 §149b). Nil means "no explicit configuration source".
+	// ConfigCommands resolves the project's explicit build/test commands.
+	// Nil means "no explicit configuration source".
 	ConfigCommands ConfigCommandsProvider
 	// Exec executes each resolved check command. Default: &ShellExecutor{}.
 	Exec Executor
-	// Browser opens routes for page checks (SP-149 §149.3). Nil → page
+	// Browser opens routes for page checks. Nil → page
 	// checks are skipped with reason "no browser configured". Default:
 	// NewWebcontentPageBrowser().
 	Browser PageBrowser
 	// StepBrowser runs the plan's scripted browser steps for interaction
-	// checks (SP-149 §149.4). Nil → interaction checks are skipped with
+	// checks. Nil → interaction checks are skipped with
 	// reason "no browser configured". Default: NewWebcontentStepBrowser().
 	StepBrowser StepBrowser
 	// Timeout bounds a single check. Default: DefaultTimeout; a
@@ -123,25 +123,25 @@ func New() *Runner {
 }
 
 // Run executes the verification checks for the project rooted at root and
-// returns the structured result (SP-149 §149a/§149c). It is implemented as
+// returns the structured result. It is implemented as
 // a snapshot-then-run: it captures a fresh Snapshot of the manifest and plan
-// (SP-149 §149b) and executes RunSnapshot against it, so a single Run call
+// and executes RunSnapshot against it, so a single Run call
 // reads each file exactly once.
 //
 //   - With an active plan, the runner runs one check per acceptance kind it
-//     implements (build and test in 149.2; page in 149.3; interaction in
-//     149.4), one check per kind for build/test/page (each covering every
+//     implements (build and test, page, and interaction), one check per kind
+//     for build/test/page (each covering every
 //     acceptance item of that kind) and one check per interaction item. A
 //     manual check is listed but never executed (it is pre-filled skipped).
 //   - Without a plan, the build and test commands run as a baseline. A
 //     baseline run never produces a page, interaction, or manual check, even
-//     when the manifest declares a dev command, port, and routes (§149a).
+//     when the manifest declares a dev command, port, and routes.
 //
 // Command resolution is per check kind: the starter manifest's command
 // wins where it is set, the explicit project configuration fills the gap,
 // and a check with no trusted command is skipped (never guessed). The
 // plan's acceptance Check fields are never read for a command, a route, or a
-// step (SP-149 §149b): a page check's routes and an interaction check's
+// step: a page check's routes and an interaction check's
 // dev command come only from the manifest, and an interaction check's steps
 // come only from the plan's frozen interaction items.
 //
@@ -156,8 +156,8 @@ func (r *Runner) Run(ctx context.Context, root string) (*Result, error) {
 	return r.RunSnapshot(ctx, root, r.Snapshot(root))
 }
 
-// Snapshot is the frozen input to a turn's verification runs (SP-149
-// §149b): the starter manifest and the active plan captured once, so that
+// Snapshot is the frozen input to a turn's verification runs:
+// the starter manifest and the active plan captured once, so that
 // every verification run of the turn (every repair round) executes against
 // the same trusted inputs rather than re-reading the files. A model that
 // edits .sprout/starter.json or .sprout/plan.json mid-turn cannot change
@@ -204,7 +204,7 @@ func (r *Runner) Snapshot(root string) *Snapshot {
 }
 
 // RunSnapshot executes the verification checks against the frozen inputs a
-// turn captured with Snapshot (SP-149 §149b): the manifest's commands and
+// turn captured with Snapshot: the manifest's commands and
 // the plan's acceptance come from the snapshot, never from a re-read of the
 // files on disk. It is the implementation Run delegates to after taking a
 // fresh snapshot; the two behave identically for a snapshot captured
@@ -270,7 +270,7 @@ func (r *Runner) RunSnapshot(ctx context.Context, root string, snap *Snapshot) (
 			r.runInteractionCheck(ctx, root, &result.Checks[i], manifest)
 		case plancontract.KindManual:
 			// Pre-filled skipped by planChecks; never executed and never
-			// gates the result (SP-149 §149a: manual is listed, not gated).
+			// gates the result (manual is listed, not gated).
 		default:
 			r.runCheck(ctx, root, &result.Checks[i])
 		}
@@ -325,8 +325,8 @@ func (r *Runner) planLoad(root string) (*plancontract.Plan, string) {
 	}
 }
 
-// resolveCommands returns the trusted commands for this project (SP-149
-// §149b): per kind, the starter manifest's command wins where it is set,
+// resolveCommands returns the trusted commands for this project:
+// per kind, the starter manifest's command wins where it is set,
 // the explicit project configuration fills the gap, and nothing else is
 // ever consulted. A manifest that exists but is invalid was already
 // recorded as a run-level finding by the manifest load, so its (discarded)
@@ -348,17 +348,17 @@ func (r *Runner) resolveCommands(manifest *startermanifest.StarterManifest, root
 	}
 }
 
-// planChecks builds the checks an active plan gates in 149.4: one check per
-// build, test, and page item group the plan declares (build and test in
-// 149.2, page in 149.3 — one check per kind, each covering every acceptance
-// item of that kind), one check per interaction item (149.4 — each is an
+// planChecks builds the checks an active plan gates: one check per
+// build, test, and page item group the plan declares (build and test, and
+// page — one check per kind, each covering every acceptance
+// item of that kind), one check per interaction item (each is an
 // independent scripted flow with its own steps and expected outcome), and a
-// single pre-filled skipped manual check listing every manual item (149.4 —
-// listed, never gated). A kind the plan declares but no trusted command
+// single pre-filled skipped manual check listing every manual item (listed,
+// never gated). A kind the plan declares but no trusted command
 // exists for still gets its check — skipped, with a reason — so the result
 // says plainly what could not be verified. The page check carries the
-// manifest's dev command and its routes come only from the manifest (SP-149
-// §149b); each interaction check carries the manifest's dev command and its
+// manifest's dev command and its routes come only from the manifest;
+// each interaction check carries the manifest's dev command and its
 // steps come only from the plan's interaction item. The plan's acceptance
 // Check fields are never read for a command, route, or step.
 func (r *Runner) planChecks(plan *plancontract.Plan, manifest *startermanifest.StarterManifest, buildCmd, testCmd string) []Check {
@@ -408,13 +408,13 @@ func (r *Runner) planChecks(plan *plancontract.Plan, manifest *startermanifest.S
 	// One check per interaction item, in plan order.
 	checks = append(checks, interactionChecks...)
 	// A single manual check listing every manual item, pre-filled skipped:
-	// manual verification is human, never machine-gated (SP-149 §149a).
+	// manual verification is human, never machine-gated.
 	if len(manualItems) > 0 {
 		checks = append(checks, Check{
 			Kind:    plancontract.KindManual,
 			Items:   manualItems,
 			Skipped: true,
-			Reason:  "manual: verified by a human, not machine-gated (SP-149 §149a)",
+			Reason:  "manual: verified by a human, not machine-gated",
 		})
 	}
 	return checks
@@ -422,7 +422,7 @@ func (r *Runner) planChecks(plan *plancontract.Plan, manifest *startermanifest.S
 
 // runCheck executes one check and fills in its outcome. A check with no
 // trusted command is skipped, not failed: there is nothing to verify,
-// and the runner never invents a command (SP-149 §149b).
+// and the runner never invents a command.
 func (r *Runner) runCheck(ctx context.Context, root string, c *Check) {
 	if c.Command == "" {
 		c.Skipped = true

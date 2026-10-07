@@ -1,5 +1,5 @@
-// stream_holdback.go — the streaming language-guard hold-back (SP-152
-// §152c). A reply streams token by token, so a wrong-language reply would be
+// stream_holdback.go — the streaming language-guard hold-back.
+// A reply streams token by token, so a wrong-language reply would be
 // visible to the client before a whole-message check could run. The guard
 // holds back the start of each streamed reply until it has enough prose to
 // judge (a few dozen words, code excluded via langguard.ExtractProse), checks
@@ -9,11 +9,11 @@
 // client.
 //
 // A reply that never reaches the prose threshold — a short or code-only
-// stream, which §152a says is not judged — is released on Finish: it is
+// stream, which the guard does not judge — is released on Finish: it is
 // never held. Only a judged, reliably-mismatched stream is held.
 //
-// A reply that switches language mid-stream is re-checked at completion
-// (SP-152 §152c, item 152.7): the hold-back only judges the START of the
+// A reply that switches language mid-stream is re-checked at completion:
+// the hold-back only judges the START of the
 // stream (and releases it once the start passes), so a later switch is
 // already streamed to the client and cannot be un-streamed. The hold-back
 // therefore also accumulates the FULL content of the reply (Full), and the
@@ -23,7 +23,7 @@
 // The component is pure and fully unit-testable: it wraps a sink (the
 // client-facing delivery) and exposes Write / Finish / State / Held. The
 // agent wiring (seed_provider_chat.go) gates assistant-text delivery
-// through it and, when a stream is held, delivers the localized §152b notice
+// through it and, when a stream is held, delivers the localized notice
 // instead of the wrong-language stream.
 package agent
 
@@ -53,7 +53,7 @@ const (
 )
 
 // StreamHoldback holds back the start of a streamed reply until enough prose
-// has accumulated to judge its language (§152c), then releases the buffer and
+// has accumulated to judge its language, then releases the buffer and
 // streams the rest live (pass/undetermined) or keeps the whole reply held
 // (a reliable mismatch). It wraps a sink that receives released content.
 type StreamHoldback struct {
@@ -70,7 +70,7 @@ type StreamHoldback struct {
 	buf strings.Builder
 	// full accumulates EVERY chunk written for this response, regardless of
 	// state — including chunks delivered live after the buffer is released.
-	// The completion re-check (SP-152 §152c, item 152.7) needs the whole
+	// The completion re-check needs the whole
 	// reply, not just the held/buffered prefix, so it is tracked separately
 	// from buf (which is reset on release).
 	full strings.Builder
@@ -98,7 +98,7 @@ func NewStreamHoldback(user langguard.Language, sink func(content string)) *Stre
 // undetermined) and goes live, or holds the reply (a reliable mismatch).
 // Live chunks pass straight through; held chunks are captured (not
 // delivered). Every chunk is also recorded into full (the completion
-// re-check's input, item 152.7).
+// re-check's input).
 func (h *StreamHoldback) Write(chunk string) {
 	// Accumulate the whole reply for the completion re-check BEFORE any
 	// state-specific handling (release resets buf, so it cannot be the
@@ -125,7 +125,7 @@ func (h *StreamHoldback) Write(chunk string) {
 	if !langguard.Judgable(langguard.ExtractProse(h.buf.String())) {
 		// Code-heavy: the extracted prose is still below the threshold.
 		// Keep buffering; the stream is released on Finish if it stays
-		// below (§152a: code is not judged).
+		// below (code is not judged).
 		return
 	}
 	// Prose is judgable: run the check. A reliable mismatch holds the
@@ -140,8 +140,8 @@ func (h *StreamHoldback) Write(chunk string) {
 }
 
 // Finish is called at the end of the stream. A reply that never reached the
-// prose threshold (short or code-only — not judged, §152a) is released here.
-// A held stream stays held (the agent replaces it with the §152b notice).
+// prose threshold (short or code-only — not judged) is released here.
+// A held stream stays held (the agent replaces it with the notice).
 func (h *StreamHoldback) Finish() {
 	if h.state != HoldbackBuffering {
 		return
@@ -190,7 +190,7 @@ func (h *StreamHoldback) Deliver(content string) {
 }
 
 // DeliverNotice writes notice through the hold-back's sink — the same
-// client-facing delivery as released content — so the user sees the §152b
+// client-facing delivery as released content — so the user sees the
 // notice instead of the held wrong-language stream. It is a thin wrapper over
 // Deliver for the templated-notice case.
 func (h *StreamHoldback) DeliverNotice(notice string) {
@@ -209,8 +209,8 @@ func (h *StreamHoldback) Held() string {
 
 // Full returns the entire content written for this response — every chunk,
 // including those delivered live after the buffer was released, not just the
-// held/buffered prefix. It is the completion re-check's input (SP-152 §152c,
-// item 152.7): a reply whose start passed the hold-back but which switched
+// held/buffered prefix. It is the completion re-check's input:
+// a reply whose start passed the hold-back but which switched
 // language later in the stream is re-judged on its full content. Empty when
 // nothing was written.
 func (h *StreamHoldback) Full() string { return h.full.String() }
@@ -263,13 +263,13 @@ func (a *Agent) storedTurnUserQuery() string {
 	return a.turnUserQuery
 }
 
-// resolveTurnLanguageGuard resolves the turn's user language once (§152a)
+// resolveTurnLanguageGuard resolves the turn's user language once
 // and stores it on the agent for the streaming hold-back. It reuses the same
-// resolution as the final-message guard (152.5): the user's recent messages
+// resolution as the final-message guard: the user's recent messages
 // plus the current query, with the configured language as the fallback. The
 // hold-back is inactive (no hold-back, byte-identical streaming) when the
 // agent is a subagent (its output is not user-facing prose), when the guard is
-// disabled (§152f), or when the user language is undetermined.
+// disabled, or when the user language is undetermined.
 func (a *Agent) resolveTurnLanguageGuard(currentQuery string) {
 	if a.IsSubagent() {
 		// Subagent output goes to the orchestrator, not the end user; the
@@ -279,7 +279,7 @@ func (a *Agent) resolveTurnLanguageGuard(currentQuery string) {
 	}
 	cfg := a.GetConfig()
 	// LanguageGuardEnabled is nil-safe: a nil config resolves to the
-	// default (enabled, §152f).
+	// default (enabled).
 	if !cfg.LanguageGuardEnabled() {
 		a.setTurnLanguageGuard(langguard.Language{}, false, currentQuery)
 		return

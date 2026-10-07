@@ -1,26 +1,26 @@
-// Package agent — SP-153 §153d starter upgrade proposals.
+// Package agent — starter upgrade proposals.
 //
-// When a project's starter manifest (.sprout/starter.json, SP-153 §153a,
+// When a project's starter manifest (.sprout/starter.json,
 // loaded through pkg/starterstore) names an older version of its starter than
-// the embedded starter tree (pkg/starters, item 153.3), the agent is told
+// the embedded starter tree (pkg/starters), the agent is told
 // about the upgrade at the start of a turn: an advisory notice is appended to
 // the turn's system prompt. The notice names the starter and both versions,
 // points at the starter's stack-skill upgrade note (the "## Upgrade note"
-// section of the skill auto-activated alongside by item 153.5), and carries
-// the load-bearing instruction of SP-153 §153d — the agent may PROPOSE the
+// section of the skill auto-activated alongside), and carries
+// the load-bearing instruction — the agent may PROPOSE the
 // upgrade, but it never applies one silently; the upgrade is applied only
 // when the user explicitly approves it.
 //
 // The turn-start hook (prepareQueryRun, seed_query.go) calls
 // starterUpgradeNotice once per turn — after the stack-skill auto-activation
-// (153.5) — and appends the notice to the composed system prompt, exactly
-// like the plan summary (148.5). A missing or stale-free manifest changes
+// — and appends the notice to the composed system prompt, exactly
+// like the plan summary. A missing or stale-free manifest changes
 // nothing: the method returns "" in every case where there is no verifiable
 // upgrade to propose.
 //
 // The mechanism is a pure reader with respect to the project: it reads the
 // manifest and the embedded starter catalogue and never writes a file. That
-// purity is what guarantees the §153d contract — this mechanism can propose,
+// purity is what guarantees the contract — this mechanism can propose,
 // but it cannot apply; applying an upgrade is a deliberate, user-approved
 // action.
 package agent
@@ -36,7 +36,7 @@ import (
 )
 
 // starterUpgradeNotice builds the advisory system-prompt notice for a stale
-// starter manifest (SP-153 §153d): the project's manifest names starterID at
+// starter manifest: the project's manifest names starterID at
 // projectVersion, and the embedded starter tree is at embeddedVersion.
 //
 // It returns the notice only when the project is strictly older than the
@@ -81,7 +81,7 @@ func starterUpgradeNotice(starterID, projectVersion, embeddedVersion string) str
 }
 
 // starterUpgradeNotice returns the turn-context advisory for the project's
-// starter manifest (SP-153 §153d): when .sprout/starter.json names an older
+// starter manifest: when .sprout/starter.json names an older
 // version of its starter than the embedded starter tree, it returns the
 // upgrade notice the agent may act on by proposing (never silently applying)
 // the upgrade.
@@ -103,7 +103,7 @@ func starterUpgradeNotice(starterID, projectVersion, embeddedVersion string) str
 // It is called from prepareQueryRun once per turn. It is a pure reader with
 // respect to the project — it reads the manifest and the embedded starter
 // catalogue and never writes a file — so the turn-start hook can never apply
-// an upgrade by itself (SP-153 §153d: "it never applies them silently").
+// an upgrade by itself ("it never applies them silently").
 func (a *Agent) starterUpgradeNotice() string {
 	root := a.currentWorkspaceRoot()
 	if root == "" {

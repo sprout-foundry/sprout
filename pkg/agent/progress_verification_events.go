@@ -1,6 +1,6 @@
-// progress_verification_events.go — SP-151 §151a item 151.3: emit the run's
+// progress_verification_events.go — emit the run's
 // progress_verification and progress_complete events at turn completion,
-// from the SP-149 turn-end verification result (SP-149 §149c).
+// from the turn-end verification result.
 //
 // The turn-end verification hook stores the final *verify.Result on the
 // agent's per-turn state (reset each turn). handleQueryResult calls
@@ -16,11 +16,11 @@
 // (false). When verification is enabled, not_verified_reason states why
 // there is no result; when it is disabled (the CLI default) the event
 // carries only run_id — no not-verified content — so the default user sees
-// no per-turn notice (SP-155 default UI unchanged).
+// no per-turn notice (default UI unchanged).
 //
 // The payloads are built as map[string]interface{} with the exact snake_case
 // wire names (mirroring the events.ProgressVerificationData /
-// events.ProgressCompleteData structs from item 151.1) rather than the Go
+// events.ProgressCompleteData structs) rather than the Go
 // structs, so decorateEventPayload can merge the event metadata (chat_id)
 // into them and the field names are the public contract.
 
@@ -31,8 +31,8 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/verify"
 )
 
-// publishTurnProgressComplete emits the SP-151 §151a turn-completion progress
-// events (item 151.3) from the turn-end verification result the SP-149 hook
+// publishTurnProgressComplete emits the turn-completion progress
+// events from the turn-end verification result the hook
 // stored for this turn. It is the single call site: handleQueryResult invokes
 // it on the success path, after the verification reply attachment.
 //
@@ -56,7 +56,7 @@ import (
 // subagent shares the parent's event bus but carries a fresh (empty) session
 // id, so its progress events would arrive with an empty run_id and read to a
 // consumer as extra "run finished" signals for one run. Subagent turns are
-// therefore silent for progress events (matching the SP-149 hook's subagent
+// therefore silent for progress events (matching the verification hook's subagent
 // guard, verification_hook.go).
 func (a *Agent) publishTurnProgressComplete() {
 	if a.subagentDepth > 0 {
@@ -75,15 +75,15 @@ func (a *Agent) publishTurnProgressComplete() {
 }
 
 // progressVerificationData builds the map shared by the progress_verification
-// event and the nested verification field of progress_complete (SP-151
-// §151a): the identical shape in both places, so the two can never drift. The
+// event and the nested verification field of progress_complete:
+// the identical shape in both places, so the two can never drift. The
 // keys are exactly the snake_case wire names of events.ProgressVerificationData;
 // zero/empty optional keys are omitted (mirroring that struct's omitempty):
 // plan_revision when 0, baseline when false, passed when false, and errors
 // when empty. checks is always present — a result with no checks emits an
 // empty slice ([]), never null. The verification runner's execution metadata
 // (routes, screenshots, steps, duration) is deliberately dropped to keep the
-// event compact (item 151.1); the full result stays server-side.
+// event compact; the full result stays server-side.
 func progressVerificationData(res *verify.Result, runID string) map[string]interface{} {
 	checks := make([]map[string]interface{}, 0, len(res.Checks))
 	for _, c := range res.Checks {
@@ -130,14 +130,14 @@ func progressVerificationData(res *verify.Result, runID string) map[string]inter
 	return payload
 }
 
-// progressVerificationPayload is the progress_verification event payload
-// (SP-151 §151a): the verification map itself.
+// progressVerificationPayload is the progress_verification event payload:
+// the verification map itself.
 func progressVerificationPayload(res *verify.Result, runID string) map[string]interface{} {
 	return progressVerificationData(res, runID)
 }
 
-// progressCompletePayload is the progress_complete event payload (SP-151
-// §151a). When res is non-nil it carries run_id, plan_revision (omitted when
+// progressCompletePayload is the progress_complete event payload.
+// When res is non-nil it carries run_id, plan_revision (omitted when
 // 0), verified (res.Passed(), omitted when false), and verification — the same
 // map the standalone progress_verification event carries (shared builder, so
 // the two cannot drift). When res is nil it carries run_id and
@@ -166,17 +166,17 @@ func progressCompletePayload(res *verify.Result, runID string, notVerifiedReason
 }
 
 // notVerifiedReason states why a completed turn has no verification result
-// (SP-151 §151a progress_complete.not_verified_reason), mirroring the SP-149
+// (progress_complete.not_verified_reason), mirroring the
 // turn-end hook's guard conditions. It is cheap — a config read plus the
 // turn's application-code paths, no I/O:
 //
 //   - "" — verification is disabled (no configuration manager, or the
-//     configuration does not enable verification, the CLI default, SP-149
-//     §149e). A disabled turn carries no not-verified content, so the
-//     default user sees no per-turn notice (SP-155 default UI unchanged);
+//     configuration does not enable verification, the CLI default).
+//     A disabled turn carries no not-verified content, so the
+//     default user sees no per-turn notice (default UI unchanged);
 //   - "no code changes this turn" — verification is enabled but the turn
 //     changed no application code (the hook gates on the turn's own
-//     application-code changes, §149a — a docs-only or .sprout-bookkeeping
+//     application-code changes — a docs-only or .sprout-bookkeeping
 //     turn reads as no code changes);
 //   - "verification did not run this turn" — verification is enabled and the
 //     turn changed application code, but the hook still did not run (a

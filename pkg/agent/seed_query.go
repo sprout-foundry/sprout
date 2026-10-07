@@ -167,7 +167,7 @@ func (a *Agent) processQueryWithSeed(source, userQuery string) (string, error) {
 		result, err = a.runTurnEndQuality(qc, result)
 	}
 	if err == nil {
-		// SP-149 §149c / 149.5: on the success path only, the turn-end
+		// On the success path only, the turn-end
 		// verification hook may continue the turn (a repair round). A
 		// hard error from the first Run flows to handleQueryResult
 		// unchanged.
@@ -218,7 +218,7 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 	// Enable change tracking
 	a.EnableChangeTracking(userQuery)
 
-	// SP-149 §149d / 149.6: reset the per-turn verification state at the
+	// Reset the per-turn verification state at the
 	// same per-turn point change tracking opens its window: a previous
 	// turn's stored result, repair attempts, and limit must never attach
 	// to this turn's reply — a turn's final reply may only carry that
@@ -231,7 +231,7 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 	// this turn.
 	a.resetTurnQuality()
 
-	// SP-149 §149b: capture the turn's verification inputs — the starter
+	// Capture the turn's verification inputs — the starter
 	// manifest's commands and the plan's acceptance — once, at the turn's
 	// start, right after the per-turn verification state is reset. Every
 	// verification run of the turn (every repair round) executes against
@@ -286,7 +286,7 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 	// Set conversation start time for duration calculation
 	a.conversationStartTime = time.Now()
 
-	// SP-152 §152c: resolve the turn's user language once (recent user
+	// Resolve the turn's user language once (recent user
 	// messages + the current query, with the configured fallback) and store
 	// it on the agent so the streaming provider path can gate assistant-text
 	// delivery through the hold-back. Inactive (no hold-back, byte-identical
@@ -377,7 +377,7 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 	opts.CompactionTriggerFraction = a.computeCompactionTriggerFraction()
 	opts.SubstitutionTargetFraction = 0.50
 
-	// SP-153 §153c: when the project's starter manifest names a starter, its
+	// When the project's starter manifest names a starter, its
 	// stack skill auto-activates at turn start — folded into the system
 	// prompt before it is handed to the seed agent (the next block).
 	// Best-effort and idempotent: a missing/invalid manifest, a starter with
@@ -396,7 +396,7 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 		opts.SystemPrompt = opts.SystemPrompt + "\n\n" + supplement
 	}
 
-	// SP-148 §148c: when a structured plan exists, append a compact plan
+	// When a structured plan exists, append a compact plan
 	// summary (goal + scope items with status) so the model works scope item
 	// by scope item. planContextSummary returns "" when there is no plan or
 	// the plan is unreadable/invalid, so an absent plan never changes the
@@ -405,7 +405,7 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 		opts.SystemPrompt = opts.SystemPrompt + "\n\n" + planSummary
 	}
 
-	// SP-153 §153d: when the project's starter manifest names an older
+	// When the project's starter manifest names an older
 	// version of its starter than the embedded starter tree, append the
 	// upgrade notice so the agent may propose the upgrade (using the
 	// skill's upgrade note) — but never apply it silently. The hook runs

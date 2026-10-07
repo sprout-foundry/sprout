@@ -12,15 +12,15 @@ import (
 )
 
 // StepBrowser is the verify package's narrow browser seam for interaction
-// checks (SP-149 §149a): it runs the plan's scripted browser steps in order
+// checks: it runs the plan's scripted browser steps in order
 // against a base URL and reports what it observed. The production
 // implementation adapts pkg/webcontent (NewWebcontentStepBrowser); tests
 // inject a fake so a run is deterministic and needs no Chromium.
 //
 // The steps come only from the active plan's interaction acceptance items
-// (SP-148 §148d) — the frozen plan written before the turn, not model output
+// — the frozen plan written before the turn, not model output
 // produced mid-turn — so running them is a trusted verification act, not a
-// model-sourced command (SP-149 §149b).
+// model-sourced command.
 type StepBrowser interface {
 	// RunSteps runs the steps in order against baseURL (the dev server root)
 	// and reports the executed actions (evidence). A nil error means every
@@ -94,7 +94,7 @@ func toBrowseSteps(steps []plancontract.BrowseStep) []webcontent.BrowseStep {
 	return out
 }
 
-// runInteractionCheck executes one interaction check (SP-149 §149a): start
+// runInteractionCheck executes one interaction check: start
 // the manifest's dev server, run the plan's scripted browser steps in order
 // against the dev server root, and confirm the expected outcome. Each
 // interaction acceptance item is its own check with its own dev server,
@@ -103,14 +103,14 @@ func toBrowseSteps(steps []plancontract.BrowseStep) []webcontent.BrowseStep {
 //
 // Skipped checks (no manifest, no dev command, no dev port, no browser, or
 // an unavailable browser) are recorded with a reason and never gate the
-// result (SP-149 §149d: the result says what could not be verified). A
+// result (the result says what could not be verified). A
 // failed check is only ever one that started the server and found a concrete
 // problem. The dev server is always stopped (the caller defers it), even on
 // failure or cancellation.
 //
 // The check's steps come only from the plan's interaction acceptance item
-// (SP-148 §148d) and its command from the manifest's dev command (SP-149
-// §149b): the plan's acceptance Check field is never read for a command.
+// and its command from the manifest's dev command: the plan's acceptance
+// Check field is never read for a command.
 func (r *Runner) runInteractionCheck(ctx context.Context, root string, c *Check, manifest *startermanifest.StarterManifest) {
 	switch {
 	case manifest == nil:
@@ -123,7 +123,7 @@ func (r *Runner) runInteractionCheck(ctx context.Context, root string, c *Check,
 		return
 	case manifest.DevPort == 0:
 		c.Skipped = true
-		c.Reason = "no dev port in the starter manifest (dev_port is 0; runtime port discovery is SP-155)"
+		c.Reason = "no dev port in the starter manifest (dev_port is 0; runtime port discovery is not implemented)"
 		return
 	case r.StepBrowser == nil:
 		c.Skipped = true

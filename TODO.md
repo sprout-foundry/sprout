@@ -493,7 +493,7 @@ passes the manifest validator (`pkg/startermanifest`).
       through `@cloudflare/vitest-pool-workers` against local D1 plus the
       UI test; manifest `deploy_target: workers`. Go instantiate/manifest
       test as above. Spec: SP-153 §153b.
-- [ ] **153.15** Stack skill `web-app-data`: where API routes, schema and
+- [x] **153.15** Stack skill `web-app-data`: where API routes, schema and
       migrations live; adding a table (schema, migration, route, test);
       local vs deployed bindings; failure modes (Node-only APIs in Workers,
       forgetting migrations, secrets in code). Spec: SP-153 §153c.

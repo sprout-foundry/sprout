@@ -66,6 +66,16 @@ const ssWebAppManifestJSON = `{"starter": {"id": "web-app", "version": "1.0.0"}}
 // when the web-app skill activates (the skill's frontmatter name).
 const ssWebAppMarker = "[Skill Activated: Web App Starter"
 
+// ssWebAppDataManifestJSON names the shipped web-app-data starter, whose
+// stack skill lives under pkg/skills/library/web-app-data/. Like web-app it
+// is a real user-facing starter: the manifest ID ("web-app-data") must
+// resolve to the embedded skill of the same ID.
+const ssWebAppDataManifestJSON = `{"starter": {"id": "web-app-data", "version": "1.0.0"}}`
+
+// ssWebAppDataMarker is the marker activateSkillByID folds into the system
+// prompt when the web-app-data skill activates (the skill's frontmatter name).
+const ssWebAppDataMarker = "[Skill Activated: Web App with Data Starter"
+
 // ssCorruptManifestJSON is not valid JSON at all. It exercises the
 // "unreadable manifest" path (logged, never fails the turn).
 const ssCorruptManifestJSON = `{"starter": {`
@@ -211,6 +221,26 @@ func TestStackSkillAutoActivation_WebAppStarter(t *testing.T) {
 	}
 	if !strings.Contains(ag.GetSystemPrompt(), ssWebAppMarker) {
 		t.Errorf("web-app skill instructions not folded into the system prompt:\n%s", ag.GetSystemPrompt())
+	}
+}
+
+// TestStackSkillAutoActivation_WebAppDataStarter is the web-app-data
+// counterpart: a manifest naming the shipped web-app-data starter activates
+// the web-app-data stack skill under pkg/skills/library/web-app-data/ — the
+// embedded skill whose ID matches the manifest's starter ID. It guards the
+// starter→skill mapping for the React + Hono/D1 starter.
+func TestStackSkillAutoActivation_WebAppDataStarter(t *testing.T) {
+	root := t.TempDir()
+	ssWriteStarterManifest(t, root, ssWebAppDataManifestJSON)
+
+	ag := ssAgent(t, NewScriptedClient(NewScriptedTextResponse("ok.")), root)
+	ag.autoActivateStarterSkill()
+
+	if got := ssCountActiveSkills(ag, "web-app-data"); got != 1 {
+		t.Errorf("web-app-data skill active count = %d, want 1 (active skills: %v)", got, ag.state.GetActiveSkills())
+	}
+	if !strings.Contains(ag.GetSystemPrompt(), ssWebAppDataMarker) {
+		t.Errorf("web-app-data skill instructions not folded into the system prompt:\n%s", ag.GetSystemPrompt())
 	}
 }
 

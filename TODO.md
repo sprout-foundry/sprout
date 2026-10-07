@@ -807,6 +807,18 @@ needed whatever the integration work does. Spec context: SP-160 §160e.
 
 ---
 
+## SP-160 §160c — Backend contract follow-up
+
+- [ ] **contract.18** Route inventory after the Huma migration:
+      `cmd/api_inventory` parses `pkg/webui/routes.go` and now finds 18 of
+      159 routes, because the families moved to `huma.Register` operations
+      (`pkg/webui/huma_*.go`); `TestRouteCountIsStable` and the
+      `docs/api/endpoints.md` freshness test fail. Build the inventory from
+      the registered Huma operations plus the remaining plain routes (from
+      the API object in-process, not by parsing source), keep the "served
+      by" column, regenerate `docs/api/endpoints.md`, and make both tests
+      pass. Spec: SP-160 §160c.
+
 ## Not automatable
 
 - **Decision:** framework for each reference starter (static site, web

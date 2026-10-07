@@ -222,12 +222,12 @@ standalone local build keeps embedding into `pkg/webui/static`.
 
 ## SP-160 §160d — Design tokens
 
-- [ ] **tok.1** Move the web UI's tokens from `webui/src/App.css` into
+- [x] **tok.1** Move the web UI's tokens from `webui/src/App.css` into
       `packages/design` (`@sprout-foundry/design`); theme packs layer on
       top; the web UI imports them from the package. No visual change: a
       test checks every token the UI uses is defined by the package.
       Spec: SP-160 §160d. (batch with next)
-- [ ] **tok.2** `host.theme` token values map onto the package's token
+- [x] **tok.2** `host.theme` token values map onto the package's token
       names (documented in `docs/integration/host-contract.md`); a host
       theme overrides tokens only inside the workspace root. Vitest.
       Spec: SP-160 §160d.

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef } from 'react';
 import type { ComponentType, ReactNode } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
-import { HostProvider } from '../host';
+import { HostProvider, useHost } from '../host';
 import type { SproutHost } from '../host';
 import { SproutProviders } from '../providers';
+import { applyHostThemeOverrides, clearHostThemeOverrides, resolveHostThemeOverrides } from '../themes/hostTheme';
 import { resolveWorkspaceMode } from '../workspaces/registry';
 import type { WorkspaceModeContext, WorkspaceModeId } from '../workspaces/registry';
 import type { WorkspaceShellProps } from '../workspaces/shell';
@@ -293,6 +294,13 @@ export function SproutWorkspace({
  * without the attribute on the root those guards would never match, so the
  * attribute makes the scoped theme rules live. Read from `useTheme()`, which
  * `SproutProviders` (rendered just above) provides.
+ *
+ * The root is also where the host's own token overrides land
+ * (`host.theme.tokens`, SP-160 §160d): they are written as inline custom
+ * properties on this element, so a host theme can only restyle the mounted
+ * workspace and never the host page around it. They are applied here rather
+ * than on `documentElement` because this element — not `documentElement` — is
+ * scoped to the workspace.
  */
 function WorkspaceRoot({
   rootClass,
@@ -306,8 +314,19 @@ function WorkspaceRoot({
   children: ReactNode;
 }): JSX.Element {
   const { theme } = useTheme();
+  const host = useHost();
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const element = rootRef.current;
+    if (!element) return;
+    applyHostThemeOverrides(element, resolveHostThemeOverrides(host));
+    return () => clearHostThemeOverrides(element);
+  }, [theme, host]);
+
   return (
     <div
+      ref={rootRef}
       className={rootClass}
       data-testid="sprout-workspace"
       data-project={projectId}

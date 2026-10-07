@@ -479,7 +479,7 @@ passes the manifest validator (`pkg/startermanifest`).
       README, manifest (`deploy_target: pages`, SPA fallback noted for
       Pages), design scaffold. Go instantiate/manifest test as above.
       Spec: SP-153 §153b.
-- [ ] **153.13** Stack skill `web-app`: layout, adding a route, a component
+- [x] **153.13** Stack skill `web-app`: layout, adding a route, a component
       with state and a test; React Router and hooks patterns to use and
       avoid; known failure modes (stale closures, effects for derived
       state, router API version mix-ups). Spec: SP-153 §153c.

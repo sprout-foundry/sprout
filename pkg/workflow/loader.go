@@ -188,6 +188,9 @@ func (c *AgentWorkflowConfig) Validate() error {
 			if c.Continuation.MaxContinuations <= 0 {
 				c.Continuation.MaxContinuations = DefaultMaxContinuations
 			}
+			if c.Continuation.MaxIdleTurns <= 0 {
+				c.Continuation.MaxIdleTurns = DefaultMaxIdleTurns
+			}
 			hasInitialPrompt := c.Initial != nil && (c.Initial.Prompt != "" || c.Initial.PromptFile != "")
 			if !hasInitialPrompt {
 				return errors.New("continuation requires an initial prompt/prompt_file — it extends the initial coordinator turn")

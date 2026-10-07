@@ -18,6 +18,7 @@
     "dist/views.js",
     "dist/providers.js",
     "dist/design.js",
+    "dist/workspace.css",
     "dist/chunks/",
     "README.md"
   ],
@@ -25,10 +26,11 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./styles.css": "./dist/workspace.css"
   },
   "scripts": {
-    "build": "vite build && node scripts/bundle-dts.mjs",
+    "build": "vite build && node scripts/scope-stylesheet.mjs && node scripts/bundle-dts.mjs",
     "type-check": "tsc --noEmit && tsc --noEmit -p tsconfig.build.json"
   },
   "devDependencies": {

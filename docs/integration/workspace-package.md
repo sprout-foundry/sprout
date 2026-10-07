@@ -77,6 +77,55 @@ React and React DOM are peer dependencies; the host provides them. Heavy
 parts (the editor, the in-browser agent, space-specific code) load when a
 space opens, not when the package is imported.
 
+## Styles
+
+The workspace's styles are one stylesheet the package ships and declares:
+
+```tsx
+import "@sprout-foundry/workspace/styles.css";
+```
+
+It is emitted at `dist/workspace.css` and reachable through the package's
+`exports` map (`"./styles.css": "./dist/workspace.css"`); no other `.css`
+file is emitted, so a host imports exactly one stylesheet. Import it once,
+before mounting; it is static CSS with no runtime dependency.
+
+**Scoped to the workspace root.** The stylesheet is scoped to the
+`.sprout-workspace` class that `SproutWorkspace`'s root element carries, so
+it cannot style the host page outside the mounted workspace: there is no
+top-level `:root`, `html`, `body` or `*` selector in the artifact. The
+workspace's token declarations are re-scoped onto that root class rather
+than `:root`, so a host's own token block is never overwritten by loading
+this stylesheet; the light-theme guards are re-scoped to
+`.sprout-workspace[data-theme="light"]`, and the workspace root carries the
+resolved `data-theme` so those guards stay live.
+
+**Consuming the design tokens.** The stylesheet styles every surface through
+`var(--token)` custom properties (the color, space, type, radius and shadow
+tokens). The token set is owned by `@sprout-foundry/design`; a host imports
+it itself:
+
+```tsx
+import "@sprout-foundry/design/tokens.css"; // and, optionally, /reset.css
+import "@sprout-foundry/workspace/styles.css";
+```
+
+The package deliberately does **not** `@import` `@sprout-foundry/design`
+from its stylesheet, and declares no dependency on it. A host that imports
+the design tokens (above) gets the token values on the document root as
+usual — that is the intended path, and the workspace's own token
+declarations are scoped to the workspace root precisely so they do not
+override the host's. A host that does _not_ import the design package can
+still load the workspace's stylesheet, but every `var(--token)` then resolves
+to the component CSS's own literal fallbacks rather than the designed values,
+so importing the tokens is recommended. A host that themes Sprout live does
+so through `SproutHost.theme`, whose values land on the workspace root —
+importing a stylesheet could not observe that anyway. `@sprout-foundry/design`
+is therefore an optional, host-supplied companion (not a dependency of this
+package); the token _consumption_ is the `var(--token)` references, which is
+the contract. Moving the web UI's own token declarations into
+`@sprout-foundry/design` is separate work.
+
 ## Publishing (maintainers)
 
 Publishing runs in GitHub Actions on a version tag that matches

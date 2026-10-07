@@ -8,6 +8,9 @@ on:
   # the same gates as PRs targeting main.
   pull_request:
   workflow_dispatch:
+  # Nightly run carries the Windows lane (see test-windows).
+  schedule:
+    - cron: '0 7 * * *'
 
 # pull-requests: read lets golangci-lint-action diff new-issue detection
 # against the PR base via the GitHub API.
@@ -89,26 +92,6 @@ jobs:
       if: runner.os == 'macOS' && runner.arch == 'ARM64'
       run: brew install mlx-c
 
-    - name: Run go vet
-      run: make vet
-
-    - name: Check gofmt
-      run: make fmt-check
-
-    - name: Lint Go (new code only)
-      # New-code gate: the repo predates golangci-lint, so a full-repo gate
-      # would block every PR on the historical backlog (431 findings as of
-      # 2026-09-19, see `make lint-go`). only-new-issues diffs against the
-      # PR base or the push range. Needs a full fetch for accurate diffs
-      # and pull-requests: read for the GitHub-API diff path.
-      uses: golangci/golangci-lint-action@v9
-      with:
-        # v2.13.2: prebuilt binaries must be built with a Go version >= the
-        # repo's toolchain (go.mod: 1.26.6). v2.5.0 shipped go1.25 builds and
-        # exits with "language version lower than targeted" on every run.
-        version: v2.13.2
-        only-new-issues: true
-
     - name: Set up Node.js
       uses: actions/setup-node@v5
       with:
@@ -127,22 +110,8 @@ jobs:
         npm run build -w @sprout/events
         npm run build -w @sprout/ui
 
-    - name: Lint frontend
-      run: make lint
-
-    - name: Check for duplicate components (SP-039 enforcement)
-      run: bash scripts/check-no-duplicate-components.sh
-
     - name: Run full build pipeline (make build-all)
       run: make build-all
-
-    - name: Run webui unit tests (vitest)
-      continue-on-error: true
-      run: npx vitest run --reporter=verbose
-      working-directory: webui
-      env:
-        CI: "true"
-        VITEST_MAX_FORKS: "2"
 
     - name: Commit updated UI assets
       run: |
@@ -165,7 +134,8 @@ jobs:
       continue-on-error: ${{ runner.os == 'Windows' }}
       env:
         CI: "true"
-        TEST_P: "1"
+        # Two packages at a time: -p 1 left most of the runner idle.
+        TEST_P: "2"
         TEST_PARALLEL: "2"
         TEST_RACE: ""
         TEST_COVER: ${{ runner.os == 'Windows' && 'no' || '' }}
@@ -246,6 +216,76 @@ jobs:
     - name: Run smoke tests
       run: make test-smoke
 
+  # Lint and web UI tests run beside the Go test matrix instead of inside
+  # it, so the matrix only carries what is OS-specific (build + Go tests).
+  lint:
+    name: Lint and Web UI Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+      with:
+        # Full history so golangci-lint's only-new-issues diff is accurate.
+        fetch-depth: 0
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: 1.26
+
+    - name: Install dependencies
+      run: go mod download
+
+    - name: Run go vet
+      run: make vet
+
+    - name: Check gofmt
+      run: make fmt-check
+
+    - name: Lint Go (new code only)
+      # New-code gate: the repo predates golangci-lint, so a full-repo gate
+      # would block every PR on the historical backlog (431 findings as of
+      # 2026-09-19, see `make lint-go`). only-new-issues diffs against the
+      # PR base or the push range. Needs a full fetch for accurate diffs
+      # and pull-requests: read for the GitHub-API diff path.
+      uses: golangci/golangci-lint-action@v9
+      with:
+        # v2.13.2: prebuilt binaries must be built with a Go version >= the
+        # repo's toolchain (go.mod: 1.26.6). v2.5.0 shipped go1.25 builds and
+        # exits with "language version lower than targeted" on every run.
+        version: v2.13.2
+        only-new-issues: true
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v5
+      with:
+        node-version: '22'
+
+    - name: Install Node.js dependencies (root workspaces)
+      run: npm ci
+
+    - name: Build shared workspace packages
+      run: |
+        npm run build -w @sprout/events
+        npm run build -w @sprout/ui
+
+    - name: Lint frontend
+      run: make lint
+
+    - name: Check for duplicate components (SP-039 enforcement)
+      run: bash scripts/check-no-duplicate-components.sh
+
+    - name: Run webui unit tests (vitest)
+      continue-on-error: true
+      run: npx vitest run --reporter=verbose
+      working-directory: webui
+      env:
+        CI: "true"
+        VITEST_MAX_FORKS: "2"
+
   # Windows test lane — same suite as `test`, running OUT OF the release
   # critical path. Its instrumented coverage run took 41 min on
   # windows-latest (3x ubuntu) and gated every push; here it runs beside
@@ -256,6 +296,9 @@ jobs:
   # job must succeed for the run to be green.
   test-windows:
     name: Run Tests (Windows)
+    # Nightly and manual only: the step is continue-on-error, so on every push
+    # it gated nothing while holding the run open for ~45 minutes.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     defaults:
       run:
@@ -373,7 +416,7 @@ jobs:
 
   build:
     name: Build Binaries
-    needs: test
+    needs: [test, lint]
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:

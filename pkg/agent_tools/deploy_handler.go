@@ -43,10 +43,13 @@ import (
 )
 
 // deployTargetFor resolves a deploy target id to a deploy.DeployTarget under
-// a project root. It is the adapter seam, mirroring cmd/deploy.go's
-// deployTargetFor: the real hosting adapter plugs in here later, and a test
-// swaps in its own target without constructing an agent. Guarded by
-// ToolFuncMu like the other package-level seams.
+// a project root. The id is the vendor id (the tool's target argument when
+// set, else the config's target), qualified with the manifest's deploy_target
+// shape when the vendor is Cloudflare (e.g. "cloudflare/pages"). It is the
+// adapter seam, mirroring cmd/deploy.go's deployTargetFor: the real hosting
+// adapter plugs in here later, and a test swaps in its own target without
+// constructing an agent. Guarded by ToolFuncMu like the other package-level
+// seams.
 var deployTargetFor func(root, targetID string) (deploy.DeployTarget, error)
 
 // deployBuildRunner is the build seam handed to deploy.Deployer. Nil uses the
@@ -69,7 +72,9 @@ var deployFakeTargets = struct {
 
 // defaultDeployTargetFor is the interim adapter for the "fake" target id (and
 // an empty id): an in-process deploy.FakeTarget, cached per root so history
-// survives between tool calls. Every other id fails actionably rather than
+// survives between tool calls. Every other id — including the
+// manifest-qualified "cloudflare/pages" and "cloudflare/workers" the real
+// adapter will resolve in a later milestone — fails actionably rather than
 // silently doing nothing, mirroring the CLI's default.
 func defaultDeployTargetFor(root, targetID string) (deploy.DeployTarget, error) {
 	switch strings.TrimSpace(targetID) {
@@ -225,17 +230,60 @@ func loadDeploySubject(env ToolEnv, args map[string]any) (deploySubject, error) 
 	}
 
 	targetID, _ := extractString(args, "target")
-	if strings.TrimSpace(targetID) == "" {
-		targetID = cfg.Target
+	targetID = strings.TrimSpace(targetID)
+	if targetID == "" {
+		targetID = strings.TrimSpace(cfg.Target)
 	}
+	// resolved.Target is the vendor id shown to the user (e.g. in the
+	// production approval prompt), not the manifest-qualified adapter id: a
+	// target argument is the vendor (e.g. "cloudflare" or "fake").
 	resolved.Target = targetID
 
-	target, err := resolveDeployTargetFor()(root, targetID)
+	adapterID, err := defaultAdapterID(root, targetID)
+	if err != nil {
+		return deploySubject{}, err
+	}
+
+	target, err := resolveDeployTargetFor()(root, adapterID)
 	if err != nil {
 		return deploySubject{}, err
 	}
 
 	return deploySubject{root: root, cfg: cfg, resolved: resolved, target: target}, nil
+}
+
+// deployCloudflareVendor is the deploy config target id whose Pages-vs-Workers
+// shape the starter manifest selects.
+const deployCloudflareVendor = "cloudflare"
+
+// defaultAdapterID is the adapter id handed to the target seam: the vendor id
+// (the tool's target argument when set, else the config's target) qualified
+// with the manifest's deploy_target shape when that vendor is Cloudflare.
+//
+// Resolution order (an explicit target argument overrides everything):
+//
+//   - target argument set: it names the adapter directly (e.g. "fake"). It
+//     wins over the config; within the Cloudflare vendor the manifest still
+//     picks the shape because the vendor is qualified below.
+//   - otherwise the config's target names the vendor.
+//   - when the vendor is "cloudflare", the starter manifest's deploy_target
+//     picks the shape (default "pages").
+//
+// A missing starter manifest means the default shape (pages), mirroring the
+// CLI: a project can hand-author its deploy config without one.
+func defaultAdapterID(root, vendor string) (string, error) {
+	vendor = strings.TrimSpace(vendor)
+	if vendor != deployCloudflareVendor {
+		return vendor, nil
+	}
+	m, err := starterstore.LoadStarterManifest(root)
+	if err != nil {
+		if errors.Is(err, starterstore.ErrNoManifest) {
+			return vendor + "/" + deploy.DeployTargetPages, nil
+		}
+		return "", err
+	}
+	return vendor + "/" + deploy.NormalizeDeployTarget(m.DeployTarget), nil
 }
 
 // emitDeployProgress publishes a progress event for a deploy outcome

@@ -37,6 +37,17 @@ const (
 // maxDevPort is the highest port number a dev server can listen on.
 const maxDevPort = 65535
 
+// Deploy target values for StarterManifest.DeployTarget: the two Cloudflare
+// shapes a starter's build output fits. The manifest declares which one the
+// project needs; an empty value means DeployTargetPages.
+const (
+	// DeployTargetPages is a static build output hosted on Cloudflare Pages.
+	DeployTargetPages = "pages"
+	// DeployTargetWorkers is a server-side build output hosted on
+	// Cloudflare Workers.
+	DeployTargetWorkers = "workers"
+)
+
 // StarterRef identifies the starter a project carries: the starter id and
 // the version of the starter tree it was instantiated from. The version is
 // the key for starter upgrades: when a project's manifest names an
@@ -110,6 +121,14 @@ type StarterManifest struct {
 	// in (e.g. "dist"); deploys take their build output from here.
 	// Optional: absent when the project has no static build output.
 	BuildOutput string `json:"build_output,omitempty"`
+
+	// DeployTarget is the deploy shape the project's build output fits:
+	// "pages" for static output or "workers" for server-side code. Optional:
+	// an absent (or empty) value means "pages". A present value must be
+	// exactly "pages" or "workers" (lowercase). It is the single source of
+	// the Pages-vs-Workers choice within a deploy target vendor (e.g.
+	// "cloudflare"); an explicit target override still wins.
+	DeployTarget string `json:"deploy_target,omitempty"`
 }
 
 // New returns a starter manifest ready to be filled in: the starter id and

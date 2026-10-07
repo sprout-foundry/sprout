@@ -17,7 +17,7 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -123,6 +123,34 @@ describe("the package build emits content-hashed WASM", () => {
     assert.ok(
       existsSync(join(distWasmDir, WASM_MANIFEST_FILE)),
       "the manifest is emitted",
+    );
+  });
+
+  test("the package emits the hashed assets only — no fixed-name duplicate", () => {
+    // The package is ~62 MB of WASM; shipping a fixed-name copy alongside the
+    // hashed one would double the installed payload for no benefit, because a
+    // host serving dist/wasm/ always has the manifest and the loader resolves
+    // the hashed name from it. Assert the directory is exactly the manifest
+    // plus the two hashed assets, and that no `sprout.wasm`/`wasm_exec.js`
+    // fixed-name copy survives (including one an earlier build left behind).
+    const distWasmDir = join(__dirname, "..", "dist", "wasm");
+    const emitted = readdirSync(distWasmDir);
+    assert.ok(
+      !emitted.includes("sprout.wasm"),
+      "the package must not ship a fixed-name sprout.wasm",
+    );
+    assert.ok(
+      !emitted.includes("wasm_exec.js"),
+      "the package must not ship a fixed-name wasm_exec.js",
+    );
+    assert.deepEqual(
+      [...emitted].sort(),
+      [
+        WASM_MANIFEST_FILE,
+        emittedWasmFile("sprout.wasm"),
+        emittedWasmFile("wasm_exec.js"),
+      ].sort(),
+      "dist/wasm/ is exactly the manifest plus the two hashed assets",
     );
   });
 

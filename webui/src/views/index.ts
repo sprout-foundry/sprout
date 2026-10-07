@@ -133,3 +133,15 @@ export type {
 // surface.
 export { SproutProviders } from '../providers/index';
 export type { SproutProvidersProps } from '../providers/index';
+
+// SproutWorkspace — one component that mounts one project's workspace: the
+// host contract, the provider stack and one registered space, behind the
+// props a host holds. It is the composition the app root performs, exposed so
+// an embedding host does not assemble a workspace from internals.
+export { SproutWorkspace } from './SproutWorkspace';
+export type { SproutWorkspaceProps, SproutProject } from './SproutWorkspace';
+
+// The space shell contract a host supplies through SproutWorkspace's
+// `shellProps` (the data the app root assembles today), so mounting a space's
+// registered shell is typed from this one entry point.
+export type { WorkspaceShellProps } from '../workspaces/shell';

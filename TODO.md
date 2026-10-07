@@ -120,7 +120,7 @@ standalone local build keeps embedding into `pkg/webui/static`.
 - [x] **ws.2** `SproutProviders`: one wrapper for the provider stack the
       views need (extracted from the app root), exported from the package;
       the local app uses it. Vitest. Spec: SP-160 §160a.
-- [ ] **ws.3** `SproutWorkspace`: mounts one project's workspace with props
+- [x] **ws.3** `SproutWorkspace`: mounts one project's workspace with props
       `project`, `space` (from the SP-155 registry), `host` (§160b),
       optional `layout` (SP-155 arrangement) and `onSpaceChange`; exported
       with the registered spaces and the individual views

@@ -93,7 +93,7 @@ checkboxes.
       vitest that scans `webui/src`) that fails if any module outside
       `webui/src/host/` reads the build mode, `appMode`, or names a host.
       Spec: SP-160 Acceptance criteria 1.
-- [ ] **host.9** Example host (test only): extend
+- [x] **host.9** Example host (test only): extend
       `webui/src/views/ExampleEmbedding.tsx` (or a sibling under
       `webui/src/host/example/`) into a minimal host with its own chrome and
       theme that mounts two spaces, receives a notification and a

@@ -201,7 +201,7 @@ standalone local build keeps embedding into `pkg/webui/static`.
       the published `package.json`, no React internals in `dist/`, and
       `npm pack --dry-run` lists only the allowlisted files. Spec:
       SP-160 §160a, §160e.
-- [ ] **ws.7c** Self-contained type declarations: `scripts/bundle-dts.mjs`
+- [x] **ws.7c** Self-contained type declarations: `scripts/bundle-dts.mjs`
       rewrites the web UI imports in the emitted `.d.ts` to a
       `@sprout-foundry/workspace-webui/...` namespace that does not exist,
       and `dist/chunks/declarations/` keeps `../../../webui/src/...`

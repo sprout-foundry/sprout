@@ -36,6 +36,7 @@
     "type-check": "tsc --noEmit && tsc --noEmit -p tsconfig.build.json"
   },
   "devDependencies": {
+    "@microsoft/api-extractor": "^7.58.7",
     "@sprout/events": "file:../events",
     "@sprout/ui": "file:../ui",
     "@types/react": "^18.2.0",

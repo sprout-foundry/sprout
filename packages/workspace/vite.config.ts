@@ -1,14 +1,14 @@
 import { defineConfig } from "vite";
-import dts from "vite-plugin-dts";
 import { resolve } from "path";
 
 /**
  * Library build for `@sprout-foundry/workspace`.
  *
- * ESM only, code-split, with declaration files. The scaffold surfaces one
- * static entry (`src/index.js`); the heavy views are the entry points a host
- * loads when a space opens, so each becomes its own chunk instead of being
- * folded into the entry:
+ * ESM only, code-split. The type declarations are rolled up separately by
+ * `scripts/bundle-dts.mjs` (API Extractor), which emits the single
+ * self-contained `dist/index.d.ts`; the Vite build itself emits no `.d.ts`
+ * (a per-module emit would keep `../../../webui/src/...` import specifiers
+ * out of the package, which a host cannot resolve).
  *
  *   - `index` — the host contract and the space registry.
  *   - `views` — the views entry point (chat, agent changes, files, preview,
@@ -22,13 +22,7 @@ import { resolve } from "path";
  * a second entry chunk by looking at what it pulls in.
  */
 export default defineConfig({
-  plugins: [
-    dts({
-      include: ["src/**/*"],
-      outDirs: "dist",
-      tsconfigPath: "./tsconfig.build.json",
-    }),
-  ],
+  plugins: [],
   resolve: {
     // The workspace bundles `@sprout/ui` (its host modules import the
     // notification bus from it). Resolve the package to its source barrel,

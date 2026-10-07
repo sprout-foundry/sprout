@@ -20,7 +20,8 @@ import StatusBar from '../components/StatusBar';
 import Terminal from '../components/Terminal';
 import type { WorkspaceShellProps } from './shell';
 import { isLayeredLayout } from '../config/layout';
-import { isCloud, supportsAgentChanges } from '../config/mode';
+import { isCloud } from '../config/mode';
+import { useHostCapabilities } from '../host';
 import { useActiveRepoURL } from '../services/activeRepo';
 import { repoSlug } from '../utils/platformUrl';
 
@@ -50,6 +51,7 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
   chat,
   git,
 }) => {
+  const { agentChanges: supportsAgentChanges } = useHostCapabilities();
   const {
     perChatCache,
     activeChatId,

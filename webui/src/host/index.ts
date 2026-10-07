@@ -22,6 +22,8 @@ export type {
 export { HostContext, HostProvider, headlessHost };
 export type { HostProviderProps } from './HostProvider';
 export { useHost } from './useHost';
+export { useHostCapabilities } from './useHostCapabilities';
+export { getActiveHost, setActiveHost } from './accessor';
 export { localHost } from './localHost';
 export { cloudHost } from './cloudHost';
 

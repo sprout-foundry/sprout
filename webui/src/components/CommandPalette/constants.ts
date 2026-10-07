@@ -1,4 +1,5 @@
-import { supportsLocalTerminal } from '../../config/mode';
+import { capability } from '../../config/mode';
+import { getActiveHost } from '../../host';
 import type { CommandDef } from './CommandPalette';
 
 // ── Command definitions ────────────────────────────────────────────────────
@@ -57,11 +58,14 @@ export const COMMAND_DEFINITIONS: CommandDef[] = [
   { id: 'editor_goto_symbol', label: 'Go to Symbol in File', category: 'Editor' },
 ];
 
-// Terminal commands are filtered at USE time, not module scope: mode.ts
-// capability flags are live bindings that refresh when the adapter installs
-// (after module load), so a module-scope filter here would freeze the
-// boot-time default for the session.
+// Terminal commands are filtered at USE time, not module scope: the capability
+// comes from the active host (set once at startup by the entry point), so a
+// module-scope filter here would freeze the boot-time value for the session.
+// A plain function (no React render context) reads it through the non-React
+// host accessor, falling back to the mode/adapter default when no host is set.
 export function visibleCommands(): CommandDef[] {
+  const supportsLocalTerminal =
+    getActiveHost()?.capabilities.localTerminal ?? capability('supportsLocalTerminal', true, false);
   return COMMAND_DEFINITIONS.filter((cmd) => {
     if (!supportsLocalTerminal && (cmd.id === 'split_terminal_vertical' || cmd.id === 'split_terminal_horizontal')) {
       return false;

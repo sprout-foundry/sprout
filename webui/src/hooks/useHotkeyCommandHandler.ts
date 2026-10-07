@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { showThemedConfirm } from '../components/ThemedDialog';
-import { supportsLocalTerminal } from '../config/mode';
+import { useHostCapabilities } from '../host';
 import { clearLayoutSnapshot } from '../services/layoutPersistence';
 import type { EditorBuffer } from '../types/editor';
 
@@ -73,6 +73,7 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
     activePaneId,
     buffers,
   } = options;
+  const { localTerminal: supportsLocalTerminal } = useHostCapabilities();
 
   // Keep ref to buffers to avoid recreating the effect on every keystroke
   const buffersRef = useRef<Map<string, EditorBuffer>>(buffers);

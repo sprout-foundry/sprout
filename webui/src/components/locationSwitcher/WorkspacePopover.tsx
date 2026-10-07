@@ -1,6 +1,6 @@
 import { FolderOpen, RefreshCw, Loader2 } from 'lucide-react';
 import React from 'react';
-import { supportsInstances } from '../../config/mode';
+import { useHostCapabilities } from '../../host';
 import type { SproutInstance } from '../../services/api';
 import { normalizePath } from './pathUtils';
 import type { WorkspaceDirectory, SwitchingState, SSHFailureState, RemoteWorkspaceContext } from './types';
@@ -80,6 +80,7 @@ export const WorkspacePopover: React.FC<WorkspacePopoverProps> = ({
   isSwitchingInstance = false,
   onInstanceChange,
 }) => {
+  const { instances: supportsInstances } = useHostCapabilities();
   return (
     <div
       ref={popoverRef}

@@ -12,7 +12,8 @@ import type { EventsProvider } from '@sprout/events';
 import { useEffect } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { fetchRuntimeConfig, getBootstrapUser } from '../bootstrapAdapter';
-import { isCloud, supportsWorkspaceSwitching } from '../config/mode';
+import { isCloud } from '../config/mode';
+import { useHostCapabilities } from '../host';
 import type { AppStoreSetState } from '../contexts/AppStore';
 import { ApiService } from '../services/api';
 import type { StatsResponse, FilesResponse } from '../services/api';
@@ -63,6 +64,7 @@ export function useAppInitialization({
   setState,
   handleReconnect,
 }: UseAppInitializationOptions): void {
+  const { workspaceSwitching: supportsWorkspaceSwitching } = useHostCapabilities();
   const log = useLog();
   const apiService = ApiService.getInstance();
 

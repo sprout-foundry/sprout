@@ -1,0 +1,58 @@
+{
+  "id": "add-robots-txt",
+  "request": "The built site has no robots.txt, so crawlers get a 404 for /robots.txt and have no explicit signal about how to index the site. Add a public/robots.txt that allows all crawlers and points them at the site root, so it is copied verbatim into the build output. Make sure the site still builds and the pages still render.",
+  "starter": "static-site",
+  "plan": {
+    "version": 1,
+    "revision": 1,
+    "created": "2026-10-02T09:00:00Z",
+    "updated": "2026-10-02T09:00:00Z",
+    "goal": "Serve a robots.txt so crawlers have an explicit indexing policy instead of a 404.",
+    "scope": [
+      {
+        "id": "robots-txt",
+        "title": "A robots.txt in public/",
+        "description": "Add public/robots.txt with a permissive policy for all user agents and a Sitemap or Host line pointing at the site root. Files under public/ are copied verbatim into the build output, so it will be served at /robots.txt."
+      }
+    ],
+    "steps": [
+      {
+        "scope": "robots-txt",
+        "description": "Create public/robots.txt containing a User-agent: * / Allow: / block."
+      },
+      {
+        "scope": "robots-txt",
+        "description": "Add a line pointing crawlers at the site root so the policy is self-describing."
+      },
+      {
+        "scope": "robots-txt",
+        "description": "Build the site and confirm dist/robots.txt is emitted and the existing pages still render."
+      }
+    ],
+    "starter": "static-site",
+    "acceptance": [
+      {
+        "id": "build-passes",
+        "scope": "robots-txt",
+        "check": "npm run build",
+        "kind": "build"
+      },
+      {
+        "id": "home-page-renders",
+        "scope": "robots-txt",
+        "check": "/",
+        "kind": "page"
+      }
+    ],
+    "out_of_scope": [
+      {
+        "item": "Generating a full sitemap of every route",
+        "reason": "A sitemap is a separate artifact with its own generator; a static robots.txt only needs to state the indexing policy."
+      },
+      {
+        "item": "Per-crawler rules or crawl-delay tuning",
+        "reason": "The site has no crawling constraints to encode, so a single permissive policy block covers it."
+      }
+    ]
+  }
+}

@@ -128,6 +128,115 @@ func TestLoadSuiteCommitted(t *testing.T) {
 	}
 }
 
+// TestLoadSuiteStaticSite loads the committed task suite and pins the
+// static-site tasks: the suite root loads cleanly, the committed tasks are
+// exactly the ones below (falsifiable — a renamed, added, or removed file
+// fails the test), every one names static-site as its starter, and each
+// frozen plan validates. A second load returns the same tasks in the same
+// order, pinning the loader's determinism.
+func TestLoadSuiteStaticSite(t *testing.T) {
+	suiteDir := filepath.Join(repoRoot(t), "benchmarks", "tasks")
+	tasks, err := LoadSuite(suiteDir)
+	if err != nil {
+		t.Fatalf("LoadSuite(%s): %v", suiteDir, err)
+	}
+
+	wantIDs := []string{
+		"add-about-section",
+		"add-footer-link",
+		"add-form-field",
+		"add-page",
+		"add-robots-txt",
+	}
+
+	var gotIDs []string
+	for _, task := range tasks {
+		if task.Starter != "static-site" {
+			continue
+		}
+		gotIDs = append(gotIDs, task.ID)
+		if err := plancontract.Validate(&task.Plan); err != nil {
+			t.Errorf("task %q frozen plan does not validate: %v", task.ID, err)
+		}
+		if task.Plan.Starter != task.Starter {
+			t.Errorf("task %q plan starter %q disagrees with task starter %q",
+				task.ID, task.Plan.Starter, task.Starter)
+		}
+	}
+	if !slices.Equal(gotIDs, wantIDs) {
+		t.Fatalf("static-site task ids = %v, want %v (the committed tasks, in suite order)", gotIDs, wantIDs)
+	}
+
+	again, err := LoadSuite(suiteDir)
+	if err != nil {
+		t.Fatalf("LoadSuite(%s) (second load): %v", suiteDir, err)
+	}
+	if len(again) != len(tasks) {
+		t.Fatalf("second load returned %d task(s), first returned %d (loader must be deterministic)",
+			len(again), len(tasks))
+	}
+	for i := range tasks {
+		if tasks[i].Starter != again[i].Starter || tasks[i].ID != again[i].ID {
+			t.Errorf("load order differs at index %d: %q/%q then %q/%q",
+				i, tasks[i].Starter, tasks[i].ID, again[i].Starter, again[i].ID)
+		}
+	}
+}
+
+// TestStaticSiteTasksPinToStarterCatalogue is the static-site coherence
+// pin: the committed static-site tasks resolve against the embedded starter
+// catalogue, and every task's acceptance uses checks the verification
+// runner can run from that starter's manifest — the build command, one of
+// its routes, or its test command.
+func TestStaticSiteTasksPinToStarterCatalogue(t *testing.T) {
+	tasks, err := LoadSuite(filepath.Join(repoRoot(t), "benchmarks", "tasks"))
+	if err != nil {
+		t.Fatalf("LoadSuite: %v", err)
+	}
+	m, err := starters.Manifest("static-site")
+	if err != nil {
+		t.Fatalf("starters.Manifest(%q): %v", "static-site", err)
+	}
+	if m.Starter.ID != "static-site" {
+		t.Errorf("catalogue starter id = %q, want static-site", m.Starter.ID)
+	}
+
+	routes := make(map[string]bool, len(m.Routes))
+	for _, r := range m.Routes {
+		routes[r] = true
+	}
+
+	matched := 0
+	for _, task := range tasks {
+		if task.Starter != "static-site" {
+			continue
+		}
+		matched++
+		for _, a := range task.Plan.Acceptance {
+			switch a.Kind {
+			case plancontract.KindBuild:
+				if a.Check != m.Build {
+					t.Errorf("task %q acceptance %q build check = %q, want the manifest build command %q",
+						task.ID, a.ID, a.Check, m.Build)
+				}
+			case plancontract.KindTest:
+				if a.Check != m.Test {
+					t.Errorf("task %q acceptance %q test check = %q, want the manifest test command %q",
+						task.ID, a.ID, a.Check, m.Test)
+				}
+			case plancontract.KindPage:
+				if !routes[a.Check] {
+					t.Errorf("task %q acceptance %q page check = %q, want one of the manifest routes %v",
+						task.ID, a.ID, a.Check, m.Routes)
+				}
+			}
+		}
+	}
+	if matched == 0 {
+		t.Fatal("no static-site tasks loaded; the catalogue pin asserted nothing")
+	}
+}
+
 // TestTaskRoundTripStability proves the frozen format is stable: a marshal
 // cycle of the committed fixture reproduces the same task, byte for byte.
 // The fixture uses second-granularity UTC timestamps so the time.Time JSON

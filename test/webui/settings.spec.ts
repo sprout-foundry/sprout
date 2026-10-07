@@ -93,9 +93,28 @@ async function reopenSettingsAfterReload() {
   });
 }
 
+/** Open the settings panel if it is not already open. Self-healing: a
+ *  WebSocket reconnect or a navigation from an earlier test in this serial
+ *  spec can close the panel; instead of inheriting that state and failing
+ *  40 tests deep, re-drive the open flow and wait for the panel. */
+async function ensureSettingsOpen() {
+  const panel = page.getByTestId(TESTIDS["settings-panel"]);
+  const visible = await panel.isVisible().catch(() => false);
+  if (visible) return;
+  await page.goto(vite.url, { waitUntil: "domcontentloaded" });
+  await expect(page.getByTestId(TESTIDS["chat-shell"])).toBeVisible({
+    timeout: 30_000,
+  });
+  const settingsToggle = page.getByTestId(TESTIDS["sidebar-settings-toggle"]);
+  await expect(settingsToggle).toBeVisible({ timeout: 15_000 });
+  await settingsToggle.click();
+  await expect(panel).toBeVisible({ timeout: 15_000 });
+}
+
 /** Expand a section by its label text. Matches the section whose header label
  *  exactly matches, avoiding false positives from hasText on subtree content. */
 async function expandSection(label: string) {
+  await ensureSettingsOpen();
   const section = sectionByLabel(label);
   await expect(section).toBeVisible({ timeout: 10_000 });
   const isExpanded = await section.evaluate((el) =>
@@ -118,12 +137,22 @@ function sectionByLabel(label: string) {
     .first();
 }
 
-/** Click a subsection tab and wait for content. */
+/** Click a subsection tab and wait for content. Self-heals: if the tab is
+ *  not visible (panel closed by an earlier test in this serial spec),
+ *  re-open the panel and retry once before failing. */
 async function clickSubsectionTab(testidKey: string) {
-  const tab = page.getByTestId(TESTIDS[testidKey]);
-  await expect(tab).toBeVisible({ timeout: 10_000 });
-  await tab.click();
-  await page.waitForTimeout(300);
+  const clickOnce = async () => {
+    const tab = page.getByTestId(TESTIDS[testidKey]);
+    await expect(tab).toBeVisible({ timeout: 10_000 });
+    await tab.click();
+    await page.waitForTimeout(300);
+  };
+  try {
+    await clickOnce();
+  } catch {
+    await ensureSettingsOpen();
+    await clickOnce();
+  }
 }
 
 // ---------------------------------------------------------------------------

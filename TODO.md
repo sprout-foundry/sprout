@@ -483,7 +483,7 @@ passes the manifest validator (`pkg/startermanifest`).
       with state and a test; React Router and hooks patterns to use and
       avoid; known failure modes (stale closures, effects for derived
       state, router API version mix-ups). Spec: SP-153 §153c.
-- [ ] **153.14** Starter `web-app-data` (the web app + Hono API on Workers
+- [x] **153.14** Starter `web-app-data` (the web app + Hono API on Workers
       + D1 via Drizzle): `wrangler.toml` serving the built app as static
       assets with the API under `/api/*`, one Drizzle table with a
       migration applied by `wrangler d1 migrations`, one API route reading

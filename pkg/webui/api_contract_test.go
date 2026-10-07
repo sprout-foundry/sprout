@@ -467,6 +467,7 @@ func TestUndocumentedAllowlistIsWebSocketStreamingInternalOnly(t *testing.T) {
 		"/debug/goroutines",
 		"/favicon.ico",
 		"/health",
+		"/editor.html",
 		"/icon-192.png",
 		"/icon-512.png",
 		"/logo-mark.svg",
@@ -475,6 +476,8 @@ func TestUndocumentedAllowlistIsWebSocketStreamingInternalOnly(t *testing.T) {
 		"/static/",
 		"/sw.js",
 		"/terminal",
+		"/terminal.html",
+		"/wasm/",
 		"/ws",
 	}
 

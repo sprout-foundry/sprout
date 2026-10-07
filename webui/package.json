@@ -42,6 +42,7 @@
     "@isomorphic-git/lightning-fs": "^4.6.2",
     "@lezer/go": "^1.0.1",
     "@replit/codemirror-minimap": "^0.5.2",
+    "@sprout-foundry/design": "file:../packages/design",
     "@sprout-foundry/workspace": "file:../packages/workspace",
     "@sprout/events": "file:../packages/events",
     "@sprout/ui": "file:../packages/ui",

@@ -2,9 +2,10 @@
  * host.7 — the theme follows `host.theme` live.
  *
  * (d) A host-provided `theme.mode` (light/dark) selects the applied mode and
- *     pack; `theme.tokens` are applied to the document root; `'system'` follows
- *     the OS media query; and a host with no theme leaves the localStorage-driven
- *     pack selection intact (regression guard).
+ *     pack; `theme.tokens` are NOT applied to the document root (they are
+ *     scoped to the workspace root — see `hostThemeScope.test.tsx`); `'system'`
+ *     follows the OS media query; and a host with no theme leaves the
+ *     localStorage-driven pack selection intact (regression guard).
  *
  * The theme modules read the active host through a module singleton, so each
  * case re-imports them after `vi.resetModules()` for a clean slate.
@@ -71,14 +72,19 @@ describe('host theme drives the applied mode', () => {
     expect(document.documentElement.style.getPropertyValue('--bg-primary')).toBe('#282c34');
   });
 
-  it('merges host-provided tokens over the resolved pack', async () => {
+  it('does not merge host-provided tokens onto the document root (they are scoped to the workspace root)', async () => {
     const { ThemeProvider, accessor } = await loadTheme();
     useThemeRef = (await import('./ThemeContext')).useTheme;
     accessor.setActiveHost(hostWithTheme({ mode: 'dark', tokens: { '--bg-primary': '#123456' } }));
 
     render(createElement(ThemeProvider as never, null, createElement(Probe)));
 
-    expect(document.documentElement.style.getPropertyValue('--bg-primary')).toBe('#123456');
+    // The host's token overrides are applied on the workspace root
+    // (SproutWorkspace), never on documentElement — a documentElement override
+    // would restyle the host page outside the mounted workspace. The root keeps
+    // the resolved pack's value.
+    expect(document.documentElement.style.getPropertyValue('--bg-primary')).toBe('#282c34');
+    expect(document.documentElement.style.getPropertyValue('--bg-primary')).not.toBe('#123456');
   });
 
   it('follows the OS media query when the host mode is system', async () => {

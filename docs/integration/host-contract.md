@@ -135,7 +135,49 @@ observation.
 - `mode?: 'light' | 'dark' | 'system'` — the preferred color mode; `'system'`
   follows the OS/browser setting live.
 - `tokens?: Record<string, string>` — design-token overrides as
-  `{ tokenName: value }`. Sprout applies them live inside the workspace root.
+  `{ tokenName: value }`. Sprout applies them live **inside the workspace
+  root** (see the token-name mapping below).
+
+#### Token names
+
+The token names are the `@sprout-foundry/design` package's token names
+(`packages/design/tokens.css`), which is also the web UI's single source of
+truth for its own tokens: the web UI imports the package's
+`@sprout-foundry/design/tokens.css` from its entry stylesheet
+(`webui/src/index.css`). A host does not import the package to theme Sprout —
+it passes values through `theme.tokens` — but the names it overrides are the
+package's, so the set a host can target is exactly what
+`packages/design/tokens.css` declares.
+
+| Group | Names (examples) | What they govern |
+|-------|------------------|------------------|
+| Backgrounds | `--bg-primary`, `--bg-secondary`, `--bg-tertiary`, `--bg-elevated`, `--bg-surface`, `--bg-hover`, `--bg-input` | Page, panel and control surfaces |
+| Borders | `--border-subtle`, `--border-default`, `--border-strong`, `--border-focus` | Dividers, outlines, focus rings |
+| Text | `--text-primary`, `--text-secondary`, `--text-tertiary`, `--text-muted`, `--text-accent` | Foreground text hierarchy |
+| Accents | `--accent-primary`, `--accent-secondary`, `--accent-success`, `--accent-warning`, `--accent-error`, `--accent-cyan`, `--accent-primary-rgb` | Semantic colors (note `--accent-primary-rgb` is the space-separated triplet used inside `rgba()`) |
+| Brand | `--brand-teal`, `--brand-frost`, `--brand-active-cyan`, `--brand-navy` | Sprout brand surfaces |
+| Typography | `--font-sans`, `--font-mono`, `--text-xs` … `--text-3xl` | Font families and sizes |
+| Spacing | `--space-1` … `--space-12` | Layout rhythm |
+| Radius | `--radius-sm`, `--radius-md`, `--radius-lg`, `--radius-xl`, `--radius-pill` | Corner rounding |
+| Shadows / gradients | `--shadow-subtle`, `--shadow-elevated`, `--shadow-float`, `--gradient-subtle`, `--gradient-elevated` | Elevation |
+| Motion | `--ease-out`, `--ease-in-out` | Transitions |
+
+A host supplies the same names, e.g.
+`tokens: { '--accent-primary': '#8b5cf6', '--accent-primary-rgb': '139, 92, 246' }`.
+A value that aliases another token (`--bg-hover: var(--bg-elevated)`) or mixes
+one (`--bg-error: color-mix(in srgb, var(--accent-error) 12%, transparent)`)
+follows whatever the host overrides those referenced tokens to.
+
+#### Scoping
+
+The host's `theme.tokens` overrides are applied on the **workspace root
+element** (`.sprout-workspace`, the element `SproutWorkspace` renders), as
+inline custom properties — never on `document.documentElement`. A host page and
+the Sprout workspace it mounts share one document, so confining the overrides
+to the root is what keeps a host theme from restyling the host's *own* chrome.
+The `mode` is different: it selects the applied theme pack, whose variables are
+the app's own theme and land on `documentElement` exactly as Sprout's local
+build does today. Only the host's per-token overrides are scoped.
 
 ### `capabilities: HostCapabilities`
 

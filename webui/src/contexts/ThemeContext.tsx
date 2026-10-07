@@ -73,21 +73,22 @@ function systemMode(): ThemeMode {
 }
 
 /**
- * The theme the active host supplies, resolved to a concrete mode + pack +
- * token overrides. Null when no host theme is present (local builds and the
- * headless default), which leaves the localStorage-driven selection in charge.
+ * The theme the active host supplies, resolved to a concrete mode + pack.
+ * Null when no host theme is present (local builds and the headless default),
+ * which leaves the localStorage-driven selection in charge.
  *
  * The host is the source of truth when it provides a theme: its `mode` picks
- * the light/dark pack ('system' follows the OS), and its `tokens` are merged
- * over that pack's variables. Sprout never infers the theme by observing the
- * DOM — it reads the host value and the OS media query only.
+ * the light/dark pack ('system' follows the OS). The host's token overrides
+ * are applied by the workspace root element (see `themes/hostTheme.ts`), not
+ * here — they must not reach `documentElement`, or they would restyle the
+ * host page outside the mounted workspace. Sprout never infers the theme by
+ * observing the DOM — it reads the host value and the OS media query only.
  */
 interface ResolvedHostTheme {
   /** The mode the host asked for, before 'system' is resolved. */
   rawMode: 'light' | 'dark' | 'system';
   /** The mode actually in effect ('system' resolved to light/dark). */
   mode: ThemeMode;
-  tokens: Record<string, string>;
   pack: ThemePack;
 }
 
@@ -97,8 +98,7 @@ function resolveHostTheme(): ResolvedHostTheme | null {
   const rawMode = hostTheme.mode ?? systemMode();
   const mode: ThemeMode = rawMode === 'system' ? systemMode() : rawMode;
   const pack = getThemePackForMode(mode);
-  const tokens = hostTheme.tokens ?? {};
-  return { rawMode, mode, tokens, pack };
+  return { rawMode, mode, pack };
 }
 
 /**
@@ -169,8 +169,12 @@ export function ThemeProvider({ children }: ThemeProviderProps): JSX.Element {
     if (!hostTheme) return localPack;
     const mode: ThemeMode = hostTheme.rawMode === 'system' ? system : hostTheme.mode;
     const base = getThemePackForMode(mode);
-    if (Object.keys(hostTheme.tokens).length === 0 && mode === hostTheme.mode) return base;
-    return { ...base, mode, variables: { ...base.variables, ...hostTheme.tokens } };
+    // The host's token overrides are NOT merged into the pack variables: they
+    // are scoped to the workspace root (SproutWorkspace), so they must not
+    // land on documentElement here. The pack keeps its own variables; the
+    // overrides are applied on the root element instead.
+    if (mode === hostTheme.mode) return base;
+    return { ...base, mode };
   }, [hostTheme, localPack, system]);
 
   const themePack = activePack;
@@ -277,9 +281,11 @@ export function ThemeProvider({ children }: ThemeProviderProps): JSX.Element {
   );
 
   // Update CSS variable tokens and document attributes for global theming.
-  // The host theme (when present) is applied by merging its tokens over the
-  // resolved pack's variables, using the same THEME_VARIABLE_KEYS cleanup the
-  // local path uses; a host-driven theme never observes the DOM for its value.
+  // This applies the resolved pack (built-in or host-selected mode) to the
+  // document root. The host's own token overrides are deliberately not applied
+  // here — they are scoped to the workspace root (see themes/hostTheme.ts), so
+  // they cannot restyle the host page outside the mounted workspace. A
+  // host-driven theme never observes the DOM for its value.
   useEffect(() => {
     const root = document.documentElement;
     THEME_VARIABLE_KEYS.forEach((key) => {

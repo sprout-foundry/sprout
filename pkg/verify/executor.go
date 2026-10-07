@@ -9,6 +9,10 @@ import (
 	"time"
 )
 
+// cancelWaitDelay is how long Run waits for the output pipe to close after
+// the command is killed on timeout or cancellation.
+const cancelWaitDelay = 500 * time.Millisecond
+
 // DefaultTimeout bounds a single verification check when the Runner has
 // no explicit timeout: five minutes covers a normal build plus test
 // suite without stalling a turn.
@@ -68,6 +72,10 @@ func (e *ShellExecutor) Run(ctx context.Context, dir, command string) (Outcome, 
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
+	bindProcessGroup(cmd)
+	// After cancellation, stop waiting for descendants that still hold the
+	// output pipe; the timeout must bound the whole run.
+	cmd.WaitDelay = cancelWaitDelay
 
 	err := cmd.Run()
 	if ctx.Err() != nil {

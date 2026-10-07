@@ -47,17 +47,21 @@ func TestShellExecutorTimeout(t *testing.T) {
 	shAvailable(t)
 	e := &ShellExecutor{}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
+	// "; true" keeps sleep a child of the shell under every sh (bash would
+	// otherwise exec a lone last command), so killing only the shell would
+	// leave sleep holding the output pipe for the full 5 s.
+	for i := 0; i < 10; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		start := time.Now()
+		out, err := e.Run(ctx, t.TempDir(), "sleep 5; true")
+		elapsed := time.Since(start)
+		cancel()
 
-	start := time.Now()
-	out, err := e.Run(ctx, t.TempDir(), "sleep 2")
-	elapsed := time.Since(start)
-
-	require.NoError(t, err, "a timeout is an outcome with a reason, not an error")
-	assert.False(t, out.Passed)
-	assert.Contains(t, out.Reason, "timeout or cancellation")
-	assert.Less(t, elapsed, time.Second, "the timeout must actually bound the run (took %s)", elapsed)
+		require.NoError(t, err, "a timeout is an outcome with a reason, not an error")
+		assert.False(t, out.Passed)
+		assert.Contains(t, out.Reason, "timeout or cancellation")
+		require.Less(t, elapsed, 3*time.Second, "iteration %d: the timeout must bound the whole command tree (took %s)", i, elapsed)
+	}
 }
 
 // TestShellExecutorLaunchError proves the setup-failure path: a

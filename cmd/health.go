@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -29,6 +30,9 @@ type healthFlags struct {
 	maxFileLines  int
 	maxComplexity int
 	noChecks      bool
+	noDuplicates  bool
+	noDeps        bool
+	dupThreshold  float64
 	jsonOut       bool
 }
 
@@ -36,18 +40,20 @@ var healthFlagsState healthFlags
 
 var healthCmd = &cobra.Command{
 	Use:   "health [dir]",
-	Short: "Report size, complexity, and failing-check health signals",
+	Short: "Report size, complexity, duplication, dependency, and check signals",
 	Long: `Report a project's health on demand.
 
 The check scans the project's source tree (Go, TypeScript, JavaScript, and
 Python) for size and complexity signals — files over a line threshold and
-functions over a branching-complexity threshold — and runs the project's
-configured build and test commands through the verification runner to report
-failing checks.
+functions over a branching-complexity threshold — and looks for near-duplicate
+functions, dependencies with newer versions available, and failing build/test
+checks (run through the verification runner).
 
 Every concern is a finding that carries a small, separately approvable fix,
-for example "split pkg/x/big.go: 1200 lines, exceeds 800". The command only
-reports the proposed fixes; it never applies one.
+for example "split pkg/x/big.go: 1200 lines, exceeds 800", "extract the shared
+block from a.go:Alpha and b.go:Beta into one helper", or "bump dep X from
+v1.2.0 to v1.3.0". The command only reports the proposed fixes; it never
+applies one.
 
 The build and test commands come from the same trusted sources as the rest of
 the system: the project's starter manifest (.sprout/starter.json) or its
@@ -57,7 +63,7 @@ Examples:
   sprout health
   sprout health ./my-app
   sprout health --max-file-lines 500 --max-complexity 12
-  sprout health --no-checks --json`,
+  sprout health --no-checks --no-deps --json`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dir := healthFlagsState.dir
@@ -73,6 +79,9 @@ func init() {
 	healthCmd.Flags().IntVar(&healthFlagsState.maxFileLines, "max-file-lines", 0, "Report files longer than this many lines (default 800)")
 	healthCmd.Flags().IntVar(&healthFlagsState.maxComplexity, "max-complexity", 0, "Report functions with a branching complexity above this (default 15)")
 	healthCmd.Flags().BoolVar(&healthFlagsState.noChecks, "no-checks", false, "Skip the build/test checks; report size and complexity only")
+	healthCmd.Flags().BoolVar(&healthFlagsState.noDuplicates, "no-duplicates", false, "Skip the near-duplicate code scan")
+	healthCmd.Flags().BoolVar(&healthFlagsState.noDeps, "no-deps", false, "Skip the outdated-dependency check")
+	healthCmd.Flags().Float64Var(&healthFlagsState.dupThreshold, "duplicate-threshold", 0, "Similarity (0-1] at which two functions are near-duplicates (default 0.85)")
 	healthCmd.Flags().BoolVar(&healthFlagsState.jsonOut, "json", false, "Output machine-readable JSON")
 	rootCmd.AddCommand(healthCmd)
 }
@@ -87,8 +96,14 @@ func runHealth(cmd *cobra.Command, dir string, flags healthFlags, out io.Writer)
 	}
 
 	cfg := health.Config{
-		MaxFileLines:  flags.maxFileLines,
-		MaxComplexity: flags.maxComplexity,
+		MaxFileLines:       flags.maxFileLines,
+		MaxComplexity:      flags.maxComplexity,
+		DuplicateThreshold: flags.dupThreshold,
+	}
+	if cmd != nil && cmd.Flags().Changed("duplicate-threshold") {
+		if verr := health.RejectZeroDuplicateThreshold(flags.dupThreshold); verr != nil {
+			return verr
+		}
 	}
 	if !flags.noChecks {
 		runner, rerr := healthCheckRunner()
@@ -96,6 +111,12 @@ func runHealth(cmd *cobra.Command, dir string, flags healthFlags, out io.Writer)
 			return rerr
 		}
 		cfg.Checks = runner
+	}
+	if !flags.noDuplicates {
+		cfg.Duplicates = health.TextDuplicateFinder{}
+	}
+	if !flags.noDeps && hasGoMod(root) {
+		cfg.Deps = healthProxyChecker{}
 	}
 
 	report, err := health.Build(cmd.Context(), root, cfg)
@@ -119,6 +140,14 @@ func resolveHealthRoot(dir string) (string, error) {
 		return "", fmt.Errorf("resolve %q: %w", dir, err)
 	}
 	return abs, nil
+}
+
+// hasGoMod reports whether root carries a Go module manifest. The dependency
+// check asks the Go toolchain (which needs a module to resolve against), so a
+// project without one skips it rather than recording a spurious error.
+func hasGoMod(root string) bool {
+	info, err := os.Stat(filepath.Join(root, "go.mod"))
+	return err == nil && !info.IsDir()
 }
 
 // healthCheckRunner builds the verification runner the health check uses for

@@ -749,8 +749,15 @@ needed whatever the integration work does. Spec context: SP-160 §160e.
       findings, each carrying a proposed fix; `cmd/health.go` registers
       `sprout health` (text + `--json`) in the Diagnostics group. Pinned by
       a fixture-project test.
-- [ ] **157.8** `sprout health`: duplicated code (SP-016 embedding index)
+- [x] **157.8** `sprout health`: duplicated code (SP-016 embedding index)
       and outdated dependencies. Fixture test. Spec: SP-157 §157c.
+      Fixed: `pkg/health` gains `DuplicateFinder` (default: token-cosine
+      over the existing AST extraction; the SP-016 embedding index was
+      removed from the repo, so a seam stands in its place) and
+      `DependencyChecker` (network-free `go.mod` parse + an injectable
+      latest-version seam; the live checker shells `go list -m -u`), with
+      `--no-duplicates`/`--no-deps`/`--duplicate-threshold`. Pinned by
+      fixture tests.
 - [ ] **157.9** Build/runtime error classifier (missing dependency, syntax
       error, type error, failing test, app crashed on start) with short
       explanation templates shown alongside the raw output. Fixture

@@ -131,8 +131,11 @@ func runBenchmarkCmd(cmd *cobra.Command, args []string) error {
 
 	// The suite runs against real providers, so the run needs the user's
 	// live configuration (credentials, models, verification commands).
-	// Detect the missing-config case before the run starts — a benchmark
-	// is the wrong place to discover it, after minutes of priced calls.
+	// Without --models the suite runs the default model list, so detect
+	// the missing-config case before the run starts — a benchmark is the
+	// wrong place to discover it, after minutes of priced calls. With
+	// --models every entry names its provider and the runner switches to
+	// it per run, so no configured default provider is needed.
 	var runner *benchmark.Runner
 	if benchmarkRunnerFor != nil {
 		runner = benchmarkRunnerFor(suiteDir, models, benchmarkRuns, benchmarkTimeout)
@@ -142,7 +145,7 @@ func runBenchmarkCmd(cmd *cobra.Command, args []string) error {
 			return withHint(fmt.Errorf("initializing configuration: %w", err),
 				"Run 'sprout keys set <provider>' to configure an API key.")
 		}
-		if strings.TrimSpace(mgr.GetConfig().LastUsedProvider) == "" {
+		if len(models) == 0 && strings.TrimSpace(mgr.GetConfig().LastUsedProvider) == "" {
 			return withHint(errors.New("no provider configured for the benchmark to run against"),
 				"Run 'sprout keys set <provider>' to configure an API key, or 'sprout benchmark --help' for what a run costs.")
 		}

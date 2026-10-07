@@ -206,6 +206,7 @@ func TestBenchmarkCmd_BadModelsIsUsageError(t *testing.T) {
 // still exits zero, and report.md + report.json land in --output recording
 // the failed runs.
 func TestBenchmarkCmd_WritesReportsFromFailedRuns(t *testing.T) {
+	isolateBenchmarkConfig(t)
 	suiteDir := filepath.Join(t.TempDir(), "suite")
 	writeBenchmarkFixtureTask(t, suiteDir, "mystery-starter", "smoke-task")
 	outDir := filepath.Join(t.TempDir(), "results")

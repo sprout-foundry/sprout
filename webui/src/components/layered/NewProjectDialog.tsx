@@ -5,11 +5,16 @@
 
 import { FolderPlus } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent, type ReactElement } from 'react';
+import { useHost } from '../../host/useHost';
 import { openHome } from '../../services/homeView';
-import { CreateRepoError, createPlatformRepo, fetchPlatformGitHubConnected } from '../../host/platformGitHub';
 import '../ThemedDialog.css';
 
 const NAME_PATTERN = /^[A-Za-z0-9._-]{1,100}$/;
+
+/** A platform error code, read generically off a thrown error (`code`). */
+function errorCode(err: unknown): string | undefined {
+  return (err as { code?: string } | null)?.code;
+}
 
 /** GitHub turns anything outside its name alphabet into "-"; do that as the user types. */
 export function toRepoName(input: string): string {
@@ -22,6 +27,8 @@ interface NewProjectDialogProps {
 }
 
 export default function NewProjectDialog({ onClose, onCreated }: NewProjectDialogProps): ReactElement {
+  const host = useHost();
+  const hostGithub = host.github;
   const [name, setName] = useState('');
   const [isPrivate, setPrivate] = useState(true);
   const [connected, setConnected] = useState<boolean | null>(null);
@@ -31,13 +38,14 @@ export default function NewProjectDialog({ onClose, onCreated }: NewProjectDialo
 
   useEffect(() => {
     let live = true;
-    fetchPlatformGitHubConnected()
+    hostGithub
+      ?.isConnected()
       .then((ok) => live && setConnected(ok))
       .catch(() => live && setConnected(true));
     return () => {
       live = false;
     };
-  }, []);
+  }, [hostGithub]);
 
   useEffect(() => {
     if (connected) inputRef.current?.focus();
@@ -53,12 +61,17 @@ export default function NewProjectDialog({ onClose, onCreated }: NewProjectDialo
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!valid || busy) return;
+    if (!hostGithub?.createRepo) {
+      setError('Creating a repository is not supported by this host.');
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      onCreated(await createPlatformRepo({ name, private: isPrivate }));
+      const url = await hostGithub.createRepo({ name, private: isPrivate });
+      onCreated(url);
     } catch (err) {
-      if (err instanceof CreateRepoError && err.code === 'github_not_connected') {
+      if (errorCode(err) === 'github_not_connected') {
         setConnected(false);
       } else {
         setError(err instanceof Error ? err.message : String(err));

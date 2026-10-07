@@ -23,7 +23,16 @@
  */
 
 import { gitClient } from './gitClient';
-import { usesPlatformGitHub } from '../host/platformGitHub';
+import { getActiveHost } from '../host/accessor';
+
+/**
+ * True when git credentials come from the host's own GitHub account (the
+ * host supplies `github`), rather than a local personal token. The agent does
+ * not need a token then — the host's git proxy injects the account's.
+ */
+function usesHostGitHub(): boolean {
+  return getActiveHost()?.github !== undefined;
+}
 
 /**
  * A single git tool definition with its executor.
@@ -280,7 +289,7 @@ export const AGENT_GIT_TOOLS: AgentGitToolDefinition[] = [
     execute: async (args) => {
       try {
         const token = getGithubToken() ?? undefined;
-        if (!token && !usesPlatformGitHub()) return 'No GitHub token found. The user must authenticate first.';
+        if (!token && !usesHostGitHub()) return 'No GitHub token found. The user must authenticate first.';
         await gitClient.push(resolveRepoDir(args.repo as string), { token, branch: args.branch as string | undefined });
         return 'Pushed to ' + args.repo;
       } catch (err) {
@@ -305,7 +314,7 @@ export const AGENT_GIT_TOOLS: AgentGitToolDefinition[] = [
           throw new Error('branch must be a string');
         }
         const token = getGithubToken() ?? undefined;
-        if (!token && !usesPlatformGitHub()) return 'No GitHub token found. The user must authenticate first.';
+        if (!token && !usesHostGitHub()) return 'No GitHub token found. The user must authenticate first.';
         await gitClient.pull(resolveRepoDir(args.repo as string), { token, branch: args.branch as string | undefined });
         return 'Pulled from ' + args.repo;
       } catch (err) {

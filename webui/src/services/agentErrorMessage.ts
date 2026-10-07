@@ -1,5 +1,4 @@
 import { getActiveHost } from '../host/accessor';
-import { platformHref } from '../host/platformUrl';
 import { openPlatformPage } from './homeView';
 import { notificationBus } from './notificationBus';
 
@@ -42,7 +41,10 @@ export function notifyCreditsBlocked(message: string): void {
         return;
       }
       const target = creditsLinkTarget();
-      if (target && !openPlatformPage(target)) window.open(platformHref(target), '_blank', 'noopener');
+      if (target && !openPlatformPage(target)) {
+        const href = getActiveHost()?.navigation.platformPagePath?.(target) ?? target;
+        window.open(href, '_blank', 'noopener');
+      }
     },
   });
 }

@@ -2,7 +2,7 @@ import React, { type ComponentType, useEffect, useState, useMemo, useCallback, u
 import './Sidebar.css';
 import { useHostCapabilities } from '../host';
 import { useActiveRepoURL } from '../services/activeRepo';
-import { repoSlug } from '../host/platformUrl';
+import { repoSlug } from '../host/repoName';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { usePlugins } from '../contexts/PluginContext';

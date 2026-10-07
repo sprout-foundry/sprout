@@ -1,3 +1,4 @@
+import type { PlatformNavItem } from '@sprout/ui';
 import type { ReactNode } from 'react';
 
 /**
@@ -130,6 +131,12 @@ export interface HostNavIntent {
   type: 'nav';
   /** The host's own identifier for the destination. */
   id: string;
+  /**
+   * An optional host-opaque detail for the destination (e.g. a task id for a
+   * `tasks` page). Sprout never interprets it; the host decides what it means
+   * and how to resolve it into a page. Absent for plain page nav.
+   */
+  detail?: string;
 }
 
 /**
@@ -167,8 +174,13 @@ export interface HostNavItem {
  * Sprout only renders the item and dispatches `open(item.intent)`.
  */
 export interface HostNavigation {
-  /** Resolve an intent the host owns (account, usage, help, signOut) or a deep link into a project/space. */
-  open(intent: HostNavigationIntent): void;
+  /**
+   * Resolve an intent the host owns (account, usage, help, signOut) or a deep
+   * link into a project/space. Returns void, or a promise for an intent the
+   * host performs asynchronously (e.g. `signOut`): awaiting it lets the caller
+   * react to a failure.
+   */
+  open(intent: HostNavigationIntent): void | Promise<void>;
   /**
    * The account-area exit items the host offers (Dashboards, Usage & billing,
    * Team, Runners, Settings, …), each carrying the host's label and intent.
@@ -178,12 +190,39 @@ export interface HostNavigation {
   /** The Home "Work" section items the host offers (Dashboard, Tasks, Workspaces, …). */
   workItems?: HostNavItem[];
   /**
+   * The host's fallback navigation items (id, label, href, icon), used by the
+   * hosted adapter when the runtime bootstrap did not provide its own list.
+   * Absent when the host supplies no such list.
+   */
+  navItems?: PlatformNavItem[];
+  /**
    * The host's own resolution of an intent to a platform page path (e.g.
    * `'/?from=editor#/account/billing'`), or null when the host has no page for
    * it. Sprout reads this only to give a link an href; the path string stays
    * entirely on the host side.
    */
   intentPath?(intent: HostNavigationIntent): string | null;
+  /**
+   * The host's own resolution of a page *route* to a full outward page URL or
+   * path, with the host's platform base applied (e.g. the platform's absolute
+   * URL). Sprout uses this when it links to one of the host's pages by route
+   * (account exits, a task deep link, the back-to-dashboard link). The argument
+   * is a **route** — the value `intentPath` returns, or a Sprout route like
+   * `/tasks/42` — never a fully-qualified URL. Absent when the host has no such
+   * page resolution; Sprout then uses the route verbatim.
+   */
+  platformPagePath?(route: string): string;
+  /**
+   * The host's own resolution of a page *route* to a full **embeddable** page
+   * URL or path, with any host-specific embed decoration applied (e.g. the
+   * platform's `?embed=1` iframe decoration). Sprout uses this only for the
+   * layered layout's Home frame, which embeds one of the host's pages, so no
+   * component carries the decoration literal. Like `platformPagePath`, the
+   * argument is a Sprout `homeView` **route** (`normalizeHomePath` output), not
+   * an `intentPath` result. Absent when the host has no embeddable pages;
+   * Sprout then builds the plain path.
+   */
+  embedPagePath?(route: string): string;
 }
 
 /**
@@ -230,6 +269,49 @@ export interface HostNotifications {
 }
 
 /**
+ * A repository the host's account can open or clone. The host supplies these
+ * as plain data (it owns where they come from); Sprout only lists and renders
+ * them. `cloneUrl` is what Sprout hands to its clone flow.
+ */
+export interface HostGitHubRepo {
+  /** Stable host-side id. */
+  id: number | string;
+  /** Repository name (last path segment). */
+  name: string;
+  /** "owner/name" (or a nested path on hosts that nest repos). */
+  full_name: string;
+  private: boolean;
+  description: string | null;
+  /** The repository's web URL. */
+  html_url: string;
+  /** The URL to clone from. */
+  clone_url: string;
+  default_branch: string;
+  updated_at: string;
+  owner?: { login: string; avatar_url: string };
+}
+
+/**
+ * The host's GitHub-through-the-account surface: when the host manages GitHub
+ * on its own account (rather than a saved personal token), it supplies the
+ * account's connection check and repository list as data. Sprout renders the
+ * list and clones through its own flow; the host owns the fetch. Absent means
+ * GitHub is a per-user token (Sprout's own PAT flow).
+ */
+export interface HostGitHub {
+  /** Whether the account's GitHub is connected. */
+  isConnected(): Promise<boolean>;
+  /** The repositories the account can see. */
+  listRepos(): Promise<HostGitHubRepo[]>;
+  /**
+   * Create a repository in the account's GitHub and return its web URL. When
+   * GitHub is not connected, throws an error whose `code` is
+   * `'github_not_connected'` (the generic failure code Sprout acts on).
+   */
+  createRepo?(opts: { name: string; private: boolean }): Promise<string>;
+}
+
+/**
  * Chrome slots the host can fill in Sprout's own header areas, or an
  * instruction for the host to render the chrome itself (hiding Sprout's).
  */
@@ -240,6 +322,14 @@ export interface HostChrome {
   headerLeft?: ReactNode;
   /** When true the host renders Sprout's chrome and Sprout hides its own. */
   renderOwnChrome?: boolean;
+  /**
+   * The host's GitHub account surface, when GitHub is managed by the host's
+   * account rather than a saved token. When present, Sprout renders the host's
+   * node wherever it shows a GitHub account panel (the repo picker, the
+   * settings section) instead of its own token card. The host decides the
+   * connection state and the manage link; Sprout only renders the node.
+   */
+  githubAccount?: ReactNode;
 }
 
 /**
@@ -314,6 +404,13 @@ export interface SproutHost {
 
   /** A sink Sprout posts notifications to. */
   notifications: HostNotifications;
+
+  /**
+   * The host's GitHub-through-the-account surface, when the host manages GitHub
+   * on its own account. Absent means GitHub is a per-user personal token
+   * (Sprout's own PAT flow, unchanged).
+   */
+  github?: HostGitHub;
 
   /** Optional chrome slots the host fills in Sprout's header, or host-rendered chrome. */
   chrome?: HostChrome;

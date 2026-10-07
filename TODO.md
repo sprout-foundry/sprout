@@ -140,7 +140,7 @@ standalone local build keeps embedding into `pkg/webui/static`.
       URL from the host's transport, and keep `bootstrapAdapter` out of the
       package's import graph. Test: importing the host entry and the
       package performs no fetch. Spec: SP-160 §160b.
-- [ ] **host.12** Platform logic behind the contract, not just moved into
+- [x] **host.12** Platform logic behind the contract, not just moved into
       `host/`: components still import platform helpers or hardcode
       platform paths — `components/UserMenu.tsx` (`/webui/auth/logout`,
       `/login`), `EscalationListener.tsx` (`/#/tasks/`), `HeaderBar.tsx`

@@ -44,14 +44,15 @@ const HOST_SELECTION_ALLOWLIST = ['index.tsx'];
 const HOST_IMPLEMENTATION_NAMES = ['localHost', 'cloudHost', 'headlessHost', 'defaultHost'];
 
 /**
- * True when the code imports from the host BARE BARREL (`'./host'`,
- * `'../host'`, or `'../../host'`) — the entry's own host selection. Anchored so
- * a deep host-module path (`'./host/cloudHost'`) or any specifier merely
- * containing '/host' (`'./services/host-x'`) is NOT accepted: the carve-out is
- * for importing the host contract's entry, not for reaching into host internals.
+ * True when the code imports the host from the tree — the entry's own host
+ * selection. Two specifiers are accepted: the bare barrel (`'./host'`) and the
+ * internal platform module (`'./host/platform'`, which carries `cloudHost`).
+ * Anchored so any other deep host-module path (`'./host/cloudHost'`) or a
+ * specifier merely containing '/host' (`'./services/host-x'`) is NOT accepted:
+ * the carve-out is for selecting the host, not for reaching into host internals.
  */
 function importsHostTree(code: string): boolean {
-  return /from\s+['"](?:\.\.?\/)*host['"]/.test(code);
+  return /from\s+['"](?:\.\.?\/)*host(?:\/platform)?['"]/.test(code);
 }
 
 /** Remove line and block comments so prose examples don't count as usage. */
@@ -198,6 +199,10 @@ describe('host boundary (SP-160 Acceptance criteria 1 / host.8)', () => {
     it('allows the entry to name a host when it imports from the host tree', () => {
       expect(findBoundaryViolations(entry, `import { localHost, cloudHost } from './host';`)).toEqual([]);
       expect(findBoundaryViolations(entry, `import { localHost } from '../host';`)).toEqual([]);
+      // The internal platform module is the other legitimate selection path
+      // (the entry imports cloudHost from it).
+      expect(findBoundaryViolations(entry, `import { cloudHost } from './host/platform';`)).toEqual([]);
+      expect(findBoundaryViolations(entry, `import { cloudHost } from '../host/platform';`)).toEqual([]);
     });
 
     it('flags the entry naming a host while importing it from elsewhere', () => {

@@ -11,7 +11,6 @@
  */
 
 import { getActiveHost, registerHostChangeHook } from './host/accessor';
-import { CLOUD_NAV_ITEMS } from './host/platformNav';
 import { installAdapter } from './services/apiAdapter';
 import type { PlatformNavItem } from './services/apiAdapter';
 import type { GitSyncReport, RuntimeConfig } from './types/runtimeConfig';
@@ -47,8 +46,8 @@ interface BootstrapResponse {
   update?: RuntimeConfig['update'];
 }
 
-// Fallback platform nav items live in the host tree (they name the platform's
-// pages); see host/platformNav.ts. Imported above.
+// The fallback nav items (which name the platform's pages) come from the host
+// as data: the active host's `navigation.navItems`. See the cloud host.
 
 const LOCALHOST_DEFAULTS: RuntimeConfig = {
   apiBaseURL: 'http://localhost:56000',
@@ -362,7 +361,7 @@ async function installAdapterForConfig(config: RuntimeConfig): Promise<void> {
     const adapter = new CloudAdapter({
       apiBase: config.apiBaseURL,
       wsUrl: config.wsURL,
-      navItems: config.navItems ?? CLOUD_NAV_ITEMS,
+      navItems: config.navItems ?? getActiveHost()?.navigation.navItems ?? [],
     });
     installAdapter(adapter);
 

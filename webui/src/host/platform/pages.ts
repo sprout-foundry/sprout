@@ -17,8 +17,8 @@
  * so the components stay host-driven and the strings stay on the host side.
  */
 
-import { platformHref } from './platformUrl';
-import type { HostEntitlements, HostNavItem, HostNavigationIntent } from './types';
+import { platformHref, platformEmbedPath } from '../platformUrl';
+import type { HostEntitlements, HostNavItem, HostNavigationIntent } from '../types';
 
 /**
  * The account-area exits, in the platform header's menu order. Paths carry
@@ -56,18 +56,46 @@ const PLATFORM_PAGES: Record<string, string> = {
   runners: '/?from=editor#/runners',
   settings: '/?from=editor#/settings',
   admin: '/?from=editor#/admin',
+  repos: '/?from=editor#/repos',
 };
 
 /**
  * The platform SPA path an intent resolves to, or null when the host has no
  * page for the intent. Each account/work item carries a distinct `nav` intent
- * (its platform id), so the mapping is unambiguous.
+ * (its platform id), so the mapping is unambiguous. A `nav` intent carrying a
+ * `detail` (e.g. a task id) deep-links into that page's item, keyed by the id.
  */
 export function intentPath(intent: HostNavigationIntent): string | null {
   if (intent.type === 'usage') return '/?from=editor#/account/billing';
   if (intent.type === 'account') return '/?from=editor';
-  if (intent.type === 'nav') return PLATFORM_PAGES[intent.id] ?? null;
+  if (intent.type === 'nav') {
+    const page = PLATFORM_PAGES[intent.id];
+    if (page === undefined) return null;
+    if (intent.detail) return `${page}/${intent.detail}`;
+    return page;
+  }
   return null;
+}
+
+/**
+ * The platform's own full page URL for a route the editor opens *outward*: the
+ * route resolved against the host's platform base (`platformHref`), with no
+ * embed decoration. The link sites (account exits, the task deep link, the
+ * back-to-dashboard link) render this; the iframe embed uses
+ * `platformEmbedPath` instead.
+ */
+export function platformPagePath(route: string): string {
+  return platformHref(route);
+}
+
+/**
+ * The platform's own full page URL for a route the editor *embeds* in the
+ * layered layout's Home frame: the platform SPA path with the platform's embed
+ * decoration applied (`?embed=1` plus the route in the hash). Keeps the embed
+ * query literal on the host side.
+ */
+export function platformEmbedPagePath(route: string): string {
+  return platformEmbedPath(route);
 }
 
 /** Convenience: the path for a `HostNavItem`, via its own intent. */

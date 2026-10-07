@@ -7,7 +7,6 @@
 
 import { Menu } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react';
-import { platformHref } from '../../host/platformUrl';
 import { useHost } from '../../host/useHost';
 import { getActiveRepoURL } from '../../services/activeRepo';
 import { closeHome, getHomeView, searchForRepo, syncHomePath, useHomeView } from '../../services/homeView';
@@ -43,6 +42,9 @@ export default function PlatformHome({ isMobile, onOpenMenu }: PlatformHomeProps
   const { navigation } = useHost();
   const { open, path } = useHomeView();
   const frameRef = useRef<HTMLIFrameElement>(null);
+  // The host resolves a page route to its own *embeddable* page URL (the embed
+  // decoration literal lives on the host side); Sprout only loads what it says.
+  const embedSrc = (route: string): string => navigation.embedPagePath?.(route) ?? route;
   // The frame's first page is wherever Home first opens to (the credits
   // chip opens it on billing); later routes move it in place.
   const [initialPath, setInitialPath] = useState<string | null>(open ? path : null);
@@ -90,7 +92,7 @@ export default function PlatformHome({ isMobile, onOpenMenu }: PlatformHomeProps
         // frame navigated to /webui/?home=…): show it here, in the frame.
         const homeRoute = target.searchParams.get('home');
         if (homeRoute && (!repo || sameRepo(repo, getActiveRepoURL()))) {
-          if (frameRef.current) frameRef.current.src = platformHref(`/?embed=1#${homeRoute}`);
+          if (frameRef.current) frameRef.current.src = embedSrc(homeRoute);
           syncHomePath(homeRoute);
           return;
         }
@@ -99,7 +101,7 @@ export default function PlatformHome({ isMobile, onOpenMenu }: PlatformHomeProps
           // editor (which refused to render nested) goes back to a platform
           // page; a platform page stays loaded.
           if (frameHoldsEditor(frameRef.current)) {
-            frameRef.current!.src = platformHref(`/?embed=1#${getHomeView().path}`);
+            frameRef.current!.src = embedSrc(getHomeView().path);
           }
           closeHome();
           return;
@@ -142,7 +144,7 @@ export default function PlatformHome({ isMobile, onOpenMenu }: PlatformHomeProps
       <iframe
         ref={frameRef}
         title="Sprout Foundry"
-        src={platformHref(`/?embed=1#${initialPath}`)}
+        src={embedSrc(initialPath ?? path)}
         className="platform-home-frame"
       />
     </div>

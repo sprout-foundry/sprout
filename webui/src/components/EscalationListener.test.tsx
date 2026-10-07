@@ -27,11 +27,12 @@ import { __resetFullWorkspaceForTests } from '../services/fullWorkspace';
 import { HostProvider } from '../host/HostProvider';
 import { makeTestHost } from '../host/testHost';
 import { intentPath } from '../host/platform';
+import type { SproutHost } from '../host/types';
 import { EscalationListener } from './EscalationListener';
 
 /** Render the toast under a host carrying the platform nav surface. */
-function renderListener() {
-  const host = { ...makeTestHost(), navigation: { open: () => undefined, intentPath } };
+function renderListener(hostOverride?: SproutHost) {
+  const host = hostOverride ?? { ...makeTestHost(), navigation: { open: () => undefined, intentPath } };
   return render(createElement(HostProvider, { host }, createElement(EscalationListener)));
 }
 
@@ -511,5 +512,54 @@ describe('EscalationListener — Mode A/B regressions', () => {
     fireEvent.click(screen.getByTestId('escalation-toast-txn'));
     await flush();
     expect(screen.queryByTestId('escalation-toast-cloud-task')).toBeNull();
+  });
+
+  it('renders the task deep link only when the host resolves the task page', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url === '/api/tasks') return jsonResponse({ task_id: 'task-9', status: 'completed' }, { status: 201 });
+      return jsonResponse({ task_id: 'task-9', status: 'completed' });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const host: SproutHost = {
+      ...makeTestHost(),
+      navigation: {
+        open: () => undefined,
+        intentPath,
+        // The host resolves a page route to its own outward URL.
+        platformPagePath: (route) => `https://platform.sprout.dev${route}`,
+      },
+    };
+    renderListener(host);
+    fireTrigger({ command: undefined, reason: 'git_push_failed' });
+    fireEvent.click(screen.getByTestId('escalation-toast-cloud-task'));
+    await flush();
+
+    const link = await screen.findByTestId('escalation-toast-cloud-task-link');
+    expect(link.getAttribute('href')).toBe('https://platform.sprout.dev/?from=editor#/tasks/task-9');
+  });
+
+  it('omits the task deep link when the host has no task page (no degraded link)', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url === '/api/tasks') return jsonResponse({ task_id: 'task-9', status: 'completed' }, { status: 201 });
+      return jsonResponse({ task_id: 'task-9', status: 'completed' });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    // A host that resolves no intent paths at all: the link must not render —
+    // an empty route would otherwise degrade to the host's bare origin.
+    const host: SproutHost = {
+      ...makeTestHost(),
+      navigation: { open: () => undefined, platformPagePath: (route) => route },
+    };
+    renderListener(host);
+    fireTrigger({ command: undefined, reason: 'git_push_failed' });
+    fireEvent.click(screen.getByTestId('escalation-toast-cloud-task'));
+    await flush();
+
+    expect(await screen.findByTestId('escalation-toast-cloud-task-status')).toBeInTheDocument();
+    expect(screen.queryByTestId('escalation-toast-cloud-task-link')).toBeNull();
   });
 });

@@ -22,7 +22,7 @@ import type { WorkspaceShellProps } from './shell';
 import { isLayeredLayout } from '../config/layout';
 import { useHost, useHostCapabilities } from '../host';
 import { useActiveRepoURL } from '../services/activeRepo';
-import { repoSlug } from '../host/platformUrl';
+import { repoSlug } from '../host/repoName';
 
 const CodeShell: React.FC<WorkspaceShellProps> = ({
   isMobile,

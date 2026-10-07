@@ -7,7 +7,7 @@ import { useActiveRepoURL } from '../services/activeRepo';
 import { startFullWorkspace, useFullWorkspacesAvailable } from '../services/fullWorkspace';
 import { notificationBus } from '../services/notificationBus';
 import HostNotificationCount from '../host/HostNotificationCount';
-import { githubRepoSlug, platformHref, repoHubPath } from '../host/platformUrl';
+import { githubRepoSlug } from '../host/repoName';
 import MenuBar from './MenuBar';
 import { CreditsChip } from './CreditsChip';
 import { UsageChip } from './UsageChip';
@@ -44,10 +44,19 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
   // host.8: the hosted build (authMode 'bearer') shows the platform's header
   // affordances (back-to-dashboard, Start Building, credits); the local build
   // shows its own MenuBar. This replaces the former isCloud branch.
-  const hosted = useHost().transport.authMode === 'bearer';
+  const host = useHost();
+  const hosted = host.transport.authMode === 'bearer';
   const repoURL = useActiveRepoURL() ?? null;
-  // The back-link returns to the hub page of the repo being edited.
+  // The back-link returns to the hub page of the repo being edited. The route
+  // is host data: Sprout asks for the repo's hub destination by (generic) nav
+  // intent and the host resolves it to its own page URL. With no repo open it
+  // falls back to the host's account/dashboard page.
   const repoSlug = githubRepoSlug(repoURL);
+  const backPath =
+    (repoSlug ? host.navigation.intentPath?.({ type: 'nav', id: 'repos', detail: repoSlug }) : null) ??
+    host.navigation.intentPath?.({ type: 'account' }) ??
+    null;
+  const backHref = backPath ? (host.navigation.platformPagePath?.(backPath) ?? backPath) : undefined;
   // Hidden on deployments without workspace compute rather than offering an
   // action that can only fail.
   const workspacesAvailable = useFullWorkspacesAvailable(hosted);
@@ -106,7 +115,7 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
       {isLayeredLayout && !(hosted && isMobile) && <LayeredSearchButton />}
       {hosted && !isLayeredLayout && (
         <a
-          href={platformHref(repoHubPath(repoURL))}
+          href={backHref}
           className="header-back-to-dashboard"
           title={repoSlug ? `Back to ${repoSlug} on the dashboard` : 'Back to Dashboard'}
         >

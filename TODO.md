@@ -733,9 +733,14 @@ needed whatever the integration work does. Spec context: SP-160 §160e.
       code-changing, non-subagent turn and feeds linter findings back
       through the shared repair loop. Pinned by a scripted seeded-lint
       test, off-by-default, and formatter-failure cases.
-- [ ] **157.6** Require a test for new behavior (a `test` acceptance item
+- [x] **157.6** Require a test for new behavior (a `test` acceptance item
       or a test added in the turn); enforced through verification when
       enabled. Test. Spec: SP-157 §157b.
+      Fixed: an off-by-default `verification.require_test` flag makes the
+      verification runner append a failing check when a code-changing turn
+      neither had a plan `test` acceptance item nor added/changed a test
+      file; disabled it changes nothing, and a docs-only turn is not
+      flagged. Pinned by five end-to-end tests (one per rule).
 - [ ] **157.7** `sprout health`: size and complexity signals and failing
       checks; findings proposed as small, separately approvable fixes.
       Fixture test. Spec: SP-157 §157c.

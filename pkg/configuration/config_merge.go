@@ -324,12 +324,16 @@ func MergeConfig(base, override *Config) *Config {
 	// beats a broader one; a silent layer keeps it).
 	if v := override.Verification; v != nil &&
 		(override.overrides("verification.enabled", v.Enabled) || v.RepairAttempts > 0 ||
-			v.TotalRepairRounds > 0 || v.BuildCommand != "" || v.TestCommand != "") {
+			v.TotalRepairRounds > 0 || v.BuildCommand != "" || v.TestCommand != "" ||
+			override.overrides("verification.require_test", v.RequireTest)) {
 		if result.Verification == nil {
 			result.Verification = &VerificationConfig{}
 		}
 		if override.overrides("verification.enabled", v.Enabled) {
 			result.Verification.Enabled = v.Enabled
+		}
+		if override.overrides("verification.require_test", v.RequireTest) {
+			result.Verification.RequireTest = v.RequireTest
 		}
 		if v.RepairAttempts > 0 {
 			result.Verification.RepairAttempts = v.RepairAttempts

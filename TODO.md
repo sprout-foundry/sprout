@@ -800,6 +800,28 @@ needed whatever the integration work does. Spec context: SP-160 §160e.
 
 ---
 
+## SP-160 §160c — Backend contract follow-up
+
+- [x] **contract.18** Route inventory after the Huma migration:
+      `cmd/api_inventory` parses `pkg/webui/routes.go` and now finds 18 of
+      159 routes, because the families moved to `huma.Register` operations
+      (`pkg/webui/huma_*.go`); `TestRouteCountIsStable` and the
+      `docs/api/endpoints.md` freshness test fail. Build the inventory from
+      the registered Huma operations plus the remaining plain routes (from
+      the API object in-process, not by parsing source), keep the "served
+      by" column, regenerate `docs/api/endpoints.md`, and make both tests
+      pass. Spec: SP-160 §160c.
+      Fixed: the Huma set is now read in-process from the live registration
+      set (`cmd/api_inventory/huma_routes.go` `humaOpsInProcess` reads the
+      in-process Huma API object's OpenAPI document, not source), merged with
+      the plain `mux.HandleFunc` routes parsed from the `registerXxxRoutes`
+      functions (all four files, not just `routes.go`). `Route` gains an
+      `ExplicitMethod` so Huma rows keep their registered method from the
+      OpenAPI spec instead of collapsing to "any". The "Served by" column is
+      unchanged. `docs/api/endpoints.md` regenerated at 195 rows (31 plain +
+      164 Huma); `TestRouteCountIsStable` constant updated 159 → 195 with an
+      accurate explanation; both the count and the freshness test pass.
+
 ## Not automatable
 
 - **Decision:** framework for each reference starter (static site, web

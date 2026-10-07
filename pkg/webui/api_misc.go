@@ -14,13 +14,10 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
-// handleAPIConfig handles API requests for configuration
-func (ws *ReactWebServer) handleAPIConfig(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
-		return
-	}
-
+// buildAPIConfig builds the configuration payload for the request's client.
+// The Huma GET /api/config operation builds the response through this helper so
+// the payload cannot drift. r is the originating request (never nil).
+func (ws *ReactWebServer) buildAPIConfig(r *http.Request) map[string]interface{} {
 	clientCtx := ws.getClientContextForRequest(r)
 	// Get current configuration
 	config := map[string]interface{}{
@@ -38,7 +35,7 @@ func (ws *ReactWebServer) handleAPIConfig(w http.ResponseWriter, r *http.Request
 		},
 	}
 
-	writeJSON(w, http.StatusOK, config)
+	return config
 }
 
 // handleTerminalHistory handles API requests for terminal history

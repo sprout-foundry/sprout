@@ -23,7 +23,8 @@
   },
   "scripts": {
     "build": "tsc",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "generate:schema": "node scripts/generate-events-schema.mjs"
   },
   "sideEffects": false,
   "types": "dist/index.d.ts",

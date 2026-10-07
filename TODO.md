@@ -125,6 +125,47 @@ standalone local build keeps embedding into `pkg/webui/static`.
       optional `layout` (SP-155 arrangement) and `onSpaceChange`; exported
       with the registered spaces and the individual views
       (`webui/src/views/index.ts`). Vitest. Spec: SP-160 §160a.
+- [ ] **host.11** No platform calls on import: `webui/src/host/cloudHost.ts`
+      calls `resolveEntitlementsNow()` at module scope (fetches
+      `/billing/status`, `host/platform.ts`), and `host/platformUrl.ts`
+      imports `bootstrapAdapter`, which fetches `/api/bootstrap` and
+      installs an adapter on import. Both run in the local build and for
+      any host that imports `@sprout-foundry/workspace` (the built
+      `homeView` chunk carries `billing/status`). Resolve entitlements
+      lazily (first read or mount, only for `cloudHost`), take the platform
+      URL from the host's transport, and keep `bootstrapAdapter` out of the
+      package's import graph. Test: importing the host entry and the
+      package performs no fetch. Spec: SP-160 §160b.
+- [ ] **host.12** Platform logic behind the contract, not just moved into
+      `host/`: components still import platform helpers or hardcode
+      platform paths — `components/UserMenu.tsx` (`/webui/auth/logout`,
+      `/login`), `EscalationListener.tsx` (`/#/tasks/`), `HeaderBar.tsx`
+      (`repoHubPath`), `EditorModelSection.tsx`, `GitHubRepoPicker.tsx`,
+      `SidebarFilesSection.tsx`, `SidebarSettingsSection.tsx`,
+      `GitHubAccountPanel.tsx`, `layered/PlatformHome.tsx` (`/?embed=1`).
+      Route these through navigation intents (`signOut`, `account`, …),
+      chrome slots or `cloudHost`; make `host/platformBoundary.test.ts`
+      forbid importing `host/platform*` modules from outside `host/` and
+      cover those path literals; split the public `host/index.ts` (contract
+      types, `localHost`, provider, hooks) from an internal platform module
+      so `cloudHost`, `platformHref`, `listPlatformRepos`,
+      `PlatformGitHubAccountCard` and `platformEntitlements` are not part of
+      the package's public API. Spec: SP-160 §160b (Rules).
+- [ ] **host.13** All notifications reach the host: only
+      `notificationBus.notify` forwards to `host.notifications`; the ~61
+      `useNotifications().addNotification(...)` call sites go straight to
+      `@sprout/ui`'s reducer. Route `addNotification` through the active
+      host's sink (`localHost`/`cloudHost` keep today's in-app behavior).
+      Test with a host whose sink records calls. Spec: SP-160 §160b.
+- [ ] **host.14** Guard the build mode fully: `host/hostBoundary.test.ts`
+      matches only the literal `import.meta.env.VITE_SPROUT_MODE`; also
+      flag `import.meta.env.MODE`, bracket access and aliasing of
+      `import.meta.env` outside the allowlist. Check whether the studio
+      (`--native-fs`) build lost its folder-picker and workspace-switching
+      gates (`scripts/build-webui-dist.mjs` declares them on;
+      `localHost.folderPicker` is off and `refreshFromAdapter` now returns
+      early when a host is active); restore them through the host if so.
+      Spec: SP-160 §160b, Acceptance criteria 1.
 - [ ] **ws.4** Lazy loading: the editor, the WASM agent and space-specific
       code load when a space opens, not on import. A test inspects the
       build manifest and fails if the entry chunk pulls in the editor or

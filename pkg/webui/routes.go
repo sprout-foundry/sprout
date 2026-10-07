@@ -20,18 +20,7 @@ func (ws *ReactWebServer) setupRoutes(ctx context.Context) *http.ServeMux {
 
 	ws.registerCoreRoutes(mux)
 	ws.registerTerminalRoutes(mux, ctx)
-	ws.registerQueryRoutes(mux)
-	ws.registerCommandRoutes(mux)
-	ws.registerDiagnosticsRoutes(mux)
-	ws.registerFileRoutes(mux)
-	ws.registerDesignRoutes(mux)
-	ws.registerStarterRoutes(mux)
 	ws.registerPreviewRoutes(mux)
-	ws.registerSettingsRoutes(mux)
-	ws.registerWorkspaceRoutes(mux)
-	ws.registerSyncRoutes(mux)
-	ws.registerGitRoutes(mux)
-	ws.registerSessionRoutes(mux)
 	ws.registerChangesRoutes(mux)
 	ws.registerAutomateRoutes(mux)
 	ws.registerHumaRoutes(mux)
@@ -91,146 +80,15 @@ func (ws *ReactWebServer) registerCoreRoutes(mux *http.ServeMux) {
 	})
 }
 
-func (ws *ReactWebServer) registerQueryRoutes(mux *http.ServeMux) {
-	// The /api/query* and /api/completion routes are Huma operations (see
-	// registerHumaOperations in huma_routes.go); their plain registrations
-	// were removed so each method+path pattern is registered once. The
-	// /api/edits/, /api/shell-approvals/, and /api/subagent/ routes are
-	// likewise Huma operations (registered as method+subtree patterns); the
-	// handlers parse r.URL.Path as before. The /api/password/ route is also a
-	// Huma operation (see registerSettingsMiscHumaOperations in
-	// huma_settings_misc.go); its plain registration was removed so each
-	// method+path pattern is registered once.
-	// Foundry proxy endpoints — accept the translated chat format from CloudAdapter
-	mux.HandleFunc("/api/proxy/chat", ws.handleAPIProxyChat)
-	mux.HandleFunc("/api/proxy/chat/stop", ws.handleAPIProxyChatStop)
-	mux.HandleFunc("/api/proxy/chat/status", ws.handleAPIProxyChatStatus)
-	mux.HandleFunc("/api/proxy/stats", ws.handleAPIProxyStats)
-}
-
-// registerCommandRoutes mounts SP-114 Phase 2 endpoints. /api/command/execute
-// is the dedicated command surface (separate from /api/query/steer which is
-// for mid-turn steering of an active LLM query). Commands here must be
-// SteerCapable — destructive commands stay CLI-only. /api/command/complete
-// is the command-bar argument/name completion endpoint (mirrors the
-// terminal's cmd/slash_completer.go over HTTP).
-func (ws *ReactWebServer) registerCommandRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/command/execute", ws.handleAPICommandExecute)
-	mux.HandleFunc("/api/command/complete", ws.handleAPICommandComplete)
-}
-
-func (ws *ReactWebServer) registerDiagnosticsRoutes(mux *http.ServeMux) {
-	// /api/stats, /api/diagnostics, /api/semantic, and /api/providers are now
-	// Huma operations (see registerHumaRoutes / registerFilesHumaOperations /
-	// registerSettingsMiscHumaOperations); their plain registrations were
-	// removed so each method+path pattern is registered once.
-	mux.HandleFunc("/api/support-bundle", ws.handleAPISupportBundle)
-	mux.HandleFunc("/api/ws-metrics", ws.handleAPIWSMetrics)
-}
-
-func (ws *ReactWebServer) registerFileRoutes(mux *http.ServeMux) {
-	// The /api/files, /api/file, /api/create, /api/delete, /api/rename, and
-	// /api/file/* routes are Huma operations (see registerFilesHumaOperations in
-	// huma_files.go); their plain registrations were removed so each method+path
-	// pattern is registered once. /api/open-in-file-browser and /api/browse are
-	// separate surfaces and stay plain handlers.
-	mux.HandleFunc("/api/open-in-file-browser", ws.handleAPIOpenInFileBrowser)
-	mux.HandleFunc("/api/browse", ws.handleAPIBrowse)
-}
-
-// registerDesignRoutes mounts SP-140-6 §6b's read-only design endpoint.
-// GET /api/design/status aggregates the tree's validation/drift/feedback
-// signals for the webui health strip (§6c) — the same pkg/design scanners
-// the agent tools read, so both surfaces share one truth.
-func (ws *ReactWebServer) registerDesignRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/design/status", ws.handleAPIDesignStatus)
-}
-
-// registerStarterRoutes mounts the SP-153 §153b starter surface (TODO
-// 153.6): the embedded starter catalogue and the instantiate endpoint
-// the web UI's new-project flow (153.7) calls to populate a fresh
-// project directory.
-func (ws *ReactWebServer) registerStarterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/starters", ws.handleAPIStartersList)
-	mux.HandleFunc("/api/starters/instantiate", ws.handleAPIStartersInstantiate)
-}
-
-func (ws *ReactWebServer) registerSettingsRoutes(mux *http.ServeMux) {
-	// The settings/configuration family routes are Huma operations (see
-	// registerSettingsHumaOperations and registerSettingsMiscHumaOperations in
-	// huma_settings.go and huma_settings_misc.go); their plain registrations
-	// were removed so each method+path pattern is registered once. The
-	// /api/computer-use/test route is a separate surface outside this family
-	// and stays a plain handler here.
-	mux.HandleFunc("/api/computer-use/test", ws.handleAPIComputerUseTest)
-}
-
-func (ws *ReactWebServer) registerWorkspaceRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/workspace", ws.handleAPIWorkspace)
-	mux.HandleFunc("/api/workspace/browse", ws.handleAPIWorkspaceBrowse)
-	mux.HandleFunc("/api/workspace/symbols", ws.handleAPIWorkspaceSymbols)
-	mux.HandleFunc("/api/workspace/projects", ws.handleAPIWorkspaceProjects)
-	// SP-046: workspace sync handlers
-	mux.HandleFunc("/api/workspace/sync", ws.handleAPIWorkspaceSync)
-	mux.HandleFunc("/api/workspace/takeover", ws.handleAPIWorkspaceTakeover)
-	mux.HandleFunc("/api/instances", ws.handleAPIInstances)
-	mux.HandleFunc("/api/instances/select", ws.handleAPIInstanceSelect)
-	mux.HandleFunc("/api/instances/ssh-hosts", ws.handleAPISSHHosts)
-	mux.HandleFunc("/api/instances/ssh-open", ws.handleAPISSHOpen)
-	mux.HandleFunc("/api/instances/ssh-launch-status", ws.handleAPISSHLaunchStatus)
-	mux.HandleFunc("/api/instances/ssh-browse", ws.handleAPISSHBrowse)
-	mux.HandleFunc("/api/instances/ssh-sessions", ws.handleAPISSHSessions)
-	mux.HandleFunc("/api/instances/ssh-close", ws.handleAPISSHSessionDelete)
-}
-
-func (ws *ReactWebServer) registerSyncRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/sync/op", ws.handleAPISyncOp)
-	mux.HandleFunc("/api/sync/batch", ws.handleAPISyncBatch)
-	mux.HandleFunc("/api/sync/status", ws.handleAPISyncStatus)
-}
-
-func (ws *ReactWebServer) registerGitRoutes(mux *http.ServeMux) {
-	// ETH-2 transactional escalation: the container-side execution surface
-	// the platform drives a push/run/pull transaction against. Exact-match
-	// patterns. Method semantics are load-bearing: GET/HEAD on /api/txn/status
-	// is read-only (unauthenticated through the auth middleware); the three
-	// POSTs mutate or execute and sit behind the Bearer boundary — see
-	// api_txn.go.
-	mux.HandleFunc("/api/txn/push", ws.handleAPITxnPush)
-	mux.HandleFunc("/api/txn/run", ws.handleAPITxnRun)
-	mux.HandleFunc("/api/txn/status", ws.handleAPITxnStatus)
-	mux.HandleFunc("/api/txn/pull", ws.handleAPITxnPull)
-
-	// ETH-1 sync-on-resume: workspace git reconciliation report (same JSON
-	// as `sprout sync`). Exact-match pattern — it does not collide with the
-	// /api/sync/op|batch|status agent file-sync routes registered in
-	// registerSyncRoutes. Method semantics are load-bearing: GET/HEAD is
-	// status-only (unauthenticated through the auth middleware), POST is
-	// the only method that may pull — see handleAPISync.
-	mux.HandleFunc("/api/sync", ws.handleAPISync)
-	// The /api/git/* routes are Huma operations (see registerGitHumaOperations
-	// in huma_git.go); their plain registrations were removed so each
-	// method+path pattern is registered once.
-}
-
+// registerTerminalRoutes keeps the LSP manager initialization and the /api/lsp/ws
+// WebSocket bridge (a non-JSON route that stays a plain handler). The
+// /api/terminal/* routes and /api/lsp/status are Huma operations (see
+// registerTerminalHumaOperations in huma_terminal.go and
+// registerFilesHumaOperations in huma_files.go); their plain registrations were
+// removed so each method+path pattern is registered once.
 func (ws *ReactWebServer) registerTerminalRoutes(mux *http.ServeMux, ctx context.Context) {
 	ws.lspManager = lspproxy.NewManager(ctx)
+	// /api/lsp/ws is a WebSocket bridge, not a JSON operation, so it stays a
+	// plain handler.
 	mux.HandleFunc("/api/lsp/ws", lspproxy.BridgeHandler(ws.lspManager, ws.upgrader, ws.workspaceRoot))
-	// /api/lsp/status is a Huma operation (see registerFilesHumaOperations in
-	// huma_files.go); its plain registration was removed. /api/lsp/ws is a
-	// WebSocket bridge, not a JSON operation, so it stays a plain handler.
-	mux.HandleFunc("/api/terminal/history", ws.handleTerminalHistory)
-	mux.HandleFunc("/api/terminal/sessions", ws.handleAPITerminalSessions)
-	mux.HandleFunc("/api/terminal/shells", ws.handleAPITerminalShells)
-	mux.HandleFunc("/api/terminal/agent-sessions", ws.handleAPIAgentSessions)
-	mux.HandleFunc("/api/terminal/agent-sessions/", ws.handleAPIAgentSessionActions)
-}
-
-func (ws *ReactWebServer) registerSessionRoutes(mux *http.ServeMux) {
-	// The /api/sessions* and /api/chat-sessions* routes are Huma operations
-	// (see registerHumaOperations in huma_routes.go); their plain registrations
-	// were removed so each method+path pattern is registered once. The
-	// singular /api/chat-session/ worktree route is a separate surface and
-	// stays a plain handler.
-	mux.HandleFunc("/api/chat-session/", ws.handleAPIChatSessionWorktree)
 }

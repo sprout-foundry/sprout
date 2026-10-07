@@ -64,9 +64,11 @@ func TestHumaOperationsArePresentInGeneratedDoc(t *testing.T) {
 	}
 }
 
-// TestMergePreservesSeedFamilies guards the merge: every path the hand-written
-// seed documents must survive into the merged output (the generated Huma
-// sections are unioned on top, never replacing the seed's families).
+// TestMergePreservesSeedFamilies guards the merge: the seed's non-generated
+// metadata (the contract version in info and the per-family tags) must survive
+// into the merged output, and every path in the generated output must come
+// from a registered Huma operation (the seed no longer documents any paths, so
+// a path that appeared nowhere in Huma would surface as a merge regression).
 func TestMergePreservesSeedFamilies(t *testing.T) {
 	root := testRoot(t)
 	baseBytes, err := os.ReadFile(filepath.Join(root, baseRel)) // #nosec G304 -- baseRel is a fixed repo-relative path
@@ -85,10 +87,36 @@ func TestMergePreservesSeedFamilies(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse generated: %v", err)
 	}
-	for p := range pathsOf(base) {
-		if !pathsOf(merged)[p] {
-			t.Errorf("seed path %q dropped from merged output", p)
+
+	// The seed's contract version must survive the merge verbatim.
+	if baseInfo, _ := base["info"].(map[string]any); baseInfo != nil {
+		if got, _ := merged["info"].(map[string]any); got["version"] != baseInfo["version"] {
+			t.Errorf("merged info.version = %v, want the seed's %v", got["version"], baseInfo["version"])
 		}
+	}
+	// Every seed tag must survive the merge verbatim.
+	if baseTags, _ := base["tags"].([]any); len(baseTags) > 0 {
+		mergedTags, _ := merged["tags"].([]any)
+		have := make(map[string]bool, len(mergedTags))
+		for _, e := range mergedTags {
+			if m, ok := e.(map[string]any); ok {
+				if n, ok := m["name"].(string); ok {
+					have[n] = true
+				}
+			}
+		}
+		for _, e := range baseTags {
+			if m, ok := e.(map[string]any); ok {
+				if n, ok := m["name"].(string); ok && !have[n] {
+					t.Errorf("seed tag %q dropped from merged output", n)
+				}
+			}
+		}
+	}
+	// The generated document must still carry Huma paths (a merge that lost
+	// the Huma overlay would leave none).
+	if len(pathsOf(merged)) == 0 {
+		t.Error("merged output has no paths; the Huma overlay was lost")
 	}
 }
 

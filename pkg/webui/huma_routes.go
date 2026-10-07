@@ -318,6 +318,24 @@ func registerHumaOperations(api huma.API, ws *ReactWebServer) {
 		Tags:        []string{"conversation/query"},
 	}, ws.shellApprovalDecisionHumaHandler)
 
+	huma.Register(api, huma.Operation{
+		OperationID: "chatSessionWorktreeGet",
+		Method:      http.MethodGet,
+		Path:        "/api/chat-session/",
+		Summary:     "Get a chat session's worktree path.",
+		Description: "Returns the worktree path bound to the chat session at the /api/chat-session/{chatId}/worktree shape (the worktree-mapping GET form).",
+		Tags:        []string{"conversation/query"},
+	}, ws.chatSessionWorktreeHumaHandler)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "chatSessionWorktreeSet",
+		Method:      http.MethodPost,
+		Path:        "/api/chat-session/",
+		Summary:     "Set or switch a chat session's worktree.",
+		Description: "Sets the worktree path for the chat session at the /api/chat-session/{chatId}/worktree shape, or switches the active workspace to it at the /api/chat-session/{chatId}/worktree/switch shape. Only the switch and set branches accept POST.",
+		Tags:        []string{"conversation/query"},
+	}, ws.chatSessionWorktreeHumaHandler)
+
 	// ---- files family ----------------
 	registerFilesHumaOperations(api, ws)
 
@@ -327,4 +345,26 @@ func registerHumaOperations(api huma.API, ws *ReactWebServer) {
 	// ---- settings/configuration family ----------------
 	registerSettingsHumaOperations(api, ws)
 	registerSettingsMiscHumaOperations(api, ws)
+
+	// ---- workspace/instances family ----------------
+	registerWorkspaceHumaOperations(api, ws)
+
+	// ---- terminal family ----------------
+	registerTerminalHumaOperations(api, ws)
+
+	// ---- sync/txn family ----------------
+	registerSyncTxnHumaOperations(api, ws)
+
+	// ---- command family ----------------
+	registerCommandHumaOperations(api, ws)
+
+	// ---- proxy family ----------------
+	registerProxyHumaOperations(api, ws)
+
+	// ---- cross-family misc (support-bundle, ws-metrics, open-in-file-browser,
+	// computer-use/test, browse) ----------------
+	registerMiscHumaOperations(api, ws)
+
+	// ---- design + starters families ----------------
+	registerDesignStartersHumaOperations(api, ws)
 }

@@ -43,6 +43,13 @@ const (
 	contractHumaGitGo          = "pkg/webui/huma_git.go"
 	contractHumaSettingsGo     = "pkg/webui/huma_settings.go"
 	contractHumaSettingsMiscGo = "pkg/webui/huma_settings_misc.go"
+	contractHumaWorkspaceGo    = "pkg/webui/huma_workspace.go"
+	contractHumaTerminalGo     = "pkg/webui/huma_terminal.go"
+	contractHumaSyncTxnGo      = "pkg/webui/huma_sync_txn.go"
+	contractHumaCommandGo      = "pkg/webui/huma_command.go"
+	contractHumaProxyGo        = "pkg/webui/huma_proxy.go"
+	contractHumaMiscGo         = "pkg/webui/huma_misc.go"
+	contractHumaDesignStarters = "pkg/webui/huma_design_starters.go"
 	contractOpenAPIYAML        = "docs/api/openapi.yaml"
 	contractAllowlist          = "docs/api/undocumented.txt"
 )
@@ -59,6 +66,13 @@ func contractRouteFiles(root string) []string {
 		filepath.Join(root, contractHumaGitGo),
 		filepath.Join(root, contractHumaSettingsGo),
 		filepath.Join(root, contractHumaSettingsMiscGo),
+		filepath.Join(root, contractHumaWorkspaceGo),
+		filepath.Join(root, contractHumaTerminalGo),
+		filepath.Join(root, contractHumaSyncTxnGo),
+		filepath.Join(root, contractHumaCommandGo),
+		filepath.Join(root, contractHumaProxyGo),
+		filepath.Join(root, contractHumaMiscGo),
+		filepath.Join(root, contractHumaDesignStarters),
 	}
 }
 
@@ -424,6 +438,91 @@ func TestOpenAPIContractTagsMirrorInventoryFamilies(t *testing.T) {
 	for i := range wantSorted {
 		if got[i] != wantSorted[i] {
 			t.Errorf("tag %d = %q, want %q", i, got[i], wantSorted[i])
+		}
+	}
+}
+
+// TestUndocumentedAllowlistIsWebSocketStreamingInternalOnly locks the
+// end-state of the allowlist: every JSON route is a Huma operation documented
+// in openapi.yaml, so undocumented.txt may only still list the routes that
+// genuinely cannot be Huma JSON operations — the WebSocket bridges, the
+// SPA/static/asset surfaces, the plain /health and /debug/goroutines probes,
+// and /api/bootstrap. It fails if a migrated family (or any other /api/ route
+// beyond /api/lsp/ws and /api/bootstrap) reappears in the allowlist, and it
+// also enforces the file's lexicographic ordering so it stays stable.
+func TestUndocumentedAllowlistIsWebSocketStreamingInternalOnly(t *testing.T) {
+	root := repoRootFromWorkingDir(t)
+	got := readAllowlist(t, filepath.Join(root, contractAllowlist))
+
+	// The exact expected allowlist: WebSocket/streaming bridges, SPA/static/
+	// asset routes, the plain probes, and the bootstrap surface. Any other
+	// entry (including a migrated family's /api/ route) is a regression.
+	want := []string{
+		"/",
+		"/api/bootstrap",
+		"/api/lsp/ws",
+		"/asset-manifest.json",
+		"/assets/",
+		"/browserconfig.xml",
+		"/debug/goroutines",
+		"/favicon.ico",
+		"/health",
+		"/icon-192.png",
+		"/icon-512.png",
+		"/logo-mark.svg",
+		"/manifest.json",
+		"/ssh/",
+		"/static/",
+		"/sw.js",
+		"/terminal",
+		"/ws",
+	}
+
+	gotSet := make(map[string]bool, len(got))
+	for _, g := range got {
+		gotSet[g] = true
+	}
+	wantSet := make(map[string]bool, len(want))
+	for _, w := range want {
+		wantSet[w] = true
+	}
+
+	var extra []string
+	for g := range gotSet {
+		if !wantSet[g] {
+			extra = append(extra, g)
+		}
+	}
+	sort.Strings(extra)
+	if len(extra) > 0 {
+		t.Errorf("undocumented.txt lists entries beyond the WebSocket/static/internal set: %v", extra)
+	}
+
+	var missing []string
+	for w := range wantSet {
+		if !gotSet[w] {
+			missing = append(missing, w)
+		}
+	}
+	sort.Strings(missing)
+	if len(missing) > 0 {
+		t.Errorf("undocumented.txt is missing expected entries: %v", missing)
+	}
+
+	// No /api/ route may appear in the allowlist except the two deliberate
+	// non-JSON surfaces; this locks the "documented-only allowlist" end-state
+	// for every migrated family.
+	for _, g := range got {
+		if strings.HasPrefix(g, "/api/") && g != "/api/lsp/ws" && g != "/api/bootstrap" {
+			t.Errorf("undocumented.txt lists a migrated /api/ route %q; it must be a Huma operation in openapi.yaml", g)
+		}
+	}
+
+	// Entries must stay in lexicographic order so the file is stable as it
+	// shrinks.
+	for i := 1; i < len(got); i++ {
+		if got[i-1] > got[i] {
+			t.Errorf("undocumented.txt is not lexicographic at entry %d: %q precedes %q", i, got[i-1], got[i])
 		}
 	}
 }

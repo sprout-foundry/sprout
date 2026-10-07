@@ -81,7 +81,7 @@ checkboxes.
       `/api/providers*`, `/api/onboarding*`, `/api/config`,
       `/api/hotkeys*`, `/api/skills*`, `/api/local-llm*`, `/api/password`)
       to Huma, no behavior change. Spec: SP-160 §160c.
-- [ ] **contract.12** Migrate the remaining families (`/api/workspace*`,
+- [x] **contract.12** Migrate the remaining families (`/api/workspace*`,
       `/api/instances*`, `/api/terminal*`, `/api/txn*`, `/api/sync*`,
       `/api/command*`, `/api/proxy*`, `/api/ws-metrics`,
       `/api/support-bundle`, `/api/open-in-file-browser`,

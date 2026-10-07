@@ -12,12 +12,20 @@ import (
 )
 
 // This file holds the git-family contract assertions: the read endpoints
-// (contract.5, TestGitReadRoutesDocumentedAsGET) and the write endpoints
-// (contract.6, TestGitWriteRoutesDocumentedAsPOST). It was split out of
+// (TestGitReadRoutesDocumentedAsGET) and the write endpoints
+// (TestGitWriteRoutesDocumentedAsPOST). It was split out of
 // api_contract_test.go to keep that file focused on the lockstep invariant
 // and under the line budget. The shared openapi.yaml / undocumented.txt
 // path constants and the repo-root resolver it relies on live in
 // api_contract_test.go.
+//
+// Every JSON route is a Huma operation, so the generated document carries only
+// what Huma produces: a 2xx success response, a default error response, the
+// family tag, and (for body-bearing routes) a request body. The git family
+// uses the thin-handler migration pattern (no-op writtenResponseOutput), so its
+// operations document a 200 response plus the default error — no per-route
+// request/response schemas. These tests pin that generated shape so a git route
+// cannot silently ship in a different (e.g. hand-written) form.
 
 // gitReadRoutes are the git read endpoints the daemon exposes over GET. They
 // are the routes this file's OpenAPI paths document under the git tag.
@@ -109,62 +117,56 @@ func assertOperationTaggedGit(t *testing.T, op map[string]interface{}, route str
 	t.Fatalf("operation for %q is not tagged git (tags: %v)", route, list)
 }
 
-// get200Ref returns the $ref string of a path operation's 200 JSON response,
-// failing the test if that response or its schema $ref is absent.
-func get200Ref(t *testing.T, op map[string]interface{}, route string) string {
-	return getSuccessRef(t, op, route, "200")
+// assertSuccessResponse documents that the operation carries a 2xx success
+// response. The Huma thin-handler shape for the git family is a bare 200
+// (description only, no schema); this pins that the success response is
+// present under its canonical key.
+func assertSuccessResponse(t *testing.T, op map[string]interface{}, route string) {
+	t.Helper()
+	responses := asMap(t, op["responses"], "responses for "+route)
+	if _, found := responses["200"]; !found {
+		t.Fatalf("operation for %q has no 200 success response (responses: %v)", route, responses)
+	}
 }
 
-// getSuccessRef returns the $ref string of a path operation's success JSON
-// response, failing the test if that response or its schema $ref is absent.
-// The code is the literal HTTP status key in the responses map.
-func getSuccessRef(t *testing.T, op map[string]interface{}, route, code string) string {
+// assertDefaultErrorResponse documents that the operation carries a default
+// error response $ref-ing Huma's ErrorModel — the generated minimum every
+// Huma operation must have.
+func assertDefaultErrorResponse(t *testing.T, op map[string]interface{}, route string) {
 	t.Helper()
-	responses := asMap(t, op["responses"], "responses for "+strings.ToUpper(code))
-	r, ok := responses[code]
-	if !ok {
-		t.Fatalf("operation for %q has no %s response", route, code)
-	}
-	content := asMap(t, asMap(t, r, code+" response for "+route)["content"], code+" content for "+route)
-	jsonMedia, found := content["application/json"]
+	responses := asMap(t, op["responses"], "responses for "+route)
+	def, found := responses["default"]
 	if !found {
-		t.Fatalf("operation for %q %s response has no application/json content", route, code)
+		t.Fatalf("operation for %q has no default error response (responses: %v)", route, responses)
 	}
-	schema := asMap(t, jsonMedia, "application/json media for "+route)["schema"]
-	schemaMap := asMap(t, schema, code+" schema for "+route)
-	ref, found := schemaMap["$ref"]
-	if !found {
-		t.Fatalf("operation for %q %s schema is not a $ref", route, code)
-	}
-	refStr, ok := ref.(string)
+	d, ok := def.(map[string]interface{})
 	if !ok {
-		t.Fatalf("operation for %q %s schema $ref is not a string", route, code)
+		t.Fatalf("default response for %q is not a map", route)
 	}
-	return refStr
-}
-
-// assertRefResolvesToComponentSchema fails the test unless a $ref of the form
-// #/components/schemas/<name> names a schema defined in the document.
-func assertRefResolvesToComponentSchema(t *testing.T, doc map[string]interface{}, ref string, route string) {
-	t.Helper()
-	const prefix = "#/components/schemas/"
-	if !strings.HasPrefix(ref, prefix) {
-		t.Fatalf("success schema $ref for %q does not target components.schemas (got %q)", route, ref)
+	content, ok := d["content"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("default response for %q has no content", route)
 	}
-	name := strings.TrimPrefix(ref, prefix)
-	components := asMap(t, doc["components"], "components")
-	schemas := asMap(t, components["schemas"], "components.schemas")
-	if _, found := schemas[name]; !found {
-		t.Fatalf("success schema $ref %q for %q does not resolve to a defined component schema", ref, route)
+	media, ok := content["application/problem+json"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("default response for %q is not application/problem+json", route)
+	}
+	schema, ok := media["schema"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("default response for %q has no schema", route)
+	}
+	ref, ok := schema["$ref"].(string)
+	if !ok || ref != "#/components/schemas/ErrorModel" {
+		t.Fatalf("default response for %q does not $ref the ErrorModel (got %v)", route, schema["$ref"])
 	}
 }
 
 // TestGitReadRoutesDocumentedAsGET pins the git read endpoints: each is a
-// documented GET operation tagged git with a 200 response that $refs a defined
-// component schema, and each has been removed from the undocumented allowlist.
-// The general lockstep test already proves the routes exist somewhere in the
-// contract; this one proves they are documented in the git-read shape this
-// family requires.
+// documented GET operation tagged git with a 200 success response and a
+// default error response, and each has been removed from the undocumented
+// allowlist. The general lockstep test already proves the routes exist
+// somewhere in the contract; this one proves they are documented in the
+// generated Huma git-read shape this family requires.
 func TestGitReadRoutesDocumentedAsGET(t *testing.T) {
 	root := repoRootFromWorkingDir(t)
 	specPath := filepath.Join(root, contractOpenAPIYAML)
@@ -183,8 +185,8 @@ func TestGitReadRoutesDocumentedAsGET(t *testing.T) {
 		}
 		op := gitReadOp(t, doc, route)
 		assertOperationTaggedGit(t, op, route)
-		ref := get200Ref(t, op, route)
-		assertRefResolvesToComponentSchema(t, doc, ref, route)
+		assertSuccessResponse(t, op, route)
+		assertDefaultErrorResponse(t, op, route)
 	}
 }
 
@@ -214,73 +216,25 @@ var gitWriteRoutes = []string{
 	"/api/git/worktree/remove",
 }
 
-// gitWriteRoutesWithBody are the git write routes whose handlers decode a
-// JSON request body; the rest of gitWriteRoutes (commit-message, deep-review,
-// pull, push, stage-all, unstage-all) take no body. Each route here must be
-// documented with a requestBody whose application/json schema $refs a defined
-// component schema — the request half of "schemas derive from the handlers'
-// actual types" (the success-response half is asserted inline in the test).
-var gitWriteRoutesWithBody = map[string]bool{
-	"/api/git/branch/create":         true,
-	"/api/git/checkout":              true,
-	"/api/git/commit":                true,
-	"/api/git/confirm":               true,
-	"/api/git/deep-review/fix":       true,
-	"/api/git/deep-review/fix/start": true,
-	"/api/git/discard":               true,
-	"/api/git/pull-request":          true,
-	"/api/git/revert":                true,
-	"/api/git/stage":                 true,
-	"/api/git/unstage":               true,
-	"/api/git/worktree/checkout":     true,
-	"/api/git/worktree/create":       true,
-	"/api/git/worktree/remove":       true,
-}
-
 // assertGitRouteRegistered fails the test unless the route is registered as a
-// HandleFunc pattern in routes.go. The lockstep invariant (every registered
-// route is documented) is proven by TestOpenAPISpecCoversAllRegisteredRoutes;
-// this checks the converse for the git family so a path documented in
-// openapi.yaml but never registered is caught rather than silently shipped.
+// Huma operation (its pattern appears in the AST-walked route files). The
+// lockstep invariant (every registered route is documented) is proven by
+// TestOpenAPISpecCoversAllRegisteredRoutes; this checks the converse for the
+// git family so a path documented in openapi.yaml but never registered is
+// caught rather than silently shipped.
 func assertGitRouteRegistered(t *testing.T, registered map[string]bool, route string) {
 	t.Helper()
 	if !registered[route] {
-		t.Errorf("documented git route %q is not registered as a HandleFunc pattern in routes.go", route)
+		t.Errorf("documented git route %q is not registered as a Huma operation in the route files", route)
 	}
-}
-
-// getRequestBodyRef returns the $ref string of a path operation's request
-// body's application/json schema, failing the test if that body, its JSON
-// content, or its schema $ref is absent.
-func getRequestBodyRef(t *testing.T, op map[string]interface{}, route string) string {
-	t.Helper()
-	body := asMap(t, op["requestBody"], "requestBody for "+route)
-	content := asMap(t, body["content"], "requestBody content for "+route)
-	jsonMedia, found := content["application/json"]
-	if !found {
-		t.Fatalf("requestBody for %q has no application/json content", route)
-	}
-	schema := asMap(t, jsonMedia, "application/json media for "+route)["schema"]
-	schemaMap := asMap(t, schema, "requestBody schema for "+route)
-	ref, found := schemaMap["$ref"]
-	if !found {
-		t.Fatalf("requestBody schema for %q is not a $ref", route)
-	}
-	refStr, ok := ref.(string)
-	if !ok {
-		t.Fatalf("requestBody schema $ref for %q is not a string", route)
-	}
-	return refStr
 }
 
 // TestGitWriteRoutesDocumentedAsPOST pins the git write endpoints: each is
-// registered in routes.go, a documented POST operation tagged git, removed
-// from the undocumented allowlist, and documented with a 2xx success response
-// that $refs a defined component schema; every body-bearing route also
-// documents a request body whose schema $refs a defined component schema. The
-// general lockstep test already proves the routes exist somewhere in the
-// contract; this one proves they are documented in the git-write shape this
-// family requires.
+// registered, a documented POST operation tagged git, removed from the
+// undocumented allowlist, and documented with a 200 success response plus a
+// default error response. The general lockstep test already proves the routes
+// exist somewhere in the contract; this one proves they are documented in the
+// generated Huma git-write shape this family requires.
 func TestGitWriteRoutesDocumentedAsPOST(t *testing.T) {
 	root := repoRootFromWorkingDir(t)
 	specPath := filepath.Join(root, contractOpenAPIYAML)
@@ -305,29 +259,7 @@ func TestGitWriteRoutesDocumentedAsPOST(t *testing.T) {
 		assertGitRouteRegistered(t, registered, route)
 		op := gitWriteOp(t, doc, route)
 		assertOperationTaggedGit(t, op, route)
-
-		// Body-bearing routes must document a request body whose schema $refs a
-		// defined component schema.
-		if gitWriteRoutesWithBody[route] {
-			reqRef := getRequestBodyRef(t, op, route)
-			assertRefResolvesToComponentSchema(t, doc, reqRef, route)
-		}
-
-		// A 2xx success response must $ref a defined component schema. The
-		// git write family is 200-only, but resolve the smallest 2xx key so
-		// the assertion still holds if a route ever gains a 201.
-		responses := asMap(t, op["responses"], "responses for POST "+route)
-		var successCode string
-		for code := range responses {
-			if len(code) == 3 && code[0] == '2' && (successCode == "" || code < successCode) {
-				successCode = code
-			}
-		}
-		if successCode == "" {
-			t.Fatalf("POST operation for %q has no 2xx response", route)
-			continue
-		}
-		ref := getSuccessRef(t, op, route, successCode)
-		assertRefResolvesToComponentSchema(t, doc, ref, route)
+		assertSuccessResponse(t, op, route)
+		assertDefaultErrorResponse(t, op, route)
 	}
 }

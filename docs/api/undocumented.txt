@@ -1,76 +1,56 @@
 # Undocumented routes allowlist
 #
-# Every route registered in pkg/webui/routes.go must be documented in
+# Every route registered in pkg/webui must be documented in
 # docs/api/openapi.yaml OR listed here, one mux pattern per line. A Go test in
 # pkg/webui (TestOpenAPISpecCoversAllRegisteredRoutes) enforces this and fails
 # if a route appears in neither file.
 #
 # This is a shrink-only allowlist: an entry is removed from this file the same
-# change that documents its route in docs/api/openapi.yaml. A route that is
-# documented in openapi.yaml must not also appear here — the test fails when it
-# does, so the file can only lose entries over time.
+# change that registers its route as a Huma operation in docs/api/openapi.yaml.
+# A route that is documented in openapi.yaml must not also appear here — the
+# test fails when it does, so the file can only lose entries over time.
 #
-# The pattern is written exactly as the mux.HandleFunc pattern is registered
-# (a trailing "/" marks a prefix route; {name} is a Go 1.22 wildcard segment).
-# Blank lines and lines starting with "#" are ignored.
-#
-# Until a route is documented in openapi.yaml it is kept here, so the skeleton
-# ships with every registered route listed. The order is plain lexicographic so
-# the file is stable and diffs stay readable as entries are removed.
+# Every registered route is now a Huma JSON operation except the handful below,
+# which are the ones that genuinely cannot be Huma JSON operations: the
+# WebSocket bridges, the SPA/static/asset surfaces, the plain /health and
+# /debug/goroutines probes, and /api/bootstrap (the bootstrap/config surface
+# the web UI fetches first, deliberately kept a plain handler). Each entry is
+# followed by a short reason (the lines the parser ignores); the entries stay
+# in lexicographic order so the file is stable and diffs stay readable as it
+# shrinks.
 /
+# The SPA root: serves the embedded web UI (static, not a JSON operation).
 /api/bootstrap
-/api/command/complete
-/api/command/execute
-/api/computer-use/test
-/api/design/status
-/api/instances
-/api/instances/select
-/api/instances/ssh-browse
-/api/instances/ssh-close
-/api/instances/ssh-hosts
-/api/instances/ssh-launch-status
-/api/instances/ssh-open
-/api/instances/ssh-sessions
-/api/open-in-file-browser
-/api/proxy/chat
-/api/proxy/chat/status
-/api/proxy/chat/stop
-/api/proxy/stats
-/api/starters
-/api/starters/instantiate
-/api/support-bundle
-/api/sync
-/api/sync/batch
-/api/sync/op
-/api/sync/status
-/api/terminal/agent-sessions
-/api/terminal/agent-sessions/
-/api/terminal/history
-/api/terminal/sessions
-/api/terminal/shells
-/api/txn/pull
-/api/txn/push
-/api/txn/run
-/api/txn/status
-/api/workspace
-/api/workspace/browse
-/api/workspace/projects
-/api/workspace/symbols
-/api/workspace/sync
-/api/workspace/takeover
-/api/ws-metrics
+# The bootstrap/config surface the web UI fetches first, kept a plain handler by design.
+/api/lsp/ws
+# A WebSocket bridge to the LSP server (a streaming upgrade, not JSON).
 /asset-manifest.json
+# The SPA asset manifest (a static asset).
 /assets/
+# The SPA static assets (a prefix route).
 /browserconfig.xml
+# Browser config metadata (a static asset).
 /debug/goroutines
+# The always-on goroutine-dump probe for diagnosing a stuck session.
 /favicon.ico
+# The favicon (a static asset).
 /health
+# The liveness probe (plain and unauthenticated).
 /icon-192.png
+# A PWA icon (a static asset).
 /icon-512.png
+# A PWA icon (a static asset).
 /logo-mark.svg
+# The logo mark (a static asset).
 /manifest.json
+# The PWA manifest (a static asset).
 /ssh/
+# A reverse proxy to a remote instance's SSH surface (a prefix route).
 /static/
+# The static file server (a prefix route).
 /sw.js
+# The service worker (a static asset).
 /terminal
+# The terminal WebSocket upgrade (streaming, not JSON).
 /ws
+# The main WebSocket event bridge (streaming, not JSON).

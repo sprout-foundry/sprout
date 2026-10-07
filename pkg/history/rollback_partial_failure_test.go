@@ -27,9 +27,15 @@ func TestRollbackContinuesPastWriteFailure(t *testing.T) {
 	// staleness guard has no baseline and allows the attempt (step 1).
 	good := []string{"a_good.go", "c_good.go"}
 	for _, f := range good {
-		os.WriteFile(f, []byte("new-"+f), 0600)
-		RecordChangeWithDetails(revisionID, f, "orig-"+f, "new-"+f, "edit", "", "", "", "m")
-		os.WriteFile(f, []byte("new-"+f), 0600)
+		if err := os.WriteFile(f, []byte("new-"+f), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := RecordChangeWithDetails(revisionID, f, "orig-"+f, "new-"+f, "edit", "", "", "", "m"); err != nil {
+			t.Fatalf("record change %s: %v", f, err)
+		}
+		if err := os.WriteFile(f, []byte("new-"+f), 0600); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	dirTarget := filepath.Join(testDir, "b_fail_dir")
@@ -37,7 +43,9 @@ func TestRollbackContinuesPastWriteFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	// NewCode empty → the staleness guard allows the write attempt.
-	RecordChangeWithDetails(revisionID, dirTarget, "orig-fail", "", "edit", "", "", "", "m")
+	if err := RecordChangeWithDetails(revisionID, dirTarget, "orig-fail", "", "edit", "", "", "", "m"); err != nil {
+		t.Fatalf("record change %s: %v", dirTarget, err)
+	}
 
 	err := RevertChangeByRevisionID(revisionID)
 	if err == nil {

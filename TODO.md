@@ -604,7 +604,7 @@ passes the manifest validator (`pkg/startermanifest`).
 
 ---
 
-- [ ] **154.6** Benchmark tasks for `static-site`: at least five tasks with
+- [x] **154.6** Benchmark tasks for `static-site`: at least five tasks with
       frozen plans (SP-148 format) and verification from the starter
       manifest (e.g. add a page, add a form field, change the layout, add a
       content collection entry, fix a broken link), under the benchmark

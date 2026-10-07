@@ -8,8 +8,9 @@ package workflow
 // remained. This loop re-reads the TODO file after every turn and, while
 // runnable items remain AND the turn made progress, issues another turn
 // with a short prompt. Progress means the session produced a new git
-// commit or newly ticked a `[ ]` item; a turn that does neither stops the
-// loop so permanently skipped items cannot spin forever.
+// commit or newly ticked a `[ ]` item. A turn that does neither is idle: the
+// next turn gets a prompt naming that, and MaxIdleTurns consecutive idle
+// turns stop the loop so permanently skipped items cannot spin forever.
 //
 // This is distinct from the Loop (RunAgentWorkflowLoop, loop.go): Loop
 // clears the conversation between items and drives each with a stateless
@@ -40,8 +41,9 @@ const (
 	// ContinuationStopNoRunnableItems — no `[ ]` items remain (all done,
 	// or only non-item prose remains).
 	ContinuationStopNoRunnableItems ContinuationStopReason = "no_runnable_items"
-	// ContinuationStopNoProgress — runnable items remain but the last turn
-	// neither committed nor ticked an item (e.g. permanently skipped items).
+	// ContinuationStopNoProgress — runnable items remain but MaxIdleTurns
+	// consecutive turns neither committed nor ticked an item (e.g.
+	// permanently skipped items).
 	ContinuationStopNoProgress ContinuationStopReason = "no_progress"
 	// ContinuationStopContextCancelled — the run was cancelled mid-turn.
 	ContinuationStopContextCancelled ContinuationStopReason = "context_cancelled"
@@ -165,6 +167,11 @@ func RunInitialContinuation(ctx context.Context, chatAgent *agent.Agent, eventBu
 	if maxContinuations <= 0 {
 		maxContinuations = DefaultMaxContinuations
 	}
+	maxIdleTurns := cont.MaxIdleTurns
+	if maxIdleTurns <= 0 {
+		maxIdleTurns = DefaultMaxIdleTurns
+	}
+	idleTurns := 0
 	// The git-HEAD probe needs a directory inside the repository. Prefer the
 	// TODO file's location (correct under test, where CWD is the package
 	// dir) and fall back to the agent's workspace root.
@@ -206,7 +213,11 @@ func RunInitialContinuation(ctx context.Context, chatAgent *agent.Agent, eventBu
 			console.GlyphWarning.Printf("Failed to emit continuation event: %v", err)
 		}
 
-		turnErr := queryExecutor(ctx, chatAgent, eventBus, prompt)
+		turnPrompt := prompt
+		if idleTurns > 0 {
+			turnPrompt = DefaultContinuationIdlePrompt
+		}
+		turnErr := queryExecutor(ctx, chatAgent, eventBus, turnPrompt)
 		result.Continuations++
 
 		after := snapshotContinuationProgress(gitDir, todoFile)
@@ -217,6 +228,7 @@ func RunInitialContinuation(ctx context.Context, chatAgent *agent.Agent, eventBu
 		if err := EmitWorkflowOrchestrationEvent(cfg, "workflow_continuation_turn_completed", map[string]interface{}{
 			"turn":           result.Continuations,
 			"progressed":     progressed,
+			"idle_turns":     nextIdleTurns(idleTurns, progressed),
 			"runnable_items": runnable,
 			"has_error":      turnErr != nil,
 		}); err != nil {
@@ -237,7 +249,8 @@ func RunInitialContinuation(ctx context.Context, chatAgent *agent.Agent, eventBu
 			result.StopReason = ContinuationStopNoRunnableItems
 			break
 		}
-		if !progressed {
+		idleTurns = nextIdleTurns(idleTurns, progressed)
+		if idleTurns >= maxIdleTurns {
 			result.StopReason = ContinuationStopNoProgress
 			break
 		}
@@ -281,6 +294,15 @@ func madeContinuationProgress(before, after continuationProgress) bool {
 		return true
 	}
 	return after.todoDone > before.todoDone
+}
+
+// nextIdleTurns returns the consecutive idle-turn count after a turn:
+// progress resets it, an idle turn extends it.
+func nextIdleTurns(idleTurns int, progressed bool) int {
+	if progressed {
+		return 0
+	}
+	return idleTurns + 1
 }
 
 // continuationLastProvider returns the agent's current provider for the

@@ -155,11 +155,11 @@ func TestRunInitialContinuation_NoRunnableItems_NoTurns(t *testing.T) {
 }
 
 // =============================================================================
-// Test 3: a run whose only remaining items are skipped stops after one
-// no-progress turn, and the stop reason is recorded
+// Test 3: a run whose only remaining items are skipped stops after the
+// idle-turn limit, and the stop reason is recorded
 // =============================================================================
 
-func TestRunInitialContinuation_SkippedItem_StopsAfterOneNoProgressTurn(t *testing.T) {
+func TestRunInitialContinuation_SkippedItem_StopsAfterMaxIdleTurns(t *testing.T) {
 	dir := t.TempDir()
 	// One runnable item the coordinator never ticks (e.g. permanently
 	// skipped) — the turn makes no progress.
@@ -185,11 +185,11 @@ func TestRunInitialContinuation_SkippedItem_StopsAfterOneNoProgressTurn(t *testi
 	if result.StopReason != ContinuationStopNoProgress {
 		t.Errorf("StopReason = %q, want %q", result.StopReason, ContinuationStopNoProgress)
 	}
-	if result.Continuations != 1 {
-		t.Errorf("Continuations = %d, want exactly 1 (stop after first no-progress turn)", result.Continuations)
+	if result.Continuations != DefaultMaxIdleTurns {
+		t.Errorf("Continuations = %d, want %d (stop after the default idle-turn limit)", result.Continuations, DefaultMaxIdleTurns)
 	}
-	if turns != 1 {
-		t.Errorf("queryExecutor calls = %d, want 1 — must not loop forever", turns)
+	if turns != DefaultMaxIdleTurns {
+		t.Errorf("queryExecutor calls = %d, want %d — must not loop forever", turns, DefaultMaxIdleTurns)
 	}
 	if result.RunnableItems != 1 {
 		t.Errorf("RunnableItems = %d, want 1 (item still open)", result.RunnableItems)
@@ -240,8 +240,8 @@ func TestRunInitialContinuation_NoProgressStopsEvenWithManyItems(t *testing.T) {
 	if result.StopReason != ContinuationStopNoProgress {
 		t.Errorf("StopReason = %q, want %q", result.StopReason, ContinuationStopNoProgress)
 	}
-	if turns != 1 {
-		t.Errorf("queryExecutor calls = %d, want 1 — no-progress must stop immediately", turns)
+	if turns != DefaultMaxIdleTurns {
+		t.Errorf("queryExecutor calls = %d, want %d — idle turns must stop at the limit, not run through the items", turns, DefaultMaxIdleTurns)
 	}
 }
 
@@ -331,9 +331,8 @@ func TestRunInitialContinuation_MaxContinuationsCap(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RunInitialContinuation: %v", err)
 	}
-	// With a no-progress turn, the loop stops after the first turn via
-	// no_progress before the cap is consulted, so this asserts the loop
-	// never exceeds the cap.
+	// The idle-turn limit is 2 but the cap is 1, so the cap stops the loop
+	// first; this asserts the loop never exceeds the cap.
 	if result.Continuations > 1 {
 		t.Errorf("Continuations = %d, want <= 1 (cap)", result.Continuations)
 	}

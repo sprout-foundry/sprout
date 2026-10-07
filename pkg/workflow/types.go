@@ -267,6 +267,12 @@ type AgentWorkflowContinuation struct {
 	// MaxContinuations caps the number of continuation turns issued
 	// after the initial turn, as a hard backstop. Default: 1000.
 	MaxContinuations int `json:"max_continuations,omitempty"`
+	// MaxIdleTurns is how many consecutive turns may end without progress
+	// (no new commit, no newly ticked item) before the loop stops. A turn
+	// can legitimately end idle, e.g. after re-verifying work a subagent
+	// left uncommitted; the next turn gets DefaultContinuationIdlePrompt.
+	// Default: DefaultMaxIdleTurns.
+	MaxIdleTurns int `json:"max_idle_turns,omitempty"`
 	// Prompt is the short prompt sent on each continuation turn.
 	// Empty uses DefaultContinuationPrompt.
 	Prompt string `json:"prompt,omitempty"`
@@ -290,6 +296,14 @@ const DefaultContinuationTodoFile = "TODO.md"
 
 // DefaultMaxContinuations bounds continuation turns when unset.
 const DefaultMaxContinuations = 1000
+
+// DefaultMaxIdleTurns bounds consecutive no-progress turns when unset.
+const DefaultMaxIdleTurns = 2
+
+// DefaultContinuationIdlePrompt follows a turn that made no progress: it
+// names that state so the coordinator commits verified work or records why
+// an item is blocked instead of re-verifying again.
+const DefaultContinuationIdlePrompt = "The last turn did not commit or tick any item. Re-read TODO.md from your current working directory. If an item is in progress in the working tree, finish it, run its validation, commit it and tick it now. If it cannot be finished, leave a short note under the item saying what remains and move on to the next runnable `[ ]` item."
 
 // DefaultContinuationPrompt is the short prompt issued on each
 // continuation turn: it tells the coordinator to re-read the TODO file and

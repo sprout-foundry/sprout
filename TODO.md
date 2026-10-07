@@ -96,7 +96,7 @@ the end, without checkboxes.
       uncached prompt cost) and otherwise uses the catalog rate, returning an
       explicit unknown (rendered as "unknown", never $0) when neither applies.
       Pinned by Go tests.
-- [ ] **auto.4** Continuation stops on a single verification-only turn:
+- [x] **auto.4** Continuation stops on a single verification-only turn:
       `RunInitialContinuation` (`pkg/workflow/continuation.go`) stops with
       `no_progress` the first time a turn ends without a new commit or a
       newly ticked item, even when that turn left verified, uncommitted

@@ -46,7 +46,7 @@ func (c *Config) SaveWorkspaceOverlay(dir, fileName string, since *Config) error
 	if err != nil {
 		return fmt.Errorf("marshal workspace config: %w", err)
 	}
-	if err := os.WriteFile(path, data, 0600); err != nil {
+	if err := writeFileAtomic(path, data, 0600); err != nil {
 		return fmt.Errorf("write workspace config: %w", err)
 	}
 	return nil

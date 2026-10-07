@@ -205,8 +205,9 @@ func (c *Config) Save() error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	// Write with explicit 0600 permissions (owner read/write only)
-	if err := os.WriteFile(configPath, data, 0600); err != nil {
+	// Write atomically (temp + rename) — the load path reads this file
+	// concurrently, and a truncation window drops the whole layer.
+	if err := writeFileAtomic(configPath, data, 0600); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
@@ -254,7 +255,7 @@ func (c *Config) SaveToDirAs(dir, fileName string) error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	if err := os.WriteFile(configPath, data, 0600); err != nil {
+	if err := writeFileAtomic(configPath, data, 0600); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 

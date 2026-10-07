@@ -57,9 +57,15 @@ test.setTimeout(120_000);
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Open the settings panel via the sidebar toggle. Assumes chat-shell is visible. */
+/** Open the settings panel via the sidebar toggle. Assumes chat-shell is visible.
+ *
+ * Uses `domcontentloaded` rather than `networkidle`: a freshly-booted daemon
+ * runs provider/model discovery against real endpoints (local Ollama, remote
+ * APIs) for several seconds per page load, so the network never goes idle
+ * within the test timeout. The explicit chat-shell/settings-panel visibility
+ * assertions below are the actual readiness signal. */
 async function openSettings() {
-  await page.goto(vite.url, { waitUntil: "networkidle" });
+  await page.goto(vite.url, { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId(TESTIDS["chat-shell"])).toBeVisible({
     timeout: 30_000,
   });
@@ -75,7 +81,7 @@ async function openSettings() {
  *  persistence tests to verify that setting changes saved to the backend
  *  survive a full page reload (not just localStorage UI state). */
 async function reopenSettingsAfterReload() {
-  await page.reload({ waitUntil: "networkidle" });
+  await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.getByTestId(TESTIDS["chat-shell"])).toBeVisible({
     timeout: 30_000,
   });
@@ -463,7 +469,7 @@ test.describe("State persistence", () => {
     await expect(sectionByLabel("Workspace")).toHaveClass(/expanded/);
 
     // Reload
-    await page.reload({ waitUntil: "networkidle" });
+    await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.getByTestId(TESTIDS["chat-shell"])).toBeVisible({
       timeout: 30_000,
     });

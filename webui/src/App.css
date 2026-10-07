@@ -412,6 +412,25 @@ body {
   min-width: 0;
 }
 
+/* Host-provided unread-notification count (host.7). Rendered only when the
+ * host supplies notifications.count; token-driven so it inherits the theme. */
+.header-host-notification-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 8px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--accent-primary);
+  color: var(--accent-fg);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
 /* Cloud-mode "Back to Dashboard" link at the left of the header bar.
  * Subtle ghost-link style that matches the header bar aesthetic. */
 .header-back-to-dashboard {

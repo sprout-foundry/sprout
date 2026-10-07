@@ -1,3 +1,4 @@
+import { notificationBus as rawNotificationBus } from '@sprout/ui';
 import type { SproutHost } from './types';
 
 /**
@@ -30,9 +31,20 @@ export const localHost: SproutHost = {
     },
   },
   notifications: {
-    // The local UI keeps its own in-app toast/center; the host sink is a
-    // no-op placeholder until that sink is wired.
-    post() {},
+    // The local host's sink IS the in-app notification bus: it forwards posted
+    // notifications to the same bus that drives the toast stack and the
+    // NotificationCenter, so local behavior is unchanged. The web UI's host-aware
+    // notificationBus routes here when localHost is active — exactly once, so
+    // nothing double-posts. No unread count: the local UI owns its own history.
+    post(notification) {
+      rawNotificationBus.notify(
+        notification.level,
+        notification.title,
+        notification.message,
+        notification.duration,
+        notification.action,
+      );
+    },
   },
   capabilities: {
     // Mirrors today's local-mode defaults (config/mode.ts local values):

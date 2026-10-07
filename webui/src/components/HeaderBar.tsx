@@ -6,6 +6,7 @@ import { LayeredSearchButton } from './layered/LayeredTopBar';
 import { useActiveRepoURL } from '../services/activeRepo';
 import { startFullWorkspace, useFullWorkspacesAvailable } from '../services/fullWorkspace';
 import { notificationBus } from '../services/notificationBus';
+import HostNotificationCount from '../host/HostNotificationCount';
 import { githubRepoSlug, platformHref, repoHubPath } from '../host/platformUrl';
 import MenuBar from './MenuBar';
 import { CreditsChip } from './CreditsChip';
@@ -121,6 +122,8 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
           </button>
         )}
         {!(isLayeredLayout && isCloud && isMobile) && <CreditsChip />}
+        {/* host.7: the host's unread-notification count, when it supplies one. */}
+        {!isLayeredLayout && <HostNotificationCount />}
         {/* SP-016 P0.5: avatar menu — cloud mode only, renders nothing in
          * local mode or without a bootstrap identity. */}
         {!isLayeredLayout && <UserMenu />}

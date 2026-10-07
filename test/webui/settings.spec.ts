@@ -154,14 +154,39 @@ async function clickSubsectionTab(testidKey: string) {
       timeout: 10_000,
     });
     const panel = page.locator(`#settings-subpanel-${subId} .section`);
-    await expect(panel).toBeVisible({ timeout: 10_000 });
+    // Long window: on CI the daemon's provider discovery churns the network
+    // for seconds at a time and React commits stall behind it.
+    await expect(panel).toBeVisible({ timeout: 30_000 });
   };
   for (let i = 0; i < 3; i += 1) {
     try {
       await attempt();
       return;
     } catch (err) {
-      if (i === 2) throw err;
+      if (i === 2) {
+        // Dump the live tab state so a CI failure names the actual culprit
+        // (wrong subsection selected vs the section hidden by the filter vs
+        // the panel rendering empty).
+        const tabs = await page
+          .locator(".settings-subsection-btn")
+          .evaluateAll((els) =>
+            els.map(
+              (el) =>
+                `${el.getAttribute("data-testid")}=${el.getAttribute("aria-selected")}`,
+            ),
+          )
+          .catch(() => ["<page unreachable>"]);
+        const content = await page
+          .locator(".settings-subsection-content")
+          .innerHTML()
+          .then((h) => h.slice(0, 400))
+          .catch(() => "<no content area>");
+        throw new Error(
+          `subsection ${testidKey} did not render (tabs: ${tabs.join(", ")}; content: ${content}); cause: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
       await ensureSettingsOpen();
     }
   }

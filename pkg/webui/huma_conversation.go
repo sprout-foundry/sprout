@@ -165,3 +165,13 @@ func (ws *ReactWebServer) shellApprovalDecisionHumaHandler(ctx context.Context, 
 	ws.handleAPIShellApprovals(in.Resp, in.Req)
 	return &writtenResponseOutput{Body: noopWrittenResponse}, nil
 }
+
+// chatSessionWorktreeHumaHandler is the Huma handler for GET and POST
+// /api/chat-session/ (the worktree surface, documented shapes
+// /api/chat-session/{chatId}/worktree and .../worktree/switch). The plain
+// dispatcher parses the {chatId}/worktree[/switch] sub-segments from r.URL.Path
+// and routes to the get/set/switch branch; each enforces its own method gate.
+func (ws *ReactWebServer) chatSessionWorktreeHumaHandler(ctx context.Context, in *humaRequestInput) (*writtenResponseOutput, error) {
+	ws.handleAPIChatSessionWorktree(in.Resp, in.Req)
+	return &writtenResponseOutput{Body: noopWrittenResponse}, nil
+}

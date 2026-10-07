@@ -24,11 +24,11 @@ func unmarshalDoc(data []byte) (map[string]any, error) {
 
 // mergeDocs merges the Huma-generated document (humaDoc) into the hand-written
 // seed (base). The generated sections — paths and components — are unioned so
-// the hand-written families and the Huma operations coexist, with the Huma
-// value winning a name conflict (a migrated family is defined by its handler,
-// not the seed). Every other top-level section (info, tags, openapi, servers,
-// …) keeps the hand-written seed; the Huma document only adds a section the
-// seed lacks.
+// the seed's non-generated metadata and the Huma operations coexist, with the
+// Huma value winning a name conflict (a migrated family is defined by its
+// handler, not the seed). Every other top-level section (info, tags, openapi,
+// servers, …) keeps the hand-written seed; the Huma document only adds a
+// section the seed lacks.
 func mergeDocs(base, humaDoc map[string]any) map[string]any {
 	out := make(map[string]any, len(base)+len(humaDoc))
 	for k, v := range base {

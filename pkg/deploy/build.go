@@ -359,7 +359,7 @@ func DefaultTreeFingerprint(root string, skip ...string) (string, error) {
 
 	h := sha256.New()
 	for _, f := range files {
-		fmt.Fprintf(h, "%s\x00%d\x00%d\n", f.path, f.info.Size(), f.info.ModTime().UnixNano())
+		_, _ = fmt.Fprintf(h, "%s\x00%d\x00%d\n", f.path, f.info.Size(), f.info.ModTime().UnixNano())
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
 }

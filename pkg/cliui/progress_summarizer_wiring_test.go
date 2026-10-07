@@ -38,7 +38,6 @@ type summaryHarness struct {
 	usage    []SummaryUsage
 	indicate *console.ActivityIndicator
 	footer   *console.StatusFooter
-	output   func() string
 }
 
 func newSummaryHarness(t *testing.T, stub *fakeModelClient) *summaryHarness {
@@ -57,11 +56,9 @@ func newSummaryHarness(t *testing.T, stub *fakeModelClient) *summaryHarness {
 
 func (h *summaryHarness) render(t *testing.T, evtType string, data map[string]interface{}) string {
 	t.Helper()
-	var out string
-	out = captureStdout(t, func() {
+	return captureStdout(t, func() {
 		h.state.HandleProgressEvent(evtType, data, h.indicate, h.footer)
 	})
-	return out
 }
 
 // TestHandleProgressEventInvokesSummarizerAtCallSite pins the wiring

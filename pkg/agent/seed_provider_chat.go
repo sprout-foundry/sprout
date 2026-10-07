@@ -180,7 +180,7 @@ func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatReques
 	var holdback *StreamHoldback
 	if holdbackActive {
 		holdback = NewStreamHoldback(userLang, func(content string) {
-			sp.agent.output.GetStreamingBuffer().WriteString(content)
+			_, _ = sp.agent.output.GetStreamingBuffer().WriteString(content)
 			if router := sp.agent.OutputRouter(); router != nil {
 				router.RouteStreamChunk(content, "assistant_text")
 			}
@@ -228,7 +228,7 @@ func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatReques
 				// language-gated, then the finalize releases or holds it.
 				holdback.Write(msgContent)
 			default:
-				sp.agent.output.GetStreamingBuffer().WriteString(msgContent)
+				_, _ = sp.agent.output.GetStreamingBuffer().WriteString(msgContent)
 				if router := sp.agent.OutputRouter(); router != nil {
 					for _, line := range strings.SplitAfter(msgContent, "\n") {
 						if line != "" {

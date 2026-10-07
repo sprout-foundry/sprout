@@ -452,7 +452,7 @@ Workers, otherwise Pages. Each starter is embedded under
 `pkg/starters/data/<id>/` with a committed lockfile and pinned versions, and
 passes the manifest validator (`pkg/startermanifest`).
 
-- [ ] **153.9** Deploy target in the manifest: add `deploy_target`
+- [x] **153.9** Deploy target in the manifest: add `deploy_target`
       (`pages` | `workers`) to the starter manifest schema and validator,
       default `pages`; the deploy path (`pkg/deploy`, `cmd/deploy.go`, the
       deploy tools) picks the Cloudflare Pages or Workers adapter from it,

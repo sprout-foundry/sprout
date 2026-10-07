@@ -356,6 +356,57 @@ func TestDeployCmd_StatusWorksWithoutBuildOutput(t *testing.T) {
 	assert.Contains(t, out, "No deployments recorded")
 }
 
+// TestDeployAdapterID_Direct pins the resolution helper directly (no seam),
+// so the real path is exercised: vendor selection, the Cloudflare shape from
+// the manifest, the pages default, the override, and trimming of the vendor.
+func TestDeployAdapterID_Direct(t *testing.T) {
+	root := t.TempDir()
+	sproutDir := filepath.Join(root, startermanifest.SproutDir)
+	require.NoError(t, os.MkdirAll(sproutDir, 0o755))
+
+	writeManifest := func(target string) {
+		m := map[string]any{"starter": map[string]string{"id": "static-site", "version": "1.0.0"}}
+		if target != "" {
+			m["deploy_target"] = target
+		}
+		writeJSON(t, filepath.Join(sproutDir, startermanifest.StarterJSONName), m)
+	}
+
+	cases := []struct {
+		name     string
+		override string
+		cfgTgt   string
+		manifest string
+		want     string
+	}{
+		{name: "cloudflare + workers manifest", cfgTgt: "cloudflare", manifest: "workers", want: "cloudflare/workers"},
+		{name: "cloudflare + pages manifest", cfgTgt: "cloudflare", manifest: "pages", want: "cloudflare/pages"},
+		{name: "cloudflare + absent manifest defaults pages", cfgTgt: "cloudflare", manifest: "", want: "cloudflare/pages"},
+		{name: "cloudflare vendor is trimmed", cfgTgt: "  cloudflare  ", manifest: "workers", want: "cloudflare/workers"},
+		{name: "non-cloudflare vendor passes through", cfgTgt: "fake", manifest: "workers", want: "fake"},
+		{name: "override wins for a non-cloudflare vendor", override: "fake", cfgTgt: "cloudflare", manifest: "workers", want: "fake"},
+		{name: "override of the vendor still uses the manifest shape", override: "cloudflare", cfgTgt: "fake", manifest: "workers", want: "cloudflare/workers"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resetDeploySeams(t)
+			writeManifest(tc.manifest)
+			deployTargetOverride = tc.override
+			got, err := deployAdapterID(root, &deployconfig.DeployConfig{Target: tc.cfgTgt, Project: "p"})
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
+// TestDeployTargetConstantsMatchPackages guards the two independent definitions
+// of the deploy-target strings (the stdlib-only startermanifest cannot import
+// pkg/deploy) against silent drift.
+func TestDeployTargetConstantsMatchPackages(t *testing.T) {
+	assert.Equal(t, startermanifest.DeployTargetPages, deploy.DeployTargetPages)
+	assert.Equal(t, startermanifest.DeployTargetWorkers, deploy.DeployTargetWorkers)
+}
+
 // TestDeployCmd_UnknownTargetIsClearError pins the adapter seam: a config
 // naming a target that has no adapter yet fails actionably, pointing at the
 // fake for this milestone.
@@ -386,4 +437,109 @@ func TestDeployCmd_ProductionRefusalIsTypedBeforeBuild(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, deploy.ErrProductionNeedsConfirmation))
 	assert.False(t, built, "the build must not run for a refused production deploy")
+}
+
+// captureDeployAdapterID swaps the target seam to record the adapter id the
+// command resolves, returning any error so the test can assert on routing
+// without a real adapter.
+func captureDeployAdapterID(t *testing.T) *string {
+	t.Helper()
+	var got string
+	deployTargetFor = func(root, targetID string) (deploy.DeployTarget, error) {
+		got = targetID
+		return deploy.NewFake(), nil
+	}
+	return &got
+}
+
+// TestDeployCmd_ManifestDeployTargetSelectsAdapter pins the rule: when the
+// deploy config's vendor is cloudflare, the starter manifest's deploy_target
+// picks the Pages or Workers shape, and an absent value defaults to pages.
+func TestDeployCmd_ManifestDeployTargetSelectsAdapter(t *testing.T) {
+	cases := []struct {
+		name       string
+		manifest   map[string]any
+		wantTarget string
+	}{
+		{
+			name: "workers selects the workers adapter",
+			manifest: map[string]any{
+				"starter": map[string]string{"id": "web-app-data", "version": "1.2.3"},
+				"build":   "npm run build", "build_output": "dist",
+				"deploy_target": "workers",
+			},
+			wantTarget: "cloudflare/workers",
+		},
+		{
+			name: "pages selects the pages adapter",
+			manifest: map[string]any{
+				"starter": map[string]string{"id": "static-site", "version": "1.2.3"},
+				"build":   "npm run build", "build_output": "dist",
+				"deploy_target": "pages",
+			},
+			wantTarget: "cloudflare/pages",
+		},
+		{
+			name: "absent deploy_target defaults to pages",
+			manifest: map[string]any{
+				"starter": map[string]string{"id": "static-site", "version": "1.2.3"},
+				"build":   "npm run build", "build_output": "dist",
+			},
+			wantTarget: "cloudflare/pages",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := setupDeployProject(t)
+			writeJSON(t, deployconfig.DeployConfigPath(root), deployconfig.DeployConfig{
+				Target: "cloudflare", Project: "fixture-app",
+			})
+			writeJSON(t, filepath.Join(root, startermanifest.SproutDir, startermanifest.StarterJSONName), tc.manifest)
+
+			got := captureDeployAdapterID(t)
+			out, err := executeDeployCmd(t)
+			require.NoError(t, err, "output: %s", out)
+			assert.Equal(t, tc.wantTarget, *got)
+		})
+	}
+}
+
+// TestDeployCmd_TargetOverrideWins pins the override: an explicit --target on
+// the CLI wins over the config's vendor and the manifest's shape.
+func TestDeployCmd_TargetOverrideWins(t *testing.T) {
+	root := setupDeployProject(t)
+	// The config names cloudflare and the manifest names workers; the
+	// explicit --target fake must win outright.
+	writeJSON(t, deployconfig.DeployConfigPath(root), deployconfig.DeployConfig{
+		Target: "cloudflare", Project: "fixture-app",
+	})
+	writeJSON(t, filepath.Join(root, startermanifest.SproutDir, startermanifest.StarterJSONName), map[string]any{
+		"starter": map[string]string{"id": "web-app-data", "version": "1.2.3"},
+		"build":   "npm run build", "build_output": "dist",
+		"deploy_target": "workers",
+	})
+
+	got := captureDeployAdapterID(t)
+	out, err := executeDeployCmd(t, "--target", "fake")
+	require.NoError(t, err, "output: %s", out)
+	assert.Equal(t, "fake", *got, "--target must override the config and the manifest shape")
+}
+
+// TestDeployCmd_TargetOverrideOfVendorKeepsManifestShape pins the finer rule:
+// --target cloudflare overrides the vendor but the manifest still picks the
+// Pages-vs-Workers shape within it.
+func TestDeployCmd_TargetOverrideOfVendorKeepsManifestShape(t *testing.T) {
+	root := setupDeployProject(t)
+	// The config names the fake target, but --target cloudflare overrides the
+	// vendor; the manifest's workers shape then applies within cloudflare.
+	writeJSON(t, filepath.Join(root, startermanifest.SproutDir, startermanifest.StarterJSONName), map[string]any{
+		"starter": map[string]string{"id": "web-app-data", "version": "1.2.3"},
+		"build":   "npm run build", "build_output": "dist",
+		"deploy_target": "workers",
+	})
+
+	got := captureDeployAdapterID(t)
+	out, err := executeDeployCmd(t, "--target", "cloudflare")
+	require.NoError(t, err, "output: %s", out)
+	assert.Equal(t, "cloudflare/workers", *got)
 }

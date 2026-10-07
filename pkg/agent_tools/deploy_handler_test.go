@@ -369,3 +369,151 @@ func nextEvent(t *testing.T, sub <-chan events.UIEvent) *events.UIEvent {
 		return nil
 	}
 }
+
+// captureDeployTargetID swaps the deploy target seam to record the adapter id
+// the handler resolves (returning a fake so the deploy proceeds), and returns
+// a pointer to the captured id.
+func captureDeployTargetID(t *testing.T, target deploy.DeployTarget) *string {
+	t.Helper()
+	ToolFuncMu.Lock()
+	prevTarget, prevRun, prevFP := deployTargetFor, deployBuildRunner, deployTreeFingerprint
+	var got string
+	deployTargetFor = func(root, targetID string) (deploy.DeployTarget, error) {
+		got = targetID
+		return target, nil
+	}
+	deployBuildRunner = func(ctx context.Context, root, command string) error { return nil }
+	deployTreeFingerprint = func(root string, skip ...string) (string, error) { return "fp-1", nil }
+	ToolFuncMu.Unlock()
+
+	t.Cleanup(func() {
+		ToolFuncMu.Lock()
+		deployTargetFor, deployBuildRunner, deployTreeFingerprint = prevTarget, prevRun, prevFP
+		ToolFuncMu.Unlock()
+	})
+	return &got
+}
+
+// writeDeployManifest rewrites the project's starter manifest with the given
+// deploy target (empty means omit the field).
+func writeDeployManifest(t *testing.T, root, deployTarget string) {
+	t.Helper()
+	manifest := `{"starter":{"id":"web-app","version":"1.2.0"},"build":"echo build","build_output":"dist"`
+	if deployTarget != "" {
+		manifest += `,"deploy_target":"` + deployTarget + `"`
+	}
+	manifest += `}`
+	require.NoError(t, os.WriteFile(
+		filepath.Join(root, startermanifest.SproutDir, startermanifest.StarterJSONName),
+		[]byte(manifest), 0o644))
+}
+
+// writeDeployConfig rewrites the project's deploy config with the given
+// vendor target.
+func writeDeployConfig(t *testing.T, root, target string) {
+	t.Helper()
+	cfg := `{"target":"` + target + `","project":"myapp"}`
+	require.NoError(t, os.WriteFile(filepath.Join(root, startermanifest.SproutDir, "deploy.json"),
+		[]byte(cfg), 0o644))
+}
+
+// TestDeploy_ManifestDeployTargetSelectsAdapter pins the rule: when the deploy
+// config's vendor is cloudflare, the starter manifest's deploy_target picks the
+// Pages or Workers shape, with pages as the default.
+func TestDeploy_ManifestDeployTargetSelectsAdapter(t *testing.T) {
+	cases := []struct {
+		name        string
+		deployTgt   string
+		wantAdapter string
+	}{
+		{name: "workers", deployTgt: "workers", wantAdapter: "cloudflare/workers"},
+		{name: "pages", deployTgt: "pages", wantAdapter: "cloudflare/pages"},
+		{name: "absent defaults to pages", deployTgt: "", wantAdapter: "cloudflare/pages"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := newDeployProject(t)
+			writeDeployConfig(t, root, "cloudflare")
+			writeDeployManifest(t, root, tc.deployTgt)
+
+			got := captureDeployTargetID(t, deploy.NewFake())
+			res, err := (&deployHandler{}).Execute(context.Background(), deployToolEnv(root), map[string]any{})
+			require.NoError(t, err)
+			require.False(t, res.IsError, "output: %s", res.Output)
+			assert.Equal(t, tc.wantAdapter, *got)
+		})
+	}
+}
+
+// TestDeploy_TargetArgumentOverrideWins pins the override: the tool's target
+// argument wins over the config and the manifest shape.
+func TestDeploy_TargetArgumentOverrideWins(t *testing.T) {
+	root := newDeployProject(t)
+	writeDeployConfig(t, root, "cloudflare")
+	writeDeployManifest(t, root, "workers")
+
+	got := captureDeployTargetID(t, deploy.NewFake())
+	res, err := (&deployHandler{}).Execute(context.Background(), deployToolEnv(root),
+		map[string]any{"target": "fake"})
+	require.NoError(t, err)
+	require.False(t, res.IsError, "output: %s", res.Output)
+	assert.Equal(t, "fake", *got, "the target argument must override the config and manifest")
+}
+
+// TestDeploy_TargetArgumentOverrideOfVendorKeepsManifestShape pins the finer
+// rule: an explicit target argument naming cloudflare overrides the vendor but
+// the manifest still picks the shape within it.
+func TestDeploy_TargetArgumentOverrideOfVendorKeepsManifestShape(t *testing.T) {
+	root := newDeployProject(t)
+	writeDeployConfig(t, root, "fake")
+	writeDeployManifest(t, root, "workers")
+
+	got := captureDeployTargetID(t, deploy.NewFake())
+	res, err := (&deployHandler{}).Execute(context.Background(), deployToolEnv(root),
+		map[string]any{"target": "cloudflare"})
+	require.NoError(t, err)
+	require.False(t, res.IsError, "output: %s", res.Output)
+	assert.Equal(t, "cloudflare/workers", *got)
+}
+
+// TestDeployStatus_ManifestDeployTargetSelectsAdapter pins that read-only
+// deploy_status resolves the same adapter shape as deploy.
+func TestDeployStatus_ManifestDeployTargetSelectsAdapter(t *testing.T) {
+	root := newDeployProject(t)
+	writeDeployConfig(t, root, "cloudflare")
+	writeDeployManifest(t, root, "workers")
+
+	got := captureDeployTargetID(t, deploy.NewFake())
+	res, err := (&deployStatusHandler{}).Execute(context.Background(), deployToolEnv(root), map[string]any{})
+	require.NoError(t, err)
+	require.False(t, res.IsError, "output: %s", res.Output)
+	assert.Equal(t, "cloudflare/workers", *got)
+}
+
+// TestDefaultAdapterID_Direct pins the handler's resolution helper directly
+// (no seam), exercising the real path: vendor selection, the Cloudflare shape
+// from the manifest, the pages default, and trimming of the vendor.
+func TestDefaultAdapterID_Direct(t *testing.T) {
+	root := newDeployProject(t)
+
+	cases := []struct {
+		name     string
+		vendor   string
+		manifest string
+		want     string
+	}{
+		{name: "cloudflare + workers", vendor: "cloudflare", manifest: "workers", want: "cloudflare/workers"},
+		{name: "cloudflare + pages", vendor: "cloudflare", manifest: "pages", want: "cloudflare/pages"},
+		{name: "cloudflare + absent defaults pages", vendor: "cloudflare", manifest: "", want: "cloudflare/pages"},
+		{name: "cloudflare vendor is trimmed", vendor: " cloudflare ", manifest: "workers", want: "cloudflare/workers"},
+		{name: "non-cloudflare passes through", vendor: "fake", manifest: "workers", want: "fake"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			writeDeployManifest(t, root, tc.manifest)
+			got, err := defaultAdapterID(root, tc.vendor)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}

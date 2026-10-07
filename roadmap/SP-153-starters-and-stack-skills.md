@@ -27,8 +27,10 @@ differently each time:
 `.sprout/starter.json` declares how a project is built and run:
 
 - `starter` (ID and version), `build`, `test`, `dev`, `preview` commands,
-  the dev server port, the routes to check, and the build output
-  directory.
+  the dev server port, the routes to check, the build output
+  directory, and the deploy target (`deploy_target`: `pages` | `workers`,
+  default `pages`) that selects the Cloudflare Pages or Workers adapter
+  (SP-156).
 - Schema and validator in Go. Any project can add the file by hand; it is
   not limited to projects created from a starter.
 - The single source of commands for SP-149 verification, SP-155 preview

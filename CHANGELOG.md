@@ -4,8 +4,6 @@ All notable changes to Sprout will be documented in this file.
 
 ## [v0.23.0] - 2026-10-07
 
-## [v0.23.0] - 2026-10-07
-
 - feat(plans): structured plans — `sprout plan --structured` writes a versioned `.sprout/plan.json` (scopes, steps, acceptance criteria) through the `write_plan` tool, validated and rendered to `plan.md`; todo items carry their scope.
 - feat(verify): verified done — with `verification.enabled`, the agent runs build, test, page and interaction checks from the project manifest before it reports done, repairs failures up to a capped number of rounds, and delivers the result to the user.
 - feat(roles): model roles — planner, coder, summarizer, reviewer and commit roles map to provider/model in settings; usage is attributed per role and shown in `/usage`.
@@ -20,6 +18,8 @@ All notable changes to Sprout will be documented in this file.
 - feat(workflow): coordinator automation runs continue until the TODO list is done (`continuation` in the workflow config), tolerate a configurable number of idle turns, and never wait on approval prompts.
 - fix(metrics): cache savings are reported from real cached-token prices instead of $0.
 - fix(webui): WASM bundle assets are content-hashed, and the released cloud bundle is built at `/webui/`.
+- fix(verify): verification command timeouts kill the whole process tree, so a timed-out command no longer keeps running on Linux.
+- fix(benchmark): `sprout benchmark --models` runs without a configured default provider.
 
 ## [v0.22.7] - 2026-10-07
 

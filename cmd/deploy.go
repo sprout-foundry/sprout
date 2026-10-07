@@ -361,8 +361,8 @@ func runDeployStatusCmd(cmd *cobra.Command, args []string) error {
 	}
 	out := cmd.OutOrStdout()
 	if len(history) == 0 {
-		fmt.Fprintf(out, "No deployments recorded for project %q yet.\n", project)
-		fmt.Fprintln(out, "Run 'sprout deploy' to make the first one.")
+		_, _ = fmt.Fprintf(out, "No deployments recorded for project %q yet.\n", project)
+		_, _ = fmt.Fprintln(out, "Run 'sprout deploy' to make the first one.")
 		return nil
 	}
 
@@ -373,7 +373,7 @@ func runDeployStatusCmd(cmd *cobra.Command, args []string) error {
 	}
 	latest.Status = state
 
-	fmt.Fprintf(out, "Latest deployment for project %q:\n", project)
+	_, _ = fmt.Fprintf(out, "Latest deployment for project %q:\n", project)
 	printDeploymentLine(out, latest)
 	return nil
 }
@@ -393,11 +393,11 @@ func runDeployHistoryCmd(cmd *cobra.Command, args []string) error {
 	}
 	out := cmd.OutOrStdout()
 	if len(history) == 0 {
-		fmt.Fprintf(out, "No deployments recorded for project %q yet.\n", project)
+		_, _ = fmt.Fprintf(out, "No deployments recorded for project %q yet.\n", project)
 		return nil
 	}
 
-	fmt.Fprintf(out, "%d deployment(s) for project %q (oldest first):\n", len(history), project)
+	_, _ = fmt.Fprintf(out, "%d deployment(s) for project %q (oldest first):\n", len(history), project)
 	for _, d := range history {
 		printDeploymentLine(out, d)
 	}
@@ -432,7 +432,7 @@ func runDeployRollbackCmd(cmd *cobra.Command, args []string) error {
 	}
 
 	out := cmd.OutOrStdout()
-	fmt.Fprintf(out, "Rolled back %s; %s is live again.\n", id, restored.ID)
+	_, _ = fmt.Fprintf(out, "Rolled back %s; %s is live again.\n", id, restored.ID)
 	printDeploymentLine(out, restored)
 	return nil
 }
@@ -450,7 +450,7 @@ func findDeployment(history []deploy.Deployment, id string) (deploy.Deployment, 
 // printDeployed prints the outcome of a successful deploy: the kind, id and
 // URL the target returned.
 func printDeployed(out io.Writer, d deploy.Deployment) {
-	fmt.Fprintf(out, "Deployed %s %s to %s\n", d.Kind, d.ID, d.URL)
+	_, _ = fmt.Fprintf(out, "Deployed %s %s to %s\n", d.Kind, d.ID, d.URL)
 }
 
 // printDeploymentLine prints one deployment: id, kind, state, version and URL.
@@ -459,5 +459,5 @@ func printDeploymentLine(out io.Writer, d deploy.Deployment) {
 	if version == "" {
 		version = "-"
 	}
-	fmt.Fprintf(out, "  %s  %s  %s  version=%s  %s\n", d.ID, d.Kind, d.Status, version, d.URL)
+	_, _ = fmt.Fprintf(out, "  %s  %s  %s  version=%s  %s\n", d.ID, d.Kind, d.Status, version, d.URL)
 }

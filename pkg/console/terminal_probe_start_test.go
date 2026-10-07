@@ -17,13 +17,17 @@ import (
 // fingerprint reply. Returns immediately; the probe polls the fd.
 func answerDA2(master *os.File) {
 	go func() {
+		// Scan the accumulated stream, not each read: the footer draw
+		// precedes the request, so a read boundary can split it.
+		var seen strings.Builder
 		buf := make([]byte, 32)
 		for {
 			n, err := master.Read(buf)
 			if err != nil || n == 0 {
 				return
 			}
-			if strings.Contains(string(buf[:n]), "\033[>c") {
+			seen.Write(buf[:n])
+			if strings.Contains(seen.String(), "\033[>c") {
 				_, _ = master.Write([]byte("\033[>41;320;0c"))
 				return
 			}

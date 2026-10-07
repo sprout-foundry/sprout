@@ -321,7 +321,7 @@ func TestUsageRender_ShowsUnknownNotZero(t *testing.T) {
 	cmd := &UsageCommand{}
 	err := cmd.Execute(nil, chatAgent)
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = old
 	<-drained
 	output := buf.String()

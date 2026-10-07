@@ -2,6 +2,7 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -306,7 +307,7 @@ func (a *Agent) ShowMyChange(path string) (string, error) {
 // summary helper could not read.
 func (a *Agent) RevertMyChanges(scope, file, since string) (string, error) {
 	if file != "" {
-		out, err := handleRecoverFile(nil, a, map[string]interface{}{
+		out, err := handleRecoverFile(context.TODO(), a, map[string]interface{}{
 			"path":  file,
 			"scope": "session_start",
 		})

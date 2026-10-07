@@ -28,7 +28,10 @@ import (
 //     escaping on, trailing newline) so a Huma response is byte-identical to
 //     the plain handler it replaces.
 func newHumaAPI(mux *http.ServeMux) huma.API {
-	cfg := huma.DefaultConfig("Sprout backend contract", "1.0.0")
+	// ContractVersion is the single source of truth for the contract's
+	// info.version (see pkg/webui/contract.go); the OpenAPI document genapi
+	// generates inherits it through this config.
+	cfg := huma.DefaultConfig("Sprout backend contract", ContractVersion)
 	cfg.CreateHooks = nil
 	cfg.OpenAPIPath = ""
 	cfg.DocsPath = ""

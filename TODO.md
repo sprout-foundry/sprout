@@ -113,7 +113,7 @@ checkboxes.
       --base-url <url> [--families …]` runs the suite against any
       implementation and exits non-zero on failure; usage in
       `docs/api/README.md` (how a host runs it in CI). Spec: SP-160 §160c.
-- [ ] **contract.17** Contract version negotiation: `/api/bootstrap`
+- [x] **contract.17** Contract version negotiation: `/api/bootstrap`
       returns `contractVersion` (from the generated `openapi.yaml`); the web
       UI refuses to start on an incompatible major version with a clear
       message, and warns on a newer minor. Tests on both sides.

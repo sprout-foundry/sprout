@@ -9,7 +9,7 @@ import (
 //   - ChargedCost: real USD charged for this call (only > 0 for pay_per_token)
 //   - TokenCost: estimated USD value of tokens consumed, from per-model pricing
 //
-// Role is the SP-150 §150c role name (a configuration.Role* constant such as
+// Role is the role name (a configuration.Role* constant such as
 // "coder" or "reviewer") whose model selection drove this call. The metrics
 // manager aggregates per-role usage keyed by this field; an empty Role is
 // bucketed under "unknown" (consistent with the language-guard metric), so a

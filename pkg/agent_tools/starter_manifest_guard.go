@@ -1,6 +1,6 @@
 package tools
 
-// starter_manifest_guard.go — the SP-149 §149b write rail, applied from the
+// starter_manifest_guard.go — the starter-manifest write rail, applied from the
 // live write/edit tool handlers (which cannot import pkg/agent). The actual
 // guard (verification-enabled check + path resolution against the starter
 // manifest) lives on the *Agent in pkg/agent and is wired in here through

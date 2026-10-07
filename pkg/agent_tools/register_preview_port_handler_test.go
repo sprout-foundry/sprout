@@ -1,6 +1,6 @@
 package tools
 
-// SP-155 §155a (TODO 155.5): register_preview_port publishes a
+// register_preview_port publishes a
 // preview_port_registered event (on the shared event bus) after a
 // successful platform registration, so the in-process webui server can
 // learn the hosted URL. The tool's model-visible output is unchanged, and

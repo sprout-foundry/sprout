@@ -9,8 +9,8 @@ import (
 // timeout (a cold dev-server start without stalling a turn).
 const DefaultReadyTimeout = 30 * time.Second
 
-// Status is one of the preview pane's four lifecycle states (SP-155 §155a,
-// TODO 155.3): the words the pane's status prop uses, so the API and the
+// Status is one of the preview pane's four lifecycle states:
+// the words the pane's status prop uses, so the API and the
 // pane speak the same language.
 type Status string
 
@@ -35,7 +35,6 @@ type State struct {
 	// called register_preview_port in a hosted workspace) rather than a
 	// local dev server managed by this package. The pane embeds the hosted
 	// URL directly; local start/restart/stop actions never apply to it.
-	// SP-155 §155a (item 155.5).
 	Hosted bool `json:"hosted,omitempty"`
 }
 

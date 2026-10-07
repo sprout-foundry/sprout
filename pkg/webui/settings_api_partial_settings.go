@@ -354,7 +354,7 @@ func applyProviderRoutingSettings(cfg *configuration.Config, patch map[string]in
 }
 
 // ---------------------------------------------------------------------------
-// Per-role model selection (SP-150 §150a)
+// Per-role model selection
 // ---------------------------------------------------------------------------
 
 // applyRolesSettings owns the top-level "roles" section: a map of role name

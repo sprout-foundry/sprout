@@ -1,15 +1,15 @@
-// User-language resolution (SP-152 152.3): work out the language the user
+// User-language resolution: work out the language the user
 // is writing in, from their own recent messages, with a configured
 // fallback for very short or mixed input. There is no fixed list of
 // supported languages — any language the detector recognizes is a valid
-// target (§152a), so the resolver has no hardcoded language list of its
-// own; it simply votes over what the trigram detector (152.2) reports.
+// target, so the resolver has no hardcoded language list of its
+// own; it simply votes over what the trigram detector reports.
 //
 // The resolver is deterministic, in-process, and pure Go (no cgo): it runs
 // the same DetectLanguage call over each recent message, takes the majority
 // language over the reliable per-message detections, and falls back to a
 // configured language when the input is too short or too mixed to yield a
-// unique winner. It is shaped so 152.5 (the final-message guard) can consume
+// unique winner. It is shaped so the final-message guard can consume
 // it directly, and can be called by other Go programs embedding sprout.
 package langguard
 
@@ -19,7 +19,7 @@ import (
 	whatlang "github.com/abadojack/whatlanggo"
 )
 
-// ResolveUserLanguage resolves the user's language (§152a) from their own
+// ResolveUserLanguage resolves the user's language from their own
 // recent messages (raw text — prose is extracted internally) with a
 // configured fallback. It returns the resolved Language and whether it was
 // determined (a non-zero language the caller can judge a reply against).
@@ -41,7 +41,7 @@ import (
 //   - If there is no configured fallback either (its Code is empty), the
 //     zero Language (Code == "") is returned with determined == false. The
 //     caller treats the user's language as undetermined; the guard never
-//     guesses (§152a).
+//     guesses.
 //
 // A clear majority always beats a configured value: the configured language
 // is only a fallback for short or mixed input, never a tie-breaker.
@@ -116,19 +116,19 @@ var langByCode = func() map[string]whatlang.Lang {
 // an ISO 639-1 code ("es", "en", ...) or, for the few languages without a
 // 639-1 code, the 639-3 code ("pes", "ceb", ...), case-insensitively. The
 // Name is filled from the detector's catalog when the code is recognized,
-// so a parsed language renders usefully in diagnostics (152.9).
+// so a parsed language renders usefully in diagnostics.
 //
 // The Code is canonicalized to the same form DetectLanguage reports — the
 // 639-1 code when the language has one, otherwise the 639-3 code — so a
 // configured value stays comparable to a detection result by code equality.
 // A configured 639-3 code for a language that also has a 639-1 code (e.g.
 // "spa" for Spanish) canonicalizes to the 639-1 code ("es"), the form the
-// trigram pass (152.2) emits. This matters because 152.5's CheckLanguage
-// compares the reply's detected code against the user's code.
+// trigram pass emits. This matters because the final-message guard's
+// CheckLanguage compares the reply's detected code against the user's code.
 //
 // An empty code, or a code the detector does not recognize, returns the zero
 // Language (Code == ""): "no fixed language list" means the detector's own
-// catalog is the universe of valid targets (§152a), and a code outside it
+// catalog is the universe of valid targets, and a code outside it
 // is undetermined rather than guessed. This is the read side of the
 // configured language setting: read the config field, pass it here, and feed
 // the result to ResolveUserLanguage.

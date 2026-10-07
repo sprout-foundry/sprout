@@ -2,7 +2,7 @@
 
 package webui
 
-// SP-155 §155a (TODO 155.4) preview API tests: the dev-server state and
+// preview API tests: the dev-server state and
 // action endpoints the preview pane polls, exercised the way the
 // neighboring api_*_test.go files do their handlers — a real (unserved)
 // server, requests through httptest, responses unmarshalled from the

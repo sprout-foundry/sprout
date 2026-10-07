@@ -119,7 +119,7 @@ func (h *registerPreviewPortHandler) Execute(ctx context.Context, env ToolEnv, a
 		}, nil
 	}
 
-	// SP-155 §155a (item 155.5): let the webui server learn about the
+	// Let the webui server learn about the
 	// registered preview URL so its preview pane can embed it instead of
 	// only printing it. In hosted workspaces the agent runs in-process in
 	// the webui server and ToolEnv.EventBus is the shared bus, so a

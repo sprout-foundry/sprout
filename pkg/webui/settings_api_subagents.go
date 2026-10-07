@@ -48,7 +48,7 @@ func (ws *ReactWebServer) handleAPISettingsSubagentTypesGet(w http.ResponseWrite
 	}
 
 	cfg := cm.GetConfig()
-	// SP-150 §150b: subagents resolve through the coder role (the subagent
+	// Subagents resolve through the coder role (the subagent
 	// settings alias it), so report the effective selection.
 	currentProvider, currentModel := cfg.ResolveRole(configuration.RoleCoder)
 	writeJSON(w, http.StatusOK, map[string]interface{}{

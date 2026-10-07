@@ -1,8 +1,8 @@
 //go:build !js
 
-// agent_verification_exit.go — the SP-149 §149e CLI exit contract: a
+// agent_verification_exit.go — the CLI exit contract: a
 // non-interactive `sprout agent` run exits non-zero when verification
-// is enabled and fails. The turn-end hook (items 149.5/149.6) already
+// is enabled and fails. The turn-end hook already
 // stores the turn's verification result on the agent
 // (Agent.LastVerificationResult); this file is where the cmd layer
 // turns it into an exit code. The exit code is a CLI concern — the
@@ -13,8 +13,8 @@
 // Behavior-preserving by construction: verification disabled (the
 // default), a turn that changed no code, a subagent turn, or a runner
 // setup error all leave the stored result nil, so every existing code
-// path and output is unchanged when verification is off (§149e:
-// disabled verification changes no behavior).
+// path and output is unchanged when verification is off: disabled
+// verification changes no behavior.
 
 package cmd
 
@@ -25,7 +25,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/verify"
 )
 
-// verificationExitError is the pure core of the §149e exit contract:
+// verificationExitError is the pure core of the exit contract:
 // it maps a turn's stored verification result to the error a
 // direct-mode completion point should return.
 //
@@ -33,7 +33,7 @@ import (
 //     change, subagent, setup error) — behavior is unchanged.
 //   - passing result (res.Passed()) → nil.
 //   - all-skipped result (verified nothing: neither Passed() nor
-//     Failed()) → nil: §149e gates on a verification FAILURE; a run
+//     Failed()) → nil: the exit gate applies to a verification FAILURE; a run
 //     that verified nothing is not a failure.
 //   - failing result (res.Failed()) → a plain error carrying the run's
 //     summary. A plain error maps to exit code 1 via exitCodeFor and

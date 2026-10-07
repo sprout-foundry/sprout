@@ -152,9 +152,9 @@ func (ws *ReactWebServer) registerDesignRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/design/status", ws.handleAPIDesignStatus)
 }
 
-// registerStarterRoutes mounts the SP-153 §153b starter surface (TODO
-// 153.6): the embedded starter catalogue and the instantiate endpoint
-// the web UI's new-project flow (153.7) calls to populate a fresh
+// registerStarterRoutes mounts the starter surface: the embedded
+// starter catalogue and the instantiate endpoint
+// the web UI's new-project flow calls to populate a fresh
 // project directory.
 func (ws *ReactWebServer) registerStarterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/starters", ws.handleAPIStartersList)

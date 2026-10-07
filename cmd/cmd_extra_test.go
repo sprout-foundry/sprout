@@ -254,7 +254,7 @@ func TestCreatePlanningAgent_StructuredFlagUsesStructuredPrompt(t *testing.T) {
 		t.Fatal("expected non-nil agent")
 	}
 
-	// Structured mode (SP-148 §148b) must install the plan schema section
+	// Structured mode must install the plan schema section
 	// in the agent's system prompt.
 	prompt := a.GetSystemPrompt()
 	if !strings.Contains(prompt, "Structured Plan Schema") {

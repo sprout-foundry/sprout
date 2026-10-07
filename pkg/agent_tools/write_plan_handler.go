@@ -13,7 +13,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/planstore"
 )
 
-// writePlanHandler implements ToolHandler for write_plan (SP-148 §148b): the
+// writePlanHandler implements ToolHandler for write_plan: the
 // agent-facing write path for the project's structured plan document.
 //
 // The model hands over the full plan document (the plancontract schema) as a
@@ -37,7 +37,7 @@ func (h *writePlanHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name: "write_plan",
 		Description: "Write the project's structured plan (.sprout/plan.json plus the rendered .sprout/plan.md). " +
-			"Use it when the planning phase produced a complete plan document (SP-148), or when scope " +
+			"Use it when the planning phase produced a complete plan document, or when scope " +
 			"changed during execution and the plan must be updated instead of silently diverging. " +
 			"The document is validated on every write: an invalid plan is rejected with the full " +
 			"problem list and nothing is written, so fix the problems and call again. " +

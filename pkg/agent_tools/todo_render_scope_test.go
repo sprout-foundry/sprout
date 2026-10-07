@@ -16,7 +16,7 @@ func lineContaining(s, needle string) string {
 	return ""
 }
 
-// TestRenderTodosForCLI_ScopeTag pins the SP-148 §148c CLI-rendering behavior:
+// TestRenderTodosForCLI_ScopeTag pins the CLI-rendering behavior:
 // a todo with a plan scope ID renders a "[scope]" tag on its line so CLI users
 // can see which plan scope item it advances; a todo without a scope renders no
 // scope tag on its line.

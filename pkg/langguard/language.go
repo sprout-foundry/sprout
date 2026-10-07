@@ -1,4 +1,4 @@
-// The same-script trigram pass (SP-152 §152d): identify the natural
+// The same-script trigram pass: identify the natural
 // language of extracted prose with a small, deterministic trigram
 // detector. The script pass (script.go) catches the "wrong script
 // entirely" failure mode, but it cannot tell Spanish from English —
@@ -9,7 +9,7 @@
 // stdlib-only trigram-frequency library (no cgo, no network, no model
 // download), so it runs in the CLI process, in the sprout process of a
 // hosted workspace, and compiled into the WASM browser build — the same
-// three places §152d requires, and it stays callable from other Go
+// three places the pass requires, and it stays callable from other Go
 // programs embedding sprout.
 //
 // The intended pipeline (layered items build on this file):
@@ -17,13 +17,13 @@
 //	prose := langguard.ExtractProse(modelReply)
 //	lang, conf, reliable := langguard.DetectLanguage(prose)
 //	if reliable && lang.Code != userLang.Code {
-//	    // mismatch: regenerate once (152.5) or fall back to the
-//	    // script pass; log with model ID and role (152.9).
+//	    // mismatch: regenerate once or fall back to the
+//	    // script pass; log with model ID and role.
 //	}
 //
-// 152.3 (user-language resolution) derives the user's own language with
-// the same DetectLanguage call over their recent messages; 152.5 (the
-// final-message guard) uses CheckLanguage to compare the reply against
+// user-language resolution derives the user's own language with
+// the same DetectLanguage call over their recent messages; the
+// final-message guard uses CheckLanguage to compare the reply against
 // it.
 package langguard
 
@@ -39,12 +39,12 @@ type Language struct {
 	// Code is the language's ISO 639-1 code ("en", "es", "ru", ...), or
 	// — for the few languages without a 639-1 code — the ISO 639-3
 	// code ("cmn", "pes", ...). It is the stable identity used to
-	// compare two detection results (152.3's majority vote over the
+	// compare two detection results (the majority vote over the
 	// user's recent messages).
 	Code string
 	// Name is the detector's human-readable language name ("English",
-	// "Spanish", ...). It feeds diagnostics (152.9) and the explicit
-	// regeneration instruction (152.5).
+	// "Spanish", ...). It feeds diagnostics and the explicit
+	// regeneration instruction.
 	Name string
 }
 
@@ -69,7 +69,7 @@ func (l Language) String() string {
 const MinDetectConfidence = 0.8
 
 // DetectLanguage identifies the natural language of already-extracted
-// prose (§152d: for same-script languages, "a small trigram detector
+// prose (for same-script languages, "a small trigram detector
 // with no network or model download"). It wraps whatlanggo's trigram
 // detector and returns:
 //
@@ -77,7 +77,7 @@ const MinDetectConfidence = 0.8
 //   - the detector's confidence in [0, 1];
 //   - whether the result is reliable enough to judge the reply: the
 //     prose must be Judgable (too-short and code-only prose are never
-//     judged, §152a) AND the confidence must reach MinDetectConfidence.
+//     judged) AND the confidence must reach MinDetectConfidence.
 //
 // Prose that is not judgable, carries no recognized script, or yields an
 // unreliable confidence returns the zero Language and reliable=false —
@@ -105,9 +105,9 @@ func DetectLanguage(prose string) (Language, float64, bool) {
 }
 
 // CheckLanguage is the trigram pass's raw-message entry point for the
-// reply paths (152.5): it extracts the prose from a raw model reply and
+// reply paths: it extracts the prose from a raw model reply and
 // reports the combined verdict of the reply's language against the
-// user's language (from 152.3's user-language resolution, or the
+// user's language (from the user-language resolution, or the
 // configured language setting). It parallels the script pass's Check:
 //
 //	Check:   text + user's script  -> Verdict   (wrong script)

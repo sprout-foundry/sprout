@@ -101,15 +101,15 @@ type ReactWebServer struct {
 	startOnce                       sync.Once    // Ensures background workers are started exactly once
 	serverCtx                       atomic.Value // context.Context — safe to read without ws.mutex
 
-	// previewManagers caches one preview.Manager (SP-155 §155a, TODO
-	// 155.4: the dev-server manager behind /api/preview/*) per project
+	// previewManagers caches one preview.Manager (the dev-server manager
+	// behind /api/preview/*) per project
 	// root, so a worktree switch to a different root gets its own manager
 	// (and dev server) rather than clobbering the running one.
 	previewManagers   map[string]*preview.Manager
 	previewManagersMu sync.Mutex
 
-	// hostedPreview is the active platform-registered preview (SP-155
-	// §155a, TODO 155.5): the URL the agent's register_preview_port call
+	// hostedPreview is the active platform-registered preview: the URL
+	// the agent's register_preview_port call
 	// returned, recorded by the event-bus subscriber when it fires. While
 	// set, /api/preview/status reports it (running, hosted) in preference
 	// to any local dev server. nil means no hosted preview is registered.

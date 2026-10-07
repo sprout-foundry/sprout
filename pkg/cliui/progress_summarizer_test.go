@@ -3,7 +3,7 @@
 package cliui
 
 // progress_summarizer_test.go — tests for the optional model-written
-// SP-151 progress summaries (SP-151 §151c, item 151.8): the template
+// progress summaries: the template
 // fallbacks (nil client, model error, empty model output), the success
 // invariant (a summary never states success without a passing
 // verification), the model prompt built only from event fields, and
@@ -50,7 +50,7 @@ func (f *fakeModelClient) Complete(ctx context.Context, systemPrompt, userPrompt
 	return f.result, f.err
 }
 
-// Progress event payloads shared by the tests (SP-151 §151a shapes).
+// Progress event payloads shared by the tests.
 var (
 	summarizerCompleteVerified = map[string]interface{}{
 		"run_id":   "run-1",

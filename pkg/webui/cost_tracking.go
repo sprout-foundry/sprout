@@ -35,7 +35,7 @@ type CostRecord struct {
 	BillingType string  `json:"billing_type,omitempty"`
 	ChargedCost float64 `json:"charged_cost,omitempty"`
 	TokenCost   float64 `json:"token_cost,omitempty"`
-	// Role is the SP-150 §150c model role the spend was attributed to. Set
+	// Role is the model role the spend was attributed to. Set
 	// when a query books its usage per-role (TakeUnbookedUsageByRole); empty
 	// for overall (role-agnostic) bookings.
 	Role string `json:"role,omitempty"`
@@ -127,8 +127,8 @@ func (cs *CostStore) RecordCostWithBilling(provider, model, sessionID, chatID, t
 	})
 }
 
-// RecordCostWithRole books a per-role usage slice into the cost store
-// (SP-150 §150c, item 150.5). It is the role-aware counterpart of
+// RecordCostWithRole books a per-role usage slice into the cost store.
+// It is the role-aware counterpart of
 // RecordCostWithBilling: a query books one record per role its usage was
 // attributed to, and the per-role records sum to the overall total.
 func (cs *CostStore) RecordCostWithRole(provider, model, sessionID, chatID, title, workingDir, billingType, role string, promptTokens, outputTokens int, chargedCost, tokenCost float64) {

@@ -2,7 +2,7 @@
 
 package webui
 
-// SP-155 §155a (TODO 155.5): the webui server's hosted-preview half. The
+// the webui server's hosted-preview half. The
 // agent's register_preview_port tool publishes preview_port_registered on
 // the shared bus; the server's subscriber records the platform URL so
 // /api/preview/* reports it (running + hosted) in preference to any local

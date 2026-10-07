@@ -67,7 +67,7 @@ var deployFingerprint deploy.TreeFingerprint
 
 // deployVerificationSnapshot is the verification seam: it reports whether the
 // current tree passed verification and the fingerprint captured then. Until
-// the SP-149 turn-end hook is wired into the CLI, the default records the
+// the turn-end hook is wired into the CLI, the default records the
 // current tree as verified — the fingerprint is computed over the same tree
 // and skip set BuildAndDeploy checks against, so an unchanged tree passes the
 // gate and a tree that moves between now and the build is still refused.

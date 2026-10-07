@@ -279,7 +279,7 @@ func (ws *ReactWebServer) runConnectionLiveLoop(
 
 			// Opportunistically drain any already-queued events (non-blocking)
 			// and coalesce before writing: runs of adjacent progress_milestone
-			// events collapse into a single batched event (SP-151 §151b), and
+			// events collapse into a single batched event, and
 			// runs of adjacent stream chunks merge into larger writes. Under a
 			// backlog — the only time stream chunks get dropped — this turns
 			// hundreds of tiny writes into a few, letting the channel drain fast

@@ -152,9 +152,11 @@ func qualityChecksAsVerifyChecks(res *verify.QualityResult) []verify.Check {
 // back to continue the turn. It is deterministic over (result, attempts,
 // limit): an explicit <quality-report> envelope carrying a framing line, the
 // run summary, one bullet per still-repairable failing step (key, attempts
-// used n/limit, reason, the step's bounded output excerpt indented), and —
-// when any step is exhausted — an explicit section telling the model those
-// steps are DONE after the repair limit.
+// used n/limit, reason, an optional "Classification:" line naming the failure
+// kind when the step's output matches a known error shape, and the step's
+// bounded output excerpt indented), and — when any step is exhausted — an
+// explicit section telling the model those steps are DONE after the repair
+// limit.
 func buildQualityReport(res *verify.QualityResult, attempts map[string]int, limit int) string {
 	var b strings.Builder
 	b.WriteString(qualityReportOpenTag + "\n")
@@ -178,6 +180,9 @@ func buildQualityReport(res *verify.QualityResult, attempts map[string]int, limi
 		for _, c := range repairable {
 			key := checkAttemptKey(c)
 			fmt.Fprintf(&b, "- %s %d/%d — %s\n", key, attempts[key], limit, checkFailureReason(c))
+			if annotation := errclassAnnotation(c.Excerpt); annotation != "" {
+				b.WriteString("  Classification: " + annotation + "\n")
+			}
 			b.WriteString(indentVerificationExcerpt(c.Excerpt))
 		}
 	}

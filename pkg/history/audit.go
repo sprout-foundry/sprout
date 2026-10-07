@@ -1,7 +1,8 @@
 // Audit logging for SP-077: tracks every write-back of OriginalCode
 // (or NewCode) to the working tree. Each write-back is a potential
-// source of silent committed-work reversion, so these audit lines
-// include a stack trace to definitively identify the caller.
+// source of silent committed-work reversion, so these audit lines are
+// kept concise and greppable; the full call chain is available on demand
+// with SPROUT_DEBUG set.
 //
 // The logs use a distinctive [SP077-AUDIT] prefix for easy grepping.
 // They are written to the standard logger so they show up in agent
@@ -10,8 +11,30 @@ package history
 
 import (
 	"log"
+	"os"
 	"runtime/debug"
+	"strings"
+	"sync/atomic"
 )
+
+// auditStackEnabled gates the per-write stack dump. Capturing debug.Stack()
+// on every write-back is diagnostic-only — a bulk revert/recover over a tree
+// emits one per file, which floods the console with hundreds of stack traces
+// and buries the operation's own output. Off by default; set SPROUT_DEBUG to
+// include the stack when diagnosing which path triggered a write.
+var auditStackEnabled atomic.Bool
+
+func init() {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("SPROUT_DEBUG"))) {
+	case "1", "true", "yes", "on":
+		auditStackEnabled.Store(true)
+	}
+}
+
+// SetAuditStackEnabled toggles the stack dump at runtime (tests, --debug wiring).
+func SetAuditStackEnabled(enabled bool) {
+	auditStackEnabled.Store(enabled)
+}
 
 // AuditRevertWrite logs a write-back of tracked content (OriginalCode
 // or NewCode) to the working tree. Called immediately before every
@@ -22,12 +45,16 @@ import (
 // relative filesystem path being written. `contentType` is "OriginalCode"
 // or "NewCode" so the log distinguishes reverts from restores.
 //
-// The stack trace captures the full call chain — this is the critical
-// piece for diagnosing whether the write was triggered by an LLM tool
-// call, a CLI command, a test, or an unexpected automatic path.
+// The full call chain — useful for diagnosing whether a write came from an
+// LLM tool call, a CLI command, a test, or an unexpected automatic path — is
+// appended only when SPROUT_DEBUG is set.
 func AuditRevertWrite(caller, path, contentType string) {
-	log.Printf("[SP077-AUDIT] revert-write caller=%s path=%q content=%s\n--- stack trace ---\n%s--- end stack ---",
-		caller, path, contentType, debug.Stack())
+	if auditStackEnabled.Load() {
+		log.Printf("[SP077-AUDIT] revert-write caller=%s path=%q content=%s\n--- stack trace ---\n%s--- end stack ---",
+			caller, path, contentType, debug.Stack())
+		return
+	}
+	log.Printf("[SP077-AUDIT] revert-write caller=%s path=%q content=%s", caller, path, contentType)
 }
 
 // AuditRevertSkip logs when a staleness guard refuses a write-back.

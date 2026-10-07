@@ -237,6 +237,7 @@ func startBackgroundSubagent(a *Agent, spec *subagentLaunchSpec, isolate bool) (
 				SystemPrompt: spec.systemPromptText,
 				WorkingDir:   spec.workingDir,
 				Quiet:        true,
+				Role:         spec.role,
 			}, nil, 0)
 		}
 		text, err := finishSubagentRun(bgCtx, a, spec, result)

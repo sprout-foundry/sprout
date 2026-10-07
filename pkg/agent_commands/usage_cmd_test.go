@@ -1,9 +1,79 @@
 package commands
 
 import (
+	"bytes"
+	"os"
 	"strings"
 	"testing"
+
+	"github.com/sprout-foundry/sprout/pkg/agent"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
+
+// newAgentForUsageTest builds an agent against an isolated config dir (the
+// primary agent is the coder role) so the /usage per-role assertions never
+// touch the real config or a live provider.
+func newAgentForUsageTest(t *testing.T) *agent.Agent {
+	t.Helper()
+	mgr, cleanup := configuration.NewTestManager(t)
+	t.Cleanup(cleanup)
+	client := agent.NewMockLLMProviderWithLimit(128_000)
+	chatAgent, err := agent.NewAgentWithClient(client, api.TestClientType, mgr)
+	if err != nil {
+		t.Fatalf("NewAgentWithClient failed: %v", err)
+	}
+	t.Cleanup(func() { chatAgent.Shutdown() })
+	return chatAgent
+}
+
+// TestUsageJSONPayload_IncludesRoleUsage pins that the /usage --json payload
+// carries the per-role token/cost totals.
+func TestUsageJSONPayload_IncludesRoleUsage(t *testing.T) {
+	chatAgent := newAgentForUsageTest(t)
+	if got := chatAgent.GetRole(); got == "" {
+		t.Fatalf("precondition: agent role = %q, want non-empty (coder)", got)
+	}
+
+	// One model call on the agent's own role.
+	chatAgent.TrackMetricsFromResponse(100, 50, 150, 0.01, 0, 0, 0, 0)
+
+	payload := buildUsageJSONPayload(chatAgent)
+	if len(payload.RoleUsage) == 0 {
+		t.Fatalf("payload.RoleUsage is empty, want the per-role totals")
+	}
+	var found bool
+	for _, ru := range payload.RoleUsage {
+		if ru.Role != chatAgent.GetRole() {
+			continue
+		}
+		found = true
+		if ru.PromptTokens != 100 || ru.CompletionTokens != 50 || ru.Tokens != 150 {
+			t.Errorf("%s role tokens = %+v, want 100 prompt / 50 completion / 150 total", ru.Role, ru)
+		}
+	}
+	if !found {
+		t.Errorf("payload.RoleUsage = %+v, want an entry for role %q", payload.RoleUsage, chatAgent.GetRole())
+	}
+}
+
+// TestUsageJSONPayload_EmptyRoleUsage pins that an agent with no role-attributed
+// usage yields an empty (nil) RoleUsage, and the dashboard renders without
+// error (the empty case must not break the layout).
+func TestUsageJSONPayload_EmptyRoleUsage(t *testing.T) {
+	chatAgent := newAgentForUsageTest(t)
+
+	payload := buildUsageJSONPayload(chatAgent)
+	if len(payload.RoleUsage) != 0 {
+		t.Errorf("no-usage agent RoleUsage = %+v, want empty", payload.RoleUsage)
+	}
+
+	// The dashboard renders the no-data case without error.
+	cmd := &UsageCommand{}
+	if err := cmd.Execute(nil, chatAgent); err != nil {
+		t.Errorf("Execute (no usage) returned error: %v", err)
+	}
+}
 
 func TestUsageCommand_Name(t *testing.T) {
 	cmd := &UsageCommand{}
@@ -191,5 +261,78 @@ func TestExecute_ZeroTokens(t *testing.T) {
 	cmd := &UsageCommand{}
 	if cmd.Name() != "usage" {
 		t.Error("command name mismatch")
+	}
+}
+
+// TestUsageJSONPayload_CacheSavingsUnknown pins that the /usage --json payload
+// flags savings as unknown when no cached response could determine a value,
+// rather than reporting a misleading 0.
+func TestUsageJSONPayload_CacheSavingsUnknown(t *testing.T) {
+	chatAgent := newAgentForUsageTest(t)
+	// A cached response with no actual cost and no resolvable catalog rate.
+	chatAgent.TrackMetricsFromResponse(100, 50, 150, 0, 30, 0, 0, 0)
+
+	if got := chatAgent.GetCachedCostSavings(); got != 0 {
+		t.Fatalf("precondition: savings = %f, want 0", got)
+	}
+	payload := buildUsageJSONPayload(chatAgent)
+	if payload.CacheSavingsKnown {
+		t.Errorf("CacheSavingsKnown = true, want false (savings undeterminable)")
+	}
+}
+
+// TestUsageJSONPayload_CacheSavingsKnown pins that a determinable savings value
+// reports as known.
+func TestUsageJSONPayload_CacheSavingsKnown(t *testing.T) {
+	chatAgent := newAgentForUsageTest(t)
+	// Seed a known catalog rate for the agent's session model so the
+	// catalog-rate path determines savings.
+	api.ResetPricingResolver()
+	t.Cleanup(api.ResetPricingResolver)
+	api.SeedPricingForTest("mock", "mock-model", 0.2, 0.6, 0.006)
+
+	chatAgent.TrackMetricsFromResponse(100, 50, 150, 0.01, 30, 0, 0, 0)
+
+	payload := buildUsageJSONPayload(chatAgent)
+	if !payload.CacheSavingsKnown {
+		t.Errorf("CacheSavingsKnown = false, want true when the catalog rate determines savings")
+	}
+	if payload.CacheSavings <= 0 {
+		t.Errorf("CacheSavings = %f, want > 0 from the seeded catalog rate", payload.CacheSavings)
+	}
+}
+
+// TestUsageRender_ShowsUnknownNotZero captures the /usage dashboard and pins
+// that an undeterminable savings figure renders as "unknown", never "$0".
+func TestUsageRender_ShowsUnknownNotZero(t *testing.T) {
+	chatAgent := newAgentForUsageTest(t)
+	chatAgent.TrackMetricsFromResponse(100, 50, 150, 0, 30, 0, 0, 0)
+
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+	var buf bytes.Buffer
+	drained := make(chan struct{})
+	go func() {
+		_, _ = buf.ReadFrom(r)
+		close(drained)
+	}()
+
+	cmd := &UsageCommand{}
+	err := cmd.Execute(nil, chatAgent)
+
+	w.Close()
+	os.Stdout = old
+	<-drained
+	output := buf.String()
+
+	if err != nil {
+		t.Fatalf("Execute returned error: %v", err)
+	}
+	if !strings.Contains(output, "unknown") {
+		t.Errorf("dashboard output missing \"unknown\" savings label:\n%s", output)
+	}
+	if strings.Contains(output, "Cache savings  $0.000000") {
+		t.Errorf("dashboard rendered misleading $0.000000 savings:\n%s", output)
 	}
 }

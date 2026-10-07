@@ -144,9 +144,12 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 		return fmt.Errorf("configuration error: %w", err)
 	}
 
-	// Display the provider/model being used for review
-	reviewProvider := cfg.GetReviewProvider()
-	reviewModel := cfg.GetReviewModel()
+	// Display the provider/model the reviewer role resolves to: the review
+	// settings alias the reviewer role, and an unset role falls back to the
+	// last-used provider. That fallback is display-only — a reviewer
+	// selection counts as "configured" only when it is explicit
+	// (HasExplicitRole), and the gate below keys on that.
+	reviewProvider, reviewModel := cfg.ResolveRole(configuration.RoleReviewer)
 	logger.LogProcessStep(fmt.Sprintf("Using provider: %s, model: %s for review", reviewProvider, reviewModel))
 
 	logger.LogProcessStep("Configuration loaded successfully")
@@ -205,8 +208,16 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 	// IMPORTANT: Must include AgentClient for the review to work.
 	agentClient := service.GetDefaultAgentClient()
 
-	// Try to use configured review provider/model first
-	if reviewProvider != "" {
+	// Try to use the configured review provider/model first — but only when
+	// the reviewer role is an explicit user selection (HasExplicitRole, i.e.
+	// a roles.reviewer entry or the legacy review settings). A gate on
+	// `reviewProvider != ""` alone always fired in live sessions because
+	// ResolveRole fills an unset provider from the last-used fallback, so a
+	// user who never configured a reviewer still took the "configured review
+	// provider" branch instead of the active-session fallback below. Keying
+	// on HasExplicitRole restores the pre-role semantics: no explicit
+	// reviewer selection → default client + active session provider.
+	if cfg.HasExplicitRole(configuration.RoleReviewer) && reviewProvider != "" {
 		if sessionClient, err := factory.CreateProviderClient(api.ClientType(reviewProvider), reviewModel); err == nil {
 			agentClient = sessionClient
 			logger.LogProcessStep(fmt.Sprintf("Using configured review provider/model: %s | %s", reviewProvider, reviewModel))

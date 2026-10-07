@@ -17,6 +17,7 @@ import (
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/verify"
 )
 
 // ---------------------------------------------------------------------------
@@ -156,6 +157,22 @@ func (a *Agent) processQueryWithSeed(source, userQuery string) (string, error) {
 	}()
 
 	result, err := qc.seedAgent.Run(qc.runCtx, qc.processedQuery)
+	if err == nil {
+		// Quality after edits: on the success path only, the turn-end
+		// quality hook may run the project's formatter and linter and
+		// continue the turn (a repair round). It runs before verification
+		// so a formatter's in-place rewrite is what verification then
+		// builds and tests. A hard error from the first Run flows to
+		// handleQueryResult unchanged (skipping both hooks).
+		result, err = a.runTurnEndQuality(qc, result)
+	}
+	if err == nil {
+		// On the success path only, the turn-end
+		// verification hook may continue the turn (a repair round). A
+		// hard error from the first Run flows to handleQueryResult
+		// unchanged.
+		result, err = a.runTurnEndVerification(qc, result)
+	}
 	return a.handleQueryResult(qc, result, err)
 }
 
@@ -201,6 +218,33 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 	// Enable change tracking
 	a.EnableChangeTracking(userQuery)
 
+	// Reset the per-turn verification state at the
+	// same per-turn point change tracking opens its window: a previous
+	// turn's stored result, repair attempts, and limit must never attach
+	// to this turn's reply — a turn's final reply may only carry that
+	// turn's verification outcome (the turn-end hook stores it at the
+	// turn's end).
+	a.resetTurnVerification()
+
+	// Quality after edits: reset the per-turn quality state at the same
+	// per-turn point, so a previous turn's quality result never attaches to
+	// this turn.
+	a.resetTurnQuality()
+
+	// Capture the turn's verification inputs — the starter
+	// manifest's commands and the plan's acceptance — once, at the turn's
+	// start, right after the per-turn verification state is reset. Every
+	// verification run of the turn (every repair round) executes against
+	// this snapshot rather than re-reading the files, so a model that
+	// edits .sprout/starter.json or .sprout/plan.json mid-turn cannot
+	// change what "passing" means. A snapshot is taken only when
+	// verification is enabled for this turn; a disabled turn takes none.
+	if a.configManager != nil {
+		if cfg := a.configManager.GetConfig(); cfg != nil && cfg.VerificationEnabled() {
+			a.setTurnVerifySnapshot(verify.New().Snapshot(a.GetWorkspaceRoot()))
+		}
+	}
+
 	// Reset circuit breaker history for a fresh query
 	if a.state.GetCircuitBreaker() != nil {
 		a.state.GetCircuitBreaker().mu.Lock()
@@ -241,6 +285,14 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 
 	// Set conversation start time for duration calculation
 	a.conversationStartTime = time.Now()
+
+	// Resolve the turn's user language once (recent user
+	// messages + the current query, with the configured fallback) and store
+	// it on the agent so the streaming provider path can gate assistant-text
+	// delivery through the hold-back. Inactive (no hold-back, byte-identical
+	// streaming) for subagents, when the guard is disabled, or when the user
+	// language is undetermined.
+	a.resolveTurnLanguageGuard(processedQuery)
 
 	// Group extracted images for provider registration. All images from this
 	// query are attached to the first user message by attachPastedImages.
@@ -329,6 +381,14 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 	// handed to the seed agent, so the mode's skills reach this turn.
 	a.autoActivateModeSkills()
 
+	// When the project's starter manifest names a starter, its
+	// stack skill auto-activates at turn start — folded into the system
+	// prompt before it is handed to the seed agent (the next block).
+	// Best-effort and idempotent: a missing/invalid manifest, a starter with
+	// no skill, or an already-active skill is a no-op and never fails the
+	// turn.
+	a.autoActivateStarterSkill()
+
 	if a.systemPrompt != "" {
 		opts.SystemPrompt = a.systemPrompt
 	}
@@ -338,6 +398,30 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 	// includes it in its first message.
 	if supplement := a.consumePendingSystemSupplement(); supplement != "" {
 		opts.SystemPrompt = opts.SystemPrompt + "\n\n" + supplement
+	}
+
+	// When a structured plan exists, append a compact plan
+	// summary (goal + scope items with status) so the model works scope item
+	// by scope item. planContextSummary returns "" when there is no plan or
+	// the plan is unreadable/invalid, so an absent plan never changes the
+	// context and never fails the turn.
+	if planSummary := a.planContextSummary(); planSummary != "" {
+		opts.SystemPrompt = opts.SystemPrompt + "\n\n" + planSummary
+	}
+
+	// When the project's starter manifest names an older
+	// version of its starter than the embedded starter tree, append the
+	// upgrade notice so the agent may propose the upgrade (using the
+	// skill's upgrade note) — but never apply it silently. The hook runs
+	// after the system prompt is set (above), because the notice is a
+	// per-turn append to opts.SystemPrompt, like the plan summary.
+	// starterUpgradeNotice returns "" when there is no manifest, nothing to
+	// propose, or an ambiguous version comparison, so an up-to-date or
+	// starter-less project never changes the context and never fails the
+	// turn. It only reads (manifest + embedded catalogue): the hook itself
+	// never writes a project file.
+	if upgradeNotice := a.starterUpgradeNotice(); upgradeNotice != "" {
+		opts.SystemPrompt = opts.SystemPrompt + "\n\n" + upgradeNotice
 	}
 
 	var seedAgentRef *core.Agent

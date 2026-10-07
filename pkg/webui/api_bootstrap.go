@@ -74,6 +74,12 @@ type RuntimeConfig struct {
 	// field, and the agent falls back to the two-origin network restriction
 	// (GitHub unreachable in-browser). See webui/src/types/runtimeConfig.ts.
 	EgressProxy string `json:"egressProxy,omitempty"`
+
+	// ContractVersion is the API contract version (the OpenAPI info.version
+	// in docs/api) this daemon build serves. The Web UI compares its major
+	// version to the value it was built against and refuses to start when
+	// they are incompatible; a newer minor version is a warning only.
+	ContractVersion string `json:"contractVersion"`
 }
 
 // UpdateInfo tells the frontend a newer release is available. It is a
@@ -117,6 +123,9 @@ func (ws *ReactWebServer) handleAPIBootstrap(w http.ResponseWriter, r *http.Requ
 		Update:       updatePayload(),
 		SharedMode:   ws.IsSharedMode(),
 		Sync:         computeBootstrapSync(r.Context(), ws.getWorkspaceRootForRequest(r)),
+		// The contract version this build serves (the source of truth in
+		// contract.go); the frontend negotiates against its own pin.
+		ContractVersion: ContractVersion,
 		// SP-016 P0.3: absolute platform base for the editor's account-surface
 		// exits. Empty (env unset) → the omitempty tag drops the field and
 		// the editor keeps its current relative-exit behavior.

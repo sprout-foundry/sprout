@@ -189,8 +189,11 @@ func RequestApproval(a ApprovalAgent, assessment RiskAssessment, toolName string
 	isSubagent := a.IsSubagent()
 
 	// WebUI path. When a browser tab is connected, the WebUI IS the
-	// interactive surface — the TTY status of os.Stdin is irrelevant.
-	webUICanAnswer := !isSubagent && a.HasActiveWebUIClients()
+	// interactive surface — the TTY status of os.Stdin is irrelevant. A
+	// workflow/automate run is excluded: even with a browser attached, nobody
+	// is guaranteed to be at it, so the run must not block on the dialog and
+	// instead resolves from the risk profile (non-interactive permissive).
+	webUICanAnswer := !isSubagent && a.HasActiveWebUIClients() && !a.IsWorkflowRun()
 	if a.DebugEnabled() {
 		a.DebugLogf("[APPROVAL] webUICanAnswer=%v (isSubagent=%v, hasWebUIClients=%v, hasMgr=%v, hasEventBus=%v)\n",
 			webUICanAnswer, isSubagent, a.HasActiveWebUIClients(), a.GetSecurityApprovalMgr() != nil, a.GetEventBus() != nil)
@@ -288,7 +291,7 @@ func RequestApproval(a ApprovalAgent, assessment RiskAssessment, toolName string
 	// CLI path
 	cfg := a.GetConfig()
 	logger := utils.GetLogger(cfg != nil && cfg.SkipPrompt)
-	canPrompt := logger != nil && logger.IsInteractive() && !isSubagent
+	canPrompt := logger != nil && logger.IsInteractive() && !isSubagent && !a.IsWorkflowRun()
 
 	if a.DebugEnabled() {
 		a.DebugLogf("[APPROVAL] CLI path: canPrompt=%v (logger=%v, isInteractive=%v, isSubagent=%v)\n",

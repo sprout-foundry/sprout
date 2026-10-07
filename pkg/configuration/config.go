@@ -49,6 +49,17 @@ type Config struct {
 	ProviderModels   map[string]string `json:"provider_models"`
 	ProviderPriority []string          `json:"provider_priority"`
 
+	// Roles is the role-model section: named roles
+	// (planner, coder, summarizer, reviewer, commit) map to a provider
+	// and model; unset roles fall back to the conversation's
+	// provider/model (ResolveRole). The existing per-setting model
+	// fields (subagent_model, commit_model, review/completion models)
+	// are read as aliases for their roles: each getter
+	// consults the roles section, and ResolveRole consults the legacy
+	// fields. The internal call sites are being rewired to
+	// ResolveRole.
+	Roles map[string]RoleConfig `json:"roles,omitempty"`
+
 	// Language Server Override Configuration
 	LanguageServers []LanguageServerOverride `json:"language_servers,omitempty"`
 
@@ -215,6 +226,22 @@ type Config struct {
 	// EditApproval controls the per-hunk diff approval gate for agent file writes.
 	EditApproval *EditApprovalConfig `json:"edit_approval,omitempty"`
 
+	// Verification controls the turn-end verification run ("verified done"):
+	// the turn-end gate that runs the plan's acceptance checks and
+	// the repair loop. Off by default in the CLI; any config layer —
+	// global, project (workspace), or an embedding environment writing the
+	// same layers — enables it through the same "verification" section.
+	// Nil means off with the default repair-attempt limit.
+	Verification *VerificationConfig `json:"verification,omitempty"`
+
+	// Quality controls the quality-after-edits step: the turn-end gate that
+	// runs the project's formatter and linter after a turn that changed
+	// application code and repairs the findings in the same turn. Off by
+	// default in the CLI; any config layer — global, project (workspace),
+	// or an embedding environment writing the same layers — enables it
+	// through the same "quality" section. Nil means off.
+	Quality *QualityConfig `json:"quality,omitempty"`
+
 	// OutputVerbosity controls how much inter-tool-call narration and
 	// streaming detail the UI shows. Valid values: "compact" (hide
 	// interim model messages, show only tool results and final text),
@@ -227,6 +254,24 @@ type Config struct {
 	// invocation details in the conversation output. When false, tool
 	// calls are collapsed/hidden. Defaults to true.
 	ShowToolInvocations bool `json:"show_tool_invocations,omitempty"`
+
+	// Language is the user's preferred conversation language, used by the
+	// outbound language guard as a fallback when the user's
+	// recent messages are too short or too mixed to resolve a majority
+	// language. It is an ISO 639-1 code (or the 639-3 code for the few
+	// languages without a 639-1 code), case-insensitive. Empty means no
+	// configured fallback — the guard then treats the user's language as
+	// undetermined and never guesses. Reading it as a langguard.Language is
+	// langguard.ParseLanguage(cfg.Language).
+	Language string `json:"language,omitempty"`
+
+	// DisableLanguageGuard turns off the outbound language guard,
+	// which is on by default everywhere, including the CLI. Any
+	// config layer (global, workspace, session) may set this to true; the
+	// layer merge tracks the key's presence, so an explicit false in a
+	// narrower layer re-enables the guard even over a broader layer's
+	// disable. Default: false (guard enabled). See LanguageGuardEnabled.
+	DisableLanguageGuard bool `json:"disable_language_guard,omitempty"`
 
 	// Wakeup controls auto-resume behavior for background task completions.
 	Wakeup WakeupConfig `json:"wakeup,omitempty"`

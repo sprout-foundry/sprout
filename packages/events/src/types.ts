@@ -294,6 +294,182 @@ export interface ContextManagementDiagnosticData {
   chat_id?: string;
 }
 
+/**
+ * Payload for a language_guard_replacement event (SP-152 §152c, item 152.7).
+ *
+ * Published when a streamed reply that was RELEASED by the streaming
+ * hold-back (its start passed the language check) is re-checked at completion
+ * and found to have switched language mid-stream. The reply was already
+ * streamed to the client and cannot be un-streamed, so the WebUI replaces the
+ * already-streamed assistant message's content with `replacement` and keeps
+ * `original` (the full switched content) available for "view original".
+ *
+ * Go: pkg/events.events_filter.go::LanguageGuardReplacementEvent
+ */
+export interface LanguageGuardReplacementData {
+  /** The localized §152b-style notice the user should see instead of the reply. */
+  replacement: string;
+  /** The full switched content — the "view original" payload. */
+  original: string;
+  /** What triggered the replacement (e.g. "mid_stream_switch"). */
+  reason: string;
+  chat_id?: string;
+}
+
+// ── SP-151 progress events (SP-151 §151a, item 151.1) ─────────────────────
+//
+// Structured run-progress signals emitted by the runtime, not parsed from
+// model text. Each payload carries the stable correlation IDs (run, plan
+// revision, scope item) so consumers can de-duplicate and correlate. Field
+// names mirror the Go json tags 1:1 (snake_case).
+
+/**
+ * Payload for a progress_milestone event: a plan scope item (SP-148)
+ * started or finished, with the files-touched count and the scope item's
+ * elapsed wall time.
+ *
+ * This one interface models BOTH wire shapes the event type carries:
+ * a flat single-milestone payload (mirrors the Go struct below) and the
+ * coalesced batch envelope, which is built by the webui stream coalescer
+ * (pkg/webui/stream_coalesce.go::mergeMilestones), not by the Go struct.
+ * The batch carries only run_id, the milestones array, and the route keys
+ * at the top level — plan_revision, phase, and elapsed_ms exist only on
+ * the per-entry flat payloads — which is why those fields are optional.
+ *
+ * Go: pkg/events/progress_events.go::ProgressMilestoneData
+ */
+export interface ProgressMilestoneData {
+  /** Stable run identifier correlating every event of one run. Present on flat and batched payloads alike. */
+  run_id: string;
+  /**
+   * Revision of the SP-148 plan (0 when the run has no active plan).
+   * Optional: a coalesced batch envelope has no top-level plan_revision —
+   * only the per-milestone entries inside `milestones` carry it.
+   */
+  plan_revision?: number;
+  /** Scope item id (plancontract.ScopeItem.ID); absent without plan scope. */
+  scope_id?: string;
+  /** Scope item's title, for display. */
+  scope_title?: string;
+  /**
+   * "started" | "finished" — which milestone phase this reports. Optional:
+   * a coalesced batch envelope has no top-level phase — each flat entry in
+   * `milestones` carries its own.
+   */
+  phase?: string;
+  /** How many files the scope item changed. */
+  files_touched?: number;
+  /**
+   * Scope item's elapsed wall time in milliseconds. Optional: the coalesced
+   * batch envelope has no top-level elapsed_ms, and a flat "started"
+   * milestone omits it on the wire (only "finished" emits it).
+   */
+  elapsed_ms?: number;
+  /**
+   * Present only when the stream coalesced a run of milestone events
+   * (SP-151 §151b); each entry is a flat ProgressMilestoneData. A single
+   * (non-coalesced) milestone event omits this field.
+   */
+  milestones?: ProgressMilestoneData[];
+  /**
+   * Route keys. Stamped onto every flat payload by the event metadata
+   * decorator, and copied onto a batch envelope so the coalesced event
+   * still reaches its destination. Consumers scope a milestone to a chat
+   * by the TOP-LEVEL chat_id — it is present on both flat and batched
+   * payloads, so one check covers both shapes.
+   */
+  client_id?: string;
+  chat_id?: string;
+  user_id?: string;
+}
+
+/**
+ * Payload for a progress_question event: the agent needs a decision.
+ * Carries the question, options if any, and why it matters — complementing
+ * `ask_user_request` with plan context.
+ *
+ * Go: pkg/events/progress_events.go::ProgressQuestionData
+ */
+export interface ProgressQuestionData {
+  run_id: string;
+  plan_revision: number;
+  /** Scope item the question belongs to; absent when not scoped. */
+  scope_id?: string;
+  /** The decision being requested. */
+  question: string;
+  /** Short categorizing label rendered above the question. */
+  header?: string;
+  /** Selectable choices; absent for freeform questions. */
+  options?: AskUserRequestOption[];
+  /** Why the decision matters. */
+  why_it_matters?: string;
+}
+
+/**
+ * Compact evidence a single verification check carries (SP-149). Mirrors
+ * the consumer-facing fields of verify.Check; the full result (routes,
+ * screenshots, steps, duration) stays server-side.
+ *
+ * Go: pkg/events/progress_events.go::ProgressVerificationCheck
+ */
+export interface ProgressVerificationCheck {
+  /** plancontract check kind ("build", "test", ...). */
+  kind: string;
+  /** ids of the plan acceptance items this check covers. */
+  items?: string[];
+  /** Trusted command that ran (absent when skipped). */
+  command?: string;
+  /** Check did not run (no trusted command, or the run was cancelled). */
+  skipped?: boolean;
+  /** Whether the check passed (false for a skipped check). */
+  passed?: boolean;
+  /** Explains a skipped or abnormal check (timeout, cancellation). */
+  reason?: string;
+  /** Bounded excerpt of the check's output (evidence). */
+  excerpt?: string;
+}
+
+/**
+ * Payload for a progress_verification event: the SP-149 verification
+ * result — the checks, pass/fail, and evidence references.
+ *
+ * Go: pkg/events/progress_events.go::ProgressVerificationData
+ */
+export interface ProgressVerificationData {
+  run_id: string;
+  plan_revision: number;
+  /** Run happened without an active SP-148 plan (SP-149 baseline mode). */
+  baseline?: boolean;
+  /** Nothing failed and at least one check actually ran (SP-149 §149d). */
+  passed?: boolean;
+  /** Individual check outcomes, in run order. */
+  checks: ProgressVerificationCheck[];
+  /** Run-level findings that prevented some commands from resolving. */
+  errors?: string[];
+}
+
+/**
+ * Payload for a progress_complete event: the run finished. `verified` is
+ * true only when a passing verification result exists (SP-149 §149d /
+ * SP-151 §151c). `not_verified_reason` says why only when verification is
+ * enabled and the turn was not verified (e.g. "no code changes this
+ * turn"); when SP-149 is disabled (the CLI default) both `verification`
+ * and `not_verified_reason` are absent — the payload carries just
+ * `run_id`, so the default UI is unchanged.
+ *
+ * Go: pkg/events/progress_events.go::ProgressCompleteData
+ */
+export interface ProgressCompleteData {
+  run_id: string;
+  plan_revision: number;
+  /** True only when a passing verification result exists. */
+  verified?: boolean;
+  /** Final verification result; absent when SP-149 is disabled or was not run. */
+  verification?: ProgressVerificationData;
+  /** Why the run is not verified (e.g. "no code changes this turn"); absent when verification is disabled. */
+  not_verified_reason?: string;
+}
+
 export interface WorkspaceChangedData {
   daemon_root?: string;
   workspace_root?: string;
@@ -620,6 +796,36 @@ export type WsEvent =
   | {
       type: "context_management_diagnostic";
       data?: ContextManagementDiagnosticData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "language_guard_replacement";
+      data?: LanguageGuardReplacementData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "progress_milestone";
+      data?: ProgressMilestoneData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "progress_question";
+      data?: ProgressQuestionData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "progress_verification";
+      data?: ProgressVerificationData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "progress_complete";
+      data?: ProgressCompleteData;
       id?: string;
       timestamp?: string;
     }

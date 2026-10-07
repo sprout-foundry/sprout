@@ -1,4 +1,4 @@
-import { PanelRightClose } from 'lucide-react';
+import { MonitorPlay, PanelRightClose } from 'lucide-react';
 import React, { useState } from 'react';
 import { isCloud } from '../config/mode';
 import { isLayeredLayout } from '../config/layout';
@@ -22,6 +22,10 @@ export interface HeaderBarProps {
   onToggleContextPanel: () => void;
   /** Whether there is a context panel to toggle. */
   hasContextPanel?: boolean;
+  /** Toggle the preview panel. Rendered when provided. */
+  onTogglePreviewPanel?: () => void;
+  /** Whether the preview panel is currently open (drives the toggle's state). */
+  previewPanelOpen?: boolean;
 }
 
 const HeaderBar: React.FC<HeaderBarProps> = ({
@@ -32,6 +36,8 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
   onToggleSidebar,
   onToggleContextPanel,
   hasContextPanel = true,
+  onTogglePreviewPanel,
+  previewPanelOpen = false,
 }) => {
   const [busy, setBusy] = useState(false);
   const repoURL = useActiveRepoURL() ?? null;
@@ -118,6 +124,20 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
         {/* SP-016 P0.5: avatar menu — cloud mode only, renders nothing in
          * local mode or without a bootstrap identity. */}
         {!isLayeredLayout && <UserMenu />}
+        {/* Toggle the Code-mode preview panel (the running-app
+         * dev server). Rendered only when the host wires it in (Code mode). */}
+        {!isMobile && onTogglePreviewPanel && (
+          <button
+            className="header-context-toggle-btn"
+            data-testid="preview-panel-toggle"
+            onClick={onTogglePreviewPanel}
+            aria-label="Toggle preview panel"
+            aria-pressed={previewPanelOpen}
+            title="Toggle preview panel"
+          >
+            <MonitorPlay size={14} />
+          </button>
+        )}
         {!isMobile && hasContextPanel && (
           <button
             className="header-context-toggle-btn"

@@ -9,16 +9,18 @@
  */
 
 import { Menu, MessageSquare, PanelRightClose, SquareTerminal } from 'lucide-react';
-import React from 'react';
+import React, { useState } from 'react';
 import ContextSidebar from '../components/ContextSidebar';
 import EditorWorkspace from '../components/EditorWorkspace';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { CreditsChip } from '../components/CreditsChip';
 import HeaderBar from '../components/HeaderBar';
+import PreviewPanel from '../components/PreviewPanel';
 import StatusBar from '../components/StatusBar';
 import Terminal from '../components/Terminal';
 import type { WorkspaceShellProps } from './shell';
 import { isLayeredLayout } from '../config/layout';
+import { copy } from '../config/copy';
 import { isCloud, supportsAgentChanges } from '../config/mode';
 import { useActiveRepoURL } from '../services/activeRepo';
 import { repoSlug } from '../utils/platformUrl';
@@ -66,11 +68,14 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
 
   // On a local daemon the panel holds the agent's change history.
   const hasContextPanel = supportsAgentChanges;
+  // The Code-mode preview panel (the running-app dev server),
+  // collapsed by default so it never steals editor space or polls.
+  const [previewPanelOpen, setPreviewPanelOpen] = useState(false);
   // On phones the project sidebar lives in the drawer, so name the project
   // on the toolbar; tapping it opens the drawer.
   const activeRepoSlug = repoSlug(useActiveRepoURL());
   const projectTitle = isCloud
-    ? (activeRepoSlug ?? 'No repository open')
+    ? (activeRepoSlug ?? copy('workspace.none'))
     : (git.workspaceRoot?.split('/').filter(Boolean).pop() ?? '');
 
   return (
@@ -85,6 +90,8 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
         onToggleSidebar={onToggleSidebar}
         onToggleContextPanel={onToggleContextPanel}
         hasContextPanel={hasContextPanel}
+        onTogglePreviewPanel={() => setPreviewPanelOpen((open) => !open)}
+        previewPanelOpen={previewPanelOpen}
       />
       <div className="main-view-content">
         <div className="editor-view">
@@ -157,6 +164,7 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
             />
           </ErrorBoundary>
         </div>
+        <PreviewPanel open={previewPanelOpen} onClose={() => setPreviewPanelOpen(false)} />
         <div className="context-panel-container">
           <ContextSidebar
             isMobile={isMobile}

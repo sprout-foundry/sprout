@@ -103,7 +103,7 @@ describe('CONSUMPTION_GUIDE.md — Import path accuracy', () => {
   // Components mentioned in the "Available Components" table and code examples
   const documentedComponents = [
     // Panels
-    'ChatPanel', 'Terminal', 'TerminalPane', 'TerminalTabBar',
+    'ChatPanel', 'Terminal', 'TerminalPane', 'TerminalTabBar', 'PreviewPane',
     // Editors
     'Editor',
     // Trees

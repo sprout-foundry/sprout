@@ -1,6 +1,6 @@
 # SP-157 — Checkpoints and Project Health
 
-> **Status (2026-10-03):** Proposed.
+> **Status (2026-10-07):** Shipped.
 > Depends on SP-145 (Changes surface), SP-149 (verification), SP-153
 > (formatter/linter/test config). Summaries use SP-150's `summarizer`
 > role when configured.

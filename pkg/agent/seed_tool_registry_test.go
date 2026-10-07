@@ -56,6 +56,8 @@ func (m *mockStateManager) SetChargedCostTotal(float64)                {}
 func (m *mockStateManager) SetTokenCostTotal(float64)                  {}
 func (m *mockStateManager) SetSubscriptionTokens(int)                  {}
 func (m *mockStateManager) SetFreeTokens(int)                          {}
+func (m *mockStateManager) GetRoleUsage() []RoleUsage                  { return nil }
+func (m *mockStateManager) SetRoleUsage([]RoleUsage)                   {}
 func (m *mockStateManager) GetTotalTokens() int                        { return 0 }
 func (m *mockStateManager) SetTotalTokens(int)                         {}
 func (m *mockStateManager) GetPromptTokens() int                       { return 0 }
@@ -78,6 +80,8 @@ func (m *mockStateManager) GetCacheWriteTokens() int                   { return 
 func (m *mockStateManager) SetCacheWriteTokens(int)                    {}
 func (m *mockStateManager) GetCachedCostSavings() float64              { return 0 }
 func (m *mockStateManager) SetCachedCostSavings(float64)               {}
+func (m *mockStateManager) GetCacheSavingsUnknown() bool               { return false }
+func (m *mockStateManager) SetCacheSavingsUnknown(bool)                {}
 func (m *mockStateManager) GetImageTokens() int                        { return 0 }
 func (m *mockStateManager) SetImageTokens(int)                         {}
 func (m *mockStateManager) GetActiveSkills() []string                  { return nil }

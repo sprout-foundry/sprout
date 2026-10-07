@@ -15,14 +15,52 @@ func TestGetCommitProvider_ExplicitValue_ReturnsValue(t *testing.T) {
 	assert.Equal(t, "openai", result)
 }
 
-// TestGetCommitProvider_EmptyReturnsEmpty tests that GetCommitProvider returns empty when not explicitly set
-func TestGetCommitProvider_EmptyReturnsEmpty(t *testing.T) {
+// TestGetCommitProvider_EmptyFallsBackToLastUsed tests that GetCommitProvider
+// falls back to the last-used provider when no explicit commit provider is set
+// (the documented default for the CommitProvider field).
+func TestGetCommitProvider_EmptyFallsBackToLastUsed(t *testing.T) {
 	cfg := &Config{
 		CommitProvider:   "",
 		LastUsedProvider: "openrouter",
 	}
 	result := cfg.GetCommitProvider()
+	assert.Equal(t, "openrouter", result)
+}
+
+// TestGetCommitProvider_ExplicitWinsOverLastUsed tests that an explicitly set
+// commit provider always wins over the last-used fallback.
+func TestGetCommitProvider_ExplicitWinsOverLastUsed(t *testing.T) {
+	cfg := &Config{
+		CommitProvider:   "openai",
+		LastUsedProvider: "openrouter",
+	}
+	result := cfg.GetCommitProvider()
+	assert.Equal(t, "openai", result)
+}
+
+// TestGetCommitProvider_AllEmptyReturnsEmpty tests that GetCommitProvider returns
+// empty only when neither the commit provider nor the last-used provider is set.
+func TestGetCommitProvider_AllEmptyReturnsEmpty(t *testing.T) {
+	cfg := &Config{
+		CommitProvider:   "",
+		LastUsedProvider: "",
+		ProviderPriority: []string{},
+	}
+	result := cfg.GetCommitProvider()
 	assert.Equal(t, "", result)
+}
+
+// TestGetCommitModel_FallsBackToLastUsedProviderModel tests that with no
+// explicit commit provider/model, the commit model resolves to the last-used
+// provider's configured model.
+func TestGetCommitModel_FallsBackToLastUsedProviderModel(t *testing.T) {
+	cfg := &Config{
+		CommitProvider:   "",
+		LastUsedProvider: "openrouter",
+		ProviderModels:   map[string]string{"openrouter": "openai/gpt-5"},
+	}
+	assert.Equal(t, "openrouter", cfg.GetCommitProvider())
+	assert.Equal(t, "openai/gpt-5", cfg.GetCommitModel())
 }
 
 // TestGetCommitProvider_OnlyProviderPriorityReturnsEmpty tests that GetCommitProvider does not fall back to ProviderPriority
@@ -31,17 +69,6 @@ func TestGetCommitProvider_OnlyProviderPriorityReturnsEmpty(t *testing.T) {
 		CommitProvider:   "",
 		LastUsedProvider: "",
 		ProviderPriority: []string{"ollama-local", "openrouter"},
-	}
-	result := cfg.GetCommitProvider()
-	assert.Equal(t, "", result)
-}
-
-// TestGetCommitProvider_AllEmptyReturnsEmpty tests that GetCommitProvider returns empty with no explicit config
-func TestGetCommitProvider_AllEmptyReturnsEmpty(t *testing.T) {
-	cfg := &Config{
-		CommitProvider:   "",
-		LastUsedProvider: "",
-		ProviderPriority: []string{},
 	}
 	result := cfg.GetCommitProvider()
 	assert.Equal(t, "", result)
@@ -186,21 +213,21 @@ func TestCommitConfigFallbackChain(t *testing.T) {
 		expectedProvider string
 	}{
 		{
-			name:             "explicit commit provider",
+			name:             "explicit commit provider wins over last-used",
 			commitProvider:   "zai",
 			lastUsedProvider: "openrouter",
 			providerPriority: []string{"ollama-local"},
 			expectedProvider: "zai",
 		},
 		{
-			name:             "empty returns empty (no fallback to last used)",
+			name:             "unset commit provider falls back to last-used",
 			commitProvider:   "",
 			lastUsedProvider: "deepinfra",
 			providerPriority: []string{"ollama-local"},
-			expectedProvider: "",
+			expectedProvider: "deepinfra",
 		},
 		{
-			name:             "empty returns empty (no fallback to provider priority)",
+			name:             "no last-used provider, no fallback to provider priority",
 			commitProvider:   "",
 			lastUsedProvider: "",
 			providerPriority: []string{"openai", "ollama-local"},
@@ -312,8 +339,10 @@ func TestCommitReviewConfigCanBeSetToEmpty(t *testing.T) {
 	assert.Empty(t, cfg.ReviewProvider)
 	assert.Empty(t, cfg.ReviewModel)
 
-	// Getters return empty — no fallback
-	assert.Equal(t, "", cfg.GetCommitProvider())
+	// The commit getter falls back to the last-used provider once the
+	// explicit commit provider is cleared; the review getter has no such
+	// fallback (this item is commit-scoped) and still returns empty.
+	assert.Equal(t, "openrouter", cfg.GetCommitProvider())
 	assert.Equal(t, "", cfg.GetReviewProvider())
 }
 

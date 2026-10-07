@@ -278,11 +278,16 @@ func (ws *ReactWebServer) runConnectionLiveLoop(
 			}
 
 			// Opportunistically drain any already-queued events (non-blocking)
-			// and coalesce runs of adjacent stream chunks before writing. Under
-			// a backlog — the only time stream chunks get dropped — this turns
+			// and coalesce before writing: runs of adjacent progress_milestone
+			// events collapse into a single batched event, and
+			// runs of adjacent stream chunks merge into larger writes. Under a
+			// backlog — the only time stream chunks get dropped — this turns
 			// hundreds of tiny writes into a few, letting the channel drain fast
 			// instead of overflowing. With no backlog the drain pulls nothing,
-			// so streaming latency is unchanged.
+			// so streaming latency is unchanged. The two coalescers target
+			// disjoint event types (milestone vs stream_chunk) so applying them
+			// in series is safe; both preserve the relative order of the other
+			// events.
 			batch := []events.UIEvent{event}
 		drain:
 			for len(batch) < maxCoalesceDrain {
@@ -294,7 +299,7 @@ func (ws *ReactWebServer) runConnectionLiveLoop(
 				}
 			}
 
-			for _, ev := range coalesceStreamChunks(batch) {
+			for _, ev := range coalesceStreamChunks(coalesceProgressMilestones(batch)) {
 				if !ws.shouldForwardEventToConnection(ev, connInfo) {
 					continue
 				}

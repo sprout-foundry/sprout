@@ -23,6 +23,7 @@ import (
 	agenttools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/preview"
 	"github.com/sprout-foundry/sprout/pkg/providercatalog"
 	"github.com/sprout-foundry/sprout/pkg/security"
 )
@@ -254,6 +255,7 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		terminalManager:          NewTerminalManager(workspaceRoot),
 		startTime:                time.Now(),
 		fixReviewJobs:            make(map[string]*gitFixReviewJob),
+		previewManagers:          make(map[string]*preview.Manager),
 		sshSessions:              make(map[string]*sshWorkspaceSession),
 		sshInFlight:              make(map[string]chan struct{}),
 		sshLaunchStatuses:        make(map[string]*sshLaunchStatus),

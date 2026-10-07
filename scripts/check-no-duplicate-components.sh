@@ -25,6 +25,9 @@ ALLOWED_DUPLICATES=(
     "CommandInput.css"
     # Git components with packages/ui placeholder
     "GitSidebarPanel.tsx"
+    # PreviewPane (SP-155 §155d 155.7) lives in packages/ui; the webui file
+    # is a thin re-export shim kept so relative imports keep working.
+    "PreviewPane.tsx"
     # Chat components (pending SP-039-4d)
     "ChatMessageContextMenu.tsx"
     "MessageBubble.tsx"

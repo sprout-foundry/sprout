@@ -71,6 +71,10 @@ func populateAgentStats(stats map[string]interface{}, agentInst *agent.Agent) {
 	}
 	stats["context_warning_issued"] = agentInst.GetContextWarningIssued()
 	stats["total_cost"] = agentInst.GetTotalCost()
+	// Per-role token/cost breakdown: the embedding
+	// surface's attribution of spend to the model role each call was made
+	// under. Empty when no usage was recorded with a role.
+	stats["role_usage"] = agentInst.GetRoleUsage()
 	stats["last_tps"] = agentInst.GetLastTPS()
 	stats["current_iteration"] = agentInst.GetCurrentIteration()
 	if agentInst.GetMaxIterations() == 0 {

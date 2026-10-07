@@ -9,7 +9,22 @@ import (
 	"time"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"github.com/sprout-foundry/sprout/pkg/git"
 )
+
+// GenerateCommitMessageFunc is a function pointer set by pkg/agent during
+// agent construction (wireAgentToolFuncs). It bridges the interface-based
+// commit tool with the sprout commit Conventional-Commit generator
+// (pkg/git.GenerateCommitMessageFromStagedDiff) plus the agent's LLM client,
+// which the tool layer must not import (import direction: pkg/agent imports
+// pkg/agent_tools, never the other way around).
+//
+// It is called with the full staged diff and the caller's notes (context for
+// the generated message) and returns the generated Conventional Commit
+// message. Nil in standalone tool runs (no agent constructed yet) — the
+// commit handler then refuses to commit rather than guessing a message.
+// Guarded by ToolFuncMu like the other package-level function pointers.
+var GenerateCommitMessageFunc func(diff []byte, notes string) (string, error)
 
 type commitHandler struct{}
 
@@ -23,8 +38,8 @@ func (h *commitHandler) Definition() ToolDefinition {
 			"For read-only git operations (status, log, diff), use shell_command.",
 		Required: []string{},
 		Parameters: []ParameterDef{
-			{Name: "message", Type: "string", Description: "Commit message (auto-generated if omitted). Shell-safe: backticks, $(), and other special characters are not expanded."},
-			{Name: "notes", Type: "string", Description: "Context for auto-generated message (ignored if message is provided)"},
+			{Name: "message", Type: "string", Description: "Explicit commit message, used as-is when provided (shell-safe: backticks, $(), and other special characters are not expanded). When omitted, a Conventional Commit message is generated from the staged diff, with notes as context; if generation fails, nothing is committed."},
+			{Name: "notes", Type: "string", Description: "Context used to shape the commit message when message is omitted (e.g., 'fixes the flaky auth test'). Ignored when message is provided."},
 			{Name: "repo_dir", Type: "string", Description: "Subdirectory within the workspace to commit in (e.g., for submodules or monorepo workspaces). Must be within the workspace root. Defaults to workspace root if omitted."},
 		},
 	}
@@ -56,23 +71,56 @@ func (h *commitHandler) Execute(ctx context.Context, env ToolEnv, args map[strin
 		return commitMessage(ctx, message, effectiveDir)
 	}
 
-	// Auto-generate from diff + notes
-	stagedResult, err := execShellCmd(ctx, "git diff --cached --stat", effectiveDir)
+	// message omitted: generate a Conventional Commit message from the
+	// staged diff, with notes as context. Never commit a placeholder
+	// ("Auto-commit") or the notes verbatim — when generation fails or no
+	// generator is wired, commit nothing.
+	//
+	// The diff is read through pkg/git (the shared git-operations layer)
+	// rather than the shell tool: the shell tool wraps command output in a
+	// status header, which would defeat the empty-diff check and pollute
+	// the generator's prompt.
+	stagedDiff, err := git.GetStagedDiff(effectiveDir)
 	if err != nil {
-		stagedResult = "(could not read staged changes)"
+		return ToolResult{
+			Output:  fmt.Sprintf("Commit message generation failed, so nothing was committed: could not read the staged diff: %v", err),
+			IsError: true,
+		}, nil
+	}
+	if strings.TrimSpace(stagedDiff) == "" {
+		return ToolResult{
+			Output:  "No staged changes to commit. Stage files first (git add), or pass an explicit message.",
+			IsError: true,
+		}, nil
 	}
 
-	// Build a simple auto-generated message
-	msg := "Auto-commit"
-	if notes != "" {
-		msg = notes
+	generate := env.ResolveToolFuncs().GenerateCommitMessage
+	if generate == nil {
+		return ToolResult{
+			Output:  "Commit message generation failed, so nothing was committed: no commit message generator is available in this session. Provide an explicit 'message' instead.",
+			IsError: true,
+		}, nil
 	}
 
-	result, err := commitMessage(ctx, msg, effectiveDir)
+	commitMsg, err := generate([]byte(stagedDiff), notes)
 	if err != nil {
-		return ToolResult{Output: fmt.Sprintf("Commit failed: %v\n\nStaged changes were:\n%s", err, stagedResult), IsError: true}, nil
+		return ToolResult{
+			Output:  fmt.Sprintf("Commit message generation failed, so nothing was committed: %v\n\nStaged diff (truncated):\n%s", err, previewStagedDiff(stagedDiff)),
+			IsError: true,
+		}, nil
 	}
-	return result, nil
+
+	return commitMessage(ctx, commitMsg, effectiveDir)
+}
+
+// previewStagedDiff caps a staged diff for display in error results,
+// mirroring the truncated diff preview the CLI commit flow shows.
+func previewStagedDiff(diff string) string {
+	const maxPreviewBytes = 2000
+	if len(diff) <= maxPreviewBytes {
+		return diff
+	}
+	return diff[:maxPreviewBytes] + "\n... (truncated)"
 }
 
 func (h *commitHandler) Aliases() []string      { return nil }

@@ -8,6 +8,36 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/modelregistry"
 )
 
+// TestResolveModelPricing_CatalogFallback verifies that pricing resolves from
+// the embedded provider catalog when the model registry path is unavailable,
+// and that a cached-input rate missing from the registry is filled from the
+// catalog.
+func TestResolveModelPricing_CatalogFallback(t *testing.T) {
+	ResetPricingResolver()
+	t.Cleanup(ResetPricingResolver)
+
+	// Registry disabled (empty base URL) → DetermineProvider/registry path
+	// yields nothing, so the catalog fallback must supply the pricing.
+	modelregistry.SetBaseURL("")
+	modelregistry.ClearCache()
+	t.Cleanup(func() {
+		modelregistry.SetBaseURL("")
+		modelregistry.ClearCache()
+	})
+
+	// DeepInfra DeepSeek-V4.1-Flash carries a curated cached rate.
+	in, out, cached, ok := ResolveModelPricing("deepinfra", "deepseek-ai/DeepSeek-V4.1-Flash")
+	if !ok {
+		t.Fatalf("expected catalog fallback to resolve deepinfra model, got ok=false")
+	}
+	if !approxEqual(in, 0.2) || !approxEqual(out, 0.6) {
+		t.Errorf("input/output: got in=%v out=%v, want 0.2/0.6", in, out)
+	}
+	if !approxEqual(cached, 0.006) {
+		t.Errorf("cached: got %v, want 0.006", cached)
+	}
+}
+
 // TestResolveModelPricing_EmptyInputs verifies that empty provider or model
 // strings short-circuit and return (0,0,0,false) without touching the cache.
 func TestResolveModelPricing_EmptyInputs(t *testing.T) {
@@ -56,7 +86,7 @@ func TestResolveModelPricing_Registry(t *testing.T) {
 		  "updated_at": "2024-01-01T00:00:00Z",
 		  "models": [
 		    {"id": "anthropic/claude-3.5", "input_cost": 3.0, "output_cost": 15.0, "cached_input_cost": 0.3},
-		    {"id": "openai/gpt-4o", "input_cost": 5.0, "output_cost": 15.0}
+		    {"id": "synthetic-no-cache-model", "input_cost": 5.0, "output_cost": 15.0}
 		  ]
 		}`))
 	}))
@@ -83,17 +113,17 @@ func TestResolveModelPricing_Registry(t *testing.T) {
 		t.Errorf("cached: got %v, want 0.3", cached)
 	}
 
-	// Model without a cached-input rate → cached is 0 but ok is still true
-	// (input/output costs are present).
-	in2, out2, cached2, ok2 := ResolveModelPricing("openrouter", "openai/gpt-4o")
+	// Model without a cached-input rate in the registry and with no catalog
+	// entry → cached stays 0 but ok is still true (input/output present).
+	in2, out2, cached2, ok2 := ResolveModelPricing("openrouter", "synthetic-no-cache-model")
 	if !ok2 {
-		t.Fatalf("expected ok=true for gpt-4o")
+		t.Fatalf("expected ok=true for synthetic-no-cache-model")
 	}
 	if !approxEqual(in2, 5.0) || !approxEqual(out2, 15.0) {
-		t.Errorf("gpt-4o input/output: got in=%v out=%v", in2, out2)
+		t.Errorf("synthetic-no-cache-model input/output: got in=%v out=%v", in2, out2)
 	}
 	if cached2 != 0 {
-		t.Errorf("gpt-4o cached should be 0, got %v", cached2)
+		t.Errorf("synthetic-no-cache-model cached should be 0, got %v", cached2)
 	}
 }
 

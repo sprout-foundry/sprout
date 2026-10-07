@@ -4,7 +4,7 @@ import { ChatFooter } from './ChatFooter';
 import type { ToolExecution } from './types';
 
 /**
- * SP-142 item 142.4 — the workspace-busy notice and send-anyway queueing.
+ * The workspace-busy notice and send-anyway queueing.
  *
  * The composer footer renders the inline notice when the server rejects a
  * send with 409 workspace_busy (another chat in this client context holds

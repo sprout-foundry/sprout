@@ -46,6 +46,7 @@ func (a *Agent) accumulateResponseCost(resp *api.ChatResponse) {
 		BillingType:      billingType,
 		Provider:         a.GetProvider(),
 		Model:            a.GetModel(),
+		Role:             a.GetRole(),
 		ChargedCost:      chargedCost,
 		TokenCost:        tokenCost,
 		PromptTokens:     resp.Usage.PromptTokens,
@@ -78,6 +79,13 @@ func (a *Agent) accumulateResponseCost(resp *api.ChatResponse) {
 
 	if n := resp.Usage.CachedTokens; n > 0 {
 		a.state.SetCachedTokens(a.state.GetCachedTokens() + n)
+		// Cache-savings: prefer the provider-reported actual cost over catalog
+		// rates; record "unknown" when neither can determine savings.
+		if savings, known := a.calculateCachedTokenSavings(n, resp.Usage.PromptTokens, resp.Usage.Cost); known {
+			a.state.SetCachedCostSavings(a.state.GetCachedCostSavings() + savings)
+		} else {
+			a.markCacheSavingsUnknown()
+		}
 	}
 	if resp.Usage.CacheWriteTokens != nil {
 		if n := *resp.Usage.CacheWriteTokens; n > 0 {

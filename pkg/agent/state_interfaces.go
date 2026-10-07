@@ -74,6 +74,14 @@ type CostTracker interface {
 	SetTokenCostTotal(float64)
 	SetSubscriptionTokens(int)
 	SetFreeTokens(int)
+	// GetRoleUsage returns the per-role token/cost totals,
+	// sorted by role. Nil/empty when no cost entry carried a
+	// role yet.
+	GetRoleUsage() []RoleUsage
+	// SetRoleUsage replaces the per-role token/cost totals.
+	// Used by state restore to rehydrate the per-role totals so
+	// they keep summing to the restored overall totals.
+	SetRoleUsage([]RoleUsage)
 }
 
 // TokenCounter manages prompt and completion token counts.
@@ -108,6 +116,8 @@ type CacheStats interface {
 	SetCacheWriteTokens(int)
 	GetCachedCostSavings() float64
 	SetCachedCostSavings(float64)
+	GetCacheSavingsUnknown() bool
+	SetCacheSavingsUnknown(bool)
 	GetImageTokens() int
 	SetImageTokens(int)
 }

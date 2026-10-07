@@ -1,5 +1,6 @@
 import { Settings, CloudOff } from 'lucide-react';
 import { forwardRef } from 'react';
+import { copy } from '../../config/copy';
 import { isCloud } from '../../config/mode';
 import { useActiveRepoURL } from '../../services/activeRepo';
 import SproutLogo from '../SproutLogo';
@@ -24,10 +25,8 @@ export const EmptyChatPanel = forwardRef<HTMLDivElement, EmptyChatPanelProps>(fu
       <div className="chat-container chat-container--empty" ref={ref}>
         <div className="chat-offline-panel" role="status" data-testid="chat-offline-panel">
           <CloudOff size={48} className="chat-offline-icon" aria-hidden="true" />
-          <h3 className="chat-offline-title">No Server Connection</h3>
-          <p className="chat-offline-description">
-            Chat requires a connection to your Sprout server. Your editor and terminal remain available while offline.
-          </p>
+          <h3 className="chat-offline-title">{copy('chat.offlineTitle')}</h3>
+          <p className="chat-offline-description">{copy('chat.offlineDescription')}</p>
           <button
             className="chat-offline-retry-btn"
             onClick={onRetryConnection}
@@ -35,7 +34,7 @@ export const EmptyChatPanel = forwardRef<HTMLDivElement, EmptyChatPanelProps>(fu
             aria-label="Retry connection"
             data-testid="chat-offline-retry"
           >
-            Retry Connection
+            {copy('action.retryConnection')}
           </button>
         </div>
       </div>
@@ -49,11 +48,8 @@ export const EmptyChatPanel = forwardRef<HTMLDivElement, EmptyChatPanelProps>(fu
           <div className="welcome-icon">
             <SproutLogo showWordmark={false} />
           </div>
-          <div className="welcome-text">No AI provider configured</div>
-          <div className="welcome-hint">
-            AI features require a provider to be set up. The editor, terminal, file tree, and git panels are fully
-            functional without one.
-          </div>
+          <div className="welcome-text">{copy('chat.noProvider')}</div>
+          <div className="welcome-hint">{copy('chat.noProviderHint')}</div>
           {onRequestProviderSetup && (
             <button
               type="button"
@@ -63,7 +59,7 @@ export const EmptyChatPanel = forwardRef<HTMLDivElement, EmptyChatPanelProps>(fu
               data-testid="chat-provider-setup"
             >
               <Settings size={14} />
-              Configure Provider
+              {copy('action.configureProvider')}
             </button>
           )}
         </div>
@@ -86,12 +82,8 @@ export const EmptyChatPanel = forwardRef<HTMLDivElement, EmptyChatPanelProps>(fu
         <div className="welcome-icon">
           <SproutLogo showWordmark={false} />
         </div>
-        <div className="welcome-text">
-          Welcome to sprout! I&apos;m ready to help you with code analysis, editing, and more.
-        </div>
-        <div className="welcome-hint">
-          Try asking: &quot;Show me the project structure&quot; or &quot;Find the main function&quot;
-        </div>
+        <div className="welcome-text">{copy('chat.welcome')}</div>
+        <div className="welcome-hint">{copy('chat.welcomeHint')}</div>
       </div>
     </div>
   );

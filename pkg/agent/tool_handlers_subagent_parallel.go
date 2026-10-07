@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
@@ -206,16 +207,14 @@ func collectParallelResults(results []*SubagentResult, tasks []SubagentTask, a *
 
 	// Track costs from all parallel subagents using the structured
 	// SubagentResult fields. This mirrors the single-subagent path
-	// (extractAndTrackSubagentSummary), which switched away from regex-
-	// scraping SUBAGENT_METRICS: lines out of stdout because nothing
-	// emits that line anymore — the parse branch has been fully removed.
-	// Prompt/completion/cached splits are not exposed by SubagentResult
-	// today, so they're left at zero; TrackMetricsFromResponse treats
-	// them as "unknown split" and still applies the totals correctly.
+	// (extractAndTrackSubagentSummary). Each subagent's usage is rolled up
+	// under the role that drove its model choice, with its real
+	// prompt/completion token split, so the
+	// per-role totals keep summing to the overall totals.
 	for _, r := range results {
 		if r.TokensUsed > 0 || r.Cost > 0 {
-			a.TrackMetricsFromResponse(0, 0, int(r.TokensUsed), r.Cost, 0, 0, 0)
-			a.Logger().Debug("Tracked parallel subagent [%s] costs: %d tokens, $%.6f\n", r.ID, r.TokensUsed, r.Cost)
+			a.RollupSubagentUsage(r)
+			a.Logger().Debug("Tracked parallel subagent [%s] costs: %d tokens, $%.6f (role %s)\n", r.ID, r.TokensUsed, r.Cost, r.Role)
 		}
 	}
 
@@ -228,16 +227,21 @@ func collectParallelResults(results []*SubagentResult, tasks []SubagentTask, a *
 
 // resolveParallelSubagentConfig resolves the effective provider and model for
 // parallel subagent tasks, checking config, fallback warnings, and parent
-// agent inheritance.
+// agent inheritance. Parallel subagents do the coder role's
+// work, so the selection resolves through the coder role (the subagent
+// settings alias it).
 func resolveParallelSubagentConfig(a *Agent) (string, string) {
 	var subagentProvider, subagentModel string
 	if a.configManager != nil {
 		config := a.configManager.GetConfig()
-		subagentProvider = config.GetSubagentProvider()
-		subagentModel = config.GetSubagentModel()
+		subagentProvider, subagentModel = config.ResolveRole(configuration.RoleCoder)
 		a.warnSubagentFallback("parallel subagent defaults", "", "", strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), subagentProvider, subagentModel)
 
-		// If no explicit subagent config, inherit from parent agent's runtime values.
+		// If no explicit subagent config, inherit from parent agent's runtime
+		// values. The gate stays on the RAW legacy subagent fields: when
+		// those are unset, the parent agent's provider/model still wins
+		// (in a normal session the last-used provider is the
+		// conversation provider, so the two are equivalent).
 		if config.SubagentProvider == "" && config.SubagentModel == "" {
 			if parentProvider := a.GetProvider(); parentProvider != "" && parentProvider != "unknown" {
 				subagentProvider = parentProvider
@@ -333,6 +337,7 @@ func buildParallelSubagentTasks(tasks []SubagentTask) []SubagentTask {
 			Provider:     pt.Provider,
 			Persona:      pt.Persona,
 			SystemPrompt: pt.SystemPrompt,
+			Role:         pt.Role,
 		}
 	}
 	return result

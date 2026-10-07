@@ -1,6 +1,7 @@
 import React, { type ComponentType, useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import './Sidebar.css';
 import { supportsAutomations, supportsSettings, supportsGit, supportsWorkspaceSwitching } from '../config/mode';
+import { copy, type CopyKey } from '../config/copy';
 import { useActiveRepoURL } from '../services/activeRepo';
 import { repoSlug } from '../utils/platformUrl';
 import { useEditorManager } from '../contexts/EditorManagerContext';
@@ -155,12 +156,14 @@ interface SidebarProps {
 
 /**
  * Section tabs rendered in the icon rail. Filtered to only show supported tabs.
+ * Labels resolve through the copy registry at render time (see the map below),
+ * so an installed override is observed rather than frozen at module load.
  */
-const ALL_SECTION_TABS: { id: SectionTab; icon: LucideIcon; label: string }[] = [
-  { id: 'git', icon: GitBranch, label: 'Git' },
-  { id: 'files', icon: FolderCog, label: 'Files' },
-  { id: 'search', icon: Search, label: 'Search' },
-  { id: 'automations', icon: Zap, label: 'Automations' },
+const ALL_SECTION_TABS: { id: SectionTab; icon: LucideIcon; labelKey: CopyKey }[] = [
+  { id: 'git', icon: GitBranch, labelKey: 'nav.git' },
+  { id: 'files', icon: FolderCog, labelKey: 'nav.files' },
+  { id: 'search', icon: Search, labelKey: 'nav.search' },
+  { id: 'automations', icon: Zap, labelKey: 'nav.automations' },
 ];
 
 /** Icon name-to-component mapping for platform nav items */
@@ -218,7 +221,7 @@ function Sidebar({
   onRequestProviderSetup,
   onViewChange,
 }: SidebarProps): JSX.Element {
-  const staticWorkspaceLabel = repoSlug(useActiveRepoURL()) ?? 'No repository open';
+  const staticWorkspaceLabel = repoSlug(useActiveRepoURL()) ?? copy('workspace.none');
   const { themePack, availableThemePacks, setThemePack, importTheme, removeTheme } = useTheme();
   // UI Size: hook mount applies data-ui-scale to <html> on boot
   // (persisted choice, tablet heuristic on first run) and re-applies on change.
@@ -656,8 +659,8 @@ function Sidebar({
                         aria-controls="sidebar-tabpanel"
                         className={`rail-icon ${effectiveSelectedSection === tab.id ? 'active' : ''}`}
                         onClick={() => handleSectionTabClick(tab.id)}
-                        title={tab.label}
-                        aria-label={tab.label}
+                        title={copy(tab.labelKey)}
+                        aria-label={copy(tab.labelKey)}
                         data-testid={`sidebar-${tab.id}-tab`}
                       >
                         <tab.icon size={18} strokeWidth={1.5} />
@@ -702,8 +705,8 @@ function Sidebar({
                     aria-selected={currentView === 'design'}
                     className={`rail-icon ${currentView === 'design' ? 'active' : ''}`}
                     onClick={() => onViewChange?.('design')}
-                    title="Design"
-                    aria-label="Design"
+                    title={copy('nav.design')}
+                    aria-label={copy('nav.design')}
                     data-testid="sidebar-design-button"
                   >
                     <Palette size={18} strokeWidth={1.5} />
@@ -719,8 +722,8 @@ function Sidebar({
                       aria-controls="sidebar-tabpanel"
                       className={`rail-icon ${effectiveSelectedSection === 'settings' ? 'active' : ''}`}
                       onClick={() => handleSectionTabClick('settings')}
-                      title="Settings"
-                      aria-label="Settings"
+                      title={copy('nav.settings')}
+                      aria-label={copy('nav.settings')}
                       data-testid="sidebar-settings-toggle"
                     >
                       <Settings size={18} strokeWidth={1.5} />
@@ -732,8 +735,8 @@ function Sidebar({
                     aria-controls="sidebar-tabpanel"
                     className={`rail-icon ${effectiveSelectedSection === 'logs' ? 'active' : ''}`}
                     onClick={() => handleSectionTabClick('logs')}
-                    title="Logs"
-                    aria-label="Logs"
+                    title={copy('nav.logs')}
+                    aria-label={copy('nav.logs')}
                     data-testid="sidebar-logs-tab"
                   >
                     <ScrollText size={18} strokeWidth={1.5} />

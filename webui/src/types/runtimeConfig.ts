@@ -109,4 +109,12 @@ export interface RuntimeConfig {
    * the allowlist, so `git fetch`/`gh pr` work from the browser shell.
    * Undefined in local mode / when the platform doesn't advertise one. */
   egressProxy?: string;
+
+  /** API contract version (the OpenAPI info.version in docs/api) reported by
+   * the daemon. The client compares its major version to the value it was
+   * built against (CONTRACT_VERSION in src/config/contractCompat.tsx) and
+   * refuses to start when they are incompatible; a newer minor version is a
+   * warning only. Undefined on daemons older than this field — those are
+   * treated as compatible (the negotiation is opt-in for the daemon). */
+  contractVersion?: string;
 }

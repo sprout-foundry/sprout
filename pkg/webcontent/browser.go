@@ -2,8 +2,37 @@ package webcontent
 
 import (
 	"context"
-	"fmt"
+	"errors"
+	"strings"
 )
+
+// ErrBrowserUnavailable is returned by the no-op browser renderer (and by
+// any browser seam that cannot render) when headless-browser rendering is not
+// available — for example without the browser build tag, or under WASM.
+// Callers detect it with errors.Is and treat a dependent check as "not
+// verifiable here" (skipped, never a failure) rather than a failure.
+var ErrBrowserUnavailable = errors.New("browser rendering not available")
+
+// consoleErrorLevel is the level tag the rod browser instrumentation
+// (browserInstrumentationScript in browser_rod_launch.go) prefixes to every
+// captured console message: "[<level>] " for log, info, warn, and error.
+const consoleErrorLevel = "[error] "
+
+// ConsoleErrorMessages returns the console messages captured at error level,
+// with the level tag stripped. The rod instrumentation prefixes every
+// captured console message with "[<level>] ", so error-level entries start
+// with "[error] ". Non-error entries (log, info, warn) and entries without
+// the tag are dropped. The result is nil when there are no error-level
+// messages.
+func ConsoleErrorMessages(messages []string) []string {
+	var out []string
+	for _, m := range messages {
+		if strings.HasPrefix(m, consoleErrorLevel) {
+			out = append(out, strings.TrimPrefix(m, consoleErrorLevel))
+		}
+	}
+	return out
+}
 
 // BrowserRenderer renders HTML pages using a headless browser.
 // Implementations may require external dependencies (e.g., rod/Chromium)
@@ -166,19 +195,19 @@ var _ BrowserRenderer = (*nopRenderer)(nil)
 var nop = &nopRenderer{}
 
 func (n *nopRenderer) RenderPage(_ context.Context, _ string) (string, error) {
-	return "", fmt.Errorf("browser rendering not available")
+	return "", ErrBrowserUnavailable
 }
 
 func (n *nopRenderer) Screenshot(_ context.Context, _ string, _ string, _, _ int, _ string) error {
-	return fmt.Errorf("browser rendering not available")
+	return ErrBrowserUnavailable
 }
 
 func (n *nopRenderer) CaptureDOM(_ context.Context, _ string, _, _ int, _ string) (string, error) {
-	return "", fmt.Errorf("browser rendering not available")
+	return "", ErrBrowserUnavailable
 }
 
 func (n *nopRenderer) Run(_ context.Context, _ string, _ BrowseOptions) (*BrowseResult, error) {
-	return nil, fmt.Errorf("browser rendering not available")
+	return nil, ErrBrowserUnavailable
 }
 
 func (n *nopRenderer) Close() {}

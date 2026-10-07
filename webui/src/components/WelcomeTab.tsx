@@ -1,4 +1,5 @@
 import { Terminal, GitBranch, MessageSquare, Zap, BookOpen, Settings, Command, X } from 'lucide-react';
+import { copy } from '../config/copy';
 import { supportsWorkspaceSwitching } from '../config/mode';
 import { useWorkspace } from '../hooks/useWorkspace';
 import WorkspacePicker from './WorkspacePicker';
@@ -39,8 +40,8 @@ function WorkspacePickerView({
     return (
       <div className="welcome-tab">
         <div className="welcome-header">
-          <h1>Welcome to Sprout!</h1>
-          <p>Ask the AI to create files, or use the Files tab to get started.</p>
+          <h1>{copy('welcome.pickerTitle')}</h1>
+          <p>{copy('welcome.pickerSubtitle')}</p>
         </div>
       </div>
     );
@@ -121,8 +122,8 @@ function WelcomeContent({
     <div data-testid="editor-empty">
       <div className="welcome-header">
         <div className="welcome-header-content">
-          <h1>Welcome to sprout</h1>
-          <p>Your AI-powered code editor</p>
+          <h1>{copy('welcome.title')}</h1>
+          <p>{copy('welcome.subtitle')}</p>
         </div>
         {onDismiss && (
           <button className="welcome-dismiss-btn" onClick={onDismiss} title="Dismiss welcome tab">

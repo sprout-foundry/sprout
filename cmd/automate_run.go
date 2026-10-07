@@ -13,7 +13,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -157,7 +156,14 @@ func runWorkflowByPath(path string) error {
 		return err
 	}
 
-	args := appendDetachedSessionFileArg(buildAgentSubprocessArgs(path, summary), sproutDir, sessionID)
+	args := buildAgentSubprocessArgs(path, summary)
+	// Every mode gets the record path so the child can annotate the run
+	// record with its continuation stop reason. Attached runs are finalized
+	// by this launcher; FinalizeSessionFile preserves the stop-reason fields.
+	// Appended before the detach-only --automate-session-file so that flag
+	// stays the child argv's final pair (its documented contract).
+	args = append(args, "--automate-record-file", detachedSessionFilePath(sproutDir, sessionID))
+	args = appendDetachedSessionFileArg(args, sproutDir, sessionID)
 
 	if floorErr := automate.CheckMemoryFloor(); floorErr != nil {
 		return fmt.Errorf("not starting workflow: %w", floorErr)
@@ -344,31 +350,6 @@ func exitCodeFromWaitErr(waitErr error) int {
 		return exitErr.ExitCode()
 	}
 	return -1
-}
-
-// buildAgentSubprocessArgs constructs the argument list for the sprout agent
-// subprocess that executes the workflow. Extracted for testability.
-func buildAgentSubprocessArgs(path string, summary *automate.Summary) []string {
-	args := []string{"agent", "--workflow-config", path, "--yes", "--no-web-ui"}
-
-	// Plumb --max-iterations from the workflow JSON.
-	// Non-zero values are passed explicitly; 0 (unlimited) is the default so
-	// we don't pass the flag when it's 0 or nil.
-	if summary != nil && summary.Initial != nil && summary.Initial.MaxIterations > 0 {
-		args = append(args, "--max-iterations", strconv.Itoa(summary.Initial.MaxIterations))
-	}
-
-	if automateBudgetUSD > 0 {
-		args = append(args, "--budget-usd", fmt.Sprintf("%g", automateBudgetUSD))
-	}
-	if strings.TrimSpace(automateBudgetWarn) != "" {
-		args = append(args, "--budget-warn", automateBudgetWarn)
-	}
-	if automateHeartbeatSeconds > 0 {
-		args = append(args, "--heartbeat", fmt.Sprintf("%d", automateHeartbeatSeconds))
-	}
-
-	return args
 }
 
 // printWorkflowOverviewFromSummary renders a human-readable summary of the

@@ -9,6 +9,9 @@ jobs:
   test:
     name: Run Tests
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
     steps:
     - name: Checkout code
       uses: actions/checkout@v5
@@ -20,17 +23,39 @@ jobs:
         sh -n scripts/install.sh
         dash -n scripts/install.sh
 
+    # The tagged commit normally already passed "Build and Test" when it was
+    # pushed to main (the same suite, plus macOS). Re-running it here only
+    # delayed every release; run it only when no successful push run exists
+    # for this exact commit (e.g. a tag on a commit that never went through
+    # main).
+    - name: Check for a passing Build and Test run on this commit
+      id: ci
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        ok=$(gh api "repos/${{ github.repository }}/actions/workflows/build.yml/runs?head_sha=${{ github.sha }}&event=push&status=success" -q '.total_count' || echo 0)
+        if [ "${ok:-0}" -gt 0 ]; then
+          echo "Build and Test already passed for ${{ github.sha }}; skipping the re-run."
+          echo "verified=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "No passing Build and Test run for ${{ github.sha }}; running the suite."
+          echo "verified=false" >> "$GITHUB_OUTPUT"
+        fi
+
     - name: Set up Go
+      if: steps.ci.outputs.verified != 'true'
       uses: actions/setup-go@v5
       with:
         go-version: 1.26
 
     - name: Set up Python
+      if: steps.ci.outputs.verified != 'true'
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
 
     - name: Install Python dependencies
+      if: steps.ci.outputs.verified != 'true'
       run: |
         python3 -m pip install --upgrade pip
         if [ -f "requirements.txt" ]; then
@@ -41,19 +66,23 @@ jobs:
         fi
 
     - name: Install dependencies
+      if: steps.ci.outputs.verified != 'true'
       run: go mod download
 
     - name: Set up Node.js
+      if: steps.ci.outputs.verified != 'true'
       uses: actions/setup-node@v5
       with:
         node-version: '22'
 
     - name: Install Node.js dependencies (root workspaces)
+      if: steps.ci.outputs.verified != 'true'
       # Single `npm ci` from root installs every workspace
       # (packages/events, packages/ui, webui) plus root devDeps.
       run: npm ci
 
     - name: Build shared workspace packages
+      if: steps.ci.outputs.verified != 'true'
       # webui imports @sprout/events and @sprout/ui from their `dist/`
       # outputs (no `prepare` script — removed in 61ba3f17).
       run: |
@@ -61,26 +90,33 @@ jobs:
         npm run build -w @sprout/ui
 
     - name: Type check
+      if: steps.ci.outputs.verified != 'true'
       run: npm run type-check -w sprout-webui
 
     - name: Build and deploy React UI
+      if: steps.ci.outputs.verified != 'true'
       run: make deploy-ui
 
     - name: Verify embedded React UI assets are current
+      if: steps.ci.outputs.verified != 'true'
       run: make verify-ui-embedded
 
     - name: Install goimports
+      if: steps.ci.outputs.verified != 'true'
       run: go install golang.org/x/tools/cmd/goimports@latest
 
     - name: Prepare grammar blobs
+      if: steps.ci.outputs.verified != 'true'
       run: make prepare-grammars
 
     - name: Run unit tests with race detection and coverage
+      if: steps.ci.outputs.verified != 'true'
       env:
         CI: "true"
       run: make test-coverage
 
     - name: Run smoke tests
+      if: steps.ci.outputs.verified != 'true'
       run: make test-smoke
 
   # Desktop installers are built by the dedicated `desktop-release.yml`
@@ -295,6 +331,13 @@ jobs:
 
     - name: Build cloud-mode webui bundle for platform vendoring
       run: node scripts/build-webui-dist.mjs --mode cloud --output dist/sprout-webui-cloud
+
+    - name: Verify cloud bundle base path is /webui/
+      # Hosts serve this bundle under /webui/, so every asset URL in the
+      # released index.html must be /webui/-rooted; a root-absolute /assets/*
+      # URL would be answered by the host's dashboard SPA and break the page.
+      # Exits non-zero on a regression (e.g. the bundle built at base /).
+      run: node scripts/verify-webui-dist-base.mjs dist/sprout-webui-cloud
 
     - name: Package cloud-mode webui bundle
       # Stable filename (no version embedded) so platform's vendor workflow

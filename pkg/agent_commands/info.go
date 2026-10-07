@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
@@ -94,13 +95,13 @@ func (c *InfoCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		persona = "none"
 	}
 
-	// Subagent config
+	// Subagent config (subagents resolve through the coder
+	// role; the subagent settings alias it).
 	cfg := chatAgent.GetConfig()
 	subagentProvider := "(unknown)"
 	subagentModel := "(unknown)"
 	if cfg != nil {
-		subagentProvider = cfg.GetSubagentProvider()
-		subagentModel = cfg.GetSubagentModel()
+		subagentProvider, subagentModel = cfg.ResolveRole(configuration.RoleCoder)
 	}
 
 	fmt.Fprintln(c.out())
@@ -163,8 +164,7 @@ func (c *InfoCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Agen
 	subagentProvider := "(unknown)"
 	subagentModel := "(unknown)"
 	if cfg := chatAgent.GetConfig(); cfg != nil {
-		subagentProvider = cfg.GetSubagentProvider()
-		subagentModel = cfg.GetSubagentModel()
+		subagentProvider, subagentModel = cfg.ResolveRole(configuration.RoleCoder)
 	}
 
 	return WriteJSON(c.out(), infoJSONPayload{

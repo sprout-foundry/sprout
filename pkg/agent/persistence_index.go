@@ -44,13 +44,18 @@ type ConversationState struct {
 	CachedTokens            int              `json:"cached_tokens"`
 	CacheWriteTokens        int              `json:"cache_write_tokens,omitempty"`
 	CachedCostSavings       float64          `json:"cached_cost_savings"`
+	CacheSavingsUnknown     bool             `json:"cache_savings_unknown,omitempty"`
 	ImageTokens             int              `json:"image_tokens,omitempty"`
-	LastUpdated             time.Time        `json:"last_updated"`
-	SessionID               string           `json:"session_id"`
-	Name                    string           `json:"name"`              // Human-readable session name
-	WorkingDirectory        string           `json:"working_directory"` // Directory where session was created
-	InterruptedAt           *time.Time       `json:"interrupted_at,omitempty"`
-	RecoveredFromJournal    bool             `json:"recovered_from_journal,omitempty"`
+	// Per-role token/cost totals. Persisted so a
+	// restored session keeps its per-role attribution and the per-role
+	// totals keep summing to the restored overall totals.
+	RoleUsage            []RoleUsage `json:"role_usage,omitempty"`
+	LastUpdated          time.Time   `json:"last_updated"`
+	SessionID            string      `json:"session_id"`
+	Name                 string      `json:"name"`              // Human-readable session name
+	WorkingDirectory     string      `json:"working_directory"` // Directory where session was created
+	InterruptedAt        *time.Time  `json:"interrupted_at,omitempty"`
+	RecoveredFromJournal bool        `json:"recovered_from_journal,omitempty"`
 	// QueryDisplays: see AgentState.QueryDisplays.
 	QueryDisplays map[string]string `json:"query_displays,omitempty"`
 

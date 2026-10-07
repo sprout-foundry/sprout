@@ -89,3 +89,44 @@ func TestTodoWriteHandler_MixedValidAndInvalidElements(t *testing.T) {
 		t.Error("expected non-empty output for mixed valid/invalid todos")
 	}
 }
+
+// TestTodoWriteHandler_Scope pins the seed-path extraction of the optional plan
+// scope ID: Execute reads the "scope" field off each todo item
+// and carries it onto the TodoItem it writes, so the live dispatch path
+// (todo_write via the seed registry) preserves the plan link. A todo with no
+// scope key yields an empty Scope (unlinked).
+func TestTodoWriteHandler_Scope(t *testing.T) {
+	h := &todoWriteHandler{}
+	mgr := NewTodoManager()
+	env := ToolEnv{TodoManager: mgr}
+
+	args := map[string]any{
+		"todos": []interface{}{
+			map[string]interface{}{
+				"content": "Implement login",
+				"status":  "in_progress",
+				"scope":   "s1",
+			},
+			map[string]interface{}{
+				"content": "Build session UI",
+				"status":  "pending",
+			},
+		},
+	}
+
+	_, err := h.Execute(context.Background(), env, args)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+
+	todos := mgr.Read()
+	if len(todos) != 2 {
+		t.Fatalf("expected 2 todos in the manager, got %d", len(todos))
+	}
+	if todos[0].Scope != "s1" {
+		t.Errorf("todo[0].Scope = %q, want %q (the plan scope id)", todos[0].Scope, "s1")
+	}
+	if todos[1].Scope != "" {
+		t.Errorf("todo[1].Scope = %q, want empty (no scope provided)", todos[1].Scope)
+	}
+}

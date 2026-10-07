@@ -9,7 +9,7 @@ import './index.css';
 import './workspaces/ship-mode'; // Registers the Ship mode through the public mode API
 import App from './App';
 import { applyShellAttribute, isStudioShellSync, resolveShellIdentity } from './config/shell';
-import { HostProvider, localHost, cloudHost } from './host';
+import { HostProvider, localHost, cloudHost, setActiveHost } from './host';
 import { resolveClientIdentity } from './services/clientSession';
 
 // External plugins (e.g. the platform IIFE bundle) externalize 'react' and
@@ -68,6 +68,7 @@ function insideAnotherEditor(): boolean {
   // (matching config/mode.ts) rather than importing its isCloud export.
   const host = (import.meta.env.VITE_SPROUT_MODE as string) === 'cloud' ? cloudHost : localHost;
   await resolveClientIdentity();
+  setActiveHost(host);
   const root = ReactDOMClient.createRoot(document.getElementById('root') as HTMLElement);
   root.render(
     <HostProvider host={host}>

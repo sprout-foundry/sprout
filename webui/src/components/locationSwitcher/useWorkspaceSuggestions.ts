@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { supportsWorkspaceSwitching } from '../../config/mode';
+import { useHostCapabilities } from '../../host';
 import { clientFetch } from '../../services/clientSession';
 import { getBrowseTarget, normalizePath } from './pathUtils';
 import type { WorkspaceDirectory, SwitchingState, SSHFailureState, RemoteWorkspaceContext } from './types';
@@ -70,6 +70,7 @@ export function useWorkspaceSuggestions({
   setIsOpen,
   setIsSshPanelOpen,
 }: UseWorkspaceSuggestionsProps): UseWorkspaceSuggestionsResult {
+  const { workspaceSwitching: supportsWorkspaceSwitching } = useHostCapabilities();
   const [inputValue, setInputValue] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [suggestions, setSuggestions] = useState<WorkspaceDirectory[]>([]);

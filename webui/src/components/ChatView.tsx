@@ -4,7 +4,7 @@ import { useRef, useCallback, useState, useMemo, useLayoutEffect } from 'react';
 import type { CSSProperties } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { isCloud } from '../config/mode';
-import { supportsExport, supportsSSH } from '../config/mode';
+import { useHostCapabilities } from '../host';
 import { rewindQuery, executeCommand, uploadImage } from '../services/api/chatApi';
 import { requiresBackendHealthCheck } from '../services/apiAdapter';
 import { clientFetch } from '../services/clientSession';
@@ -77,6 +77,7 @@ function Chat(props: ChatProps): JSX.Element {
     isForking = false,
     inputPlaceholder,
   } = props;
+  const { export: supportsExport, ssh: supportsSSH } = useHostCapabilities();
 
   const chatShellRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);

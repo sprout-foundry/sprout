@@ -2,7 +2,8 @@
 import { StatusBar as SproutStatusBar, detectLineEnding } from '@sprout/ui';
 import { FolderOpen, Zap } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { supportsGit, isCloud } from '../config/mode';
+import { isCloud } from '../config/mode';
+import { useHostCapabilities } from '../host';
 import { getBootstrapConfig } from '../bootstrapAdapter';
 import { useActiveRepoURL } from '../services/activeRepo';
 import { repoName as repoNameFromURL, repoSlug as repoSlugFromURL } from '../utils/platformUrl';
@@ -70,6 +71,7 @@ function StatusBar({
   workspacePath,
   onWorkspaceClick,
 }: WebuiStatusBarProps): JSX.Element {
+  const { git: supportsGit } = useHostCapabilities();
   // Notification context — derive unread count for the bell badge
   const { notifications } = useNotifications();
   const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);

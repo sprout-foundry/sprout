@@ -3,9 +3,23 @@
  *
  * Feature flags for Cloud vs Local mode in the Sprout webui.
  * Controlled via VITE_SPROUT_MODE environment variable at build time.
+ *
+ * Capability resolution (host.3): every `supports*` binding below is driven by
+ * the active host when one is set — the entry point records it via
+ * `setActiveHost()` (host/accessor), which fires HOST_UPDATED_EVENT and these
+ * bindings re-derive from `host.capabilities`. The host is selected once at
+ * startup and is stable, so when it is active its capabilities are the source
+ * of truth.
+ *
+ * When no host is active (pure test contexts, and the code path before the
+ * entry sets the host) the bindings fall back to the legacy resolution: the
+ * adapter's value if an adapter is installed, else the mode-aware default.
+ * That fallback is what `mode.test.ts` exercises, and the adapter-refresh path
+ * (ADAPTER_INSTALLED_EVENT) still fires but is a no-op while a host is active.
  */
 
 import { getAdapter, ADAPTER_INSTALLED_EVENT, type APIAdapter } from '../services/apiAdapter';
+import { getActiveHost, HOST_UPDATED_EVENT } from '../host/accessor';
 
 export type SproutMode = 'local' | 'cloud';
 
@@ -38,8 +52,15 @@ export const isCloud: boolean = mode === 'cloud';
  * This helper replaces the previous inline `isCloud ? X : (getAdapter()?.Y ?? Z)`
  * pattern that was duplicated across every export — the logic is identical,
  * now centralized and documented once.
+ *
+ * host.3: this is the NO-HOST path only. When an active host exists, the
+ * bindings resolve from host.capabilities instead (see refreshFromHost). It is
+ * exported so non-React call sites (plain functions, module-scope helpers) can
+ * read `getActiveHost()?.capabilities.x ?? capability(...)` — the same
+ * host-or-fallback value the exported bindings carry, without importing the
+ * live binding itself.
  */
-function capability<K extends keyof APIAdapter>(
+export function capability<K extends keyof APIAdapter>(
   key: K,
   localDefault: NonNullable<APIAdapter[K]>,
   cloudDefault: NonNullable<APIAdapter[K]>,
@@ -54,17 +75,17 @@ function capability<K extends keyof APIAdapter>(
 // ── Live capability flags ─────────────────────────────────────────────────
 //
 // These are `export let`, not `const`: the adapter installs ASYNCHRONOUSLY
-// (bootstrapAdapter.ts awaits /api/bootstrap after this module has loaded),
-// so the mode-aware fallback defaults are computed first and the adapter's
-// own values replace them when ADAPTER_INSTALLED_EVENT fires. ESM live
-// bindings propagate the reassignment to every importer that reads the
-// binding at render/use time (module-scope snapshots in consuming modules
-// would still freeze — don't cache these at import scope).
+// (bootstrapAdapter.ts awaits /api/bootstrap after this module has loaded), and
+// the entry sets the active host asynchronously too, so the initial values are
+// computed from the fallback defaults first and then RE-EVALUATED when
+// HOST_UPDATED_EVENT (host set) or ADAPTER_INSTALLED_EVENT (adapter installed,
+// no host) fire. ESM live bindings propagate the reassignment to every importer
+// that reads the binding at render/use time (module-scope snapshots in
+// consuming modules would still freeze — don't cache these at import scope).
 //
-// Components that need to RE-RENDER on the transition (rare: the install
-// usually lands before the tree mounts) listen for ADAPTER_INSTALLED_EVENT
-// directly — the established seam used by PlatformNavContext and
-// SproutAdapterContext.
+// Components that need to RE-RENDER on a transition (rare: the host is set
+// before the tree mounts) listen for the events directly — the established seam
+// used by PlatformNavContext and SproutAdapterContext.
 
 export let supportsSSH: boolean = capability('supportsSSH', true, false);
 
@@ -126,20 +147,26 @@ export let supportsSettings: boolean = capability('supportsSettings', true, true
 /**
  * Automation workflows - local mode only (the platform serves no
  * /api/automate; hosted scheduling lives in the platform's Tasks).
+ * host.3: `export let` so the active host's `capabilities.automations` can
+ * drive it; the fallback initializer is `!isCloud` (today's value).
  */
-export const supportsAutomations: boolean = !isCloud;
+export let supportsAutomations: boolean = !isCloud;
 
 /**
  * Agent change history (the context panel's Agent Changes tab) - local mode
  * only: the in-browser agent does not record a change manifest, and the
  * platform serves no /api/changes.
+ * host.3: `export let` so the active host's `capabilities.agentChanges` can
+ * drive it; the fallback initializer is `!isCloud` (today's value).
  */
-export const supportsAgentChanges: boolean = !isCloud;
+export let supportsAgentChanges: boolean = !isCloud;
 
-// Adapter-installed refresh: re-read every capability against the newly
-// installed adapter. The defaults table mirrors the initializers above — a
-// per-key map of [localDefault, cloudDefault] and the matching binding, so a
-// new flag needs exactly one row here plus its `export let`.
+// Adapter-installed refresh (no-host path only): re-read every adapter-derived
+// capability against the newly installed adapter. The defaults table mirrors
+// the initializers above — a per-key map of [localDefault, cloudDefault] and
+// the matching binding, so a new flag needs exactly one row here plus its
+// `export let`. Skipped entirely while an active host is set: the host's
+// capabilities are the source of truth, and the adapter values are redundant.
 const CAPABILITY_REFRESH: Array<{
   key:
     | 'supportsSSH'
@@ -166,9 +193,53 @@ const CAPABILITY_REFRESH: Array<{
   { key: 'supportsSettings', local: true, cloud: true, set: (v) => (supportsSettings = v) },
 ];
 
-function refreshCapabilities(): void {
+function refreshFromAdapter(): void {
+  // The host wins: when one is active its capabilities are the source of
+  // truth, so the adapter refresh must not overwrite them.
+  if (getActiveHost()) return;
   for (const { key, local, cloud, set } of CAPABILITY_REFRESH) {
     set(capability(key, local, cloud));
+  }
+}
+
+// Host-set refresh: when an active host exists, every host-derivable binding
+// resolves from host.capabilities. The field names map 1:1 to HostCapabilities
+// (ssh, git, chat, workspaceSwitching, folderPicker, export, instances,
+// localTerminal, settings, automations, agentChanges). Idempotent: re-setting
+// from the same (stable) host yields the same values.
+const HOST_REFRESH: Array<{
+  field:
+    | 'ssh'
+    | 'git'
+    | 'chat'
+    | 'workspaceSwitching'
+    | 'folderPicker'
+    | 'export'
+    | 'instances'
+    | 'localTerminal'
+    | 'settings'
+    | 'automations'
+    | 'agentChanges';
+  set: (v: boolean) => void;
+}> = [
+  { field: 'ssh', set: (v) => (supportsSSH = v) },
+  { field: 'git', set: (v) => (supportsGit = v) },
+  { field: 'chat', set: (v) => (supportsChat = v) },
+  { field: 'workspaceSwitching', set: (v) => (supportsWorkspaceSwitching = v) },
+  { field: 'folderPicker', set: (v) => (supportsFolderPicker = v) },
+  { field: 'export', set: (v) => (supportsExport = v) },
+  { field: 'instances', set: (v) => (supportsInstances = v) },
+  { field: 'localTerminal', set: (v) => (supportsLocalTerminal = v) },
+  { field: 'settings', set: (v) => (supportsSettings = v) },
+  { field: 'automations', set: (v) => (supportsAutomations = v) },
+  { field: 'agentChanges', set: (v) => (supportsAgentChanges = v) },
+];
+
+function refreshFromHost(): void {
+  const host = getActiveHost();
+  if (!host) return;
+  for (const { field, set } of HOST_REFRESH) {
+    set(host.capabilities[field]);
   }
 }
 
@@ -178,9 +249,22 @@ function refreshCapabilities(): void {
 if (typeof window !== 'undefined') {
   window.addEventListener(ADAPTER_INSTALLED_EVENT, () => {
     try {
-      refreshCapabilities();
+      refreshFromAdapter();
     } catch {
       // keep mode defaults
     }
   });
+  window.addEventListener(HOST_UPDATED_EVENT, () => {
+    try {
+      refreshFromHost();
+    } catch {
+      // keep current values
+    }
+  });
 }
+
+// Seed: the entry may record the active host before this module's listeners are
+// attached (or a test may set the host before importing this module). Applying
+// the host now makes the initial values correct in both cases; the events keep
+// them live from here. A no-op when no host is active.
+refreshFromHost();

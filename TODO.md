@@ -50,7 +50,7 @@ checkboxes.
       `cloudHost` explicitly); nothing else reads the build flag. Vitest for
       both hosts' capability sets matching today's `config/mode.ts` values.
       Spec: SP-160 §160b.
-- [ ] **host.3** Capabilities replace the module-level flags: every
+- [x] **host.3** Capabilities replace the module-level flags: every
       `supports*` binding in `config/mode.ts` and its call sites read
       `useHost().capabilities` (or a non-React accessor for services). No
       behavior change in either build. Vitest for the touched components.

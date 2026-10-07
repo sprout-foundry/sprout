@@ -5,7 +5,8 @@
  */
 
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
-import { isCloud, supportsAutomations, supportsGit, supportsSettings } from '../../config/mode';
+import { isCloud } from '../../config/mode';
+import { useHostCapabilities } from '../../host';
 import type { SectionTab } from '../../hooks/useSidebarState';
 import type { SproutInstance } from '../../services/api';
 import { useActiveRepoURL } from '../../services/activeRepo';
@@ -94,6 +95,7 @@ async function promptForRepo(): Promise<void> {
 }
 
 export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement {
+  const { git: supportsGit, settings: supportsSettings, automations: supportsAutomations } = useHostCapabilities();
   const [open, setOpen] = useState<ProjectNavTarget | null>(null);
   const [creating, setCreating] = useState(false);
   const [picking, setPicking] = useState(false);

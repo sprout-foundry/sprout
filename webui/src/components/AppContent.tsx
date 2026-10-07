@@ -1,6 +1,7 @@
 import type { TodoItem, LogEntry } from '@sprout/ui';
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
-import { isCloud, supportsLocalTerminal } from '../config/mode';
+import { isCloud } from '../config/mode';
+import { useHostCapabilities } from '../host';
 import { useAppStateField, useAppStoreSetState } from '../contexts/AppStore';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
@@ -172,6 +173,7 @@ const AppContent: React.FC<AppContentProps> = ({
   onDeleteAllChats,
   onRenameChat,
 }) => {
+  const { localTerminal: supportsLocalTerminal } = useHostCapabilities();
   const {
     buffers,
     buffersRef,

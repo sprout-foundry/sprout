@@ -1,9 +1,12 @@
 # TODO
 
-Active work for the host-contract lane (branch `feat/host-contract`). Each
-item is a small, independently committable unit for the workflow automation
-(~30 min – 2 h) and cites its spec section — read
-`roadmap/SP-160-integration-api.md` §160b (and Phases, 1) before starting.
+Active work for the host-contract lane (branch `feat/host-contract`): SP-160
+phases 1, 3 and 4 — the host contract (§160b), then the composition package
+(§160a, §160e), then design tokens (§160d). Every `[ ]` item below is in
+scope for this lane. Each item is a small, independently committable unit
+for the workflow automation (~30 min – 2 h) and cites its spec section —
+read `roadmap/SP-160-integration-api.md` (the cited section and Phases)
+before starting.
 Completed work lives in git history; finished sections are removed.
 
 Validation gate for every item: `make vet && make fmt-check && make lint &&
@@ -103,13 +106,67 @@ checkboxes.
       of the former `isCloud` branches and what each became. Link it from
       SP-160. Spec: SP-160 §160b.
 
+## SP-160 §160a, §160e — Composition package (`roadmap/SP-160-integration-api.md`)
+
+Starts after host.9. The package is the only hosted artifact (§160e); the
+standalone local build keeps embedding into `pkg/webui/static`.
+
+- [ ] **ws.1** Package scaffold `packages/workspace` (`@sprout-foundry/workspace`):
+      Vite library build (ESM, code-split, type declarations), `exports`
+      for the entry points, `publishConfig` for GitHub Packages like
+      `packages/design`, version kept equal to the sprout release. Wired
+      into the npm workspaces and `make build-all`. A test checks the build
+      emits the entry, types and no unexpected files. Spec: SP-160 §160a.
+- [ ] **ws.2** `SproutProviders`: one wrapper for the provider stack the
+      views need (extracted from the app root), exported from the package;
+      the local app uses it. Vitest. Spec: SP-160 §160a.
+- [ ] **ws.3** `SproutWorkspace`: mounts one project's workspace with props
+      `project`, `space` (from the SP-155 registry), `host` (§160b),
+      optional `layout` (SP-155 arrangement) and `onSpaceChange`; exported
+      with the registered spaces and the individual views
+      (`webui/src/views/index.ts`). Vitest. Spec: SP-160 §160a.
+- [ ] **ws.4** Lazy loading: the editor, the WASM agent and space-specific
+      code load when a space opens, not on import. A test inspects the
+      build manifest and fails if the entry chunk pulls in the editor or
+      WASM loader. Spec: SP-160 Acceptance criteria 5.
+- [ ] **ws.5** Styles as a separate stylesheet in the package that consumes
+      the design tokens; no global CSS leaks onto the host page outside the
+      workspace root. Spec: SP-160 §160a.
+- [ ] **ws.6** Content-hashed WASM (§160e): `sprout.wasm` and
+      `wasm_exec.js` are emitted with hashed names and referenced through
+      the package, in both the package and the cloud build; the local embed
+      keeps working. A test fails if the WASM URL does not change when its
+      content changes. Spec: SP-160 §160e, Acceptance criteria 6.
+- [ ] **ws.7** The local web UI becomes a thin app: its shell renders around
+      `SproutWorkspace` with `localHost` and `SproutProviders`, importing
+      only the package's public entry points; anything missing is added to
+      the package exports, not imported privately. No feature loss.
+      Spec: SP-160 Acceptance criteria 2.
+- [ ] **ws.8** Publish workflow: a GitHub Actions job publishes
+      `@sprout-foundry/workspace` and `@sprout-foundry/design` to GitHub Packages on
+      release tags (production build). Workflow file and
+      `docs/integration/workspace-package.md` (install, `.npmrc`, mounting
+      with a host) only; nothing is published from this lane.
+      Spec: SP-160 §160e.
+
+## SP-160 §160d — Design tokens
+
+- [ ] **tok.1** Move the web UI's tokens from `webui/src/App.css` into
+      `packages/design` (`@sprout-foundry/design`); theme packs layer on
+      top; the web UI imports them from the package. No visual change: a
+      test checks every token the UI uses is defined by the package.
+      Spec: SP-160 §160d.
+- [ ] **tok.2** `host.theme` token values map onto the package's token
+      names (documented in `docs/integration/host-contract.md`); a host
+      theme overrides tokens only inside the workspace root. Vitest.
+      Spec: SP-160 §160d.
+
 ## Not automatable
 
-- Phase 3 (§160a composition package, §160e build and delivery) follows
-  this lane: library build, lazy loading, content-hashed WASM, publishing
-  `@sprout/workspace` to GitHub Packages. Queue after host.9 lands.
+- First publish of `@sprout-foundry/workspace`: owner sets up the GitHub Packages
+  token and cuts the release that runs the ws.8 workflow.
 - The platform's `SproutHost` implementation (platform `SP-SHELL.md` stage
-  1) starts once host.1–host.6 are merged and published.
+  1) starts once this branch is merged and the package is published.
 - Merge order with the main sprout lane (`wip/local-preview`), which also
   edits the web UI: merge this branch after the current main-lane web UI
   items commit; expect conflicts in sidebar and settings components.

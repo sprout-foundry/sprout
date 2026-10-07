@@ -45,6 +45,17 @@ const ssFixtureManifestJSON = `{"starter": {"id": "fixture", "version": "1"}}`
 // whose starter ID is not a registered skill.
 const ssUnknownStarterManifestJSON = `{"starter": {"id": "nonexistent", "version": "1"}}`
 
+// ssStaticSiteManifestJSON names the shipped static-site starter, whose
+// stack skill lives under pkg/skills/library/static-site/. Unlike the
+// fixture (an ID chosen only for the mechanism test), this is a real
+// user-facing starter: the manifest ID ("static-site") must resolve to the
+// embedded skill of the same ID.
+const ssStaticSiteManifestJSON = `{"starter": {"id": "static-site", "version": "1.0.0"}}`
+
+// ssStaticSiteMarker is the marker activateSkillByID folds into the system
+// prompt when the static-site skill activates (the skill's frontmatter name).
+const ssStaticSiteMarker = "[Skill Activated: Static Site Starter"
+
 // ssCorruptManifestJSON is not valid JSON at all. It exercises the
 // "unreadable manifest" path (logged, never fails the turn).
 const ssCorruptManifestJSON = `{"starter": {`
@@ -150,6 +161,26 @@ func TestStackSkillAutoActivation_PresentWhenManifestNamesStarter(t *testing.T) 
 	}
 	if !strings.Contains(ag.GetSystemPrompt(), ssSkillMarker) {
 		t.Errorf("skill instructions not folded into the system prompt:\n%s", ag.GetSystemPrompt())
+	}
+}
+
+// TestStackSkillAutoActivation_StaticSiteStarter is the real-starter case:
+// a manifest naming the shipped static-site starter activates the
+// static-site stack skill under pkg/skills/library/static-site/ — the
+// embedded skill whose ID matches the manifest's starter ID. It guards the
+// starter→skill mapping for a user-facing starter (not just the fixture).
+func TestStackSkillAutoActivation_StaticSiteStarter(t *testing.T) {
+	root := t.TempDir()
+	ssWriteStarterManifest(t, root, ssStaticSiteManifestJSON)
+
+	ag := ssAgent(t, NewScriptedClient(NewScriptedTextResponse("ok.")), root)
+	ag.autoActivateStarterSkill()
+
+	if got := ssCountActiveSkills(ag, "static-site"); got != 1 {
+		t.Errorf("static-site skill active count = %d, want 1 (active skills: %v)", got, ag.state.GetActiveSkills())
+	}
+	if !strings.Contains(ag.GetSystemPrompt(), ssStaticSiteMarker) {
+		t.Errorf("static-site skill instructions not folded into the system prompt:\n%s", ag.GetSystemPrompt())
 	}
 }
 

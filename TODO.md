@@ -467,7 +467,7 @@ passes the manifest validator (`pkg/startermanifest`).
       so design mode works from the first turn. A Go test instantiates it
       into a temp dir and validates the manifest (no npm in Go tests).
       Spec: SP-153 §153b.
-- [ ] **153.11** Stack skill `static-site` (`pkg/skills/library/static-site/`,
+- [x] **153.11** Stack skill `static-site` (`pkg/skills/library/static-site/`,
       registered in `registry.json`): layout and where things go, how to
       add a page, a component and a test, Astro patterns to use and avoid,
       known failure modes for open models (client JS in static pages,

@@ -12,6 +12,7 @@ A good skill contains knowledge that models **cannot infer from training data** 
 | `browse-debugging` | Multi-step interactive browser debugging with `browse_url` |
 | `self-help` | User asks "how do I...", wants to configure settings, or needs help understanding Sprout |
 | `design-system` | Any design work in sprout's `design/` tree — brief → tokens → wireframes → flows → screens, validate between each |
+| `static-site` | Working in an Astro static-site starter project — layout, adding a page/component/test, Astro patterns and pitfalls. Auto-activates when `.sprout/starter.json` names the `static-site` starter |
 
 ## Creating Custom Skills
 

@@ -120,3 +120,62 @@ export {
   COPY_INSTALLED_EVENT,
 } from '../config/copy';
 export type { CopyKey, CopyOverrides } from '../config/copy';
+
+// The registered spaces a host mounts, re-exported so mounting a space needs
+// the views entry point only (no reach into the workspace registry module). A
+// host that registers its own space gets the registration API here too; the
+// built-in spaces (`code`, `design`) are always present. The registry imports
+// the built-in shells, so importing this entry pulls the shell graph with it —
+// the price of making the spaces reachable from the one documented import
+// point rather than through a private module path.
+export { WORKSPACE_MODES, availableModes, registerWorkspaceMode, resolveWorkspaceMode } from '../workspaces/registry';
+export type {
+  UnregisterWorkspaceMode,
+  WorkspaceMode,
+  WorkspaceModeContext,
+  WorkspaceModeId,
+  WorkspaceModeRegistration,
+} from '../workspaces/registry';
+
+// The active-space state a host drives with its own switcher: it reads the
+// resolved mode and the offered modes, and calls `select`. A host that owns
+// its chrome (Sprout's own app root does) keeps the requested-space state here
+// and feeds the resolved id to `SproutWorkspace`'s `space` prop, so the
+// switcher and the mounted space cannot disagree.
+export { useWorkspaceMode } from '../workspaces/useWorkspaceMode';
+export type { UseWorkspaceModeResult } from '../workspaces/useWorkspaceMode';
+
+// The provider wrapper a host wraps the composed views in, so it does not
+// assemble the web UI context stack by hand. Its own entry point and chunk
+// (the `providers` library entry) keep it out of the static entry; the local
+// app imports this module directly, and the package's `views` chunk re-exports
+// it so a host that already imports the views entry gets it from the same
+// surface.
+export { SproutProviders } from '../providers/index';
+export type { SproutProvidersProps } from '../providers/index';
+
+// The WASM asset seam: a host that mounts the package serves its content-hashed
+// `dist/wasm/` at a base the host owns, and tells the loader where that is.
+// `SproutWorkspace`/`SproutProviders` take it as the `wasmBase` prop; a host
+// that drives the loader itself uses these directly.
+export {
+  WasmAssetsProvider,
+  WasmAssetsContext,
+  useWasmAssets,
+  setActiveWasmBase,
+  getActiveWasmBase,
+  normalizeWasmBase,
+} from '../contexts/WasmAssetsContext';
+export type { WasmAssets, WasmAssetsProviderProps } from '../contexts/WasmAssetsContext';
+
+// SproutWorkspace — one component that mounts one project's workspace: the
+// host contract, the provider stack and one registered space, behind the
+// props a host holds. It is the composition the app root performs, exposed so
+// an embedding host does not assemble a workspace from internals.
+export { SproutWorkspace } from './SproutWorkspace';
+export type { SproutWorkspaceProps, SproutProject } from './SproutWorkspace';
+
+// The space shell contract a host supplies through SproutWorkspace's
+// `shellProps` (the data the app root assembles today), so mounting a space's
+// registered shell is typed from this one entry point.
+export type { WorkspaceShellProps } from '../workspaces/shell';

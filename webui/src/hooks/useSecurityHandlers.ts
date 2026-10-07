@@ -7,19 +7,14 @@
 
 import type { EventsProvider } from '@sprout/events';
 import { useCallback } from 'react';
-import { isCloud } from '../config/mode';
+import { useHostCapabilities } from '../host';
 import type { AppStoreSetState } from '../contexts/AppStore';
 import { clientFetch } from '../services/clientSession';
 
 // The action names must match the server-side ApprovalDecisionFromString in
 // pkg/security/approval_manager.go.
 export type SecurityApprovalAction =
-  | 'approve_once'
-  | 'approve_always'
-  | 'always_ask'
-  | 'elevate'
-  | 'allow_folder_session'
-  | 'deny';
+  'approve_once' | 'approve_always' | 'always_ask' | 'elevate' | 'allow_folder_session' | 'deny';
 
 export interface UseSecurityHandlersOptions {
   eventsProvider: EventsProvider;
@@ -41,6 +36,8 @@ export function useSecurityHandlers({
   provider,
   setState,
 }: UseSecurityHandlersOptions): UseSecurityHandlersReturn {
+  const { localTerminal } = useHostCapabilities();
+
   const handleSecurityApprovalResponse = useCallback(
     (requestId: string, approved: boolean, action?: SecurityApprovalAction) => {
       if (!eventsProvider.isConnected()) {
@@ -85,11 +82,11 @@ export function useSecurityHandlers({
 
   const handleAskUserResponse = useCallback(
     (requestId: string, response: string) => {
-      // Cloud mode: the agent loop runs in the WASM binary, so the
+      // The in-browser agent runs its loop in the WASM binary, so the
       // ask_user response must be delivered to the in-process
       // AskUserManager via the wasm-local endpoint (no backend is
-      // listening for the WebSocket event in cloud mode).
-      if (isCloud) {
+      // listening for the WebSocket event on a hosted shell).
+      if (!localTerminal) {
         clientFetch('/api/ask-user/response', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -150,7 +147,7 @@ export function useSecurityHandlers({
       });
       setState((_prev) => ({ askUserRequest: null }));
     },
-    [eventsProvider, setState],
+    [eventsProvider, setState, localTerminal],
   );
 
   // handlePasswordResponse delivers the user's typed password back to the

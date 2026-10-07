@@ -15,6 +15,9 @@ vi.mock('../services/editorModel', async (orig) => ({
 }));
 vi.mock('../services/platformProvider', () => ({ loadManagedContextWindow: vi.fn() }));
 
+import { HostProvider } from '../host/HostProvider';
+import { makeTestHost } from '../host/testHost';
+import { PLATFORM_ACCOUNT_ITEMS, intentPath } from '../host/platform';
 import EditorModelSection from './EditorModelSection';
 
 let container: HTMLDivElement;
@@ -39,8 +42,16 @@ afterEach(() => {
 });
 
 async function render() {
+  const host = {
+    ...makeTestHost(),
+    navigation: { open: () => undefined, accountItems: PLATFORM_ACCOUNT_ITEMS, intentPath },
+  };
   await act(async () => {
-    root.render(<EditorModelSection />);
+    root.render(
+      <HostProvider host={host}>
+        <EditorModelSection />
+      </HostProvider>,
+    );
   });
 }
 

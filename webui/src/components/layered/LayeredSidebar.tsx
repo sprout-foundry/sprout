@@ -6,7 +6,7 @@
 
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { copy } from '../../config/copy';
-import { isCloud, supportsAutomations, supportsGit, supportsSettings } from '../../config/mode';
+import { useHost, useHostCapabilities } from '../../host';
 import type { SectionTab } from '../../hooks/useSidebarState';
 import type { SproutInstance } from '../../services/api';
 import { useActiveRepoURL } from '../../services/activeRepo';
@@ -15,13 +15,12 @@ import { useRecentRepos } from '../../services/recentRepos';
 import { parseRepoRef } from '../../services/workspaceFs/workspaceGit';
 import { showThemedAlert, showThemedPrompt } from '../ThemedDialog';
 import type { ViewType } from '../../types/app';
-import { repoSlug as repoSlugFromURL } from '../../utils/platformUrl';
+import { repoSlug as repoSlugFromURL } from '../../host/repoName';
 import type { WorkspaceMode, WorkspaceModeId } from '../../workspaces/registry';
 import ProjectNav, { NAV_ICONS, type ProjectNavConversations, type ProjectNavTarget } from './ProjectNav';
 import HomeNav from './HomeNav';
 import NewProjectDialog from './NewProjectDialog';
 import GitHubRepoPicker from '../GitHubRepoPicker';
-import { fetchPlatformGitHubConnected } from '../../services/platformGitHub';
 import ProjectRail, { type RailProject } from './ProjectRail';
 import './Layered.css';
 
@@ -95,13 +94,26 @@ async function promptForRepo(): Promise<void> {
 }
 
 export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement {
+  const {
+    git: supportsGit,
+    settings: supportsSettings,
+    automations: supportsAutomations,
+    instances: supportsInstances,
+  } = useHostCapabilities();
+  const host = useHost();
+  // In the hosted build "projects" are repositories and the rail's account
+  // menu is the host's; the local daemon uses running workspaces instead.
+  const hosted = supportsInstances;
   const [open, setOpen] = useState<ProjectNavTarget | null>(null);
   const [creating, setCreating] = useState(false);
   const [picking, setPicking] = useState(false);
-  // With GitHub connected, pick from the account's repositories (typing any
-  // public one still works there); otherwise type one in.
+  // With the host managing GitHub on its account (and connected), pick from
+  // the account's repositories (typing any public one still works there);
+  // otherwise type one in. The host owns the connection check.
   const chooseRepo = async () => {
-    if (await fetchPlatformGitHubConnected().catch(() => false)) setPicking(true);
+    const hostGithub = host.github;
+    const connected = hostGithub ? await hostGithub.isConnected().catch(() => false) : false;
+    if (connected) setPicking(true);
     else await promptForRepo();
   };
   const activeRepo = useActiveRepoURL();
@@ -117,7 +129,7 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
     if (homeShown !== null && homeShown !== lastHomeShown.current) onCloseDrawer?.();
     lastHomeShown.current = homeShown;
   }, [homeShown, onCloseDrawer]);
-  const title = isCloud ? (repoSlug ?? copy('workspace.none')) : basename(props.workspaceRoot);
+  const title = hosted ? (repoSlug ?? copy('workspace.none')) : basename(props.workspaceRoot);
 
   const inCode = props.activeModeId !== 'design';
   const conversationInMain = inCode && !!props.conversations?.inMain;
@@ -190,7 +202,7 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
     entry('section', 'search', 'Search'),
     ...(supportsGit ? [entry('section', 'git', 'Source control')] : []),
     // Hosted: the in-browser terminal stays hidden until asked for.
-    ...(isCloud ? [entry('section', 'terminal', 'Terminal')] : []),
+    ...(hosted ? [entry('section', 'terminal', 'Terminal')] : []),
   ];
   const designEntries = props.modes.some((m) => m.id === 'design')
     ? [
@@ -211,7 +223,7 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
   // for the rail's icons.
   const drillContent = props.renderSection();
 
-  const projects: RailProject[] = isCloud
+  const projects: RailProject[] = hosted
     ? recentRepos.map((url) => ({
         id: url,
         label: repoSlugFromURL(url) ?? url,
@@ -241,7 +253,7 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
         collapsed={props.collapsed}
         onToggleCollapsed={props.isMobile ? undefined : props.onToggleCollapsed}
         addActions={
-          isCloud
+          hosted
             ? [
                 { label: 'New project…', onSelect: () => setCreating(true) },
                 { label: 'Open a repository…', onSelect: () => void chooseRepo() },
@@ -261,7 +273,7 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
       {!props.collapsed && home.open && (
         <HomeNav
           path={home.path}
-          projectLabel={isCloud && !repoSlug ? 'the editor' : title}
+          projectLabel={hosted && !repoSlug ? 'the editor' : title}
           onBackToProject={() => {
             closeHome();
             props.onCloseDrawer?.();

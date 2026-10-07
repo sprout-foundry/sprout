@@ -12,27 +12,10 @@ vi.mock('../services/workspaceClone', () => ({
 }));
 vi.mock('./ThemedDialog', () => ({ showThemedConfirm: vi.fn() }));
 vi.mock('../utils/log', () => ({ debugLog: vi.fn() }));
-vi.mock('../services/platformGitHub', () => ({
-  usesPlatformGitHub: () => true,
-  platformGitHubSettingsHref: () => '/?from=editor#/settings',
-  fetchPlatformGitHubConnected: () => Promise.resolve(platform.connected),
-  listPlatformRepos: () =>
-    Promise.resolve([
-      {
-        id: 7,
-        name: 'widgets',
-        full_name: 'acme/widgets',
-        private: true,
-        description: null,
-        html_url: 'https://github.com/acme/widgets',
-        clone_url: 'https://github.com/acme/widgets.git',
-        default_branch: 'main',
-        updated_at: '2026-09-01T00:00:00Z',
-        owner: { login: 'acme', avatar_url: '' },
-      },
-    ]),
-}));
 
+import { HostProvider } from '../host/HostProvider';
+import { headlessHost } from '../host';
+import type { HostGitHubRepo, SproutHost } from '../host/types';
 import GitHubRepoPicker from './GitHubRepoPicker';
 
 let container: HTMLDivElement;
@@ -56,9 +39,48 @@ afterEach(() => {
   container.remove();
 });
 
+/**
+ * A host that manages GitHub on its own account: it supplies the connection
+ * check, the repository list and its account card as data/chrome. The picker
+ * talks to the host contract, never to a platform module.
+ */
+function accountGitHubHost(): SproutHost {
+  const repos: HostGitHubRepo[] = [
+    {
+      id: 7,
+      name: 'widgets',
+      full_name: 'acme/widgets',
+      private: true,
+      description: null,
+      html_url: 'https://github.com/acme/widgets',
+      clone_url: 'https://github.com/acme/widgets.git',
+      default_branch: 'main',
+      updated_at: '2026-09-01T00:00:00Z',
+      owner: { login: 'acme', avatar_url: '' },
+    },
+  ];
+  return {
+    ...headlessHost(),
+    chrome: {
+      githubAccount: (
+        <div data-testid="platform-gh-card">{platform.connected ? 'GitHub is connected' : 'Connect GitHub'}</div>
+      ),
+    },
+    github: {
+      isConnected: () => Promise.resolve(platform.connected),
+      listRepos: () => Promise.resolve(repos),
+    },
+  };
+}
+
 async function open(onSelect?: (url: string) => void) {
   await act(async () => {
-    root.render(<GitHubRepoPicker isOpen onClose={() => undefined} onSelect={onSelect} />);
+    // The picker reads the host through the provider, so wrap it in one.
+    root.render(
+      <HostProvider host={accountGitHubHost()}>
+        <GitHubRepoPicker isOpen onClose={() => undefined} onSelect={onSelect} />
+      </HostProvider>,
+    );
   });
   for (let i = 0; i < 5; i++) {
     await act(async () => {
@@ -77,12 +99,10 @@ describe('GitHubRepoPicker with the Foundry account connection', () => {
     expect(mockClone).toHaveBeenCalledWith('https://github.com/acme/widgets.git', { token: undefined });
   });
 
-  it('points to account settings when GitHub is not connected', async () => {
+  it('shows the host account card when GitHub is not connected', async () => {
     platform.connected = false;
     await open();
-    const link = document.body.querySelector<HTMLAnchorElement>('[data-testid="platform-gh-manage"]');
-    expect(link?.textContent).toContain('Connect GitHub');
-    expect(link?.getAttribute('href')).toBe('/?from=editor#/settings');
+    expect(document.body.querySelector('[data-testid="platform-gh-card"]')?.textContent).toContain('Connect GitHub');
     expect(document.body.querySelector('input[aria-label="GitHub personal access token"]')).toBeNull();
   });
 

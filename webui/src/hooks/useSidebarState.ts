@@ -7,7 +7,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import { supportsGit } from '../config/mode';
+import { useHostCapabilities } from '../host';
 import { debugLog } from '../utils/log';
 
 export type SectionTab = 'git' | 'logs' | 'files' | 'settings' | 'search' | 'automations' | (string & {}); // eslint-disable-line @typescript-eslint/ban-types
@@ -102,6 +102,7 @@ const VALID_SECTION_TABS: readonly SectionTab[] = [
 ] as const;
 
 export function useSidebarState(): UseSidebarStateReturn {
+  const { git: supportsGit } = useHostCapabilities();
   const [isMobile, setIsMobile] = useState(false);
   const [isTablet, setIsTablet] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);

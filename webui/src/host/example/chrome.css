@@ -1,0 +1,102 @@
+/*
+ * Example host chrome styling.
+ *
+ * The example host carries its own chrome, so it carries its own stylesheet.
+ * Every colour and radius here reads a design token (`--*`) with an inline
+ * fallback: the host's own theme supplies the values (its `theme.tokens` are
+ * applied as CSS custom properties), and when nothing supplies one the
+ * fallback paints a neutral frame. No hard-coded palette lives in the
+ * component — the host looks themed because it consumes the tokens rather
+ * than because it re-declares colours.
+ */
+
+.host-example {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  background: var(--bg-primary, #ffffff);
+  color: var(--text-primary, #1b1f24);
+}
+
+.host-example__chrome {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-subtle, #e5e7eb);
+  background: var(--bg-secondary, #f6f7f9);
+}
+
+.host-example__brand {
+  font-weight: 600;
+}
+
+.host-example__chrome-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.host-example__usage {
+  font-size: 12px;
+  color: var(--text-secondary, #55606d);
+}
+
+.host-example__mode-switch,
+.host-example__notify {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.host-example__mode-switch button,
+.host-example__notify {
+  padding: 4px 10px;
+  border: 1px solid var(--border-subtle, #e5e7eb);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-primary, #ffffff);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.host-example__mode-switch button[aria-pressed='true'] {
+  border-color: var(--accent-primary, #3b82f6);
+  color: var(--accent-primary, #3b82f6);
+}
+
+.host-example__space {
+  flex: 1;
+  min-height: 0;
+  padding: 16px;
+}
+
+.host-example__notifications {
+  list-style: none;
+  margin: 12px 16px;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.host-example__notification {
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle, #e5e7eb);
+  border-radius: var(--radius-sm, 6px);
+  font-size: 13px;
+}
+
+.host-example__notification[data-level='error'] {
+  border-color: var(--status-error, #ef4444);
+}
+
+.host-example__notification[data-level='success'] {
+  border-color: var(--status-success, #22c55e);
+}
+
+.host-example__nav-log {
+  margin: 0 16px 16px;
+  font-size: 12px;
+  color: var(--text-secondary, #55606d);
+}

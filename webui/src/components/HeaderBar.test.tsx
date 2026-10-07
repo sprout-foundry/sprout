@@ -2,14 +2,17 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../config/mode', () => ({ isCloud: true }));
 vi.mock('./MenuBar', () => ({ default: () => null }));
 vi.mock('./UserMenu', () => ({ UserMenu: () => null }));
 vi.mock('./UsageChip', () => ({ UsageChip: () => null }));
 vi.mock('./WorkspaceBar', () => ({ default: () => null }));
+// CreditsChip reads the host; HeaderBar's own tests don't provide one.
+vi.mock('./CreditsChip', () => ({ CreditsChip: () => null }));
 let activeRepo: string | undefined;
 vi.mock('../services/activeRepo', () => ({ useActiveRepoURL: () => activeRepo }));
 
+import { HostProvider, headlessHost } from '../host';
+import { setActiveHost } from '../host/accessor';
 import { __resetFullWorkspaceForTests } from '../services/fullWorkspace';
 import HeaderBar from './HeaderBar';
 
@@ -39,6 +42,8 @@ afterEach(() => {
   act(() => root.unmount());
   container.remove();
   vi.unstubAllGlobals();
+  // Reset the active host so the host-count case does not leak into other tests.
+  setActiveHost(headlessHost());
 });
 
 async function renderHeader(status: number, body: string) {
@@ -46,15 +51,21 @@ async function renderHeader(status: number, body: string) {
     'fetch',
     vi.fn(() => Promise.resolve(new Response(body, { status }))),
   );
+  // HeaderBar branches on the host's transport (authMode 'bearer' = hosted);
+  // it renders inside the app's HostProvider, so the tests mount one too.
+  const host = headlessHost();
+  host.transport = { ...host.transport, authMode: 'bearer' };
   await act(async () => {
     root.render(
-      <HeaderBar
-        isMobile={false}
-        isSidebarOpen
-        isConnected
-        onToggleSidebar={() => undefined}
-        onToggleContextPanel={() => undefined}
-      />,
+      <HostProvider host={host}>
+        <HeaderBar
+          isMobile={false}
+          isSidebarOpen
+          isConnected
+          onToggleSidebar={() => undefined}
+          onToggleContextPanel={() => undefined}
+        />
+      </HostProvider>,
     );
   });
   await act(async () => {
@@ -96,6 +107,25 @@ describe('HeaderBar back-link', () => {
   });
 });
 
+describe('HeaderBar host notification count', () => {
+  it('shows the host-supplied unread count in the header chrome', async () => {
+    const host = headlessHost();
+    host.notifications = { post: () => undefined, count: 3 };
+    setActiveHost(host);
+
+    await renderHeader(200, '[]');
+
+    expect(container.querySelector('[data-testid="host-notification-count"]')?.textContent).toBe('3');
+  });
+
+  it('renders no count when the host supplies none', async () => {
+    // headlessHost().notifications has no count; the default from afterEach.
+    await renderHeader(200, '[]');
+
+    expect(container.querySelector('[data-testid="host-notification-count"]')).toBeNull();
+  });
+});
+
 // The Code-mode preview panel toggle.
 describe('HeaderBar preview toggle', () => {
   async function renderWithPreview(onTogglePreviewPanel: () => void, previewPanelOpen = false) {
@@ -103,17 +133,21 @@ describe('HeaderBar preview toggle', () => {
       'fetch',
       vi.fn(() => Promise.resolve(new Response('[]', { status: 200 }))),
     );
+    const host = headlessHost();
+    host.transport = { ...host.transport, authMode: 'bearer' };
     await act(async () => {
       root.render(
-        <HeaderBar
-          isMobile={false}
-          isSidebarOpen
-          isConnected
-          onToggleSidebar={() => undefined}
-          onToggleContextPanel={() => undefined}
-          onTogglePreviewPanel={onTogglePreviewPanel}
-          previewPanelOpen={previewPanelOpen}
-        />,
+        <HostProvider host={host}>
+          <HeaderBar
+            isMobile={false}
+            isSidebarOpen
+            isConnected
+            onToggleSidebar={() => undefined}
+            onToggleContextPanel={() => undefined}
+            onTogglePreviewPanel={onTogglePreviewPanel}
+            previewPanelOpen={previewPanelOpen}
+          />
+        </HostProvider>,
       );
     });
     await act(async () => {
@@ -146,16 +180,20 @@ describe('HeaderBar preview toggle', () => {
       'fetch',
       vi.fn(() => Promise.resolve(new Response('[]', { status: 200 }))),
     );
+    const host = headlessHost();
+    host.transport = { ...host.transport, authMode: 'bearer' };
     await act(async () => {
       root.render(
-        <HeaderBar
-          isMobile
-          isSidebarOpen
-          isConnected
-          onToggleSidebar={() => undefined}
-          onToggleContextPanel={() => undefined}
-          onTogglePreviewPanel={() => undefined}
-        />,
+        <HostProvider host={host}>
+          <HeaderBar
+            isMobile
+            isSidebarOpen
+            isConnected
+            onToggleSidebar={() => undefined}
+            onToggleContextPanel={() => undefined}
+            onTogglePreviewPanel={() => undefined}
+          />
+        </HostProvider>,
       );
     });
     await act(async () => {

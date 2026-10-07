@@ -5,17 +5,20 @@
  * and automatic activation/reload on new versions.
  */
 
+import { capability } from '../config/mode';
+import { getActiveHost } from '../host/accessor';
 import { debugLog } from '../utils/log';
-import { isCloud } from '../config/mode';
 
 export const registerServiceWorker = async (): Promise<ServiceWorkerRegistration | null> => {
-  // Cloud mode ships no service worker: the platform's vendored dist strips
-  // sw.js (see platform/scripts/update-sprout-webui.sh) and the SPA
+  // A shell with a local terminal ships its own service worker; a hosted shell
+  // (WASM terminal, no local terminal) ships none: the platform's vendored dist
+  // strips sw.js (see platform/scripts/update-sprout-webui.sh) and the SPA
   // catch-all would serve index.html (text/html) for /webui/sw.js, turning
   // the registration into a "script has an unsupported MIME type" console
   // error. The CloudAdapter proxies the platform API directly; offline
   // state is backed by IndexedDB, not a network cache.
-  if (isCloud) {
+  const localTerminal = getActiveHost()?.capabilities.localTerminal ?? capability('supportsLocalTerminal', true, false);
+  if (!localTerminal) {
     return null;
   }
 
@@ -31,9 +34,9 @@ export const registerServiceWorker = async (): Promise<ServiceWorkerRegistration
   }
 
   try {
-    // In cloud mode the SW is served at /webui/sw.js (relative to the app
-    // scope). In local mode it's at the root.
-    const swUrl = isCloud ? '/webui/sw.js' : `${import.meta.env.PUBLIC_URL || ''}/sw.js`;
+    // The service worker is served at the app scope for a hosted shell
+    // (no local terminal); a local-terminal shell serves it at the root.
+    const swUrl = !localTerminal ? '/webui/sw.js' : `${import.meta.env.PUBLIC_URL || ''}/sw.js`;
     const registration = await navigator.serviceWorker.register(swUrl);
     await registration.update();
     debugLog('SW registered:', registration);

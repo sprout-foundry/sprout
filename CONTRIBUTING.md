@@ -18,7 +18,7 @@ guidelines below to help keep things smooth for everyone.
 git clone https://github.com/sprout-foundry/sprout.git
 cd sprout
 
-# Full build: React UI + WASM shell + Go binary
+# Full build: React UI + WASM shell + Go binary + workspace package
 make build-all
 ```
 

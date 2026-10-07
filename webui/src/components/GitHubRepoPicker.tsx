@@ -20,6 +20,8 @@ import { AlertTriangle, Download, FolderOpen, GitBranch, Loader2, Lock, Search, 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent, ReactElement } from 'react';
 import { createPortal } from 'react-dom';
+import { useHost } from '../host/useHost';
+import type { HostGitHubRepo } from '../host/types';
 import { clearGitHubAccount, getStoredToken, getStoredUser, listRepos } from '../services/githubService';
 import type { GitHubRepo, GitHubUser } from '../services/githubService';
 import { cloneIntoWorkspace } from '../services/workspaceClone';
@@ -29,8 +31,6 @@ import { type CloneResult } from '../services/workspaceFs/backendsExport';
 import { debugLog } from '../utils/log';
 import './GitHubRepoPicker.css';
 import GitHubAccountPanel from './GitHubAccountPanel';
-import PlatformGitHubAccountCard from './PlatformGitHubAccountCard';
-import { fetchPlatformGitHubConnected, listPlatformRepos, usesPlatformGitHub } from '../services/platformGitHub';
 import { showThemedConfirm } from './ThemedDialog';
 
 export interface GitHubRepoPickerProps {
@@ -65,6 +65,24 @@ function formatUpdated(iso: string): string {
   return `${Math.floor(diffDays / 365)}y ago`;
 }
 
+/** Normalize a host-supplied repo into the shape the picker renders. */
+function toGitHubRepo(repo: HostGitHubRepo): GitHubRepo {
+  const cut = repo.full_name.lastIndexOf('/');
+  const owner = cut >= 0 ? repo.full_name.slice(0, cut) : '';
+  return {
+    id: repo.id,
+    name: repo.name,
+    full_name: repo.full_name,
+    private: repo.private,
+    description: repo.description,
+    html_url: repo.html_url,
+    clone_url: repo.clone_url,
+    default_branch: repo.default_branch,
+    updated_at: repo.updated_at,
+    owner: repo.owner ?? { login: owner, avatar_url: '' },
+  };
+}
+
 export default function GitHubRepoPicker({
   isOpen,
   onClose,
@@ -80,25 +98,33 @@ export default function GitHubRepoPicker({
   const [cloningRepo, setCloningRepo] = useState<string | null>(null);
   const [cloneError, setCloneError] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  // Hosted editor: GitHub comes from the Foundry account, not a local token.
-  const platformMode = usesPlatformGitHub();
+  // When the host manages GitHub on its account (it supplies the github data
+  // and its account card), GitHub comes from the account, not a local token.
+  const host = useHost();
+  const hostGithub = host.github;
+  const platformMode = Boolean(hostGithub);
   const [platformConnected, setPlatformConnected] = useState<boolean | null>(null);
 
   /* ── Reset + load repos whenever the modal opens ─────────────── */
 
-  const loadRepos = useCallback(async (activeToken: string | null) => {
-    setLoading(true);
-    setListError(null);
-    setRepos(null);
-    try {
-      const list = activeToken ? await listRepos(activeToken) : await listPlatformRepos();
-      setRepos(list);
-    } catch (err) {
-      setListError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const loadRepos = useCallback(
+    async (activeToken: string | null) => {
+      setLoading(true);
+      setListError(null);
+      setRepos(null);
+      try {
+        const list = activeToken
+          ? await listRepos(activeToken)
+          : await hostGithub!.listRepos().then((rs) => rs.map(toGitHubRepo));
+        setRepos(list);
+      } catch (err) {
+        setListError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [hostGithub],
+  );
 
   useEffect(() => {
     if (!isOpen) return;
@@ -112,7 +138,8 @@ export default function GitHubRepoPicker({
     setCloneError(null);
     if (platformMode) {
       setPlatformConnected(null);
-      fetchPlatformGitHubConnected()
+      hostGithub!
+        .isConnected()
         .then((connected) => {
           setPlatformConnected(connected);
           if (connected) void loadRepos(null);
@@ -128,7 +155,7 @@ export default function GitHubRepoPicker({
       setLoading(false);
       setListError(null);
     }
-  }, [isOpen, loadRepos, platformMode]);
+  }, [isOpen, loadRepos, platformMode, hostGithub]);
 
   // The account card's link opens Home (account settings); get out of its way.
   const homeOpen = useHomeView().open;
@@ -292,7 +319,7 @@ export default function GitHubRepoPicker({
         <div className="gh-picker-body">
           {!showRepoList &&
             (platformMode ? (
-              <PlatformGitHubAccountCard connected={listError ? false : platformConnected} />
+              <GitHubAccountPanel user={null} compact onSignedIn={() => undefined} onSignedOut={() => undefined} />
             ) : (
               <GitHubAccountPanel user={null} onSignedIn={handleSignedIn} onSignedOut={handleSignedOut} />
             ))}
@@ -331,7 +358,7 @@ export default function GitHubRepoPicker({
               )}
 
               {platformMode ? (
-                <PlatformGitHubAccountCard connected compact />
+                <GitHubAccountPanel user={null} compact onSignedIn={() => undefined} onSignedOut={() => undefined} />
               ) : user ? (
                 <GitHubAccountPanel user={user} onSignedIn={handleSignedIn} onSignedOut={handleSignedOut} compact />
               ) : (

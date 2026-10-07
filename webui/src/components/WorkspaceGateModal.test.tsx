@@ -2,6 +2,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
+import { HostProvider } from '../host/HostProvider';
+import { makeTestHost } from '../host/testHost';
 import WorkspaceGateModal from './WorkspaceGateModal';
 
 // A hoisted, mutable flag so the mode mock factory can flip
@@ -116,9 +118,20 @@ function renderModal(overrides: Record<string, unknown> = {}) {
     onConsentHome: vi.fn(),
     ...overrides,
   };
+  // The gate reads its capabilities from the host (not from a build flag).
+  // Mirror the test's modeState flags into a host so per-test cloud/studio
+  // toggles keep working exactly as before.
+  const host = makeTestHost({
+    workspaceSwitching: !modeState.cloud,
+    folderPicker: modeState.studio,
+  });
   act(() => {
     root = createRoot(container!);
-    root.render(<WorkspaceGateModal {...props} />);
+    root.render(
+      <HostProvider host={host}>
+        <WorkspaceGateModal {...props} />
+      </HostProvider>,
+    );
   });
   return props;
 }

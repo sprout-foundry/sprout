@@ -11,6 +11,8 @@
 
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { HostProvider } from '../host/HostProvider';
+import { makeTestHost } from '../host/testHost';
 
 // ---------------------------------------------------------------------------
 // Mocks — MUST be set up BEFORE importing Sidebar
@@ -70,7 +72,6 @@ vi.mock('./design/useDesignPresence', () => ({
 // Mock config/mode so capability flags are explicit (not adapter-dependent).
 vi.mock('../config/mode', () => ({
   __esModule: true,
-  isCloud: false,
   supportsSettings: true,
   supportsLocalTerminal: false,
   supportsGit: true,
@@ -163,6 +164,16 @@ vi.mock('../config/layout', async (importOriginal) => ({
   isLayeredLayout: false,
 }));
 
+// The Sidebar test mocked these capabilities as explicit values; the component
+// now reads them from the host, so the provider carries the same set.
+const sidebarHost = makeTestHost({
+  settings: true,
+  git: true,
+  automations: true,
+  localTerminal: false,
+  workspaceSwitching: false,
+});
+
 function makeModelState(overrides = {}) {
   return {
     selectedProvider: 'openai',
@@ -225,14 +236,16 @@ describe('Sidebar provider selection', () => {
 
     await act(async () => {
       root.render(
-        <Sidebar
-          isConnected={true}
-          isOpen={true}
-          selectedSection="settings"
-          provider="openai"
-          model="gpt-4o-mini"
-          onProviderChange={onProviderChange}
-        />,
+        <HostProvider host={sidebarHost}>
+          <Sidebar
+            isConnected={true}
+            isOpen={true}
+            selectedSection="settings"
+            provider="openai"
+            model="gpt-4o-mini"
+            onProviderChange={onProviderChange}
+          />
+        </HostProvider>,
       );
     });
 
@@ -262,17 +275,19 @@ describe('Sidebar provider selection', () => {
 
     await act(async () => {
       root.render(
-        <Sidebar
-          isConnected={true}
-          isOpen={true}
-          isMobile={isMobile}
-          isMobileMenuOpen={true}
-          onMobileMenuToggle={onMobileMenuToggle}
-          selectedSection="search"
-          provider="openai"
-          model="gpt-4o-mini"
-          onFileClick={onFileClick}
-        />,
+        <HostProvider host={sidebarHost}>
+          <Sidebar
+            isConnected={true}
+            isOpen={true}
+            isMobile={isMobile}
+            isMobileMenuOpen={true}
+            onMobileMenuToggle={onMobileMenuToggle}
+            selectedSection="search"
+            provider="openai"
+            model="gpt-4o-mini"
+            onFileClick={onFileClick}
+          />
+        </HostProvider>,
       );
     });
     await act(async () => {
@@ -289,14 +304,16 @@ describe('Sidebar provider selection', () => {
 
     await act(async () => {
       root.render(
-        <Sidebar
-          isConnected={true}
-          isOpen={true}
-          selectedSection="git"
-          provider="openai"
-          model="gpt-4o-mini"
-          onSectionChange={onSectionChange}
-        />,
+        <HostProvider host={sidebarHost}>
+          <Sidebar
+            isConnected={true}
+            isOpen={true}
+            selectedSection="git"
+            provider="openai"
+            model="gpt-4o-mini"
+            onSectionChange={onSectionChange}
+          />
+        </HostProvider>,
       );
     });
 

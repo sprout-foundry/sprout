@@ -1,7 +1,7 @@
 import { FolderOpen, Monitor, Loader2, Server } from 'lucide-react';
 import React, { useState, useMemo } from 'react';
 import './LocationSwitcher.css';
-import { supportsSSH } from '../config/mode';
+import { useHostCapabilities } from '../host';
 import type { SproutInstance } from '../services/api';
 import { getPathDisplayName, collapseHomePath } from './locationSwitcher/pathUtils';
 import { SSHPanel } from './locationSwitcher/SSHPanel';
@@ -30,6 +30,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
   sidebarCollapsed = false,
   nameOnly = false,
 }) => {
+  const { ssh: supportsSSH } = useHostCapabilities();
   // ─── Main component owns panel toggle state ───
   const [isOpen, setIsOpen] = useState(false);
   const [isSshPanelOpen, setIsSshPanelOpen] = useState(false);

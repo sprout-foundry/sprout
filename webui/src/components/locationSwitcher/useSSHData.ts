@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { supportsSSH } from '../../config/mode';
+import { useHostCapabilities } from '../../host';
 import type { SSHBrowseEntry, SSHHostEntry, SSHSessionEntry } from '../../services/api';
 import { ApiService, SSHWorkspaceOpenError } from '../../services/api';
 import { getSSHBrowseQuery } from './pathUtils';
@@ -42,6 +42,7 @@ export function useSSHData({
   setIsOpeningSshHost,
   setIsClosingSshSession,
 }: UseSSHDataProps): UseSSHDataResult {
+  const { ssh: supportsSSH } = useHostCapabilities();
   const [sshHosts, setSshHosts] = useState<SSHHostEntry[]>([]);
   const [sshSessions, setSshSessions] = useState<SSHSessionEntry[]>([]);
   const [selectedSshBrowseHost, setSelectedSshBrowseHost] = useState('');

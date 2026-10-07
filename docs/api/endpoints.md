@@ -4,8 +4,10 @@
 > `go run ./cmd/api_inventory` from the repo root. A Go test in
 > `cmd/api_inventory` fails when this file is stale.
 
-Every route registered in `pkg/webui/routes.go` is listed below, grouped by
-family.
+Every route registered by the web server is listed below, grouped by family:
+the plain mux routes from the `pkg/webui` `registerXxxRoutes` functions and
+the Huma operations, read straight from the in-process API object (the live
+registration set), so the list cannot drift from the handlers.
 
 **Served-by semantics.** In the local product every route is served by the
 **daemon** (the Go web server). In a hosted/cloud deployment the same route is
@@ -20,25 +22,25 @@ to the host backend by that catch-all.
 
 | Column | Meaning |
 |---|---|
-| Method | HTTP methods the route accepts. For a route listed in the endpoint registry (or a registry prefix entry covering it), the registry's method list; otherwise derived from the handler source in `pkg/webui/*.go`. `any` means the handler performs no method check and accepts any method. |
-| Path | The mux pattern as registered in `pkg/webui/routes.go`. A trailing `/` marks a prefix route; `{name}` is a Go 1.22 wildcard segment. |
-| Handler | The handler registered for the route (a `ReactWebServer` method, an inline closure, or a package-qualified handler). |
+| Method | HTTP methods the route accepts. For a Huma operation, the method registered in its OpenAPI spec; otherwise, for a route listed in the endpoint registry (or a registry prefix entry covering it), the registry's method list; otherwise derived from the handler source in `pkg/webui/*.go`. `any` means the handler performs no method check and accepts any method. |
+| Path | The mux pattern as registered. A trailing `/` marks a prefix route; `{name}` is a Go 1.22 wildcard segment. |
+| Handler | The handler registered for the route (a `ReactWebServer` method, an inline closure, or a package-qualified handler), or the Huma `operationId` for a Huma operation. |
 | Served by | The components that serve the route, in the order: daemon, in-browser WASM agent, browser-local, host. |
 
 ## conversation/query
 
 | Method | Path | Handler | Served by |
 |---|---|---|---|
-| POST | `/api/command/complete` | handleAPICommandComplete | daemon |
-| POST | `/api/command/execute` | handleAPICommandExecute | daemon |
-| POST | `/api/completion` | handleAPICompletion | daemon |
-| POST | `/api/query` | handleAPIQuery | daemon, in-browser WASM agent |
-| POST | `/api/query/rewind` | handleAPIQueryRewind | daemon |
-| GET | `/api/query/status` | handleAPIQueryStatus | daemon, host |
-| POST | `/api/query/steer` | handleAPIQuerySteer | daemon, in-browser WASM agent |
-| POST | `/api/query/steer/retract` | handleAPIQuerySteerRetract | daemon |
-| POST | `/api/query/stop` | handleAPIQueryStop | daemon, in-browser WASM agent |
-| POST | `/api/subagent/` | handleAPISubagentCancel | daemon |
+| POST | `/api/command/complete` | commandComplete | daemon |
+| POST | `/api/command/execute` | commandExecute | daemon |
+| POST | `/api/completion` | completionGenerate | daemon |
+| POST | `/api/query` | queryStart | daemon, in-browser WASM agent |
+| POST | `/api/query/rewind` | queryRewind | daemon |
+| GET | `/api/query/status` | queryStatus | daemon, host |
+| POST | `/api/query/steer` | querySteer | daemon, in-browser WASM agent |
+| POST | `/api/query/steer/retract` | querySteerRetract | daemon |
+| POST | `/api/query/stop` | queryStop | daemon, in-browser WASM agent |
+| POST | `/api/subagent/` | subagentCancel | daemon |
 
 Notes:
 - `/api/command/complete` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
@@ -52,92 +54,105 @@ Notes:
 
 | Method | Path | Handler | Served by |
 |---|---|---|---|
-| GET | `/api/browse` | handleAPIBrowse | daemon, in-browser WASM agent |
-| POST | `/api/create` | handleAPICreateFile | daemon, in-browser WASM agent |
-| POST, DELETE | `/api/delete` | handleAPIDeleteItem | daemon, in-browser WASM agent |
-| GET, POST | `/api/edits/` | handleAPIEdits | daemon, in-browser WASM agent |
-| GET, POST | `/api/file` | handleAPIFile | daemon, in-browser WASM agent |
-| GET, POST | `/api/file/check-modified` | handleAPIFileCheckModified | daemon, in-browser WASM agent |
-| POST | `/api/file/consent` | handleAPIFileConsent | daemon, in-browser WASM agent |
-| GET | `/api/files` | handleAPIFiles | daemon, in-browser WASM agent |
-| GET | `/api/files/prettier-config` | handleAPIGetPrettierConfig | daemon, in-browser WASM agent |
-| POST | `/api/password/` | handleAPIPasswordRoutes | daemon |
-| POST | `/api/rename` | handleAPIRenameItem | daemon, in-browser WASM agent |
-| POST | `/api/shell-approvals/` | handleAPIShellApprovals | daemon, in-browser WASM agent |
-| POST | `/api/upload/image` | handleUploadImage | daemon, browser-local |
+| GET | `/api/browse` | browseDir | daemon, in-browser WASM agent |
+| POST | `/api/create` | createFile | daemon, in-browser WASM agent |
+| DELETE | `/api/delete` | deleteItemHttp | daemon, in-browser WASM agent |
+| POST | `/api/delete` | deleteItem | daemon, in-browser WASM agent |
+| GET | `/api/edits/` | editStatus | daemon, in-browser WASM agent |
+| POST | `/api/edits/` | editDecision | daemon, in-browser WASM agent |
+| GET | `/api/file` | fileRead | daemon, in-browser WASM agent |
+| POST | `/api/file` | fileWrite | daemon, in-browser WASM agent |
+| POST | `/api/file/check-modified` | fileCheckModified | daemon, in-browser WASM agent |
+| POST | `/api/file/consent` | fileConsent | daemon, in-browser WASM agent |
+| GET | `/api/files` | filesList | daemon, in-browser WASM agent |
+| GET | `/api/files/prettier-config` | prettierConfig | daemon, in-browser WASM agent |
+| POST | `/api/password/` | passwordRespond | daemon |
+| POST | `/api/rename` | renameItem | daemon, in-browser WASM agent |
+| POST | `/api/shell-approvals/` | shellApprovalDecision | daemon, in-browser WASM agent |
+| POST | `/api/upload/image` | uploadImage | daemon, browser-local |
 
 Notes:
-- `/api/file/check-modified` — registry methods GET, POST vs handler methods POST
 - `/api/password/` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
 
 ## git
 
 | Method | Path | Handler | Served by |
 |---|---|---|---|
-| POST | `/api/git/branch/create` | handleAPIGitCreateBranch | daemon, browser-local |
-| GET | `/api/git/branches` | handleAPIGitBranches | daemon, browser-local |
-| POST | `/api/git/checkout` | handleAPIGitCheckout | daemon, browser-local |
-| POST | `/api/git/commit` | handleAPIGitCommit | daemon, browser-local |
-| POST | `/api/git/commit-message` | handleAPIGitCommitMessage | daemon, browser-local |
-| POST | `/api/git/commit/show` | handleAPIGitCommitShow | daemon, browser-local |
-| POST | `/api/git/commit/show/file` | handleAPIGitCommitFileDiff | daemon, browser-local |
-| POST | `/api/git/confirm` | handleAPIConfirm | daemon, browser-local |
-| POST | `/api/git/deep-review` | handleAPIGitDeepReview | daemon, browser-local |
-| POST | `/api/git/deep-review/fix` | handleAPIGitDeepReviewFix | daemon, browser-local |
-| POST | `/api/git/deep-review/fix/start` | handleAPIGitDeepReviewFixStart | daemon, browser-local |
-| GET | `/api/git/deep-review/fix/status` | handleAPIGitDeepReviewFixStatus | daemon, browser-local |
-| GET | `/api/git/diff` | handleAPIGitDiff | daemon, browser-local |
-| POST | `/api/git/discard` | handleAPIGitDiscard | daemon, browser-local |
-| GET | `/api/git/log` | handleAPIGitLog | daemon, browser-local |
-| POST | `/api/git/pull` | handleAPIGitPull | daemon, browser-local |
-| POST | `/api/git/pull-request` | handleAPIGitPullRequest | daemon, browser-local |
-| POST | `/api/git/push` | handleAPIGitPush | daemon, browser-local |
-| POST | `/api/git/revert` | handleAPIGitRevert | daemon, browser-local |
-| POST | `/api/git/stage` | handleAPIGitStage | daemon, browser-local |
-| POST | `/api/git/stage-all` | handleAPIGitStageAll | daemon, browser-local |
-| GET | `/api/git/status` | handleAPIGitStatus | daemon, browser-local |
-| POST | `/api/git/unstage` | handleAPIGitUnstage | daemon, browser-local |
-| POST | `/api/git/unstage-all` | handleAPIGitUnstageAll | daemon, browser-local |
-| POST | `/api/git/worktree/checkout` | handleAPIGitWorktreeCheckout | daemon, browser-local |
-| POST | `/api/git/worktree/create` | handleAPIGitWorktreeCreate | daemon, browser-local |
-| POST | `/api/git/worktree/remove` | handleAPIGitWorktreeRemove | daemon, browser-local |
-| GET | `/api/git/worktrees` | handleAPIGitWorktrees | daemon, browser-local |
-
-Notes:
-- `/api/git/commit/show` — registry methods POST vs handler methods GET
-- `/api/git/commit/show/file` — registry methods POST vs handler methods GET
+| POST | `/api/git/branch/create` | gitBranchCreate | daemon, browser-local |
+| GET | `/api/git/branches` | gitBranches | daemon, browser-local |
+| POST | `/api/git/checkout` | gitCheckout | daemon, browser-local |
+| POST | `/api/git/commit` | gitCommit | daemon, browser-local |
+| POST | `/api/git/commit-message` | gitCommitMessage | daemon, browser-local |
+| GET | `/api/git/commit/show` | gitCommitShow | daemon, browser-local |
+| GET | `/api/git/commit/show/file` | gitCommitFileDiff | daemon, browser-local |
+| POST | `/api/git/confirm` | gitConfirm | daemon, browser-local |
+| POST | `/api/git/deep-review` | gitDeepReview | daemon, browser-local |
+| POST | `/api/git/deep-review/fix` | gitDeepReviewFix | daemon, browser-local |
+| POST | `/api/git/deep-review/fix/start` | gitDeepReviewFixStart | daemon, browser-local |
+| GET | `/api/git/deep-review/fix/status` | gitDeepReviewFixStatus | daemon, browser-local |
+| GET | `/api/git/diff` | gitDiff | daemon, browser-local |
+| POST | `/api/git/discard` | gitDiscard | daemon, browser-local |
+| GET | `/api/git/log` | gitLog | daemon, browser-local |
+| POST | `/api/git/pull` | gitPull | daemon, browser-local |
+| POST | `/api/git/pull-request` | gitPullRequest | daemon, browser-local |
+| POST | `/api/git/push` | gitPush | daemon, browser-local |
+| POST | `/api/git/revert` | gitRevert | daemon, browser-local |
+| POST | `/api/git/stage` | gitStage | daemon, browser-local |
+| POST | `/api/git/stage-all` | gitStageAll | daemon, browser-local |
+| GET | `/api/git/status` | gitStatus | daemon, browser-local |
+| POST | `/api/git/unstage` | gitUnstage | daemon, browser-local |
+| POST | `/api/git/unstage-all` | gitUnstageAll | daemon, browser-local |
+| POST | `/api/git/worktree/checkout` | gitWorktreeCheckout | daemon, browser-local |
+| POST | `/api/git/worktree/create` | gitWorktreeCreate | daemon, browser-local |
+| POST | `/api/git/worktree/remove` | gitWorktreeRemove | daemon, browser-local |
+| GET | `/api/git/worktrees` | gitWorktrees | daemon, browser-local |
 
 ## settings
 
 | Method | Path | Handler | Served by |
 |---|---|---|---|
-| POST | `/api/computer-use/test` | handleAPIComputerUseTest | daemon |
-| GET | `/api/config` | humaGetConfig | daemon, browser-local |
-| GET, PUT | `/api/hotkeys` | handleAPIHotkeys | daemon, browser-local |
-| POST | `/api/hotkeys/preset` | handleAPIHotkeysPreset | daemon, browser-local |
-| POST | `/api/hotkeys/validate` | handleAPIHotkeysValidate | daemon, browser-local |
-| POST | `/api/local-llm/download` | handleLocalLLMDownload | daemon |
-| POST | `/api/local-llm/download/cancel` | handleLocalLLMDownloadCancel | daemon |
-| GET | `/api/local-llm/models` | handleLocalLLMModels | daemon |
-| POST | `/api/local-llm/start` | handleLocalLLMStart | daemon |
-| GET | `/api/local-llm/status` | handleLocalLLMStatus | daemon |
-| POST | `/api/onboarding/complete` | handleAPIOnboardingComplete | daemon, browser-local |
-| POST | `/api/onboarding/skip` | handleAPIOnboardingSkip | daemon, browser-local |
-| GET | `/api/onboarding/status` | handleAPIOnboardingStatus | daemon, browser-local |
-| GET | `/api/providers` | handleAPIProviders | daemon, host |
-| GET | `/api/providers/models` | handleGetModels | daemon, browser-local |
-| GET, PUT | `/api/settings` | handleAPISettings | daemon, host |
-| GET | `/api/settings/credentials` | handleAPISettingsCredentials | daemon, host |
-| GET, POST, PUT, DELETE | `/api/settings/credentials/` | handleAPISettingsCredentials | daemon, host |
-| GET, PUT | `/api/settings/mcp` | handleAPISettingsMCP | daemon, browser-local |
-| GET, POST, PUT, DELETE | `/api/settings/mcp/servers/` | handleAPISettingsMCPServers | daemon, browser-local |
-| GET, PUT | `/api/settings/providers` | handleAPISettingsProviders | daemon, host |
-| GET, PUT, DELETE | `/api/settings/providers/` | handleAPISettingsProviders | daemon, host |
-| GET, PUT | `/api/settings/skills` | handleAPISettingsSkills | daemon, browser-local |
-| GET | `/api/settings/subagent-types` | handleAPISettingsSubagentTypes | daemon, browser-local |
-| GET | `/api/settings/subagent-types/` | handleAPISettingsSubagentTypes | daemon, browser-local |
-| GET | `/api/skills` | handleAPIListSkills | daemon |
-| GET, POST | `/api/skills/` | handleAPISkillsRoutes | daemon |
+| POST | `/api/computer-use/test` | computerUseTest | daemon |
+| GET | `/api/config` | get-config | daemon, browser-local |
+| GET | `/api/hotkeys` | hotkeysGet | daemon, browser-local |
+| PUT | `/api/hotkeys` | hotkeysPut | daemon, browser-local |
+| POST | `/api/hotkeys/preset` | hotkeysPreset | daemon, browser-local |
+| POST | `/api/hotkeys/validate` | hotkeysValidate | daemon, browser-local |
+| POST | `/api/local-llm/download` | localLLMDownload | daemon |
+| POST | `/api/local-llm/download/cancel` | localLLMDownloadCancel | daemon |
+| GET | `/api/local-llm/models` | localLLMModels | daemon |
+| POST | `/api/local-llm/start` | localLLMStart | daemon |
+| GET | `/api/local-llm/status` | localLLMStatus | daemon |
+| POST | `/api/onboarding/complete` | onboardingComplete | daemon, browser-local |
+| POST | `/api/onboarding/skip` | onboardingSkip | daemon, browser-local |
+| GET | `/api/onboarding/status` | onboardingStatus | daemon, browser-local |
+| GET | `/api/providers` | providersList | daemon, host |
+| GET | `/api/providers/models` | providersModels | daemon, browser-local |
+| GET | `/api/settings` | settingsGet | daemon, host |
+| PUT | `/api/settings` | settingsPut | daemon, host |
+| DELETE | `/api/settings/credentials` | settingsCredentialsDelete | daemon, host |
+| GET | `/api/settings/credentials` | settingsCredentialsList | daemon, host |
+| POST | `/api/settings/credentials` | settingsCredentialsTest | daemon, host |
+| PUT | `/api/settings/credentials` | settingsCredentialsSet | daemon, host |
+| DELETE | `/api/settings/credentials/` | settingsCredentialsPoolDelete | daemon, host |
+| GET | `/api/settings/credentials/` | settingsCredentialsPoolGet | daemon, host |
+| POST | `/api/settings/credentials/` | settingsCredentialsPoolPost | daemon, host |
+| PUT | `/api/settings/credentials/` | settingsCredentialsPoolSet | daemon, host |
+| GET | `/api/settings/mcp` | settingsMcpGet | daemon, browser-local |
+| PUT | `/api/settings/mcp` | settingsMcpPut | daemon, browser-local |
+| DELETE | `/api/settings/mcp/servers/` | settingsMcpServersDelete | daemon, browser-local |
+| POST | `/api/settings/mcp/servers/` | settingsMcpServersPost | daemon, browser-local |
+| PUT | `/api/settings/mcp/servers/` | settingsMcpServersPut | daemon, browser-local |
+| GET | `/api/settings/providers` | settingsProvidersList | daemon, host |
+| POST | `/api/settings/providers` | settingsProvidersCreate | daemon, host |
+| DELETE | `/api/settings/providers/` | settingsProvidersDelete | daemon, host |
+| PUT | `/api/settings/providers/` | settingsProvidersUpdate | daemon, host |
+| GET | `/api/settings/skills` | settingsSkillsGet | daemon, browser-local |
+| PUT | `/api/settings/skills` | settingsSkillsPut | daemon, browser-local |
+| GET | `/api/settings/subagent-types` | settingsSubagentTypes | daemon, browser-local |
+| GET | `/api/settings/subagent-types/` | settingsSubagentTypesSubtree | daemon, browser-local |
+| GET | `/api/skills` | skillsList | daemon |
+| GET | `/api/skills/` | skillsListSubtree | daemon |
+| POST | `/api/skills/` | skillsAction | daemon |
 
 Notes:
 - `/api/computer-use/test` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
@@ -146,43 +161,44 @@ Notes:
 - `/api/local-llm/models` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
 - `/api/local-llm/start` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
 - `/api/local-llm/status` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
-- `/api/settings/credentials` — registry methods GET vs handler methods GET, POST, PUT, DELETE
-- `/api/settings/providers` — registry methods GET, PUT vs handler methods GET, POST, PUT, DELETE
-- `/api/settings/providers/` — registry methods GET, PUT, DELETE vs handler methods GET, POST, PUT, DELETE
 - `/api/skills` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
+- `/api/skills/` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
 - `/api/skills/` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
 
 ## terminal
 
 | Method | Path | Handler | Served by |
 |---|---|---|---|
-| GET | `/api/lsp/status` | handleLSPStatus | daemon, browser-local |
+| GET | `/api/lsp/status` | lspStatus | daemon, browser-local |
 | GET | `/api/lsp/ws` | lspproxy.BridgeHandler | daemon, browser-local |
-| GET | `/api/terminal/agent-sessions` | handleAPIAgentSessions | daemon, host |
-| GET, POST | `/api/terminal/agent-sessions/` | handleAPIAgentSessionActions | daemon, host |
-| GET, POST | `/api/terminal/history` | handleTerminalHistory | daemon, in-browser WASM agent |
-| GET | `/api/terminal/sessions` | handleAPITerminalSessions | daemon, in-browser WASM agent |
-| GET | `/api/terminal/shells` | handleAPITerminalShells | daemon, in-browser WASM agent |
+| GET | `/api/terminal/agent-sessions` | agentSessionsList | daemon, host |
+| GET | `/api/terminal/agent-sessions/` | agentSessionAction | daemon, host |
+| POST | `/api/terminal/agent-sessions/` | agentSessionActionPost | daemon, host |
+| GET | `/api/terminal/history` | terminalHistoryGet | daemon, in-browser WASM agent |
+| POST | `/api/terminal/history` | terminalHistoryPost | daemon, in-browser WASM agent |
+| GET | `/api/terminal/sessions` | terminalSessions | daemon, in-browser WASM agent |
+| GET | `/api/terminal/shells` | terminalShells | daemon, in-browser WASM agent |
 | any | `/terminal` | handleTerminalWebSocket | daemon |
 
 ## workspace/instances
 
 | Method | Path | Handler | Served by |
 |---|---|---|---|
-| GET | `/api/instances` | handleAPIInstances | daemon, browser-local |
-| POST | `/api/instances/select` | handleAPIInstanceSelect | daemon, browser-local |
-| POST | `/api/instances/ssh-browse` | handleAPISSHBrowse | daemon, browser-local |
-| POST | `/api/instances/ssh-close` | handleAPISSHSessionDelete | daemon, browser-local |
-| GET | `/api/instances/ssh-hosts` | handleAPISSHHosts | daemon, browser-local |
-| GET | `/api/instances/ssh-launch-status` | handleAPISSHLaunchStatus | daemon, browser-local |
-| POST | `/api/instances/ssh-open` | handleAPISSHOpen | daemon, browser-local |
-| GET | `/api/instances/ssh-sessions` | handleAPISSHSessions | daemon, browser-local |
-| GET, POST | `/api/workspace` | handleAPIWorkspace | daemon, browser-local |
-| GET | `/api/workspace/browse` | handleAPIWorkspaceBrowse | daemon, in-browser WASM agent |
-| GET | `/api/workspace/projects` | handleAPIWorkspaceProjects | daemon |
-| GET | `/api/workspace/symbols` | handleAPIWorkspaceSymbols | daemon, browser-local |
-| POST | `/api/workspace/sync` | handleAPIWorkspaceSync | daemon |
-| POST | `/api/workspace/takeover` | handleAPIWorkspaceTakeover | daemon |
+| GET | `/api/instances` | instancesList | daemon, browser-local |
+| POST | `/api/instances/select` | instanceSelect | daemon, browser-local |
+| POST | `/api/instances/ssh-browse` | sshBrowse | daemon, browser-local |
+| POST | `/api/instances/ssh-close` | sshClose | daemon, browser-local |
+| GET | `/api/instances/ssh-hosts` | sshHosts | daemon, browser-local |
+| GET | `/api/instances/ssh-launch-status` | sshLaunchStatus | daemon, browser-local |
+| POST | `/api/instances/ssh-open` | sshOpen | daemon, browser-local |
+| GET | `/api/instances/ssh-sessions` | sshSessions | daemon, browser-local |
+| GET | `/api/workspace` | workspaceGet | daemon, browser-local |
+| POST | `/api/workspace` | workspaceSet | daemon, browser-local |
+| GET | `/api/workspace/browse` | workspaceBrowse | daemon, in-browser WASM agent |
+| GET | `/api/workspace/projects` | workspaceProjects | daemon |
+| GET | `/api/workspace/symbols` | workspaceSymbols | daemon, browser-local |
+| POST | `/api/workspace/sync` | workspaceSync | daemon |
+| POST | `/api/workspace/takeover` | workspaceTakeover | daemon |
 
 Notes:
 - `/api/workspace/projects` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
@@ -193,16 +209,18 @@ Notes:
 
 | Method | Path | Handler | Served by |
 |---|---|---|---|
-| GET, HEAD, POST | `/api/sync` | handleAPISync | daemon |
-| POST | `/api/sync/batch` | handleAPISyncBatch | daemon |
-| POST | `/api/sync/op` | handleAPISyncOp | daemon |
-| GET | `/api/sync/status` | handleAPISyncStatus | daemon |
-| POST | `/api/txn/pull` | handleAPITxnPull | daemon |
-| POST | `/api/txn/push` | handleAPITxnPush | daemon |
-| POST | `/api/txn/run` | handleAPITxnRun | daemon |
-| GET, HEAD | `/api/txn/status` | handleAPITxnStatus | daemon |
+| GET | `/api/sync` | syncStatus | daemon |
+| POST | `/api/sync` | syncPull | daemon |
+| POST | `/api/sync/batch` | syncBatch | daemon |
+| POST | `/api/sync/op` | syncOp | daemon |
+| GET | `/api/sync/status` | syncAgentStatus | daemon |
+| POST | `/api/txn/pull` | txnPull | daemon |
+| POST | `/api/txn/push` | txnPush | daemon |
+| POST | `/api/txn/run` | txnRun | daemon |
+| GET | `/api/txn/status` | txnStatus | daemon |
 
 Notes:
+- `/api/sync` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
 - `/api/sync` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
 - `/api/sync/batch` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
 - `/api/sync/op` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
@@ -216,28 +234,39 @@ Notes:
 
 | Method | Path | Handler | Served by |
 |---|---|---|---|
-| GET, POST | `/api/chat-session/` | handleAPIChatSessionWorktree | daemon, browser-local |
-| GET | `/api/chat-sessions` | handleAPIChatSessions | daemon, browser-local |
-| POST | `/api/chat-sessions/breakpoints` | handleAPIChatSessionBreakpoints | daemon |
-| POST | `/api/chat-sessions/compact` | handleAPIChatSessionsCompact | daemon, browser-local |
-| POST | `/api/chat-sessions/create` | handleAPIChatSessionsCreate | daemon, browser-local |
-| POST | `/api/chat-sessions/create-in-worktree` | handleAPIChatSessionCreateInWorktree | daemon, browser-local |
-| POST | `/api/chat-sessions/delete` | handleAPIChatSessionsDelete | daemon, browser-local |
-| POST | `/api/chat-sessions/delete-all` | handleAPIChatSessionsDeleteAll | daemon, browser-local |
-| POST | `/api/chat-sessions/fork` | handleAPIChatSessionFork | daemon |
-| POST | `/api/chat-sessions/history` | handleAPIChatSessionClearHistory | daemon |
-| GET | `/api/chat-sessions/messages` | handleAPIChatSessionMessages | daemon, browser-local |
-| POST | `/api/chat-sessions/pin` | handleAPIChatSessionsPin | daemon, browser-local |
-| POST | `/api/chat-sessions/rename` | handleAPIChatSessionsRename | daemon, browser-local |
-| POST | `/api/chat-sessions/switch` | handleAPIChatSessionsSwitch | daemon, browser-local |
-| POST | `/api/chat-sessions/unpin` | handleAPIChatSessionsUnpin | daemon, browser-local |
-| GET | `/api/chat-sessions/worktree-mappings` | handleAPIChatSessionWorktreeList | daemon, browser-local |
-| GET | `/api/sessions` | handleAPISessions | daemon, browser-local |
-| POST | `/api/sessions/restore` | handleAPIRestoreSession | daemon, browser-local |
-| GET | `/api/sessions/search` | handleAPISessionsSearch | daemon, browser-local |
-| GET | `/api/sessions/{id}/export` | handleAPISessionExport | daemon |
+| GET | `/api/changes/diff` | handleAPIChangesDiff | daemon |
+| POST | `/api/changes/revert` | handleAPIChangesRevert | daemon |
+| GET | `/api/changes/session` | handleAPIChangesSession | daemon |
+| GET | `/api/changes/summary` | handleAPIChangesSummary | daemon |
+| GET | `/api/changes/timeline` | handleAPIChangesTimeline | daemon |
+| GET | `/api/chat-session/` | chatSessionWorktreeGet | daemon, browser-local |
+| POST | `/api/chat-session/` | chatSessionWorktreeSet | daemon, browser-local |
+| GET | `/api/chat-sessions` | chatSessionsList | daemon, browser-local |
+| POST | `/api/chat-sessions/breakpoints` | chatSessionBreakpoints | daemon |
+| POST | `/api/chat-sessions/compact` | chatSessionsCompact | daemon, browser-local |
+| POST | `/api/chat-sessions/create` | chatSessionsCreate | daemon, browser-local |
+| POST | `/api/chat-sessions/create-in-worktree` | chatSessionsCreateInWorktree | daemon, browser-local |
+| POST | `/api/chat-sessions/delete` | chatSessionsDelete | daemon, browser-local |
+| POST | `/api/chat-sessions/delete-all` | chatSessionsDeleteAll | daemon, browser-local |
+| POST | `/api/chat-sessions/fork` | chatSessionFork | daemon |
+| POST | `/api/chat-sessions/history` | chatSessionClearHistory | daemon |
+| GET | `/api/chat-sessions/messages` | chatSessionMessages | daemon, browser-local |
+| POST | `/api/chat-sessions/pin` | chatSessionsPin | daemon, browser-local |
+| POST | `/api/chat-sessions/rename` | chatSessionsRename | daemon, browser-local |
+| POST | `/api/chat-sessions/switch` | chatSessionsSwitch | daemon, browser-local |
+| POST | `/api/chat-sessions/unpin` | chatSessionsUnpin | daemon, browser-local |
+| GET | `/api/chat-sessions/worktree-mappings` | chatSessionWorktreeList | daemon, browser-local |
+| GET | `/api/sessions` | sessionsList | daemon, browser-local |
+| POST | `/api/sessions/restore` | sessionRestore | daemon, browser-local |
+| GET | `/api/sessions/search` | sessionsSearch | daemon, browser-local |
+| GET | `/api/sessions/{id}/export` | sessionExport | daemon |
 
 Notes:
+- `/api/changes/diff` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
+- `/api/changes/revert` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
+- `/api/changes/session` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
+- `/api/changes/summary` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
+- `/api/changes/timeline` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
 - `/api/chat-sessions/breakpoints` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
 - `/api/chat-sessions/fork` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
 - `/api/chat-sessions/history` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
@@ -247,18 +276,18 @@ Notes:
 
 | Method | Path | Handler | Served by |
 |---|---|---|---|
-| GET | `/api/search` | handleAPIQuerySearch | daemon, in-browser WASM agent |
-| POST | `/api/search/replace` | handleAPIQuerySearchReplace | daemon, in-browser WASM agent |
+| GET | `/api/search` | searchQuery | daemon, in-browser WASM agent |
+| POST | `/api/search/replace` | searchReplace | daemon, in-browser WASM agent |
 
 ## diagnostics
 
 | Method | Path | Handler | Served by |
 |---|---|---|---|
-| POST | `/api/diagnostics` | handleAPIDiagnostics | daemon, browser-local |
-| POST | `/api/semantic` | handleAPISemantic | daemon, browser-local |
-| GET | `/api/stats` | humaGetStats | daemon, host |
-| GET | `/api/support-bundle` | handleAPISupportBundle | daemon, browser-local |
-| GET | `/api/ws-metrics` | handleAPIWSMetrics | daemon |
+| POST | `/api/diagnostics` | diagnosticsValidate | daemon, browser-local |
+| POST | `/api/semantic` | semanticRun | daemon, browser-local |
+| GET | `/api/stats` | get-stats | daemon, host |
+| GET | `/api/support-bundle` | supportBundle | daemon, browser-local |
+| GET | `/api/ws-metrics` | wsMetrics | daemon |
 
 Notes:
 - `/api/ws-metrics` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
@@ -267,7 +296,7 @@ Notes:
 
 | Method | Path | Handler | Served by |
 |---|---|---|---|
-| GET | `/api/design/status` | handleAPIDesignStatus | daemon |
+| GET | `/api/design/status` | designStatus | daemon |
 
 Notes:
 - `/api/design/status` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
@@ -276,8 +305,8 @@ Notes:
 
 | Method | Path | Handler | Served by |
 |---|---|---|---|
-| GET | `/api/starters` | handleAPIStartersList | daemon |
-| POST | `/api/starters/instantiate` | handleAPIStartersInstantiate | daemon |
+| GET | `/api/starters` | startersList | daemon |
+| POST | `/api/starters/instantiate` | startersInstantiate | daemon |
 
 Notes:
 - `/api/starters` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
@@ -288,12 +317,20 @@ Notes:
 | Method | Path | Handler | Served by |
 |---|---|---|---|
 | any | `/` | handleIndex | daemon |
+| POST | `/api/automate/run` | handleAPIAutomateRun | daemon |
+| GET | `/api/automate/sessions` | handleAPIAutomateSessionsList | daemon |
+| GET, POST | `/api/automate/sessions/` | handleAPIAutomateSessionsAll | daemon |
+| GET | `/api/automate/workflows` | handleAPIAutomateWorkflows | daemon |
 | GET | `/api/bootstrap` | handleAPIBootstrap | daemon |
-| POST | `/api/open-in-file-browser` | handleAPIOpenInFileBrowser | daemon, browser-local |
-| POST | `/api/proxy/chat` | handleAPIProxyChat | daemon |
-| GET | `/api/proxy/chat/status` | handleAPIProxyChatStatus | daemon |
-| POST | `/api/proxy/chat/stop` | handleAPIProxyChatStop | daemon |
-| GET | `/api/proxy/stats` | handleAPIProxyStats | daemon |
+| POST | `/api/open-in-file-browser` | openInFileBrowser | daemon, browser-local |
+| POST | `/api/preview/restart` | handleAPIPreviewRestart | daemon |
+| POST | `/api/preview/start` | handleAPIPreviewStart | daemon |
+| GET | `/api/preview/status` | handleAPIPreviewStatus | daemon |
+| POST | `/api/preview/stop` | handleAPIPreviewStop | daemon |
+| POST | `/api/proxy/chat` | proxyChat | daemon |
+| GET | `/api/proxy/chat/status` | proxyChatStatus | daemon |
+| POST | `/api/proxy/chat/stop` | proxyChatStop | daemon |
+| GET | `/api/proxy/stats` | proxyStats | daemon |
 | any | `/asset-manifest.json` | handleAssetManifest | daemon |
 | any | `/assets/` | handleAssets | daemon |
 | any | `/browserconfig.xml` | handleBrowserConfig | daemon |
@@ -310,7 +347,15 @@ Notes:
 | any | `/ws` | handleWebSocket | daemon |
 
 Notes:
+- `/api/automate/run` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
+- `/api/automate/sessions` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
+- `/api/automate/sessions/` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
+- `/api/automate/workflows` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
 - `/api/bootstrap` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
+- `/api/preview/restart` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
+- `/api/preview/start` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
+- `/api/preview/status` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
+- `/api/preview/stop` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
 - `/api/proxy/chat` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
 - `/api/proxy/chat/status` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
 - `/api/proxy/chat/stop` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)

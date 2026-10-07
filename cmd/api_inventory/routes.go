@@ -6,7 +6,21 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	"path/filepath"
 )
+
+// plainRouteFiles are the webui source files (relative to the repo root) that
+// register plain mux.HandleFunc routes through a registerXxxRoutes function.
+// Huma operations are NOT parsed from source; they are read in-process by
+// humaOpsInProcess (huma_routes.go) and merged in buildRouteSet, so the
+// inventory reflects the live registration set even as the huma.Register calls
+// move between files.
+var plainRouteFiles = []string{
+	"pkg/webui/routes.go",
+	"pkg/webui/api_preview.go",
+	"pkg/webui/automations_api.go",
+	"pkg/webui/changes_api.go",
+}
 
 // Route is one entry in the route inventory: a mux pattern plus the handler
 // expression registered for it and the register function it appears in.
@@ -15,31 +29,53 @@ type Route struct {
 	// "/api/edits/", or the Go 1.22 wildcard "/api/sessions/{id}/export").
 	Path string
 	// Handler is the display name for the Handler column (e.g. "handleAPIQuery",
-	// "lspproxy.BridgeHandler", or "inline closure").
+	// "lspproxy.BridgeHandler", an inline closure, or a Huma operationId).
 	Handler string
 	// HandlerBase is the local handler function name used to derive HTTP
 	// methods ("" for inline closures and package-qualified handlers, which
-	// are not in the webui handler index and fall back to "any").
+	// are not in the webui handler index, and for Huma operations, which use
+	// ExplicitMethod instead).
 	HandlerBase string
-	// RegisterFn is the enclosing registerXxxRoutes function.
+	// RegisterFn is the enclosing registerXxxRoutes function, or "huma" for
+	// operations read from the in-process API object.
 	RegisterFn string
+	// ExplicitMethod is the single HTTP method a route is registered with,
+	// for Huma operations read from the in-process API object (the OpenAPI
+	// spec's method key, upper-cased). Empty for plain mux routes, which have
+	// no single registered method and derive their method set from the
+	// registry or the handler source.
+	ExplicitMethod string
 }
 
-// parseRoutes parses pkg/webui/routes.go and returns every route registration
-// in source order: plain mux.HandleFunc patterns plus Huma operations
-// (huma.Register with a huma.Operation). routes.go is the single source of
-// truth for the registered route set, and both registration styles coexist
-// there, so the inventory must discover both to stay complete.
-func parseRoutes(path string) ([]Route, error) {
-	data, err := os.ReadFile(path) // #nosec G703 -- path resolves within the repo root (pkg/webui/routes.go)
-	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", path, err)
+// parsePlainRoutes parses every plain-route registration file and returns every
+// plain mux.HandleFunc registration in source order. Huma operations are not
+// parsed here; they are read in-process and merged by buildRouteSet.
+func parsePlainRoutes(root string) ([]Route, error) {
+	var routes []Route
+	for _, rel := range plainRouteFiles {
+		path := filepath.Join(root, rel)
+		data, err := os.ReadFile(path) // #nosec G703 -- paths resolve within the repo root
+		if err != nil {
+			return nil, fmt.Errorf("read %s: %w", rel, err)
+		}
+		fset := token.NewFileSet()
+		f, err := parser.ParseFile(fset, path, data, 0)
+		if err != nil {
+			return nil, fmt.Errorf("parse %s: %w", rel, err)
+		}
+		fileRoutes, err := parsePlainRoutesFromAST(f)
+		if err != nil {
+			return nil, err
+		}
+		routes = append(routes, fileRoutes...)
 	}
-	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, path, data, 0)
-	if err != nil {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
-	}
+	return routes, nil
+}
+
+// parsePlainRoutesFromAST extracts the plain mux.HandleFunc registrations from
+// a parsed file. For each enclosing registerXxxRoutes function it records the
+// pattern, the handler expression, and the enclosing function name.
+func parsePlainRoutesFromAST(f *ast.File) ([]Route, error) {
 	var routes []Route
 	ast.Inspect(f, func(n ast.Node) bool {
 		fd, ok := n.(*ast.FuncDecl)
@@ -62,68 +98,12 @@ func parseRoutes(path string) ([]Route, error) {
 						RegisterFn:  fd.Name.Name,
 					})
 				}
-				return true
-			}
-			// Huma operation registrations: huma.Register(api, huma.Operation{...}, handler).
-			if r, ok := humaRoute(call, fd.Name.Name); ok {
-				routes = append(routes, r)
 			}
 			return true
 		})
 		return true
 	})
 	return routes, nil
-}
-
-// humaRoute reports whether call is a huma.Register invocation and, if so,
-// returns the Route it registers (the Operation's Path plus the handler
-// expression). The method is derived later from the registry or handler
-// source, so the Operation's Method field is not needed here.
-func humaRoute(call *ast.CallExpr, registerFn string) (Route, bool) {
-	if len(call.Args) < 3 {
-		return Route{}, false
-	}
-	// Confirm the receiver is the huma package (huma.Register), not some
-	// unrelated Register symbol.
-	sel, ok := call.Fun.(*ast.SelectorExpr)
-	if !ok || sel.Sel.Name != "Register" {
-		return Route{}, false
-	}
-	pkg, ok := sel.X.(*ast.Ident)
-	if !ok || pkg.Name != "huma" {
-		return Route{}, false
-	}
-	op, ok := call.Args[1].(*ast.CompositeLit)
-	if !ok {
-		return Route{}, false
-	}
-	var path string
-	found := false
-	for _, elt := range op.Elts {
-		kv, ok := elt.(*ast.KeyValueExpr)
-		if !ok {
-			continue
-		}
-		key, ok := kv.Key.(*ast.Ident)
-		if !ok || key.Name != "Path" {
-			continue
-		}
-		if lit, ok := stringLiteral(kv.Value); ok {
-			path = lit
-			found = true
-			break
-		}
-	}
-	if !found {
-		return Route{}, false
-	}
-	handler := call.Args[2]
-	return Route{
-		Path:        path,
-		Handler:     describeHandler(handler),
-		HandlerBase: handlerBase(handler),
-		RegisterFn:  registerFn,
-	}, true
 }
 
 // stringLiteral returns the value of a basic string literal expression.

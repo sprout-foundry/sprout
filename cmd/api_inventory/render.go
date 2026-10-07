@@ -23,7 +23,7 @@ func buildInventory(routes []Route, registry []RegistryEntry, idx *handlerIndex)
 	rows := make([]inventoryRow, 0, len(routes))
 	for _, r := range routes {
 		family := familyForPath(r.Path)
-		methods := resolveRouteMethod(r.Path, r.HandlerBase, registry, idx)
+		methods := resolveRouteMethod(r.Path, r.HandlerBase, r.ExplicitMethod, registry, idx)
 		served := servedByForRoute(r.Path, registry)
 		row := inventoryRow{
 			Path:       r.Path,
@@ -108,8 +108,10 @@ const header = `# API endpoint inventory
 > ` + "`go run ./cmd/api_inventory`" + ` from the repo root. A Go test in
 > ` + "`cmd/api_inventory`" + ` fails when this file is stale.
 
-Every route registered in ` + "`pkg/webui/routes.go`" + ` is listed below, grouped by
-family.
+Every route registered by the web server is listed below, grouped by family:
+the plain mux routes from the ` + "`pkg/webui`" + ` ` + "`registerXxxRoutes`" + ` functions and
+the Huma operations, read straight from the in-process API object (the live
+registration set), so the list cannot drift from the handlers.
 
 **Served-by semantics.** In the local product every route is served by the
 **daemon** (the Go web server). In a hosted/cloud deployment the same route is
@@ -124,8 +126,8 @@ to the host backend by that catch-all.
 
 | Column | Meaning |
 |---|---|
-| Method | HTTP methods the route accepts. For a route listed in the endpoint registry (or a registry prefix entry covering it), the registry's method list; otherwise derived from the handler source in ` + "`pkg/webui/*.go`" + `. ` + "`any`" + ` means the handler performs no method check and accepts any method. |
-| Path | The mux pattern as registered in ` + "`pkg/webui/routes.go`" + `. A trailing ` + "`/`" + ` marks a prefix route; ` + "`{name}`" + ` is a Go 1.22 wildcard segment. |
-| Handler | The handler registered for the route (a ` + "`ReactWebServer`" + ` method, an inline closure, or a package-qualified handler). |
+| Method | HTTP methods the route accepts. For a Huma operation, the method registered in its OpenAPI spec; otherwise, for a route listed in the endpoint registry (or a registry prefix entry covering it), the registry's method list; otherwise derived from the handler source in ` + "`pkg/webui/*.go`" + `. ` + "`any`" + ` means the handler performs no method check and accepts any method. |
+| Path | The mux pattern as registered. A trailing ` + "`/`" + ` marks a prefix route; ` + "`{name}`" + ` is a Go 1.22 wildcard segment. |
+| Handler | The handler registered for the route (a ` + "`ReactWebServer`" + ` method, an inline closure, or a package-qualified handler), or the Huma ` + "`operationId`" + ` for a Huma operation. |
 | Served by | The components that serve the route, in the order: daemon, in-browser WASM agent, browser-local, host. |
 `

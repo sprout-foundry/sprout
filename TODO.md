@@ -257,18 +257,22 @@ protects.
       strings added by the automated work ("TODO 153.6", "item 149.5",
       "(152.7)", "SP-149 §149a" in the manual-check reason). Spec-level
       references in docs are fine.
-      Remaining: ~485 tagged comment/string occurrences across ~217 files
+      Remaining: ~312 tagged comment/string occurrences across ~182 files
       under `pkg/`, `cmd/`, `webui/src/`, `test/` (the SP-148..157 series,
       plus some pre-existing). A scripted sweep was attempted and rejected:
       naive tag-stripping corrupts real code/strings (e.g. `.sprout`,
       `Load()`) and leaves ungrammatical prose, so this needs per-file
       review.
-      Progress: a first verified batch cleaned ~29 of the densest files
-      (benchmark, verify, agent verification, plancontract, events,
-      startermanifest, configuration, langguard, starters, cliui, webui
-      preview/progress) — comment-only, prose rewritten grammatically,
-      non-comment tokens unchanged, all tests pass. The bulk remains; a
-      further per-file pass is needed before this can be ticked.
+      Progress: three verified batches cleaned ~65 of the densest files
+      (benchmark, verify, plancontract, events, startermanifest,
+      configuration, langguard, starters, cliui, preview, agent/agent_tools
+      verification + plan, webui preview/progress) — comment/string-only,
+      prose rewritten grammatically, non-comment tokens unchanged, touched
+      suites pass; the item's named examples (TODO 153.6, item 149.5,
+      (152.7), the manual-check reason) are cleaned. The bulk (182 files,
+      mostly 1–5 tags each) remains and needs further per-file passes before
+      this can be ticked. `webui/src/types/generated.ts` must be regenerated
+      via the token exporter, not hand-edited.
 - [x] **rules.2** Split files over 500 lines introduced or grown by the
       automated work (`pkg/agent/seed_provider_chat.go`,
       `pkg/benchmark/runner_test.go`, `config_roles_test.go`,

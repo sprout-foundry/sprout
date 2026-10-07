@@ -109,7 +109,7 @@ checkboxes.
       in a bounded Go test (in-process server on a temp workspace, no
       browsers, no containers), and fix or document every failure.
       Spec: SP-160 §160c.
-- [ ] **contract.16** Command for hosts: `sprout api conformance
+- [x] **contract.16** Command for hosts: `sprout api conformance
       --base-url <url> [--families …]` runs the suite against any
       implementation and exits non-zero on failure; usage in
       `docs/api/README.md` (how a host runs it in CI). Spec: SP-160 §160c.

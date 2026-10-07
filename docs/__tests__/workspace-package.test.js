@@ -93,9 +93,11 @@ describe('@sprout-foundry/workspace package.json', () => {
     assert.equal(entry.require, undefined, 'the package is ESM only');
   });
 
-  test('declares a package manager resolution path into the workspace', () => {
-    assert.ok(pkg.dependencies['@sprout/events'], 'depends on @sprout/events');
-    assert.ok(pkg.dependencies['@sprout/ui'], 'depends on @sprout/ui');
+  test('bundles the internal packages from the workspace (dev dependencies only)', () => {
+    for (const name of ['@sprout/events', '@sprout/ui']) {
+      assert.ok(pkg.devDependencies[name], `builds against ${name} from the workspace`);
+      assert.ok(!pkg.dependencies?.[name], `${name} is bundled, not installed by the host`);
+    }
   });
 });
 
@@ -272,3 +274,88 @@ describe('source is not published', { skip: !built && 'packages/workspace/dist n
     }
   });
 });
+
+// ── Installable by a host ──────────────────────────────────────────────
+
+describe('a host can install the published package', () => {
+  test('no installed dependency uses a file: or link: specifier', () => {
+    for (const field of [
+      'dependencies',
+      'peerDependencies',
+      'optionalDependencies',
+    ]) {
+      for (const [name, spec] of Object.entries(pkg[field] ?? {})) {
+        assert.ok(
+          !/^(file|link):/.test(spec),
+          `${field}.${name} is not installable from a registry: ${spec}`,
+        );
+      }
+    }
+  });
+
+  test('react and react-dom are peer dependencies, never regular ones', () => {
+    for (const name of ['react', 'react-dom']) {
+      assert.ok(pkg.peerDependencies?.[name], `${name} is a peer dependency`);
+      assert.ok(
+        !pkg.dependencies?.[name],
+        `${name} must not be a regular dependency`,
+      );
+    }
+  });
+});
+
+describe(
+  'the build keeps peer dependencies external',
+  { skip: !built && 'packages/workspace/dist not built' },
+  () => {
+    const scripts = () => walk(DIST).filter((file) => file.endsWith('.js'));
+
+    test('no React internals are bundled into dist/', () => {
+      const offenders = scripts().filter((file) => {
+        const source = fs.readFileSync(path.join(PACKAGE_DIR, file), 'utf-8');
+        return /__SECRET_INTERNALS_DO_NOT_USE|ReactCurrentOwner|react\.production\.min/.test(
+          source,
+        );
+      });
+      assert.deepEqual(
+        offenders,
+        [],
+        `React is bundled into: ${offenders.join(', ')}`,
+      );
+    });
+
+    test('React is imported from the host by bare specifier', () => {
+      const imports = scripts().flatMap((file) => {
+        const source = fs.readFileSync(path.join(PACKAGE_DIR, file), 'utf-8');
+        return [
+          ...source.matchAll(/from\s*["'](react(?:-dom)?(?:\/[^"']*)?)["']/g),
+        ].map((m) => m[1]);
+      });
+      assert.ok(
+        imports.includes('react'),
+        'the build imports react from the host',
+      );
+    });
+
+    test(
+      'declarations resolve without paths outside the package',
+      { todo: 'declarations are not yet bundled (SP-160 §160e)' },
+      () => {
+        const declarations = walk(DIST).filter((file) =>
+          file.endsWith('.d.ts'),
+        );
+        const offenders = declarations.filter((file) => {
+          const source = fs.readFileSync(path.join(PACKAGE_DIR, file), 'utf-8');
+          return /from\s*["'](?:(?:\.\.\/)+webui\/|@sprout-foundry\/workspace-webui)/.test(
+            source,
+          );
+        });
+        assert.deepEqual(
+          offenders,
+          [],
+          `declarations reference files outside the package: ${offenders.join(', ')}`,
+        );
+      },
+    );
+  },
+);

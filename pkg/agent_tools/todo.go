@@ -13,12 +13,22 @@ import (
 // the imperative Content "Implement X"). Priority drives the colored
 // indicator on the UI; it's accepted from the LLM but is purely
 // presentational.
+//
+// Scope is an optional plan scope item ID — the id of a
+// scope[] entry in .sprout/plan.json (pkg/plancontract) that this todo
+// advances. It links the todo back to the structured plan so progress maps
+// to the plan and survives across sessions. It is free-form and optional:
+// an empty Scope means the todo is not linked to any plan scope. The
+// json:"scope,omitempty" tag is the persistence carrier — the struct is
+// marshalled/unmarshalled at session boundaries and the tag round-trips the
+// value.
 type TodoItem struct {
 	ID         string `json:"id"`
 	Content    string `json:"content"`
 	Status     string `json:"status"`               // pending, in_progress, completed, cancelled
 	Priority   string `json:"priority,omitempty"`   // high, medium, low
 	ActiveForm string `json:"activeForm,omitempty"` // present-continuous phrasing
+	Scope      string `json:"scope,omitempty"`      // plan scope item ID
 }
 
 // TodoManager manages the todo list for a single conversation scope.

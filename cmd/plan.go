@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
@@ -25,6 +26,7 @@ var (
 	planOutputFile  string
 	planContinue    bool
 	planCreateTodos bool
+	planStructured  bool
 )
 
 func init() {
@@ -33,6 +35,7 @@ func init() {
 	planCmd.Flags().StringVarP(&planOutputFile, "output", "o", "", "Output file for the plan (default: plan.md)")
 	planCmd.Flags().BoolVarP(&planContinue, "continue", "c", false, "Continue from an existing plan file")
 	planCmd.Flags().BoolVarP(&planCreateTodos, "todos", "t", true, "Create todos from plan items during planning")
+	planCmd.Flags().BoolVarP(&planStructured, "structured", "s", false, "Structured plan: the agent writes .sprout/plan.json (plus the rendered .sprout/plan.md) through the write_plan tool")
 }
 
 var planCmd = &cobra.Command{
@@ -69,6 +72,9 @@ Examples:
 
   # Use specific model
   sprout plan -p openrouter -m "qwen/qwen3-coder-30b" "Build REST API"
+
+  # Structured plan: .sprout/plan.json + rendered .sprout/plan.md
+  sprout plan --structured "Build REST API"
 
 The agent will seamlessly transition from planning to execution upon your approval.`,
 	Args: cobra.MaximumNArgs(1),
@@ -153,11 +159,8 @@ func createPlanningAgent() (*agent.Agent, error) {
 	var chatAgent *agent.Agent
 	var err error
 
-	if planProvider != "" && planModel != "" {
-		modelWithProvider := fmt.Sprintf("%s:%s", planProvider, planModel)
-		chatAgent, err = agent.NewAgentWithModel(modelWithProvider)
-	} else if planModel != "" {
-		chatAgent, err = agent.NewAgentWithModel(planModel)
+	if spec := planningAgentSpec(); spec != "" {
+		chatAgent, err = agent.NewAgentWithModel(spec)
 	} else {
 		chatAgent, err = agent.NewAgent()
 	}
@@ -166,8 +169,21 @@ func createPlanningAgent() (*agent.Agent, error) {
 		return nil, fmt.Errorf("failed to initialize agent: %w", err)
 	}
 
+	// Stamp the planner role: the planning loop
+	// serves the "planning" purpose, so its metering is attributed to the
+	// planner role even when an explicit -p/-m flag (rather than the
+	// configured planner role) selected the model.
+	chatAgent.SetRole(configuration.RolePlanner)
+
 	// Set planning-focused system prompt (now includes execution workflow)
-	planningPrompt, err := agent.GetEmbeddedPlanningPrompt(planCreateTodos)
+	var planningPrompt string
+	if planStructured {
+		// Structured mode: the prompt carries the plan schema
+		// section so the agent writes .sprout/plan.json via write_plan.
+		planningPrompt, err = agent.GetStructuredPlanningPrompt(planCreateTodos)
+	} else {
+		planningPrompt, err = agent.GetEmbeddedPlanningPrompt(planCreateTodos)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to load planning prompt: %w", err)
 	}
@@ -176,6 +192,52 @@ func createPlanningAgent() (*agent.Agent, error) {
 	// maxIterations defaults to 0 (unlimited) — no per-prompt cap
 
 	return chatAgent, nil
+}
+
+// planningAgentSpec returns the "provider:model" (or bare model) specifier
+// the planning agent is created with, or "" to fall back to the
+// conversation's provider and model.
+// Explicit flags always win: -p plus -m wins as "provider:model", -m alone
+// wins as a bare model, and a bare -p keeps today's fall-through to the
+// conversation model (it must not be overridden by the planner role). Only
+// when no flag is set does an explicitly-set planner role select the
+// plan's model.
+func planningAgentSpec() string {
+	switch {
+	case planProvider != "" && planModel != "":
+		return planProvider + ":" + planModel
+	case planModel != "":
+		return planModel
+	case planProvider != "":
+		// Bare -p: the conversation model, exactly as before roles — an
+		// explicit provider flag wins over the configured role.
+		return ""
+	default:
+		return plannerRoleSpec()
+	}
+}
+
+// plannerRoleSpec returns the planner role's resolved "provider:model"
+// specifier when the roles section sets the
+// planner explicitly, or "" when it does not. ResolveRole applies the field
+// fallbacks (empty provider → last-used provider, empty model → that
+// provider's configured model); providerModelSpec then shapes the pair so a
+// bare provider never reaches the constructors as a model name.
+func plannerRoleSpec() string {
+	mgr, err := configuration.NewManagerSilent()
+	if err != nil {
+		return ""
+	}
+	cfg := mgr.GetConfig()
+	if cfg == nil {
+		return ""
+	}
+	role := cfg.GetRole(configuration.RolePlanner)
+	if role.Provider == "" && role.Model == "" {
+		return ""
+	}
+	provider, model := cfg.ResolveRole(configuration.RolePlanner)
+	return providerModelSpec(provider, model)
 }
 
 // runSeamlessPlanning runs the seamless planning and execution loop

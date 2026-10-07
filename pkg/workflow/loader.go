@@ -149,7 +149,6 @@ func (c *AgentWorkflowConfig) Validate() error {
 			return errors.New("workflow requires at least one step or an initial prompt/prompt_file")
 		}
 	}
-
 	// Validate loop config
 	if c.Loop != nil {
 		c.Loop.TodoFile = strings.TrimSpace(c.Loop.TodoFile)
@@ -170,6 +169,32 @@ func (c *AgentWorkflowConfig) Validate() error {
 		}
 		if c.Loop.BuildCommand == "" {
 			c.Loop.BuildCommand = "go build ./..."
+		}
+	}
+
+	// Validate continuation config. A present block is intent to keep a
+	// coordinator session going; normalize its defaults here so the
+	// runtime reads non-zero values.
+	if c.Continuation != nil {
+		if !c.Continuation.IsEnabled() {
+			// Explicitly disabled — nothing to normalize or validate.
+			c.Continuation = nil
+		} else {
+			c.Continuation.TodoFile = strings.TrimSpace(c.Continuation.TodoFile)
+			c.Continuation.Prompt = strings.TrimSpace(c.Continuation.Prompt)
+			if c.Continuation.TodoFile == "" {
+				c.Continuation.TodoFile = DefaultContinuationTodoFile
+			}
+			if c.Continuation.MaxContinuations <= 0 {
+				c.Continuation.MaxContinuations = DefaultMaxContinuations
+			}
+			if c.Continuation.MaxIdleTurns <= 0 {
+				c.Continuation.MaxIdleTurns = DefaultMaxIdleTurns
+			}
+			hasInitialPrompt := c.Initial != nil && (c.Initial.Prompt != "" || c.Initial.PromptFile != "")
+			if !hasInitialPrompt {
+				return errors.New("continuation requires an initial prompt/prompt_file — it extends the initial coordinator turn")
+			}
 		}
 	}
 

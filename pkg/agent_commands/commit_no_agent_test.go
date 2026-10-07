@@ -50,3 +50,49 @@ func TestCommitCommand_YesWithoutAgentFails(t *testing.T) {
 		t.Errorf("expected no new commit, rev-list count = %s", out)
 	}
 }
+
+// TestCommitCommand_SkipPromptNoProviderFailsClear covers --skip-prompt with
+// no provider configured at all: no commit provider, no last-used provider,
+// and no chat agent. The command must return a clear error (the manual
+// message prompt is ruled out by --skip-prompt) and must not create a commit
+// — not an empty-message abort that reads as success.
+func TestCommitCommand_SkipPromptNoProviderFailsClear(t *testing.T) {
+	_, cleanup := configuration.NewTestManager(t)
+	defer cleanup()
+
+	repo := t.TempDir()
+	for _, args := range [][]string{
+		{"init", "-q"},
+		{"config", "user.email", "test@example.com"},
+		{"config", "user.name", "Test"},
+		{"commit", "-q", "--allow-empty", "-m", "initial"},
+	} {
+		if out, err := exec.Command("git", append([]string{"-C", repo}, args...)...).CombinedOutput(); err != nil { //nolint:gosec // G204: test-driven git invocations with controlled args
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(repo, "a.txt"), []byte("hello\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command("git", "-C", repo, "add", "a.txt").CombinedOutput(); err != nil { //nolint:gosec // G204: test-driven git invocations with controlled args
+		t.Fatalf("git add: %v\n%s", err, out)
+	}
+	t.Chdir(repo)
+
+	// Fresh config: neither commit_provider nor last_used_provider is set.
+	cmd := &CommitCommand{}
+	var err error
+	out := captureOutput(func() { err = cmd.Execute([]string{"--skip-prompt"}, nil) })
+	if err == nil {
+		t.Fatalf("Execute(--skip-prompt) with no provider configured must fail, got nil error")
+	}
+	if !strings.Contains(err.Error(), "no AI provider available") {
+		t.Errorf("want the clear no-provider error, got: %v", err)
+	}
+	if !strings.Contains(out, "Manual commit mode") {
+		t.Errorf("output should name the manual-mode fallback, got: %q", out)
+	}
+	if out, _ := exec.Command("git", "-C", repo, "rev-list", "--count", "HEAD").CombinedOutput(); strings.TrimSpace(string(out)) != "1" { //nolint:gosec // G204: test-driven git invocations with controlled args
+		t.Errorf("expected no new commit, rev-list count = %s", out)
+	}
+}

@@ -25,11 +25,12 @@ type settingDef struct {
 // getConfigValue/setConfigValue switches) is derived from this slice. Entry
 // order is preserved across the category files.
 var settingDefs = func() []settingDef {
-	defs := make([]settingDef, 0, len(settingDefsProvider)+len(settingDefsHistory)+len(settingDefsNotifications)+len(settingDefsShell))
+	defs := make([]settingDef, 0, len(settingDefsProvider)+len(settingDefsHistory)+len(settingDefsNotifications)+len(settingDefsShell)+len(settingDefsRoles))
 	defs = append(defs, settingDefsProvider...)
 	defs = append(defs, settingDefsHistory...)
 	defs = append(defs, settingDefsNotifications...)
 	defs = append(defs, settingDefsShell...)
+	defs = append(defs, settingDefsRoles...)
 	return defs
 }()
 

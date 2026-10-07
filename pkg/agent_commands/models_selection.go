@@ -9,12 +9,15 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
@@ -427,5 +430,52 @@ func (m *ModelsCommand) setModel(modelID string, chatAgent *agent.Agent) error {
 	// Publish model info event for UI
 	agent.PublishModel(finalModel)
 
+	return nil
+}
+
+// setRoleModel sets the model for a role:
+// `/model --role <role> <model_id>`. It read-modifies-writes the role's
+// stored selection through the config manager, preserving the role's
+// stored provider — only the model is set; the role's provider is changed
+// through `sprout config set role.<name>.provider`, so stamping the
+// conversation's current provider here would wrongly couple the two
+// selections. Unlike setModel, it does not switch the active conversation
+// model and does not publish a model event.
+//
+// The role name must be one of the built-in roles (configuration.BuiltInRoles);
+// unknown names are rejected with the valid set in the message so the user can
+// correct the typo. The config layer's SetRole still accepts arbitrary names
+// (it is the lower-level API), but this CLI entry point gates them: a role the
+// resolvers never read is a silent no-op waiting to happen.
+func (m *ModelsCommand) setRoleModel(role, modelID string, chatAgent *agent.Agent) error {
+	if strings.TrimSpace(role) == "" || strings.ContainsAny(role, " \t") {
+		return fmt.Errorf("invalid role %q: role must be a non-empty identifier without whitespace", role)
+	}
+	if modelID == "" {
+		return errors.New("usage: /model --role <role> <model_id>")
+	}
+	validRoles := configuration.BuiltInRoles()
+	if !slices.Contains(validRoles, role) {
+		return fmt.Errorf("unknown role %q: valid roles are %s", role, strings.Join(validRoles, ", "))
+	}
+
+	mgr := chatAgent.GetConfigManager()
+	if mgr == nil {
+		return errors.New("configuration manager not available")
+	}
+
+	// Read-modify-write: preserve the role's stored provider and only
+	// set the model.
+	rc := mgr.GetRole(role)
+	rc.Model = modelID
+	if err := mgr.SetRole(role, rc); err != nil {
+		return fmt.Errorf("failed to set model for role %s: %w", role, err)
+	}
+
+	if rc.Provider != "" {
+		m.printf("Role %q model set to: %s (provider: %s)\n", role, modelID, rc.Provider)
+	} else {
+		m.printf("Role %q model set to: %s\n", role, modelID)
+	}
 	return nil
 }

@@ -1,6 +1,6 @@
 # SP-156 — Deploy Targets and Ship Mode
 
-> **Status (2026-10-03):** Proposed.
+> **Status (2026-10-07):** Partially shipped — deploy interface, Cloudflare and fake adapters, `sprout deploy`, deploy tools, confirmation and verification gates ship; an end-to-end deploy of each reference starter remains (needs SP-153 starters and a Cloudflare account).
 > Depends on SP-147 (Design · Code · Ship stages), SP-153 (build output),
 > SP-149 (verification gate when enabled), SP-155 (mode registry).
 

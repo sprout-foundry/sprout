@@ -14,7 +14,7 @@ func TestDeriveUsageMetricsUsesProviderUsageWhenPresent(t *testing.T) {
 	resp.Usage.EstimatedCost = 0.001
 	resp.Usage.CachedTokens = 40
 
-	prompt, completion, total, cost, cached, _, estimated := deriveUsageMetrics(resp, nil, nil)
+	prompt, completion, total, cost, cached, _, actualCost, estimated := deriveUsageMetrics(resp, nil, nil)
 	if estimated {
 		t.Fatalf("expected non-estimated usage when provider metrics are present")
 	}
@@ -23,6 +23,9 @@ func TestDeriveUsageMetricsUsesProviderUsageWhenPresent(t *testing.T) {
 	}
 	if cost != 0.001 || cached != 40 {
 		t.Fatalf("unexpected cost/cached values: cost=%f cached=%d", cost, cached)
+	}
+	if actualCost != 0 {
+		t.Fatalf("expected zero actual cost when the provider reports none, got %f", actualCost)
 	}
 }
 
@@ -38,7 +41,7 @@ func TestDeriveUsageMetricsEstimatesWhenProviderUsageMissing(t *testing.T) {
 		{Role: "user", Content: "Write a short response."},
 	}
 
-	prompt, completion, total, _, _, _, estimated := deriveUsageMetrics(resp, messages, nil)
+	prompt, completion, total, _, _, _, _, estimated := deriveUsageMetrics(resp, messages, nil)
 	if !estimated {
 		t.Fatalf("expected estimated usage when provider metrics are missing")
 	}
@@ -76,7 +79,7 @@ func TestDeriveUsageMetricsUsesCentralizedEstimatorForToolCalls(t *testing.T) {
 	messages[0].ToolCalls[0].Function.Name = "calculator"
 	messages[0].ToolCalls[0].Function.Arguments = `{"value":1}`
 
-	prompt, _, _, _, _, _, estimated := deriveUsageMetrics(resp, messages, nil)
+	prompt, _, _, _, _, _, _, estimated := deriveUsageMetrics(resp, messages, nil)
 	if !estimated {
 		t.Fatalf("expected estimated usage when provider metrics are missing")
 	}

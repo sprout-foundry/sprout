@@ -5,6 +5,7 @@
  */
 
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { copy } from '../../config/copy';
 import { isCloud, supportsAutomations, supportsGit, supportsSettings } from '../../config/mode';
 import type { SectionTab } from '../../hooks/useSidebarState';
 import type { SproutInstance } from '../../services/api';
@@ -116,7 +117,7 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
     if (homeShown !== null && homeShown !== lastHomeShown.current) onCloseDrawer?.();
     lastHomeShown.current = homeShown;
   }, [homeShown, onCloseDrawer]);
-  const title = isCloud ? (repoSlug ?? 'No repository open') : basename(props.workspaceRoot);
+  const title = isCloud ? (repoSlug ?? copy('workspace.none')) : basename(props.workspaceRoot);
 
   const inCode = props.activeModeId !== 'design';
   const conversationInMain = inCode && !!props.conversations?.inMain;

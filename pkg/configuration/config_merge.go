@@ -79,6 +79,17 @@ func MergeConfig(base, override *Config) *Config {
 	if override.overrides("show_tool_invocations", override.ShowToolInvocations) {
 		result.ShowToolInvocations = override.ShowToolInvocations
 	}
+	// Language is a single-value selector — a non-empty override wins.
+	if override.Language != "" {
+		result.Language = override.Language
+	}
+	// The language guard is on by default; the opt-out is a
+	// boolean with the same explicit-key semantics as disable_thinking, so
+	// a layer that named disable_language_guard wins with either value —
+	// including false, which re-enables the guard over a broader disable.
+	if override.overrides("disable_language_guard", override.DisableLanguageGuard) {
+		result.DisableLanguageGuard = override.DisableLanguageGuard
+	}
 	if override.overrides("disable_thinking", override.DisableThinking) {
 		result.DisableThinking = override.DisableThinking
 	}
@@ -99,6 +110,28 @@ func MergeConfig(base, override *Config) *Config {
 		}
 		for k, v := range override.RiskProfiles {
 			result.RiskProfiles[k] = v
+		}
+	}
+	// Merge Roles with field-wise precedence. Unlike
+	// RiskProfiles (which replaces a named profile wholesale), a role
+	// named in both layers keeps every field the override left empty
+	// from the base layer — so a project-level roles.commit {model: …}
+	// keeps the global provider. Roles named in only one layer pass
+	// through. There is no unsetting: an override field set to empty
+	// cannot clear a base value, the same semantics as RiskProfiles.
+	if len(override.Roles) > 0 {
+		if result.Roles == nil {
+			result.Roles = make(map[string]RoleConfig, len(override.Roles))
+		}
+		for name, overrideRole := range override.Roles {
+			merged := result.Roles[name] // zero when the base layer lacks the role
+			if overrideRole.Provider != "" {
+				merged.Provider = overrideRole.Provider
+			}
+			if overrideRole.Model != "" {
+				merged.Model = overrideRole.Model
+			}
+			result.Roles[name] = merged
 		}
 	}
 	// ContextMode is a single-value selector — non-empty override wins.
@@ -278,6 +311,64 @@ func MergeConfig(base, override *Config) *Config {
 	}
 	if len(override.Training.ExcludePaths) > 0 {
 		result.Training.ExcludePaths = mergeStringSlices(result.Training.ExcludePaths, override.Training.ExcludePaths)
+	}
+
+	// Merge Verification configuration. The
+	// feature is off by default; the enable flag carries explicit-key
+	// semantics so a narrower layer can disable a broader layer's
+	// enable, the repair-attempt limit and the total repair-rounds cap
+	// follow the non-zero-wins convention of the other numeric caps, and
+	// the explicit build/test commands follow the non-empty-wins
+	// convention of the other string fields (a narrower layer's command
+	// beats a broader one; a silent layer keeps it).
+	if v := override.Verification; v != nil &&
+		(override.overrides("verification.enabled", v.Enabled) || v.RepairAttempts > 0 ||
+			v.TotalRepairRounds > 0 || v.BuildCommand != "" || v.TestCommand != "" ||
+			override.overrides("verification.require_test", v.RequireTest)) {
+		if result.Verification == nil {
+			result.Verification = &VerificationConfig{}
+		}
+		if override.overrides("verification.enabled", v.Enabled) {
+			result.Verification.Enabled = v.Enabled
+		}
+		if override.overrides("verification.require_test", v.RequireTest) {
+			result.Verification.RequireTest = v.RequireTest
+		}
+		if v.RepairAttempts > 0 {
+			result.Verification.RepairAttempts = v.RepairAttempts
+		}
+		if v.TotalRepairRounds > 0 {
+			result.Verification.TotalRepairRounds = v.TotalRepairRounds
+		}
+		if v.BuildCommand != "" {
+			result.Verification.BuildCommand = v.BuildCommand
+		}
+		if v.TestCommand != "" {
+			result.Verification.TestCommand = v.TestCommand
+		}
+	}
+
+	// Merge Quality configuration. The feature is off by default; the
+	// enable flag carries explicit-key semantics so a narrower layer can
+	// disable a broader layer's enable, and the explicit formatter/linter
+	// commands follow the non-empty-wins convention of the other string
+	// fields (a narrower layer's command beats a broader one; a silent
+	// layer keeps it).
+	if q := override.Quality; q != nil &&
+		(override.overrides("quality.enabled", q.Enabled) ||
+			q.FormatCommand != "" || q.LintCommand != "") {
+		if result.Quality == nil {
+			result.Quality = &QualityConfig{}
+		}
+		if override.overrides("quality.enabled", q.Enabled) {
+			result.Quality.Enabled = q.Enabled
+		}
+		if q.FormatCommand != "" {
+			result.Quality.FormatCommand = q.FormatCommand
+		}
+		if q.LintCommand != "" {
+			result.Quality.LintCommand = q.LintCommand
+		}
 	}
 
 	return result

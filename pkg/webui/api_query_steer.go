@@ -2,13 +2,15 @@
 
 package webui
 
-// api_query_steer.go — the webui query steer + steer-retract handlers:
-// handleAPIQuerySteer, handleAPIQuerySteerRetract, the safe steer-command
-// execution (executeSafeSteerCommand, executeSafeSteerCommandStreaming), and
-// the stream-pipe chunking helper (streamPipeChunks). Split out of
-// api_query.go.
+// api_query_steer.go — the webui query steer + steer-retract operations: the
+// buildAPIQuerySteer / buildAPIQuerySteerRetract backends and their Huma
+// handlers (POST /api/query/steer and /api/query/steer/retract), the safe
+// steer-command execution (executeSafeSteerCommand,
+// executeSafeSteerCommandStreaming), and the stream-pipe chunking helper
+// (streamPipeChunks). Split out of api_query.go.
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -22,24 +24,18 @@ import (
 	agent_commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
 )
 
-// handleAPIQuerySteer injects user input into the currently running query loop.
-func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
-		return
-	}
+// steerRequest is the request body for POST /api/query/steer. It mirrors the
+// QuerySteerRequest schema documented in docs/api/openapi.base.yaml.
+type steerRequest struct {
+	Query  string `json:"query"`
+	ChatID string `json:"chat_id"`
+}
 
-	r.Body = http.MaxBytesReader(w, r.Body, maxQueryBodyBytes)
-	var query struct {
-		Query  string `json:"query"`
-		ChatID string `json:"chat_id"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&query); err != nil {
-		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
-		return
-	}
-
+// buildAPIQuerySteer is the shared backend for POST /api/query/steer. It
+// injects user input into the currently running query loop (or executes a safe
+// slash command mid-turn), reusing the existing steer machinery, and writes the
+// response itself through w.
+func (ws *ReactWebServer) buildAPIQuerySteer(w http.ResponseWriter, r *http.Request, query steerRequest) {
 	query.Query = strings.TrimSpace(query.Query)
 	if query.Query == "" {
 		writeJSONErr(w, http.StatusBadRequest, "query_required", "Query is required")
@@ -176,31 +172,43 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 	writeJSON(w, http.StatusAccepted, resp)
 }
 
-// handleAPIQuerySteerRetract pulls back the newest staged-but-unpicked steer
-// message so the user can edit it (Up-arrow on empty input while processing).
-// On success returns 200 with the retracted text. When nothing is pending
-// returns 200 with success=false (not an error — the frontend treats it as
-// "nothing to pull back").
+// steerInput is the input for the Huma POST /api/query/steer operation.
+type steerInput struct {
+	humaRequestInput
+}
+
+// steerHumaHandler is the Huma handler for POST /api/query/steer. It parses
+// the body exactly as the plain handler did and writes the response through
+// in.Resp, so the migrated operation is byte-identical to the plain handler;
+// the body is a no-op callback.
+func (ws *ReactWebServer) steerHumaHandler(ctx context.Context, in *steerInput) (*writtenResponseOutput, error) {
+	w := in.Resp
+	r := in.Req
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxQueryBodyBytes)
+	var query steerRequest
+	if err := json.NewDecoder(r.Body).Decode(&query); err != nil {
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
+		return &writtenResponseOutput{Body: noopWrittenResponse}, nil
+	}
+
+	ws.buildAPIQuerySteer(w, r, query)
+	return &writtenResponseOutput{Body: noopWrittenResponse}, nil
+}
+
+// buildAPIQuerySteerRetract is the shared backend for POST
+// /api/query/steer/retract. It pulls back the newest staged-but-unpicked steer
+// message so the user can edit it (Up-arrow on empty input while processing),
+// or reports that nothing was pending. On success it writes 200 with the
+// retracted text; when nothing is pending it writes 200 with success=false (not
+// an error — the frontend treats it as "nothing to pull back"). The HTTP method
+// gate is enforced by the Huma operation (registerHumaOperations in routes.go).
 //
-// Note: if the steer was delivered to a SUBAGENT (rare fallback path in
-// handleAPIQuerySteer), RetractLatestSteer on the primary agent returns
-// false — the subagent's input channel is separate and not retractable.
-// This is acceptable; the steer is already in-flight.
-func (ws *ReactWebServer) handleAPIQuerySteerRetract(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
-		return
-	}
-
-	// The frontend sends chat_id in the body (see retractSteer in chatApi.ts);
-	// resolveChatID only reads the URL query param, so honor the body value
-	// first — otherwise retract targets the active chat instead of the chat
-	// that actually staged the steer.
-	var body struct {
-		ChatID string `json:"chat_id"`
-	}
-	_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, maxQueryBodyBytes)).Decode(&body)
-
+// Note: if the steer was delivered to a SUBAGENT (rare fallback path in the
+// steer handler), RetractLatestSteer on the primary agent returns false — the
+// subagent's input channel is separate and not retractable. This is acceptable;
+// the steer is already in-flight.
+func (ws *ReactWebServer) buildAPIQuerySteerRetract(w http.ResponseWriter, r *http.Request, body steerRetractRequest) {
 	clientID := ws.resolveClientID(r)
 	chatID := strings.TrimSpace(body.ChatID)
 	if chatID == "" {
@@ -230,6 +238,37 @@ func (ws *ReactWebServer) handleAPIQuerySteerRetract(w http.ResponseWriter, r *h
 		"success": true,
 		"message": message,
 	})
+}
+
+// steerRetractRequest is the request body for POST /api/query/steer/retract.
+// The frontend sends chat_id in the body (see retractSteer in chatApi.ts);
+// resolveChatID only reads the URL query param, so the body value is honored
+// first — otherwise retract would target the active chat instead of the chat
+// that actually staged the steer.
+type steerRetractRequest struct {
+	ChatID string `json:"chat_id"`
+}
+
+// steerRetractInput is the input for the Huma POST /api/query/steer/retract
+// operation.
+type steerRetractInput struct {
+	humaRequestInput
+}
+
+// steerRetractHumaHandler is the Huma handler for POST /api/query/steer/retract.
+// It parses the body (decoding through a size-capped reader, honoring the body's
+// chat_id first) and writes the response through in.Resp, so the migrated
+// operation is byte-identical to the plain handler it replaced; the body is a
+// no-op callback.
+func (ws *ReactWebServer) steerRetractHumaHandler(ctx context.Context, in *steerRetractInput) (*writtenResponseOutput, error) {
+	w := in.Resp
+	r := in.Req
+
+	var body steerRetractRequest
+	_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, maxQueryBodyBytes)).Decode(&body)
+
+	ws.buildAPIQuerySteerRetract(w, r, body)
+	return &writtenResponseOutput{Body: noopWrittenResponse}, nil
 }
 
 // executeSafeSteerCommand tries to execute a slash command mid-turn.

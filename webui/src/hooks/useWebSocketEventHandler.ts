@@ -46,6 +46,7 @@ import {
 } from './wsHandlers/session';
 import {
   handleQueryCompleted,
+  handleLanguageGuardReplacement,
   handleSteerDelivered,
   handleQueryProgress,
   handleQueryStarted,
@@ -190,6 +191,7 @@ export function useWebSocketEventHandler({
         'subagent_activity',
         'agent_message',
         'error',
+        'language_guard_replacement',
       ]);
       if (
         perChatEvents.has(event.type) &&
@@ -335,6 +337,8 @@ export function useWebSocketEventHandler({
           return handleInputRequired(ctx);
         case 'context_management_diagnostic':
           return handleContextManagementDiagnostic(ctx);
+        case 'language_guard_replacement':
+          return handleLanguageGuardReplacement(ctx);
         case 'chat_run_restored':
           return handleChatRunRestored(ctx);
         case 'session_terminated':

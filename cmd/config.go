@@ -116,6 +116,13 @@ func findFieldByJSONTag(v reflect.Value, tag string) (reflect.Value, bool) {
 	if v.Kind() == reflect.Ptr {
 		v = v.Elem()
 	}
+	if v.Kind() == reflect.Map {
+		// Map sections (roles, provider_models, …) navigate by key.
+		if key := v.MapIndex(reflect.ValueOf(tag)); key.IsValid() {
+			return key, true
+		}
+		return reflect.Value{}, false
+	}
 	if v.Kind() != reflect.Struct {
 		return reflect.Value{}, false
 	}

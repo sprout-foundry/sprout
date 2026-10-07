@@ -305,6 +305,79 @@ func (s *TerminalSubscriberState) HandleAgentMessageEvent(data map[string]interf
 	footer.Refresh()
 }
 
+// HandleProgressEvent renders the deterministic one-line summary of a
+// progress event in the scroll region: milestone, verification, and
+// completion events.
+//
+// progress_question events are deliberately NOT rendered: the CLI
+// already shows the interactive ask_user prompt for the same decision
+// (the ask_user_request / security-prompt path), so a second "Needs a
+// decision" line would be redundant. The question template still exists
+// for the web UI and webhooks — it just isn't
+// printed in the terminal.
+func (s *TerminalSubscriberState) HandleProgressEvent(evtType string, data map[string]interface{}, indicator *console.ActivityIndicator, footer *console.StatusFooter) {
+	// The story invariant: a progress_question's "Needs a decision" line is
+	// deliberately not rendered — the interactive ask_user prompt already
+	// shows the decision, so a second line would be redundant. Skip it
+	// before the summary so the optional summarizer is never consulted for
+	// an event the terminal does not print.
+	if evtType == events.EventTypeProgressQuestion {
+		return
+	}
+	summary := s.summarizeProgressEvent(evtType, data)
+	if summary == "" {
+		return
+	}
+	// Progress lines are informational; a completed run is a success
+	// when verified and needs attention when it wasn't.
+	glyph := console.GlyphInfo
+	if evtType == events.EventTypeProgressComplete {
+		if verified, _ := data["verified"].(bool); verified {
+			glyph = console.GlyphSuccess
+		} else {
+			glyph = console.GlyphWarning
+		}
+	}
+	// Same row-invalidation pattern as HandleAgentMessageEvent: stop
+	// the spinner, flush buffered prose, then print through
+	// console.PrintExternal — which takes outputMu internally, so do
+	// NOT wrap in console.LockOutput. The explicit trailing newline
+	// terminates the line on the bare fmt.Print fallback path (the
+	// reader paths detect it and do not double it).
+	indicator.Stop()
+	s.thinkingActive = false
+	s.flushExternalWrite()
+	console.PrintExternal(glyph.Prefix() + summary + "\n")
+	// The notice invalidates the collapse-run row math the next
+	// ToolEnd would use.
+	s.run = nil
+	footer.Refresh()
+}
+
+// HandleLanguageGuardReplacementEvent renders a language_guard_replacement
+// event: the guard repaired a reply that was already streamed, so the
+// terminal must show the corrected text in place of the prose it already
+// printed. The replacement lands on stdout as an external notice — the
+// streaming turn's prose is already on the screen above it, so a "replaced"
+// marker keeps the two texts distinguishable. A dim hint line follows,
+// pointing at /original — the held original text stays in the session and
+// the notice alone never carries it.
+func (s *TerminalSubscriberState) HandleLanguageGuardReplacementEvent(data map[string]interface{}, indicator *console.ActivityIndicator, footer *console.StatusFooter) {
+	replacement, _ := data["replacement"].(string)
+	if replacement == "" {
+		return
+	}
+	indicator.Stop()
+	s.thinkingActive = false
+	s.flushExternalWrite()
+	console.PrintExternal(console.WrapHanging(
+		console.GlyphInfo.Prefix(), replacement, console.StdoutColumns()))
+	console.PrintExternal(console.WrapHanging(
+		console.GlyphDim.Prefix(), "Original text available with /original.", console.StdoutColumns()))
+	s.run = nil
+	footer.Refresh()
+}
+
 // runEventLoop is the goroutine body for the terminal tool subscriber.
 // It selects on ctx cancellation and incoming events, dispatching each
 // event type to the corresponding handler method.
@@ -339,6 +412,13 @@ func (s *TerminalSubscriberState) runEventLoop(ctx context.Context, ch <-chan ev
 				s.HandleTodoUpdateEvent(data, indicator, footer)
 			case events.EventTypeAgentMessage:
 				s.HandleAgentMessageEvent(data, indicator, footer)
+			case events.EventTypeLanguageGuardReplacement:
+				s.HandleLanguageGuardReplacementEvent(data, indicator, footer)
+			case events.EventTypeProgressMilestone,
+				events.EventTypeProgressVerification,
+				events.EventTypeProgressComplete,
+				events.EventTypeProgressQuestion:
+				s.HandleProgressEvent(evt.Type, data, indicator, footer)
 			case events.EventTypeQueryCompleted:
 				s.HandleQueryCompletedEvent(data, indicator)
 			}

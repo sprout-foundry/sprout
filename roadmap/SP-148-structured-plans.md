@@ -1,6 +1,6 @@
 # SP-148 — Structured Plans
 
-> **Status (2026-10-03):** Proposed.
+> **Status (2026-10-07):** Shipped.
 > Consumed by SP-149 (verified done), SP-151 (progress events),
 > SP-153 (starters), SP-154 (agent benchmark).
 

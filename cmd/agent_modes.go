@@ -52,6 +52,15 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		isInteractive = false
 	}
 
+	// A workflow/automate run is driven by a config file, not a person at the
+	// keyboard. Even when it is launched from a terminal (so os.Stdin is a
+	// TTY), nobody answers the Caution approval prompt, so a run must never
+	// wait on it: Caution results follow the configured risk profile without
+	// prompting, while hard blocks still block. Marking the agent here makes
+	// every approval surface (Gate 1, the broker, the filesystem gate) treat
+	// the run as non-interactive regardless of the console's interactivity.
+	markWorkflowRun(chatAgent, workflowConfig)
+
 	// Determine if web UI should be enabled
 	// Web UI requires: interactive mode, daemon mode, not disabled, and not in CI/subagent
 	enableWebUI := (isInteractive || daemonMode) && !disableWebUI && !IsCI()
@@ -315,6 +324,20 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 
 		workflowState.HasError = workflowState.HasError || err != nil
 
+		// Coordinator continuation: an "initial" coordinator run has no
+		// steps and used to exit the moment its one turn answered, even
+		// with runnable `[ ]` items left. Keep issuing continuation turns
+		// until nothing runnable remains or a turn makes no progress, then
+		// record the stop reason on the run record. Loop mode is the other
+		// TODO driver; when it is configured, continuation defers to it.
+		if err == nil && workflowConfig != nil && workflowConfig.Continuation != nil && workflowConfig.Loop == nil {
+			contResult, contErr := workflow.RunInitialContinuation(ctx, chatAgent, eventBus, workflowConfig, workflowState, workflow.QueryExecutor(ProcessQuery))
+			recordContinuationStopReason(contResult)
+			if contErr != nil {
+				return contErr
+			}
+		}
+
 		// Loop mode: iterate over TODO items with stateless gate + context reset.
 		if workflowConfig != nil && workflowConfig.Loop != nil {
 			workflowYielded, workflowErr := workflow.RunAgentWorkflowLoop(ctx, chatAgent, eventBus, workflowConfig, workflowState, workflow.QueryExecutor(ProcessQuery), workflowOverrides)
@@ -326,6 +349,16 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 					return fmt.Errorf("%w (workflow loop failed: %w)", err, workflowErr)
 				}
 				return workflowErr
+			}
+			// A completed non-interactive run whose
+			// verification is enabled and fails exits non-zero. Yielded
+			// runs return above (workflow-loop continuation is a workflow
+			// decision, not the exit code's).
+			if vErr := verificationRunExitError(chatAgent); vErr != nil {
+				if outputFormatJSON {
+					emitJSONResult(query, directModeStart, vErr, chatAgent)
+				}
+				return vErr
 			}
 			if outputFormatJSON {
 				emitJSONResult(query, directModeStart, nil, chatAgent)
@@ -350,6 +383,17 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				emitJSONResult(query, directModeStart, err, chatAgent)
 			}
 			return fmt.Errorf("failed to run direct mode: %w", err)
+		}
+		// A completed non-interactive run whose
+		// verification is enabled and fails exits non-zero. The
+		// failure report is already in the final reply shown to the user;
+		// this error adds the exit code (1 via exitCodeFor) and, for
+		// --json, the status:"error" envelope scripts read.
+		if vErr := verificationRunExitError(chatAgent); vErr != nil {
+			if outputFormatJSON {
+				emitJSONResult(query, directModeStart, vErr, chatAgent)
+			}
+			return vErr
 		}
 		if outputFormatJSON {
 			emitJSONResult(query, directModeStart, nil, chatAgent)

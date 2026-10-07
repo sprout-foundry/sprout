@@ -291,6 +291,13 @@ func (a *Agent) ShouldGateEdit(path string) bool {
 // isNonInteractive reports whether the agent is running in a mode where
 // interactive prompts are suppressed or impossible.
 func (a *Agent) isNonInteractive() bool {
+	// A workflow/automate run has no human answering prompts even when
+	// launched from a TTY, so it is non-interactive for approval purposes.
+	// This is a hard property of the run, not a preference, so it takes
+	// precedence over the force-interactive override.
+	if a.workflowRun.Load() {
+		return true
+	}
 	if strings.TrimSpace(os.Getenv("SPROUT_FORCE_INTERACTIVE")) == "1" {
 		return false
 	}

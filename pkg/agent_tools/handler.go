@@ -198,6 +198,13 @@ type ToolFuncSet struct {
 	MCPRefresh           func(ctx context.Context, args map[string]any) (string, error)
 	RunAutomate          func(ctx context.Context, args map[string]any) (string, error)
 	CreatePullRequest    func(ctx context.Context, args map[string]any) (string, error)
+	// GenerateCommitMessage generates a Conventional Commit message from
+	// the full staged diff plus notes (context for the generated message).
+	// Set by pkg/agent (wireAgentToolFuncs); the production implementation
+	// reuses the sprout commit generator (pkg/git), so the tool and the
+	// CLI flow share one prompt and one LLM call. Nil in standalone runs —
+	// the commit handler then refuses to commit rather than guessing.
+	GenerateCommitMessage func(diff []byte, notes string) (string, error)
 	// TrackFileWrite records a full-file write (write_file, and the
 	// write-through path of write_structured_file) with the agent's
 	// ChangeTracker. originalContent is the file's pre-write state
@@ -221,6 +228,23 @@ type ToolFuncSet struct {
 	// tracker has a pre-command baseline to diff TrackShellCommand against.
 	// Nil when no tracker.
 	PrepareShellCommand func(command string)
+	// GuardStarterManifestWrite refuses a model write or edit of the
+	// project's starter manifest while verification is enabled: the
+	// manifest is the project's trusted source for the
+	// verification commands, so a mid-turn rewrite would change what
+	// "passing" means. Set by pkg/agent (wireAgentToolFuncs) to the agent's
+	// refuseStarterManifestWrite; nil in standalone runs, in which case the
+	// write/edit handlers skip the guard. The turn-start snapshot is the
+	// enforcement; this is the polite rail that refuses the write.
+	GuardStarterManifestWrite func(path string) error
+	// DeployVerification reports the agent's latest verification
+	// outcome: whether it passed, and whether a result exists at all
+	// (haveResult is false when verification has not produced a result for
+	// the current work). The deploy tool reads it to gate a deploy on a
+	// passing verification; when it is nil and verification is enabled, the
+	// tool fails closed and refuses. Set by pkg/agent (wireAgentToolFuncs);
+	// nil in standalone runs (verification disabled), where the gate is open.
+	DeployVerification func() (passed bool, haveResult bool)
 }
 
 // ResolveToolFuncs returns the tool func set to dispatch through. It prefers
@@ -235,16 +259,17 @@ func (e ToolEnv) ResolveToolFuncs() *ToolFuncSet {
 	ToolFuncMu.RLock()
 	defer ToolFuncMu.RUnlock()
 	return &ToolFuncSet{
-		RunSubagent:          RunSubagentFunc,
-		RunParallelSubagents: RunParallelSubagentsFunc,
-		RequestClarification: RequestClarificationFunc,
-		RespondClarification: RespondClarificationFunc,
-		ListChanges:          ListChangesFunc,
-		RecoverFile:          RecoverFileFunc,
-		RevertMyChanges:      RevertMyChangesFunc,
-		MCPRefresh:           MCPRefreshFunc,
-		RunAutomate:          RunAutomateFunc,
-		CreatePullRequest:    CreatePullRequestFunc,
+		RunSubagent:           RunSubagentFunc,
+		RunParallelSubagents:  RunParallelSubagentsFunc,
+		RequestClarification:  RequestClarificationFunc,
+		RespondClarification:  RespondClarificationFunc,
+		ListChanges:           ListChangesFunc,
+		RecoverFile:           RecoverFileFunc,
+		RevertMyChanges:       RevertMyChangesFunc,
+		MCPRefresh:            MCPRefreshFunc,
+		RunAutomate:           RunAutomateFunc,
+		CreatePullRequest:     CreatePullRequestFunc,
+		GenerateCommitMessage: GenerateCommitMessageFunc,
 		// Track* funcs are per-agent by design (the ChangeTracker lives on
 		// the Agent); the package-level fallback has no tracker, so leaving
 		// them nil here is correct — handlers skip tracking when nil.

@@ -224,7 +224,7 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 		// CLI approval path
 		agentConfig := agent.GetConfig()
 		logger := utils.GetLogger(agentConfig != nil && agentConfig.SkipPrompt)
-		canPrompt := logger != nil && logger.IsInteractive() && !isSubagent
+		canPrompt := logger != nil && logger.IsInteractive() && !isSubagent && !agent.IsWorkflowRun()
 
 		if canPrompt {
 			if name == "shell_command" {
@@ -247,12 +247,15 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 		}
 
 		// Non-interactive path: permissive-by-default (assumes container/sandbox).
-		// Only unconditional hard blocks (Critical) terminate the run.
+		// Only unconditional hard blocks (Critical) refuse the operation — this
+		// rejects the single command with a clear tool error the agent can act
+		// on; it does NOT end the run, so the agent can pick another approach
+		// and the next tool call still executes.
 		if secResult.IsHardBlock {
 			return wrapSecurityCautionWithLoop(agent, agenterrors.NewSecurityError(
-				fmt.Sprintf("fatal security block (non-interactive): %s — %s. "+
-					"This operation is unconditionally blocked and cannot be approved by any profile or flag. "+
-					"The run will exit.",
+				fmt.Sprintf("hard security block: %s — %s. "+
+					"This operation is unconditionally blocked and cannot be approved by any profile or flag; "+
+					"the command was rejected — choose a different approach.",
 					name, secResult.Reasoning), nil), name, args)
 		}
 

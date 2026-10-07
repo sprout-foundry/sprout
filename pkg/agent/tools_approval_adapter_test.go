@@ -431,3 +431,28 @@ func TestToolsApprovalAdapter_SkipPromptWithWebUIWaitsOnBus(t *testing.T) {
 		t.Errorf("expected bus timeout denial, got approved=%v reason=%q", result.Approved, result.Reason)
 	}
 }
+
+// A workflow/automate run never waits on any approval surface: with a web UI
+// attached and prompts off it still denies immediately (rather than blocking on
+// the dialog), and it never offers a CLI prompt.
+func TestToolsApprovalAdapter_WorkflowRunNeverWaits(t *testing.T) {
+	adapter, a := newSkipPromptAdapter(t)
+	adapter.approvalMgr.SetTimeout(time.Hour)
+	a.security.SetHasActiveWebUIClients(func() bool { return true })
+	a.SetWorkflowRun(true)
+
+	if adapter.preferWebUI() {
+		t.Error("a workflow run must not prefer the web UI approval dialog")
+	}
+	if adapter.cliAvailable() {
+		t.Error("a workflow run must not offer a CLI approval prompt")
+	}
+
+	result := requestWithin(t, adapter, 2*time.Second)
+	if result.Approved {
+		t.Error("expected denial; a workflow run must not block on approval")
+	}
+	if result.Reason != noApprovalSurfaceReason {
+		t.Errorf("expected Reason=%q, got %q", noApprovalSurfaceReason, result.Reason)
+	}
+}

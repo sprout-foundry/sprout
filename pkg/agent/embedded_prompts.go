@@ -189,6 +189,71 @@ func GetEmbeddedPlanningPrompt(createTodos bool) (string, error) {
 	// Timestamp removed from here to preserve prefix cache; it arrives in the user message instead.
 
 	// Add todo integration or not based on flag
+	return promptContent + buildTodoIntegration(createTodos), nil
+}
+
+// GetStructuredPlanningPrompt returns the planning prompt with the
+// structured-plan schema section appended after the base
+// prompt body and before the todo-integration suffix. The schema section
+// describes the .sprout/plan.json document the write_plan tool persists,
+// including the rule that every scope item needs at least one acceptance
+// item. It is advertised to the model only in structured planning mode
+// (`sprout plan --structured`); the base GetEmbeddedPlanningPrompt never
+// includes it.
+func GetStructuredPlanningPrompt(createTodos bool) (string, error) {
+	promptContent, err := extractPlanningPrompt()
+	if err != nil {
+		return "", agenterrors.NewPermanentError("failed to extract planning prompt", err)
+	}
+
+	schema, err := extractStructuredPlanSchemaSection()
+	if err != nil {
+		return "", err
+	}
+
+	return promptContent + schema + buildTodoIntegration(createTodos), nil
+}
+
+// structuredPlanSchemaStart and structuredPlanSchemaEnd delimit the
+// structured-plan schema section inside planning_prompt.md. The
+// section is written after the main prompt body's closing fence, so the
+// base extraction (extractPlanningPrompt, which ends at the first fenced
+// code block after the body's start marker) never sees it; only
+// GetStructuredPlanningPrompt includes it. The HTML-comment markers are
+// inert in markdown and cannot collide with the ``` fences the extractors
+// search for.
+const (
+	structuredPlanSchemaStart = "<!-- STRUCTURED_PLAN_SCHEMA -->"
+	structuredPlanSchemaEnd   = "<!-- /STRUCTURED_PLAN_SCHEMA -->"
+)
+
+// extractStructuredPlanSchemaSection extracts the structured-plan schema
+// section from the embedded planning prompt file. The
+// returned string is ready to append to the base prompt ("\n\n" prefix
+// included). A missing or empty section is a permanent error: structured
+// mode must not silently degrade to a prompt without the schema the
+// write_plan tool depends on.
+func extractStructuredPlanSchemaSection() (string, error) {
+	start := strings.Index(planningPromptContent, structuredPlanSchemaStart)
+	if start == -1 {
+		return "", agenterrors.NewPermanentError("critical error: structured plan schema start marker not found in embedded planning prompt", nil)
+	}
+	rest := planningPromptContent[start+len(structuredPlanSchemaStart):]
+	end := strings.Index(rest, structuredPlanSchemaEnd)
+	if end == -1 {
+		return "", agenterrors.NewPermanentError("critical error: structured plan schema end marker not found in embedded planning prompt", nil)
+	}
+	section := strings.TrimSpace(rest[:end])
+	if section == "" {
+		return "", agenterrors.NewPermanentError("critical error: structured plan schema section is empty", nil)
+	}
+	return "\n\n" + section, nil
+}
+
+// buildTodoIntegration renders the planning prompt's todo-integration
+// suffix. Shared by GetEmbeddedPlanningPrompt and GetStructuredPlanningPrompt
+// so both modes carry the identical suffix.
+func buildTodoIntegration(createTodos bool) string {
 	todoIntegration := `
 
 # Todo Integration
@@ -203,8 +268,7 @@ func GetEmbeddedPlanningPrompt(createTodos bool) (string, error) {
 		todoIntegration += `- Disabled (user is managing tasks separately)
 `
 	}
-
-	return promptContent + todoIntegration, nil
+	return todoIntegration
 }
 
 // extractPlanningPrompt extracts the prompt content from the planning_prompt markdown

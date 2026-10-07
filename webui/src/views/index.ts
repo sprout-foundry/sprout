@@ -108,3 +108,15 @@ export { PreviewPanel } from '../components/PreviewPanel';
 export type { PreviewPanelProps } from '../components/PreviewPanel';
 export { usePreviewStatus } from '../hooks/usePreviewStatus';
 export type { UsePreviewStatusReturn } from '../hooks/usePreviewStatus';
+
+// Copy keys (webui config — the embedding's wording seam).
+export {
+  copy,
+  formatCopy,
+  installCopy,
+  resetCopyForTests,
+  DEFAULT_COPY,
+  COPY_KEYS,
+  COPY_INSTALLED_EVENT,
+} from '../config/copy';
+export type { CopyKey, CopyOverrides } from '../config/copy';

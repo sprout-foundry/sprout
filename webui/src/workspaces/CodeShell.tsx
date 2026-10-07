@@ -20,6 +20,7 @@ import StatusBar from '../components/StatusBar';
 import Terminal from '../components/Terminal';
 import type { WorkspaceShellProps } from './shell';
 import { isLayeredLayout } from '../config/layout';
+import { copy } from '../config/copy';
 import { isCloud, supportsAgentChanges } from '../config/mode';
 import { useActiveRepoURL } from '../services/activeRepo';
 import { repoSlug } from '../utils/platformUrl';
@@ -74,7 +75,7 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
   // on the toolbar; tapping it opens the drawer.
   const activeRepoSlug = repoSlug(useActiveRepoURL());
   const projectTitle = isCloud
-    ? (activeRepoSlug ?? 'No repository open')
+    ? (activeRepoSlug ?? copy('workspace.none'))
     : (git.workspaceRoot?.split('/').filter(Boolean).pop() ?? '');
 
   return (

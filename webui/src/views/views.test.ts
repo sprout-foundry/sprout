@@ -19,10 +19,18 @@ import {
   ExampleEmbedding,
   ViewsLayout,
   usePreviewStatus,
+  copy,
+  formatCopy,
+  installCopy,
+  resetCopyForTests,
+  DEFAULT_COPY,
+  COPY_KEYS,
 } from './index';
 import type {
   AgentChangesPanelProps,
   ChatProps,
+  CopyKey,
+  CopyOverrides,
   EditorProps,
   FileTreeProps,
   PreviewPaneProps,
@@ -82,6 +90,26 @@ describe('views entry exports', () => {
     for (const kind of Object.keys(VIEWS_BY_KIND) as ViewKind[]) {
       expect(VIEWS_BY_KIND[kind]).toBeDefined();
     }
+  });
+
+  // ── Copy keys (the embedding's wording seam) ─────────────────────────
+
+  it('exports the copy registry API for the embedding to install wording', () => {
+    expect(typeof copy).toBe('function');
+    expect(typeof formatCopy).toBe('function');
+    expect(typeof installCopy).toBe('function');
+    expect(typeof resetCopyForTests).toBe('function');
+    expect(COPY_KEYS.length).toBeGreaterThan(0);
+    expect(copy('app.name')).toBe(DEFAULT_COPY['app.name']);
+  });
+
+  it('installs an override through the entry export, then resets', () => {
+    const overrides: CopyOverrides = { 'app.name': 'acme' };
+    const key: CopyKey = 'app.name';
+    installCopy(overrides);
+    expect(copy(key)).toBe('acme');
+    resetCopyForTests();
+    expect(copy(key)).toBe('sprout');
   });
 });
 

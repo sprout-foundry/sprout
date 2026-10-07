@@ -1,6 +1,7 @@
 import { FolderGit2 } from 'lucide-react';
 import { useState } from 'react';
 import type { FormEvent, ReactElement } from 'react';
+import { copy } from '../../config/copy';
 import { searchForRepo } from '../../services/homeView';
 import { parseRepoRef } from '../../services/workspaceFs/workspaceGit';
 import GitHubRepoPicker from '../GitHubRepoPicker';
@@ -37,10 +38,8 @@ export function OpenRepositoryPanel(): ReactElement {
       <div className="welcome-icon">
         <SproutLogo showWordmark={false} />
       </div>
-      <div className="welcome-text">Open a repository to get started</div>
-      <div className="welcome-hint">
-        The agent works on the repository you open. Public GitHub repositories work without connecting an account.
-      </div>
+      <div className="welcome-text">{copy('chat.openRepo')}</div>
+      <div className="welcome-hint">{copy('chat.openRepoHint')}</div>
       <form className="open-repo-form" onSubmit={submit}>
         <input
           className="open-repo-input"
@@ -56,7 +55,7 @@ export function OpenRepositoryPanel(): ReactElement {
         />
         <button type="submit" className="provider-setup-btn" disabled={!value.trim()} data-testid="open-repo-submit">
           <FolderGit2 size={14} />
-          Open
+          {copy('action.open')}
         </button>
       </form>
       {error && (
@@ -66,11 +65,11 @@ export function OpenRepositoryPanel(): ReactElement {
       )}
       <div className="open-repo-alternatives">
         <button type="button" className="open-repo-dashboard" onClick={() => setCreating(true)}>
-          Start a new project
+          {copy('action.newProject')}
         </button>
         <span aria-hidden="true">·</span>
         <button type="button" className="open-repo-dashboard" onClick={() => setPicking(true)}>
-          Choose from your repositories
+          {copy('action.chooseRepo')}
         </button>
       </div>
       {creating && <NewProjectDialog onClose={() => setCreating(false)} onCreated={openRepo} />}

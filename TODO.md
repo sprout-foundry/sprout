@@ -606,8 +606,15 @@ needed whatever the integration work does. Spec context: SP-160 §160e.
       embedding-supplied `ViewsArrangement` per slot onto the built-in
       composition (unknown kinds throw); `ExampleEmbedding` composes chat +
       preview from the views entry exports. Pinned by vitest.
-- [ ] **155.9** Move primary UI strings to copy keys with today's text as
+- [x] **155.9** Move primary UI strings to copy keys with today's text as
       defaults; visual regression shows no change. Spec: SP-155 §155d.
+      Fixed: a typed copy registry (`webui/src/config/copy.ts`) maps 39
+      primary chrome keys (product name, mode switcher, sidebar tabs,
+      home nav, welcome/empty states, primary actions) to today's exact
+      text, with an installable override seam and a safe fallback; the
+      migrated components resolve strings through it at render time. The
+      defaults are pinned literally in tests so a future edit cannot
+      silently change the UI. Pinned by vitest.
 
 ---
 

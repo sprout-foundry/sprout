@@ -51,7 +51,9 @@ all read the same pinned version.
 ## Mount
 
 ```tsx
-import { SproutWorkspace, SproutProviders } from "@sprout-foundry/workspace";
+import { SproutWorkspace } from "@sprout-foundry/workspace/views";
+import { SproutProviders } from "@sprout-foundry/workspace/providers";
+import type { SproutHost } from "@sprout-foundry/workspace";
 import { myHost } from "./myHost";
 
 export function ProjectSpace({
@@ -69,6 +71,22 @@ export function ProjectSpace({
 }
 ```
 
+The package exposes three entry points:
+
+- `.` — the **host contract** (`SproutHost` and the host types, the
+  provider and hooks, `localHost`). It is deliberately thin: importing it
+  pulls no view, editor or WASM code.
+- `./views` — the **composition API**: `SproutWorkspace` (mounts one
+  project's workspace), the registered spaces through the registry
+  (`WORKSPACE_MODES`, `availableModes`, `registerWorkspaceMode`,
+  `resolveWorkspaceMode`, `useWorkspaceMode`), the individual views
+  (`ChatView`, `AgentChangesPanel`, editor, files, preview, `ViewsLayout`),
+  the WASM asset seam, and `SproutProviders` (so a host that already
+  imports the views gets the wrapper from the same surface).
+- `./providers` — just `SproutProviders` and its props, for a host that
+  wraps the views it composes itself without importing the whole views
+  graph.
+
 `SproutProviders` sets up the provider stack the views need (optionally
 with an `eventsProvider` for the event transport); `SproutWorkspace` takes
 the host. `myHost` implements `SproutHost`: identity, entitlements, transport,
@@ -76,6 +94,13 @@ navigation intents, notifications, chrome slots, theme and capabilities.
 React and React DOM are peer dependencies; the host provides them. Heavy
 parts (the editor, the in-browser agent, space-specific code) load when a
 space opens, not when the package is imported.
+
+The `./views` and `./providers` subpaths each ship their own self-contained
+type declarations (`dist/views.d.ts`, `dist/providers.d.ts`), so importing
+`SproutWorkspace` or `SproutProviders` type-checks from `dist/` alone —
+no web UI source tree required. They reference only `react` as an external
+(the registry's mode icons and the editor's CodeMirror-typed props are
+inlined).
 
 ## Styles
 

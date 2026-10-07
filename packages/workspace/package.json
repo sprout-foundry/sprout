@@ -16,7 +16,9 @@
     "dist/index.js",
     "dist/index.d.ts",
     "dist/views.js",
+    "dist/views.d.ts",
     "dist/providers.js",
+    "dist/providers.d.ts",
     "dist/design.js",
     "dist/workspace.css",
     "dist/wasm/",
@@ -27,6 +29,14 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./views": {
+      "types": "./dist/views.d.ts",
+      "import": "./dist/views.js"
+    },
+    "./providers": {
+      "types": "./dist/providers.d.ts",
+      "import": "./dist/providers.js"
     },
     "./styles.css": "./dist/workspace.css",
     "./wasm/": "./dist/wasm/"

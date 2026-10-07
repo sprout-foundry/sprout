@@ -1245,3 +1245,41 @@ describe(
     });
   },
 );
+
+// ── Consumer smoke: the packed tarball in a real host app ──────────────
+
+describe(
+  "a host can consume the packed tarball",
+  { skip: !built && "packages/workspace/dist not built" },
+  () => {
+    test("packing, installing into a scratch Vite React 18 app, type-checking and building all pass with a single React copy", () => {
+      // The end-to-end proof a host actually consumes: `npm pack` the package,
+      // stand the tarball up as an installed dependency of a scratch
+      // TypeScript + Vite React 18 app outside the repo, and require
+      // `tsc --noEmit` and `vite build` to pass with the app bundling exactly
+      // one React copy. The heavy lifting lives in its own script (runnable on
+      // its own: `node --test docs/__tests__/workspace-consumer.test.mjs`) so
+      // the manifest of assertions here stays readable; this runs it and
+      // surfaces its output when it fails.
+      const consumerTest = path.join(
+        "docs/__tests__/workspace-consumer.test.mjs",
+      );
+      const result = spawnSync(process.execPath, ["--test", consumerTest], {
+        cwd: ROOT,
+        encoding: "utf-8",
+        maxBuffer: 64 * 1024 * 1024,
+        timeout: 300_000,
+      });
+      assert.equal(
+        result.status,
+        0,
+        `the packed package failed the consumer smoke test:\n${result.stdout}${result.stderr}`,
+      );
+      assert.match(
+        result.stdout,
+        /single React copy/,
+        "the consumer test ran its React-copy assertion",
+      );
+    });
+  },
+);

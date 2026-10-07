@@ -1,12 +1,16 @@
 // Package health implements the on-demand project health check behind
 // `sprout health`: it reports size and complexity signals for a project's
-// source tree and the project's failing build/test checks, and turns each
+// source tree, near-duplicate functions, dependencies with newer versions
+// available, and the project's failing build/test checks, and turns each
 // concern into a finding that carries a small, separately approvable fix.
 //
 // The package is pure data and stdlib: it walks the tree itself, reuses the
-// verification runner for the build/test checks, and never runs a model. A
-// caller (the CLI, or a scheduled job) can present the findings one at a
-// time and apply the ones a human approves; nothing here is auto-applied.
+// verification runner for the build/test checks, and never runs a model. The
+// duplication and dependency checks run behind injectable seams
+// (DuplicateFinder, DependencyChecker), so the command uses a live
+// implementation while tests inject fixture data with no network. A caller
+// (the CLI, or a scheduled job) can present the findings one at a time and
+// apply the ones a human approves; nothing here is auto-applied.
 package health
 
 import (
@@ -36,6 +40,10 @@ const (
 	KindComplexity FindingKind = "complexity"
 	// KindCheck is a project build/test check that failed or errored.
 	KindCheck FindingKind = "check"
+	// KindDuplication is a pair of near-identical code units.
+	KindDuplication FindingKind = "duplication"
+	// KindOutdatedDep is a dependency with a newer version available.
+	KindOutdatedDep FindingKind = "outdated-dependency"
 )
 
 // Fix is a small, separately approvable remediation. Applying it is a human

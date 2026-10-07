@@ -100,6 +100,9 @@ Rules:
 - The local web UI ships `localHost`: no account, local files, local
   backend, all local capabilities on.
 
+See `docs/integration/host-contract.md` for the interface field by field, the
+built-in hosts, and what each former `isCloud` branch became.
+
 ### 160c. Backend contract
 
 The API the spaces talk to, written down and versioned:

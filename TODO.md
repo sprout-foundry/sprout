@@ -100,7 +100,7 @@ checkboxes.
       navigation intent, and imports only the public entry points
       (`webui/src/views/index.ts` and `webui/src/host/index.ts`), enforced by
       the test. Spec: SP-160 Acceptance criteria 3.
-- [ ] **host.10** Documentation: `docs/integration/host-contract.md` — the
+- [x] **host.10** Documentation: `docs/integration/host-contract.md` — the
       interface field by field, `localHost`, how a host supplies entitlements,
       navigation intents, chrome slots, theme and capabilities, and a table
       of the former `isCloud` branches and what each became. Link it from

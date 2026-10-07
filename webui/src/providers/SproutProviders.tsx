@@ -1,14 +1,16 @@
 import { EventsContextProvider } from '@sprout/events';
 import type { EventsProvider } from '@sprout/events';
-import { useSyncExternalStore, type ReactNode } from 'react';
+import { useCallback, useSyncExternalStore, type ReactNode } from 'react';
 import { EditorManagerProvider } from '../contexts/EditorManagerContext';
 import { HotkeyProvider } from '../contexts/HotkeyContext';
-import { NotificationProvider } from '../contexts/NotificationContext';
+import { NotificationProvider, type NotificationSink } from '../contexts/NotificationContext';
 import { PlatformNavProvider } from '../contexts/PlatformNavContext';
 import { PluginContextProvider } from '../contexts/PluginContext';
 import { ProviderCatalogProvider } from '../contexts/ProviderCatalogContext';
 import { SproutAdapterProvider } from '../contexts/SproutAdapterContext';
 import { ThemeProvider } from '../contexts/ThemeContext';
+import { getActiveHost } from '../host/accessor';
+import { notificationBus } from '../services/notificationBus';
 
 /**
  * The provider stack a view needs, behind one wrapper.
@@ -43,6 +45,12 @@ export interface SproutProvidersProps {
   eventsProvider?: EventsProvider;
   /** The connection state the provider catalog fetches against. */
   isConnected?: boolean;
+  /**
+   * Overrides the notification sink. Omitted, the wrapper routes
+   * `addNotification` to the active host's sink (falling back to the in-app
+   * bus when no host is active).
+   */
+  sink?: NotificationSink;
   children: ReactNode;
 }
 
@@ -105,16 +113,44 @@ function useDefaultEventsProvider(): EventsProvider | null {
  * default transport is present nothing renders: a view must never mount
  * against a half-built stack.
  */
-export function SproutProviders({ eventsProvider, isConnected, children }: SproutProvidersProps): JSX.Element {
+export function SproutProviders({
+  eventsProvider,
+  isConnected,
+  sink: sinkProp,
+  children,
+}: SproutProvidersProps): JSX.Element {
   const defaultProvider = useDefaultEventsProvider();
   const events = eventsProvider ?? defaultProvider;
+
+  // Route notifications raised through `addNotification` to the active host's
+  // sink, so every notification reaches the host. The function is stable (it
+  // reads the host at call time, not at render time), so the provider's
+  // `addNotification` identity does not churn. When no host is active (pure
+  // service contexts, tests) it falls back to the in-app bus, and the local
+  // host's sink IS that bus, so local behavior is unchanged either way.
+  const defaultSink = useCallback<NotificationSink>((notification) => {
+    const host = getActiveHost();
+    if (host) {
+      host.notifications.post(notification);
+    } else {
+      notificationBus.notify(
+        notification.level,
+        notification.title,
+        notification.message,
+        notification.duration,
+        notification.action,
+      );
+    }
+  }, []);
+
+  const sink = sinkProp ?? defaultSink;
 
   if (!events) return <></>;
 
   const connected = isConnected ?? events.isConnected();
 
   return (
-    <NotificationProvider>
+    <NotificationProvider sink={sink}>
       <EventsContextProvider provider={events}>
         <SproutAdapterProvider>
           <PlatformNavProvider>

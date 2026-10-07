@@ -155,7 +155,7 @@ standalone local build keeps embedding into `pkg/webui/static`.
       so `cloudHost`, `platformHref`, `listPlatformRepos`,
       `PlatformGitHubAccountCard` and `platformEntitlements` are not part of
       the package's public API. Spec: SP-160 §160b (Rules).
-- [ ] **host.13** All notifications reach the host: only
+- [x] **host.13** All notifications reach the host: only
       `notificationBus.notify` forwards to `host.notifications`; the ~61
       `useNotifications().addNotification(...)` call sites go straight to
       `@sprout/ui`'s reducer. Route `addNotification` through the active

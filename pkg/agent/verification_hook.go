@@ -17,6 +17,7 @@ import (
 
 	core "github.com/sprout-foundry/seed/core"
 
+	"github.com/sprout-foundry/sprout/pkg/history"
 	"github.com/sprout-foundry/sprout/pkg/plancontract"
 	"github.com/sprout-foundry/sprout/pkg/verify"
 )
@@ -156,6 +157,13 @@ func (a *Agent) runTurnEndVerification(qc *queryRunContext, finalResult string) 
 		})
 		if !res.Failed() {
 			// Passing, or all-skipped where nothing failed — both stand.
+			// A result that Passed() captures a checkpoint of the state the
+			// turn left behind: the checkpoint ties a known-good project
+			// state to the revision that produced it. A vacuous run (all
+			// checks skipped) is not a pass, so it records nothing.
+			if res.Passed() {
+				a.CaptureVerificationCheckpoint(res)
+			}
 			return finalResult, nil
 		}
 		if verificationLoopShouldStop(res, attempts, limit, rounds, totalCap) {
@@ -318,6 +326,58 @@ func indentVerificationExcerpt(excerpt string) string {
 		b.WriteString("  " + line + "\n")
 	}
 	return b.String()
+}
+
+// captureCheckpoint is the checkpoint seam the turn-end verification hook
+// calls when a verification run passes. It is a package-level variable so a
+// test can observe the capture without constructing a workspace; production
+// uses captureCheckpointForWorkspace. revisionID is the revision the turn
+// left behind — the state the checkpoint must identify — so the capture does
+// not have to guess it from the process history store.
+var captureCheckpoint func(workspace, revisionID string, res *verify.Result) error
+
+// CaptureVerificationCheckpoint creates a checkpoint of the project's
+// current state after the agent's verification run passed. It is the seam
+// the automatic trigger goes through: the turn-end hook calls it on a
+// passing run (res.Passed()), so a passing verification leaves a restorable
+// marker on the timeline.
+//
+// The checkpoint captures the agent's current revision (the change set the
+// turn produced), not whichever revision happens to be most recent in the
+// process history store: the marker must identify the state verification
+// passed on.
+//
+// It is a no-op for a nil or non-passing result. A capture failure is logged
+// and swallowed: the checkpoint is a convenience over a run that already
+// passed, and a store failure must never turn a good turn into an error.
+func (a *Agent) CaptureVerificationCheckpoint(res *verify.Result) {
+	if res == nil || !res.Passed() {
+		return
+	}
+	workspace := a.currentWorkspaceRoot()
+	capture := captureCheckpoint
+	if capture == nil {
+		capture = captureCheckpointForWorkspace
+	}
+	if err := capture(workspace, a.GetRevisionID(), res); err != nil && a.Logger() != nil {
+		// Warn, not Debug: the turn passed, but no restorable marker was
+		// recorded — a silently lost checkpoint is worth surfacing even
+		// though it never gates the turn.
+		a.Logger().Warn("verification checkpoint capture failed: %v", err)
+	}
+}
+
+// captureCheckpointForWorkspace is the production checkpoint capture: it
+// stores a verification checkpoint under the workspace's
+// .sprout/checkpoints/ directory, capturing revisionID — the revision the
+// turn produced — so the marker identifies the state verification passed on.
+func captureCheckpointForWorkspace(workspace, revisionID string, res *verify.Result) error {
+	summary := "verification passed"
+	if res != nil {
+		summary = "verification passed: " + res.Summary()
+	}
+	_, err := history.CreateCheckpointForRevision(workspace, history.CheckpointVerification, revisionID, summary, nil)
+	return err
 }
 
 // LastVerificationResult returns the last turn-end verification result

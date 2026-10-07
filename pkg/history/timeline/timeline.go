@@ -1,12 +1,12 @@
 // Package timeline builds a project timeline from the recorded history.
 //
-// A timeline is an ordered list of entries. Each entry is either a change
-// set — a history revision (the changes sharing one RequestHash, i.e. a
+// A timeline is an ordered list of entries. Each entry is a change set — a
+// history revision (the changes sharing one RequestHash, i.e. a
 // history.RevisionGroup) rendered with a short deterministic template
-// summary — a history revision (the changes sharing one RequestHash, i.e. a
-// history.RevisionGroup) rendered with a short deterministic template
-// summary and the plan scope IDs it pertains to — or a deploy recorded by
-// the deploy package.
+// summary and the plan scope IDs it pertains to — a checkpoint recorded by
+// pkg/history, or a deploy recorded by the deploy package. A checkpoint
+// entry that records a restore is how a restore itself shows up on the
+// timeline.
 //
 // The package is a sub-interface of pkg/history rather than part of it
 // because a timeline is defined by joining two domain models: pkg/history
@@ -27,7 +27,8 @@ import (
 )
 
 // Kind identifies what a timeline entry records. The set is closed: an
-// entry is a change set (a history revision) or a deploy.
+// entry is a change set (a history revision), a checkpoint (a recorded
+// project state), or a deploy.
 type Kind string
 
 const (
@@ -36,6 +37,10 @@ const (
 	KindChangeSet Kind = "change_set"
 	// KindDeploy is a deploy recorded by a deploy target.
 	KindDeploy Kind = "deploy"
+	// KindCheckpoint is a checkpoint recorded by pkg/history: a restorable
+	// marker of a project state, including the checkpoint a restore itself
+	// records.
+	KindCheckpoint Kind = "checkpoint"
 )
 
 // Order fixes the direction a timeline is sorted in.
@@ -81,8 +86,19 @@ type Deploy struct {
 	Summary string
 }
 
-// Entry is one item on the timeline: exactly one of ChangeSet or Deploy is
-// non-nil, as reported by Kind().
+// Checkpoint is a timeline entry for a checkpoint. It carries the history
+// package's Checkpoint value rather than a copy of its fields, so the
+// timeline never reimplements the checkpoint model.
+type Checkpoint struct {
+	// Checkpoint is the recorded checkpoint.
+	Checkpoint history.Checkpoint
+	// Summary is the short deterministic template summary of the
+	// checkpoint (see SummarizeCheckpoint).
+	Summary string
+}
+
+// Entry is one item on the timeline: exactly one of ChangeSet, Deploy, or
+// Checkpoint is non-nil, as reported by Kind().
 type Entry struct {
 	// Timestamp is the entry's ordering key.
 	Timestamp time.Time
@@ -90,19 +106,31 @@ type Entry struct {
 	ChangeSet *ChangeSet
 	// Deploy is set when the entry is a deploy (KindDeploy).
 	Deploy *Deploy
+	// Checkpoint is set when the entry is a checkpoint (KindCheckpoint).
+	Checkpoint *Checkpoint
 }
 
 // Kind reports the entry's kind. It returns "" for a malformed entry that
-// carries neither or both payloads.
+// carries anything other than exactly one payload.
 func (e Entry) Kind() Kind {
-	switch {
-	case e.ChangeSet != nil && e.Deploy == nil:
-		return KindChangeSet
-	case e.Deploy != nil && e.ChangeSet == nil:
-		return KindDeploy
-	default:
+	count := 0
+	kind := Kind("")
+	if e.ChangeSet != nil {
+		count++
+		kind = KindChangeSet
+	}
+	if e.Deploy != nil {
+		count++
+		kind = KindDeploy
+	}
+	if e.Checkpoint != nil {
+		count++
+		kind = KindCheckpoint
+	}
+	if count != 1 {
 		return ""
 	}
+	return kind
 }
 
 // Summary returns the entry's template summary, or "" for a malformed
@@ -113,13 +141,16 @@ func (e Entry) Summary() string {
 		return e.ChangeSet.Summary
 	case KindDeploy:
 		return e.Deploy.Summary
+	case KindCheckpoint:
+		return e.Checkpoint.Summary
 	default:
 		return ""
 	}
 }
 
-// ScopeIDs returns the change set's plan scope IDs, or nil for a deploy or
-// malformed entry.
+// ScopeIDs returns the change set's plan scope IDs, or nil for a deploy,
+// checkpoint, or malformed entry. A checkpoint's scope IDs live on the
+// checkpoint itself (Entry.Checkpoint.Checkpoint.ScopeIDs).
 func (e Entry) ScopeIDs() []string {
 	if e.ChangeSet == nil {
 		return nil
@@ -127,14 +158,16 @@ func (e Entry) ScopeIDs() []string {
 	return e.ChangeSet.ScopeIDs
 }
 
-// EntryInput is one entry passed to Build. Exactly one of Revision or
-// Deployment must be set. ScopeIDs is optional and applies only to a
-// Revision input.
+// EntryInput is one entry passed to Build. Exactly one of Revision,
+// Deployment, or Checkpoint must be set. ScopeIDs is optional and applies
+// only to a Revision input.
 type EntryInput struct {
 	// Revision is a history revision to render as a change set.
 	Revision *history.RevisionGroup
 	// Deployment is a deploy to render as a deploy entry.
 	Deployment *deploy.Deployment
+	// Checkpoint is a checkpoint to render as a checkpoint entry.
+	Checkpoint *history.Checkpoint
 	// ScopeIDs are the plan scope IDs the revision pertains to.
 	ScopeIDs []string
 }
@@ -147,9 +180,10 @@ type EntryInput struct {
 // matching EntryInput; the builder itself never reads a plan store.
 //
 // Timestamps are the ordering key. Ties are broken by a stable identity
-// (revision ID for change sets, deployment ID for deploys), so the result
-// is deterministic even when two entries share a timestamp; a change set
-// sorts before a deploy at the same timestamp.
+// (revision ID for change sets, deployment ID for deploys, checkpoint ID
+// for checkpoints), so the result is deterministic even when two entries
+// share a timestamp; at an equal timestamp a change set sorts before a
+// checkpoint, which sorts before a deploy.
 func Build(inputs []EntryInput, order Order) []Entry {
 	if order != NewestFirst {
 		order = OldestFirst
@@ -170,6 +204,14 @@ func Build(inputs []EntryInput, order Order) []Entry {
 				Timestamp: d.CreatedAt,
 				Deploy:    &Deploy{Deployment: d, Summary: SummarizeDeploy(d)},
 			})
+			continue
+		}
+		if in.Checkpoint != nil {
+			cp := *in.Checkpoint
+			entries = append(entries, Entry{
+				Timestamp:  cp.Timestamp,
+				Checkpoint: &Checkpoint{Checkpoint: cp, Summary: SummarizeCheckpoint(cp)},
+			})
 		}
 	}
 
@@ -177,21 +219,42 @@ func Build(inputs []EntryInput, order Order) []Entry {
 	return entries
 }
 
-// BuildTimeline reads the recorded history, renders each revision as a
-// change set (with the given scope IDs, keyed by revision ID) and appends
-// the given deploys, returning the timeline in the requested order.
+// BuildTimeline reads the recorded history and checkpoints, renders each
+// revision as a change set (with the given scope IDs, keyed by revision ID),
+// appends the given deploys and every stored checkpoint, and returns the
+// timeline in the requested order. It reads the process-wide checkpoint
+// store; use BuildTimelineInWorkspace to read a specific workspace's
+// checkpoints (the store the automatic capture seams write to).
 //
 // scopeIDsByRevision is optional: a nil map (or a missing revision) yields
 // a change set with no scope IDs. The caller supplies the association; the
 // timeline builder takes the active plan's mapping as input rather than
 // reading a plan store, which keeps this package independent of the agent.
+//
+// Checkpoints are read from pkg/history's checkpoint store, so a restore
+// (itself a recorded checkpoint) appears on the timeline without extra
+// wiring.
 func BuildTimeline(deployments []deploy.Deployment, scopeIDsByRevision map[string][]string, order Order) ([]Entry, error) {
+	return BuildTimelineInWorkspace("", deployments, scopeIDsByRevision, order)
+}
+
+// BuildTimelineInWorkspace is BuildTimeline scoped to a workspace's
+// checkpoint store: it reads <workspace>/.sprout/checkpoints/ (the same
+// store CreateCheckpointInWorkspace writes), so the checkpoints the
+// verification and deploy seams capture for a workspace appear on that
+// workspace's timeline. An empty workspace reads the process-wide store.
+func BuildTimelineInWorkspace(workspace string, deployments []deploy.Deployment, scopeIDsByRevision map[string][]string, order Order) ([]Entry, error) {
 	groups, err := history.GetRevisionGroups()
 	if err != nil {
 		return nil, fmt.Errorf("reading revision groups: %w", err)
 	}
 
-	inputs := make([]EntryInput, 0, len(groups)+len(deployments))
+	checkpoints, err := history.ListCheckpointsInWorkspace(workspace, false)
+	if err != nil {
+		return nil, fmt.Errorf("reading checkpoints: %w", err)
+	}
+
+	inputs := make([]EntryInput, 0, len(groups)+len(deployments)+len(checkpoints))
 	for i := range groups {
 		g := groups[i]
 		var scopeIDs []string
@@ -203,6 +266,10 @@ func BuildTimeline(deployments []deploy.Deployment, scopeIDsByRevision map[strin
 	for i := range deployments {
 		d := deployments[i]
 		inputs = append(inputs, EntryInput{Deployment: &d})
+	}
+	for i := range checkpoints {
+		cp := checkpoints[i]
+		inputs = append(inputs, EntryInput{Checkpoint: &cp})
 	}
 
 	return Build(inputs, order), nil
@@ -219,12 +286,26 @@ func sortEntries(entries []Entry, order Order) {
 		}
 		ka, kb := a.Kind(), b.Kind()
 		if ka != kb {
-			// Change sets sort before deploys at an equal timestamp.
-			return ka == KindChangeSet
+			return kindRank(ka) < kindRank(kb)
 		}
 		return tieBreak(a) < tieBreak(b)
 	}
 	sort.SliceStable(entries, less)
+}
+
+// kindRank orders the kinds at an equal timestamp: a change set first, then
+// a checkpoint, then a deploy.
+func kindRank(k Kind) int {
+	switch k {
+	case KindChangeSet:
+		return 0
+	case KindCheckpoint:
+		return 1
+	case KindDeploy:
+		return 2
+	default:
+		return 3
+	}
 }
 
 func tieBreak(e Entry) string {
@@ -233,6 +314,8 @@ func tieBreak(e Entry) string {
 		return e.ChangeSet.RevisionID
 	case KindDeploy:
 		return e.Deploy.Deployment.ID
+	case KindCheckpoint:
+		return e.Checkpoint.Checkpoint.ID
 	default:
 		return ""
 	}

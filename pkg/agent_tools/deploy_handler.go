@@ -38,6 +38,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/deploy"
 	"github.com/sprout-foundry/sprout/pkg/deployconfig"
 	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/history"
 	"github.com/sprout-foundry/sprout/pkg/starterstore"
 )
 
@@ -415,6 +416,19 @@ func (h *deployHandler) Execute(ctx context.Context, env ToolEnv, args map[strin
 	}
 
 	emitDeployProgress(env, kind, "success", fmt.Sprintf("%s deployed to %s", d.ID, d.URL))
+
+	// A completed deploy leaves a checkpoint of the state that shipped, so
+	// the timeline carries a marker for what was deployed and, when the
+	// history store holds the revision, a restorable one. The checkpoint
+	// records the revision current in the process history store — for the
+	// agent that is the workspace's revision, i.e. the tree the deploy
+	// built — rather than d.Version, which is the opaque starter/plan
+	// version and not a history revision a restore could act on. A capture
+	// failure never changes the deploy result: the deploy succeeded, and
+	// the checkpoint is a convenience over it.
+	_, _ = history.CreateCheckpointInWorkspace(subject.root, history.CheckpointDeploy,
+		fmt.Sprintf("deployed %s %s", d.Kind, d.ID), nil)
+
 	return ToolResult{Output: fmt.Sprintf("Deployed %s %s to %s", d.Kind, d.ID, d.URL)}, nil
 }
 

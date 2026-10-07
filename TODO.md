@@ -692,9 +692,17 @@ needed whatever the integration work does. Spec context: SP-160 §160e.
       stable tie-break. A subpackage (not the history package itself) so
       the history data layer stays free of the deploy/plancontract
       dependencies. Pinned by Go tests over a seeded temp history.
-- [ ] **157.2** Checkpoints: created automatically on passing verification
+- [x] **157.2** Checkpoints: created automatically on passing verification
       and on deploy, and on demand; restoring is one action and is itself
       a timeline entry. Tests. Spec: SP-157 §157a.
+      Fixed: `pkg/history` gains a checkpoint store (create/list/get/restore,
+      workspace-scoped) that reuses the revision revert for restore and
+      records the restore as a checkpoint; the timeline gains a checkpoint
+      entry kind. Automatic capture is wired at the passing-verification
+      seam (the turn's revision) and the completed-deploy seam, and the
+      on-demand `checkpoint` agent tool lists/creates/restores. Pinned by
+      Go tests (including that capture uses the given revision, not the
+      store head, and that reads never create the store).
 - [ ] **157.3** Timeline UI with restore action in the changes surface
       (the SP-145 Changes surface if it has landed, otherwise the current
       Changes panel); file-level views remain. Vitest. Spec: SP-157 §157a.

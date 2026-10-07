@@ -44,6 +44,10 @@ interface BootstrapResponse {
   sync?: GitSyncReport | null;
   /** Newer release available, from the daemon's cached release check. */
   update?: RuntimeConfig['update'];
+  /** API contract version (OpenAPI info.version in docs/api), reported by the
+   * daemon for version negotiation (see src/config/contractCompat.tsx).
+   * Absent on daemons older than the field — treated as compatible. */
+  contractVersion?: string;
 }
 
 // Fallback platform nav items when the platform did not serve navItems
@@ -236,6 +240,9 @@ async function resolveRuntimeConfig(): Promise<RuntimeConfig> {
         // SP-016 P0.3: absolute platform base for account-surface exits.
         // An empty string means "the host doesn't know" → treat as absent.
         platformURL: data.platformURL || undefined,
+        // Version negotiation: the daemon's reported contract version, checked
+        // against this build's pin before the app renders (contractCompat).
+        contractVersion: data.contractVersion,
       };
       lastConfig = config;
       currentUserIdentity = config.user;

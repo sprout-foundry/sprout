@@ -7,6 +7,7 @@ import * as JSXRuntime from 'react/jsx-runtime';
 import * as ReactDOMClient from 'react-dom/client';
 import './index.css';
 import App from './App';
+import { checkContractCompat, ContractRefusal } from './config/contractCompat';
 import { applyShellAttribute, isStudioShellSync, resolveShellIdentity } from './config/shell';
 import { resolveClientIdentity } from './services/clientSession';
 
@@ -62,5 +63,25 @@ function insideAnotherEditor(): boolean {
   }
   await resolveClientIdentity();
   const root = ReactDOMClient.createRoot(document.getElementById('root') as HTMLElement);
+
+  // Version negotiation (SP-160 §160c): before the editor renders, check the
+  // daemon's reported API contract version against this build's pin. A
+  // different MAJOR version cannot be run against safely — render the
+  // blocking refusal screen instead of the app. A newer MINOR version is
+  // forward-compatible: start, and log a warning. The bootstrap is awaited
+  // through fetchRuntimeConfig (memoized, so this does not re-fetch when the
+  // auth gate awaits it again).
+  const { fetchRuntimeConfig } = await import('./bootstrapAdapter');
+  const config = await fetchRuntimeConfig();
+  const compat = checkContractCompat(config.contractVersion);
+  if (!compat.ok) {
+    root.render(<ContractRefusal message={compat.message ?? 'Unknown contract version.'} />);
+    return;
+  }
+  if (compat.warning) {
+    // eslint-disable-next-line no-console
+    console.warn(`[sprout] ${compat.warning}`);
+  }
+
   root.render(<App />);
 })();

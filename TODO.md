@@ -91,7 +91,7 @@ checkboxes.
       deliberately internal routes, each with a reason; the route-coverage
       test (contract.2) checks that every registered route is a Huma
       operation or on that list. Spec: SP-160 §160c.
-- [ ] **contract.13** Event schema: `docs/api/events.schema.json` (JSON
+- [x] **contract.13** Event schema: `docs/api/events.schema.json` (JSON
       Schema) generated from the `@sprout/events` types
       (`packages/events/src/types.ts`) by a script in `packages/events`; a Go
       test marshals representative Go event payloads and validates them

@@ -110,7 +110,7 @@ func (a *Agent) ImportState(data []byte) error {
 	a.state.SetTokenCostTotal(state.TokenCostTotal)
 	a.state.SetSubscriptionTokens(state.SubscriptionTokens)
 	a.state.SetFreeTokens(state.FreeTokens)
-	// Restore the per-role totals (SP-150 §150c, item 150.5) so they keep
+	// Restore the per-role totals so they keep
 	// summing to the restored overall totals; markUsageBooked below then
 	// marks the restored per-role totals as already booked.
 	a.state.SetRoleUsage(state.RoleUsage)
@@ -420,7 +420,7 @@ func (a *Agent) RotateSession() (string, error) {
 	}
 
 	// The new run has a new run id (session id): the prior run's
-	// started/finished plan-scope state (SP-151 §151a) must not leak in —
+	// started/finished plan-scope state must not leak in —
 	// it would emit a "finished" milestone for a scope that merely looks
 	// terminal in the new run.
 	if a.scopeMilestones != nil {

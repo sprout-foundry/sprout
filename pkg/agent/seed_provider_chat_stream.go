@@ -109,7 +109,7 @@ func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest,
 	}
 
 	// Route through OutputRouter.RouteStreamChunk for both WebUI and seed handler.
-	// SP-152 §152c: when the streaming hold-back is active for this turn, gate
+	// When the streaming hold-back is active for this turn, gate
 	// assistant-text delivery through it. Reasoning chunks are never gated.
 	// When inactive the assistant-text path below is byte-for-byte unchanged.
 	userLang, holdbackActive := sp.agent.turnUserLanguageGuard()
@@ -147,9 +147,9 @@ func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest,
 		handler.OnError(err)
 		return err
 	}
-	// SP-152 §152c: finalize the hold-back for this streamed response —
+	// Finalize the hold-back for this streamed response —
 	// release a below-threshold stream, and (when held) regenerate the reply
-	// and deliver the corrected text (or the §152b notice) instead of the
+	// and deliver the corrected text (or the language notice) instead of the
 	// wrong-language stream.
 	if holdback != nil {
 		sp.finalizeStreamHoldback(ctx, holdback, resp)
@@ -178,7 +178,7 @@ func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages
 				return nil, ctx.Err()
 			}
 		}
-		// SP-152 §152c: each attempt is a separate streamed response — start
+		// Each attempt is a separate streamed response — start
 		// its hold-back fresh (discard the previous attempt's buffered/held
 		// content) so a failed or wrong-language attempt never leaks into the
 		// next one.

@@ -10,7 +10,7 @@ import (
 )
 
 // TestSetSettingValue_RoleModel verifies the `sprout config set` role
-// model path (SP-150 item 150.6): the def writes the stored role entry
+// model path: the def writes the stored role entry
 // and preserves the role's stored provider (read-modify-write).
 func TestSetSettingValue_RoleModel(t *testing.T) {
 	cfg := &configuration.Config{}

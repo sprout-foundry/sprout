@@ -1,6 +1,6 @@
 //go:build !js
 
-// stack_skill_activation_test.go — SP-153 §153c acceptance tests for
+// stack_skill_activation_test.go — acceptance tests for
 // stack-skill auto-activation: when .sprout/starter.json names a starter,
 // that starter's skill under pkg/skills/library/<starter>/ activates
 // automatically at the start of a turn; when there is no manifest, or the
@@ -34,8 +34,8 @@ import (
 // Fixtures
 // ---------------------------------------------------------------------------
 
-// ssFixtureManifestJSON is a minimal valid starter manifest (SP-153 §153a:
-// only the starter identity is required). The starter ID "fixture" matches
+// ssFixtureManifestJSON is a minimal valid starter manifest (only
+// the starter identity is required). The starter ID "fixture" matches
 // the fixture stack skill under pkg/skills/library/fixture/ — the skill the
 // embedded library seeds into every config's registry.
 const ssFixtureManifestJSON = `{"starter": {"id": "fixture", "version": "1"}}`

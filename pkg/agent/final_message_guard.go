@@ -1,6 +1,6 @@
-// final_message_guard.go — the final-message language guard (SP-152
-// §152b). The final (completed) assistant message of a turn is judged
-// against the user's language (152.3's user-language resolution plus the
+// final_message_guard.go — the final-message language guard. The final
+// (completed) assistant message of a turn is judged
+// against the user's language (the user-language resolution plus the
 // configured language fallback); on a mismatch the message is not
 // displayed: it is regenerated ONCE with an explicit instruction to
 // answer in the user's language, and if the regeneration still mismatches
@@ -21,7 +21,7 @@ import (
 )
 
 // GuardOutcome is the result of running the final assistant message
-// through the final-message guard (§152b).
+// through the final-message guard.
 type GuardOutcome struct {
 	// Display is what the user sees: the final text (no mismatch, or a
 	// successful regeneration) or the localized templated notice (a
@@ -41,14 +41,14 @@ type GuardOutcome struct {
 	Mismatched bool
 }
 
-// Regenerator performs the single regeneration model call (§152b:
-// "regenerate once"). Implementations issue exactly one model call — a
+// Regenerator performs the single regeneration model call:
+// "regenerate once". Implementations issue exactly one model call — a
 // focused prompt, not a re-run of the tool loop. The guard calls it at
 // most once, never in a retry loop.
 type Regenerator func(ctx context.Context) (string, error)
 
 // FinalMessageGuard checks finalText against the user's language and
-// repairs a mismatch exactly once (§152b). Behavior matrix:
+// repairs a mismatch exactly once. Behavior matrix:
 //
 //   - user language undetermined (user.Code == ""): Display is finalText
 //     unchanged (byte-identical passthrough), no mismatch, regenerate is
@@ -98,7 +98,7 @@ func FinalMessageGuard(ctx context.Context, finalText string, user langguard.Lan
 	}
 }
 
-// languageNotices are the §152b templated notices, keyed by the resolved
+// languageNotices are the templated notices, keyed by the resolved
 // user language's ISO code: a short sentence saying the reply came back
 // in the wrong language, plus the "view original" affordance, in the
 // user's own language. Each template carries the user language's own
@@ -109,7 +109,7 @@ func FinalMessageGuard(ctx context.Context, finalText string, user langguard.Lan
 // for any code without a dedicated entry.
 //
 // This is a UI-string localization table only. The detector's "no fixed
-// language list" constraint (§152a) governs language detection, not
+// language list" constraint governs language detection, not
 // these strings: any language the detector recognizes remains a valid
 // target, and a code without a template simply falls back to English.
 var languageNotices = map[string]string{
@@ -126,7 +126,7 @@ var languageNotices = map[string]string{
 	"hi": "जवाब हिंदी के बजाय किसी अन्य भाषा में आया है। आप मूल पाठ देख सकते हैं या फिर से कोशिश करने का अनुरोध कर सकते हैं।",
 }
 
-// LanguageMismatchNotice returns the templated §152b notice in the user's
+// LanguageMismatchNotice returns the templated notice in the user's
 // language (the table's English entry for any code without a dedicated
 // entry, including the zero language).
 func LanguageMismatchNotice(user langguard.Language) string {
@@ -141,12 +141,12 @@ func LanguageMismatchNotice(user langguard.Language) string {
 // ---------------------------------------------------------------------------
 
 // languageGuardRecentMessages is how many of the user's recent messages
-// the guard feeds to ResolveUserLanguage (§152a's "majority over recent
+// the guard feeds to ResolveUserLanguage (the "majority over recent
 // turns").
 const languageGuardRecentMessages = 10
 
 // langGuardOriginalMetaKey is where the mismatched original (the "view
-// original" payload, §152b) is kept on the replaced assistant message.
+// original" payload) is kept on the replaced assistant message.
 const langGuardOriginalMetaKey = "language_guard_original"
 
 // langGuardRepairedMetaKey marks an assistant message the streaming guard
@@ -176,7 +176,7 @@ func LastLanguageGuardOriginal(messages []api.Message) string {
 }
 
 // applyLanguageGuard runs the turn's final assistant message through the
-// final-message guard (§152b) and, on a mismatch outcome, replaces the
+// final-message guard and, on a mismatch outcome, replaces the
 // last assistant message in state with the display text. It returns the
 // display text as the turn's result: equal to result whenever the guard
 // does not fire (subagent, guard disabled, undetermined user language,
@@ -190,7 +190,7 @@ func (a *Agent) applyLanguageGuard(qc *queryRunContext, result string) string {
 
 	cfg := a.GetConfig()
 	// LanguageGuardEnabled is nil-safe: a nil config resolves to the
-	// default (enabled, §152f).
+	// default (enabled).
 	if !cfg.LanguageGuardEnabled() {
 		return result
 	}
@@ -242,13 +242,13 @@ func (a *Agent) applyLanguageGuard(qc *queryRunContext, result string) string {
 			return a.regenerateInUserLanguage(ctx, qc, finalText, user)
 		})
 
-	// SP-152 §152e (item 152.9): record the judgment in the per-model
+	// Record the judgment in the per-model
 	// language-guard metric — a check always, a mismatch when one was
 	// detected — and log the mismatch with the model ID. This is the
 	// canonical recording point: applyLanguageGuard runs on every
 	// successful turn (buffered, held-stream and streamed-rechecked alike),
 	// so each mismatch is counted exactly once here. The role dimension
-	// (SP-150 §150c, item 150.5) buckets the check under the agent's role
+	// buckets the check under the agent's role
 	// (the guard only runs on the primary agent, so this is the coder role
 	// in practice) so the metric keys by (model, role).
 	modelID := a.GetModel()
@@ -317,7 +317,7 @@ func (a *Agent) recentUserMessages(messages []api.Message) []string {
 	return recent
 }
 
-// regenerateInUserLanguage issues the §152b regeneration: a single model
+// regenerateInUserLanguage issues the regeneration: a single model
 // call carrying the user's last message, the mismatched reply, and an
 // explicit instruction to answer in the user's language (code blocks,
 // URLs, file paths and quoted text stay as-is). It is a focused prompt —
@@ -327,7 +327,7 @@ func (a *Agent) regenerateInUserLanguage(ctx context.Context, qc *queryRunContex
 	return a.regenerateInUserLanguageCore(ctx, qc.processedQuery, mismatched, user)
 }
 
-// regenerateInUserLanguageCore is the shared §152b regeneration primitive: a
+// regenerateInUserLanguageCore is the shared regeneration primitive: a
 // single model call carrying the user's last message, the mismatched reply,
 // and an explicit instruction to answer in the user's language (code blocks,
 // URLs, file paths and quoted text stay as-is). It is a focused prompt — one

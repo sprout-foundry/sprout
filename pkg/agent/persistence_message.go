@@ -285,7 +285,7 @@ func (a *Agent) ApplyState(state *ConversationState) {
 	a.state.SetCachedCostSavings(state.CachedCostSavings)
 	a.state.SetCacheSavingsUnknown(state.CacheSavingsUnknown)
 	a.state.SetImageTokens(state.ImageTokens)
-	// Restore the per-role totals (SP-150 §150c, item 150.5) so they keep
+	// Restore the per-role totals so they keep
 	// summing to the restored overall totals; markUsageBooked below then
 	// marks the restored per-role totals as already booked.
 	a.state.SetRoleUsage(state.RoleUsage)

@@ -28,7 +28,7 @@ type subagentLaunchSpec struct {
 	personaExplicitlyProvided bool
 	provider                  string
 	model                     string
-	// role is the SP-150 §150c role the subagent's usage is attributed to
+	// role is the role the subagent's usage is attributed to
 	// (the role its model was resolved through; see
 	// resolveSubagentProviderModel).
 	role                  string

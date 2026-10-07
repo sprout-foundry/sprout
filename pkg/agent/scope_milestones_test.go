@@ -1,8 +1,8 @@
 //go:build !js
 
-// scope_milestones_test.go — the SP-151 §151a item-151.2 acceptance tests:
+// scope_milestones_test.go — the acceptance tests for the
 // a todo_write that starts or finishes a plan scope item (the todo "scope"
-// field, SP-148 §148c) emits a progress_milestone event carrying the stable
+// field) emits a progress_milestone event carrying the stable
 // correlation ids (run id, plan revision, scope id), and the finished event
 // additionally carries the files-touched count and the scope item's elapsed
 // time.
@@ -12,7 +12,7 @@
 // coercion → todo write → observeScopeMilestones → publishEvent. A fixture
 // plan on disk (two scope items, revision 1) provides the scope ids and
 // titles, mirroring the fixture conventions in todo_plan_scope_test.go
-// (148.6) and plan_context_test.go (148.5).
+// and plan_context_test.go.
 
 package agent
 
@@ -32,7 +32,7 @@ import (
 // Fixture
 // ---------------------------------------------------------------------------
 
-// smFixturePlanJSON is a minimal valid SP-148 plan with two scope items
+// smFixturePlanJSON is a minimal valid plan with two scope items
 // (signup-form, billing), each covered by one acceptance item (the validator
 // rule "every scope item needs at least one acceptance item"). revision is 1,
 // so the milestones carry plan_revision=1.

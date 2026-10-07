@@ -153,7 +153,7 @@ func (a *Agent) TrackMetricsFromResponse(promptTokens, completionTokens, totalTo
 
 // RollupSubagentUsage folds a completed subagent/reviewer's usage into this
 // agent's totals, attributed to the role that drove the subagent's model
-// choice (SP-150 §150c, item 150.5) with the subagent's actual
+// choice with the subagent's actual
 // prompt/completion token split. It records a cost entry under the
 // subagent's role (feeding both the per-role bucket and the overall cost
 // totals) and advances the overall prompt/completion/total token counters —

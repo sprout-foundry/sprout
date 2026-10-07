@@ -7,8 +7,8 @@ import (
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
-// settings_defs_roles.go — the role-model section (SP-150 §150d, item
-// 150.6) of the settingDefs registry: one def per built-in role for its
+// settings_defs_roles.go — the role-model section
+// of the settingDefs registry: one def per built-in role for its
 // model and provider, keyed `role.<name>.model` and
 // `role.<name>.provider`. This is the SET path for roles
 // (`sprout config set role.coder.model …`); the read path

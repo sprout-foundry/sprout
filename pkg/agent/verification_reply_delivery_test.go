@@ -1,7 +1,7 @@
 //go:build !js
 
-// verification_reply_delivery_test.go — the fix.2 delivery tests for the
-// SP-149 §149d final-reply contract: the verification block must reach the
+// verification_reply_delivery_test.go — the delivery tests for the
+// final-reply contract: the verification block must reach the
 // user on every path, not just the returned result string. It is written
 // into the last assistant message in state (what the query_completed
 // response and later turns read) and, when the reply string is suppressed by
@@ -52,7 +52,7 @@ func vdFailingTurnVerification() turnVerification {
 	}
 }
 
-// vdFailingAttachment is the §149d failure report rendered from
+// vdFailingAttachment is the failure report rendered from
 // vdFailingTurnVerification: what passes (nothing), what fails (the build),
 // and what was tried (2/2 repair attempts).
 const vdFailingAttachment = "Verification: FAILED after the stopping rule (2 repair attempts)\n" +
@@ -248,7 +248,7 @@ func TestVerificationDelivery_DisabledTurnShowsNothing(t *testing.T) {
 		vhWriteToolCall(t, root, "src/app.js"),
 		NewScriptedTextResponse(turnAnswer),
 	)
-	// No verification section: the default-off path (SP-149 §149e).
+	// No verification section: the default-off path.
 	ag := vhAgent(t, client, root, nil)
 
 	bus := events.NewEventBus()

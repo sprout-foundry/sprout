@@ -1,6 +1,6 @@
 package agent
 
-// Item 150.5 (SP-150 §150c): metering — every model call carries its role.
+// Metering: every model call carries its role.
 // These tests pin the per-role dimension on the cost model, the metrics
 // manager, the usage ledger, the agent/subagent role stamping, and the
 // language-guard metric (the per-model metric gains a role axis).
@@ -31,8 +31,7 @@ func addRoleTurn(t *testing.T, a *Agent, role string, prompt, completion int, ch
 }
 
 // TestCostEntryRoleStampedByBuildSites pins that each of the three cost build
-// sites stamps the agent's own role on the CostEntry (SP-150 §150c,
-// item 150.5). The primary agent's role is the coder role.
+// sites stamps the agent's own role on the CostEntry. The primary agent's role is the coder role.
 func TestCostEntryRoleStampedByBuildSites(t *testing.T) {
 	a := newTestAgent(t)
 	defer a.Shutdown()
@@ -114,7 +113,7 @@ func TestMetricsManagerPerRoleAggregation(t *testing.T) {
 }
 
 // TestPrimaryAgentRoleIsCoder pins that a primary (main-loop) agent is
-// attributed to the coder role (SP-150 §150c, item 150.5).
+// attributed to the coder role.
 func TestPrimaryAgentRoleIsCoder(t *testing.T) {
 	a := newTestAgent(t)
 	defer a.Shutdown()

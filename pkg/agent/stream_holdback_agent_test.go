@@ -1,6 +1,6 @@
 // stream_holdback_agent_test.go — agent-level scripted tests for the
-// streaming language-guard hold-back (SP-152 §152c): a wrong-language streamed
-// reply never reaches the client's streaming buffer (the user sees the §152b
+// streaming language-guard hold-back: a wrong-language streamed
+// reply never reaches the client's streaming buffer (the user sees the language
 // notice instead), while a correct-language stream is delivered. These drive
 // the real provider streaming path (doChatStream → SendChatRequestStream) with
 // the scripted streaming client (StreamConfig.Chunks playback).
@@ -74,7 +74,7 @@ func TestStreamHoldbackWrongLanguageNeverReachesClient(t *testing.T) {
 		t.Errorf("buffer does not carry the regenerated reply %q; got %q", hbSpanishProse, buffer)
 	}
 	// The held content is kept available for "view original" (the final
-	// message's Meta, mirroring 152.5's language_guard_original).
+	// message's Meta, mirroring the language_guard_original payload).
 	last := lastAssistantMessage(t, ag)
 	if original := last.Meta[langGuardOriginalMetaKey]; original != hbEnglishProse {
 		t.Errorf("view-original payload = %q, want the held reply %q", original, hbEnglishProse)
@@ -121,7 +121,7 @@ func TestStreamHoldbackCorrectLanguageStreamsLive(t *testing.T) {
 
 // TestStreamHoldbackDisabledIsByteIdentical pins the opt-out: with the guard
 // disabled, a wrong-language stream is NOT held — it streams through
-// unchanged (byte-for-byte), and no §152b notice is delivered.
+// unchanged (byte-for-byte), and no language notice is delivered.
 func TestStreamHoldbackDisabledIsByteIdentical(t *testing.T) {
 	ag, _ := newLanguageGuardAgent(t, "es", true,
 		newStreamingResponse(hbEnglishProse, englishChunks),
@@ -139,7 +139,7 @@ func TestStreamHoldbackDisabledIsByteIdentical(t *testing.T) {
 	}
 	wantNotice := LanguageMismatchNotice(langguard.Language{Code: "es", Name: "Spanish"})
 	if strings.Contains(buffer, wantNotice) {
-		t.Errorf("with the guard disabled no §152b notice should be delivered; buffer = %q", buffer)
+		t.Errorf("with the guard disabled no language notice should be delivered; buffer = %q", buffer)
 	}
 }
 
@@ -207,7 +207,7 @@ func newReasoningModelAgent(t *testing.T, configuredLanguage string, guardDisabl
 }
 
 // TestStreamHoldbackReasoningModelFallbackHeld pins the reasoning-model
-// fallback interaction (SP-152 §152c): when the model streams its visible
+// fallback interaction: when the model streams its visible
 // prose as reasoning_content (no assistant-text), the provider's fallback is
 // the only path that delivers the content. The fallback must route it through
 // the hold-back, so a wrong-language reply is held (not delivered) and the
@@ -271,7 +271,7 @@ func TestStreamHoldbackReasoningModelFallbackCorrectLanguageReleased(t *testing.
 }
 
 // ---------------------------------------------------------------------------
-// Completion re-check (SP-152 §152c, item 152.7)
+// Completion re-check
 //
 // The hold-back only judges the START of a streamed reply. A reply whose start
 // passes (and is released) but which switches language later in the stream is
@@ -421,13 +421,13 @@ func TestStreamCompletionRecheckCorrectLanguageNoEvent(t *testing.T) {
 }
 
 // TestStreamCompletionRecheckHeldStreamNoEvent pins that a HELD stream (a
-// reliable mismatch at the START, handled by the 152.6 notice) is NOT
+// reliable mismatch at the START, handled by the notice) is NOT
 // re-checked: the held path is terminal, so no language_guard_replacement event
 // is published (it would be a duplicate of the notice already delivered).
 func TestStreamCompletionRecheckHeldStreamNoEvent(t *testing.T) {
 	ag, _ := newLanguageGuardAgent(t, "es", false,
 		newStreamingResponse(hbEnglishProse, englishChunks), // wrong language from the start
-		NewStopResponse(hbSpanishProse),                     // the §152b regeneration
+		NewStopResponse(hbSpanishProse),                     // the regeneration
 	)
 	ag.SetStreamingEnabled(true)
 	sub := wireLanguageGuardEventBus(t, ag)
@@ -447,7 +447,7 @@ func TestStreamCompletionRecheckHeldStreamNoEvent(t *testing.T) {
 }
 
 // TestStreamCompletionRecheckShortStreamNoEvent pins that a reply below the
-// prose threshold is not judged (§152a): it is released on Finish and the
+// prose threshold is not judged: it is released on Finish and the
 // completion re-check does not run — so no replacement event is published.
 func TestStreamCompletionRecheckShortStreamNoEvent(t *testing.T) {
 	ag, _ := newLanguageGuardAgent(t, "es", false,
@@ -489,7 +489,7 @@ func TestStreamHoldbackHeldFinalStateMatchesBuffer(t *testing.T) {
 		t.Fatalf("ProcessQuery: %v", err)
 	}
 
-	// The client buffer carries the regenerated text — no §152b notice.
+	// The client buffer carries the regenerated text — no language notice.
 	buffer := ag.output.GetStreamingBuffer().String()
 	if wantNotice := LanguageMismatchNotice(langguard.Language{Code: "es", Name: "Spanish"}); strings.Contains(buffer, wantNotice) {
 		t.Errorf("buffer carries the fallback notice; want the regenerated reply only: %q", buffer)

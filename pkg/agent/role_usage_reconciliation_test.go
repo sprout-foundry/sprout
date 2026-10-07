@@ -1,10 +1,10 @@
 package agent
 
-// Item 150.5 (SP-150 §150c): per-role usage reconciliation. These tests pin
+// Per-role usage reconciliation. These tests pin
 // the invariant that per-role totals sum to the overall total across the
-// subagent/reviewer rollup (sub-issue 1) and a state save/restore round-trip
-// (sub-issue 4). The plan-agent role stamping (sub-issue 2) is pinned in
-// cmd/plan_roles_test.go; the role-aware cost-ledger booking (sub-issue 3) is
+// subagent/reviewer rollup and a state save/restore round-trip. The plan-agent
+// role stamping is pinned in
+// cmd/plan_roles_test.go; the role-aware cost-ledger booking is
 // pinned in pkg/webui/cost_tracking_test.go.
 
 import (

@@ -166,7 +166,7 @@ standalone local build keeps embedding into `pkg/webui/static`.
       `localHost.folderPicker` is off and `refreshFromAdapter` now returns
       early when a host is active); restore them through the host if so.
       Spec: SP-160 §160b, Acceptance criteria 1.
-- [ ] **ws.4** Lazy loading: the editor, the WASM agent and space-specific
+- [x] **ws.4** Lazy loading: the editor, the WASM agent and space-specific
       code load when a space opens, not on import. A test inspects the
       build manifest and fails if the entry chunk pulls in the editor or
       WASM loader. Spec: SP-160 Acceptance criteria 5.

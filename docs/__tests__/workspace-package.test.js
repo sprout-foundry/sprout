@@ -68,6 +68,49 @@ if (!built) {
   );
 }
 
+/**
+ * The static import specifiers of a built JS file: `import ... from "..."`,
+ * bare `import "..."` and `export ... from "..."`. A dynamic `import("...")`
+ * is deliberately NOT matched — that is a lazy boundary, and a chunk reached
+ * only through one is not in the importer's static graph. The `(?!\s*\()` on
+ * the keyword keeps `import(` out even when the call's argument sits on the
+ * next line.
+ */
+function staticSpecifiers(source) {
+  const pattern = /\b(?:import|export)\b(?!\s*\()\s+(?:[^"'();]*?\bfrom\s+)?["']([^"']+)["']/g;
+  return [...source.matchAll(pattern)].map((m) => m[1]);
+}
+
+/**
+ * Every relative file statically reachable from a built entry, following the
+ * `./chunks/...` specifiers transitively. This is what "importing the
+ * package" means: the browser (or a bundler of the host) fetches this set
+ * eagerly when the entry module is evaluated.
+ */
+function staticImportGraph(entryName, seen = new Set()) {
+  const abs = path.join(PACKAGE_DIR, entryName);
+  if (!fs.existsSync(abs) || fs.statSync(abs).isDirectory()) return seen;
+  if (seen.has(entryName)) return seen;
+  seen.add(entryName);
+  for (const spec of staticSpecifiers(fs.readFileSync(abs, 'utf-8'))) {
+    if (spec.startsWith('.')) {
+      // Normalize to posix so the keys match `walk()`'s chunk names (which
+      // split on `path.sep`): on Windows `path.relative` yields backslashes,
+      // and a `graph.has(file)` identity check against forward-slash names
+      // would silently never match.
+      const rel = path.relative(PACKAGE_DIR, path.resolve(path.dirname(abs), spec)).split(path.sep).join('/');
+      staticImportGraph(rel, seen);
+    }
+  }
+  return seen;
+}
+
+/** Markers that identify editor (CodeMirror) code in a built chunk. */
+const EDITOR_MARKERS = /@codemirror\/|CodeMirror|cm-editor/;
+/** Markers that identify the WASM agent (its loader / instantiation). */
+const WASM_MARKERS = /sprout\.wasm|wasm_exec|WebAssembly\.instantiate/;
+
+
 // ── Package manifest ───────────────────────────────────────────────────
 
 describe('@sprout-foundry/workspace package.json', () => {
@@ -263,6 +306,84 @@ describe('build artifacts', { skip: !built && 'packages/workspace/dist not built
     assert.ok(chunks.length > 0, 'the build emits the views stylesheet');
     const css = chunks.map((file) => fs.readFileSync(path.join(PACKAGE_DIR, file), 'utf-8')).join('\n');
     assert.ok(css.includes('.sprout-views-layout'), 'the emitted stylesheet carries the layout styles');
+  });
+});
+
+// ── Lazy loading (SP-160 Acceptance criteria 5) ────────────────────────
+
+describe('lazy loading: the entry loads no editor or WASM code', { skip: !built && 'packages/workspace/dist not built' }, () => {
+  // "Importing the package loads no editor or WASM code until a space opens":
+  // importing is evaluating `dist/index.js`, which eager-fetches exactly the
+  // static import graph below (transitively). Dynamic imports are the lazy
+  // boundary — a chunk reached only through one is NOT in this set.
+  const graph = staticImportGraph('dist/index.js');
+  const contents = [...graph].map((file) => [file, fs.readFileSync(path.join(PACKAGE_DIR, file), 'utf-8')]);
+
+  // The chunks that carry the editor / WASM loader, identified across the whole
+  // artifact. The size- and identity-based assertions below do not depend on
+  // the markers surviving minification, so a re-bundled editor cannot slip past
+  // by having its literals renamed.
+  const allChunks = walk(DIST).filter((file) => file.startsWith('dist/chunks/') && file.endsWith('.js'));
+  const chunkSources = allChunks.map((file) => [file, fs.readFileSync(path.join(PACKAGE_DIR, file), 'utf-8')]);
+  const heavyChunks = chunkSources
+    .filter(([, source]) => EDITOR_MARKERS.test(source) || WASM_MARKERS.test(source))
+    .map(([file]) => file);
+
+  test('the entry graph reaches files (the walk is real, not vacuous)', () => {
+    assert.ok(graph.size >= 2, `the entry statically imports at least one chunk, reached ${graph.size}`);
+  });
+
+  test('no file in the entry graph contains editor code', () => {
+    const offenders = contents.filter(([, source]) => EDITOR_MARKERS.test(source)).map(([file]) => file);
+    assert.deepEqual(offenders, [], `editor code is eagerly imported by the entry: ${offenders.join(', ')}`);
+  });
+
+  test('no file in the entry graph contains the WASM loader', () => {
+    const offenders = contents.filter(([, source]) => WASM_MARKERS.test(source)).map(([file]) => file);
+    assert.deepEqual(offenders, [], `the WASM loader is eagerly imported by the entry: ${offenders.join(', ')}`);
+  });
+
+  test('no file in the entry graph is a heavy chunk (a renamed editor cannot evade the marker scan)', () => {
+    // Minification concatenates and renames modules, so a chunk that carries
+    // the editor could in principle contain no `CodeMirror` literal. A size
+    // ceiling is independent of naming: the editor bundle is hundreds of
+    // kilobytes, so any eager file above this cap is a regression whatever it
+    // is called. This is the assertion that does not depend on the markers.
+    const CAP = 64 * 1024;
+    const offenders = contents
+      .map(([file]) => [file, fs.statSync(path.join(PACKAGE_DIR, file)).size])
+      .filter(([, size]) => size > CAP)
+      .map(([file, size]) => `${file} (${size} bytes)`);
+    assert.deepEqual(offenders, [], `the entry eagerly loads a heavy chunk: ${offenders.join(', ')}`);
+  });
+
+  test('the editor and WASM chunks exist but are NOT in the entry graph', () => {
+    // The split must be real, not a deletion of the functionality: the editor
+    // and the WASM agent are still built, in chunks the entry does not
+    // statically import. Asserting the known-heavy chunks are absent from the
+    // static graph checks the boundary by chunk identity, not by re-reading
+    // markers the minifier could have renamed.
+    assert.ok(heavyChunks.length > 0, 'a chunk carries the editor or WASM loader');
+    const eagerlyReached = heavyChunks.filter((file) => graph.has(file));
+    assert.deepEqual(
+      eagerlyReached,
+      [],
+      `a heavy chunk is in the entry's static graph: ${eagerlyReached.join(', ')}`,
+    );
+  });
+
+  test('the heavy chunks are loaded by the views/providers entries, not the package entry', () => {
+    // The lazy boundary in this package is the entry point, not a dynamic
+    // import: a host imports the `views` (or `providers`) entry when it mounts
+    // a space, and that entry pulls the heavy chunks. Prove the split is real
+    // by chunk identity — at least one heavy chunk is statically reachable from
+    // the `views` entry and none from the package entry (asserted above).
+    const viewsGraph = staticImportGraph('dist/views.js');
+    const reachableFromViews = heavyChunks.filter((file) => viewsGraph.has(file));
+    assert.ok(
+      reachableFromViews.length > 0,
+      `the views entry must load the heavy chunks (heavy: ${heavyChunks.join(', ')})`,
+    );
   });
 });
 

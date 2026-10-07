@@ -54,6 +54,18 @@ type TerminalSubscriberState struct {
 	// OutputRouter.FlushExternalWrite before terminal writes.
 	// May be nil in non-agent callers / tests.
 	chatAgent *agent.Agent
+	// summaryModelClient is the optional model client for the
+	// model-written progress summary. Nil means the
+	// summarizer role is unconfigured, so the subscriber renders the
+	// deterministic template. A non-nil override (tests) is used in
+	// place of the role-resolved client.
+	summaryModelClient ModelClient
+	// summaryUsage books the model usage a progress summary incurred
+	// under the summarizer role. Nil falls back to the
+	// chat agent's own per-role metrics; a non-nil override (tests)
+	// records the usage instead. Nil both means "no metering", e.g. a
+	// non-agent caller.
+	summaryUsage func(SummaryUsage)
 	// thinkingActive tracks whether the "thinking…" spinner was started
 	// by a query_started event and is still showing. It lets
 	// HandleStreamChunkEvent know to stop the spinner when assistant

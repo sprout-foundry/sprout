@@ -188,8 +188,9 @@ func buildSecretSource(toolName string, args map[string]interface{}) string {
 
 // formatTodoItemsForEvent converts a []tools.TodoItem slice into the
 // []map[string]interface{} format expected by PublishTodoUpdate.
-// Includes optional activeForm and priority so the WebUI can surface
-// the present-continuous phrasing and priority indicator.
+// Includes optional activeForm, priority, and scope so the WebUI can surface
+// the present-continuous phrasing, priority indicator, and the plan scope
+// link.
 func formatTodoItemsForEvent(todos []tools.TodoItem) []map[string]interface{} {
 	result := make([]map[string]interface{}, len(todos))
 	for i, t := range todos {
@@ -203,6 +204,9 @@ func formatTodoItemsForEvent(todos []tools.TodoItem) []map[string]interface{} {
 		}
 		if t.Priority != "" {
 			entry["priority"] = t.Priority
+		}
+		if t.Scope != "" {
+			entry["scope"] = t.Scope
 		}
 		result[i] = entry
 	}

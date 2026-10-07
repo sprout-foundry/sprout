@@ -45,12 +45,14 @@ func (m *ModelsCommand) Usage() string {
 		"/model              List all available models for the current provider.",
 		"/model select       Interactive model picker (searchable).",
 		"/model <model_id>   Set model directly by ID.",
+		"/model --role <role> <model_id>   Set the model for a role.",
 		"",
 		"Use /provider select to switch providers first.",
 		"Alias: /m",
 		"",
 		"Flags:",
 		"  --json   Output the model list as a JSON array",
+		"  --role <role>   Set the model for a role instead of the active model",
 	}, "\n")
 }
 
@@ -59,6 +61,14 @@ func (m *ModelsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	// If no arguments, list available models
 	if len(args) == 0 {
 		return m.listModels(chatAgent)
+	}
+
+	// Optional --role flag: set the model for a role instead of the
+	// active conversation model.
+	if role, modelID, found, err := parseRoleArgs(args); err != nil {
+		return err
+	} else if found {
+		return m.setRoleModel(role, modelID, chatAgent)
 	}
 
 	// If arguments provided, handle model selection
@@ -72,6 +82,50 @@ func (m *ModelsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	}
 
 	return errors.New("usage: /model [select|<model_id>]")
+}
+
+// parseRoleArgs extracts the optional `--role <role>` flag and the model ID
+// from /model arguments. The flag may appear
+// anywhere in the arguments (the last occurrence wins); its value is the
+// role name and the model ID is the single argument that is neither a flag
+// nor the role value. When the flag is absent, found is false and the
+// caller falls through to the pre-role dispatch. Malformed --role usage
+// (a missing role name or model, or extra arguments) is a usage error.
+func parseRoleArgs(args []string) (role, modelID string, found bool, err error) {
+	usageErr := errors.New("usage: /model --role <role> <model_id>")
+
+	// Locate the --role flag (the last occurrence wins); without it the
+	// pre-role dispatch applies.
+	roleIdx := -1
+	for i, a := range args {
+		if a == "--role" {
+			roleIdx = i
+		}
+	}
+	if roleIdx < 0 {
+		return "", "", false, nil
+	}
+
+	// The role name is the argument right after the flag.
+	tail := args[roleIdx:]
+	if len(tail) < 2 {
+		return "", "", false, usageErr
+	}
+	role = tail[1]
+
+	// The model ID is the single argument that is neither a flag nor the
+	// role value.
+	remaining := make([]string, 0, len(args))
+	for i, a := range args {
+		if a == "--role" || i == roleIdx+1 {
+			continue
+		}
+		remaining = append(remaining, a)
+	}
+	if len(remaining) != 1 {
+		return "", "", false, usageErr
+	}
+	return role, remaining[0], true, nil
 }
 
 // modelsJSONPayload wraps the model list with provider context.

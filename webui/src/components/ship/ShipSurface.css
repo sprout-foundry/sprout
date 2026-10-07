@@ -1,0 +1,299 @@
+/*
+ * Ship surface — deploy status, action, history, rollback.
+ *
+ * Tokens only (design system § "Color"): no raw hex/rgba. The surface owns the
+ * content column; the shell supplies the frame.
+ */
+
+.ship-surface {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-10);
+  color: var(--text-primary);
+  overflow-y: auto;
+  height: 100%;
+}
+
+.ship-surface-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.ship-surface-title {
+  font-size: var(--font-size-xl, 20px);
+  font-weight: 600;
+}
+
+.ship-surface-subtitle {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm, 13px);
+}
+
+.ship-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-8);
+}
+
+/* Status ------------------------------------------------------------------ */
+
+.ship-status-card {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-8);
+  align-items: start;
+}
+
+.ship-status-live,
+.ship-status-version,
+.ship-status-last {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.ship-status-label {
+  color: var(--text-tertiary);
+  font-size: var(--font-size-xs, 11px);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ship-status-value {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ship-status-url {
+  color: var(--accent-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ship-status-empty {
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+.ship-status-state {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+/* Action ------------------------------------------------------------------ */
+
+.ship-action-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.ship-deploy-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-8);
+  background: var(--accent-primary);
+  color: var(--accent-on-primary, var(--bg-primary));
+  border: none;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ship-deploy-button:hover:not(:disabled) {
+  background: var(--brand-active-cyan);
+}
+
+.ship-deploy-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ship-action-blocked {
+  color: var(--text-tertiary);
+  font-size: var(--font-size-sm, 13px);
+}
+
+.ship-action-error {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+  padding: var(--space-4) var(--space-6);
+  background: var(--bg-error);
+  color: var(--accent-error);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm, 13px);
+}
+
+.ship-spinner {
+  animation: ship-spin 1s linear infinite;
+}
+
+@keyframes ship-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* History ----------------------------------------------------------------- */
+
+.ship-history-title {
+  font-size: var(--font-size-md, 15px);
+  font-weight: 600;
+  margin-bottom: var(--space-6);
+}
+
+.ship-history-empty {
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+.ship-history-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.ship-history-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-6);
+  padding: var(--space-6);
+  border-radius: var(--radius-md);
+}
+
+.ship-history-row:hover {
+  background: var(--bg-hover);
+}
+
+.ship-history-main {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+.ship-history-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.ship-history-headline {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.ship-history-kind {
+  color: var(--text-tertiary);
+  font-size: var(--font-size-xs, 11px);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ship-history-version {
+  font-weight: 600;
+}
+
+.ship-history-revision {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm, 13px);
+}
+
+.ship-history-summary {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm, 13px);
+}
+
+.ship-history-time {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs, 11px);
+}
+
+.ship-history-state {
+  flex-shrink: 0;
+  padding: var(--space-1) var(--space-4);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-xs, 11px);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ship-history-state-ready {
+  background: var(--bg-success);
+  color: var(--accent-success);
+}
+
+.ship-history-state-deploying,
+.ship-history-state-queued {
+  background: var(--bg-info);
+  color: var(--accent-primary);
+}
+
+.ship-history-state-failed {
+  background: var(--bg-error);
+  color: var(--accent-error);
+}
+
+.ship-history-state-rolled_back {
+  background: var(--bg-warning);
+  color: var(--accent-warning);
+}
+
+.ship-history-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.ship-history-link,
+.ship-history-rollback {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-xs, 11px);
+  cursor: pointer;
+}
+
+.ship-history-link:hover:not(:disabled),
+.ship-history-rollback:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.ship-history-link:disabled,
+.ship-history-rollback:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Shell frame ------------------------------------------------------------- */
+
+.ship-shell-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}

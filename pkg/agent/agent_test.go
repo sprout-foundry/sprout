@@ -587,6 +587,75 @@ func TestUpdateShellCwd_CdDotdot(t *testing.T) {
 
 // --- Tests for cd rejection message ---
 
+// captureStderr runs fn and returns everything written to os.Stderr during it.
+// The global os.Stderr is restored on every path, including a panic in fn,
+// and no pipe file descriptor outlives the call.
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+	oldStderr := os.Stderr
+	defer func() { os.Stderr = oldStderr }()
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	defer r.Close()
+
+	os.Stderr = w
+	func() {
+		defer func() {
+			if p := recover(); p != nil {
+				// Close the write end so no pipe fd outlives the helper,
+				// then re-panic so the test framework records the failure.
+				// A failed close is not actionable while re-panicking, so
+				// it is discarded rather than reported.
+				w.Close() //nolint:gosec // G104: best-effort close on the panic path; the re-panic below is the failure report
+				panic(p)
+			}
+		}()
+		fn()
+	}()
+
+	var output strings.Builder
+	buf := make([]byte, 4096)
+	// Close the write end synchronously so the read loop below sees EOF;
+	// a failed close would make that loop hang, so report it and return
+	// what has been captured so far.
+	if err := w.Close(); err != nil {
+		t.Errorf("close captured-stderr write end: %v", err)
+		return output.String()
+	}
+	for {
+		n, readErr := r.Read(buf)
+		if n > 0 {
+			output.Write(buf[:n])
+		}
+		if readErr != nil {
+			break
+		}
+	}
+	return output.String()
+}
+
+// TestCaptureStderr_PanicRestoresStderr pins the helper's panic invariant: a
+// panic in fn must propagate (the test fails if it ever gets swallowed) and
+// must leave the global os.Stderr restored — and must not hang the run (the
+// read loop is only reached after the write end is closed).
+func TestCaptureStderr_PanicRestoresStderr(t *testing.T) {
+	saved := os.Stderr
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected the panic in fn to propagate")
+		}
+		if os.Stderr != saved {
+			t.Errorf("os.Stderr not restored after a panic in fn")
+		}
+	}()
+	captureStderr(t, func() {
+		panic("test panic")
+	})
+}
+
 func TestUpdateShellCwd_RejectionMessage(t *testing.T) {
 	workspace, _ := os.MkdirTemp("", "test-workspace-*")
 	defer os.RemoveAll(workspace)
@@ -595,29 +664,10 @@ func TestUpdateShellCwd_RejectionMessage(t *testing.T) {
 	tracker := a.ensureShellCwd()
 	tracker.Set(workspace)
 
-	// Capture stderr.
-	oldStderr := os.Stderr
-	r, w, _ := os.Pipe()
-	os.Stderr = w
+	msg := captureStderr(t, func() {
+		a.updateShellCwd("cd /etc")
+	})
 
-	a.updateShellCwd("cd /etc")
-
-	// Restore stderr and read output.
-	w.Close()
-	os.Stderr = oldStderr
-
-	var output strings.Builder
-	buf := make([]byte, 4096)
-	for {
-		n, _ := r.Read(buf)
-		if n == 0 {
-			break
-		}
-		output.Write(buf[:n])
-	}
-	r.Close()
-
-	msg := output.String()
 	if !strings.Contains(msg, "cd refused") {
 		t.Errorf("expected rejection message to contain 'cd refused', got: %s", msg)
 	}
@@ -626,6 +676,52 @@ func TestUpdateShellCwd_RejectionMessage(t *testing.T) {
 	}
 	if !strings.Contains(msg, "workspace") {
 		t.Errorf("expected rejection message to list allowed paths, got: %s", msg)
+	}
+	if !strings.Contains(msg, "permission model") {
+		t.Errorf("expected rejection message to explain the permission model, got: %s", msg)
+	}
+	if !strings.Contains(msg, "Allow folder this session") {
+		t.Errorf("expected rejection message to offer the session-approval resolution, got: %s", msg)
+	}
+	if !strings.Contains(msg, "security-policy.json") {
+		t.Errorf("expected rejection message to name the allowed_paths config file, got: %s", msg)
+	}
+}
+
+func TestUpdateShellCwd_RejectionMessage_CdPrevious(t *testing.T) {
+	workspace, _ := os.MkdirTemp("", "test-workspace-*")
+	defer os.RemoveAll(workspace)
+
+	a := newTestAgentWithSecurity(workspace)
+	tracker := a.ensureShellCwd()
+	tracker.SetWithPrev(workspace, "/etc")
+
+	msg := captureStderr(t, func() {
+		a.updateShellCwd("cd -")
+	})
+
+	if !strings.Contains(msg, "cd refused") {
+		t.Errorf("expected rejection message to contain 'cd refused', got: %s", msg)
+	}
+	if !strings.Contains(msg, "/etc") {
+		t.Errorf("expected rejection message to contain '/etc', got: %s", msg)
+	}
+	if !strings.Contains(msg, "previous directory is not allowed") {
+		t.Errorf("expected rejection message to name the previous-directory reason, got: %s", msg)
+	}
+	if !strings.Contains(msg, "permission model") {
+		t.Errorf("expected rejection message to explain the permission model, got: %s", msg)
+	}
+	if !strings.Contains(msg, "Allow folder this session") {
+		t.Errorf("expected rejection message to offer the session-approval resolution, got: %s", msg)
+	}
+	if !strings.Contains(msg, "security-policy.json") {
+		t.Errorf("expected rejection message to name the allowed_paths config file, got: %s", msg)
+	}
+
+	cwd, _ := tracker.GetBoth()
+	if cwd != workspace {
+		t.Errorf("expected cwd to stay %q after refused cd -, got %q", workspace, cwd)
 	}
 }
 

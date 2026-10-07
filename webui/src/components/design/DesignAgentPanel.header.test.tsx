@@ -11,7 +11,7 @@ vi.mock('../ChatView', () => ({
 }));
 
 /**
- * SP-142 item 142.5 — the Design agent panel's header: the design chat's
+ * The Design agent panel's header: the design chat's
  * name and a New Chat affordance scoped to the design lane.
  *
  * The header renders only when the host supplies the lane identity
@@ -27,7 +27,7 @@ const chatProps = {
   onInputChange: () => {},
 } as unknown as DesignAgentPanelProps['chatProps'];
 
-describe('DesignAgentPanel header (SP-142 142.5)', () => {
+describe('DesignAgentPanel header', () => {
   it('renders the header naming the active design chat', () => {
     render(<DesignAgentPanel chatProps={chatProps} chatName="Critique round 2" onCreateDesignChat={() => {}} />);
     expect(screen.getByTestId('design-agent-head')).toBeTruthy();

@@ -67,6 +67,17 @@ type AgentWorkflowConfig struct {
 	// When Loop is set, Steps are ignored — the loop IS the execution plan.
 	Loop *AgentWorkflowLoopConfig `json:"loop,omitempty"`
 
+	// Continuation keeps a coordinator-style initial session going after
+	// its final answer. Unlike Loop — which starts a fresh gate-driven
+	// agent context per item — continuation re-invokes the same
+	// coordinator turn with a short prompt, so the agent's own workflow
+	// is preserved. After each turn the TODO file is re-read: while
+	// runnable `[ ]` items remain AND the turn made progress (a new git
+	// commit or a newly ticked item), another turn is issued. The loop
+	// stops when nothing runnable is left or a turn makes no progress,
+	// so permanently skipped items cannot spin forever.
+	Continuation *AgentWorkflowContinuation `json:"continuation,omitempty"`
+
 	// AllowedPaths declares the external directories the workflow needs
 	// to read or write outside the workspace. Each entry is validated by
 	// AllowedPath.Validate and pre-seeded into the running agent's
@@ -233,6 +244,71 @@ type AgentWorkflowLoopConfig struct {
 func (s AgentWorkflowStep) IsShellStep() bool {
 	return strings.TrimSpace(s.Command) != "" || strings.TrimSpace(s.CommandFile) != ""
 }
+
+// AgentWorkflowContinuation keeps a coordinator-style initial session
+// going after its final answer. It is the coordinator-loop counterpart to
+// Loop: instead of a fresh per-item gate context, it re-invokes the same
+// coordinator turn with a short continuation prompt once the turn's answer
+// has come back, and re-reads the TODO file between turns.
+//
+// A turn is "another turn" only if the previous turn made progress — it
+// produced a new git commit or newly ticked a `[ ]` item. When nothing
+// runnable remains, or a turn makes no progress, the loop stops and
+// records why. That is what stops permanently skipped items (items left
+// `[ ]` by design) from looping forever.
+type AgentWorkflowContinuation struct {
+	// TodoFile is the markdown file scanned for runnable `[ ]` items.
+	// Default: TODO.md.
+	TodoFile string `json:"todo_file,omitempty"`
+	// ContinueUntilDone enables the continuation loop. Pointer so an
+	// explicit false disables it even when the block is present; nil
+	// means enabled (a present block is intent to continue).
+	ContinueUntilDone *bool `json:"continue_until_done,omitempty"`
+	// MaxContinuations caps the number of continuation turns issued
+	// after the initial turn, as a hard backstop. Default: 1000.
+	MaxContinuations int `json:"max_continuations,omitempty"`
+	// MaxIdleTurns is how many consecutive turns may end without progress
+	// (no new commit, no newly ticked item) before the loop stops. A turn
+	// can legitimately end idle, e.g. after re-verifying work a subagent
+	// left uncommitted; the next turn gets DefaultContinuationIdlePrompt.
+	// Default: DefaultMaxIdleTurns.
+	MaxIdleTurns int `json:"max_idle_turns,omitempty"`
+	// Prompt is the short prompt sent on each continuation turn.
+	// Empty uses DefaultContinuationPrompt.
+	Prompt string `json:"prompt,omitempty"`
+}
+
+// IsEnabled reports whether the continuation loop should run. A nil
+// receiver or nil ContinueUntilDone means enabled; only an explicit
+// false disables it.
+func (c *AgentWorkflowContinuation) IsEnabled() bool {
+	if c == nil {
+		return false
+	}
+	if c.ContinueUntilDone == nil {
+		return true
+	}
+	return *c.ContinueUntilDone
+}
+
+// DefaultContinuationTodoFile is used when Continuation.TodoFile is empty.
+const DefaultContinuationTodoFile = "TODO.md"
+
+// DefaultMaxContinuations bounds continuation turns when unset.
+const DefaultMaxContinuations = 1000
+
+// DefaultMaxIdleTurns bounds consecutive no-progress turns when unset.
+const DefaultMaxIdleTurns = 2
+
+// DefaultContinuationIdlePrompt follows a turn that made no progress: it
+// names that state so the coordinator commits verified work or records why
+// an item is blocked instead of re-verifying again.
+const DefaultContinuationIdlePrompt = "The last turn did not commit or tick any item. Re-read TODO.md from your current working directory. If an item is in progress in the working tree, finish it, run its validation, commit it and tick it now. If it cannot be finished, leave a short note under the item saying what remains and move on to the next runnable `[ ]` item."
+
+// DefaultContinuationPrompt is the short prompt issued on each
+// continuation turn: it tells the coordinator to re-read the TODO file and
+// keep processing without re-deriving its whole plan.
+const DefaultContinuationPrompt = "You have finished the work you described. Re-read TODO.md from your current working directory and continue with the next runnable `[ ]` item, following the same workflow as before. Keep going until no runnable `[ ]` items remain."
 
 // AllowedPath is a single directory the workflow needs access to outside
 // the workspace. Declared at the workflow level so the user can review

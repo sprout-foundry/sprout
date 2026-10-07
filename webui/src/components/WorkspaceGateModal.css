@@ -265,6 +265,31 @@
   opacity: 0.6;
 }
 
+/* Starter chooser (SP-153 §153b): a native select styled to match the name
+ * input. Always shows at least the "Blank (no starter)" option. */
+.workspace-gate-starter-select {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  padding: var(--space-4) var(--space-5);
+  box-sizing: border-box;
+  width: 100%;
+  cursor: pointer;
+}
+
+.workspace-gate-starter-select:focus-visible {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+.workspace-gate-starter-select:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .workspace-gate-create-actions {
   display: flex;
   gap: var(--space-4);

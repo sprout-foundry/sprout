@@ -482,6 +482,12 @@
   text-align: right;
 }
 
+.changes-project-timeline {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 /* ── Filter bar ───────────────────────────────────────────────── */
 
 .changes-filter {

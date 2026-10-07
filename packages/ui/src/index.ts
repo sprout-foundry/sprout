@@ -111,6 +111,10 @@ export type { SkeletonProps, SkeletonTextProps } from './components/Skeleton';
 export { default as Collapsible } from './components/Collapsible';
 export type { CollapsibleProps } from './components/Collapsible';
 
+// ── Preview pane (SP-155 §155d, 155.7) ─────────────────────────
+export { default as PreviewPane } from './components/PreviewPane';
+export type { PreviewPaneProps, PreviewPaneStatus } from './components/PreviewPane';
+
 export { default as CodeBlock } from './components/CodeBlock';
 
 // ── Dialogs ───────────────────────────────────────────────────────────

@@ -54,7 +54,9 @@ func TestCommitCommandUsesConfiguredProvider(t *testing.T) {
 }
 
 // TestCommitCommandFallsBackToLastUsedProvider tests that GetCommitProvider
-// returns empty when only LastUsedProvider is set (no implicit fallback).
+// falls back to LastUsedProvider when CommitProvider is not set (the
+// documented default for the CommitProvider field), and that the commit model
+// resolves through that provider.
 func TestCommitCommandFallsBackToLastUsedProvider(t *testing.T) {
 	homeDir := t.TempDir()
 	configDir := filepath.Join(homeDir, ".config", "sprout")
@@ -73,6 +75,7 @@ func TestCommitCommandFallsBackToLastUsedProvider(t *testing.T) {
 		c.CommitProvider = ""
 		c.CommitModel = ""
 		c.LastUsedProvider = "openrouter"
+		c.ProviderModels["openrouter"] = "openai/gpt-5"
 		return nil
 	})
 	if err != nil {
@@ -80,8 +83,11 @@ func TestCommitCommandFallsBackToLastUsedProvider(t *testing.T) {
 	}
 
 	config := cm.GetConfig()
-	if provider := config.GetCommitProvider(); provider != "" {
-		t.Errorf("GetCommitProvider() should return empty when CommitProvider is not set, got %q", provider)
+	if provider := config.GetCommitProvider(); provider != "openrouter" {
+		t.Errorf("GetCommitProvider() should fall back to LastUsedProvider, got %q", provider)
+	}
+	if model := config.GetCommitModel(); model != "openai/gpt-5" {
+		t.Errorf("GetCommitModel() should resolve through the last-used provider, got %q", model)
 	}
 }
 

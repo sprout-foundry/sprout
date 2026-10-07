@@ -190,6 +190,13 @@ func coerceTodoItem(raw interface{}) (tools.TodoItem, error) {
 	// Extract activeForm with fallbacks
 	todo.ActiveForm = extractStringField(todoMap, "activeForm", "active_form")
 
+	// Extract scope (plan scope item ID). It is optional and
+	// free-form: a todo's scope links it to a scope entry in .sprout/plan.json
+	// so progress maps back to the plan and survives across sessions. No
+	// normalization and no required check — an empty scope means the todo is
+	// not linked to any plan scope.
+	todo.Scope = extractStringField(todoMap, "scope", "scopeId", "scope_id", "planScope", "plan_scope")
+
 	return todo, nil
 }
 
@@ -281,7 +288,11 @@ func handleTodoWrite(ctx context.Context, a *Agent, args map[string]interface{})
 	}
 
 	a.Logger().Debug("TodoWrite: processing %d todos\n", len(todos))
+	prev := a.GetTodoManager().Read()
 	result := a.GetTodoManager().Write(todos)
+	// Emit progress_milestone for plan scope
+	// items that just started or finished with this write.
+	a.observeScopeMilestones(prev, todos)
 	a.Logger().Debug("TodoWrite result: %s\n", result)
 
 	// CLI rendering: when there's no active browser and stdin is a TTY,

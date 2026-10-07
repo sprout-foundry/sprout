@@ -45,6 +45,7 @@ const TESTIDS = {
   "turn-changes-strip": "turn-changes-strip",
   "diff-view": "diff-view",
   "chat-metrics-strip": "chat-metrics-strip",
+  "progress-strip": "progress-strip", // active-run progress strip
   "chs-trigger": "chs-trigger",
   "chs-popover": "chs-popover",
   "chs-search-input": "chs-search-input",
@@ -161,6 +162,16 @@ const TESTIDS = {
   // Editor footer whitespace mode
   "settings-whitespace-mode": "settings-whitespace-mode",
 
+  // Role models (RoleModelsSection.tsx). Row/input/save testids
+  // are generated per role: `role-model-{row,input,save}-${role}` and
+  // `role-provider-input-${role}` (BUILTIN_ROLES: planner|coder|summarizer|
+  // reviewer|commit); `coder` is the representative registered value.
+  "role-models-section": "role-models-section",
+  "role-model-row-coder": "role-model-row-coder", // pattern role-model-row-${role}
+  "role-model-input-coder": "role-model-input-coder", // pattern role-model-input-${role}
+  "role-provider-input-coder": "role-provider-input-coder", // pattern role-provider-input-${role}
+  "role-model-save-coder": "role-model-save-coder", // pattern role-model-save-${role}
+
   // Skills
   "skills-install-source": "skills-install-source",
   "skills-install-ref": "skills-install-ref",
@@ -203,6 +214,8 @@ const TESTIDS = {
   "workspace-gate-create-input": "workspace-gate-create-input",
   "workspace-gate-create-cancel": "workspace-gate-create-cancel",
   "workspace-gate-create-submit": "workspace-gate-create-submit",
+  // Starter chooser in the studio new-project create form.
+  "workspace-gate-starter-select": "workspace-gate-starter-select",
 
   // Command output
   "command-output-panel": "command-output-panel",
@@ -564,6 +577,31 @@ const TESTIDS = {
   "design-status-set-login-ready": "design-status-set-login-ready", // pattern design-status-set-${stem}-${status}
   "design-status-set-login-clear": "design-status-set-login-clear", // pattern design-status-set-${stem}-clear
   "design-status-error-login": "design-status-error-login", // pattern design-status-error-${stem}
+
+  // Preview (the preview pane's dev-server lifecycle surface,
+  // packages/ui/src/components/PreviewPane.tsx)
+  "preview-pane": "preview-pane", // the pane root
+  "preview-pane-title": "preview-pane-title", // the pane header
+  "preview-pane-status": "preview-pane-status", // the live status line
+  "preview-pane-starting": "preview-pane-starting", // the starting placeholder
+  "preview-pane-iframe": "preview-pane-iframe", // the embed (localhost URL)
+  "preview-pane-stopped": "preview-pane-stopped", // the stopped affordance
+  "preview-pane-restart": "preview-pane-restart", // the restart action
+  "preview-pane-failed": "preview-pane-failed", // the failure reason surface
+  "preview-pane-no-url": "preview-pane-no-url", // running-but-no-URL guard
+  "preview-pane-close": "preview-pane-close", // the close affordance (panel)
+  // Preview placement (the Code-mode panel)
+  "preview-panel": "preview-panel", // the Code-mode preview panel container
+  "preview-panel-toggle": "preview-panel-toggle", // the HeaderBar toggle button
+
+  // Views layout configuration:
+  // webui/src/views/ViewsLayout.tsx + ExampleEmbedding.tsx
+  "views-layout": "views-layout", // the arrangement renderer's root
+  "views-slot-left": "views-slot-left", // pattern views-slot-${slot}, slot ∈ ViewSlot
+  "views-slot-center": "views-slot-center",
+  "views-slot-right": "views-slot-right",
+  "views-slot-overlay": "views-slot-overlay",
+  "views-example-embedding": "views-example-embedding", // the example composition's root
 } as const;
 
 // Derived set for O(1) coverage lookups

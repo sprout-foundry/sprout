@@ -11,8 +11,10 @@ import (
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/langguard"
 	"github.com/sprout-foundry/sprout/pkg/security"
 	"github.com/sprout-foundry/sprout/pkg/validation"
+	"github.com/sprout-foundry/sprout/pkg/verify"
 )
 
 const (
@@ -122,12 +124,35 @@ type Agent struct {
 	turnTimestamp         time.Time
 	turnTimestampMu       sync.RWMutex
 
+	// Outbound language guard: the resolved user language for
+	// the active turn and whether the streaming hold-back applies to it
+	// (guard enabled, not a subagent, and the language was determined).
+	// Set once per turn in prepareQueryRun (resolveTurnLanguageGuard); read
+	// by the streaming provider path to gate assistant-text delivery.
+	// turnLangMu guards both fields.
+	turnLangMu           sync.RWMutex
+	turnUserLanguage     langguard.Language
+	streamHoldbackActive bool
+	// turnUserQuery is the current turn's user message (the user's last
+	// message), stored so the streaming regeneration prompt can carry it
+	// without a query-run context. Set once per turn in prepareQueryRun
+	// (setTurnLanguageGuard).
+	turnUserQuery string
+
 	// Configuration
 	configManager *configuration.Manager
 	// workspaceRootMu protects workspaceRoot from concurrent access.
 	workspaceRootMu sync.RWMutex
 	workspaceRoot   string
 	debug           bool
+	// role is the role whose model selection this agent's
+	// usage is attributed to (a configuration.Role* constant such as
+	// "coder" or "reviewer"). Set once at creation: the primary agent is
+	// the coder role; a subagent carries the role its model was resolved
+	// through (subagents/types.go SubagentOptions.Role). Empty only for
+	// agents built before role stamping landed; GetRoleUsage and the cost
+	// build sites bucket an empty role under "unknown".
+	role string
 	// contextProfile is the resolved set of context-engine levers (tool allowlist, prompt path, compaction trigger, etc.).
 	// Resolved once at agent creation. Zero-value means full-context mode.
 	contextProfile configuration.ContextProfile
@@ -240,6 +265,13 @@ type Agent struct {
 	security SecurityManager    // Approvals, redaction, elevation, bypass
 	mcpSub   MCPSubManager      // MCP server lifecycle and tool caching
 	todoMgr  *tools.TodoManager // Per-agent todo manager for session isolation
+	// scopeMilestones tracks plan scope items that started or
+	// finished this session: the per-scope
+	// started/finished state that decides which progress_milestone events a
+	// todo_write emits. Initialized at agent creation, lazily for bare test
+	// agents, and reset on session rotation so stale scope state never leaks
+	// across runs.
+	scopeMilestones *scopeMilestoneTracker
 
 	// Event system (bridges output and core)
 	eventBus  *events.EventBus
@@ -251,6 +283,37 @@ type Agent struct {
 	changeTracker         *ChangeTracker
 	preparedTools         sync.RWMutex
 	lastToolNames         []string
+	// turnVerification is this agent's per-turn verification state:
+	// the last run's result, the per-check repair attempts
+	// it consumed, and the configured repair limit N — the single access
+	// the final-reply contract and the verification event
+	// read. The turn-end hook stores a fresh state on every verification
+	// run (pass, fail, or stop-rule); prepareQueryRun resets it at each
+	// turn start so a previous turn's result never attaches to a later
+	// reply. A nil result means the hook never ran for this turn
+	// (verification disabled, no code change, subagent, or a runner setup
+	// error).
+	turnVerificationMu sync.Mutex
+	turnVerification   turnVerification
+	// turnVerifySnapshot is the frozen verification input captured once at
+	// the turn's start: the starter manifest's commands and
+	// the plan's acceptance that every verification run of the turn
+	// executes against. It is stored under turnVerificationMu and reset at
+	// each turn's start (prepareQueryRun) so a turn's verification never
+	// re-reads .sprout/starter.json or .sprout/plan.json mid-turn and a
+	// previous turn's snapshot never leaks into a later one. The turn-end
+	// hook runs every repair round against this snapshot (taking a fresh
+	// one at hook entry only if none was stored), so the model cannot
+	// change what "passing" means mid-turn.
+	turnVerifySnapshot *verify.Snapshot
+	// turnQuality is this agent's per-turn quality-after-edits state: the
+	// last quality run's structured result, or nil when the hook never ran
+	// for this turn (quality disabled, no code change, subagent, or a
+	// runner setup error). The turn-end hook stores a fresh result on every
+	// quality run; prepareQueryRun resets it at each turn start so a
+	// previous turn's result never attaches to a later one.
+	turnQualityMu sync.Mutex
+	turnQuality   *verify.QualityResult
 	// toolFuncs is this agent's per-agent tool dispatch set, built by
 	// wireAgentToolFuncs and carried into ToolEnv so agent-dependent tools
 	// route to THIS agent, not the most recently constructed one.
@@ -406,6 +469,11 @@ type Agent struct {
 
 	// securityAnalysisCacheMu guards securityAnalysisCache against concurrent lazy-init and reset.
 	securityAnalysisCacheMu sync.Mutex
+
+	// workflowRun marks a workflow/automate run: non-interactive for approval
+	// purposes regardless of the console's TTY status. See
+	// workflow_run_approval.go for the policy and the accessors.
+	workflowRun atomic.Bool
 }
 
 // InjectWebUIManagers replaces the agent's internal approval and ask-user managers with the webui-owned instances.

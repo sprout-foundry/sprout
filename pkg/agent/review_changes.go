@@ -121,7 +121,7 @@ func (a *Agent) ReviewChanges(ctx context.Context, opts ReviewChangesOptions) (*
 		return nil, agenterrors.NewValidation("review_changes requires a git repository", nil)
 	}
 
-	provider, model, systemPrompt, err := resolveSubagentProviderModel(a, personas.IDReviewer, true, workspaceRoot)
+	provider, model, role, systemPrompt, err := resolveSubagentProviderModel(a, personas.IDReviewer, true, workspaceRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -153,6 +153,7 @@ func (a *Agent) ReviewChanges(ctx context.Context, opts ReviewChangesOptions) (*
 			Provider:     provider,
 			Model:        model,
 			SystemPrompt: systemPrompt,
+			Role:         role,
 		})
 	}
 	if len(tasks) == 0 {
@@ -176,7 +177,7 @@ func (a *Agent) runReviewTasks(ctx context.Context, tasks []SubagentTask, quiet 
 	if len(tasks) == 1 {
 		t := tasks[0]
 		res := runner.runTask(ctx, t.ID, t.Prompt, SubagentOptions{
-			Persona: t.Persona, Provider: t.Provider, Model: t.Model, SystemPrompt: t.SystemPrompt, Quiet: quiet,
+			Persona: t.Persona, Provider: t.Provider, Model: t.Model, SystemPrompt: t.SystemPrompt, Quiet: quiet, Role: t.Role,
 		}, nil, 0)
 		results = []*SubagentResult{res}
 	} else {
@@ -194,7 +195,9 @@ func (a *Agent) runReviewTasks(ctx context.Context, tasks []SubagentTask, quiet 
 			printSubagentDone(personas.IDReviewer, r)
 		}
 		if r.TokensUsed > 0 || r.Cost > 0 {
-			a.TrackMetricsFromResponse(0, 0, r.TokensUsed, r.Cost, 0, 0, 0)
+			// Roll the reviewer's usage up under its own role with its real
+			// prompt/completion token split.
+			a.RollupSubagentUsage(r)
 		}
 	}
 	return results

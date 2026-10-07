@@ -104,6 +104,7 @@ function createMockFetch(responseOverrides?: Map<string, Partial<Response>>) {
       status: 200,
       headers: { get: () => 'application/wasm' },
       arrayBuffer: async () => new ArrayBuffer(0),
+      text: async () => '',
     } as Response;
   };
 }

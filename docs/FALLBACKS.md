@@ -124,10 +124,15 @@ Tier 3: Parent agent inheritance (field-by-field)
 ### `GetCommitProvider` / `GetReviewProvider`
 
 ```
-1. cfg.CommitProvider / cfg.ReviewProvider (direct field only — may be empty)
+GetCommitProvider:
+1. cfg.CommitProvider
+2. cfg.LastUsedProvider (documented default; empty when neither is set)
+
+GetReviewProvider:
+1. cfg.ReviewProvider (direct field only — may be empty)
 ```
 
-**v0.17 change:** The 4-level fallback chain (→ LastUsedProvider → ProviderPriority[0] → ollama-local) was removed. These now return only the explicitly configured value. Callers that need a provider fall back to the main agent's provider.
+**v0.17 change:** The 4-level fallback chain (→ LastUsedProvider → ProviderPriority[0] → ollama-local) was removed. `GetReviewProvider` still returns only the explicitly configured value; callers that need a provider fall back to the main agent's provider. **commit.2:** `GetCommitProvider` falls back to `LastUsedProvider` when `commit_provider` is unset (matching the field's documented default), so `sprout commit --skip-prompt` resolves a real client instead of aborting on the manual-message prompt. The `ProviderPriority` fallback did not return.
 
 ### `GetCommitModel` / `GetReviewModel`
 

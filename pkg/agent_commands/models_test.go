@@ -1,10 +1,14 @@
 package commands
 
 import (
+	"bytes"
+	"io"
 	"testing"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestModelsCommandFindExactModel(t *testing.T) {
@@ -499,4 +503,158 @@ func TestModelsCommandFindFeaturedModels(t *testing.T) {
 			}
 		})
 	}
+}
+
+// ====================================================================
+// /model --role
+// ====================================================================
+
+func TestModelsCommandExecute_RoleModelPersists(t *testing.T) {
+	chatAgent := createTestAgentWithTempConfig(t)
+	cm := chatAgent.GetConfigManager()
+	require.NotNil(t, cm)
+
+	var buf bytes.Buffer
+	cmd := &ModelsCommand{}
+	cmd.SetOutput(&buf)
+
+	require.NoError(t, cmd.Execute([]string{"--role", "planner", "some-model"}, chatAgent))
+
+	// The role's model is persisted through the config manager.
+	assert.Equal(t, "some-model", cm.GetConfig().GetRole(configuration.RolePlanner).Model)
+	assert.Contains(t, buf.String(), `Role "planner" model set to: some-model`)
+
+	// The active conversation model is untouched by the role path.
+	assert.NotContains(t, buf.String(), "Model set to: ")
+}
+
+func TestModelsCommandExecute_RoleModelPreservesProvider(t *testing.T) {
+	chatAgent := createTestAgentWithTempConfig(t)
+	cm := chatAgent.GetConfigManager()
+	require.NotNil(t, cm)
+
+	// A stored provider on the role must survive a model update.
+	require.NoError(t, cm.UpdateConfig(func(c *configuration.Config) error {
+		c.SetRole(configuration.RolePlanner, configuration.RoleConfig{Provider: "zai"})
+		return nil
+	}))
+
+	var buf bytes.Buffer
+	cmd := &ModelsCommand{}
+	cmd.SetOutput(&buf)
+
+	require.NoError(t, cmd.Execute([]string{"--role", "planner", "glm-4"}, chatAgent))
+
+	stored := cm.GetConfig().GetRole(configuration.RolePlanner)
+	assert.Equal(t, "zai", stored.Provider, "stored provider must be preserved")
+	assert.Equal(t, "glm-4", stored.Model)
+	assert.Contains(t, buf.String(), `Role "planner" model set to: glm-4 (provider: zai)`)
+}
+
+func TestModelsCommandExecute_RoleModelValidation(t *testing.T) {
+	chatAgent := createTestAgentWithTempConfig(t)
+	cm := chatAgent.GetConfigManager()
+	require.NotNil(t, cm)
+
+	cmd := &ModelsCommand{}
+	cmd.SetOutput(io.Discard)
+
+	// Missing model ID.
+	require.Error(t, cmd.Execute([]string{"--role", "planner"}, chatAgent))
+	// Missing role name (flag at the end of the arguments).
+	require.Error(t, cmd.Execute([]string{"some-model", "--role"}, chatAgent))
+	// Whitespace in the role name is rejected.
+	require.Error(t, cmd.Execute([]string{"--role", "pl anner", "m"}, chatAgent))
+
+	// Unknown role names are rejected — only the built-ins are resolvable,
+	// so an arbitrary name would persist a selection no feature reads.
+	require.Error(t, cmd.Execute([]string{"--role", "my-custom-role", "m"}, chatAgent))
+	assert.Empty(t, cm.GetConfig().GetRole("my-custom-role").Model, "unknown role must not be persisted")
+}
+
+// TestModelsCommandExecute_RoleModelUnknownRoleRejected pins the unknown-role
+// gate: a near-miss name is rejected with the valid roles named in the error
+// and nothing persisted, while every built-in remains accepted.
+func TestModelsCommandExecute_RoleModelUnknownRoleRejected(t *testing.T) {
+	chatAgent := createTestAgentWithTempConfig(t)
+	cm := chatAgent.GetConfigManager()
+	require.NotNil(t, cm)
+
+	var buf bytes.Buffer
+	cmd := &ModelsCommand{}
+	cmd.SetOutput(&buf)
+
+	// A typo'd built-in ("Planer") is rejected, and the error names the
+	// valid roles so the user can correct it.
+	err := cmd.Execute([]string{"--role", "Planer", "glm-4"}, chatAgent)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, `unknown role "Planer"`)
+	for _, valid := range configuration.BuiltInRoles() {
+		assert.Contains(t, err.Error(), valid)
+	}
+	assert.Empty(t, cm.GetConfig().GetRole("Planer").Model, "near-miss role must not be persisted")
+
+	// Every built-in role still passes the gate.
+	for _, role := range configuration.BuiltInRoles() {
+		require.NoError(t, cmd.Execute([]string{"--role", role, "m-" + role}, chatAgent))
+		assert.Equal(t, "m-"+role, cm.GetConfig().GetRole(role).Model)
+	}
+}
+
+func TestParseRoleArgs(t *testing.T) {
+	tests := []struct {
+		name      string
+		args      []string
+		wantRole  string
+		wantModel string
+		wantFound bool
+		wantErr   bool
+	}{
+		{name: "no args has no flag", args: []string{}, wantFound: false},
+		{name: "bare model ID has no flag", args: []string{"gpt-4o"}, wantFound: false},
+		{name: "select has no flag", args: []string{"select"}, wantFound: false},
+		{name: "flag first", args: []string{"--role", "planner", "gpt-4o"}, wantRole: "planner", wantModel: "gpt-4o", wantFound: true},
+		{name: "flag last", args: []string{"gpt-4o", "--role", "planner"}, wantRole: "planner", wantModel: "gpt-4o", wantFound: true},
+		{name: "missing role name", args: []string{"--role"}, wantErr: true},
+		{name: "missing model", args: []string{"--role", "planner"}, wantErr: true},
+		{name: "extra non-flag args", args: []string{"--role", "planner", "gpt-4o", "extra"}, wantErr: true},
+		// Repeated flags are malformed: the first flag's value is a
+		// non-flag argument, so the model list is no longer exactly one.
+		{name: "repeated flags", args: []string{"--role", "planner", "--role", "coder", "gpt-4o"}, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			role, model, found, err := parseRoleArgs(tt.args)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantFound, found)
+			if found {
+				assert.Equal(t, tt.wantRole, role)
+				assert.Equal(t, tt.wantModel, model)
+			}
+		})
+	}
+}
+
+// TestModelsCommandExecute_NoRoleFlagUnchanged pins the pre-role dispatch:
+// without --role the existing paths are unchanged (multi-arg usage error,
+// bare ID routed to the model set path, not the role path).
+func TestModelsCommandExecute_NoRoleFlagUnchanged(t *testing.T) {
+	chatAgent := createTestAgentWithTempConfig(t)
+
+	cmd := &ModelsCommand{}
+	cmd.SetOutput(io.Discard)
+	// Two bare arguments (no --role) is still a usage error.
+	require.Error(t, cmd.Execute([]string{"gpt-4o", "extra"}, chatAgent))
+
+	// A bare model ID is not treated as a role flag.
+	role, model, found, err := parseRoleArgs([]string{"gpt-4o"})
+	require.NoError(t, err)
+	assert.False(t, found)
+	assert.Empty(t, role)
+	assert.Empty(t, model)
 }

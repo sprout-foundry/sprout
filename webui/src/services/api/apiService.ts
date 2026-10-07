@@ -20,6 +20,7 @@ import * as searchApi from './searchApi';
 import * as sessionApi from './sessionApi';
 import * as settingsApi from './settingsApi';
 import * as sshApi from './sshApi';
+import * as startersApi from './startersApi';
 import * as terminalApi from './terminalApi';
 import type {
   StatsResponse,
@@ -45,6 +46,9 @@ import type {
   ProviderModelsResponse,
   SessionSearchResponse,
   SessionSearchResult,
+  Starter,
+  InstantiateStarterParams,
+  InstantiateStarterResponse,
 } from './types';
 import * as workspaceApi from './workspaceApi';
 
@@ -82,6 +86,18 @@ class ApiService {
 
   async browseDirectory(path?: string): Promise<workspaceApi.BrowseResult> {
     return workspaceApi.browseDirectory(clientFetch, path);
+  }
+
+  // ── Starters ────────────────────────────────────────────────────
+
+  /** List the embedded starters (id, version, file count, manifest). */
+  async listStarters(): Promise<Starter[]> {
+    return startersApi.listStarters(clientFetch);
+  }
+
+  /** Instantiate a starter into a fresh project directory. */
+  async instantiateStarter(params: InstantiateStarterParams): Promise<InstantiateStarterResponse> {
+    return startersApi.instantiateStarter(clientFetch, params);
   }
 
   // ── Terminal ───────────────────────────────────────────────────────

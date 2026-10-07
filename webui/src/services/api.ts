@@ -44,6 +44,10 @@ export type {
   SubagentTypeInfo,
   SessionSearchResult,
   SessionSearchResponse,
+  Starter,
+  StarterManifest,
+  InstantiateStarterParams,
+  InstantiateStarterResponse,
 } from './api/types';
 
 // Re-export SSHWorkspaceOpenError as a value for backward compatibility

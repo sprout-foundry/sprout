@@ -1,0 +1,467 @@
+{
+  "meta": {
+    "RunDate": "2026-10-04",
+    "Version": "v0.0.0-golden"
+  },
+  "models": [
+    {
+      "Model": "alpha",
+      "Provider": "prov-a"
+    },
+    {
+      "Model": "beta",
+      "Provider": "prov-b"
+    }
+  ],
+  "tasks": [
+    {
+      "TaskID": "add-badge",
+      "Starter": "fixture",
+      "Model": "alpha",
+      "Provider": "prov-a",
+      "Runs": [
+        {
+          "TaskID": "add-badge",
+          "Starter": "fixture",
+          "Model": "alpha",
+          "Provider": "prov-a",
+          "RunNumber": 1,
+          "Passed": true,
+          "Result": {
+            "plan_revision": 1,
+            "checks": [
+              {
+                "kind": "build",
+                "command": "npm run build",
+                "passed": true
+              }
+            ]
+          },
+          "Err": null,
+          "StartedAt": "2026-10-04T08:00:00Z",
+          "FinishedAt": "2026-10-04T08:00:01.234Z",
+          "Turns": 1,
+          "RepairRounds": 0,
+          "RepairAttempts": null,
+          "RepairLimit": 0,
+          "Tokens": 250,
+          "Cost": 0.0011,
+          "LangChecks": 0,
+          "LangMismatches": 0,
+          "RoleUsage": [
+            {
+              "role": "coder",
+              "prompt_tokens": 200,
+              "completion_tokens": 50,
+              "tokens": 250,
+              "charged_cost": 0.0011,
+              "token_cost": 0.0011,
+              "calls": 2
+            }
+          ]
+        },
+        {
+          "TaskID": "add-badge",
+          "Starter": "fixture",
+          "Model": "alpha",
+          "Provider": "prov-a",
+          "RunNumber": 2,
+          "Passed": true,
+          "Result": {
+            "plan_revision": 1,
+            "checks": [
+              {
+                "kind": "build",
+                "command": "npm run build",
+                "passed": true
+              }
+            ]
+          },
+          "Err": null,
+          "StartedAt": "2026-10-04T08:00:05Z",
+          "FinishedAt": "2026-10-04T08:00:07.5Z",
+          "Turns": 1,
+          "RepairRounds": 0,
+          "RepairAttempts": null,
+          "RepairLimit": 0,
+          "Tokens": 310,
+          "Cost": 0.0013,
+          "LangChecks": 1,
+          "LangMismatches": 1,
+          "RoleUsage": null
+        },
+        {
+          "TaskID": "add-badge",
+          "Starter": "fixture",
+          "Model": "alpha",
+          "Provider": "prov-a",
+          "RunNumber": 3,
+          "Passed": true,
+          "Result": {
+            "plan_revision": 1,
+            "checks": [
+              {
+                "kind": "build",
+                "command": "npm run build",
+                "passed": true
+              }
+            ]
+          },
+          "Err": null,
+          "StartedAt": "2026-10-04T08:00:10Z",
+          "FinishedAt": "2026-10-04T08:00:12.015Z",
+          "Turns": 1,
+          "RepairRounds": 0,
+          "RepairAttempts": null,
+          "RepairLimit": 0,
+          "Tokens": 290,
+          "Cost": 0.0012,
+          "LangChecks": 0,
+          "LangMismatches": 0,
+          "RoleUsage": null
+        }
+      ],
+      "Passed": 3,
+      "PassRate": 1
+    },
+    {
+      "TaskID": "dark-mode",
+      "Starter": "fixture",
+      "Model": "alpha",
+      "Provider": "prov-a",
+      "Runs": [
+        {
+          "TaskID": "dark-mode",
+          "Starter": "fixture",
+          "Model": "alpha",
+          "Provider": "prov-a",
+          "RunNumber": 1,
+          "Passed": false,
+          "Result": {
+            "plan_revision": 1,
+            "checks": [
+              {
+                "kind": "build",
+                "command": "npm run build",
+                "passed": true
+              },
+              {
+                "kind": "test",
+                "command": "npm test",
+                "excerpt": "2 of 14 tests failed."
+              }
+            ]
+          },
+          "Err": null,
+          "StartedAt": "2026-10-04T08:02:00Z",
+          "FinishedAt": "2026-10-04T08:02:05.6Z",
+          "Turns": 1,
+          "RepairRounds": 0,
+          "RepairAttempts": null,
+          "RepairLimit": 0,
+          "Tokens": 500,
+          "Cost": 0.0031,
+          "LangChecks": 0,
+          "LangMismatches": 0,
+          "RoleUsage": null
+        },
+        {
+          "TaskID": "dark-mode",
+          "Starter": "fixture",
+          "Model": "alpha",
+          "Provider": "prov-a",
+          "RunNumber": 2,
+          "Passed": false,
+          "Result": {
+            "plan_revision": 1,
+            "checks": [
+              {
+                "kind": "build",
+                "command": "npm run build",
+                "passed": true
+              },
+              {
+                "kind": "page",
+                "command": "npm run dev",
+                "excerpt": "route /: HTTP 500",
+                "routes": [
+                  "/"
+                ]
+              }
+            ]
+          },
+          "Err": null,
+          "StartedAt": "2026-10-04T08:02:10Z",
+          "FinishedAt": "2026-10-04T08:02:16.1Z",
+          "Turns": 1,
+          "RepairRounds": 0,
+          "RepairAttempts": null,
+          "RepairLimit": 0,
+          "Tokens": 520,
+          "Cost": 0.0033,
+          "LangChecks": 0,
+          "LangMismatches": 0,
+          "RoleUsage": null
+        },
+        {
+          "TaskID": "dark-mode",
+          "Starter": "fixture",
+          "Model": "alpha",
+          "Provider": "prov-a",
+          "RunNumber": 3,
+          "Passed": false,
+          "Result": null,
+          "Err": {},
+          "StartedAt": "2026-10-04T08:02:20Z",
+          "FinishedAt": "2026-10-04T08:02:20.5Z",
+          "Turns": 0,
+          "RepairRounds": 0,
+          "RepairAttempts": null,
+          "RepairLimit": 0,
+          "Tokens": 0,
+          "Cost": 0,
+          "LangChecks": 0,
+          "LangMismatches": 0,
+          "RoleUsage": null
+        }
+      ],
+      "Passed": 0,
+      "PassRate": 0
+    },
+    {
+      "TaskID": "add-badge",
+      "Starter": "fixture",
+      "Model": "beta",
+      "Provider": "prov-b",
+      "Runs": [
+        {
+          "TaskID": "add-badge",
+          "Starter": "fixture",
+          "Model": "beta",
+          "Provider": "prov-b",
+          "RunNumber": 1,
+          "Passed": true,
+          "Result": {
+            "plan_revision": 1,
+            "checks": [
+              {
+                "kind": "build",
+                "command": "npm run build",
+                "passed": true
+              }
+            ]
+          },
+          "Err": null,
+          "StartedAt": "2026-10-04T08:01:00Z",
+          "FinishedAt": "2026-10-04T08:01:02.05Z",
+          "Turns": 1,
+          "RepairRounds": 0,
+          "RepairAttempts": null,
+          "RepairLimit": 0,
+          "Tokens": 340,
+          "Cost": 0.0021,
+          "LangChecks": 0,
+          "LangMismatches": 0,
+          "RoleUsage": null
+        },
+        {
+          "TaskID": "add-badge",
+          "Starter": "fixture",
+          "Model": "beta",
+          "Provider": "prov-b",
+          "RunNumber": 2,
+          "Passed": true,
+          "Result": {
+            "plan_revision": 1,
+            "checks": [
+              {
+                "kind": "build",
+                "command": "npm run build",
+                "passed": true
+              }
+            ]
+          },
+          "Err": null,
+          "StartedAt": "2026-10-04T08:01:05Z",
+          "FinishedAt": "2026-10-04T08:01:08.075Z",
+          "Turns": 1,
+          "RepairRounds": 0,
+          "RepairAttempts": null,
+          "RepairLimit": 0,
+          "Tokens": 355,
+          "Cost": 0.0022,
+          "LangChecks": 0,
+          "LangMismatches": 0,
+          "RoleUsage": null
+        },
+        {
+          "TaskID": "add-badge",
+          "Starter": "fixture",
+          "Model": "beta",
+          "Provider": "prov-b",
+          "RunNumber": 3,
+          "Passed": false,
+          "Result": {
+            "plan_revision": 1,
+            "checks": [
+              {
+                "kind": "build",
+                "command": "npm run build",
+                "excerpt": "tsc: error TS2304: Cannot find name 'bench'."
+              }
+            ]
+          },
+          "Err": null,
+          "StartedAt": "2026-10-04T08:01:10Z",
+          "FinishedAt": "2026-10-04T08:01:14.4Z",
+          "Turns": 1,
+          "RepairRounds": 1,
+          "RepairAttempts": {
+            "build": 1
+          },
+          "RepairLimit": 1,
+          "Tokens": 420,
+          "Cost": 0.0027,
+          "LangChecks": 0,
+          "LangMismatches": 0,
+          "RoleUsage": null
+        }
+      ],
+      "Passed": 2,
+      "PassRate": 0.6666666666666666
+    },
+    {
+      "TaskID": "dark-mode",
+      "Starter": "fixture",
+      "Model": "beta",
+      "Provider": "prov-b",
+      "Runs": [
+        {
+          "TaskID": "dark-mode",
+          "Starter": "fixture",
+          "Model": "beta",
+          "Provider": "prov-b",
+          "RunNumber": 1,
+          "Passed": false,
+          "Result": {
+            "plan_revision": 1,
+            "checks": [
+              {
+                "kind": "build",
+                "command": "npm run build",
+                "excerpt": "tsc: error TS2304: Cannot find name 'bench'."
+              }
+            ]
+          },
+          "Err": null,
+          "StartedAt": "2026-10-04T08:03:00Z",
+          "FinishedAt": "2026-10-04T08:03:03.3Z",
+          "Turns": 1,
+          "RepairRounds": 0,
+          "RepairAttempts": null,
+          "RepairLimit": 0,
+          "Tokens": 480,
+          "Cost": 0.0029,
+          "LangChecks": 0,
+          "LangMismatches": 0,
+          "RoleUsage": null
+        },
+        {
+          "TaskID": "dark-mode",
+          "Starter": "fixture",
+          "Model": "beta",
+          "Provider": "prov-b",
+          "RunNumber": 2,
+          "Passed": false,
+          "Result": {
+            "plan_revision": 1,
+            "checks": [
+              {
+                "kind": "build",
+                "command": "npm run build",
+                "excerpt": "tsc: error TS2304: Cannot find name 'bench'."
+              },
+              {
+                "kind": "interaction",
+                "command": "browser: 2 steps",
+                "excerpt": "step 2: expected element missing"
+              }
+            ]
+          },
+          "Err": null,
+          "StartedAt": "2026-10-04T08:03:05Z",
+          "FinishedAt": "2026-10-04T08:03:09.9Z",
+          "Turns": 1,
+          "RepairRounds": 0,
+          "RepairAttempts": null,
+          "RepairLimit": 0,
+          "Tokens": 495,
+          "Cost": 0.003,
+          "LangChecks": 0,
+          "LangMismatches": 0,
+          "RoleUsage": null
+        },
+        {
+          "TaskID": "dark-mode",
+          "Starter": "fixture",
+          "Model": "beta",
+          "Provider": "prov-b",
+          "RunNumber": 3,
+          "Passed": false,
+          "Result": {
+            "plan_revision": 1,
+            "checks": [
+              {
+                "kind": "build",
+                "command": "npm run build",
+                "excerpt": "tsc: error TS2304: Cannot find name 'bench'."
+              }
+            ]
+          },
+          "Err": null,
+          "StartedAt": "2026-10-04T08:03:10Z",
+          "FinishedAt": "2026-10-04T08:03:15.2Z",
+          "Turns": 1,
+          "RepairRounds": 0,
+          "RepairAttempts": null,
+          "RepairLimit": 0,
+          "Tokens": 510,
+          "Cost": 0.0032,
+          "LangChecks": 0,
+          "LangMismatches": 0,
+          "RoleUsage": null
+        }
+      ],
+      "Passed": 0,
+      "PassRate": 0
+    }
+  ],
+  "starters": [
+    {
+      "Starter": "fixture",
+      "Model": "alpha",
+      "Provider": "prov-a",
+      "Tasks": 2,
+      "RunsTotal": 6,
+      "Passed": 3,
+      "PassRate": 0.5
+    },
+    {
+      "Starter": "fixture",
+      "Model": "beta",
+      "Provider": "prov-b",
+      "Tasks": 2,
+      "RunsTotal": 6,
+      "Passed": 2,
+      "PassRate": 0.3333333333333333
+    }
+  ],
+  "failure_categories": {
+    "build": 4,
+    "error": 1,
+    "interaction": 1,
+    "page": 1,
+    "stopped_by_rule": 1,
+    "test": 1
+  }
+}

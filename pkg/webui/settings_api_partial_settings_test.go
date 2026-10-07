@@ -48,6 +48,10 @@ func TestPartialSettingsAppliers_ComprehensiveEnums(t *testing.T) {
 		"provider_models":    map[string]interface{}{"openai": "gpt-4"},
 		"provider_priority":  []interface{}{"openai"},
 		"last_used_provider": "openai",
+		// applyRolesSettings
+		"roles": map[string]interface{}{
+			"coder": map[string]interface{}{"provider": "openai", "model": "gpt-4"},
+		},
 		// applyShellDetectionSettings
 		"enable_zsh_command_detection":   true,
 		"auto_execute_detected_commands": true,
@@ -467,6 +471,7 @@ func TestPartialSettingsAppliers_Ordered(t *testing.T) {
 		"applyRiskAndSafetySettings",
 		"applySubagentSettings",
 		"applyProviderRoutingSettings",
+		"applyRolesSettings",
 		"applyShellDetectionSettings",
 		"applyAPITimeoutsSettings",
 		"applyVersionSettings",

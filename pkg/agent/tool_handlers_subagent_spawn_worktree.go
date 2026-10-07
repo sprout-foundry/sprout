@@ -85,9 +85,9 @@ func approveExternalWorkspace(a *Agent, outsidePaths, absFilePaths []string) (st
 		// Prefer webui approval path when a browser tab is connected
 		agentConfig := a.GetConfig()
 		logger := utils.GetLogger(agentConfig != nil && agentConfig.SkipPrompt)
-		canPrompt := logger != nil && logger.IsInteractive() && !a.IsSubagent()
+		canPrompt := logger != nil && logger.IsInteractive() && !a.IsSubagent() && !a.IsWorkflowRun()
 
-		if mgr := a.GetSecurityApprovalMgr(); mgr != nil && a.GetEventBus() != nil && !a.IsSubagent() && a.HasActiveWebUIClients() {
+		if mgr := a.GetSecurityApprovalMgr(); mgr != nil && a.GetEventBus() != nil && !a.IsSubagent() && !a.IsWorkflowRun() && a.HasActiveWebUIClients() {
 			// WEBUI: request approval via event bus for the browser dialog
 			extras := map[string]string{
 				"risk_type": "Subagent External Workspace",

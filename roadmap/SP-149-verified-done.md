@@ -1,6 +1,6 @@
 # SP-149 — Verified Done
 
-> **Status (2026-10-03):** Proposed.
+> **Status (2026-10-07):** Shipped.
 > Depends on SP-148 (acceptance criteria) and SP-153 (starter manifest
 > commands). Reuses the browse path (`pkg/webcontent`) and the SP-140-4
 > render→check pattern.

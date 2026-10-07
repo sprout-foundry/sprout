@@ -2,7 +2,7 @@ import { AlertTriangle, FolderPlus, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { supportsFolderPicker, supportsWorkspaceSwitching } from '../config/mode';
 import type { WorkspaceInfo } from '../hooks/useWorkspace';
-import { ApiService } from '../services/api';
+import { ApiService, type Starter } from '../services/api';
 import { createWorkspaceNative, pickWorkspaceNative } from '../services/nativeFs';
 import { setWorkspaceGateOpen } from '../services/workspaceGate';
 import WorkspaceBrowser from './WorkspaceBrowser';
@@ -65,6 +65,11 @@ function WorkspaceGateModal({
   // name input; `newName` is its controlled value.
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
+  // The embedded starter catalogue for the studio create form.
+  // `starterOptions` is populated when the form is revealed; `selectedStarter`
+  // is the chosen starter id, or '' for "blank" (no starter — the default).
+  const [starterOptions, setStarterOptions] = useState<Starter[]>([]);
+  const [selectedStarter, setSelectedStarter] = useState('');
 
   const run = useCallback(
     (kind: 'select' | 'consent' | 'pick' | 'create', action: () => void) => {
@@ -94,6 +99,27 @@ function WorkspaceGateModal({
     return () => setWorkspaceGateOpen(false);
   }, []);
 
+  // Studio create form: load the embedded starter catalogue
+  // when the form is revealed, so the chooser offers the starters. The create
+  // form is only reachable in the studio variant, so `creating` implies
+  // studio mode. A fetch failure (or an empty catalogue) degrades to "blank"
+  // only — create is never blocked.
+  useEffect(() => {
+    if (!creating) return undefined;
+    let live = true;
+    void (async () => {
+      try {
+        const list = await ApiService.getInstance().listStarters();
+        if (live) setStarterOptions(Array.isArray(list) ? list : []);
+      } catch {
+        if (live) setStarterOptions([]);
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [creating]);
+
   // Cloud mode (and any mode without workspace switching) is never gated.
   if (!supportsWorkspaceSwitching) return null;
 
@@ -122,6 +148,20 @@ function WorkspaceGateModal({
                 run('create', async () => {
                   const result = await createWorkspaceNative(newName);
                   if (result.ok) {
+                    // A starter was picked: the bridge created the folder and
+                    // made it the workspace root, so the new project's
+                    // absolute path is the current workspace root (GET
+                    // /api/workspace → workspace_root). Instantiate the
+                    // starter there. "Blank" skips this step, leaving the
+                    // create flow byte-identical to a plain folder create.
+                    if (selectedStarter !== '') {
+                      const ws = await ApiService.getInstance().getWorkspace();
+                      await ApiService.getInstance().instantiateStarter({
+                        starter: selectedStarter,
+                        path: ws.workspace_root,
+                        name: newName,
+                      });
+                    }
                     window.location.reload();
                     return;
                   }
@@ -150,14 +190,37 @@ function WorkspaceGateModal({
                 disabled={pending !== null}
                 data-testid="workspace-gate-create-input"
               />
+              <label className="workspace-gate-create-label" htmlFor="workspace-gate-starter-select">
+                Starter
+              </label>
+              <select
+                id="workspace-gate-starter-select"
+                className="workspace-gate-starter-select"
+                value={selectedStarter}
+                onChange={(e) => setSelectedStarter(e.target.value)}
+                disabled={pending !== null}
+                data-testid="workspace-gate-starter-select"
+              >
+                <option value="">Blank (no starter)</option>
+                {starterOptions.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.id} (v{s.version}, {s.files} files)
+                  </option>
+                ))}
+              </select>
               <div className="workspace-gate-create-actions">
                 <button
                   className="workspace-gate-home-btn"
                   type="button"
                   onClick={() => {
+                    // Reset the form. setPending is defensive — the button is
+                    // disabled while a create is in flight (pending !== null) —
+                    // but it guarantees the form is idle when re-revealed.
                     setCreating(false);
                     setNewName('');
                     setError(null);
+                    setSelectedStarter('');
+                    setPending(null);
                   }}
                   disabled={pending !== null}
                   data-testid="workspace-gate-create-cancel"

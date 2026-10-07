@@ -71,14 +71,14 @@ func postTxnJSON(t *testing.T, ws *ReactWebServer, path string, body string) *ht
 	return rec
 }
 
-// txnMux registers the real route table (registerGitRoutes is what
-// setupRoutes calls for these patterns), so the exact-match /api/txn/*
-// registrations themselves are under test rather than just the handlers.
-// The full setupRoutes is not used because it also brings up the LSP
-// manager, which no txn test needs.
+// txnMux registers the real route table (the sync/txn Huma operations are what
+// setupRoutes mounts for these patterns, via registerHumaOperations), so the
+// /api/txn/* and /api/sync registrations themselves are under test rather
+// than just the handlers. The full setupRoutes is not used because it also
+// brings up the LSP manager, which no txn test needs.
 func txnMux(ws *ReactWebServer) *http.ServeMux {
 	mux := http.NewServeMux()
-	ws.registerGitRoutes(mux)
+	registerHumaOperations(newHumaAPI(mux), ws)
 	return mux
 }
 

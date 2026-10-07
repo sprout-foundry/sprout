@@ -216,8 +216,8 @@ func TestTrackMetricsFromResponse_UsdBudgetWiring(t *testing.T) {
 		})
 
 		// Two responses totaling $6 — should NOT touch the budget.
-		a.TrackMetricsFromResponse(100, 50, 150, 3.0, 0, 0, 0)
-		a.TrackMetricsFromResponse(100, 50, 150, 3.0, 0, 0, 0)
+		a.TrackMetricsFromResponse(100, 50, 150, 3.0, 0, 0, 0, 0)
+		a.TrackMetricsFromResponse(100, 50, 150, 3.0, 0, 0, 0, 0)
 
 		spent, _ := budget.Snapshot()
 		if spent != 0 {
@@ -243,7 +243,7 @@ func TestTrackMetricsFromResponse_UsdBudgetWiring(t *testing.T) {
 
 		// $6 exceeds the $5 cap, but TrackMetricsFromResponse should NOT
 		// debit the fleet budget or set the truncation flag.
-		a.TrackMetricsFromResponse(100, 50, 150, 6.0, 0, 0, 0)
+		a.TrackMetricsFromResponse(100, 50, 150, 6.0, 0, 0, 0, 0)
 
 		if a.FleetBudgetExceeded() {
 			t.Fatalf("FleetBudgetExceeded should be false (no fleet debit)")
@@ -255,7 +255,7 @@ func TestTrackMetricsFromResponse_UsdBudgetWiring(t *testing.T) {
 
 	t.Run("no budget attached is a no-op", func(t *testing.T) {
 		a := newMetricsTestAgent(t)
-		a.TrackMetricsFromResponse(100, 50, 150, 100.0, 0, 0, 0)
+		a.TrackMetricsFromResponse(100, 50, 150, 100.0, 0, 0, 0, 0)
 		if a.FleetBudgetExceeded() {
 			t.Fatalf("no budget should mean no truncation")
 		}
@@ -276,6 +276,7 @@ func TestTrackMetricsFromResponse(t *testing.T) {
 			0,    // cachedTokens
 			0,    // cacheWriteTokens
 			0,    // imageTokens
+			0,    // actualCost
 		)
 
 		if a.GetTotalTokens() != 150 {
@@ -292,8 +293,8 @@ func TestTrackMetricsFromResponse(t *testing.T) {
 	t.Run("updates cost correctly", func(t *testing.T) {
 		a := newMetricsTestAgent(t)
 
-		a.TrackMetricsFromResponse(100, 50, 150, 0.05, 0, 0, 0)
-		a.TrackMetricsFromResponse(200, 100, 300, 0.10, 0, 0, 0)
+		a.TrackMetricsFromResponse(100, 50, 150, 0.05, 0, 0, 0, 0)
+		a.TrackMetricsFromResponse(200, 100, 300, 0.10, 0, 0, 0, 0)
 
 		cost := a.GetTotalCost()
 		// Use approximate comparison for floating point
@@ -309,13 +310,13 @@ func TestTrackMetricsFromResponse(t *testing.T) {
 			t.Errorf("expected initial call count 0, got %d", a.GetLLMCallCount())
 		}
 
-		a.TrackMetricsFromResponse(100, 50, 150, 0.05, 0, 0, 0)
+		a.TrackMetricsFromResponse(100, 50, 150, 0.05, 0, 0, 0, 0)
 
 		if a.GetLLMCallCount() != 1 {
 			t.Errorf("expected call count 1, got %d", a.GetLLMCallCount())
 		}
 
-		a.TrackMetricsFromResponse(100, 50, 150, 0.05, 0, 0, 0)
+		a.TrackMetricsFromResponse(100, 50, 150, 0.05, 0, 0, 0, 0)
 
 		if a.GetLLMCallCount() != 2 {
 			t.Errorf("expected call count 2, got %d", a.GetLLMCallCount())
@@ -325,8 +326,8 @@ func TestTrackMetricsFromResponse(t *testing.T) {
 	t.Run("tracks cached tokens", func(t *testing.T) {
 		a := newMetricsTestAgent(t)
 
-		a.TrackMetricsFromResponse(100, 50, 150, 0.05, 25, 0, 0)
-		a.TrackMetricsFromResponse(200, 100, 300, 0.10, 50, 0, 0)
+		a.TrackMetricsFromResponse(100, 50, 150, 0.05, 25, 0, 0, 0)
+		a.TrackMetricsFromResponse(200, 100, 300, 0.10, 50, 0, 0, 0)
 
 		if a.GetCachedTokens() != 75 {
 			t.Errorf("expected 75 cached tokens, got %d", a.GetCachedTokens())
@@ -346,7 +347,7 @@ func TestTrackMetricsFromResponse(t *testing.T) {
 		a.state.SetSessionModel("test-model")
 
 		// With 0.05 cost for 150 tokens and cached=25, savings = 25 * (0.6 - 0.06) / 1e6 = 0.0000135
-		a.TrackMetricsFromResponse(100, 50, 150, 0.05, 25, 0, 0)
+		a.TrackMetricsFromResponse(100, 50, 150, 0.05, 25, 0, 0, 0)
 
 		savings := a.GetCachedCostSavings()
 		if savings <= 0 {
@@ -358,15 +359,53 @@ func TestTrackMetricsFromResponse(t *testing.T) {
 		}
 	})
 
+	t.Run("uses provider actual cost for savings", func(t *testing.T) {
+		api.ResetPricingResolver()
+		api.SeedPricingForTest("test-provider", "test-model", 0.6, 3.0, 0.06)
+		t.Cleanup(api.ResetPricingResolver)
+
+		a := newMetricsTestAgent(t)
+		a.state.SetSessionProvider(api.ClientType("test-provider"))
+		a.state.SetSessionModel("test-model")
+
+		// prompt=100, cached=80, actual=0.00005. ratio = 0.06/0.6 = 0.1.
+		// effective = 100 - 80*0.9 = 28. uncached = actual*100/28.
+		actual := 0.00005
+		a.TrackMetricsFromResponse(100, 50, 150, 0.0001, 80, 0, 0, actual)
+
+		want := actual*100.0/28.0 - actual
+		got := a.GetCachedCostSavings()
+		if got < want-1e-9 || got > want+1e-9 {
+			t.Errorf("actual-cost savings = %f, want %f", got, want)
+		}
+	})
+
+	t.Run("marks savings unknown when undeterminable", func(t *testing.T) {
+		// No catalog rate and no actual cost → unknown, not a fabricated $0.
+		a := newMetricsTestAgent(t)
+
+		a.TrackMetricsFromResponse(100, 50, 150, 0, 25, 0, 0, 0)
+
+		if !a.GetCacheSavingsUnknown() {
+			t.Errorf("expected CacheSavingsUnknown=true when savings are undeterminable")
+		}
+		if a.GetCachedCostSavings() != 0 {
+			t.Errorf("expected 0 recorded savings, got %f", a.GetCachedCostSavings())
+		}
+		if got := a.FormatCacheSavings(); got != "unknown" {
+			t.Errorf("FormatCacheSavings = %q, want \"unknown\"", got)
+		}
+	})
+
 	t.Run("accumulates multiple responses", func(t *testing.T) {
 		a := newMetricsTestAgent(t)
 
 		// First response
-		a.TrackMetricsFromResponse(100, 50, 150, 0.05, 20, 0, 0)
+		a.TrackMetricsFromResponse(100, 50, 150, 0.05, 20, 0, 0, 0)
 		// Second response
-		a.TrackMetricsFromResponse(200, 100, 300, 0.10, 40, 0, 0)
+		a.TrackMetricsFromResponse(200, 100, 300, 0.10, 40, 0, 0, 0)
 		// Third response
-		a.TrackMetricsFromResponse(50, 25, 75, 0.025, 10, 0, 0)
+		a.TrackMetricsFromResponse(50, 25, 75, 0.025, 10, 0, 0, 0)
 
 		if a.GetTotalTokens() != 525 {
 			t.Errorf("expected total tokens 525, got %d", a.GetTotalTokens())
@@ -433,135 +472,203 @@ func TestGetCachedCostSavings(t *testing.T) {
 }
 
 // TestCalculateCachedTokenSavings verifies the provider-aware cached-token
-// savings calculation. The helper estimates how much money was saved by
-// prompt-cache hits, but only when the (provider, model) pair resolves to a
-// known cached-input rate strictly less than the standard input rate. When
-// the rate is unknown or the provider/model can't be resolved, the function
-// returns 0 rather than fabricating a number.
+// savings calculation. The helper reports whether savings are determinable; it
+// never fabricates a number, and the unknown case is surfaced as (0,false) so
+// the cost views can render "unknown" rather than $0.
 func TestCalculateCachedTokenSavings(t *testing.T) {
 	t.Parallel()
 
-	t.Run("returns zero when cachedTokens is 0", func(t *testing.T) {
-		a := newMetricsTestAgent(t)
-
-		got := a.calculateCachedTokenSavings(0, 150, 0.05)
-		if got != 0 {
-			t.Errorf("expected 0 savings for 0 cached tokens, got %f", got)
-		}
-	})
-
-	t.Run("returns zero when totalTokens is 0", func(t *testing.T) {
-		a := newMetricsTestAgent(t)
-
-		got := a.calculateCachedTokenSavings(25, 0, 0.05)
-		if got != 0 {
-			t.Errorf("expected 0 savings for 0 total tokens, got %f", got)
-		}
-	})
-
-	t.Run("returns zero when estimatedCost is 0", func(t *testing.T) {
-		a := newMetricsTestAgent(t)
-
-		got := a.calculateCachedTokenSavings(25, 150, 0)
-		if got != 0 {
-			t.Errorf("expected 0 savings for 0 cost, got %f", got)
-		}
-	})
-
-	t.Run("returns zero when estimatedCost is negative", func(t *testing.T) {
-		a := newMetricsTestAgent(t)
-
-		got := a.calculateCachedTokenSavings(25, 150, -0.05)
-		if got != 0 {
-			t.Errorf("expected 0 savings for negative cost, got %f", got)
-		}
-	})
-
-	// The test agent (newMetricsTestAgent) has no client, so GetProvider()
-	// returns "unknown" and GetModel() returns "unknown". ResolveModelPricing
-	// cannot resolve that pair, so the function returns 0. This subtest
-	// pins the "no fabrication when unknown" behavior — the previous 0.9
-	// heuristic has been removed to avoid displaying fake savings numbers.
-	t.Run("returns zero for unknown provider/model", func(t *testing.T) {
-		a := newMetricsTestAgent(t)
-
-		// Sanity: confirm the provider/model are unknown so the exact
-		// branch is genuinely unreachable for this agent.
-		if a.GetProvider() != "unknown" || a.GetModel() != "unknown" {
-			t.Fatalf("test agent provider/model should be unknown, got %q/%q",
-				a.GetProvider(), a.GetModel())
-		}
-
-		// cachedTokens=25, totalTokens=150, estimatedCost=0.05
-		// Old heuristic: 25 * (0.05/150) * 0.9 = 0.0075
-		// New behavior: 0 (no fabrication)
-		got := a.calculateCachedTokenSavings(25, 150, 0.05)
-		if got != 0 {
-			t.Errorf("expected 0 savings for unknown provider/model, got %f", got)
-		}
-	})
-
-	t.Run("returns zero for large values with unknown provider", func(t *testing.T) {
-		a := newMetricsTestAgent(t)
-
-		// Large token counts with a realistic cost, but unknown provider.
-		// Old heuristic: 2_000_000 * (100.0/3_000_000) * 0.9 = 60.0
-		// New behavior: 0 (no fabrication)
-		got := a.calculateCachedTokenSavings(2_000_000, 3_000_000, 100.0)
-		if got != 0 {
-			t.Errorf("expected 0 savings for unknown provider, got %f", got)
-		}
-		// Sanity: result must be finite (no NaN/Inf).
-		if got != got || got > 1e18 {
-			t.Errorf("expected finite savings, got %f", got)
-		}
-	})
-}
-
-// TestCalculateCachedTokenSavings_PricingAware verifies the exact-savings
-// branch: when a (provider, model) resolves to a known cached rate strictly
-// less than the standard input rate, the function returns the precise
-// unrealized cost difference (cachedTokens × (inputPrice − cachedPrice) / 1M).
-func TestCalculateCachedTokenSavings_PricingAware(t *testing.T) {
-	t.Parallel()
-
-	// Seed the resolver with a model that has a distinct cached rate.
-	// DeepSeek-style: input $0.14/M, cached $0.0028/M, output $0.28/M.
-	api.ResetPricingResolver()
-	api.SeedPricingForTest("deepseek", "deepseek-chat", 0.14, 0.28, 0.0028)
-	t.Cleanup(api.ResetPricingResolver)
-
-	// setSessionProviderModel sets the agent's session-scoped provider/model
-	// without going through SetProvider (which requires a configManager and
-	// would try to create a real client).
 	setSessionProviderModel := func(a *Agent, provider, model string) {
 		a.state.SetSessionProvider(api.ClientType(provider))
 		a.state.SetSessionModel(model)
 	}
 
-	t.Run("exact savings when cached rate is known", func(t *testing.T) {
+	t.Run("no savings to consider when cachedTokens is 0", func(t *testing.T) {
 		a := newMetricsTestAgent(t)
-		setSessionProviderModel(a, "deepseek", "deepseek-chat")
 
-		// cachedTokens=1000, (input - cached) = 0.14 - 0.0028 = 0.1372 per M
-		// savings = 1000 * 0.1372 / 1e6 = 0.0001372
-		got := a.calculateCachedTokenSavings(1000, 2000, 0.05)
-		want := 1000.0 * (0.14 - 0.0028) / 1e6
-		if got < want-1e-9 || got > want+1e-9 {
-			t.Errorf("expected exact savings %f, got %f", want, got)
+		got, known := a.calculateCachedTokenSavings(0, 150, 0)
+		if got != 0 || !known {
+			t.Errorf("expected (0,true) for 0 cached tokens, got (%f,%v)", got, known)
 		}
 	})
 
-	t.Run("returns zero when cached rate equals input rate", func(t *testing.T) {
+	t.Run("no savings to consider when promptTokens is 0", func(t *testing.T) {
 		a := newMetricsTestAgent(t)
-		// Seed with cached == input to exercise the no-discount branch.
+
+		got, known := a.calculateCachedTokenSavings(25, 0, 0)
+		if got != 0 || !known {
+			t.Errorf("expected (0,true) for 0 prompt tokens, got (%f,%v)", got, known)
+		}
+	})
+
+	// The test agent (newMetricsTestAgent) has no client, so GetProvider()
+	// returns "unknown" and GetModel() returns "unknown". Neither an actual
+	// cost nor the catalog can resolve, so savings are unknown — NOT a
+	// fabricated $0.
+	t.Run("unknown when neither actual cost nor catalog rate is available", func(t *testing.T) {
+		a := newMetricsTestAgent(t)
+
+		if a.GetProvider() != "unknown" || a.GetModel() != "unknown" {
+			t.Fatalf("test agent provider/model should be unknown, got %q/%q",
+				a.GetProvider(), a.GetModel())
+		}
+
+		got, known := a.calculateCachedTokenSavings(25, 150, 0)
+		if got != 0 || known {
+			t.Errorf("expected (0,false) for unknown provider/model, got (%f,%v)", got, known)
+		}
+	})
+
+	t.Run("unknown for large values with unknown provider", func(t *testing.T) {
+		a := newMetricsTestAgent(t)
+
+		got, known := a.calculateCachedTokenSavings(2_000_000, 3_000_000, 0)
+		if got != 0 || known {
+			t.Errorf("expected (0,false) for unknown provider, got (%f,%v)", got, known)
+		}
+		if got != got || got > 1e18 {
+			t.Errorf("expected finite savings, got %f", got)
+		}
+	})
+
+	// Path (b): the provider reports the request's actual cost. Savings are
+	// the uncached prompt cost minus that actual cost.
+	t.Run("actual cost yields uncached cost minus actual cost", func(t *testing.T) {
+		api.ResetPricingResolver()
+		api.SeedPricingForTest("openrouter", "deepseek/deepseek-v4.1-flash", 0.15, 0.6, 0.003)
+		t.Cleanup(api.ResetPricingResolver)
+
+		a := newMetricsTestAgent(t)
+		setSessionProviderModel(a, "openrouter", "deepseek/deepseek-v4.1-flash")
+
+		// prompt=1000 tokens, cached=900. ratio = 0.003/0.15 = 0.02.
+		// effective = 1000 - 900*(1-0.02) = 1000 - 882 = 118.
+		// inputRatePerToken = actual/118. uncached = that * 1000.
+		// With actual = 0.0003: uncached = 0.0003*1000/118 ≈ 0.0025424.
+		actual := 0.0003
+		got, known := a.calculateCachedTokenSavings(900, 1000, actual)
+		want := actual*1000.0/118.0 - actual
+		if !known {
+			t.Fatalf("expected savings to be determinable via actual cost")
+		}
+		if got < want-1e-9 || got > want+1e-9 {
+			t.Errorf("expected actual-cost savings %f, got %f", want, got)
+		}
+		if got <= 0 {
+			t.Errorf("expected positive savings, got %f", got)
+		}
+	})
+
+	t.Run("actual cost with no cache hits yields zero savings", func(t *testing.T) {
+		api.ResetPricingResolver()
+		api.SeedPricingForTest("openrouter", "no-cache-hits", 0.15, 0.6, 0.003)
+		t.Cleanup(api.ResetPricingResolver)
+
+		a := newMetricsTestAgent(t)
+		setSessionProviderModel(a, "openrouter", "no-cache-hits")
+
+		// cached == prompt → all prompt tokens were cached, so the "uncached"
+		// reconstruction degenerates; nothing to compare against.
+		got, known := a.calculateCachedTokenSavings(1000, 1000, 0.0003)
+		if known && got < 0 {
+			t.Errorf("savings must not be negative, got %f", got)
+		}
+	})
+
+	t.Run("actual cost greater than uncached cost never yields negative savings", func(t *testing.T) {
+		api.ResetPricingResolver()
+		api.SeedPricingForTest("openrouter", "overcharged", 0.15, 0.6, 0.003)
+		t.Cleanup(api.ResetPricingResolver)
+
+		a := newMetricsTestAgent(t)
+		setSessionProviderModel(a, "openrouter", "overcharged")
+
+		// An absurd actual cost far above what the uncached prompt could cost.
+		got, known := a.calculateCachedTokenSavings(900, 1000, 5.0)
+		if known && got < 0 {
+			t.Errorf("savings must never be negative, got %f", got)
+		}
+	})
+}
+
+// TestCalculateCachedTokenSavings_CatalogPath verifies path (a): a model whose
+// providercatalog entry carries cached_input_cost yields exact savings, and a
+// cached rate at or above the input rate yields zero (not a bogus value).
+func TestCalculateCachedTokenSavings_CatalogPath(t *testing.T) {
+	t.Parallel()
+
+	setSessionProviderModel := func(a *Agent, provider, model string) {
+		a.state.SetSessionProvider(api.ClientType(provider))
+		a.state.SetSessionModel(model)
+	}
+
+	// The resolver reads through providercatalog.FindModelPricing; seed a
+	// catalog entry directly so the test exercises the catalog-rate path
+	// without a registry or network.
+	api.ResetPricingResolver()
+	t.Cleanup(api.ResetPricingResolver)
+
+	t.Run("exact savings from catalog cached rate", func(t *testing.T) {
+		api.ResetPricingResolver()
+		// DeepInfra DeepSeek-V4.1-Flash: input $0.20/M, cached $0.006/M.
+		api.SeedPricingForTest("deepinfra", "deepseek-ai/DeepSeek-V4.1-Flash", 0.20, 0.6, 0.006)
+		t.Cleanup(api.ResetPricingResolver)
+
+		a := newMetricsTestAgent(t)
+		setSessionProviderModel(a, "deepinfra", "deepseek-ai/DeepSeek-V4.1-Flash")
+
+		// cached=1000, (0.20 - 0.006) = 0.194 per M → 0.000194.
+		got, known := a.calculateCachedTokenSavings(1000, 2000, 0)
+		want := 1000.0 * (0.20 - 0.006) / 1e6
+		if !known {
+			t.Fatalf("expected savings determinable from catalog rate")
+		}
+		if got < want-1e-9 || got > want+1e-9 {
+			t.Errorf("expected exact catalog savings %f, got %f", want, got)
+		}
+	})
+
+	t.Run("zero when cached rate equals input rate", func(t *testing.T) {
+		api.ResetPricingResolver()
 		api.SeedPricingForTest("test-equal", "test-model", 1.0, 2.0, 1.0)
+		t.Cleanup(api.ResetPricingResolver)
+
+		a := newMetricsTestAgent(t)
 		setSessionProviderModel(a, "test-equal", "test-model")
 
-		// Provider reports cache hits but bills at standard rate.
-		got := a.calculateCachedTokenSavings(1000, 2000, 0.05)
+		got, known := a.calculateCachedTokenSavings(1000, 2000, 0)
+		if !known {
+			t.Fatalf("expected savings determinable (no discount)")
+		}
 		if got != 0 {
 			t.Errorf("expected 0 savings when cached rate equals input, got %f", got)
+		}
+	})
+
+	t.Run("zero when cached rate exceeds input rate", func(t *testing.T) {
+		api.ResetPricingResolver()
+		api.SeedPricingForTest("test-inverted", "test-model", 1.0, 2.0, 1.5)
+		t.Cleanup(api.ResetPricingResolver)
+
+		a := newMetricsTestAgent(t)
+		setSessionProviderModel(a, "test-inverted", "test-model")
+
+		got, known := a.calculateCachedTokenSavings(1000, 2000, 0)
+		if !known {
+			t.Fatalf("expected savings determinable (inverted rate)")
+		}
+		if got != 0 {
+			t.Errorf("expected 0 savings when cached rate exceeds input, got %f", got)
+		}
+	})
+
+	t.Run("unknown when catalog cannot resolve the model", func(t *testing.T) {
+		a := newMetricsTestAgent(t)
+		setSessionProviderModel(a, "no-such-provider", "no-such-model")
+
+		got, known := a.calculateCachedTokenSavings(1000, 2000, 0)
+		if known {
+			t.Errorf("expected unknown savings for unresolvable model, got (%f,%v)", got, known)
 		}
 	})
 }

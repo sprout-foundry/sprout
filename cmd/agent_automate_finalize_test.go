@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/automate"
+	"github.com/sprout-foundry/sprout/pkg/workflow"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -92,6 +93,62 @@ func TestFinalizeAutomateSession_MissingRecordIsNonFatal(t *testing.T) {
 
 	_, err := os.Stat(absent)
 	assert.True(t, os.IsNotExist(err), "finalizer must not create a missing record, got err=%v", err)
+}
+
+// TestRecordContinuationStopReason writes the wired record-file global and
+// asserts the continuation stop reason lands on the record.
+func TestRecordContinuationStopReason(t *testing.T) {
+	saved := agentAutomateRecordFile
+	savedSession := agentAutomateSessionFile
+	t.Cleanup(func() {
+		agentAutomateRecordFile = saved
+		agentAutomateSessionFile = savedSession
+	})
+
+	sproutDir := filepath.Join(t.TempDir(), ".sprout")
+	path := writeDetachedSessionRecord(t, sproutDir, "cli-automate-cont", 4247)
+	agentAutomateRecordFile = path
+	agentAutomateSessionFile = ""
+
+	recordContinuationStopReason(workflow.ContinuationResult{
+		Continuations: 3,
+		StopReason:    workflow.ContinuationStopNoProgress,
+		RunnableItems: 5,
+	})
+
+	info, err := automate.ReadSessionFile(sproutDir, "cli-automate-cont")
+	require.NoError(t, err)
+	assert.Equal(t, "no_progress", info.StopReason)
+	assert.Equal(t, 3, info.ContinuationTurns)
+	assert.Equal(t, 5, info.RunnableItemsRemaining)
+}
+
+// TestRecordContinuationStopReason_FallsBackToSessionFile pins the fallback
+// path: a detached child passed only --automate-session-file still gets its
+// stop reason recorded.
+func TestRecordContinuationStopReason_FallsBackToSessionFile(t *testing.T) {
+	saved := agentAutomateRecordFile
+	savedSession := agentAutomateSessionFile
+	t.Cleanup(func() {
+		agentAutomateRecordFile = saved
+		agentAutomateSessionFile = savedSession
+	})
+
+	sproutDir := filepath.Join(t.TempDir(), ".sprout")
+	path := writeDetachedSessionRecord(t, sproutDir, "cli-automate-fallback", 4248)
+	agentAutomateRecordFile = ""
+	agentAutomateSessionFile = path
+
+	recordContinuationStopReason(workflow.ContinuationResult{
+		Continuations: 1,
+		StopReason:    workflow.ContinuationStopNoRunnableItems,
+		RunnableItems: 0,
+	})
+
+	info, err := automate.ReadSessionFile(sproutDir, "cli-automate-fallback")
+	require.NoError(t, err)
+	assert.Equal(t, "no_runnable_items", info.StopReason)
+	assert.Equal(t, 1, info.ContinuationTurns)
 }
 
 // runAgentCommandForTest invokes the real agent command body with the

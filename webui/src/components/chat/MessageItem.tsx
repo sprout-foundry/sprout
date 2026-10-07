@@ -1,5 +1,5 @@
 import { MessageBubble, MessageSegments, MessageContent, Collapsible } from '@sprout/ui';
-import { AlertTriangle, BrainCircuit, Bot, GitFork, Square } from 'lucide-react';
+import { AlertTriangle, BrainCircuit, Bot, GitFork, History, Square } from 'lucide-react';
 import { memo } from 'react';
 import { chatErrorText } from './chatError';
 import { ToolDetailInline } from './ToolDetailInline';
@@ -228,6 +228,23 @@ export const MessageItem = memo(function MessageItem({
               }}
               getToolStatus={getToolStatus}
             />
+          )}
+          {!!message.languageGuardOriginal && message.languageGuardOriginal.trim().length > 0 && (
+            // The language guard replaced this reply (a wrong-language answer
+            // regenerated or swapped for the localized notice) and kept the
+            // mismatched text for "view original". Native <details> via the
+            // shared Collapsible: keyboard and ARIA semantics come free.
+            <Collapsible
+              title="Original reply"
+              icon={<History size={13} />}
+              ariaLabel="Original reply"
+              className="language-guard-original"
+              data-testid="language-guard-original"
+            >
+              <div className="language-guard-original-content">
+                <MessageContent content={message.languageGuardOriginal} />
+              </div>
+            </Collapsible>
           )}
           {activeToolDetail && message.toolRefs?.some((r) => r.toolId === activeToolDetail.id) && (
             <ToolDetailInline

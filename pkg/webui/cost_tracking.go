@@ -35,6 +35,10 @@ type CostRecord struct {
 	BillingType string  `json:"billing_type,omitempty"`
 	ChargedCost float64 `json:"charged_cost,omitempty"`
 	TokenCost   float64 `json:"token_cost,omitempty"`
+	// Role is the model role the spend was attributed to. Set
+	// when a query books its usage per-role (TakeUnbookedUsageByRole); empty
+	// for overall (role-agnostic) bookings.
+	Role string `json:"role,omitempty"`
 }
 
 // CostStore handles persisting and querying cost records
@@ -120,6 +124,36 @@ func (cs *CostStore) RecordCostWithBilling(provider, model, sessionID, chatID, t
 		BillingType:  billingType,
 		ChargedCost:  chargedCost,
 		TokenCost:    tokenCost,
+	})
+}
+
+// RecordCostWithRole books a per-role usage slice into the cost store.
+// It is the role-aware counterpart of
+// RecordCostWithBilling: a query books one record per role its usage was
+// attributed to, and the per-role records sum to the overall total.
+func (cs *CostStore) RecordCostWithRole(provider, model, sessionID, chatID, title, workingDir, billingType, role string, promptTokens, outputTokens int, chargedCost, tokenCost float64) {
+	if chargedCost <= 0 && tokenCost <= 0 {
+		return
+	}
+	if billingType == "" {
+		billingType = "pay_per_token"
+	}
+	cs.appendRecord(CostRecord{
+		Timestamp:    time.Now(),
+		Provider:     provider,
+		Model:        model,
+		PromptTokens: promptTokens,
+		OutputTokens: outputTokens,
+		Cost:         chargedCost,
+		SessionID:    sessionID,
+		ChatID:       chatID,
+		Title:        title,
+		WorkingDir:   workingDir,
+		LastUpdated:  time.Now().Format(time.RFC3339),
+		BillingType:  billingType,
+		ChargedCost:  chargedCost,
+		TokenCost:    tokenCost,
+		Role:         role,
 	})
 }
 

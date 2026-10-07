@@ -92,8 +92,9 @@ func (a *toolsApprovalAdapter) RequestApproval(requestID, toolName, riskLevel, p
 		// headless) and no web UI attached — waiting would stall the turn
 		// for the full approval timeout with nothing on screen. Deny now
 		// and say how to allow it. Subagents still wait: their requests
-		// are answered through the parent's interface.
-		if a.agent != nil && !a.agent.IsSubagent() && !a.agent.WebUIAttached() {
+		// are answered through the parent's interface. A workflow/automate
+		// run also never waits.
+		if a.agent != nil && !a.agent.IsSubagent() && (!a.agent.WebUIAttached() || a.agent.IsWorkflowRun()) {
 			return tools.ApprovalResult{Approved: false, Reason: noApprovalSurfaceReason}
 		}
 		if a.agent != nil && !a.agent.IsSubagent() {
@@ -114,18 +115,19 @@ const noApprovalSurfaceReason = "needs approval, but prompts are off (--yes or a
 	"run interactively to approve it, or allow it up front with --unsafe-shell or /risk-profile permissive"
 
 // preferWebUI reports whether the event-bus dialog should be tried first:
-// a bus exists, this is not a subagent, and a WebUI client is connected.
+// a bus exists, this is not a subagent, a WebUI client is connected, and
+// this is not a workflow/automate run (which must never block on a dialog).
 func (a *toolsApprovalAdapter) preferWebUI() bool {
 	return a.eventBus != nil && a.agent != nil &&
-		!a.agent.IsSubagent() && a.agent.HasActiveWebUIClients()
+		!a.agent.IsSubagent() && !a.agent.IsWorkflowRun() && a.agent.HasActiveWebUIClients()
 }
 
 // cliAvailable reports whether an interactive CLI prompt can be shown.
-// False in headless mode, subagents, and skip-prompt configs. The
-// subagent guard is checked before the test seam so stubbed prompts
-// can never leak into subagent flows.
+// False in headless mode, subagents, workflow runs, and skip-prompt
+// configs. The subagent guard is checked before the test seam so stubbed
+// prompts can never leak into subagent flows.
 func (a *toolsApprovalAdapter) cliAvailable() bool {
-	if a.agent == nil || a.agent.IsSubagent() {
+	if a.agent == nil || a.agent.IsSubagent() || a.agent.IsWorkflowRun() {
 		return false
 	}
 	// cliPrompt is the test seam: an injected stub stands in for an

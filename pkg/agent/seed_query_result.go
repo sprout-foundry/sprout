@@ -246,6 +246,40 @@ func (a *Agent) handleQueryResult(qc *queryRunContext, result string, err error)
 	qc.preSeedMsgCount = rebaseQueryStart(qc.preSeedMsgCount, rebase, len(a.state.GetMessages()))
 	a.journalSeedState(qc.seedAgent.State())
 
+	// Language-guard the turn's final assistant message
+	// before anything downstream (the query-completed event, later turns,
+	// the CLI result) sees it. On a mismatch the corrected text — or the
+	// localized notice — replaces the message in state and becomes the
+	// turn's result; the mismatched original is kept on the message for
+	// "view original". The streaming branch below still returns "" to
+	// avoid duplicate display; the corrected text reaches the WebUI via
+	// the query-completed event and via state.
+	result = a.applyLanguageGuard(qc, result)
+
+	// Deliver the turn's verification result to
+	// the user — AFTER the language guard, so the guard's language-detection
+	// sees only the model's own text, and before the return, via the stored
+	// per-turn state (reset in prepareQueryRun). It appends the attachment
+	// to the reply, writes it into the last assistant message in state (what
+	// the query_completed response and later turns read), and — when the
+	// reply string will be suppressed by the streaming early-return below —
+	// emits it as a stream chunk (what the streaming CLI and the Web UI's
+	// live stream show). The attachment is a no-op when the turn-end hook
+	// never ran for the turn. The error and interrupt paths above never
+	// reach this point: an interrupted turn reports as an interrupt, not a
+	// verification result.
+	result = a.deliverVerificationResult(result)
+
+	// Emit the turn's verification + completion
+	// progress events from the turn-end result (progress_verification
+	// when a result exists, then progress_complete). Placed after the
+	// verification reply attachment and before the commit/finalize/streaming
+	// early-returns below so both success outcomes emit them. The error and
+	// interrupt paths above never reach this point: a failed or interrupted
+	// run is not a completed run, so it emits no completion event (its
+	// consumers already get the error/interrupt events).
+	a.publishTurnProgressComplete()
+
 	// ---- Post-loop hooks (moved from old ConversationHandler.finalizeConversation) ----
 
 	// Commit tracked changes. Subagents are EXEMPT: their writes are
@@ -271,7 +305,7 @@ func (a *Agent) handleQueryResult(qc *queryRunContext, result string, err error)
 	// stderr for the human, but the orchestrator LLM only sees what we return
 	// here via SubagentResult.Output — returning "" would make the orchestrator
 	// think the subagent did nothing and re-attempt the task.
-	if !a.IsSubagent() && a.output.IsStreamingEnabled() && len(a.output.GetStreamingBuffer().String()) > 0 {
+	if !a.IsSubagent() && a.output.IsStreamingEnabled() && a.output.GetStreamingBuffer().Len() > 0 {
 		return "", nil
 	}
 

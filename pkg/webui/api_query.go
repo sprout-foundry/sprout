@@ -4,11 +4,14 @@ package webui
 
 // api_query.go — the webui query API: the active-query counters, the
 // client-event publishing + session-update hooks, the run-buffer append, and
-// the handleAPIQuery / handleAPIQueryStop / handleAPIQueryStatus handlers.
-// The steer + steer-retract handlers and their streaming execution live in
+// the query handlers. handleAPIQuery remains a plain handler (tests call it by
+// name); /api/query/stop and /api/query/status are now Huma operations that
+// drive the buildAPIQueryStop / buildAPIQueryStatus builders. The steer +
+// steer-retract handlers and their streaming execution live in
 // api_query_steer.go.
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -251,19 +254,59 @@ func (ws *ReactWebServer) appendChatEventToRunBuffer(clientID, chatID, eventType
 	return buf.Append(events.UIEvent{Type: eventType, Data: data})
 }
 
-// handleAPIQuery handles API queries to the agent. It is a thin
-// wrapper over runChatQuery — the body parsing and chat-id resolution
-// stay here so the request schema (query, chat_id, provider, model,
-// workspace_root, system_prompt) is documented in one place. The
-// shared runner handles locking, agent creation, override application,
-// the slash-command-in-chat path, and the async ProcessQueryWithContinuity
-// goroutine with cost recording and state sync.
-//
-// Keeping the slash-command-in-chat path inside the shared runner
-// (gated by opts.AllowSlashCommands=true here) means the legacy
-// /api/query surface still lets users type `/info` in a fresh chat
-// input; the runner rejects destructive commands via SteerCapable.
-// See SP-114 Phase 2 for the gating rationale.
+// queryRequest is the request body for POST /api/query. It mirrors the
+// QueryRequest schema documented in docs/api/openapi.base.yaml.
+type queryRequest struct {
+	Query         string `json:"query"`
+	ChatID        string `json:"chat_id,omitempty"`
+	Provider      string `json:"provider,omitempty"`
+	Model         string `json:"model,omitempty"`
+	WorkspaceRoot string `json:"workspace_root,omitempty"`
+	SystemPrompt  string `json:"system_prompt,omitempty"`
+	Mode          string `json:"mode,omitempty"`
+}
+
+// buildAPIQuery is the shared backend for POST /api/query. It validates the
+// request, resolves the client and chat IDs, and hands off to the shared
+// runChatQuery runner — which owns the full query lifecycle (locking, agent
+// creation, per-query overrides, the slash-command-in-chat path, and the async
+// ProcessQueryWithContinuity goroutine) and writes the response itself. The
+// response is written through w, so the caller must pass the live
+// ResponseWriter. Keeping the slash-command-in-chat path inside the shared
+// runner (gated by AllowSlashCommands=true) means the /api/query surface still
+// lets users type `/info` in a fresh chat input; the runner rejects
+// destructive commands via SteerCapable. See SP-114 Phase 2.
+func (ws *ReactWebServer) buildAPIQuery(w http.ResponseWriter, r *http.Request, q queryRequest) {
+	if q.Query == "" {
+		writeJSONErr(w, http.StatusBadRequest, "query_required", "Query is required")
+		return
+	}
+
+	clientID := ws.resolveClientID(r)
+
+	// Resolve chat_id: prefer body parameter, fall back to query parameter.
+	chatID := strings.TrimSpace(q.ChatID)
+	if chatID == "" {
+		chatID = ws.resolveChatID(r, clientID)
+	}
+
+	ws.runChatQuery(w, r, clientID, chatID, q.Query, chatQueryOptions{
+		Provider:           q.Provider,
+		Model:              q.Model,
+		WorkspaceRoot:      q.WorkspaceRoot,
+		SystemPrompt:       q.SystemPrompt,
+		Mode:               q.Mode,
+		AllowSlashCommands: true,
+		EchoQueryInAccept:  true,
+		LogTag:             "handleAPIQuery",
+	})
+}
+
+// handleAPIQuery handles POST /api/query. It is a thin wrapper over
+// buildAPIQuery — the body parsing and method gate stay here (the plain
+// route) so the request schema is documented in one place, and the shared
+// builder runs the real logic. The Huma operation (registerHumaOperations in
+// routes.go) drives the same builder, so the two surfaces cannot drift.
 func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
@@ -271,74 +314,77 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxQueryBodyBytes)
-	var query struct {
-		Query         string `json:"query"`
-		ChatID        string `json:"chat_id,omitempty"`
-		Provider      string `json:"provider,omitempty"`
-		Model         string `json:"model,omitempty"`
-		WorkspaceRoot string `json:"workspace_root,omitempty"`
-		SystemPrompt  string `json:"system_prompt,omitempty"`
-		Mode          string `json:"mode,omitempty"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&query); err != nil {
+	var q queryRequest
+	if err := json.NewDecoder(r.Body).Decode(&q); err != nil {
 		ws.log().Warn("invalid query JSON", slog.String("err", err.Error()))
 		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
 		return
 	}
 
-	if query.Query == "" {
-		writeJSONErr(w, http.StatusBadRequest, "query_required", "Query is required")
-		return
-	}
-
-	clientID := ws.resolveClientID(r)
-
-	// Resolve chat_id: prefer body parameter, fall back to query parameter
-	chatID := strings.TrimSpace(query.ChatID)
-	if chatID == "" {
-		chatID = ws.resolveChatID(r, clientID)
-	}
-
-	ws.runChatQuery(w, r, clientID, chatID, query.Query, chatQueryOptions{
-		Provider:           query.Provider,
-		Model:              query.Model,
-		WorkspaceRoot:      query.WorkspaceRoot,
-		SystemPrompt:       query.SystemPrompt,
-		Mode:               query.Mode,
-		AllowSlashCommands: true,
-		EchoQueryInAccept:  true,
-		LogTag:             "handleAPIQuery",
-	})
+	ws.buildAPIQuery(w, r, q)
 }
 
-// handleAPIQueryStop interrupts the currently running query loop. Thin
-// wrapper over the shared stopActiveQuery helper — the body parsing
-// and chat-id resolution stay here so the HTTP method gate runs first,
-// then the shared helper handles active-state lookup, agent
-// resolution, TriggerInterrupt, and subagent cancellation.
-func (ws *ReactWebServer) handleAPIQueryStop(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
-		return
+// queryInput is the input for the Huma POST /api/query operation. It carries
+// the raw request and response writer (via humaRequestInput) so the handler
+// can parse the body and reuse the existing helpers, keeping the request
+// schema in the hand-written seed rather than the generated doc.
+type queryInput struct {
+	humaRequestInput
+}
+
+// queryHumaHandler is the Huma handler for POST /api/query. It parses the body
+// exactly as the plain handler did (MaxBytesReader + JSON decode) and writes
+// the response through in.Resp, so the migrated operation is byte-identical
+// to the plain handler it replaces. The response is written by the runner, so
+// the output body is a no-op callback (Huma writes nothing of its own).
+func (ws *ReactWebServer) queryHumaHandler(ctx context.Context, in *queryInput) (*writtenResponseOutput, error) {
+	w := in.Resp
+	r := in.Req
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxQueryBodyBytes)
+	var q queryRequest
+	if err := json.NewDecoder(r.Body).Decode(&q); err != nil {
+		ws.log().Warn("invalid query JSON", slog.String("err", err.Error()))
+		writeJSONErr(w, http.StatusBadRequest, "invalid_json", "Invalid JSON")
+		return &writtenResponseOutput{Body: noopWrittenResponse}, nil
 	}
 
+	ws.buildAPIQuery(w, r, q)
+	return &writtenResponseOutput{Body: noopWrittenResponse}, nil
+}
+
+// buildAPIQueryStop is the shared backend for POST /api/query/stop. It resolves
+// the client and chat IDs and delegates to the shared stopActiveQuery helper,
+// which owns the active-state lookup, agent resolution, TriggerInterrupt, and
+// subagent cancellation, and writes the response itself through w. The HTTP
+// method gate is enforced by the Huma operation (registerHumaOperations in
+// routes.go); a wrong method reaches the SPA catch-all and 404s.
+func (ws *ReactWebServer) buildAPIQueryStop(w http.ResponseWriter, r *http.Request) {
 	clientID := ws.resolveClientID(r)
 	chatID := ws.resolveChatID(r, clientID)
 
 	ws.stopActiveQuery(w, r, clientID, chatID)
 }
 
-// handleAPIQueryStatus handles GET /api/query/status?chat_id=xxx
-// Returns whether a query is currently active for the specified chat.
-// This is a polling fallback for when the WebSocket drops and reconnects.
-// Thin wrapper over the shared chatQueryStatus helper.
-func (ws *ReactWebServer) handleAPIQueryStatus(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
-		return
-	}
+// queryStopInput is the input for the Huma POST /api/query/stop operation.
+type queryStopInput struct {
+	humaRequestInput
+}
 
+// queryStopHumaHandler is the Huma handler for POST /api/query/stop. It drives
+// the shared builder through the live ResponseWriter so the response is
+// byte-identical to the plain handler; the body is a no-op callback.
+func (ws *ReactWebServer) queryStopHumaHandler(ctx context.Context, in *queryStopInput) (*writtenResponseOutput, error) {
+	ws.buildAPIQueryStop(in.Resp, in.Req)
+	return &writtenResponseOutput{Body: noopWrittenResponse}, nil
+}
+
+// buildAPIQueryStatus is the shared backend for GET /api/query/status. It
+// reports whether a query is currently active for the chat (the polling
+// fallback for when the WebSocket drops and reconnects) and writes the result.
+// The HTTP method gate is enforced by the Huma operation (registerHumaOperations
+// in routes.go); a wrong method reaches the SPA catch-all and 404s.
+func (ws *ReactWebServer) buildAPIQueryStatus(w http.ResponseWriter, r *http.Request) {
 	clientID := ws.resolveClientID(r)
 	chatID := ws.resolveChatID(r, clientID)
 
@@ -347,4 +393,17 @@ func (ws *ReactWebServer) handleAPIQueryStatus(w http.ResponseWriter, r *http.Re
 		"active":  active,
 		"chat_id": chatID,
 	})
+}
+
+// queryStatusInput is the input for the Huma GET /api/query/status operation.
+type queryStatusInput struct {
+	humaRequestInput
+}
+
+// queryStatusHumaHandler is the Huma handler for GET /api/query/status. It
+// drives the shared builder through the live ResponseWriter so the response is
+// byte-identical to the plain handler; the body is a no-op callback.
+func (ws *ReactWebServer) queryStatusHumaHandler(ctx context.Context, in *queryStatusInput) (*writtenResponseOutput, error) {
+	ws.buildAPIQueryStatus(in.Resp, in.Req)
+	return &writtenResponseOutput{Body: noopWrittenResponse}, nil
 }

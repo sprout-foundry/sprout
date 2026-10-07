@@ -46,11 +46,13 @@ import { changeOpLabel, classifyChangeOp, describeRevertOutcome } from '../utils
 import { copyToClipboard } from '../utils/clipboard';
 import { formatRelativeTime } from '../utils/format';
 import { useLog } from '../utils/log';
+import ProjectTimeline from './changes/ProjectTimeline';
+import type { ProjectTimelineEntry, ProjectTimelineOrder } from './changes/timelineModel';
 import DiffView from './DiffView';
 import { showThemedConfirm } from './ThemedDialog';
 import './AgentChangesPanel.css';
 
-interface AgentChangesPanelProps {
+export interface AgentChangesPanelProps {
   /**
    * Optional callback for "Ask agent about this change". When provided,
    * clicking the chat icon next to a file opens the chat with a
@@ -61,9 +63,23 @@ interface AgentChangesPanelProps {
   /** Optional callback for "View diff in editor" — opens the file
    *  using the host's normal file-click handler. */
   onFileClick?: (filePath: string) => void;
+  /**
+   * The project timeline supplied by the app: change sets with their
+   * summaries, deploy entries, and checkpoint entries. The panel renders
+   * it without fetching — the app owns the transport. Omit or pass an
+   * empty list to hide the Project timeline tab.
+   */
+  timeline?: readonly ProjectTimelineEntry[];
+  /** Sort direction for the project timeline. Defaults to newest-first. */
+  timelineOrder?: ProjectTimelineOrder;
+  /** Restore a checkpoint by ID. Called only after the restore action's
+   *  explicit confirmation step. */
+  onRestoreCheckpoint?: (checkpointId: string) => void;
+  /** Open/select a timeline entry (e.g. to view its diff or details). */
+  onOpenTimelineEntry?: (entry: ProjectTimelineEntry) => void;
 }
 
-type Tab = 'session' | 'timeline';
+type Tab = 'session' | 'timeline' | 'project';
 
 const opIcon = (op: string) => {
   const cls = `op-icon op-${classifyChangeOp(op)}`;
@@ -87,7 +103,14 @@ function formatBulkCount(n?: number): string {
   return new Intl.NumberFormat(undefined).format(n) + ' file' + (n === 1 ? '' : 's');
 }
 
-function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps): JSX.Element {
+function AgentChangesPanel({
+  onAskAgent,
+  onFileClick,
+  timeline,
+  timelineOrder = 'newest_first',
+  onRestoreCheckpoint,
+  onOpenTimelineEntry,
+}: AgentChangesPanelProps): JSX.Element {
   const apiService = ApiService.getInstance();
   const log = useLog();
 
@@ -497,6 +520,15 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
         >
           Recent history
         </button>
+        {timeline && timeline.length > 0 && (
+          <button
+            type="button"
+            className={`changes-tab ${tab === 'project' ? 'active' : ''}`}
+            onClick={() => setTab('project')}
+          >
+            Project timeline
+          </button>
+        )}
         <div style={{ flex: 1 }} />
         <button
           type="button"
@@ -645,6 +677,17 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {tab === 'project' && timeline && timeline.length > 0 && (
+        <div className="changes-project-timeline">
+          <ProjectTimeline
+            entries={timeline ?? []}
+            order={timelineOrder}
+            onRestore={onRestoreCheckpoint}
+            onOpen={onOpenTimelineEntry}
+          />
         </div>
       )}
 

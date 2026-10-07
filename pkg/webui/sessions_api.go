@@ -161,6 +161,7 @@ func (ws *ReactWebServer) handleAPIRestoreSession(w http.ResponseWriter, r *http
 		EstimatedTokenResponses: state.EstimatedTokenResponses,
 		CachedTokens:            state.CachedTokens,
 		CachedCostSavings:       state.CachedCostSavings,
+		CacheSavingsUnknown:     state.CacheSavingsUnknown,
 		SessionID:               state.SessionID,
 	})
 	if err != nil {

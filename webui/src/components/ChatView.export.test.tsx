@@ -117,7 +117,34 @@ vi.mock('../utils/log', () => ({
 // Import AFTER mocks
 // ---------------------------------------------------------------------------
 
+import { EventsContextProvider } from '../contexts/EventsContext';
 import ChatView from './ChatView';
+
+// ---------------------------------------------------------------------------
+// Test setup
+// ---------------------------------------------------------------------------
+
+/** Mock events transport: ChatView renders ProgressStrip, which
+ *  subscribes via useEvents — provide a no-op provider like the app's
+ *  EventsContextProvider does. */
+const provider = {
+  connect: vi.fn(),
+  disconnect: vi.fn(),
+  onEvent: vi.fn(),
+  removeEvent: vi.fn(),
+  sendEvent: vi.fn(),
+  isConnected: vi.fn(() => true),
+  onReconnect: vi.fn(),
+  freeze: vi.fn(),
+  resume: vi.fn(),
+  resetAndReconnect: vi.fn(),
+  getQueuedMessageCount: vi.fn(() => 0),
+  flushQueuedMessages: vi.fn(() => 0),
+};
+
+function wrap(node: React.ReactNode) {
+  return createElement(EventsContextProvider, { provider }, node);
+}
 
 // ---------------------------------------------------------------------------
 // Test setup
@@ -177,7 +204,7 @@ describe('ChatView Export button', () => {
   /* ---- 1. Export button does NOT render without sessionId ---- */
   it('does not render export button when chatId is undefined', () => {
     act(() => {
-      root.render(createElement(ChatView, minimalProps));
+      root.render(wrap(createElement(ChatView, minimalProps)));
     });
 
     expect(screen.queryByTestId('chat-export-button')).toBeNull();
@@ -186,7 +213,7 @@ describe('ChatView Export button', () => {
   /* ---- 2. Export button renders when sessionId is set ---- */
   it('renders export button when chatId is set', () => {
     act(() => {
-      root.render(createElement(ChatView, { ...minimalProps, chatId: 'abc-123' }));
+      root.render(wrap(createElement(ChatView, { ...minimalProps, chatId: 'abc-123' })));
     });
 
     expect(screen.getByTestId('chat-export-button')).toBeInTheDocument();
@@ -195,7 +222,7 @@ describe('ChatView Export button', () => {
   /* ---- 3. ExportDialog is closed initially ---- */
   it('ExportDialog is closed initially when chatId is set', () => {
     act(() => {
-      root.render(createElement(ChatView, { ...minimalProps, chatId: 'abc-123' }));
+      root.render(wrap(createElement(ChatView, { ...minimalProps, chatId: 'abc-123' })));
     });
 
     expect(exportDialogProps.isOpen).toBe(false);
@@ -205,7 +232,7 @@ describe('ChatView Export button', () => {
   /* ---- 4. Clicking Export button opens the ExportDialog ---- */
   it('clicking the export button opens the ExportDialog', () => {
     act(() => {
-      root.render(createElement(ChatView, { ...minimalProps, chatId: 'abc-123' }));
+      root.render(wrap(createElement(ChatView, { ...minimalProps, chatId: 'abc-123' })));
     });
 
     const exportBtn = screen.getByTestId('chat-export-button');
@@ -222,7 +249,7 @@ describe('ChatView Export button', () => {
     const sessionId = 'session-xyz-789';
 
     act(() => {
-      root.render(createElement(ChatView, { ...minimalProps, chatId: sessionId }));
+      root.render(wrap(createElement(ChatView, { ...minimalProps, chatId: sessionId })));
     });
 
     // Dialog is closed initially but sessionId is already passed
@@ -240,7 +267,7 @@ describe('ChatView Export button', () => {
   /* ---- 6. Export button is not present when chatId is empty string ---- */
   it('does not render export button when chatId is empty string', () => {
     act(() => {
-      root.render(createElement(ChatView, { ...minimalProps, chatId: '' }));
+      root.render(wrap(createElement(ChatView, { ...minimalProps, chatId: '' })));
     });
 
     expect(screen.queryByTestId('chat-export-button')).toBeNull();

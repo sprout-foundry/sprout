@@ -22,6 +22,7 @@ func AllTools() []ToolHandler {
 		&searchFilesHandler{},
 		&repoMapHandler{},
 		&rollbackChangesHandler{},
+		&checkpointHandler{},
 		&viewHistoryHandler{},
 		&listSkillsHandler{},
 		&writeFileHandler{},
@@ -53,6 +54,8 @@ func AllTools() []ToolHandler {
 		&requestClarificationHandler{},
 		&respondClarificationHandler{},
 		&registerPreviewPortHandler{},
+		&deployStatusHandler{},
+		&deployHandler{},
 		&designValidateHandler{},
 		&designAssetsHandler{},
 		&designBriefHandler{},
@@ -61,6 +64,8 @@ func AllTools() []ToolHandler {
 		&designRenderHandler{},
 		&designCritiqueHandler{},
 		&designImportSketchHandler{},
+		&writePlanHandler{},
+		&planAddScopeHandler{},
 	}
 	// Platform-specific tools (nil on WASM via build-tagged stubs).
 	tools = append(tools, registerBrowseURLTool()...)

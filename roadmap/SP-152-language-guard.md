@@ -1,6 +1,6 @@
 # SP-152 — Outbound Language Guard
 
-> **Status (2026-10-03):** Proposed.
+> **Status (2026-10-07):** Shipped.
 > Related: SP-150 (per-role metrics), SP-151 (summaries are checked too).
 
 ## Problem
@@ -72,6 +72,17 @@ Two passes:
 The detector is a standalone package so other Go programs embedding
 sprout can call the same check.
 
+**WASM size impact (measured, item 152.8):** the language guard (script
+pass + `whatlanggo` trigram pass, both pure Go, no cgo) adds 558,352
+bytes (≈545 KB, ~0.97 %) to the stripped `sprout.wasm` artifact:
+57,408,813 → 57,967,165 bytes (54.7 → 55.2 MB). `make test-wasm`
+confirms the detector compiles and runs under `GOOS=js GOARCH=wasm`,
+and the guard runs on the browser build's outbound path
+(`cmd/wasm` → `ProcessQuery` → final-message guard + streaming
+hold-back). Both the baseline and post-guard artifacts exceed the build
+script's 50 MB threshold — a pre-existing warning, not introduced by
+the guard.
+
 ### 152f. Default
 
 On by default everywhere, including the CLI. A config setting turns it
@@ -93,7 +104,7 @@ mismatch rate is available in diagnostics.
       text matches the user's language.
 - [ ] Streaming hold-back test: a wrong-language stream never reaches
       the client.
-- [ ] WASM build includes the detector; size impact recorded in the PR.
+- [x] WASM build includes the detector; size impact recorded in the PR.
 - [ ] Mismatch metric recorded per model and role.
 - [ ] On by default in the CLI and web UI; the config setting disables it.
 

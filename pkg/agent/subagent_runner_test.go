@@ -1536,6 +1536,11 @@ func TestCreateSubagent_DefaultMaxIterationsBounded(t *testing.T) {
 // explicit timeouts always win, orchestrator persona (by ID or alias) gets 1 hour,
 // and all other personas get the 30-minute default.
 func TestResolveSubagentTimeout(t *testing.T) {
+	// Neutralize the SPROUT_TOOL_TIMEOUT floor (ResolveSubagentTimeout treats
+	// it as a floor-multiple, so a high ambient value would otherwise override
+	// the persona defaults this test pins). Deterministic regardless of the
+	// runner's environment; the dedicated env-override test sets it itself.
+	t.Setenv("SPROUT_TOOL_TIMEOUT", "")
 	parent := newIsolatedTestAgent(t)
 	defer parent.Shutdown()
 

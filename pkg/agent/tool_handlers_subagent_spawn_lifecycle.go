@@ -28,9 +28,13 @@ type subagentLaunchSpec struct {
 	personaExplicitlyProvided bool
 	provider                  string
 	model                     string
-	systemPromptText          string
-	enhancedPrompt            string
-	subagentWorkspaceRoot     string
+	// role is the role the subagent's usage is attributed to
+	// (the role its model was resolved through; see
+	// resolveSubagentProviderModel).
+	role                  string
+	systemPromptText      string
+	enhancedPrompt        string
+	subagentWorkspaceRoot string
 }
 
 // prepareSubagentLaunch parses the raw args map, validates paths and
@@ -116,7 +120,7 @@ func prepareSubagentLaunch(ctx context.Context, a *Agent, args map[string]interf
 
 	// --- Build enhanced prompt ---
 	// --- Resolve provider/model ---
-	spec.provider, spec.model, spec.systemPromptText, err = resolveSubagentProviderModel(a, spec.persona, spec.personaExplicitlyProvided, spec.subagentWorkspaceRoot)
+	spec.provider, spec.model, spec.role, spec.systemPromptText, err = resolveSubagentProviderModel(a, spec.persona, spec.personaExplicitlyProvided, spec.subagentWorkspaceRoot)
 	if err != nil {
 		return nil, err
 	}

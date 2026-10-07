@@ -1,4 +1,4 @@
-// runner_support.go — the SP-154 §154b runner's small private helpers,
+// runner_support.go — the runner's small private helpers,
 // split from runner.go to keep that file under the repo's per-file line
 // budget: the language-guard stat lookup, the work-dir resolution, and
 // the fresh-copy MkdirTemp prefix.
@@ -13,7 +13,7 @@ import (
 )
 
 // langGuardStat returns one model's language-guard stat from a snapshot,
-// summed across that model's roles (the SP-150 §150c role dimension splits
+// summed across that model's roles (the role dimension splits
 // a model's checks by role; the benchmark's per-model delta wants the total
 // for the model). It is the zero stat when the model has no recorded checks
 // yet. The snapshot is small (one entry per (model, role) ever judged,

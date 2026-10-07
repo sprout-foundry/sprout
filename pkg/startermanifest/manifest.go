@@ -20,7 +20,7 @@
 // standard-library-only.
 //
 // JSON field names are part of the on-disk contract and must stay in sync
-// with the spec (roadmap/SP-153-starters-and-stack-skills.md §153a).
+// with the spec (roadmap/SP-153-starters-and-stack-skills.md).
 package startermanifest
 
 // On-disk location of the manifest, under the project root.

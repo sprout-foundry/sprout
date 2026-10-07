@@ -11,7 +11,7 @@
 // file; this package defines its shape and enforces its invariants.
 //
 // JSON field names are part of the on-disk contract and must stay in sync
-// with the spec (roadmap/SP-148-structured-plans.md §148a). Bumping the
+// with the spec (roadmap/SP-148-structured-plans.md). Bumping the
 // schema version (SchemaVersion / SupportedVersions) is the only supported
 // way to change the contract in a breaking way.
 package plancontract

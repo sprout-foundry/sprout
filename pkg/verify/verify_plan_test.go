@@ -41,11 +41,11 @@ func TestRunPlanWithConfigCommands(t *testing.T) {
 	assert.True(t, res.Passed())
 }
 
-// TestRunPlanWithoutBuildOrTestItems pins the 149.3/149.4 scope: a plan that
+// TestRunPlanWithoutBuildOrTestItems pins the page/manual scope: a plan that
 // declares only a page item (plus a manual item) gates a single page check
 // and a single pre-filled manual check. The manifestFull manifest has no dev
-// command, so the page check is skipped with a reason (honest failure,
-// SP-149 §149d) rather than invented, and the manual item is listed but
+// command, so the page check is skipped with a reason (honest failure)
+// rather than invented, and the manual item is listed but
 // never gated — it appears as a skipped manual check that gates nothing.
 func TestRunPlanWithoutBuildOrTestItems(t *testing.T) {
 	root := t.TempDir()
@@ -65,7 +65,7 @@ func TestRunPlanWithoutBuildOrTestItems(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Empty(t, exec.executed, "a plan with no build/test items gates no command execution")
-	require.Len(t, res.Checks, 2, "149.3 adds one page check and 149.4 adds one manual check")
+	require.Len(t, res.Checks, 2, "the plan gates one page check and one manual check")
 	assert.Equal(t, plancontract.KindPage, res.Checks[0].Kind)
 	assert.True(t, res.Checks[0].Skipped, "no dev command in the manifest: the page check is skipped, not invented")
 	assert.Contains(t, res.Checks[0].Reason, "dev command")
@@ -222,7 +222,7 @@ func TestNewDefaults(t *testing.T) {
 	assert.Equal(t, DefaultMaxExcerptBytes, r.MaxExcerptBytes)
 }
 
-// TestResultJSONRoundTrip pins the "plain data for SP-151" contract: a
+// TestResultJSONRoundTrip pins the "plain data" contract: a
 // Result marshals and unmarshals losslessly.
 func TestResultJSONRoundTrip(t *testing.T) {
 	res := &Result{
@@ -243,7 +243,7 @@ func TestResultJSONRoundTrip(t *testing.T) {
 }
 
 // TestResultSummary pins the deterministic summary rendering used by the
-// final reply (SP-149 §149d).
+// final reply.
 func TestResultSummary(t *testing.T) {
 	baseline := &Result{
 		Baseline: true,

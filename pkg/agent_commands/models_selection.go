@@ -433,7 +433,7 @@ func (m *ModelsCommand) setModel(modelID string, chatAgent *agent.Agent) error {
 	return nil
 }
 
-// setRoleModel sets the model for a role (SP-150 §150d, item 150.6):
+// setRoleModel sets the model for a role:
 // `/model --role <role> <model_id>`. It read-modifies-writes the role's
 // stored selection through the config manager, preserving the role's
 // stored provider — only the model is set; the role's provider is changed

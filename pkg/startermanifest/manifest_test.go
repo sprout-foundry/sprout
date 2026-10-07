@@ -27,11 +27,11 @@ const fixtureValid = `{
 
 // fixtureMinimal is the leanest valid manifest: just the starter identity.
 // Every command, the port, the routes, and the build output are optional
-// (SP-153 §153a: any project can add the file by hand).
+// (any project can add the file by hand).
 const fixtureMinimal = `{"starter": {"id": "static-site", "version": "0.1.0"}}`
 
-// TestValidateJSON is the table test over JSON fixtures required by SP-153
-// §153a: a fully-populated manifest and the minimal manifest pass, and every
+// TestValidateJSON is the table test over JSON fixtures for the schema:
+// a fully-populated manifest and the minimal manifest pass, and every
 // invalid case fails with a clear message.
 func TestValidateJSON(t *testing.T) {
 	cases := []struct {

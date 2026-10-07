@@ -13,7 +13,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Manifest / plan / baseline behavior for page checks (SP-149 §149b): a page
+// Manifest / plan / baseline behavior for page checks: a page
 // check's command and routes come only from the starter manifest, the plan's
 // model-proposed Check fields are inert, and a baseline run never produces a
 // page check.
@@ -111,7 +111,7 @@ func TestBaselineNeverProducesPageCheck(t *testing.T) {
 
 // ---------------------------------------------------------------------------
 // (h) the plan's model-proposed page Check fields have NO effect: routes come
-//     only from the manifest (§149b).
+//     only from the manifest.
 // ---------------------------------------------------------------------------
 
 func TestPageCheckModelProposedRouteHasNoEffect(t *testing.T) {

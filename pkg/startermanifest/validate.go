@@ -28,7 +28,7 @@ func (e *ValidationError) Error() string {
 // It is a pure function over the in-memory struct, so it can be used both
 // when building a new manifest and on every read/write of
 // .sprout/starter.json. The invariants are deliberately lenient (any
-// project can add the file by hand — SP-153 §153a): the starter identity is
+// project can add the file by hand): the starter identity is
 // the only required content, and every command is optional. What is
 // enforced is:
 //

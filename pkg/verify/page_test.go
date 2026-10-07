@@ -26,7 +26,7 @@ import (
 
 // consoleErrorRe extracts console.error("...") literals from an HTML file so
 // the fake browser's console-error report comes from the fixture app itself
-// (SP-149 §149a acceptance: "a page check catches a route that renders with a
+// (the acceptance rule: "a page check catches a route that renders with a
 // console error").
 var consoleErrorRe = regexp.MustCompile(`console\.error\(\s*["']([^"']*)["']`)
 

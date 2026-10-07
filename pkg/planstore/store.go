@@ -1,4 +1,4 @@
-// Package planstore is the file-system-facing half of the SP-148 structured
+// Package planstore is the file-system-facing half of the structured
 // plan: it reads and writes the machine-readable plan document stored at
 // .sprout/plan.json and the rendered .sprout/plan.md view.
 //
@@ -15,7 +15,7 @@
 //     truth.
 //
 // The on-disk location is project-relative (.sprout/ under the project root),
-// so a plan travels with the code and lands in git history (SP-148 §148a).
+// so a plan travels with the code and lands in git history.
 package planstore
 
 import (

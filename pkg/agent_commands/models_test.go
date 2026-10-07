@@ -506,7 +506,7 @@ func TestModelsCommandFindFeaturedModels(t *testing.T) {
 }
 
 // ====================================================================
-// /model --role (SP-150 §150d, item 150.6)
+// /model --role
 // ====================================================================
 
 func TestModelsCommandExecute_RoleModelPersists(t *testing.T) {

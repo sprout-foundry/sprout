@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestNewConfigVerificationOffByDefault proves the SP-149 149e default: a
+// TestNewConfigVerificationOffByDefault proves the default: a
 // fresh config has no verification section (off) and the repair-attempt
 // limit resolves to the small default.
 func TestNewConfigVerificationOffByDefault(t *testing.T) {
@@ -341,7 +341,7 @@ func TestLoadConfigWithLayers_Verification(t *testing.T) {
 }
 
 // TestVerificationAccessors pins the accessors' default and configured
-// behavior for later items (149.5+) that ask "is verification enabled?" and
+// behavior for later callers that ask "is verification enabled?" and
 // "how many repair attempts are allowed?".
 func TestVerificationAccessors(t *testing.T) {
 	enabledCases := []struct {
@@ -451,7 +451,7 @@ func TestVerificationConfigResolve(t *testing.T) {
 }
 
 // TestConfigVerificationCommandsJSON pins the on-disk contract of the
-// explicit build/test commands (SP-149 §149b): they are serialized under
+// explicit build/test commands: they are serialized under
 // the verification section as build_command/test_command, omitted when
 // empty, and read back.
 func TestConfigVerificationCommandsJSON(t *testing.T) {
@@ -475,7 +475,7 @@ func TestConfigVerificationCommandsJSON(t *testing.T) {
 }
 
 // TestMergeConfig_VerificationCommands pins the merge conventions for the
-// explicit build/test commands (SP-149 §149b): a non-empty command wins
+// explicit build/test commands: a non-empty command wins
 // (the narrower layer's command beats the broader one), a silent layer
 // keeps the broader command, the two commands merge independently, and
 // naming commands never enables the feature.

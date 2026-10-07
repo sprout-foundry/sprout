@@ -2,11 +2,10 @@ package configuration
 
 import "fmt"
 
-// manager_roles.go — per-role model selection accessors on the Manager
-// (SP-150 item 150.6, §150d). Role storage, alias fallback and the
-// field-wise resolution live on Config (config_roles.go); these
-// methods expose the stored selection through the Manager with
-// persistence.
+// manager_roles.go — per-role model selection accessors on the Manager.
+// Role storage, alias fallback and field-wise resolution live on Config
+// (config_roles.go); these methods expose the stored selection through the
+// Manager with persistence.
 
 // GetRole returns the stored selection for a role (the zero RoleConfig
 // when the role is unset). It returns the raw stored entry without

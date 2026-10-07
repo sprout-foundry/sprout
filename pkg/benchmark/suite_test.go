@@ -1,6 +1,6 @@
 //go:build !js
 
-// suite_test.go — the SP-154 §154c/§154.5 RunSuite acceptance tests: the
+// suite_test.go — the RunSuite acceptance tests: the
 // suite runs every model of the override against each task in suite order
 // and aggregates them into one report, a mid-suite error is recorded and
 // the suite continues, and a nil runner or task list is rejected. The
@@ -19,12 +19,12 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// RunSuite: models × tasks in suite order (SP-154 §154c, 154.5)
+// RunSuite: models × tasks in suite order
 // ---------------------------------------------------------------------------
 
 // TestRunSuite_TwoModelsEndToEnd pins the spec's acceptance criterion:
 // the runner produces a report for two models end to end. The suite
-// runs every model of the 154.4 override against the fixture task
+// runs every model of the override against the fixture task
 // (RunsPerTask default: 3 runs per pair — 6 runs in suite order: model
 // A's runs 1–3, then model B's runs 1–3), all scripted to pass, and
 // BuildReport aggregates them: two starter reports (one per model, the
@@ -73,7 +73,7 @@ func TestRunSuite_TwoModelsEndToEnd(t *testing.T) {
 		}
 	}
 
-	// The report (SP-154 §154c): two starter reports — one per model,
+	// The report: two starter reports — one per model,
 	// the same starter — each with 3 runs and pass rate 1.0; no failure
 	// categories (every run passed).
 	rep := BuildReport(runs, runner.SuiteModels(), Meta{RunDate: "2026-10-04", Version: "v0.0.0-suite"})

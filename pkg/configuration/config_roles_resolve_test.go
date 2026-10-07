@@ -183,7 +183,7 @@ func TestSetRole_NilReceiver(t *testing.T) {
 	assert.NotPanics(t, func() { cfg.SetRole(RolePlanner, RoleConfig{Provider: "openai"}) })
 }
 
-// TestResolveRole_InternalRoleChains pins item 150.3 (SP-150 §150b):
+// TestResolveRole_InternalRoleChains pins the internal-role precedence:
 // ResolveRole is the single internal resolver. For each internal role the
 // full precedence chain must hold: an explicit roles-section entry beats
 // the legacy alias settings, which beat the conversation's (last-used
@@ -406,8 +406,8 @@ func TestBuiltInRoles(t *testing.T) {
 	)
 }
 
-// TestResolveRole_SummarizerResolvable pins item 150.4 (SP-150 §150a): the
-// summarizer role (progress and change summaries, SP-151/SP-157) must be
+// TestResolveRole_SummarizerResolvable pins the summarizer role: the
+// summarizer role (progress and change summaries) must be
 // resolvable through the single resolver — its explicit roles-section entry
 // when set, and the conversation's (provider, model) when unset. It has no
 // legacy alias, like the planner.

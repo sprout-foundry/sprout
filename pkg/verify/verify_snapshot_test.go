@@ -55,9 +55,9 @@ func snapshotRunner(exec *fakeExecutor) *Runner {
 	return r
 }
 
-// TestSnapshotFreezesManifestAndPlan is the pkg/verify anchor for SP-149
-// §149b: a Snapshot captured before the files change on disk keeps the
-// original manifest commands (build, test, dev) and the original plan
+// TestSnapshotFreezesManifestAndPlan is the pkg/verify anchor for the
+// snapshot contract: a Snapshot captured before the files change on disk
+// keeps the original manifest commands (build, test, dev) and the original plan
 // acceptance, and RunSnapshot executes against the snapshot — never the
 // tampered on-disk files.
 func TestSnapshotFreezesManifestAndPlan(t *testing.T) {

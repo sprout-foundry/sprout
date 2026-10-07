@@ -458,7 +458,7 @@ passes the manifest validator (`pkg/startermanifest`).
       deploy tools) picks the Cloudflare Pages or Workers adapter from it,
       and an explicit `--target`/config still overrides. Tests for the
       rule and the override. Spec: SP-153 §153a, SP-156 §156a.
-- [ ] **153.10** Starter `static-site` (Astro, static output): home and one
+- [x] **153.10** Starter `static-site` (Astro, static output): home and one
       content page, a shared layout, a contact form posting to an external
       endpoint configured in one place, prettier + eslint config, one test
       (vitest checking the built HTML of the home page), plain README,

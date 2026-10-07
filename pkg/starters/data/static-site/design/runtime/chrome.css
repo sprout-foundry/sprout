@@ -1,0 +1,102 @@
+/*
+ * Sprout device chrome (SP-143 §143.2) — a fixed checked-in asset, copied
+ * into trees by the scaffold. Hardware realism, never project-themed: the
+ * phone shell is an iPhone regardless of the project's palette, and
+ * light/dark follows `color-scheme` alone (light-dark(), no token reads).
+ *
+ * html[data-device="phone"] turns the page into an iPhone shell sized by
+ * the --sprout-frame-* variables the base template sets to the README
+ * `frames:` entry. The declared frame is the GLASS (the rectangle the
+ * author lays out); the bezel is drawn around it as a border. No
+ * data-device attribute, or data-device="desktop", renders an unframed
+ * document — desktop is the default layout and this sheet does nothing.
+ *
+ * Reference from a screen as ../runtime/chrome.css (screens/ sits one
+ * level below design/). Safe areas: the status bar overlays the top 47px
+ * of the glass and the home indicator the bottom ~13px; keep live content
+ * inside that inset.
+ */
+
+html[data-device="phone"] {
+  color-scheme: light dark;
+  /* The stage behind the device. Neutral, never themed. */
+  background: light-dark(#e5e5ea, #000000);
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  margin: 0;
+}
+
+/* The glass: the declared frame, wrapped in the bezel (the border). */
+html[data-device="phone"] body {
+  position: relative;
+  box-sizing: content-box;
+  width: var(--sprout-frame-width, 390px);
+  height: var(--sprout-frame-height, 844px);
+  margin: 0;
+  border: 12px solid #0b0b0d;
+  border-radius: 54px;
+  background: #000;
+  overflow: hidden;
+  box-shadow:
+    0 0 0 2px #2a2a2e,
+    0 24px 60px light-dark(rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.8));
+}
+
+/* Side buttons: fixed hardware, drawn on the stage beside the glass. */
+html[data-device="phone"] body::before {
+  content: "";
+  position: absolute;
+  left: -16px;
+  top: 120px;
+  width: 3px;
+  height: 64px;
+  border-radius: 2px;
+  background: #2a2a2e;
+  box-shadow: 0 96px 0 0 #2a2a2e;
+}
+
+/* Status bar: time text, the dynamic island (a solid block), and the
+   radios (an inline data-URI SVG — self-contained, network-free). Overlay
+   only: pointer-events none keeps it out of every hit test. A screen that
+   wants light status text on a dark glass sets color-scheme: dark on html
+   in its own style — chrome follows, it never decides. */
+html[data-device="phone"] body::after {
+  content: "9:41";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 47px;
+  padding: 15px 30px 0 34px;
+  box-sizing: border-box;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: light-dark(#000000, #ffffff);
+  pointer-events: none;
+  z-index: 2147483646;
+  background-image:
+    linear-gradient(#000000, #000000),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='62' height='12' viewBox='0 0 62 12'%3E%3Cg fill='%2385888d'%3E%3Crect x='0' y='7' width='3' height='4' rx='1'/%3E%3Crect x='4' y='5' width='3' height='6' rx='1'/%3E%3Crect x='8' y='3' width='3' height='8' rx='1'/%3E%3Crect x='12' y='1' width='3' height='10' rx='1'/%3E%3Cpath d='M22 4.5a8.5 8.5 0 0 1 11 0l-1.6 1.9a6 6 0 0 0-7.8 0Z'/%3E%3Cpath d='M24.4 7.2a5 5 0 0 1 6.2 0L27.5 11Z'/%3E%3Crect x='38' y='1.5' width='20' height='9' rx='2.5' fill='none' stroke='%2385888d'/%3E%3Crect x='40' y='3.5' width='13' height='5' rx='1'/%3E%3Crect x='59' y='4.5' width='2' height='3' rx='1'/%3E%3C/g%3E%3C/svg%3E");
+  background-repeat: no-repeat, no-repeat;
+  background-position: center 10px, right 26px top 17px;
+  background-size: 122px 34px, 62px 12px;
+}
+
+/* The home indicator is a real element the base templates ship in the body
+   (<div data-sprout-home></div>), so it survives above authored stacking
+   contexts without a second pseudo-element on body. */
+html[data-device="phone"] [data-sprout-home] {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 140px;
+  height: 5px;
+  border-radius: 3px;
+  background: light-dark(rgba(0, 0, 0, 0.28), rgba(255, 255, 255, 0.85));
+  pointer-events: none;
+  z-index: 2147483647;
+}

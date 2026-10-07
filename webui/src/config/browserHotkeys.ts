@@ -46,4 +46,7 @@ export const BROWSER_DEFAULT_HOTKEYS: HotkeyEntry[] = [
   { key: 'Alt+1', command_id: 'switch_to_editor', global: false },
   { key: 'Alt+2', command_id: 'switch_to_chat', global: false },
   { key: 'Alt+3', command_id: 'switch_to_git', global: false },
+  { key: 'Shift+Alt+R', command_id: 'editor_reveal_in_explorer', global: false },
+  { key: 'Shift+Alt+C', command_id: 'editor_copy_relative_path', global: false },
+  { key: 'Shift+Alt+P', command_id: 'editor_copy_absolute_path', global: false },
 ];

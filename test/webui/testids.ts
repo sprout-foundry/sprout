@@ -602,6 +602,42 @@ const TESTIDS = {
   "views-slot-right": "views-slot-right",
   "views-slot-overlay": "views-slot-overlay",
   "views-example-embedding": "views-example-embedding", // the example composition's root
+
+  // Language guard (chat message original-text disclosure, MessageItem)
+  "language-guard-original": "language-guard-original",
+
+  // Project timeline (components/changes/ProjectTimeline.tsx)
+  "project-timeline": "project-timeline", // the timeline root
+  "ptl-row": "ptl-row", // one timeline entry
+  "ptl-restore": "ptl-restore", // the restore action
+  "ptl-restore-cancel": "ptl-restore-cancel", // cancel the restore confirm
+  "ptl-restore-confirm": "ptl-restore-confirm", // the restore confirm dialog
+  "ptl-restore-confirm-yes": "ptl-restore-confirm-yes", // confirm the restore
+
+  // Ship surface (components/ship/ShipSurface.tsx)
+  "ship-surface": "ship-surface", // the surface root
+  "ship-status": "ship-status", // the deploy status line
+  "ship-deploy": "ship-deploy", // the deploy action
+  "ship-deploy-blocked": "ship-deploy-blocked", // the blocked-deploy reason
+  "ship-error": "ship-error", // the error surface
+  "ship-live-state": "ship-live-state", // the live deployment state
+  "ship-live-url": "ship-live-url", // the live deployment URL
+  "ship-live-url-empty": "ship-live-url-empty", // running-but-no-URL guard
+  "ship-live-version": "ship-live-version", // the live deployment version
+  "ship-live-deployed-at": "ship-live-deployed-at", // the live deploy time
+  "ship-history-list": "ship-history-list", // the deploy history list
+  "ship-history-empty": "ship-history-empty", // empty history placeholder
+  "ship-history-revision": "ship-history-revision", // one history entry
+  "ship-history-state": "ship-history-state", // entry state
+  "ship-history-summary": "ship-history-summary", // entry summary
+  "ship-history-time": "ship-history-time", // entry timestamp
+  "ship-history-version": "ship-history-version", // entry version
+  // Dynamic per-entry actions follow ship-history-{row,open,rollback}-${id};
+  // the registry keeps one concrete exemplar per pattern (the same approach
+  // the role-model rows use).
+  "ship-history-row-x": "ship-history-row-x", // pattern ship-history-row-${id}
+  "ship-history-open-x": "ship-history-open-x", // pattern ship-history-open-${id}
+  "ship-history-rollback-x": "ship-history-rollback-x", // pattern ship-history-rollback-${id}
 } as const;
 
 // Derived set for O(1) coverage lookups

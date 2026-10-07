@@ -148,7 +148,14 @@ function createManifestFetch(manifestBody: string | null, wasmBody = new ArrayBu
       if (manifestBody === null) return { ok: false, status: 404 } as Response;
       return { ok: true, status: 200, text: async () => manifestBody } as Response;
     }
-    return { ok: true, status: 200, arrayBuffer: async () => wasmBody, text: async () => '' } as Response;
+    return {
+      ok: true,
+      status: 200,
+      // wasmShell init validates the content-type of the WASM response.
+      headers: { get: (name: string) => (name.toLowerCase() === 'content-type' ? 'application/wasm' : null) },
+      arrayBuffer: async () => wasmBody,
+      text: async () => '',
+    } as Response;
   };
 }
 

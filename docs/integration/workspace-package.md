@@ -163,8 +163,15 @@ binary with new JS:
 - `dist/wasm/wasm-manifest.json` — the small manifest the loader reads, mapping
   each logical name to its content-hashed filename.
 
-The bare `sprout.wasm` / `wasm_exec.js` are emitted alongside as fallbacks. The
-hash is the first 10 hex characters of the assets' sha256, produced by the same
+The package ships only these three files. The bare `sprout.wasm` /
+`wasm_exec.js` are **not** emitted alongside: the binary is ~62 MB, and a
+fixed-name duplicate would double the installed payload for no benefit, since a
+host serving `dist/wasm/` always has the manifest and the loader resolves the
+hashed name from it. The standalone local/cloud build
+(`scripts/build-webui-dist.mjs`) still writes fixed-name copies where the embed
+(`pkg/webui/static`, `webui/public/wasm`) is served without a manifest; the
+package is the only artifact that drops them.
+The hash is the first 10 hex characters of the assets' sha256, produced by the same
 pure helpers the cloud/standalone build uses
 (`scripts/build-webui-dist.mjs`), so a changed binary always yields a new URL.
 The `./wasm/` subpath export points at the directory:

@@ -41,13 +41,23 @@ make build-all`.
       test) packs the tarball, installs it into a scratch Vite React 18
       app outside the repo, and requires `tsc --noEmit` and `vite build`
       to pass with a single React copy.
-- [ ] **ws.10** Package size: the 62 MB WASM ships twice (hashed and a
+- [x] **ws.10** Package size: the 62 MB WASM ships twice (hashed and a
       fixed-name fallback, `emit-wasm-assets.mjs`), 132 MB unpacked. Ship
       only the content-hashed WASM and `wasm_exec.js` in the package
       (referenced through the manifest); keep the fixed-name copies only
       where the local embed (`pkg/webui/static`) needs them. Artifact test
       asserts one WASM file in the package and a size budget.
       Spec: SP-160 §160e.
+      Fixed: `packages/workspace/scripts/emit-wasm-assets.mjs` now emits
+      only the content-hashed `sprout.<hash>.wasm`, `wasm_exec.<hash>.js`
+      and `wasm-manifest.json` into `dist/wasm/` — the fixed-name
+      duplicates are gone (dist/wasm/ 118 MB → 59 MB). The
+      cloud/standalone build path is untouched, so the local embed
+      (`pkg/webui/static`, `webui/public/wasm`) still ships the fixed-name
+      copies, and the loader already resolves the hashed name from the
+      manifest. Pinned by the package emit test and the artifact test
+      (exactly one WASM binary and one `wasm_exec`, plus a single-copy
+      size budget derived from the emitted binary).
 
 
 Active work tracked here. Each item is a small, independently committable

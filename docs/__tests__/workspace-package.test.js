@@ -551,27 +551,30 @@ describe(
         "the build emits dist/wasm/",
       );
 
-      // The wasm directory itself is exact: the manifest, the fixed-name
-      // fallbacks and the files the manifest names — no stale hashed asset left
-      // over from a previous build.
+      // The wasm directory itself is exact: the manifest plus ONLY the files
+      // the manifest names — no fixed-name fallbacks (the package would then
+      // carry the ~62 MB binary twice) and no stale hashed asset left over
+      // from a previous build.
       const wasmDir = path.join(DIST, "wasm");
       const manifest = JSON.parse(
         fs.readFileSync(path.join(wasmDir, "wasm-manifest.json"), "utf-8"),
       );
       const expectedWasmFiles = new Set([
         "wasm-manifest.json",
-        "sprout.wasm",
-        "wasm_exec.js",
         ...Object.values(manifest.files ?? {}),
       ]);
-      const stale = fs
-        .readdirSync(wasmDir)
-        .filter((name) => !expectedWasmFiles.has(name));
+      const emittedWasm = fs.readdirSync(wasmDir).sort();
       assert.deepEqual(
-        stale,
-        [],
-        `dist/wasm/ has stale or unexpected files: ${stale.join(", ")}`,
+        emittedWasm,
+        [...expectedWasmFiles].sort(),
+        `dist/wasm/ must be exactly the manifest and the files it names: ${emittedWasm.join(", ")}`,
       );
+      for (const fixed of ["sprout.wasm", "wasm_exec.js"]) {
+        assert.ok(
+          !emittedWasm.includes(fixed),
+          `the package must not ship a fixed-name ${fixed} duplicate`,
+        );
+      }
     });
 
     test("the entry declares the host contract and the package version", () => {
@@ -853,6 +856,81 @@ describe(
         pkg.exports["./wasm/"],
         "./dist/wasm/",
         "package.json exports a ./wasm/ subpath",
+      );
+    });
+
+    test("the package ships exactly one WASM binary and one wasm_exec", () => {
+      // The regression this guards: emitting both a content-hashed copy and a
+      // fixed-name fallback ships the ~62 MB binary twice. A host serving
+      // dist/wasm/ always has the manifest, so the loader resolves the hashed
+      // name and the fixed-name copy is pure dead weight. Exactly one of each.
+      const emitted = fs.readdirSync(WASM_DIR);
+      const wasmFiles = emitted.filter((name) => name.endsWith(".wasm"));
+      const execFiles = emitted.filter((name) =>
+        /^wasm_exec.*\.js$/.test(name),
+      );
+      assert.deepEqual(
+        wasmFiles,
+        [JSON.parse(fs.readFileSync(manifestPath, "utf-8")).wasm],
+        `exactly one WASM binary must ship, found: ${wasmFiles.join(", ")}`,
+      );
+      assert.deepEqual(
+        execFiles,
+        [JSON.parse(fs.readFileSync(manifestPath, "utf-8")).wasmExec],
+        `exactly one wasm_exec must ship, found: ${execFiles.join(", ")}`,
+      );
+    });
+
+    test("the WASM payload is within the single-copy size budget", () => {
+      // The duplication guard. Measured on this artifact: the single hashed
+      // sprout.wasm is ~62 MB (62,027,995 bytes ≈ 59.2 MiB); the de-duplicated
+      // dist/wasm/ is that binary plus the ~33 KB wasm_exec and the ~200 B
+      // manifest. Before de-duplication the payload was ~2× (a fixed-name copy
+      // of the same ~62 MB binary).
+      //
+      // The reference is the measured single hashed wasm, not a hardcoded
+      // absolute: budget = single-copy size × 1.5. That is a REAL guard — a
+      // second ~equal copy lands at ~2× (fails), while a moderately larger
+      // binary (up to +50 %) still passes with headroom, so a legitimate WASM
+      // growth is not a spurious failure. The message names the measured values
+      // so a regression is diagnosable.
+      const wasmFiles = fs
+        .readdirSync(WASM_DIR)
+        .filter((name) => name.endsWith(".wasm"));
+      assert.equal(
+        wasmFiles.length,
+        1,
+        `the package must ship a single WASM binary, found: ${wasmFiles.join(", ")}`,
+      );
+      const singleWasmBytes = fs.statSync(
+        path.join(WASM_DIR, wasmFiles[0]),
+      ).size;
+      const totalWasmBytes = wasmFiles.reduce(
+        (sum, name) => sum + fs.statSync(path.join(WASM_DIR, name)).size,
+        0,
+      );
+      const budget = singleWasmBytes * 1.5;
+      assert.ok(
+        totalWasmBytes <= budget,
+        `the WASM payload is ${totalWasmBytes} bytes over ${wasmFiles.length} file(s); ` +
+          `budget is ${budget} bytes (single hashed wasm is ${singleWasmBytes} bytes). ` +
+          "A second WASM copy (the old fixed-name fallback) doubled this — the package ships one.",
+      );
+
+      // And the whole unpacked directory is roughly one WASM plus the small
+      // js/manifest — not the ~2× payload a duplicate produces. Slack is a
+      // fraction of the single copy (the js and manifest are ~33 KB), so this
+      // scales with the binary rather than pinning an absolute ceiling.
+      const totalDirBytes = fs
+        .readdirSync(WASM_DIR)
+        .reduce(
+          (sum, name) => sum + fs.statSync(path.join(WASM_DIR, name)).size,
+          0,
+        );
+      assert.ok(
+        totalDirBytes <= singleWasmBytes * 1.05,
+        `dist/wasm/ unpacks to ${totalDirBytes} bytes; expected one WASM plus the small ` +
+          `js/manifest (≤ ${singleWasmBytes * 1.05} bytes, i.e. single wasm + 5% slack).`,
       );
     });
   },

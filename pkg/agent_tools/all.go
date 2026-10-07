@@ -52,6 +52,8 @@ func AllTools() []ToolHandler {
 		&requestClarificationHandler{},
 		&respondClarificationHandler{},
 		&registerPreviewPortHandler{},
+		&deployStatusHandler{},
+		&deployHandler{},
 		&designValidateHandler{},
 		&designAssetsHandler{},
 		&writePlanHandler{},

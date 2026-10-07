@@ -649,9 +649,14 @@ needed whatever the integration work does. Spec context: SP-160 §160e.
       `.sprout/deploy.json`, and drives `deploy.Deployer.BuildAndDeploy`
       against a persisted fake target; `--production` is gated on `--yes`.
       Verified end to end and pinned by Go tests.
-- [ ] **156.7** Agent tools `deploy_status` and `deploy` with the
+- [x] **156.7** Agent tools `deploy_status` and `deploy` with the
       verification and confirmation gates; deploy outcomes emit progress
       events (SP-151). Tests. Spec: SP-156 §156c.
+      Fixed: `pkg/agent_tools` registers `deploy_status` (read-only) and
+      `deploy` (preview by default); `deploy` refuses unless verification
+      passed and routes production through the approval gate (no model-
+      supplied confirmation), emitting a progress event on the outcome.
+      Pinned by Go tests.
 - [ ] **156.8** Cloudflare adapter (Pages for static output, Workers where
       needed) against the user's own account token; unit tests against
       an `httptest` fake of the Cloudflare API, no live account. Spec:

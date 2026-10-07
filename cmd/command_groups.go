@@ -12,7 +12,7 @@ var commandGroups = []struct {
 	{cobra.Group{ID: "sessions", Title: "Sessions & History:"}, []string{"history", "search", "export", "export-training", "log"}},
 	{cobra.Group{ID: "automation", Title: "Automation:"}, []string{"automate", "shell-bg"}},
 	{cobra.Group{ID: "config", Title: "Configuration:"}, []string{"config", "keys", "custom", "mcp", "lsp", "skill", "policy", "service"}},
-	{cobra.Group{ID: "diagnostics", Title: "Diagnostics & Maintenance:"}, []string{"diag", "explain", "audit", "version", "upgrade", "help", "completion"}},
+	{cobra.Group{ID: "diagnostics", Title: "Diagnostics & Maintenance:"}, []string{"diag", "explain", "audit", "api", "version", "upgrade", "help", "completion"}},
 }
 
 // plumbingCommands are invoked by tooling (sprout-foundry's workspace

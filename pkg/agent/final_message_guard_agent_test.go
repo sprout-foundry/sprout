@@ -66,7 +66,7 @@ func lastAssistantMessage(t *testing.T, ag *Agent) api.Message {
 	return api.Message{}
 }
 
-// TestLanguageGuardMismatchRegenerates drives the §152b success path:
+// TestLanguageGuardMismatchRegenerates drives the regeneration success path:
 // the user's language is inferred from their own (Spanish) message, the
 // turn's final answer comes back in English (a mismatch), so the guard
 // regenerates once — the corrected Spanish text ends up in state, the
@@ -105,7 +105,7 @@ func TestLanguageGuardMismatchRegenerates(t *testing.T) {
 	}
 }
 
-// TestLanguageGuardMismatchStillFailingShowsNotice drives the §152b
+// TestLanguageGuardMismatchStillFailingShowsNotice drives the
 // second-mismatch path: the regeneration also comes back in the wrong
 // language, so the user sees the templated notice in their (configured,
 // Spanish) language and the original is retained for "view original".
@@ -231,8 +231,8 @@ func TestLanguageGuardSkipsSubagents(t *testing.T) {
 }
 
 // TestApplyLanguageGuardNilConfig pins the guard's behavior on an agent
-// without a config manager: the guard resolves to its default (enabled,
-// §152f), the user's language is inferred from their message, and the
+// without a config manager: the guard resolves to its default (enabled),
+// the user's language is inferred from their message, and the
 // failed regeneration (no client) shows the notice — without a panic.
 func TestApplyLanguageGuardNilConfig(t *testing.T) {
 	ag := NewTestAgent()
@@ -304,8 +304,8 @@ func TestRecentUserMessagesExcludesVerificationReports(t *testing.T) {
 	}
 }
 
-// TestLanguageGuardMismatchRecordedPerModel pins the §152e metric (item
-// 152.9): the guard records a check for every judged final message and a
+// TestLanguageGuardMismatchRecordedPerModel pins the language-guard metric:
+// the guard records a check for every judged final message and a
 // mismatch when one is detected, both keyed by the turn's model ID. A
 // mismatch turn records one check and one mismatch; a pass turn records one
 // check and no mismatch.

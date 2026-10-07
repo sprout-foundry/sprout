@@ -32,8 +32,8 @@ func vhacWriteToolCall(t *testing.T, root, path string) *ScriptedResponse {
 	return NewScriptedToolCallResponse("vhac_wf_1", "write_file", args, "Writing the file.")
 }
 
-// TestVerificationHook_DocsOnlyTurnSkipsVerification pins §149a's docs
-// half: a turn that changed only markdown never starts a build, even
+// TestVerificationHook_DocsOnlyTurnSkipsVerification pins the docs
+// half of the app-code rule: a turn that changed only markdown never starts a build, even
 // though the starter manifest carries a failing one — the reply is
 // byte-identical to the model's answer, no extra model call happens, and
 // no result is stored or attached.
@@ -71,9 +71,9 @@ func TestVerificationHook_DocsOnlyTurnSkipsVerification(t *testing.T) {
 }
 
 // TestVerificationHook_SproutBookkeepingOnlyTurnSkipsVerification pins
-// §149a's bookkeeping half: a turn that changed only .sprout paths (the
-// plan here; the starter manifest is off-limits to the model by the
-// §149b write guard) is also a no-op for the hook.
+// the bookkeeping half of the app-code rule: a turn that changed only
+// .sprout paths (the plan here; the starter manifest is off-limits to the
+// model by the write guard) is also a no-op for the hook.
 func TestVerificationHook_SproutBookkeepingOnlyTurnSkipsVerification(t *testing.T) {
 	vhShAvailable(t)
 	root := t.TempDir()

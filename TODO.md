@@ -473,7 +473,7 @@ passes the manifest validator (`pkg/startermanifest`).
       known failure modes for open models (client JS in static pages,
       wrong import paths, `.astro` frontmatter mistakes). Auto-activates
       for the starter (existing activation path). Spec: SP-153 §153c.
-- [ ] **153.12** Starter `web-app` (React + Vite + React Router): two routes,
+- [x] **153.12** Starter `web-app` (React + Vite + React Router): two routes,
       shared layout, one piece of client state with persistence to
       `localStorage`, prettier + eslint, one vitest + Testing Library test,
       README, manifest (`deploy_target: pages`, SPA fallback noted for

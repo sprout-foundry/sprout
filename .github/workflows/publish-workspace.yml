@@ -45,6 +45,15 @@ jobs:
           npm run build -w @sprout/events
           npm run build -w @sprout/ui
 
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.26
+
+      - name: Prepare grammar blobs
+        # pkg/ast embeds the tree-sitter grammar blobs this generates; the
+        # WASM build fails without them.
+        run: make prepare-grammars
+
       - name: Build the WASM the package ships
         # The workspace package content-hashes webui/public/wasm/{sprout.wasm,
         # wasm_exec.js} into dist/wasm/; build them first so the published

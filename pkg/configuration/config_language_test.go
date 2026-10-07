@@ -9,7 +9,7 @@ import (
 )
 
 // TestConfigLanguageFieldRoundTrip proves the new `language` setting
-// (SP-152 152.3) survives the config save/load machinery: set it, save to a
+// survives the config save/load machinery: set it, save to a
 // fresh config dir, load it back, and confirm the value is preserved.
 func TestConfigLanguageFieldRoundTrip(t *testing.T) {
 	tmpDir := t.TempDir()

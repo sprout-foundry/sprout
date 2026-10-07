@@ -8,7 +8,7 @@ import (
 
 // ConfigurationCommands returns a ConfigCommandsProvider backed by a
 // merged *configuration.Config — the "explicit project configuration"
-// source of SP-149 §149b: verification.build_command and
+// source of the explicit project configuration: verification.build_command and
 // verification.test_command, set by a human in the project layer
 // (.sprout/workspace.json) or in global config. The provider ignores
 // root: the config is already the merged result for the project.

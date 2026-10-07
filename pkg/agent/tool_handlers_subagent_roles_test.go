@@ -1,6 +1,6 @@
 package agent
 
-// Item 150.3 (SP-150 §150b): the subagent spawn and parallel-dispatch paths
+// The subagent spawn and parallel-dispatch paths
 // resolve provider/model through the role resolver (Config.ResolveRole)
 // instead of the per-setting getters. These tests pin the call-site
 // behavior, including the preserved parent-inheritance gate on the RAW
@@ -88,7 +88,7 @@ func TestResolveSubagentProviderModel_RoleEntryBeatsLegacyAlias(t *testing.T) {
 
 // TestResolveSubagentProviderModel_LegacySubagentSettingsAliasCoderRole
 // pins that the pre-role subagent settings still flow through the coder
-// role's alias (item 150.2) on the persona path: a catalog persona with no
+// role's alias on the persona path: a catalog persona with no
 // explicit provider/model falls back to the general subagent getters.
 func TestResolveSubagentProviderModel_LegacySubagentSettingsAliasCoderRole(t *testing.T) {
 	agent := newRolesTestAgent(t)
@@ -110,7 +110,7 @@ func TestResolveSubagentProviderModel_LegacySubagentSettingsAliasCoderRole(t *te
 }
 
 // TestResolveSubagentProviderModel_ReviewerRoleOverride pins the reviewer
-// persona override: the reviewer role (SP-150 §150b) wins ahead of both the
+// persona override: the reviewer role wins ahead of both the
 // generic subagent settings and parent inheritance. The parent here reports
 // "unknown", so the override is the only source.
 func TestResolveSubagentProviderModel_ReviewerRoleOverride(t *testing.T) {

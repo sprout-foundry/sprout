@@ -146,7 +146,7 @@ func (s *SubagentConfigCommand) Complete(args []string, chatAgent *agent.Agent) 
 
 // showStatus displays current subagent configuration
 func (s *SubagentConfigCommand) showStatus(config *configuration.Config) error {
-	// SP-150 §150b: subagents resolve through the coder role (the
+	// Subagents resolve through the coder role (the
 	// subagent settings alias it), so show the effective selection.
 	provider, model := config.ResolveRole(configuration.RoleCoder)
 

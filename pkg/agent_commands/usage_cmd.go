@@ -145,7 +145,7 @@ func (u *UsageCommand) Execute(args []string, chatAgent *agent.Agent) error {
 			efficiency)
 	}
 
-	// Per-role breakdown (SP-150 §150c, 150.5): attribute the session's
+	// Per-role breakdown: attribute the session's
 	// tokens and cost to the model role each call was made under. Omitted
 	// when no usage was recorded with a role, so an empty session renders
 	// exactly as before.
@@ -195,8 +195,8 @@ type usageJSONPayload struct {
 	CacheSavingsKnown  bool    `json:"cache_savings_known"`
 	CacheEfficiencyPct float64 `json:"cache_efficiency_pct"`
 	EstimatedResponses int     `json:"estimated_responses"`
-	// RoleUsage is the per-role token/cost breakdown (SP-150 §150c,
-	// 150.5): how much of the session's tokens and cost was attributed to
+	// RoleUsage is the per-role token/cost breakdown:
+	// how much of the session's tokens and cost was attributed to
 	// each model role. Empty (omitted) when no usage was recorded with a
 	// role.
 	RoleUsage []agent.RoleUsage `json:"role_usage,omitempty"`
@@ -212,7 +212,7 @@ func (u *UsageCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Age
 
 // buildUsageJSONPayload assembles the /usage --json payload from the agent's
 // metrics. It is factored out of ExecuteWithJSONOutput so tests can assert on
-// the payload (including the per-role totals, SP-150 §150c) without capturing
+// the payload (including the per-role totals) without capturing
 // stdout.
 func buildUsageJSONPayload(chatAgent *agent.Agent) usageJSONPayload {
 	totalTokens := chatAgent.GetTotalTokens()

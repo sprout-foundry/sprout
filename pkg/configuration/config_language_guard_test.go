@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestNewConfigLanguageGuardOnByDefault proves the SP-152 152f default: a
+// TestNewConfigLanguageGuardOnByDefault proves the default: a
 // fresh config has the outbound language guard enabled and the opt-out flag
 // unset.
 func TestNewConfigLanguageGuardOnByDefault(t *testing.T) {
@@ -195,7 +195,7 @@ func TestLoadConfigWithLayers_DisableLanguageGuard(t *testing.T) {
 }
 
 // TestLanguageGuardEnabledAccessor pins the accessor's default and off
-// behavior for later items (152.5+) that ask "is the guard enabled?".
+// behavior for later callers that ask "is the guard enabled?".
 func TestLanguageGuardEnabledAccessor(t *testing.T) {
 	cases := []struct {
 		name   string

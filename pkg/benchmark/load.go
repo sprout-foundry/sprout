@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// LoadTask reads one task file (SP-154 §154a), unmarshals it, and
+// LoadTask reads one task file, unmarshals it, and
 // validates it against the task rules and plancontract.Validate. On any
 // error the returned task is nil, so a caller never observes an invalid
 // task (the pkg/planstore and pkg/starterstore loader contract).

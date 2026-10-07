@@ -28,7 +28,7 @@ func newAgentForUsageTest(t *testing.T) *agent.Agent {
 }
 
 // TestUsageJSONPayload_IncludesRoleUsage pins that the /usage --json payload
-// carries the per-role token/cost totals (SP-150 §150c, item 150.5).
+// carries the per-role token/cost totals.
 func TestUsageJSONPayload_IncludesRoleUsage(t *testing.T) {
 	chatAgent := newAgentForUsageTest(t)
 	if got := chatAgent.GetRole(); got == "" {

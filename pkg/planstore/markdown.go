@@ -18,8 +18,8 @@ import (
 // document order and emits no nondeterministic values, so a given plan
 // renders to identical markdown on every run and platform. It is the
 // function Save uses to regenerate .sprout/plan.md from the JSON, and it is
-// exported so other tooling (e.g. `sprout plan --structured`, SP-148
-// §148b) can render the same view.
+// exported so other tooling (e.g. `sprout plan --structured`)
+// can render the same view.
 func RenderMarkdown(plan *plancontract.Plan) string {
 	if plan == nil {
 		return ""
@@ -66,7 +66,7 @@ func RenderMarkdown(plan *plancontract.Plan) string {
 			}
 			fmt.Fprintf(&b, "- **%s** (%s, %s): %s\n", a.ID, a.Scope, a.Kind, check)
 			// Interaction items render their scripted browse steps as a
-			// numbered sub-list in execution order (SP-148 §148d). Steps are
+			// numbered sub-list in execution order. Steps are
 			// only ever present on interaction items (the validator
 			// enforces it), so this renders exactly when they exist.
 			for i, st := range a.Steps {

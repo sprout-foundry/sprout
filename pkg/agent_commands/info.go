@@ -95,7 +95,7 @@ func (c *InfoCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		persona = "none"
 	}
 
-	// Subagent config (SP-150 §150b: subagents resolve through the coder
+	// Subagent config (subagents resolve through the coder
 	// role; the subagent settings alias it).
 	cfg := chatAgent.GetConfig()
 	subagentProvider := "(unknown)"

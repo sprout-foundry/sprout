@@ -1,6 +1,6 @@
 //go:build !js
 
-// verification_hook_guards_test.go — the SP-149 §149c guard-rail tests: the
+// verification_hook_guards_test.go — the guard-rail tests: the
 // per-turn reset (a previous turn's stored state never attaches to a later
 // reply) and the belt-and-braces guards (subagent turns skip the hook, a
 // runner setup error does not gate the turn, a provider error in a repair
@@ -163,7 +163,7 @@ func TestVerificationHook_ProviderErrorDuringRepairIsPropagated(t *testing.T) {
 		t.Fatalf("ProcessQuery error = %v, want a classified client error", err)
 	}
 
-	// 149.6: the error path never reaches the attachment — the turn
+	// The error path never reaches the attachment — the turn
 	// reports as an error, and the stored failing verification result
 	// must not leak into the reply as a final-result attachment.
 	if strings.Contains(result, "Verification:") {

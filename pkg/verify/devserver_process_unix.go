@@ -12,7 +12,7 @@ import (
 // DevProcess owns one launched dev-server process (the shell that runs the
 // manifest's dev command) and its process group, so a caller can stop the
 // whole tree (the shell and every child it spawned) with one signal.
-// SP-149 page checks and the SP-155 preview manager both drive dev servers
+// Page checks and the preview manager both drive dev servers
 // through this type, so it is exported: the platform process handling
 // (process groups on Unix, Job Objects on Windows, the no-op WASM stub)
 // lives here and nowhere else.
@@ -24,7 +24,7 @@ type DevProcess struct {
 // capturing combined output to out, in its own process group (pgid == pid)
 // so the whole tree can be signalled to stop.
 func StartDevProcess(root, command string, out *bytes.Buffer) (*DevProcess, error) {
-	cmd := exec.Command("sh", "-c", command) //nolint:gosec // G204: the dev command is trusted starter-manifest configuration (SP-149 149b), by design
+	cmd := exec.Command("sh", "-c", command) //nolint:gosec // G204: the dev command is trusted starter-manifest configuration, by design
 	if root != "" {
 		cmd.Dir = root
 	}

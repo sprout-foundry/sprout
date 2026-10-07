@@ -21,7 +21,7 @@ import (
 )
 
 // prepareCommitClient builds the LLM client for commit message generation:
-// the commit role's provider/model first (SP-150 §150b — the commit
+// the commit role's provider/model first (the commit
 // settings alias the commit role), falling back to the chat agent's
 // provider/model.
 func (c *CommitCommand) prepareCommitClient(cfg *configuration.Config, chatAgent *agent.Agent) (api.ClientInterface, api.ClientType, string) {

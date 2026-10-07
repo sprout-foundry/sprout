@@ -1,9 +1,9 @@
 /**
- * Preview API types (SP-155 §155a, TODO 155.6).
+ * Preview API types.
  *
  * Mirror the JSON served by pkg/webui/api_preview.go, which in turn
  * serialises pkg/preview.State. The lifecycle words match the preview pane's
- * `status` prop (155.3) so the API and the pane speak the same language.
+ * `status` prop so the API and the pane speak the same language.
  */
 
 /** The dev server's lifecycle state (pkg/preview.Status). */

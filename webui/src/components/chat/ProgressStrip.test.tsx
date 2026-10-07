@@ -1,5 +1,5 @@
 /**
- * ProgressStrip tests — SP-151 §151c (item 151.7).
+ * ProgressStrip tests.
  *
  * Pattern (mirrors EventsContext.test.tsx and useCommandOutput.test.ts):
  * render the strip inside an EventsContextProvider whose provider mock

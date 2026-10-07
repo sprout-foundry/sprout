@@ -1,5 +1,5 @@
 /**
- * Tests for the configured default workspace mode (SP-155 §155b).
+ * Tests for the configured default workspace mode.
  *
  * The build-time base is read from VITE_DEFAULT_WORKSPACE_MODE at module load,
  * like the other config surfaces (config/layout.ts, config/mode.ts). In the

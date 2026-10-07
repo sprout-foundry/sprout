@@ -1,6 +1,6 @@
 // @ts-nocheck
 /**
- * CodeShell preview-panel wiring (SP-155 §155a, item 155.6).
+ * CodeShell preview-panel wiring.
  *
  * Pins that the preview panel is mounted in Code mode and driven by the
  * HeaderBar toggle:

@@ -375,7 +375,7 @@ export const handleSteerDelivered = (ctx: EventHandlerContext): void => {
   ctx.setState((prev) => ({ messages: deliverOldestSteer(prev.messages) }));
 };
 
-// Handle language_guard_replacement (SP-152 §152c, item 152.7): a streamed
+// Handle language_guard_replacement: a streamed
 // reply that was RELEASED by the hold-back (its start passed the language
 // check) switched language mid-stream, so it was already streamed to the
 // client and cannot be un-streamed. Replace the already-streamed assistant

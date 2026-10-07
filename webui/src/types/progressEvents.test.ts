@@ -8,9 +8,9 @@ import type {
 } from '@sprout/events';
 import type { ServerEventType } from './generated';
 
-// ── Compile-time assertions (SP-151 §151d) ──────────────────────────
+// ── Compile-time assertions ─────────────────────────────────────────
 //
-// The four SP-151 progress event types must be members of the
+// The four progress event types must be members of the
 // @sprout/events WsEvent union, each carrying its ...Data payload, and of
 // the webui ServerEventType mirror (webui/src/types/generated.ts). The
 // aliases below fail type-checking if a member is removed or its data
@@ -39,7 +39,7 @@ type _ServerEventTypeMirror = Expect<
   >
 >;
 
-describe('SP-151 progress event types (§151d)', () => {
+describe('progress event types', () => {
   it('accepts a value of each new ...Data shape as a WsEvent', () => {
     const samples: WsEvent[] = [
       {

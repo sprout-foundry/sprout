@@ -1,5 +1,5 @@
 /**
- * Starters domain API types (SP-153 §153b, TODO 153.7).
+ * Starters domain API types.
  *
  * These mirror the JSON shapes served by pkg/webui/api_starters.go:
  *   - GET  /api/starters             → { starters: Starter[] }

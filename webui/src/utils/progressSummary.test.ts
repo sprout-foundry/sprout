@@ -1,8 +1,8 @@
 /**
- * progressSummary tests — SP-151 §151c (item 151.7). Exact-string table
- * tests for the deterministic progress-event templates, mirroring the Go
- * 151.6 cases (pkg/cliui/progress_summary_test.go) so the CLI and the
- * web UI progress strip agree.
+ * progressSummary tests. Exact-string table
+ * tests for the deterministic progress-event templates, mirroring the
+ * CLI progress-summary cases (pkg/cliui/progress_summary_test.go) so the
+ * CLI and the web UI progress strip agree.
  */
 
 import { describe, expect, it } from 'vitest';

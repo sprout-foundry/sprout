@@ -1,4 +1,4 @@
-// SP-155 §155a (item 155.6) — Code-mode preview panel e2e spec.
+// Code-mode preview panel e2e spec.
 //
 // The preview panel is driven by the dev-server lifecycle API. This spec pins
 // the wiring that only a real stack can: the HeaderBar toggle opens the panel
@@ -72,7 +72,7 @@ async function openPanel(): Promise<void> {
   await expect(pane()).toBeVisible();
 }
 
-test.describe("Preview panel (SP-155 §155a)", () => {
+test.describe("Preview panel", () => {
   test("the Code-mode HeaderBar exposes the preview toggle, with the panel closed by default", async () => {
     await page.goto(vite.url, { waitUntil: "networkidle" });
 
@@ -117,13 +117,13 @@ test.describe("Preview panel (SP-155 §155a)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Fixture starter project + local dev server (SP-155 §155a acceptance:
+// Fixture starter project + local dev server (acceptance:
 // "Preview pane shows a local dev server for a starter project (e2e)").
 //
 // A second, independent stack boots the real backend over a fixture starter
-// project: a .sprout/starter.json (SP-153 §153a) whose `dev` command is a
+// project: a .sprout/starter.json whose `dev` command is a
 // plain node dev server on a known `dev_port`. The pane's action starts the
-// dev server through the backend's preview manager (155.4), and the pane
+// dev server through the backend's preview manager, and the pane
 // settles into `running` with the iframe embedding the localhost URL.
 // ---------------------------------------------------------------------------
 test.describe("Preview pane with a fixture starter project (local dev server)", () => {

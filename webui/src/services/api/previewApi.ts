@@ -1,5 +1,5 @@
 /**
- * Preview domain API — SP-155 §155a (TODO 155.6).
+ * Preview domain API.
  *
  * Adapter-aware access to the dev-server lifecycle surface
  * (pkg/webui/api_preview.go):

@@ -96,7 +96,7 @@ describe('HeaderBar back-link', () => {
   });
 });
 
-// SP-155 §155a (item 155.6): the Code-mode preview panel toggle.
+// The Code-mode preview panel toggle.
 describe('HeaderBar preview toggle', () => {
   async function renderWithPreview(onTogglePreviewPanel: () => void, previewPanelOpen = false) {
     vi.stubGlobal(

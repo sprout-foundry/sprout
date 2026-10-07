@@ -1,5 +1,5 @@
 /**
- * Documented views entry point for embedding (SP-155 §155c/d, item 155.7).
+ * Documented views entry point for embedding.
  *
  * `@sprout/ui` is the canonical home for *primitives*: props-only components
  * that render in isolation and never touch app services. The views a host
@@ -7,7 +7,7 @@
  * the files views, the preview panel — mostly need the webui context stack
  * (adapter fetch, client session, websocket bridge), so their canonical code
  * lives in `webui/src/components` (see docs/CONSUMPTION_GUIDE.md, "Primitive
- * vs Composite Rubric"). This module re-exports the four SP-155 views behind
+ * vs Composite Rubric"). This module re-exports the four views behind
  * one documented, typed surface so an embedding shell has a single import
  * point and does not have to reach into webui internals.
  *

@@ -2,7 +2,7 @@
  * Workspace-mode registry, registration, and persistence.
  *
  * The registry decides which modes a workspace offers; `registerWorkspaceMode`
- * is the one public way to put a mode in there (SP-155 §155b — the built-ins
+ * is the one public way to put a mode in there (the built-ins
  * go through the same write path at load, minus the public API's built-in
  * guard); and the resolution rule decides what a stale persisted id degrades
  * to. All three are worth pinning directly — a regression here silently
@@ -82,7 +82,7 @@ describe('registry', () => {
   });
 });
 
-describe('registerWorkspaceMode (SP-155 §155b)', () => {
+describe('registerWorkspaceMode', () => {
   let container: HTMLDivElement;
   let root: Root;
   /**
@@ -423,7 +423,7 @@ describe('useWorkspaceMode contract', () => {
   });
 });
 
-describe('config-driven default mode (SP-155 §155b)', () => {
+describe('config-driven default mode', () => {
   const disposers: UnregisterWorkspaceMode[] = [];
 
   function register(definition: WorkspaceModeRegistration): UnregisterWorkspaceMode {

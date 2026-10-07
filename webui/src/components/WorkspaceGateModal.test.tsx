@@ -459,7 +459,7 @@ describe('WorkspaceGateModal', () => {
     expect(setWorkspaceMock).toHaveBeenCalledWith('/home/alice', true);
   });
 
-  // ── Starter chooser (SP-153 §153b, TODO 153.7) ─────────────────────
+  // ── Starter chooser ────────────────────────────────────────────────
   //
   // The studio create form offers the embedded starter catalogue. "Blank"
   // (no starter) is the default; picking a starter instantiates it into the

@@ -124,7 +124,7 @@ import ChatView from './ChatView';
 // Test setup
 // ---------------------------------------------------------------------------
 
-/** Mock events transport: ChatView renders ProgressStrip (SP-151), which
+/** Mock events transport: ChatView renders ProgressStrip, which
  *  subscribes via useEvents — provide a no-op provider like the app's
  *  EventsContextProvider does. */
 const provider = {

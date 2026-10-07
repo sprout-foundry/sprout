@@ -30,10 +30,10 @@ function eventChatId(e: SproutEvent): string | undefined {
 }
 
 /**
- * Compact SP-151 progress strip (item 151.7, SP-151 §151c): a memo'd
+ * Compact progress strip: a memo'd
  * one-liner in the chat rendering the latest deterministic template
  * summary of the active run's progress events — the same text the CLI
- * renders (item 151.6). No model call, no invented detail.
+ * renders. No model call, no invented detail.
  *
  * Subscribes to the events transport the way useGitWorkspace does: a
  * stable callback registered via onEvent/removeEvent in a single effect.

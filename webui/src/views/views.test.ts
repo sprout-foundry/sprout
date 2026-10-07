@@ -1,5 +1,5 @@
 /**
- * views entry point (SP-155 §155d, item 155.7) — runtime + type smoke.
+ * views entry point — runtime + type smoke.
  *
  * Runtime: every documented view export is defined (components/functions).
  * Type-level: minimal `Props`-annotated values prove the exported view types

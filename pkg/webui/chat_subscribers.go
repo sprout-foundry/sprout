@@ -165,9 +165,17 @@ func (ws *ReactWebServer) connectionSubscribedToChat(connInfo *ConnectionInfo, c
 // when the chatID matches. These events authenticate a specific browser
 // session (the one that initiated the action) and showing them on
 // another tab would be both wrong and a security leak.
+//
+// ask_user_request is deliberately NOT in this set: it is a question to
+// *the user*, not an action on session state. With two windows open, the
+// owning window is often not the one the user is looking at, and the
+// strict client match left the question displayed nowhere while the
+// agent blocked until timeout. Answers are request-ID scoped and
+// single-winner (AskUserManager.RespondToAskUser), so rendering the
+// dialog on every window of the session is safe.
 func isSecurityScopedEvent(eventType string) bool {
 	switch eventType {
-	case eventTypeSecurityApproval, eventTypeSecurityPrompt, eventTypeAskUser, eventTypeEditApproval:
+	case eventTypeSecurityApproval, eventTypeSecurityPrompt, eventTypeEditApproval:
 		return true
 	}
 	return false

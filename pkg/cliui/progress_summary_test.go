@@ -329,12 +329,12 @@ func captureStdout(t *testing.T, fn func()) string {
 	os.Stdout = w
 	defer func() { os.Stdout = oldStdout }()
 	fn()
-	w.Close()
+	_ = w.Close()
 	var buf bytes.Buffer
 	if _, err := io.Copy(&buf, r); err != nil {
 		t.Fatalf("drain stdout pipe: %v", err)
 	}
-	r.Close()
+	_ = r.Close()
 	return buf.String()
 }
 

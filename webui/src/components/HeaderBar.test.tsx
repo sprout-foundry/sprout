@@ -12,6 +12,8 @@ vi.mock('./CreditsChip', () => ({ CreditsChip: () => null }));
 let activeRepo: string | undefined;
 vi.mock('../services/activeRepo', () => ({ useActiveRepoURL: () => activeRepo }));
 
+import { headlessHost } from '../host';
+import { setActiveHost } from '../host/accessor';
 import { __resetFullWorkspaceForTests } from '../services/fullWorkspace';
 import HeaderBar from './HeaderBar';
 
@@ -41,6 +43,8 @@ afterEach(() => {
   act(() => root.unmount());
   container.remove();
   vi.unstubAllGlobals();
+  // Reset the active host so the host-count case does not leak into other tests.
+  setActiveHost(headlessHost());
 });
 
 async function renderHeader(status: number, body: string) {
@@ -99,6 +103,25 @@ describe('HeaderBar back-link', () => {
 });
 
 // SP-155 §155a (item 155.6): the Code-mode preview panel toggle.
+describe('HeaderBar host notification count', () => {
+  it('shows the host-supplied unread count in the header chrome', async () => {
+    const host = headlessHost();
+    host.notifications = { post: () => undefined, count: 3 };
+    setActiveHost(host);
+
+    await renderHeader(200, '[]');
+
+    expect(container.querySelector('[data-testid="host-notification-count"]')?.textContent).toBe('3');
+  });
+
+  it('renders no count when the host supplies none', async () => {
+    // headlessHost().notifications has no count; the default from afterEach.
+    await renderHeader(200, '[]');
+
+    expect(container.querySelector('[data-testid="host-notification-count"]')).toBeNull();
+  });
+});
+
 describe('HeaderBar preview toggle', () => {
   async function renderWithPreview(onTogglePreviewPanel: () => void, previewPanelOpen = false) {
     vi.stubGlobal(

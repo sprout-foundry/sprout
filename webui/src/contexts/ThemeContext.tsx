@@ -1,5 +1,6 @@
 import { type HighlightStyle } from '@codemirror/language';
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react';
+import { getActiveHost, HOST_UPDATED_EVENT } from '../host/accessor';
 import { notificationBus } from '../services/notificationBus';
 import { ThemeImporter, type VSCodeTheme, type ImportResult } from '../themes/themeImport';
 import {
@@ -46,6 +47,8 @@ interface ThemeProviderProps {
 const THEME_STORAGE_KEY = 'sprout-editor-theme-mode';
 const THEME_PACK_STORAGE_KEY = 'sprout-editor-theme-pack';
 
+const DARK_MEDIA_QUERY = '(prefers-color-scheme: dark)';
+
 function loadImportedThemes(): ThemePack[] {
   try {
     const raw = localStorage.getItem(IMPORTED_THEMES_STORAGE_KEY);
@@ -63,6 +66,58 @@ function saveImportedThemes(themes: ThemePack[]) {
   localStorage.setItem(IMPORTED_THEMES_STORAGE_KEY, JSON.stringify(themes));
 }
 
+/** The OS color scheme as a resolved light/dark; 'dark' is the safe default. */
+function systemMode(): ThemeMode {
+  if (typeof window === 'undefined' || !window.matchMedia) return 'dark';
+  return window.matchMedia(DARK_MEDIA_QUERY).matches ? 'dark' : 'light';
+}
+
+/**
+ * The theme the active host supplies, resolved to a concrete mode + pack +
+ * token overrides. Null when no host theme is present (local builds and the
+ * headless default), which leaves the localStorage-driven selection in charge.
+ *
+ * The host is the source of truth when it provides a theme: its `mode` picks
+ * the light/dark pack ('system' follows the OS), and its `tokens` are merged
+ * over that pack's variables. Sprout never infers the theme by observing the
+ * DOM — it reads the host value and the OS media query only.
+ */
+interface ResolvedHostTheme {
+  /** The mode the host asked for, before 'system' is resolved. */
+  rawMode: 'light' | 'dark' | 'system';
+  /** The mode actually in effect ('system' resolved to light/dark). */
+  mode: ThemeMode;
+  tokens: Record<string, string>;
+  pack: ThemePack;
+}
+
+function resolveHostTheme(): ResolvedHostTheme | null {
+  const hostTheme = getActiveHost()?.theme;
+  if (!hostTheme) return null;
+  const rawMode = hostTheme.mode ?? systemMode();
+  const mode: ThemeMode = rawMode === 'system' ? systemMode() : rawMode;
+  const pack = getThemePackForMode(mode);
+  const tokens = hostTheme.tokens ?? {};
+  return { rawMode, mode, tokens, pack };
+}
+
+/**
+ * Track the OS color scheme so a host theme whose mode is 'system' follows it
+ * live. Only subscribes while a system-mode host theme is actually in effect.
+ */
+function useSystemMode(active: boolean): ThemeMode {
+  const [mode, setMode] = useState<ThemeMode>(systemMode);
+  useEffect(() => {
+    if (!active || typeof window === 'undefined' || !window.matchMedia) return;
+    const mql = window.matchMedia(DARK_MEDIA_QUERY);
+    const onChange = () => setMode(mql.matches ? 'dark' : 'light');
+    onChange();
+    mql.addEventListener?.('change', onChange);
+    return () => mql.removeEventListener?.('change', onChange);
+  }, [active]);
+  return mode;
+}
+
 export function ThemeProvider({ children }: ThemeProviderProps): JSX.Element {
   const [importedThemes, setImportedThemes] = useState<ThemePack[]>(loadImportedThemes);
   const [themePackID, setThemePackID] = useState<string>(() => {
@@ -78,6 +133,20 @@ export function ThemeProvider({ children }: ThemeProviderProps): JSX.Element {
     return DEFAULT_THEME_PACK_ID;
   });
 
+  // The host theme re-derives on HOST_UPDATED_EVENT (the established seam) so a
+  // host that replaces its theme live is followed without a DOM observation.
+  const [hostTheme, setHostTheme] = useState<ResolvedHostTheme | null>(resolveHostTheme);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const refresh = () => setHostTheme(resolveHostTheme());
+    window.addEventListener(HOST_UPDATED_EVENT, refresh);
+    return () => window.removeEventListener(HOST_UPDATED_EVENT, refresh);
+  }, []);
+
+  // A host theme with mode 'system' follows the OS live; the media listener is
+  // only installed while that is the active case.
+  const system = useSystemMode(hostTheme?.rawMode === 'system');
+
   // Merge built-in + imported themes
   const allPacks = useMemo(() => [...THEME_PACKS, ...importedThemes], [importedThemes]);
 
@@ -92,7 +161,19 @@ export function ThemeProvider({ children }: ThemeProviderProps): JSX.Element {
     [allPacks],
   );
 
-  const themePack = getValidPack(themePackID);
+  // The host theme wins when present. Otherwise the localStorage-selected pack
+  // is used, exactly as before.
+  const localPack = getValidPack(themePackID);
+
+  const activePack = useMemo<ThemePack>(() => {
+    if (!hostTheme) return localPack;
+    const mode: ThemeMode = hostTheme.rawMode === 'system' ? system : hostTheme.mode;
+    const base = getThemePackForMode(mode);
+    if (Object.keys(hostTheme.tokens).length === 0 && mode === hostTheme.mode) return base;
+    return { ...base, mode, variables: { ...base.variables, ...hostTheme.tokens } };
+  }, [hostTheme, localPack, system]);
+
+  const themePack = activePack;
   const theme = themePack.mode;
 
   // Build a custom HighlightStyle if the current theme has tokenColors
@@ -195,7 +276,10 @@ export function ThemeProvider({ children }: ThemeProviderProps): JSX.Element {
     [themePackID, theme],
   );
 
-  // Update CSS variable tokens and document attributes for global theming
+  // Update CSS variable tokens and document attributes for global theming.
+  // The host theme (when present) is applied by merging its tokens over the
+  // resolved pack's variables, using the same THEME_VARIABLE_KEYS cleanup the
+  // local path uses; a host-driven theme never observes the DOM for its value.
   useEffect(() => {
     const root = document.documentElement;
     THEME_VARIABLE_KEYS.forEach((key) => {

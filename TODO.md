@@ -79,7 +79,7 @@ checkboxes.
       or account pages. `layered/PlatformHome.tsx` (the iframe) stays for
       now but is reached only through `cloudHost`. Vitest.
       Spec: SP-160 §160b (Rules).
-- [ ] **host.7** Notifications and theme: the web UI posts its
+- [x] **host.7** Notifications and theme: the web UI posts its
       notifications to `host.notifications` (`localHost` keeps today's
       in-app toasts and center) and shows the host's count where a host
       provides one; the theme follows `host.theme` live (token values or a

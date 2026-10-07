@@ -1,3 +1,4 @@
+import { notificationBus as rawNotificationBus } from '@sprout/ui';
 import {
   PLATFORM_ACCOUNT_ITEMS,
   PLATFORM_WORK_ITEMS,
@@ -78,8 +79,21 @@ export const cloudHost: SproutHost = {
     intentPath: platformIntentPath,
   },
   notifications: {
-    // No-op placeholder; a later item wires the platform's real sink.
-    post() {},
+    // The platform's own sink is a later item. Until it is wired, the honest
+    // behavior is to keep raising notifications in the editor's own in-app
+    // channel (the toast stack + NotificationCenter), so a hosted build does
+    // not silently lose notifications it would have shown. This forwards to
+    // the same in-app bus the local host uses; when the platform sink lands it
+    // replaces this with a real platform post.
+    post(notification) {
+      rawNotificationBus.notify(
+        notification.level,
+        notification.title,
+        notification.message,
+        notification.duration,
+        notification.action,
+      );
+    },
   },
   capabilities: {
     // These mirror CloudAdapter's capability constants (the hosted build's

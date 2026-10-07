@@ -178,15 +178,35 @@ export interface HostNavigation {
 }
 
 /**
- * A single notification posted to the host sink.
+ * An optional action Sprout attaches to a notification (e.g. a "Retry" or
+ * "Configure" button). The host decides how, or whether, to render it.
+ */
+export interface HostNotificationAction {
+  /** Button label. */
+  label: string;
+  /** Invoked when the action is chosen. */
+  onClick: () => void;
+  /** When true the notification stays until the user acts on it. */
+  keepOpen?: boolean;
+}
+
+/**
+ * A single notification posted to the host sink. The shape mirrors what
+ * Sprout's in-app bus already carries, so the host sink is a faithful
+ * superset: `level` matches the bus's notification types and the optional
+ * `duration`/`action` carry the toast behavior a host may honor.
  */
 export interface HostNotification {
   /** Severity used by the host to render the notification. */
-  level: 'info' | 'warning' | 'error';
+  level: 'info' | 'success' | 'warning' | 'error';
   /** Short, user-facing title. */
   title: string;
   /** The notification body. */
   message: string;
+  /** Auto-dismiss duration in ms; absent means the host's own default. */
+  duration?: number;
+  /** An optional inline action (label + callback) the host may render. */
+  action?: HostNotificationAction;
 }
 
 /**

@@ -10,6 +10,7 @@ export type {
   HostNavigation,
   HostNavigationIntent,
   HostNotification,
+  HostNotificationAction,
   HostNotifications,
   HostProjectIntent,
   HostSignOutIntent,
@@ -26,6 +27,7 @@ export type { HostProviderProps } from './HostProvider';
 export { useHost } from './useHost';
 export { useHostCapabilities } from './useHostCapabilities';
 export { getActiveHost, setActiveHost } from './accessor';
+export { default as HostNotificationCount } from './HostNotificationCount';
 export { localHost } from './localHost';
 export { cloudHost } from './cloudHost';
 export { platformHref, repoHubPath, repoSlug, repoName, githubRepoSlug } from './platformUrl';

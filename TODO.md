@@ -767,8 +767,14 @@ needed whatever the integration work does. Spec context: SP-160 §160e.
       table covering Go, JS/TS and Python shapes, and `Classify` returning
       the category, a short explanation template and the raw output
       preserved verbatim. Pinned by fixture tests.
-- [ ] **157.10** Agent attempts a fix for a classified error before
+- [x] **157.10** Agent attempts a fix for a classified error before
       reporting it. Scripted test. Spec: SP-157 §157d.
+      Fixed: the turn-end report builders classify a failed check's excerpt
+      through `pkg/errclass` and attach a short `Classification:` line
+      above the raw excerpt (never replacing it), so the existing repair
+      loop feeds a classified failure back with its explanation and stays
+      bounded by the current caps; an unknown failure keeps the prior
+      behavior. Pinned by scripted end-to-end tests (one per rule).
 
 ---
 

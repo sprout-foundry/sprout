@@ -4,9 +4,9 @@ import { asc } from 'drizzle-orm';
 import { items } from './schema';
 
 // The Worker environment: the D1 database is bound as DB (wrangler.toml) and
-// drizzle wraps it. The static-assets binding is declared so the type is
-// complete; the assets are served by the Worker runtime before the Hono app
-// sees a request, so the app itself never reads it.
+// drizzle wraps it. ASSETS is the static-assets binding; the wildcard route
+// below forwards non-API requests to it, which is what serves the app and
+// lets a client route such as /about resolve to dist/index.html.
 export type Env = {
   DB: D1Database;
   ASSETS: Fetcher;
@@ -29,6 +29,14 @@ app.post('/api/items', async (c) => {
   const [created] = await db.insert(items).values({ name: body }).returning();
   return c.json(created, 201);
 });
+
+// Fall through to the static assets for everything that is not an API route.
+// Those assets carry `not_found_handling = "single-page-application"` so a path
+// with no real file (a client route such as /about) is answered with
+// dist/index.html and the router renders it — which is also what a direct
+// visit to /about needs. Keeping the fallback beside the app means the API
+// route table fully describes the app, with no extra runtime wiring.
+app.get('*', (c) => c.env.ASSETS.fetch(c.req.raw));
 
 async function readName(request: Request): Promise<string | null> {
   try {

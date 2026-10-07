@@ -497,7 +497,7 @@ passes the manifest validator (`pkg/startermanifest`).
       migrations live; adding a table (schema, migration, route, test);
       local vs deployed bindings; failure modes (Node-only APIs in Workers,
       forgetting migrations, secrets in code). Spec: SP-153 §153c.
-- [ ] **153.16** Starter CI job: a workflow (on changes to
+- [x] **153.16** Starter CI job: a workflow (on changes to
       `pkg/starters/**` or `pkg/skills/library/**`, nightly, and manual)
       that, for each starter, instantiates it with `sprout new --starter`
       into a temp dir, runs `npm ci`, the manifest's build and test

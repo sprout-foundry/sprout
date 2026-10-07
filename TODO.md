@@ -177,7 +177,7 @@ standalone local build keeps embedding into `pkg/webui/static`.
 - [x] **ws.5** Styles as a separate stylesheet in the package that consumes
       the design tokens; no global CSS leaks onto the host page outside the
       workspace root. Spec: SP-160 §160a.
-- [ ] **ws.6** Content-hashed WASM (§160e): `sprout.wasm` and
+- [x] **ws.6** Content-hashed WASM (§160e): `sprout.wasm` and
       `wasm_exec.js` are emitted with hashed names and referenced through
       the package, in both the package and the cloud build; the local embed
       keeps working. A test fails if the WASM URL does not change when its

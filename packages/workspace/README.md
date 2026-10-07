@@ -37,6 +37,29 @@ styles surfaces through `var(--token)` design tokens; the host imports
 `@sprout-foundry/design` for the token values, or supplies them on the
 workspace root through the host theme.
 
+## WASM assets
+
+The package ships Sprout's in-browser agent (Go→WASM) content-hashed under
+`dist/wasm/` (`sprout.<hash>.wasm`, `wasm_exec.<hash>.js`, plus
+`wasm-manifest.json`), so a host may cache the package as immutable and an
+upgrade can never mix an old binary with new JS. `dist/wasm/` is declared as
+the `./wasm/` subpath export and in the `files` allowlist.
+
+A host serves that directory at a URL it owns and tells Sprout where it is:
+
+```tsx
+<SproutWorkspace
+  project={project}
+  space={space}
+  host={myHost}
+  wasmBase="/assets/sprout-wasm"
+/>
+```
+
+`wasmBase` is also a `SproutProviders` prop, or use `WasmAssetsProvider` /
+`setActiveWasmBase` directly. With no base, Sprout probes `/webui/wasm` versus
+`/wasm` (the shipped local and cloud builds' behaviour).
+
 ## Build
 
 ```bash
@@ -44,9 +67,10 @@ npm run build -w @sprout-foundry/workspace
 ```
 
 The build emits `dist/index.js` plus its lazily loaded chunks,
-`dist/workspace.css` and `dist/index.d.ts`. The `files` and `exports` fields
-in `package.json` are the publish allowlist: `dist/` (entry, chunks,
-stylesheet, declarations) and this README.
+`dist/workspace.css`, `dist/index.d.ts` and `dist/wasm/` (the content-hashed
+WASM assets and their manifest). The `files` and `exports` fields in
+`package.json` are the publish allowlist: `dist/` (entry, chunks, stylesheet,
+declarations, WASM) and this README.
 
 ## Installation
 

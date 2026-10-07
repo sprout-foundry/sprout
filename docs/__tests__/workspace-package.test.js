@@ -524,6 +524,55 @@ describe(
       }
     });
 
+    test("no unexpected files in dist/ (the publish allowlist is exact)", () => {
+      // Every emitted file must be covered by the allowlist: the declared
+      // artifacts, the chunks directory, the stylesheet, the WASM directory and
+      // the README. An emitted file the allowlist does not cover would be
+      // dropped by npm pack, so the artifact would ship an incomplete package.
+      const allowed = new Set([
+        ...declaredArtifacts(pkg),
+        "dist/workspace.css",
+        "dist/README.md",
+      ]);
+      const isAllowed = (file) =>
+        allowed.has(file) ||
+        file.startsWith("dist/chunks/") ||
+        file.startsWith("dist/wasm/");
+      const unexpected = walk(DIST).filter((file) => !isAllowed(file));
+      assert.deepEqual(
+        unexpected,
+        [],
+        `dist/ has files the allowlist does not cover: ${unexpected.join(", ")}`,
+      );
+      // The WASM directory must actually be emitted, not merely tolerated.
+      assert.ok(
+        fs.existsSync(path.join(DIST, "wasm")),
+        "the build emits dist/wasm/",
+      );
+
+      // The wasm directory itself is exact: the manifest, the fixed-name
+      // fallbacks and the files the manifest names — no stale hashed asset left
+      // over from a previous build.
+      const wasmDir = path.join(DIST, "wasm");
+      const manifest = JSON.parse(
+        fs.readFileSync(path.join(wasmDir, "wasm-manifest.json"), "utf-8"),
+      );
+      const expectedWasmFiles = new Set([
+        "wasm-manifest.json",
+        "sprout.wasm",
+        "wasm_exec.js",
+        ...Object.values(manifest.files ?? {}),
+      ]);
+      const stale = fs
+        .readdirSync(wasmDir)
+        .filter((name) => !expectedWasmFiles.has(name));
+      assert.deepEqual(
+        stale,
+        [],
+        `dist/wasm/ has stale or unexpected files: ${stale.join(", ")}`,
+      );
+    });
+
     test("the entry declares the host contract and the package version", () => {
       const types = fs.readFileSync(path.join(DIST, "index.d.ts"), "utf-8");
       assert.match(
@@ -695,6 +744,114 @@ describe(
       assert.ok(
         /\.sprout-workspace\[data-theme=light\]/.test(css),
         "the light-theme guards are scoped to the workspace root",
+      );
+    });
+  },
+);
+
+// ── Content-hashed WASM (SP-160 §160e, Acceptance criteria 6) ──────────
+
+describe(
+  "the package ships content-hashed WASM and a manifest",
+  { skip: !built && "packages/workspace/dist not built" },
+  () => {
+    // "Upgrading the package changes the WASM asset URLs": the package emits
+    // sprout.<hash>.wasm / wasm_exec.<hash>.js plus wasm-manifest.json under
+    // dist/wasm/, the same shape the loader (webui/src/services/wasmShell.ts)
+    // reads. The names are content-derived (the shared hashing helper in
+    // scripts/build-webui-dist.mjs over the source bytes), so a changed binary
+    // changes the URL a host resolves. `./wasm/` is a declared subpath export,
+    // so a host serves the directory without guessing its path.
+    const WASM_DIR = path.join(DIST, "wasm");
+    const manifestPath = path.join(WASM_DIR, "wasm-manifest.json");
+
+    test("dist/wasm/ is emitted with a manifest and the hashed assets", () => {
+      assert.ok(
+        fs.existsSync(manifestPath),
+        "the build emits dist/wasm/wasm-manifest.json",
+      );
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
+      assert.equal(
+        manifest.version,
+        1,
+        "the manifest carries the loader's version",
+      );
+
+      for (const logical of ["sprout.wasm", "wasm_exec.js"]) {
+        const hashed = manifest.files?.[logical];
+        assert.ok(hashed, `the manifest names a hashed ${logical}`);
+        assert.ok(
+          fs.existsSync(path.join(WASM_DIR, hashed)),
+          `the manifest's ${logical} → ${hashed} exists on disk`,
+        );
+      }
+    });
+
+    test("the manifest's names match the emitted files exactly", () => {
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
+      const emitted = fs.readdirSync(WASM_DIR);
+      // Every name the manifest points at is present in the emitted directory.
+      for (const name of Object.values(manifest.files ?? {})) {
+        assert.ok(
+          emitted.includes(name),
+          `the manifest name ${name} is an emitted file`,
+        );
+      }
+      assert.ok(
+        emitted.includes("wasm-manifest.json"),
+        "the manifest is emitted in dist/wasm/",
+      );
+    });
+
+    test("the hashed names are derived from the source WASM content", async () => {
+      // Recompute the hash from the source bytes with the SAME helper the build
+      // uses: the emitted name is provably content-derived, not incidental.
+      const { buildWasmManifest } = await import(
+        pathToFileURL(path.join(ROOT, "scripts/build-webui-dist.mjs")).href
+      );
+      const sourceDir = path.join(ROOT, "webui/public/wasm");
+      const entries = {};
+      for (const logical of ["sprout.wasm", "wasm_exec.js"]) {
+        const from = path.join(sourceDir, logical);
+        if (fs.existsSync(from)) entries[logical] = fs.readFileSync(from);
+      }
+      assert.ok(
+        entries["sprout.wasm"],
+        "webui/public/wasm/sprout.wasm is present (run `make build-wasm`)",
+      );
+      const expected = buildWasmManifest(entries);
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
+      assert.equal(
+        manifest.wasm,
+        expected.wasm,
+        "the emitted wasm name is the source content's hash",
+      );
+      assert.equal(
+        manifest.wasmExec,
+        expected.wasmExec,
+        "the emitted wasmExec name is the source content's hash",
+      );
+    });
+
+    test("the names are the standard hashed shape the loader resolves", () => {
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
+      assert.match(manifest.wasm, /^sprout\.[0-9a-f]{10}\.wasm$/);
+      assert.match(manifest.wasmExec, /^wasm_exec\.[0-9a-f]{10}\.js$/);
+    });
+
+    test("the package declares the wasm/ directory as the publish allowlist entry", () => {
+      // The emitted directory must be in `files` so a host installing the
+      // package actually receives it (the artifact test's "no unexpected files"
+      // check is the other half), and reachable through a subpath export so a
+      // host can resolve its path without hard-coding the layout.
+      assert.ok(
+        pkg.files.includes("dist/wasm/"),
+        "package.json files includes dist/wasm/",
+      );
+      assert.equal(
+        pkg.exports["./wasm/"],
+        "./dist/wasm/",
+        "package.json exports a ./wasm/ subpath",
       );
     });
   },

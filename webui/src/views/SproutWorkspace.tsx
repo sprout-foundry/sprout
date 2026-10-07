@@ -104,6 +104,12 @@ export interface SproutWorkspaceProps {
   shellProps?: WorkspaceShellProps;
   /** Whether the workspace root has a `design/` tree — the space availability context. */
   hasDesignTree?: boolean;
+  /**
+   * Base URL the host serves the package's `dist/wasm/` WASM assets at. Sprout
+   * loads its in-browser agent's WASM from there; omitted, the loader keeps the
+   * location-probing default (the shipped local and cloud builds).
+   */
+  wasmBase?: string | null;
   /** Additional class on the workspace root. */
   className?: string;
   /** Rendered inside the workspace root, below the mounted space. */
@@ -175,6 +181,7 @@ export function SproutWorkspace({
   onSpaceChange,
   shellProps,
   hasDesignTree,
+  wasmBase,
   className,
   children,
 }: SproutWorkspaceProps): JSX.Element {
@@ -219,7 +226,7 @@ export function SproutWorkspace({
 
   return (
     <HostProvider host={host}>
-      <SproutProviders>
+      <SproutProviders wasmBase={wasmBase}>
         <WorkspaceRoot rootClass={rootClass} projectId={project.id} spaceId={resolved.id}>
           {content}
           {children}

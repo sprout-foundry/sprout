@@ -5,6 +5,7 @@ import {
   intentPath as platformIntentPath,
   platformEntitlements,
 } from './platform';
+import { platformHref } from './platformUrl';
 import type { HostEntitlements, SproutHost } from './types';
 
 /**
@@ -13,6 +14,11 @@ import type { HostEntitlements, SproutHost } from './types';
  * mutable object lets the resolved summary be replaced in place, so a chip
  * that re-reads after `resolve()` sees the new value without the host object
  * itself changing.
+ *
+ * Resolution is lazy by design: `resolve()` is only called from the consumer
+ * (the credits chip calls it on mount, on focus, while the tab is visible and
+ * when Home closes). Importing the host therefore performs no fetch — the
+ * package entry stays free of platform calls on import.
  */
 const entitlements: HostEntitlements = {
   async resolve() {
@@ -22,12 +28,6 @@ const entitlements: HostEntitlements = {
     else delete entitlements.usageSummary;
   },
 };
-
-/** Resolve once now; the UI re-resolves on focus/visibility/Home-close. */
-function resolveEntitlementsNow(): void {
-  void entitlements.resolve?.();
-}
-resolveEntitlementsNow();
 
 /**
  * The cloud host: the hosted build's contract.
@@ -42,8 +42,11 @@ resolveEntitlementsNow();
  *
  * The transport records the cloud *policy* (auth + same-origin-or-Foundry
  * identity), not a hardcoded platform URL: the concrete URL is resolved at
- * startup by the bootstrap adapter. This constant is a value object describing
- * the cloud contract; it must not duplicate the bootstrap fetch logic.
+ * startup by the bootstrap adapter and records it on this host object's
+ * transport (`platformURL`), so the constant declares the shape and the host
+ * object carries the resolved value as data. This constant is a value object
+ * describing the cloud contract; it must not duplicate the bootstrap fetch
+ * logic.
  */
 export const cloudHost: SproutHost = {
   // The platform account, host-provided at runtime; the constant declares the
@@ -70,7 +73,7 @@ export const cloudHost: SproutHost = {
     // side); callers that render a link read it via intentPath.
     open(intent) {
       const path = platformIntentPath(intent);
-      if (path) window.location.href = path;
+      if (path) window.location.href = platformHref(path);
     },
     // The platform's account exits and Home "Work" places, as data.
     accountItems: PLATFORM_ACCOUNT_ITEMS,

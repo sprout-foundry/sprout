@@ -42,8 +42,10 @@ describe('localHost', () => {
 
   it('uses a same-origin transport with no auth', () => {
     // '' is the same-origin sentinel (derived at runtime by the local
-    // transport); the dev port is never hardcoded.
+    // transport); the dev port is never hardcoded. The local host has no
+    // outward platform surface, so its transport carries no platform URL.
     expect(localHost.transport).toEqual({ apiBaseURL: '', wsURL: '', authMode: 'none' });
+    expect(localHost.transport.platformURL).toBeUndefined();
   });
 
   it('exposes the local-mode capability set (mode.ts local values)', () => {
@@ -95,11 +97,15 @@ describe('cloudHost', () => {
   });
 
   it('records the cloud transport policy (bearer auth, same-origin-or-Foundry)', () => {
-    // The concrete URL is resolved at startup by the bootstrap adapter; the
-    // constant records the policy, so it uses the same-origin sentinel with
-    // bearer auth and does not hardcode a platform URL.
+    // The concrete URL is resolved at startup by the bootstrap adapter and
+    // recorded on this transport (platformURL); the constant declares the
+    // policy, so it uses the same-origin sentinel with bearer auth and does not
+    // hardcode a platform URL. The platform base is absent here because the
+    // constant itself performs no bootstrap (importing the host fetches
+    // nothing).
     expect(cloudHost.transport).toEqual({ apiBaseURL: '', wsURL: '', authMode: 'bearer' });
     expect(cloudHost.transport.authMode).toBe('bearer');
+    expect(cloudHost.transport.platformURL).toBeUndefined();
   });
 
   it('exposes the CloudAdapter capability set (hosted source of truth)', () => {

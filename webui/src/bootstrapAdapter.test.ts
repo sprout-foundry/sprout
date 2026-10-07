@@ -127,6 +127,32 @@ describe('bootstrapAdapter', () => {
       expect(navIds).toContain('team');
     });
 
+    it('records the bootstrap platform URL on the active host transport', async () => {
+      // The bootstrap resolves the platform base at startup and records it as
+      // DATA on the host's transport (host.11): the URL builder reads it from
+      // there instead of reaching into the bootstrap fetch. Tier 1 (the
+      // /api/bootstrap fetch) supplies the value.
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          json: () =>
+            Promise.resolve({
+              apiBaseURL: 'https://foundry.test.sprout.dev/api',
+              wsURL: 'wss://foundry.test.sprout.dev/ws',
+              authMode: 'bearer',
+              platformURL: 'https://platform.sprout.dev',
+            }),
+        }),
+      );
+
+      await importWithBootstrap();
+
+      const { getActiveHost } = await import('./host/accessor');
+      expect(getActiveHost()?.transport.platformURL).toBe('https://platform.sprout.dev');
+      const { platformHref } = await import('./host/platformUrl');
+      expect(platformHref('/tasks/abc')).toBe('https://platform.sprout.dev/tasks/abc');
+    });
+
     it('adapter has correct capability flags for cloud mode', async () => {
       await importWithBootstrap();
 

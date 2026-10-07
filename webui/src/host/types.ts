@@ -60,6 +60,15 @@ export interface HostTransport {
    * not supply one (the agent falls back to the default endpoint).
    */
   modelEndpoint?: string;
+  /**
+   * Absolute base URL of the host's outward platform surface (its SPA pages,
+   * account pages and platform API). Present only for a host that has one —
+   * the hosted build's bootstrap resolves the concrete value at startup and
+   * records it here. Absent (or empty) means the host has no platform surface,
+   * and outward paths stay relative. It is host-provided data, never fetched
+   * on import: the transport carries the answer, not the question.
+   */
+  platformURL?: string;
 }
 
 /**

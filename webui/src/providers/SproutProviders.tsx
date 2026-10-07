@@ -11,6 +11,7 @@ import { SproutAdapterProvider } from '../contexts/SproutAdapterContext';
 import { ThemeProvider } from '../contexts/ThemeContext';
 import { getActiveHost } from '../host/accessor';
 import { notificationBus } from '../services/notificationBus';
+import { WasmAssetsProvider } from '../contexts/WasmAssetsContext';
 
 /**
  * The provider stack a view needs, behind one wrapper.
@@ -51,6 +52,12 @@ export interface SproutProvidersProps {
    * bus when no host is active).
    */
   sink?: NotificationSink;
+  /**
+   * Base URL the host serves the package's `dist/wasm/` WASM assets at.
+   * Omitted, the WASM loader keeps its location-probing default (the shipped
+   * local and cloud builds).
+   */
+  wasmBase?: string | null;
   children: ReactNode;
 }
 
@@ -117,6 +124,7 @@ export function SproutProviders({
   eventsProvider,
   isConnected,
   sink: sinkProp,
+  wasmBase,
   children,
 }: SproutProvidersProps): JSX.Element {
   const defaultProvider = useDefaultEventsProvider();
@@ -158,7 +166,9 @@ export function SproutProviders({
               <ThemeProvider>
                 <HotkeyProvider>
                   <EditorManagerProvider>
-                    <ProviderCatalogProvider isConnected={connected}>{children}</ProviderCatalogProvider>
+                    <ProviderCatalogProvider isConnected={connected}>
+                      <WasmAssetsProvider wasmBase={wasmBase}>{children}</WasmAssetsProvider>
+                    </ProviderCatalogProvider>
                   </EditorManagerProvider>
                 </HotkeyProvider>
               </ThemeProvider>

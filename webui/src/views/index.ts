@@ -134,6 +134,20 @@ export type {
 export { SproutProviders } from '../providers/index';
 export type { SproutProvidersProps } from '../providers/index';
 
+// The WASM asset seam: a host that mounts the package serves its content-hashed
+// `dist/wasm/` at a base the host owns, and tells the loader where that is.
+// `SproutWorkspace`/`SproutProviders` take it as the `wasmBase` prop; a host
+// that drives the loader itself uses these directly.
+export {
+  WasmAssetsProvider,
+  WasmAssetsContext,
+  useWasmAssets,
+  setActiveWasmBase,
+  getActiveWasmBase,
+  normalizeWasmBase,
+} from '../contexts/WasmAssetsContext';
+export type { WasmAssets, WasmAssetsProviderProps } from '../contexts/WasmAssetsContext';
+
 // SproutWorkspace — one component that mounts one project's workspace: the
 // host contract, the provider stack and one registered space, behind the
 // props a host holds. It is the composition the app root performs, exposed so

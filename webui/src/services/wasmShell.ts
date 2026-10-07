@@ -8,6 +8,7 @@
  */
 
 import { safeJsonParse, safeJsonParseOrNull } from '../utils/json';
+import { resolveActiveWasmBase } from '../contexts/WasmAssetsContext';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -211,8 +212,16 @@ function resolveWasmBase(): string {
   return underMount ? '/webui/wasm' : '/wasm';
 }
 
-const DEFAULT_WASM_URL = `${resolveWasmBase()}/sprout.wasm`;
-const DEFAULT_WASM_EXEC_URL = `${resolveWasmBase()}/wasm_exec.js`;
+/**
+ * Resolve the WASM base for a load: an explicit `wasmBase` override wins,
+ * otherwise the host-supplied base (a host serving the package's `dist/wasm/`
+ * at its own path), otherwise the location-probing default the standalone and
+ * cloud builds rely on. Keeping the default last is what leaves both shipped
+ * builds unchanged.
+ */
+function resolveLoadWasmBase(explicitBase?: string | null): string {
+  return resolveActiveWasmBase(explicitBase) ?? resolveWasmBase();
+}
 
 /** Name of the content-hashed WASM asset manifest emitted by the dist build. */
 export const WASM_MANIFEST_FILE = 'wasm-manifest.json';
@@ -348,6 +357,8 @@ export async function initWasmShell(config?: {
   home?: string;
   wasmUrl?: string; // default: '/webui/wasm/sprout.wasm'
   wasmExecUrl?: string; // default: '/webui/wasm/wasm_exec.js'
+  /** Base URL for the WASM manifest + assets (overrides the host-provided base). */
+  wasmBase?: string;
 }): Promise<WasmShell> {
   debug(' initWasmShell called');
   if (sharedInstance) {
@@ -394,12 +405,14 @@ export async function initWasmShell(config?: {
 
     // 2. Resolve asset URLs. The dist bundle emits content-hashed WASM
     //    names plus a manifest so a host caching the bundle as immutable
-    //    can never serve an old binary next to new JS. Read the manifest
-    //    first; when it is absent (older bundle / local dev) fall back to
-    //    the fixed names. An explicit config override always wins.
-    const wasmBase = resolveWasmBase();
-    let resolvedWasmUrl = DEFAULT_WASM_URL;
-    let resolvedWasmExecUrl = DEFAULT_WASM_EXEC_URL;
+    //    can never serve an old binary next to new JS. The base is the
+    //    host-supplied one when a host serves the package's dist/wasm/ at
+    //    its own path; otherwise the location probe (the shipped builds).
+    //    Read the manifest first; when it is absent (older bundle / local
+    //    dev) fall back to the fixed names. An explicit config override
+    //    always wins.
+    const wasmBase = resolveLoadWasmBase(config?.wasmBase);
+    let { wasmUrl: resolvedWasmUrl, wasmExecUrl: resolvedWasmExecUrl } = resolveWasmUrls(wasmBase, null);
     if (!config?.wasmUrl || !config?.wasmExecUrl) {
       const manifest = await loadWasmManifest(wasmBase);
       const urls = resolveWasmUrls(wasmBase, manifest);

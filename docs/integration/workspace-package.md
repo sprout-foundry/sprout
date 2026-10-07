@@ -126,6 +126,58 @@ package); the token _consumption_ is the `var(--token)` references, which is
 the contract. Moving the web UI's own token declarations into
 `@sprout-foundry/design` is separate work.
 
+## WASM assets
+
+Sprout's in-browser agent (the browser-local fallback for a host that serves
+no daemon) runs on a Go→WASM binary. The package ships it content-hashed so a
+host can cache the package as immutable and an upgrade can never pair an old
+binary with new JS:
+
+- `dist/wasm/sprout.<hash>.wasm` — the compiled agent.
+- `dist/wasm/wasm_exec.<hash>.js` — the Go WASM runtime.
+- `dist/wasm/wasm-manifest.json` — the small manifest the loader reads, mapping
+  each logical name to its content-hashed filename.
+
+The bare `sprout.wasm` / `wasm_exec.js` are emitted alongside as fallbacks. The
+hash is the first 10 hex characters of the assets' sha256, produced by the same
+pure helpers the cloud/standalone build uses
+(`scripts/build-webui-dist.mjs`), so a changed binary always yields a new URL.
+The `./wasm/` subpath export points at the directory:
+
+```js
+import { createRequire } from "node:module";
+const wasmDir = new URL("@sprout-foundry/workspace/wasm/", import.meta.url);
+```
+
+**Building.** The package's build copies the WASM from
+`webui/public/wasm/{sprout.wasm,wasm_exec.js}` — the sources `make build-wasm`
+produces — and fails if they are absent (a package that ships no WASM/manifest
+is a broken artifact, so a mis-ordered build is loud, not silently green).
+`make build-all` runs `build-wasm` before the package build; a standalone
+`npm run build -w @sprout-foundry/workspace` uses whatever `make build-wasm`
+last emitted, so run it after changing the Go WASM.
+
+**Where the loader looks.** A host serves `dist/wasm/` at a path it owns — its
+bundler copies the directory somewhere. Tell Sprout that base so the loader
+resolves the manifest and the hashed assets against it:
+
+```tsx
+<SproutWorkspace
+  project={project}
+  space={space}
+  host={myHost}
+  wasmBase="/assets/sprout-wasm"
+/>
+```
+
+`wasmBase` is also a prop of `SproutProviders` (for a host that composes the
+views itself) and available as `WasmAssetsProvider` /
+`setActiveWasmBase` for a host that loads the WASM shell directly. When no base
+is supplied Sprout keeps its default: it probes `/webui/wasm` (the daemon mount)
+versus `/wasm` (a root-served bundle), which is what the standalone local build
+and the platform's cloud build have always done. A host that serves the assets
+at neither path sets `wasmBase`.
+
 ## Publishing (maintainers)
 
 Publishing runs in GitHub Actions on a version tag that matches

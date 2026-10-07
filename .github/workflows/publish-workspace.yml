@@ -45,6 +45,13 @@ jobs:
           npm run build -w @sprout/events
           npm run build -w @sprout/ui
 
+      - name: Build the WASM the package ships
+        # The workspace package content-hashes webui/public/wasm/{sprout.wasm,
+        # wasm_exec.js} into dist/wasm/; build them first so the published
+        # artifact carries the real assets (and fails loudly if the toolchain
+        # cannot produce them).
+        run: ./scripts/build-wasm.sh
+
       - name: Build the workspace package (production)
         run: npm run build -w @sprout-foundry/workspace
         env:

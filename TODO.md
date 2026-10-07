@@ -142,7 +142,21 @@ standalone local build keeps embedding into `pkg/webui/static`.
       only the package's public entry points; anything missing is added to
       the package exports, not imported privately. No feature loss.
       Spec: SP-160 Acceptance criteria 2.
-- [ ] **ws.8** Publish workflow: a GitHub Actions job publishes
+- [ ] **ws.7b** Installable package: today `packages/workspace/package.json`
+      lists `@sprout/events` and `@sprout/ui` as `file:` dependencies (a
+      host cannot install those) and the build bundles React's internals
+      into `dist/chunks/` although `react`/`react-dom` are peer
+      dependencies (a host would load two Reacts and hooks break).
+      Externalize every peer dependency in `vite.config.ts`
+      (`rollupOptions.external`, including `react/jsx-runtime` and
+      `react-dom/client`); bundle the internal `@sprout/*` packages and
+      move them to `devDependencies` (or publish them, if bundling is not
+      possible, and say why). Extend
+      `docs/__tests__/workspace-package.test.js`: no `file:` specifier in
+      the published `package.json`, no React internals in `dist/`, and
+      `npm pack --dry-run` lists only the allowlisted files. Spec:
+      SP-160 §160a, §160e.
+- [x] **ws.8** Publish workflow: a GitHub Actions job publishes
       `@sprout-foundry/workspace` and `@sprout-foundry/design` to GitHub Packages on
       release tags (production build). Workflow file and
       `docs/integration/workspace-package.md` (install, `.npmrc`, mounting

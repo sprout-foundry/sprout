@@ -1,9 +1,9 @@
-// langguard_metrics.go — the per-model language-guard metric (SP-152 §152e,
-// item 152.9). Every final message the guard judges is counted as a check;
+// langguard_metrics.go — the per-model language-guard metric.
+// Every final message the guard judges is counted as a check;
 // a reliable language mismatch is counted as a mismatch. The per-model
 // mismatch rate (mismatches / checks) is the diagnostic signal: a high rate
 // for a given model means that model frequently replies in the wrong
-// language. The role dimension (SP-150 §150c, item 150.5) buckets each
+// language. The role dimension buckets each
 // check under the agent's role, so the metric keys by (model, role): an
 // empty model or role is bucketed under "unknown".
 package agent
@@ -40,8 +40,8 @@ type langGuardKey struct {
 }
 
 // LanguageGuardMetrics aggregates per-(model, role) language-guard
-// observations into a per-(model, role) mismatch rate (SP-152 §152e, SP-150
-// §150c). It is process-wide and safe for concurrent use from any goroutine
+// observations into a per-(model, role) mismatch rate.
+// It is process-wide and safe for concurrent use from any goroutine
 // (the guard runs on the agent's query path, which can be concurrent across
 // chats). The process-wide instance is exposed via
 // GlobalLanguageGuardMetrics; tests build their own with
@@ -153,7 +153,7 @@ func SetGlobalLanguageGuardMetricsForTest(r *LanguageGuardMetrics) func() {
 }
 
 // LanguageGuardStats is the Agent's diagnostic accessor for the
-// language-guard metric (SP-152 §152e, SP-150 §150c): it returns the
+// language-guard metric: it returns the
 // process-wide per-(model, role) snapshot — for each (model, role), how
 // many final messages the guard judged and how many were mismatches, with a
 // mismatch rate per (model, role). A high rate for a model means it

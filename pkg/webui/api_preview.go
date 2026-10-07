@@ -1,8 +1,8 @@
 //go:build !js
 
-// Preview API — SP-155 §155a (TODO 155.4).
+// Preview API.
 //
-// Four endpoints drive the preview pane (155.3's presentational component,
+// Four endpoints drive the preview pane (a presentational component,
 // which renders state entirely through its props) from the project's dev
 // server, owned by a per-root pkg/preview.Manager:
 //
@@ -31,8 +31,8 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/starterstore"
 )
 
-// registerPreviewRoutes mounts the SP-155 §155a preview surface (TODO
-// 155.4): the dev-server state the preview pane renders and the actions
+// registerPreviewRoutes mounts the preview surface:
+// the dev-server state the preview pane renders and the actions
 // that drive it (start, restart, stop).
 func (ws *ReactWebServer) registerPreviewRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/preview/status", ws.handleAPIPreviewStatus)
@@ -68,8 +68,8 @@ func (ws *ReactWebServer) stopPreviewManagers() {
 	}
 }
 
-// hostedPreviewShortcut reports the active hosted preview (SP-155 §155a,
-// TODO 155.5) and tells the caller to stop, when one is registered. The
+// hostedPreviewShortcut reports the active hosted preview
+// and tells the caller to stop, when one is registered. The
 // hosted URL is platform-managed — the agent registered it, and the
 // platform owns it — so the local dev-server actions (start/restart/stop)
 // must not touch it: they simply echo the hosted state back instead of
@@ -111,8 +111,8 @@ func previewDevDeclaration(root string) (port, code int, errCode, msg string) {
 // is always 200 — a state observation, never a caller fault: a project
 // without a dev server reports stopped, with the reason.
 //
-// A registered hosted preview takes precedence over the local manager
-// (SP-155 §155a, TODO 155.5): when the agent registered a platform
+// A registered hosted preview takes precedence over the local manager:
+// when the agent registered a platform
 // preview port, the pane embeds that platform URL, so we report it as
 // running/hosted rather than the local dev server's state.
 func (ws *ReactWebServer) handleAPIPreviewStatus(w http.ResponseWriter, r *http.Request) {
@@ -142,7 +142,7 @@ func (ws *ReactWebServer) handleAPIPreviewStart(w http.ResponseWriter, r *http.R
 	}
 	// A registered hosted preview wins: a local start would spawn a dev
 	// server the pane ignores (it embeds the platform URL), so echo the
-	// hosted state and do not touch the local manager (SP-155 §155a).
+	// hosted state and do not touch the local manager.
 	if ws.hostedPreviewShortcut(w) {
 		return
 	}
@@ -191,7 +191,7 @@ func (ws *ReactWebServer) handleAPIPreviewRestart(w http.ResponseWriter, r *http
 		return
 	}
 	// A registered hosted preview is platform-managed: a restart has
-	// nothing local to cycle, so echo the hosted state (SP-155 §155a).
+	// nothing local to cycle, so echo the hosted state.
 	if ws.hostedPreviewShortcut(w) {
 		return
 	}
@@ -221,7 +221,7 @@ func (ws *ReactWebServer) handleAPIPreviewStop(w http.ResponseWriter, r *http.Re
 		return
 	}
 	// A registered hosted preview is platform-managed: Stop cannot stop
-	// it (we never started it), so echo the hosted state (SP-155 §155a).
+	// it (we never started it), so echo the hosted state.
 	if ws.hostedPreviewShortcut(w) {
 		return
 	}

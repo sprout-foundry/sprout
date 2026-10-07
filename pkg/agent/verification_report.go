@@ -14,7 +14,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/verify"
 )
 
-// verificationLoopShouldStop reports whether the SP-149 §149c stopping
+// verificationLoopShouldStop reports whether the stopping
 // rule has fired for one failing verification run. Either condition ends
 // the loop, whichever fires first:
 //
@@ -50,7 +50,7 @@ func repairLoopShouldStop(checks []verify.Check, attempts map[string]int, limit,
 	return repairStopRuleFired(checks, attempts, limit)
 }
 
-// verificationStopRuleFired reports whether the SP-149 §149c stopping rule
+// verificationStopRuleFired reports whether the stopping rule
 // has fired: every failing check has used its repair-attempt limit. A run
 // whose failure comes only from run-level errors (no failing check) fires
 // immediately — there is nothing to repair per check.
@@ -76,8 +76,8 @@ func repairStopRuleFired(checks []verify.Check, attempts map[string]int, limit i
 	return true
 }
 
-// checkAttemptKey is the per-check counter key for the repair loop
-// (SP-149 §149c): the kind string, plus the interaction item id for
+// checkAttemptKey is the per-check counter key for the repair loop:
+// the kind string, plus the interaction item id for
 // interaction checks (each scripted flow is its own check and counts its
 // own attempts, so two flows never share a counter). Manual checks never
 // fail — they are pre-filled skipped — so they never need a key.
@@ -89,7 +89,7 @@ func checkAttemptKey(c verify.Check) string {
 }
 
 // buildVerificationReport renders the structured verification report
-// (SP-149 §149c) the hook feeds back to continue the turn. It is
+// the hook feeds back to continue the turn. It is
 // deterministic over (result, attempts, limit): an explicit
 // <verification-report> envelope carrying
 //
@@ -102,8 +102,7 @@ func checkAttemptKey(c verify.Check) string {
 //     indented,
 //  4. when any check is exhausted, an explicit section telling the model
 //     those checks are DONE after the repair limit: stop trying to fix
-//     them and state the remaining failure plainly in the final reply
-//     (SP-149 §149d).
+//     them and state the remaining failure plainly in the final reply.
 //
 // The report is the query of the continued seedAgent.Run call, so it is
 // sent to the model as a user-role message.

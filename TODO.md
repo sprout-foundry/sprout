@@ -257,12 +257,18 @@ protects.
       strings added by the automated work ("TODO 153.6", "item 149.5",
       "(152.7)", "SP-149 §149a" in the manual-check reason). Spec-level
       references in docs are fine.
-      Remaining: ~690 tagged comment/string occurrences across `pkg/`,
-      `cmd/`, `webui/src/`, `test/` (the SP-148..157 series, plus some
-      pre-existing). A scripted sweep was attempted and rejected: naive
-      tag-stripping corrupts real code/strings (e.g. `.sprout`, `Load()`)
-      and leaves ungrammatical prose, so this needs per-file review.
-      Newly authored tags this session were already cleaned. Not yet done.
+      Remaining: ~485 tagged comment/string occurrences across ~217 files
+      under `pkg/`, `cmd/`, `webui/src/`, `test/` (the SP-148..157 series,
+      plus some pre-existing). A scripted sweep was attempted and rejected:
+      naive tag-stripping corrupts real code/strings (e.g. `.sprout`,
+      `Load()`) and leaves ungrammatical prose, so this needs per-file
+      review.
+      Progress: a first verified batch cleaned ~29 of the densest files
+      (benchmark, verify, agent verification, plancontract, events,
+      startermanifest, configuration, langguard, starters, cliui, webui
+      preview/progress) — comment-only, prose rewritten grammatically,
+      non-comment tokens unchanged, all tests pass. The bulk remains; a
+      further per-file pass is needed before this can be ticked.
 - [x] **rules.2** Split files over 500 lines introduced or grown by the
       automated work (`pkg/agent/seed_provider_chat.go`,
       `pkg/benchmark/runner_test.go`, `config_roles_test.go`,

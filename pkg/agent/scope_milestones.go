@@ -1,15 +1,15 @@
-// Package agent — SP-151 §151a item 151.2: plan-scope milestone events.
+// Package agent — plan-scope milestone events.
 //
 // When a todo_write changes the status of todos linked to a plan scope item
-// (the todo "scope" field, SP-148 §148c), the runtime emits a
+// (the todo "scope" field), the runtime emits a
 // progress_milestone event for that scope item: phase "started" when one of
 // its todos first goes in_progress, phase "finished" when all of its todos
 // reach a terminal status (completed/cancelled). The finished event carries
 // the files-touched count (change-tracker delta since the scope started) and
 // the scope item's elapsed wall time. Every event carries the stable run id
 // (the session id), the plan revision, and the scope id so consumers can
-// de-duplicate and correlate the started/finished pair (SP-151 §151a:
-// "stable IDs (run, plan revision, scope item)").
+// de-duplicate and correlate the started/finished pair ("stable IDs
+// (run, plan revision, scope item)").
 //
 // The plan snapshot behind the payload is not frozen at the first load: the
 // milestone path re-reads .sprout/plan.json and refreshes the cached
@@ -36,7 +36,7 @@ import (
 )
 
 // scopeMilestoneTracker is the per-agent state that turns todo_write
-// snapshots into progress_milestone events (SP-151 §151a, item 151.2). It
+// snapshots into progress_milestone events. It
 // remembers, per plan scope item id, whether the scope has started (and when,
 // with how many tracked files) and whether it has finished, so a scope that
 // starts in one turn and finishes in a later one produces exactly one started
@@ -360,7 +360,7 @@ func (t *scopeMilestoneTracker) refreshPlanLocked(a *Agent) {
 }
 
 // observeScopeMilestones records the milestone transitions a todo_write just
-// made (SP-151 §151a, item 151.2). prev is the todo snapshot before the
+// made. prev is the todo snapshot before the
 // write, next the snapshot just written.
 func (a *Agent) observeScopeMilestones(prev, next []tools.TodoItem) {
 	if a == nil {
@@ -372,8 +372,8 @@ func (a *Agent) observeScopeMilestones(prev, next []tools.TodoItem) {
 	a.scopeMilestones.observe(a, prev, next)
 }
 
-// questionContext returns the plan context a decision is correlated to (SP-151
-// §151a, item 151.4): the active scope item (the most recently started scope
+// questionContext returns the plan context a decision is correlated to:
+// the active scope item (the most recently started scope
 // that has not finished) and the plan revision. It is the read-side companion
 // to observe: observe records scope transitions, questionContext reports which
 // scope a mid-run decision belongs to.
@@ -415,8 +415,8 @@ func (t *scopeMilestoneTracker) questionContext(a *Agent) (scopeID string, planR
 }
 
 // planQuestionContext returns the plan context (active scope item id + plan
-// revision) a progress_question event is correlated to (SP-151 §151a, item
-// 151.4). A bare agent with no tracker (the minimal test agents) reports no
+// revision) a progress_question event is correlated to.
+// A bare agent with no tracker (the minimal test agents) reports no
 // context: ("", 0).
 func (a *Agent) planQuestionContext() (scopeID string, planRev int) {
 	if a == nil || a.scopeMilestones == nil {

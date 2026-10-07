@@ -16,7 +16,7 @@ import (
 const DefaultMaxExcerptBytes = 8 * 1024
 
 // Commands are the trusted build and test commands for one project's
-// verification run (SP-149 §149b): resolved only from the starter
+// verification run: resolved only from the starter
 // manifest and the explicit project configuration. An empty field means
 // "no command for that check" — the runner never guesses one.
 type Commands struct {
@@ -27,10 +27,10 @@ type Commands struct {
 }
 
 // Check is the outcome of one verification check. It carries the
-// evidence SP-149 §149c names: which check ran, its pass/fail state,
+// evidence the contract names: which check ran, its pass/fail state,
 // and a bounded excerpt of its output.
 type Check struct {
-	// Kind is the check's plancontract kind (build or test in 149.2).
+	// Kind is the check's plancontract kind (build or test).
 	Kind plancontract.Kind `json:"kind"`
 	// Items are the ids of the plan acceptance items this check covers
 	// (empty for baseline checks and when the plan declares none).
@@ -41,7 +41,7 @@ type Check struct {
 	// Skipped marks a check that did not run: no trusted command was
 	// available, or the run was cancelled. Skipped checks do not gate
 	// the result (see Result.Passed) but are listed in it, so the
-	// result always says what could not be verified (SP-149 §149d).
+	// result always says what could not be verified.
 	Skipped bool `json:"skipped,omitempty"`
 	// Passed reports whether the check passed. For a skipped check it is
 	// false.
@@ -51,7 +51,7 @@ type Check struct {
 	// non-zero exit (the output excerpt carries the evidence there).
 	Reason string `json:"reason,omitempty"`
 	// Excerpt is a bounded excerpt of the check's combined output
-	// (SP-149 §149c evidence).
+	// (the evidence).
 	Excerpt string `json:"excerpt,omitempty"`
 	// Routes are the routes a page check attempted, in manifest order
 	// (page checks only; empty for every other kind).
@@ -62,19 +62,19 @@ type Check struct {
 	Screenshots []string `json:"screenshots,omitempty"`
 	// Steps are the scripted browser steps an interaction check ran, in
 	// execution order (interaction checks only; empty for every other kind).
-	// They come from the plan's interaction acceptance item (SP-148 §148d).
+	// They come from the plan's interaction acceptance item.
 	Steps []plancontract.BrowseStep `json:"steps,omitempty"`
 	// Duration is the wall time the check took to execute.
 	Duration time.Duration `json:"duration,omitempty"`
 }
 
-// Result is the structured outcome of one verification run (SP-149
-// §149a/§149c). It is plain data: 149.5 (turn-end hook) consumes it,
-// 149.6 (final-reply contract) reports from it, and SP-151 records it
-// as a structured event with evidence.
+// Result is the structured outcome of one verification run. It is plain
+// data: the turn-end hook consumes it, the final-reply contract reports
+// from it, and the progress events record it as a structured event with
+// evidence.
 type Result struct {
-	// Baseline is true when the run happened without an active SP-148
-	// plan: the build and test commands ran as a baseline (§149a).
+	// Baseline is true when the run happened without an active
+	// plan: the build and test commands ran as a baseline.
 	Baseline bool `json:"baseline,omitempty"`
 	// PlanRevision is the revision of the plan whose acceptance items
 	// the checks cover (0 in baseline mode).
@@ -108,7 +108,7 @@ func (r *Result) Failed() bool {
 // Passed reports whether the verification run passed: nothing failed and
 // at least one check actually ran. A run whose checks were all skipped
 // (no trusted command anywhere) passed nothing — partial or vacuous
-// success is never reported as success (SP-149 §149d).
+// success is never reported as success.
 func (r *Result) Passed() bool {
 	if r == nil {
 		return false
@@ -125,7 +125,7 @@ func (r *Result) Passed() bool {
 }
 
 // Summary renders a compact, deterministic one-line summary of the run
-// for display and for the final reply (SP-149 §149d).
+// for display and for the final reply.
 func (r *Result) Summary() string {
 	if r == nil {
 		return "no verification result"
@@ -152,7 +152,7 @@ func (r *Result) Summary() string {
 			part += " (" + c.Command + ")"
 		}
 		// A page check that ran reports how many routes it covered, so the
-		// summary says plainly what was verified (SP-149 §149d).
+		// summary says plainly what was verified.
 		if c.Kind == plancontract.KindPage && !c.Skipped && len(c.Routes) > 0 {
 			if len(c.Routes) == 1 {
 				part += " [1 route]"

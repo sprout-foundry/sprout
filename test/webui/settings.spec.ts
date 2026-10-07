@@ -137,21 +137,33 @@ function sectionByLabel(label: string) {
     .first();
 }
 
-/** Click a subsection tab and wait for content. Self-heals: if the tab is
- *  not visible (panel closed by an earlier test in this serial spec),
- *  re-open the panel and retry once before failing. */
+/** Click a subsection tab and wait for it to become the selected tab with
+ *  its panel mounted. The SettingsPanel uses ARIA tabs: the button flips
+ *  aria-selected and the content area is #settings-subpanel-<sub.id>. A
+ *  click that lands during a section re-render (the expand toggle re-mounts
+ *  the subsection list) gets retried; a closed panel falls back to a full
+ *  settings re-open between attempts. */
 async function clickSubsectionTab(testidKey: string) {
-  const clickOnce = async () => {
+  // "settings-<sub.id>-tab" -> sub.id (SettingsPanel's data-testid template).
+  const subId = testidKey.replace(/^settings-/, "").replace(/-tab$/, "");
+  const attempt = async (): Promise<void> => {
     const tab = page.getByTestId(TESTIDS[testidKey]);
     await expect(tab).toBeVisible({ timeout: 10_000 });
     await tab.click();
-    await page.waitForTimeout(300);
+    await expect(tab).toHaveAttribute("aria-selected", "true", {
+      timeout: 10_000,
+    });
+    const panel = page.locator(`#settings-subpanel-${subId} .section`);
+    await expect(panel).toBeVisible({ timeout: 10_000 });
   };
-  try {
-    await clickOnce();
-  } catch {
-    await ensureSettingsOpen();
-    await clickOnce();
+  for (let i = 0; i < 3; i += 1) {
+    try {
+      await attempt();
+      return;
+    } catch (err) {
+      if (i === 2) throw err;
+      await ensureSettingsOpen();
+    }
   }
 }
 

@@ -157,6 +157,12 @@ describe('package sources', () => {
     assert.match(source, /from '\.\.\/\.\.\/\.\.\/webui\/src\/views\/index'/);
   });
 
+  test('the providers entry point re-exports the provider wrapper', () => {
+    const source = read('packages/workspace/src/providersChunk.ts');
+    assert.match(source, /from "\.\.\/\.\.\/\.\.\/webui\/src\/providers\/SproutProviders"/);
+    assert.match(source, /SproutProviders/);
+  });
+
   test('the host entry point re-exports the public host module', () => {
     const source = read('packages/workspace/src/host.ts');
     assert.match(source, /from '\.\.\/\.\.\/\.\.\/webui\/src\/host\/index'/);
@@ -219,8 +225,10 @@ describe('build artifacts', { skip: !built && 'packages/workspace/dist not built
   test('code-splitting: the entry is small and the views are their own chunks', () => {
     const entry = fs.statSync(path.join(DIST, 'index.js')).size;
     const views = fs.statSync(path.join(DIST, 'views.js')).size;
+    const providers = fs.statSync(path.join(DIST, 'providers.js')).size;
     assert.ok(entry < 16 * 1024, `the entry must stay small, was ${entry} bytes`);
     assert.ok(views < 16 * 1024, `the views facade must stay small, was ${views} bytes`);
+    assert.ok(providers < 16 * 1024, `the providers facade must stay small, was ${providers} bytes`);
 
     const chunks = walk(DIST).filter((file) => /^dist\/chunks\/.*\.js$/.test(file));
     assert.ok(chunks.length > 0, 'the build emitted at least one lazily loaded chunk');

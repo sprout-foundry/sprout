@@ -124,3 +124,12 @@ export type {
   WorkspaceModeId,
   WorkspaceModeRegistration,
 } from '../workspaces/registry';
+
+// The provider wrapper a host wraps the composed views in, so it does not
+// assemble the web UI context stack by hand. Its own entry point and chunk
+// (the `providers` library entry) keep it out of the static entry; the local
+// app imports this module directly, and the package's `views` chunk re-exports
+// it so a host that already imports the views entry gets it from the same
+// surface.
+export { SproutProviders } from '../providers/index';
+export type { SproutProvidersProps } from '../providers/index';

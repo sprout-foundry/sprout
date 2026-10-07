@@ -7,9 +7,10 @@
 
 import { Menu } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react';
+import { platformHref } from '../../host/platformUrl';
+import { useHost } from '../../host/useHost';
 import { getActiveRepoURL } from '../../services/activeRepo';
 import { closeHome, getHomeView, searchForRepo, syncHomePath, useHomeView } from '../../services/homeView';
-import { platformHref } from '../../utils/platformUrl';
 import { homePageLabel } from './HomeNav';
 
 type EmbedMessage = { type: 'sprout:open-editor'; href: string } | { type: 'sprout:platform-route'; path: string };
@@ -39,6 +40,7 @@ interface PlatformHomeProps {
 }
 
 export default function PlatformHome({ isMobile, onOpenMenu }: PlatformHomeProps): ReactElement | null {
+  const { navigation } = useHost();
   const { open, path } = useHomeView();
   const frameRef = useRef<HTMLIFrameElement>(null);
   // The frame's first page is wherever Home first opens to (the credits
@@ -128,7 +130,13 @@ export default function PlatformHome({ isMobile, onOpenMenu }: PlatformHomeProps
           <button type="button" className="project-nav-back" onClick={onOpenMenu} aria-label="Open navigation">
             <Menu size={18} />
           </button>
-          <span>{homePageLabel(path)}</span>
+          <span>
+            {homePageLabel(
+              path,
+              [...(navigation.workItems ?? []), ...(navigation.accountItems ?? [])],
+              (intent) => navigation.intentPath?.(intent) ?? null,
+            )}
+          </span>
         </div>
       )}
       <iframe

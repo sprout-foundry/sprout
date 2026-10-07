@@ -24,7 +24,16 @@ import {
   type TxnRunResult,
 } from '../services/cloudTxn';
 import { __resetFullWorkspaceForTests } from '../services/fullWorkspace';
+import { HostProvider } from '../host/HostProvider';
+import { makeTestHost } from '../host/testHost';
+import { intentPath } from '../host/platform';
 import { EscalationListener } from './EscalationListener';
+
+/** Render the toast under a host carrying the platform nav surface. */
+function renderListener() {
+  const host = { ...makeTestHost(), navigation: { open: () => undefined, intentPath } };
+  return render(createElement(HostProvider, { host }, createElement(EscalationListener)));
+}
 
 vi.mock('../services/cloudTxn', async () => {
   // Real builders (buildPushManifest/applyPullManifest/CloudTxnError) with
@@ -187,7 +196,7 @@ afterEach(() => {
 
 describe('EscalationListener — ETH-2 txn action', () => {
   it('shows the txn CTA only when the trigger carries a command and repoURL', () => {
-    render(createElement(EscalationListener));
+    renderListener();
 
     fireTrigger({ command: undefined });
     expect(screen.queryByTestId('escalation-toast-txn')).toBeNull();
@@ -201,7 +210,7 @@ describe('EscalationListener — ETH-2 txn action', () => {
   });
 
   it('runs open → push → run → pull → apply → finish and renders the result', async () => {
-    render(createElement(EscalationListener));
+    renderListener();
     fireTrigger();
     fireEvent.click(screen.getByTestId('escalation-toast-txn'));
 
@@ -237,7 +246,7 @@ describe('EscalationListener — ETH-2 txn action', () => {
   it('falls back to pushing every VFS file when git has no commits', async () => {
     gitStatus.mockResolvedValue({ staged: [], unstaged: [], untracked: [] });
     gitLog.mockResolvedValue([]);
-    render(createElement(EscalationListener));
+    renderListener();
     fireTrigger();
     fireEvent.click(screen.getByTestId('escalation-toast-txn'));
     await flush();
@@ -248,7 +257,7 @@ describe('EscalationListener — ETH-2 txn action', () => {
 
   it('pushes nothing when the repo is clean', async () => {
     gitStatus.mockResolvedValue({ staged: [], unstaged: [], untracked: [] });
-    render(createElement(EscalationListener));
+    renderListener();
     fireTrigger();
     fireEvent.click(screen.getByTestId('escalation-toast-txn'));
     await flush();
@@ -258,7 +267,7 @@ describe('EscalationListener — ETH-2 txn action', () => {
 
   it('still finishes when the run phase fails, and names the failing side', async () => {
     vi.mocked(txnRun).mockRejectedValue(new Error('container died'));
-    render(createElement(EscalationListener));
+    renderListener();
     fireTrigger();
     fireEvent.click(screen.getByTestId('escalation-toast-txn'));
     await flush();
@@ -273,7 +282,7 @@ describe('EscalationListener — ETH-2 txn action', () => {
 
   it('still finishes when the pull/apply phase fails', async () => {
     vi.mocked(txnPull).mockRejectedValue(new CloudTxnError('pull failed', 500));
-    render(createElement(EscalationListener));
+    renderListener();
     fireTrigger();
     fireEvent.click(screen.getByTestId('escalation-toast-txn'));
     await flush();
@@ -287,7 +296,7 @@ describe('EscalationListener — ETH-2 txn action', () => {
     vi.mocked(createTxn).mockRejectedValue(
       new CloudTxnError("this workspace runs an older version of sprout that can't run commands from the browser", 409),
     );
-    render(createElement(EscalationListener));
+    renderListener();
     fireTrigger();
     fireEvent.click(screen.getByTestId('escalation-toast-txn'));
     await flush();
@@ -299,7 +308,7 @@ describe('EscalationListener — ETH-2 txn action', () => {
 
   it('maps a 409 to the friendly busy message', async () => {
     vi.mocked(createTxn).mockRejectedValue(new CloudTxnError('a transaction is already open', 409));
-    render(createElement(EscalationListener));
+    renderListener();
     fireTrigger();
     fireEvent.click(screen.getByTestId('escalation-toast-txn'));
     await flush();
@@ -311,7 +320,7 @@ describe('EscalationListener — ETH-2 txn action', () => {
 
   it('maps a 402 to a credits message', async () => {
     vi.mocked(resolveTxnWorkspace).mockRejectedValue(new CloudTxnError('Overage spending cap reached.', 402));
-    render(createElement(EscalationListener));
+    renderListener();
     fireTrigger();
     fireEvent.click(screen.getByTestId('escalation-toast-txn'));
     await flush();
@@ -323,7 +332,7 @@ describe('EscalationListener — ETH-2 txn action', () => {
 
   it('maps a 503 to a friendly unavailable message', async () => {
     vi.mocked(createTxn).mockRejectedValue(new CloudTxnError('workspace not running', 503));
-    render(createElement(EscalationListener));
+    renderListener();
     fireTrigger();
     fireEvent.click(screen.getByTestId('escalation-toast-txn'));
     await flush();
@@ -335,7 +344,7 @@ describe('EscalationListener — ETH-2 txn action', () => {
 
   it('surfaces a failed finish as a warning without losing the result', async () => {
     vi.mocked(txnFinish).mockRejectedValue(new Error('stop timeout'));
-    render(createElement(EscalationListener));
+    renderListener();
     fireTrigger();
     fireEvent.click(screen.getByTestId('escalation-toast-txn'));
     await flush();
@@ -355,7 +364,7 @@ describe('EscalationListener — ETH-2 txn action', () => {
       skipped: [{ path: 'big.bin', reason: 'exceeds_per_file_cap' }],
       truncated: true,
     });
-    render(createElement(EscalationListener));
+    renderListener();
     fireTrigger();
     fireEvent.click(screen.getByTestId('escalation-toast-txn'));
     await flush();
@@ -375,7 +384,7 @@ describe('EscalationListener — ETH-2 txn action', () => {
           resolveCreate = resolve;
         }),
     );
-    render(createElement(EscalationListener));
+    renderListener();
     fireTrigger();
 
     fireEvent.click(screen.getByTestId('escalation-toast-txn'));
@@ -392,7 +401,7 @@ describe('EscalationListener — ETH-2 txn action', () => {
   });
 
   it('resets the txn view when a new blocking trigger arrives', async () => {
-    render(createElement(EscalationListener));
+    renderListener();
     fireTrigger();
     fireEvent.click(screen.getByTestId('escalation-toast-txn'));
     await flush();
@@ -406,7 +415,7 @@ describe('EscalationListener — ETH-2 txn action', () => {
 
 describe('EscalationListener — Mode A/B regressions', () => {
   it('renders nothing before any trigger', () => {
-    render(createElement(EscalationListener));
+    renderListener();
     expect(screen.queryByText('Browser limitation reached')).toBeNull();
   });
 
@@ -417,7 +426,7 @@ describe('EscalationListener — Mode A/B regressions', () => {
         : jsonResponse({ workspaces: [] }),
     );
     vi.stubGlobal('fetch', fetchMock);
-    render(createElement(EscalationListener));
+    renderListener();
     fireTrigger({ command: undefined });
 
     fireEvent.click(screen.getByText('Start Full Workspace'));
@@ -434,7 +443,7 @@ describe('EscalationListener — Mode A/B regressions', () => {
       return jsonResponse({ workspaces: [] });
     });
     vi.stubGlobal('fetch', fetchMock);
-    render(createElement(EscalationListener));
+    renderListener();
     fireTrigger({ command: undefined });
 
     fireEvent.click(screen.getByText('Start Full Workspace'));
@@ -450,7 +459,7 @@ describe('EscalationListener — Mode A/B regressions', () => {
       'fetch',
       vi.fn(async () => jsonResponse({ error: 'workspaces are not available on this deployment' }, { status: 503 })),
     );
-    render(createElement(EscalationListener));
+    renderListener();
     fireTrigger({ command: undefined });
     await flush();
     expect(screen.queryByText('Start Full Workspace')).toBeNull();
@@ -459,7 +468,7 @@ describe('EscalationListener — Mode A/B regressions', () => {
   it('goes to /?from=editor when the trigger has no repo context', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-    render(createElement(EscalationListener));
+    renderListener();
     fireTrigger({ command: undefined, repoURL: undefined });
 
     fireEvent.click(screen.getByText('Start Full Workspace'));
@@ -478,7 +487,7 @@ describe('EscalationListener — Mode A/B regressions', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    render(createElement(EscalationListener));
+    renderListener();
     // No command → Mode A is the primary inline action.
     fireTrigger({ command: undefined, reason: 'git_push_failed' });
     fireEvent.click(screen.getByTestId('escalation-toast-cloud-task'));
@@ -497,7 +506,7 @@ describe('EscalationListener — Mode A/B regressions', () => {
   });
 
   it('hides the cloud-task CTA once a txn is in flight for the same toast', async () => {
-    render(createElement(EscalationListener));
+    renderListener();
     fireTrigger();
     fireEvent.click(screen.getByTestId('escalation-toast-txn'));
     await flush();

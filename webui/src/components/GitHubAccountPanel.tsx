@@ -16,8 +16,8 @@ import { LogOut, Loader2, ExternalLink, X } from 'lucide-react';
 import { useRef, useState } from 'react';
 import type { FormEvent, ReactElement } from 'react';
 import './GitHubAccountPanel.css';
-import { usesPlatformGitHub } from '../services/platformGitHub';
-import PlatformGitHubAccountCard from './PlatformGitHubAccountCard';
+import { usesPlatformGitHub } from '../host/platformGitHub';
+import PlatformGitHubAccountCard from '../host/PlatformGitHubAccountCard';
 import { GITHUB_TOKENS_URL, clearGitHubAccount, storeToken, storeUser, validateToken } from '../services/githubService';
 import type { GitHubUser } from '../services/githubService';
 import {

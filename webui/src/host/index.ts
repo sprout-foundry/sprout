@@ -5,6 +5,8 @@ export type {
   HostChrome,
   HostEntitlements,
   HostHelpIntent,
+  HostNavIntent,
+  HostNavItem,
   HostNavigation,
   HostNavigationIntent,
   HostNotification,
@@ -26,6 +28,17 @@ export { useHostCapabilities } from './useHostCapabilities';
 export { getActiveHost, setActiveHost } from './accessor';
 export { localHost } from './localHost';
 export { cloudHost } from './cloudHost';
+export { platformHref, repoHubPath, repoSlug, repoName, githubRepoSlug } from './platformUrl';
+export {
+  fetchPlatformGitHubConnected,
+  listPlatformRepos,
+  createPlatformRepo,
+  usesPlatformGitHub,
+  platformGitHubSettingsHref,
+  CreateRepoError,
+} from './platformGitHub';
+export { default as PlatformGitHubAccountCard } from './PlatformGitHubAccountCard';
+export { platformEntitlements } from './platform';
 
 /**
  * A stable, pre-built headless host for hosts that want a single default

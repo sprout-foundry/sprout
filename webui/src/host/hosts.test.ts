@@ -125,12 +125,30 @@ describe('cloudHost', () => {
     });
   });
 
-  it('leaves platform-provided values absent (shape, not values)', () => {
-    // Identity, entitlements, chrome, and theme are host-provided at runtime
-    // by a later item; the constant declares the shape, so these are absent.
+  it('supplies the platform navigation surface (items + intent resolution)', () => {
+    // host.6: the cloud host names the platform's pages and resolves intents to
+    // them; Sprout components render the items and dispatch through open.
+    expect(cloudHost.navigation.workItems?.map((i) => i.label)).toEqual(['Dashboard', 'Tasks', 'Workspaces']);
+    expect(cloudHost.navigation.accountItems?.map((i) => i.label)).toEqual([
+      'Dashboard',
+      'Tasks',
+      'Usage & billing',
+      'Team',
+      'Runners',
+      'Settings',
+    ]);
+    expect(cloudHost.navigation.intentPath?.({ type: 'usage' })).toBe('/?from=editor#/account/billing');
+  });
+
+  it('leaves platform-provided identity/chrome/theme absent but supplies live entitlements', () => {
+    // Identity, chrome, and theme are host-provided at runtime by a later item;
+    // the constant declares the shape, so these are absent. Entitlements are
+    // live: the summary is resolved from the platform's billing status, so the
+    // object exists with a resolver and (initially, in tests) no summary.
     expect(cloudHost.user).toBeUndefined();
-    expect(cloudHost.entitlements).toBeUndefined();
     expect(cloudHost.chrome).toBeUndefined();
     expect(cloudHost.theme).toBeUndefined();
+    expect(typeof cloudHost.entitlements?.resolve).toBe('function');
+    expect(cloudHost.entitlements?.usageSummary).toBeUndefined();
   });
 });

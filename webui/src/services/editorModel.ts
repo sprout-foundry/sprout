@@ -5,7 +5,7 @@
  * platform routes the agent's requests by it.
  */
 
-import { platformHref } from '../utils/platformUrl';
+import { platformHref } from '../host/platformUrl';
 
 export interface EditorModelState {
   /** Empty for the managed model. */

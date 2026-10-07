@@ -6,7 +6,7 @@ import { LayeredSearchButton } from './layered/LayeredTopBar';
 import { useActiveRepoURL } from '../services/activeRepo';
 import { startFullWorkspace, useFullWorkspacesAvailable } from '../services/fullWorkspace';
 import { notificationBus } from '../services/notificationBus';
-import { githubRepoSlug, platformHref, repoHubPath } from '../utils/platformUrl';
+import { githubRepoSlug, platformHref, repoHubPath } from '../host/platformUrl';
 import MenuBar from './MenuBar';
 import { CreditsChip } from './CreditsChip';
 import { UsageChip } from './UsageChip';

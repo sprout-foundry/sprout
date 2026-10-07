@@ -1,7 +1,7 @@
 import type { TodoItem, LogEntry } from '@sprout/ui';
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { isCloud } from '../config/mode';
-import { useHostCapabilities } from '../host';
+import { useHost, useHostCapabilities } from '../host';
 import { useAppStateField, useAppStoreSetState } from '../contexts/AppStore';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
@@ -174,6 +174,10 @@ const AppContent: React.FC<AppContentProps> = ({
   onRenameChat,
 }) => {
   const { localTerminal: supportsLocalTerminal } = useHostCapabilities();
+  // The host provides a Home surface (its work places) when it has platform
+  // pages to embed; the frame is only reachable through that surface.
+  const host = useHost();
+  const hasHomeSurface = (host.navigation.workItems?.length ?? 0) > 0;
   const {
     buffers,
     buffersRef,
@@ -1300,7 +1304,7 @@ const AppContent: React.FC<AppContentProps> = ({
           <Terminal isExpanded={isTerminalExpanded} onToggleExpand={onTerminalExpandedChange} />
         </ErrorBoundary>
       ) : null}
-      {isLayeredLayout && isCloud && <PlatformHome isMobile={isMobile} onOpenMenu={onToggleSidebar} />}
+      {isLayeredLayout && hasHomeSurface && <PlatformHome isMobile={isMobile} onOpenMenu={onToggleSidebar} />}
       <NotificationCenterHost />
       {isLayeredLayout && isCloud && isMobile && (
         <PhoneTabBar

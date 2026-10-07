@@ -68,7 +68,7 @@ checkboxes.
       `WasmLoadingOverlay.tsx`, `serviceWorkerRegistration.ts`,
       `useCloudSessionPersistence.ts`, `runtimeConfig.ts`) to the host's
       transport and capabilities. Spec: SP-160 §160b.
-- [ ] **host.6** Move host-specific product UI behind the contract:
+- [x] **host.6** Move host-specific product UI behind the contract:
       `CreditsChip.tsx` renders the host's entitlements summary;
       platform links in `layered/HomeNav.tsx`, `ProjectRail.tsx`,
       `LayeredSidebar.tsx` and `UserMenu.tsx` become navigation intents or

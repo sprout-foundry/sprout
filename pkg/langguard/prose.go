@@ -1,4 +1,4 @@
-// Prose extraction for the language guard (SP-152 §152a). Code blocks,
+// Prose extraction for the language guard. Code blocks,
 // inline code, URLs, file paths and quoted user text are "not prose" and
 // must be stripped before language detection: code is written in whatever
 // language the codebase uses regardless of the conversation language, and
@@ -53,7 +53,7 @@ var (
 // ExtractProse returns the prose-only portion of text: fenced code
 // blocks, inline code, URLs, file paths and quoted spans are removed, and
 // the remaining whitespace is collapsed to single spaces. The result is
-// what language detection (Judgable, DominantScript) should see (§152a).
+// what language detection (Judgable, DominantScript) should see.
 //
 // Extraction is total: it never fails, never mutates its input, and
 // returns "" for empty and garbage input. What is removed is deliberately
@@ -147,7 +147,7 @@ func stripSingleQuotedSpans(s string) string {
 		}
 		if opens && j < n && j > i+1 && (j+1 == n || unicode.IsSpace(r[j+1])) {
 			// A well-formed span: drop it entirely (quoted user text
-			// is not prose, §152a).
+			// is not prose).
 			i = j
 			continue
 		}

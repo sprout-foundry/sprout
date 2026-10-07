@@ -54,8 +54,8 @@ func TestCommitMessageClient_CommitProviderWins(t *testing.T) {
 	assert.Equal(t, string(api.TestClientType), client.GetProvider(), "the commit provider must win over the conversation provider")
 }
 
-// TestCommitMessageClient_RoleCommitResolvesClient verifies (SP-150 §150b)
-// that the commit tool resolves its LLM client through the commit role:
+// TestCommitMessageClient_RoleCommitResolvesClient verifies that the
+// commit tool resolves its LLM client through the commit role:
 // with only roles.commit set, the role's provider wins over the
 // conversation's (last-used) provider.
 func TestCommitMessageClient_RoleCommitResolvesClient(t *testing.T) {

@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestExtractProse is the table test over prose extraction (SP-152 §152a):
+// TestExtractProse is the table test over prose extraction:
 // code, URLs, file paths and quoted spans are removed, while genuine
 // prose — including prose that merely contains slashes or apostrophes —
 // survives.
@@ -119,7 +119,7 @@ func TestExtractProse(t *testing.T) {
 }
 
 // TestExtractProseExact pins exact outputs for the degenerate inputs:
-// empty and garbage input yields "" without failing (§152d: the check is
+// empty and garbage input yields "" without failing (the check is
 // in-process and must never take a reply path down).
 func TestExtractProseExact(t *testing.T) {
 	cases := []struct {

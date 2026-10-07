@@ -91,7 +91,7 @@ func TestTodoWriteHandler_MixedValidAndInvalidElements(t *testing.T) {
 }
 
 // TestTodoWriteHandler_Scope pins the seed-path extraction of the optional plan
-// scope ID (SP-148 §148c): Execute reads the "scope" field off each todo item
+// scope ID: Execute reads the "scope" field off each todo item
 // and carries it onto the TodoItem it writes, so the live dispatch path
 // (todo_write via the seed registry) preserves the plan link. A todo with no
 // scope key yields an empty Scope (unlinked).

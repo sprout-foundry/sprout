@@ -350,9 +350,9 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				}
 				return workflowErr
 			}
-			// SP-149 §149e: a completed non-interactive run whose
+			// A completed non-interactive run whose
 			// verification is enabled and fails exits non-zero. Yielded
-			// runs return above (workflow-loop continuation is SP-153's
+			// runs return above (workflow-loop continuation is a workflow
 			// decision, not the exit code's).
 			if vErr := verificationRunExitError(chatAgent); vErr != nil {
 				if outputFormatJSON {
@@ -384,8 +384,8 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 			}
 			return fmt.Errorf("failed to run direct mode: %w", err)
 		}
-		// SP-149 §149e: a completed non-interactive run whose
-		// verification is enabled and fails exits non-zero. The §149d
+		// A completed non-interactive run whose
+		// verification is enabled and fails exits non-zero. The
 		// failure report is already in the final reply shown to the user;
 		// this error adds the exit code (1 via exitCodeFor) and, for
 		// --json, the status:"error" envelope scripts read.

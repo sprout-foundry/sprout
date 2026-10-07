@@ -213,7 +213,7 @@ func (ws *ReactWebServer) runChatQuery(
 	// must not start concurrently — the client gets a machine-readable busy
 	// payload naming the running chat so it can offer send-anyway queueing.
 	// The wire mirrors the 142.1 mode_mismatch 409 (error/code) plus the
-	// running-chat fields the spec names.
+	// running-chat fields the protocol names.
 	if busy := ctx.busyChatInWorkspace(chatID); busy != nil {
 		busy.mu.RLock()
 		runningChatID := busy.ID
@@ -510,7 +510,7 @@ func (ws *ReactWebServer) runChatQuery(
 // recordQueryCost books the usage a has accrued since its last booking. The
 // agent's cost and token figures are running totals for the conversation, so
 // booking them as-is after every turn would count each earlier turn again.
-// Usage is booked per role (SP-150 §150c, item 150.5): the per-role deltas
+// Usage is booked per role: the per-role deltas
 // sum to the overall delta, so the persistent cost ledger attributes spend to
 // the model role each call served while recording the same total cost.
 func recordQueryCost(a *agent.Agent, chatID string) {

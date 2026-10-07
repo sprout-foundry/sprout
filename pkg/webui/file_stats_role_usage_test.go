@@ -11,7 +11,7 @@ import (
 )
 
 // TestPopulateAgentStats_IncludesRoleUsage pins that the /api/stats payload
-// carries the per-role token/cost breakdown (SP-150 §150c, 150.5): each
+// carries the per-role token/cost breakdown: each
 // entry keyed by role with its tokens and cost, so the WebUI can attribute
 // spend to the model role each call was made under.
 func TestPopulateAgentStats_IncludesRoleUsage(t *testing.T) {

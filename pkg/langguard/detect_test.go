@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// Trigram-pass fixtures (SP-152 §152d). Every prose fixture is above
+// Trigram-pass fixtures. Every prose fixture is above
 // MinJudgedProseRunes so DetectLanguage actually judges it, and long
 // enough that the detector's confidence clears MinDetectConfidence.
 var (
@@ -35,8 +35,8 @@ var (
 	polishProse       = "Pakiet jest gotowy do kompilacji, a testy uruchamiają się bez błędów."
 )
 
-// TestDetectLanguage is the table test over the trigram pass (SP-152
-// §152d): the correct language for prose across a broad sample of
+// TestDetectLanguage is the table test over the trigram pass:
+// the correct language for prose across a broad sample of
 // languages and scripts, dominant-language reporting for mixed text,
 // and "not reliable" for short, code-only or undetectable input.
 func TestDetectLanguage(t *testing.T) {
@@ -74,7 +74,7 @@ func TestDetectLanguage(t *testing.T) {
 			wantRel: true,
 		},
 		// Reliability: below the length threshold the message is not
-		// judged at all (§152a), whatever the detector would say.
+		// judged at all, whatever the detector would say.
 		{"short prose is not judged", "Hola", Language{}, false},
 		{
 			name: "code-heavy message has too little prose",
@@ -113,7 +113,7 @@ func TestDetectLanguageConfidence(t *testing.T) {
 }
 
 // TestDetectLanguageAgreesWithScriptPass checks that the two passes
-// agree where they overlap (§152d): for the same prose, the script pass
+// agree where they overlap: for the same prose, the script pass
 // reports the script of the detected language, so a mismatch verdict
 // from either pass is a real mismatch.
 func TestDetectLanguageAgreesWithScriptPass(t *testing.T) {
@@ -148,8 +148,8 @@ func TestDetectLanguageAgreesWithScriptPass(t *testing.T) {
 	}
 }
 
-// TestCheckLanguage covers the trigram pass's raw-message entry point
-// (152.5): code, URLs and quoted spans are stripped first, the verdict
+// TestCheckLanguage covers the trigram pass's raw-message entry point:
+// code, URLs and quoted spans are stripped first, the verdict
 // follows reliability, and codes compare case-insensitively.
 func TestCheckLanguage(t *testing.T) {
 	esUser := Language{Code: "es", Name: "Spanish"}
@@ -193,8 +193,8 @@ func TestCheckLanguage(t *testing.T) {
 	}
 }
 
-// TestLanguageString pins the diagnostic rendering (SP-152 152.9 logs
-// mismatches with the language involved).
+// TestLanguageString pins the diagnostic rendering, which logs
+// mismatches with the language involved.
 func TestLanguageString(t *testing.T) {
 	assert.Equal(t, "es (Spanish)", Language{Code: "es", Name: "Spanish"}.String())
 	assert.Equal(t, "en", Language{Code: "en"}.String(), "nameless codes render bare")

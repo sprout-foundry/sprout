@@ -57,7 +57,7 @@ func getRolesFromResponse(t *testing.T, rec *httptest.ResponseRecorder) map[stri
 }
 
 // TestSettingsAPI_RolesRoundTrip exercises the GET→PUT→GET loop the settings
-// panel uses for the SP-150 roles section. Without a dedicated applier the
+// panel uses for the roles section. Without a dedicated applier the
 // "roles" key would be silently dropped with an "Unknown fields ignored"
 // warning; this pins down that it now persists and survives the GET.
 func TestSettingsAPI_RolesRoundTrip(t *testing.T) {

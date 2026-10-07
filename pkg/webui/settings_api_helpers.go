@@ -136,7 +136,7 @@ func sanitizedConfig(cfg *configuration.Config) map[string]interface{} {
 		"commit_model":              cfg.CommitModel,
 		"review_provider":           cfg.ReviewProvider,
 		"review_model":              cfg.ReviewModel,
-		// SP-150 §150a: per-role model selection. Carries only provider
+		// Per-role model selection. Carries only provider
 		// and model names (no secrets), so it passes through sanitization
 		// as-is. Absent/empty roles fall back to the conversation's
 		// provider/model at resolution time.

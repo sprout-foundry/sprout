@@ -11,7 +11,7 @@ import (
 // both the Judgable and the script-reliability thresholds.
 const spanishReply = "El paquete está listo para compilar ahora mismo."
 
-// TestJudgable covers the minimum-length threshold (SP-152 §152a): the
+// TestJudgable covers the minimum-length threshold: the
 // threshold applies to the extracted prose, not the raw message.
 func TestJudgable(t *testing.T) {
 	codeOnly := "```go\n" + strings.Repeat("x := 1;\n", 50) + "```"
@@ -35,7 +35,7 @@ func TestJudgable(t *testing.T) {
 	}
 }
 
-// TestCheckScript covers the script pass (SP-152 §152d): the "wrong
+// TestCheckScript covers the script pass: the "wrong
 // script entirely" case, and every situation in which the pass must stay
 // quiet (too short, no reliable dominant script, unknown user script).
 func TestCheckScript(t *testing.T) {
@@ -79,7 +79,7 @@ func TestCheck(t *testing.T) {
 	assert.Equal(t, VerdictUndetermined, Check(codeHeavy, ScriptLatin), "raw: %q", codeHeavy)
 }
 
-// TestVerdictString pins the diagnostic rendering (SP-152 152.9).
+// TestVerdictString pins the diagnostic rendering.
 func TestVerdictString(t *testing.T) {
 	assert.Equal(t, "pass", VerdictPass.String())
 	assert.Equal(t, "mismatch", VerdictMismatch.String())

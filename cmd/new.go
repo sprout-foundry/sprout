@@ -1,13 +1,13 @@
 //go:build !js
 
 // `sprout new` instantiates an embedded starter into a new project
-// directory (SP-153 §153b, TODO 153.4). It is the CLI half of
-// "sprout new --starter <id>"; the web UI new-project dialog lands in
-// 153.7.
+// directory. It is the CLI half of
+// "sprout new --starter <id>"; the web UI new-project dialog is the
+// other half.
 //
 // The heavy lifting — resolving an embedded starter tree, copying it, and
 // writing the project's .sprout/starter.json — lives in
-// pkg/starters.Instantiate (TODO 153.3); this file only wires the flags and
+// pkg/starters.Instantiate; this file only wires the flags and
 // keeps the body in a small, testable function.
 package cmd
 
@@ -26,7 +26,7 @@ var newStarterID string
 var newCmd = &cobra.Command{
 	Use:   "new [dir]",
 	Short: "Create a new project from a starter",
-	Long: `Create a new project by instantiating an embedded starter (SP-153).
+	Long: `Create a new project by instantiating an embedded starter.
 
 A starter is a versioned project tree that gives a new project a working
 skeleton plus the .sprout/starter.json manifest that later tools read for
@@ -57,7 +57,7 @@ Examples:
 //     starter id (e.g. a relative "fixture").
 //   - starterID empty: the list of available starters is printed to out and
 //     an error is returned — this command cannot create a project without a
-//     starter (153.4).
+//     starter.
 //   - unknown starter id (starters.ErrUnknownStarter): the list of
 //     available starters is printed to out and an error is returned, so the
 //     caller can see what it can try.

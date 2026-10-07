@@ -2,8 +2,8 @@
 
 package cliui
 
-// progress_summary_test.go — tests for the deterministic SP-151
-// progress-event template summaries (item 151.6) and the CLI render path
+// progress_summary_test.go — tests for the deterministic progress-event
+// template summaries and the CLI render path
 // (HandleProgressEvent). The template tests are pure exact-string
 // assertions; the handler tests capture the fmt.Print fallback of
 // console.PrintExternal (no reader active in a test process), so no
@@ -338,8 +338,8 @@ func captureStdout(t *testing.T, fn func()) string {
 	return buf.String()
 }
 
-// TestHandleProgressEvent_Render covers the CLI render path (item
-// 151.6): a milestone event prints its one-line summary through
+// TestHandleProgressEvent_Render covers the CLI render path:
+// a milestone event prints its one-line summary through
 // console.PrintExternal (captured via the fmt.Print fallback — no real
 // TTY required) and invalidates the collapse run + thinking state.
 func TestHandleProgressEvent_Render(t *testing.T) {

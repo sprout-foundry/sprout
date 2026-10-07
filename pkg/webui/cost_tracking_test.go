@@ -81,7 +81,7 @@ func TestRecordCost_MultipleRecords(t *testing.T) {
 	}
 }
 
-// TestRecordCostWithRole_AttributesRole pins (SP-150 §150c, item 150.5) that a
+// TestRecordCostWithRole_AttributesRole pins that a
 // per-role booking records a role-tagged record and that the per-role records
 // sum to the overall total.
 func TestRecordCostWithRole_AttributesRole(t *testing.T) {

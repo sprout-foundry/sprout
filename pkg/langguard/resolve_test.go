@@ -9,14 +9,14 @@ import (
 
 // A reliably-detectable Persian sentence. Persian has no ISO 639-1 code, so
 // the trigram pass reports its 639-3 code ("pes") — the fixture for the
-// "no 639-1 code round-trips" case (SP-152 152.3).
+// "no 639-1 code round-trips" case.
 const persianProse = "هر شخص حق آزادی و حقوق برابر دارد و کشور باید از آنها محافظت کند."
 
 // reliableSpanish and friends are the package-level fixtures from
 // detect_test.go (all detected reliably by DetectLanguage). They are used
 // here as "recent user messages".
 
-// TestResolveUserLanguageMajority covers the core resolution (§152a): a
+// TestResolveUserLanguageMajority covers the core resolution: a
 // clear majority over the reliable per-message detections resolves to that
 // language, and a clear majority beats a configured fallback.
 func TestResolveUserLanguageMajority(t *testing.T) {
@@ -67,7 +67,7 @@ func TestResolveUserLanguageMajority(t *testing.T) {
 }
 
 // TestResolveUserLanguageFallback covers the short / mixed / code-only input
-// falling back to the configured language (§152a).
+// falling back to the configured language.
 func TestResolveUserLanguageFallback(t *testing.T) {
 	configured := Language{Code: "es", Name: "Spanish"}
 
@@ -96,7 +96,7 @@ func TestResolveUserLanguageFallback(t *testing.T) {
 
 // TestResolveUserLanguageUndetermined covers the no-configured-value case:
 // with no reliable detection and nothing configured, the resolver returns
-// the zero Language (undetermined) and must not guess (§152a).
+// the zero Language (undetermined) and must not guess.
 func TestResolveUserLanguageUndetermined(t *testing.T) {
 	cases := map[string][]string{
 		"single very short message":     {"Hola"},
@@ -171,7 +171,7 @@ func TestParseLanguage(t *testing.T) {
 // TestParseLanguageMatchesDetector pins the MUST_FIX from review: the Code
 // ParseLanguage returns must be the same code form DetectLanguage reports
 // for the same language, so a configured value is comparable to a detection
-// result by code equality (152.5's CheckLanguage depends on this).
+// result by code equality (the final-message guard's CheckLanguage depends on this).
 func TestParseLanguageMatchesDetector(t *testing.T) {
 	// Spanish has both a 639-1 code ("es") and a 639-3 code ("spa"); the
 	// detector reports the 639-1 form.

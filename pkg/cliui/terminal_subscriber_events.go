@@ -306,14 +306,14 @@ func (s *TerminalSubscriberState) HandleAgentMessageEvent(data map[string]interf
 }
 
 // HandleProgressEvent renders the deterministic one-line summary of a
-// SP-151 progress event in the scroll region (SP-151 §151c, item
-// 151.6): milestone, verification, and completion events.
+// progress event in the scroll region: milestone, verification, and
+// completion events.
 //
 // progress_question events are deliberately NOT rendered: the CLI
 // already shows the interactive ask_user prompt for the same decision
 // (the ask_user_request / security-prompt path), so a second "Needs a
 // decision" line would be redundant. The question template still exists
-// for the web UI and webhooks (SP-151 §151c / §151d) — it just isn't
+// for the web UI and webhooks — it just isn't
 // printed in the terminal.
 func (s *TerminalSubscriberState) HandleProgressEvent(evtType string, data map[string]interface{}, indicator *console.ActivityIndicator, footer *console.StatusFooter) {
 	// The story invariant: a progress_question's "Needs a decision" line is

@@ -1,5 +1,5 @@
-// progress_question_events.go — SP-151 §151a item 151.4: emit
-// progress_question alongside ask_user_request whenever the agent asks the
+// progress_question_events.go — emit progress_question alongside
+// ask_user_request whenever the agent asks the
 // user a decision, carrying the plan context (the active scope item and plan
 // revision) so the question is correlated to the plan.
 //
@@ -14,7 +14,7 @@
 // double-emits for a single question.
 //
 // The payload is built as map[string]interface{} with the exact snake_case
-// wire names of events.ProgressQuestionData (item 151.1), not the Go struct,
+// wire names of events.ProgressQuestionData, not the Go struct,
 // so decorateEventPayload can merge the event metadata (chat_id). Zero/empty
 // optional keys are omitted (plan_revision when 0, scope_id when empty,
 // header when empty, options when empty, and each option's value/description
@@ -29,8 +29,8 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
-// publishProgressQuestion emits the SP-151 §151a item-151.4 progress_question
-// event for an ask_user decision, correlated to the active plan scope item
+// publishProgressQuestion emits the progress_question event for an ask_user
+// decision, correlated to the active plan scope item
 // and plan revision (planQuestionContext). It is called at the ask_user entry
 // points (the native handler and the AskUserService) before the ask channel is
 // engaged, so the progress_question precedes the ask_user_request for the same

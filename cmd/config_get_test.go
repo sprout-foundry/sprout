@@ -12,7 +12,7 @@ import (
 )
 
 // TestConfigGet_RoleSectionResolves verifies the `sprout config get
-// roles.<role>` read path (SP-150 item 150.6): getConfigField navigates the
+// roles.<role>` read path: getConfigField navigates the
 // serialized roles section to the stored RoleConfig.
 func TestConfigGet_RoleSectionResolves(t *testing.T) {
 	cfg := &configuration.Config{

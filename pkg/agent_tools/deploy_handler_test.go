@@ -62,7 +62,7 @@ func installDeploySeams(t *testing.T, target deploy.DeployTarget) {
 	})
 }
 
-// verificationManager returns a ConfigManager with SP-149 verification
+// verificationManager returns a ConfigManager with verification
 // enabled (or disabled) for the deploy verification gate.
 func verificationManager(enabled bool) *configuration.Manager {
 	cfg := configuration.NewConfig()

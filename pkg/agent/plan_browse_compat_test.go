@@ -11,8 +11,8 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/plancontract"
 )
 
-// TestPlanInteractionStepsParseBrowseCompatible pins the SP-148 §148d
-// wire-format contract between the structured plan and the browse tool: the
+// TestPlanInteractionStepsParseBrowseCompatible pins the wire-format
+// contract between the structured plan and the browse tool: the
 // browse steps carried by an interaction acceptance item
 // (plancontract.BrowseStep) must parse cleanly through this handler's
 // parseBrowseSteps, field for field.

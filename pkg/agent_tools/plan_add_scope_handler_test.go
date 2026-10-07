@@ -14,7 +14,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// plan_add_scope (SP-148 §148c) conformance tests.
+// plan_add_scope conformance tests.
 //
 // The handler is the agent-facing scope write-back path: when scope changes
 // during execution, the agent appends the new scope item (with its covering
@@ -24,7 +24,7 @@ import (
 // result — a call that only *claims* to write the plan fails here.
 // ---------------------------------------------------------------------------
 
-// pasFixturePlanJSON is a minimal valid SP-148 plan document: one scope item
+// pasFixturePlanJSON is a minimal valid plan document: one scope item
 // (s1) covered by one acceptance item (a1), revision 1 — the revision the
 // fixture carries before a write (the store bumps it on every write).
 const pasFixturePlanJSON = `{
@@ -184,7 +184,7 @@ func TestPlanAddScopeHandlerConformance_Validate(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// The §148c write-back: scope addition → revision bump + markdown view
+// The scope write-back: scope addition → revision bump + markdown view
 // ---------------------------------------------------------------------------
 
 // TestPlanAddScopeHandlerConformance_AddScopeBumpsRevisionAndMarkdown is the
@@ -228,7 +228,7 @@ func TestPlanAddScopeHandlerConformance_AddScopeBumpsRevisionAndMarkdown(t *test
 	if acceptance[0].ID != "a2" || acceptance[0].Kind != plancontract.KindPage || acceptance[0].Check != "/login renders" {
 		t.Errorf("stored a2 = %+v, want the scripted page check", acceptance[0])
 	}
-	// The acceptance item is wired to the new scope id (SP-148 §148c).
+	// The acceptance item is wired to the new scope id.
 	if acceptance[0].Scope != "s2" {
 		t.Errorf("stored a2.scope = %q, want %q (wired to the new scope item)", acceptance[0].Scope, "s2")
 	}
@@ -366,7 +366,7 @@ func TestPlanAddScopeHandlerConformance_UnknownKindRejected(t *testing.T) {
 }
 
 // TestPlanAddScopeHandlerConformance_InteractionWithoutStepsRejected pins the
-// §148d rule through the write-back: an interaction acceptance item without
+// browse-step rule through the write-back: an interaction acceptance item without
 // steps is rejected by the store, and nothing is written.
 func TestPlanAddScopeHandlerConformance_InteractionWithoutStepsRejected(t *testing.T) {
 	t.Parallel()
@@ -392,7 +392,7 @@ func TestPlanAddScopeHandlerConformance_InteractionWithoutStepsRejected(t *testi
 }
 
 // TestPlanAddScopeHandlerConformance_InteractionWithStepsSucceeds pins the
-// §148d happy path through the write-back: an interaction item with browse
+// browse-step happy path through the write-back: an interaction item with browse
 // steps is stored, and the markdown view renders the steps.
 func TestPlanAddScopeHandlerConformance_InteractionWithStepsSucceeds(t *testing.T) {
 	t.Parallel()

@@ -40,8 +40,8 @@ func withPlanFlags(t *testing.T, model, provider string) {
 	})
 }
 
-// TestPlanningAgentSpec_FlagsBeatPlannerRole verifies (SP-150 §150a, item
-// 150.4) that explicit -p/-m flags always win over the planner role, and
+// TestPlanningAgentSpec_FlagsBeatPlannerRole verifies
+// that explicit -p/-m flags always win over the planner role, and
 // that a bare -p keeps today's fall-through to the conversation model.
 func TestPlanningAgentSpec_FlagsBeatPlannerRole(t *testing.T) {
 	_, cleanup := configuration.NewTestManager(t)
@@ -147,7 +147,7 @@ func TestCreatePlanningAgent_PlannerRoleSet(t *testing.T) {
 	if prompt := a.GetSystemPrompt(); prompt == "" {
 		t.Error("expected non-empty planning system prompt")
 	}
-	// SP-150 §150c (item 150.5): the planning loop is the planner's, so the
+	// The planning loop is the planner's, so the
 	// plan agent is stamped the planner role (not the default coder).
 	if got := a.GetRole(); got != configuration.RolePlanner {
 		t.Errorf("plan agent role = %q, want %q (stamped by createPlanningAgent)", got, configuration.RolePlanner)

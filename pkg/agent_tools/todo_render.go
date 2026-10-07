@@ -67,7 +67,7 @@ func RenderTodosForCLI(w io.Writer, todos []TodoItem) {
 		if len(text) > 96 {
 			text = text[:96] + "..."
 		}
-		// Surface the plan scope link (SP-148 §148c) so CLI users can see
+		// Surface the plan scope link so CLI users can see
 		// which plan scope item a todo advances; empty scope renders nothing.
 		scopeTag := ""
 		if s := strings.TrimSpace(t.Scope); s != "" {

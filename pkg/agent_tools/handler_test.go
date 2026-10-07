@@ -833,8 +833,8 @@ func TestAllToolsRegistration(t *testing.T) {
 		"register_preview_port": "register_preview_port",
 		"design_validate":       "design_validate",
 		"design_assets":         "design_assets",
-		"write_plan":            "write_plan",     // SP-148 §148b structured plan write path
-		"plan_add_scope":        "plan_add_scope", // SP-148 §148c scope write-back
+		"write_plan":            "write_plan",     // structured plan write path
+		"plan_add_scope":        "plan_add_scope", // plan scope write-back
 		"design_render":         "design_render",
 		"design_import_sketch":  "design_import_sketch",
 		"design_critique":       "design_critique",

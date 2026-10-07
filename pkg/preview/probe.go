@@ -9,7 +9,7 @@ import (
 )
 
 // devURL is the embed URL the preview pane gets for a dev server on port:
-// a localhost origin, per SP-155 §155a ("embed localhost").
+// a localhost origin, so the preview pane can embed localhost.
 func devURL(port int) string {
 	return "http://localhost:" + strconv.Itoa(port)
 }

@@ -28,8 +28,8 @@ var allScripts = []Script{
 	ScriptHiragana, ScriptKatakana, ScriptHan,
 }
 
-// TestDominantScript is the table test over the Unicode script pass
-// (SP-152 §152d): the correct script for prose across a broad sample of
+// TestDominantScript is the table test over the Unicode script pass:
+// the correct script for prose across a broad sample of
 // languages and scripts, dominant-script reporting for mixed text, and
 // reliability ("not enough data") for short or split text.
 func TestDominantScript(t *testing.T) {
@@ -116,7 +116,7 @@ func TestDominantScript(t *testing.T) {
 		{
 			// 9 katakana, 9 hiragana and 2 Han: no reliable dominant
 			// script, so a real Japanese sentence is not judged by this
-			// pass (the same-script detector of 152.2 is what would see
+			// pass (the same-script detector is what would see
 			// it as Japanese).
 			name:  "mixed kana and kanji is not reliable",
 			prose: "パッケージはコンパイルの準備ができています",
@@ -158,7 +158,7 @@ func TestDominantScript(t *testing.T) {
 	}
 }
 
-// TestScriptString pins the diagnostic names (SP-152 152.9 logs them).
+// TestScriptString pins the diagnostic names, which get logged.
 func TestScriptString(t *testing.T) {
 	seen := map[string]Script{}
 	for _, s := range allScripts {

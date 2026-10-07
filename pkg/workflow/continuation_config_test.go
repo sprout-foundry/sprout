@@ -148,7 +148,7 @@ func TestAutomateWorkflowJSONParses(t *testing.T) {
 // runGit runs a git command in dir, failing the test on error.
 func runGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
-	cmd := exec.Command("git", args...)
+	cmd := exec.Command("git", args...) // #nosec G204 -- test helper: fixed git binary, arguments come from the test
 	cmd.Dir = dir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)

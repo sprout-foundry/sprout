@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -37,7 +38,9 @@ func writeContinuationTodo(t *testing.T, dir string, items []string) string {
 func newContinuationAgent(t *testing.T) *agent.Agent {
 	t.Helper()
 	client := agent.NewScriptedClient()
-	client.SetModel("test:test")
+	if err := client.SetModel("test:test"); err != nil {
+		t.Fatalf("SetModel: %v", err)
+	}
 	return newTestLoopAgent(t, client)
 }
 
@@ -80,7 +83,7 @@ func TestRunInitialContinuation_StopsAfterEachItem_CompletesThree(t *testing.T) 
 		if !ok {
 			return nil // nothing left to do — coordinator no-ops
 		}
-		if err := os.WriteFile(todoPath, []byte(updated), 0644); err != nil {
+		if err := os.WriteFile(todoPath, []byte(updated), 0644); err != nil { // #nosec G703 -- todoPath is the test's own TempDir TODO file
 			t.Fatalf("write TODO.md: %v", err)
 		}
 		return nil
@@ -263,7 +266,9 @@ func TestRunInitialContinuation_GitCommitCountsAsProgress(t *testing.T) {
 	// Point the agent's workspace root at the repo so the loop probes HEAD
 	// there.
 	client := agent.NewScriptedClient()
-	client.SetModel("test:test")
+	if err := client.SetModel("test:test"); err != nil {
+		t.Fatalf("SetModel: %v", err)
+	}
 	chatAgent := newTestLoopAgent(t, client)
 	chatAgent.SetWorkspaceRoot(dir)
 
@@ -272,7 +277,7 @@ func TestRunInitialContinuation_GitCommitCountsAsProgress(t *testing.T) {
 		turns++
 		// Make a commit each turn without ticking anything — progress is
 		// detected purely from the new HEAD.
-		f := filepath.Join(dir, "work"+string(rune('0'+turns))+".txt")
+		f := filepath.Join(dir, "work"+strconv.Itoa(turns)+".txt")
 		if err := os.WriteFile(f, []byte("work"), 0644); err != nil {
 			t.Fatalf("write work file: %v", err)
 		}

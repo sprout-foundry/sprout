@@ -119,9 +119,9 @@ func (t *persistentFakeTarget) persist() error {
 		return fmt.Errorf("create deploy state temp file: %w", err)
 	}
 	tmpName := tmp.Name()
-	defer os.Remove(tmpName)
+	defer func() { _ = os.Remove(tmpName) }()
 	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		return fmt.Errorf("write deploy state %s: %w", t.path, err)
 	}
 	if err := tmp.Close(); err != nil {

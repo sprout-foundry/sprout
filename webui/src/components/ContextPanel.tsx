@@ -12,11 +12,12 @@ import type {
 } from './contextPanel/types';
 import { PANEL_COLLAPSED_WIDTH } from './contextPanel/types';
 import { useContextPanelState } from './contextPanel/useContextPanelState';
-import { supportsAgentChanges } from '../config/mode';
+import { useHostCapabilities } from '../host';
 
 const TAB_IDS: readonly ChatTabId[] = ['changes'];
 
 const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, ref) => {
+  const { agentChanges: supportsAgentChanges } = useHostCapabilities();
   const isChat = props.context === 'chat';
   const chatProps = isChat ? (props as ChatContextPanelProps) : null;
   const isMobileLayout = props.isMobileLayout ?? false;

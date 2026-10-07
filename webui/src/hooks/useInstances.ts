@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supportsInstances } from '../config/mode';
+import { useHostCapabilities } from '../host';
 import type { ApiService, SproutInstance } from '../services/api';
 
 const INSTANCE_PID_STORAGE_KEY = 'sprout:webui:instancePid';
@@ -17,6 +17,7 @@ export interface UseInstancesReturn {
 }
 
 export const useInstances = ({ apiService, isConnected }: UseInstancesParams): UseInstancesReturn => {
+  const { instances: supportsInstances } = useHostCapabilities();
   const [instances, setInstances] = useState<SproutInstance[]>([]);
   const [selectedInstancePID, setSelectedInstancePID] = useState<number>(0);
   const [isSwitchingInstance, setIsSwitchingInstance] = useState(false);

@@ -75,7 +75,6 @@ vi.mock('../contexts/NotificationContext', () => ({
 
 vi.mock('../config/mode', () => ({
   __esModule: true,
-  isCloud: false,
   supportsSettings: true,
   supportsLocalTerminal: false,
   supportsGit: true,
@@ -160,6 +159,7 @@ vi.mock('../utils/log', () => ({
 // ---------------------------------------------------------------------------
 
 import DesignRail from './design/DesignRail';
+import { HostProvider, headlessHost } from '../host';
 import Sidebar from './Sidebar';
 
 // These cover the classic layout, still available as ?layout=classic.
@@ -215,7 +215,11 @@ const designRailProps = { modeRail: DesignRail };
 /** Render Sidebar with the given extra props and return the container. */
 function renderSidebar(extraProps = {}) {
   act(() => {
-    root.render(createElement(Sidebar, { ...minimalProps, ...extraProps }));
+    // Sidebar reads its capabilities from the host contract, so mount it
+    // inside a provider (the app always supplies one at the root).
+    root.render(
+      createElement(HostProvider, { host: headlessHost() }, createElement(Sidebar, { ...minimalProps, ...extraProps })),
+    );
   });
   return container;
 }

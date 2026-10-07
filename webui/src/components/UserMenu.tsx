@@ -2,15 +2,14 @@
  * UserMenu — avatar menu in the cloud-mode header (SP-016 P0.5).
  *
  * First consumer of getBootstrapUser(): the account-surface identity
- * (avatar initial + email) and the exit items (Dashboard / Tasks /
- * Billing / Manage Team) plus Sign out. Cloud mode only — local mode
- * renders nothing (it shows no identity surface today, and we match
- * that).
+ * (avatar initial + email) and the exit items plus Sign out. The exit items
+ * come from the host (`host.navigation.accountItems`, plus the host's admin
+ * item for administrators) rather than a hard-coded list: the host owns the
+ * labels and each item's destination, and Sprout renders + dispatches.
  *
- * Exit URLs are built with platformHref (SP-016 P0.3): absolute
- * (platformURL + path) when the host knows the platform base, the
- * relative path otherwise (today's behavior). Every exit is tagged
- * ?from=editor (SP-016 P0.7) so the platform can count editor exits.
+ * Exit URLs are resolved by the host (`host.navigation.intentPath`); the paths
+ * live only on the host side. Every exit is tagged ?from=editor (SP-016 P0.7)
+ * by the host, so the platform can count editor exits.
  *
  * Sign out reuses the platform's existing server-side logout path
  * (POST /webui/auth/logout — the Kratos two-step browser logout the
@@ -22,29 +21,13 @@
 
 import type { CSSProperties } from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { isCloud } from '../config/mode';
-import { getBootstrapUser, getPlatformURL } from '../bootstrapAdapter';
-import { ADAPTER_INSTALLED_EVENT } from '../services/apiAdapter';
-import { notificationBus } from '../services/notificationBus';
+import { getBootstrapUser } from '../bootstrapAdapter';
 import { isLayeredLayout } from '../config/layout';
+import type { HostNavItem, HostNavigationIntent } from '../host/types';
+import { useHost } from '../host/useHost';
+import { ADAPTER_INSTALLED_EVENT } from '../services/apiAdapter';
 import { openHome } from '../services/homeView';
-import { platformHref } from '../utils/platformUrl';
-
-/** Account-surface exit items, the same account area the platform header's
- *  menu offers. Paths carry ?from=editor (SP-016 P0.7) and put the SPA route
- *  in the hash: Team/Runners are also flat API routes on the platform
- *  (GET /team, GET /runners), so a plain /team would return the API's JSON,
- *  not the page. */
-const MENU_ITEMS: readonly { label: string; path: string }[] = [
-  { label: 'Dashboard', path: '/?from=editor' },
-  { label: 'Tasks', path: '/?from=editor#/tasks' },
-  { label: 'Usage & billing', path: '/?from=editor#/account/billing' },
-  { label: 'Team', path: '/?from=editor#/team' },
-  { label: 'Runners', path: '/?from=editor#/runners' },
-  { label: 'Settings', path: '/?from=editor#/settings' },
-];
-
-const ADMIN_ITEM = { label: 'Admin', path: '/?from=editor#/admin' };
+import { notificationBus } from '../services/notificationBus';
 
 type BootstrapUser = NonNullable<ReturnType<typeof getBootstrapUser>>;
 
@@ -54,6 +37,8 @@ interface UserMenuProps {
 }
 
 export function UserMenu({ label }: UserMenuProps = {}): JSX.Element | null {
+  const host = useHost();
+  const { navigation } = host;
   // Identity is captured once at bootstrap (adapter install); re-read it
   // on the install event so a late bootstrap still populates the menu —
   // the same seam PlatformNavContext uses.
@@ -68,8 +53,16 @@ export function UserMenu({ label }: UserMenuProps = {}): JSX.Element | null {
     return () => window.removeEventListener(ADAPTER_INSTALLED_EVENT, handler);
   }, []);
 
-  // Cloud mode only, and only when the bootstrap carried a user identity.
-  if (!isCloud || !user) {
+  const accountItems = navigation.accountItems ?? [];
+  const hasAdmin = accountItems.some((i) => i.label === 'Admin');
+  const items: HostNavItem[] =
+    user?.admin && !hasAdmin
+      ? [...accountItems, { label: 'Admin', intent: { type: 'nav', id: 'admin' } }]
+      : accountItems;
+
+  // Cloud mode only, and only when the bootstrap carried a user identity and
+  // the host offers an account surface.
+  if (!user || items.length === 0) {
     return null;
   }
 
@@ -83,23 +76,18 @@ export function UserMenu({ label }: UserMenuProps = {}): JSX.Element | null {
   const handleSignOut = async () => {
     setSigningOut(true);
     setOpen(false);
+    // The host performs the sign-out (logout + redirect); Sprout only requests
+    // the intent. A network failure propagates to the caller: the session
+    // cookie is intact, so staying here is the honest outcome. Surface it
+    // rather than stranding the user in a logged-in state pretending to be
+    // signed out.
     try {
-      await fetch(platformHref('/webui/auth/logout'), {
-        method: 'POST',
-        credentials: 'include',
-      });
+      await navigation.open({ type: 'signOut' } satisfies HostNavigationIntent);
     } catch (e) {
-      // Network failure only — the session cookie is intact, so staying
-      // here is the honest outcome. Surface it rather than stranding the
-      // user in a logged-in state pretending to be signed out.
       setSigningOut(false);
       setOpen(true);
       notificationBus.notify('error', 'Sign out failed', e instanceof Error ? e.message : String(e));
-      return;
     }
-    // The server cleared the session cookie. A hard navigation drops any
-    // cached client-side session state and lands on the login screen.
-    window.location.href = platformHref('/login');
   };
 
   // The header bar clips overflow, so the list is fixed-positioned under the
@@ -161,25 +149,32 @@ export function UserMenu({ label }: UserMenuProps = {}): JSX.Element | null {
               </span>
               {user.tier ? <span className="user-menu-tier">{user.tier}</span> : null}
             </div>
-            {(user.admin ? [...MENU_ITEMS, ADMIN_ITEM] : MENU_ITEMS).map((item) => (
-              <a
-                key={item.label}
-                role="menuitem"
-                className="user-menu-item"
-                href={platformHref(item.path)}
-                onClick={(e) => {
-                  setOpen(false);
-                  // Layered layout: platform pages open inside the shell
-                  // (Home) instead of leaving the editor.
-                  if (isLayeredLayout && isCloud && !e.metaKey && !e.ctrlKey) {
-                    e.preventDefault();
-                    openHome(item.path);
-                  }
-                }}
-              >
-                {item.label}
-              </a>
-            ))}
+            {items.map((item) => {
+              const path = navigation.intentPath?.(item.intent) ?? undefined;
+              // The host resolves the path to a full page URL (its outward
+              // surface); Sprout only renders the href the host supplies.
+              const href = path ? (navigation.platformPagePath?.(path) ?? path) : undefined;
+              return (
+                <a
+                  key={item.label}
+                  role="menuitem"
+                  className="user-menu-item"
+                  href={href}
+                  onClick={(e) => {
+                    setOpen(false);
+                    // Layered layout: platform pages open inside the shell
+                    // (Home) instead of leaving the editor. The host owns the
+                    // path; Sprout decides only where to show it.
+                    if (isLayeredLayout && path && !e.metaKey && !e.ctrlKey) {
+                      e.preventDefault();
+                      openHome(path);
+                    }
+                  }}
+                >
+                  {item.label}
+                </a>
+              );
+            })}
             <button
               type="button"
               role="menuitem"

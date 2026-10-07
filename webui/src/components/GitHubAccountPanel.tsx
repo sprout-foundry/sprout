@@ -16,8 +16,7 @@ import { LogOut, Loader2, ExternalLink, X } from 'lucide-react';
 import { useRef, useState } from 'react';
 import type { FormEvent, ReactElement } from 'react';
 import './GitHubAccountPanel.css';
-import { usesPlatformGitHub } from '../services/platformGitHub';
-import PlatformGitHubAccountCard from './PlatformGitHubAccountCard';
+import { useHost } from '../host/useHost';
 import { GITHUB_TOKENS_URL, clearGitHubAccount, storeToken, storeUser, validateToken } from '../services/githubService';
 import type { GitHubUser } from '../services/githubService';
 import {
@@ -299,6 +298,11 @@ function TokenGitHubAccountPanel({
 }
 
 export default function GitHubAccountPanel(props: GitHubAccountPanelProps): ReactElement {
-  if (usesPlatformGitHub()) return <PlatformGitHubAccountCard compact={props.compact} />;
+  const host = useHost();
+  // The host's GitHub account surface, when the host manages GitHub on its own
+  // account rather than through a saved token. The host decides the connection
+  // state and the manage link; Sprout only renders the node it supplies.
+  const githubAccount = host.chrome?.githubAccount;
+  if (githubAccount) return <>{githubAccount}</>;
   return <TokenGitHubAccountPanel {...props} />;
 }

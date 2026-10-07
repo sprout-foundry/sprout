@@ -41,7 +41,7 @@ beforeAll(async () => {
 
 // ── resolveViteBuildArgs ─────────────────────────────────────────────────
 // The cloud branch must pass `--mode cloud` through to Vite so vite.config's
-// `isCloud` branch applies. The `--` separator is required for npm to forward
+// cloud build branch applies. The `--` separator is required for npm to forward
 // the flag (without it npm consumes `--mode` and passes a bare positional
 // `cloud`). Local builds keep the plain production build.
 describe('resolveViteBuildArgs', () => {

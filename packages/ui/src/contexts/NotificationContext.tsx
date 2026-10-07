@@ -95,15 +95,36 @@ export const useNotifications = () => {
   return context;
 };
 
+/**
+ * The delivery seam a host supplies. When present, `addNotification` routes
+ * the notification here instead of dispatching into the local reducer: the
+ * host owns delivery, and a host whose sink eventually echoes back through
+ * `notificationBus` still lands exactly one entry in the provider's state via
+ * the bus subscription below — the local (sink-less) and host paths each add
+ * a notification once, never twice.
+ */
+export type NotificationSink = (notification: {
+  level: NotificationType;
+  title: string;
+  message: string;
+  duration?: number;
+  action?: NotificationAction;
+}) => void;
+
 interface NotificationProviderProps {
   children: ReactNode;
+  /**
+   * Optional host sink. Omitted, the provider is the delivery path (it
+   * dispatches into its own reducer) — today's host-agnostic behavior.
+   */
+  sink?: NotificationSink;
 }
 
 const initialState: NotificationState = {
   notifications: [],
 };
 
-export function NotificationProvider({ children }: NotificationProviderProps): JSX.Element {
+export function NotificationProvider({ children, sink }: NotificationProviderProps): JSX.Element {
   const [state, dispatch] = useReducer(notificationReducer, initialState);
 
   const addNotification = useCallback(
@@ -117,13 +138,21 @@ export function NotificationProvider({ children }: NotificationProviderProps): J
       const id = generateUUID();
       // Clamp duration between 0 and 60000ms (60 seconds)
       const clampedDuration = duration !== undefined ? Math.max(0, Math.min(duration, 60000)) : undefined;
-      dispatch({
-        type: 'ADD_NOTIFICATION',
-        payload: { type, title, message, duration: clampedDuration, id, action },
-      });
+      if (sink) {
+        // The host sink is the delivery path. The local host forwards to the
+        // in-app bus (whose subscription adds one entry); a host with its own
+        // sink owns display. Either way nothing is dispatched here, so a
+        // host that echoes back cannot produce a second entry.
+        sink({ level: type, title, message, duration: clampedDuration, action });
+      } else {
+        dispatch({
+          type: 'ADD_NOTIFICATION',
+          payload: { type, title, message, duration: clampedDuration, id, action },
+        });
+      }
       return id;
     },
-    [],
+    [sink],
   );
 
   const removeNotification = useCallback((id: string) => {

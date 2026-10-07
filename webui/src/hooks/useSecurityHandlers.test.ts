@@ -1,36 +1,36 @@
 // @vitest-environment jsdom
 
 /**
- * useSecurityHandlers.test.ts — covers handleAskUserResponse in cloud vs local mode.
+ * useSecurityHandlers.test.ts — covers handleAskUserResponse for a hosted vs
+ * local shell.
  *
- * Cloud mode: the agent loop runs in the WASM binary, so the response must be
- * POSTed to the wasm-local /api/ask-user/response endpoint via clientFetch —
- * NOT sent as a WebSocket event (no backend is listening for it in cloud mode).
+ * Hosted (no local terminal): the agent loop runs in the WASM binary, so the
+ * response must be POSTed to the wasm-local /api/ask-user/response endpoint
+ * via clientFetch — NOT sent as a WebSocket event (no backend is listening
+ * for it on a hosted shell).
  *
- * Local mode: the response is delivered as an 'ask_user_response' WebSocket
- * event via eventsProvider.sendEvent — clientFetch must not be touched.
+ * Local terminal: the response is delivered as an 'ask_user_response'
+ * WebSocket event via eventsProvider.sendEvent — clientFetch must not be
+ * touched.
  *
  * Both paths must clear the askUserRequest dialog state via setState.
+ *
+ * The hook reads its capability through the host, so the suite supplies it via
+ * a HostProvider wrapper (localTerminal: false = hosted, true = local).
  */
 
 import { act, renderHook } from '@testing-library/react';
+import { createElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { HostProvider } from '../host/HostProvider';
+import { makeTestHost } from '../host/testHost';
 
 // ── Hoisted mocks ─────────────────────────────────────────────────────────
-// vi.mock factories run before module code, so the mutable isCloud flag and
-// the clientFetch spy must live in a vi.hoisted block.
+// vi.mock factories run before module code, so the clientFetch spy must live
+// in a vi.hoisted block.
 
 const mocks = vi.hoisted(() => ({
-  isCloud: false,
   clientFetch: vi.fn(),
-}));
-
-vi.mock('../config/mode', () => ({
-  // Getter (not a plain value) so each test can flip the mode flag and the
-  // hook reads the current value at handler-call time.
-  get isCloud() {
-    return mocks.isCloud;
-  },
 }));
 
 vi.mock('../services/clientSession', () => ({
@@ -48,23 +48,28 @@ function makeEventsProvider() {
   };
 }
 
-function renderSecurityHandlers() {
+// localTerminal: false = the hosted (WASM) shell (POST path); true = a local
+// terminal (WebSocket path).
+function renderSecurityHandlers(localTerminal: boolean) {
   const eventsProvider = makeEventsProvider();
   const setState = vi.fn();
 
-  const { result } = renderHook(() =>
-    useSecurityHandlers({
-      eventsProvider,
-      provider: 'anthropic',
-      setState,
-    }),
+  const { result } = renderHook(
+    () =>
+      useSecurityHandlers({
+        eventsProvider,
+        provider: 'anthropic',
+        setState,
+      }),
+    {
+      wrapper: ({ children }) => createElement(HostProvider, { host: makeTestHost({ localTerminal }) }, children),
+    },
   );
 
   return { result, eventsProvider, setState };
 }
 
 beforeEach(() => {
-  mocks.isCloud = false;
   mocks.clientFetch.mockReset();
   mocks.clientFetch.mockResolvedValue(undefined);
 });
@@ -90,14 +95,10 @@ function jsonResponse(status: number, body: unknown): Response {
   });
 }
 
-describe('handleAskUserResponse (cloud mode)', () => {
-  beforeEach(() => {
-    mocks.isCloud = true;
-  });
-
+describe('handleAskUserResponse (hosted shell — no local terminal)', () => {
   it('POSTs the response to the wasm-local endpoint via clientFetch', async () => {
     mocks.clientFetch.mockResolvedValue(jsonResponse(200, { delivered: true }));
-    const { result } = renderSecurityHandlers();
+    const { result } = renderSecurityHandlers(false);
 
     act(() => {
       result.current.handleAskUserResponse('req-123', 'yes please');
@@ -117,7 +118,7 @@ describe('handleAskUserResponse (cloud mode)', () => {
 
   it('clears the askUserRequest state when delivered:true', async () => {
     mocks.clientFetch.mockResolvedValue(jsonResponse(200, { delivered: true }));
-    const { result, setState } = renderSecurityHandlers();
+    const { result, setState } = renderSecurityHandlers(false);
 
     act(() => {
       result.current.handleAskUserResponse('req-123', 'yes please');
@@ -135,7 +136,7 @@ describe('handleAskUserResponse (cloud mode)', () => {
 
   it('does NOT clear state when the endpoint returns 404 (delivered:false)', async () => {
     mocks.clientFetch.mockResolvedValue(jsonResponse(404, { error: 'not found' }));
-    const { result, setState } = renderSecurityHandlers();
+    const { result, setState } = renderSecurityHandlers(false);
 
     act(() => {
       result.current.handleAskUserResponse('req-123', 'yes please');
@@ -155,7 +156,7 @@ describe('handleAskUserResponse (cloud mode)', () => {
 
   it('does NOT clear state on a network error', async () => {
     mocks.clientFetch.mockRejectedValue(new Error('network down'));
-    const { result, setState } = renderSecurityHandlers();
+    const { result, setState } = renderSecurityHandlers(false);
 
     act(() => {
       result.current.handleAskUserResponse('req-123', 'yes please');
@@ -174,7 +175,7 @@ describe('handleAskUserResponse (cloud mode)', () => {
 
   it('does NOT send a WebSocket event', async () => {
     mocks.clientFetch.mockResolvedValue(jsonResponse(200, { delivered: true }));
-    const { result, eventsProvider } = renderSecurityHandlers();
+    const { result, eventsProvider } = renderSecurityHandlers(false);
 
     act(() => {
       result.current.handleAskUserResponse('req-123', 'yes please');
@@ -187,9 +188,9 @@ describe('handleAskUserResponse (cloud mode)', () => {
   });
 });
 
-describe('handleAskUserResponse (local mode)', () => {
+describe('handleAskUserResponse (local terminal)', () => {
   it('sends the ask_user_response WebSocket event with the correct payload', () => {
-    const { result, eventsProvider } = renderSecurityHandlers();
+    const { result, eventsProvider } = renderSecurityHandlers(true);
 
     act(() => {
       result.current.handleAskUserResponse('req-456', 'no thanks');
@@ -203,7 +204,7 @@ describe('handleAskUserResponse (local mode)', () => {
   });
 
   it('clears the askUserRequest state', () => {
-    const { result, setState } = renderSecurityHandlers();
+    const { result, setState } = renderSecurityHandlers(true);
 
     act(() => {
       result.current.handleAskUserResponse('req-456', 'no thanks');
@@ -217,7 +218,7 @@ describe('handleAskUserResponse (local mode)', () => {
   });
 
   it('does NOT call clientFetch', () => {
-    const { result } = renderSecurityHandlers();
+    const { result } = renderSecurityHandlers(true);
 
     act(() => {
       result.current.handleAskUserResponse('req-456', 'no thanks');

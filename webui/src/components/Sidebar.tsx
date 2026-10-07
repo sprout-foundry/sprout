@@ -1,9 +1,9 @@
 import React, { type ComponentType, useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import './Sidebar.css';
-import { supportsAutomations, supportsSettings, supportsGit, supportsWorkspaceSwitching } from '../config/mode';
+import { useHostCapabilities } from '../host';
 import { copy, type CopyKey } from '../config/copy';
 import { useActiveRepoURL } from '../services/activeRepo';
-import { repoSlug } from '../utils/platformUrl';
+import { repoSlug } from '../host/repoName';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { usePlugins } from '../contexts/PluginContext';
@@ -221,6 +221,12 @@ function Sidebar({
   onRequestProviderSetup,
   onViewChange,
 }: SidebarProps): JSX.Element {
+  const {
+    automations: supportsAutomations,
+    settings: supportsSettings,
+    git: supportsGit,
+    workspaceSwitching: supportsWorkspaceSwitching,
+  } = useHostCapabilities();
   const staticWorkspaceLabel = repoSlug(useActiveRepoURL()) ?? copy('workspace.none');
   const { themePack, availableThemePacks, setThemePack, importTheme, removeTheme } = useTheme();
   // UI Size: hook mount applies data-ui-scale to <html> on boot

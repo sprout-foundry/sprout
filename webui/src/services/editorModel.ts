@@ -5,7 +5,19 @@
  * platform routes the agent's requests by it.
  */
 
-import { platformHref } from '../utils/platformUrl';
+import { outwardURL } from '../host/outwardURL';
+
+/**
+ * Resolve a platform **account API** path (e.g. '/user/me/editor-model')
+ * against the host's outward platform origin. The host declares that base on
+ * its transport; when it supplies none the path stays relative (same-origin),
+ * today's behavior. This is the transport-level resolver, not a page route —
+ * the API base is the same origin as the platform's pages but is not one of
+ * them.
+ */
+function platformApi(path: string): string {
+  return outwardURL(path);
+}
 
 export interface EditorModelState {
   /** Empty for the managed model. */
@@ -37,13 +49,13 @@ async function readError(res: Response): Promise<string> {
 }
 
 export async function getEditorModel(): Promise<EditorModelState> {
-  const res = await fetch(platformHref('/user/me/editor-model'), { credentials: 'include' });
+  const res = await fetch(platformApi('/user/me/editor-model'), { credentials: 'include' });
   if (!res.ok) throw new Error(await readError(res));
   return (await res.json()) as EditorModelState;
 }
 
 export async function setEditorModel(choice: { provider: string; model: string }): Promise<void> {
-  const res = await fetch(platformHref('/user/me/editor-model'), {
+  const res = await fetch(platformApi('/user/me/editor-model'), {
     method: 'PUT',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
@@ -53,7 +65,7 @@ export async function setEditorModel(choice: { provider: string; model: string }
 }
 
 export async function listProviderModels(provider: string): Promise<ProviderModel[]> {
-  const res = await fetch(platformHref(`/user/me/editor-model/models?provider=${encodeURIComponent(provider)}`), {
+  const res = await fetch(platformApi(`/user/me/editor-model/models?provider=${encodeURIComponent(provider)}`), {
     credentials: 'include',
   });
   if (!res.ok) throw new Error(await readError(res));

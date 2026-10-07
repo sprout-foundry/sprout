@@ -4,23 +4,20 @@
  * regression that the informational build-command hint still fires and that
  * non-127 commands never produce a trigger.
  *
- * The hook only arms its listeners in cloud mode, so ../config/mode is mocked
- * to isCloud=true.
+ * The hook only arms its listeners when the host has no local terminal, so
+ * the probe mounts under a hosted-shell host (localTerminal: false).
  */
 
 import { act, render } from '@testing-library/react';
 import { createElement } from 'react';
+import { HostProvider } from '../host/HostProvider';
+import { makeTestHost } from '../host/testHost';
 import {
   ESCALATION_TRIGGER_EVENT,
   hashCommand,
   useEscalationTriggers,
   type EscalationTriggerEvent,
 } from './useEscalationTriggers';
-
-vi.mock('../config/mode', () => ({
-  isCloud: true,
-  mode: 'cloud',
-}));
 
 interface Captured {
   blocking: EscalationTriggerEvent[];
@@ -34,25 +31,24 @@ function mountHook(repoURL?: string): { captured: Captured; rerender: (repoURL?:
   const onBlockingTrigger = (event: EscalationTriggerEvent) => captured.blocking.push(event);
   const onInfoTrigger = (event: EscalationTriggerEvent) => captured.info.push(event);
 
-  const view = render(
-    createElement(() => {
-      useEscalationTriggers({ onBlockingTrigger, onInfoTrigger, repoURL });
+  // The hook arms its listeners only when the host has no local terminal, so
+  // the probe mounts under a hosted-shell host (stable across re-renders).
+  const probe = (next: string | undefined) => {
+    const inner = createElement(() => {
+      useEscalationTriggers({ onBlockingTrigger, onInfoTrigger, repoURL: next });
       return null;
-    }),
-  );
+    });
+    return createElement(HostProvider, { host: makeTestHost({ localTerminal: false }) }, inner);
+  };
+
+  const view = render(probe(repoURL));
 
   const listener = (e: Event) => captured.dom.push((e as CustomEvent<EscalationTriggerEvent>).detail);
   window.addEventListener(ESCALATION_TRIGGER_EVENT, listener);
 
   return {
     captured,
-    rerender: (next?: string) =>
-      view.rerender(
-        createElement(() => {
-          useEscalationTriggers({ onBlockingTrigger, onInfoTrigger, repoURL: next });
-          return null;
-        }),
-      ),
+    rerender: (next?: string) => view.rerender(probe(next)),
   };
 }
 

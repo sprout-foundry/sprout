@@ -5,11 +5,20 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 const openHome = vi.fn();
 vi.mock('../../services/homeView', () => ({ openHome: (p: string) => openHome(p) }));
 
+import { HostProvider } from '../../host/HostProvider';
+import { CreateRepoError } from '../../host/platformGitHub';
+import type { SproutHost } from '../../host/types';
 import NewProjectDialog, { toRepoName } from './NewProjectDialog';
 
 let container: HTMLDivElement;
 let root: Root;
-const fetchMock = vi.fn();
+
+/** The GitHub surface the host supplies (account-managed GitHub). */
+const github = {
+  connected: true,
+  createRepo: vi.fn(),
+};
+let host: SproutHost;
 
 beforeAll(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -19,23 +28,50 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  fetchMock.mockReset();
   openHome.mockReset();
-  vi.stubGlobal('fetch', fetchMock);
+  github.connected = true;
+  github.createRepo.mockReset();
+  host = {
+    transport: { apiBaseURL: '', wsURL: '', authMode: 'bearer' },
+    navigation: { open: () => undefined },
+    notifications: { post: () => undefined },
+    capabilities: {
+      ssh: false,
+      git: true,
+      chat: true,
+      workspaceSwitching: false,
+      folderPicker: false,
+      export: false,
+      instances: true,
+      localTerminal: false,
+      settings: true,
+      automations: false,
+      agentChanges: false,
+      mcp: false,
+      localModels: false,
+      verification: false,
+      serverGit: false,
+    },
+    github: {
+      isConnected: () => Promise.resolve(github.connected),
+      listRepos: () => Promise.resolve([]),
+      createRepo: (opts) => github.createRepo(opts),
+    },
+  };
 });
 
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
-  vi.unstubAllGlobals();
 });
-
-const json = (status: number, body: unknown) =>
-  Promise.resolve(new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } }));
 
 async function render(onCreated = vi.fn(), onClose = vi.fn()) {
   await act(async () => {
-    root.render(<NewProjectDialog onCreated={onCreated} onClose={onClose} />);
+    root.render(
+      <HostProvider host={host}>
+        <NewProjectDialog onCreated={onCreated} onClose={onClose} />
+      </HostProvider>,
+    );
   });
   return { onCreated, onClose };
 }
@@ -64,27 +100,17 @@ describe('toRepoName', () => {
 
 describe('NewProjectDialog', () => {
   it('creates a private repository and hands back its URL', async () => {
-    fetchMock.mockImplementation((url: string, init?: RequestInit) =>
-      init?.method === 'POST'
-        ? json(201, { html_url: 'https://github.com/ada/new-app' })
-        : json(200, { github_connected: true }),
-    );
+    github.createRepo.mockResolvedValue('https://github.com/ada/new-app');
     const { onCreated } = await render();
     typeName('new app');
     await submit();
 
-    const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')!;
-    expect(String(post[0])).toContain('/user/me/repos');
-    expect(JSON.parse(post[1].body)).toEqual({ name: 'new-app', private: true });
+    expect(github.createRepo).toHaveBeenCalledWith({ name: 'new-app', private: true });
     expect(onCreated).toHaveBeenCalledWith('https://github.com/ada/new-app');
   });
 
   it('shows why a name was refused', async () => {
-    fetchMock.mockImplementation((_url: string, init?: RequestInit) =>
-      init?.method === 'POST'
-        ? json(409, { error: 'name already exists on this account', code: 'name_unavailable' })
-        : json(200, { github_connected: true }),
-    );
+    github.createRepo.mockRejectedValue(new CreateRepoError('name already exists on this account', 'name_unavailable'));
     const { onCreated } = await render();
     typeName('taken');
     await submit();
@@ -94,7 +120,7 @@ describe('NewProjectDialog', () => {
   });
 
   it('offers to connect GitHub when the account has none', async () => {
-    fetchMock.mockImplementation(() => json(200, { github_connected: false }));
+    github.connected = false;
     const { onClose } = await render();
 
     const connect = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Connect GitHub')!;

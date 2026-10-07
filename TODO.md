@@ -161,7 +161,7 @@ standalone local build keeps embedding into `pkg/webui/static`.
       `@sprout/ui`'s reducer. Route `addNotification` through the active
       host's sink (`localHost`/`cloudHost` keep today's in-app behavior).
       Test with a host whose sink records calls. Spec: SP-160 §160b.
-- [ ] **host.14** Guard the build mode fully: `host/hostBoundary.test.ts`
+- [x] **host.14** Guard the build mode fully: `host/hostBoundary.test.ts`
       matches only the literal `import.meta.env.VITE_SPROUT_MODE`; also
       flag `import.meta.env.MODE`, bracket access and aliasing of
       `import.meta.env` outside the allowlist. Check whether the studio

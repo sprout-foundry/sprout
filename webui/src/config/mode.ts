@@ -18,7 +18,7 @@
  * (ADAPTER_INSTALLED_EVENT) still fires but is a no-op while a host is active.
  */
 
-import { getActiveHost, HOST_UPDATED_EVENT } from '../host/accessor';
+import { getActiveHost, HOST_UPDATED_EVENT, registerActiveHostCapabilitiesHook } from '../host/accessor';
 import { getAdapter, ADAPTER_INSTALLED_EVENT, type APIAdapter } from '../services/apiAdapter';
 
 /**
@@ -249,6 +249,18 @@ if (typeof window !== 'undefined') {
     }
   });
 }
+
+// A host shell's declared capabilities (applied to the active host by the
+// entry once the adapter installs) are re-read from the host the same way a
+// host-change is: no window event needed, so the refresh is deterministically
+// scoped to this module instance (matching the host-change-hook pattern).
+registerActiveHostCapabilitiesHook(() => {
+  try {
+    refreshFromHost();
+  } catch {
+    // keep current values
+  }
+});
 
 // Seed: the entry may record the active host before this module's listeners are
 // attached (or a test may set the host before importing this module). Applying

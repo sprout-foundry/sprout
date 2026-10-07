@@ -16,11 +16,26 @@ Two parts are exported:
 
 ## Status
 
-Scaffold. The package builds today (ESM, code-split, type declarations) and
-re-exports the two public entry points of the web UI
+Scaffold. The package builds today (ESM, code-split, type declarations, the
+scoped stylesheet) and re-exports the two public entry points of the web UI
 (`webui/src/views/index.ts` and `webui/src/host/index.ts`). The
-`SproutWorkspace` component, `SproutProviders` and the stylesheet land in the
-following steps of the composition work.
+`SproutWorkspace` component and `SproutProviders` land in the following steps
+of the composition work.
+
+## Styles
+
+The workspace's styles ship as one stylesheet:
+
+```tsx
+import "@sprout-foundry/workspace/styles.css";
+```
+
+It is emitted at `dist/workspace.css` and scoped to the `.sprout-workspace`
+class the workspace root renders, so it cannot style the host page outside
+the mounted workspace (no top-level `:root`/`html`/`body`/`*` selector). It
+styles surfaces through `var(--token)` design tokens; the host imports
+`@sprout-foundry/design` for the token values, or supplies them on the
+workspace root through the host theme.
 
 ## Build
 
@@ -28,9 +43,10 @@ following steps of the composition work.
 npm run build -w @sprout-foundry/workspace
 ```
 
-The build emits `dist/index.js` plus its lazily loaded chunks and
-`dist/index.d.ts`. The `files` and `exports` fields in `package.json` are the
-publish allowlist: `dist/` (entry, chunks, declarations) and this README.
+The build emits `dist/index.js` plus its lazily loaded chunks,
+`dist/workspace.css` and `dist/index.d.ts`. The `files` and `exports` fields
+in `package.json` are the publish allowlist: `dist/` (entry, chunks,
+stylesheet, declarations) and this README.
 
 ## Installation
 

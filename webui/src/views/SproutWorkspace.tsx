@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import type { ComponentType, ReactNode } from 'react';
+import { useTheme } from '../contexts/ThemeContext';
 import { HostProvider } from '../host';
 import type { SproutHost } from '../host';
 import { SproutProviders } from '../providers';
@@ -219,12 +220,48 @@ export function SproutWorkspace({
   return (
     <HostProvider host={host}>
       <SproutProviders>
-        <div className={rootClass} data-testid="sprout-workspace" data-project={project.id} data-space={resolved.id}>
+        <WorkspaceRoot rootClass={rootClass} projectId={project.id} spaceId={resolved.id}>
           {content}
           {children}
-        </div>
+        </WorkspaceRoot>
       </SproutProviders>
     </HostProvider>
+  );
+}
+
+/**
+ * The workspace root element.
+ *
+ * Its class (`sprout-workspace`) is the scope the package's stylesheet targets,
+ * so the stylesheet cannot leak onto the host page. The root also carries the
+ * resolved `data-theme`, because the stylesheet's light-theme guards were
+ * re-scoped from `:root[data-theme=…]` to `.sprout-workspace[data-theme=…]`:
+ * without the attribute on the root those guards would never match, so the
+ * attribute makes the scoped theme rules live. Read from `useTheme()`, which
+ * `SproutProviders` (rendered just above) provides.
+ */
+function WorkspaceRoot({
+  rootClass,
+  projectId,
+  spaceId,
+  children,
+}: {
+  rootClass: string;
+  projectId: string;
+  spaceId: WorkspaceModeId;
+  children: ReactNode;
+}): JSX.Element {
+  const { theme } = useTheme();
+  return (
+    <div
+      className={rootClass}
+      data-testid="sprout-workspace"
+      data-project={projectId}
+      data-space={spaceId}
+      data-theme={theme}
+    >
+      {children}
+    </div>
   );
 }
 

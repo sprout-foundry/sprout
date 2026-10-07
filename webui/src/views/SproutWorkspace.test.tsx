@@ -336,4 +336,34 @@ describe('SproutWorkspace rules', () => {
     expect(workspace).toHaveAttribute('data-space', 'test-space');
     expect(screen.getByTestId('sprout-workspace-test-shell')).toBeInTheDocument();
   });
+
+  it('rule: the workspace root carries the `sprout-workspace` class the package stylesheet scopes to', async () => {
+    // ws.5 (SP-160 §160a): the package's stylesheet is scoped to the workspace
+    // root so it cannot leak onto the host page. That scope is only real if the
+    // root element actually bears the class the stylesheet targets — this test
+    // is the DOM side of that contract (the artifact test asserts the CSS side).
+    render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} />);
+
+    const workspace = await screen.findByTestId('sprout-workspace');
+    expect(workspace).toHaveClass('sprout-workspace');
+  });
+
+  it('rule: the workspace root carries the resolved data-theme the scoped guards key on', async () => {
+    // The stylesheet's light-theme guards were re-scoped from `:root[data-theme]`
+    // to `.sprout-workspace[data-theme]`, so the attribute must live on the
+    // workspace root for those rules to match. Without it the scoped guards are
+    // dead.
+    render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} />);
+
+    const workspace = await screen.findByTestId('sprout-workspace');
+    expect(workspace).toHaveAttribute('data-theme', 'dark');
+  });
+
+  it('rule: a supplied className extends the workspace root, never replaces the scope class', async () => {
+    render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} className="host-shell" />);
+
+    const workspace = await screen.findByTestId('sprout-workspace');
+    expect(workspace).toHaveClass('sprout-workspace');
+    expect(workspace).toHaveClass('host-shell');
+  });
 });

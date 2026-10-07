@@ -174,7 +174,7 @@ standalone local build keeps embedding into `pkg/webui/static`.
       code load when a space opens, not on import. A test inspects the
       build manifest and fails if the entry chunk pulls in the editor or
       WASM loader. Spec: SP-160 Acceptance criteria 5.
-- [ ] **ws.5** Styles as a separate stylesheet in the package that consumes
+- [x] **ws.5** Styles as a separate stylesheet in the package that consumes
       the design tokens; no global CSS leaks onto the host page outside the
       workspace root. Spec: SP-160 §160a.
 - [ ] **ws.6** Content-hashed WASM (§160e): `sprout.wasm` and

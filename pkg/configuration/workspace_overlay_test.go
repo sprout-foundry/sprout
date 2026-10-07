@@ -144,8 +144,9 @@ func TestWorkspaceSave_ConcurrentReadersNeverSeeTruncatedFile(t *testing.T) {
 	}()
 
 	for i := 0; i < 25; i++ {
+		label := fmt.Sprintf("provider-%c", 'a'+i)
 		if err := m.UpdateConfig(func(c *Config) error {
-			c.LastUsedProvider = "provider-" + string(rune('a'+i))
+			c.LastUsedProvider = label
 			return nil
 		}); err != nil {
 			t.Fatalf("save %d: %v", i, err)

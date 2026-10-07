@@ -35,7 +35,7 @@ export type { NotificationType } from './services/notificationBus';
 export { notificationBus } from './services/notificationBus';
 export type { NotificationEvent, Listener } from './services/notificationBus';
 export type { NotificationData } from './types/notification';
-export type { Notification } from './contexts/NotificationContext';
+export type { Notification, NotificationSink } from './contexts/NotificationContext';
 export type { CursorPosition, StatusBarProps } from './components/StatusBar';
 export type { ContextMenuProps } from './components/ContextMenu';
 export type { FileInfo } from './types/file-tree';

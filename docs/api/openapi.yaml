@@ -5348,6 +5348,149 @@ paths:
       summary: List git worktrees.
       tags:
         - git
+  /api/hotkeys:
+    get:
+      description: Returns the current keyboard-shortcut configuration, the loaded file version, and the config path.
+      operationId: hotkeysGet
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Read the hotkey configuration.
+      tags:
+        - settings
+    put:
+      description: Persists the supplied keyboard-shortcut configuration, validating it before writing.
+      operationId: hotkeysPut
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Save the hotkey configuration.
+      tags:
+        - settings
+  /api/hotkeys/preset:
+    post:
+      description: Applies a named hotkey preset and returns the resulting configuration.
+      operationId: hotkeysPreset
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Apply a preset hotkey configuration.
+      tags:
+        - settings
+  /api/hotkeys/validate:
+    post:
+      description: Validates the supplied hotkey configuration without persisting it, returning the normalized config when it is valid.
+      operationId: hotkeysValidate
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Validate a hotkey configuration.
+      tags:
+        - settings
+  /api/local-llm/download:
+    post:
+      description: Starts downloading the model identified by `model` for local use. Returns the download status.
+      operationId: localLLMDownload
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Start downloading a local-LLM model.
+      tags:
+        - settings
+  /api/local-llm/download/cancel:
+    post:
+      description: Cancels the in-progress download for the model identified by `model`.
+      operationId: localLLMDownloadCancel
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Cancel a local-LLM model download.
+      tags:
+        - settings
+  /api/local-llm/models:
+    get:
+      description: Lists the models available for local use, with their download status.
+      operationId: localLLMModels
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: List downloadable local-LLM models.
+      tags:
+        - settings
+  /api/local-llm/start:
+    post:
+      description: Starts the local language-model runtime, optionally with `model` to select a model. Returns the new runtime status.
+      operationId: localLLMStart
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Start the local-LLM runtime.
+      tags:
+        - settings
+  /api/local-llm/status:
+    get:
+      description: 'Reports the state of the local language-model runtime: whether it is installed, running, and its current model.'
+      operationId: localLLMStatus
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Report the local-LLM runtime status.
+      tags:
+        - settings
   /api/lsp/status:
     get:
       description: Lists the configured language servers with their supported languages, binary, install hint, and whether the binary is resolvable on PATH, plus the count of currently active LSP sessions and the workspace root.
@@ -5415,6 +5558,102 @@ paths:
       summary: Open an LSP WebSocket bridge.
       tags:
         - terminal
+  /api/onboarding/complete:
+    post:
+      description: Records that the user has completed onboarding, optionally recording the choices made.
+      operationId: onboardingComplete
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Mark onboarding complete.
+      tags:
+        - settings
+  /api/onboarding/skip:
+    post:
+      description: Records that the user chose to skip onboarding.
+      operationId: onboardingSkip
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Skip onboarding.
+      tags:
+        - settings
+  /api/onboarding/status:
+    get:
+      description: Reports whether onboarding has been completed or skipped, plus any pending steps.
+      operationId: onboardingStatus
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Report the onboarding status.
+      tags:
+        - settings
+  /api/password/:
+    post:
+      description: Submits the user's password for the pending request at /api/password/{id}/respond, unblocking the agent that was waiting for it. The password value is never logged.
+      operationId: passwordRespond
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Respond to a pending password request.
+      tags:
+        - settings
+  /api/providers:
+    get:
+      description: Lists the LLM providers available to the agent, with their connection status and configuration.
+      operationId: providersList
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: List the available providers.
+      tags:
+        - settings
+  /api/providers/models:
+    get:
+      description: Lists the models available for the provider identified by the `provider` query parameter.
+      operationId: providersModels
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: List the models for a provider.
+      tags:
+        - settings
   /api/query:
     post:
       description: Submits a query to the agent for the resolved chat (body `chat_id` or the client's active chat) and starts the query lifecycle asynchronously. The response is written by the shared runner, so this operation reports a 202 Accepted with the submitted query text.
@@ -6213,6 +6452,361 @@ paths:
       summary: Search across saved sessions.
       tags:
         - conversation/query
+  /api/settings:
+    get:
+      description: Returns the effective (merged) configuration for the client, or a specific layer with `layer=global|workspace|session|provenance`.
+      operationId: settingsGet
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Read the effective settings.
+      tags:
+        - settings
+    put:
+      description: Applies a partial settings patch to the effective configuration. Provider and model changes are session-scoped overrides applied to the live agent; everything else is persisted through the config manager.
+      operationId: settingsPut
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Update the settings.
+      tags:
+        - settings
+  /api/settings/credentials:
+    delete:
+      description: Removes the stored credential for the provider at /api/settings/credentials/{provider}.
+      operationId: settingsCredentialsDelete
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Delete a credential.
+      tags:
+        - settings
+    get:
+      description: Returns the storage backend and, per provider, whether a credential is stored or present in the environment, with any stored value masked.
+      operationId: settingsCredentialsList
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: List credential status per provider.
+      tags:
+        - settings
+    post:
+      description: Validates the credential for /api/settings/credentials/{provider}/test against the provider without persisting it.
+      operationId: settingsCredentialsTest
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Test a credential.
+      tags:
+        - settings
+    put:
+      description: Stores (or replaces) the credential for the provider named in the URL at /api/settings/credentials/{provider}.
+      operationId: settingsCredentialsSet
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Store a credential.
+      tags:
+        - settings
+  /api/settings/credentials/:
+    delete:
+      description: Removes a key from the pool for the provider at /api/settings/credentials/{provider}/pool.
+      operationId: settingsCredentialsPoolDelete
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Delete a key from the credential pool.
+      tags:
+        - settings
+    get:
+      description: Returns the key pool for the provider at /api/settings/credentials/{provider}/pool.
+      operationId: settingsCredentialsPoolGet
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Read the credential pool.
+      tags:
+        - settings
+    post:
+      description: Adds a key to the pool for the provider at /api/settings/credentials/{provider}/pool.
+      operationId: settingsCredentialsPoolPost
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Add a key to the credential pool.
+      tags:
+        - settings
+    put:
+      description: Updates the key pool for the provider at /api/settings/credentials/{provider}/pool.
+      operationId: settingsCredentialsPoolSet
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Update the credential pool.
+      tags:
+        - settings
+  /api/settings/mcp:
+    get:
+      description: Returns the MCP (model context protocol) configuration and the list of configured servers.
+      operationId: settingsMcpGet
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Read the MCP settings.
+      tags:
+        - settings
+    put:
+      description: Replaces the MCP configuration section with the supplied body.
+      operationId: settingsMcpPut
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Update the MCP settings.
+      tags:
+        - settings
+  /api/settings/mcp/servers/:
+    delete:
+      description: Removes the MCP server at /api/settings/mcp/servers/{name}.
+      operationId: settingsMcpServersDelete
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Delete an MCP server.
+      tags:
+        - settings
+    post:
+      description: Creates or replaces an MCP server entry (name taken from the body). A trailing `/credentials` suffix creates the server's credential and `/test` runs a connection test, both handled by the same route handler.
+      operationId: settingsMcpServersPost
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Add an MCP server.
+      tags:
+        - settings
+    put:
+      description: Updates the MCP server at /api/settings/mcp/servers/{name} with the supplied body.
+      operationId: settingsMcpServersPut
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Update an MCP server.
+      tags:
+        - settings
+  /api/settings/providers:
+    get:
+      description: Returns the configured custom providers as a map keyed by name, with sensitive fields sanitized.
+      operationId: settingsProvidersList
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: List custom providers.
+      tags:
+        - settings
+    post:
+      description: Creates a new custom provider. The provider file is written before the in-memory map is mutated so a failure leaves prior state untouched; a duplicate name returns 409.
+      operationId: settingsProvidersCreate
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Create a custom provider.
+      tags:
+        - settings
+  /api/settings/providers/:
+    delete:
+      description: Removes the custom provider at /api/settings/providers/{name} and its backing file. A missing provider returns 404.
+      operationId: settingsProvidersDelete
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Delete a custom provider.
+      tags:
+        - settings
+    put:
+      description: Updates the custom provider at /api/settings/providers/{name}; the body name is overridden by the URL segment. A missing provider returns 404.
+      operationId: settingsProvidersUpdate
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Update a custom provider.
+      tags:
+        - settings
+  /api/settings/skills:
+    get:
+      description: Returns the skills configuration section.
+      operationId: settingsSkillsGet
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Read the skills settings.
+      tags:
+        - settings
+    put:
+      description: Replaces the skills configuration section with the supplied body.
+      operationId: settingsSkillsPut
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Update the skills settings.
+      tags:
+        - settings
+  /api/settings/subagent-types:
+    get:
+      description: Returns the configured subagent types, the disabled personas, and the available providers/models. Personas are catalog-fixed, so only GET is supported.
+      operationId: settingsSubagentTypes
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: List the subagent types.
+      tags:
+        - settings
+  /api/settings/subagent-types/:
+    get:
+      description: Subtree form of the subagent-types listing; the same read handler serves both the exact and trailing-slash patterns.
+      operationId: settingsSubagentTypesSubtree
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: List the subagent types (subtree).
+      tags:
+        - settings
   /api/shell-approvals/:
     post:
       description: Submits per-part accept/reject choices for a pending shell approval at the /api/shell-approvals/{id}/decision shape, unblocking the agent's shell-approval broker.
@@ -6270,6 +6864,53 @@ paths:
       summary: Submit a per-part shell approval decision.
       tags:
         - conversation/query
+  /api/skills:
+    get:
+      description: Lists the skills available to the agent, with their source and enabled state.
+      operationId: skillsList
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: List installed skills.
+      tags:
+        - settings
+  /api/skills/:
+    get:
+      description: 'Subtree form of the skills surface: /api/skills/ (list) and /api/skills/registry (the browsable registry).'
+      operationId: skillsListSubtree
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: List skills or the registry (subtree).
+      tags:
+        - settings
+    post:
+      description: Runs a skill lifecycle action at /api/skills/install, /api/skills/update, or /api/skills/remove.
+      operationId: skillsAction
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Install, update, or remove a skill (subtree).
+      tags:
+        - settings
   /api/stats:
     get:
       description: Reports server and per-client statistics, including provider, model, and token usage.

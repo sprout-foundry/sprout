@@ -37,12 +37,14 @@ import (
 // and the Huma operations in huma_routes.go; the AST walk reads both so a new
 // Huma route cannot ship undocumented.
 const (
-	contractRoutesGo     = "pkg/webui/routes.go"
-	contractHumaRoutesGo = "pkg/webui/huma_routes.go"
-	contractHumaFilesGo  = "pkg/webui/huma_files.go"
-	contractHumaGitGo    = "pkg/webui/huma_git.go"
-	contractOpenAPIYAML  = "docs/api/openapi.yaml"
-	contractAllowlist    = "docs/api/undocumented.txt"
+	contractRoutesGo           = "pkg/webui/routes.go"
+	contractHumaRoutesGo       = "pkg/webui/huma_routes.go"
+	contractHumaFilesGo        = "pkg/webui/huma_files.go"
+	contractHumaGitGo          = "pkg/webui/huma_git.go"
+	contractHumaSettingsGo     = "pkg/webui/huma_settings.go"
+	contractHumaSettingsMiscGo = "pkg/webui/huma_settings_misc.go"
+	contractOpenAPIYAML        = "docs/api/openapi.yaml"
+	contractAllowlist          = "docs/api/undocumented.txt"
 )
 
 // contractRouteFiles returns the repo-root-joined paths of every file that
@@ -55,6 +57,8 @@ func contractRouteFiles(root string) []string {
 		filepath.Join(root, contractHumaRoutesGo),
 		filepath.Join(root, contractHumaFilesGo),
 		filepath.Join(root, contractHumaGitGo),
+		filepath.Join(root, contractHumaSettingsGo),
+		filepath.Join(root, contractHumaSettingsMiscGo),
 	}
 }
 

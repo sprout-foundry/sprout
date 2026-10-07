@@ -77,7 +77,7 @@ checkboxes.
       Huma, no behavior change. Spec: SP-160 §160c.
 - [x] **contract.10** Migrate the git family (`/api/git/*`, read and write)
       to Huma, no behavior change. Spec: SP-160 §160c.
-- [ ] **contract.11** Migrate settings and configuration (`/api/settings*`,
+- [x] **contract.11** Migrate settings and configuration (`/api/settings*`,
       `/api/providers*`, `/api/onboarding*`, `/api/config`,
       `/api/hotkeys*`, `/api/skills*`, `/api/local-llm*`, `/api/password`)
       to Huma, no behavior change. Spec: SP-160 §160c.

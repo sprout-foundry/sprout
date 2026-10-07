@@ -97,9 +97,10 @@ func (ws *ReactWebServer) registerQueryRoutes(mux *http.ServeMux) {
 	// were removed so each method+path pattern is registered once. The
 	// /api/edits/, /api/shell-approvals/, and /api/subagent/ routes are
 	// likewise Huma operations (registered as method+subtree patterns); the
-	// handlers parse r.URL.Path as before.
-	// SP-089-3: password prompt endpoints.
-	mux.HandleFunc("/api/password/", ws.handleAPIPasswordRoutes)
+	// handlers parse r.URL.Path as before. The /api/password/ route is also a
+	// Huma operation (see registerSettingsMiscHumaOperations in
+	// huma_settings_misc.go); its plain registration was removed so each
+	// method+path pattern is registered once.
 	// Foundry proxy endpoints — accept the translated chat format from CloudAdapter
 	mux.HandleFunc("/api/proxy/chat", ws.handleAPIProxyChat)
 	mux.HandleFunc("/api/proxy/chat/stop", ws.handleAPIProxyChatStop)
@@ -119,11 +120,10 @@ func (ws *ReactWebServer) registerCommandRoutes(mux *http.ServeMux) {
 }
 
 func (ws *ReactWebServer) registerDiagnosticsRoutes(mux *http.ServeMux) {
-	// /api/stats, /api/diagnostics, and /api/semantic are now Huma operations
-	// (see registerHumaRoutes / registerFilesHumaOperations); their plain
-	// registrations were removed so each method+path pattern is registered once.
-	mux.HandleFunc("/api/providers", ws.handleAPIProviders)
-	mux.HandleFunc("/api/providers/models", ws.handleGetModels)
+	// /api/stats, /api/diagnostics, /api/semantic, and /api/providers are now
+	// Huma operations (see registerHumaRoutes / registerFilesHumaOperations /
+	// registerSettingsMiscHumaOperations); their plain registrations were
+	// removed so each method+path pattern is registered once.
 	mux.HandleFunc("/api/support-bundle", ws.handleAPISupportBundle)
 	mux.HandleFunc("/api/ws-metrics", ws.handleAPIWSMetrics)
 }
@@ -156,32 +156,13 @@ func (ws *ReactWebServer) registerStarterRoutes(mux *http.ServeMux) {
 }
 
 func (ws *ReactWebServer) registerSettingsRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/onboarding/status", ws.handleAPIOnboardingStatus)
-	mux.HandleFunc("/api/onboarding/complete", ws.handleAPIOnboardingComplete)
-	mux.HandleFunc("/api/onboarding/skip", ws.handleAPIOnboardingSkip)
-	// /api/config is now a Huma operation (see registerHumaRoutes); the plain
-	// registration was removed so the method+path pattern is registered once.
-	mux.HandleFunc("/api/settings", ws.handleAPISettings)
-	mux.HandleFunc("/api/settings/mcp", ws.handleAPISettingsMCP)
-	mux.HandleFunc("/api/settings/mcp/servers/", ws.handleAPISettingsMCPServers)
-	mux.HandleFunc("/api/settings/providers", ws.handleAPISettingsProviders)
-	mux.HandleFunc("/api/settings/providers/", ws.handleAPISettingsProviders)
-	mux.HandleFunc("/api/settings/credentials", ws.handleAPISettingsCredentials)
-	mux.HandleFunc("/api/settings/credentials/", ws.handleAPISettingsCredentials)
-	mux.HandleFunc("/api/settings/skills", ws.handleAPISettingsSkills)
-	mux.HandleFunc("/api/skills", ws.handleAPIListSkills)
-	mux.HandleFunc("/api/skills/", ws.handleAPISkillsRoutes)
-	mux.HandleFunc("/api/settings/subagent-types", ws.handleAPISettingsSubagentTypes)
-	mux.HandleFunc("/api/settings/subagent-types/", ws.handleAPISettingsSubagentTypes)
-	mux.HandleFunc("/api/hotkeys", ws.handleAPIHotkeys)
-	mux.HandleFunc("/api/hotkeys/validate", ws.handleAPIHotkeysValidate)
-	mux.HandleFunc("/api/hotkeys/preset", ws.handleAPIHotkeysPreset)
+	// The settings/configuration family routes are Huma operations (see
+	// registerSettingsHumaOperations and registerSettingsMiscHumaOperations in
+	// huma_settings.go and huma_settings_misc.go); their plain registrations
+	// were removed so each method+path pattern is registered once. The
+	// /api/computer-use/test route is a separate surface outside this family
+	// and stays a plain handler here.
 	mux.HandleFunc("/api/computer-use/test", ws.handleAPIComputerUseTest)
-	mux.HandleFunc("/api/local-llm/status", ws.handleLocalLLMStatus)
-	mux.HandleFunc("/api/local-llm/start", ws.handleLocalLLMStart)
-	mux.HandleFunc("/api/local-llm/models", ws.handleLocalLLMModels)
-	mux.HandleFunc("/api/local-llm/download", ws.handleLocalLLMDownload)
-	mux.HandleFunc("/api/local-llm/download/cancel", ws.handleLocalLLMDownloadCancel)
 }
 
 func (ws *ReactWebServer) registerWorkspaceRoutes(mux *http.ServeMux) {

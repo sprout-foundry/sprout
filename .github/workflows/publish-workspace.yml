@@ -1,0 +1,60 @@
+name: Publish @sprout-foundry/workspace
+
+# Publish only on explicit version tags (workspace-v*), like
+# publish-design.yml: a published version can never be overwritten, so
+# publishing on every push would fail (409) without a version bump.
+# The tag must match packages/workspace/package.json's version.
+#   git tag workspace-v1.0.0 -m "workspace v1.0.0"
+#   git push origin workspace-v1.0.0
+on:
+  push:
+    tags:
+      - "workspace-v*"
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@sprout-foundry"
+
+      - name: Check the tag matches the package version
+        if: startsWith(github.ref, 'refs/tags/workspace-v')
+        run: |
+          version="$(node -p "require('./packages/workspace/package.json').version")"
+          if [ "workspace-v${version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match package version ${version}" >&2
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build the packages the workspace depends on
+        run: |
+          npm run build -w @sprout/events
+          npm run build -w @sprout/ui
+
+      - name: Build the workspace package (production)
+        run: npm run build -w @sprout-foundry/workspace
+        env:
+          NODE_ENV: production
+
+      - name: Validate the build artifact
+        run: node docs/__tests__/workspace-package.test.js
+
+      - name: Publish to GitHub Packages
+        working-directory: packages/workspace
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

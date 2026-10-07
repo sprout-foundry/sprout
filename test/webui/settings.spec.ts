@@ -158,6 +158,14 @@ async function clickSubsectionTab(testidKey: string) {
     // for seconds at a time and React commits stall behind it.
     await expect(panel).toBeVisible({ timeout: 30_000 });
   };
+  // Re-expand the section on retries: the failing signature from CI is
+  // aria-selected=true with the section's content area gone — i.e. the
+  // section collapsed after the click (content only renders while
+  // expanded). expandSection no-ops when already expanded.
+  // Re-expand the section between attempts: the CI failure signature is
+  // aria-selected=true with the section's content area gone — the section
+  // collapsed after the click (subsection content renders only while the
+  // section is expanded). expandSection no-ops when already expanded.
   for (let i = 0; i < 3; i += 1) {
     try {
       await attempt();
@@ -167,29 +175,49 @@ async function clickSubsectionTab(testidKey: string) {
         // Dump the live tab state so a CI failure names the actual culprit
         // (wrong subsection selected vs the section hidden by the filter vs
         // the panel rendering empty).
-        const tabs = await page
-          .locator(".settings-subsection-btn")
-          .evaluateAll((els) =>
-            els.map(
-              (el) =>
-                `${el.getAttribute("data-testid")}=${el.getAttribute("aria-selected")}`,
-            ),
-          )
-          .catch(() => ["<page unreachable>"]);
-        const content = await page
+        // Counts and .first() throughout: with several sections expanded
+        // there are MULTIPLE .settings-subsection-content nodes; a bare
+        // query strict-mode-throws, which a .catch() would misreport.
+        const contentCount = await page
           .locator(".settings-subsection-content")
+          .count()
+          .catch(() => -1);
+        const subpanelCount = await page
+          .locator(`#settings-subpanel-${subId}`)
+          .count()
+          .catch(() => -1);
+        const contentHead = await page
+          .locator(".settings-subsection-content")
+          .first()
           .innerHTML()
-          .then((h) => h.slice(0, 400))
-          .catch(() => "<no content area>");
+          .then((h) => h.slice(0, 300))
+          .catch(
+            (e) =>
+              `<unavailable: ${e instanceof Error ? e.message.split("\n")[0] : e}>`,
+          );
         throw new Error(
-          `subsection ${testidKey} did not render (tabs: ${tabs.join(", ")}; content: ${content}); cause: ${
-            err instanceof Error ? err.message : String(err)
-          }`,
+          `subsection ${testidKey} did not render (content areas on page: ${contentCount}; ` +
+            `#settings-subpanel-${subId} present: ${subpanelCount}; first content head: ${contentHead}); ` +
+            `cause: ${err instanceof Error ? err.message.split("\n")[0] : String(err)}`,
         );
       }
       await ensureSettingsOpen();
+      const sectionLabel = tabSectionLabel(testidKey);
+      if (sectionLabel) await expandSection(sectionLabel);
     }
   }
+}
+
+/** The section label a subsection tab testid belongs to, from the
+ *  "settings-<section>-<sub>-tab" naming. Used to re-expand the right
+ *  section on retry. Returns null for unknown prefixes. */
+function tabSectionLabel(testidKey: string): string | null {
+  if (testidKey.startsWith("settings-agent-")) return "Agent";
+  if (testidKey.startsWith("settings-workspace-")) return "Workspace";
+  if (testidKey.startsWith("settings-env-")) return "Environment";
+  if (testidKey.startsWith("settings-editor-")) return "Editor";
+  if (testidKey.startsWith("settings-experimental-")) return "Experimental";
+  return null;
 }
 
 // ---------------------------------------------------------------------------

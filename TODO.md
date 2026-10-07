@@ -758,10 +758,15 @@ needed whatever the integration work does. Spec context: SP-160 §160e.
       latest-version seam; the live checker shells `go list -m -u`), with
       `--no-duplicates`/`--no-deps`/`--duplicate-threshold`. Pinned by
       fixture tests.
-- [ ] **157.9** Build/runtime error classifier (missing dependency, syntax
+- [x] **157.9** Build/runtime error classifier (missing dependency, syntax
       error, type error, failing test, app crashed on start) with short
       explanation templates shown alongside the raw output. Fixture
       tests. Spec: SP-157 §157d.
+      Fixed: new stdlib-only `pkg/errclass` with a closed `Category` set
+      (plus a conservative `unknown`), a deterministic first-match text
+      table covering Go, JS/TS and Python shapes, and `Classify` returning
+      the category, a short explanation template and the raw output
+      preserved verbatim. Pinned by fixture tests.
 - [ ] **157.10** Agent attempts a fix for a classified error before
       reporting it. Scripted test. Spec: SP-157 §157d.
 

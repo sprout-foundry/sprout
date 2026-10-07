@@ -55,18 +55,29 @@ export function useSidebarModel({
   const [settings, setSettings] = useState<SproutSettings | null>(null);
   const [settingsFocusTarget, setSettingsFocusTarget] = useState<'provider' | null>(null);
 
-  // Load settings on mount / connection
+  // Load settings on mount / connection. Retried with backoff: the daemon
+  // can be busy in serial provider discovery for tens of seconds after
+  // boot, and a single stalled/failed fetch left `settings` null forever —
+  // the whole SettingsPanel then rendered its loading skeleton eternally
+  // (the CI "skills list did not render" flake's true root).
   useEffect(() => {
     if (!isConnected || !supportsSettings) return;
     let cancelled = false;
-    apiService
-      .getSettings()
-      .then((s) => {
+    const attempt = async (n: number): Promise<void> => {
+      try {
+        const s = await apiService.getSettings();
         if (!cancelled) setSettings(s);
-      })
-      .catch((err) => {
-        debugLog('Failed to load settings:', err);
-      });
+        return;
+      } catch (err) {
+        if (cancelled) return;
+        debugLog(`Failed to load settings (attempt ${n + 1}):`, err);
+        if (n >= 4) return; // five attempts, ~10s of backoff, then give up quietly
+        await new Promise((r) => window.setTimeout(r, 500 * 2 ** n));
+        if (cancelled) return;
+        await attempt(n + 1);
+      }
+    };
+    void attempt(0);
     return () => {
       cancelled = true;
     };

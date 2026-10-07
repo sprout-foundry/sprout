@@ -47,6 +47,9 @@ export default defineConfig({
     // collected in dist/chunks/ so the publish allowlist stays a short,
     // checkable list (entry points + declarations + chunks + stylesheet).
     rollupOptions: {
+      // React and React DOM are peer dependencies: the host provides them.
+      // Bundling them would give the host a second React and break hooks.
+      external: [/^react($|\/)/, /^react-dom($|\/)/],
       output: {
         manualChunks: {},
         chunkFileNames: "chunks/[name]-[hash].js",

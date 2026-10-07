@@ -142,7 +142,7 @@ standalone local build keeps embedding into `pkg/webui/static`.
       only the package's public entry points; anything missing is added to
       the package exports, not imported privately. No feature loss.
       Spec: SP-160 Acceptance criteria 2.
-- [ ] **ws.7b** Installable package: today `packages/workspace/package.json`
+- [x] **ws.7b** Installable package: today `packages/workspace/package.json`
       lists `@sprout/events` and `@sprout/ui` as `file:` dependencies (a
       host cannot install those) and the build bundles React's internals
       into `dist/chunks/` although `react`/`react-dom` are peer
@@ -156,6 +156,18 @@ standalone local build keeps embedding into `pkg/webui/static`.
       the published `package.json`, no React internals in `dist/`, and
       `npm pack --dry-run` lists only the allowlisted files. Spec:
       SP-160 §160a, §160e.
+- [ ] **ws.7c** Self-contained type declarations: `scripts/bundle-dts.mjs`
+      rewrites the web UI imports in the emitted `.d.ts` to a
+      `@sprout-foundry/workspace-webui/...` namespace that does not exist,
+      and `dist/chunks/declarations/` keeps `../../../webui/src/...`
+      imports, so a host's TypeScript cannot resolve the package's types.
+      Roll the public types up into self-contained declarations (e.g.
+      `vite-plugin-dts` `rollupTypes` with API Extractor, or an equivalent
+      bundler), delete the rewrite, and turn the `todo` test "declarations
+      resolve without paths outside the package" in
+      `docs/__tests__/workspace-package.test.js` into a passing test. Add a
+      check that a scratch TypeScript project importing the package
+      type-checks against `dist/` alone. Spec: SP-160 §160a, §160e.
 - [x] **ws.8** Publish workflow: a GitHub Actions job publishes
       `@sprout-foundry/workspace` and `@sprout-foundry/design` to GitHub Packages on
       release tags (production build). Workflow file and

@@ -1,0 +1,1502 @@
+{
+  "$defs": {
+    "AgentMessageData": {
+      "properties": {
+        "action": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        },
+        "chat_id": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "category",
+        "message"
+      ],
+      "type": "object"
+    },
+    "AskUserRequestData": {
+      "properties": {
+        "client_id": {
+          "type": "string"
+        },
+        "credential_key": {
+          "type": "string"
+        },
+        "default": {
+          "type": "string"
+        },
+        "header": {
+          "type": "string"
+        },
+        "multi_select": {
+          "type": "boolean"
+        },
+        "options": {
+          "items": {
+            "$ref": "#/$defs/AskUserRequestOption"
+          },
+          "type": "array"
+        },
+        "question": {
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "sensitive": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "question",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "AskUserRequestOption": {
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "type": "object"
+    },
+    "CommandOutputData": {
+      "description": "Streamed output from a safe slash command.",
+      "properties": {
+        "chat_id": {
+          "type": "string"
+        },
+        "chunk": {
+          "type": "string"
+        },
+        "command": {
+          "type": "string"
+        },
+        "is_final": {
+          "type": "boolean"
+        },
+        "seq": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "chunk",
+        "command",
+        "is_final",
+        "seq"
+      ],
+      "type": "object"
+    },
+    "CommandOutputDroppedData": {
+      "description": "Backpressure warning emitted when streamed command output is discarded.",
+      "properties": {
+        "chat_id": {
+          "type": "string"
+        },
+        "command": {
+          "type": "string"
+        },
+        "dropped_bytes": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "command",
+        "dropped_bytes"
+      ],
+      "type": "object"
+    },
+    "CompactCompletedData": {
+      "description": "Payload for compact_completed. success=false carries the failure reason.",
+      "properties": {
+        "after_message_count": {
+          "type": "number"
+        },
+        "before_message_count": {
+          "type": "number"
+        },
+        "chat_id": {
+          "type": "string"
+        },
+        "error": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "success": {
+          "type": "boolean"
+        },
+        "summary_chars": {
+          "type": "number"
+        },
+        "timestamp": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "after_message_count",
+        "before_message_count",
+        "source",
+        "success",
+        "summary_chars",
+        "timestamp"
+      ],
+      "type": "object"
+    },
+    "CompactStartedData": {
+      "description": "Payload for compact_started (seed structural compaction / manual /compact).",
+      "properties": {
+        "chat_id": {
+          "type": "string"
+        },
+        "checkpoint_count": {
+          "type": "number"
+        },
+        "message_count": {
+          "type": "number"
+        },
+        "source": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "checkpoint_count",
+        "message_count",
+        "source",
+        "timestamp"
+      ],
+      "type": "object"
+    },
+    "ConnectionStatusData": {
+      "properties": {
+        "client_id": {
+          "type": "string"
+        },
+        "connected": {
+          "type": "boolean"
+        },
+        "message_count": {
+          "type": "number"
+        },
+        "queuedMessageCount": {
+          "type": "number"
+        },
+        "reattach": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reconnected": {
+          "type": "boolean"
+        },
+        "reconnecting": {
+          "type": "boolean"
+        },
+        "restored": {
+          "type": "boolean"
+        },
+        "session_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "connected"
+      ],
+      "type": "object"
+    },
+    "ContextManagementDiagnosticData": {
+      "description": "Per-iteration context-management diagnostic emitted by the backend agent loop (see pkg/events.ContextManagementDiagnosticEvent). The fields mirror the Go payload 1:1 — `cached_tokens`, `prompt_tokens`, and `cache_write_tokens` are cumulative session counters (not per-iteration), and `cache_hit_rate` is the backend-computed `cached/prompt` ratio. The frontend treats this as telemetry: the typed payload lets the dedicated handler in useWebSocketEventHandler render a compact summary instead of letting the event fall through to the generic \"unknown event\" branch and show up as raw JSON in the Logs pane.",
+      "properties": {
+        "cache_hit_rate": {
+          "type": "number"
+        },
+        "cache_write_tokens": {
+          "type": "number"
+        },
+        "cached_tokens": {
+          "type": "number"
+        },
+        "chat_id": {
+          "type": "string"
+        },
+        "current_tokens": {
+          "type": "number"
+        },
+        "effective_max": {
+          "type": "number"
+        },
+        "iteration": {
+          "type": "number"
+        },
+        "max_tokens": {
+          "type": "number"
+        },
+        "message_count": {
+          "type": "number"
+        },
+        "native_max_tokens": {
+          "type": "number"
+        },
+        "prompt_tokens": {
+          "type": "number"
+        },
+        "reserved_response": {
+          "type": "number"
+        },
+        "reserved_thinking": {
+          "type": "number"
+        },
+        "reserved_tool_io": {
+          "type": "number"
+        },
+        "trigger_fraction": {
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "DelegateClarificationRequestedData": {
+      "properties": {
+        "chat_id": {
+          "type": "string"
+        },
+        "question": {
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "subagent_id": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "question",
+        "request_id",
+        "subagent_id",
+        "timestamp"
+      ],
+      "type": "object"
+    },
+    "DelegateClarificationRespondedData": {
+      "properties": {
+        "chat_id": {
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "response": {
+          "type": "string"
+        },
+        "subagent_id": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "request_id",
+        "response",
+        "subagent_id",
+        "timestamp"
+      ],
+      "type": "object"
+    },
+    "EditApprovalRequestData": {
+      "description": "Payload for an edit_approval_request event (SP-072-3).",
+      "properties": {
+        "file_path": {
+          "type": "string"
+        },
+        "hunks": {
+          "items": {
+            "$ref": "#/$defs/EditHunk"
+          },
+          "type": "array"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string"
+        },
+        "unified_diff": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "file_path",
+        "hunks",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "EditHunk": {
+      "description": "A discrete change region in a unified diff for edit approval.",
+      "properties": {
+        "add_count": {
+          "type": "number"
+        },
+        "del_count": {
+          "type": "number"
+        },
+        "id": {
+          "type": "string"
+        },
+        "lines": {
+          "items": {
+            "$ref": "#/$defs/EditHunkLine"
+          },
+          "type": "array"
+        },
+        "new_lines": {
+          "type": "number"
+        },
+        "new_start": {
+          "type": "number"
+        },
+        "old_lines": {
+          "type": "number"
+        },
+        "old_start": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "add_count",
+        "del_count",
+        "id",
+        "lines",
+        "new_lines",
+        "new_start",
+        "old_lines",
+        "old_start"
+      ],
+      "type": "object"
+    },
+    "EditHunkLine": {
+      "description": "A single line in a diff hunk with its change type.",
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "content",
+        "type"
+      ],
+      "type": "object"
+    },
+    "ErrorData": {
+      "properties": {
+        "chat_id": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        },
+        "error": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "message"
+      ],
+      "type": "object"
+    },
+    "EventsProvider": {
+      "description": "EventsProvider — abstraction over the real-time event transport. In local mode this wraps a WebSocket connection to the Go backend. In cloud mode this could wrap Server-Sent Events, a cloud WebSocket, or any other streaming transport. Components consume this via the `useEvents()` hook from EventsContext.",
+      "type": "object"
+    },
+    "FileChangedData": {
+      "properties": {
+        "action": {
+          "type": "string"
+        },
+        "chat_id": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        },
+        "file_path": {
+          "type": "string"
+        },
+        "lines_added": {
+          "type": "number"
+        },
+        "lines_deleted": {
+          "type": "number"
+        },
+        "operation": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "size": {
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "FileContentChangedData": {
+      "properties": {
+        "file_path": {
+          "type": "string"
+        },
+        "mod_time": {
+          "type": "number"
+        },
+        "size": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "file_path"
+      ],
+      "type": "object"
+    },
+    "InputRequiredData": {
+      "properties": {
+        "chat_id": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "reason",
+        "timestamp"
+      ],
+      "type": "object"
+    },
+    "LanguageGuardReplacementData": {
+      "description": "Payload for a language_guard_replacement event (SP-152 §152c, item 152.7). Published when a streamed reply that was RELEASED by the streaming hold-back (its start passed the language check) is re-checked at completion and found to have switched language mid-stream. The reply was already streamed to the client and cannot be un-streamed, so the WebUI replaces the already-streamed assistant message's content with `replacement` and keeps `original` (the full switched content) available for \"view original\". Go: pkg/events.events_filter.go::LanguageGuardReplacementEvent",
+      "properties": {
+        "chat_id": {
+          "type": "string"
+        },
+        "original": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "replacement": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "original",
+        "reason",
+        "replacement"
+      ],
+      "type": "object"
+    },
+    "MetricsUpdateData": {
+      "properties": {
+        "chat_id": {
+          "type": "string"
+        },
+        "context_tokens": {
+          "type": "number"
+        },
+        "iteration": {
+          "type": "number"
+        },
+        "max_context_tokens": {
+          "type": "number"
+        },
+        "model": {
+          "type": "string"
+        },
+        "persona": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "total_cost": {
+          "type": "number"
+        },
+        "total_tokens": {
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "PasswordRequestData": {
+      "description": "Payload for a password_request event. Password responses are never included.",
+      "properties": {
+        "chat_id": {
+          "type": "string"
+        },
+        "command": {
+          "type": "string"
+        },
+        "prompt": {
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "command",
+        "prompt",
+        "request_id",
+        "timestamp"
+      ],
+      "type": "object"
+    },
+    "ProgressCompleteData": {
+      "description": "Payload for a progress_complete event: the run finished. `verified` is true only when a passing verification result exists (SP-149 §149d / SP-151 §151c). `not_verified_reason` says why only when verification is enabled and the turn was not verified (e.g. \"no code changes this turn\"); when SP-149 is disabled (the CLI default) both `verification` and `not_verified_reason` are absent — the payload carries just `run_id`, so the default UI is unchanged. Go: pkg/events/progress_events.go::ProgressCompleteData",
+      "properties": {
+        "not_verified_reason": {
+          "type": "string"
+        },
+        "plan_revision": {
+          "type": "number"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "verification": {
+          "$ref": "#/$defs/ProgressVerificationData"
+        },
+        "verified": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "plan_revision",
+        "run_id"
+      ],
+      "type": "object"
+    },
+    "ProgressMilestoneData": {
+      "description": "Payload for a progress_milestone event: a plan scope item (SP-148) started or finished, with the files-touched count and the scope item's elapsed wall time. Go: pkg/events/progress_events.go::ProgressMilestoneData",
+      "properties": {
+        "elapsed_ms": {
+          "type": "number"
+        },
+        "files_touched": {
+          "type": "number"
+        },
+        "milestones": {
+          "items": {
+            "$ref": "#/$defs/ProgressMilestoneData"
+          },
+          "type": "array"
+        },
+        "phase": {
+          "type": "string"
+        },
+        "plan_revision": {
+          "type": "number"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "scope_id": {
+          "type": "string"
+        },
+        "scope_title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "elapsed_ms",
+        "phase",
+        "plan_revision",
+        "run_id"
+      ],
+      "type": "object"
+    },
+    "ProgressQuestionData": {
+      "description": "Payload for a progress_question event: the agent needs a decision. Carries the question, options if any, and why it matters — complementing `ask_user_request` with plan context. Go: pkg/events/progress_events.go::ProgressQuestionData",
+      "properties": {
+        "header": {
+          "type": "string"
+        },
+        "options": {
+          "items": {
+            "$ref": "#/$defs/AskUserRequestOption"
+          },
+          "type": "array"
+        },
+        "plan_revision": {
+          "type": "number"
+        },
+        "question": {
+          "type": "string"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "scope_id": {
+          "type": "string"
+        },
+        "why_it_matters": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "plan_revision",
+        "question",
+        "run_id"
+      ],
+      "type": "object"
+    },
+    "ProgressVerificationCheck": {
+      "description": "Compact evidence a single verification check carries (SP-149). Mirrors the consumer-facing fields of verify.Check; the full result (routes, screenshots, steps, duration) stays server-side. Go: pkg/events/progress_events.go::ProgressVerificationCheck",
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "excerpt": {
+          "type": "string"
+        },
+        "items": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "skipped": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "ProgressVerificationData": {
+      "description": "Payload for a progress_verification event: the SP-149 verification result — the checks, pass/fail, and evidence references. Go: pkg/events/progress_events.go::ProgressVerificationData",
+      "properties": {
+        "baseline": {
+          "type": "boolean"
+        },
+        "checks": {
+          "items": {
+            "$ref": "#/$defs/ProgressVerificationCheck"
+          },
+          "type": "array"
+        },
+        "errors": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "plan_revision": {
+          "type": "number"
+        },
+        "run_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "checks",
+        "plan_revision",
+        "run_id"
+      ],
+      "type": "object"
+    },
+    "ProviderNoCredentialData": {
+      "properties": {
+        "chat_id": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "message",
+        "provider"
+      ],
+      "type": "object"
+    },
+    "QueryCompletedData": {
+      "properties": {
+        "chat_id": {
+          "type": "string"
+        },
+        "cost": {
+          "type": "number"
+        },
+        "duration_ms": {
+          "type": "number"
+        },
+        "query": {
+          "type": "string"
+        },
+        "response": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "tokens_used": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
+    "QueryProgressData": {
+      "properties": {
+        "chat_id": {
+          "type": "string"
+        },
+        "iteration": {
+          "type": "number"
+        },
+        "message": {
+          "type": "string"
+        },
+        "tokens_used": {
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "QueryStartedData": {
+      "properties": {
+        "chat_id": {
+          "type": "string"
+        },
+        "display": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "query": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
+    "RateLimitedData": {
+      "description": "Payload for rate_limited — the approval broker's backoff notice.",
+      "properties": {
+        "attempt": {
+          "type": "number"
+        },
+        "max_attempts": {
+          "type": "number"
+        },
+        "message": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "retry_after_ms": {
+          "type": "number"
+        },
+        "session_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "attempt",
+        "max_attempts",
+        "message",
+        "provider",
+        "retry_after_ms"
+      ],
+      "type": "object"
+    },
+    "SecurityAnalysisData": {
+      "description": "LLM-generated analysis of a shell command. The full struct lives in `pkg/agent.SecurityAnalysis` (Go) and serializes to JSON over the wire — callers receive it as the SecurityAnalysisData shape, not a string. SP-124-2.",
+      "properties": {
+        "modifies": {
+          "type": "string"
+        },
+        "recommendation": {
+          "type": "string"
+        },
+        "risk_assessment": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "modifies",
+        "recommendation",
+        "risk_assessment",
+        "summary"
+      ],
+      "type": "object"
+    },
+    "SecurityApprovalRequestData": {
+      "properties": {
+        "allow_options": {
+          "type": "string"
+        },
+        "command": {
+          "type": "string"
+        },
+        "folder": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "reasoning": {
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "risk_level": {
+          "type": "string"
+        },
+        "risk_type": {
+          "type": "string"
+        },
+        "security_analysis": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "tool_name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "reasoning",
+        "request_id",
+        "risk_level",
+        "tool_name"
+      ],
+      "type": "object"
+    },
+    "SecurityPromptRequestData": {
+      "properties": {
+        "concern": {
+          "type": "string"
+        },
+        "default_response": {
+          "type": "boolean"
+        },
+        "file_path": {
+          "type": "string"
+        },
+        "prompt": {
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "prompt",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "SessionChangedData": {
+      "properties": {
+        "change": {
+          "type": "string"
+        },
+        "chat_id": {
+          "type": "string"
+        },
+        "summary": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      "required": [
+        "change",
+        "summary"
+      ],
+      "type": "object"
+    },
+    "ShellApprovalPartData": {
+      "description": "A single part of a shell command in a shell_approval_request event (SP-093-3).",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "risk": {
+          "type": "string"
+        },
+        "semantic": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "risk",
+        "semantic",
+        "text"
+      ],
+      "type": "object"
+    },
+    "ShellApprovalRequestData": {
+      "description": "Payload for a shell_approval_request event (SP-093-3).",
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "parts": {
+          "items": {
+            "$ref": "#/$defs/ShellApprovalPartData"
+          },
+          "type": "array"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "risk_level": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string"
+        },
+        "unified_view": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "command",
+        "parts",
+        "request_id",
+        "risk_level",
+        "unified_view"
+      ],
+      "type": "object"
+    },
+    "SproutEvent": {
+      "description": "Events transport types for Sprout. Shared between webui and A single event from the transport layer. Compatible with the WsEvent shape used by the webui WebSocketService.",
+      "properties": {
+        "data": {},
+        "type": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "type": "object"
+    },
+    "StreamChunkData": {
+      "properties": {
+        "chat_id": {
+          "type": "string"
+        },
+        "chunk": {
+          "type": "string"
+        },
+        "content_type": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "chunk"
+      ],
+      "type": "object"
+    },
+    "SubagentActivityData": {
+      "properties": {
+        "chat_id": {
+          "type": "string"
+        },
+        "elapsed_ms": {
+          "type": "number"
+        },
+        "failures": {
+          "type": "number"
+        },
+        "is_parallel": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "persona": {
+          "type": "string"
+        },
+        "phase": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "task_count": {
+          "type": "number"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "tokens_used": {
+          "type": "number"
+        },
+        "tool_call_id": {
+          "type": "string"
+        },
+        "tool_name": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "TerminalOutputData": {
+      "properties": {
+        "chunk": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "TerminalPtyExitData": {
+      "properties": {
+        "exit_code": {
+          "type": "number"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "TerminalSessionReadyData": {
+      "properties": {
+        "pseudo_command": {
+          "type": "string"
+        },
+        "session_id": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "TodoUpdateData": {
+      "properties": {
+        "chat_id": {
+          "type": "string"
+        },
+        "todos": {}
+      },
+      "required": [
+        "todos"
+      ],
+      "type": "object"
+    },
+    "ToolEndData": {
+      "properties": {
+        "arguments": {
+          "type": "string"
+        },
+        "chat_id": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "duration_ms": {
+          "type": "number"
+        },
+        "error": {
+          "type": "string"
+        },
+        "result": {
+          "type": "string"
+        },
+        "result_length": {
+          "type": "number"
+        },
+        "result_truncated": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "string"
+        },
+        "tool_call_id": {
+          "type": "string"
+        },
+        "tool_name": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ToolStartData": {
+      "properties": {
+        "arguments": {
+          "type": "string"
+        },
+        "arguments_truncated": {
+          "type": "boolean"
+        },
+        "chat_id": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "is_subagent": {
+          "type": "boolean"
+        },
+        "persona": {
+          "type": "string"
+        },
+        "subagent_type": {
+          "type": "string"
+        },
+        "tool_call_id": {
+          "type": "string"
+        },
+        "tool_index": {
+          "type": "number"
+        },
+        "tool_name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "tool_name"
+      ],
+      "type": "object"
+    },
+    "WorkspaceChangedData": {
+      "properties": {
+        "client_id": {
+          "type": "string"
+        },
+        "daemon_root": {
+          "type": "string"
+        },
+        "previous_workspace_root": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "workspace_root": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "WorkspacePatchData": {
+      "description": "File-change notification payload from WorkspacePatchEvent (no content — see WorkspacePatchEvent).",
+      "properties": {
+        "action": {
+          "type": "string"
+        },
+        "chat_id": {
+          "type": "string"
+        },
+        "conflict": {
+          "type": "boolean"
+        },
+        "content": {
+          "type": "string"
+        },
+        "file_path": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "number"
+        },
+        "size": {
+          "type": "number"
+        },
+        "theirs_path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "action",
+        "file_path",
+        "seq",
+        "size"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://github.com/sprout-foundry/sprout/docs/api/events.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "The Sprout WebSocket event envelope (Go events.UIEvent / TS SproutEvent). The top-level schema is the envelope; each payload is a $def and the x-eventTypes extension maps an event-type string to its payload schema. Generated from packages/events/src/types.ts — do not edit by hand. Regenerate with: node packages/events/scripts/generate-events-schema.mjs.",
+  "properties": {
+    "data": {},
+    "id": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string"
+    }
+  },
+  "title": "Sprout WebSocket events",
+  "type": "object",
+  "x-eventTypes": {
+    "agent_message": {
+      "$ref": "#/$defs/AgentMessageData"
+    },
+    "ask_user_request": {
+      "$ref": "#/$defs/AskUserRequestData"
+    },
+    "command_output": {
+      "$ref": "#/$defs/CommandOutputData"
+    },
+    "command_output_dropped": {
+      "$ref": "#/$defs/CommandOutputDroppedData"
+    },
+    "compact_completed": {
+      "$ref": "#/$defs/CompactCompletedData"
+    },
+    "compact_started": {
+      "$ref": "#/$defs/CompactStartedData"
+    },
+    "connection_status": {
+      "$ref": "#/$defs/ConnectionStatusData"
+    },
+    "context_management_diagnostic": {
+      "$ref": "#/$defs/ContextManagementDiagnosticData"
+    },
+    "delegate_clarification_requested": {
+      "$ref": "#/$defs/DelegateClarificationRequestedData"
+    },
+    "delegate_clarification_responded": {
+      "$ref": "#/$defs/DelegateClarificationRespondedData"
+    },
+    "edit_approval_request": {
+      "$ref": "#/$defs/EditApprovalRequestData"
+    },
+    "error": {
+      "$ref": "#/$defs/ErrorData"
+    },
+    "error_output": {
+      "$ref": "#/$defs/TerminalOutputData"
+    },
+    "file_changed": {
+      "$ref": "#/$defs/FileChangedData"
+    },
+    "file_content_changed": {
+      "$ref": "#/$defs/FileContentChangedData"
+    },
+    "input_required": {
+      "$ref": "#/$defs/InputRequiredData"
+    },
+    "language_guard_replacement": {
+      "$ref": "#/$defs/LanguageGuardReplacementData"
+    },
+    "metrics_update": {
+      "$ref": "#/$defs/MetricsUpdateData"
+    },
+    "output": {
+      "$ref": "#/$defs/TerminalOutputData"
+    },
+    "password_request": {
+      "$ref": "#/$defs/PasswordRequestData"
+    },
+    "progress_complete": {
+      "$ref": "#/$defs/ProgressCompleteData"
+    },
+    "progress_milestone": {
+      "$ref": "#/$defs/ProgressMilestoneData"
+    },
+    "progress_question": {
+      "$ref": "#/$defs/ProgressQuestionData"
+    },
+    "progress_verification": {
+      "$ref": "#/$defs/ProgressVerificationData"
+    },
+    "provider_no_credential": {
+      "$ref": "#/$defs/ProviderNoCredentialData"
+    },
+    "pty_exit": {
+      "$ref": "#/$defs/TerminalPtyExitData"
+    },
+    "query_completed": {
+      "$ref": "#/$defs/QueryCompletedData"
+    },
+    "query_progress": {
+      "$ref": "#/$defs/QueryProgressData"
+    },
+    "query_started": {
+      "$ref": "#/$defs/QueryStartedData"
+    },
+    "rate_limited": {
+      "$ref": "#/$defs/RateLimitedData"
+    },
+    "security_approval_request": {
+      "$ref": "#/$defs/SecurityApprovalRequestData"
+    },
+    "security_prompt_request": {
+      "$ref": "#/$defs/SecurityPromptRequestData"
+    },
+    "session_changed": {
+      "$ref": "#/$defs/SessionChangedData"
+    },
+    "session_ready": {
+      "$ref": "#/$defs/TerminalSessionReadyData"
+    },
+    "session_restored": {
+      "$ref": "#/$defs/TerminalSessionReadyData"
+    },
+    "session_terminated": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "shell_approval_request": {
+      "$ref": "#/$defs/ShellApprovalRequestData"
+    },
+    "stream_chunk": {
+      "$ref": "#/$defs/StreamChunkData"
+    },
+    "subagent_activity": {
+      "$ref": "#/$defs/SubagentActivityData"
+    },
+    "terminal_output": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "todo_update": {
+      "$ref": "#/$defs/TodoUpdateData"
+    },
+    "tool_end": {
+      "$ref": "#/$defs/ToolEndData"
+    },
+    "tool_execution": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "tool_start": {
+      "$ref": "#/$defs/ToolStartData"
+    },
+    "validation": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "workspace_changed": {
+      "$ref": "#/$defs/WorkspaceChangedData"
+    },
+    "workspace_patch": {
+      "$ref": "#/$defs/WorkspacePatchData"
+    }
+  },
+  "x-sprout-generated-by": "packages/events/scripts/generate-events-schema.mjs",
+  "x-sprout-source": "packages/events/src/types.ts"
+}

@@ -614,6 +614,37 @@ passes the manifest validator (`pkg/startermanifest`).
       new API route with a test, list and create through the UI).
       Spec: SP-154 §154a.
 
+## Model output robustness
+
+Seen in automation runs on DeepSeek V4.1 Flash: a streamed reply degenerates
+into a repetition loop ("Let me run." / "Let me do it." for dozens of lines)
+with no tool call, until the model breaks out on its own. Rare, model-side,
+and not specific to one model, so the guard lives in sprout.
+
+- [ ] **robust.1** Streamed repetition guard: while a reply streams
+      (`pkg/agent/seed_provider_chat_stream.go`; the language guard's
+      hold-back in `stream_holdback.go` is the pattern), detect degenerate
+      repetition — the same short line or n-gram repeating past a threshold
+      with no tool call emitted — stop the stream, drop the degenerate text,
+      and retry the request once with a short system nudge to emit the tool
+      call or the final answer directly. Thresholds are config with sane
+      defaults; a second loop surfaces as a normal turn error. Count loops in
+      the metrics (per provider/model) and log one line per detection. Tests:
+      a scripted stream that loops is cut and retried once; legitimate
+      repetition (code with repeated lines, a list of similar items, a
+      progress log) is not flagged; a tool call after some repetition is
+      kept. Works for CLI, subagents and the web UI paths that share the
+      stream.
+- [ ] **robust.2** Per-model sampling parameters: provider configs
+      (`pkg/agent_providers/provider_config.go`, `configs/*.json`) can set
+      temperature, top_p and extra request parameters (e.g.
+      `frequency_penalty`) per model, overriding the provider defaults; user
+      provider config can override both. Today only context limits are per
+      model. Tests for precedence (model over provider over built-in, user
+      over embedded) and that unknown parameters pass through to the
+      request body. No value changes for any model in this item — tuning
+      follows from benchmark runs (SP-154).
+
 ## SP-150 — Model Roles (`roadmap/SP-150-model-roles.md`)
 
 - [x] **150.1** `roles` config section (`planner`, `coder`, `summarizer`,

@@ -2,6 +2,11 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.22.6] - 2026-10-06
+
+- fix(history): the revert-write audit no longer dumps a full stack trace per file — a bulk recover/revert flooded the console with hundreds of goroutine dumps; the concise audit line stays by default and the stack is available with SPROUT_DEBUG (8bf8dd955)
+- fix(history): hardened the revert/recover process — a single-file revert reports its outcome correctly (not a blank summary), a revision rollback continues past a failed file instead of leaving the tree part-reverted, a successful write whose status update fails is no longer reported as a failure, unreadable files (non-ENOENT) are refused rather than treated as safe to overwrite, the in-memory change buffer is bounded (count + byte caps with oldest-first eviction), out-of-workspace items count as skipped not failed, and recover_bulk's `found` reflects actual restores (9b63ba6ef)
+
 ## [v0.22.5] - 2026-10-06
 
 - fix(webui): the chat composer steers instead of dead-ending on "already in process" — the send path's steer-vs-new decision now stays in sync with the real run state, and the browser/wasm backend returns a machine-readable `query_in_progress` so a concurrent submit recovers by steering (922592cdd)

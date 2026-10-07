@@ -389,6 +389,21 @@ func (a *Agent) currentTurnVerification() turnVerification {
 	return a.turnVerification
 }
 
+// lastVerificationOutcome reports the agent's latest verification result as
+// the pair the deploy tool gates on: whether it passed, and
+// whether a result exists at all. haveResult is false when the turn-end hook
+// produced no result for the current work (a nil stored result — verification
+// disabled, no code change, or not yet run). The deploy tool combines this
+// with the session's verification-enabled state: enabled + no result is a
+// fail-closed refusal, so a deploy never rides on a guess.
+func (a *Agent) lastVerificationOutcome() (passed bool, haveResult bool) {
+	res := a.currentTurnVerification().result
+	if res == nil {
+		return false, false
+	}
+	return res.Passed(), true
+}
+
 // lastTurnVerificationSnapshot returns a defensive copy of the stored
 // per-turn verification state for consumers outside pkg/agent: the
 // Attempts map is copied (callers may mutate their copy without touching

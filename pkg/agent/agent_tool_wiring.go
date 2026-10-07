@@ -114,5 +114,12 @@ func buildAgentToolFuncs(agent *Agent) *tools.ToolFuncSet {
 		// write/edit handlers (pkg/agent_tools) invoke this closure so the
 		// agent's per-agent guard is applied to the model's file mutations.
 		GuardStarterManifestWrite: agent.refuseStarterManifestWrite,
+		// Deploy verification gate: the deploy tool reads the
+		// agent's latest SP-149 result so a deploy is refused unless
+		// verification passed. haveResult is false when the hook produced no
+		// result for the current work (verification disabled, no code change,
+		// or not yet run), which the tool treats as fail-closed when
+		// verification is enabled.
+		DeployVerification: agent.lastVerificationOutcome,
 	}
 }

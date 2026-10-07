@@ -41,6 +41,15 @@ type VerificationConfig struct {
 	// verification run (SP-149 149b). Same source and semantics as
 	// BuildCommand.
 	TestCommand string `json:"test_command,omitempty"`
+
+	// RequireTest requires a test for new behavior: when enabled, a turn
+	// that added new behavior must either carry an active-plan acceptance
+	// item of kind test or add/change a test file, and verification flags
+	// the turn otherwise. Off by default; it becomes enabled only when a
+	// config layer names "verification.require_test" with a truthy value.
+	// Enforced through the verification run so the flag flows through the
+	// same turn-end reporting and repair loop as the other checks.
+	RequireTest bool `json:"require_test,omitempty"`
 }
 
 // DefaultVerificationRepairAttempts is the small default for the SP-149
@@ -77,6 +86,7 @@ func (c *VerificationConfig) Resolve() VerificationConfig {
 	}
 	if c != nil {
 		result.Enabled = c.Enabled
+		result.RequireTest = c.RequireTest
 		if c.RepairAttempts > 0 {
 			result.RepairAttempts = c.RepairAttempts
 			// The total-rounds default derives from the effective

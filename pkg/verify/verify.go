@@ -95,6 +95,12 @@ type Runner struct {
 	// MaxExcerptBytes bounds Check.Excerpt (see boundedExcerpt).
 	// Default: DefaultMaxExcerptBytes.
 	MaxExcerptBytes int
+	// RequireTest is the mechanical input to the require-a-test-for-new-
+	// behavior check: when Enabled, a turn that added new behavior must
+	// either carry an active-plan test acceptance item or add/change a test
+	// file, and the run reports a failing check otherwise. The default (zero
+	// value) is disabled — the run's checks are then unchanged.
+	RequireTest RequireTestInput
 }
 
 // New returns a Runner with the production defaults: the starter manifest
@@ -268,6 +274,14 @@ func (r *Runner) RunSnapshot(ctx context.Context, root string, snap *Snapshot) (
 		default:
 			r.runCheck(ctx, root, &result.Checks[i])
 		}
+	}
+
+	// The require-a-test-for-new-behavior check is appended after the
+	// executed checks, so a failing check is fed back through the same repair
+	// loop and report as the build/test checks. It is off by default and adds
+	// no check when it is satisfied or not applicable.
+	if check := RequireTestCheck(r.RequireTest); check != nil {
+		result.Checks = append(result.Checks, *check)
 	}
 	return result, nil
 }

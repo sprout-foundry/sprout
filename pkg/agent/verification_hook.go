@@ -126,6 +126,18 @@ func (a *Agent) runTurnEndVerification(qc *queryRunContext, finalResult string) 
 
 	limit := cfg.VerificationRepairAttempts()
 	totalCap := cfg.VerificationRepairTotalRounds()
+
+	// The require-a-test-for-new-behavior check is opted in through the
+	// verification section; its mechanical input is frozen once, at hook
+	// entry: the turn's changed application-code paths and whether the frozen
+	// plan declares a test acceptance item. A disabled requirement leaves the
+	// runner's checks unchanged.
+	runner.RequireTest = verify.RequireTestInput{
+		Enabled:                 cfg.RequireTest(),
+		PlanHasTestItem:         snapshotHasTestItem(snap),
+		ChangedApplicationPaths: a.TurnChangedApplicationPaths(),
+	}
+
 	attempts := make(map[string]int)
 	rounds := 0
 

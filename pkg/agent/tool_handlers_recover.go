@@ -236,7 +236,7 @@ func recoverBulk(a *Agent, bulkPath string) (string, error) {
 		OK      bool   `json:"ok"`
 	}
 	results := make([]entry, 0, len(bulk.BulkItems))
-	var restored, failed int
+	var restored, failed, skipped int
 	for _, item := range bulk.BulkItems {
 		// Reuse the existing per-file recovery by synthesizing a
 		// TrackedFileChange and going through revertOne.
@@ -250,14 +250,20 @@ func recoverBulk(a *Agent, bulkPath string) (string, error) {
 		}
 		action, ok, msg := a.revertOne(synthesized)
 		results = append(results, entry{Path: item.FilePath, Action: action, OK: ok, Message: msg})
-		if ok {
+		switch {
+		case action == "skip":
+			skipped++
+		case ok:
 			restored++
-		} else {
+		default:
 			failed++
 		}
 	}
-	summary := fmt.Sprintf("%d restored, %d failed (bulk=%s, %d items)", restored, failed, bulkPath, len(bulk.BulkItems))
-	return jsonRecoverBulkResult(true, bulkPath, restored, failed, summary, results), nil
+	summary := fmt.Sprintf("%d restored, %d failed, %d skipped (bulk=%s, %d items)", restored, failed, skipped, bulkPath, len(bulk.BulkItems))
+	// found reflects that at least one item was actually restored, so a
+	// consumer keying on `found` alone doesn't read an all-failed/all-skipped
+	// bulk as a success. The raw counts still carry the full picture.
+	return jsonRecoverBulkResult(restored > 0, bulkPath, restored, failed, summary, results), nil
 }
 
 // resolveRecoveryTarget finds the most recent TrackedFileChange that

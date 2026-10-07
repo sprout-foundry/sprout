@@ -298,13 +298,22 @@ func (a *Agent) ShowMyChange(path string) (string, error) {
 	return string(b), nil
 }
 
-// RevertMyChanges performs a bulk revert.
+// RevertMyChanges performs a bulk revert. With a non-empty `file` it
+// reverts that one path; the single-path recover result is translated
+// into the same {restored, failed, summary, entries} envelope the bulk
+// path returns, so every caller (WebUI/API) sees one shape — a per-file
+// revert used to return {recovered, path, action, message}, which the UI
+// summary helper could not read.
 func (a *Agent) RevertMyChanges(scope, file, since string) (string, error) {
 	if file != "" {
-		return handleRecoverFile(nil, a, map[string]interface{}{
+		out, err := handleRecoverFile(nil, a, map[string]interface{}{
 			"path":  file,
 			"scope": "session_start",
 		})
+		if err != nil {
+			return out, err
+		}
+		return fileRevertEnvelope(out, file), nil
 	}
 	args := map[string]interface{}{}
 	if scope != "" {
@@ -314,6 +323,51 @@ func (a *Agent) RevertMyChanges(scope, file, since string) (string, error) {
 		args["since"] = since
 	}
 	return handleRevertMyChanges(nil, a, args)
+}
+
+// fileRevertEnvelope reshapes a single-path recover_file result
+// ({recovered, path, action, message}) into the revert envelope
+// ({restored, failed, summary, entries}). It is tolerant of an
+// unparseable payload: the original string is passed through unchanged
+// rather than lost.
+func fileRevertEnvelope(recoverJSON, file string) string {
+	var single struct {
+		Recovered bool   `json:"recovered"`
+		Path      string `json:"path"`
+		Action    string `json:"action"`
+		Message   string `json:"message"`
+	}
+	if err := json.Unmarshal([]byte(recoverJSON), &single); err != nil {
+		return recoverJSON
+	}
+	restored, failed := 0, 0
+	if single.Recovered {
+		restored = 1
+	} else {
+		failed = 1
+	}
+	path := single.Path
+	if path == "" {
+		path = file
+	}
+	entry := struct {
+		Path    string `json:"path"`
+		Action  string `json:"action,omitempty"`
+		Message string `json:"message,omitempty"`
+		OK      bool   `json:"ok"`
+	}{Path: path, Action: single.Action, Message: single.Message, OK: single.Recovered}
+	summary := fmt.Sprintf("%d restored, %d failed (file=%s)", restored, failed, file)
+	out := struct {
+		Restored int         `json:"restored"`
+		Failed   int         `json:"failed"`
+		Summary  string      `json:"summary"`
+		Entries  interface{} `json:"entries,omitempty"`
+	}{Restored: restored, Failed: failed, Summary: summary, Entries: []interface{}{entry}}
+	b, marshalErr := json.MarshalIndent(out, "", "  ")
+	if marshalErr != nil {
+		return recoverJSON
+	}
+	return string(b)
 }
 
 // SummarizeMySession returns the activity-block digest. Thin wrapper

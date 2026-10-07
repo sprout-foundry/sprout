@@ -16,6 +16,92 @@ import (
 // sites within this package keep working.
 const RedactedContentMarker = history.RedactedContentMarker
 
+// Bounds on the in-memory session change buffer. TrackedFileChange keeps a
+// full copy of each file's before/after content, and the slice was
+// append-only — it only reset at session end — so a long session with many
+// edits grew without bound. These caps evict the OLDEST entries once the
+// buffer is over budget, while always retaining the earliest entry per path
+// (session_start recovery reads it) and the most recent entries.
+var (
+	// maxTrackedChanges caps the number of entries held in the buffer.
+	maxTrackedChanges = 5000
+	// maxTrackedBytes caps the total before+after content bytes held.
+	maxTrackedBytes = int64(64 * 1024 * 1024) // 64 MiB
+)
+
+// SetTrackedChangeCaps overrides the buffer caps (tests / tuning).
+func SetTrackedChangeCaps(maxChanges int, maxBytes int64) {
+	if maxChanges > 0 {
+		maxTrackedChanges = maxChanges
+	}
+	if maxBytes > 0 {
+		maxTrackedBytes = maxBytes
+	}
+}
+
+// trimChangesLocked enforces the buffer caps by evicting OLDEST-first until
+// the buffer is back under both the count and byte caps. Earlier I protected
+// each path's earliest entry to preserve session_start semantics, but that
+// made the count cap a no-op whenever every edit touched a distinct file
+// (every entry was "earliest" and un-evictable). The bound has to bite, so
+// the newest entries win and the oldest are dropped; the persisted history
+// store remains the source of truth for anything aged out of the live buffer.
+// Caller must hold ct.mu.
+func (ct *ChangeTracker) trimChangesLocked() {
+	if maxTrackedChanges <= 0 && maxTrackedBytes <= 0 {
+		return
+	}
+	overCount := maxTrackedChanges > 0 && len(ct.changes) > maxTrackedChanges
+	overBytes := maxTrackedBytes > 0 && trackedContentBytes(ct.changes) > maxTrackedBytes
+	if !overCount && !overBytes {
+		return
+	}
+
+	// Keep a suffix of the most recent entries that fits both caps. Walk from
+	// the newest end backwards, accumulating until a cap would be exceeded.
+	start := len(ct.changes)
+	var bytes int64
+	for i := len(ct.changes) - 1; i >= 0; i-- {
+		add := entryBytes(ct.changes[i])
+		if maxTrackedChanges > 0 && len(ct.changes)-i > maxTrackedChanges {
+			break
+		}
+		if maxTrackedBytes > 0 && bytes+add > maxTrackedBytes {
+			break
+		}
+		bytes += add
+		start = i
+	}
+	if start == 0 {
+		return
+	}
+	kept := make([]TrackedFileChange, len(ct.changes)-start)
+	copy(kept, ct.changes[start:])
+	// Zero the evicted prefix so its content strings are GC-reachable no more.
+	for i := 0; i < start; i++ {
+		ct.changes[i] = TrackedFileChange{}
+	}
+	ct.changes = kept
+}
+
+// entryBytes is the approximate retained size of one change.
+func entryBytes(ch TrackedFileChange) int64 {
+	n := int64(len(ch.FilePath) + len(ch.OriginalCode) + len(ch.NewCode))
+	for _, item := range ch.BulkItems {
+		n += int64(len(item.FilePath) + len(item.OriginalCode) + len(item.NewCode))
+	}
+	return n
+}
+
+// trackedContentBytes sums the retained size of a change slice.
+func trackedContentBytes(changes []TrackedFileChange) int64 {
+	var n int64
+	for _, ch := range changes {
+		n += entryBytes(ch)
+	}
+	return n
+}
+
 // AgentView is the seam between the change tracker and its host agent
 // (SP-141 phase 2). The tracker lives in pkg/agent/changes; the agent
 // lives in pkg/agent, and the import arrow is one-way (pkg/agent →
@@ -215,6 +301,7 @@ func (ct *ChangeTracker) TrackFileWriteState(filePath string, originalContent st
 
 	ct.mu.Lock()
 	ct.changes = append(ct.changes, change)
+	ct.trimChangesLocked()
 	ct.mu.Unlock()
 	return nil
 }
@@ -243,6 +330,7 @@ func (ct *ChangeTracker) TrackFileEdit(filePath string, originalContent string, 
 
 	ct.mu.Lock()
 	ct.changes = append(ct.changes, change)
+	ct.trimChangesLocked()
 	ct.mu.Unlock()
 	return nil
 }
@@ -251,6 +339,7 @@ func (ct *ChangeTracker) TrackFileEdit(filePath string, originalContent string, 
 func (ct *ChangeTracker) appendChange(change TrackedFileChange) {
 	ct.mu.Lock()
 	ct.changes = append(ct.changes, change)
+	ct.trimChangesLocked()
 	ct.mu.Unlock()
 }
 
@@ -423,6 +512,7 @@ func (ct *ChangeTracker) MergeChild(changes []TrackedFileChange, source string) 
 	}
 	ct.mu.Lock()
 	ct.changes = append(ct.changes, merged...)
+	ct.trimChangesLocked()
 	ct.mu.Unlock()
 	// Re-baseline the shell cache for each touched path to avoid duplicates.
 	for _, ch := range merged {
@@ -543,5 +633,6 @@ func (ct *ChangeTracker) RecordRevert(filePath, before, after string, existsAfte
 		Timestamp:    time.Now(),
 		ToolCall:     toolCall,
 	})
+	ct.trimChangesLocked()
 	ct.mu.Unlock()
 }

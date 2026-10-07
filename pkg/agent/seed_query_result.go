@@ -246,7 +246,7 @@ func (a *Agent) handleQueryResult(qc *queryRunContext, result string, err error)
 	qc.preSeedMsgCount = rebaseQueryStart(qc.preSeedMsgCount, rebase, len(a.state.GetMessages()))
 	a.journalSeedState(qc.seedAgent.State())
 
-	// SP-152 §152b: language-guard the turn's final assistant message
+	// Language-guard the turn's final assistant message
 	// before anything downstream (the query-completed event, later turns,
 	// the CLI result) sees it. On a mismatch the corrected text — or the
 	// localized notice — replaces the message in state and becomes the
@@ -256,7 +256,7 @@ func (a *Agent) handleQueryResult(qc *queryRunContext, result string, err error)
 	// the query-completed event and via state.
 	result = a.applyLanguageGuard(qc, result)
 
-	// SP-149 §149c/§149d (149.6): deliver the turn's verification result to
+	// Deliver the turn's verification result to
 	// the user — AFTER the language guard, so the guard's language-detection
 	// sees only the model's own text, and before the return, via the stored
 	// per-turn state (reset in prepareQueryRun). It appends the attachment
@@ -270,8 +270,8 @@ func (a *Agent) handleQueryResult(qc *queryRunContext, result string, err error)
 	// verification result.
 	result = a.deliverVerificationResult(result)
 
-	// SP-151 §151a (151.3): emit the turn's verification + completion
-	// progress events from the SP-149 turn-end result (progress_verification
+	// Emit the turn's verification + completion
+	// progress events from the turn-end result (progress_verification
 	// when a result exists, then progress_complete). Placed after the
 	// verification reply attachment and before the commit/finalize/streaming
 	// early-returns below so both success outcomes emit them. The error and

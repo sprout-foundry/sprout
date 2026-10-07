@@ -10,7 +10,7 @@ package tools
 //
 // The tool adds two rules on top of the package:
 //
-//   - Verification (SP-149). When verification is enabled for the session,
+//   - Verification. When verification is enabled for the session,
 //     deploy refuses unless the agent's latest verification result passed.
 //     The result is read through the ToolFuncSet seam wired by pkg/agent; a
 //     session with verification enabled but no wired result fails closed —
@@ -116,7 +116,7 @@ func resolveDeployRunnerAndFingerprint() (deploy.BuildRunner, deploy.TreeFingerp
 	return run, fingerprint
 }
 
-// verificationEnabled reports whether the SP-149 verification run is enabled
+// verificationEnabled reports whether the verification run is enabled
 // for this session. A nil ConfigManager (standalone tool runs, tests) reads
 // as disabled, matching the CLI default.
 func verificationEnabled(env ToolEnv) bool {
@@ -127,11 +127,11 @@ func verificationEnabled(env ToolEnv) bool {
 	return cfg.VerificationEnabled()
 }
 
-// deployVerificationGate decides whether a deploy may proceed past the SP-149
+// deployVerificationGate decides whether a deploy may proceed past the
 // verification gate, and returns the snapshot deploy.BuildAndDeploy checks.
 //
 //   - When verification is disabled for the session (the default), there is
-//     no SP-149 result to gate on — verification is off — so the gate is
+//     no result to gate on — verification is off — so the gate is
 //     open, mirroring the CLI's default snapshot: the snapshot records the
 //     current tree's fingerprint and passed=true, and BuildAndDeploy's own
 //     fingerprint check still guards the build window. The passing flag is

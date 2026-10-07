@@ -1,27 +1,23 @@
-// Package preview is the SP-155 §155a preview backend (TODO 155.4): it
-// starts or detects the project's dev server from the starter manifest's
-// dev command and port (SP-153 §153a, loaded through pkg/starterstore),
-// and tracks the server's lifecycle — starting, running, stopped, failed —
-// for the preview pane (155.3's presentational component).
+// Package preview is the preview backend: it starts or detects the project's
+// dev server from the starter manifest's dev command and port (loaded through
+// pkg/starterstore), and tracks the server's lifecycle — starting, running,
+// stopped, failed — for the preview pane's presentational component.
 //
-// The Manager is the single owner of a dev-server start for one project
-// root, and it follows the starter manifest strictly:
+// The Manager is the single owner of a dev-server start for one project root,
+// and it follows the starter manifest strictly:
 //
-//   - it never guesses a command. A missing manifest, or a manifest
-//     without a usable dev declaration (a dev command AND a dev port),
-//     settles the state to stopped with a reason;
-//   - it detects an already-running server on the manifest's dev port and
-//     adopts it (running, detected) instead of starting a second one;
-//   - a dev server it starts runs in its own process group (verify's
-//     DevProcess, the shared platform process type), so Stop releases the
-//     port for real, and a liveness monitor settles the state to failed
-//     when the dev command dies or the port stops answering.
+//   - it never guesses a command. A missing manifest, or a manifest without a usable dev
+//     declaration (a dev command AND a dev port), settles the state to stopped with a reason;
+//   - it detects an already-running server on the manifest's dev port and adopts it (running,
+//     detected) instead of starting a second one;
+//   - a dev server it starts runs in its own process group (verify's DevProcess, the shared
+//     platform process type), so Stop releases the port for real, and a liveness monitor
+//     settles the state to failed when the dev command dies or the port stops answering.
 //
-// The package is standard-library plus repo-internal only, so it compiles
-// for the CLI, the webui server, and WASM builds alike. Under WASM the
-// process support is a no-op stub (verify's js build), so Start settles to
-// failed with the stub's reason — hosted previews are the other half of
-// SP-155 §155a (TODO 155.5), not a local dev server.
+// The package is standard-library plus repo-internal only, so it compiles for the CLI, the webui
+// server, and WASM builds alike. Under WASM the process support is a no-op stub (verify's js
+// build), so Start settles to failed with the stub's reason; hosted previews are out of scope
+// here and are not a local dev server.
 package preview
 
 import (
@@ -37,17 +33,17 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/verify"
 )
 
-// readinessPollInterval is the interval between dev-port readiness probes
-// while a spawned dev server is starting (verify's poll cadence).
+// readinessPollInterval is the interval between dev-port readiness probes while
+// a spawned dev server is starting (verify's poll cadence).
 const readinessPollInterval = 250 * time.Millisecond
 
-// livenessPollInterval is the interval between dev-port probes while a
-// spawned dev server is running, so a wedged or crashed server settles the
-// state instead of showing a dead "running" pane.
+// livenessPollInterval is the interval between dev-port probes while a spawned
+// dev server is running, so a wedged or crashed server settles the state
+// instead of showing a dead "running" pane.
 const livenessPollInterval = 2 * time.Second
 
-// Manager drives one project's dev server (SP-155 §155a). One manager per
-// project root; every method is safe for concurrent use.
+// Manager drives one project's dev server. One manager per project root; every
+// method is safe for concurrent use.
 type Manager struct {
 	root         string
 	readyTimeout time.Duration

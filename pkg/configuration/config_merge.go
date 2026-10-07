@@ -79,12 +79,11 @@ func MergeConfig(base, override *Config) *Config {
 	if override.overrides("show_tool_invocations", override.ShowToolInvocations) {
 		result.ShowToolInvocations = override.ShowToolInvocations
 	}
-	// Language is a single-value selector — a non-empty override wins
-	// (SP-152 152.3).
+	// Language is a single-value selector — a non-empty override wins.
 	if override.Language != "" {
 		result.Language = override.Language
 	}
-	// The language guard is on by default (SP-152 152f); the opt-out is a
+	// The language guard is on by default; the opt-out is a
 	// boolean with the same explicit-key semantics as disable_thinking, so
 	// a layer that named disable_language_guard wins with either value —
 	// including false, which re-enables the guard over a broader disable.
@@ -113,7 +112,7 @@ func MergeConfig(base, override *Config) *Config {
 			result.RiskProfiles[k] = v
 		}
 	}
-	// Merge Roles (SP-150 §150a) with field-wise precedence. Unlike
+	// Merge Roles with field-wise precedence. Unlike
 	// RiskProfiles (which replaces a named profile wholesale), a role
 	// named in both layers keeps every field the override left empty
 	// from the base layer — so a project-level roles.commit {model: …}
@@ -314,7 +313,7 @@ func MergeConfig(base, override *Config) *Config {
 		result.Training.ExcludePaths = mergeStringSlices(result.Training.ExcludePaths, override.Training.ExcludePaths)
 	}
 
-	// Merge Verification configuration (SP-149 149e/149c/149b). The
+	// Merge Verification configuration. The
 	// feature is off by default; the enable flag carries explicit-key
 	// semantics so a narrower layer can disable a broader layer's
 	// enable, the repair-attempt limit and the total repair-rounds cap

@@ -15,7 +15,7 @@
  * mode's shell component, which composes its surface and its own chrome. The
  * surfaces stay inside their shells, not here.
  *
- * Modes are defined by one public registration API (SP-155 §155b): an
+ * Modes are defined by one public registration API: an
  * embedding shell registers its modes with it, and the built-in Code and
  * Design modes register at module load through the same write path (minus the
  * API's built-in guard, which exists to protect them). Adding a mode is: one
@@ -79,7 +79,7 @@ export interface WorkspaceMode {
 }
 
 /**
- * Public registration payload (SP-155 §155b): id, label, icon, shell
+ * Public registration payload: id, label, icon, shell
  * component, and an availability predicate.
  *
  * This is the only way an extension's mode gets into the registry; the
@@ -106,7 +106,7 @@ export type UnregisterWorkspaceMode = () => void;
 /**
  * The built-in baseline: the mode every workspace offers, and the last resort
  * when a configured default points at a mode the workspace does not. New
- * sessions start in the configured default (SP-155 §155b) — see
+ * sessions start in the configured default — see
  * `defaultWorkspaceMode` — which falls back to this when unset or unusable.
  */
 export const BUILTIN_DEFAULT_WORKSPACE_MODE: WorkspaceModeId = 'code';
@@ -143,7 +143,7 @@ export function isBuiltinWorkspaceModeId(id: WorkspaceModeId): boolean {
 export const WORKSPACE_MODES: WorkspaceMode[] = [];
 
 /**
- * Public mode registration API (SP-155 §155b).
+ * Public mode registration API.
  *
  * A new id is appended, after the built-ins, in switcher order. Re-registering
  * an existing id replaces that entry in place (the mode keeps its position),
@@ -234,7 +234,7 @@ export function availableModes(ctx: WorkspaceModeContext): WorkspaceMode[] {
 }
 
 /**
- * The default mode new sessions start in (SP-155 §155b).
+ * The default mode new sessions start in.
  *
  * The configured default (`config/workspaceMode.ts`) when it names a mode this
  * workspace actually offers — a mode that is unregistered, or registered but

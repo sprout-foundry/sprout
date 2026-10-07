@@ -1,7 +1,7 @@
 //go:build !js
 
-// runner_contract_test.go — the SP-154 §154a/§154b pass/fail contract and
-// repair-loop tests: the recorded pass/fail comes only from the SP-149
+// runner_contract_test.go — the pass/fail contract and
+// repair-loop tests: the recorded pass/fail comes only from the
 // verification result (never the model's reply), a bad setup is recorded and
 // the run continues, and the three-runs-per-model / fresh-copy guarantees
 // hold. The fixtures and helpers live in runner_test.go (same package).
@@ -22,7 +22,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// The pass/fail contract (SP-154 §154a/§154b)
+// The pass/fail contract
 // ---------------------------------------------------------------------------
 
 // TestRunner_ClaimsSuccessFailingCheckRecordsFail pins the item's
@@ -71,7 +71,7 @@ func TestRunner_ClaimsSuccessFailingCheckRecordsFail(t *testing.T) {
 	if len(run.Result.Checks) != 1 || run.Result.Checks[0].Kind != plancontract.KindBuild || run.Result.Checks[0].Passed {
 		t.Errorf("result checks = %+v, want the single failing build check", run.Result.Checks)
 	}
-	// 154.3 per-task metrics: the runner issued one turn; the hook ran
+	// Per-task metrics: the runner issued one turn; the hook ran
 	// one repair round (the report fed the failing build back once) and
 	// consumed the build check's attempt budget against the harness's
 	// N=1 limit.
@@ -123,7 +123,7 @@ func TestRunner_ClaimsFailurePassingCheckRecordsPass(t *testing.T) {
 	if run.Err != nil {
 		t.Errorf("Err = %v, want nil (the turn completed cleanly)", run.Err)
 	}
-	// 154.3: a passing run stores the limit (the hook saves it on a
+	// A passing run stores the limit (the hook saves it on a
 	// passing run too) and no repair rounds or attempts.
 	if run.Turns != 1 {
 		t.Errorf("Turns = %d, want 1 (the runner issued one turn)", run.Turns)
@@ -141,7 +141,7 @@ func TestRunner_ClaimsFailurePassingCheckRecordsPass(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Fresh copies and the 3-runs-per-model default (SP-154 §154b)
+// Fresh copies and the 3-runs-per-model default
 // ---------------------------------------------------------------------------
 
 // TestRunner_ThreeRunsPerModelInFreshCopies pins the run count and the
@@ -177,7 +177,7 @@ func TestRunner_ThreeRunsPerModelInFreshCopies(t *testing.T) {
 		t.Fatalf("RunTask: %v", err)
 	}
 	if len(runs) != 3 {
-		t.Fatalf("runs = %d, want 3 (SP-154 §154b: 3 runs per model)", len(runs))
+		t.Fatalf("runs = %d, want 3 (3 runs per model)", len(runs))
 	}
 	for i, run := range runs {
 		if run.RunNumber != i+1 {
@@ -345,7 +345,7 @@ func TestRunner_ShapeCopyErrorFirstRunContinues(t *testing.T) {
 // verification enabled but a text-only turn (the model changes no file,
 // the hook's change gate stays closed), the hook never runs, no result
 // is stored, and the run records as fail — no passing result, no pass
-// (SP-154 §154a: pass/fail comes only from the SP-149 result).
+// (pass/fail comes only from the verification result).
 func TestRunner_NeverRanVerificationRecordsFail(t *testing.T) {
 	mgr, cleanup := configuration.NewTestManager(t)
 	t.Cleanup(cleanup)
@@ -374,7 +374,7 @@ func TestRunner_NeverRanVerificationRecordsFail(t *testing.T) {
 	if run.Passed {
 		t.Error("Passed = true, want false (no passing result, no pass)")
 	}
-	// 154.3: verification never ran (the hook's change gate stayed
+	// Verification never ran (the hook's change gate stayed
 	// closed) → the repair metrics are zero and empty.
 	if run.RepairRounds != 0 || run.RepairLimit != 0 || len(run.RepairAttempts) != 0 {
 		t.Errorf("repair metrics = rounds %d / limit %d / attempts %v, want all zero (the hook never ran)",

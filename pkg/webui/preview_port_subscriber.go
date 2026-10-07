@@ -1,13 +1,13 @@
 //go:build !js
 
-// Hosted-preview subscriber — SP-155 §155a (TODO 155.5).
+// Hosted-preview subscriber.
 //
 // In hosted workspaces the agent runs in-process inside the webui server,
 // and its register_preview_port tool publishes a preview_port_registered
 // event to the shared event bus (the same bus passed to ToolEnv). This
 // file is the webui server's half of that wiring: it keeps the active
 // hosted preview (the platform-registered URL) on the server so
-// /api/preview/status can report it to the preview pane (155.6) instead
+// /api/preview/status can report it to the preview pane instead
 // of the URL being only printed to the model.
 package webui
 
@@ -19,8 +19,8 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/preview"
 )
 
-// hostedPreviewInfo is the recorded state of a platform-registered preview
-// (SP-155 §155a, TODO 155.5): the URL the agent's register_preview_port
+// hostedPreviewInfo is the recorded state of a platform-registered preview:
+// the URL the agent's register_preview_port
 // call returned, plus its port/label and when it was registered. The
 // platform owns that URL (it is not a dev server we started), so the
 // preview pane embeds it as-is and the local start/restart/stop actions
@@ -93,8 +93,8 @@ func (ws *ReactWebServer) clearHostedPreview() {
 	ws.hostedPreviewMu.Unlock()
 }
 
-// hostedPreviewState returns the active hosted preview (SP-155 §155a,
-// TODO 155.5) as the preview.State the pane renders: running, with the
+// hostedPreviewState returns the active hosted preview
+// as the preview.State the pane renders: running, with the
 // platform URL and the hosted marker. The second return is false when no
 // hosted preview is registered (the caller then falls back to the local
 // dev-server manager's state).

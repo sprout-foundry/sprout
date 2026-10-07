@@ -49,14 +49,14 @@ type Config struct {
 	ProviderModels   map[string]string `json:"provider_models"`
 	ProviderPriority []string          `json:"provider_priority"`
 
-	// Roles is the SP-150 §150a role-model section: named roles
+	// Roles is the role-model section: named roles
 	// (planner, coder, summarizer, reviewer, commit) map to a provider
 	// and model; unset roles fall back to the conversation's
 	// provider/model (ResolveRole). The existing per-setting model
 	// fields (subagent_model, commit_model, review/completion models)
-	// are read as aliases for their roles (item 150.2): each getter
+	// are read as aliases for their roles: each getter
 	// consults the roles section, and ResolveRole consults the legacy
-	// fields. Item 150.3 rewires the internal call sites to
+	// fields. The internal call sites are being rewired to
 	// ResolveRole.
 	Roles map[string]RoleConfig `json:"roles,omitempty"`
 
@@ -226,12 +226,12 @@ type Config struct {
 	// EditApproval controls the per-hunk diff approval gate for agent file writes.
 	EditApproval *EditApprovalConfig `json:"edit_approval,omitempty"`
 
-	// Verification controls the SP-149 verification run ("verified done"):
-	// the turn-end gate that runs the plan's acceptance checks (149a) and
-	// the repair loop (149c). Off by default in the CLI; any config layer —
+	// Verification controls the turn-end verification run ("verified done"):
+	// the turn-end gate that runs the plan's acceptance checks and
+	// the repair loop. Off by default in the CLI; any config layer —
 	// global, project (workspace), or an embedding environment writing the
-	// same layers — enables it through the same "verification" section
-	// (149e). Nil means off with the default repair-attempt limit.
+	// same layers — enables it through the same "verification" section.
+	// Nil means off with the default repair-attempt limit.
 	Verification *VerificationConfig `json:"verification,omitempty"`
 
 	// Quality controls the quality-after-edits step: the turn-end gate that
@@ -256,7 +256,7 @@ type Config struct {
 	ShowToolInvocations bool `json:"show_tool_invocations,omitempty"`
 
 	// Language is the user's preferred conversation language, used by the
-	// outbound language guard (SP-152 152.3) as a fallback when the user's
+	// outbound language guard as a fallback when the user's
 	// recent messages are too short or too mixed to resolve a majority
 	// language. It is an ISO 639-1 code (or the 639-3 code for the few
 	// languages without a 639-1 code), case-insensitive. Empty means no
@@ -265,8 +265,8 @@ type Config struct {
 	// langguard.ParseLanguage(cfg.Language).
 	Language string `json:"language,omitempty"`
 
-	// DisableLanguageGuard turns off the outbound language guard (SP-152
-	// 152f), which is on by default everywhere, including the CLI. Any
+	// DisableLanguageGuard turns off the outbound language guard,
+	// which is on by default everywhere, including the CLI. Any
 	// config layer (global, workspace, session) may set this to true; the
 	// layer merge tracks the key's presence, so an explicit false in a
 	// narrower layer re-enables the guard even over a broader layer's

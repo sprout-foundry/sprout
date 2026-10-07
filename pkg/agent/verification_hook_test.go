@@ -1,16 +1,16 @@
 //go:build !js
 
-// verification_hook_test.go — the SP-149 §149c acceptance tests: the
+// verification_hook_test.go — the turn-end verification acceptance tests: the
 // turn-end verification hook drives a full agent turn (scripted model,
 // real workspace fixture, real shell execution of the manifest's build
 // command) and pins the gate, the repair loop, and the final-reply
-// contract (149.6):
+// contract:
 //
 //   - a turn that changed a file runs the project's verification;
 //   - a broken build → the structured report continues the turn, the
 //     loop stops after N repair attempts on the same check (N repair
 //     rounds, a third never happens), and the final reply carries the
-//     §149d failure report (what passes, what fails, what was tried);
+//     failure report (what passes, what fails, what was tried);
 //   - a passing build needs no repair round and the final reply carries
 //     the passing result;
 //   - an all-skipped run verifies nothing, so the reply states that no
@@ -61,7 +61,7 @@ func vhShAvailable(t *testing.T) {
 }
 
 // vhWriteStarterManifest writes the project's starter manifest fixture
-// (SP-153) with the given build command and no test command, so a
+// with the given build command and no test command, so a
 // baseline verification run executes the build and skips the test check.
 func vhWriteStarterManifest(t *testing.T, root, buildCommand string) {
 	t.Helper()
@@ -76,8 +76,7 @@ func vhWriteStarterManifest(t *testing.T, root, buildCommand string) {
 
 // vhWriteBareStarterManifest writes a starter manifest with no commands at
 // all: a baseline verification run skips every check (no trusted command
-// anywhere), so the run verifies nothing and reports no passing result
-// (SP-149 §149d).
+// anywhere), so the run verifies nothing and reports no passing result.
 func vhWriteBareStarterManifest(t *testing.T, root string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Join(root, ".sprout"), 0o755); err != nil {
@@ -166,16 +165,16 @@ func TestVerificationHook_BrokenBuildLoopRunsAndStopsAtN(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ProcessQuery: %v", err)
 	}
-	// 149.6: the stopping rule fired (N=2) — the final reply states
+	// The stopping rule fired (N=2): the final reply states
 	// plainly what passes (nothing), what fails (the build), and what
-	// was tried (2/2 repair attempts) (SP-149 §149d). Partial success
+	// was tried (2/2 repair attempts). Partial success
 	// is never reported as success.
 	const want = repairTwoFinal + "\n\n" + "Verification: FAILED after the stopping rule (2 repair attempts)\n" +
 		"Passed: none\n" +
 		"Failed: build — command failed\n" +
 		"Tried: build: 2/2 repair attempts"
 	if result != want {
-		t.Errorf("result = %q,\nwant %q (the last repair-round answer with the §149d failure report)", result, want)
+		t.Errorf("result = %q,\nwant %q (the last repair-round answer with the failure report)", result, want)
 	}
 
 	// Model calls: the turn's tool-call iteration + the turn's answer,
@@ -244,9 +243,9 @@ func TestVerificationHook_PassingBuildNeedsNoRepair(t *testing.T) {
 		t.Fatalf("ProcessQuery: %v", err)
 	}
 
-	// 149.6: the final reply carries the passing verification result —
-	// success may be reported only with a passing result attached
-	// (SP-149 §149c). The attachment is the stable block: a blank line,
+	// The final reply carries the passing verification result —
+	// success may be reported only with a passing result attached.
+	// The attachment is the stable block: a blank line,
 	// then the "passed" line with the run's summary.
 	const want = turnAnswer + "\n\n" + "Verification: passed — baseline: build: passed (echo fixture-build-ok); test: skipped — no test command available: set the starter manifest or the project's explicit verification configuration"
 	if result != want {
@@ -284,7 +283,7 @@ func TestVerificationHook_DisabledByDefaultIsNoOp(t *testing.T) {
 		vhWriteToolCall(t, root, "src/app.js"),
 		NewScriptedTextResponse(turnAnswer),
 	)
-	// No verification section: the default-off path (SP-149 §149e) — a
+	// No verification section: the default-off path — a
 	// broken build must be invisible to the hook.
 	ag := vhAgent(t, client, root, nil)
 
@@ -368,7 +367,7 @@ func TestVerificationHook_StopRuleCapsRepairRoundsAtN(t *testing.T) {
 		t.Fatalf("ProcessQuery: %v", err)
 	}
 
-	// The stopping rule (SP-149 §149c): after N=2 repair attempts on the
+	// The stopping rule: after N=2 repair attempts on the
 	// same failing check the loop stops — exactly two repair rounds,
 	// never a third. The scripted client carries exactly the four
 	// responses a correct run consumes: a third repair round would send
@@ -388,11 +387,11 @@ func TestVerificationHook_StopRuleCapsRepairRoundsAtN(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// The final-reply contract (149.6)
+// The final-reply contract
 // ---------------------------------------------------------------------------
 
-// TestVerificationHook_AllSkippedRunReportsNoPassingResult pins §149d: a
-// run that verified nothing (every check skipped, no trusted command
+// TestVerificationHook_AllSkippedRunReportsNoPassingResult pins the all-skipped
+// rule: a run that verified nothing (every check skipped, no trusted command
 // anywhere) is neither a pass nor a failure — the reply states that no
 // passing result exists, and success is never reported without one.
 func TestVerificationHook_AllSkippedRunReportsNoPassingResult(t *testing.T) {
@@ -423,7 +422,7 @@ func TestVerificationHook_AllSkippedRunReportsNoPassingResult(t *testing.T) {
 	}
 
 	// The reply carries the no-passing-result attachment — not the
-	// passing one — listing what could not be verified (SP-149 §149d).
+	// passing one — listing what could not be verified.
 	const want = turnAnswer + "\n\n" + "Verification: ran, but no checks applied (all skipped) — no passing result\n" +
 		"Skipped: build — no build command available: set the starter manifest or the project's explicit verification configuration\n" +
 		"Skipped: test — no test command available: set the starter manifest or the project's explicit verification configuration"

@@ -1,0 +1,64 @@
+{
+  "id": "add-items-count-route",
+  "request": "There is no cheap way to see how many items exist without fetching the whole list. Add a GET /api/items/count route that returns the number of items as JSON. Add a test for it against the local database, and make sure the app still builds and the API still responds.",
+  "starter": "web-app-data",
+  "plan": {
+    "version": 1,
+    "revision": 1,
+    "created": "2026-10-07T09:00:00Z",
+    "updated": "2026-10-07T09:00:00Z",
+    "goal": "Give a client a lightweight endpoint that reports how many items the database holds.",
+    "scope": [
+      {
+        "id": "items-count-route",
+        "title": "A GET /api/items/count route",
+        "description": "Add a GET /api/items/count handler to the Hono app in src/worker/index.ts that counts the rows in the items table and returns a JSON object with a count field. Register it before the catch-all asset route so the API path is matched, not served as an asset. Extend test/api.test.ts to cover an empty table and a table with items."
+      }
+    ],
+    "steps": [
+      {
+        "scope": "items-count-route",
+        "description": "Add app.get('/api/items/count', ...) to src/worker/index.ts above the catch-all asset route."
+      },
+      {
+        "scope": "items-count-route",
+        "description": "Count the rows with Drizzle and return c.json({ count }) with a 200 status."
+      },
+      {
+        "scope": "items-count-route",
+        "description": "Extend test/api.test.ts with a case that asserts the count is zero on an empty table and increases after a create, then run the build and both test suites."
+      }
+    ],
+    "starter": "web-app-data",
+    "acceptance": [
+      {
+        "id": "build-passes",
+        "scope": "items-count-route",
+        "check": "npm run build",
+        "kind": "build"
+      },
+      {
+        "id": "tests-pass",
+        "scope": "items-count-route",
+        "check": "npm test",
+        "kind": "test"
+      },
+      {
+        "id": "api-responds",
+        "scope": "items-count-route",
+        "check": "/api/items",
+        "kind": "page"
+      }
+    ],
+    "out_of_scope": [
+      {
+        "item": "Showing the count on the items page",
+        "reason": "The request is an API endpoint that reports the count; surfacing it in the UI can follow as its own change."
+      },
+      {
+        "item": "Counting with a filter or grouping",
+        "reason": "A single total is enough for a cheap count; filtered counts need query parameters that are not requested."
+      }
+    ]
+  }
+}

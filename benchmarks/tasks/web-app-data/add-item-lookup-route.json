@@ -1,0 +1,68 @@
+{
+  "id": "add-item-lookup-route",
+  "request": "The API can list every item and create one, but there is no way to read a single item by its id. Add a GET /api/items/:id route that returns the matching item as JSON and responds 404 with a small error object when no item has that id. Cover both the found and the missing case in the API test, and make sure the app still builds and the API still responds.",
+  "starter": "web-app-data",
+  "plan": {
+    "version": 1,
+    "revision": 1,
+    "created": "2026-10-07T09:00:00Z",
+    "updated": "2026-10-07T09:00:00Z",
+    "goal": "Let a client fetch one item by its id instead of having to list the whole table.",
+    "scope": [
+      {
+        "id": "item-lookup-route",
+        "title": "A GET /api/items/:id read route",
+        "description": "Add a GET /api/items/:id handler to the Hono app in src/worker/index.ts that parses the id, selects the matching row, returns it as JSON when found, and returns a 404 with an {\"error\": \"item not found\"} body when it is not. Extend test/api.test.ts to cover the found and missing cases."
+      }
+    ],
+    "steps": [
+      {
+        "scope": "item-lookup-route",
+        "description": "Add app.get('/api/items/:id', ...) to src/worker/index.ts, above the catch-all asset route so it is matched as an API path."
+      },
+      {
+        "scope": "item-lookup-route",
+        "description": "Select the item by id with Drizzle and return c.json(item, 200) when a row is found."
+      },
+      {
+        "scope": "item-lookup-route",
+        "description": "Return a 404 with a small error object when no row matches the requested id."
+      },
+      {
+        "scope": "item-lookup-route",
+        "description": "Extend test/api.test.ts with a case that creates an item, reads it back by id, and asserts a missing id responds 404, then run the build and both test suites."
+      }
+    ],
+    "starter": "web-app-data",
+    "acceptance": [
+      {
+        "id": "build-passes",
+        "scope": "item-lookup-route",
+        "check": "npm run build",
+        "kind": "build"
+      },
+      {
+        "id": "tests-pass",
+        "scope": "item-lookup-route",
+        "check": "npm test",
+        "kind": "test"
+      },
+      {
+        "id": "api-responds",
+        "scope": "item-lookup-route",
+        "check": "/api/items",
+        "kind": "page"
+      }
+    ],
+    "out_of_scope": [
+      {
+        "item": "Adding an update route alongside the read route",
+        "reason": "The request is to read one item; an update path is a separate change with its own validation."
+      },
+      {
+        "item": "Filtering or searching items by name",
+        "reason": "A lookup by id is a direct read; name search is a different query shape and is not requested here."
+      }
+    ]
+  }
+}

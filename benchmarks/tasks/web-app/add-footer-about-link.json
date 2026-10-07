@@ -1,0 +1,58 @@
+{
+  "id": "add-footer-about-link",
+  "request": "Every page shares the same layout, but the footer only shows a copyright line. Add a link to the about page to the shared footer so every page offers it, and keep the existing copyright text. Make sure the app still builds and the pages still render.",
+  "starter": "web-app",
+  "plan": {
+    "version": 1,
+    "revision": 1,
+    "created": "2026-10-07T09:00:00Z",
+    "updated": "2026-10-07T09:00:00Z",
+    "goal": "Add a link to the about page to the shared footer so every route offers it.",
+    "scope": [
+      {
+        "id": "footer-about-link",
+        "title": "An about link in the shared footer",
+        "description": "Extend the footer in src/layouts/Layout.tsx with a Link to /about labelled \"About\", so the link appears on every page that renders inside the layout, while the existing copyright line stays."
+      }
+    ],
+    "steps": [
+      {
+        "scope": "footer-about-link",
+        "description": "Add a Link to=\"/about\" with the visible text \"About\" inside the footer element in src/layouts/Layout.tsx."
+      },
+      {
+        "scope": "footer-about-link",
+        "description": "Keep the existing copyright paragraph intact and leave the footer's markup otherwise unchanged."
+      },
+      {
+        "scope": "footer-about-link",
+        "description": "Run the build and confirm the home and about routes still render with the footer present."
+      }
+    ],
+    "starter": "web-app",
+    "acceptance": [
+      {
+        "id": "build-passes",
+        "scope": "footer-about-link",
+        "check": "npm run build",
+        "kind": "build"
+      },
+      {
+        "id": "pages-render",
+        "scope": "footer-about-link",
+        "check": "/",
+        "kind": "page"
+      }
+    ],
+    "out_of_scope": [
+      {
+        "item": "Redesigning the footer or its styling",
+        "reason": "The request is to add one link to the existing footer; changing the footer's visual design is a styling task of its own."
+      },
+      {
+        "item": "Replacing the header navigation with footer navigation",
+        "reason": "The primary navigation is a separate, working part of the layout; the footer link is an addition, not a move."
+      }
+    ]
+  }
+}

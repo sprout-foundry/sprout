@@ -1,0 +1,64 @@
+{
+  "id": "add-about-section",
+  "request": "The about page is a single short paragraph with no structure. Add a \"What you get\" section to it: a second-level heading followed by a short bulleted list of three things the starter includes. Keep it as plain JSX content on the page, and make sure the app still builds, the about page still renders, and the tests pass.",
+  "starter": "web-app",
+  "plan": {
+    "version": 1,
+    "revision": 1,
+    "created": "2026-10-07T09:00:00Z",
+    "updated": "2026-10-07T09:00:00Z",
+    "goal": "Give the about page a short structured section so its content is easier to scan.",
+    "scope": [
+      {
+        "id": "about-section",
+        "title": "A \"What you get\" section on the about page",
+        "description": "Add an h2 heading and a three-item list to src/pages/About.tsx, in the same plain JSX style the page already uses, below its existing paragraph."
+      }
+    ],
+    "steps": [
+      {
+        "scope": "about-section",
+        "description": "Add an <h2>What you get</h2> heading to src/pages/About.tsx below the existing paragraph."
+      },
+      {
+        "scope": "about-section",
+        "description": "Add a <ul> with three <li> items naming things the starter provides (a routed home page, a shared layout, and a persisted-state hook)."
+      },
+      {
+        "scope": "about-section",
+        "description": "Run the build and the test suite to confirm the app compiles and the about route still renders its heading."
+      }
+    ],
+    "starter": "web-app",
+    "acceptance": [
+      {
+        "id": "build-passes",
+        "scope": "about-section",
+        "check": "npm run build",
+        "kind": "build"
+      },
+      {
+        "id": "tests-pass",
+        "scope": "about-section",
+        "check": "npm test",
+        "kind": "test"
+      },
+      {
+        "id": "about-page-renders",
+        "scope": "about-section",
+        "check": "/about",
+        "kind": "page"
+      }
+    ],
+    "out_of_scope": [
+      {
+        "item": "Moving the section content into a data file or content collection",
+        "reason": "The starter keeps page content inline in the component; introducing a content layer is a structural change larger than adding a section."
+      },
+      {
+        "item": "Styling the new section",
+        "reason": "The page inherits the starter's existing typography; bespoke styling is not needed to add scannable content."
+      }
+    ]
+  }
+}

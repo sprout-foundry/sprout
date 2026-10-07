@@ -30,10 +30,9 @@ import type { AppState, PerChatState, ViewType } from '../types/app';
 import { fuzzyFilter } from '../utils/fuzzyMatch';
 import { useLog } from '../utils/log';
 import { extractSymbols } from '../utils/symbolUtils';
-import type { WorkspaceModeId } from '../workspaces/registry';
-import type { WorkspaceShellProps } from '../workspaces/shell';
+import type { WorkspaceModeId, WorkspaceShellProps } from '../views';
+import { SproutWorkspace, useWorkspaceMode } from '../views';
 import { useDesignSectionPersistence } from '../workspaces/useDesignSectionPersistence';
-import { useWorkspaceMode } from '../workspaces/useWorkspaceMode';
 import CommandPalette, { type PaletteMode } from './CommandPalette';
 import { visibleCommands } from './CommandPalette/constants';
 import useFileIndex from './CommandPalette/useFileIndex';
@@ -1169,8 +1168,26 @@ const AppContent: React.FC<AppContentProps> = ({
       history: [],
     },
   };
-  // Capital alias so the registry-supplied component renders as a component.
-  const ModeShell = workspaceMode.Shell;
+
+  // The workspace composition (SP-160 §160a): the app renders the active space
+  // through `SproutWorkspace` — the same component a host mounts — rather than
+  // assembling the registry shell itself. The space is the app's resolved
+  // mode; the app owns "which space" (its switcher lives in the Sidebar) and
+  // feeds the resolved id down, so the switcher and the mounted space agree.
+  //
+  // `providers="ambient"`: the app root already mounted `HostProvider`
+  // (`localHost` in `index.tsx`) and `SproutProviders` (in `App.tsx`), and the
+  // app-level chrome (Sidebar, dialogs, terminal) shares those contexts with
+  // the space. A second stack here would fork them, so the composition reuses
+  // the ambient one and renders only the space.
+  //
+  // `project` mirrors how the web UI already identifies a project: the local
+  // workspace root (falling back to the workspace metadata's root), which is
+  // the stable identifier a local/daemon host uses.
+  const project = useMemo(
+    () => ({ id: workspaceRoot || workspaceInfo.workspace_root || '' }),
+    [workspaceRoot, workspaceInfo.workspace_root],
+  );
 
   return (
     <div className="app">
@@ -1300,7 +1317,15 @@ const AppContent: React.FC<AppContentProps> = ({
             }}
           />
         </ErrorBoundary>
-        <ModeShell {...shellProps} />
+        <SproutWorkspace
+          providers="ambient"
+          project={project}
+          space={workspaceMode.id}
+          shellProps={shellProps}
+          hasDesignTree={hasDesignTree}
+          onSpaceChange={selectWorkspaceMode}
+          className="app-workspace"
+        />
       </DesignWorkspaceProvider>
       {supportsLocalTerminal ? (
         <ErrorBoundary panelName="Terminal">

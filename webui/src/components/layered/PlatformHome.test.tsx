@@ -71,4 +71,36 @@ describe('PlatformHome', () => {
     );
     expect(container.querySelector('.platform-home-mobile-bar')?.textContent).toContain('Tasks');
   });
+
+  it("offsets Home below the editor bar in the app's real nesting", () => {
+    // SP-160 §160a: the app renders its space through `SproutWorkspace`, so the
+    // space's <main> is a DOM grandchild of `.app`
+    // (`.app > .sprout-workspace > main > .header-bar`). The offset query must
+    // be a descendant query for that nesting, or `top` silently stays 0 and
+    // Home hides under the editor bar.
+    const app = document.createElement('div');
+    app.className = 'app';
+    const workspaceRoot = document.createElement('div');
+    workspaceRoot.className = 'sprout-workspace';
+    const main = document.createElement('main');
+    main.className = 'main-content';
+    const header = document.createElement('div');
+    header.className = 'header-bar';
+    // jsdom does no layout, so offsetHeight is 0; a stub makes the height real
+    // and lets the assertion distinguish "matched" from "not matched".
+    Object.defineProperty(header, 'offsetHeight', { value: 35, configurable: true });
+    main.appendChild(header);
+    workspaceRoot.appendChild(main);
+    app.appendChild(workspaceRoot);
+    document.body.appendChild(app);
+
+    try {
+      render();
+      act(() => openHome('/account/billing'));
+      const home = container.querySelector<HTMLElement>('[data-testid="platform-home"]');
+      expect(home?.style.top).toBe('35px');
+    } finally {
+      app.remove();
+    }
+  });
 });

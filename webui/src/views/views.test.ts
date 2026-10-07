@@ -17,8 +17,10 @@ import {
   PreviewPane,
   PreviewPanel,
   ExampleEmbedding,
+  SproutWorkspace,
   ViewsLayout,
   usePreviewStatus,
+  useWorkspaceMode,
 } from './index';
 import type {
   AgentChangesPanelProps,
@@ -27,7 +29,10 @@ import type {
   FileTreeProps,
   PreviewPaneProps,
   PreviewPanelProps,
+  SproutProject,
+  SproutWorkspaceProps,
   UsePreviewStatusReturn,
+  UseWorkspaceModeResult,
 } from './index';
 
 // ── Runtime: all view exports are defined ─────────────────────────────
@@ -82,6 +87,11 @@ describe('views entry exports', () => {
     for (const kind of Object.keys(VIEWS_BY_KIND) as ViewKind[]) {
       expect(VIEWS_BY_KIND[kind]).toBeDefined();
     }
+  });
+
+  it('exports the workspace composition and its companion hook', () => {
+    expect(isReactComponent(SproutWorkspace)).toBe(true);
+    expect(typeof useWorkspaceMode).toBe('function');
   });
 });
 
@@ -138,6 +148,26 @@ describe('views entry typed props', () => {
       stop: () => undefined,
     };
     expect(hookReturn.status).toBe('stopped');
+  });
+
+  it('accepts minimal SproutWorkspace + useWorkspaceMode values', () => {
+    const project: SproutProject = { id: '/ws', root: '/ws' };
+    const workspaceProps: SproutWorkspaceProps = { project, space: 'code', providers: 'ambient' };
+    const modeResult: UseWorkspaceModeResult = {
+      mode: {
+        id: 'code',
+        label: 'Code',
+        icon: (() => null) as never,
+        hint: '',
+        available: () => true,
+        Shell: () => null,
+      },
+      modes: [],
+      select: () => undefined,
+      canSwitch: false,
+    };
+    expect(workspaceProps.providers).toBe('ambient');
+    expect(modeResult.canSwitch).toBe(false);
   });
 
   // ── Layout configuration types ────────────────────────────────────────

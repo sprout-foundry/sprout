@@ -69,7 +69,8 @@ vi.mock('../services/api', () => {
 
 import { useHost } from '../host';
 import type { SproutHost } from '../host';
-import { headlessHost } from '../host/HostProvider';
+import { HostProvider, headlessHost } from '../host/HostProvider';
+import { SproutProviders } from '../providers/SproutProviders';
 import type { WorkspaceShellProps } from '../workspaces/shell';
 import { registerWorkspaceMode } from '../workspaces/registry';
 import { SproutWorkspace } from './SproutWorkspace';
@@ -246,6 +247,48 @@ describe('SproutWorkspace', () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('layout'));
     // The layout path wins: the space's registered shell is not rendered.
     expect(screen.queryByTestId('sprout-workspace-code-shell')).not.toBeInTheDocument();
+    warn.mockRestore();
+  });
+
+  it('providers="ambient" renders the registry space without building a second stack', async () => {
+    // SP-160 §160a: the app root already mounted HostProvider + SproutProviders
+    // above. A second SproutProviders would open a second events transport and
+    // fork the contexts the app-level chrome shares with the space, so ambient
+    // mode renders only the registry space under the ambient stack. This test
+    // mounts that ambient stack (the real SproutProviders, whose default
+    // transport is stubbed at its module boundary) and asserts the space's
+    // `useHost()` reads the ambient host — nothing was re-created.
+    const ambientHost = makeHost({
+      transport: { apiBaseURL: 'https://ambient.test', wsURL: '', authMode: 'none' },
+    });
+    render(
+      <HostProvider host={ambientHost}>
+        <SproutProviders>
+          <SproutWorkspace providers="ambient" project={PROJECT} space="code">
+            <HostProbe />
+          </SproutWorkspace>
+        </SproutProviders>
+      </HostProvider>,
+    );
+    const workspace = await screen.findByTestId('sprout-workspace');
+    expect(workspace).toHaveAttribute('data-space', 'code');
+    expect(screen.getByTestId('sprout-workspace-code-shell')).toBeInTheDocument();
+    // The ambient host is the one the subtree reads (no second HostProvider
+    // shadowed it with the headless default).
+    expect(await screen.findByTestId('host-probe')).toHaveAttribute('data-api', 'https://ambient.test');
+  });
+
+  it('providers="ambient" ignores and warns about host/wasmBase', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    render(
+      <HostProvider host={makeHost()}>
+        <SproutProviders>
+          <SproutWorkspace providers="ambient" project={PROJECT} space="code" host={makeHost()} wasmBase="/wasm" />
+        </SproutProviders>
+      </HostProvider>,
+    );
+    await screen.findByTestId('sprout-workspace');
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('ambient'));
     warn.mockRestore();
   });
 });

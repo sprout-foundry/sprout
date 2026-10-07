@@ -25,13 +25,26 @@ import type { ViewsArrangement } from './ViewsLayout';
  *   anything rendered below reads it through `useHost()` / the capability
  *   hooks. The host is a prop here, so this component supplies it (rather than
  *   requiring one upstream); a host that already mounted its own
- *   `HostProvider` should mount `SproutWorkspace` inside it and may omit the
- *   prop — the supplied one would simply shadow it.
+ *   `HostProvider` should mount `SproutWorkspace` inside it and pass
+ *   `providers="ambient"` — see below.
  * - `SproutProviders` — the web UI context stack every view and space shell
  *   reads (adapter, events, notifications, buffers, theme, catalogs).
  * - The **space** — resolved through the SP-155 registry
  *   (`resolveWorkspaceMode`), so an unknown or unavailable id degrades exactly
  *   as the registry specifies rather than rendering nothing.
+ *
+ * Two ways to source that stack, chosen by `providers`:
+ *
+ * - `"own"` (the default): the composition supplies `HostProvider` and
+ *   `SproutProviders` itself, so a host gives it a `host` (and optionally a
+ *   `wasmBase`) and mounts it anywhere. This is what an external host uses.
+ * - `"ambient"`: the caller has already mounted `HostProvider` +
+ *   `SproutProviders` above (Sprout's own app root does) and the composition
+ *   must not build a second stack — a second `SproutProviders` would open a
+ *   second events transport and fork the buffer/notification/theme contexts
+ *   the app-level chrome shares with the space. In this mode `host` and
+ *   `wasmBase` are ignored (the ambient values win; supplying them warns),
+ *   and only the registry space + the workspace root are rendered.
  *
  * Two ways a space's content is rendered (both load the same resolved space):
  *
@@ -80,10 +93,24 @@ export interface SproutWorkspaceProps {
   space: WorkspaceModeId;
   /**
    * The host contract for this subtree. Supplied through `HostProvider`.
-   * Optional: a host that already mounted its own `HostProvider` upstream can
-   * omit it (that provider's host is then the active one).
+   * Required when `providers` is `"own"`; ignored when `"ambient"` (the
+   * caller has already mounted its own `HostProvider`).
    */
   host?: SproutHost;
+  /**
+   * Where the host contract and the provider stack come from.
+   *
+   * - `"own"` (default): this component mounts `HostProvider` +
+   *   `SproutProviders` around the space, so the caller gives it a `host` and
+   *   mounts it anywhere.
+   * - `"ambient"`: the caller already mounted `HostProvider` +
+   *   `SproutProviders` above (Sprout's own app root does). Exactly one stack
+   *   must exist — a second `SproutProviders` would open a second events
+   *   transport and fork the buffer/notification/theme contexts the
+   *   app-level chrome shares with the space. `host` and `wasmBase` are then
+   *   ignored.
+   */
+  providers?: 'own' | 'ambient';
   /**
    * A host-supplied arrangement of the individual views. When present, the
    * space's content is rendered through `ViewsLayout` with it instead of the
@@ -177,6 +204,7 @@ export function SproutWorkspace({
   project,
   space,
   host,
+  providers = 'own',
   layout,
   onSpaceChange,
   shellProps,
@@ -207,6 +235,12 @@ export function SproutWorkspace({
 
   const rootClass = className ? `sprout-workspace ${className}` : 'sprout-workspace';
 
+  const content = layout ? (
+    <ViewsLayout arrangement={layout} className="sprout-workspace__layout" />
+  ) : (
+    <ResolvedSpaceShell Shell={resolved.Shell} shellProps={shellProps} />
+  );
+
   // A host that supplies both is confused: `layout` replaces the space's
   // registered shell, so `shellProps` is ignored. Warn once per instance
   // rather than silently dropping the props.
@@ -218,20 +252,33 @@ export function SproutWorkspace({
     );
   }
 
-  const content = layout ? (
-    <ViewsLayout arrangement={layout} className="sprout-workspace__layout" />
-  ) : (
-    <ResolvedSpaceShell Shell={resolved.Shell} shellProps={shellProps} />
+  // Ambient mode: the caller already mounted `HostProvider` +
+  // `SproutProviders`, so the composition must not build a second stack. A
+  // second `SproutProviders` would open a second events transport and fork
+  // the contexts the app-level chrome shares with the space; a second
+  // `HostProvider` would shadow the ambient host. Warn once if the
+  // caller-supplied values would otherwise be silently dropped.
+  const ambient = providers === 'ambient';
+  const warnedOnAmbientProps = useRef(false);
+  if (!warnedOnAmbientProps.current && ambient && (host || wasmBase)) {
+    warnedOnAmbientProps.current = true;
+    console.warn(
+      'SproutWorkspace: `providers="ambient"` ignores `host`/`wasmBase`; the ambient HostProvider and SproutProviders win.',
+    );
+  }
+
+  const root = (
+    <WorkspaceRoot rootClass={rootClass} projectId={project.id} spaceId={resolved.id}>
+      {content}
+      {children}
+    </WorkspaceRoot>
   );
+
+  if (ambient) return root;
 
   return (
     <HostProvider host={host}>
-      <SproutProviders wasmBase={wasmBase}>
-        <WorkspaceRoot rootClass={rootClass} projectId={project.id} spaceId={resolved.id}>
-          {content}
-          {children}
-        </WorkspaceRoot>
-      </SproutProviders>
+      <SproutProviders wasmBase={wasmBase}>{root}</SproutProviders>
     </HostProvider>
   );
 }

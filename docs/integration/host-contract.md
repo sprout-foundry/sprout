@@ -448,9 +448,43 @@ capabilities for their layout, hence their rows above.)
 
 The contract is enforced by a test: `webui/src/host/hostBoundary.test.ts`
 scans `webui/src` and fails if any module **outside** `webui/src/host/` reads
-the build mode (`import.meta.env.VITE_SPROUT_MODE`), names `appMode` or
-`isCloud`, or imports a host implementation by name (`localHost`, `cloudHost`,
-`headlessHost`, `defaultHost`, `setActiveHost`). Exactly one module is
-allowed to select a host — the app entry `webui/src/index.tsx` — and it must
-import the host from the host tree. A new file naming a host is a failure, not
-a silent second entry point.
+the build mode, names `appMode` or `isCloud`, or imports a host
+implementation by name (`localHost`, `cloudHost`, `headlessHost`,
+`defaultHost`, `setActiveHost`). It flags every route to the build mode:
+
+- `import.meta.env.VITE_SPROUT_MODE` (the mode var),
+- `import.meta.env.MODE` (Vite's built-in mode string),
+- any bracket read of the env object (`import.meta.env[…]`), which can dodge
+  a property-name rule,
+- aliasing the env object (`const env = import.meta.env`, a destructure, or
+  passing it to a function).
+
+The rule is scoped to what can resolve to the **build mode**, not a blanket
+ban on `import.meta.env`: a direct `.PROP` read of a non-mode property (a URL,
+the `PROD`/dev flag, a `VITE_SPROUT_NATIVE_*` seam flag) is legitimate and is
+not flagged.
+
+Exactly one module is allowed to select a host — the app entry
+`webui/src/index.tsx` — and it must import the host from the host tree. A new
+file naming a host is a failure, not a silent second entry point. The entry's
+env carve-out is limited to what it actually does: a single
+`import.meta.env.VITE_SPROUT_MODE` read. It may not use `.MODE`, bracket access
+or aliasing.
+
+### Restoring a shell's declared capabilities
+
+A host shell advertises what it provides by installing an adapter (a studio
+`--native-fs` dist ships a `capabilities.json` declaring
+`supportsFolderPicker` / `supportsWorkspaceSwitching`, which its shell reports
+through the installed adapter). The host shell is the one that ships the
+native operations, so its declaration wins over the host's local default.
+
+The entry (`webui/src/index.tsx`) applies the adapter's declared capability
+flags onto the selected host's `capabilities` (`host/applyHostCapabilities.ts`)
+after the adapter installs, then calls `upsertActiveHostCapabilities()`
+(`host/accessor.ts`) to re-dispatch `HOST_UPDATED_EVENT` and run the
+capability hooks, so `config/mode`'s `supports*` bindings re-derive from the
+merged host. The merge is generic — every capability key the adapter declares,
+whatever its value — with no platform- or studio-specific branch. A plain
+local build (no declared flags) keeps the host's own capabilities, and the
+cloud host is unaffected.

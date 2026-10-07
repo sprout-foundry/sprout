@@ -43,7 +43,7 @@ export { HostContext, HostProvider, headlessHost };
 export type { HostProviderProps } from './HostProvider';
 export { useHost } from './useHost';
 export { useHostCapabilities } from './useHostCapabilities';
-export { getActiveHost, setActiveHost } from './accessor';
+export { getActiveHost, setActiveHost, upsertActiveHostCapabilities } from './accessor';
 export { default as HostNotificationCount } from './HostNotificationCount';
 export { localHost } from './localHost';
 export { outwardURL } from './outwardURL';

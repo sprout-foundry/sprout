@@ -1,5 +1,6 @@
 /**
- * SP-160 Acceptance criteria 1 / host.8 — the build-mode boundary guard.
+ * SP-160 Acceptance criteria 1 / host.8 + host.14 — the build-mode boundary
+ * guard.
  *
  * The host contract exists so Sprout never infers its host from a build flag:
  * the host tree (webui/src/host/) owns `localHost`/`cloudHost` and the entry
@@ -8,20 +9,43 @@
  *
  * This scan fails if any module OUTSIDE webui/src/host/:
  *   - reads the build mode (`import.meta.env.VITE_SPROUT_MODE`),
+ *   - reads Vite's built-in mode string (`import.meta.env.MODE`) — another
+ *     way to read the build mode,
+ *   - reads the env object by bracket index (`import.meta.env['…']`) — a
+ *     bracket read dodges any property-NAME rule, so it is flagged outright,
+ *   - aliases the env object (`const env = import.meta.env`, a destructure,
+ *     or passing it to a function) so a property-name rule could be dodged,
  *   - names `appMode`,
  *   - imports the removed `isCloud` binding,
  *   - imports a host IMPLEMENTATION by name (`localHost`, `cloudHost`,
  *     `headlessHost`, `defaultHost`, `setActiveHost`) — i.e. names a host.
  *
+ * Rule scope for the env reads (documented decision): "no module outside the
+ * entry may read the BUILD MODE / env object". A blanket "any `import.meta.env`
+ * outside the allowlist is a violation" would flag the many legitimate
+ * NON-mode reads the tree relies on — `import.meta.env.VITE_FOUNDRY_API_URL`,
+ * `VITE_WS_URL`, the `VITE_SPROUT_NATIVE_*` compile-time flags, and
+ * `import.meta.env.PROD` (logging, service worker). Those read a build-time
+ * VALUE (a URL, a seam flag, dev/prod), not the mode/env object, so the rule is
+ * scoped to what can resolve to the build mode:
+ *   - `VITE_SPROUT_MODE` and `MODE` property reads,
+ *   - ANY bracket read (`import.meta.env[...]`),
+ *   - ANY aliasing of `import.meta.env` (its occurrence not being the direct
+ *     object of a simple `.PROP` read).
+ * A direct `.PROP` read of any OTHER property (e.g. `.VITE_FOUNDRY_API_URL`,
+ * `.PROD`) is allowed and is NOT flagged.
+ *
  * Exactly one module may name a host implementation: the app entry
  * (`src/index.tsx`), which selects the host at startup. That carve-out is the
  * ALLOWLIST below and is deliberately explicit — a new file naming a host is a
- * failure, not a silent second entry point.
+ * failure, not a silent second entry point. The entry's env carve-out is
+ * limited to what it actually does — the single `VITE_SPROUT_MODE` read; it may
+ * NOT use `.MODE`, bracket access or aliasing, which it does not need.
  *
  * Comments are stripped before scanning (a doc-comment that mentions the old
  * flag is prose, not a dependency). The scanner is factored into
- * `findBoundaryViolations` and given a positive-control test that feeds it a
- * seeded violation, so a broken scanner cannot pass vacuously.
+ * `findBoundaryViolations` and given positive-control tests that feed it a
+ * seeded violation of each rule, so a broken scanner cannot pass vacuously.
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
@@ -84,8 +108,29 @@ function relPath(path: string): string {
 }
 
 /**
+ * True when the source uses `import.meta.env` other than as the direct object
+ * of a simple `.PROP` property read — i.e. aliasing (assignment, destructure,
+ * argument passing) that a property-name rule could be dodged through.
+ *
+ * Implementation: any `import.meta.env` occurrence that is NOT immediately
+ * followed by `.<identifier>` is a violation. The regex's global `lastIndex`
+ * consumes each `import.meta.env.<PROP>` match, so occurrences inside a `.PROP`
+ * read are not re-scanned (a match never re-includes its own prefix). The
+ * optional `skipViteSproutMode` carve-out lets the ENTRY keep its single
+ * `import.meta.env.VITE_SPROUT_MODE` read (a non-global probe run on a copy, so
+ * `lastIndex` does not leak into the main scan).
+ */
+function findEnvAlias(code: string, skipViteSproutMode: boolean): boolean {
+  if (skipViteSproutMode && /import\.meta\.env\.VITE_SPROUT_MODE/.test(code)) {
+    return false;
+  }
+  const re = /import\.meta\.env(?!\s*\.\s*[A-Za-z_$])/g;
+  return re.test(code);
+}
+
+/**
  * Every build-mode boundary violation in a single source string. Pure, so the
- * positive-control test can feed it crafted sources. `file` is only used to
+ * positive-control tests can feed it crafted sources. `file` is only used to
  * build the message.
  */
 export function findBoundaryViolations(file: string, source: string): string[] {
@@ -95,6 +140,26 @@ export function findBoundaryViolations(file: string, source: string): string[] {
 
   if (/import\.meta\.env\.VITE_SPROUT_MODE/.test(code) && !isHostSelection) {
     offenders.push(`${relPath(file)}: reads the build mode (VITE_SPROUT_MODE)`);
+  }
+  // Vite's built-in mode string is another way to read the build mode. `.MODE`
+  // is anchored on `import.meta.env.` so a bare `MODE` identifier,
+  // `.VITE_SPROUT_MODE` (covered above), and a longer `…MODE_…` property are
+  // not matched. Never carved out for the entry: it reads only VITE_SPROUT_MODE.
+  if (/import\.meta\.env\.MODE\b/.test(code)) {
+    offenders.push(`${relPath(file)}: reads the build mode (import.meta.env.MODE)`);
+  }
+  // Any INDEXED read of the env object can dodge a property-name rule, so it is
+  // flagged outright — legitimate env reads are always `.PROP` form.
+  if (/import\.meta\.env\s*\[/.test(code)) {
+    offenders.push(`${relPath(file)}: reads env via bracket access (import.meta.env[…])`);
+  }
+  // Aliasing (or otherwise using) the env object other than as the direct
+  // object of a simple `.PROP` read. Any surviving `import.meta.env` occurrence
+  // is one that is NOT exactly `import.meta.env.<PROP>`; `.VITE_SPROUT_MODE` is
+  // carved out for the entry (does not collide: a `.MODE` read's match starts at
+  // its own prefix).
+  if (findEnvAlias(code, isHostSelection)) {
+    offenders.push(`${relPath(file)}: aliases the env object (import.meta.env)`);
   }
   if (/\bappMode\b/.test(code)) {
     offenders.push(`${relPath(file)}: names appMode`);
@@ -181,6 +246,75 @@ describe('host boundary (SP-160 Acceptance criteria 1 / host.8)', () => {
       );
     });
 
+    // ── host.14 evasions ───────────────────────────────────────────────
+
+    it('flags a Vite built-in mode read (import.meta.env.MODE)', () => {
+      expect(findBoundaryViolations(outside, `const isCloudBuild = import.meta.env.MODE === 'production';`)).toContain(
+        'components/Seeded.tsx: reads the build mode (import.meta.env.MODE)',
+      );
+      // Also as a value, not just a comparison.
+      expect(findBoundaryViolations(outside, `const m = import.meta.env.MODE;`)).toContain(
+        'components/Seeded.tsx: reads the build mode (import.meta.env.MODE)',
+      );
+    });
+
+    it('flags a bracket read of the env object (any index)', () => {
+      expect(findBoundaryViolations(outside, `const m = import.meta.env['VITE_SPROUT_MODE'];`)).toContain(
+        'components/Seeded.tsx: reads env via bracket access (import.meta.env[…])',
+      );
+      expect(findBoundaryViolations(outside, `const m = import.meta.env["MODE"];`)).toContain(
+        'components/Seeded.tsx: reads env via bracket access (import.meta.env[…])',
+      );
+      // A dynamic index dodges a property-name rule entirely, so any bracket
+      // read is flagged — even one that (today) names a non-mode var.
+      expect(findBoundaryViolations(outside, 'const u = import.meta.env[key];')).toContain(
+        'components/Seeded.tsx: reads env via bracket access (import.meta.env[…])',
+      );
+    });
+
+    it('flags aliasing the env object (assignment)', () => {
+      expect(findBoundaryViolations(outside, `const env = import.meta.env;`)).toContain(
+        'components/Seeded.tsx: aliases the env object (import.meta.env)',
+      );
+      // Aliasing is caught even when the alias is then used as a bridge read
+      // that briefly looks like `.PROD` — only a direct `.PROP` read is allowed.
+      expect(findBoundaryViolations(outside, `const env = (0, import.meta.env); env.PROD;`)).toContain(
+        'components/Seeded.tsx: aliases the env object (import.meta.env)',
+      );
+    });
+
+    it('flags aliasing the env object (destructure)', () => {
+      expect(findBoundaryViolations(outside, `const { VITE_SPROUT_MODE } = import.meta.env;`)).toContain(
+        'components/Seeded.tsx: aliases the env object (import.meta.env)',
+      );
+    });
+
+    it('flags aliasing the env object (passing it to a function)', () => {
+      expect(findBoundaryViolations(outside, `readMode(import.meta.env);`)).toContain(
+        'components/Seeded.tsx: aliases the env object (import.meta.env)',
+      );
+    });
+
+    it('does NOT flag legitimate direct property reads (negative control)', () => {
+      // A URL, the dev/prod flag and a Track R seam flag all read a build-time
+      // VALUE — not the mode — so they must stay green outside the allowlist.
+      expect(findBoundaryViolations(outside, `const url = import.meta.env.VITE_FOUNDRY_API_URL;`)).toEqual([]);
+      expect(findBoundaryViolations(outside, `const ws = import.meta.env.VITE_WS_URL || '/ws';`)).toEqual([]);
+      expect(findBoundaryViolations(outside, `const on = import.meta.env.VITE_SPROUT_NATIVE_FS === '1';`)).toEqual([]);
+      expect(findBoundaryViolations(outside, `const level = import.meta.env.PROD ? 'warn' : 'debug';`)).toEqual([]);
+      expect(findBoundaryViolations(outside, `if (!import.meta.env.PROD) { log(); }`)).toEqual([]);
+      // Non-vacuous: a MODE read on the SAME line shape IS flagged, so
+      // "not flagged" is distinguishable from "rule disabled".
+      expect(findBoundaryViolations(outside, `const m = import.meta.env.MODE;`)).toContain(
+        'components/Seeded.tsx: reads the build mode (import.meta.env.MODE)',
+      );
+    });
+
+    it('does NOT flag a comment that merely mentions the env object', () => {
+      expect(findBoundaryViolations(outside, `// reads import.meta.env.MODE historically\nconst x = 1;`)).toEqual([]);
+      expect(findBoundaryViolations(outside, `/* import.meta.env['MODE'] */ const x = 1;`)).toEqual([]);
+    });
+
     it('does NOT flag a comment that merely mentions the old flag', () => {
       expect(findBoundaryViolations(outside, `// this replaced the isCloud branch\nconst x = 1;`)).toEqual([]);
       // Non-vacuous: the same code WITHOUT the comment marker IS flagged, so
@@ -216,6 +350,27 @@ describe('host boundary (SP-160 Acceptance criteria 1 / host.8)', () => {
       // for the contract's entry, not for naming host internals.
       expect(findBoundaryViolations(entry, `import { cloudHost } from './host/cloudHost';`)).toContain(
         'index.tsx: host selection must import from the host tree',
+      );
+    });
+
+    it('allows the entry its single VITE_SPROUT_MODE read but no other mode evasion', () => {
+      // The entry's env carve-out is exactly what it does: one direct
+      // VITE_SPROUT_MODE read. `.MODE`, bracket access and aliasing are NOT
+      // carved out — the entry does not need them, so they stay violations.
+      // (Each seed carries the entry's required host import, so the only
+      // possible offender is the mode rule under test.)
+      const host = `import { localHost } from './host';\n`;
+      expect(findBoundaryViolations(entry, `${host}const h = import.meta.env.VITE_SPROUT_MODE === 'cloud';`)).toEqual(
+        [],
+      );
+      expect(findBoundaryViolations(entry, `${host}const m = import.meta.env.MODE;`)).toContain(
+        'index.tsx: reads the build mode (import.meta.env.MODE)',
+      );
+      expect(findBoundaryViolations(entry, `${host}const m = import.meta.env['VITE_SPROUT_MODE'];`)).toContain(
+        'index.tsx: reads env via bracket access (import.meta.env[…])',
+      );
+      expect(findBoundaryViolations(entry, `${host}const env = import.meta.env;`)).toContain(
+        'index.tsx: aliases the env object (import.meta.env)',
       );
     });
 

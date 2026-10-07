@@ -9,10 +9,13 @@ import './index.css';
 import './workspaces/ship-mode'; // Registers the Ship mode through the public mode API
 import App from './App';
 import { applyShellAttribute, isStudioShellSync, resolveShellIdentity } from './config/shell';
-import { HostProvider, localHost, setActiveHost } from './host';
+import './config/mode'; // Imported early so it regs the host-capability hook before the host is set
+import { HostProvider, localHost, setActiveHost, upsertActiveHostCapabilities } from './host';
+import { applyHostCapabilities } from './host/applyHostCapabilities';
 // The cloud host is a platform implementation detail (not part of the public
 // host contract), so the entry imports it from the internal platform module.
 import { cloudHost } from './host/platform';
+import { ADAPTER_INSTALLED_EVENT, getAdapter } from './services/apiAdapter';
 import { resolveClientIdentity } from './services/clientSession';
 
 // External plugins (e.g. the platform IIFE bundle) externalize 'react' and
@@ -70,8 +73,29 @@ function insideAnotherEditor(): boolean {
   // useHost()/the provider and never reads the flag. Read the env var directly
   // (matching config/mode.ts) rather than importing its isCloud export.
   const host = (import.meta.env.VITE_SPROUT_MODE as string) === 'cloud' ? cloudHost : localHost;
+  // A host shell advertises its capabilities through the installed adapter
+  // (e.g. a studio dist's capabilities.json). The host shell is the one that
+  // ships the native ops, so its declaration wins over the host's local
+  // default and must reach host.capabilities before the capability bindings
+  // read them. The adapter installs asynchronously (bootstrapAdapter), so
+  // apply what is present now and again when ADAPTER_INSTALLED_EVENT fires.
+  // A studio shell is a local build (localHost); a hosted build is served by
+  // the platform, not a studio shell, so it needs no studio flags.
+  applyHostCapabilities(host, getAdapter());
   await resolveClientIdentity();
   setActiveHost(host);
+  if (host === localHost) {
+    const onAdapterInstalled = () => {
+      const adapter = getAdapter();
+      if (!adapter) return;
+      applyHostCapabilities(host, adapter);
+      upsertActiveHostCapabilities();
+    };
+    window.addEventListener(ADAPTER_INSTALLED_EVENT, onAdapterInstalled);
+    // The adapter may already be installed (a fast bootstrap resolving before
+    // this listener attached): apply once more, idempotently.
+    onAdapterInstalled();
+  }
   const root = ReactDOMClient.createRoot(document.getElementById('root') as HTMLElement);
   root.render(
     <HostProvider host={host}>

@@ -104,8 +104,14 @@ Rules:
 
 The API the spaces talk to, written down and versioned:
 
-- An OpenAPI description of the HTTP API and a schema for WebSocket events
-  (the `@sprout/events` types become the source for the event schema).
+- An OpenAPI description of the HTTP API, generated from code: handlers are
+  registered as Huma operations (`github.com/danielgtaylor/huma/v2`, the
+  `humago` adapter on the existing `ServeMux`) with typed input and output,
+  and `cmd/genapi` writes the document. Never hand-written, so it cannot
+  drift from the handlers. Streaming and WebSocket endpoints that do not fit
+  are listed explicitly with a reason.
+- A schema for WebSocket events (the `@sprout/events` types become the
+  source for the event schema).
 - Each endpoint family is marked by where it may be served from: a Sprout
   daemon, the in-browser WASM agent, browser-local storage, or the host.
 - A conformance test suite, published with the package, that any

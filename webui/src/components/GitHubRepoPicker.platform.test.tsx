@@ -33,6 +33,8 @@ vi.mock('../host/platformGitHub', () => ({
     ]),
 }));
 
+import { headlessHost } from '../host';
+import { HostProvider } from '../host/HostProvider';
 import GitHubRepoPicker from './GitHubRepoPicker';
 
 let container: HTMLDivElement;
@@ -58,7 +60,12 @@ afterEach(() => {
 
 async function open(onSelect?: (url: string) => void) {
   await act(async () => {
-    root.render(<GitHubRepoPicker isOpen onClose={() => undefined} onSelect={onSelect} />);
+    // PlatformGitHubAccountCard reads the host (useHost), so wrap it in one.
+    root.render(
+      <HostProvider host={headlessHost()}>
+        <GitHubRepoPicker isOpen onClose={() => undefined} onSelect={onSelect} />
+      </HostProvider>,
+    );
   });
   for (let i = 0; i < 5; i++) {
     await act(async () => {

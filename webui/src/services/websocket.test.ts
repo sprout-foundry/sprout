@@ -3,17 +3,13 @@ import { makeTestHost } from '../host/testHost';
 import type { SproutHost } from '../host/types';
 
 // ---------------------------------------------------------------------------
-// Mock config/mode so the mode-aware fallbacks can be toggled per test (INT-3)
-// and the capability fallback reads the mode-aware default (no adapter here).
+// Mock config/mode so the capability fallback reads a per-test mode-aware
+// default (no adapter here). host.8 removed `isCloud`/`mode` from the module;
+// the capability fallback no longer reads the build mode either, so this mock
+// only supplies `capability`.
 // ---------------------------------------------------------------------------
 const { cloudModeRef } = vi.hoisted(() => ({ cloudModeRef: { value: false } }));
 vi.mock('../config/mode', () => ({
-  get isCloud() {
-    return cloudModeRef.value;
-  },
-  get mode() {
-    return cloudModeRef.value ? 'cloud' : 'local';
-  },
   capability: (_key, localDefault, cloudDefault) => (cloudModeRef.value ? cloudDefault : localDefault),
 }));
 

@@ -8,9 +8,8 @@ import { makeTestHost } from '../host/testHost';
 // The section's platform-managed-model flag is a module-scope const that reads
 // the live `supportsLocalTerminal` binding at import time; a hosted shell has
 // no local terminal, so pin it to false here (the HostProvider below drives
-// the per-render branches). `isCloud` is still read by the un-converted
-// transitive gitCorsProxy (GitHub section), so keep it true.
-vi.mock('../config/mode', () => ({ isCloud: true, supportsLocalTerminal: false }));
+// the per-render branches).
+vi.mock('../config/mode', () => ({ supportsLocalTerminal: false }));
 vi.mock('./CredentialsSettingsTab', () => ({ default: () => <div data-testid="credentials-tab" /> }));
 vi.mock('./GitHubAccountPanel', () => ({ default: () => null }));
 vi.mock('./SettingsPanel', () => ({ default: () => null }));

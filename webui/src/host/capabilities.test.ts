@@ -133,7 +133,6 @@ describe('config/mode capability bindings fall back with no active host', () => 
     expect(getActiveHost()).toBeNull();
 
     const mode = await import('../config/mode');
-    expect(mode.isCloud).toBe(false);
     expect(mode.supportsSSH).toBe(true);
     expect(mode.supportsGit).toBe(true);
     expect(mode.supportsChat).toBe(true);
@@ -147,17 +146,19 @@ describe('config/mode capability bindings fall back with no active host', () => 
     expect(mode.supportsAgentChanges).toBe(true);
   });
 
-  it('uses cloud-mode defaults in a cloud build with no host', async () => {
+  it('uses local defaults in a cloud build with no host (no build-flag seeding)', async () => {
     process.env.VITE_SPROUT_MODE = 'cloud';
     vi.resetModules();
     const mode = await import('../config/mode');
-    expect(mode.isCloud).toBe(true);
-    expect(mode.supportsSSH).toBe(false);
-    expect(mode.supportsInstances).toBe(true);
-    expect(mode.supportsWorkspaceSwitching).toBe(false);
-    expect(mode.supportsLocalTerminal).toBe(false);
-    expect(mode.supportsAutomations).toBe(false);
-    expect(mode.supportsAgentChanges).toBe(false);
+    // host.8 removed the build-mode read: with no active host and no adapter
+    // the bindings use the local defaults regardless of build. The hosted
+    // build's cloud values come from cloudHost (pinned by hosts.test.ts).
+    expect(mode.supportsSSH).toBe(true);
+    expect(mode.supportsInstances).toBe(false);
+    expect(mode.supportsWorkspaceSwitching).toBe(true);
+    expect(mode.supportsLocalTerminal).toBe(true);
+    expect(mode.supportsAutomations).toBe(true);
+    expect(mode.supportsAgentChanges).toBe(true);
     delete process.env.VITE_SPROUT_MODE;
   });
 });

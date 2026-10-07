@@ -21,18 +21,49 @@ export const HOST_UPDATED_EVENT = 'sprout:host-updated';
 let activeHost: SproutHost | null = null;
 
 /**
+ * Hooks run after setActiveHost() records a new host. bootstrapAdapter
+ * registers one so it can re-resolve its URL fallback and (re)install the
+ * adapter against the host — the entry imports bootstrapAdapter (whose
+ * auto-run fires immediately) BEFORE it calls setActiveHost, so the adapter
+ * install must follow the host, not the other way round. Kept as a registry
+ * of plain callbacks rather than a window event so it is deterministically
+ * scoped to this module instance (a window listener survives
+ * vi.resetModules() in tests and fires against a torn module graph).
+ */
+type HostChangeHook = () => void;
+const hostChangeHooks = new Set<HostChangeHook>();
+
+/** Register a callback invoked after the active host is recorded. */
+export function registerHostChangeHook(hook: HostChangeHook): void {
+  hostChangeHooks.add(hook);
+}
+
+/** Remove a previously registered host-change hook. */
+export function unregisterHostChangeHook(hook: HostChangeHook): void {
+  hostChangeHooks.delete(hook);
+}
+
+/**
  * Record the active host. Called once by the entry point with the same host
  * instance it passes to <HostProvider>. Re-dispatching with the same instance
  * is safe; the value is what a later getActiveHost() returns.
  *
  * Also fires HOST_UPDATED_EVENT on window so module-scope consumers (config/mode
- * capability bindings) refresh from the host. A browser is required for the
- * event; the singleton is recorded either way.
+ * capability bindings) refresh from the host, and runs the registered
+ * host-change hooks. A browser is required for the event; the singleton and
+ * the hooks run either way.
  */
 export function setActiveHost(host: SproutHost): void {
   activeHost = host;
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new Event(HOST_UPDATED_EVENT));
+  }
+  for (const hook of hostChangeHooks) {
+    try {
+      hook();
+    } catch {
+      // A host-change hook must not take the app down.
+    }
   }
 }
 

@@ -3,7 +3,6 @@ import { ChevronDown, Download } from 'lucide-react';
 import { useRef, useCallback, useState, useMemo, useLayoutEffect } from 'react';
 import type { CSSProperties } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
-import { isCloud } from '../config/mode';
 import { useHostCapabilities } from '../host';
 import { rewindQuery, executeCommand, uploadImage } from '../services/api/chatApi';
 import { requiresBackendHealthCheck } from '../services/apiAdapter';

@@ -17,8 +17,12 @@
  * `vi.stubEnv('VITE_SPROUT_NATIVE_GIT','1')` + `vi.resetModules()` + a FRESH
  * dynamic import of the hook module, so the `NATIVE_GIT_ENABLED` constant
  * baked into `nativeGitFlag.ts` at import time reflects the env.
- * `VITE_SPROUT_MODE` is stubbed to `'cloud'` in every case so `isCloud`
- * bakes true — the git boot blocks only run on the cloud boot path.
+ *
+ * host.8: the hook now reads the hosted-vs-local switch from the ACTIVE HOST
+ * (`useHost().transport.authMode === 'bearer'`), not from isCloud, so the
+ * harness renders under a <HostProvider host={cloudHost}> — the hosted
+ * transport — which is what `VITE_SPROUT_MODE=cloud` used to bake in. The git
+ * boot blocks only run on the hosted boot path.
  *
  * Coverage in this file:
  *   1. flag ON + cloud: NONE of the three git boot blocks run
@@ -99,7 +103,7 @@ vi.mock('../services/clientSession', () => ({
 }));
 
 vi.mock('../bootstrapAdapter', () => ({
-  fetchRuntimeConfig: async () => ({ appMode: 'cloud', user: { id: 'u' } }),
+  fetchRuntimeConfig: async () => ({ authMode: 'bearer', user: { id: 'u' } }),
   getBootstrapUser: () => ({ id: 'u', email: 'dev@example.com', tier: 'free' }),
 }));
 
@@ -192,10 +196,10 @@ function BootHarness() {
 
 /**
  * Fresh import of the hook with the given native-GIT flag value.
- * `VITE_SPROUT_MODE` is always 'cloud' so `isCloud` bakes true (the git boot
- * blocks are cloud-only). The native-FS flag stays unset in every case so
- * the `!NATIVE_FS_ENABLED` wrapper around the git blocks is a pass-through
- * — this file isolates the GIT guard, not the FS one.
+ * The harness renders under a cloud host (the git boot blocks are
+ * hosted-path only). The native-FS flag stays unset in every case so the
+ * `!NATIVE_FS_ENABLED` wrapper around the git blocks is a pass-through — this
+ * file isolates the GIT guard, not the FS one.
  */
 async function loadHook(gitFlagOn: boolean): Promise<HookModule> {
   if (gitFlagOn) {
@@ -209,6 +213,20 @@ async function loadHook(gitFlagOn: boolean): Promise<HookModule> {
   const mod = await import('../hooks/useAppInitialization');
   hookFn = mod.useAppInitialization;
   return mod;
+}
+
+/**
+ * The host modules must come from the SAME re-imported graph as the hook
+ * (loadHook's vi.resetModules), otherwise the JSX HostProvider and the hook's
+ * HostContext are two module instances and useHost() throws.
+ */
+async function freshHostProvider(): Promise<{
+  Provider: typeof import('../host/HostProvider').HostProvider;
+  host: typeof import('../host/cloudHost').cloudHost;
+}> {
+  const { HostProvider } = await import('../host/HostProvider');
+  const { cloudHost } = await import('../host/cloudHost');
+  return { Provider: HostProvider, host: cloudHost };
 }
 
 /**
@@ -246,8 +264,13 @@ beforeEach(() => {
 describe('useAppInitialization — R-4 git guard ACTIVE (--native-git dist)', () => {
   it('flag ON + cloud: NONE of the three git boot blocks run (no browser git wiring at all)', async () => {
     await loadHook(true);
+    const { Provider, host } = await freshHostProvider();
 
-    const result: RenderResult = render(<BootHarness />);
+    const result: RenderResult = render(
+      <Provider host={host}>
+        <BootHarness />
+      </Provider>,
+    );
     // Settle once the non-git WASM preload state has arrived — the git blocks
     // (if any ran) would have fired in the same ready-branch.
     await waitFor(() => resultingStates(capturedStateUpdates).some((s) => s.wasmReady === true));
@@ -285,8 +308,15 @@ describe('useAppInitialization — R-4 git guard ACTIVE (--native-git dist)', ()
 describe('useAppInitialization — R-4 git guard INACTIVE (default build)', () => {
   it('flag OFF + cloud: all three git boot blocks run exactly once (today behavior)', async () => {
     await loadHook(false);
+    const { Provider, host } = await freshHostProvider();
 
-    const { unmount } = await act(async () => render(<BootHarness />));
+    const { unmount } = await act(async () =>
+      render(
+        <Provider host={host}>
+          <BootHarness />
+        </Provider>,
+      ),
+    );
     // Settle once block 1 (configureBrowserGit) has landed; blocks 2 + 3 are
     // independent parallel dynamic-import chains that settle around the
     // same time — one extra settle so they cannot race the assertions.

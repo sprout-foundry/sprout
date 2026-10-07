@@ -4,7 +4,6 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 vi.mock('../../hooks/useUnreadNotificationCount', () => ({ useUnreadNotificationCount: () => 0 }));
 vi.mock('../../config/mode', () => ({
-  isCloud: false,
   supportsGit: true,
   supportsSettings: true,
   supportsAutomations: true,

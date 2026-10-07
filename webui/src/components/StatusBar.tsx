@@ -2,8 +2,7 @@
 import { StatusBar as SproutStatusBar, detectLineEnding } from '@sprout/ui';
 import { FolderOpen, Zap } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { isCloud } from '../config/mode';
-import { useHostCapabilities } from '../host';
+import { useHost, useHostCapabilities } from '../host';
 import { getBootstrapConfig } from '../bootstrapAdapter';
 import { useActiveRepoURL } from '../services/activeRepo';
 import { repoName as repoNameFromURL, repoSlug as repoSlugFromURL } from '../host/platformUrl';
@@ -72,6 +71,10 @@ function StatusBar({
   onWorkspaceClick,
 }: WebuiStatusBarProps): JSX.Element {
   const { git: supportsGit, workspaceSwitching, localTerminal } = useHostCapabilities();
+  // The hosted build's platform chooses the model for lower tiers; the badge
+  // names that. host.8: the hosted transport authenticates against a platform
+  // (authMode 'bearer') — the former isCloud branch.
+  const hosted = useHost().transport.authMode === 'bearer';
   // Notification context — derive unread count for the bell badge
   const { notifications } = useNotifications();
   const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
@@ -151,7 +154,7 @@ function StatusBar({
           <span className="statusbar-text">{workspaceName}</span>
         </div>
       )}
-      {isCloud &&
+      {hosted &&
         (() => {
           const cfg = getBootstrapConfig();
           if (['pro', 'team', 'runner'].includes(cfg.user?.tier ?? '')) return null;

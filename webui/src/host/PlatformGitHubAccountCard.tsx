@@ -10,9 +10,9 @@ import { useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import '../components/GitHubAccountPanel.css';
 import { isLayeredLayout } from '../config/layout';
-import { isCloud } from '../config/mode';
 import { onPlatformLinkClick } from '../services/homeView';
 import { fetchPlatformGitHubConnected, platformGitHubSettingsHref } from './platformGitHub';
+import { useHost } from './useHost';
 
 interface PlatformGitHubAccountCardProps {
   /** Connection state when the parent already knows it; fetched otherwise. */
@@ -25,6 +25,11 @@ export default function PlatformGitHubAccountCard({
   compact = false,
 }: PlatformGitHubAccountCardProps): ReactElement {
   const controlled = connectedProp !== undefined;
+  // In the layered layout the link opens account settings inside the editor;
+  // the hosted (platform-authenticated) transport is the one with a Home
+  // surface, matching the former isCloud branch (host.8). The host is read
+  // unconditionally at the top so the hook order is stable.
+  const host = useHost();
   const [fetched, setFetched] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,8 +46,10 @@ export default function PlatformGitHubAccountCard({
 
   const connected = controlled ? connectedProp : fetched;
   const href = platformGitHubSettingsHref();
-  // In the layered layout the link opens account settings inside the editor.
-  const opensInHome = isLayeredLayout && isCloud;
+  // In the layered layout the link opens account settings inside the editor;
+  // the hosted (platform-authenticated) transport is the one with a Home
+  // surface, matching the former isCloud branch (host.8).
+  const opensInHome = isLayeredLayout && host.transport.authMode === 'bearer';
   const cardClass = `gh-account-card gh-account-card--platform${compact ? ' gh-account-card--compact' : ''}`;
 
   if (error) {

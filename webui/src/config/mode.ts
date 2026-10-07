@@ -2,7 +2,6 @@
  * Sprout Mode Configuration
  *
  * Feature flags for Cloud vs Local mode in the Sprout webui.
- * Controlled via VITE_SPROUT_MODE environment variable at build time.
  *
  * Capability resolution (host.3): every `supports*` binding below is driven by
  * the active host when one is set — the entry point records it via
@@ -11,37 +10,20 @@
  * startup and is stable, so when it is active its capabilities are the source
  * of truth.
  *
- * When no host is active (pure test contexts, and the code path before the
- * entry sets the host) the bindings fall back to the legacy resolution: the
- * adapter's value if an adapter is installed, else the mode-aware default.
- * That fallback is what `mode.test.ts` exercises, and the adapter-refresh path
+ * When no host is active (pure test contexts, and the instant before the entry
+ * sets the host) the bindings fall back to the adapter's value if an adapter is
+ * installed, else the local default. host.8 removed the build-mode read from
+ * this module: the host is the only source of truth, and the single place that
+ * reads the build flag to pick a host is the app entry. The adapter-refresh path
  * (ADAPTER_INSTALLED_EVENT) still fires but is a no-op while a host is active.
  */
 
-import { getAdapter, ADAPTER_INSTALLED_EVENT, type APIAdapter } from '../services/apiAdapter';
 import { getActiveHost, HOST_UPDATED_EVENT } from '../host/accessor';
-
-export type SproutMode = 'local' | 'cloud';
-
-/**
- * Resolved mode value from environment variable, defaulting to 'local'.
- *
- * Vite replaces VITE_* vars at build time,
- * so this resolves to a compile-time constant. Dead code is tree-shaken.
- *
- * Strict comparison — any non-'cloud' value (including typos) safely
- * defaults to local mode.
- */
-export const mode: SproutMode = (import.meta.env.VITE_SPROUT_MODE as SproutMode) === 'cloud' ? 'cloud' : 'local';
-
-/**
- * Cloud mode flag - true when running in cloud environment
- */
-export const isCloud: boolean = mode === 'cloud';
+import { getAdapter, ADAPTER_INSTALLED_EVENT, type APIAdapter } from '../services/apiAdapter';
 
 /**
  * capability resolves a feature flag from the adapter when one is installed,
- * falling back to a mode-aware default.
+ * falling back to the local default.
  *
  * The adapter is installed asynchronously (after /api/bootstrap fetch),
  * so getAdapter() is null at module load time. The exported flags are
@@ -49,9 +31,12 @@ export const isCloud: boolean = mode === 'cloud';
  * ADAPTER_INSTALLED_EVENT fires (see "Live capability flags" below) —
  * at which point the adapter's capability value takes precedence.
  *
- * This helper replaces the previous inline `isCloud ? X : (getAdapter()?.Y ?? Z)`
- * pattern that was duplicated across every export — the logic is identical,
- * now centralized and documented once.
+ * host.8: this no longer reads the build mode. With no active host the honest
+ * fallback is the adapter's value (a hosted build installs one) or the local
+ * default; the hosted build's cloud values come from its host, which the entry
+ * always sets. `cloudDefault` is kept in the signature so the call sites keep
+ * reading as a (local, cloud) pair, but it is no longer consulted — the cloud
+ * values now come from the cloud host, not a build flag.
  *
  * host.3: this is the NO-HOST path only. When an active host exists, the
  * bindings resolve from host.capabilities instead (see refreshFromHost). It is
@@ -63,13 +48,13 @@ export const isCloud: boolean = mode === 'cloud';
 export function capability<K extends keyof APIAdapter>(
   key: K,
   localDefault: NonNullable<APIAdapter[K]>,
-  cloudDefault: NonNullable<APIAdapter[K]>,
+  _cloudDefault: NonNullable<APIAdapter[K]>,
 ): NonNullable<APIAdapter[K]> {
   const adapter = getAdapter();
   if (adapter && adapter[key] !== undefined) {
     return adapter[key] as NonNullable<APIAdapter[K]>;
   }
-  return isCloud ? cloudDefault : localDefault;
+  return localDefault;
 }
 
 // ── Live capability flags ─────────────────────────────────────────────────
@@ -147,19 +132,21 @@ export let supportsSettings: boolean = capability('supportsSettings', true, true
 /**
  * Automation workflows - local mode only (the platform serves no
  * /api/automate; hosted scheduling lives in the platform's Tasks).
- * host.3: `export let` so the active host's `capabilities.automations` can
- * drive it; the fallback initializer is `!isCloud` (today's value).
+ * host.3: `export let` so the active host's `capabilities.automations` drives
+ * it. It is not an adapter key, so there is no adapter-refresh row; the
+ * no-host fallback is the local default (true — today's `!isCloud` value).
  */
-export let supportsAutomations: boolean = !isCloud;
+export let supportsAutomations: boolean = true;
 
 /**
  * Agent change history (the context panel's Agent Changes tab) - local mode
  * only: the in-browser agent does not record a change manifest, and the
  * platform serves no /api/changes.
- * host.3: `export let` so the active host's `capabilities.agentChanges` can
- * drive it; the fallback initializer is `!isCloud` (today's value).
+ * host.3: `export let` so the active host's `capabilities.agentChanges` drives
+ * it. It is not an adapter key, so there is no adapter-refresh row; the
+ * no-host fallback is the local default (true — today's `!isCloud` value).
  */
-export let supportsAgentChanges: boolean = !isCloud;
+export let supportsAgentChanges: boolean = true;
 
 // Adapter-installed refresh (no-host path only): re-read every adapter-derived
 // capability against the newly installed adapter. The defaults table mirrors

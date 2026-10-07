@@ -72,7 +72,6 @@ vi.mock('./design/useDesignPresence', () => ({
 // Mock config/mode so capability flags are explicit (not adapter-dependent).
 vi.mock('../config/mode', () => ({
   __esModule: true,
-  isCloud: false,
   supportsSettings: true,
   supportsLocalTerminal: false,
   supportsGit: true,

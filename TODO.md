@@ -253,28 +253,21 @@ protects.
       summary still requires a passing verification. Pinned by CLI tests.
 
 ## Review fixes — repository rules
-- [ ] **rules.1** Remove item tags from code comments and user-visible
+- [x] **rules.1** Remove item tags from code comments and user-visible
       strings added by the automated work ("TODO 153.6", "item 149.5",
       "(152.7)", "SP-149 §149a" in the manual-check reason). Spec-level
       references in docs are fine.
-      Remaining: ~312 tagged comment/string occurrences across ~182 files
-      under `pkg/`, `cmd/`, `webui/src/`, `test/` (the SP-148..157 series,
-      plus some pre-existing). A scripted sweep was attempted and rejected:
-      naive tag-stripping corrupts real code/strings (e.g. `.sprout`,
-      `Load()`) and leaves ungrammatical prose, so this needs per-file
-      review.
-      Progress: five verified batches cleaned ~220 of the densest files
-      (benchmark, verify, plancontract, planstore, events, startermanifest,
-      starters, starterstore, configuration, langguard, cliui, preview,
-      agent + agent_tools verification/plan/roles, agent_commands,
-      subagents, changes, webui preview/progress) — comment/string-only,
-      prose rewritten grammatically, non-comment tokens unchanged, touched
-      suites pass; the item's named examples (TODO 153.6, item 149.5,
-      (152.7), the manual-check reason) are cleaned. Reduced the automated-
-      work series from ~755 to ~155 occurrences across ~91 files (mostly
-      1–3 tags each); the remainder needs further per-file passes before
-      this can be ticked. `webui/src/types/generated.ts` must be
-      regenerated via the token exporter, not hand-edited.
+      Fixed: removed the automated-work spec tags from comments and
+      user-visible strings across `pkg/`, `cmd/`, `webui/src/` and `test/`
+      in seven verified comment/string-only batches — the SP-148..157
+      series, the bare `§149`/`§152` forms, `TODO 15x.y`, `item 14x/15x`
+      and `(15x.y)` shapes — rewriting each sentence so it reads cleanly.
+      Every batch was proven comment/string-only (non-comment tokens
+      unchanged) and the touched suites pass; the item's named examples are
+      cleaned. The only remaining matches are three roadmap *filenames*
+      (`roadmap/SP-148-structured-plans.md`, `roadmap/SP-153-starters-and-
+      stack-skills.md`, `roadmap/SP-152-language-guard.md`), which are
+      spec-level doc references the item allows.
 - [x] **rules.2** Split files over 500 lines introduced or grown by the
       automated work (`pkg/agent/seed_provider_chat.go`,
       `pkg/benchmark/runner_test.go`, `config_roles_test.go`,

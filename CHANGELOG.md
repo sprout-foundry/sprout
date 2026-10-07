@@ -20,6 +20,11 @@ All notable changes to Sprout will be documented in this file.
 - fix(webui): WASM bundle assets are content-hashed, and the released cloud bundle is built at `/webui/`.
 - fix(verify): verification command timeouts kill the whole process tree, so a timed-out command no longer keeps running on Linux.
 - fix(benchmark): `sprout benchmark --models` runs without a configured default provider.
+- fix(history): the revert-write audit no longer dumps a stack trace per file in a bulk recover/revert (concise line by default, stack under SPROUT_DEBUG).
+- fix(webui): the git worktree panel shows every worktree (the rooted one was invisible with mismatched branch/path), switching worktrees asks for confirmation, a failed create keeps its dialog open with the error, and remove uses --force + prune so dirty worktrees don't dead-end.
+- feat(webui): the tab context menu gains Open in file list, Copy relative path, and Copy absolute path; Shift+Alt+R / Shift+Alt+C / Shift+Alt+P do the same from the keyboard; Shift+Alt+R reveals and highlights the active file in the file tree.
+- feat(ui): dropping an image on the chat composer attaches it (previously the browser navigated to the file); the composer highlights during the drag and non-image drops are ignored.
+- fix(webui): repaired five webui tests broken by the release/0.23 merge (wasm-shell manifest fetch stub, unregistered testids for the language-guard, project-timeline and ship surfaces).
 
 ## [v0.22.7] - 2026-10-07
 

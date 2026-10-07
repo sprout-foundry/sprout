@@ -41,6 +41,14 @@ func collectAssets(dir string) ([]pagesAsset, error) {
 	if !info.IsDir() {
 		return nil, fmt.Errorf("%s is not a directory", root)
 	}
+	// A root-scoped filesystem keeps reads inside the build tree: a symlink
+	// swapped in between the walk and the read resolves under root, not
+	// wherever it now points.
+	rootFS, err := os.OpenRoot(root)
+	if err != nil {
+		return nil, fmt.Errorf("open %s: %w", root, err)
+	}
+	defer func() { _ = rootFS.Close() }()
 
 	var assets []pagesAsset
 	walkErr := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
@@ -66,11 +74,14 @@ func collectAssets(dir string) ([]pagesAsset, error) {
 		if info.Size() > maxCloudflareAssetBytes {
 			return fmt.Errorf("file %s exceeds %d bytes", path, maxCloudflareAssetBytes)
 		}
-		content, err := os.ReadFile(path)
+		rel, err := filepath.Rel(root, path)
 		if err != nil {
 			return err
 		}
-		rel, err := filepath.Rel(root, path)
+		// G122: read through an os.Root scoped to the build directory rather
+		// than the walked path, so a symlink swapped in between the walk and
+		// the read cannot escape the output tree.
+		content, err := rootFS.ReadFile(rel)
 		if err != nil {
 			return err
 		}

@@ -85,7 +85,7 @@ func (t *CloudflareTarget) doRawRequest(ctx context.Context, token, method, path
 		// but never the header, so the wrapped message is safe to surface.
 		return nil, fmt.Errorf("cloudflare: %s %s: %w", method, path, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {

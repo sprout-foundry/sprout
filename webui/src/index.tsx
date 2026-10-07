@@ -6,6 +6,7 @@ import React from 'react';
 import * as JSXRuntime from 'react/jsx-runtime';
 import * as ReactDOMClient from 'react-dom/client';
 import './index.css';
+import './workspaces/ship-mode'; // Registers the Ship mode through the public mode API
 import App from './App';
 import { applyShellAttribute, isStudioShellSync, resolveShellIdentity } from './config/shell';
 import { resolveClientIdentity } from './services/clientSession';

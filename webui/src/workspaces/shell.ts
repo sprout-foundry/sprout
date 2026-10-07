@@ -20,6 +20,7 @@ import type { default as WorkspacePane } from '../components/WorkspacePane';
 import type { ChatSession } from '../services/chatSessions';
 import type { PerChatState, QueryProgress, ViewType } from '../types/app';
 import type { GitBranchesState, GitStatusData } from '../types/git-types';
+import type { ShipPayload } from './ship';
 
 /** Chat/editor surface payload, consumed by the Code shell. */
 export interface WorkspaceShellChat {
@@ -107,4 +108,5 @@ export interface WorkspaceShellProps {
   chat: WorkspaceShellChat;
   design: WorkspaceShellDesign;
   git: WorkspaceShellGit;
+  ship: ShipPayload;
 }

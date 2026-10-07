@@ -96,10 +96,19 @@ func DefaultProbes() []Probe {
 		makeProbe("browseDir", "files", "/api/browse", nil),
 
 		// git
+		//
+		// The git probes assume the workspace is a git repository: a real sprout
+		// workspace (a code-editing tool's project) is a git repo, and a conformance
+		// harness should stage the disposable workspace as one. gitLog returns 200
+		// only in a git repo (it 400s otherwise), while gitStatus / gitBranches /
+		// gitWorktrees report in_git_repo:false and still return 200 outside one.
 		makeProbe("gitStatus", "git", "/api/git/status", nil),
 		makeProbe("gitBranches", "git", "/api/git/branches", nil),
 		makeProbe("gitLog", "git", "/api/git/log", nil),
-		makeProbe("gitDiff", "git", "/api/git/diff", nil),
+		// gitDiff is a per-file operation: it requires a `path` query parameter (a
+		// bare GET is 400 path_required). Like searchQuery, the probe supplies the
+		// parameter so a fresh workspace returns a valid, possibly-empty diff.
+		makeProbe("gitDiff", "git", "/api/git/diff", map[string]string{"path": "README.md"}),
 		makeProbe("gitWorktrees", "git", "/api/git/worktrees", nil),
 
 		// design

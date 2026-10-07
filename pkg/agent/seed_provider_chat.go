@@ -172,7 +172,7 @@ func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatReques
 	}
 
 	// Route every chunk through OutputRouter.RouteStreamChunk for both WebUI and CLI.
-	// SP-152 §152c: when the streaming hold-back is active for this turn,
+	// When the streaming hold-back is active for this turn,
 	// gate assistant-text delivery through it. Reasoning chunks are never
 	// gated. When inactive the assistant-text path below is byte-for-byte
 	// unchanged (no hold-back, no extra behavior).
@@ -240,9 +240,9 @@ func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatReques
 		}
 	}
 
-	// SP-152 §152c: finalize the hold-back for this streamed response —
+	// Finalize the hold-back for this streamed response —
 	// release a below-threshold stream, and (when held) regenerate the reply
-	// and deliver the corrected text (or the §152b notice) instead of the
+	// and deliver the corrected text (or the language notice) instead of the
 	// wrong-language stream.
 	if holdback != nil {
 		sp.finalizeStreamHoldback(ctx, holdback, resp)

@@ -209,7 +209,7 @@ func collectParallelResults(results []*SubagentResult, tasks []SubagentTask, a *
 	// SubagentResult fields. This mirrors the single-subagent path
 	// (extractAndTrackSubagentSummary). Each subagent's usage is rolled up
 	// under the role that drove its model choice, with its real
-	// prompt/completion token split (SP-150 §150c, item 150.5), so the
+	// prompt/completion token split, so the
 	// per-role totals keep summing to the overall totals.
 	for _, r := range results {
 		if r.TokensUsed > 0 || r.Cost > 0 {
@@ -227,7 +227,7 @@ func collectParallelResults(results []*SubagentResult, tasks []SubagentTask, a *
 
 // resolveParallelSubagentConfig resolves the effective provider and model for
 // parallel subagent tasks, checking config, fallback warnings, and parent
-// agent inheritance. SP-150 §150b: parallel subagents do the coder role's
+// agent inheritance. Parallel subagents do the coder role's
 // work, so the selection resolves through the coder role (the subagent
 // settings alias it).
 func resolveParallelSubagentConfig(a *Agent) (string, string) {
@@ -240,7 +240,7 @@ func resolveParallelSubagentConfig(a *Agent) (string, string) {
 		// If no explicit subagent config, inherit from parent agent's runtime
 		// values. The gate stays on the RAW legacy subagent fields: when
 		// those are unset, the parent agent's provider/model still wins
-		// (SP-150 §150b; in a normal session the last-used provider is the
+		// (in a normal session the last-used provider is the
 		// conversation provider, so the two are equivalent).
 		if config.SubagentProvider == "" && config.SubagentModel == "" {
 			if parentProvider := a.GetProvider(); parentProvider != "" && parentProvider != "unknown" {

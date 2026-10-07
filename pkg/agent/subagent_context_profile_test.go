@@ -70,8 +70,8 @@ func TestSubagentProfile_SmallModelActivatesLCM(t *testing.T) {
 	}
 }
 
-// TestSubagentProfile_RoleResolvedModelResolvesOwnProfile verifies SP-150
-// §150b on top of SP-125 R4: the subagent's provider/model come from role
+// TestSubagentProfile_RoleResolvedModelResolvesOwnProfile verifies
+// role resolution on top of SP-125 R4: the subagent's provider/model come from role
 // resolution (roles.coder points at a small-context model) and the context
 // profile is resolved against the subagent's OWN model window — LCM
 // activates even though the parent runs a 200K model.
@@ -88,7 +88,7 @@ func TestSubagentProfile_RoleResolvedModelResolvesOwnProfile(t *testing.T) {
 		t.Fatalf("UpdateConfigNoSave failed: %v", err)
 	}
 
-	// The spawn path (SP-150 §150b) resolves the coder role and flows the
+	// The spawn path resolves the coder role and flows the
 	// pair into SubagentOptions exactly as the spawn handler does.
 	provider, model := parent.configManager.GetConfig().ResolveRole(configuration.RoleCoder)
 	if provider != "test" || model != "small-context-model" {

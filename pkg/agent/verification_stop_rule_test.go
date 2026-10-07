@@ -1,6 +1,6 @@
 // verification_stop_rule_test.go — unit tests for the repair loop's
 // termination decision (verificationLoopShouldStop), the pure rule that
-// ends the SP-149 §149c repair loop: either every failing check has used
+// ends the repair loop: either every failing check has used
 // its per-check repair attempts, or the turn's total repair rounds have
 // reached the cap — whichever fires first. The per-check counters alone
 // cannot stop two failure patterns: checks alternating failures between

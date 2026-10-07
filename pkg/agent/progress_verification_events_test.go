@@ -1,8 +1,8 @@
 //go:build !js
 
-// progress_verification_events_test.go — the SP-151 §151a item-151.3
+// progress_verification_events_test.go — the
 // acceptance tests: at turn completion the runtime emits
-// progress_verification (the SP-149 evidence) followed by
+// progress_verification (the verification evidence) followed by
 // progress_complete (the verdict), both carrying the same correlation ids,
 // and emits only progress_complete when the turn-end hook never ran —
 // with a not_verified_reason when verification is enabled, and with no
@@ -12,7 +12,7 @@
 // pins). The emit path is driven through the real method —
 // publishTurnProgressComplete on a bare Agent wired to a captured EventBus —
 // mirroring the bare-`*Agent` + captured-`EventBus` convention in
-// scope_milestones_test.go (151.2), so the full publish path
+// scope_milestones_test.go, so the full publish path
 // (stored turn-verification → payload builder → publishEvent) is exercised.
 
 package agent
@@ -458,7 +458,7 @@ func TestPublishTurnProgressComplete_SubagentSilent(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // TestProgressComplete_NotVerifiedReason pins every branch of the
-// not-verified reason (mirroring the SP-149 hook's guard conditions): a nil
+// not-verified reason (mirroring the verification hook's guard conditions): a nil
 // config manager or a config with verification disabled (the default) → ""
 // (no not-verified notice); verification enabled but no code change → "no
 // code changes this turn"; verification enabled with a code change →

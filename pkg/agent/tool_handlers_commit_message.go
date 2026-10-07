@@ -48,7 +48,7 @@ func handleGenerateCommitMessage(a *Agent, diff []byte, notes string) (string, e
 
 // commitMessageClient builds the LLM client for commit message generation,
 // mirroring prepareCommitClient in the CLI commit flow: the commit role's
-// provider/model first (SP-150 §150b — the commit settings alias the commit
+// provider/model first (the commit settings alias the commit
 // role), then the conversation provider/model.
 // Returns nil when no client can be created.
 func commitMessageClient(a *Agent) api.ClientInterface {

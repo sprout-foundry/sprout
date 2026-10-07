@@ -1,6 +1,6 @@
 //go:build !js
 
-// verification_hook_snapshot_test.go — SP-149 §149b: the turn-start
+// verification_hook_snapshot_test.go — the turn-start
 // verification snapshot and the starter-manifest write guard. Together they
 // close the hole where the model could change what "passing" means mid-turn:
 //
@@ -205,7 +205,7 @@ func TestHandleWriteFileAllowsStarterManifestWhenDisabled(t *testing.T) {
 // The anchor test (the full turn, the live tool path)
 // ---------------------------------------------------------------------------
 
-// TestVerificationSnapshot_ModelCannotChangeCommands is the §149b anchor: a
+// TestVerificationSnapshot_ModelCannotChangeCommands is the anchor test: a
 // scripted turn whose repair round tries to rewrite the manifest's build
 // command to a trivially-passing one. The guard refuses the write and the
 // turn-start snapshot keeps the gate — the turn ends FAILED on the original
@@ -261,7 +261,7 @@ func TestVerificationSnapshot_ModelCannotChangeCommands(t *testing.T) {
 	}
 	require.True(t, foundBuild, "the stored result must carry the build check")
 
-	// 149.6: the turn ended FAILED — the final reply carries the §149d
+	// The turn ended FAILED — the final reply carries the
 	// failure report (what fails, what was tried), not a clean success.
 	const want = repairOne + "\n\n" + "Verification: FAILED after the stopping rule (1 repair attempts)\n" +
 		"Passed: none\n" +
@@ -346,6 +346,6 @@ func TestVerificationSnapshot_PlanTamperStillGates(t *testing.T) {
 	assert.False(t, res.Checks[0].Passed, "the build check (the snapshot's command) must still fail")
 	assert.True(t, res.Failed(), "the run must fail (the gate holds on the snapshot)")
 
-	// 149.6: the turn ended FAILED.
+	// The turn ended FAILED.
 	assert.Contains(t, result, "Verification: FAILED", "the final reply must carry the FAILED verification attachment")
 }

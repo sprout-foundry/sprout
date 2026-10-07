@@ -1,7 +1,7 @@
 //go:build !js
 
-// progress_question_events_test.go — the SP-151 §151a item-151.4 acceptance
-// tests: the plan context a progress_question is correlated to (the active
+// progress_question_events_test.go — the acceptance
+// tests for the plan context a progress_question is correlated to (the active
 // scope item + plan revision), the exact payload shape of the emitted event,
 // and the "alongside ask_user_request" wiring at the ask_user entry points.
 //
@@ -9,8 +9,7 @@
 // bare agent whose tracker is seeded). The emit path is driven through the
 // real method — publishProgressQuestion on a bare Agent wired to a captured
 // EventBus — mirroring the bare-`*Agent` + captured-`EventBus` convention in
-// progress_verification_events_test.go (151.3) and scope_milestones_test.go
-// (151.2). The "alongside" pairing is by construction: the emit sits at the
+// progress_verification_events_test.go and scope_milestones_test.go. The "alongside" pairing is by construction: the emit sits at the
 // same entry point as ask_user_request and before the channel, so the
 // progress_question always precedes it for one question.
 

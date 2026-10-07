@@ -115,7 +115,7 @@ type AgentState struct {
 	SubscriptionTokens int     `json:"subscription_tokens,omitempty"`
 	FreeTokens         int     `json:"free_tokens,omitempty"`
 
-	// Per-role token/cost totals (SP-150 §150c, item 150.5). Persisted so a
+	// Per-role token/cost totals. Persisted so a
 	// restored conversation keeps its per-role attribution and the per-role
 	// totals keep summing to the restored overall totals.
 	RoleUsage []RoleUsage `json:"role_usage,omitempty"`

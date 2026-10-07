@@ -190,7 +190,7 @@ func buildSecretSource(toolName string, args map[string]interface{}) string {
 // []map[string]interface{} format expected by PublishTodoUpdate.
 // Includes optional activeForm, priority, and scope so the WebUI can surface
 // the present-continuous phrasing, priority indicator, and the plan scope
-// link (SP-148 §148c).
+// link.
 func formatTodoItemsForEvent(todos []tools.TodoItem) []map[string]interface{} {
 	result := make([]map[string]interface{}, len(todos))
 	for i, t := range todos {

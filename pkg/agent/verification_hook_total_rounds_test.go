@@ -1,14 +1,14 @@
 //go:build !js
 
 // verification_hook_total_rounds_test.go — the total repair-rounds cap of
-// the SP-149 §149c verification loop: the per-check attempt counters stop
+// the verification loop: the per-check attempt counters stop
 // the loop only when every currently-failing check has exhausted its own
 // attempts, so two failure patterns can outrun them — checks alternating
 // failures between rounds (each counter grows at half speed), and
 // interaction checks whose item id (and therefore counter key) is new
 // every round. This file pins the turn-level cap that bounds both: the
 // loop stops when either the per-check rule or the total cap fires,
-// whichever comes first, and the §149d honest failure report still
+// whichever comes first, and the honest failure report still
 // attaches when the total cap is what ended the loop.
 //
 // The fixture follows verification_hook_test.go: a scripted model, a real
@@ -83,7 +83,7 @@ func vtrWriteFlipScript(t *testing.T, root string) {
 // alternating-failure termination: build and test take turns failing, so
 // neither per-check counter reaches the limit while the loop is running,
 // and the total-rounds cap is what ends the turn — exactly at the cap,
-// with the §149d failure report attached to the final reply.
+// with the failure report attached to the final reply.
 func TestVerificationHook_TotalCapStopsAlternatingFailures(t *testing.T) {
 	vtrShAvailable(t)
 	root := t.TempDir()
@@ -149,7 +149,7 @@ func TestVerificationHook_TotalCapStopsAlternatingFailures(t *testing.T) {
 		t.Errorf("round 3 report must show the test's second attempt:\n%s", reports[3])
 	}
 
-	// 149.6: the final reply carries the §149d failure report even though
+	// The final reply carries the failure report even though
 	// the total cap (not the per-check rule) ended the loop. The last run
 	// failed the build (test passed), each with 2 of N=3 attempts used.
 	const want = finalReply + "\n\n" + "Verification: FAILED after the stopping rule (3 repair attempts)\n" +
@@ -157,7 +157,7 @@ func TestVerificationHook_TotalCapStopsAlternatingFailures(t *testing.T) {
 		"Failed: build — command failed\n" +
 		"Tried: build: 2/3 repair attempts"
 	if result != want {
-		t.Errorf("result = %q,\nwant %q (the §149d failure report after the total cap fired)", result, want)
+		t.Errorf("result = %q,\nwant %q (the failure report after the total cap fired)", result, want)
 	}
 
 	// The stored state carries the cap round count and the per-check
@@ -230,7 +230,7 @@ func TestVerificationHook_TotalCapDefaultScalesAbovePerCheckLimit(t *testing.T) 
 // explicit total tighter than the derived default: with N=2 and
 // total_repair_rounds=1, one repair round runs and the loop stops at the
 // cap — before the per-check limit — with the failing run stored and the
-// §149d report attached.
+// report attached.
 func TestVerificationHook_ExplicitTotalCapBelowDefaultStopsEarly(t *testing.T) {
 	vtrShAvailable(t)
 	root := t.TempDir()
@@ -260,13 +260,13 @@ func TestVerificationHook_ExplicitTotalCapBelowDefaultStopsEarly(t *testing.T) {
 	if tv := ag.LastTurnVerification(); tv == nil || tv.Rounds != 1 {
 		t.Errorf("stored rounds = %+v, want 1 (the total cap fired before the per-check limit)", tv)
 	}
-	// The §149d report still names what failed and what was tried; the
+	// The failure report still names what failed and what was tried; the
 	// per-check counter shows the attempt the one round consumed.
 	const wantSub = "Verification: FAILED after the stopping rule (2 repair attempts)\n" +
 		"Passed: none\n" +
 		"Failed: build — command failed\n" +
 		"Tried: build: 1/2 repair attempts"
 	if !strings.HasSuffix(result, wantSub) {
-		t.Errorf("result = %q,\nwant it to end with the §149d failure report %q", result, wantSub)
+		t.Errorf("result = %q,\nwant it to end with the failure report %q", result, wantSub)
 	}
 }

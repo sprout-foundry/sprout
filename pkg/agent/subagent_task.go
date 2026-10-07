@@ -330,7 +330,7 @@ func (r *SubagentRunner) finalizeSubagentResult(
 		result.ID = taskID
 		result.TokensUsed = tokensUsed
 		result.Cost = cost
-		// SP-150 §150c (item 150.5): carry the subagent's role and its
+		// Carry the subagent's role and its
 		// prompt/completion token split so the parent can roll the usage up
 		// under the correct role with real token counts, not a zero-split
 		// aggregate stamped with the parent's role.

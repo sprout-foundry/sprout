@@ -7,7 +7,7 @@
 
 import { Cloud, Server } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { isCloud } from '../config/mode';
+import { useHostCapabilities } from '../host';
 import { useRunHostChoice } from '../hooks/useRunHostChoice';
 import {
   installEscalationBridge,
@@ -50,12 +50,13 @@ async function runnerAvailable(host: EscalationHost): Promise<boolean> {
 }
 
 export function AgentEscalationBridge({ repoURL }: { repoURL?: string }) {
+  const { localTerminal } = useHostCapabilities();
   const [pending, setPending] = useState<PendingConsent[]>([]);
   const [progress, setProgress] = useState<{ command: string; phase: string; host: EscalationHost } | null>(null);
   const allowRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (!isCloud) return undefined;
+    if (localTerminal) return undefined;
     return installEscalationBridge({
       repoURL,
       requestConsent: (command, context) =>
@@ -67,7 +68,7 @@ export function AgentEscalationBridge({ repoURL }: { repoURL?: string }) {
       onPhase: (command, phase, host) =>
         setProgress(phase === 'done' || phase === 'error' ? null : { command, phase, host }),
     });
-  }, [repoURL]);
+  }, [repoURL, localTerminal]);
 
   // Safety net: a run advances opening → pushing → running → pulling → done (or
   // → error). If a phase arrives but no next phase follows within the watchdog
@@ -111,7 +112,7 @@ export function AgentEscalationBridge({ repoURL }: { repoURL?: string }) {
     return () => document.removeEventListener('keydown', onKey);
   }, [current, answer]);
 
-  if (!isCloud) return null;
+  if (localTerminal) return null;
 
   const onRunner = host.kind === 'runner';
   const HostIcon = onRunner ? Server : Cloud;

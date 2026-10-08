@@ -40,8 +40,9 @@ Your job is to complete each TODO item with full build/test/review rigor, commit
    Task: [insert the TODO item description here, with any specific file paths or requirements]"
 
 3. **After the orchestrator completes**, verify that it delegated the review to the `reviewer` subagent (check its output for a run_subagent call to reviewer) and that its report contains build/test evidence (commands + outcomes). If it skipped the review or lacks test evidence, treat it as a failure and retry with a stronger reminder.
-4. **Verify the build passes** (run the project's build command like `make build-all` or `go build ./...`)
-5. **If build fails**, delegate a fix to orchestrator and re-verify
+4. **Check the gate evidence; do not re-run the gate.** The orchestrator already ran the item's validation gate (see `TODO.md`). Confirm its report lists each gate command with a passing result, and run `git status` and `git diff --stat` to confirm the changed files match the item. Re-run a gate command yourself only if its evidence is missing, failed, or does not cover a file the item changed.
+5. **If the gate failed or evidence is missing**, delegate a fix to orchestrator and re-verify
+   **Batches:** an item whose text ends with `(batch with next)` is handed to the orchestrator together with the item that follows it, in one prompt; both are validated together, ticked together and committed as one commit whose subject covers both.
 6. **Mark the TODO item `[x]`** in TODO.md using edit_file, then stage TODO.md together with the files the item changed. The tick and the work land in ONE commit; never a separate "mark complete" commit.
 7. **Review staged changes** with `git diff --cached`, then commit with the commit tool. Write the message yourself and pass it as `message`; do not rely on `notes`. The message must follow these rules:
    - Conventional Commit subject: `type(scope): summary`, at most 72 characters, imperative mood, lowercase after the colon, no trailing period. `type` is one of `feat`, `fix`, `refactor`, `test`, `docs`, `chore`; `scope` is the area or spec, e.g. `feat(plans): add structured plan store` or `feat(billing): grant welcome credits on approval`.

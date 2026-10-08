@@ -11,6 +11,8 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { __resetShellIdentityForTests, publishShellIdentityForTests } from '../config/shell';
+import { HostProvider } from '../host/HostProvider';
+import { makeTestHost } from '../host/testHost';
 import SidebarFilesSection from './SidebarFilesSection';
 
 vi.mock('../services/workspaceFs/backendsExport', () => ({
@@ -18,20 +20,16 @@ vi.mock('../services/workspaceFs/backendsExport', () => ({
   listWorkspaceRepos: vi.fn().mockResolvedValue(['octo/sprout']),
 }));
 
-// The component renders the + add-repo button only in cloud mode (cloneTrigger
-// = isCloud ? handleCloneRepo : undefined). isCloud is a build-time constant,
-// so mock the mode module rather than fighting env-replacement ordering. The
-// factory must not close over top-level lets (vi.mock is hoisted) — the flag
-// lives on a hoisted-safe object created inside vi.hoisted.
-const modeState = vi.hoisted(() => ({ isCloud: true, isLayeredLayout: false }));
-vi.mock('../config/mode', () => ({
-  isCloud: modeState.isCloud,
-}));
-// The layered layout opens repositories from its repository rail, so the row
-// carries the button only in the classic layout.
+// The Files section shows the "+ add repo" clone button only when the host has
+// no local terminal (clone is a hosted capability) AND in the classic layout
+// (the layered layout opens repositories from its repository rail). The
+// host capability comes from the provider; the layout flag is a module import
+// the component still reads, so it is mocked here (getter so it can flip per
+// test — vi.mock is hoisted, so the flag lives on a hoisted-safe object).
+const layoutState = vi.hoisted(() => ({ isLayeredLayout: false }));
 vi.mock('../config/layout', () => ({
   get isLayeredLayout() {
-    return modeState.isLayeredLayout;
+    return layoutState.isLayeredLayout;
   },
 }));
 
@@ -41,14 +39,17 @@ let root: Root;
 function renderSection() {
   // eslint-disable-next-line testing-library/no-unnecessary-act -- createRoot render isn't RTL-tracked
   act(() => {
-    root.render(<SidebarFilesSection workspaceRoot="" />);
+    root.render(
+      <HostProvider host={makeTestHost({ localTerminal: false })}>
+        <SidebarFilesSection workspaceRoot="" />
+      </HostProvider>,
+    );
   });
 }
 
 describe('SidebarFilesSection: shell-scoped cwd row', () => {
   beforeEach(() => {
-    modeState.isCloud = true;
-    modeState.isLayeredLayout = false;
+    layoutState.isLayeredLayout = false;
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -72,7 +73,7 @@ describe('SidebarFilesSection: shell-scoped cwd row', () => {
   });
 
   it('layered layout: no add-repo button (the repository rail opens repos)', () => {
-    modeState.isLayeredLayout = true;
+    layoutState.isLayeredLayout = true;
     publishShellIdentityForTests('webui');
     renderSection();
     expect(container.querySelector('[data-testid="workspace-add-repo-btn"]')).toBeNull();

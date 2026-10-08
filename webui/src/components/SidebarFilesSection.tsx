@@ -2,7 +2,7 @@ import { FileTree, type FileInfo, type FileTreeRefreshOptions } from '@sprout/ui
 import { Check, TriangleAlert, X } from 'lucide-react';
 import { forwardRef, useImperativeHandle, useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { isLayeredLayout } from '../config/layout';
-import { isCloud } from '../config/mode';
+import { useHost, useHostCapabilities } from '../host';
 import { getShellIdentity, onShellIdentityChange } from '../config/shell';
 import { useOptionalBufferManager } from '../contexts/BufferManagerContext';
 import { useFileTreeAutoRefresh } from '../hooks/useFileTreeAutoRefresh';
@@ -14,13 +14,12 @@ import { searchForRepo } from '../services/homeView';
 import { detectSproutStudio, mapWorkspaceListing, nativeFsGate, workspaceListDepth } from '../services/nativeFs';
 import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
 import { gitCorsProxy } from '../services/gitCorsProxy';
-import { fetchPlatformGitHubConnected, usesPlatformGitHub } from '../services/platformGitHub';
 import { cloneIntoWorkspace } from '../services/workspaceClone';
 import { useWorkspaceCwd, setWorkspaceCwd } from '../services/workspaceCwd';
 import { getWorkspaceFs, listWorkspaceRepos } from '../services/workspaceFs/backendsExport';
 import type { FsEntry } from '../services/workspaceFs/types';
 import { parseRepoRef, repoDir } from '../services/workspaceFs/workspaceGit';
-import { repoSlug } from '../utils/platformUrl';
+import { repoSlug } from '../host/repoName';
 import GitHubRepoPicker from './GitHubRepoPicker';
 import { showThemedAlert, showThemedPrompt } from './ThemedDialog';
 import WorkspaceCwdBar from './WorkspaceCwdBar';
@@ -75,6 +74,8 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
 
     const api = ApiService.getInstance();
     const bufferManager = useOptionalBufferManager();
+    const host = useHost();
+    const { localTerminal } = useHostCapabilities();
 
     // ── Working directory (session-level cwd) ─────────────────────
     // Shared with the terminal / git / agent surfaces via the workspaceCwd
@@ -210,7 +211,11 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
     const [isRepoPickerOpen, setIsRepoPickerOpen] = useState(false);
 
     const handleCloneRepo = async () => {
-      const accountConnected = usesPlatformGitHub() && (await fetchPlatformGitHubConnected().catch(() => false));
+      // GitHub is "connected" when a token is stored, or when the host manages
+      // GitHub on its account and reports a live connection. The host owns the
+      // account check; Sprout only asks.
+      const hostGithub = host.github;
+      const accountConnected = hostGithub ? await hostGithub.isConnected().catch(() => false) : false;
       if (getStoredToken() || accountConnected) {
         setIsRepoPickerOpen(true);
         return;
@@ -265,11 +270,12 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
       }
     };
 
-    // "Add repo" trigger for the workspace row. Only in cloud/local webui
-    // mode (matches the old tree-header gating); studio dists clone via
-    // the GitHub account panel / device-flow sign-in surface. The layered
-    // layout opens repositories from its repository rail instead.
-    const cloneTrigger = isCloud && !isLayeredLayout ? handleCloneRepo : undefined;
+    // "Add repo" trigger for the workspace row. Clone is a hosted capability
+    // (the host holds one repository per page); local builds manage files on
+    // disk. Studio dists clone via the GitHub account panel / device-flow
+    // sign-in surface; the layered layout opens repositories from its
+    // repository rail instead.
+    const cloneTrigger = !localTerminal && !isLayeredLayout ? handleCloneRepo : undefined;
 
     return (
       <>

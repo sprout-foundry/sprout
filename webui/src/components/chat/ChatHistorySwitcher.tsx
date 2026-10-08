@@ -2,7 +2,7 @@ import { Clock, Download, History, Loader2, Search, X } from 'lucide-react';
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { clientFetch } from '../../services/clientSession';
-import { supportsExport } from '../../config/mode';
+import { useHostCapabilities } from '../../host';
 import { getSessions, searchSessions } from '../../services/api/sessionApi';
 import type { SessionEntry, SessionSearchResult } from '../../services/api/types/session';
 import { highlightExcerpt } from './highlightExcerpt';
@@ -51,6 +51,7 @@ interface ChatHistorySwitcherProps {
 const POPOVER_WIDTH = 340;
 
 function ChatHistorySwitcherInner({ chatId, onRestoreSession, iconOnly = false }: ChatHistorySwitcherProps) {
+  const { export: supportsExport } = useHostCapabilities();
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
   const [query, setQuery] = useState('');

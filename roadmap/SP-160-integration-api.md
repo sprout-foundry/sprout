@@ -50,7 +50,7 @@ spaces talk to, versioned and conformance-tested).
 
 ## Design
 
-### 160a. Composition API — `@sprout/workspace`
+### 160a. Composition API — `@sprout-foundry/workspace`
 
 A versioned package that exports the spaces and the pieces of the workspace:
 
@@ -100,6 +100,9 @@ Rules:
 - The local web UI ships `localHost`: no account, local files, local
   backend, all local capabilities on.
 
+See `docs/integration/host-contract.md` for the interface field by field, the
+built-in hosts, and what each former `isCloud` branch became.
+
 ### 160c. Backend contract
 
 The API the spaces talk to, written down and versioned:
@@ -131,7 +134,7 @@ The API the spaces talk to, written down and versioned:
 
 ### 160e. Build and delivery
 
-- One hosted artifact: the `@sprout/workspace` package, built once per
+- One hosted artifact: the `@sprout-foundry/workspace` package, built once per
   release in production mode. Hosts consume the package; they do not build
   the web UI from source.
 - WASM and other large assets are content-hashed and referenced through the
@@ -165,7 +168,7 @@ Phases 1 and 2 can proceed in parallel; 3 needs 1.
       intent, and never imports a web UI internal.
 - [ ] The conformance suite passes against the daemon and the WASM agent; a
       deliberately broken endpoint fails it.
-- [ ] Importing `@sprout/workspace` loads no editor or WASM code until a
+- [ ] Importing `@sprout-foundry/workspace` loads no editor or WASM code until a
       space opens.
 - [ ] Upgrading the package changes the WASM asset URLs.
 

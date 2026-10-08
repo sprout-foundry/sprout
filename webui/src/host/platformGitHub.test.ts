@@ -1,7 +1,4 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-
-vi.mock('../bootstrapAdapter', () => ({ getPlatformURL: () => undefined }));
-
 import { fetchPlatformGitHubConnected, listPlatformRepos } from './platformGitHub';
 
 afterEach(() => vi.unstubAllGlobals());

@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { supportsSettings } from '../config/mode';
+import { useHostCapabilities } from '../host';
 import { ApiService, type ProviderOption } from '../services/api';
 import { debugLog } from '../utils/log';
 import { toUserErrorMessage } from '../utils/errorMessage';
@@ -71,6 +71,7 @@ interface ProviderCatalogProviderProps {
  * once per connect and exposes a stable lookup to every consumer.
  */
 export function ProviderCatalogProvider({ isConnected, children }: ProviderCatalogProviderProps): JSX.Element {
+  const { settings: supportsSettings } = useHostCapabilities();
   const [providers, setProviders] = useState<ProviderOption[]>(EMPTY_PROVIDERS);
   const [isLoading, setIsLoading] = useState(false);
   const [currentProvider, setCurrentProvider] = useState('');

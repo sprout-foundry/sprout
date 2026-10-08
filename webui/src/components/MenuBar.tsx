@@ -10,7 +10,8 @@
  */
 import { MenuBar, type MenuDefinition, type MenuBarItem } from '@sprout/ui';
 import { useMemo, useCallback } from 'react';
-import { supportsLocalTerminal } from '../config/mode';
+import { capability } from '../config/mode';
+import { getActiveHost } from '../host';
 import { useHotkeys } from '../contexts/HotkeyContext';
 
 /* ------------------------------------------------------------------ */
@@ -94,7 +95,12 @@ function buildMenus(username: string | null | undefined, _currentBranch: string 
     { title: 'Help', mnemonic: 'H', items: helpItems },
   ];
 
-  // Append Terminal menu only when supported
+  // Append Terminal menu only when supported. buildMenus is a plain function
+  // (not a component/hook), so it reads the capability through the non-React
+  // host accessor at use time — the same host-or-fallback value the live mode
+  // binding carries — rather than a module-scope snapshot.
+  const supportsLocalTerminal =
+    getActiveHost()?.capabilities.localTerminal ?? capability('supportsLocalTerminal', true, false);
   if (supportsLocalTerminal) {
     menus.splice(3, 0, { title: 'Terminal', mnemonic: 'T', items: terminalItems });
   }

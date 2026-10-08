@@ -14,6 +14,9 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { vi, describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
+import { HostProvider } from '../host/HostProvider';
+import { makeTestHost } from '../host/testHost';
+import type { SproutHost } from '../host/types';
 import SettingsPanel from './SettingsPanel';
 
 // ---------------------------------------------------------------------------
@@ -144,11 +147,6 @@ vi.mock('../../utils/log', () => ({
   debugLog: vi.fn(),
 }));
 
-// Mock config/mode
-vi.mock('../../config/mode', () => ({
-  supportsSettings: true,
-}));
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -198,7 +196,7 @@ afterEach(() => {
   container?.remove();
 });
 
-function renderPanel(extraProps?: Record<string, unknown>) {
+function renderPanel(extraProps?: Record<string, unknown>, host: SproutHost = makeTestHost({ localTerminal: true })) {
   const baseProps = {
     settings: null,
     onSettingsChanged: vi.fn(),
@@ -209,7 +207,7 @@ function renderPanel(extraProps?: Record<string, unknown>) {
     ...extraProps,
   };
   act(() => {
-    root.render(createElement(SettingsPanel, baseProps));
+    root.render(<HostProvider host={host}>{createElement(SettingsPanel, baseProps)}</HostProvider>);
   });
 }
 
@@ -473,5 +471,35 @@ describe('filter bar', () => {
     const filterInput = container.querySelector('.settings-filter-input');
     expect(filterInput).not.toBeNull();
     expect(filterInput?.getAttribute('placeholder')).toContain('Filter settings');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: host capability flips the local-only subsection filtering
+// ---------------------------------------------------------------------------
+
+// MCP / LSP / Computer Use / Skills / Subagents subsections require a local
+// backend. A local terminal (localTerminal: true) keeps them; a hosted shell
+// (localTerminal: false) filters them out (and drops any section that ends up
+// with no subsections). The Agent section is expanded by default, so the
+// subagents tab is the cleanest flip signal.
+describe('host capability flips the local-only subsection filtering', () => {
+  it('local terminal: all 5 sections render and the agent subagents tab is visible', () => {
+    renderPanel({}, makeTestHost({ localTerminal: true }));
+
+    expect(container.querySelectorAll('.settings-section')).toHaveLength(5);
+    expect(container.querySelector('[data-testid="settings-agent-subagents-tab"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="settings-agent-skills-tab"]')).not.toBeNull();
+  });
+
+  it('no local terminal (hosted): local-only subsections are filtered out', () => {
+    renderPanel({}, makeTestHost({ localTerminal: false }));
+
+    // Agent, Environment, Editor remain (Workspace + Experimental lose every
+    // subsection and are dropped); the local-only agent subsections go.
+    expect(container.querySelectorAll('.settings-section')).toHaveLength(3);
+    expect(container.querySelector('[data-testid="settings-agent-subagents-tab"]')).toBeNull();
+    expect(container.querySelector('[data-testid="settings-agent-skills-tab"]')).toBeNull();
+    expect(container.querySelector('[data-testid="settings-agent-general-tab"]')).not.toBeNull();
   });
 });

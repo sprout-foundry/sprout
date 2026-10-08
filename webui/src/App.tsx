@@ -1,4 +1,4 @@
-import { EventsContextProvider, useEvents } from '@sprout/events';
+import { useEvents } from '@sprout/events';
 import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { AgentEscalationBridge } from './components/AgentEscalationBridge';
 import AppContent from './components/AppContent';
@@ -24,14 +24,6 @@ import UpdateNotification from './components/UpdateNotification';
 import { WasmLoadingOverlay } from './components/WasmLoadingOverlay';
 import { MAX_PERSISTED_LOGS } from './constants/app';
 import { AppStoreProvider, useAppStoreSetState, useAppStoreState } from './contexts/AppStore';
-import { EditorManagerProvider } from './contexts/EditorManagerContext';
-import { HotkeyProvider } from './contexts/HotkeyContext';
-import { NotificationProvider } from './contexts/NotificationContext';
-import { PlatformNavProvider } from './contexts/PlatformNavContext';
-import { PluginContextProvider } from './contexts/PluginContext';
-import { ProviderCatalogProvider } from './contexts/ProviderCatalogContext';
-import { SproutAdapterProvider } from './contexts/SproutAdapterContext';
-import { ThemeProvider } from './contexts/ThemeContext';
 import { useAppInitialization } from './hooks/useAppInitialization';
 import { useAppStatePersistence } from './hooks/useAppStatePersistence';
 import { useBackgroundChatSync } from './hooks/useBackgroundChatSync';
@@ -47,6 +39,7 @@ import { useSecurityHandlers } from './hooks/useSecurityHandlers';
 import { useSidebarState } from './hooks/useSidebarState';
 import type { UseWebSocketEventHandlerRefs } from './hooks/useWebSocketEventHandler';
 import { useWebSocketEventHandler } from './hooks/useWebSocketEventHandler';
+import { SproutProviders } from './providers';
 import { useActiveRepoURL } from './services/activeRepo';
 import { ApiService } from './services/api';
 import { loadPersistedAppState } from './services/appStatePersistence';
@@ -109,11 +102,9 @@ function App() {
 
   return (
     <AppStoreProvider initialState={initialState}>
-      <NotificationProvider>
-        <EventsContextProvider provider={eventsProvider}>
-          <AppInner />
-        </EventsContextProvider>
-      </NotificationProvider>
+      <SproutProviders eventsProvider={eventsProvider}>
+        <AppInner />
+      </SproutProviders>
     </AppStoreProvider>
   );
 }
@@ -432,200 +423,186 @@ function AppInner() {
       }}
     >
       <WasmLoadingOverlay isLoading={!!state.wasmLoading} error={state.wasmError} />
-      <SproutAdapterProvider>
-        <PlatformNavProvider>
-          <PluginContextProvider>
-            <ThemeProvider>
-              <HotkeyProvider>
-                <EditorManagerProvider>
-                  <ProviderCatalogProvider isConnected={state.isConnected}>
-                    <UIManager>
-                      <NotificationCenter />
-                      <AppContent
-                        state={state}
-                        isMobile={isMobile}
-                        isTablet={isTablet}
-                        isSidebarOpen={isSidebarOpen}
-                        sidebarCollapsed={sidebarCollapsed}
-                        isTerminalExpanded={isTerminalExpanded}
-                        selectedSection={selectedSection}
-                        sidebarWidth={sidebarWidth}
-                        sidebarWidthRef={sidebarWidthRef}
-                        onSectionChange={setSelectedSection}
-                        onSidebarWidthChange={setSidebarWidth}
-                        onSidebarWidthPersist={persistSidebarWidth}
-                        // Double-tap/double-click on the grip cycles snap
-                        // presets (narrow → standard → wide, wraps) instead
-                        // of only resetting to default.
-                        onSidebarWidthReset={cycleSidebarSnap}
-                        stats={stats}
-                        recentFiles={recentFiles}
-                        recentLogs={recentLogs}
-                        gitRefreshToken={gitRefreshToken}
-                        onSidebarToggle={handleSidebarToggle}
-                        onToggleSidebar={toggleSidebar}
-                        onCloseSidebar={closeSidebar}
-                        onViewChange={handleViewChange}
-                        onModelChange={handleModelChange}
-                        onProviderChange={handleProviderChange}
-                        onSendMessage={chatManager.handleSendMessage}
-                        onQueueMessage={chatManager.handleQueueMessage}
-                        onQueueMessageRemove={chatManager.handleRemoveQueuedMessage}
-                        onQueueMessageEdit={chatManager.handleEditQueuedMessage}
-                        onQueueReorder={chatManager.handleReorderQueuedMessages}
-                        onClearQueuedMessages={chatManager.handleClearQueuedMessages}
-                        onStopProcessing={chatManager.handleStopProcessing}
-                        onRetractSteer={chatManager.handleRetractSteer}
-                        queuedMessages={chatManager.queuedMessages}
-                        queuedMessagesCount={chatManager.queuedMessagesCount}
-                        onGitCommit={handleGitCommit}
-                        onGitAICommit={handleGitAICommit}
-                        onGitStage={handleGitStage}
-                        onGitUnstage={handleGitUnstage}
-                        onGitDiscard={handleGitDiscard}
-                        onTerminalOutput={handleTerminalOutput}
-                        onTerminalExpandedChange={setIsTerminalExpanded}
-                        isConnected={state.isConnected}
-                        chatSessions={state.chatSessions}
-                        activeChatId={state.activeChatId}
-                        onActiveChatChange={chatManager.handleActiveChatChange}
-                        onCreateChat={chatManager.handleCreateChat}
-                        onCreateChatInWorktree={chatManager.handleCreateChatInWorktree}
-                        onDeleteChat={chatManager.handleDeleteChat}
-                        onDeleteAllChats={chatManager.handleDeleteAllChats}
-                        onRenameChat={chatManager.handleRenameChat}
-                        perChatCache={state.perChatCache}
-                      />
-                      <UpdateNotification />
-                      <UpdateAvailableBanner />
-                      <EscalationListener />
-                      <AgentEscalationBridge repoURL={repoURL} />
-                      <InstallPromptBanner />
-                      <SyncStatusBanner />
-                      <DisconnectedOverlay isConnected={state.isConnected} />
-                      <ApprovalOriginNotice
-                        chatName={
-                          state.securityApprovalRequest?.fromChat ??
-                          state.securityPromptRequest?.fromChat ??
-                          state.askUserRequest?.fromChat ??
-                          state.editApprovalRequest?.fromChat ??
-                          state.shellApprovalRequest?.fromChat
-                        }
-                      />
-                      {state.securityApprovalRequest && (
-                        <SecurityApprovalDialog
-                          requestId={state.securityApprovalRequest.requestId}
-                          toolName={state.securityApprovalRequest.toolName}
-                          riskLevel={state.securityApprovalRequest.riskLevel as 'SAFE' | 'CAUTION' | 'DANGEROUS'}
-                          reasoning={state.securityApprovalRequest.reasoning}
-                          command={state.securityApprovalRequest.command}
-                          riskType={state.securityApprovalRequest.riskType}
-                          target={state.securityApprovalRequest.target}
-                          allowOptions={state.securityApprovalRequest.allowOptions}
-                          fsKind={state.securityApprovalRequest.fsKind}
-                          fsFolder={state.securityApprovalRequest.fsFolder}
-                          fsPath={state.securityApprovalRequest.fsPath}
-                          securityAnalysis={state.securityApprovalRequest.securityAnalysis}
-                          deliveryError={state.securityApprovalRequest.deliveryError}
-                          onRespond={handleSecurityApprovalResponse}
-                        />
-                      )}
-                      {state.securityPromptRequest && (
-                        <SecurityPromptDialog
-                          requestId={state.securityPromptRequest.requestId}
-                          prompt={state.securityPromptRequest.prompt}
-                          filePath={state.securityPromptRequest.filePath}
-                          concern={state.securityPromptRequest.concern}
-                          onRespond={handleSecurityPromptResponse}
-                        />
-                      )}
-                      {state.askUserRequest && (
-                        <AskUserDialog
-                          requestId={state.askUserRequest.requestId}
-                          question={state.askUserRequest.question}
-                          header={state.askUserRequest.header}
-                          options={state.askUserRequest.options}
-                          multiSelect={state.askUserRequest.multiSelect}
-                          defaultValue={state.askUserRequest.default}
-                          sensitive={state.askUserRequest.sensitive}
-                          credentialKey={state.askUserRequest.credentialKey}
-                          deliveryError={state.askUserRequest.deliveryError}
-                          onRespond={handleAskUserResponse}
-                        />
-                      )}
-                      {state.passwordRequest && (
-                        <PasswordPromptDialog
-                          key={state.passwordRequest.requestId}
-                          requestId={state.passwordRequest.requestId}
-                          command={state.passwordRequest.command}
-                          prompt={state.passwordRequest.prompt}
-                          onRespond={handlePasswordResponse}
-                        />
-                      )}
-                      {state.editApprovalRequest && (
-                        <EditApprovalPanel
-                          requestId={state.editApprovalRequest.requestId}
-                          filePath={state.editApprovalRequest.filePath}
-                          unifiedDiff={state.editApprovalRequest.unifiedDiff}
-                          hunks={state.editApprovalRequest.hunks}
-                          onRespond={handleEditApprovalResolved}
-                        />
-                      )}
-                      {state.shellApprovalRequest && (
-                        <ShellApprovalPanel
-                          request={{
-                            request_id: state.shellApprovalRequest.requestId,
-                            command: state.shellApprovalRequest.command,
-                            parts: state.shellApprovalRequest.parts,
-                            unified_view: state.shellApprovalRequest.unifiedView,
-                            risk_level: state.shellApprovalRequest.riskLevel,
-                            security_analysis: state.shellApprovalRequest.securityAnalysis
-                              ? {
-                                  summary: state.shellApprovalRequest.securityAnalysis.summary,
-                                  modifies: state.shellApprovalRequest.securityAnalysis.modifies,
-                                  risk_assessment: state.shellApprovalRequest.securityAnalysis.riskAssessment,
-                                  recommendation: state.shellApprovalRequest.securityAnalysis.recommendation,
-                                }
-                              : undefined,
-                          }}
-                          onSubmit={async (decisions) => {
-                            await handleShellApprovalSubmit(state.shellApprovalRequest!.requestId, decisions);
-                          }}
-                        />
-                      )}
-                      {state.modelSelectionRequest && (
-                        <ModelSelectionModal
-                          provider={state.modelSelectionRequest.provider}
-                          reason={state.modelSelectionRequest.reason}
-                          onClose={handleModelSelectionClose}
-                          onSelectModel={handleModelSelectionResponse}
-                        />
-                      )}
-                      <OnboardingDialog
-                        onboarding={onboarding}
-                        selectedProvider={selectedProvider}
-                        recommendedProviders={recommendedProviders}
-                        advancedProviders={advancedProviders}
-                        windowsGuidance={windowsGuidance}
-                        onProviderChange={onProviderChange}
-                        onComplete={handleCompleteOnboarding}
-                        onSkip={onSkip}
-                        onRefresh={refreshProviderList}
-                        onInstallWsl={onInstallWsl}
-                        onInstallGitBash={onInstallGitBash}
-                        updateOnboarding={updateOnboarding}
-                      />
-                      {showKeyboardShortcuts && (
-                        <KeyboardShortcutsModal onClose={() => setShowKeyboardShortcuts(false)} />
-                      )}
-                    </UIManager>
-                  </ProviderCatalogProvider>
-                </EditorManagerProvider>
-              </HotkeyProvider>
-            </ThemeProvider>
-          </PluginContextProvider>
-        </PlatformNavProvider>
-      </SproutAdapterProvider>
+      <SproutProviders eventsProvider={events} isConnected={state.isConnected}>
+        <UIManager>
+          <NotificationCenter />
+          <AppContent
+            state={state}
+            isMobile={isMobile}
+            isTablet={isTablet}
+            isSidebarOpen={isSidebarOpen}
+            sidebarCollapsed={sidebarCollapsed}
+            isTerminalExpanded={isTerminalExpanded}
+            selectedSection={selectedSection}
+            sidebarWidth={sidebarWidth}
+            sidebarWidthRef={sidebarWidthRef}
+            onSectionChange={setSelectedSection}
+            onSidebarWidthChange={setSidebarWidth}
+            onSidebarWidthPersist={persistSidebarWidth}
+            // Double-tap/double-click on the grip cycles snap
+            // presets (narrow → standard → wide, wraps) instead
+            // of only resetting to default.
+            onSidebarWidthReset={cycleSidebarSnap}
+            stats={stats}
+            recentFiles={recentFiles}
+            recentLogs={recentLogs}
+            gitRefreshToken={gitRefreshToken}
+            onSidebarToggle={handleSidebarToggle}
+            onToggleSidebar={toggleSidebar}
+            onCloseSidebar={closeSidebar}
+            onViewChange={handleViewChange}
+            onModelChange={handleModelChange}
+            onProviderChange={handleProviderChange}
+            onSendMessage={chatManager.handleSendMessage}
+            onQueueMessage={chatManager.handleQueueMessage}
+            onQueueMessageRemove={chatManager.handleRemoveQueuedMessage}
+            onQueueMessageEdit={chatManager.handleEditQueuedMessage}
+            onQueueReorder={chatManager.handleReorderQueuedMessages}
+            onClearQueuedMessages={chatManager.handleClearQueuedMessages}
+            onStopProcessing={chatManager.handleStopProcessing}
+            onRetractSteer={chatManager.handleRetractSteer}
+            queuedMessages={chatManager.queuedMessages}
+            queuedMessagesCount={chatManager.queuedMessagesCount}
+            onGitCommit={handleGitCommit}
+            onGitAICommit={handleGitAICommit}
+            onGitStage={handleGitStage}
+            onGitUnstage={handleGitUnstage}
+            onGitDiscard={handleGitDiscard}
+            onTerminalOutput={handleTerminalOutput}
+            onTerminalExpandedChange={setIsTerminalExpanded}
+            isConnected={state.isConnected}
+            chatSessions={state.chatSessions}
+            activeChatId={state.activeChatId}
+            onActiveChatChange={chatManager.handleActiveChatChange}
+            onCreateChat={chatManager.handleCreateChat}
+            onCreateChatInWorktree={chatManager.handleCreateChatInWorktree}
+            onDeleteChat={chatManager.handleDeleteChat}
+            onDeleteAllChats={chatManager.handleDeleteAllChats}
+            onRenameChat={chatManager.handleRenameChat}
+            perChatCache={state.perChatCache}
+          />
+          <UpdateNotification />
+          <UpdateAvailableBanner />
+          <EscalationListener />
+          <AgentEscalationBridge repoURL={repoURL} />
+          <InstallPromptBanner />
+          <SyncStatusBanner />
+          <DisconnectedOverlay isConnected={state.isConnected} />
+          <ApprovalOriginNotice
+            chatName={
+              state.securityApprovalRequest?.fromChat ??
+              state.securityPromptRequest?.fromChat ??
+              state.askUserRequest?.fromChat ??
+              state.editApprovalRequest?.fromChat ??
+              state.shellApprovalRequest?.fromChat
+            }
+          />
+          {state.securityApprovalRequest && (
+            <SecurityApprovalDialog
+              requestId={state.securityApprovalRequest.requestId}
+              toolName={state.securityApprovalRequest.toolName}
+              riskLevel={state.securityApprovalRequest.riskLevel as 'SAFE' | 'CAUTION' | 'DANGEROUS'}
+              reasoning={state.securityApprovalRequest.reasoning}
+              command={state.securityApprovalRequest.command}
+              riskType={state.securityApprovalRequest.riskType}
+              target={state.securityApprovalRequest.target}
+              allowOptions={state.securityApprovalRequest.allowOptions}
+              fsKind={state.securityApprovalRequest.fsKind}
+              fsFolder={state.securityApprovalRequest.fsFolder}
+              fsPath={state.securityApprovalRequest.fsPath}
+              securityAnalysis={state.securityApprovalRequest.securityAnalysis}
+              deliveryError={state.securityApprovalRequest.deliveryError}
+              onRespond={handleSecurityApprovalResponse}
+            />
+          )}
+          {state.securityPromptRequest && (
+            <SecurityPromptDialog
+              requestId={state.securityPromptRequest.requestId}
+              prompt={state.securityPromptRequest.prompt}
+              filePath={state.securityPromptRequest.filePath}
+              concern={state.securityPromptRequest.concern}
+              onRespond={handleSecurityPromptResponse}
+            />
+          )}
+          {state.askUserRequest && (
+            <AskUserDialog
+              requestId={state.askUserRequest.requestId}
+              question={state.askUserRequest.question}
+              header={state.askUserRequest.header}
+              options={state.askUserRequest.options}
+              multiSelect={state.askUserRequest.multiSelect}
+              defaultValue={state.askUserRequest.default}
+              sensitive={state.askUserRequest.sensitive}
+              credentialKey={state.askUserRequest.credentialKey}
+              deliveryError={state.askUserRequest.deliveryError}
+              onRespond={handleAskUserResponse}
+            />
+          )}
+          {state.passwordRequest && (
+            <PasswordPromptDialog
+              key={state.passwordRequest.requestId}
+              requestId={state.passwordRequest.requestId}
+              command={state.passwordRequest.command}
+              prompt={state.passwordRequest.prompt}
+              onRespond={handlePasswordResponse}
+            />
+          )}
+          {state.editApprovalRequest && (
+            <EditApprovalPanel
+              requestId={state.editApprovalRequest.requestId}
+              filePath={state.editApprovalRequest.filePath}
+              unifiedDiff={state.editApprovalRequest.unifiedDiff}
+              hunks={state.editApprovalRequest.hunks}
+              onRespond={handleEditApprovalResolved}
+            />
+          )}
+          {state.shellApprovalRequest && (
+            <ShellApprovalPanel
+              request={{
+                request_id: state.shellApprovalRequest.requestId,
+                command: state.shellApprovalRequest.command,
+                parts: state.shellApprovalRequest.parts,
+                unified_view: state.shellApprovalRequest.unifiedView,
+                risk_level: state.shellApprovalRequest.riskLevel,
+                security_analysis: state.shellApprovalRequest.securityAnalysis
+                  ? {
+                      summary: state.shellApprovalRequest.securityAnalysis.summary,
+                      modifies: state.shellApprovalRequest.securityAnalysis.modifies,
+                      risk_assessment: state.shellApprovalRequest.securityAnalysis.riskAssessment,
+                      recommendation: state.shellApprovalRequest.securityAnalysis.recommendation,
+                    }
+                  : undefined,
+              }}
+              onSubmit={async (decisions) => {
+                await handleShellApprovalSubmit(state.shellApprovalRequest!.requestId, decisions);
+              }}
+            />
+          )}
+          {state.modelSelectionRequest && (
+            <ModelSelectionModal
+              provider={state.modelSelectionRequest.provider}
+              reason={state.modelSelectionRequest.reason}
+              onClose={handleModelSelectionClose}
+              onSelectModel={handleModelSelectionResponse}
+            />
+          )}
+          <OnboardingDialog
+            onboarding={onboarding}
+            selectedProvider={selectedProvider}
+            recommendedProviders={recommendedProviders}
+            advancedProviders={advancedProviders}
+            windowsGuidance={windowsGuidance}
+            onProviderChange={onProviderChange}
+            onComplete={handleCompleteOnboarding}
+            onSkip={onSkip}
+            onRefresh={refreshProviderList}
+            onInstallWsl={onInstallWsl}
+            onInstallGitBash={onInstallGitBash}
+            updateOnboarding={updateOnboarding}
+          />
+          {showKeyboardShortcuts && <KeyboardShortcutsModal onClose={() => setShowKeyboardShortcuts(false)} />}
+        </UIManager>
+      </SproutProviders>
     </ErrorBoundary>
   );
 }

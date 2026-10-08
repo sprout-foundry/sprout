@@ -6,6 +6,7 @@
 
 import { useEffect, useId, useState } from 'react';
 import type { FormEvent, ReactElement } from 'react';
+import { useHost } from '../host/useHost';
 import { onPlatformLinkClick } from '../services/homeView';
 import {
   getEditorModel,
@@ -15,10 +16,16 @@ import {
   type EditorModelState,
   type ProviderModel,
 } from '../services/editorModel';
-import { platformHref } from '../utils/platformUrl';
 import './EditorModelSection.css';
 
 export default function EditorModelSection(): ReactElement {
+  const { navigation } = useHost();
+  // Destinations come from the host's intent resolution; the paths live only
+  // on the host side. The host also resolves a path to a full page URL (its
+  // outward surface); Sprout only renders what the host supplies.
+  const accountSettingsPath = navigation.intentPath?.({ type: 'account' }) ?? null;
+  const usagePath = navigation.intentPath?.({ type: 'usage' }) ?? null;
+  const pageHref = (path: string): string => navigation.platformPagePath?.(path) ?? path;
   const [state, setState] = useState<EditorModelState | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mode, setMode] = useState<'managed' | 'own'>('managed');
@@ -125,9 +132,13 @@ export default function EditorModelSection(): ReactElement {
         (noKeys ? (
           <p className="settings-section-desc">
             Save an API key first, in{' '}
-            <a href={platformHref('/?from=editor#/settings')} onClick={onPlatformLinkClick('/settings')}>
-              account settings
-            </a>
+            {accountSettingsPath ? (
+              <a href={pageHref(accountSettingsPath)} onClick={onPlatformLinkClick(accountSettingsPath)}>
+                account settings
+              </a>
+            ) : (
+              'account settings'
+            )}
             .
           </p>
         ) : (
@@ -172,10 +183,10 @@ export default function EditorModelSection(): ReactElement {
         </button>
         <a
           className="editor-model-billing"
-          href={platformHref('/#/account/billing')}
+          href={usagePath ? pageHref(usagePath) : undefined}
           target="_blank"
           rel="noopener noreferrer"
-          onClick={onPlatformLinkClick('/account/billing')}
+          onClick={usagePath ? onPlatformLinkClick(usagePath) : undefined}
         >
           Usage and billing
         </a>

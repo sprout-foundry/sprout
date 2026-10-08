@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   AUTO_HOST,
   CLOUD_HOST,
-  defaultHost,
+  defaultRunHost,
   escalationHostKey,
   getRememberedHost,
   rememberHost,
@@ -40,11 +40,11 @@ describe('remembered host', () => {
   });
 });
 
-describe('defaultHost', () => {
+describe('defaultRunHost', () => {
   it('prefers an online runner, else the cloud', () => {
-    expect(defaultHost(REPO, [])).toEqual(CLOUD_HOST);
-    expect(defaultHost(REPO, [runner('a', 'offline'), runner('b', 'busy')])).toEqual(CLOUD_HOST);
-    expect(defaultHost(REPO, [runner('a', 'offline'), runner('b', 'online')])).toEqual({
+    expect(defaultRunHost(REPO, [])).toEqual(CLOUD_HOST);
+    expect(defaultRunHost(REPO, [runner('a', 'offline'), runner('b', 'busy')])).toEqual(CLOUD_HOST);
+    expect(defaultRunHost(REPO, [runner('a', 'offline'), runner('b', 'online')])).toEqual({
       kind: 'runner',
       runnerId: 'b',
       name: 'n-b',
@@ -54,19 +54,19 @@ describe('defaultHost', () => {
   it('uses the remembered choice when it is still available', () => {
     const runners = [runner('a', 'online'), runner('b', 'busy')];
     rememberHost(REPO, CLOUD_HOST);
-    expect(defaultHost(REPO, runners)).toEqual(CLOUD_HOST);
+    expect(defaultRunHost(REPO, runners)).toEqual(CLOUD_HOST);
     rememberHost(REPO, { kind: 'runner', runnerId: 'b', name: 'old name' });
-    expect(defaultHost(REPO, runners)).toEqual({ kind: 'runner', runnerId: 'b', name: 'n-b' });
+    expect(defaultRunHost(REPO, runners)).toEqual({ kind: 'runner', runnerId: 'b', name: 'n-b' });
   });
 
   it('falls back when the remembered runner is offline or gone', () => {
     rememberHost(REPO, { kind: 'runner', runnerId: 'gone', name: 'x' });
-    expect(defaultHost(REPO, [runner('a', 'online')])).toEqual({ kind: 'runner', runnerId: 'a', name: 'n-a' });
-    expect(defaultHost(REPO, [])).toEqual(CLOUD_HOST);
+    expect(defaultRunHost(REPO, [runner('a', 'online')])).toEqual({ kind: 'runner', runnerId: 'a', name: 'n-a' });
+    expect(defaultRunHost(REPO, [])).toEqual(CLOUD_HOST);
   });
 
   it('starts on the cloud after a runner turned the run down', () => {
-    expect(defaultHost(REPO, [runner('a', 'online'), runner('b', 'online')], 'a')).toEqual(CLOUD_HOST);
+    expect(defaultRunHost(REPO, [runner('a', 'online'), runner('b', 'online')], 'a')).toEqual(CLOUD_HOST);
   });
 });
 

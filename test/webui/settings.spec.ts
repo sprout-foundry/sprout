@@ -93,9 +93,50 @@ async function reopenSettingsAfterReload() {
   });
 }
 
+/** Open the settings panel if it is not already open. Self-healing: a
+ *  WebSocket reconnect or a navigation from an earlier test in this serial
+ *  spec can close the panel; instead of inheriting that state and failing
+ *  40 tests deep, re-drive the open flow and wait for the panel. */
+async function ensureSettingsOpen() {
+  const panel = page.getByTestId(TESTIDS["settings-panel"]);
+  const visible = await panel.isVisible().catch(() => false);
+  if (visible) return;
+  await page.goto(vite.url, { waitUntil: "domcontentloaded" });
+  await expect(page.getByTestId(TESTIDS["chat-shell"])).toBeVisible({
+    timeout: 30_000,
+  });
+  const settingsToggle = page.getByTestId(TESTIDS["sidebar-settings-toggle"]);
+  await expect(settingsToggle).toBeVisible({ timeout: 15_000 });
+  await settingsToggle.click();
+  await expect(panel).toBeVisible({ timeout: 15_000 });
+}
+
+/** Wait for the panel's settings data to have loaded: the panel-level
+ *  skeleton (role=status, aria-label="Loading settings") renders for every
+ *  subsection while `settings` is still null, and on a CI daemon busy in
+ *  provider discovery that load can take a minute-plus. Every subsection
+ *  assertion below is meaningless until it clears, so wait it out here —
+ *  the webui's own bootstrap poll retries until the daemon answers. */
+async function waitForSettingsLoaded() {
+  const skeleton = page.locator(
+    '.settings-skeleton[aria-label="Loading settings"]',
+  );
+  try {
+    await skeleton.first().waitFor({ state: "hidden", timeout: 90_000 });
+  } catch {
+    // Dump why it never cleared so the failure names the layer.
+    const count = await skeleton.count().catch(() => -1);
+    throw new Error(
+      `settings panel still on its loading skeleton (skeleton count: ${count}) after 90s`,
+    );
+  }
+}
+
 /** Expand a section by its label text. Matches the section whose header label
  *  exactly matches, avoiding false positives from hasText on subtree content. */
 async function expandSection(label: string) {
+  await ensureSettingsOpen();
+  await waitForSettingsLoaded();
   const section = sectionByLabel(label);
   await expect(section).toBeVisible({ timeout: 10_000 });
   const isExpanded = await section.evaluate((el) =>
@@ -118,12 +159,92 @@ function sectionByLabel(label: string) {
     .first();
 }
 
-/** Click a subsection tab and wait for content. */
+/** Click a subsection tab and wait for it to become the selected tab with
+ *  its panel mounted. The SettingsPanel uses ARIA tabs: the button flips
+ *  aria-selected and the content area is #settings-subpanel-<sub.id>. A
+ *  click that lands during a section re-render (the expand toggle re-mounts
+ *  the subsection list) gets retried; a closed panel falls back to a full
+ *  settings re-open between attempts. */
 async function clickSubsectionTab(testidKey: string) {
-  const tab = page.getByTestId(TESTIDS[testidKey]);
-  await expect(tab).toBeVisible({ timeout: 10_000 });
-  await tab.click();
-  await page.waitForTimeout(300);
+  // "settings-<sub.id>-tab" -> sub.id (SettingsPanel's data-testid template).
+  const subId = testidKey.replace(/^settings-/, "").replace(/-tab$/, "");
+  const attempt = async (): Promise<void> => {
+    const tab = page.getByTestId(TESTIDS[testidKey]);
+    await expect(tab).toBeVisible({ timeout: 10_000 });
+    await tab.click();
+    await expect(tab).toHaveAttribute("aria-selected", "true", {
+      timeout: 10_000,
+    });
+    const panel = page.locator(`#settings-subpanel-${subId} .section`);
+    // Long window: on CI the daemon's provider discovery churns the network
+    // for seconds at a time and React commits stall behind it.
+    await expect(panel).toBeVisible({ timeout: 30_000 });
+  };
+  // Re-expand the section on retries: the failing signature from CI is
+  // aria-selected=true with the section's content area gone — i.e. the
+  // section collapsed after the click (content only renders while
+  // expanded). expandSection no-ops when already expanded.
+  // Re-expand the section between attempts: the CI failure signature is
+  // aria-selected=true with the section's content area gone — the section
+  // collapsed after the click (subsection content renders only while the
+  // section is expanded). expandSection no-ops when already expanded.
+  for (let i = 0; i < 3; i += 1) {
+    try {
+      await attempt();
+      return;
+    } catch (err) {
+      if (i === 2) {
+        // Dump the live tab state so a CI failure names the actual culprit
+        // (wrong subsection selected vs the section hidden by the filter vs
+        // the panel rendering empty).
+        // Counts and .first() throughout: with several sections expanded
+        // there are MULTIPLE .settings-subsection-content nodes; a bare
+        // query strict-mode-throws, which a .catch() would misreport.
+        const contentCount = await page
+          .locator(".settings-subsection-content")
+          .count()
+          .catch(() => -1);
+        const subpanelCount = await page
+          .locator(`#settings-subpanel-${subId}`)
+          .count()
+          .catch(() => -1);
+        const skeletonCount = await page
+          .locator('.settings-skeleton[aria-label="Loading settings"]')
+          .count()
+          .catch(() => -1);
+        const contentHead = await page
+          .locator(".settings-subsection-content")
+          .first()
+          .innerHTML()
+          .then((h) => h.slice(0, 300))
+          .catch(
+            (e) =>
+              `<unavailable: ${e instanceof Error ? e.message.split("\n")[0] : e}>`,
+          );
+        throw new Error(
+          `subsection ${testidKey} did not render (content areas on page: ${contentCount}; ` +
+            `#settings-subpanel-${subId} present: ${subpanelCount}; ` +
+            `panel skeletons: ${skeletonCount}; first content head: ${contentHead}); ` +
+            `cause: ${err instanceof Error ? err.message.split("\n")[0] : String(err)}`,
+        );
+      }
+      await ensureSettingsOpen();
+      const sectionLabel = tabSectionLabel(testidKey);
+      if (sectionLabel) await expandSection(sectionLabel);
+    }
+  }
+}
+
+/** The section label a subsection tab testid belongs to, from the
+ *  "settings-<section>-<sub>-tab" naming. Used to re-expand the right
+ *  section on retry. Returns null for unknown prefixes. */
+function tabSectionLabel(testidKey: string): string | null {
+  if (testidKey.startsWith("settings-agent-")) return "Agent";
+  if (testidKey.startsWith("settings-workspace-")) return "Workspace";
+  if (testidKey.startsWith("settings-env-")) return "Environment";
+  if (testidKey.startsWith("settings-editor-")) return "Editor";
+  if (testidKey.startsWith("settings-experimental-")) return "Experimental";
+  return null;
 }
 
 // ---------------------------------------------------------------------------

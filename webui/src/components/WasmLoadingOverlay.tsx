@@ -1,11 +1,12 @@
 /**
- * Overlay shown while the WASM binary downloads and initializes in cloud mode.
- * The binary is ~44MB so this can take 5-30 seconds depending on connection.
- * Without this overlay, users see a blank workspace with no feedback.
+ * Overlay shown while the WASM binary downloads and initializes in a hosted
+ * shell. The binary is ~44MB so this can take 5-30 seconds depending on
+ * connection. Without this overlay, users see a blank workspace with no
+ * feedback. A shell with a local terminal (no in-browser WASM) never shows it.
  */
 
 import { useEffect, useState } from 'react';
-import { isCloud } from '../config/mode';
+import { useHostCapabilities } from '../host';
 import './WasmLoadingOverlay.css';
 
 interface WasmLoadingOverlayProps {
@@ -22,6 +23,7 @@ const LOADING_MESSAGES = [
 ];
 
 export function WasmLoadingOverlay({ isLoading, error }: WasmLoadingOverlayProps) {
+  const { localTerminal } = useHostCapabilities();
   const [messageIdx, setMessageIdx] = useState(0);
   const [elapsed, setElapsed] = useState(0);
 
@@ -39,7 +41,7 @@ export function WasmLoadingOverlay({ isLoading, error }: WasmLoadingOverlayProps
     };
   }, [isLoading]);
 
-  if (!isCloud) return null;
+  if (localTerminal) return null;
   if (!isLoading && !error) return null;
 
   return (

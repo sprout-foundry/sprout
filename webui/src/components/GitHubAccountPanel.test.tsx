@@ -18,6 +18,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import GitHubAccountPanel from './GitHubAccountPanel';
+import { HostProvider } from '../host';
 
 const { mockValidate, mockStoreToken, mockStoreUser, mockConfirm } = vi.hoisted(() => ({
   mockValidate: vi.fn(),
@@ -77,7 +78,12 @@ describe('GitHubAccountPanel', () => {
   const render = async (props: Record<string, unknown> = {}) => {
     await act(async () => {
       root.render(
-        <GitHubAccountPanel user={null} onSignedIn={() => undefined} onSignedOut={() => undefined} {...props} />,
+        // The host-contract refactor requires a HostProvider ancestor for
+        // useHost(); a headless host (no chrome.githubAccount) exercises the
+        // PAT / device-flow surface this file tests.
+        <HostProvider>
+          <GitHubAccountPanel user={null} onSignedIn={() => undefined} onSignedOut={() => undefined} {...props} />
+        </HostProvider>,
       );
     });
   };

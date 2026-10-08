@@ -1,5 +1,8 @@
-import { act } from 'react';
+import { act, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { HostProvider } from '../host/HostProvider';
+import { makeTestHost } from '../host/testHost';
+import type { SproutHost } from '../host/types';
 import StatusBar from './StatusBar';
 
 // ---------------------------------------------------------------------------
@@ -95,6 +98,18 @@ function queryByText(parent: HTMLElement, text: string) {
   return els.find((el) => el.textContent === text && el.children.length === 0) ?? null;
 }
 
+// StatusBar reads its capability flags through the host. The default host is
+// the LOCAL shape: git support on (the assertions below expect a git branch
+// surface), workspace-switching on, and a local terminal — so the workspace
+// indicator derives from workspacePath (not the repo slug) and a missing
+// branch reads as "No Git" from the git bar, matching the local build. Flip
+// tests override the host to exercise the hosted branches.
+const localStatusBarHost = makeTestHost({ git: true, workspaceSwitching: true, localTerminal: true });
+
+function renderStatusBar(node: ReactNode, host: SproutHost = localStatusBarHost) {
+  root.render(<HostProvider host={host}>{node}</HostProvider>);
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -103,7 +118,7 @@ describe('StatusBar', () => {
   // ---- 1. Renders with no props ----
   test('renders with no props — shows "No Git" on left side, no right section', async () => {
     await act(async () => {
-      root.render(<StatusBar />);
+      renderStatusBar(<StatusBar />);
     });
 
     expect(getByText(container, 'No Git')).toBeTruthy();
@@ -115,7 +130,7 @@ describe('StatusBar', () => {
   // ---- 2. Shows git branch name ----
   test('shows git branch name when branch prop is provided', async () => {
     await act(async () => {
-      root.render(<StatusBar branch="feature/my-branch" />);
+      renderStatusBar(<StatusBar branch="feature/my-branch" />);
     });
 
     expect(getByText(container, 'feature/my-branch')).toBeTruthy();
@@ -125,7 +140,7 @@ describe('StatusBar', () => {
   // ---- 3. Semantic HTML ----
   test('renders as a <footer> with aria-label for landmark navigation', async () => {
     await act(async () => {
-      root.render(<StatusBar />);
+      renderStatusBar(<StatusBar />);
     });
 
     const footer = container.querySelector('footer.statusbar');
@@ -140,7 +155,7 @@ describe('StatusBar', () => {
   // ---- 4. Shows right section when buffer is provided ----
   test('shows right section with cursor, language, encoding, line endings, indentation when buffer is provided', async () => {
     await act(async () => {
-      root.render(<StatusBar branch="main" buffer={makeBuffer()} />);
+      renderStatusBar(<StatusBar branch="main" buffer={makeBuffer()} />);
     });
 
     const right = container.querySelector('.statusbar-right');
@@ -161,7 +176,7 @@ describe('StatusBar', () => {
   // ---- 5. Cursor position display (1-based from 0-based) ----
   test('displays cursor position as 1-based values', async () => {
     await act(async () => {
-      root.render(
+      renderStatusBar(
         <StatusBar
           buffer={makeBuffer({
             cursorPosition: { line: 4, column: 9 },
@@ -176,7 +191,7 @@ describe('StatusBar', () => {
   // ---- 6. Language detection from file extension ----
   test('detects language from file extension', async () => {
     await act(async () => {
-      root.render(
+      renderStatusBar(
         <StatusBar
           buffer={makeBuffer({
             file: { name: 'app.ts', ext: '.ts' },
@@ -191,7 +206,7 @@ describe('StatusBar', () => {
   // ---- 7. Language detection with override ----
   test('uses language override when provided, ignoring file extension', async () => {
     await act(async () => {
-      root.render(
+      renderStatusBar(
         <StatusBar
           buffer={makeBuffer({
             file: { name: 'app.ts', ext: '.ts' },
@@ -208,7 +223,7 @@ describe('StatusBar', () => {
   // ---- 8b. Non-file buffer kind ----
   test('shows capitalized kind name for non-file buffers', async () => {
     await act(async () => {
-      root.render(
+      renderStatusBar(
         <StatusBar
           buffer={{
             kind: 'chat',
@@ -223,7 +238,7 @@ describe('StatusBar', () => {
 
   test('shows capitalized kind name for diff kind', async () => {
     await act(async () => {
-      root.render(
+      renderStatusBar(
         <StatusBar
           buffer={{
             kind: 'diff',
@@ -239,7 +254,7 @@ describe('StatusBar', () => {
   // ---- 9. Line endings detection ----
   test('shows "LF" when content contains no CRLF', async () => {
     await act(async () => {
-      root.render(<StatusBar buffer={makeBuffer({ content: 'line1\nline2\nline3' })} />);
+      renderStatusBar(<StatusBar buffer={makeBuffer({ content: 'line1\nline2\nline3' })} />);
     });
 
     expect(getByText(container, 'LF')).toBeTruthy();
@@ -247,7 +262,7 @@ describe('StatusBar', () => {
 
   test('shows "CRLF" when content contains only \\r\\n', async () => {
     await act(async () => {
-      root.render(<StatusBar buffer={makeBuffer({ content: 'line1\r\nline2\r\nline3' })} />);
+      renderStatusBar(<StatusBar buffer={makeBuffer({ content: 'line1\r\nline2\r\nline3' })} />);
     });
 
     // After removing all \r\n sequences, no bare \n remains → hasBareLF=false → "CRLF".
@@ -256,7 +271,7 @@ describe('StatusBar', () => {
 
   test('shows "Mixed" when content has both CRLF and bare LF', async () => {
     await act(async () => {
-      root.render(<StatusBar buffer={makeBuffer({ content: 'line1\nline2\r\nline3' })} />);
+      renderStatusBar(<StatusBar buffer={makeBuffer({ content: 'line1\nline2\r\nline3' })} />);
     });
 
     // After removing \r\n, bare \n remains → hasBareLF=true + hasCRLF=true → "Mixed".
@@ -266,7 +281,7 @@ describe('StatusBar', () => {
   // ---- 10. No buffer ----
   test('does not render right section when buffer is null', async () => {
     await act(async () => {
-      root.render(<StatusBar branch="main" buffer={null} />);
+      renderStatusBar(<StatusBar branch="main" buffer={null} />);
     });
 
     expect(container.querySelector('.statusbar-right')).toBeNull();
@@ -275,7 +290,7 @@ describe('StatusBar', () => {
   // ---- 11. Buffer without cursorPosition ----
   test('does not show cursor position when buffer has no cursorPosition', async () => {
     await act(async () => {
-      root.render(
+      renderStatusBar(
         <StatusBar
           buffer={makeBuffer({
             cursorPosition: undefined,
@@ -290,7 +305,7 @@ describe('StatusBar', () => {
 
   test('does not show cursor position when cursorPosition has non-numeric values', async () => {
     await act(async () => {
-      root.render(
+      renderStatusBar(
         <StatusBar
           buffer={makeBuffer({
             cursorPosition: { line: undefined as any, column: undefined as any },
@@ -305,7 +320,7 @@ describe('StatusBar', () => {
   // ---- 12. Plain text for unknown extensions ----
   test.skip('shows "Plain Text" for unknown file extensions', async () => {
     await act(async () => {
-      root.render(
+      renderStatusBar(
         <StatusBar
           buffer={makeBuffer({
             file: { name: 'data.xyz', ext: '.xyz' },
@@ -320,7 +335,7 @@ describe('StatusBar', () => {
   // ---- 13. Title attributes for accessibility ----
   test('items have title attributes for accessibility', async () => {
     await act(async () => {
-      root.render(<StatusBar branch="main" buffer={makeBuffer()} />);
+      renderStatusBar(<StatusBar branch="main" buffer={makeBuffer()} />);
     });
 
     expect(container.querySelector('[title="Branch: main"]')).toBeTruthy();
@@ -334,7 +349,7 @@ describe('StatusBar', () => {
   // ---- 14. Cursor position is aria-hidden ----
   test('cursor position span has aria-hidden to avoid screen reader spam', async () => {
     await act(async () => {
-      root.render(<StatusBar buffer={makeBuffer()} />);
+      renderStatusBar(<StatusBar buffer={makeBuffer()} />);
     });
 
     const cursorEl = document.querySelector('.statusbar-item-cursor');
@@ -345,7 +360,7 @@ describe('StatusBar', () => {
   // ---- 15. Empty branch string shows "No Git" ----
   test('empty string branch shows "No Git"', async () => {
     await act(async () => {
-      root.render(<StatusBar branch="" />);
+      renderStatusBar(<StatusBar branch="" />);
     });
 
     expect(getByText(container, 'No Git')).toBeTruthy();
@@ -354,7 +369,7 @@ describe('StatusBar', () => {
   // ---- 16. Custom encoding when provided ----
   test('shows custom encoding when encoding prop is provided', async () => {
     await act(async () => {
-      root.render(<StatusBar buffer={makeBuffer()} encoding="ISO-8859-1" />);
+      renderStatusBar(<StatusBar buffer={makeBuffer()} encoding="ISO-8859-1" />);
     });
 
     expect(getByText(container, 'ISO-8859-1')).toBeTruthy();
@@ -363,7 +378,7 @@ describe('StatusBar', () => {
   // ---- 17. Custom indentation when provided ----
   test('shows custom indentation when indentation prop is provided', async () => {
     await act(async () => {
-      root.render(<StatusBar buffer={makeBuffer()} indentation="Tabs: 4" />);
+      renderStatusBar(<StatusBar buffer={makeBuffer()} indentation="Tabs: 4" />);
     });
 
     expect(getByText(container, 'Tabs: 4')).toBeTruthy();
@@ -373,7 +388,7 @@ describe('StatusBar', () => {
   describe('Workspace indicator', () => {
     test('renders workspace indicator when workspacePath is provided', async () => {
       await act(async () => {
-        root.render(<StatusBar workspacePath="/home/user/myproject" />);
+        renderStatusBar(<StatusBar workspacePath="/home/user/myproject" />);
       });
 
       const indicator = container.querySelector('.statusbar-item-workspace');
@@ -383,13 +398,13 @@ describe('StatusBar', () => {
 
     test('does not render workspace indicator without workspacePath', async () => {
       await act(async () => {
-        root.render(<StatusBar />);
+        renderStatusBar(<StatusBar />);
       });
 
       expect(container.querySelector('.statusbar-item-workspace')).toBeNull();
 
       await act(async () => {
-        root.render(<StatusBar workspacePath="" />);
+        renderStatusBar(<StatusBar workspacePath="" />);
       });
 
       expect(container.querySelector('.statusbar-item-workspace')).toBeNull();
@@ -397,7 +412,7 @@ describe('StatusBar', () => {
 
     test('extracts basename from path with trailing slash', async () => {
       await act(async () => {
-        root.render(<StatusBar workspacePath="/home/user/myproject/" />);
+        renderStatusBar(<StatusBar workspacePath="/home/user/myproject/" />);
       });
 
       const indicator = container.querySelector('.statusbar-item-workspace');
@@ -405,9 +420,34 @@ describe('StatusBar', () => {
       expect(indicator?.textContent).toContain('myproject');
     });
 
+    // Host capability flips the workspace indicator's data source. A
+    // workspace-switching shell derives the name from workspacePath (the local
+    // build's behavior); a hosted shell with no workspace switching derives it
+    // from the active repository URL. Without a repo URL and without a
+    // workspacePath, the hosted shell hides the indicator entirely.
+    test('hosted shell with no workspace switching and no repo: indicator hidden', async () => {
+      await act(async () => {
+        renderStatusBar(<StatusBar />, makeTestHost({ git: true, workspaceSwitching: false, localTerminal: false }));
+      });
+      expect(container.querySelector('.statusbar-item-workspace')).toBeNull();
+    });
+
+    test('workspace-switching shell: indicator derives from workspacePath', async () => {
+      await act(async () => {
+        renderStatusBar(
+          <StatusBar workspacePath="/home/user/myproject" />,
+          makeTestHost({ git: true, workspaceSwitching: true, localTerminal: true }),
+        );
+      });
+      const indicator = container.querySelector('.statusbar-item-workspace');
+      expect(indicator).toBeTruthy();
+      expect(indicator?.textContent).toContain('myproject');
+      expect(indicator?.getAttribute('aria-label')).toContain('Workspace:');
+    });
+
     test('does not render for root path', async () => {
       await act(async () => {
-        root.render(<StatusBar workspacePath="/" />);
+        renderStatusBar(<StatusBar workspacePath="/" />);
       });
 
       expect(container.querySelector('.statusbar-item-workspace')).toBeNull();
@@ -417,7 +457,7 @@ describe('StatusBar', () => {
       const handleClick = vi.fn();
 
       await act(async () => {
-        root.render(<StatusBar workspacePath="/some/path" onWorkspaceClick={handleClick} />);
+        renderStatusBar(<StatusBar workspacePath="/some/path" onWorkspaceClick={handleClick} />);
       });
 
       const indicator = container.querySelector('.statusbar-item-workspace');
@@ -432,7 +472,7 @@ describe('StatusBar', () => {
 
     test('has proper accessibility attributes', async () => {
       await act(async () => {
-        root.render(<StatusBar workspacePath="/home/user/myproject" />);
+        renderStatusBar(<StatusBar workspacePath="/home/user/myproject" />);
       });
 
       const indicator = container.querySelector('.statusbar-item-workspace');
@@ -445,7 +485,7 @@ describe('StatusBar', () => {
   describe('notification bell', () => {
     test('opens and closes the notification history', async () => {
       await act(async () => {
-        root.render(<StatusBar />);
+        renderStatusBar(<StatusBar />);
       });
       const bell = container.querySelector('[data-testid="status-bar-notification"]') as HTMLButtonElement;
       expect(bell.getAttribute('aria-expanded')).toBe('false');

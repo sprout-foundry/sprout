@@ -10,7 +10,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { defaultHost, type EscalationHost } from '../services/escalationHost';
+import { defaultRunHost, type EscalationHost } from '../services/escalationHost';
 import { listRunners, type Runner } from '../services/runners';
 
 export interface RunHostChoice {
@@ -43,7 +43,7 @@ export function useRunHostChoice(
   const loaded = requestKey !== null && fetched?.key === requestKey;
   const runners = loaded && fetched ? fetched.runners : [];
   const host =
-    requestKey !== null && picked?.key === requestKey ? picked.host : defaultHost(repoURL, runners, avoidRunnerId);
+    requestKey !== null && picked?.key === requestKey ? picked.host : defaultRunHost(repoURL, runners, avoidRunnerId);
 
   const setHost = useCallback(
     (next: EscalationHost) => {

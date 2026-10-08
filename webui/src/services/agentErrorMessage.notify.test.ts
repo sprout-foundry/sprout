@@ -4,11 +4,17 @@ const { notify, openPlatformPage } = vi.hoisted(() => ({ notify: vi.fn(), openPl
 vi.mock('./notificationBus', () => ({ notificationBus: { notify } }));
 vi.mock('./homeView', () => ({ openPlatformPage }));
 
+import { setActiveHost } from '../host/accessor';
+import { makeTestHost } from '../host/testHost';
+import { intentPath } from '../host/platform';
 import { notifyCreditsBlocked } from './agentErrorMessage';
 
 beforeEach(() => {
   notify.mockReset();
   openPlatformPage.mockClear();
+  // The service reads the active host (non-React): give it the cloud platform
+  // surface so the billing exit resolves through the host.
+  setActiveHost({ ...makeTestHost(), navigation: { open: () => undefined, intentPath } });
 });
 
 describe('notifyCreditsBlocked', () => {
@@ -24,11 +30,11 @@ describe('notifyCreditsBlocked', () => {
     window.removeEventListener('sprout:open-settings-focus', opened);
   });
 
-  it('offers billing otherwise', () => {
+  it('offers billing otherwise, resolved through the host', () => {
     notifyCreditsBlocked("You're out of platform credits. Buy a credit pack.");
     const action = notify.mock.calls[0][4];
     expect(action.label).toBe('Buy credits');
     action.onClick();
-    expect(openPlatformPage).toHaveBeenCalledWith('/account/billing');
+    expect(openPlatformPage).toHaveBeenCalledWith('/?from=editor#/account/billing');
   });
 });

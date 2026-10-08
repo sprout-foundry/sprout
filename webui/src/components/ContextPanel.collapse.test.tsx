@@ -14,6 +14,8 @@ vi.mock('../contexts/NotificationContext', () => ({
 }));
 
 import ContextPanel from './ContextPanel';
+import { HostProvider } from '../host';
+import { makeTestHost } from '../host/testHost';
 
 const MINIMAL_CHAT_PROPS = {
   context: 'chat',
@@ -66,7 +68,15 @@ async function flushPromises() {
 
 async function renderPanel(props: Record<string, unknown>, ref?: React.RefObject<unknown>) {
   await act(async () => {
-    root.render(createElement(ContextPanel, { ...props, ref }));
+    // A local host (agentChanges on) so the "changes" tab renders and the
+    // panel is present; the collapse behavior under test is host-agnostic.
+    root.render(
+      createElement(
+        HostProvider,
+        { host: makeTestHost({ agentChanges: true }) },
+        createElement(ContextPanel, { ...props, ref }),
+      ),
+    );
   });
   await flushPromises();
 }

@@ -7,9 +7,9 @@
 
 import { Bell, FolderGit2, Home, PanelLeftOpen, Plus, Settings } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
-import { isCloud } from '../../config/mode';
 import { OPEN_NOTIFICATIONS_EVENT } from '../../config/layout';
 import { useUnreadNotificationCount } from '../../hooks/useUnreadNotificationCount';
+import { useHost } from '../../host/useHost';
 import { UserMenu } from '../UserMenu';
 
 export interface RailProject {
@@ -97,6 +97,10 @@ export default function ProjectRail({
   const [addMenu, setAddMenu] = useState<DOMRect | null>(null);
   const unread = useUnreadNotificationCount();
   const symbols = railSymbols(projects.map((p) => p.label));
+  // The host offers a Home surface when it supplies work places; without one
+  // the rail shows a plain brand mark instead of a Home button.
+  const host = useHost();
+  const hasHome = (host.navigation.workItems?.length ?? 0) > 0;
   return (
     <nav className="project-rail" aria-label="Projects" data-testid="project-rail">
       {collapsed && onToggleCollapsed && (
@@ -110,7 +114,7 @@ export default function ProjectRail({
           <PanelLeftOpen size={18} />
         </button>
       )}
-      {isCloud ? (
+      {hasHome ? (
         <button
           type="button"
           className={`project-rail-btn${homeActive ? ' active' : ''}`}
@@ -211,7 +215,7 @@ export default function ProjectRail({
         <Bell size={18} />
         {unread > 0 && <span className="activity-badge">{unread > 99 ? '99+' : unread}</span>}
       </button>
-      {isCloud ? (
+      {hasHome ? (
         <div className="project-rail-account">
           <UserMenu />
         </div>

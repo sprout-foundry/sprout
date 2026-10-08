@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "declaration": true,
+    "declarationDir": "dist",
+    "emitDeclarationOnly": true,
+    "noEmit": false,
+    "sourceMap": false
+  },
+  "include": ["src", "../../webui/src/**/*.d.ts"],
+  "exclude": ["node_modules", "dist"]
+}

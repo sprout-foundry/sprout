@@ -12,11 +12,15 @@
  *
  * The compile-time flag is controlled exactly like the other native-FS tests
  * (nativeFsBoot.test.tsx, nativeFsSidebar.test.tsx):
- * `vi.stubEnv('VITE_SPROUT_NATIVE_FS','1')` + `vi.resetModules()` + a FRESH
+ * `VITE_SPROUT_NATIVE_FS` env flag + `vi.resetModules()` + a FRESH
  * dynamic import of the hook module, so the `NATIVE_FS_ENABLED` constant
  * baked into `nativeFsFlag.ts` at import time reflects the env.
- * `VITE_SPROUT_MODE` is stubbed to `'cloud'` in every case so `isCloud`
- * bakes true — the guard only matters on the cloud boot path.
+ *
+ * host.8: the hook now reads the hosted-vs-local switch from the ACTIVE HOST
+ * (`useHost().transport.authMode === 'bearer'`), not from isCloud, so the
+ * harness renders under a <HostProvider host={cloudHost}> — the hosted
+ * transport — which is what `VITE_SPROUT_MODE=cloud` used to bake in. The
+ * native-FS guard only matters on the hosted boot path.
  *
  * Coverage in this file (the nativeFsBoot.test.tsx header explicitly defers
  * the hook to this file — it only covers CloudAdapter + useWasmTerminalInput):
@@ -39,7 +43,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, act, type RenderResult } from '@testing-library/react';
 import type { EventsProvider } from '@sprout/events';
 import type { AppState } from '../types/app';
-
 // ── Mocks (hoisted — must resolve before the dynamic hook import) ───────────
 
 /**
@@ -82,7 +85,7 @@ vi.mock('../services/clientSession', () => ({
 }));
 
 vi.mock('../bootstrapAdapter', () => ({
-  fetchRuntimeConfig: async () => ({ appMode: 'cloud', user: { id: 'u' } }),
+  fetchRuntimeConfig: async () => ({ authMode: 'bearer', user: { id: 'u' } }),
 }));
 
 // Flag-OFF preload path dynamic-imports these; mocked so the imports are
@@ -180,9 +183,10 @@ function BootHarness() {
 }
 
 /**
- * Fresh import of the hook module with the given flag value. `VITE_SPROUT_MODE`
- * is always 'cloud' so `isCloud` bakes true; the native-FS flag is '1' for the
- * ON case, unset for the OFF case (default-build regression).
+ * Fresh import of the hook module with the given flag value. The hook reads
+ * the hosted switch from the host, so the harness renders under a cloud host;
+ * the native-FS flag is '1' for the ON case, unset for the OFF case
+ * (default-build regression).
  */
 async function loadHook(flagOn: boolean): Promise<HookModule> {
   if (flagOn) {
@@ -196,6 +200,22 @@ async function loadHook(flagOn: boolean): Promise<HookModule> {
   const mod = await import('../hooks/useAppInitialization');
   hookFn = mod.useAppInitialization;
   return mod;
+}
+
+/**
+ * The host modules must come from the SAME re-imported graph as the hook
+ * (loadHook's vi.resetModules), otherwise the JSX HostProvider and the hook's
+ * HostContext are two different module instances and useHost() throws. So the
+ * provider + host are imported fresh here, after the reset, and returned for
+ * the caller to render with.
+ */
+async function freshHostProvider(): Promise<{
+  Provider: typeof import('../host/HostProvider').HostProvider;
+  host: typeof import('../host/cloudHost').cloudHost;
+}> {
+  const { HostProvider } = await import('../host/HostProvider');
+  const { cloudHost } = await import('../host/cloudHost');
+  return { Provider: HostProvider, host: cloudHost };
 }
 
 /**
@@ -223,8 +243,13 @@ beforeEach(() => {
 describe('useAppInitialization — R-2f guard ACTIVE (--native-fs dist)', () => {
   it('flag ON + cloud: preloadWasmShell is never called and no wasmLoading/wasmError state updates are emitted', async () => {
     await loadHook(true);
+    const { Provider, host } = await freshHostProvider();
 
-    const result: RenderResult = render(<BootHarness />);
+    const result: RenderResult = render(
+      <Provider host={host}>
+        <BootHarness />
+      </Provider>,
+    );
     await flushMicrotasks();
     result.unmount();
 
@@ -248,8 +273,15 @@ describe('useAppInitialization — R-2f guard ACTIVE (--native-fs dist)', () => 
 describe('useAppInitialization — R-2f guard INACTIVE (default build)', () => {
   it('flag OFF + cloud: preloadWasmShell IS called exactly once', async () => {
     await loadHook(false);
+    const { Provider, host } = await freshHostProvider();
 
-    const { unmount } = await act(async () => render(<BootHarness />));
+    const { unmount } = await act(async () =>
+      render(
+        <Provider host={host}>
+          <BootHarness />
+        </Provider>,
+      ),
+    );
     await flushMicrotasks();
     unmount();
 
@@ -270,8 +302,15 @@ describe('useAppInitialization — default build, preload success path', () => {
   it('flag OFF + cloud, preload resolves true: { wasmReady: true, wasmLoading: false } state update arrives', async () => {
     fakeAdapter.preloadWasmShell = vi.fn(async () => true);
     await loadHook(false);
+    const { Provider, host } = await freshHostProvider();
 
-    const { unmount } = await act(async () => render(<BootHarness />));
+    const { unmount } = await act(async () =>
+      render(
+        <Provider host={host}>
+          <BootHarness />
+        </Provider>,
+      ),
+    );
     await flushMicrotasks();
     unmount();
 

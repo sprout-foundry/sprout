@@ -8,6 +8,7 @@ All notable changes to Sprout will be documented in this file.
 - fix(benchmark): a run without a verification result records why (no code changes, verification disabled, setup error, timeout) and the report lists it under failure categories.
 - feat(benchmark): failed runs keep their evidence — the working-copy diff, the agent transcript and the verification output — under `<output>/runs/` (`--keep-runs=failed|all|none`, default `failed`).
 - fix(agent): `sprout agent` no longer hands a turn to a running daemon of a different version or config root; it runs the turn in-process and says why.
+- fix(verify): the dev-server readiness probe, page checks and interaction checks use `localhost`, so dev servers that bind only the IPv6 loopback (Astro, Vite on recent Node) are reachable — the static-site starter's page check failed without it.
 - fix(tools): `read_file` accepts the common line-range spellings, names the exact `view_range` for truncated output, and answers a repeated identical read with a hint instead of the same content.
 
 ## [v0.24.0] - 2026-10-07

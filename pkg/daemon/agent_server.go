@@ -30,6 +30,7 @@ import (
 //	{"id":"4","op":"query","prompt":"...","work_dir":"...","options":{"persona":"coder"}}  → QueryResponse (one-shot)
 //	{"id":"5","op":"stream_query","prompt":"...","work_dir":"...","options":{...}}         → stream of StreamEvents (newline JSON)
 //	{"id":"6","op":"execute_tool","tool":"name","tool_args":{...},"work_dir":"..."} → ToolResponse
+//	{"id":"7","op":"identity"}                             → IdentityResponse
 //
 // One-shot and stream are mutually exclusive per connection op; stream_query
 // holds the connection until the run completes, emitting one event per line.
@@ -44,6 +45,7 @@ const (
 	AgentOpQuery         AgentOp = "query"
 	AgentOpStreamQuery   AgentOp = "stream_query"
 	AgentOpExecuteTool   AgentOp = "execute_tool"
+	AgentOpIdentity      AgentOp = "identity"
 )
 
 // SessionInfo describes an agent session.
@@ -52,6 +54,26 @@ type SessionInfo struct {
 	Name      string `json:"name"`
 	CreatedAt string `json:"created_at,omitempty"`
 	Active    bool   `json:"active,omitempty"`
+}
+
+// DaemonIdentity describes the daemon process that owns the agent socket —
+// its build and its config root. A CLI that is about to hand a turn to the
+// daemon must be able to confirm the daemon is the same binary and uses the
+// same configuration it would have used in-process: the daemon is a
+// long-lived process whose environment (and therefore its resolved config
+// root) was fixed at its start, which may not match the invoking CLI's (an
+// --isolated-config run, for instance, points the CLI at the workspace's
+// ./.sprout while the daemon may still be running against the user's main
+// config).
+type DaemonIdentity struct {
+	// Version is the daemon binary's semantic release version ("dev" for
+	// source builds).
+	Version string `json:"version"`
+	// Commit is the short git hash the daemon was built from.
+	Commit string `json:"commit,omitempty"`
+	// ConfigDir is the config root the daemon resolved at startup. It may
+	// be empty when the daemon could not resolve one.
+	ConfigDir string `json:"config_dir,omitempty"`
 }
 
 // StreamEvent is one chunk of a streaming query run.
@@ -100,12 +122,13 @@ type AgentRequest struct {
 
 // AgentResponse is a single protocol response (non-streaming ops).
 type AgentResponse struct {
-	ID       string        `json:"id"`
-	Error    string        `json:"error,omitempty"`
-	Sessions []SessionInfo `json:"sessions,omitempty"`
-	Session  *SessionInfo  `json:"session,omitempty"`
-	Result   string        `json:"result,omitempty"`
-	Tool     *ToolResult   `json:"tool,omitempty"`
+	ID       string          `json:"id"`
+	Error    string          `json:"error,omitempty"`
+	Sessions []SessionInfo   `json:"sessions,omitempty"`
+	Session  *SessionInfo    `json:"session,omitempty"`
+	Result   string          `json:"result,omitempty"`
+	Tool     *ToolResult     `json:"tool,omitempty"`
+	Identity *DaemonIdentity `json:"identity,omitempty"`
 }
 
 // AgentService is the daemon-side capability for CLI-on-daemon (SP-136 P4).
@@ -125,6 +148,11 @@ type AgentService interface {
 	StreamQuery(ctx context.Context, prompt, workDir string, opts QueryOptions, emit func(StreamEvent) error) error
 	// ExecuteTool invokes a tool by name with args, scoped to workDir.
 	ExecuteTool(ctx context.Context, name string, args map[string]any, workDir string) (*ToolResult, error)
+	// Identity returns the daemon's build/config identity, so a client can
+	// decide whether the daemon is a compatible place to run this turn
+	// before handing it a query. Implementations should report the values
+	// captured when the daemon started, not re-resolve them per call.
+	Identity(ctx context.Context) (*DaemonIdentity, error)
 }
 
 // AgentServer serves the SP-136 P4 agent socket protocol.
@@ -374,6 +402,14 @@ func (s *AgentServer) dispatch(ctx context.Context, req AgentRequest) AgentRespo
 			return resp
 		}
 		resp.Tool = tool
+
+	case AgentOpIdentity:
+		ident, err := s.Service.Identity(ctx)
+		if err != nil {
+			resp.Error = err.Error()
+			return resp
+		}
+		resp.Identity = ident
 
 	default:
 		resp.Error = fmt.Sprintf("unknown agent op %q", req.Op)

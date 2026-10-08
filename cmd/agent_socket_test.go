@@ -13,7 +13,9 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/buildinfo"
 	"github.com/sprout-foundry/sprout/pkg/daemon"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,10 +25,26 @@ type stubAgentForCmd struct {
 	queries     int64
 	lastWorkDir atomic.Value // string
 	lastOpts    atomic.Value // daemon.QueryOptions
+
+	// identity is returned by Identity. A nil identity means "report the
+	// invoking binary's own identity" — the common case for tests that want
+	// routing to succeed without caring about the daemon's build/config.
+	identity *daemon.DaemonIdentity
 }
 
 func (s *stubAgentForCmd) ListSessions(context.Context) ([]daemon.SessionInfo, error) {
 	return []daemon.SessionInfo{{ID: "s1", Name: "default", Active: true}}, nil
+}
+
+func (s *stubAgentForCmd) Identity(context.Context) (*daemon.DaemonIdentity, error) {
+	if s.identity != nil {
+		return s.identity, nil
+	}
+	ident := &daemon.DaemonIdentity{Version: buildinfo.Version, Commit: buildinfo.Commit}
+	if dir, err := envutil.ConfigDir(); err == nil {
+		ident.ConfigDir = dir
+	}
+	return ident, nil
 }
 
 func (s *stubAgentForCmd) CreateSession(context.Context, string) (*daemon.SessionInfo, error) {

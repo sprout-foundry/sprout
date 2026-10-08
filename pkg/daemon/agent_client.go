@@ -161,6 +161,15 @@ func (c *AgentClient) ExecuteTool(ctx context.Context, name string, args map[str
 	return resp.Tool, nil
 }
 
+// Identity returns the daemon's build/config identity.
+func (c *AgentClient) Identity(ctx context.Context) (*DaemonIdentity, error) {
+	resp, err := c.do(ctx, AgentRequest{Op: AgentOpIdentity})
+	if err != nil {
+		return nil, err
+	}
+	return resp.Identity, nil
+}
+
 // StreamQuery is Query with streamed events instead of a single result. The
 // call returns after the terminal "done"/"error" event.
 func (c *AgentClient) StreamQuery(ctx context.Context, prompt, workDir string, opts QueryOptions, emit func(StreamEvent) error) error {

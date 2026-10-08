@@ -60,6 +60,11 @@ func AgentSocketPath() string {
 type SharedAgentService struct {
 	a *agent.Agent
 
+	// identity is the daemon's build/config identity, captured at daemon
+	// start (see newSharedAgentIdentity). A client compares it against its
+	// own binary/config before routing a turn here.
+	identity daemon.DaemonIdentity
+
 	// teardownWg tracks ephemeral agent shutdowns started off the response
 	// path so WaitForTeardown can block until they finish (mirrors
 	// pkg/webui/agent_teardown.go's agentTeardownWg). teardownMu and
@@ -71,7 +76,7 @@ type SharedAgentService struct {
 
 // NewSharedAgentService wraps an agent for socket serving.
 func NewSharedAgentService(a *agent.Agent) *SharedAgentService {
-	return &SharedAgentService{a: a}
+	return &SharedAgentService{a: a, identity: newSharedAgentIdentity()}
 }
 
 // beginQuery reserves a teardown slot for one in-flight query, returning
@@ -400,6 +405,13 @@ func startDaemonAgentServer(ctx context.Context, daemonMode bool, chatAgent *age
 // in-process instead (the agent_modes.go gate skips this call for them;
 // this guard keeps the contract self-contained even if a future caller
 // forgets). The daemon path is interactive/plain-text use only.
+//
+// Routing is gated on the daemon's identity: a daemon of a different binary
+// version or a different config root must never silently receive the turn.
+// The daemon is a long-lived process whose build and config root were fixed
+// at its start; the invoking CLI may be a different binary, or (with
+// --isolated-config) point at a different config. When the identity differs
+// this returns (false, nil) so the caller runs in-process, printing why.
 func tryDaemonOneShot(ctx context.Context, query string, jsonOut bool) (bool, error) {
 	if jsonOut {
 		return false, nil
@@ -431,6 +443,22 @@ func tryDaemonOneShot(ctx context.Context, query string, jsonOut bool) (bool, er
 	}
 	defer client.Close()
 
+	// Confirm the daemon is the same binary AND the same config before
+	// handing it a turn. A daemon that can't answer Identity (an older
+	// binary that doesn't know the op) is treated as incompatible: we don't
+	// know what it is, so we must not let it run the turn silently.
+	ident, err := client.Identity(ctx)
+	if err != nil || ident == nil {
+		console.GlyphDim.Printf("daemon at %s did not report its identity (%s) — running in-process; use --no-daemon to silence this",
+			AgentSocketPath(), identityErrReason(err))
+		return false, nil
+	}
+	localConfigDir := localConfigDirForComparison()
+	if mismatch, msg := daemonIdentityMismatch(ident, localConfigDir); mismatch {
+		console.GlyphDim.Printf("%s — running in-process; pass --no-daemon to silence this", msg)
+		return false, nil
+	}
+
 	opts := daemon.QueryOptions{
 		Persona:       agentPersona,
 		Provider:      agentProvider,
@@ -440,6 +468,8 @@ func tryDaemonOneShot(ctx context.Context, query string, jsonOut bool) (bool, er
 	}
 
 	console.GlyphAction.Printf("Running via daemon at %s", AgentSocketPath())
+	console.GlyphDim.Printf("daemon: %s", formatBinaryIdentity(ident.Version, ident.Commit))
+	console.GlyphDim.Printf("config: %s", displayConfigDir(ident.ConfigDir))
 	result, err := client.Query(ctx, query, workDir, opts)
 	if err != nil {
 		// The daemon was up but the query failed — surface it, don't

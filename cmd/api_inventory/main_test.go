@@ -84,7 +84,7 @@ func TestRouteCountIsStable(t *testing.T) {
 	}
 	// The inventory must cover every plain mux.HandleFunc registration plus
 	// every registered Huma operation.
-	const want = 198
+	const want = 199
 	if len(routes) != want {
 		t.Errorf("parsed %d routes, want %d (a registration was added or dropped)", len(routes), want)
 	}

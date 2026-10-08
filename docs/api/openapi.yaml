@@ -88,22 +88,6 @@ paths:
       summary: List a directory's contents.
       tags:
         - files
-  /api/file-index:
-    get:
-      description: Walks the workspace once and returns every non-ignored file as a workspace-relative path, bounded by the indexer caps (12k files / 3k dirs / depth 8). One response replaces the palette's per-directory crawl; `truncated` reports when the caps bit.
-      operationId: fileIndex
-      responses:
-        "200":
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ErrorModel'
-          description: Error
-      summary: Return the workspace's whole quick-open file index.
-      tags:
-        - files
   /api/chat-session/:
     get:
       description: Returns the worktree path bound to the chat session at the /api/chat-session/{chatId}/worktree shape (the worktree-mapping GET form).
@@ -599,6 +583,22 @@ paths:
                 $ref: '#/components/schemas/ErrorModel'
           description: Error
       summary: Write a file's contents.
+      tags:
+        - files
+  /api/file-index:
+    get:
+      description: Walks the workspace once and returns every non-ignored file as a workspace-relative path, bounded by the indexer caps (12k files / 3k dirs / depth 8). One response replaces the palette's per-directory crawl; `truncated` reports when the caps bit.
+      operationId: fileIndex
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Return the workspace's whole quick-open file index.
       tags:
         - files
   /api/file/check-modified:

@@ -27,6 +27,7 @@ package agent
 
 import (
 	"strings"
+	"unicode"
 )
 
 // RepetitionGuardConfig parameterizes the guard. The zero value is the
@@ -52,6 +53,14 @@ const (
 	defaultRepetitionMinRepetitions = 6
 	defaultRepetitionMaxLineChars   = 120
 )
+
+// A degenerate loop does not always repeat one line: models also cycle a few
+// short phrases ("Let me run." / "Let me do it." / "Running."), which never
+// builds a long identical run. The window signal catches that: once
+// loopWindowLines consecutive short lines (outside code fences) have been
+// seen, if at most half of them are distinct after normalization the reply
+// is degenerate. Lists, progress logs and tables have mostly distinct lines.
+const loopWindowLines = 16
 
 // resolveRepetitionGuardConfig fills a config's zero values with the defaults
 // and clamps MinRepetitions to at least 2.
@@ -104,6 +113,10 @@ type RepetitionGuard struct {
 	// delivered: they are flushed when the run breaks, discarded when it
 	// degenerates.
 	pending []string
+
+	// window holds the normalized text of the most recent consecutive short
+	// lines (at most loopWindowLines); a long line or a code fence clears it.
+	window []string
 
 	// looping is set once a degenerate run is confirmed; the guard then
 	// captures but never delivers, and Looping() reports true.
@@ -231,6 +244,7 @@ func (g *RepetitionGuard) processLine(line string, prefixDelivered int) {
 			g.fenceMarker = ""
 		}
 		g.flushRun()
+		g.window = nil
 		g.deliverLine(line, prefixDelivered)
 		return
 	}
@@ -244,7 +258,23 @@ func (g *RepetitionGuard) processLine(line string, prefixDelivered int) {
 	// or padding between repeated short lines, must not by itself reset the
 	// run).
 	if trimmed == "" || len([]rune(trimmed)) > g.cfg.MaxLineChars {
+		if trimmed != "" {
+			g.window = nil
+		}
 		g.deliverLine(line, prefixDelivered)
+		return
+	}
+
+	if g.cyclingWindow(trimmed) {
+		// Cycling a few phrases: the window's lines were already delivered
+		// (each was a new line when it arrived), so record them as the
+		// degenerate text and stop delivering.
+		g.looping = true
+		for _, held := range g.pending {
+			g.dropped.WriteString(held)
+		}
+		g.pending = nil
+		g.dropped.WriteString(line)
 		return
 	}
 
@@ -283,6 +313,35 @@ func (g *RepetitionGuard) processLine(line string, prefixDelivered int) {
 	g.runLine = trimmed
 	g.runCount = 1
 	g.deliverLine(line, prefixDelivered)
+}
+
+// cyclingWindow adds a short line to the window and reports whether the
+// window is full and at most half its lines are distinct.
+func (g *RepetitionGuard) cyclingWindow(trimmed string) bool {
+	g.window = append(g.window, normalizeLoopLine(trimmed))
+	if len(g.window) > loopWindowLines {
+		g.window = g.window[1:]
+	}
+	if len(g.window) < loopWindowLines {
+		return false
+	}
+	distinct := make(map[string]struct{}, len(g.window))
+	for _, l := range g.window {
+		distinct[l] = struct{}{}
+	}
+	return len(distinct)*2 <= len(g.window)
+}
+
+// normalizeLoopLine folds case and drops punctuation and surrounding
+// parentheses, so "(Executing.)" and "Executing" count as the same phrase.
+func normalizeLoopLine(trimmed string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(trimmed) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == ' ' {
+			b.WriteRune(r)
+		}
+	}
+	return strings.Join(strings.Fields(b.String()), " ")
 }
 
 // deliverLine delivers a complete line, sending only the part not already
@@ -333,6 +392,7 @@ func (g *RepetitionGuard) Reset() {
 	g.runLine = ""
 	g.runCount = 0
 	g.pending = nil
+	g.window = nil
 	g.looping = false
 	g.dropped.Reset()
 	g.toolCall = false

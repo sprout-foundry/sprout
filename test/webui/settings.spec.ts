@@ -111,10 +111,32 @@ async function ensureSettingsOpen() {
   await expect(panel).toBeVisible({ timeout: 15_000 });
 }
 
+/** Wait for the panel's settings data to have loaded: the panel-level
+ *  skeleton (role=status, aria-label="Loading settings") renders for every
+ *  subsection while `settings` is still null, and on a CI daemon busy in
+ *  provider discovery that load can take a minute-plus. Every subsection
+ *  assertion below is meaningless until it clears, so wait it out here —
+ *  the webui's own bootstrap poll retries until the daemon answers. */
+async function waitForSettingsLoaded() {
+  const skeleton = page.locator(
+    '.settings-skeleton[aria-label="Loading settings"]',
+  );
+  try {
+    await skeleton.first().waitFor({ state: "hidden", timeout: 90_000 });
+  } catch {
+    // Dump why it never cleared so the failure names the layer.
+    const count = await skeleton.count().catch(() => -1);
+    throw new Error(
+      `settings panel still on its loading skeleton (skeleton count: ${count}) after 90s`,
+    );
+  }
+}
+
 /** Expand a section by its label text. Matches the section whose header label
  *  exactly matches, avoiding false positives from hasText on subtree content. */
 async function expandSection(label: string) {
   await ensureSettingsOpen();
+  await waitForSettingsLoaded();
   const section = sectionByLabel(label);
   await expect(section).toBeVisible({ timeout: 10_000 });
   const isExpanded = await section.evaluate((el) =>
@@ -186,6 +208,10 @@ async function clickSubsectionTab(testidKey: string) {
           .locator(`#settings-subpanel-${subId}`)
           .count()
           .catch(() => -1);
+        const skeletonCount = await page
+          .locator('.settings-skeleton[aria-label="Loading settings"]')
+          .count()
+          .catch(() => -1);
         const contentHead = await page
           .locator(".settings-subsection-content")
           .first()
@@ -197,7 +223,8 @@ async function clickSubsectionTab(testidKey: string) {
           );
         throw new Error(
           `subsection ${testidKey} did not render (content areas on page: ${contentCount}; ` +
-            `#settings-subpanel-${subId} present: ${subpanelCount}; first content head: ${contentHead}); ` +
+            `#settings-subpanel-${subId} present: ${subpanelCount}; ` +
+            `panel skeletons: ${skeletonCount}; first content head: ${contentHead}); ` +
             `cause: ${err instanceof Error ? err.message.split("\n")[0] : String(err)}`,
         );
       }

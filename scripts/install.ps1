@@ -797,10 +797,12 @@ function Main {
 
         Write-LogInfo "Stopping the running sprout daemon (PID $($runningProc.Id))..."
         try {
-            & $existingBinary service stop 2>$null | Out-Null
+            $stopOutput = & $existingBinary service stop 2>$null | Out-String
+            if ($LASTEXITCODE -ne 0) {
+                Write-LogInfo "service stop unavailable ($($stopOutput.Trim())) — falling back to a process kill."
+            }
         } catch {
-            # No service manager on this platform — fall through to the
-            # process kill below.
+            Write-LogInfo "service stop threw ($_) — falling back to a process kill."
         }
         if (Get-Process sprout -ErrorAction SilentlyContinue) {
             Stop-Process -Name sprout -Force -ErrorAction SilentlyContinue

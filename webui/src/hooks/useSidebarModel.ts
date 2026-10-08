@@ -54,6 +54,7 @@ export function useSidebarModel({
   const isLoadingProviders = catalog.isLoading;
   const hasHydratedProviderStateRef = useRef(false);
   const [settings, setSettings] = useState<SproutSettings | null>(null);
+  const settingsRef = useRef<SproutSettings | null>(null);
   const [settingsFocusTarget, setSettingsFocusTarget] = useState<'provider' | null>(null);
 
   // Load settings on mount / connection. Retried with backoff: the daemon
@@ -79,10 +80,40 @@ export function useSidebarModel({
       }
     };
     void attempt(0);
+    // While settings is still null, keep retrying on a slow interval: a
+    // fixed attempt burst at mount loses to a daemon that stays busy in
+    // provider discovery for minutes (observed in CI — the panel then
+    // skeletoned for the whole session and every subsection content
+    // assertion failed). 15s cadence, cheap GET, stops the moment settings
+    // lands or the hook unmounts. The settingsRef guards against StrictMode
+    // double-invoke and makes the stop condition pure.
+    settingsRef.current = null;
+    const poll = window.setInterval(async () => {
+      if (cancelled || settingsRef.current) {
+        window.clearInterval(poll);
+        return;
+      }
+      try {
+        const s = await apiService.getSettings();
+        if (cancelled) return;
+        settingsRef.current = s;
+        window.clearInterval(poll);
+        setSettings(s);
+      } catch {
+        /* next tick retries */
+      }
+    }, 15_000);
     return () => {
       cancelled = true;
+      window.clearInterval(poll);
     };
   }, [isConnected, apiService]);
+
+  // Keep the ref in sync with every external settings write so the poll's
+  // stop condition reflects reality.
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
 
   const finalSelectedModel = selectedModel || selectedModelState;
 

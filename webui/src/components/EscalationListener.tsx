@@ -297,9 +297,11 @@ export function EscalationListener() {
   // Shown only when there is repo context (same gate the Mode B path uses for
   // a meaningful task) and no txn/cloud task is already in flight.
   const showCloudTaskButton = Boolean(repoURL) && !cloudTask && !txn;
-  // The task page's platform route for the deep link. Resolved once, guarded:
-  // when the host has no page for it the link is not rendered rather than
-  // degrading to the host's bare origin.
+  // The task page's route for the deep link, resolved host-side: a cloud
+  // host maps it to its platform route; the local host maps it to its own
+  // hash route. When the host has no page for it the link is not rendered —
+  // which is why localHost resolves the tasks intent itself (returning null
+  // dropped the "View task" link and broke the CLOUD-2 surface).
   const taskLinkPath = cloudTask?.taskId
     ? (navigation.intentPath?.({ type: 'nav', id: 'tasks', detail: cloudTask.taskId }) ?? null)
     : null;

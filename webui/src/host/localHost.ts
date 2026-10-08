@@ -23,10 +23,17 @@ export const localHost: SproutHost = {
     authMode: 'none',
   },
   navigation: {
-    // The local build has no outward platform pages; a no-op open plus an
-    // intentPath that always reports "no page" is honest.
+    // The local build has no outward platform pages: open is a no-op. The
+    // tasks intent is the one exception — the cloud task a local escalation
+    // submits lives on the platform SPA served alongside the editor, at its
+    // hash route. Returning null here dropped the toast's "View task" link
+    // entirely (the CLOUD-2 regression the E2E pins). Other intents still
+    // report "no page" honestly.
     open() {},
-    intentPath() {
+    intentPath(intent) {
+      if (intent.type === 'nav' && intent.id === 'tasks') {
+        return intent.detail ? `/#/tasks/${intent.detail}` : '/#/tasks';
+      }
       return null;
     },
   },

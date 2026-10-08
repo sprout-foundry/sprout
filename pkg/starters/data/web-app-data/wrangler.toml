@@ -12,7 +12,7 @@
 name = "web-app-data"
 main = "src/worker/index.ts"
 compatibility_date = "2024-12-01"
-# Required by @cloudflare/vitest-pool-workers (and harmless in production).
+# Required by @cloudflare/vitest-plugin (and harmless in production).
 compatibility_flags = ["nodejs_compat"]
 
 [assets]

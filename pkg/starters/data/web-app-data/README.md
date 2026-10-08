@@ -52,7 +52,7 @@ point the assets directory at the Vite dev server if you prefer HMR).
 - `test/app.test.tsx` — the UI test: renders the routes with an in-memory
   router and checks the `Items` page against a stubbed `fetch`.
 - `test/api.test.ts` — the API test: runs the Worker through
-  `@cloudflare/vitest-pool-workers` against local D1.
+  `@cloudflare/vitest-plugin` against local D1.
 - `design/` — the design workspace scaffold.
 
 ## Tests
@@ -61,7 +61,7 @@ There are two kinds of test, so there are two Vitest configs:
 
 - `vitest.config.ts` runs the UI tests under jsdom (`npm test` runs it).
 - `vitest.workers.config.ts` runs `test/api.test.ts` inside the Workers
-  runtime via `@cloudflare/vitest-pool-workers`, with the D1 binding from
+  runtime via `@cloudflare/vitest-plugin`, with the D1 binding from
   `wrangler.toml` and local D1 state. `npm test` runs it after the jsdom
   run; a single Vitest config cannot serve both environments.
 
@@ -118,3 +118,18 @@ then emulate KV and R2 in `.wrangler/state/` automatically.
 
 `design/` holds the tokens, wireframes, screens and flows scaffold; see
 `design/README.md`.
+
+## Dependency security
+
+`npm audit --audit-level=high` is clean — no high or critical advisory
+remains. The stack is on React 19, React Router 7.18, Vite 8, Vitest 4,
+Wrangler 4 and Drizzle ORM 0.45. Two points worth recording:
+
+- The Workers test pool moved to **`@cloudflare/vitest-plugin`** (the old
+  `@cloudflare/vitest-pool-workers` is deprecated and renamed). See
+  `vitest.workers.config.ts`.
+- `npm audit` reports four **moderate** advisories from `drizzle-kit`'s
+  dev-only `@esbuild-kit` chain (an old `esbuild` whose dev server lets a
+  website read responses). They are below the high threshold, never ship in
+  `dist/`, and the only "fix" is a large `drizzle-kit` downgrade; they are
+  left as-is. `npm audit --audit-level=high` (the CI gate) exits clean.

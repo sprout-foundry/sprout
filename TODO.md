@@ -621,7 +621,7 @@ into a repetition loop ("Let me run." / "Let me do it." for dozens of lines)
 with no tool call, until the model breaks out on its own. Rare, model-side,
 and not specific to one model, so the guard lives in sprout.
 
-- [ ] **robust.1** Streamed repetition guard: while a reply streams
+- [x] **robust.1** Streamed repetition guard: while a reply streams
       (`pkg/agent/seed_provider_chat_stream.go`; the language guard's
       hold-back in `stream_holdback.go` is the pattern), detect degenerate
       repetition — the same short line or n-gram repeating past a threshold

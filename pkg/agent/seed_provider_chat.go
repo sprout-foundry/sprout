@@ -186,22 +186,40 @@ func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatReques
 			}
 		})
 	}
+	// The repetition guard is composed OUTSIDE the hold-back: assistant text
+	// flows guard → hold-back → client sink. When the guard is disabled it is
+	// a passthrough and the path is byte-for-byte unchanged.
+	guardSink := func(content string) {
+		if holdback != nil {
+			holdback.Write(content)
+			return
+		}
+		_, _ = sp.agent.output.GetStreamingBuffer().WriteString(content)
+		if router := sp.agent.OutputRouter(); router != nil {
+			router.RouteStreamChunk(content, "assistant_text")
+		}
+	}
+	guard := NewRepetitionGuard(sp.repetitionGuardConfigFromAgent(), guardSink)
 	callback := func(content string, contentType string) {
 		if contentType == "reasoning" {
 			sp.agent.output.GetReasoningBuffer().WriteString(content)
-		} else {
-			if holdback != nil {
-				holdback.Write(content)
-				return
+			if router := sp.agent.OutputRouter(); router != nil {
+				router.RouteStreamChunk(content, contentType)
 			}
-			sp.agent.output.GetStreamingBuffer().WriteString(content)
+			return
 		}
-		if router := sp.agent.OutputRouter(); router != nil {
-			router.RouteStreamChunk(content, contentType)
-		}
+		// Assistant text flows through the guard and its sink (the hold-back
+		// or the direct client delivery), which owns the routing.
+		guard.Write(content)
 	}
 
-	resp, err := sp.currentClient().SendChatRequestStream(ctx, messages, sproutReq.Tools, sproutReq.Reasoning, false, callback)
+	// The buffer-only path keeps its single-attempt transport (it had no
+	// backoff retries before the guard existed); the repetition guard adds
+	// only the cut-and-retry-once handling on top.
+	attemptFn := func(attemptCtx context.Context, msgs []api.Message, cb api.StreamCallback) (*api.ChatResponse, error) {
+		return sp.currentClient().SendChatRequestStream(attemptCtx, msgs, sproutReq.Tools, sproutReq.Reasoning, false, cb)
+	}
+	resp, err := sp.streamWithRepetitionGuard(ctx, messages, callback, holdback, guard, attemptFn)
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +231,8 @@ func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatReques
 	// wrong-language fallback is held like any streamed chunk), directly
 	// otherwise. When the hold-back already holds this response's content (the
 	// stream delivered it), the finalize below releases or holds it, so the
-	// fallback must not re-deliver it.
+	// fallback must not re-deliver it. The fallback is a single post-hoc blob,
+	// not a per-token stream, so it is not re-checked for repetition.
 	if resp != nil && len(resp.Choices) > 0 {
 		msgContent := resp.Choices[0].Message.Content
 		if sp.agent.output.GetStreamingBuffer().Len() == 0 && strings.TrimSpace(msgContent) != "" {

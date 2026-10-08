@@ -95,7 +95,7 @@ func TestDoChatWithRetryStreamingPublishesNotices(t *testing.T) {
 		client: client,
 	}
 
-	_, err := sp.doChatWithRetryStreaming(context.Background(), nil, nil, "", func(string, string) {}, nil)
+	_, err := sp.doChatWithRetryStreaming(context.Background(), nil, nil, "", func(string, string) {}, nil, nil)
 	if err == nil {
 		t.Fatal("expected error from always-failing client")
 	}

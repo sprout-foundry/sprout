@@ -635,17 +635,15 @@ and not specific to one model, so the guard lives in sprout.
       progress log) is not flagged; a tool call after some repetition is
       kept. Works for CLI, subagents and the web UI paths that share the
       stream.
-- [ ] **robust.2** Per-model sampling parameters: provider configs
+- [x] **robust.2** Per-model sampling parameters: provider configs
       (`pkg/agent_providers/provider_config.go`, `configs/*.json`) can set
       temperature, top_p and extra request parameters (e.g.
       `frequency_penalty`) per model, overriding the provider defaults; user
       provider config can override both. Today only context limits are per
       model. Tests for precedence (model over provider over built-in, user
-      over embedded) and that unknown parameters pass through to the
-      request body. No value changes for any model in this item — tuning
-      follows from benchmark runs (SP-154).
-
-## SP-150 — Model Roles (`roadmap/SP-150-model-roles.md`)
+      over embedded) and that unknown parameters pass through to the request
+      body. No value changes for any model in this item — tuning follows from
+      benchmark runs (SP-154).## SP-150 — Model Roles (`roadmap/SP-150-model-roles.md`)
 
 - [x] **150.1** `roles` config section (`planner`, `coder`, `summarizer`,
       `reviewer`, `commit`), parsed and merged across global and project

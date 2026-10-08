@@ -16,6 +16,16 @@ type LanguageServerOverride struct {
 	InstallHint string   `json:"install_hint,omitempty" yaml:"install_hint,omitempty"` // Installation instructions
 }
 
+// SamplingOverride carries per-model sampling parameters in a custom provider
+// config. It mirrors the per-model sampling shape of the provider config
+// (temperature, top_p, and free-form extra request parameters); unknown
+// parameter keys pass straight through to the request body.
+type SamplingOverride struct {
+	Temperature *float64               `json:"temperature,omitempty"`
+	TopP        *float64               `json:"top_p,omitempty"`
+	Parameters  map[string]interface{} `json:"parameters,omitempty"`
+}
+
 // CustomProviderConfig represents a custom model provider configuration
 type CustomProviderConfig struct {
 	Name                   string                      `json:"name"`
@@ -23,6 +33,7 @@ type CustomProviderConfig struct {
 	ModelName              string                      `json:"model_name"`
 	ContextSize            int                         `json:"context_size"`                  // Default context size for provider
 	ModelContextSizes      map[string]int              `json:"model_context_sizes,omitempty"` // Per-model context sizes (e.g., "my-model": 131072)
+	ModelSampling          map[string]SamplingOverride `json:"model_sampling,omitempty"`      // Per-model sampling overrides (temperature, top_p, extra parameters)
 	ReasoningEffort        string                      `json:"reasoning_effort,omitempty"`    // Optional provider-specific reasoning effort override
 	Temperature            *float64                    `json:"temperature,omitempty"`         // Optional default temperature
 	TopP                   *float64                    `json:"top_p,omitempty"`               // Optional default top_p

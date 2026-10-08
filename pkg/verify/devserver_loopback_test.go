@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"testing"
+	"time"
 )
 
 // A dev server bound only to the IPv6 loopback (as Astro and Vite are on
@@ -15,7 +16,7 @@ func TestProbeDevPort_IPv6OnlyServerIsUp(t *testing.T) {
 	if err != nil {
 		t.Skipf("IPv6 loopback unavailable: %v", err)
 	}
-	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	srv := &http.Server{ReadHeaderTimeout: 5 * time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})}
 	go func() { _ = srv.Serve(l) }()
@@ -38,7 +39,7 @@ func TestProbeDevPort_IPv4OnlyServerIsUp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
-	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {})}
+	srv := &http.Server{ReadHeaderTimeout: 5 * time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {})}
 	go func() { _ = srv.Serve(l) }()
 	t.Cleanup(func() { _ = srv.Close() })
 

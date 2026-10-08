@@ -74,6 +74,8 @@ export function handleWasmLocal(
       case '/api/browse':
       case '/api/workspace/browse':
         return handleWasmBrowse(shell, fullUrl);
+      case '/api/file-index':
+        return handleWasmFileIndex(shell, fullUrl);
 
       // ── File read/write ──────────────────────────────────────
       case '/api/file':
@@ -359,6 +361,146 @@ function flattenEntries(shell: WasmShell, dir: string): Array<{ path: string; mo
     }
   }
   return result;
+}
+
+// The fallback crawl's caps; mirrored from pkg/filediscovery's defaults.
+const WASM_INDEX_MAX_FILES = 12000;
+const WASM_INDEX_MAX_DEPTH = 8;
+const WASM_SKIP_DIRS = new Set([
+  '.git',
+  'node_modules',
+  '.next',
+  '.nuxt',
+  '.svelte-kit',
+  'dist',
+  'build',
+  'out',
+  '__pycache__',
+  '.venv',
+  'venv',
+  'vendor',
+  'target',
+  '.turbo',
+  '.cache',
+  '.parcel-cache',
+  'coverage',
+  '.gradle',
+  '.idea',
+  '.vs',
+  'Library',
+  'Applications',
+  'Documents',
+  'Desktop',
+  'Downloads',
+  'Pictures',
+  'Music',
+  'Movies',
+  'Public',
+  'Videos',
+  'Templates',
+  'AppData',
+  'OneDrive',
+  'Contacts',
+  'Favorites',
+  'Links',
+  'Saved Games',
+  'Searches',
+  'Dropbox',
+  'Google Drive',
+  'iCloud Drive',
+]);
+
+/**
+ * GET /api/file-index — the workspace's whole quick-open index in ONE
+ * response. Uses the WASM binary's bulk walkFiles export (one JS→WASM
+ * crossing) instead of a per-directory listDir crawl; falls back to
+ * serially walking via /api/browse semantics on older binaries that don't
+ * expose it.
+ * Expected: { files: [{name, path, type}], truncated, file_count, dir_count }
+ */
+function handleWasmFileIndex(shell: WasmShell, _fullUrl: string): Response {
+  const root = workspaceRootOf(shell) || '/';
+  if (typeof shell.walkFiles === 'function') {
+    const json = shell.walkFiles('/');
+    try {
+      const parsed = JSON.parse(json) as {
+        files?: Array<{ name: string; path: string; type?: string }>;
+        truncated?: boolean;
+        file_count?: number;
+        dir_count?: number;
+        error?: string;
+      };
+      if (parsed.error) {
+        return jsonError(parsed.error, 500);
+      }
+      return jsonOk({
+        message: 'success',
+        workspace: root,
+        files: (parsed.files ?? []).map((f) => ({
+          name: f.name,
+          path: f.path,
+          type: f.type ?? 'file',
+        })),
+        truncated: parsed.truncated ?? false,
+        file_count: parsed.file_count ?? parsed.files?.length ?? 0,
+        dir_count: parsed.dir_count ?? 0,
+      });
+    } catch {
+      // Fall through to the crawl below on malformed output.
+    }
+  }
+
+  // Older binaries: crawl one listDir per directory (the pre-index shape).
+  const files: Array<{ name: string; path: string; type: string }> = [];
+  let truncated = false;
+  const visit = (dir: string, depth: number): void => {
+    if (files.length >= WASM_INDEX_MAX_FILES || depth > WASM_INDEX_MAX_DEPTH) {
+      truncated = true;
+      return;
+    }
+    let entries: Array<{ name: string; path: string; type: string }>;
+    try {
+      const result = shell.listDir(dir);
+      if (result.error) return;
+      entries = (result.entries ?? []).map((e) => ({
+        name: e.name,
+        path: dir === '/' ? `/${e.name}` : `${dir}/${e.name}`,
+        type: e.type,
+      }));
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (entry.type === 'dir') {
+        if (WASM_SKIP_DIRS.has(entry.name)) continue;
+        visit(entry.path, depth + 1);
+        if (truncated) return;
+        continue;
+      }
+      if (files.length >= WASM_INDEX_MAX_FILES) {
+        truncated = true;
+        return;
+      }
+      files.push({ name: entry.name, path: toWorkspaceRelative(entry.path, root), type: 'file' });
+    }
+  };
+  visit('/', 0);
+
+  return jsonOk({
+    message: 'success',
+    workspace: root,
+    files,
+    truncated,
+    file_count: files.length,
+    dir_count: 0,
+  });
+}
+
+/** Convert an absolute VFS path to workspace-relative slash path (or '' root). */
+function toWorkspaceRelative(path: string, root: string): string {
+  const normRoot = root.endsWith('/') && root !== '/' ? root.slice(0, -1) : root;
+  if (root === '/' || path === normRoot) return path.replace(/^\/+/, '');
+  return path.startsWith(normRoot + '/') ? path.slice(normRoot.length + 1) : path;
 }
 
 /**

@@ -65,6 +65,15 @@ func registerMiscHumaOperations(api huma.API, ws *ReactWebServer) {
 		Description: "Lists the files and directories inside the `path` (defaulting to the workspace root), always skipping the .git directory. `ignore=true` additionally skips entries matched by the workspace's gitignore rules.",
 		Tags:        []string{"files"},
 	}, ws.browseDirHumaHandler)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "fileIndex",
+		Method:      http.MethodGet,
+		Path:        "/api/file-index",
+		Summary:     "Return the workspace's whole quick-open file index.",
+		Description: "Walks the workspace once and returns every non-ignored file as a workspace-relative path, bounded by the indexer caps (12k files / 3k dirs / depth 8). One response replaces the palette's per-directory crawl; `truncated` reports when the caps bit.",
+		Tags:        []string{"files"},
+	}, ws.fileIndexHumaHandler)
 }
 
 // supportBundleHumaHandler is the Huma handler for GET /api/support-bundle.
@@ -94,5 +103,11 @@ func (ws *ReactWebServer) computerUseTestHumaHandler(ctx context.Context, in *hu
 // browseDirHumaHandler is the Huma handler for GET /api/browse.
 func (ws *ReactWebServer) browseDirHumaHandler(ctx context.Context, in *humaRequestInput) (*writtenResponseOutput, error) {
 	ws.handleAPIBrowse(in.Resp, in.Req)
+	return &writtenResponseOutput{Body: noopWrittenResponse}, nil
+}
+
+// fileIndexHumaHandler is the Huma handler for GET /api/file-index.
+func (ws *ReactWebServer) fileIndexHumaHandler(ctx context.Context, in *humaRequestInput) (*writtenResponseOutput, error) {
+	ws.handleAPIFileIndex(in.Resp, in.Req)
 	return &writtenResponseOutput{Body: noopWrittenResponse}, nil
 }

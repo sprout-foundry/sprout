@@ -90,6 +90,13 @@ export interface WasmShell {
   saveImage(bytes: Uint8Array): WasmSaveImageResult;
   /** List directory entries. */
   listDir(path: string): WasmListDirResult;
+  /**
+   * Whole-workspace quick-open index in one call: {files:[{name,path,type}],
+   * truncated, file_count, dir_count}. Paths are workspace-relative.
+   * Optional — binaries built before the export existed fall back to the
+   * per-directory crawl.
+   */
+  walkFiles?(path?: string): string;
   /** Delete a file. */
   deleteFile(path: string): string; // error or ""
   /** Run the full agent loop (ProcessQuery) in-browser.
@@ -321,6 +328,8 @@ export interface SproutWasmAPI {
   readFileBytes?(path: string): WasmReadFileBytesResult;
   saveImage?(bytes: Uint8Array): WasmSaveImageResult;
   listDir(path: string): string;
+  /** Absent in binaries built before the bulk file index existed. */
+  walkFiles?(path?: string): string;
   deleteFile(path: string): string;
   getHistory(): string;
   getEnv(): string;
@@ -608,6 +617,12 @@ export async function initWasmShell(config?: {
         if (parsed === null) return { entries: [] };
         if (Array.isArray(parsed)) return { entries: parsed };
         return { entries: parsed.entries ?? [], error: parsed.error };
+      },
+
+      walkFiles(path?: string): string {
+        const api = wasm as SproutWasmAPI;
+        if (!api.walkFiles) return JSON.stringify({ error: 'WASM binary does not expose walkFiles' });
+        return api.walkFiles(path);
       },
 
       deleteFile(path: string): string {

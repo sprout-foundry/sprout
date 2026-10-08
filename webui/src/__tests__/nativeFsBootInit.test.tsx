@@ -173,7 +173,6 @@ function BootHarness() {
     handleEvent: vi.fn(),
     connectionTimeoutRef: { current: null },
     loadChatSessions: vi.fn(),
-    setRecentFiles: vi.fn(),
     setIsMobile: vi.fn(),
     setIsTablet: vi.fn(),
     setState: setSpy,

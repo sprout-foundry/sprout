@@ -36,6 +36,12 @@ export const wasmLocalEndpoints: CloudEndpoint[] = [
     description: 'Directory browsing (WASM handles locally)',
   },
   {
+    path: '/api/file-index',
+    methods: ['GET'],
+    category: 'wasm-local',
+    description: 'Whole-workspace quick-open index (WASM bulk walk)',
+  },
+  {
     path: '/api/file/check-modified',
     methods: ['GET', 'POST'],
     category: 'wasm-local',

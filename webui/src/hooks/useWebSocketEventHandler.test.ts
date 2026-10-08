@@ -949,7 +949,6 @@ describe('workspace_changed', () => {
   function setup(clientId?: string) {
     const stateHolder = { current: createDefaultState() };
     // Seed caches that should be cleared on workspace change.
-    stateHolder.current.recentFiles = ['/old/file1.ts'];
     stateHolder.current.recentLogs = ['old log entry'];
 
     const setStateMock = vi.fn((updater: unknown) => {
@@ -1015,7 +1014,7 @@ describe('workspace_changed', () => {
     cleanup();
   });
 
-  it('clears recentFiles and recentLogs caches', () => {
+  it('clears recentLogs cache on workspace change', () => {
     const { stateHolder, cleanup } = setup();
     act(() => {
       hookHandleEvent!({
@@ -1025,7 +1024,6 @@ describe('workspace_changed', () => {
       });
     });
 
-    expect(stateHolder.current.recentFiles).toEqual([]);
     expect(stateHolder.current.recentLogs).toEqual([]);
     cleanup();
   });

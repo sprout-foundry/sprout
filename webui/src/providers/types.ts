@@ -35,7 +35,6 @@ export interface ProviderContext {
   onModelChange?: (model: string) => void;
 
   // Data accessors (not hardcoded - providers fetch what they need)
-  recentFiles: Array<{ path: string; modified: boolean }>;
   recentLogs: ProviderLogEntry[];
   stats?: {
     queryCount: number;

@@ -80,7 +80,6 @@ interface SidebarProps {
     filesModified: number;
     persona?: string;
   };
-  recentFiles?: Array<{ path: string; modified: boolean }>;
   recentLogs?:
     | string[]
     | Array<{
@@ -189,7 +188,6 @@ function Sidebar({
   availableModels,
   currentView,
   stats,
-  recentFiles: _recentFiles = [],
   recentLogs = [],
   isMobileMenuOpen,
   onMobileMenuToggle,

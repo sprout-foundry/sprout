@@ -149,6 +149,13 @@ type ToolEnv struct {
 	// handlers skip their interactive approval prompt to avoid double-prompting.
 	// Hard blocks are NEVER bypassed regardless of this flag.
 	Gate1AutoApproved bool
+	// UnsafeShellMode reports whether the session opted into --unsafe-shell,
+	// which bypasses CAUTION-tier shell_command prompts. Deliberately
+	// separate from Gate1AutoApproved: --unsafe-shell is scoped to
+	// shell_command and must not lift prompts for any other tool. The shell
+	// handler consults it so its own gate honors the flag (the approval
+	// broker already does, but a headless command never reaches it).
+	UnsafeShellMode bool
 	// RawArgsJSON is the raw JSON string of the tool arguments as sent by the
 	// LLM. When set, handlers can parse this to recover the original key
 	// insertion order of nested maps (e.g., the "data" field in

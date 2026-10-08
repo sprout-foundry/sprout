@@ -25,7 +25,7 @@ section: the turn-end verification never ran. Reproduced by hand, the same
 model made the correct edit to `src/pages/about.astro`, so the harness, not
 the model, lost the result.
 
-- [ ] **bench.8** Benchmark runs always verify: find why the run's turn
+- [x] **bench.8** Benchmark runs always verify: find why the run's turn
       reported no changed application paths (the verification gate stayed
       closed) — check whether edits made through shell commands, or by a
       subagent, are missing from the turn's change window

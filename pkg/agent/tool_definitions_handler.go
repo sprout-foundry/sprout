@@ -222,6 +222,9 @@ func buildToolEnvFromAgent(agent *Agent) tools.ToolEnv {
 	// both --unsafe mode and elevated risk profiles; hard blocks are
 	// still enforced by the handlers' own IsHardBlock early-returns.
 	env.Gate1AutoApproved = agent.GetUnsafeMode() || agent.IsSessionElevated()
+	// Propagate --unsafe-shell so the shell handler's own gate honors it
+	// (scoped to shell_command; never widens Gate1AutoApproved).
+	env.UnsafeShellMode = agent.GetUnsafeShellMode()
 	// Off-workspace file access is handled entirely through
 	// PrecheckFileAccess which consults Gate 1's path-tier classifier.
 	// Handlers consult it up-front and return typed errors for Deny,

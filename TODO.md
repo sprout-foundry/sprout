@@ -14,7 +14,7 @@
 
 ## Design tokens (for the platform look-and-feel work)
 
-- [ ] **design.1** Fix and extend `@sprout-foundry/design`
+- [x] **design.1** Fix and extend `@sprout-foundry/design`
       (`packages/design/tokens.css`): `--brand-frost` means a light cyan in
       dark mode but a green (#1ba03d) in light mode — give each brand token
       one meaning in both themes (rename or add a token for the green, and

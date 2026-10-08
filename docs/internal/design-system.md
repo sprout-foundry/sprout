@@ -10,7 +10,8 @@ The webui uses a token-driven design system rooted in `webui/src/App.css` (canon
 **Accents** — `--accent-primary`, `--accent-secondary`, `--accent-success`, `--accent-warning`, `--accent-error`, `--accent-info`.
 **Accent foregrounds** — `--accent-fg` (white on accent surfaces), `--accent-warning-fg` (#1a1a2e dark text on amber), `--accent-on-primary`.
 **Borders** — `--border-subtle`, `--border-default`, `--border-strong`, `--border-focus`.
-**Brand** — `--brand-teal`, `--brand-frost`, `--brand-active-cyan`, `--brand-navy`.
+**Brand** — `--brand-teal`, `--brand-frost`, `--brand-sprout`, `--brand-active-cyan`, `--brand-navy`. Each brand token has one meaning across both themes (`--brand-frost` is always the light-cyan frost accent; the green is `--brand-sprout`).
+**Motion** — `--ease-out`, `--ease-in-out`, `--duration-fast` (120ms), `--duration-base` (180ms), `--duration-slow` (320ms). The durations are zeroed under `@media (prefers-reduced-motion: reduce)`.
 
 ## Hard rules
 

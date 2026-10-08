@@ -43,7 +43,7 @@ the model, lost the result.
       the report lists it under failure categories. Test: the empty
       "Failure categories: No failures" next to a failed run can no
       longer happen. Spec: SP-154 §154c.
-- [ ] **bench.10** Keep evidence for failed runs: save each failed run's
+- [x] **bench.10** Keep evidence for failed runs: save each failed run's
       working copy diff (`git diff` against the baseline), the agent
       transcript and the verification output under
       `<output>/runs/<task>-<model>-<n>/` (`--keep-runs=failed|all|none`,

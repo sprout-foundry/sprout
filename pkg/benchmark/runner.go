@@ -207,6 +207,17 @@ type Runner struct {
 	// ErrRunTimeout in Run.Err — never Passed. 0 (or negative) →
 	// defaultTaskTimeout (10m). Each run carries its own timer.
 	Timeout time.Duration
+	// KeepRuns is the evidence policy: which runs leave their failed
+	// working-copy diff, agent transcript and verification output under
+	// EvidenceDir. "" resolves to KeepRunsFailed — the default, so a run
+	// never silently discards the evidence a failure needs.
+	KeepRuns KeepRuns
+	// EvidenceDir is the root directory the per-run evidence lands under
+	// (EvidenceDir/runs/<task>-<model>-<n>/). "" → no evidence is kept,
+	// regardless of KeepRuns: a runner with no evidence root has nowhere
+	// to write the evidence. Evidence writing is best-effort — a
+	// failure to write never changes a run's verdict.
+	EvidenceDir string
 }
 
 // RunTask runs task's request with one model (spec) RunsPerTask times —
@@ -457,6 +468,14 @@ func (r *Runner) runOnce(task *Task, spec ModelSpec, runNumber int) Run {
 	langAfter := langGuardStat(agent.GlobalLanguageGuardMetrics().Snapshot(), langModel)
 	run.LangChecks = langAfter.Checks - langBefore.Checks
 	run.LangMismatches = langAfter.Mismatches - langBefore.Mismatches
+
+	// Evidence for the run is captured here — after the turn and before
+	// the copy is removed by this function's defer — from the live copy
+	// (the diff against the baseline), the agent's transcript and the
+	// run's verification outcome. Best-effort: the policy decides which
+	// runs keep evidence, and a failure to write it is logged and
+	// swallowed so it can never change the run's verdict.
+	captureRunEvidence(r, task, spec, runNumber, dir, ag, &run)
 
 	run.FinishedAt = time.Now()
 	return run

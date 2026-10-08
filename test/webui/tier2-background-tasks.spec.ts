@@ -37,7 +37,7 @@ test.describe('Background Tasks', () => {
   test('Background status visible after launching long-running command', async () => {
     // ORIGINAL TEST BODY (unchanged):
     // "Background status visible after launching long-running command"
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     const triggerBtn = page.getByTestId(TESTIDS['background-tasks-trigger']);
@@ -75,7 +75,7 @@ test.describe('Background Tasks', () => {
   test('resume/terminate control visible on a background task', async () => {
     // ORIGINAL TEST BODY (unchanged):
     // "resume/terminate control visible on a background task"
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     const triggerBtn = page.getByTestId(TESTIDS['background-tasks-trigger']);

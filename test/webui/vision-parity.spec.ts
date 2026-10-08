@@ -43,7 +43,7 @@ test.setTimeout(60_000);
 
 test.describe('Vision parity', () => {
   test('chat shell renders', async () => {
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
   });
 

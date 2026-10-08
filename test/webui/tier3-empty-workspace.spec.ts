@@ -35,7 +35,7 @@ test.setTimeout(60_000);
 
 test.describe('Empty Workspace', () => {
   test('file tree shows empty state when workspace has no files', async () => {
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // Verify the workspace is actually empty via the API
@@ -76,7 +76,7 @@ test.describe('Empty Workspace', () => {
   });
 
   test('chat works in an empty workspace — send message and get response', async () => {
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // Use the chat-input testid

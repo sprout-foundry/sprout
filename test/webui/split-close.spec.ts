@@ -32,7 +32,7 @@ test.describe.configure({ mode: 'serial' });
 test.setTimeout(60_000);
 
 test('closing a split keeps the pane the control was invoked from', async () => {
-  await page.goto(vite.url, { waitUntil: 'networkidle' });
+  await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
 
   // Split once: 2 panes.
   await page.locator('.split-controls button[title="Split vertically"]').first().click();

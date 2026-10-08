@@ -40,7 +40,7 @@ test.setTimeout(60_000);
 
 test.describe('Empty Session List', () => {
   test('sidebar shows empty-state when there are no chat sessions', async () => {
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // Verify via API that chat sessions list is initially empty (or has only the default)
@@ -65,7 +65,7 @@ test.describe('Empty Session List', () => {
   });
 
   test('creating first session via API and verifying it appears', async () => {
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // Create a new chat session via the API

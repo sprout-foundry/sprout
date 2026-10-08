@@ -41,7 +41,7 @@ test.describe('Worktree', () => {
     async () => {
       // ORIGINAL TEST BODY (unchanged):
       // "worktree-panel is visible or accessible via a UI trigger"
-      await page.goto(vite.url, { waitUntil: 'networkidle' });
+      await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
       await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
       const worktreePanel = page.getByTestId(TESTIDS['worktree-panel']);
@@ -80,7 +80,7 @@ test.describe('Worktree', () => {
     async () => {
       // ORIGINAL TEST BODY (unchanged):
       // "worktree-create-button is interactable when panel is open"
-      await page.goto(vite.url, { waitUntil: 'networkidle' });
+      await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
       await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
       // Try to find and show the worktree panel first
@@ -115,7 +115,7 @@ test.describe('Worktree', () => {
     async () => {
       // ORIGINAL TEST BODY (unchanged):
       // "worktree-list is visible when the panel is open"
-      await page.goto(vite.url, { waitUntil: 'networkidle' });
+      await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
       await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
       // Try to reveal the worktree panel

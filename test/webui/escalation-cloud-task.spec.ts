@@ -98,7 +98,7 @@ interface CapturedPost {
 
 test.describe('Escalation — Run as cloud task (CLOUD-2)', () => {
   test('submit → poll → completed renders inline progress and task link', async () => {
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['sidebar-container'])).toBeVisible({ timeout: 30_000 });
 
     const posts: CapturedPost[] = [];
@@ -180,7 +180,7 @@ test.describe('Escalation — Run as cloud task (CLOUD-2)', () => {
   });
 
   test('submit failure (402) surfaces the platform error message', async () => {
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['sidebar-container'])).toBeVisible({ timeout: 30_000 });
     await dismissToastIfOpen();
 

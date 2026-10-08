@@ -45,7 +45,7 @@ test.describe('Model Picker', () => {
     async () => {
       // ORIGINAL TEST BODY (unchanged):
       // "model-picker is reachable via status bar button"
-      await page.goto(vite.url, { waitUntil: 'networkidle' });
+      await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
 
       // Wait for the main shell to be rendered
       await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
@@ -86,7 +86,7 @@ test.describe('Model Picker', () => {
     async () => {
       // ORIGINAL TEST BODY (unchanged):
       // "model-picker-option list has at least one option when picker is opened"
-      await page.goto(vite.url, { waitUntil: 'networkidle' });
+      await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
       await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
       // Try to open the model picker and check for options

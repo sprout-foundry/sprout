@@ -33,7 +33,7 @@ test.describe.configure({ mode: 'serial' });
 test.setTimeout(60_000);
 
 test('split resize handle changes pane widths', async () => {
-  await page.goto(vite.url, { waitUntil: 'networkidle' });
+  await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
 
   const splitBtn = page.locator('.split-controls button[title="Split vertically"]').first();
   await expect(splitBtn).toBeVisible({ timeout: 30_000 });

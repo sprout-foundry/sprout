@@ -65,7 +65,7 @@ test.describe.configure({ mode: 'serial' });
 test.setTimeout(120_000);
 
 test('diff viewer does not constantly reload', async () => {
-  await page.goto(vite.url, { waitUntil: 'networkidle' });
+  await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
   const diffRequests: number[] = [];

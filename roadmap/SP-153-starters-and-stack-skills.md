@@ -1,6 +1,6 @@
 # SP-153 — Starters and Stack Skills
 
-> **Status (2026-10-07):** Partially shipped — manifest, store, `sprout new --starter` and stack-skill auto-activation ship; the three reference starters, their stack skills and their CI job remain (framework and local storage-emulation choices pending).
+> **Status (2026-10-08):** Shipped.
 > Consumed by SP-149 (commands), SP-154 (benchmark), SP-155 (preview
 > command), SP-156 (build output for deploys).
 

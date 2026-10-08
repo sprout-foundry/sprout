@@ -29,6 +29,7 @@ package benchmark
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -75,7 +76,7 @@ func goldenBuildFail() *verify.Result {
 	}}
 }
 
-// goldenRuns builds the fixture's 12 runs in suite order (models outer —
+// goldenRuns builds the fixture's 14 runs in suite order (models outer —
 // alpha, then beta — tasks inner — add-badge, then dark-mode — run
 // number within the pair):
 //
@@ -85,13 +86,17 @@ func goldenBuildFail() *verify.Result {
 //	                   result, metrics zero)
 //	add-badge × beta:  2 passes, r3 fails on the build check after the
 //	                   hook exhausted its repair budget (stopped_by_rule)
-//	dark-mode × beta:  3 failures on the build check (r2 also fails the
-//	                   interaction check)
+//	dark-mode × beta:  r1, r2 and r4 fail on the build check (r2's run
+//	                   also fails the interaction check); r3 is a
+//	                   silent-fail run — no verification result and no Err
+//	                   — carrying a not-verified reason, so the report's
+//	                   failure categories are non-empty and the Result
+//	                   cell names the reason
 //
 // Hand-computed expectations the test asserts (not just the golden
-// bytes): 5 of 12 runs pass; starter fixture/alpha pooled 3/6 (50%),
-// starter fixture/beta pooled 2/6 (33%); failure categories build 4,
-// test 1, page 1, interaction 1, stopped_by_rule 1, error 1.
+// bytes): 5 of 14 runs pass; starter fixture/alpha pooled 3/6 (50%),
+// starter fixture/beta pooled 2/7 (29%); failure categories build 4,
+// test 1, page 1, interaction 1, stopped_by_rule 1, error 1, not_verified 1.
 func goldenRuns() []Run {
 	base := func(task, model, provider string, runNumber int, start, end time.Time, tokens int, cost float64) Run {
 		return Run{
@@ -123,7 +128,7 @@ func goldenRuns() []Run {
 		}}
 	}
 
-	runs := make([]Run, 0, 12)
+	runs := make([]Run, 0, 14)
 	add := func(r Run) { runs = append(runs, r) }
 
 	// add-badge × prov-a/alpha: all three runs pass (r2 carries the
@@ -182,8 +187,11 @@ func goldenRuns() []Run {
 	r.RepairAttempts = map[string]int{"build": 1}
 	add(r)
 
-	// dark-mode × prov-b/beta: three build failures (r2 also fails the
-	// interaction check — one run contributing to two categories).
+	// dark-mode × prov-b/beta: r1, r2 and r4 fail on the build check (r2's
+	// run also fails the interaction check); r3 is a silent-fail run — no
+	// verification result and no Err (the hook never ran) — carrying the
+	// reason the report must surface instead of printing "No failures."
+	// next to a failed run.
 	r = base("dark-mode", "beta", "prov-b", 1, goldenTime(3, 0, 0), goldenTime(3, 3, 300), 480, 0.0029)
 	r.Result = goldenBuildFail()
 	add(r)
@@ -191,6 +199,9 @@ func goldenRuns() []Run {
 	r.Result = buildInteractionFail()
 	add(r)
 	r = base("dark-mode", "beta", "prov-b", 3, goldenTime(3, 10, 0), goldenTime(3, 15, 200), 510, 0.0032)
+	r.NotVerifiedReason = "no code changes this turn"
+	add(r)
+	r = base("dark-mode", "beta", "prov-b", 4, goldenTime(3, 20, 0), goldenTime(3, 25, 400), 505, 0.0031)
 	r.Result = goldenBuildFail()
 	add(r)
 
@@ -241,14 +252,15 @@ func TestReportGolden(t *testing.T) {
 
 	type wantPair struct {
 		task, model, provider string
+		runs                  int
 		passed                int
 		passRate              float64
 	}
 	wantPairs := []wantPair{
-		{"add-badge", "alpha", "prov-a", 3, 1.0},
-		{"dark-mode", "alpha", "prov-a", 0, 0.0},
-		{"add-badge", "beta", "prov-b", 2, 2.0 / 3.0},
-		{"dark-mode", "beta", "prov-b", 0, 0.0},
+		{"add-badge", "alpha", "prov-a", 3, 3, 1.0},
+		{"dark-mode", "alpha", "prov-a", 3, 0, 0.0},
+		{"add-badge", "beta", "prov-b", 3, 2, 2.0 / 3.0},
+		{"dark-mode", "beta", "prov-b", 4, 0, 0.0}, // 4: the extra silent-fail run
 	}
 	if len(rep.Tasks) != len(wantPairs) {
 		t.Fatalf("Tasks = %d, want %d (2 models × 2 tasks, first-seen order)", len(rep.Tasks), len(wantPairs))
@@ -259,8 +271,8 @@ func TestReportGolden(t *testing.T) {
 			t.Errorf("Tasks[%d] = %s/%s/%s, want %s/%s/%s (suite order: models outer, tasks inner)",
 				i, tr.TaskID, tr.Model, tr.Provider, w.task, w.model, w.provider)
 		}
-		if len(tr.Runs) != 3 {
-			t.Errorf("Tasks[%d].Runs = %d, want 3", i, len(tr.Runs))
+		if len(tr.Runs) != w.runs {
+			t.Errorf("Tasks[%d].Runs = %d, want %d", i, len(tr.Runs), w.runs)
 		}
 		if tr.Passed != w.passed {
 			t.Errorf("Tasks[%d].Passed = %d, want %d", i, tr.Passed, w.passed)
@@ -273,11 +285,12 @@ func TestReportGolden(t *testing.T) {
 	type wantStarter struct {
 		model, provider string
 		passed          int
+		runsTotal       int
 		passRate        float64
 	}
 	wantStarters := []wantStarter{
-		{"alpha", "prov-a", 3, 0.5},      // pooled 3/6
-		{"beta", "prov-b", 2, 2.0 / 6.0}, // pooled 2/6
+		{"alpha", "prov-a", 3, 6, 3.0 / 6.0}, // pooled 3/6
+		{"beta", "prov-b", 2, 7, 2.0 / 7.0},  // pooled 2/7
 	}
 	if len(rep.Starters) != len(wantStarters) {
 		t.Fatalf("Starters = %d, want %d (one per model, same starter)", len(rep.Starters), len(wantStarters))
@@ -290,8 +303,8 @@ func TestReportGolden(t *testing.T) {
 		if sr.Model != w.model || sr.Provider != w.provider {
 			t.Errorf("Starters[%d] = %s/%s, want %s/%s", i, sr.Model, sr.Provider, w.model, w.provider)
 		}
-		if sr.Tasks != 2 || sr.RunsTotal != 6 {
-			t.Errorf("Starters[%d] = Tasks %d / RunsTotal %d, want 2 / 6 (the pooled task × run matrix)", i, sr.Tasks, sr.RunsTotal)
+		if sr.Tasks != 2 || sr.RunsTotal != w.runsTotal {
+			t.Errorf("Starters[%d] = Tasks %d / RunsTotal %d, want 2 / %d (the pooled task × run matrix)", i, sr.Tasks, sr.RunsTotal, w.runsTotal)
 		}
 		if sr.Passed != w.passed {
 			t.Errorf("Starters[%d].Passed = %d, want %d (pooled)", i, sr.Passed, w.passed)
@@ -302,10 +315,11 @@ func TestReportGolden(t *testing.T) {
 	}
 
 	wantCats := map[string]int{
-		"build": 4, // add-badge×beta r3 + the three dark-mode×beta runs
+		"build": 4, // add-badge×beta r3 + dark-mode×beta r1, r2 and r4
 		"error": 1, // dark-mode×alpha r3 (Err set)
 		// dark-mode×beta r2 (one run, two categories)
 		"interaction":     1,
+		"not_verified":    1, // dark-mode×beta r3 (no result, no err)
 		"page":            1, // dark-mode×alpha r2
 		"stopped_by_rule": 1, // add-badge×beta r3 (the exhausted repair budget)
 		"test":            1, // dark-mode×alpha r1
@@ -381,11 +395,12 @@ func TestReportFailureCategoriesRules(t *testing.T) {
 		t.Errorf("manual-only failure: cats = %v, want none (manual checks are reported by a human)", cats)
 	}
 
-	// A never-ran verification failure (no result, no err — the strict
-	// run that verified nothing): failed, but no rule matches.
-	r = mk(func(*Run) {})
-	if cats := failureCategories([]Run{r}); len(cats) != 0 {
-		t.Errorf("never-ran failure: cats = %v, want none", cats)
+	// A no-result, no-err run (the silent fail): failed, and now counted
+	// as not_verified so the report can never print "No failures." next to
+	// it. The specific reason rides on the run, not the category.
+	r = mk(func(r *Run) { r.NotVerifiedReason = "no code changes this turn" })
+	if cats := failureCategories([]Run{r}); !reflect.DeepEqual(cats, map[string]int{"not_verified": 1}) {
+		t.Errorf("no-result failure: cats = %v, want {not_verified:1}", cats)
 	}
 
 	// A repair budget that was not exhausted: no stopped_by_rule.
@@ -452,5 +467,77 @@ func TestReportMarkdownNoFailures(t *testing.T) {
 		if !strings.Contains(md, want) {
 			t.Errorf("Markdown missing %q:\n%s", want, md)
 		}
+	}
+}
+
+// TestReportNoResultFailureNotSilent is the item's acceptance test: a
+// failed run with no verification result and no Err (the exact
+// "Result: null, Err: null" shape) must produce a non-empty
+// FailureCategories and a Markdown report that does NOT print
+// "No failures." — and its Result cell must name the not-verified reason.
+func TestReportNoResultFailureNotSilent(t *testing.T) {
+	run := Run{
+		TaskID: "t", Starter: "fixture", Model: "m", Provider: "p", RunNumber: 1,
+		NotVerifiedReason: "no code changes this turn",
+		StartedAt:         goldenTime(0, 0, 0), FinishedAt: goldenTime(0, 1, 0),
+		Turns: 1, Tokens: 100, Cost: 0.001,
+	}
+	rep := BuildReport([]Run{run}, []ModelSpec{{Model: "m", Provider: "p"}}, goldenMeta)
+
+	if len(rep.FailureCategories) == 0 {
+		t.Fatalf("FailureCategories = %v, want non-empty (a run with no verification result and no Err is a failure)", rep.FailureCategories)
+	}
+	if got := rep.FailureCategories["not_verified"]; got != 1 {
+		t.Errorf("FailureCategories[not_verified] = %d, want 1 (got %v)", got, rep.FailureCategories)
+	}
+
+	md := rep.Markdown()
+	if strings.Contains(md, "No failures.") {
+		t.Errorf("Markdown contains %q next to a failed run:\n%s", "No failures.", md)
+	}
+	if !strings.Contains(md, "| not_verified | 1 |") {
+		t.Errorf("Markdown missing the not_verified category row:\n%s", md)
+	}
+	if !strings.Contains(md, "fail: no verification result (no code changes this turn)") {
+		t.Errorf("Markdown missing the reason in the Result cell:\n%s", md)
+	}
+}
+
+// TestReportResultCellNotVerified pins resultCell's no-result branches: a
+// reason is named, and an absent reason (verification disabled — which a
+// benchmark run cannot normally reach) still renders a crisp cell rather
+// than a bare "fail".
+func TestReportResultCellNotVerified(t *testing.T) {
+	withReason := Run{NotVerifiedReason: "verify timed out"}
+	if got, want := resultCell(withReason), "fail: no verification result (verify timed out)"; got != want {
+		t.Errorf("resultCell(with reason) = %q, want %q", got, want)
+	}
+	noReason := Run{}
+	if got, want := resultCell(noReason), "fail: no verification result (reason not recorded)"; got != want {
+		t.Errorf("resultCell(no reason) = %q, want %q", got, want)
+	}
+	if got := resultCell(Run{Err: errors.New("boom")}); got != "error: boom" {
+		t.Errorf("resultCell(err) = %q, want %q (the error outranks the result)", got, "error: boom")
+	}
+	if got := resultCell(Run{Passed: true, Result: goldenBuildPass()}); got != "pass" {
+		t.Errorf("resultCell(passed) = %q, want pass", got)
+	}
+	if got := resultCell(Run{Result: goldenBuildFail()}); got != "fail" {
+		t.Errorf("resultCell(failed result) = %q, want fail", got)
+	}
+}
+
+// TestReasonForMissingResult pins the runner's reason precedence: a
+// timed-out turn is the runner's own knowledge and outranks the agent's
+// reason; otherwise the agent's reason stands.
+func TestReasonForMissingResult(t *testing.T) {
+	if got := reasonForMissingResult(fmt.Errorf("wrap: %w", ErrRunTimeout), "no code changes this turn"); got != "verify timed out" {
+		t.Errorf("timeout reason = %q, want %q", got, "verify timed out")
+	}
+	if got := reasonForMissingResult(nil, "verification setup error"); got != "verification setup error" {
+		t.Errorf("agent reason = %q, want it passed through", got)
+	}
+	if got := reasonForMissingResult(errors.New("some other turn error"), "verification did not run this turn"); got != "verification did not run this turn" {
+		t.Errorf("non-timeout turn error reason = %q, want the agent's reason", got)
 	}
 }

@@ -37,7 +37,7 @@ func (h *readFileHandler) Definition() ToolDefinition {
 				Name:        "view_range",
 				Type:        "array",
 				Required:    false,
-				Description: "Optional line range as [start, end] array (1-based). Use this to read specific sections of large files.",
+				Description: "Optional line range as [start, end] array (1-based). Use this to read specific sections of large files. Aliases accepted for convenience: start_line/end_line, line_start/line_end, offset/limit (offset is a 1-based start line, limit a line count). An explicit view_range takes precedence.",
 				Items:       map[string]any{"type": "integer"},
 			},
 		},
@@ -46,6 +46,14 @@ func (h *readFileHandler) Definition() ToolDefinition {
 }
 
 func (h *readFileHandler) Validate(args map[string]any) error {
+	// Fail fast on genuinely unknown arguments: a model that passes
+	// "start_line" when only "view_range" exists otherwise gets the
+	// whole file back repeatedly with no hint that its argument was
+	// ignored. Accepted aliases are translated rather than rejected.
+	if err := rejectUnknownReadFileArgs(args); err != nil {
+		return err
+	}
+
 	path, err := extractString(args, "path")
 	if err != nil {
 		return err
@@ -55,7 +63,7 @@ func (h *readFileHandler) Validate(args map[string]any) error {
 	}
 
 	// Validate view_range if provided
-	if vr, exists := args["view_range"]; exists && vr != nil {
+	if vr, exists := lookupKey(args, "view_range"); exists && vr != nil {
 		arr, ok := vr.([]any)
 		if !ok {
 			return fmt.Errorf("parameter 'view_range' must be an array")
@@ -83,7 +91,15 @@ func (h *readFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 	// to fail first. Prompt paths fall through to the interactive
 	// dialog.
 
-	path, err := extractString(args, "path")
+	// Reject arguments the handler cannot resolve before doing any work.
+	// This is the path a model hits when it invents an argument name: a
+	// clear error naming the valid ones beats silently reading the whole
+	// file again.
+	if err := rejectUnknownReadFileArgs(args); err != nil {
+		return ToolResult{Output: err.Error(), IsError: true}, err
+	}
+
+	path, err := extractStringAny(args, append([]string{"path"}, readFilePathAliases...)...)
 	if err != nil {
 		return ToolResult{Output: err.Error(), IsError: true}, err
 	}
@@ -108,15 +124,11 @@ func (h *readFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 		}
 	}
 
-	// Parse view_range (defensive — Validate() should have been called,
-	// but we guard against panic if it wasn't or input is malformed)
-	var startLine, endLine int
-	if vr, exists := args["view_range"]; exists && vr != nil {
-		if arr, ok := vr.([]any); ok && len(arr) == 2 {
-			startLine = toIntArg(arr[0])
-			endLine = toIntArg(arr[1])
-		}
-	}
+	// Resolve the effective line range, honouring the documented aliases
+	// (an explicit view_range wins). This must happen before validation of
+	// the read so a `start_line`/`end_line` call reaches the same code path
+	// as `view_range`.
+	startLine, endLine := effectiveReadRange(args)
 
 	// SP-046-2: Record the read for staleness tracking (all code paths, including PDF)
 	// Use a defer so this runs regardless of which branch handles the file.
@@ -155,6 +167,25 @@ func (h *readFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 			Output:  "",
 			IsError: true,
 		}, fmt.Errorf("read file %q: %w", path, err)
+	}
+
+	// Repeat guard: once the read succeeded, an identical call (same path +
+	// same effective range) made a third time this turn returns a short note
+	// instead of the content again. The read still runs so the file's
+	// existence and range validation are unchanged for the first two calls
+	// and for error cases; only the (expensive) content payload is withheld.
+	// The per-turn counter is owned by the agent (ToolEnv.ReadCallGuard).
+	if env.ReadCallGuard != nil {
+		if count := env.ReadCallGuard.ObserveRead(path, startLine, endLine); count >= 3 {
+			note := readRepeatNote(path, startLine, endLine, count)
+			if env.OutputWriter != nil {
+				_, _ = io.WriteString(env.OutputWriter, note)
+			}
+			return ToolResult{
+				Output:     note,
+				TokenUsage: int64(estimateTokenUsage(note)),
+			}, nil
+		}
 	}
 
 	// Write to output writer if available

@@ -96,6 +96,7 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 	var content []byte
 	var truncated bool
 	var headLines, tailLines int
+	var fileTotalLines int
 
 	if startLine > 0 || endLine > 0 {
 		// For line-range reads, just read up to maxFileSize (could be lineRangeMaxSize)
@@ -103,8 +104,12 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 		if err != nil {
 			return "", fmt.Errorf("read file %s: %w", cleanPath, err)
 		}
-		if int64(len(content)) > int64(maxFileSize) {
-			content = content[:maxFileSize]
+		// Truncation when the file is larger than the cap — readAllWithContext
+		// returns at most maxFileSize bytes, so a full-cap read of a bigger
+		// file is indistinguishable from an exact fit by length alone; compare
+		// the on-disk size instead. The size comes from the bounded
+		// statWithTimeout above, so this adds no new hang surface.
+		if info.Size() > int64(maxFileSize) {
 			// Trim to last complete line to avoid mid-line split
 			if idx := bytes.LastIndex(content, []byte("\n")); idx > 0 {
 				content = content[:idx]
@@ -144,6 +149,12 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 		}
 
 		content = []byte(string(head) + "\n\n... [~" + fmt.Sprintf("%d", omittedKB) + "KB omitted] ...\n\n" + string(tail))
+		// Count the file's total lines so the truncation notice can point the
+		// model at the exact view_range covering the omitted middle. This is a
+		// second streaming pass over the file, only on the already-truncated
+		// path (files over the read cap), so the extra cost is bounded and paid
+		// once per truncated read rather than on every read.
+		fileTotalLines = countFileLines(ctx, cleanPath)
 		truncated = true
 	} else {
 		// For smaller files, read all content with context cancellation support
@@ -183,10 +194,15 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 		selectedLines := lines[startLine-1 : endLine]
 		fileContent = strings.Join(selectedLines, "\n")
 
-		// Warn if file was truncated during line range request
+		// Warn if the 2MB line-range read cap cut the file short. The total
+		// line count is genuinely unknown here — the file was truncated at
+		// 2MB, so lines past that point were never read. Say so, and point at
+		// where the readable content ends so the model can narrow its range.
 		if truncated {
-			fileContent = fmt.Sprintf("[WARN] File was truncated to 2MB limit. Requested lines %d-%d, but only %d lines were available in the truncated content. Try a smaller line range to target specific sections.\n\n%s",
-				startLine, endLine, totalLines, fileContent)
+			lastAvailable := totalLines
+			fileContent = fmt.Sprintf("[WARN] File exceeds the 2MB line-range read cap, so the total line count is unavailable and the readable content ends at line %d. Requested lines %d-%d. Read a range within 1-%d, e.g. view_range=[%d, %d], or use a smaller range to target a specific section.\n\n%s",
+				lastAvailable, startLine, endLine, lastAvailable,
+				maxInt(1, lastAvailable-49), lastAvailable, fileContent)
 		}
 
 		// Add line range info to result
@@ -200,12 +216,85 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 		if omittedKB < 1 {
 			omittedKB = 1
 		}
-		fileContent = fmt.Sprintf("[WARN] File truncated — total %d bytes (%dKB). Showing ~%dKB: first %d lines and last %d lines, ~%dKB omitted. Use view_range parameter to read specific line ranges, e.g. view_range=[1,50]",
-			info.Size(), info.Size()/1024+1, shownKB, headLines, tailLines, omittedKB)
+		notice := ""
+		if fileTotalLines > 0 {
+			notice = fmt.Sprintf("[WARN] File truncated — total %d lines (%d bytes, %dKB). Showing ~%dKB: first %d lines and last %d lines, ~%dKB omitted.",
+				fileTotalLines, info.Size(), info.Size()/1024+1, shownKB, headLines, tailLines, omittedKB)
+			firstOmitted := headLines + 1
+			lastOmitted := fileTotalLines - tailLines
+			// Clamp for pathological cases (a file only marginally over the cap
+			// can have the head and tail chunks overlap once the line counts
+			// are compared, e.g. lastOmitted < firstOmitted).
+			if lastOmitted < firstOmitted {
+				lastOmitted = firstOmitted
+			}
+			// Point at the exact view_range covering the omitted middle.
+			notice += fmt.Sprintf(" Use view_range parameter to read the omitted part, e.g. view_range=[%d, %d] for lines %d-%d, or a smaller sub-range of it.",
+				firstOmitted, lastOmitted, firstOmitted, lastOmitted)
+		} else {
+			notice = fmt.Sprintf("[WARN] File truncated — total %d bytes (%dKB). Showing ~%dKB: first %d lines and last %d lines, ~%dKB omitted.",
+				info.Size(), info.Size()/1024+1, shownKB, headLines, tailLines, omittedKB)
+			notice += " Use view_range parameter to read specific line ranges, e.g. view_range=[1,50]."
+		}
+		fileContent = notice
 		fileContent += "\n" + string(content)
 	}
 
 	return fileContent, nil
+}
+
+// maxInt returns the larger of a and b.
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+// countFileLines streams the file and counts '\n' bytes, returning the line
+// count as strings.Split(content, "\n") would: nl_total + 1 for a non-empty
+// file, 0 for an empty file. This intentionally matches the reader's own line
+// indexing (strings.Split) so the truncation notice's suggested view_range
+// lands on the exact omitted middle. A read error returns 0 (the notice then
+// falls back to generic guidance rather than blocking the read).
+func countFileLines(ctx context.Context, path string) int {
+	type countResult struct {
+		n   int
+		err error
+	}
+	resultCh := make(chan countResult, 1)
+	go func() {
+		file, err := os.Open(path)
+		if err != nil {
+			resultCh <- countResult{0, err}
+			return
+		}
+		defer func() { _ = file.Close() }()
+		buf := make([]byte, 64*1024)
+		lines := 0
+		anyBytes := false
+		for {
+			n, err := file.Read(buf)
+			if n > 0 {
+				anyBytes = true
+				lines += bytes.Count(buf[:n], []byte("\n"))
+			}
+			if err != nil {
+				break
+			}
+		}
+		if anyBytes {
+			lines++
+		}
+		resultCh <- countResult{lines, nil}
+	}()
+
+	select {
+	case res := <-resultCh:
+		return res.n
+	case <-ctx.Done():
+		return 0
+	}
 }
 
 // isNonTextFileExtension checks if the file extension indicates a non-text file

@@ -3,7 +3,6 @@ package verify
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -241,7 +240,7 @@ func firstFewMessages(messages []string) string {
 
 // routeURL resolves a manifest route entry to an absolute URL. Absolute
 // http(s) URLs are used as-is; anything else is joined onto the dev server's
-// base URL (http://127.0.0.1:<port>).
+// base URL (devServerURL).
 func routeURL(port int, route string) string {
 	if strings.HasPrefix(route, "http://") || strings.HasPrefix(route, "https://") {
 		return route
@@ -249,7 +248,7 @@ func routeURL(port int, route string) string {
 	if !strings.HasPrefix(route, "/") {
 		route = "/" + route
 	}
-	return fmt.Sprintf("http://127.0.0.1:%d%s", port, route)
+	return devServerURL(port, route)
 }
 
 // routeSlug turns a route path into a screenshot file stem: non-alphanumeric

@@ -32,7 +32,6 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
-	"github.com/sprout-foundry/sprout/pkg/factory"
 	"github.com/sprout-foundry/sprout/pkg/planstore"
 	"github.com/sprout-foundry/sprout/pkg/starters"
 	"github.com/sprout-foundry/sprout/pkg/verify"
@@ -111,6 +110,16 @@ type Run struct {
 	// disabled, the turn changed no code, a setup error before the turn,
 	// or a verify runner setup error).
 	Result *verify.Result
+	// NotVerifiedReason states WHY a failed run has no verification
+	// result (set only when Result is nil): "no code changes this turn"
+	// (the hook's change gate stayed closed), "verification setup error"
+	// (the hook entered but its runner failed to set up), "verification
+	// did not run this turn" (the hook still did not run), or "verify
+	// timed out" (the run's turn exceeded Runner.Timeout). Empty when
+	// Result is non-nil, and also when verification was disabled — which
+	// a benchmark run forces on, so an empty reason on a nil result
+	// means there is nothing honest to record beyond the category.
+	NotVerifiedReason string
 	// Err is a run-level failure (fresh-copy setup, plan write, agent
 	// build, or the agent turn itself). Non-nil means the run did not
 	// complete cleanly; such a run is never Passed.
@@ -198,6 +207,17 @@ type Runner struct {
 	// ErrRunTimeout in Run.Err — never Passed. 0 (or negative) →
 	// defaultTaskTimeout (10m). Each run carries its own timer.
 	Timeout time.Duration
+	// KeepRuns is the evidence policy: which runs leave their failed
+	// working-copy diff, agent transcript and verification output under
+	// EvidenceDir. "" resolves to KeepRunsFailed — the default, so a run
+	// never silently discards the evidence a failure needs.
+	KeepRuns KeepRuns
+	// EvidenceDir is the root directory the per-run evidence lands under
+	// (EvidenceDir/runs/<task>-<model>-<n>/). "" → no evidence is kept,
+	// regardless of KeepRuns: a runner with no evidence root has nowhere
+	// to write the evidence. Evidence writing is best-effort — a
+	// failure to write never changes a run's verdict.
+	EvidenceDir string
 }
 
 // RunTask runs task's request with one model (spec) RunsPerTask times —
@@ -353,6 +373,13 @@ func (r *Runner) runOnce(task *Task, spec ModelSpec, runNumber int) Run {
 		}
 	}
 
+	// Take a git baseline of the copy's starting state before the agent's
+	// turn, so the backstop below can ask git — independently of the
+	// change tracker — what the turn changed. Best-effort: a copy with no
+	// git (or a git failure) leaves baselineReady false and the backstop
+	// inert; the run still proceeds and the hook still verifies.
+	baselineReady := initGitBaseline(dir)
+
 	if err := r.configureRun(spec); err != nil {
 		return fail(fmt.Errorf("benchmark: configure run for task %s run %d: %w", task.ID, runNumber, err))
 	}
@@ -365,6 +392,15 @@ func (r *Runner) runOnce(task *Task, spec ModelSpec, runNumber int) Run {
 		return fail(fmt.Errorf("benchmark: build agent for task %s run %d: %w", task.ID, runNumber, err))
 	}
 	defer ag.Shutdown()
+
+	// The run's non-interactive posture: no approval surface exists in a
+	// headless run, so the run opts into the narrow --unsafe-shell posture —
+	// otherwise a shell command the classifier escalates to a CAUTION-tier
+	// prompt is denied (nobody to ask) and the model's edit never lands
+	// (the copy stays unchanged and the run is scored on work that never
+	// happened). Only CAUTION-tier shell prompts are lifted; DANGEROUS
+	// commands and hard blocks stay enforced.
+	applyRunSecurityPosture(ag)
 
 	// The language-guard delta is a diff of the process-wide per-model
 	// metric: snapshot the run's model's stat before the
@@ -383,9 +419,25 @@ func (r *Runner) runOnce(task *Task, spec ModelSpec, runNumber int) Run {
 	// run. The reply is never read for scoring — pass/fail comes only
 	// from the verification result the turn-end hook stored on the agent.
 	turnErr := r.runTurnWithTimeout(ag, task, runNumber)
+
+	// Backstop: the turn-end hook gates on the turn's change window. When
+	// that window stayed closed but git shows the copy changed application
+	// code, force verification so the run still produces the verdict the
+	// window's gap would have erased. No-op when the hook already ran or
+	// the copy did not change.
+	r.runVerificationBackstop(context.Background(), ag, dir, baselineReady)
+
 	res := ag.LastVerificationResult()
 	run.Result = res
 	run.Passed = res != nil && res.Passed()
+	if res == nil {
+		// A run with no verification result must never read as a silent
+		// failure: record why there is no result. A timed-out turn is
+		// known directly from the turn error; otherwise the agent's
+		// not-verified reason states it (no code changes, a setup error,
+		// or the hook did not run).
+		run.NotVerifiedReason = reasonForMissingResult(turnErr, ag.NotVerifiedReason())
+	}
 	if turnErr != nil {
 		// An errored run is never Passed, even if a result was stored
 		// (kept on the record as evidence).
@@ -417,80 +469,29 @@ func (r *Runner) runOnce(task *Task, spec ModelSpec, runNumber int) Run {
 	run.LangChecks = langAfter.Checks - langBefore.Checks
 	run.LangMismatches = langAfter.Mismatches - langBefore.Mismatches
 
+	// Evidence for the run is captured here — after the turn and before
+	// the copy is removed by this function's defer — from the live copy
+	// (the diff against the baseline), the agent's transcript and the
+	// run's verification outcome. Best-effort: the policy decides which
+	// runs keep evidence, and a failure to write it is logged and
+	// swallowed so it can never change the run's verdict.
+	captureRunEvidence(r, task, spec, runNumber, dir, ag, &run)
+
 	run.FinishedAt = time.Now()
 	return run
 }
 
-// configureRun applies the run's requirements to the runner's
-// ConfigManager: verification forced on — the
-// benchmark's pass/fail source must run for every run — and the spec's
-// model/provider where set. The manager's other verification settings
-// (the repair-attempt limit, the explicit build/test commands)
-// are preserved, and an empty spec field leaves the manager's
-// current value: the spec narrows, it never clears. A nil ConfigManager
-// skips the step (a custom AgentFactory owns the run's configuration
-// entirely).
-func (r *Runner) configureRun(spec ModelSpec) error {
-	if r.ConfigManager == nil {
-		return nil
+// reasonForMissingResult states why a failed run has no verification
+// result, for the report to record instead of a silent failure. A
+// timed-out turn is the runner's own knowledge (Run.Err wraps
+// ErrRunTimeout) and outranks the agent's reason; otherwise the agent's
+// not-verified reason stands (it may be empty — verification disabled,
+// which a benchmark run forces on). Either way the report's failure
+// categories still count the run, so "No failures." can never sit next
+// to a failed run.
+func reasonForMissingResult(turnErr error, agentReason string) string {
+	if errors.Is(turnErr, ErrRunTimeout) {
+		return "verify timed out"
 	}
-	return r.ConfigManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
-		if cfg.Verification == nil {
-			cfg.Verification = &configuration.VerificationConfig{}
-		}
-		cfg.Verification.Enabled = true
-		if spec.Provider != "" {
-			cfg.LastUsedProvider = spec.Provider
-		}
-		if spec.Model != "" {
-			provider := spec.Provider
-			if provider == "" {
-				provider = cfg.LastUsedProvider
-			}
-			if provider != "" {
-				cfg.SetModelForProvider(provider, spec.Model)
-			}
-		}
-		return nil
-	})
-}
-
-// defaultAgentFactory builds the headless agent for a run from the
-// runner's ConfigManager (the run is already configured: verification
-// enabled, the spec's model/provider in place). It mirrors the production
-// SDK path (cmd/wasm): a real provider client from pkg/factory plus
-// agent.NewAgentWithClient with the runner's config manager — so the
-// agent sees exactly the run's configuration — with the workspace root
-// pinned to the run's fresh copy.
-func (r *Runner) defaultAgentFactory(runDir string, spec ModelSpec) (*agent.Agent, error) {
-	if r.ConfigManager == nil {
-		return nil, errors.New("benchmark: the default agent factory needs a ConfigManager to target the run's model and provider (set Runner.ConfigManager or supply an AgentFactory)")
-	}
-	provider, err := r.ConfigManager.GetProvider()
-	if err != nil {
-		return nil, fmt.Errorf("benchmark: resolve the run's provider: %w (set ModelSpec.Provider or select a provider in the run's configuration)", err)
-	}
-	model := spec.Model
-	if model == "" {
-		model = r.ConfigManager.GetModelForProvider(provider)
-	}
-	client, err := factory.CreateProviderClient(provider, model)
-	if err != nil {
-		return nil, fmt.Errorf("benchmark: create client for provider %q model %q: %w", provider, model, err)
-	}
-	ag, err := agent.NewAgentWithClient(client, provider, r.ConfigManager)
-	if err != nil {
-		return nil, fmt.Errorf("benchmark: build the headless agent: %w", err)
-	}
-	ag.SetWorkspaceRoot(runDir)
-	return ag, nil
-}
-
-// runsPerTask is the effective runs-per-model count:
-// RunsPerTask where positive, defaultRunsPerTask (3) otherwise.
-func (r *Runner) runsPerTask() int {
-	if r != nil && r.RunsPerTask > 0 {
-		return r.RunsPerTask
-	}
-	return defaultRunsPerTask
+	return agentReason
 }

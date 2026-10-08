@@ -1,6 +1,6 @@
 # SP-154 — Agent Task Benchmark
 
-> **Status (2026-10-07):** Partially shipped — runner, `sprout benchmark`, verification-only pass/fail and the report ship; tasks for the first reference starter (needs SP-153 starters) and a demonstrated two-model run remain.
+> **Status (2026-10-08):** Partially shipped — runner, `sprout benchmark`, verification-only pass/fail, the report with failure reasons and kept evidence, and five frozen-plan tasks per reference starter ship; a demonstrated run comparing two models end to end remains (needs API keys and spend).
 > Depends on SP-148 (plans), SP-149 (verification as the pass
 > criterion), SP-153 (starters). Feeds SP-153c stack skills and model
 > recommendations in the provider catalog.

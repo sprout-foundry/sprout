@@ -12,6 +12,66 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/verify"
 )
 
+// markTurnVerificationSetupError records that this turn's verification
+// run hit a runner setup error and stored nothing. Guarded by
+// turnVerificationMu (the per-agent lock over the per-turn verification
+// state), so consumers reading it through NotVerifiedReason never race
+// the hook that writes it.
+func (a *Agent) markTurnVerificationSetupError() {
+	a.turnVerificationMu.Lock()
+	defer a.turnVerificationMu.Unlock()
+	a.turnVerificationSetupErr = true
+}
+
+// NotVerifiedReason states why the agent's current turn has no
+// verification result (Agent.LastVerificationResult == nil), reusing the
+// same reasons the turn-completion event carries
+// (progress_complete.not_verified_reason). It is the accessor consumers
+// outside pkg/agent use — the benchmark report records it on a run whose
+// verification never produced a result, so a failed run always carries
+// the reason instead of reading as a silent failure.
+//
+// The values are:
+//
+//   - "" — verification is disabled for this agent (no configuration
+//     manager, or the configuration does not enable verification);
+//   - "no code changes this turn" — verification is enabled but the turn
+//     changed no application code (the hook's change gate);
+//   - "verification setup error" — the turn changed application code and
+//     the hook entered, but its verify runner hit a setup error and
+//     stored nothing;
+//   - "verification did not run this turn" — verification is enabled and
+//     code changed, but the hook still did not run (a subagent turn, or
+//     the reason was not otherwise recorded).
+func (a *Agent) NotVerifiedReason() string {
+	if a == nil {
+		return ""
+	}
+	cfgEnabled := a.configManager != nil && a.configManager.GetConfig() != nil &&
+		a.configManager.GetConfig().VerificationEnabled()
+	a.turnVerificationMu.Lock()
+	setupErr := a.turnVerificationSetupErr
+	a.turnVerificationMu.Unlock()
+	return notVerifiedReasonFor(cfgEnabled, len(a.TurnChangedApplicationPaths()) > 0, setupErr)
+}
+
+// notVerifiedReasonFor is the pure reason decision shared by the event
+// builder (notVerifiedReason) and the exported accessor
+// (NotVerifiedReason): the same string the turn's progress_complete
+// event carries is the string the benchmark report records.
+func notVerifiedReasonFor(verificationEnabled, codeChanged, setupError bool) string {
+	if !verificationEnabled {
+		return ""
+	}
+	if setupError {
+		return "verification setup error"
+	}
+	if !codeChanged {
+		return "no code changes this turn"
+	}
+	return "verification did not run this turn"
+}
+
 // TurnVerification is one turn's end-verification state
 // for consumers outside pkg/agent (the benchmark
 // metrics, and the verification event later): the run's

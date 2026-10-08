@@ -37,6 +37,31 @@ func extractString(args map[string]any, key string) (string, error) {
 	return s, nil
 }
 
+// extractStringAny returns the first non-empty string found under any of
+// keys (case-insensitively), so a caller can accept documented aliases for a
+// parameter. Falls back to the canonical error naming the first key when
+// none is present.
+func extractStringAny(args map[string]any, keys ...string) (string, error) {
+	for _, key := range keys {
+		val, exists := lookupKey(args, key)
+		if !exists || val == nil {
+			continue
+		}
+		s, ok := val.(string)
+		if !ok {
+			return "", fmt.Errorf("parameter '%s' must be a string, got %T", key, val)
+		}
+		if strings.TrimSpace(s) == "" {
+			continue
+		}
+		return s, nil
+	}
+	if len(keys) == 0 {
+		return "", fmt.Errorf("parameter 'path' is required")
+	}
+	return "", fmt.Errorf("parameter '%s' is required", keys[0])
+}
+
 // extractInt extracts an integer value from args map.
 // Returns 0, nil if the key is missing (for optional parameters).
 func extractInt(args map[string]any, key string) (int, error) {

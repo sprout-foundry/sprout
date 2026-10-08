@@ -285,6 +285,9 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 		// Interactive off-workspace approval: handlers consult this for
 		// "prompt" verdicts instead of failing with the raw error.
 		env.FileAccessPrompter = agent
+		// Per-turn identical-call guard so a repeated read_file returns a
+		// short note instead of the same content again.
+		env.ReadCallGuard = agent
 		env.PrimaryAcceptsImages = func() bool {
 			c := agent.getClient()
 			return c != nil && api.ResolveVisionCapability(c).AcceptsImages

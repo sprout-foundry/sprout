@@ -60,7 +60,7 @@ the model, lost the result.
 
 ## Tool robustness
 
-- [ ] **tool.1** `read_file` range requests that miss: a coordinator called
+- [x] **tool.1** `read_file` range requests that miss: a coordinator called
       `read_file` on a ~1000-line `TODO.md` 14 times in a row, each time
       getting the same middle-truncated output while asking for "lines
       615-680", until it fell back to `sed -n`. The tool takes the range as

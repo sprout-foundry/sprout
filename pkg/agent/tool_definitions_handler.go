@@ -217,6 +217,9 @@ func buildToolEnvFromAgent(agent *Agent) tools.ToolEnv {
 	// "prompt" verdicts (WebUI dialog via handleFileSecurityError when a
 	// browser client is connected, CLI prompt otherwise).
 	env.FileAccessPrompter = agent
+	// Per-turn identical-call guard so a repeated read_file returns a
+	// short note instead of the same content again.
+	env.ReadCallGuard = agent
 	// Propagate Gate 1's auto-approve decision so handler-level gates
 	// (Gate 2) skip their interactive prompt, matching Gate 1. Covers
 	// both --unsafe mode and elevated risk profiles; hard blocks are

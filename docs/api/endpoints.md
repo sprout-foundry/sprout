@@ -320,6 +320,7 @@ Notes:
 | GET, POST | `/api/automate/sessions/` | handleAPIAutomateSessionsAll | daemon |
 | GET | `/api/automate/workflows` | handleAPIAutomateWorkflows | daemon |
 | GET | `/api/bootstrap` | handleAPIBootstrap | daemon |
+| GET | `/api/file-index` | fileIndex | daemon, in-browser WASM agent |
 | POST | `/api/open-in-file-browser` | openInFileBrowser | daemon, browser-local |
 | POST | `/api/preview/restart` | handleAPIPreviewRestart | daemon |
 | POST | `/api/preview/start` | handleAPIPreviewStart | daemon |

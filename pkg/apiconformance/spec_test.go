@@ -33,7 +33,7 @@ func TestNewValidatorRealSpec(t *testing.T) {
 }
 
 // TestLoadSpecRealContract locks the loader against the committed contract: it
-// must parse 164 operations and 13 families, the contract version, the shared
+// must parse 165 operations and 13 families, the contract version, the shared
 // ErrorModel, and the two schema-backed operations with their inline object
 // schemas.
 func TestLoadSpecRealContract(t *testing.T) {
@@ -43,8 +43,8 @@ func TestLoadSpecRealContract(t *testing.T) {
 		t.Fatalf("LoadSpec on the committed contract: %v", err)
 	}
 
-	if n := len(spec.Operations); n != 164 {
-		t.Errorf("operations = %d, want 164", n)
+	if n := len(spec.Operations); n != 165 {
+		t.Errorf("operations = %d, want 165", n)
 	}
 	if got := len(spec.Families()); got != 13 {
 		t.Errorf("families = %d, want 13: %v", got, spec.Families())

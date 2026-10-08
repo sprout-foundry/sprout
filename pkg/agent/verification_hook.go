@@ -150,6 +150,7 @@ func (a *Agent) runTurnEndVerification(qc *queryRunContext, finalResult string) 
 		res, err := runner.RunSnapshot(qc.runCtx, a.GetWorkspaceRoot(), snap)
 		if err != nil {
 			a.Logger().Debug("turn-end verification setup error: %v\n", err)
+			a.markTurnVerificationSetupError()
 			return finalResult, nil
 		}
 		// Stored on every run (pass, fail, stop-rule): the result, the
@@ -293,6 +294,7 @@ func (a *Agent) resetTurnVerification() {
 	defer a.turnVerificationMu.Unlock()
 	a.turnVerification = turnVerification{}
 	a.turnVerifySnapshot = nil
+	a.turnVerificationSetupErr = false
 }
 
 // setTurnVerifySnapshot stores the turn's frozen verification input:

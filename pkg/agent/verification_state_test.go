@@ -135,3 +135,89 @@ func TestLastTurnVerification_PassingTurnStoresZeroRounds(t *testing.T) {
 		t.Errorf("stored Rounds = %d, want 0 (a passing run needs no repair)", tv.Rounds)
 	}
 }
+
+// TestNotVerifiedReason_ExportedAccessor pins the exported
+// Agent.NotVerifiedReason accessor: it reports the same reason as the
+// unexported event builder for every branch (nil receiver, disabled
+// verification, enabled with no code change, enabled with a code
+// change), so a consumer outside pkg/agent — the benchmark report —
+// records exactly what the turn-completion event says.
+func TestNotVerifiedReason_ExportedAccessor(t *testing.T) {
+	var nilAgent *Agent
+	if got := nilAgent.NotVerifiedReason(); got != "" {
+		t.Errorf("nil receiver = %q, want \"\" (no config, verification disabled)", got)
+	}
+
+	// No configuration manager: verification disabled.
+	if got := NewTestAgent().NotVerifiedReason(); got != "" {
+		t.Errorf("no config manager = %q, want \"\"", got)
+	}
+
+	// Verification enabled, no code change.
+	mgrEnabled, cleanupEnabled := configuration.NewTestManager(t)
+	t.Cleanup(cleanupEnabled)
+	if err := mgrEnabled.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		cfg.Verification = &configuration.VerificationConfig{Enabled: true}
+		return nil
+	}); err != nil {
+		t.Fatalf("configure verification: %v", err)
+	}
+	agNoChanges := NewTestAgentWithConfigManager(mgrEnabled)
+	if got := agNoChanges.NotVerifiedReason(); got != "no code changes this turn" {
+		t.Errorf("enabled + no change = %q, want %q", got, "no code changes this turn")
+	}
+
+	// Verification enabled and the turn changed code, no setup error: the
+	// hook still did not run.
+	tracker := NewChangeTracker(nil, "nvr-exported")
+	tracker.MarkTurnStart()
+	if err := tracker.TrackFileWriteState("/ws/app.go", "old", "new", true); err != nil {
+		t.Fatalf("TrackFileWriteState: %v", err)
+	}
+	agChanged := NewTestAgentWithConfigManager(mgrEnabled)
+	agChanged.changeTracker = tracker
+	if got := agChanged.NotVerifiedReason(); got != "verification did not run this turn" {
+		t.Errorf("enabled + change = %q, want %q", got, "verification did not run this turn")
+	}
+
+	// The exported accessor and the event builder agree.
+	if got, want := agChanged.NotVerifiedReason(), agChanged.notVerifiedReason(); got != want {
+		t.Errorf("NotVerifiedReason = %q, notVerifiedReason = %q (must agree)", got, want)
+	}
+}
+
+// TestNotVerifiedReason_SetupErrorBranch pins that a hook setup error is
+// distinguishable from "no code changes": with verification enabled and
+// the turn window empty, the marker flips the reason from the no-code
+// branch to "verification setup error" — the hook entered and failed to
+// set up, which is a different remedy than "write code".
+func TestNotVerifiedReason_SetupErrorBranch(t *testing.T) {
+	mgr, cleanup := configuration.NewTestManager(t)
+	t.Cleanup(cleanup)
+	if err := mgr.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		cfg.Verification = &configuration.VerificationConfig{Enabled: true}
+		return nil
+	}); err != nil {
+		t.Fatalf("configure verification: %v", err)
+	}
+
+	ag := NewTestAgentWithConfigManager(mgr)
+	if got := ag.NotVerifiedReason(); got != "no code changes this turn" {
+		t.Fatalf("before the marker = %q, want %q", got, "no code changes this turn")
+	}
+
+	ag.markTurnVerificationSetupError()
+	if got := ag.NotVerifiedReason(); got != "verification setup error" {
+		t.Errorf("after setup error = %q, want %q", got, "verification setup error")
+	}
+	if got := ag.notVerifiedReason(); got != "verification setup error" {
+		t.Errorf("event builder after setup error = %q, want %q", got, "verification setup error")
+	}
+
+	// A turn start clears the marker with the rest of the per-turn state,
+	// so a stale setup error never attaches to a later turn.
+	ag.resetTurnVerification()
+	if got := ag.NotVerifiedReason(); got != "no code changes this turn" {
+		t.Errorf("after turn reset = %q, want %q (the marker is per-turn)", got, "no code changes this turn")
+	}
+}

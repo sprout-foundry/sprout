@@ -295,6 +295,15 @@ type Agent struct {
 	// error).
 	turnVerificationMu sync.Mutex
 	turnVerification   turnVerification
+	// turnVerificationSetupErr records that this agent's turn-end
+	// verification hook entered but its verify runner hit a setup error
+	// and stored nothing — the only way a consumer can tell a setup error
+	// from the hook's other no-op gates (no code change, a subagent turn,
+	// verification disabled), all of which mean the hook never entered.
+	// It is per-agent (stored under turnVerificationMu) so two agents
+	// never bleed state, and cleared at each turn's start
+	// (resetTurnVerification) alongside the rest of the per-turn state.
+	turnVerificationSetupErr bool
 	// turnVerifySnapshot is the frozen verification input captured once at
 	// the turn's start: the starter manifest's commands and
 	// the plan's acceptance that every verification run of the turn

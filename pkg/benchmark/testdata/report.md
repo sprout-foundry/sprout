@@ -1,13 +1,13 @@
 # Agent benchmark — 2026-10-04 (sprout v0.0.0-golden)
 
-Models: prov-a/alpha, prov-b/beta (3 runs per task)
+Models: prov-a/alpha, prov-b/beta (4 runs per task)
 
 ## Pass rate per starter per model
 
 | Starter | Model | Tasks | Runs | Passed | Pass rate |
 |---|---|---|---|---|---|
 | fixture | prov-a/alpha | 2 | 6 | 3 | 3/6 (50%) |
-| fixture | prov-b/beta | 2 | 6 | 2 | 2/6 (33%) |
+| fixture | prov-b/beta | 2 | 7 | 2 | 2/7 (29%) |
 
 ## Failure categories
 
@@ -16,6 +16,7 @@ Models: prov-a/alpha, prov-b/beta (3 runs per task)
 | build | 4 |
 | error | 1 |
 | interaction | 1 |
+| not_verified | 1 |
 | page | 1 |
 | stopped_by_rule | 1 |
 | test | 1 |
@@ -52,5 +53,6 @@ Models: prov-a/alpha, prov-b/beta (3 runs per task)
 |---|---|---|---|---|---|---|
 | 1 | fail | 1 | 480 | $0.0029 | 0 | 3.3s |
 | 2 | fail | 1 | 495 | $0.0030 | 0 | 4.9s |
-| 3 | fail | 1 | 510 | $0.0032 | 0 | 5.2s |
+| 3 | fail: no verification result (no code changes this turn) | 1 | 510 | $0.0032 | 0 | 5.2s |
+| 4 | fail | 1 | 505 | $0.0031 | 0 | 5.4s |
 

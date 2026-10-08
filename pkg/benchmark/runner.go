@@ -110,6 +110,16 @@ type Run struct {
 	// disabled, the turn changed no code, a setup error before the turn,
 	// or a verify runner setup error).
 	Result *verify.Result
+	// NotVerifiedReason states WHY a failed run has no verification
+	// result (set only when Result is nil): "no code changes this turn"
+	// (the hook's change gate stayed closed), "verification setup error"
+	// (the hook entered but its runner failed to set up), "verification
+	// did not run this turn" (the hook still did not run), or "verify
+	// timed out" (the run's turn exceeded Runner.Timeout). Empty when
+	// Result is non-nil, and also when verification was disabled — which
+	// a benchmark run forces on, so an empty reason on a nil result
+	// means there is nothing honest to record beyond the category.
+	NotVerifiedReason string
 	// Err is a run-level failure (fresh-copy setup, plan write, agent
 	// build, or the agent turn itself). Non-nil means the run did not
 	// complete cleanly; such a run is never Passed.
@@ -409,6 +419,14 @@ func (r *Runner) runOnce(task *Task, spec ModelSpec, runNumber int) Run {
 	res := ag.LastVerificationResult()
 	run.Result = res
 	run.Passed = res != nil && res.Passed()
+	if res == nil {
+		// A run with no verification result must never read as a silent
+		// failure: record why there is no result. A timed-out turn is
+		// known directly from the turn error; otherwise the agent's
+		// not-verified reason states it (no code changes, a setup error,
+		// or the hook did not run).
+		run.NotVerifiedReason = reasonForMissingResult(turnErr, ag.NotVerifiedReason())
+	}
 	if turnErr != nil {
 		// An errored run is never Passed, even if a result was stored
 		// (kept on the record as evidence).
@@ -442,4 +460,19 @@ func (r *Runner) runOnce(task *Task, spec ModelSpec, runNumber int) Run {
 
 	run.FinishedAt = time.Now()
 	return run
+}
+
+// reasonForMissingResult states why a failed run has no verification
+// result, for the report to record instead of a silent failure. A
+// timed-out turn is the runner's own knowledge (Run.Err wraps
+// ErrRunTimeout) and outranks the agent's reason; otherwise the agent's
+// not-verified reason stands (it may be empty — verification disabled,
+// which a benchmark run forces on). Either way the report's failure
+// categories still count the run, so "No failures." can never sit next
+// to a failed run.
+func reasonForMissingResult(turnErr error, agentReason string) string {
+	if errors.Is(turnErr, ErrRunTimeout) {
+		return "verify timed out"
+	}
+	return agentReason
 }

@@ -126,6 +126,15 @@ func TestRunnerTimeout_StopsHungTurnAndRecordsFailed(t *testing.T) {
 	if !strings.Contains(run.Err.Error(), "timed out") {
 		t.Errorf("Err = %v, want a message that explains the timeout", run.Err)
 	}
+	// The run records WHY it has no verification result: a timed-out turn
+	// is the runner's own knowledge and gets its own reason, not a silent
+	// fail.
+	if run.Result != nil {
+		t.Errorf("Result = %+v, want nil (a timed-out turn stored no verification result)", run.Result)
+	}
+	if run.NotVerifiedReason != "verify timed out" {
+		t.Errorf("NotVerifiedReason = %q, want %q", run.NotVerifiedReason, "verify timed out")
+	}
 	assertWallTime(t, run)
 }
 

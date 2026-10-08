@@ -37,6 +37,7 @@
               }
             ]
           },
+          "NotVerifiedReason": "",
           "Err": null,
           "StartedAt": "2026-10-04T08:00:00Z",
           "FinishedAt": "2026-10-04T08:00:01.234Z",
@@ -77,6 +78,7 @@
               }
             ]
           },
+          "NotVerifiedReason": "",
           "Err": null,
           "StartedAt": "2026-10-04T08:00:05Z",
           "FinishedAt": "2026-10-04T08:00:07.5Z",
@@ -107,6 +109,7 @@
               }
             ]
           },
+          "NotVerifiedReason": "",
           "Err": null,
           "StartedAt": "2026-10-04T08:00:10Z",
           "FinishedAt": "2026-10-04T08:00:12.015Z",
@@ -152,6 +155,7 @@
               }
             ]
           },
+          "NotVerifiedReason": "",
           "Err": null,
           "StartedAt": "2026-10-04T08:02:00Z",
           "FinishedAt": "2026-10-04T08:02:05.6Z",
@@ -190,6 +194,7 @@
               }
             ]
           },
+          "NotVerifiedReason": "",
           "Err": null,
           "StartedAt": "2026-10-04T08:02:10Z",
           "FinishedAt": "2026-10-04T08:02:16.1Z",
@@ -211,6 +216,7 @@
           "RunNumber": 3,
           "Passed": false,
           "Result": null,
+          "NotVerifiedReason": "",
           "Err": {},
           "StartedAt": "2026-10-04T08:02:20Z",
           "FinishedAt": "2026-10-04T08:02:20.5Z",
@@ -251,6 +257,7 @@
               }
             ]
           },
+          "NotVerifiedReason": "",
           "Err": null,
           "StartedAt": "2026-10-04T08:01:00Z",
           "FinishedAt": "2026-10-04T08:01:02.05Z",
@@ -281,6 +288,7 @@
               }
             ]
           },
+          "NotVerifiedReason": "",
           "Err": null,
           "StartedAt": "2026-10-04T08:01:05Z",
           "FinishedAt": "2026-10-04T08:01:08.075Z",
@@ -311,6 +319,7 @@
               }
             ]
           },
+          "NotVerifiedReason": "",
           "Err": null,
           "StartedAt": "2026-10-04T08:01:10Z",
           "FinishedAt": "2026-10-04T08:01:14.4Z",
@@ -353,6 +362,7 @@
               }
             ]
           },
+          "NotVerifiedReason": "",
           "Err": null,
           "StartedAt": "2026-10-04T08:03:00Z",
           "FinishedAt": "2026-10-04T08:03:03.3Z",
@@ -388,6 +398,7 @@
               }
             ]
           },
+          "NotVerifiedReason": "",
           "Err": null,
           "StartedAt": "2026-10-04T08:03:05Z",
           "FinishedAt": "2026-10-04T08:03:09.9Z",
@@ -408,6 +419,28 @@
           "Provider": "prov-b",
           "RunNumber": 3,
           "Passed": false,
+          "Result": null,
+          "NotVerifiedReason": "no code changes this turn",
+          "Err": null,
+          "StartedAt": "2026-10-04T08:03:10Z",
+          "FinishedAt": "2026-10-04T08:03:15.2Z",
+          "Turns": 1,
+          "RepairRounds": 0,
+          "RepairAttempts": null,
+          "RepairLimit": 0,
+          "Tokens": 510,
+          "Cost": 0.0032,
+          "LangChecks": 0,
+          "LangMismatches": 0,
+          "RoleUsage": null
+        },
+        {
+          "TaskID": "dark-mode",
+          "Starter": "fixture",
+          "Model": "beta",
+          "Provider": "prov-b",
+          "RunNumber": 4,
+          "Passed": false,
           "Result": {
             "plan_revision": 1,
             "checks": [
@@ -418,15 +451,16 @@
               }
             ]
           },
+          "NotVerifiedReason": "",
           "Err": null,
-          "StartedAt": "2026-10-04T08:03:10Z",
-          "FinishedAt": "2026-10-04T08:03:15.2Z",
+          "StartedAt": "2026-10-04T08:03:20Z",
+          "FinishedAt": "2026-10-04T08:03:25.4Z",
           "Turns": 1,
           "RepairRounds": 0,
           "RepairAttempts": null,
           "RepairLimit": 0,
-          "Tokens": 510,
-          "Cost": 0.0032,
+          "Tokens": 505,
+          "Cost": 0.0031,
           "LangChecks": 0,
           "LangMismatches": 0,
           "RoleUsage": null
@@ -451,15 +485,16 @@
       "Model": "beta",
       "Provider": "prov-b",
       "Tasks": 2,
-      "RunsTotal": 6,
+      "RunsTotal": 7,
       "Passed": 2,
-      "PassRate": 0.3333333333333333
+      "PassRate": 0.2857142857142857
     }
   ],
   "failure_categories": {
     "build": 4,
     "error": 1,
     "interaction": 1,
+    "not_verified": 1,
     "page": 1,
     "stopped_by_rule": 1,
     "test": 1

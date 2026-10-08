@@ -29,6 +29,35 @@
       Vitest for the URL builder (prefill, no sensitive fields, length cap)
       and the button; Go test for `sprout bug`'s URL.
 
+## Workers deploys with data bindings
+
+- [ ] **prov.1** `sprout deploy` to Cloudflare Workers must bring the
+      project's declared bindings with it. Today the Workers adapter
+      (`pkg/deploy/cloudflare_workers.go`) uploads the script and ignores
+      `wrangler.toml`, so the `web-app-data` starter deploys without its D1
+      database and its API fails at runtime — and the starter's
+      `database_id` is a placeholder (`00000000-…`) that points at nothing.
+      - **Create what is declared, reuse what exists:** for each binding the
+        project's `wrangler.toml` declares (`[[d1_databases]]`, and
+        `[[kv_namespaces]]` / `[[r2_buckets]]` only when present), find or
+        create the resource in the user's account and attach it to the
+        uploaded script. A placeholder D1 id means "create it"; write the
+        real id back into `wrangler.toml` so local and deployed config agree.
+      - **Safe to rerun:** a second deploy reuses the resources the first one
+        created instead of making duplicates, and two different projects
+        never share one by accident (name resources from the worker name
+        plus a stable suffix recorded in the project, not the display name
+        alone).
+      - **All or nothing:** if any declared binding cannot be created or
+        attached, the deploy fails with a plain message naming it; it never
+        goes live with some bindings missing. Apply pending D1 migrations
+        (`drizzle/migrations`) before switching traffic, or say clearly that
+        they are not applied.
+      - Uses the existing deploy credential (`CLOUDFLARE_API_TOKEN` and the
+        account id); the token is never passed as an argument or printed.
+      - Tests against the fake Cloudflare API in `pkg/deploy/fake.go`; update
+        `docs/CLI_REFERENCE.md` and the `web-app-data` README's deploy section.
+
 ## CI flake
 
 - [x] **flake.1** `TestDrainAndWait` (`pkg/utils/token_bucket_test.go:391`)

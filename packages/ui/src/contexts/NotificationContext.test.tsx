@@ -1,4 +1,4 @@
-import { act, createElement, type ReactNode } from 'react';
+import { act, createElement, useEffect, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { vi } from 'vitest';
 import {
@@ -524,5 +524,116 @@ describe('notification fields', () => {
       addNotificationRef?.('info', 'TS Test', 'Check timestamp');
     });
     expect(container.querySelector('[data-testid="ts-test"]')?.getAttribute('data-has-ts')).toBe('true');
+  });
+});
+
+describe('sink path (host delivery)', () => {
+  type SinkCall = { level: NotificationType; title: string; message: string; duration?: number; action?: unknown };
+
+  function SinkConsumer({ onAdd }: { onAdd: (add: ReturnType<typeof useNotifications>['addNotification']) => void }): ReactNode {
+    const { addNotification } = useNotifications();
+    useEffect(() => {
+      onAdd(addNotification);
+    }, [addNotification, onAdd]);
+    return createElement('div', { 'data-testid': 'sink-consumer' });
+  }
+
+  it('routes addNotification through the sink instead of the local reducer', () => {
+    const calls: SinkCall[] = [];
+    const sink = vi.fn((n: SinkCall) => calls.push(n));
+    let add: ReturnType<typeof useNotifications>['addNotification'] | null = null;
+
+    act(() => {
+      root.render(createElement(NotificationProvider, {
+        sink,
+        children: createElement(SinkConsumer, { onAdd: (a) => { add = a; } }),
+      }));
+    });
+
+    let id = '';
+    act(() => {
+      id = add!('warning', 'Host Title', 'Host message', 5000);
+    });
+
+    // The sink received exactly one call with the full shape, and nothing was
+    // dispatched locally (a host that echoes back on the bus adds the entry).
+    expect(sink).toHaveBeenCalledTimes(1);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toEqual({ level: 'warning', title: 'Host Title', message: 'Host message', duration: 5000, action: undefined });
+    // The id return contract is preserved (generated regardless of delivery).
+    expect(typeof id).toBe('string');
+    expect(id.length).toBeGreaterThan(0);
+    expect(notificationBus.getNotificationHistory()).toHaveLength(0);
+  });
+
+  it('reaches exactly one provider entry when the sink echoes on the bus (no double-add)', async () => {
+    // A host sink that mirrors the local host: it forwards to the in-app bus,
+    // which the provider subscribes to. If addNotification ALSO dispatched,
+    // this would be two entries.
+    const sink = vi.fn((n: SinkCall) => {
+      notificationBus.notify(n.level, n.title, n.message, n.duration, n.action as never);
+    });
+    let add: ReturnType<typeof useNotifications>['addNotification'] | null = null;
+
+    act(() => {
+      root.render(createElement(NotificationProvider, {
+        sink,
+        children: createElement(SinkConsumer, { onAdd: (a) => { add = a; } }),
+      }));
+    });
+
+    await act(async () => {
+      add!('error', 'Echo', 'Echoed once');
+    });
+
+    expect(sink).toHaveBeenCalledTimes(1);
+    expect(container.querySelectorAll('[data-testid="notification-item"]')).toHaveLength(0);
+    // The provider state carries exactly one entry — from the bus echo, not
+    // from a second local dispatch.
+    // (TestConsumer is not mounted here; assert via the bus history.)
+    expect(notificationBus.getNotificationHistory()).toHaveLength(1);
+  });
+
+  it('clamps duration before handing it to the sink (max 60000)', () => {
+    const sink = vi.fn();
+    let add: ReturnType<typeof useNotifications>['addNotification'] | null = null;
+    act(() => {
+      root.render(createElement(NotificationProvider, {
+        sink,
+        children: createElement(SinkConsumer, { onAdd: (a) => { add = a; } }),
+      }));
+    });
+    act(() => {
+      add!('info', 'Clamp', 'Huge', 999999);
+    });
+    expect(sink).toHaveBeenCalledWith({ level: 'info', title: 'Clamp', message: 'Huge', duration: 60000, action: undefined });
+  });
+
+  it('clamps duration before handing it to the sink (min 0)', () => {
+    const sink = vi.fn();
+    let add: ReturnType<typeof useNotifications>['addNotification'] | null = null;
+    act(() => {
+      root.render(createElement(NotificationProvider, {
+        sink,
+        children: createElement(SinkConsumer, { onAdd: (a) => { add = a; } }),
+      }));
+    });
+    act(() => {
+      add!('info', 'Clamp', 'Negative', -10);
+    });
+    expect(sink).toHaveBeenCalledWith({ level: 'info', title: 'Clamp', message: 'Negative', duration: 0, action: undefined });
+  });
+
+  it('keeps local dispatch behavior when no sink is supplied', () => {
+    act(() => {
+      root.render(createElement(NotificationProvider, {
+        children: createElement(TestConsumer),
+      }));
+    });
+    act(() => {
+      container.querySelector('[data-testid="add-info"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('[data-testid="count"]')?.textContent).toBe('1');
+    expect(container.querySelectorAll('[data-testid="notification-item"]')).toHaveLength(1);
   });
 });

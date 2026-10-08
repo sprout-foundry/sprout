@@ -3,15 +3,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HostUnavailableError } from '../services/cloudTxnEscalate';
 import { escalationHostKey, getRememberedHost } from '../services/escalationHost';
 import type { Runner } from '../services/runners';
+import { HostProvider } from '../host/HostProvider';
+import { makeTestHost } from '../host/testHost';
 import { AgentEscalationBridge } from './AgentEscalationBridge';
-
-vi.mock('../config/mode', () => ({ isCloud: true, mode: 'cloud' }));
 
 const runTxnCommand = vi.fn();
 vi.mock('../services/cloudTxnEscalate', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/cloudTxnEscalate')>()),
   runTxnCommand: (...args: unknown[]) => runTxnCommand(...args),
 }));
+
+// The bridge reads its host capability through the provider; this suite
+// exercises the hosted (WASM) shell, which has no local terminal.
+function renderBridge(props: { repoURL?: string }) {
+  return render(
+    <HostProvider host={makeTestHost({ localTerminal: false })}>
+      <AgentEscalationBridge repoURL={props.repoURL} />
+    </HostProvider>,
+  );
+}
 
 type Bridge = { run: (c: string) => Promise<{ ran: boolean; stdout?: string; exitCode?: number; message?: string }> };
 const bridge = () => (globalThis as unknown as { __sproutEscalate?: Bridge }).__sproutEscalate;
@@ -68,7 +78,7 @@ afterEach(() => {
 describe('AgentEscalationBridge', () => {
   it('asks before running an agent command in the cloud workspace', async () => {
     runTxnCommand.mockResolvedValue(OK);
-    render(<AgentEscalationBridge repoURL={REPO} />);
+    renderBridge({ repoURL: REPO });
 
     const { pending } = await ask('npm test');
     expect(screen.getByRole('dialog', { name: /run this in your cloud workspace/i })).toBeTruthy();
@@ -83,7 +93,7 @@ describe('AgentEscalationBridge', () => {
   });
 
   it('Escape declines', async () => {
-    render(<AgentEscalationBridge repoURL={REPO} />);
+    renderBridge({ repoURL: REPO });
     let pending!: ReturnType<Bridge['run']>;
     act(() => {
       pending = bridge()!.run('make');
@@ -95,7 +105,7 @@ describe('AgentEscalationBridge', () => {
   });
 
   it('removes the bridge on unmount', () => {
-    const { unmount } = render(<AgentEscalationBridge repoURL="r" />);
+    const { unmount } = renderBridge({ repoURL: 'r' });
     expect(bridge()).toBeDefined();
     unmount();
     expect(bridge()).toBeUndefined();
@@ -103,7 +113,7 @@ describe('AgentEscalationBridge', () => {
 
   it('offers runners with mode labels, disables offline ones, and warns on bare metal', async () => {
     stubRunners(RUNNERS);
-    render(<AgentEscalationBridge repoURL={REPO} />);
+    renderBridge({ repoURL: REPO });
     await ask('go test ./...');
 
     const options = screen.getAllByTestId('run-host-option');
@@ -130,7 +140,7 @@ describe('AgentEscalationBridge', () => {
   it('runs on the chosen runner and remembers it for the repo', async () => {
     stubRunners(RUNNERS);
     runTxnCommand.mockResolvedValue(OK);
-    render(<AgentEscalationBridge repoURL={REPO} />);
+    renderBridge({ repoURL: REPO });
     const { pending } = await ask('cargo build');
 
     fireEvent.click(screen.getAllByTestId('run-host-option')[1]);
@@ -147,7 +157,7 @@ describe('AgentEscalationBridge', () => {
   it('starts on the remembered host for the repo', async () => {
     stubRunners(RUNNERS);
     window.localStorage.setItem(escalationHostKey(REPO), JSON.stringify({ kind: 'cloud' }));
-    render(<AgentEscalationBridge repoURL={REPO} />);
+    renderBridge({ repoURL: REPO });
     await ask('make');
     expect(screen.getByTestId('run-host-option-cloud')).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByRole('dialog', { name: /run this in your cloud workspace/i })).toBeTruthy();
@@ -156,7 +166,7 @@ describe('AgentEscalationBridge', () => {
   it('"Always allow" remembers the host and later runs there without asking', async () => {
     stubRunners(RUNNERS);
     runTxnCommand.mockResolvedValue(OK);
-    render(<AgentEscalationBridge repoURL={REPO} />);
+    renderBridge({ repoURL: REPO });
     const { pending: first } = await ask('make');
     fireEvent.click(screen.getAllByTestId('run-host-option')[1]);
     fireEvent.click(screen.getByRole('button', { name: 'Always allow' }));
@@ -180,7 +190,7 @@ describe('AgentEscalationBridge', () => {
     runTxnCommand
       .mockRejectedValueOnce(new HostUnavailableError({ kind: 'runner', runnerId: 'r-mac', name: 'MacBook' }))
       .mockResolvedValueOnce(OK);
-    render(<AgentEscalationBridge repoURL={REPO} />);
+    renderBridge({ repoURL: REPO });
     const { pending } = await ask('npm test');
     fireEvent.click(screen.getByRole('button', { name: 'Run once' }));
 
@@ -204,7 +214,7 @@ describe('AgentEscalationBridge', () => {
           resolveRun = resolve;
         });
       });
-      render(<AgentEscalationBridge repoURL={REPO} />);
+      renderBridge({ repoURL: REPO });
       await ask('npm test');
       fireEvent.click(screen.getByRole('button', { name: 'Run once' }));
       await waitFor(() => expect(emitPhase).toBeDefined());

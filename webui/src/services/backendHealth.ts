@@ -6,7 +6,7 @@
  */
 
 import { debugLog } from '../utils/log';
-import { isCloud } from '../config/mode';
+import { getActiveHost } from '../host/accessor';
 import { getAdapter } from './apiAdapter';
 import { clientFetch } from './clientSession';
 
@@ -21,9 +21,12 @@ let callbacks: Array<(isReachable: boolean) => void> = [];
 /* Perform a single health check against the backend */
 async function checkBackendHealth(): Promise<boolean> {
   try {
-    /* In cloud mode, use a plain fetch (the adapter handles routing).
-       In local mode, use clientFetch (handles proxy base + credentials). */
-    const fetchFn = isCloud
+    /* In hosted (cloud) mode, use a plain fetch (the adapter handles routing).
+       In local mode, use clientFetch (handles proxy base + credentials).
+       host.8: the hosted transport authenticates against a platform
+       (authMode 'bearer'); that is the former isCloud branch. */
+    const isHosted = getActiveHost()?.transport.authMode === 'bearer';
+    const fetchFn = isHosted
       ? (input: RequestInfo | URL, init?: RequestInit) => {
           const adapter = getAdapter();
           if (adapter) return adapter.fetch(input, init);

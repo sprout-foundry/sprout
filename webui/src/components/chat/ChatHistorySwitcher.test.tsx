@@ -2,6 +2,8 @@ import { act, fireEvent, waitFor } from '@testing-library/react';
 import { createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { HostProvider } from '../../host/HostProvider';
+import { makeTestHost } from '../../host/testHost';
 import { ChatHistorySwitcher } from './ChatHistorySwitcher';
 
 vi.mock('../../services/clientSession', () => ({
@@ -71,7 +73,13 @@ function act_unmount() {
 
 function renderSwitcher(props: { chatId?: string } = {}) {
   act(() => {
-    root.render(createElement(ChatHistorySwitcher, { onRestoreSession, chatId: props.chatId ?? 'chat-7' }));
+    root.render(
+      createElement(
+        HostProvider,
+        { host: makeTestHost({ export: true }) },
+        createElement(ChatHistorySwitcher, { onRestoreSession, chatId: props.chatId ?? 'chat-7' }),
+      ),
+    );
   });
 }
 
@@ -89,7 +97,9 @@ async function openPopover() {
 describe('ChatHistorySwitcher', () => {
   it('renders nothing without a restore callback', () => {
     act(() => {
-      root.render(createElement(ChatHistorySwitcher, {}));
+      root.render(
+        createElement(HostProvider, { host: makeTestHost({ export: true }) }, createElement(ChatHistorySwitcher, {})),
+      );
     });
     expect(container.querySelector('.chat-history-switcher')).toBeNull();
   });

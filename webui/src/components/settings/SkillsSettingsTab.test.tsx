@@ -256,6 +256,29 @@ describe('errors', () => {
       expect(screen.getByRole('alert')).toHaveTextContent(/boom/);
     });
   });
+
+  it('leaves the loading skeleton after 15s when the daemon never answers', async () => {
+    vi.useFakeTimers();
+    try {
+      // Never-settling loads: the daemon is busy and the fetches sit.
+      mockListInstalledSkills.mockReturnValue(new Promise(() => {}));
+      mockListSkillRegistry.mockReturnValue(new Promise(() => {}));
+      renderTab();
+      expect(screen.getByText('Loading…')).toBeTruthy();
+
+      // Advance past the 15s guard: the skeleton must resolve into the
+      // error state (with its retry affordance) instead of spinning forever.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(15_000);
+      });
+      await waitFor(() => {
+        expect(screen.getByRole('alert')).toHaveTextContent(/Timed out loading skills/);
+      });
+      expect(screen.queryByText('Loading…')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('toggle enabled (preserved original UI)', () => {

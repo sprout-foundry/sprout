@@ -1,8 +1,13 @@
 /**
  * Tests for bootstrapAdapter.ts
  *
- * Verifies that CloudAdapter is installed at startup when VITE_SPROUT_MODE=cloud,
- * and that no adapter is installed in local mode.
+ * Verifies that CloudAdapter is installed at startup when the active host is
+ * the hosted/cloud host, and that no adapter is installed for the local host.
+ *
+ * host.8: the adapter install branches on the ACTIVE HOST's transport (bearer
+ * = cloud), not on a build flag or an appMode field. These tests set the host
+ * through the accessor exactly as the entry point does, and assert the
+ * transport + installed-adapter behavior the old appMode assertions protected.
  */
 
 import type { CloudAdapter } from './services/cloudAdapter';
@@ -27,6 +32,23 @@ function restoreWindowLocation() {
 }
 
 /**
+ * Record the active host the way the app entry does. Called after
+ * vi.resetModules() so the accessor singleton bootstrapAdapter imports is the
+ * one we configure.
+ */
+async function activateCloudHost() {
+  const { setActiveHost } = await import('./host/accessor');
+  const { cloudHost } = await import('./host/cloudHost');
+  setActiveHost(cloudHost);
+}
+
+async function activateLocalHost() {
+  const { setActiveHost } = await import('./host/accessor');
+  const { localHost } = await import('./host/localHost');
+  setActiveHost(localHost);
+}
+
+/**
  * Import bootstrapAdapter and drive the async adapter install to completion.
  *
  * bootstrapAdapter.ts auto-runs fetchRuntimeConfig() on import, but adapter
@@ -39,8 +61,8 @@ async function importWithBootstrap() {
 }
 
 describe('bootstrapAdapter', () => {
-  describe('cloud mode (VITE_SPROUT_MODE=cloud)', () => {
-    beforeEach(() => {
+  describe('cloud host (bearer transport)', () => {
+    beforeEach(async () => {
       vi.resetModules();
       // Mock fetch to reject (tier 1 fails) so tier 2 env vars are used
       vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network error')));
@@ -48,6 +70,7 @@ describe('bootstrapAdapter', () => {
       vi.stubEnv('VITE_FOUNDRY_API_URL', 'https://foundry.test.sprout.dev/api');
       vi.stubEnv('VITE_FOUNDRY_WS_URL', 'wss://foundry.test.sprout.dev/ws');
       mockWindowLocation('https://app.test.sprout.dev', 'https:', 'app.test.sprout.dev');
+      await activateCloudHost();
     });
 
     afterEach(() => {
@@ -104,6 +127,32 @@ describe('bootstrapAdapter', () => {
       expect(navIds).toContain('team');
     });
 
+    it('records the bootstrap platform URL on the active host transport', async () => {
+      // The bootstrap resolves the platform base at startup and records it as
+      // DATA on the host's transport (host.11): the URL builder reads it from
+      // there instead of reaching into the bootstrap fetch. Tier 1 (the
+      // /api/bootstrap fetch) supplies the value.
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          json: () =>
+            Promise.resolve({
+              apiBaseURL: 'https://foundry.test.sprout.dev/api',
+              wsURL: 'wss://foundry.test.sprout.dev/ws',
+              authMode: 'bearer',
+              platformURL: 'https://platform.sprout.dev',
+            }),
+        }),
+      );
+
+      await importWithBootstrap();
+
+      const { getActiveHost } = await import('./host/accessor');
+      expect(getActiveHost()?.transport.platformURL).toBe('https://platform.sprout.dev');
+      const { platformHref } = await import('./host/platformUrl');
+      expect(platformHref('/tasks/abc')).toBe('https://platform.sprout.dev/tasks/abc');
+    });
+
     it('adapter has correct capability flags for cloud mode', async () => {
       await importWithBootstrap();
 
@@ -119,13 +168,14 @@ describe('bootstrapAdapter', () => {
     });
   });
 
-  describe('local mode (default)', () => {
-    beforeEach(() => {
+  describe('local host (none transport)', () => {
+    beforeEach(async () => {
       vi.resetModules();
       // Mock fetch to reject and clear env vars
       vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network error')));
       vi.unstubAllEnvs();
       mockWindowLocation('http://localhost:3000', 'http:', 'localhost:3000');
+      await activateLocalHost();
     });
 
     afterEach(() => {
@@ -142,20 +192,27 @@ describe('bootstrapAdapter', () => {
       expect(hasAdapter()).toBe(false);
     });
 
-    it('getAdapter returns null in local mode', async () => {
+    it('getAdapter returns null for the local host', async () => {
       await import('./bootstrapAdapter');
 
       const { getAdapter } = await import('./services/apiAdapter');
       expect(getAdapter()).toBeNull();
     });
+
+    it('the resolved config carries the local (none) transport', async () => {
+      const { fetchRuntimeConfig } = await import('./bootstrapAdapter');
+      const config = await fetchRuntimeConfig();
+      expect(config.authMode).toBe('none');
+    });
   });
 
-  describe('local mode (VITE_SPROUT_MODE=local)', () => {
-    beforeEach(() => {
+  describe('local host with VITE_SPROUT_MODE=local', () => {
+    beforeEach(async () => {
       vi.resetModules();
       vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network error')));
       vi.stubEnv('VITE_SPROUT_MODE', 'local');
       mockWindowLocation('http://localhost:3000', 'http:', 'localhost:3000');
+      await activateLocalHost();
     });
 
     afterEach(() => {
@@ -173,15 +230,17 @@ describe('bootstrapAdapter', () => {
     });
   });
 
-  describe('fallback when env vars are not set in cloud mode (Pages Functions proxy case)', () => {
-    beforeEach(() => {
+  describe('fallback when env vars are not set in a cloud build (Pages Functions proxy case)', () => {
+    beforeEach(async () => {
       vi.resetModules();
-      // Mock fetch to reject (tier 1 fails), and only set appMode to cloud
+      // Mock fetch to reject (tier 1 fails). With no Foundry URLs the runtime
+      // config derives same-origin URLs from window.location (Cloudflare Pages
+      // Functions proxy). The CloudAdapter install is driven by the host.
       vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network error')));
       vi.stubEnv('VITE_SPROUT_MODE', 'cloud');
-      // Do NOT set VITE_FOUNDRY_API_URL or VITE_FOUNDRY_WS_URL — should derive
-      // same-origin URLs from window.location (Cloudflare Pages Functions proxy).
+      // Do NOT set VITE_FOUNDRY_API_URL or VITE_FOUNDRY_WS_URL.
       mockWindowLocation('https://app.test.sprout.dev', 'https:', 'app.test.sprout.dev');
+      await activateCloudHost();
     });
 
     afterEach(() => {
@@ -246,7 +305,21 @@ describe('bootstrapAdapter', () => {
         const { fetchRuntimeConfig } = await import('./bootstrapAdapter');
         const config = await fetchRuntimeConfig();
 
-        expect(config).toEqual(serverConfig);
+        // host.8: appMode is gone from RuntimeConfig; the transport is asserted
+        // instead — the behavior the appMode field used to carry.
+        expect(config).toEqual({
+          apiBaseURL: 'http://server:8080',
+          wsURL: 'ws://server:8080/ws',
+          authMode: 'bearer',
+          buildVersion: '1.0.0',
+          sharedMode: false,
+          navItems: undefined,
+          user: undefined,
+          sync: undefined,
+          update: undefined,
+          platformURL: undefined,
+        });
+        expect('appMode' in config).toBe(false);
       });
 
       it('caches the fetched config in getBootstrapConfig', async () => {
@@ -266,7 +339,10 @@ describe('bootstrapAdapter', () => {
         await fetchRuntimeConfig();
 
         const cached = getBootstrapConfig();
-        expect(cached).toEqual(serverConfig);
+        expect(cached.apiBaseURL).toBe('http://server:8080');
+        expect(cached.wsURL).toBe('ws://server:8080/ws');
+        expect(cached.authMode).toBe('none');
+        expect(cached.buildVersion).toBe('1.0.0');
       });
 
       it('carries the daemon-reported contractVersion onto the resolved config', async () => {
@@ -319,7 +395,6 @@ describe('bootstrapAdapter', () => {
 
         expect(config.apiBaseURL).toBe('http://env:9090');
         expect(config.wsURL).toBe('ws://env:9090/ws');
-        expect(config.appMode).toBe('cloud');
         expect(config.buildVersion).toBe('2.0.0');
         expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('using VITE env vars'), expect.anything());
       });
@@ -350,7 +425,6 @@ describe('bootstrapAdapter', () => {
 
         expect(config.apiBaseURL).toBe('http://partial:7777');
         expect(config.wsURL).toBe('ws://localhost:56000/ws'); // local-mode fallback
-        expect(config.appMode).toBe('local'); // falls back to default
         expect(config.buildVersion).toBe('dev'); // falls back to default
       });
     });
@@ -369,7 +443,6 @@ describe('bootstrapAdapter', () => {
         expect(config.apiBaseURL).toBe('http://localhost:56000');
         expect(config.wsURL).toBe('ws://localhost:56000/ws');
         expect(config.authMode).toBe('none');
-        expect(config.appMode).toBe('local');
         expect(config.buildVersion).toBe('dev');
       });
 
@@ -428,20 +501,22 @@ describe('bootstrapAdapter', () => {
 
         expect(config.apiBaseURL).toBe('http://srv:1234');
         expect(config.authMode).toBe('none'); // defaults
-        expect(config.appMode).toBe('local'); // defaults
         expect(config.buildVersion).toBe('dev'); // defaults
       });
 
-      it('cloud mode without explicit URLs derives same-origin defaults', async () => {
+      it('hosted host without explicit URLs derives same-origin defaults', async () => {
+        vi.resetModules();
         fetchSpy.mockRejectedValue(new Error('no bootstrap endpoint'));
         vi.stubEnv('VITE_SPROUT_MODE', 'cloud');
         mockWindowLocation('https://app.example.com', 'https:', 'app.example.com');
+        // host.8: the same-origin fallback is chosen by the ACTIVE HOST (the
+        // hosted transport), not the build flag.
+        await activateCloudHost();
 
         try {
           const { fetchRuntimeConfig } = await import('./bootstrapAdapter');
           const config = await fetchRuntimeConfig();
 
-          expect(config.appMode).toBe('cloud');
           expect(config.apiBaseURL).toBe('https://app.example.com');
           expect(config.wsURL).toBe('wss://app.example.com/ws');
         } finally {
@@ -487,7 +562,12 @@ describe('bootstrapAdapter', () => {
       const { fetchRuntimeConfig, getBootstrapConfig } = await import('./bootstrapAdapter');
       await fetchRuntimeConfig();
 
-      expect(getBootstrapConfig()).toEqual(serverConfig);
+      const cached = getBootstrapConfig();
+      expect(cached.apiBaseURL).toBe('http://cached:9999');
+      expect(cached.wsURL).toBe('ws://cached:9999/ws');
+      expect(cached.authMode).toBe('bearer');
+      expect(cached.buildVersion).toBe('3.0.0');
+      expect('appMode' in cached).toBe(false);
     });
 
     it('returns localhost defaults before fetchRuntimeConfig resolves', async () => {
@@ -501,7 +581,6 @@ describe('bootstrapAdapter', () => {
         apiBaseURL: 'http://localhost:56000',
         wsURL: 'ws://localhost:56000/ws',
         authMode: 'none',
-        appMode: 'local',
         buildVersion: 'dev',
       });
     });

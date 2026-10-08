@@ -17,6 +17,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { vi, describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
 import GitHubRepoPicker from './GitHubRepoPicker';
+import { HostProvider } from '../host';
 
 // ── Mocks ────────────────────────────────────────────────────────────────
 
@@ -88,7 +89,13 @@ function renderPicker(props: { isOpen?: boolean } = {}) {
   // eslint-disable-next-line testing-library/no-unnecessary-act
   act(() => {
     root = createRoot(mountPoint);
-    root.render(<GitHubRepoPicker isOpen={props.isOpen ?? true} onClose={onClose} onCloned={onCloned} />);
+    root.render(
+      // A headless host (no host-managed github) exercises the PAT/token
+      // surface this file tests.
+      <HostProvider>
+        <GitHubRepoPicker isOpen={props.isOpen ?? true} onClose={onClose} onCloned={onCloned} />
+      </HostProvider>,
+    );
   });
   return { onClose, onCloned };
 }

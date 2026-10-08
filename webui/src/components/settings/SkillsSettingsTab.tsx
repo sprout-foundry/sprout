@@ -44,7 +44,16 @@ export default function SkillsSettingsTab({ settings, toggleSkill }: SkillsSetti
     setLoading(true);
     setError(null);
     try {
-      const [list, reg] = await Promise.all([api.listInstalledSkills(), api.listSkillRegistry()]);
+      // Timeout guard: the daemon can be busy in serial provider discovery
+      // for tens of seconds, and a fetch that sits that long left this tab
+      // on an eternal skeleton (the E2E "skills list did not render" flake).
+      // Race the loads; on timeout surface the error state (with retry)
+      // instead of an unbounded spinner.
+      const loads = Promise.all([api.listInstalledSkills(), api.listSkillRegistry()]);
+      const timeout = new Promise<never>((_, reject) => {
+        window.setTimeout(() => reject(new Error('Timed out loading skills — check the daemon connection.')), 15_000);
+      });
+      const [list, reg] = await Promise.race([loads, timeout]);
       setInstalled(list);
       setRegistry(reg);
     } catch (e: unknown) {

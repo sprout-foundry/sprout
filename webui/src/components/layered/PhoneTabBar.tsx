@@ -10,7 +10,7 @@ import { useEffect, useState, type ReactElement } from 'react';
 import { OPEN_COMMAND_PALETTE_EVENT, OPEN_NOTIFICATIONS_EVENT } from '../../config/layout';
 import { useActiveRepoURL } from '../../services/activeRepo';
 import { closeHome, openHome, useHomeView } from '../../services/homeView';
-import { repoName, repoSlug as repoSlugFromURL } from '../../utils/platformUrl';
+import { repoName, repoSlug as repoSlugFromURL } from '../../host/repoName';
 import { useUnreadNotificationCount } from '../../hooks/useUnreadNotificationCount';
 import { UserMenu } from '../UserMenu';
 

@@ -1,6 +1,6 @@
 import { Server, Loader2, RefreshCw } from 'lucide-react';
 import React from 'react';
-import { supportsSSH } from '../../config/mode';
+import { useHostCapabilities } from '../../host';
 import type { SSHHostEntry, SSHSessionEntry } from '../../services/api';
 import { collapseHomePath } from './pathUtils';
 import type { SwitchingState, SSHFailureState, RemoteWorkspaceContext, WorkspaceDirectory } from './types';
@@ -69,6 +69,7 @@ export const SSHPanel: React.FC<SSHPanelProps> = ({
   setFocusedSshSessionKey,
   sshPanelRef,
 }) => {
+  const { ssh: supportsSSH } = useHostCapabilities();
   if (!supportsSSH) return null;
 
   return (

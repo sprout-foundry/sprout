@@ -396,7 +396,11 @@
   padding-bottom: 0;
 }
 
-.layout-layered .app > main {
+/* Descendant, not direct-child: the space's <main> now sits inside the
+ * `SproutWorkspace` root (`display: contents`), so `.app > main` would no
+ * longer match it and the reserved bottom padding would be lost. The only
+ * `<main>` in the app is the space shell's. */
+.layout-layered .app main {
   padding-bottom: var(--sprout-bottom-reserved-height);
   box-sizing: border-box;
 }

@@ -18,6 +18,8 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { HostProvider } from '../host/HostProvider';
+import { makeTestHost } from '../host/testHost';
 
 // Mock log before importing the module under test
 vi.mock('../utils/log', () => ({
@@ -51,7 +53,7 @@ function renderHook() {
   document.body.appendChild(container);
   root = createRoot(container);
   act(() => {
-    root.render(createElement(TestComponent));
+    root.render(createElement(HostProvider, { host: makeTestHost({ git: true }) }, createElement(TestComponent)));
   });
 }
 

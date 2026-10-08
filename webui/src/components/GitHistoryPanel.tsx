@@ -1,6 +1,6 @@
 import { Loader2, ChevronRight, Clock, GitCommitHorizontal, Search, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { isCloud } from '../config/mode';
+import { useHost } from '../host';
 import { BROWSER_GIT_UNSUPPORTED_OPS } from '../services/browserGit';
 import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
 import { formatRelativeDate, formatAbsoluteDate, firstLine } from '../utils/format';
@@ -49,6 +49,10 @@ function GitHistoryPanel({
   isActing,
   openWorkspaceBuffer,
 }: GitHistoryPanelProps): JSX.Element {
+  // host.8: the hosted build runs browser git, which cannot revert; the
+  // hosted transport authenticates against a platform (authMode 'bearer') —
+  // the former isCloud branch.
+  const browserGit = useHost().transport.authMode === 'bearer';
   const [commits, setCommits] = useState<GitCommitSummary[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -194,8 +198,8 @@ function GitHistoryPanel({
           onCheckoutCommit={onCheckoutCommit}
           onRevertCommit={onRevertCommit}
           isActing={isActing}
-          revertDisabled={isCloud && BROWSER_GIT_UNSUPPORTED_OPS.has('revert')}
-          unsupportedTooltip={isCloud ? BROWSER_UNSUPPORTED_TOOLTIP : undefined}
+          revertDisabled={browserGit && BROWSER_GIT_UNSUPPORTED_OPS.has('revert')}
+          unsupportedTooltip={browserGit ? BROWSER_UNSUPPORTED_TOOLTIP : undefined}
         />
         <CommitDetailPanel
           onLoadCommitDetail={onLoadCommitDetail}
@@ -217,8 +221,8 @@ function GitHistoryPanel({
         onCheckoutCommit={onCheckoutCommit}
         onRevertCommit={onRevertCommit}
         isActing={isActing}
-        revertDisabled={isCloud && BROWSER_GIT_UNSUPPORTED_OPS.has('revert')}
-        unsupportedTooltip={isCloud ? BROWSER_UNSUPPORTED_TOOLTIP : undefined}
+        revertDisabled={browserGit && BROWSER_GIT_UNSUPPORTED_OPS.has('revert')}
+        unsupportedTooltip={browserGit ? BROWSER_UNSUPPORTED_TOOLTIP : undefined}
       />
       {error && commits.length > 0 && (
         <div className="git-history-error">

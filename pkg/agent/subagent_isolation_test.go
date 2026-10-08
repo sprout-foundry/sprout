@@ -58,6 +58,37 @@ func isolatedSpec(t *testing.T, parent *Agent, dir string) *subagentLaunchSpec {
 	return spec
 }
 
+// waitSubagentWorktree polls for the isolated worktree's SEED to complete:
+// createIsolatedWorkspace creates the worktree (at HEAD) first and seeds it
+// afterwards — the seed's `git diff HEAD` runs in the PARENT workspace, so
+// anything that mutates the workspace between `worktree add` and the seed's
+// baseline commit gets baked into the baseline (that raced the old fixed
+// sleep and turned the conflict test into a clean-apply). The deterministic
+// "seed done" signal is the baseline commit itself.
+func waitSubagentWorktree(t *testing.T, home string) string {
+	t.Helper()
+	root := filepath.Join(home, "state", "worktrees")
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		entries, err := os.ReadDir(root)
+		if err == nil {
+			for _, e := range entries {
+				if !e.IsDir() {
+					continue
+				}
+				wt := filepath.Join(root, e.Name())
+				out, err := runGitIn(context.Background(), wt, "log", "-1", "--format=%s")
+				if err == nil && strings.TrimSpace(out) == "sprout isolation baseline" {
+					return wt
+				}
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("seeded isolated worktree (baseline commit) never appeared under %s", root)
+	return ""
+}
+
 func worktreesLeft(t *testing.T, home string) []string {
 	t.Helper()
 	entries, _ := os.ReadDir(filepath.Join(home, "state", "worktrees"))
@@ -144,15 +175,26 @@ func TestRunIsolatedSubagent_ConflictLeavesWorkspaceUntouched(t *testing.T) {
 		done <- runIsolatedSubagent(context.Background(), parent, isolatedSpec(t, parent, dir), "iso-2", true)
 	}()
 
-	// The primary edits the same lines while the subagent works.
-	time.Sleep(200 * time.Millisecond)
+	// The primary edits the same lines while the subagent works. Wait until
+	// the subagent's isolated worktree EXISTS (poll — a fixed sleep raced on
+	// slower macOS runners: when the primary's write landed before the
+	// worktree was seeded, the seed carried the primary's version, the
+	// subagent patch applied cleanly on top of it, and the apply-back
+	// overwrote the workspace — the exact "conflict modified the workspace"
+	// failure). The scripted factory blocks on `hold` until after the write,
+	// so existence of the worktree (seeded from the pre-write workspace) is
+	// the correct sequencing point.
+	waitSubagentWorktree(t, home)
 	writeFile(t, dir, "main.go", "package main\n\nfunc main() { println(\"primary\") }\n")
+	if got, _ := os.ReadFile(filepath.Join(dir, "main.go")); !strings.Contains(string(got), "primary") {
+		t.Fatalf("primary write did not land before release: %s", got)
+	}
 	close(hold)
 
 	result := <-done
 	got, _ := os.ReadFile(filepath.Join(dir, "main.go"))
 	if !strings.Contains(string(got), "primary") || strings.Contains(string(got), "subagent") {
-		t.Fatalf("conflicting patch modified the workspace:\n%s", got)
+		t.Fatalf("conflicting patch modified the workspace:\n%s\n--- result.Output:\n%s", got, result.Output)
 	}
 	if !strings.Contains(result.Output, "no longer apply cleanly") || len(result.FileChanges) != 0 {
 		t.Errorf("conflict not reported: %q", result.Output)

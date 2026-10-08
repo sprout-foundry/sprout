@@ -37,7 +37,7 @@ test.describe('MCP Servers', () => {
   test('add server and list shows it', async () => {
     // ORIGINAL TEST BODY (unchanged):
     // "add server and list shows it"
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // Open settings panel
@@ -118,7 +118,7 @@ test.describe('MCP Servers', () => {
   test('remove server disappears from list', async () => {
     // ORIGINAL TEST BODY (unchanged):
     // "remove server disappears from list"
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // Open settings panel

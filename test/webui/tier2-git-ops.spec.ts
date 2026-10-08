@@ -37,7 +37,7 @@ test.describe('Git Operations', () => {
   test('push to bare remote reflects in UI', async () => {
     // ORIGINAL TEST BODY (unchanged):
     // "push to bare remote reflects in UI"
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // Click the git tab
@@ -82,7 +82,7 @@ test.describe('Git Operations', () => {
   test('after pushing, the UI shows remote URL indication', async () => {
     // ORIGINAL TEST BODY (unchanged):
     // "After pushing, the UI should show some indication of the remote URL"
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     const gitTab = page.getByTestId(TESTIDS['sidebar-git-tab']);

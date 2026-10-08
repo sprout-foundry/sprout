@@ -36,7 +36,7 @@ test.setTimeout(60_000);
 test.describe('Sessions', () => {
   test.fixme('sessions search input is visible in the sidebar', async () => {
     // FIXME: The sidebar-session-search-input is in the right-side ContextPanel, not the left sidebar.
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
 
     // The sidebar container should be visible
     await expect(page.getByTestId(TESTIDS['sidebar-container'])).toBeVisible({ timeout: 30_000 });
@@ -48,7 +48,7 @@ test.describe('Sessions', () => {
 
   test.fixme('typing in the search input shows the search dropdown', async () => {
     // FIXME: Session search input is in the right-side ContextPanel, not the left sidebar.
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['sidebar-container'])).toBeVisible({ timeout: 30_000 });
 
     const searchInput = page.getByTestId(TESTIDS['sidebar-sessions-search-input']);

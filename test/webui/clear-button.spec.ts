@@ -32,7 +32,7 @@ test.describe.configure({ mode: 'serial' });
 test.setTimeout(60_000);
 
 test('New Session button clears the transcript promptly', async () => {
-  await page.goto(vite.url, { waitUntil: 'networkidle' });
+  await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
 
   // Send a message so the transcript has content.
   const textarea = page.getByTestId('chat-input');

@@ -38,7 +38,7 @@ test.setTimeout(60_000);
 test.describe('Command Palette', () => {
   test.fixme('Ctrl+Shift+P opens the command palette', async () => {
     // FIXME: The command palette keyboard shortcut requires async-loaded hotkey configuration from the backend. The test presses the key before hotkeys are loaded.
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // Open the command palette via keyboard shortcut
@@ -56,7 +56,7 @@ test.describe('Command Palette', () => {
 
   test.fixme('typing in the command palette shows results', async () => {
     // FIXME: Command palette requires async-loaded hotkey config from the backend before Ctrl+Shift+P works.
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // Open the command palette
@@ -79,7 +79,7 @@ test.describe('Command Palette', () => {
 
   test.fixme('pressing Enter in the command palette closes it or executes', async () => {
     // FIXME: Command palette requires async-loaded hotkey config from backend.
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // Open the command palette

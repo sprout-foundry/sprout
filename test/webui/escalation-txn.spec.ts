@@ -102,7 +102,7 @@ interface CapturedRequest {
 
 test.describe('Escalation — Run in cloud container (ETH-2)', () => {
   test('open → push → run → pull → finish renders the result and stops the machine', async () => {
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['sidebar-container'])).toBeVisible({ timeout: 30_000 });
 
     const captured: CapturedRequest[] = [];
@@ -246,7 +246,7 @@ test.describe('Escalation — Run in cloud container (ETH-2)', () => {
   });
 
   test('409 (txn already open) renders the friendly busy message', async () => {
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['sidebar-container'])).toBeVisible({ timeout: 30_000 });
     await dismissToastIfOpen();
 

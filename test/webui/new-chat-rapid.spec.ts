@@ -40,7 +40,7 @@ test.setTimeout(60_000);
  * (one click → one session) is covered by unit tests on the create guard.
  */
 test('rapid New Chat clicks in shared mode produce no duplicate sessions and visible feedback', async () => {
-  await page.goto(vite.url, { waitUntil: 'networkidle' });
+  await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
 
   // Shared mode is reported by bootstrap config.
   const sharedMode = await page.evaluate(() => {

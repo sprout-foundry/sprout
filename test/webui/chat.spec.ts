@@ -35,7 +35,7 @@ test.setTimeout(60_000);
 
 test.describe('Chat', () => {
   test('chat shell renders on the webui home page', async () => {
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
   });
 
@@ -44,7 +44,7 @@ test.describe('Chat', () => {
   // then Enter to send. This is a known gap to be filled when testids
   // are added for chat-input / chat-send.
   test('user can type a message into the chat input and submit it', async () => {
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // Fallback: first <textarea> inside the chat shell (chat-input testid is missing)
@@ -64,7 +64,7 @@ test.describe('Chat', () => {
 
   test.fixme('mock-LLM response appears in chat message list after sending a message', async () => {
     // FIXME: Test counts direct children of chat-message-list with `> *` selector, but messages are inside Virtuoso which wraps them in internal DOM structures.
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // Record initial message count (may be 0 or have welcome text)

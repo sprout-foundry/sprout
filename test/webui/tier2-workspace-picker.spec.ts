@@ -37,7 +37,7 @@ test.describe('Workspace Picker', () => {
   test('open picker, select workspace, active switches', async () => {
     // ORIGINAL TEST BODY (unchanged):
     // "open picker, select workspace, active switches"
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // Check if workspace indicator is visible
@@ -129,7 +129,7 @@ test.describe('Workspace Picker', () => {
   test('pick a different workspace, it switches', async () => {
     // ORIGINAL TEST BODY (unchanged):
     // "pick a different workspace, it switches"
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // Check if workspace indicator is visible

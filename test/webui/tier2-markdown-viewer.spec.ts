@@ -37,7 +37,7 @@ test.describe('Markdown Viewer', () => {
   test('open .md file shows headings/lists/code blocks', async () => {
     // ORIGINAL TEST BODY (unchanged):
     // "open .md file shows headings/lists/code blocks"
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // Create a test markdown file in the workspace

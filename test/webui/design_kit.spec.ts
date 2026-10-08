@@ -106,7 +106,7 @@ function resolvedTokens(): Record<string, string> {
 
 /** The live preview: select the screens section, then a screen, if needed. */
 async function openWorkbenchOn(screenFile: string): Promise<void> {
-  await page.goto(vite.url, { waitUntil: "networkidle" });
+  await page.goto(vite.url, { waitUntil: "domcontentloaded" });
   const designView = page.getByTestId("design-view");
   const chatShell = page.getByTestId("chat-shell");
   await expect(designView.or(chatShell).first()).toBeVisible({

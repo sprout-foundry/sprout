@@ -35,7 +35,7 @@ test.setTimeout(60_000);
 
 test.describe('Terminal', () => {
   test('terminal-toggle exists and clicking it makes terminal-pane visible', async () => {
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // The terminal toggle should exist (it may be a button in the bottom bar or sidebar)
@@ -62,7 +62,7 @@ test.describe('Terminal', () => {
   });
 
   test('after running a command, output is present in terminal-container', async () => {
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // First try to open the terminal

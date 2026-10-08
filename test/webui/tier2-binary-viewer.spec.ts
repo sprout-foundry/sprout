@@ -37,7 +37,7 @@ test.describe('Binary Viewer', () => {
   test('open .png/binary file shows binary viewer placeholder', async () => {
     // ORIGINAL TEST BODY (unchanged):
     // "open .png/binary file shows binary viewer placeholder"
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // Create a small PNG file (1x1 red pixel, base64-encoded)

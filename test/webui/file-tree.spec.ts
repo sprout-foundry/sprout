@@ -36,7 +36,7 @@ test.setTimeout(60_000);
 
 test.describe('File Tree', () => {
   test('file tree section is reachable via sidebar-files-tab', async () => {
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['sidebar-container'])).toBeVisible({ timeout: 30_000 });
 
     // The files tab should be visible in the sidebar
@@ -63,7 +63,7 @@ test.describe('File Tree', () => {
   });
 
   test('a file tree item can be clicked and expanded', async () => {
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['sidebar-container'])).toBeVisible({ timeout: 30_000 });
 
     // Navigate to the files tab
@@ -90,7 +90,7 @@ test.describe('File Tree', () => {
   });
 
   test('clicking a file shows it in the editor', async () => {
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['sidebar-container'])).toBeVisible({ timeout: 30_000 });
 
     // Navigate to the files tab

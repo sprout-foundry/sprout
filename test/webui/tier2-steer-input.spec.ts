@@ -38,7 +38,7 @@ test.describe('Steer Input', () => {
     // FIXME: The steer input element requires an active streaming response to be visible.
     // ORIGINAL TEST BODY (unchanged):
     // "typing into steer box interrupts streaming"
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // Use the chat-input testid

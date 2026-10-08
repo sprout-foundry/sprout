@@ -37,7 +37,7 @@ test.describe('Theme Toggle', () => {
   test('toggle theme flips data-theme/class + persists', async () => {
     // ORIGINAL TEST BODY (unchanged):
     // "toggle theme flips data-theme/class + persists"
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // Record the initial theme
@@ -100,7 +100,7 @@ test.describe('Theme Toggle', () => {
       // The theme attribute or class should have changed
       if (newTheme !== initialTheme) {
         // Reload and verify persistence
-        await page.reload({ waitUntil: 'networkidle' });
+        await page.reload({ waitUntil: 'domcontentloaded' });
         await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
         const persistedTheme = await page.evaluate(() => {
@@ -156,7 +156,7 @@ test.describe('Theme Toggle', () => {
     // NOTE: This test requires stubbing the Notification API via addInitScript,
     // which must be done before page navigation. Since we share a page across
     // tests in serial mode, this test is best-effort.
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // Stub Notification API to capture calls
@@ -178,7 +178,7 @@ test.describe('Theme Toggle', () => {
     });
 
     // Reload to apply the init script
-    await page.reload({ waitUntil: 'networkidle' });
+    await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // Open settings and navigate to notifications tab

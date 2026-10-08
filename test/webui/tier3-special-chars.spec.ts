@@ -41,7 +41,7 @@ test.describe('Special Characters in Filenames', () => {
     const filePath = path.join(sprout.workspaceDir, 'hello world.txt');
     fs.writeFileSync(filePath, 'File with spaces in name');
 
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     const filesTab = page.getByTestId(TESTIDS['sidebar-files-tab']);
@@ -72,7 +72,7 @@ test.describe('Special Characters in Filenames', () => {
     const emojiFile = path.join(sprout.workspaceDir, '🚀_rocket.txt');
     fs.writeFileSync(emojiFile, 'Emoji filename content');
 
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     const filesTab = page.getByTestId(TESTIDS['sidebar-files-tab']);
@@ -107,7 +107,7 @@ test.describe('Special Characters in Filenames', () => {
     const mixedFile = path.join(sprout.workspaceDir, 'my file (final) - 世界 🚀.md');
     fs.writeFileSync(mixedFile, '# Mixed Special Characters\n\nThis file has a complex filename.');
 
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     const filesTab = page.getByTestId(TESTIDS['sidebar-files-tab']);
@@ -144,7 +144,7 @@ test.describe('Special Characters in Filenames', () => {
     const punctFile = path.join(sprout.workspaceDir, '!@#$%^&().txt');
     fs.writeFileSync(punctFile, 'Punctuation filename content');
 
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     // The sidebar's selected tab persists per instance, so the reload may
     // come back in Files mode (no chat-shell). Either way, select Files and
     // assert the tree itself — that is the thing under test.

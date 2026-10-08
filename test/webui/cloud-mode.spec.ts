@@ -46,7 +46,7 @@ test.setTimeout(120_000);
 
 test.describe('Cloud Mode — SP-CLOUD-8', () => {
   test('IDE loads without errors — no ErrorBoundary crash', async () => {
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
 
     // Wait for sidebar to render (core UI component)
     await expect(page.getByTestId(TESTIDS['sidebar-container'])).toBeVisible({ timeout: 30_000 });
@@ -87,7 +87,7 @@ test.describe('Cloud Mode — SP-CLOUD-8', () => {
   });
 
   test('sidebar shows only functional tabs in cloud mode', async () => {
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['sidebar-container'])).toBeVisible({ timeout: 30_000 });
 
     // Files tab should always be visible
@@ -104,7 +104,7 @@ test.describe('Cloud Mode — SP-CLOUD-8', () => {
   });
 
   test('sidebar hides non-functional features in cloud mode', async () => {
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['sidebar-container'])).toBeVisible({ timeout: 30_000 });
 
     // Git tab IS visible in cloud mode — in-browser git via isomorphic-git
@@ -121,7 +121,7 @@ test.describe('Cloud Mode — SP-CLOUD-8', () => {
     // which is not available in the Vite dev server E2E environment. The WASM
     // shell is only initialized when the app is served from the platform backend
     // with the full cloud build. Run the platform E2E suite for this coverage.
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['sidebar-container'])).toBeVisible({ timeout: 30_000 });
 
     // Click the files tab to show the file tree
@@ -143,7 +143,7 @@ test.describe('Cloud Mode — SP-CLOUD-8', () => {
     // (the /api/proxy/settings endpoint). The Vite dev E2E environment runs
     // against the local sprout backend, not the platform. Run the platform
     // E2E suite for this coverage.
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['sidebar-container'])).toBeVisible({ timeout: 30_000 });
 
     // Open settings
@@ -161,7 +161,7 @@ test.describe('Cloud Mode — SP-CLOUD-8', () => {
   });
 
   test('sends chat query without crashing', async () => {
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['sidebar-container'])).toBeVisible({ timeout: 30_000 });
 
     // Type a query in the chat input and send it
@@ -180,7 +180,7 @@ test.describe('Cloud Mode — SP-CLOUD-8', () => {
   test('responsive layout at different viewport sizes', async () => {
     // Test at desktop size
     await page.setViewportSize({ width: 1920, height: 1080 });
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['sidebar-container'])).toBeVisible({ timeout: 30_000 });
 
     // Test at tablet size

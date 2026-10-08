@@ -36,7 +36,7 @@ test.setTimeout(60_000);
 test.describe('Editor', () => {
   test.fixme('editor pane renders', async () => {
     // FIXME: The editor pane is not visible on initial page load — it requires opening a file or tab first.
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // The editor pane should be visible (it may show a welcome tab initially)
@@ -53,7 +53,7 @@ test.describe('Editor', () => {
 
   test.fixme('typing in the editor textarea works', async () => {
     // FIXME: Editor pane not visible on initial load — requires opening a file first.
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // NOTE: The editor content area may be a <textarea>, .cm-content,
@@ -104,7 +104,7 @@ test.describe('Editor', () => {
 
   test.fixme('Ctrl+Z undo works in the editor', async () => {
     // FIXME: Editor pane not visible on initial load — requires opening a file first.
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     const editorArea = page.getByTestId(TESTIDS['editor']);
@@ -151,7 +151,7 @@ test.describe('Editor', () => {
 
   test.fixme('Ctrl+S save works without error toast', async () => {
     // FIXME: Editor pane not visible on initial load — requires opening a file first.
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     const editorArea = page.getByTestId(TESTIDS['editor']);

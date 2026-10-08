@@ -41,7 +41,7 @@ test.describe('Multi-Chat', () => {
   test('create chat, create another, switch back, messages isolated', async () => {
     // ORIGINAL TEST BODY (unchanged):
     // "create chat, create another, switch back, messages isolated"
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // Use the chat-input testid
@@ -133,7 +133,7 @@ test.describe('Multi-Chat', () => {
     // FIXME: Assertion about message ordering fails due to mock-LLM timing.
     // ORIGINAL TEST BODY (unchanged):
     // "messages ordered"
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // Use the chat-input testid

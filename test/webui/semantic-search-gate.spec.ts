@@ -43,7 +43,7 @@ test.describe.configure({ mode: 'serial' });
 test.setTimeout(60_000);
 
 async function openSearchPanel() {
-  await page.goto(vite.url, { waitUntil: 'networkidle' });
+  await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('sidebar-container')).toBeVisible({ timeout: 30_000 });
   const searchTab = page.getByTestId('sidebar-search-tab');
   await expect(searchTab).toBeVisible({ timeout: 15_000 });

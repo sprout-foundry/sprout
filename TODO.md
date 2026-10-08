@@ -46,7 +46,7 @@ starter is copied into each new builder project, so these ship to users.
       builds, passes its tests and serves every manifest route. Update the
       stack skills if a major bump changes conventions. Bump each starter's
       version in its manifest.
-- [ ] **deps.2** Keep them patched: the starters CI workflow
+- [x] **deps.2** Keep them patched: the starters CI workflow
       (`.github/workflows/starters.yml`) runs `npm audit --audit-level=high`
       per starter and fails on high/critical; add a `.github/dependabot.yml`
       entry per starter directory (npm, weekly, grouped) so updates arrive

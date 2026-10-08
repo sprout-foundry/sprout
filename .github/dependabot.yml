@@ -1,0 +1,39 @@
+# Dependabot configuration.
+#
+# The reference starters under pkg/starters/data/ are copied into every new
+# builder project, so their dependencies ship to users. Each starter is its own
+# npm project (they are not part of the root workspace), so each gets its own
+# npm entry: weekly, with all updates grouped into a single PR per starter to
+# keep the review queue small. The starters CI workflow audits each lockfile
+# for high/critical advisories on every change and nightly.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /pkg/starters/data/static-site
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      static-site:
+        patterns:
+          - '*'
+
+  - package-ecosystem: npm
+    directory: /pkg/starters/data/web-app
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      web-app:
+        patterns:
+          - '*'
+
+  - package-ecosystem: npm
+    directory: /pkg/starters/data/web-app-data
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      web-app-data:
+        patterns:
+          - '*'

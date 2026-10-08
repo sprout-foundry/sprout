@@ -2,7 +2,7 @@
 
 ## Report a bug
 
-- [ ] **bug.1** A visible "Report a bug" button that opens a new issue on
+- [x] **bug.1** A visible "Report a bug" button that opens a new issue on
       `github.com/sprout-foundry/sprout`:
       - **Where:** always reachable — the help/user menu and the status bar
         (or the equivalent spot in the layered/builder UIs where the menu bar

@@ -1,5 +1,19 @@
 # TODO
 
+## Design tokens (for the platform look-and-feel work)
+
+- [ ] **design.1** Fix and extend `@sprout-foundry/design`
+      (`packages/design/tokens.css`): `--brand-frost` means a light cyan in
+      dark mode but a green (#1ba03d) in light mode — give each brand token
+      one meaning in both themes (rename or add a token for the green, and
+      update every use in `webui/` and `packages/`); add motion tokens
+      (`--duration-fast` ~120ms, `--duration-base` ~180ms,
+      `--duration-slow` ~320ms alongside the existing `--ease-*`) and a
+      `prefers-reduced-motion` block that zeroes them; document them in the
+      package README. Bump the package version (1.1.0) — publishing is the
+      owner's `design-v1.1.0` tag. Tests: a token check that each brand
+      token resolves in both themes and the web UI builds.
+
 ## Starter dependency security (before builders use the starters)
 
 GitHub Dependabot reports ~100 open alerts in the starter lockfiles

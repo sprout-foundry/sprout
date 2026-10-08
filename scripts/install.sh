@@ -543,6 +543,85 @@ print_path_hint() {
 }
 
 # Print success message
+# Query the running daemon's /health endpoint. Prints the raw JSON on
+# success (nothing on failure) — parse with the health_field helper.
+# Uses a short timeout: an absent daemon must not stall the installer.
+daemon_health_json() {
+    curl --fail --silent --max-time 3 "http://127.0.0.1:56000/health" 2>/dev/null || true
+}
+
+# Extract one top-level string field from the /health JSON without
+# jq (the installer's dependency list is deliberately tiny).
+# Usage: health_field <json> <field>
+health_field() {
+    printf '%s' "$1" | grep -o "\"$2\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" | head -1 | sed "s/.*: *\"//;s/\"$//"
+}
+
+# Restart the daemon after a successful binary swap. Read-only on the
+# filesystem apart from invoking sprout's own service commands. Busy-gating
+# (drain + confirm) lives inside `sprout service restart` itself.
+restart_daemon_after_upgrade() {
+    local install_dir="$1"
+    local new_version="$2"
+    local new_binary="${install_dir}/sprout"
+
+    # Is a daemon running? Health first (covers service AND standalone
+    # daemons); an unreachable port means nothing to restart.
+    local health
+    health=$(daemon_health_json)
+    if [ -z "$health" ]; then
+        # Not running via HTTP. The service may still be registered but
+        # stopped — reinstalling its unit/plist is still correct so it
+        # points at the new binary on next start.
+        if [ "$service_was_installed" = "true" ]; then
+            log_info "Daemon not running. Refreshing the service definition..."
+            if "$new_binary" service install -y >/dev/null 2>&1; then
+                log_success "Service definition updated."
+            else
+                log_warn "Could not refresh the service definition. Run 'sprout service install' manually."
+            fi
+        fi
+        return 0
+    fi
+
+    local old_version
+    old_version=$(health_field "$health" version)
+    [ -z "$old_version" ] && old_version="unknown"
+
+    if ! "$new_binary" service restart -y; then
+        # Either no service manager on this platform (plain daemon) or the
+        # restart failed. Advise instead of failing the install.
+        log_warn "Could not restart the service daemon automatically."
+        log_info "The upgrade succeeded; any running daemon is still on $old_version."
+        log_info "Restart it to pick up $new_version:  sprout service restart"
+        return 0
+    fi
+
+    # Wait for the daemon to come back serving the NEW version. 20s covers
+    # the graceful-shutdown window (5s) plus a fresh start.
+    local i=0
+    while [ "$i" -lt 40 ]; do
+        local now_health now_version
+        now_health=$(daemon_health_json)
+        now_version=$(health_field "$now_health" version)
+        if [ -n "$now_version" ] && [ "$now_version" != "$old_version" ]; then
+            log_success "Daemon restarted: $old_version → $now_version"
+            return 0
+        fi
+        # A daemon built before /health carried a version reports empty;
+        # accept plain healthy as good enough rather than looping forever.
+        if [ -n "$now_health" ] && [ "$old_version" = "unknown" ]; then
+            log_success "Daemon restarted (running build does not report a version)."
+            return 0
+        fi
+        i=$((i + 1))
+        sleep 0.5
+    done
+
+    log_warn "Daemon restart issued but the new version was not confirmed within 20s."
+    log_info "Check: sprout service status"
+}
+
 print_success() {
     local install_dir="$1"
     local version="$2"
@@ -949,16 +1028,27 @@ main() {
     # Verify installation
     verify_installation "$install_dir"
 
-    # If the service was previously installed, reinstall it now so the service
-    # unit/plist points at the newly installed binary. Skip on Termux — it
-    # has neither systemd nor launchd, so 'sprout service install' would fail.
-    if [ "$service_was_installed" = "true" ] && ! is_termux; then
-        log_info "Reinstalling sprout service to point at the updated binary..."
-        if "${install_dir}/sprout" service install; then
-            log_success "Service reinstalled successfully."
-        else
-            log_warn "Service reinstall failed. Run 'sprout service install' manually."
-        fi
+    # ── Daemon restart (the part that picks up the new binary) ──────────
+    # The binary swap is atomic (rename over the old file), so the running
+    # daemon keeps serving the OLD build until restarted. Restart it here,
+    # but only after its in-flight work has drained: an upgrade must not
+    # cut an agent query mid-flight.
+    #
+    #   - daemon running + drained       → restart, verify the new version
+    #   - daemon running + still busy    → interactive: confirm; piped/CI:
+    #                                      defer with instructions
+    #   - daemon not running             → nothing to restart
+    #
+    # SPROUT_SKIP_RESTART=1 forces the defer path (zero-churn upgrades).
+    if is_termux; then
+        # Termux has neither launchd nor systemd; the daemon is a plain
+        # process the user manages themselves.
+        log_info "Termux: not restarting any daemon. Restart 'sprout agent -d' to pick up the new binary."
+    elif [ "${SPROUT_SKIP_RESTART:-0}" = "1" ]; then
+        log_info "SPROUT_SKIP_RESTART=1 — leaving any running daemon on the old binary."
+        log_info "Run 'sprout service restart' (or restart 'sprout agent -d') to pick up $version."
+    else
+        restart_daemon_after_upgrade "$install_dir" "$version"
     fi
 
     # Print success message

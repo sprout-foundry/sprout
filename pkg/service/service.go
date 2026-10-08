@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -159,8 +160,100 @@ var serviceStatusCmd = &cobra.Command{
 		fmt.Printf("Service '%s': ", serviceName)
 		if running {
 			fmt.Printf("running (%s)\n", serviceURL)
+			// Report what the RUNNING daemon was started from. An upgrade
+			// swaps the binary on disk but leaves the process on the old
+			// build until a restart; this line makes that skew visible.
+			if hs := fetchHealthStatus(); hs != nil && hs.Version != "" {
+				fmt.Printf("  running build: %s (%s)\n", hs.Version, hs.Commit)
+			}
 		} else {
 			fmt.Println("stopped")
+		}
+		return nil
+	},
+}
+
+var serviceRestartCmd = &cobra.Command{
+	Use:   "restart",
+	Short: "Restart the sprout daemon service (waits for in-flight queries)",
+	Long: `Restart the sprout daemon service, picking up the newly installed binary.
+
+Before stopping the daemon it waits (up to SPROUT_SERVICE_DRAIN_TIMEOUT
+seconds, default 15) for active agent queries to finish, so an upgrade
+restart does not cut work mid-flight. Pass --force to skip the drain and
+restart immediately, or -y to accept the restart without the interactive
+confirm when queries are still running.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		sm, err := getOrCreateServiceManager()
+		if err != nil {
+			return err
+		}
+
+		running, err := sm.Status()
+		if err != nil {
+			return fmt.Errorf("failed to query service status: %w", err)
+		}
+		if !running {
+			// Distinguish "nothing at all" from "a daemon that isn't
+			// service-managed": restarting the service would silently
+			// START a service the user never installed alongside their
+			// standalone daemon.
+			if hs := fetchHealthStatus(); hs != nil {
+				fmt.Println("A sprout daemon is running, but not via the system service.")
+				fmt.Println("Restart it directly (stop the 'sprout agent -d' process and start it again);")
+				fmt.Println("auto-started daemons also stop themselves when idle.")
+				return nil
+			}
+			fmt.Println("Service is not running — starting it.")
+			return sm.Start()
+		}
+
+		old := fetchHealthStatus()
+		if err := drainActiveQueries(restartDrainTimeout); err != nil {
+			if !ForceConfirm {
+				fmt.Printf("%d agent quer(y/ies) still active after %s.\n", busyCount(old), restartDrainTimeout)
+				fmt.Print("Restart now and interrupt them? (y/N): ")
+				reader := bufio.NewReader(os.Stdin)
+				resp, _ := reader.ReadString('\n')
+				resp = strings.TrimSpace(strings.ToLower(resp))
+				if resp != "y" {
+					fmt.Println("Restart deferred. Run 'sprout service restart' when the queries finish.")
+					return nil
+				}
+			} else {
+				fmt.Printf("Proceeding with restart despite %d active quer(y/ies) (--yes).\n", busyCount(old))
+			}
+		}
+
+		if restarter, ok := sm.(serviceRestarter); ok {
+			if err := restarter.Restart(); err != nil {
+				return fmt.Errorf("failed to restart service: %w", err)
+			}
+		} else {
+			// Generic path: stop then start.
+			if err := sm.Stop(); err != nil {
+				return fmt.Errorf("failed to stop service: %w", err)
+			}
+			if err := sm.Start(); err != nil {
+				return fmt.Errorf("failed to start service: %w", err)
+			}
+		}
+
+		// Wait for the daemon to come back healthy and report the version
+		// it now runs, so the operator can confirm the new binary took over.
+		if hs := waitHealthy(15 * time.Second); hs != nil {
+			newV := hs.Version
+			if newV == "" {
+				newV = "unknown (pre-version daemon)"
+			}
+			if old != nil && old.Version != "" {
+				fmt.Printf("Daemon restarted: %s → %s\n", old.Version, newV)
+			} else {
+				fmt.Printf("Daemon restarted; running %s\n", newV)
+			}
+		} else {
+			fmt.Println("Daemon restarted; health check did not return OK within 15s.")
+			fmt.Printf("Check it with: sprout service status\n")
 		}
 		return nil
 	},
@@ -184,11 +277,13 @@ var serviceDiagnoseCmd = &cobra.Command{
 func init() {
 	serviceInstallCmd.Flags().BoolVarP(&ForceConfirm, "yes", "y", false, "Skip confirmation prompts and auto-remove legacy services")
 	serviceUninstallCmd.Flags().BoolVarP(&ForceConfirm, "yes", "y", false, "Skip confirmation prompts")
+	serviceRestartCmd.Flags().BoolVarP(&ForceConfirm, "yes", "y", false, "Restart without confirming when queries are still active")
 
 	ServiceCmd.AddCommand(serviceInstallCmd)
 	ServiceCmd.AddCommand(serviceUninstallCmd)
 	ServiceCmd.AddCommand(serviceStartCmd)
 	ServiceCmd.AddCommand(serviceStopCmd)
+	ServiceCmd.AddCommand(serviceRestartCmd)
 	ServiceCmd.AddCommand(serviceStatusCmd)
 	ServiceCmd.AddCommand(serviceDiagnoseCmd)
 }

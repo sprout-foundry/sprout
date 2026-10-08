@@ -90,6 +90,14 @@ func TestHealthEndpoint_ReturnsOK(t *testing.T) {
 	queries, ok := body["active_queries"].(float64) // JSON numbers decode as float64
 	require.True(t, ok, "active_queries should be a number")
 	assert.Equal(t, float64(0), queries, "active_queries should be 0 at start")
+
+	// version/commit — binary identity for the upgrade-restart flow. Source
+	// builds report "dev"/""; the fields must exist either way.
+	require.Contains(t, body, "version", "version should be present")
+	version, ok := body["version"].(string)
+	require.True(t, ok, "version should be a string")
+	assert.NotEmpty(t, version, "version should be non-empty (buildinfo.Version default is \"dev\")")
+	require.Contains(t, body, "commit", "commit should be present")
 }
 
 // TestHealthEndpoint_DaemonMode_AgentAvailableFalse verifies that with a nil

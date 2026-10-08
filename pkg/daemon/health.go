@@ -34,6 +34,11 @@ type HealthStatus struct {
 	Uptime         string `json:"uptime"`
 	AgentAvailable bool   `json:"agent_available"`
 	ActiveQueries  int    `json:"active_queries"`
+	// Binary identity of the RUNNING daemon (build-time injection). Empty
+	// when the daemon predates the field — callers must treat "" as
+	// unknown, not as a mismatch.
+	Version string `json:"version,omitempty"`
+	Commit  string `json:"commit,omitempty"`
 }
 
 // ---------------------------------------------------------------------------

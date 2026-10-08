@@ -8,6 +8,8 @@ param(
     [switch]$Version,
     [switch]$KeepConfig,
     [switch]$DryRun,
+    # Skip the "interrupt running queries?" confirmation during upgrades.
+    [switch]$Yes,
     [Alias('?')]
     [switch]$Help
 )
@@ -763,6 +765,53 @@ function Main {
     $downloadUrl = Download-Release -Version $version -OS $os -Arch $arch
     Write-LogInfo "Downloaded from: $downloadUrl"
 
+    # ── Running daemon: must stop BEFORE the swap ────────────────────────
+    # Windows locks a running executable's file, so Copy-Item over
+    # sprout.exe fails while the daemon (or any sprout process) is live.
+    # Warn about in-flight work first, then stop it. -Yes skips the
+    # confirmation; -SkipRestart is not offered here because skipping the
+    # stop would skip the whole upgrade.
+    $runningProc = Get-Process sprout -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($runningProc) {
+        # Best-effort busy check against the daemon's health endpoint.
+        $activeQueries = -1
+        try {
+            $health = Invoke-RestMethod -Uri "http://127.0.0.1:56000/health" -TimeoutSec 3
+            $activeQueries = [int]$health.active_queries
+        } catch {
+            # A sprout process that is not the daemon (CLI mid-command) —
+            # nothing to query. Treat as idle.
+            $activeQueries = 0
+        }
+
+        if ($activeQueries -gt 0 -and -not $Yes.IsPresent) {
+            if ([Console]::IsInputRedirected) {
+                throw "$activeQueries agent quer(y/ies) are running. Stop them (or wait), then re-run the installer."
+            }
+            Write-LogWarn "$activeQueries agent quer(y/ies) are running."
+            $answer = Read-Host "Stop the daemon and interrupt them? (y/N)"
+            if ($answer -notmatch '^[Yy]') {
+                throw "Upgrade aborted so the running queries can finish. Re-run when idle."
+            }
+        }
+
+        Write-LogInfo "Stopping the running sprout daemon (PID $($runningProc.Id))..."
+        try {
+            & $existingBinary service stop 2>$null | Out-Null
+        } catch {
+            # No service manager on this platform — fall through to the
+            # process kill below.
+        }
+        if (Get-Process sprout -ErrorAction SilentlyContinue) {
+            Stop-Process -Name sprout -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Milliseconds 500
+        }
+        if (Get-Process sprout -ErrorAction SilentlyContinue) {
+            throw "Could not stop the running sprout process; refusing to overwrite the binary."
+        }
+        Write-LogSuccess "Daemon stopped."
+    }
+
     # Verify the downloaded archive against the release's SHA256SUMS manifest
     # BEFORE we extract / copy it. Failure aborts.
     $archiveName = "sprout-${os}-${arch}.zip"
@@ -792,7 +841,9 @@ function Main {
     # ships on Windows, restore it here gated by $Service / $NoService.
     if ($Service.IsPresent) {
         Write-LogInfo "Automatic service management is not yet available on Windows."
-        Write-LogInfo "Run 'sprout agent -d' to start the daemon manually."
+    }
+    if ($runningProc) {
+        Write-LogInfo "The daemon was stopped for the upgrade — run 'sprout agent -d' to start the new version."
     }
 
     # Add to PATH if needed

@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import migrationSql from '../drizzle/migrations/0000_init.sql?raw';
 
 // The API test runs inside the Workers runtime through
-// @cloudflare/vitest-pool-workers. SELF dispatches a request through the
+// @cloudflare/vitest-plugin. SELF dispatches a request through the
 // Worker entry point (the Hono app) with the D1 binding from wrangler.toml;
 // env.DB is the same local database, so the test can apply the migration
 // directly and then exercise the route end to end. The migration SQL is

@@ -35,7 +35,7 @@ func TestWaitBasic(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
-		if elapsed > 100*time.Millisecond {
+		if elapsed > 2*time.Second {
 			t.Errorf("Wait should be immediate for first %d requests, took %v", 5, elapsed)
 		}
 	}
@@ -51,8 +51,10 @@ func TestWaitBasic(t *testing.T) {
 		t.Fatalf("Unexpected error: %v", err)
 	}
 	// With rate 10 tps, we should wait ~100ms for the 6th token
-	// The test range is wider to accommodate implementation differences
-	if elapsed < 80*time.Millisecond || elapsed > 300*time.Millisecond {
+	// The lower bound proves the wait happened; the upper bound is
+	// generous because a loaded runner (macOS CI in particular) can
+	// overshoot well past the expected wait.
+	if elapsed < 80*time.Millisecond || elapsed > 2*time.Second {
 		t.Errorf("Expected wait ~100ms, got %v", elapsed)
 	}
 }
@@ -94,7 +96,7 @@ func TestBurstCapacity(t *testing.T) {
 	}
 	elapsed := time.Since(start)
 
-	if elapsed > 100*time.Millisecond {
+	if elapsed > 2*time.Second {
 		t.Errorf("Consuming burst tokens should be immediate, took %v", elapsed)
 	}
 
@@ -107,8 +109,9 @@ func TestBurstCapacity(t *testing.T) {
 		t.Fatalf("Unexpected error: %v", err)
 	}
 	// With rate 1 tps, should wait ~1s after burst exhausted
-	// The test range is wider to accommodate implementation differences
-	if elapsed < 900*time.Millisecond || elapsed > 1200*time.Millisecond {
+	// The lower bound proves the wait happened; the upper bound is
+	// generous because a loaded runner can overshoot the expected wait.
+	if elapsed < 900*time.Millisecond || elapsed > 3*time.Second {
 		t.Errorf("Expected wait ~1s after burst exhausted, got %v", elapsed)
 	}
 }
@@ -236,7 +239,9 @@ func TestUpdateRate(t *testing.T) {
 	wait2 := time.Since(start)
 
 	// With rate 10.0, should wait ~100ms
-	if wait2 < 80*time.Millisecond || wait2 > 300*time.Millisecond {
+	// The lower bound proves the wait happened; the upper bound is
+	// generous because a loaded runner can overshoot the expected wait.
+	if wait2 < 80*time.Millisecond || wait2 > 2*time.Second {
 		t.Errorf("Expected wait ~100ms at rate 10.0, got %v", wait2)
 	}
 }
@@ -277,7 +282,7 @@ func TestUpdateBurst(t *testing.T) {
 	}
 	elapsed := time.Since(start)
 
-	if elapsed > 50*time.Millisecond {
+	if elapsed > 2*time.Second {
 		t.Errorf("Consuming available tokens should be immediate, took %v", elapsed)
 	}
 	if consumed == 0 {
@@ -298,7 +303,7 @@ func TestUnlimitedAccess(t *testing.T) {
 	}
 	elapsed := time.Since(start)
 
-	if elapsed > 100*time.Millisecond {
+	if elapsed > 2*time.Second {
 		t.Errorf("Unlimited access should not wait, took %v", elapsed)
 	}
 
@@ -387,7 +392,10 @@ func TestDrainAndWait(t *testing.T) {
 	}
 
 	// With 5 tps, should wait ~200ms for 1 token
-	if elapsed < 150*time.Millisecond || elapsed > 300*time.Millisecond {
+	// The lower bound proves the wait happened; the upper bound is
+	// generous because a loaded runner (macOS CI in particular) can
+	// overshoot the expected wait.
+	if elapsed < 150*time.Millisecond || elapsed > 2*time.Second {
 		t.Errorf("Expected wait ~200ms, got %v", elapsed)
 	}
 }

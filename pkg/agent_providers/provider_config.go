@@ -157,6 +157,19 @@ type VisionLimitsSpec struct {
 	MaxImageDimension int `json:"max_dimension,omitempty"`
 }
 
+// SamplingParams holds optional per-model sampling overrides. Every field is
+// a pointer so "not configured" is distinguishable from an explicit zero
+// (temperature 0 is a meaningful value). Parameters carries free-form
+// request fields (e.g. frequency_penalty, presence_penalty) that are copied
+// onto the request body verbatim — unknown keys are passed through, never
+// rejected, because new provider knobs appear faster than this schema
+// changes.
+type SamplingParams struct {
+	Temperature *float64               `json:"temperature,omitempty"`
+	TopP        *float64               `json:"top_p,omitempty"`
+	Parameters  map[string]interface{} `json:"parameters,omitempty"`
+}
+
 // ModelInfo represents information about a model (simplified version for config)
 type ModelInfo struct {
 	ID            string   `json:"id"`
@@ -167,6 +180,10 @@ type ModelInfo struct {
 	// Per-model vision limits (SP-140 Phase 1): override the provider's
 	// capability table for this model only. Optional.
 	VisionLimits *VisionLimitsSpec `json:"vision_limits,omitempty"`
+	// Sampling holds per-model request-parameter overrides (temperature,
+	// top_p, and free-form extra parameters). When set, these win over the
+	// provider-level defaults for this model. Optional.
+	Sampling *SamplingParams `json:"sampling,omitempty"`
 	// Pricing (USD per million tokens) — optional, used by enrich_registry
 	// to estimate probe cost for models sourced from embedded configs.
 	InputCost  float64 `json:"input_cost,omitempty"`
@@ -397,6 +414,28 @@ func (c *ProviderConfig) validateModelConfig() error {
 		}
 		if _, err := regexp.Compile(patternOverride.Pattern); err != nil {
 			return agenterrors.NewValidation(fmt.Sprintf("completion pattern override '%s' has invalid regex pattern: %v", patternOverride.Pattern, err), nil)
+		}
+	}
+
+	// Validate per-model sampling overrides. Temperature and top_p are
+	// validated for range; the free-form parameters map is intentionally
+	// unrestricted (unknown keys pass straight through to the request).
+	for i := range c.Models.ModelInfo {
+		mi := &c.Models.ModelInfo[i]
+		if mi.Sampling == nil {
+			continue
+		}
+		if mi.Sampling.Temperature != nil {
+			t := *mi.Sampling.Temperature
+			if t < 0 || t > 2 {
+				return agenterrors.NewValidation(fmt.Sprintf("model_info[%d] ('%s') sampling temperature %v is outside the valid range [0, 2]", i, mi.ID, t), nil)
+			}
+		}
+		if mi.Sampling.TopP != nil {
+			p := *mi.Sampling.TopP
+			if p < 0 || p > 1 {
+				return agenterrors.NewValidation(fmt.Sprintf("model_info[%d] ('%s') sampling top_p %v is outside the valid range [0, 1]", i, mi.ID, p), nil)
+			}
 		}
 	}
 

@@ -74,11 +74,6 @@ func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.T
 		request["stream_options"] = map[string]interface{}{"include_usage": true}
 	}
 
-	// Add default parameters
-	if p.config.Defaults.Temperature != nil {
-		request["temperature"] = *p.config.Defaults.Temperature
-	}
-
 	// Apply output token budgeting against context limits.
 	contextLimit, _ := p.GetModelContextLimit()
 	completionLimit := p.getModelCompletionLimit()
@@ -111,22 +106,17 @@ func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.T
 
 	request["max_tokens"] = budgetedMax
 
-	if p.config.Defaults.TopP != nil {
-		request["top_p"] = *p.config.Defaults.TopP
-	}
-
-	// Add provider-specific parameters
-	if p.config.Defaults.Parameters != nil {
-		for key, value := range p.config.Defaults.Parameters {
-			request[key] = value
-		}
-	}
-
 	// Apply model-specific defaults and suppress unsupported fields.
 	// instruct=true when thinking is disabled, so models with a distinct
 	// non-thinking recommendation (e.g. Qwen3.6, Qwen3.8) get the correct
 	// parameters.
 	applyModelSpecificSettings(model, request, disableThinking)
+	// Config wins over the built-in catalog: re-apply the resolved sampling
+	// after the model-settings pass so an operator's per-model (or explicit
+	// provider-level) temperature/top_p/parameters are not silently replaced
+	// by the catalog defaults. Only values that are actually configured are
+	// re-applied; unset knobs keep whatever the catalog decision produced.
+	p.applyResolvedSampling(model, request, blockedParams(model, disableThinking))
 	// Disable wins: when thinking is being turned off, the effort level is
 	// meaningless and would overwrite the disable-targeting reasoning object.
 	if !disableThinking {
@@ -269,6 +259,40 @@ func applyModelSpecificSettings(model string, request map[string]interface{}, di
 			continue
 		}
 		request[param] = value
+	}
+}
+
+// blockedParams returns the set of request parameters the built-in catalog
+// marks as unsupported for a model — a backend constraint that config-sourced
+// sampling must not override.
+func blockedParams(model string, disableThinking bool) map[string]bool {
+	return modelsettings.ResolveModelSettingsForMode(model, disableThinking).Unsupported
+}
+
+// applyResolvedSampling writes the config-resolved sampling parameters onto
+// the request last, so an explicitly configured value beats any decision the
+// built-in model-settings catalog made. Only configured values are applied —
+// an unset knob leaves the catalog's choice (or its absence) in place.
+//
+// The catalog's Unsupported set is a backend constraint (e.g. gpt-5.x rejects
+// temperature/top_p), not a sampling preference, so keys it blocks are never
+// re-applied — a configured parameter can override a recommended value but
+// cannot re-introduce a field the backend refuses.
+func (p *GenericProvider) applyResolvedSampling(model string, request map[string]interface{}, unsupported map[string]bool) {
+	blocked := func(key string) bool {
+		return unsupported[strings.ToLower(strings.TrimSpace(key))]
+	}
+	if temperature := p.config.ResolveTemperature(model); temperature != nil && !blocked("temperature") {
+		request["temperature"] = *temperature
+	}
+	if topP := p.config.ResolveTopP(model); topP != nil && !blocked("top_p") {
+		request["top_p"] = *topP
+	}
+	for key, value := range p.config.ResolveParameters(model) {
+		if blocked(key) {
+			continue
+		}
+		request[key] = value
 	}
 }
 

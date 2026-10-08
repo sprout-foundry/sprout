@@ -2,6 +2,15 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.24.1] - 2026-10-08
+
+- fix(benchmark): benchmark runs always verify their turn — runs force change tracking on, take a git baseline so real on-disk changes still trigger verification, and run headless shell commands under the narrow `--unsafe-shell` posture so a model's edits are not silently denied.
+- fix(benchmark): a run without a verification result records why (no code changes, verification disabled, setup error, timeout) and the report lists it under failure categories.
+- feat(benchmark): failed runs keep their evidence — the working-copy diff, the agent transcript and the verification output — under `<output>/runs/` (`--keep-runs=failed|all|none`, default `failed`).
+- fix(agent): `sprout agent` no longer hands a turn to a running daemon of a different version or config root; it runs the turn in-process and says why.
+- fix(verify): the dev-server readiness probe, page checks and interaction checks use `localhost`, so dev servers that bind only the IPv6 loopback (Astro, Vite on recent Node) are reachable — the static-site starter's page check failed without it.
+- fix(tools): `read_file` accepts the common line-range spellings, names the exact `view_range` for truncated output, and answers a repeated identical read with a hint instead of the same content.
+
 ## [v0.24.0] - 2026-10-07
 
 - feat(starters): three reference starters — `static-site` (Astro), `web-app` (React + Vite + React Router) and `web-app-data` (the web app plus a Hono API on Cloudflare Workers with D1 through Drizzle, run locally with Wrangler and no account) — each with pinned dependencies, one working test, quality config, a README and a design scaffold; a CI job instantiates, builds, tests and serves every starter.

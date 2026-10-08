@@ -3,7 +3,6 @@ package verify
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/plancontract"
@@ -191,7 +190,7 @@ func stepExcerpt(obs *StepObservation, err error) string {
 }
 
 // devServerBaseURL is the dev server root URL the interaction steps start
-// from (http://127.0.0.1:<port>/). Steps may navigate elsewhere themselves.
+// from (devServerURL). Steps may navigate elsewhere themselves.
 func devServerBaseURL(port int) string {
-	return fmt.Sprintf("http://127.0.0.1:%d/", port)
+	return devServerURL(port, "/")
 }

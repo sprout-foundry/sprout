@@ -37,7 +37,7 @@ const (
 // without a provider: production leaves it nil and the command builds the
 // harness's default runner (real provider clients); a test swaps in a
 // runner whose AgentFactory is the scripted model.
-var benchmarkRunnerFor func(suiteDir string, models []benchmark.ModelSpec, runs int, timeout time.Duration) *benchmark.Runner
+var benchmarkRunnerFor func(suiteDir string, models []benchmark.ModelSpec, runs int, timeout time.Duration, keepRuns benchmark.KeepRuns, evidenceDir string) *benchmark.Runner
 
 var (
 	benchmarkSuiteDir string
@@ -45,6 +45,7 @@ var (
 	benchmarkOutDir   string
 	benchmarkRuns     int
 	benchmarkTimeout  time.Duration
+	benchmarkKeepRuns string
 )
 
 var benchmarkCmd = &cobra.Command{
@@ -65,6 +66,11 @@ run against the fresh copy), never from the model's own reply.
 Each run carries a wall-clock timeout; a hung turn is stopped through the
 agent's interrupt mechanism and recorded as a failed run.
 
+Run evidence (the run's working-copy diff against its baseline, the agent
+transcript and the verification output) is kept under <output>/runs/ for
+failed runs by default; --keep-runs=all keeps it for every run and
+--keep-runs=none keeps none.
+
 Examples:
   # Committed fixture suite, default model list (the provider catalog's
   # recommended models)
@@ -74,7 +80,10 @@ Examples:
   sprout benchmark --models anthropic/claude-sonnet-4-5,openai/gpt-5-mini --runs 1 --output out/bench
 
   # Stop a run that hangs for more than five minutes
-  sprout benchmark --timeout 5m`,
+  sprout benchmark --timeout 5m
+
+  # Keep evidence for every run, passed or failed
+  sprout benchmark --keep-runs all`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runBenchmarkCmd,
 }
@@ -90,6 +99,8 @@ func init() {
 		"Runs per task per model (default 3)")
 	benchmarkCmd.Flags().DurationVar(&benchmarkTimeout, "timeout", 0,
 		"Per-run wall-clock limit; a run exceeding it is interrupted and recorded as failed (default 10m)")
+	benchmarkCmd.Flags().StringVar(&benchmarkKeepRuns, "keep-runs", "failed",
+		"Keep run evidence (working-copy diff, transcript, verification output) for failed runs, all runs, or none (failed|all|none, default failed)")
 	rootCmd.AddCommand(benchmarkCmd)
 }
 
@@ -111,6 +122,11 @@ func runBenchmarkCmd(cmd *cobra.Command, args []string) error {
 		return usageErrorf(cmd, "%v", err)
 	}
 
+	keepRuns, err := benchmark.ParseKeepRuns(benchmarkKeepRuns)
+	if err != nil {
+		return usageErrorf(cmd, "%v", err)
+	}
+
 	tasks, err := benchmark.LoadSuite(suiteDir)
 	if err != nil {
 		return newUsageError(cmd, fmt.Errorf("load benchmark suite: %w", err))
@@ -125,6 +141,7 @@ func runBenchmarkCmd(cmd *cobra.Command, args []string) error {
 	if outDir == "" {
 		outDir = benchmarkDefaultOutDir
 	}
+
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return fmt.Errorf("create benchmark output dir %s: %w", outDir, err)
 	}
@@ -138,7 +155,7 @@ func runBenchmarkCmd(cmd *cobra.Command, args []string) error {
 	// it per run, so no configured default provider is needed.
 	var runner *benchmark.Runner
 	if benchmarkRunnerFor != nil {
-		runner = benchmarkRunnerFor(suiteDir, models, benchmarkRuns, benchmarkTimeout)
+		runner = benchmarkRunnerFor(suiteDir, models, benchmarkRuns, benchmarkTimeout, keepRuns, outDir)
 	} else {
 		mgr, err := configuration.NewManagerSilent()
 		if err != nil {
@@ -154,6 +171,8 @@ func runBenchmarkCmd(cmd *cobra.Command, args []string) error {
 			Models:        models,
 			RunsPerTask:   benchmarkRuns,
 			Timeout:       benchmarkTimeout,
+			KeepRuns:      keepRuns,
+			EvidenceDir:   outDir,
 		}
 	}
 

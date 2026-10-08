@@ -209,6 +209,14 @@ type starterAggregate struct {
 //     (Failed via Errors, no failed check — e.g. an unreadable plan or
 //     manifest): the benchmark's plumbing, not the agent's work, is
 //     what needs fixing.
+//   - "not_verified" when a failed run stored no verification result
+//     (Result == nil, Err == nil): the turn produced no verdict at all —
+//     the hook never ran, the turn changed no code, a setup error
+//     stopped it, or the turn timed out. The run's own
+//     NotVerifiedReason carries the specific cause; the category keeps
+//     such a run from contributing nothing (a run with no result and no
+//     error would otherwise match no rule, leaving the report's failure
+//     list empty next to a failure).
 func failureCategories(runs []Run) map[string]int {
 	cats := make(map[string]int)
 	for _, run := range runs {
@@ -231,6 +239,12 @@ func failureCategories(runs []Run) map[string]int {
 		}
 		if run.Err != nil {
 			cats["error"]++
+		}
+		if run.Result == nil && run.Err == nil {
+			// A run that neither verified nor errored: no verdict at all.
+			// An Err-carrying run is already counted as "error" above;
+			// counting it here too would double-report one failure.
+			cats["not_verified"]++
 		}
 	}
 	if len(cats) == 0 {
@@ -344,12 +358,22 @@ func passRateCell(passed, total int) string {
 // resultCell renders one run's outcome: "pass", "fail", or
 // "error: <one-line err>" — a run-level error outranks the verification
 // outcome (the run did not complete cleanly, whatever the check says).
+// A failed run with no verification result names why in the cell — "fail:
+// no verification result (<reason>)" — so the table never shows a bare
+// "fail" whose cause is invisible.
 func resultCell(run Run) string {
 	if run.Err != nil {
 		return "error: " + oneLine(run.Err.Error())
 	}
 	if run.Passed {
 		return "pass"
+	}
+	if run.Result == nil {
+		reason := run.NotVerifiedReason
+		if reason == "" {
+			reason = "reason not recorded"
+		}
+		return "fail: no verification result (" + oneLine(reason) + ")"
 	}
 	return "fail"
 }

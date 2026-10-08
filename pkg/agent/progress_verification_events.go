@@ -178,19 +178,24 @@ func progressCompletePayload(res *verify.Result, runID string, notVerifiedReason
 //     changed no application code (the hook gates on the turn's own
 //     application-code changes — a docs-only or .sprout-bookkeeping
 //     turn reads as no code changes);
+//   - "verification setup error" — the hook entered (code changed) but
+//     its verify runner hit a setup error and stored nothing;
 //   - "verification did not run this turn" — verification is enabled and the
 //     turn changed application code, but the hook still did not run (a
-//     subagent turn, or a runner setup error).
+//     subagent turn, or the reason was not otherwise recorded).
+//
+// The decision is the package's single reason function
+// (notVerifiedReasonFor), shared with the exported accessor
+// (Agent.NotVerifiedReason) so the event and the accessor can never
+// disagree.
 func (a *Agent) notVerifiedReason() string {
-	if a == nil || a.configManager == nil {
+	if a == nil {
 		return ""
 	}
-	cfg := a.configManager.GetConfig()
-	if cfg == nil || !cfg.VerificationEnabled() {
-		return ""
-	}
-	if len(a.TurnChangedApplicationPaths()) == 0 {
-		return "no code changes this turn"
-	}
-	return "verification did not run this turn"
+	cfgEnabled := a.configManager != nil && a.configManager.GetConfig() != nil &&
+		a.configManager.GetConfig().VerificationEnabled()
+	a.turnVerificationMu.Lock()
+	setupErr := a.turnVerificationSetupErr
+	a.turnVerificationMu.Unlock()
+	return notVerifiedReasonFor(cfgEnabled, len(a.TurnChangedApplicationPaths()) > 0, setupErr)
 }

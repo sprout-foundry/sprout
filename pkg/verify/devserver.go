@@ -107,13 +107,22 @@ func (ds *devServer) output() string {
 }
 
 // probeDevPort reports whether anything on the dev port answers a plain HTTP
-// GET. Any status code (including 404) means the server is up.
+// GET. Any status code (including 404) means the server is up. It dials
+// "localhost", not 127.0.0.1: dev servers such as Astro and Vite on recent
+// Node bind only the IPv6 loopback (::1), and the resolver tries both.
 func probeDevPort(port int) bool {
 	client := &http.Client{Timeout: devProbeClientTimeout}
-	resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/", port))
+	resp, err := client.Get(devServerURL(port, "/"))
 	if err != nil {
 		return false
 	}
 	_ = resp.Body.Close()
 	return true
+}
+
+// devServerURL is the URL of path on the local dev server. The host is
+// "localhost" so servers bound to either loopback family (127.0.0.1 or ::1)
+// are reachable from the probe, the page check and the headless browser.
+func devServerURL(port int, path string) string {
+	return fmt.Sprintf("http://localhost:%d%s", port, path)
 }

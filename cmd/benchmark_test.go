@@ -34,7 +34,7 @@ import (
 
 // keepSeam holds the test-installed benchmarkRunnerFor across
 // resetBenchmarkFlags (which must still clear the flag globals it owns).
-var keepSeam func(suiteDir string, models []benchmark.ModelSpec, runs int, timeout time.Duration) *benchmark.Runner
+var keepSeam func(suiteDir string, models []benchmark.ModelSpec, runs int, timeout time.Duration, keepRuns benchmark.KeepRuns, evidenceDir string) *benchmark.Runner
 
 // resetBenchmarkFlags restores the command's flag globals so one test's
 // parse cannot leak into the next (the repo's flag-globals convention, as
@@ -44,15 +44,16 @@ var keepSeam func(suiteDir string, models []benchmark.ModelSpec, runs int, timeo
 func resetBenchmarkFlags(t *testing.T) {
 	t.Helper()
 	savedSuite, savedModels, savedOut := benchmarkSuiteDir, benchmarkModels, benchmarkOutDir
-	savedRuns, savedTimeout := benchmarkRuns, benchmarkTimeout
+	savedRuns, savedTimeout, savedKeepRuns := benchmarkRuns, benchmarkTimeout, benchmarkKeepRuns
 	savedRunnerFor := benchmarkRunnerFor
 	t.Cleanup(func() {
 		benchmarkSuiteDir, benchmarkModels, benchmarkOutDir = savedSuite, savedModels, savedOut
-		benchmarkRuns, benchmarkTimeout = savedRuns, savedTimeout
+		benchmarkRuns, benchmarkTimeout, benchmarkKeepRuns = savedRuns, savedTimeout, savedKeepRuns
 		benchmarkRunnerFor = savedRunnerFor
 	})
 	benchmarkSuiteDir, benchmarkModels, benchmarkOutDir = "", "", ""
 	benchmarkRuns, benchmarkTimeout = 0, 0
+	benchmarkKeepRuns = "failed"
 	benchmarkRunnerFor = nil
 	keepSeam = savedRunnerFor
 	if f := benchmarkCmd.Flags().Lookup("help"); f != nil {
@@ -60,6 +61,9 @@ func resetBenchmarkFlags(t *testing.T) {
 	}
 	if f := benchmarkCmd.Flags().Lookup("suite"); f != nil {
 		_ = f.Value.Set("")
+	}
+	if f := benchmarkCmd.Flags().Lookup("keep-runs"); f != nil {
+		_ = f.Value.Set("failed")
 	}
 }
 
@@ -147,7 +151,7 @@ func TestBenchmarkCmd_RegisteredWithFlagsAndGroup(t *testing.T) {
 	assert.Equal(t, "benchmark", c.Name())
 	assert.False(t, c.Hidden, "benchmark is a person-typed command, not plumbing")
 	assert.Equal(t, "benchmark", c.GroupID, "a visible top-level command must carry a help group")
-	for _, flag := range []string{"suite", "models", "output", "runs", "timeout"} {
+	for _, flag := range []string{"suite", "models", "output", "runs", "timeout", "keep-runs"} {
 		assert.NotNil(t, c.Flags().Lookup(flag), "--%s must be registered", flag)
 	}
 }
@@ -165,7 +169,7 @@ func TestBenchmarkCmd_HelpResolvesViaRoot(t *testing.T) {
 	out := buf.String()
 	assert.Contains(t, out, "Run the agent task benchmark")
 	assert.Contains(t, out, "network and money", "the help must be explicit that real providers are called")
-	for _, flag := range []string{"--suite", "--models", "--output", "--runs", "--timeout"} {
+	for _, flag := range []string{"--suite", "--models", "--output", "--runs", "--timeout", "--keep-runs"} {
 		assert.Contains(t, out, flag)
 	}
 }
@@ -198,6 +202,41 @@ func TestBenchmarkCmd_BadModelsIsUsageError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "bad --models")
 	assert.Equal(t, exitUsage, exitCodeFor(err))
+}
+
+// TestBenchmarkCmd_BadKeepRunsIsUsageError pins --keep-runs parsing: an
+// unrecognized value is rejected as an invocation error naming the accepted
+// ones (failed|all|none).
+func TestBenchmarkCmd_BadKeepRunsIsUsageError(t *testing.T) {
+	_, err := executeBenchmarkCmd(t, "--suite", t.TempDir(), "--models", "prov-x/model-x", "--keep-runs", "sometimes")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "bad --keep-runs")
+	for _, want := range []string{"failed", "all", "none"} {
+		assert.Contains(t, err.Error(), want)
+	}
+	assert.Equal(t, exitUsage, exitCodeFor(err))
+}
+
+// TestBenchmarkCmd_DefaultKeepRunsIsFailed pins the flag's default: with
+// --keep-runs unset the command hands the runner the "failed" policy and
+// the resolved output dir as the evidence root.
+func TestBenchmarkCmd_DefaultKeepRunsIsFailed(t *testing.T) {
+	resetBenchmarkFlags(t)
+	suiteDir := filepath.Join(t.TempDir(), "suite")
+	writeBenchmarkFixtureTask(t, suiteDir, "mystery-starter", "keep-task")
+	outDir := filepath.Join(t.TempDir(), "results")
+
+	var gotKeepRuns benchmark.KeepRuns
+	var gotEvidenceDir string
+	benchmarkRunnerFor = func(_ string, _ []benchmark.ModelSpec, _ int, _ time.Duration, keepRuns benchmark.KeepRuns, evidenceDir string) *benchmark.Runner {
+		gotKeepRuns, gotEvidenceDir = keepRuns, evidenceDir
+		return &benchmark.Runner{Models: []benchmark.ModelSpec{{Model: "stub", Provider: "p"}}, RunsPerTask: 1}
+	}
+
+	_, err := executeBenchmarkCmdKeepSeam(t, "--suite", suiteDir, "--models", "prov-x/model-x", "--output", outDir)
+	require.NoError(t, err)
+	assert.Equal(t, benchmark.KeepRunsFailed, gotKeepRuns, "the default policy is failed")
+	assert.Equal(t, outDir, gotEvidenceDir)
 }
 
 // TestBenchmarkCmd_WritesReportsFromFailedRuns runs the real command end to
@@ -274,8 +313,11 @@ func TestBenchmarkCmd_FlagsReachRunner(t *testing.T) {
 	var gotModels []benchmark.ModelSpec
 	var gotRuns int
 	var gotTimeout time.Duration
-	benchmarkRunnerFor = func(seenSuiteDir string, models []benchmark.ModelSpec, runs int, timeout time.Duration) *benchmark.Runner {
+	var gotKeepRuns benchmark.KeepRuns
+	var gotEvidenceDir string
+	benchmarkRunnerFor = func(seenSuiteDir string, models []benchmark.ModelSpec, runs int, timeout time.Duration, keepRuns benchmark.KeepRuns, evidenceDir string) *benchmark.Runner {
 		gotSuiteDir, gotModels, gotRuns, gotTimeout = seenSuiteDir, models, runs, timeout
+		gotKeepRuns, gotEvidenceDir = keepRuns, evidenceDir
 		// A runner whose model list is distinctive: the report must come
 		// from THIS runner (the command records the runner's own resolved
 		// list), and its runs fail at the fresh-copy step — no provider.
@@ -287,7 +329,8 @@ func TestBenchmarkCmd_FlagsReachRunner(t *testing.T) {
 
 	stdout, err := executeBenchmarkCmdKeepSeam(t,
 		suiteDir, "--suite", filepath.Join(t.TempDir(), "ignored"),
-		"--models", "prov-x/model-x", "--runs", "2", "--timeout", "90s", "--output", outDir)
+		"--models", "prov-x/model-x", "--runs", "2", "--timeout", "90s", "--output", outDir,
+		"--keep-runs", "all")
 	require.NoError(t, err)
 
 	assert.Equal(t, suiteDir, gotSuiteDir, "the positional suite dir wins over --suite")
@@ -295,6 +338,8 @@ func TestBenchmarkCmd_FlagsReachRunner(t *testing.T) {
 	assert.Equal(t, benchmark.ModelSpec{Model: "model-x", Provider: "prov-x"}, gotModels[0])
 	assert.Equal(t, 2, gotRuns, "--runs must reach the runner construction")
 	assert.Equal(t, 90*time.Second, gotTimeout, "--timeout must reach the runner construction")
+	assert.Equal(t, benchmark.KeepRunsAll, gotKeepRuns, "--keep-runs must reach the runner construction")
+	assert.Equal(t, outDir, gotEvidenceDir, "the resolved output dir is the evidence root")
 
 	data, err := os.ReadFile(filepath.Join(outDir, "report.json"))
 	require.NoError(t, err)
@@ -323,7 +368,7 @@ func TestBenchmarkCmd_SuiteStoppedEarlyWritesPartialReportAndFails(t *testing.T)
 
 	ctx, cancelCmd := context.WithCancel(context.Background())
 	defer cancelCmd()
-	benchmarkRunnerFor = func(seenSuiteDir string, models []benchmark.ModelSpec, runs int, timeout time.Duration) *benchmark.Runner {
+	benchmarkRunnerFor = func(seenSuiteDir string, models []benchmark.ModelSpec, runs int, timeout time.Duration, keepRuns benchmark.KeepRuns, evidenceDir string) *benchmark.Runner {
 		return &benchmark.Runner{
 			AgentFactory: func(runDir string, spec benchmark.ModelSpec) (*agent.Agent, error) {
 				// Stop the suite during the first pair's run: the ctx

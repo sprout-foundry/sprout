@@ -383,5 +383,11 @@ func TestRunner_NeverRanVerificationRecordsFail(t *testing.T) {
 	if run.Turns != 1 {
 		t.Errorf("Turns = %d, want 1 (the runner still issued the turn)", run.Turns)
 	}
+	// The reason is recorded, never a silent fail: the turn changed no
+	// code, so the run says so (the same reason the turn-completion event
+	// carries).
+	if run.NotVerifiedReason != "no code changes this turn" {
+		t.Errorf("NotVerifiedReason = %q, want %q (a no-result run records why)", run.NotVerifiedReason, "no code changes this turn")
+	}
 	assertWallTime(t, run)
 }

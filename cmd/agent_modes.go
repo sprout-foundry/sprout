@@ -216,10 +216,18 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		// available; the daemon owns the agent. Falls back to in-process
 		// when the socket is unreachable or when a behavior-changing flag
 		// that can't travel the wire protocol is set (agentSkipDaemonRouting).
+		// Routing also requires the daemon to match this binary and config
+		// (see tryDaemonOneShot); on any mismatch the turn runs in-process.
 		if query != "" && workflowConfig == nil && !daemonMode && !agentSkipDaemonRouting() {
 			if handled, derr := tryDaemonOneShot(ctx, query, outputFormatJSON); handled {
 				return derr
 			}
+		}
+		// The turn will run in-process: say so, naming the binary and config
+		// that will run it, so the user is never left guessing which of the
+		// two (CLI or daemon) actually handled the query.
+		if query != "" && workflowConfig == nil && !daemonMode {
+			printInProcessIdentity()
 		}
 		hasLoop := workflowConfig != nil && workflowConfig.Loop != nil
 		if query == "" && !hasLoop && (workflowConfig == nil || len(workflowConfig.Steps) == 0) {

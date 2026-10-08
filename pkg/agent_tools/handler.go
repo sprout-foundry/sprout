@@ -149,6 +149,13 @@ type ToolEnv struct {
 	// handlers skip their interactive approval prompt to avoid double-prompting.
 	// Hard blocks are NEVER bypassed regardless of this flag.
 	Gate1AutoApproved bool
+	// UnsafeShellMode reports whether the session opted into --unsafe-shell,
+	// which bypasses CAUTION-tier shell_command prompts. Deliberately
+	// separate from Gate1AutoApproved: --unsafe-shell is scoped to
+	// shell_command and must not lift prompts for any other tool. The shell
+	// handler consults it so its own gate honors the flag (the approval
+	// broker already does, but a headless command never reaches it).
+	UnsafeShellMode bool
 	// RawArgsJSON is the raw JSON string of the tool arguments as sent by the
 	// LLM. When set, handlers can parse this to recover the original key
 	// insertion order of nested maps (e.g., the "data" field in
@@ -175,6 +182,23 @@ type ToolEnv struct {
 	// Agent is the *pkg/agent.Agent instance. Only set for tools that
 	// explicitly need agent access (e.g., run_subagent). Nil for all others.
 	Agent interface{} `json:"-"`
+	// ReadCallGuard tracks identical read_file calls within the current
+	// turn so a repeated call can be answered with a short note instead of
+	// the same content again. Nil means no guard is available (standalone
+	// tools, tests) and every call returns content.
+	ReadCallGuard ReadCallGuard `json:"-"`
+}
+
+// ReadCallGuard counts identical read_file invocations within a single
+// conversation turn. The agent owns the per-turn state and resets it at
+// turn boundaries; the read_file handler consults it before returning
+// content so a third identical call is short-circuited.
+type ReadCallGuard interface {
+	// ObserveRead records a read of path for the effective (startLine,
+	// endLine) range and returns how many times this exact call has been
+	// made in the current turn, including this one (1 for the first call).
+	// A range of (0, 0) means a full-file read.
+	ObserveRead(path string, startLine, endLine int) int
 }
 
 // ToolFuncSet carries the per-agent closures that delegate agent-dependent

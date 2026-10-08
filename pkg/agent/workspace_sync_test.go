@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -278,6 +279,71 @@ func TestCheckWriteStaleness_FreeTierDegenerate(t *testing.T) {
 	if err := a.checkWriteStaleness(path); err != nil {
 		t.Errorf("free-tier read-then-write should succeed, got %v", err)
 	}
+}
+
+// TestObserveRead_CountsIdenticalCalls verifies the per-turn identical-call
+// guard: the same path + range increments, a different range or path is a
+// separate key.
+func TestObserveRead_CountsIdenticalCalls(t *testing.T) {
+	a := &Agent{}
+	p := "roadmap/spec.md"
+
+	if got := a.ObserveRead(p, 615, 680); got != 1 {
+		t.Fatalf("first identical call count = %d, want 1", got)
+	}
+	if got := a.ObserveRead(p, 615, 680); got != 2 {
+		t.Fatalf("second identical call count = %d, want 2", got)
+	}
+	if got := a.ObserveRead(p, 615, 680); got != 3 {
+		t.Fatalf("third identical call count = %d, want 3", got)
+	}
+	// A different range is a different key.
+	if got := a.ObserveRead(p, 1, 50); got != 1 {
+		t.Fatalf("different-range count = %d, want 1", got)
+	}
+	// A different path is a different key.
+	if got := a.ObserveRead("other.md", 615, 680); got != 1 {
+		t.Fatalf("different-path count = %d, want 1", got)
+	}
+	// A full-file read (0, 0) is its own key.
+	if got := a.ObserveRead(p, 0, 0); got != 1 {
+		t.Fatalf("full-file count = %d, want 1", got)
+	}
+}
+
+// TestObserveRead_ResetsAcrossTurns pins the turn boundary: the counter is
+// cleared by ResetFileReadsForNewTurn so a repeat in a NEW turn is a first
+// call again, not a third.
+func TestObserveRead_ResetsAcrossTurns(t *testing.T) {
+	a := &Agent{}
+	p := "roadmap/spec.md"
+
+	_ = a.ObserveRead(p, 615, 680)
+	_ = a.ObserveRead(p, 615, 680)
+	if got := a.ObserveRead(p, 615, 680); got != 3 {
+		t.Fatalf("pre-reset third call = %d, want 3", got)
+	}
+
+	a.ResetFileReadsForNewTurn()
+
+	if got := a.ObserveRead(p, 615, 680); got != 1 {
+		t.Fatalf("post-reset call = %d, want 1 (turn boundary must clear the counter)", got)
+	}
+}
+
+// TestObserveRead_NilAgentIsSafe pins the guard's nil-safety for contexts
+// without a configured agent.
+func TestObserveRead_NilAgentIsSafe(t *testing.T) {
+	var a *Agent
+	if got := a.ObserveRead("x", 0, 0); got != 1 {
+		t.Fatalf("nil agent ObserveRead = %d, want 1", got)
+	}
+}
+
+// TestAgentImplementsReadCallGuard is a compile-time interface assertion that
+// the live path can wire *Agent straight into ToolEnv.ReadCallGuard.
+func TestAgentImplementsReadCallGuard(t *testing.T) {
+	var _ tools.ReadCallGuard = (*Agent)(nil)
 }
 
 // TestCheckWriteStaleness_PathNormalization pins the fix for the bug

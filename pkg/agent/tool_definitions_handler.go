@@ -217,11 +217,17 @@ func buildToolEnvFromAgent(agent *Agent) tools.ToolEnv {
 	// "prompt" verdicts (WebUI dialog via handleFileSecurityError when a
 	// browser client is connected, CLI prompt otherwise).
 	env.FileAccessPrompter = agent
+	// Per-turn identical-call guard so a repeated read_file returns a
+	// short note instead of the same content again.
+	env.ReadCallGuard = agent
 	// Propagate Gate 1's auto-approve decision so handler-level gates
 	// (Gate 2) skip their interactive prompt, matching Gate 1. Covers
 	// both --unsafe mode and elevated risk profiles; hard blocks are
 	// still enforced by the handlers' own IsHardBlock early-returns.
 	env.Gate1AutoApproved = agent.GetUnsafeMode() || agent.IsSessionElevated()
+	// Propagate --unsafe-shell so the shell handler's own gate honors it
+	// (scoped to shell_command; never widens Gate1AutoApproved).
+	env.UnsafeShellMode = agent.GetUnsafeShellMode()
 	// Off-workspace file access is handled entirely through
 	// PrecheckFileAccess which consults Gate 1's path-tier classifier.
 	// Handlers consult it up-front and return typed errors for Deny,

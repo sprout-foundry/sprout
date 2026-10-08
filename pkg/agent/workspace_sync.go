@@ -9,6 +9,7 @@ package agent
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -280,14 +281,24 @@ func normalizeFilePath(path, workspaceRoot string) string {
 }
 
 // turnFileTracker records which files the agent has called read_file on
-// during the current turn. Paths are normalized to absolute form.
+// during the current turn. Paths are normalized to absolute form. It also
+// counts identical read calls (path + effective range) so the read_file
+// tool can short-circuit a repeated call.
 type turnFileTracker struct {
 	mu    sync.Mutex
 	reads map[string]time.Time
+	// readCalls counts identical read_file calls within the turn, keyed by
+	// the normalized path plus the effective line range. Lets the handler
+	// answer a third identical call with a short note instead of the same
+	// content.
+	readCalls map[string]int
 }
 
 func newTurnFileTracker() *turnFileTracker {
-	return &turnFileTracker{reads: make(map[string]time.Time)}
+	return &turnFileTracker{
+		reads:     make(map[string]time.Time),
+		readCalls: make(map[string]int),
+	}
 }
 
 func (t *turnFileTracker) recordRead(path, workspaceRoot string) {
@@ -300,6 +311,23 @@ func (t *turnFileTracker) recordRead(path, workspaceRoot string) {
 		t.reads = make(map[string]time.Time)
 	}
 	t.reads[normalizeFilePath(path, workspaceRoot)] = time.Now()
+}
+
+// observeRead increments and returns the count of identical read_file calls
+// (same normalized path + same effective range) made this turn, including
+// this one. A range of (0, 0) is a full-file read.
+func (t *turnFileTracker) observeRead(path, workspaceRoot string, startLine, endLine int) int {
+	if t == nil {
+		return 1
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.readCalls == nil {
+		t.readCalls = make(map[string]int)
+	}
+	key := normalizeFilePath(path, workspaceRoot) + fmt.Sprintf("|%d-%d", startLine, endLine)
+	t.readCalls[key]++
+	return t.readCalls[key]
 }
 
 func (t *turnFileTracker) hasReadThisTurn(path, workspaceRoot string) bool {
@@ -331,6 +359,7 @@ func (t *turnFileTracker) reset() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.reads = make(map[string]time.Time)
+	t.readCalls = make(map[string]int)
 }
 
 // RecordFileReadThisTurn marks `path` as read by the agent during the
@@ -345,6 +374,25 @@ func (a *Agent) RecordFileReadThisTurn(path string) {
 	}
 	a.fileReadsMu.Unlock()
 	a.filesReadThisTurn.recordRead(path, a.currentWorkspaceRoot())
+}
+
+// ObserveRead implements tools.ReadCallGuard. It records an identical
+// read_file call (same path + same effective range) and returns how many
+// times that exact call has been made this turn, including this one. The
+// read_file handler uses a count of 3 or more to return a short note instead
+// of re-emitting content the model already has. State is per-agent and reset
+// at each turn boundary by ResetFileReadsForNewTurn.
+func (a *Agent) ObserveRead(path string, startLine, endLine int) int {
+	if a == nil {
+		return 1
+	}
+	a.fileReadsMu.Lock()
+	if a.filesReadThisTurn == nil {
+		a.filesReadThisTurn = newTurnFileTracker()
+	}
+	tracker := a.filesReadThisTurn
+	a.fileReadsMu.Unlock()
+	return tracker.observeRead(path, a.currentWorkspaceRoot(), startLine, endLine)
 }
 
 // ResetFileReadsForNewTurn clears the per-turn read tracker at turn boundaries.

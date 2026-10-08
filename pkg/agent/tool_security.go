@@ -277,11 +277,17 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 		env.SubagentDepth = agent.subagentDepth
 		// Propagate Gate 1's auto-approve decision so handler-level gates skip their interactive prompt.
 		env.Gate1AutoApproved = agent.GetUnsafeMode() || agent.IsSessionElevated()
+		// Propagate --unsafe-shell so the shell handler's own gate honors it
+		// (scoped to shell_command; never widens Gate1AutoApproved).
+		env.UnsafeShellMode = agent.GetUnsafeShellMode()
 		// Wire Gate 1's path-tier classifier into ToolEnv so handlers can consult it up-front.
 		env.FileAccessClassifier = agent
 		// Interactive off-workspace approval: handlers consult this for
 		// "prompt" verdicts instead of failing with the raw error.
 		env.FileAccessPrompter = agent
+		// Per-turn identical-call guard so a repeated read_file returns a
+		// short note instead of the same content again.
+		env.ReadCallGuard = agent
 		env.PrimaryAcceptsImages = func() bool {
 			c := agent.getClient()
 			return c != nil && api.ResolveVisionCapability(c).AcceptsImages

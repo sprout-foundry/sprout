@@ -38,6 +38,10 @@ func (s *stubAgentService) ListSessions(context.Context) ([]SessionInfo, error) 
 	return s.sessions, nil
 }
 
+func (s *stubAgentService) Identity(context.Context) (*DaemonIdentity, error) {
+	return &DaemonIdentity{Version: "test", Commit: "test"}, nil
+}
+
 func (s *stubAgentService) CreateSession(_ context.Context, name string) (*SessionInfo, error) {
 	sess := SessionInfo{ID: fmt.Sprintf("s-%d", len(s.sessions)+1), Name: name, Active: false}
 	s.sessions = append(s.sessions, sess)
@@ -201,5 +205,8 @@ func (f *failingAgentService) StreamQuery(context.Context, string, string, Query
 	return errors.New("injected failure")
 }
 func (f *failingAgentService) ExecuteTool(context.Context, string, map[string]any, string) (*ToolResult, error) {
+	return nil, errors.New("injected failure")
+}
+func (f *failingAgentService) Identity(context.Context) (*DaemonIdentity, error) {
 	return nil, errors.New("injected failure")
 }

@@ -67,6 +67,45 @@ func TestAgentServer_PanicRecovers(t *testing.T) {
 	assert.NotEmpty(t, sessions)
 }
 
+// TestAgentClient_IdentityRoundTrip pins the identity op on the wire: the
+// client's Identity call carries AgentOpIdentity and returns the daemon's
+// reported version/commit/config root.
+func TestAgentClient_IdentityRoundTrip(t *testing.T) {
+	svc := newStubAgentService()
+	sockPath := shortSocketPath(t, "agent-identity")
+	srv := &AgentServer{SocketPath: sockPath, Service: svc}
+	require.NoError(t, srv.Start(context.Background()))
+	t.Cleanup(func() { _ = srv.Close() })
+
+	client, err := NewAgentClient(sockPath)
+	require.NoError(t, err)
+	defer client.Close()
+
+	ident, err := client.Identity(context.Background())
+	require.NoError(t, err)
+	require.NotNil(t, ident)
+	assert.Equal(t, "test", ident.Version)
+	assert.Equal(t, "test", ident.Commit)
+}
+
+// TestAgentServer_IdentityErrorPropagation verifies an Identity failure
+// surfaces to the client as a response error, not a dropped connection.
+func TestAgentServer_IdentityErrorPropagation(t *testing.T) {
+	svc := &failingAgentService{}
+	sockPath := shortSocketPath(t, "agent-identity-fail")
+	srv := &AgentServer{SocketPath: sockPath, Service: svc}
+	require.NoError(t, srv.Start(context.Background()))
+	t.Cleanup(func() { _ = srv.Close() })
+
+	client, err := NewAgentClient(sockPath)
+	require.NoError(t, err)
+	defer client.Close()
+
+	_, err = client.Identity(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "injected failure")
+}
+
 // TestRequestOptions_NilSafe pins old-client compatibility: a request
 // without an options block resolves to zero QueryOptions (daemon defaults),
 // never a nil dereference.

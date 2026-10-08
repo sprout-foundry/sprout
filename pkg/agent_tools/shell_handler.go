@@ -247,7 +247,19 @@ func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map
 		}, agenterrors.NewPermission(fmt.Sprintf("security block: shell_command — %s", secResult.Reasoning), nil)
 	}
 
-	if (secResult.ShouldPrompt || secResult.ShouldBlock) && env.ApprovalManager != nil && !(env.Gate1AutoApproved && !secResult.IsHardBlock) {
+	// A prompt is skipped when Gate 1 already auto-approved the call
+	// (--unsafe mode or session elevation) or when the session opted into
+	// --unsafe-shell and this command is not excluded from that bypass.
+	// Hard blocks and DANGEROUS commands stay gated: --unsafe-shell matches
+	// the broker's CAUTION-tier bypass in practice (non-hard-block,
+	// non-DANGEROUS, no intent confirmation), only lifting the CAUTION-tier
+	// shell prompt.
+	shellAutoApproved := env.Gate1AutoApproved && !secResult.IsHardBlock
+	if !shellAutoApproved && env.UnsafeShellMode && !secResult.IsHardBlock &&
+		secResult.Risk.String() != "DANGEROUS" && !secResult.IntentConfirmation {
+		shellAutoApproved = true
+	}
+	if (secResult.ShouldPrompt || secResult.ShouldBlock) && env.ApprovalManager != nil && !shellAutoApproved {
 		approvalExtras := map[string]string{}
 		if command != "" {
 			approvalExtras["command"] = command

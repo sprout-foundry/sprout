@@ -346,6 +346,25 @@ func (m *launchdManager) Status() (bool, error) {
 	return strings.Contains(out, "state = running"), nil
 }
 
+// Restart restarts the loaded service in place: `launchctl kickstart -k`
+// delivers SIGTERM (the daemon's graceful-shutdown path) and launchd
+// re-execs ProgramArguments — the same binary path, whose on-disk content
+// the installer has already replaced, so the new process runs the new
+// build. Unlike bootout+bootstrap it keeps the service loaded throughout,
+// so a failed restart is retried by launchd instead of leaving the service
+// unloaded.
+func (m *launchdManager) Restart() error {
+	servicePath := launchdDomain() + "/" + launchdLabel
+	if _, err := runLaunchctl("print", servicePath); err != nil {
+		// Not loaded — a restart degenerates to a start.
+		return m.Start()
+	}
+	if _, err := runLaunchctl("kickstart", "-k", servicePath); err != nil {
+		return fmt.Errorf("launchctl kickstart -k: %w", err)
+	}
+	return nil
+}
+
 // plistFileMode is the permission the launchd plist must carry.
 //
 // launchd has no EnvironmentFile equivalent, so every API key captured by

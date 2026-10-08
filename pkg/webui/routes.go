@@ -8,6 +8,7 @@ import (
 	"runtime/pprof"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/buildinfo"
 	lspproxy "github.com/sprout-foundry/sprout/pkg/lsp/proxy"
 )
 
@@ -54,6 +55,12 @@ func (ws *ReactWebServer) registerCoreRoutes(mux *http.ServeMux) {
 			"status": "ok",
 			"port":   ws.port,
 			"uptime": time.Since(ws.startTime).String(),
+			// Binary identity: lets an installer (or `sprout service
+			// status`) tell which build a RUNNING daemon was started from
+			// versus what's now on disk — the core signal for the
+			// upgrade-restart flow.
+			"version": buildinfo.Version,
+			"commit":  buildinfo.Commit,
 		}
 		// Report whether an agent backend is available. In daemon mode
 		// (ws.agent == nil) agents are created per-client, so "available"

@@ -224,6 +224,31 @@ func (m *systemdManager) Stop() error {
 	return nil
 }
 
+// Restart restarts the unit in one step: systemd delivers SIGTERM (the
+// daemon's graceful-shutdown path, bounded by TimeoutStopSec=15) and starts
+// the new process from the on-disk unit, which the installer has already
+// refreshed with daemon-reload. Falls back to the PID-file manager's
+// Stop+Start in non-systemd environments.
+func (m *systemdManager) Restart() error {
+	if !systemdAvailable() {
+		// Non-systemd environment: the same binary would have installed the
+		// PID-file manager; stop+start through it.
+		home, err := os.UserHomeDir()
+		if err != nil {
+			home = ""
+		}
+		fallback := &pidFileManager{homeDir: home}
+		if err := fallback.Stop(); err != nil {
+			return err
+		}
+		return fallback.Start()
+	}
+	if _, err := runSystemctl("restart", "sprout.service"); err != nil {
+		return fmt.Errorf("failed to restart service: %w", err)
+	}
+	return nil
+}
+
 func (m *systemdManager) Status() (bool, error) {
 	output, err := runSystemctl("show", "--property=SubState", "sprout.service")
 	if err != nil {

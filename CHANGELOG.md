@@ -2,6 +2,16 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.24.2] - 2026-10-08
+
+- fix(starters): security update for the three reference starters — every starter's dependencies were bumped to current releases (Astro 7, Vite 8, Vitest 4, ESLint 10, Wrangler 4), clearing the critical advisories in vitest, tinypool and astro that every new project inherited; lockfiles are committed with exact pins, the stack skills and starter versions (1.1.0) follow the new majors. `npm audit --audit-level=high` is clean for all three; web-app-data keeps four documented dev-only moderate advisories from drizzle-kit's bundled esbuild.
+- ci(starters): the starters workflow fails on any high/critical `npm audit` finding, and Dependabot opens weekly grouped updates per starter.
+- feat(design): `@sprout-foundry/design` 1.1.0 — each brand token has one meaning in both themes (`--brand-frost` is the cyan accent in light and dark; the green is the new `--brand-sprout`), and a motion scale (`--duration-fast/base/slow`) that the reduced-motion preference zeroes.
+- feat(install): an upgrade restarts the daemon cleanly (`sprout service restart` with a drain gate).
+- fix(webui): workspace-scoped command-palette recents; one `/api/file-index` request replaces the per-directory crawl.
+- feat(benchmark): `benchmark-suite-check` validates a benchmark task suite with the harness's own loader and plan validation, without running (or paying for) the benchmark.
+- test(utils): token-bucket timing tests no longer fail on busy CI runners.
+
 ## [v0.24.1] - 2026-10-08
 
 - fix(benchmark): benchmark runs always verify their turn — runs force change tracking on, take a git baseline so real on-disk changes still trigger verification, and run headless shell commands under the narrow `--unsafe-shell` posture so a model's edits are not silently denied.

@@ -28,6 +28,7 @@ import { useHost } from '../host/useHost';
 import { ADAPTER_INSTALLED_EVENT } from '../services/apiAdapter';
 import { openHome } from '../services/homeView';
 import { notificationBus } from '../services/notificationBus';
+import { collectBugReportEnvironment } from '../services/reportBug';
 
 type BootstrapUser = NonNullable<ReturnType<typeof getBootstrapUser>>;
 
@@ -175,6 +176,31 @@ export function UserMenu({ label }: UserMenuProps = {}): JSX.Element | null {
                 </a>
               );
             })}
+            <button
+              type="button"
+              role="menuitem"
+              className="user-menu-item user-menu-report-bug"
+              data-testid="user-menu-report-bug"
+              onClick={() => {
+                setOpen(false);
+                // The host resolves the intent (the local host opens the public
+                // repository's prefilled issue; a platform resolves it to its
+                // own support flow). In the layered layout the platform page
+                // opens inside the shell (Home), matching every other platform
+                // link here; otherwise the host's own resolution runs.
+                const path = navigation.intentPath?.({ type: 'reportBug' });
+                if (isLayeredLayout && path) {
+                  openHome(path);
+                  return;
+                }
+                void navigation.open({
+                  type: 'reportBug',
+                  environment: collectBugReportEnvironment(),
+                } satisfies HostNavigationIntent);
+              }}
+            >
+              Report a bug
+            </button>
             <button
               type="button"
               role="menuitem"

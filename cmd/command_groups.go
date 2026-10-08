@@ -14,7 +14,7 @@ var commandGroups = []struct {
 	{cobra.Group{ID: "deploy", Title: "Deploy:"}, []string{"deploy"}},
 	{cobra.Group{ID: "benchmark", Title: "Benchmarking:"}, []string{"benchmark"}},
 	{cobra.Group{ID: "config", Title: "Configuration:"}, []string{"config", "keys", "custom", "mcp", "lsp", "skill", "policy", "service", "runner"}},
-	{cobra.Group{ID: "diagnostics", Title: "Diagnostics & Maintenance:"}, []string{"diag", "explain", "health", "audit", "api", "version", "upgrade", "help", "completion"}},
+	{cobra.Group{ID: "diagnostics", Title: "Diagnostics & Maintenance:"}, []string{"diag", "explain", "health", "audit", "api", "version", "upgrade", "bug", "help", "completion"}},
 }
 
 // plumbingCommands are invoked by tooling (sprout-foundry's workspace

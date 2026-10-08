@@ -1,5 +1,34 @@
 # TODO
 
+## Report a bug
+
+- [x] **bug.1** A visible "Report a bug" button that opens a new issue on
+      `github.com/sprout-foundry/sprout`:
+      - **Where:** always reachable — the help/user menu and the status bar
+        (or the equivalent spot in the layered/builder UIs where the menu bar
+        is hidden), plus the existing menu command `report_issue` in
+        `webui/src/components/MenuBar.tsx`, which today opens the old
+        `github.com/alantheprice/sprout` repo with a blank issue — fix it.
+      - **Prefill** (`/issues/new?title=…&body=…&labels=bug`): a short
+        template — what happened / what you expected / steps — plus
+        environment: sprout version (from the build/bootstrap, not a
+        literal), mode (local daemon, in-browser, desktop/studio, hosted),
+        OS and browser. Never include file paths, workspace names, session
+        ids, provider keys, prompts or model output (public repo hygiene);
+        keep the URL under GitHub's length limit.
+      - **One source of truth:** the repo URL lives in one constant (also
+        used by `sprout bug` below and any docs links); grep for and fix
+        every other `alantheprice/sprout` URL in the web UI, CLI and docs.
+      - **Hosts:** expose it through the host contract — a `reportBug`
+        navigation intent; `localHost` opens the GitHub issue; a host may
+        resolve it to its own support flow (the platform keeps its support
+        tickets), and the button uses the intent.
+      - **CLI:** `sprout bug` opens the same prefilled URL in the browser (and
+        prints it), with version/OS filled in.
+      - Fix the "About" dialog to show the real version.
+      Vitest for the URL builder (prefill, no sensitive fields, length cap)
+      and the button; Go test for `sprout bug`'s URL.
+
 ## CI flake
 
 - [x] **flake.1** `TestDrainAndWait` (`pkg/utils/token_bucket_test.go:391`)

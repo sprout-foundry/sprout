@@ -48,7 +48,7 @@ the model, lost the result.
       transcript and the verification output under
       `<output>/runs/<task>-<model>-<n>/` (`--keep-runs=failed|all|none`,
       default `failed`). Spec: SP-154 §154c.
-- [ ] **cli.1** `sprout agent` must not silently hand a turn to a daemon of
+- [x] **cli.1** `sprout agent` must not silently hand a turn to a daemon of
       a different binary or config: today, when a daemon is already
       running (e.g. the web UI's backend), the CLI forwards the turn to it
       ("Running via daemon at …/agent.sock") even when the invoked binary

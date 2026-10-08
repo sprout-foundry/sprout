@@ -66,6 +66,9 @@ var (
 	agentBudgetWarn       string
 	agentHeartbeatSeconds int
 	agentMockLLM          bool
+	// agentNoDaemon forces this invocation to run in-process, never handing
+	// the turn to a running daemon even when one is reachable and compatible.
+	agentNoDaemon bool
 )
 
 // runStartupPermissionCheck performs a security check on config file permissions
@@ -175,7 +178,8 @@ func shouldPreloadLocalModel() bool {
 // is in the same class: the detached automate child owns finalizing its own
 // session record, which a daemon-routed query would never do.
 func agentSkipDaemonRouting() bool {
-	return agentWorkflowConfig != "" ||
+	return agentNoDaemon ||
+		agentWorkflowConfig != "" ||
 		agentAutomateSessionFile != "" ||
 		agentSessionID != "" ||
 		agentLastSession ||
@@ -348,6 +352,7 @@ func init() {
 	agentCmd.Flags().StringVar(&agentTraceDatasetDir, "trace-dataset-dir", "", "Enable dataset trace mode and write to directory (also settable via SPROUT_TRACE_DATASET_DIR env var)")
 	agentCmd.Flags().BoolVar(&agentPromptStdin, "prompt-stdin", false, "Read the prompt from stdin (avoids OS ARG_MAX limits for large prompts)")
 	agentCmd.Flags().BoolVar(&agentMockLLM, "mock-llm", false, "Use a stub LLM provider that returns canned responses (for testing)")
+	agentCmd.Flags().BoolVar(&agentNoDaemon, "no-daemon", false, "Run this turn in-process instead of handing it to a running daemon (also set by SPROUT_DAEMON_AGENT=0)")
 	_ = agentCmd.RegisterFlagCompletionFunc("persona", completePersonaFlag)
 
 	// Initialize environment-based defaults

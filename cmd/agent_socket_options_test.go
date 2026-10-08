@@ -24,6 +24,7 @@ func saveAgentFlagVars(t *testing.T) {
 	unsafeShell, noSub := agentUnsafeShell, agentNoSubagents
 	subModel, subProvider, budget := agentSubagentModel, agentSubagentProvider, agentBudgetUSD
 	mockLLM, noProjSkills := agentMockLLM, noProjectSkills
+	noDaemon := agentNoDaemon
 	t.Cleanup(func() {
 		agentPersona, agentProvider, agentModel, agentRiskProfile = persona, provider, model, risk
 		maxIterations, agentWorkflowConfig, agentSessionID, agentSystemPrompt = iter, workflow, session, sysPrompt
@@ -32,6 +33,7 @@ func saveAgentFlagVars(t *testing.T) {
 		agentUnsafeShell, agentNoSubagents = unsafeShell, noSub
 		agentSubagentModel, agentSubagentProvider, agentBudgetUSD = subModel, subProvider, budget
 		agentMockLLM, noProjectSkills = mockLLM, noProjSkills
+		agentNoDaemon = noDaemon
 	})
 }
 
@@ -151,6 +153,7 @@ func TestAgentSkipDaemonRouting_FlagMatrix(t *testing.T) {
 		"trace-dataset":     func(t *testing.T) { agentTraceDatasetDir = "d" },
 		"mock-llm":          func(t *testing.T) { agentMockLLM = true },
 		"no-project-skills": func(t *testing.T) { noProjectSkills = true },
+		"no-daemon":         func(t *testing.T) { agentNoDaemon = true },
 	}
 	for name, set := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -171,4 +174,5 @@ func resetUntransmittableFlags() {
 	agentUnsafeShell, agentNoSubagents = false, false
 	agentSubagentModel, agentSubagentProvider, agentBudgetUSD = "", "", 0
 	agentMockLLM, noProjectSkills = false, false
+	agentNoDaemon = false
 }

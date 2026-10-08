@@ -1,0 +1,74 @@
+name: Starter CI
+
+# Each reference starter is instantiated, installed, built, tested and then
+# served: this is the job that proves a starter works end to end, not just
+# that its tree and manifest are well-formed. It runs when a starter tree or a
+# stack skill changes, nightly so dependency and runtime drift surfaces without
+# a PR, and on demand.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'pkg/starters/**'
+      - 'pkg/skills/library/**'
+      - '.github/workflows/starters.yml'
+      - 'scripts/ci-check-starters.sh'
+  pull_request:
+    paths:
+      - 'pkg/starters/**'
+      - 'pkg/skills/library/**'
+      - '.github/workflows/starters.yml'
+      - 'scripts/ci-check-starters.sh'
+  # Nightly at 09:17 UTC — deliberately off the hour and distinct from the
+  # main build's 07:00 run so the two never contend for a runner.
+  schedule:
+    - cron: '17 9 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: starters-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || format('ref-{0}', github.ref) }}
+  cancel-in-progress: true
+
+jobs:
+  starters:
+    name: Check reference starters
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.26'
+        cache-dependency-path: go.sum
+
+    - name: Set up Node.js
+      # The starter dev servers and their test runners are Node-based; the
+      # version matches the main build workflow.
+      uses: actions/setup-node@v5
+      with:
+        node-version: '22'
+
+    - name: Install dependencies
+      run: go mod download
+
+    - name: Build sprout binary
+      # `sprout new --starter` is the instantiation step of the check, so the
+      # CLI is built from this checkout before it runs.
+      run: make build
+
+    - name: Check each starter end to end
+      # The script reads each manifest's build, test and dev commands and its
+      # dev_port and routes, so the starters — not this workflow — own how they
+      # are run. It starts each dev server, polls its port, and asserts every
+      # route returns 200.
+      run: bash scripts/ci-check-starters.sh

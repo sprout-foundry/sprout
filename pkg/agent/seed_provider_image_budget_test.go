@@ -96,7 +96,7 @@ func TestStreaming413ShedsImagesAndRetries(t *testing.T) {
 	}
 
 	resp, err := provider.(*sproutProvider).doChatWithRetryStreaming(
-		context.Background(), imagesMessageSet(4), nil, "", nil, nil)
+		context.Background(), imagesMessageSet(4), nil, "", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("doChatWithRetryStreaming: %v", err)
 	}
@@ -130,7 +130,7 @@ func TestStreaming413ExhaustsToTextOnly(t *testing.T) {
 	}
 
 	_, err = provider.(*sproutProvider).doChatWithRetryStreaming(
-		context.Background(), imagesMessageSet(4), nil, "", nil, nil)
+		context.Background(), imagesMessageSet(4), nil, "", nil, nil, nil)
 	if err == nil {
 		t.Fatal("expected the unfixable 413 to surface, got success")
 	}

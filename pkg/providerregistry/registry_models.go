@@ -54,6 +54,13 @@ type RemoteVisionLimits struct {
 	MaxImageDimension int `json:"max_dimension,omitempty"`
 }
 
+// RemoteSamplingParams duplicates providers.SamplingParams.
+type RemoteSamplingParams struct {
+	Temperature *float64               `json:"temperature,omitempty"`
+	TopP        *float64               `json:"top_p,omitempty"`
+	Parameters  map[string]interface{} `json:"parameters,omitempty"`
+}
+
 // RemoteModelInfo duplicates ModelInfo.
 type RemoteModelInfo struct {
 	ID            string   `json:"id"`
@@ -63,6 +70,8 @@ type RemoteModelInfo struct {
 	Tags          []string `json:"tags,omitempty"`
 	// Per-model vision limits (SP-140 Phase 1). Optional.
 	VisionLimits *RemoteVisionLimits `json:"vision_limits,omitempty"`
+	// Per-model sampling overrides. Optional.
+	Sampling *RemoteSamplingParams `json:"sampling,omitempty"`
 }
 
 // RemoteModelConfig duplicates ModelConfig.
@@ -221,6 +230,20 @@ func (r *RemoteProviderConfig) modelsToNative() providers.ModelConfig {
 				MaxImageCount:     mi.VisionLimits.MaxImageCount,
 				MaxImageDimension: mi.VisionLimits.MaxImageDimension,
 			}
+		}
+		if mi.Sampling != nil {
+			s := &providers.SamplingParams{
+				Parameters: copyInterfaceMap(mi.Sampling.Parameters),
+			}
+			if mi.Sampling.Temperature != nil {
+				v := *mi.Sampling.Temperature
+				s.Temperature = &v
+			}
+			if mi.Sampling.TopP != nil {
+				v := *mi.Sampling.TopP
+				s.TopP = &v
+			}
+			entry.Sampling = s
 		}
 		mc.ModelInfo = append(mc.ModelInfo, entry)
 	}

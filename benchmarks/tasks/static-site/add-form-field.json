@@ -1,0 +1,64 @@
+{
+  "id": "add-form-field",
+  "request": "The contact form on the home page asks for a name, an email and a message, but not a phone number. Add an optional phone field to the form so people can leave a callback number. Keep the form posting to the endpoint configured in src/config.ts, and make the starter's tests pass.",
+  "starter": "static-site",
+  "plan": {
+    "version": 1,
+    "revision": 1,
+    "created": "2026-10-02T09:00:00Z",
+    "updated": "2026-10-02T09:00:00Z",
+    "goal": "Let visitors leave a phone number on the contact form without changing where the form posts.",
+    "scope": [
+      {
+        "id": "phone-field",
+        "title": "Optional phone field on the contact form",
+        "description": "Extend src/components/ContactForm.astro with a labelled phone input (name=\"phone\", type=\"tel\") that is optional, while leaving the form's action bound to CONTACT_ENDPOINT from src/config.ts."
+      }
+    ],
+    "steps": [
+      {
+        "scope": "phone-field",
+        "description": "Add a label and an input with id=\"phone\", name=\"phone\", type=\"tel\" to src/components/ContactForm.astro, without the required attribute."
+      },
+      {
+        "scope": "phone-field",
+        "description": "Place the new field between the email field and the message field so the form order stays readable."
+      },
+      {
+        "scope": "phone-field",
+        "description": "Build the site and run the test suite to confirm the home page still renders a form posting to the configured endpoint."
+      }
+    ],
+    "starter": "static-site",
+    "acceptance": [
+      {
+        "id": "build-passes",
+        "scope": "phone-field",
+        "check": "npm run build",
+        "kind": "build"
+      },
+      {
+        "id": "tests-pass",
+        "scope": "phone-field",
+        "check": "npm test",
+        "kind": "test"
+      },
+      {
+        "id": "home-page-renders",
+        "scope": "phone-field",
+        "check": "/",
+        "kind": "page"
+      }
+    ],
+    "out_of_scope": [
+      {
+        "item": "Changing the form's endpoint",
+        "reason": "The endpoint is a deployment decision already owned by src/config.ts; the task is to add a field, not to point the form somewhere new."
+      },
+      {
+        "item": "Client-side validation beyond the browser's built-in input types",
+        "reason": "The starter relies on native HTML validation; a custom validation script is a larger change than adding one field."
+      }
+    ]
+  }
+}

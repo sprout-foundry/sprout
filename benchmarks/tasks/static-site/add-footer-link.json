@@ -1,0 +1,58 @@
+{
+  "id": "add-footer-link",
+  "request": "Every page on the site shares the same layout, but the footer is just a copyright line. Change the shared layout so the footer also carries a link to the site's about page, and let that link show up on every page. Make sure the site still builds and the pages render.",
+  "starter": "static-site",
+  "plan": {
+    "version": 1,
+    "revision": 1,
+    "created": "2026-10-02T09:00:00Z",
+    "updated": "2026-10-02T09:00:00Z",
+    "goal": "Add a link to the about page to the shared footer so every page offers it.",
+    "scope": [
+      {
+        "id": "footer-about-link",
+        "title": "About link in the shared footer",
+        "description": "Extend the footer in src/layouts/BaseLayout.astro with an anchor to /about/ labelled \"About\" (or similar), so the link appears on every page that uses the layout."
+      }
+    ],
+    "steps": [
+      {
+        "scope": "footer-about-link",
+        "description": "Add an anchor with href=\"/about/\" inside the footer's <p> or immediately after it in src/layouts/BaseLayout.astro."
+      },
+      {
+        "scope": "footer-about-link",
+        "description": "Give the link a readable label and keep the existing copyright text intact."
+      },
+      {
+        "scope": "footer-about-link",
+        "description": "Build the site and confirm the home page and about page both render with the footer link present."
+      }
+    ],
+    "starter": "static-site",
+    "acceptance": [
+      {
+        "id": "build-passes",
+        "scope": "footer-about-link",
+        "check": "npm run build",
+        "kind": "build"
+      },
+      {
+        "id": "pages-render",
+        "scope": "footer-about-link",
+        "check": "/",
+        "kind": "page"
+      }
+    ],
+    "out_of_scope": [
+      {
+        "item": "Redesigning the footer or its styling",
+        "reason": "The task is to add one link to the existing footer; changing the footer's visual design is a styling task of its own."
+      },
+      {
+        "item": "Adding the same link to the header navigation",
+        "reason": "The header nav already lists the about page; adding a second nav entry would duplicate it."
+      }
+    ]
+  }
+}

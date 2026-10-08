@@ -12,6 +12,9 @@ A good skill contains knowledge that models **cannot infer from training data** 
 | `browse-debugging` | Multi-step interactive browser debugging with `browse_url` |
 | `self-help` | User asks "how do I...", wants to configure settings, or needs help understanding Sprout |
 | `design-system` | Any design work in sprout's `design/` tree — brief → tokens → wireframes → flows → screens, validate between each |
+| `static-site` | Working in an Astro static-site starter project — layout, adding a page/component/test, Astro patterns and pitfalls. Auto-activates when `.sprout/starter.json` names the `static-site` starter |
+| `web-app` | Working in a React + Vite + React Router starter project — layout, adding a route/component with state/test, router and hooks patterns and pitfalls. Auto-activates when `.sprout/starter.json` names the `web-app` starter |
+| `web-app-data` | Working in a React + Vite + Hono-on-Workers + D1 (Drizzle) starter project — where the API, schema and migrations live, adding a table end to end, local vs deployed bindings, the two-config vitest split, and pitfalls. Auto-activates when `.sprout/starter.json` names the `web-app-data` starter |
 
 ## Creating Custom Skills
 

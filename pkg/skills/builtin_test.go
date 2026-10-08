@@ -15,12 +15,79 @@ func TestBuiltinsContainsKnownSkills(t *testing.T) {
 		"project-planning",
 		"self-help",
 		"workflow-automation",
+		"static-site",
+		"web-app",
+		"web-app-data",
 	}
 	got := Builtins()
 	for _, id := range required {
 		if _, ok := got[id]; !ok {
 			t.Errorf("Builtins() missing required skill %q", id)
 		}
+	}
+}
+
+// TestBuiltinsContainsStaticSiteStackSkill is the stack-skill discovery
+// gate: the static-site starter's skill must be discoverable as a builtin
+// (a directory under library/ with valid SKILL.md frontmatter). The
+// starter's auto-activation path (pkg/agent) looks the skill up by the
+// starter ID, so the ID must match the starter's id — "static-site".
+func TestBuiltinsContainsStaticSiteStackSkill(t *testing.T) {
+	got := Builtins()
+	b, ok := got["static-site"]
+	if !ok {
+		t.Fatal("Builtins() missing the static-site stack skill")
+	}
+	if b.Name == "" {
+		t.Error("static-site skill has an empty Name")
+	}
+	if b.Description == "" {
+		t.Error("static-site skill has an empty Description")
+	}
+	if b.Path != LogicalPath+"/static-site" {
+		t.Errorf("static-site Path = %q, want %q", b.Path, LogicalPath+"/static-site")
+	}
+}
+
+// TestBuiltinsContainsWebAppStackSkill is the counterpart discovery gate
+// for the web-app starter: its skill must be a builtin whose ID matches
+// the starter's id — "web-app" — because the starter's auto-activation
+// path (pkg/agent) looks the skill up by that ID.
+func TestBuiltinsContainsWebAppStackSkill(t *testing.T) {
+	got := Builtins()
+	b, ok := got["web-app"]
+	if !ok {
+		t.Fatal("Builtins() missing the web-app stack skill")
+	}
+	if b.Name == "" {
+		t.Error("web-app skill has an empty Name")
+	}
+	if b.Description == "" {
+		t.Error("web-app skill has an empty Description")
+	}
+	if b.Path != LogicalPath+"/web-app" {
+		t.Errorf("web-app Path = %q, want %q", b.Path, LogicalPath+"/web-app")
+	}
+}
+
+// TestBuiltinsContainsWebAppDataStackSkill is the discovery gate for the
+// web-app-data starter: its skill must be a builtin whose ID matches the
+// starter's id — "web-app-data" — because the starter's auto-activation
+// path (pkg/agent) looks the skill up by that ID.
+func TestBuiltinsContainsWebAppDataStackSkill(t *testing.T) {
+	got := Builtins()
+	b, ok := got["web-app-data"]
+	if !ok {
+		t.Fatal("Builtins() missing the web-app-data stack skill")
+	}
+	if b.Name == "" {
+		t.Error("web-app-data skill has an empty Name")
+	}
+	if b.Description == "" {
+		t.Error("web-app-data skill has an empty Description")
+	}
+	if b.Path != LogicalPath+"/web-app-data" {
+		t.Errorf("web-app-data Path = %q, want %q", b.Path, LogicalPath+"/web-app-data")
 	}
 }
 

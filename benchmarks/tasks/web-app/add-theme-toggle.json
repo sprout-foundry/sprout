@@ -1,0 +1,72 @@
+{
+  "id": "add-theme-toggle",
+  "request": "The layout offers no way to switch between a light and a dark appearance. Add a theme control to the shared header that switches every page between a light and a dark theme, remembers the visitor's choice across reloads using the starter's existing useLocalStorage hook, and defaults to light. Add the dark colours to the global stylesheet and cover the toggle in the test suite. Make sure the app still builds and the pages still render.",
+  "starter": "web-app",
+  "plan": {
+    "version": 1,
+    "revision": 1,
+    "created": "2026-10-07T09:00:00Z",
+    "updated": "2026-10-07T09:00:00Z",
+    "goal": "Let a visitor switch the app between a light and a dark theme, with the choice remembered across reloads and light as the default.",
+    "scope": [
+      {
+        "id": "theme-toggle",
+        "title": "A persisted light/dark theme toggle in the shared header",
+        "description": "Add a theme toggle button to src/layouts/Layout.tsx whose state is persisted with the existing useLocalStorage hook, reflect the selected theme on the document root as a data-theme attribute, add a [data-theme=\"dark\"] variable block to src/styles/global.css, and extend test/app.test.tsx to cover the default and the switch."
+      }
+    ],
+    "steps": [
+      {
+        "scope": "theme-toggle",
+        "description": "Read a theme value from useLocalStorage('theme', 'light') in src/layouts/Layout.tsx and add a button that flips it between 'light' and 'dark'."
+      },
+      {
+        "scope": "theme-toggle",
+        "description": "Apply the current theme to document.documentElement as a data-theme attribute in an effect, so the stylesheet can key off it."
+      },
+      {
+        "scope": "theme-toggle",
+        "description": "Add a [data-theme=\"dark\"] block to src/styles/global.css that overrides the existing custom properties with dark values."
+      },
+      {
+        "scope": "theme-toggle",
+        "description": "Extend test/app.test.tsx with a case that asserts the default theme and that clicking the toggle switches it and persists the choice."
+      },
+      {
+        "scope": "theme-toggle",
+        "description": "Run the build and the test suite to confirm the app compiles and the pages still render in the default theme."
+      }
+    ],
+    "starter": "web-app",
+    "acceptance": [
+      {
+        "id": "build-passes",
+        "scope": "theme-toggle",
+        "check": "npm run build",
+        "kind": "build"
+      },
+      {
+        "id": "tests-pass",
+        "scope": "theme-toggle",
+        "check": "npm test",
+        "kind": "test"
+      },
+      {
+        "id": "home-page-renders",
+        "scope": "theme-toggle",
+        "check": "/",
+        "kind": "page"
+      }
+    ],
+    "out_of_scope": [
+      {
+        "item": "Following the operating system's colour-scheme preference",
+        "reason": "The request is a manual toggle that defaults to light; reacting to prefers-color-scheme is a separate behaviour."
+      },
+      {
+        "item": "Adding a third theme or user-configurable colours",
+        "reason": "Two themes are enough to satisfy the request; a theme system with more options is a larger feature."
+      }
+    ]
+  }
+}

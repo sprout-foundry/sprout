@@ -27,6 +27,11 @@ vi.mock('../host/accessor', () => ({
   setActiveHost: (host: SproutHost) => {
     activeHostRef.value = host;
   },
+  // The host-contract refactor added this export; config/mode registers a
+  // capability-refresh hook at module load, so the mock must provide it.
+  // No-op: the tested path drives capabilities via getActiveHost() at use
+  // time, never the capability-sync hook, so nothing should be registered.
+  registerActiveHostCapabilitiesHook: () => {},
   HOST_UPDATED_EVENT: 'sprout:host-updated',
 }));
 

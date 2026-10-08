@@ -15,6 +15,21 @@
 
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { HostProvider } from '../host';
+import { makeTestHost } from '../host/testHost';
+
+/**
+ * Wrap a tree in a host provider so useHost()/useHostCapabilities() consumers
+ * resolve (the feat/host-contract refactor made a HostProvider mandatory).
+ *
+ * The shell smoke tests represent a LOCAL shell (makeShellProps defaults
+ * supportsLocalTerminal: true), so the default host turns the local-only
+ * capabilities on (agentChanges drives CodeShell's context-pane chrome). Pass
+ * an override to exercise a different capability mix.
+ */
+function host(children: unknown, capabilities: Record<string, boolean> = { agentChanges: true }): unknown {
+  return createElement(HostProvider, { host: makeTestHost(capabilities) }, children);
+}
 
 // ---------------------------------------------------------------------------
 // Mocks — MUST be set up BEFORE importing the shells
@@ -144,7 +159,7 @@ function makeShellProps(overrides = {}) {
 describe('CodeShell', () => {
   it('renders its full chrome around the editor surface', () => {
     act(() => {
-      root.render(createElement(CodeShell, makeShellProps()));
+      root.render(host(createElement(CodeShell, makeShellProps())));
     });
 
     expect(container.querySelector('main.main-content')).not.toBeNull();
@@ -156,7 +171,7 @@ describe('CodeShell', () => {
 
   it('renders the placeholder terminal without a local terminal', () => {
     act(() => {
-      root.render(createElement(CodeShell, makeShellProps({ supportsLocalTerminal: false })));
+      root.render(host(createElement(CodeShell, makeShellProps({ supportsLocalTerminal: false }))));
     });
     expect(container.querySelector('.mock-terminal')).not.toBeNull();
   });
@@ -164,26 +179,28 @@ describe('CodeShell', () => {
   it('opens the placeholder terminal only when the user left it open', () => {
     act(() => {
       root.render(
-        createElement(CodeShell, makeShellProps({ supportsLocalTerminal: false, isTerminalExpanded: false })),
+        host(createElement(CodeShell, makeShellProps({ supportsLocalTerminal: false, isTerminalExpanded: false }))),
       );
     });
     expect(container.querySelector('.mock-terminal')?.getAttribute('data-expanded')).toBe('false');
     act(() => {
-      root.render(createElement(CodeShell, makeShellProps({ supportsLocalTerminal: false, isTerminalExpanded: true })));
+      root.render(
+        host(createElement(CodeShell, makeShellProps({ supportsLocalTerminal: false, isTerminalExpanded: true }))),
+      );
     });
     expect(container.querySelector('.mock-terminal')?.getAttribute('data-expanded')).toBe('true');
   });
 
   it('omits the placeholder terminal when a local terminal is supported', () => {
     act(() => {
-      root.render(createElement(CodeShell, makeShellProps({ supportsLocalTerminal: true })));
+      root.render(host(createElement(CodeShell, makeShellProps({ supportsLocalTerminal: true }))));
     });
     expect(container.querySelector('.mock-terminal')).toBeNull();
   });
 
   it('renders the mobile pane controls on mobile', () => {
     act(() => {
-      root.render(createElement(CodeShell, makeShellProps({ isMobile: true })));
+      root.render(host(createElement(CodeShell, makeShellProps({ isMobile: true }))));
     });
     expect(container.querySelector('.pane-controls-mobile')).not.toBeNull();
     expect(container.querySelector('.top-mobile-context-btn')).not.toBeNull();
@@ -191,7 +208,7 @@ describe('CodeShell', () => {
 
   it('omits the mobile pane controls on desktop', () => {
     act(() => {
-      root.render(createElement(CodeShell, makeShellProps({ isMobile: false })));
+      root.render(host(createElement(CodeShell, makeShellProps({ isMobile: false }))));
     });
     expect(container.querySelector('.pane-controls-mobile')).toBeNull();
   });
@@ -200,7 +217,7 @@ describe('CodeShell', () => {
 describe('DesignShell', () => {
   it('renders the design surface with no Code chrome', () => {
     act(() => {
-      root.render(createElement(DesignShell, makeShellProps()));
+      root.render(host(createElement(DesignShell, makeShellProps())));
     });
 
     expect(container.querySelector('main.main-content')).not.toBeNull();
@@ -214,7 +231,7 @@ describe('DesignShell', () => {
 
   it('keeps the mobile pane controls to the sidebar toggle only', () => {
     act(() => {
-      root.render(createElement(DesignShell, makeShellProps({ isMobile: true })));
+      root.render(host(createElement(DesignShell, makeShellProps({ isMobile: true }))));
     });
 
     expect(container.querySelector('.pane-controls-mobile')).not.toBeNull();

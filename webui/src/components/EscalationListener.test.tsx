@@ -434,7 +434,7 @@ describe('EscalationListener — ETH-2 txn action', () => {
     vi.mocked(txnPull).mockResolvedValue(PULL_MANIFEST);
     vi.mocked(txnFinish).mockResolvedValue(undefined);
 
-    render(createElement(EscalationListener));
+    render(createElement(HostProvider, null, createElement(EscalationListener)));
     fireTrigger();
     await clickRunTxn();
     await flush();
@@ -468,7 +468,7 @@ describe('EscalationListener — runner host choice', () => {
   });
 
   it("offers the user's runners and runs on the selected one", async () => {
-    render(createElement(EscalationListener));
+    render(createElement(HostProvider, null, createElement(EscalationListener)));
     fireTrigger();
     await waitFor(() => expect(screen.getByTestId('escalation-toast-txn')).toHaveTextContent('Run on MacBook'));
     expect(screen.getAllByTestId('run-host-option').map((o) => o.textContent)).toEqual([
@@ -486,7 +486,7 @@ describe('EscalationListener — runner host choice', () => {
   });
 
   it('runs in the cloud when Cloud is picked', async () => {
-    render(createElement(EscalationListener));
+    render(createElement(HostProvider, null, createElement(EscalationListener)));
     fireTrigger();
     await waitFor(() => expect(screen.getByTestId('escalation-toast-txn')).toBeEnabled());
     fireEvent.click(screen.getByTestId('run-host-option-cloud'));
@@ -498,7 +498,7 @@ describe('EscalationListener — runner host choice', () => {
 
   it('explains an unavailable runner and offers the cloud instead', async () => {
     vi.mocked(resolveTxnWorkspace).mockRejectedValueOnce(new RunnerUnavailableError('r-mac'));
-    render(createElement(EscalationListener));
+    render(createElement(HostProvider, null, createElement(EscalationListener)));
     fireTrigger();
     await clickRunTxn();
     await flush();

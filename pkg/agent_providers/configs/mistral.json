@@ -412,6 +412,21 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.07,
+        "context_length": 1048576,
+        "description": "Mistral Large 4 is Mistral's flagship open-weight multimodal model (1.05T total, 49B active) built for reasoning, coding, and agentic workloads, with a 1M-token context window.",
+        "id": "mistral-large-4-0",
+        "input_cost": 0.68,
+        "name": "Mistral: Mistral Large 4",
+        "output_cost": 2.09,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {
@@ -420,9 +435,9 @@
       "devstral-2512": 262144,
       "mistral-embed": 32768,
       "mistral-large-2407": 131072,
-      "mistral-large-2411": 131072,
-      "mistral-large-latest": 131072,
-      "mistral-medium-2312": 32768,
+          "mistral-large-2411": 131072,
+    "mistral-large-4-0": 1048576,
+    "mistral-large-latest": 131072,"mistral-medium-2312": 32768,
       "mistral-medium-latest": 32768,
       "mistral-small-2409": 32768,
       "mistral-small-latest": 32768,

@@ -1,5 +1,31 @@
 # TODO
 
+## Starter dependency security (before builders use the starters)
+
+GitHub Dependabot reports ~100 open alerts in the starter lockfiles
+(`pkg/starters/data/{static-site,web-app,web-app-data}/package-lock.json`),
+13 critical: vitest (RCE via the UI server / malicious site), tinypool
+(prototype pollution → RCE), astro (RCE via AVIF image optimization). Every
+starter is copied into each new builder project, so these ship to users.
+
+- [ ] **deps.1** Patch the starters: bump every starter's direct
+      dependencies to current releases that resolve the open Dependabot
+      alerts (`gh api repos/sprout-foundry/sprout/dependabot/alerts` filtered
+      to `pkg/starters/data/`), regenerate each lockfile with `npm install`,
+      keep exact pins where the starter pins exactly (web-app-data's caret
+      ranges become exact pins too, so a fresh copy is reproducible), and
+      run `npm audit --audit-level=high` clean in each starter (document any
+      advisory with no fix and why it does not apply). Then run
+      `scripts/ci-check-starters.sh` with the built binary: every starter
+      builds, passes its tests and serves every manifest route. Update the
+      stack skills if a major bump changes conventions. Bump each starter's
+      version in its manifest.
+- [ ] **deps.2** Keep them patched: the starters CI workflow
+      (`.github/workflows/starters.yml`) runs `npm audit --audit-level=high`
+      per starter and fails on high/critical; add a `.github/dependabot.yml`
+      entry per starter directory (npm, weekly, grouped) so updates arrive
+      as PRs. actionlint clean.
+
 ## Host-contract lane — publish blockers for `@sprout-foundry/workspace`
 
 Branch `feat/host-contract` (worktree `../sprout-host`). Read

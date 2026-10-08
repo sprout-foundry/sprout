@@ -2,6 +2,12 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.24.3] - 2026-10-08
+
+- feat(webui): a "Report a bug" action in the help menu, the status bar and the layered top bar opens a prefilled issue on the public repository; a hosted platform can route the same action to its own support flow through the host contract's new optional `reportBug` intent.
+- feat(cli): `sprout bug` opens the same prefilled issue (sprout version and OS only) and prints its URL.
+- fix(webui): the About dialog shows the real build version instead of a fixed one.
+
 ## [v0.24.2] - 2026-10-08
 
 - fix(starters): security update for the three reference starters — every starter's dependencies were bumped to current releases (Astro 7, Vite 8, Vitest 4, ESLint 10, Wrangler 4), clearing the critical advisories in vitest, tinypool and astro that every new project inherited; lockfiles are committed with exact pins, the stack skills and starter versions (1.1.0) follow the new majors. `npm audit --audit-level=high` is clean for all three; web-app-data keeps four documented dev-only moderate advisories from drizzle-kit's bundled esbuild.

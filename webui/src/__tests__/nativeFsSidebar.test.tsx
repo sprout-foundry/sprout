@@ -142,6 +142,10 @@ function clearBridge(): void {
 
 type SidebarModule = typeof import('../components/SidebarFilesSection');
 let Sidebar: SidebarModule['default'];
+// Captured from the SAME fresh module graph as `Sidebar` inside loadComponent:
+// after vi.resetModules() the component's HostContext is a fresh instance, so a
+// top-level HostProvider import (the original graph) would NOT provide it.
+let HostProvider: typeof import('../host').HostProvider;
 
 /** Fresh import of the component with the given compile-time flag value. */
 async function loadComponent(
@@ -151,6 +155,7 @@ async function loadComponent(
   else vi.stubEnv('VITE_SPROUT_NATIVE_FS', '');
   vi.resetModules();
   const mod = (await import('../components/SidebarFilesSection')) as unknown as SidebarModule;
+  HostProvider = (await import('../host')).HostProvider;
   return mod.default;
 }
 
@@ -180,7 +185,11 @@ describe('onFetchFiles — gate ACTIVE routes through the bridge', () => {
     });
     installBridge(bridge);
 
-    render(<Sidebar onFileClick={() => {}} workspaceRoot="/ws" />);
+    render(
+      <HostProvider>
+        <Sidebar onFileClick={() => {}} workspaceRoot="/ws" />
+      </HostProvider>,
+    );
     expect(screen.getByTestId('mock-filetree')).toBeTruthy();
 
     const result = await act(async () => (await getCapturedOnFetchFiles())('.'));
@@ -216,7 +225,11 @@ describe('onFetchFiles — gate ACTIVE routes through the bridge', () => {
     });
     installBridge(bridge);
 
-    render(<Sidebar onFileClick={() => {}} workspaceRoot="/ws" />);
+    render(
+      <HostProvider>
+        <Sidebar onFileClick={() => {}} workspaceRoot="/ws" />
+      </HostProvider>,
+    );
     expect(screen.getByTestId('mock-filetree')).toBeTruthy();
 
     const result = await act(async () => (await getCapturedOnFetchFiles())('src'));
@@ -242,7 +255,11 @@ describe('onFetchFiles — gate ACTIVE routes through the bridge', () => {
     });
     installBridge(bridge);
 
-    render(<Sidebar onFileClick={() => {}} workspaceRoot="/ws" />);
+    render(
+      <HostProvider>
+        <Sidebar onFileClick={() => {}} workspaceRoot="/ws" />
+      </HostProvider>,
+    );
     expect(screen.getByTestId('mock-filetree')).toBeTruthy();
     const result = await act(async () => (await getCapturedOnFetchFiles())('.'));
 
@@ -278,7 +295,11 @@ describe('onFetchFiles — gate INACTIVE falls back to clientFetch', () => {
       ),
     );
 
-    render(<Sidebar onFileClick={() => {}} workspaceRoot="/ws" />);
+    render(
+      <HostProvider>
+        <Sidebar onFileClick={() => {}} workspaceRoot="/ws" />
+      </HostProvider>,
+    );
     expect(screen.getByTestId('mock-filetree')).toBeTruthy();
     const result = await act(async () => (await getCapturedOnFetchFiles())('.'));
 

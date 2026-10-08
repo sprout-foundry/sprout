@@ -132,14 +132,25 @@ function createMockIDBDatabase() {
 
 /** Fetch mock serving a manifest body and a WASM body, recording every URL. */
 function createManifestFetch(manifestBody: string | null) {
+  // The production loader reads the Content-Type of the .wasm response to guard
+  // against a misrouted (non-wasm) asset, so the mock Response must expose a
+  // headers.get() that answers the lookup (an empty type exercises the buffered
+  // compile path — the one the WebAssembly.instantiate mock drives).
+  const emptyHeaders = { get: () => '' };
   return async (input: RequestInfo | URL): Promise<Response> => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
     capturedFetchUrls.push(url);
     if (url.endsWith('wasm-manifest.json')) {
-      if (manifestBody === null) return { ok: false, status: 404 } as Response;
-      return { ok: true, status: 200, text: async () => manifestBody } as Response;
+      if (manifestBody === null) return { ok: false, status: 404, headers: emptyHeaders } as Response;
+      return { ok: true, status: 200, headers: emptyHeaders, text: async () => manifestBody } as Response;
     }
-    return { ok: true, status: 200, arrayBuffer: async () => new ArrayBuffer(0), text: async () => '' } as Response;
+    return {
+      ok: true,
+      status: 200,
+      headers: emptyHeaders,
+      arrayBuffer: async () => new ArrayBuffer(0),
+      text: async () => '',
+    } as Response;
   };
 }
 

@@ -638,6 +638,23 @@ const TESTIDS = {
   "ship-history-row-x": "ship-history-row-x", // pattern ship-history-row-${id}
   "ship-history-open-x": "ship-history-open-x", // pattern ship-history-open-${id}
   "ship-history-rollback-x": "ship-history-rollback-x", // pattern ship-history-rollback-${id}
+
+  // Host contract (host/example/ExampleHost.tsx, host/HostNotificationCount.tsx)
+  "host-example": "host-example", // the example host shell root
+  "host-example-chrome": "host-example-chrome", // the shell chrome bar
+  "host-example-chrome-left": "host-example-chrome-left", // chrome left cluster
+  "host-example-nav-log": "host-example-nav-log", // nav to the log view
+  "host-example-notifications": "host-example-notifications", // notifications view
+  "host-example-notify": "host-example-notify", // post a notification action
+  "host-example-open-account": "host-example-open-account", // open the account surface
+  "host-example-space-x": "host-example-space-x", // pattern host-example-space-${id}
+  "host-example-space": "host-example-space", // a space row container
+  "host-example-spaces": "host-example-spaces", // the spaces list
+  "host-example-usage": "host-example-usage", // the usage view
+  "host-notification-count": "host-notification-count", // the notification badge
+
+  // Workspace views (views/SproutWorkspace.tsx)
+  "sprout-workspace": "sprout-workspace", // the workspace view root
 } as const;
 
 // Derived set for O(1) coverage lookups

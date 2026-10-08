@@ -67,6 +67,18 @@ vi.mock('../contexts/SproutAdapterContext', () => ({
 }));
 
 import CodeShell from './CodeShell';
+import { HostProvider } from '../host';
+import { makeTestHost } from '../host/testHost';
+
+/**
+ * Wrap a tree in a host provider so useHost()/useHostCapabilities() consumers
+ * resolve (the feat/host-contract refactor made a HostProvider mandatory). The
+ * preview-panel tests represent a local shell, so the host turns the local-only
+ * capabilities on (matching shell.test.tsx).
+ */
+function host(children: unknown, capabilities: Record<string, boolean> = { agentChanges: true }): unknown {
+  return createElement(HostProvider, { host: makeTestHost(capabilities) }, children);
+}
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -136,7 +148,7 @@ function makeShellProps(overrides = {}) {
 describe('CodeShell preview panel', () => {
   it('mounts the preview toggle, with the panel closed by default', () => {
     act(() => {
-      root.render(createElement(CodeShell, makeShellProps()));
+      root.render(host(createElement(CodeShell, makeShellProps())));
     });
 
     // CodeShell wires the toggle into the HeaderBar.
@@ -149,7 +161,7 @@ describe('CodeShell preview panel', () => {
 
   it('opens the preview panel from the toggle (the pane renders in Code mode)', () => {
     act(() => {
-      root.render(createElement(CodeShell, makeShellProps()));
+      root.render(host(createElement(CodeShell, makeShellProps())));
     });
 
     const toggle = container.querySelector('[data-testid="preview-panel-toggle"]')!;
@@ -164,7 +176,7 @@ describe('CodeShell preview panel', () => {
 
   it('closes the panel again when the toggle is clicked a second time', () => {
     act(() => {
-      root.render(createElement(CodeShell, makeShellProps()));
+      root.render(host(createElement(CodeShell, makeShellProps())));
     });
 
     const toggle = container.querySelector('[data-testid="preview-panel-toggle"]')!;
@@ -177,7 +189,7 @@ describe('CodeShell preview panel', () => {
 
   it('renders the pane in its initial lifecycle state (stopped)', () => {
     act(() => {
-      root.render(createElement(CodeShell, makeShellProps()));
+      root.render(host(createElement(CodeShell, makeShellProps())));
     });
     const toggle = container.querySelector('[data-testid="preview-panel-toggle"]')!;
     fireEvent.click(toggle);

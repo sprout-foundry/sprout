@@ -12,6 +12,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { vi, describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
 import GitHubSettingsTab from './GitHubSettingsTab';
+import { HostProvider } from '../../host';
 
 // Sign-out is destructive (drops the stored PAT), so the panel confirms first.
 const { mockConfirm } = vi.hoisted(() => ({ mockConfirm: vi.fn().mockResolvedValue(true) }));
@@ -44,7 +45,13 @@ function renderTab() {
   // eslint-disable-next-line testing-library/no-unnecessary-act
   act(() => {
     root = createRoot(mountPoint);
-    root.render(<GitHubSettingsTab />);
+    root.render(
+      // A headless host (no host-managed github) exercises the PAT/token
+      // surface this file tests.
+      <HostProvider>
+        <GitHubSettingsTab />
+      </HostProvider>,
+    );
   });
 }
 

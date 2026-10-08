@@ -36,7 +36,7 @@ test.setTimeout(60_000);
 
 test.describe('Network Failure During Chat', () => {
   test('chat works normally before simulating failure (control test)', async () => {
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // Use the chat-input testid
@@ -64,7 +64,7 @@ test.describe('Network Failure During Chat', () => {
   });
 
   test('chat shows error state when API endpoint is blocked', async () => {
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // Use the chat-input testid
@@ -121,7 +121,7 @@ test.describe('Network Failure During Chat', () => {
   });
 
   test('chat shell remains stable after WebSocket disconnect', async () => {
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // Try to close the WebSocket connection via page.evaluate
@@ -167,7 +167,7 @@ test.describe('Network Failure During Chat', () => {
   });
 
   test('chat recovers when network is restored after failure', async () => {
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // First, block the API endpoint

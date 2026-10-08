@@ -43,7 +43,7 @@ test.setTimeout(60_000);
 test.describe('Search Panel', () => {
   test.fixme('sessions search panel filter works', async () => {
     // FIXME: The sessions search panel is in the right-side ContextPanel, requires navigation to access.
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['sidebar-container'])).toBeVisible({ timeout: 30_000 });
 
     // The search input should be visible in the sidebar
@@ -73,7 +73,7 @@ test.describe('Search Panel', () => {
 
   test.fixme('clear query returns all', async () => {
     // FIXME: Sessions search panel is in the right-side ContextPanel, requires navigation to access.
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['sidebar-container'])).toBeVisible({ timeout: 30_000 });
 
     // First, type a query to activate the search state

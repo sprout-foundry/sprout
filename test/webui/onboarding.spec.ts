@@ -46,7 +46,7 @@ test.describe('Onboarding', () => {
   // the backend reports its state. We check for it but fall back to verifying
   // the basic chat shell is up if onboarding is skipped.
   test('onboarding overlay or chat shell appears on first load', async () => {
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
 
     // Wait a moment for the app to fully initialize
     await page.waitForTimeout(2000);
@@ -72,7 +72,7 @@ test.describe('Onboarding', () => {
 
   test.fixme('sidebar session search input is interactable regardless of onboarding state', async () => {
     // FIXME: The sidebar-session-search-input is in the right-side ContextPanel's SessionsTab, not the left sidebar. The test navigates to the wrong UI region.
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
 
     // If onboarding is showing, skip it to get to the main UI
     const onboardingOverlay = page.getByTestId(TESTIDS['onboarding-overlay']);

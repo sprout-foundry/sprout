@@ -55,7 +55,7 @@ async function openLayered(viewport: {
 }): Promise<Page> {
   const context = await browser.newContext({ viewport });
   const page = await context.newPage();
-  await page.goto(`${vite.url}/?layout=layered`, { waitUntil: "networkidle" });
+  await page.goto(`${vite.url}/?layout=layered`, { waitUntil: "domcontentloaded" });
   return page;
 }
 

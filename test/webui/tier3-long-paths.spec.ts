@@ -44,7 +44,7 @@ test.describe('Long File Paths', () => {
     fs.mkdirSync(path.dirname(deepFile), { recursive: true });
     fs.writeFileSync(deepFile, 'I am a deeply nested file');
 
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     const filesTab = page.getByTestId(TESTIDS['sidebar-files-tab']);
@@ -74,7 +74,7 @@ test.describe('Long File Paths', () => {
     const longFile = path.join(sprout.workspaceDir, longName);
     fs.writeFileSync(longFile, 'I have a very long filename');
 
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     const filesTab = page.getByTestId(TESTIDS['sidebar-files-tab']);
@@ -117,7 +117,7 @@ test.describe('Long File Paths', () => {
     fs.mkdirSync(path.dirname(moderatePath), { recursive: true });
     fs.writeFileSync(moderatePath, 'Content for editor test with long path');
 
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     const filesTab = page.getByTestId(TESTIDS['sidebar-files-tab']);

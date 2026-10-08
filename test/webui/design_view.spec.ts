@@ -79,7 +79,7 @@ test.setTimeout(120_000);
  * switcher (SP-140-5: Design is a workspace mode, not a rail icon).
  */
 async function openDesignView(target: Page = page): Promise<void> {
-  await target.goto(vite.url, { waitUntil: "networkidle" });
+  await target.goto(vite.url, { waitUntil: "domcontentloaded" });
 
   // The active mode persists per instance, so a reload inside this serial run
   // may come back already in Design. Wait for the shell to mount either way,
@@ -125,7 +125,7 @@ async function switchToDesignMode(target: Page = page): Promise<void> {
 
 test.describe("SP-140-3 DesignView", () => {
   test("a workspace with a design/ tree exposes the Design mode and opens the view", async () => {
-    await page.goto(vite.url, { waitUntil: "networkidle" });
+    await page.goto(vite.url, { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId(TESTIDS["chat-shell"])).toBeVisible({
       timeout: 30_000,
     });

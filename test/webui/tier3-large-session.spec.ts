@@ -42,7 +42,7 @@ test.describe('Large Session', () => {
   // (e.g. via the Virtuoso item class) instead of direct children. Same root
   // cause as the two fixme'd tests below.
   test.fixme('chat scrolls to bottom when opening a large session', async () => {
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     const createResp = await fetch(`${sprout.baseUrl}/api/chat-sessions/create`, {
@@ -97,7 +97,7 @@ test.describe('Large Session', () => {
 
   test.fixme('message list renders large sessions without freezing', async () => {
     // FIXME: Same Virtuoso virtualization issue — direct child counting doesn't work with virtualized lists.
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // Use the chat-input testid
@@ -133,7 +133,7 @@ test.describe('Large Session', () => {
 
   test.fixme('jumping to a specific message by index works', async () => {
     // FIXME: Virtuoso virtualization breaks message index navigation.
-    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await page.goto(vite.url, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
     // Use the chat-input testid

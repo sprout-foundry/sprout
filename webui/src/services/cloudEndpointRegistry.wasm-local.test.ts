@@ -198,6 +198,7 @@ describe('WASM-local endpoint cross-validation (Go server ↔ TypeScript registr
     it('registry has expected number of wasm-local endpoint definitions', () => {
       // Count from wasm-local.ts (20 as of /api/design/status):
       // /api/files, /api/create, /api/delete, /api/rename, /api/browse,
+      // /api/file-index (bulk quick-open index),
       // /api/file/check-modified, /api/file/consent, /api/terminal/sessions,
       // /api/terminal/shells, /api/terminal/history, /api/search/replace,
       // /api/file, /api/files/prettier-config, /api/workspace/browse, /api/search,
@@ -206,7 +207,7 @@ describe('WASM-local endpoint cross-validation (Go server ↔ TypeScript registr
       // /api/ask-user/response (deliver ask_user response to WASM agent),
       // /api/design/status (design health from the WASM scanners).
       const wasmEndpoints = getEndpointsByCategory('wasm-local');
-      expect(wasmEndpoints.length).toBe(20);
+      expect(wasmEndpoints.length).toBe(21);
     });
 
     it('wasm-local endpoints cover all 3 categories: file, terminal, search', () => {

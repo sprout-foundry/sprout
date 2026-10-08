@@ -11,6 +11,12 @@ import type { QueuedMessage } from '../hooks/useChatSessionManager';
 import { useChatSessionsSync } from '../hooks/useChatSessionsSync';
 import { useCurrentTodos } from '../hooks/useCurrentTodos';
 import { getPluginViewIds } from '../services/pluginRegistry';
+import {
+  loadRecentFiles,
+  pruneRecentFiles,
+  recordRecentFile as recordRecentFileInStore,
+  type RecentFileEntry,
+} from '../services/paletteRecents';
 import { useFileHandler } from '../hooks/useFileHandler';
 import { useGitWorkspace } from '../hooks/useGitWorkspace';
 import { useHotkeysConfig } from '../hooks/useHotkeysConfig';
@@ -72,7 +78,6 @@ interface AppContentProps {
     queryCount: number;
     filesModified: number;
   };
-  recentFiles: Array<{ path: string; modified: boolean }>;
   recentLogs: LogEntry[];
   gitRefreshToken: number;
   onSidebarToggle: () => void;
@@ -134,7 +139,6 @@ const AppContent: React.FC<AppContentProps> = ({
   onSidebarWidthPersist,
   onSidebarWidthReset,
   stats,
-  recentFiles,
   recentLogs,
   gitRefreshToken,
   onSidebarToggle,
@@ -661,34 +665,25 @@ const AppContent: React.FC<AppContentProps> = ({
     },
     [paletteAllFiles],
   );
-  // Most-recently-opened files. Persisted across sessions so the palette
-  // has something to show on idle, even right after page load. Limited to
-  // 15 entries — beyond that the list becomes noise.
-  const RECENT_FILES_STORAGE_KEY = 'sprout.commandPalette.recentFiles.v1';
-  const RECENT_FILES_LIMIT = 15;
-  type RecentFile = { name: string; path: string; type: string };
-  const [paletteRecentFiles, setPaletteRecentFiles] = useState<RecentFile[]>(() => {
-    try {
-      const raw = typeof window !== 'undefined' ? window.localStorage.getItem(RECENT_FILES_STORAGE_KEY) : null;
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return [];
-      return parsed.slice(0, RECENT_FILES_LIMIT);
-    } catch {
-      return [];
-    }
-  });
-  const recordRecentFile = useCallback((file: RecentFile) => {
-    setPaletteRecentFiles((prev) => {
-      const next = [file, ...prev.filter((f) => f.path !== file.path)].slice(0, RECENT_FILES_LIMIT);
-      try {
-        window.localStorage.setItem(RECENT_FILES_STORAGE_KEY, JSON.stringify(next));
-      } catch {
-        // ignore quota / privacy-mode errors
-      }
-      return next;
-    });
-  }, []);
+  // Most-recently-opened files for the palette's idle landing list.
+  // Persisted across sessions, keyed PER WORKSPACE (paletteRecents v2): the
+  // old v1 store was one browser-global list of absolute paths, so files
+  // from the previous folder stayed in the palette after a workspace switch
+  // and clicking one opened a path in the wrong workspace. v2 buckets by
+  // root with workspace-relative paths — a cross-workspace leak is
+  // structurally impossible.
+  const [paletteRecentFiles, setPaletteRecentFiles] = useState<RecentFileEntry[]>([]);
+  // Load the current workspace's bucket when the root is known (and reload
+  // when it changes — worktree switches arrive without a remount).
+  useEffect(() => {
+    setPaletteRecentFiles(loadRecentFiles(paletteWorkspaceRoot));
+  }, [paletteWorkspaceRoot]);
+  const recordRecentFile = useCallback(
+    (file: RecentFileEntry) => {
+      setPaletteRecentFiles(recordRecentFileInStore(paletteWorkspaceRoot, file));
+    },
+    [paletteWorkspaceRoot],
+  );
   // Watch the editor manager's buffer set so *any* path that opens a file
   // (palette, file tree, hotkey, drag-drop, layout restore…) contributes to
   // the recents MRU. Skip non-file kinds (welcome/chat/diff/etc.) and the
@@ -709,6 +704,21 @@ const AppContent: React.FC<AppContentProps> = ({
       });
     }
   }, [buffers, recordRecentFile]);
+  // A freshly-built index tells us which paths actually exist in this
+  // workspace; drop stale recents (deleted files, renamed paths) against it.
+  // Runs only after a bulk load, keyed by root so it re-arms on switches.
+  const lastPruneRootRef = useRef<string>('');
+  useEffect(() => {
+    if (!paletteWorkspaceRoot || lastPruneRootRef.current === paletteWorkspaceRoot) return;
+    if (paletteIsLoading) return;
+    if (paletteAllFiles.length === 0) return;
+    lastPruneRootRef.current = paletteWorkspaceRoot;
+    const known = new Set(paletteAllFiles.map((f) => f.path));
+    setPaletteRecentFiles((prev) => {
+      const next = pruneRecentFiles(paletteWorkspaceRoot, (p) => known.has(p));
+      return next === prev ? prev : next;
+    });
+  }, [paletteWorkspaceRoot, paletteAllFiles, paletteIsLoading]);
   const handlePaletteSearchSymbols = useCallback(
     (query: string) => {
       const content = currentBuffer?.content;
@@ -1219,7 +1229,6 @@ const AppContent: React.FC<AppContentProps> = ({
             onViewChange={onViewChange}
             onFileClick={handleFileClick}
             stats={stats}
-            recentFiles={recentFiles}
             recentLogs={recentLogs}
             isMobileMenuOpen={isSidebarOpen}
             onMobileMenuToggle={onToggleSidebar}

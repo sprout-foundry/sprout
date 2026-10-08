@@ -15,7 +15,7 @@ import { fetchRuntimeConfig, getBootstrapUser } from '../bootstrapAdapter';
 import { useHost, useHostCapabilities } from '../host';
 import type { AppStoreSetState } from '../contexts/AppStore';
 import { ApiService } from '../services/api';
-import type { StatsResponse, FilesResponse } from '../services/api';
+import type { StatsResponse } from '../services/api';
 import { polledStatsPatch } from '../utils/polledStats';
 import type { SessionEntry } from '../services/api/types';
 import { getAdapter } from '../services/apiAdapter';
@@ -32,11 +32,6 @@ import { WebSocketService } from '../services/websocket';
 import { debugLog, useLog } from '../utils/log';
 import { canAutoRestoreLatestSession, clearedByUser } from './bootSessionRestore';
 
-interface RecentFile {
-  path: string;
-  modified: boolean;
-}
-
 export interface UseAppInitializationOptions {
   eventsProvider: EventsProvider;
   handleEvent: (event: SproutEvent) => void;
@@ -44,7 +39,6 @@ export interface UseAppInitializationOptions {
   /** Loads the chat list and the backend's active chat. Awaited before the boot-time
    * active-chat decision so a design-mode restore/fresh start is not clobbered. */
   loadChatSessions: () => Promise<void>;
-  setRecentFiles: Dispatch<SetStateAction<RecentFile[]>>;
   setIsMobile: Dispatch<SetStateAction<boolean>>;
   setIsTablet: Dispatch<SetStateAction<boolean>>;
   setState: AppStoreSetState;
@@ -57,7 +51,6 @@ export function useAppInitialization({
   handleEvent,
   connectionTimeoutRef,
   loadChatSessions,
-  setRecentFiles,
   setIsMobile,
   setIsTablet,
   setState,
@@ -308,47 +301,24 @@ export function useAppInitialization({
           );
       };
 
-      const loadFiles = () => {
-        apiService
-          .getFiles()
-          .then((response: FilesResponse) => {
-            if (response && Array.isArray(response.files)) {
-              const files = response.files.map((file) => ({
-                path: file.path,
-                modified: false,
-              }));
-              setRecentFiles(files);
-            }
-          })
-          .catch((err) => {
-            // Before a workspace is chosen the server refuses the listing;
-            // the workspace gate is already asking for one.
-            if ((err as { code?: string })?.code === 'workspace_not_selected') return;
-            log.error(`Failed to load initial data: ${err instanceof Error ? err.message : String(err)}`, {
-              title: 'Initialization Error',
-            });
-          });
-      };
-
-      // Load initial stats & files
+      // Load initial stats. (The former loadFiles() fed the dead
+      // `recentFiles` prop — a root-directory listing mislabeled as recents;
+      // the palette's real recents live in paletteRecents.ts, and the file
+      // tree fetches its own listing.)
       loadStats();
-      loadFiles();
 
-      // In cloud mode, listen for repo import completion to refresh files.
-      // The import runs async in bootstrapAdapter.ts and may complete after
-      // the initial loadFiles() call returned empty.
+      // In cloud mode, a repo import (?repo= param) completes asynchronously
+      // after boot; components that need the new files listen for the same
+      // event themselves (e.g. SidebarFilesSection refreshes its tree).
       const handleRepoImported = () => {
-        debugLog('[startup] repo import completed — refreshing file list');
-        loadFiles();
+        debugLog('[startup] repo import completed');
       };
       window.addEventListener('sprout:repo-imported', handleRepoImported);
 
       // Check if import already completed before we mounted (race condition).
       const importedRepo = (window as unknown as Record<string, unknown>).__repoImported;
       if (importedRepo) {
-        debugLog('[startup] repo was already imported before mount — loading files');
-        // Small delay to ensure WASM shell writes have settled.
-        setTimeout(() => loadFiles(), 500);
+        debugLog('[startup] repo was already imported before mount');
       }
 
       // Restore workspace and session startup state
@@ -555,6 +525,6 @@ export function useAppInitialization({
       };
     } // end startDataLoading
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- setState, setRecentFiles, setIsMobile, setIsTablet are stable useState setters; connectionTimeoutRef is a stable ref; eventsProvider/apiService are stable from hooks/singletons; loadChatSessions is stable (empty useCallback deps); handleReconnect is stable (useCallback with empty deps)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setState, setIsMobile, setIsTablet are stable useState setters; connectionTimeoutRef is a stable ref; eventsProvider/apiService are stable from hooks/singletons; loadChatSessions is stable (empty useCallback deps); handleReconnect is stable (useCallback with empty deps)
   }, [handleEvent, loadChatSessions, eventsProvider]);
 }

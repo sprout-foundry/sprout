@@ -66,7 +66,7 @@ function endStepParagraph(messages: Message[]): Message[] {
 // The in-place refresh does three things:
 //   1. Tears down cached LSP clients (their WebSocket URLs are keyed by the
 //      old workspace root).
-//   2. Clears recentFiles / recentLogs caches in React state so stale data
+//   2. Clears the recentLogs cache in React state so stale data
 //      from the previous workspace doesn't linger.
 //   3. Dispatches a `sprout:workspace-changed` DOM event so other components
 //      (WorkspaceBar, FileBrowser, editor tabs, etc.) can re-fetch fresh data
@@ -94,8 +94,10 @@ export const handleWorkspaceChanged = (ctx: EventHandlerContext): void => {
   }
 
   // Clear workspace-derived caches so they re-fetch from the new root.
+  // (recentFiles state was removed with the dead recents pipeline; the
+  // palette's recents are workspace-scoped in localStorage and don't need
+  // clearing — the bucket IS the workspace.)
   setState((prev) => ({
-    recentFiles: [],
     recentLogs: [],
     logs: appendCappedLog(prev.logs, logEntry),
   }));

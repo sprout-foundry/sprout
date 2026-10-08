@@ -42,6 +42,7 @@ func main() {
 		"writeFile":           js.FuncOf(writeFileFunc),
 		"readFile":            js.FuncOf(readFileFunc),
 		"listDir":             js.FuncOf(listDirFunc),
+		"walkFiles":           js.FuncOf(walkFilesFunc),
 		"deleteFile":          js.FuncOf(deleteFileFunc),
 		"getHistory":          js.FuncOf(getHistoryFunc),
 		"getEnv":              js.FuncOf(getEnvFunc),
@@ -261,6 +262,30 @@ func listDirFunc(this js.Value, args []js.Value) interface{} {
 	}
 
 	jsonStr, err := wasmshell.ListDirEntryJSON(workspacePath(path))
+	if err != nil {
+		type result struct {
+			Error string `json:"error"`
+		}
+		r := result{Error: err.Error()}
+		data, _ := json.Marshal(r)
+		return string(data)
+	}
+
+	return jsonStr
+}
+
+// walkFilesFunc returns the workspace's whole quick-open file index as one
+// JSON document (same row shape as the daemon's /api/file-index). One
+// JS→WASM crossing replaces the palette's per-directory listDir crawl.
+func walkFilesFunc(this js.Value, args []js.Value) interface{} {
+	root := workspaceRoot
+	if len(args) > 0 {
+		if p := args[0].String(); p != "" && p != "/" {
+			root = workspacePath(p)
+		}
+	}
+
+	jsonStr, err := wasmshell.WalkFilesJSON(root)
 	if err != nil {
 		type result struct {
 			Error string `json:"error"`

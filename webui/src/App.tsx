@@ -121,7 +121,6 @@ function AppInner() {
   // hooks-consolidation refactor; restored here.)
   usePageVisibility();
 
-  const [recentFiles, setRecentFiles] = useState<Array<{ path: string; modified: boolean }>>([]);
   const [gitRefreshToken, setGitRefreshToken] = useState(0);
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
 
@@ -338,7 +337,6 @@ function AppInner() {
     handleEvent,
     connectionTimeoutRef,
     loadChatSessions: chatManager.loadChatSessions,
-    setRecentFiles,
     setIsMobile,
     setIsTablet,
     setState,
@@ -444,7 +442,6 @@ function AppInner() {
             // of only resetting to default.
             onSidebarWidthReset={cycleSidebarSnap}
             stats={stats}
-            recentFiles={recentFiles}
             recentLogs={recentLogs}
             gitRefreshToken={gitRefreshToken}
             onSidebarToggle={handleSidebarToggle}

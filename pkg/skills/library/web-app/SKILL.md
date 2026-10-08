@@ -331,7 +331,23 @@ client-side paths.
 
 ## Upgrade note
 
-No upgrades yet. When the starter version in `.sprout/starter.json` falls
-behind the embedded tree, this section carries the upgrade note and the agent
-may propose — but never silently apply — the upgrade; apply it only when the
-user explicitly approves.
+Starter version **1.1.0** (2026-10): the stack was bumped to **React 19**
+(from 18), **React Router 7.18** (`react-router-dom`), **Vite 8**, **Vitest 4**
+and **ESLint 10**. The React Router data-router API this skill documents
+(`createBrowserRouter` + `<RouterProvider>` + a route-object array,
+`createMemoryRouter` in tests) is unchanged in 7.18 — existing routes, links
+and tests need no edits. Two things to know:
+
+- **React 19**: the component and hook patterns here are unchanged, but React
+  19 removed a few legacy APIs (e.g. `ReactDOM.render`, string refs). This
+  starter's code does not use them. `@types/react` / `@types/react-dom` are on
+  19; keep them in step with `react`/`react-dom`.
+- **ESLint is now 10** with `eslint-plugin-react-hooks` v7 and
+  `eslint-plugin-react-refresh` v0.5; the flat config in `eslint.config.mjs`
+  is unchanged. **Vitest 4** keeps the `vitest run` script and
+  `vitest.config.ts` shape.
+
+When the starter version in `.sprout/starter.json` falls behind the embedded
+tree, this section carries the upgrade note and the agent may propose — but
+never silently apply — the upgrade; apply it only when the user explicitly
+approves.

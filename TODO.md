@@ -34,7 +34,7 @@ GitHub Dependabot reports ~100 open alerts in the starter lockfiles
 (prototype pollution → RCE), astro (RCE via AVIF image optimization). Every
 starter is copied into each new builder project, so these ship to users.
 
-- [ ] **deps.1** Patch the starters: bump every starter's direct
+- [x] **deps.1** Patch the starters: bump every starter's direct
       dependencies to current releases that resolve the open Dependabot
       alerts (`gh api repos/sprout-foundry/sprout/dependabot/alerts` filtered
       to `pkg/starters/data/`), regenerate each lockfile with `npm install`,

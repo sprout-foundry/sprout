@@ -1,8 +1,8 @@
-// The `cloudflare:test` module exposes `env` typed as the empty ProvidedEnv.
+// The `cloudflare:test` module exposes `env` typed as `Cloudflare.Env`.
 // Declaring the D1 binding here (matching the `DB` binding in wrangler.toml)
 // gives the API test a typed `env.DB`.
-declare module 'cloudflare:test' {
-  interface ProvidedEnv {
+declare namespace Cloudflare {
+  interface Env {
     DB: D1Database;
   }
 }

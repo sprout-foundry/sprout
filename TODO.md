@@ -1,5 +1,17 @@
 # TODO
 
+## CI flake
+
+- [ ] **flake.1** `TestDrainAndWait` (`pkg/utils/token_bucket_test.go:391`)
+      failed on the macOS runner with "Expected wait ~200ms, got 351ms": the
+      150–300ms window bounds scheduler latency, not the contract. Keep the
+      lower bound (it proves the wait happened) and replace the tight upper
+      bound with a generous one (e.g. 2s) or loop per
+      `docs/internal/test-flakiness.md`; scan `pkg/utils` and `pkg/agent`
+      for other single-shot wall-clock upper bounds under ~1s and fix the
+      same way. `go test -count=20 -run TestDrainAndWait ./pkg/utils/`
+      passes under `-p 4` load.
+
 ## Design tokens (for the platform look-and-feel work)
 
 - [ ] **design.1** Fix and extend `@sprout-foundry/design`

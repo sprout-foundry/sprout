@@ -7,6 +7,7 @@ package agent
 
 import (
 	"github.com/sprout-foundry/sprout/pkg/agent/subagents"
+	agent_api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -16,6 +17,15 @@ func NewSubagentRunner(parent *Agent, shared *SharedState) *SubagentRunner {
 		parentAgent: parent,
 		shared:      shared,
 	}
+}
+
+// SetSubagentClientFactoryForTest installs a client factory the runner uses
+// instead of factory.CreateProviderClient when building a subagent. It is the
+// exported form of the unexported testClientFactory field so tests outside
+// pkg/agent (e.g. pkg/benchmark) can drive a scripted subagent without a real
+// provider. Never called in production.
+func (r *SubagentRunner) SetSubagentClientFactoryForTest(factory func(clientType agent_api.ClientType, model string) (agent_api.ClientInterface, error)) {
+	r.testClientFactory = factory
 }
 
 // Metrics returns a snapshot of the subagent runner's operational metrics.

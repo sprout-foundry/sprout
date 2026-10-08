@@ -1,0 +1,64 @@
+{
+  "id": "add-visits-reset",
+  "request": "The home page counts visits in localStorage but the counter can only go up. Add a \"Reset\" button next to the \"Add a visit\" button that sets the count back to zero and persists the reset, and cover the reset in the test suite. Make sure the app still builds and the home page still renders.",
+  "starter": "web-app",
+  "plan": {
+    "version": 1,
+    "revision": 1,
+    "created": "2026-10-07T09:00:00Z",
+    "updated": "2026-10-07T09:00:00Z",
+    "goal": "Let a visitor clear the persisted visit counter on the home page instead of only incrementing it.",
+    "scope": [
+      {
+        "id": "visits-reset",
+        "title": "A Reset control for the persisted visit count",
+        "description": "Add a Reset button to src/pages/Home.tsx that calls the existing useLocalStorage setter with 0, so the displayed count and the stored value both return to zero, and extend test/app.test.tsx to cover it."
+      }
+    ],
+    "steps": [
+      {
+        "scope": "visits-reset",
+        "description": "Add a second button labelled \"Reset\" to src/pages/Home.tsx, beside the existing \"Add a visit\" button, that calls setVisits(0)."
+      },
+      {
+        "scope": "visits-reset",
+        "description": "Extend test/app.test.tsx with a case that increments the counter, clicks Reset, and asserts the displayed count and the stored localStorage value are both back to 0."
+      },
+      {
+        "scope": "visits-reset",
+        "description": "Run the build and the test suite to confirm the app compiles and the home route still renders and passes its tests."
+      }
+    ],
+    "starter": "web-app",
+    "acceptance": [
+      {
+        "id": "build-passes",
+        "scope": "visits-reset",
+        "check": "npm run build",
+        "kind": "build"
+      },
+      {
+        "id": "tests-pass",
+        "scope": "visits-reset",
+        "check": "npm test",
+        "kind": "test"
+      },
+      {
+        "id": "home-page-renders",
+        "scope": "visits-reset",
+        "check": "/",
+        "kind": "page"
+      }
+    ],
+    "out_of_scope": [
+      {
+        "item": "Changing where or how the visit count is stored",
+        "reason": "The starter already persists the count through useLocalStorage; the request is to add a way to clear it, not to replace the storage mechanism."
+      },
+      {
+        "item": "Confirming the reset with a dialog",
+        "reason": "The count is trivial and local; a confirmation step adds interaction complexity the request does not ask for."
+      }
+    ]
+  }
+}

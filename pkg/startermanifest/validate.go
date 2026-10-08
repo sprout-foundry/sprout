@@ -39,7 +39,10 @@ func (e *ValidationError) Error() string {
 //   - dev_port, if present and non-zero, is a valid port (1-65535); zero
 //     means "no fixed port" and is allowed;
 //   - every routes entry is non-blank;
-//   - build_output, if present, is not whitespace-only.
+//   - build_output, if present, is not whitespace-only;
+//   - deploy_target, if present, is exactly "pages" or "workers"
+//     (lowercase); an absent value means "pages" and a whitespace-only or
+//     otherwise unrecognised value is a problem.
 //
 // What is deliberately NOT enforced, so hand-authored files keep working:
 // there is no "at least one command" rule, no "dev implies dev_port or a
@@ -98,6 +101,14 @@ func Validate(m *StarterManifest) error {
 	// build_output: optional, but a present value must not be blank.
 	if presentButBlank(m.BuildOutput) {
 		add("build_output: must not be whitespace-only (omit the field when the project has no build output directory)")
+	}
+
+	// deploy_target: optional; an absent value means "pages". A present
+	// value must be exactly one of the recognised targets (lowercase) — a
+	// whitespace-only or unrecognised value is a mistake, not a default.
+	if m.DeployTarget != "" && m.DeployTarget != DeployTargetPages && m.DeployTarget != DeployTargetWorkers {
+		add("deploy_target must be %q or %q, got %q (omit the field to default to %q)",
+			DeployTargetPages, DeployTargetWorkers, m.DeployTarget, DeployTargetPages)
 	}
 
 	if len(problems) == 0 {

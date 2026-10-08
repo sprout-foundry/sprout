@@ -99,4 +99,5 @@ deploy tools and instructions, not a new chat.
 - Resolved: first adapter is Cloudflare, user's own account (156a-1).
 - Resolved: previews may auto-deploy after verification; production
   always needs confirmation (156a-3).
-- Pages vs Workers selection rule per starter (from the manifest).
+- Resolved (2026-10-07): the starter manifest declares `deploy_target`;
+  an app with an API deploys to Workers, otherwise Pages.

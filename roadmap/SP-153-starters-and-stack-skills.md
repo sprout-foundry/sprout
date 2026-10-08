@@ -27,8 +27,10 @@ differently each time:
 `.sprout/starter.json` declares how a project is built and run:
 
 - `starter` (ID and version), `build`, `test`, `dev`, `preview` commands,
-  the dev server port, the routes to check, and the build output
-  directory.
+  the dev server port, the routes to check, the build output
+  directory, and the deploy target (`deploy_target`: `pages` | `workers`,
+  default `pages`) that selects the Cloudflare Pages or Workers adapter
+  (SP-156).
 - Schema and validator in Go. Any project can add the file by hand; it is
   not limited to projects created from a starter.
 - The single source of commands for SP-149 verification, SP-155 preview
@@ -87,6 +89,8 @@ proposes upgrades for existing projects; it never applies them silently.
 ## Open questions
 
 - Resolved: three starters ship together (153b).
-- Framework per starter (static site, web app, web app with data).
-- Local development story for starter 3's Cloudflare storage (emulator
-  choice) so tests run without an account.
+- Resolved (2026-10-07): static site = Astro; web app = React + Vite +
+  React Router; web app with data = the web app plus a Hono API on
+  Cloudflare Workers with D1 through Drizzle.
+- Resolved (2026-10-07): local Cloudflare storage uses Wrangler/Miniflare
+  (local D1/KV/R2 state, tests through `@cloudflare/vitest-pool-workers`).

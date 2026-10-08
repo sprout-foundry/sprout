@@ -30,6 +30,14 @@ const fixtureValid = `{
 // (any project can add the file by hand).
 const fixtureMinimal = `{"starter": {"id": "static-site", "version": "0.1.0"}}`
 
+// fixtureWorkers is a valid manifest declaring the Workers deploy shape.
+const fixtureWorkers = `{
+  "starter": {"id": "web-app-data", "version": "1.0.0"},
+  "build": "npm run build",
+  "build_output": "dist",
+  "deploy_target": "workers"
+}`
+
 // TestValidateJSON is the table test over JSON fixtures for the schema:
 // a fully-populated manifest and the minimal manifest pass, and every
 // invalid case fails with a clear message.
@@ -59,6 +67,45 @@ func TestValidateJSON(t *testing.T) {
 			name:      "dev_port of 0 means no fixed port and passes",
 			jsonStr:   `{"starter": {"id": "web-app", "version": "1.0.0"}, "dev": "npm run dev", "dev_port": 0}`,
 			wantValid: true,
+		},
+		{
+			name:      "deploy_target pages passes",
+			jsonStr:   `{"starter": {"id": "static-site", "version": "1.0.0"}, "deploy_target": "pages"}`,
+			wantValid: true,
+		},
+		{
+			name:      "deploy_target workers passes",
+			jsonStr:   fixtureWorkers,
+			wantValid: true,
+		},
+		{
+			name:      "absent deploy_target defaults to pages and passes",
+			jsonStr:   fixtureMinimal,
+			wantValid: true,
+		},
+		{
+			name:       "unrecognised deploy_target fails",
+			jsonStr:    `{"starter": {"id": "web-app", "version": "1.0.0"}, "deploy_target": "foo"}`,
+			wantValid:  false,
+			wantSubstr: "deploy_target must be",
+		},
+		{
+			name:       "uppercase deploy_target fails (lowercase only)",
+			jsonStr:    `{"starter": {"id": "web-app", "version": "1.0.0"}, "deploy_target": "PAGES"}`,
+			wantValid:  false,
+			wantSubstr: "deploy_target must be",
+		},
+		{
+			name:       "whitespace-only deploy_target fails",
+			jsonStr:    `{"starter": {"id": "web-app", "version": "1.0.0"}, "deploy_target": "   "}`,
+			wantValid:  false,
+			wantSubstr: "deploy_target must be",
+		},
+		{
+			name:       "trailing-space deploy_target fails (exact match required)",
+			jsonStr:    `{"starter": {"id": "web-app", "version": "1.0.0"}, "deploy_target": "pages "}`,
+			wantValid:  false,
+			wantSubstr: "deploy_target must be",
 		},
 		{
 			name:       "missing starter id fails",
@@ -174,6 +221,7 @@ func baseManifest() *StarterManifest {
 	m.DevPort = 5173
 	m.Routes = []string{"/", "/login", "/dashboard"}
 	m.BuildOutput = "dist"
+	m.DeployTarget = DeployTargetPages
 	return m
 }
 
@@ -263,6 +311,33 @@ func TestValidateTable(t *testing.T) {
 			wantSubstr: "build_output: must not be whitespace-only",
 		},
 		{
+			name:      "deploy_target pages passes",
+			m:         mutate(func(m *StarterManifest) { m.DeployTarget = DeployTargetPages }),
+			wantValid: true,
+		},
+		{
+			name:      "deploy_target workers passes",
+			m:         mutate(func(m *StarterManifest) { m.DeployTarget = DeployTargetWorkers }),
+			wantValid: true,
+		},
+		{
+			name:      "absent deploy_target passes (defaults to pages)",
+			m:         mutate(func(m *StarterManifest) { m.DeployTarget = "" }),
+			wantValid: true,
+		},
+		{
+			name:       "unrecognised deploy_target fails",
+			m:          mutate(func(m *StarterManifest) { m.DeployTarget = "foo" }),
+			wantValid:  false,
+			wantSubstr: "deploy_target must be",
+		},
+		{
+			name:       "whitespace-only deploy_target fails",
+			m:          mutate(func(m *StarterManifest) { m.DeployTarget = "  " }),
+			wantValid:  false,
+			wantSubstr: "deploy_target must be",
+		},
+		{
 			name:      "missing commands is lenient",
 			m:         New("static-site", "0.1.0"),
 			wantValid: true,
@@ -314,12 +389,13 @@ func TestJSONFieldNamesMatchSpec(t *testing.T) {
 	require.NoError(t, json.Unmarshal(b, &m))
 
 	wantTopLevel := []string{
-		"starter", "build", "test", "dev", "preview", "format", "lint", "dev_port", "routes", "build_output",
+		"starter", "build", "test", "dev", "preview", "format", "lint", "dev_port", "routes", "build_output", "deploy_target",
 	}
 	for _, k := range wantTopLevel {
 		assert.Contains(t, m, k, "missing top-level JSON key %q", k)
 	}
 	assert.Equal(t, len(wantTopLevel), len(m), "unexpected top-level JSON keys: %v", keys(m))
+	assert.JSONEq(t, `"pages"`, string(m["deploy_target"]))
 
 	var starter struct {
 		ID      string `json:"id"`
@@ -352,6 +428,31 @@ func TestRoundTrip(t *testing.T) {
 	assert.Equal(t, *m, decoded, "round-tripped manifest should be identical")
 }
 
+// TestDeployTargetRoundTrip pins the new field's wire contract: it serializes
+// under "deploy_target", survives a marshal/unmarshal cycle, and is omitted
+// when empty (so a lean hand-authored file stays compact).
+func TestDeployTargetRoundTrip(t *testing.T) {
+	t.Run("workers round-trips", func(t *testing.T) {
+		m := New("web-app-data", "1.0.0")
+		m.DeployTarget = DeployTargetWorkers
+		b, err := json.Marshal(m)
+		require.NoError(t, err)
+		assert.Contains(t, string(b), `"deploy_target":"workers"`)
+
+		var decoded StarterManifest
+		require.NoError(t, json.Unmarshal(b, &decoded))
+		assert.Equal(t, DeployTargetWorkers, decoded.DeployTarget)
+		require.NoError(t, Validate(&decoded))
+	})
+
+	t.Run("empty is omitted", func(t *testing.T) {
+		b, err := json.Marshal(New("web-app", "1.0.0"))
+		require.NoError(t, err)
+		assert.NotContains(t, string(b), "deploy_target",
+			"an absent deploy_target must be omitted, not emitted empty")
+	})
+}
+
 // TestNewInitializesEmptyManifest checks New sets the starter identity and
 // initializes Routes to an empty (non-nil) slice.
 func TestNewInitializesEmptyManifest(t *testing.T) {
@@ -365,6 +466,7 @@ func TestNewInitializesEmptyManifest(t *testing.T) {
 	assert.Empty(t, m.Preview)
 	assert.Zero(t, m.DevPort)
 	assert.Empty(t, m.BuildOutput)
+	assert.Empty(t, m.DeployTarget)
 	assert.NotNil(t, m.Routes)
 	assert.Empty(t, m.Routes)
 	require.NoError(t, Validate(m), "a freshly constructed manifest is valid")

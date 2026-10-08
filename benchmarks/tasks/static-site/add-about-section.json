@@ -1,0 +1,58 @@
+{
+  "id": "add-about-section",
+  "request": "The about page is a single block of prose with no structure. Add a \"What you get\" section to it: a second-level heading followed by a short bulleted list of three things the site includes. Keep the page readable as plain content, with no new build tooling, and make sure the site still builds.",
+  "starter": "static-site",
+  "plan": {
+    "version": 1,
+    "revision": 1,
+    "created": "2026-10-02T09:00:00Z",
+    "updated": "2026-10-02T09:00:00Z",
+    "goal": "Give the about page a short structured section so its content is easier to scan.",
+    "scope": [
+      {
+        "id": "about-section",
+        "title": "A \"What you get\" section on the about page",
+        "description": "Add an h2 heading and a three-item list to src/pages/about.astro in the same plain Astro content style the page already uses."
+      }
+    ],
+    "steps": [
+      {
+        "scope": "about-section",
+        "description": "Add an <h2>What you get</h2> heading to src/pages/about.astro below the existing paragraph."
+      },
+      {
+        "scope": "about-section",
+        "description": "Add a <ul> with three <li> items naming things the starter provides (a home page, an about page, a contact form)."
+      },
+      {
+        "scope": "about-section",
+        "description": "Build the site and confirm the home page and about page still render."
+      }
+    ],
+    "starter": "static-site",
+    "acceptance": [
+      {
+        "id": "build-passes",
+        "scope": "about-section",
+        "check": "npm run build",
+        "kind": "build"
+      },
+      {
+        "id": "site-pages-render",
+        "scope": "about-section",
+        "check": "/about/",
+        "kind": "page"
+      }
+    ],
+    "out_of_scope": [
+      {
+        "item": "Moving the section content into a content collection or a data file",
+        "reason": "The starter has no content collections and keeps page content inline; introducing one is a structural change larger than adding a section."
+      },
+      {
+        "item": "Styling the new section",
+        "reason": "The page inherits the starter's existing typography; bespoke styling is not needed to add scannable content."
+      }
+    ]
+  }
+}

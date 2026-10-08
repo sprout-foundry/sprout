@@ -371,6 +371,27 @@ func MergeConfig(base, override *Config) *Config {
 		}
 	}
 
+	// Merge RepetitionGuard configuration. The guard is on by default; the
+	// enable flag carries explicit-key semantics so a narrower layer can
+	// disable a broader layer's enable (and a bare *bool false is honored
+	// because the pointer is present). The thresholds follow the
+	// non-zero-wins convention.
+	if rg := override.RepetitionGuard; rg != nil &&
+		(rg.Enabled != nil || rg.MinRepetitions > 0 || rg.MaxLineChars > 0) {
+		if result.RepetitionGuard == nil {
+			result.RepetitionGuard = &RepetitionGuardConfig{}
+		}
+		if rg.Enabled != nil {
+			result.RepetitionGuard.Enabled = boolPtr(*rg.Enabled)
+		}
+		if rg.MinRepetitions > 0 {
+			result.RepetitionGuard.MinRepetitions = rg.MinRepetitions
+		}
+		if rg.MaxLineChars > 0 {
+			result.RepetitionGuard.MaxLineChars = rg.MaxLineChars
+		}
+	}
+
 	return result
 }
 

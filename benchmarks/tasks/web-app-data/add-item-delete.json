@@ -1,0 +1,68 @@
+{
+  "id": "add-item-delete",
+  "request": "Items can be listed and created from the items page, but once one is added it can never be removed. Add a DELETE /api/items/:id route that deletes the matching item and responds with no body, or 404 when no item has that id. Put a Delete button next to each item on the items page so a click removes it from the list, cover removal in the API and UI tests, and make sure the app still builds and the API still responds.",
+  "starter": "web-app-data",
+  "plan": {
+    "version": 1,
+    "revision": 1,
+    "created": "2026-10-07T09:00:00Z",
+    "updated": "2026-10-07T09:00:00Z",
+    "goal": "Let a user remove an item from the list, both through the API and from the items page.",
+    "scope": [
+      {
+        "id": "item-delete",
+        "title": "Delete an item through the API and the items page",
+        "description": "Add a DELETE /api/items/:id handler to the Hono app in src/worker/index.ts that deletes the matching row and responds 204, or 404 when nothing matched. Add a Delete button beside each item in src/pages/Items.tsx that calls the route and drops the item from local state on success. Extend test/api.test.ts and test/app.test.tsx to cover both paths."
+      }
+    ],
+    "steps": [
+      {
+        "scope": "item-delete",
+        "description": "Add app.delete('/api/items/:id', ...) to src/worker/index.ts above the catch-all asset route, deleting by id with Drizzle and returning 204 on success or 404 when no row matched."
+      },
+      {
+        "scope": "item-delete",
+        "description": "Add a per-item Delete button in src/pages/Items.tsx that issues a DELETE to /api/items/<id> and removes the item from the rendered list when the response is ok."
+      },
+      {
+        "scope": "item-delete",
+        "description": "Extend test/api.test.ts to create an item, delete it, confirm a following list no longer contains it, and confirm deleting a missing id returns 404."
+      },
+      {
+        "scope": "item-delete",
+        "description": "Extend the items-page test in test/app.test.tsx so clicking Delete removes the item from the list, then run the build and both test suites."
+      }
+    ],
+    "starter": "web-app-data",
+    "acceptance": [
+      {
+        "id": "build-passes",
+        "scope": "item-delete",
+        "check": "npm run build",
+        "kind": "build"
+      },
+      {
+        "id": "tests-pass",
+        "scope": "item-delete",
+        "check": "npm test",
+        "kind": "test"
+      },
+      {
+        "id": "api-responds",
+        "scope": "item-delete",
+        "check": "/api/items",
+        "kind": "page"
+      }
+    ],
+    "out_of_scope": [
+      {
+        "item": "Confirming deletion with a dialog",
+        "reason": "The request is a working delete path; a confirmation step is extra interaction the request does not ask for."
+      },
+      {
+        "item": "Soft deletion or an undo history",
+        "reason": "The table has no deleted-at column; a real delete is the simplest correct behaviour for the request."
+      }
+    ]
+  }
+}

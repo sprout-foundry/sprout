@@ -1,5 +1,6 @@
 import type { PlatformNavItem } from '@sprout/ui';
 import type { ReactNode } from 'react';
+import type { BugReportEnvironment } from './reportBugURL';
 
 /**
  * The host account, when one exists. Absent (or `null`) means the host has
@@ -102,6 +103,25 @@ export interface HostSignOutIntent {
 }
 
 /**
+ * A "report a bug" intent. The host resolves it however it wants: the local
+ * host opens the public repository's prefilled new-issue page; a hosted
+ * platform resolves it to its own support flow (the platform keeps its own
+ * support tickets). Sprout only requests the intent, so no component hardcodes
+ * the public repository URL.
+ */
+export interface HostReportBugIntent {
+  type: 'reportBug';
+  /**
+   * The environment to prefill, collected outside the host tree (the version
+   * comes from the build/bootstrap, which the host tree must not import). The
+   * local host uses it to build the prefilled issue URL; a host that resolves
+   * the intent to its own support flow may ignore it. Absent means the host
+   * uses its own defaults.
+   */
+  environment?: BugReportEnvironment;
+}
+
+/**
  * A deep link back into a specific project.
  */
 export interface HostProjectIntent {
@@ -148,6 +168,7 @@ export type HostNavigationIntent =
   | HostUsageIntent
   | HostHelpIntent
   | HostSignOutIntent
+  | HostReportBugIntent
   | HostProjectIntent
   | HostSpaceIntent
   | HostNavIntent;

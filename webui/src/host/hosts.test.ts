@@ -48,6 +48,25 @@ describe('localHost', () => {
     expect(localHost.transport.platformURL).toBeUndefined();
   });
 
+  it('opens the public repository issue for a reportBug intent (local host)', () => {
+    // The local host has no support flow, so it opens the prefilled public
+    // issue. The URL comes from the host-tree builder; the environment is
+    // passed on the intent (collected outside the host tree).
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    localHost.navigation.open({
+      type: 'reportBug',
+      environment: { version: 'v1.2.3', mode: 'local daemon', os: 'macOS', browser: 'TestBrowser' },
+    });
+    expect(openSpy).toHaveBeenCalledTimes(1);
+    const [url, target, features] = openSpy.mock.calls[0];
+    expect(String(url)).toContain('https://github.com/sprout-foundry/sprout/issues/new');
+    expect(String(url)).toContain('labels=bug');
+    expect(String(url)).toContain('v1.2.3');
+    expect(target).toBe('_blank');
+    expect(features).toBe('noopener,noreferrer');
+    openSpy.mockRestore();
+  });
+
   it('exposes the local-mode capability set (mode.ts local values)', () => {
     // Compare against mode.ts's LOCAL values read with VITE_SPROUT_MODE unset,
     // so a change to the local defaults is caught rather than frozen as a
@@ -155,6 +174,14 @@ describe('cloudHost', () => {
     expect(cloudHost.navigation.intentPath?.({ type: 'nav', id: 'repos', detail: 'acme/widgets' })).toBe(
       '/?from=editor#/repos/acme/widgets',
     );
+  });
+
+  it('resolves a reportBug intent to the platform support flow, not the public issue', () => {
+    // The platform keeps its own support tickets: a reportBug intent resolves
+    // to the platform's support page, never the public GitHub issue.
+    const path = cloudHost.navigation.intentPath?.({ type: 'reportBug' });
+    expect(path).toBe('/?from=editor#/support');
+    expect(path).not.toContain('github.com');
   });
 
   it('supplies the platform GitHub surface as host data (account card + repo list)', () => {

@@ -1,5 +1,22 @@
 import { notificationBus as rawNotificationBus } from '@sprout/ui';
+import { buildBugReportURLFromEnv, type BugReportEnvironment } from './reportBugURL';
 import type { SproutHost } from './types';
+
+/**
+ * A minimal environment for a bare `reportBug` intent (one the caller did not
+ * prefill). The host tree must not import the bootstrap adapter, so the
+ * version falls back to 'dev' here; the buttons and the CLI collect the real
+ * build version outside the host tree and pass it on the intent.
+ */
+function fallbackBugEnvironment(): BugReportEnvironment {
+  const nav = typeof navigator !== 'undefined' ? navigator : undefined;
+  return {
+    version: 'dev',
+    mode: 'local daemon',
+    os: nav?.platform || 'unknown',
+    browser: nav?.userAgent || 'unknown',
+  };
+}
 
 /**
  * The local host: no account, no entitlements, the local backend at the
@@ -23,13 +40,30 @@ export const localHost: SproutHost = {
     authMode: 'none',
   },
   navigation: {
-    // The local build has no outward platform pages: open is a no-op. The
-    // tasks intent is the one exception — the cloud task a local escalation
-    // submits lives on the platform SPA served alongside the editor, at its
-    // hash route. Returning null here dropped the toast's "View task" link
-    // entirely (the CLOUD-2 regression the E2E pins). Other intents still
-    // report "no page" honestly.
-    open() {},
+    // The local build has no outward platform pages. `open` handles the one
+    // intent it can resolve itself (`reportBug` — the local host has no support
+    // flow, so it opens the public repository's prefilled new-issue page) and
+    // is otherwise a no-op. The tasks intent is the one exception in
+    // `intentPath` — the cloud task a local escalation submits lives on the
+    // platform SPA served alongside the editor, at its hash route. Returning
+    // null there dropped the toast's "View task" link entirely (the CLOUD-2
+    // regression the E2E pins). Other intents still report "no page" honestly.
+    //
+    // `reportBug`'s environment comes from the intent (collected outside the
+    // host tree, since the host tree must not import the bootstrap adapter); a
+    // fallback covers a bare intent.
+    open(intent) {
+      if (intent.type === 'reportBug') {
+        if (typeof window !== 'undefined') {
+          window.open(
+            buildBugReportURLFromEnv(intent.environment ?? fallbackBugEnvironment()),
+            '_blank',
+            'noopener,noreferrer',
+          );
+        }
+        return;
+      }
+    },
     intentPath(intent) {
       if (intent.type === 'nav' && intent.id === 'tasks') {
         return intent.detail ? `/#/tasks/${intent.detail}` : '/#/tasks';

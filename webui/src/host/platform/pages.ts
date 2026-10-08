@@ -57,6 +57,9 @@ const PLATFORM_PAGES: Record<string, string> = {
   settings: '/?from=editor#/settings',
   admin: '/?from=editor#/admin',
   repos: '/?from=editor#/repos',
+  // The platform's own support flow (it keeps its own support tickets). A
+  // `reportBug` intent resolves here rather than to the public GitHub issue.
+  support: '/?from=editor#/support',
 };
 
 /**
@@ -68,6 +71,8 @@ const PLATFORM_PAGES: Record<string, string> = {
 export function intentPath(intent: HostNavigationIntent): string | null {
   if (intent.type === 'usage') return '/?from=editor#/account/billing';
   if (intent.type === 'account') return '/?from=editor';
+  // The platform's own support flow, not the public GitHub issue.
+  if (intent.type === 'reportBug') return PLATFORM_PAGES.support;
   if (intent.type === 'nav') {
     const page = PLATFORM_PAGES[intent.id];
     if (page === undefined) return null;

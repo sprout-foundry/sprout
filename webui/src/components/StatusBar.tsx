@@ -2,13 +2,14 @@
 import { StatusBar as SproutStatusBar, detectLineEnding } from '@sprout/ui';
 import { FolderOpen, Zap } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { useHost, useHostCapabilities } from '../host';
 import { getBootstrapConfig } from '../bootstrapAdapter';
-import { useActiveRepoURL } from '../services/activeRepo';
-import { repoName as repoNameFromURL, repoSlug as repoSlugFromURL } from '../host/repoName';
 import { useNotifications } from '../contexts/NotificationContext';
 import { allLanguageEntries, resolveLanguageId } from '../extensions/languageRegistry';
+import { useHost, useHostCapabilities } from '../host';
+import { repoName as repoNameFromURL, repoSlug as repoSlugFromURL } from '../host/repoName';
+import { useActiveRepoURL } from '../services/activeRepo';
 import NotificationHistoryPanel from './NotificationHistoryPanel';
+import { ReportBugButton } from './ReportBugButton';
 import './StatusBar.css';
 
 interface StatusBarBufferInfo {
@@ -193,6 +194,7 @@ function StatusBar({
           <span className="statusbar-notification-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
         )}
       </button>
+      <ReportBugButton className="statusbar-item statusbar-item-report-bug" testId="status-bar-report-bug" />
       {isNotificationCenterOpen && (
         <NotificationHistoryPanel anchorRef={bellIconRef} onClose={closeNotificationCenter} />
       )}

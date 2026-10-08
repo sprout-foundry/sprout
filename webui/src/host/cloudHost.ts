@@ -137,6 +137,9 @@ export const cloudHost: SproutHost = {
     // endpoint, then land on the login page) — the host owns it, so no Sprout
     // component holds the sign-out paths. The sign-out promise is returned so
     // the caller can surface a failure.
+    //
+    // `reportBug` resolves to the platform's own support flow (the platform
+    // keeps its own support tickets), never the public GitHub issue.
     open(intent) {
       if (intent.type === 'signOut') return signOutAndRedirect();
       const path = platformIntentPath(intent);

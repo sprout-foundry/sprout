@@ -30,6 +30,7 @@ export type {
   HostNotificationAction,
   HostNotifications,
   HostProjectIntent,
+  HostReportBugIntent,
   HostSignOutIntent,
   HostSpaceIntent,
   HostTheme,

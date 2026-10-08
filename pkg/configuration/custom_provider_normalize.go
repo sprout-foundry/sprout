@@ -38,6 +38,18 @@ func NormalizeCustomProviderConfig(cfg CustomProviderConfig) (CustomProviderConf
 		cfg.ModelContextSizes = make(map[string]int)
 	}
 
+	// Validate per-model sampling ranges for consistency with the embedded/
+	// remote config path. Unknown parameter keys are intentionally allowed —
+	// they pass straight through to the request body.
+	for modelID, sampling := range cfg.ModelSampling {
+		if sampling.Temperature != nil && (*sampling.Temperature < 0 || *sampling.Temperature > 2) {
+			return CustomProviderConfig{}, fmt.Errorf("model_sampling temperature for %q is outside the valid range [0, 2]", modelID)
+		}
+		if sampling.TopP != nil && (*sampling.TopP < 0 || *sampling.TopP > 1) {
+			return CustomProviderConfig{}, fmt.Errorf("model_sampling top_p for %q is outside the valid range [0, 1]", modelID)
+		}
+	}
+
 	if cfg.ContextSize <= 0 {
 		cfg.ContextSize = 32768
 	}

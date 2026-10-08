@@ -501,6 +501,69 @@ needed whatever the integration work does. Spec context: SP-160 §160e.
 
 ---
 
+### SP-153 reference starters (decided 2026-10-07)
+Frameworks: static site = Astro (static output); web app = React + Vite +
+React Router; web app with data = the web app plus a Hono API on Cloudflare
+Workers with D1 through Drizzle (Workers serves the built app as static
+assets). Local Cloudflare storage = Wrangler/Miniflare (`wrangler dev`, local
+D1/KV/R2 state, tests through `@cloudflare/vitest-pool-workers`), so no
+account is needed. Deploy target rule: an app with an API deploys to
+Workers, otherwise Pages. Each starter is embedded under
+`pkg/starters/data/<id>/` with a committed lockfile and pinned versions, and
+passes the manifest validator (`pkg/startermanifest`).
+
+- [x] **153.9** Deploy target in the manifest: add `deploy_target`
+      (`pages` | `workers`) to the starter manifest schema and validator,
+      default `pages`; the deploy path (`pkg/deploy`, `cmd/deploy.go`, the
+      deploy tools) picks the Cloudflare Pages or Workers adapter from it,
+      and an explicit `--target`/config still overrides. Tests for the
+      rule and the override. Spec: SP-153 §153a, SP-156 §156a.
+- [x] **153.10** Starter `static-site` (Astro, static output): home and one
+      content page, a shared layout, a contact form posting to an external
+      endpoint configured in one place, prettier + eslint config, one test
+      (vitest checking the built HTML of the home page), plain README,
+      `.sprout/starter.json` (build/test/dev commands, dev port, routes,
+      `build_output`, `deploy_target: pages`) and the design tree scaffold
+      so design mode works from the first turn. A Go test instantiates it
+      into a temp dir and validates the manifest (no npm in Go tests).
+      Spec: SP-153 §153b.
+- [x] **153.11** Stack skill `static-site` (`pkg/skills/library/static-site/`,
+      registered in `registry.json`): layout and where things go, how to
+      add a page, a component and a test, Astro patterns to use and avoid,
+      known failure modes for open models (client JS in static pages,
+      wrong import paths, `.astro` frontmatter mistakes). Auto-activates
+      for the starter (existing activation path). Spec: SP-153 §153c.
+- [x] **153.12** Starter `web-app` (React + Vite + React Router): two routes,
+      shared layout, one piece of client state with persistence to
+      `localStorage`, prettier + eslint, one vitest + Testing Library test,
+      README, manifest (`deploy_target: pages`, SPA fallback noted for
+      Pages), design scaffold. Go instantiate/manifest test as above.
+      Spec: SP-153 §153b.
+- [x] **153.13** Stack skill `web-app`: layout, adding a route, a component
+      with state and a test; React Router and hooks patterns to use and
+      avoid; known failure modes (stale closures, effects for derived
+      state, router API version mix-ups). Spec: SP-153 §153c.
+- [x] **153.14** Starter `web-app-data` (the web app + Hono API on Workers
+      + D1 via Drizzle): `wrangler.toml` serving the built app as static
+      assets with the API under `/api/*`, one Drizzle table with a
+      migration applied by `wrangler d1 migrations`, one API route reading
+      and writing it, the UI calling it; KV and R2 bindings documented in
+      the README for when a feature needs them (not wired by default);
+      `npm run dev` runs `wrangler dev` with local state; one API test
+      through `@cloudflare/vitest-pool-workers` against local D1 plus the
+      UI test; manifest `deploy_target: workers`. Go instantiate/manifest
+      test as above. Spec: SP-153 §153b.
+- [x] **153.15** Stack skill `web-app-data`: where API routes, schema and
+      migrations live; adding a table (schema, migration, route, test);
+      local vs deployed bindings; failure modes (Node-only APIs in Workers,
+      forgetting migrations, secrets in code). Spec: SP-153 §153c.
+- [x] **153.16** Starter CI job: a workflow (on changes to
+      `pkg/starters/**` or `pkg/skills/library/**`, nightly, and manual)
+      that, for each starter, instantiates it with `sprout new --starter`
+      into a temp dir, runs `npm ci`, the manifest's build and test
+      commands, starts the dev server and checks each manifest route
+      returns 200. Linux only. Spec: SP-153 Acceptance criteria.
+
 ## SP-152 — Outbound Language Guard (`roadmap/SP-152-language-guard.md`)
 
 - [x] **152.1** New package `pkg/langguard`: prose extraction (strip code
@@ -601,7 +664,46 @@ needed whatever the integration work does. Spec context: SP-160 §160e.
 
 ---
 
-## SP-150 — Model Roles (`roadmap/SP-150-model-roles.md`)
+- [x] **154.6** Benchmark tasks for `static-site`: at least five tasks with
+      frozen plans (SP-148 format) and verification from the starter
+      manifest (e.g. add a page, add a form field, change the layout, add a
+      content collection entry, fix a broken link), under the benchmark
+      suite directory; the runner lists and loads them. Spec: SP-154 §154a.
+- [x] **154.7** Benchmark tasks for `web-app` and `web-app-data`: at least
+      five each, same format (for data: add a column with a migration, a
+      new API route with a test, list and create through the UI).
+      Spec: SP-154 §154a.
+
+## Model output robustness
+
+Seen in automation runs on DeepSeek V4.1 Flash: a streamed reply degenerates
+into a repetition loop ("Let me run." / "Let me do it." for dozens of lines)
+with no tool call, until the model breaks out on its own. Rare, model-side,
+and not specific to one model, so the guard lives in sprout.
+
+- [x] **robust.1** Streamed repetition guard: while a reply streams
+      (`pkg/agent/seed_provider_chat_stream.go`; the language guard's
+      hold-back in `stream_holdback.go` is the pattern), detect degenerate
+      repetition — the same short line or n-gram repeating past a threshold
+      with no tool call emitted — stop the stream, drop the degenerate text,
+      and retry the request once with a short system nudge to emit the tool
+      call or the final answer directly. Thresholds are config with sane
+      defaults; a second loop surfaces as a normal turn error. Count loops in
+      the metrics (per provider/model) and log one line per detection. Tests:
+      a scripted stream that loops is cut and retried once; legitimate
+      repetition (code with repeated lines, a list of similar items, a
+      progress log) is not flagged; a tool call after some repetition is
+      kept. Works for CLI, subagents and the web UI paths that share the
+      stream.
+- [x] **robust.2** Per-model sampling parameters: provider configs
+      (`pkg/agent_providers/provider_config.go`, `configs/*.json`) can set
+      temperature, top_p and extra request parameters (e.g.
+      `frequency_penalty`) per model, overriding the provider defaults; user
+      provider config can override both. Today only context limits are per
+      model. Tests for precedence (model over provider over built-in, user
+      over embedded) and that unknown parameters pass through to the request
+      body. No value changes for any model in this item — tuning follows from
+      benchmark runs (SP-154).## SP-150 — Model Roles (`roadmap/SP-150-model-roles.md`)
 
 - [x] **150.1** `roles` config section (`planner`, `coder`, `summarizer`,
       `reviewer`, `commit`), parsed and merged across global and project
@@ -900,23 +1002,11 @@ needed whatever the integration work does. Spec context: SP-160 §160e.
 
 ## Not automatable
 
-- **Decision:** framework for each reference starter (static site, web
-  app, web app with data) — SP-153 open question. Unblocks the items
-  below.
-- **Decision:** local development emulation for starter 3's Cloudflare
-  storage (D1/KV/R2) so its tests run without an account — SP-153.
-- After the framework decision, add as `[ ]` items under SP-153: one item
-  per starter scaffold (minimal app, one test, formatter/linter/test
-  config, README, manifest, design scaffold), one per stack skill
-  (`pkg/skills/library/<starter>/`), and the CI job that instantiates,
-  builds, tests and serves each starter (SP-153 §153b, §153c).
-- After starters exist, add as `[ ]` items under SP-154: at least five
-  tasks per starter with frozen plans (SP-154 §154a).
+- Resolved 2026-10-07: starter frameworks, local storage emulation and the
+  Pages/Workers rule (see "SP-153 reference starters" above).
 - **Decision + accounts:** running the benchmark on real models and
   publishing results — needs API keys and spend; also decide where
   results live and the run cadence (SP-154 open questions).
 - **Accounts:** live Cloudflare end-to-end deploy of each reference
   starter (preview, then confirmed production) — needs a real Cloudflare
   account and token (SP-156 acceptance).
-- **Decision:** Pages vs Workers selection rule per starter (SP-156 open
-  question); 156.8 can proceed with Pages for static output meanwhile.

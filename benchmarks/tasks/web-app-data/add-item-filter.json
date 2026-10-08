@@ -1,0 +1,64 @@
+{
+  "id": "add-item-filter",
+  "request": "The items page lists every item, which becomes unwieldy as the list grows. Add a filter input above the list that narrows the visible items to those whose name contains what you type, case-insensitively, without another API call. Cover the filtering in the UI test, and make sure the app still builds and the pages still render.",
+  "starter": "web-app-data",
+  "plan": {
+    "version": 1,
+    "revision": 1,
+    "created": "2026-10-07T09:00:00Z",
+    "updated": "2026-10-07T09:00:00Z",
+    "goal": "Let a user narrow the displayed items by name without refetching them from the API.",
+    "scope": [
+      {
+        "id": "item-filter",
+        "title": "A client-side name filter on the items page",
+        "description": "Add a labelled filter input to src/pages/Items.tsx whose value narrows the rendered list to items whose name contains the query case-insensitively, using the already-fetched items. Extend the items-page test in test/app.test.tsx to cover narrowing and restoring the list."
+      }
+    ],
+    "steps": [
+      {
+        "scope": "item-filter",
+        "description": "Add a labelled text input to src/pages/Items.tsx above the item list, with its own piece of local state."
+      },
+      {
+        "scope": "item-filter",
+        "description": "Render only the items whose name contains the query, compared case-insensitively, leaving the fetched list untouched."
+      },
+      {
+        "scope": "item-filter",
+        "description": "Extend the items-page test in test/app.test.tsx to type a query that matches some of the stubbed items and assert the others are hidden, then run the build and both test suites."
+      }
+    ],
+    "starter": "web-app-data",
+    "acceptance": [
+      {
+        "id": "build-passes",
+        "scope": "item-filter",
+        "check": "npm run build",
+        "kind": "build"
+      },
+      {
+        "id": "tests-pass",
+        "scope": "item-filter",
+        "check": "npm test",
+        "kind": "test"
+      },
+      {
+        "id": "home-page-renders",
+        "scope": "item-filter",
+        "check": "/",
+        "kind": "page"
+      }
+    ],
+    "out_of_scope": [
+      {
+        "item": "Filtering on the server through a query parameter",
+        "reason": "The request is to narrow the items already displayed; a server-side query is a larger change the list does not need yet."
+      },
+      {
+        "item": "Sorting the list as well as filtering it",
+        "reason": "Sorting is a separate behaviour and the API already returns items in id order."
+      }
+    ]
+  }
+}

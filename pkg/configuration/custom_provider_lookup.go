@@ -8,6 +8,7 @@ package configuration
 // ModelsEndpoint derives the /models URL for a provider.
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	providers "github.com/sprout-foundry/sprout/pkg/agent_providers"
@@ -50,6 +51,28 @@ func (c CustomProviderConfig) ToProviderConfig() (*providers.ProviderConfig, err
 		}
 	}
 
+	// Carry per-model sampling overrides into model_info entries so the
+	// resolution helpers (which look up model_info by id) find them. A user
+	// config's per-model sampling therefore overrides both its own
+	// provider-level defaults and any embedded entry for the same model.
+	// Only entries that actually carry a configured value are emitted, so an
+	// empty override never shadows another model_info source.
+	var modelInfo []providers.ModelInfo
+	for modelID, s := range normalized.ModelSampling {
+		if s.Temperature == nil && s.TopP == nil && len(s.Parameters) == 0 {
+			continue
+		}
+		modelInfo = append(modelInfo, providers.ModelInfo{
+			ID: modelID,
+			Sampling: &providers.SamplingParams{
+				Temperature: s.Temperature,
+				TopP:        s.TopP,
+				Parameters:  s.Parameters,
+			},
+		})
+	}
+	sort.Slice(modelInfo, func(i, j int) bool { return modelInfo[i].ID < modelInfo[j].ID })
+
 	return &providers.ProviderConfig{
 		Name:     normalized.Name,
 		Endpoint: normalized.Endpoint,
@@ -75,6 +98,7 @@ func (c CustomProviderConfig) ToProviderConfig() (*providers.ProviderConfig, err
 		Models: providers.ModelConfig{
 			DefaultContextLimit: normalized.ContextSize,
 			ModelOverrides:      modelOverrides,
+			ModelInfo:           modelInfo,
 			DefaultModel:        normalized.ModelName,
 			SupportsVision:      normalized.SupportsVision,
 			VisionModel:         normalized.VisionModel,

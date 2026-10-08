@@ -52,9 +52,12 @@ var deployProduction bool
 var deployAssumeYes bool
 
 // deployTargetFor is the adapter seam: it maps a target id to a
-// deploy.DeployTarget under a project root. Production uses the on-disk fake;
-// the real hosting adapter is added here. A test swaps in
-// its own target without touching the command.
+// deploy.DeployTarget under a project root. The id is the vendor id (the
+// --target override when set, else the config's target), qualified with the
+// manifest's deploy_target shape when the vendor is Cloudflare (e.g.
+// "cloudflare/pages"). Production uses the on-disk fake; the real hosting
+// adapter is added here. A test swaps in its own target without touching the
+// command.
 var deployTargetFor func(root, targetID string) (deploy.DeployTarget, error)
 
 // deployBuildRunner is the build seam handed to deploy.Deployer. Nil uses the
@@ -91,6 +94,12 @@ func defaultDeployVerificationSnapshot(root, buildDir string) (deploy.Verificati
 // on-disk fake for the "fake" target id and a clear "not available yet"
 // error for every other id, so an unconfigured real target fails actionably
 // instead of silently doing nothing.
+//
+// The Cloudflare ids are qualified with the manifest's deploy_target shape
+// (see deployAdapterID): "cloudflare/pages" and "cloudflare/workers" are the
+// ids the real hosting adapter will resolve — that wiring lands in a later
+// milestone (SP-156), so for now they fall through to the actionable error
+// that keeps pointing at --target fake for tests.
 func defaultDeployTargetFor(root, targetID string) (deploy.DeployTarget, error) {
 	switch strings.TrimSpace(targetID) {
 	case "", "fake":
@@ -233,11 +242,64 @@ func loadDeploySubject() (root string, cfg *deployconfig.DeployConfig, target de
 	if forTarget == nil {
 		forTarget = defaultDeployTargetFor
 	}
-	target, err = forTarget(root, deployTargetID(cfg))
+	adapterID, err := deployAdapterID(root, cfg)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	target, err = forTarget(root, adapterID)
 	if err != nil {
 		return "", nil, nil, err
 	}
 	return root, cfg, target, nil
+}
+
+// deployCloudflareVendor is the deploy config target id whose Pages-vs-Workers
+// shape the starter manifest selects.
+const deployCloudflareVendor = "cloudflare"
+
+// deployAdapterID is the adapter id handed to the target seam: the vendor id
+// (the --target override when set, else the config's target) qualified with
+// the manifest's deploy_target shape when that vendor is Cloudflare.
+//
+// Resolution order (an explicit --target overrides everything):
+//
+//   - --target set: it names the adapter directly (e.g. "fake"). It wins over
+//     the config; within the Cloudflare vendor the manifest still picks the
+//     shape because the vendor is qualified below.
+//   - otherwise the config's target names the vendor.
+//   - when the vendor is "cloudflare", the starter manifest's deploy_target
+//     picks the shape: "cloudflare/pages" (the default when absent) or
+//     "cloudflare/workers".
+//
+// A missing starter manifest means the default shape (pages): a project can
+// hand-author its deploy config without one. Any other manifest failure is
+// surfaced, since an invalid manifest is a real configuration error the
+// deploy should not silently paper over.
+func deployAdapterID(root string, cfg *deployconfig.DeployConfig) (string, error) {
+	vendor := strings.TrimSpace(deployTargetID(cfg))
+	if vendor != deployCloudflareVendor {
+		return vendor, nil
+	}
+	shape, err := deployManifestShape(root)
+	if err != nil {
+		return "", err
+	}
+	return vendor + "/" + shape, nil
+}
+
+// deployManifestShape reads the starter manifest's deploy_target and returns
+// the effective Cloudflare shape ("pages" or "workers"), defaulting to
+// "pages" when the manifest is absent. It mirrors the deploy selector's
+// normalization so the command and the adapter agree on the default.
+func deployManifestShape(root string) (string, error) {
+	m, err := starterstore.LoadStarterManifest(root)
+	if err != nil {
+		if errors.Is(err, starterstore.ErrNoManifest) {
+			return deploy.DeployTargetPages, nil
+		}
+		return "", err
+	}
+	return deploy.NormalizeDeployTarget(m.DeployTarget), nil
 }
 
 // deployTargetID is the target id in effect: the --target override when set,

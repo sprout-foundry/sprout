@@ -1,0 +1,58 @@
+{
+  "id": "add-page",
+  "request": "The static site only has a home page and an about page, so there is nowhere to send visitors who want directions or opening hours. Add a new page at the /contact/ route that uses the shared layout, shows a heading and a short paragraph, and links back home like the other pages do. Make sure the site still builds and the new route loads.",
+  "starter": "static-site",
+  "plan": {
+    "version": 1,
+    "revision": 1,
+    "created": "2026-10-02T09:00:00Z",
+    "updated": "2026-10-02T09:00:00Z",
+    "goal": "Give the site a contact page the header can reach, so visitors have somewhere to find directions and opening hours.",
+    "scope": [
+      {
+        "id": "contact-page",
+        "title": "A /contact/ page",
+        "description": "Add src/pages/contact.astro that imports BaseLayout, renders an h1 heading and a short paragraph, and links back to the home page. The file path becomes the /contact/ route."
+      }
+    ],
+    "steps": [
+      {
+        "scope": "contact-page",
+        "description": "Create src/pages/contact.astro importing ../layouts/BaseLayout.astro and set its title prop to \"Contact\"."
+      },
+      {
+        "scope": "contact-page",
+        "description": "Render an h1 heading, a short paragraph of directions, and a link back to /."
+      },
+      {
+        "scope": "contact-page",
+        "description": "Run the build so dist/contact/index.html is emitted; the build fails if the new page's frontmatter or imports are wrong."
+      }
+    ],
+    "starter": "static-site",
+    "acceptance": [
+      {
+        "id": "build-passes",
+        "scope": "contact-page",
+        "check": "npm run build",
+        "kind": "build"
+      },
+      {
+        "id": "home-page-renders",
+        "scope": "contact-page",
+        "check": "/",
+        "kind": "page"
+      }
+    ],
+    "out_of_scope": [
+      {
+        "item": "Adding a header nav entry pointing at the new page",
+        "reason": "The nav list lives in the shared layout; changing what the header shows on every page is a separate layout change, not part of adding one page."
+      },
+      {
+        "item": "Moving the contact form from the home page onto the new page",
+        "reason": "Relocating existing content would change the home page the starter's tests already cover, which is beyond adding a page."
+      }
+    ]
+  }
+}

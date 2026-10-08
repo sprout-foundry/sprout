@@ -242,6 +242,14 @@ type Config struct {
 	// through the same "quality" section. Nil means off.
 	Quality *QualityConfig `json:"quality,omitempty"`
 
+	// RepetitionGuard controls the streamed degenerate-repetition guard:
+	// while a reply streams, the guard watches the assistant text for a
+	// repetition loop and cuts the stream, retrying once with a nudge. On by
+	// default with sane thresholds; a layer disables it with
+	// `{"repetition_guard": {"enabled": false}}` or tunes the thresholds.
+	// Nil means the defaults (enabled).
+	RepetitionGuard *RepetitionGuardConfig `json:"repetition_guard,omitempty"`
+
 	// OutputVerbosity controls how much inter-tool-call narration and
 	// streaming detail the UI shows. Valid values: "compact" (hide
 	// interim model messages, show only tool results and final text),

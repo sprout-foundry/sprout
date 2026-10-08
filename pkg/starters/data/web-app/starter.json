@@ -1,0 +1,15 @@
+{
+  "starter": {
+    "id": "web-app",
+    "version": "1.0.0"
+  },
+  "build": "npm run build",
+  "test": "npm test",
+  "dev": "npm run dev",
+  "format": "npm run format",
+  "lint": "npm run lint",
+  "dev_port": 5173,
+  "routes": ["/", "/about"],
+  "build_output": "dist",
+  "deploy_target": "pages"
+}

@@ -75,8 +75,10 @@ func (c *ScriptedClient) SendChatRequestStream(ctx context.Context, messages []a
 		select {
 		case <-time.After(resp.Delay):
 		case <-ctx.Done():
+			c.advanceIndex(resp)
 			return nil, ctx.Err()
 		case <-c.ctx.Done():
+			c.advanceIndex(resp)
 			return nil, c.ctx.Err()
 		}
 	}
@@ -100,8 +102,14 @@ func (c *ScriptedClient) SendChatRequestStream(ctx context.Context, messages []a
 		for i, chunk := range streamConfig.Chunks {
 			select {
 			case <-ctx.Done():
+				// The caller cancelled mid-stream (e.g. a cut degenerate
+				// repetition loop): the scripted response was consumed, so
+				// advance past it — the next attempt gets the next response,
+				// the way a real retry does.
+				c.advanceIndex(resp)
 				return nil, ctx.Err()
 			case <-c.ctx.Done():
+				c.advanceIndex(resp)
 				return nil, c.ctx.Err()
 			default:
 			}
@@ -127,8 +135,10 @@ func (c *ScriptedClient) SendChatRequestStream(ctx context.Context, messages []a
 				select {
 				case <-time.After(streamConfig.ChunkDelay):
 				case <-ctx.Done():
+					c.advanceIndex(resp)
 					return nil, ctx.Err()
 				case <-c.ctx.Done():
+					c.advanceIndex(resp)
 					return nil, c.ctx.Err()
 				}
 			}

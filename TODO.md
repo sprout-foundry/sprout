@@ -614,6 +614,47 @@ passes the manifest validator (`pkg/startermanifest`).
       new API route with a test, list and create through the UI).
       Spec: SP-154 §154a.
 
+## Benchmark and CLI fixes (found in the first real benchmark run)
+
+A one-task run (static-site/add-about-section, ai-worker/qwen3.8-27b)
+recorded "fail" with `Result: null`, `Err: null` and an empty failure
+section: the turn-end verification never ran. Reproduced by hand, the same
+model made the correct edit to `src/pages/about.astro`, so the harness, not
+the model, lost the result.
+
+- [ ] **bench.8** Benchmark runs always verify: find why the run's turn
+      reported no changed application paths (the verification gate stayed
+      closed) — check whether edits made through shell commands, or by a
+      subagent, are missing from the turn's change window
+      (`Agent.TurnChangedPaths`) and whether `ProcessQueryWithContinuityAs`
+      opens the window in the benchmark path. Fix the root cause; as a
+      backstop the runner initializes a git baseline in each fresh copy
+      and, when the tracker reports no changes but `git status` shows
+      changed application paths, runs verification anyway. Tests: a
+      scripted run editing through the edit tool, through a shell
+      command, and through a subagent all produce a verification result.
+      Spec: SP-154 §154b, SP-149.
+- [ ] **bench.9** Report the reason, never a silent fail: a run without a
+      verification result records why (the hook's not-verified reason:
+      no code changes, verification disabled, setup error, timeout) and
+      the report lists it under failure categories. Test: the empty
+      "Failure categories: No failures" next to a failed run can no
+      longer happen. Spec: SP-154 §154c.
+- [ ] **bench.10** Keep evidence for failed runs: save each failed run's
+      working copy diff (`git diff` against the baseline), the agent
+      transcript and the verification output under
+      `<output>/runs/<task>-<model>-<n>/` (`--keep-runs=failed|all|none`,
+      default `failed`). Spec: SP-154 §154c.
+- [ ] **cli.1** `sprout agent` must not silently hand a turn to a daemon of
+      a different binary or config: today, when a daemon is already
+      running (e.g. the web UI's backend), the CLI forwards the turn to it
+      ("Running via daemon at …/agent.sock") even when the invoked binary
+      is a different version and `--isolated-config` names another
+      config. Run in-process when the daemon's version or config differs
+      from the invoking binary's (or refuse with a clear message and a
+      `--no-daemon` flag), and always print which binary and config ran
+      the turn. Tests for version mismatch and isolated config.
+
 ## Model output robustness
 
 Seen in automation runs on DeepSeek V4.1 Flash: a streamed reply degenerates

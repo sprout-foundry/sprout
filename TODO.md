@@ -37,7 +37,7 @@ the model, lost the result.
       scripted run editing through the edit tool, through a shell
       command, and through a subagent all produce a verification result.
       Spec: SP-154 §154b, SP-149.
-- [ ] **bench.9** Report the reason, never a silent fail: a run without a
+- [x] **bench.9** Report the reason, never a silent fail: a run without a
       verification result records why (the hook's not-verified reason:
       no code changes, verification disabled, setup error, timeout) and
       the report lists it under failure categories. Test: the empty

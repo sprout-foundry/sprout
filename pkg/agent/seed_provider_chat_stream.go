@@ -123,25 +123,47 @@ func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest,
 			}
 		})
 	}
+	// The repetition guard is composed OUTSIDE the hold-back: assistant text
+	// flows guard → hold-back → client sink. It watches the model's raw
+	// streamed text for a degenerate repetition run and, when one is
+	// confirmed, cuts the attempt so the degenerate copies never reach the
+	// client. When the guard is disabled it is a passthrough and the path is
+	// byte-for-byte unchanged.
+	guardSink := func(content string) {
+		if holdback != nil {
+			holdback.Write(content)
+			return
+		}
+		handler.OnContent(content)
+		sp.agent.output.GetStreamingBuffer().WriteString(content) //nolint:gosec // G104: bytes.Buffer writes cannot fail
+		if router := sp.agent.OutputRouter(); router != nil {
+			router.RouteStreamChunk(content, "assistant_text")
+		}
+	}
+	guard := NewRepetitionGuard(sp.repetitionGuardConfigFromAgent(), guardSink)
 	callback := func(content string, contentType string) {
 		if contentType == "reasoning" {
 			handler.OnReasoning(content)
 			sp.agent.output.GetReasoningBuffer().WriteString(content) //nolint:gosec // G104: bytes.Buffer writes cannot fail
-		} else {
-			if holdback != nil {
-				holdback.Write(content)
-				return
+			if router := sp.agent.OutputRouter(); router != nil {
+				router.RouteStreamChunk(content, contentType)
 			}
-			handler.OnContent(content)
-			sp.agent.output.GetStreamingBuffer().WriteString(content) //nolint:gosec // G104: bytes.Buffer writes cannot fail
+			return
 		}
-		if router := sp.agent.OutputRouter(); router != nil {
-			router.RouteStreamChunk(content, contentType)
-		}
+		// Assistant text flows through the guard and its sink (the hold-back
+		// or the direct client delivery), which owns the routing — so the
+		// chunk never also hits the router here.
+		guard.Write(content)
 	}
 
-	// Use doChatWithRetry for streaming too, but wrap it to deliver through the handler
-	resp, err := sp.doChatWithRetryStreaming(ctx, messages, sproutReq.Tools, sproutReq.Reasoning, callback, holdback)
+	// Use doChatWithRetry for streaming too, but wrap it to deliver through the handler.
+	// The transport layer (with its backoff retries and 413 shedding) is the
+	// attempt body for the repetition guard, so a cut attempt and the
+	// retry-once nudge go through the same request plumbing.
+	attemptFn := func(attemptCtx context.Context, msgs []api.Message, cb api.StreamCallback) (*api.ChatResponse, error) {
+		return sp.doChatWithRetryStreaming(attemptCtx, msgs, sproutReq.Tools, sproutReq.Reasoning, cb, holdback, guard)
+	}
+	resp, err := sp.streamWithRepetitionGuard(ctx, messages, callback, holdback, guard, attemptFn)
 	sp.fireSteerFlushHook()
 	if err != nil {
 		handler.OnError(err)
@@ -164,7 +186,10 @@ func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest,
 // holdback (nil when the hold-back is inactive) is reset at the start of each
 // attempt so a failed or wrong-language attempt never leaks into the next; the
 // caller finalizes it (finalizeStreamHoldback) after a successful attempt.
-func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, callback api.StreamCallback, holdback *StreamHoldback) (*api.ChatResponse, error) {
+// guard (nil when the repetition guard is inactive) is reset alongside it, so a
+// transport retry's replayed chunks never accumulate into a false repetition
+// run.
+func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, callback api.StreamCallback, holdback *StreamHoldback, guard *RepetitionGuard) (*api.ChatResponse, error) {
 	const maxRetries = 3
 	var lastErr error
 
@@ -181,9 +206,12 @@ func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages
 		// Each attempt is a separate streamed response — start
 		// its hold-back fresh (discard the previous attempt's buffered/held
 		// content) so a failed or wrong-language attempt never leaks into the
-		// next one.
+		// next one. The repetition guard is reset for the same reason.
 		if holdback != nil {
 			holdback.Reset()
+		}
+		if guard != nil {
+			guard.Reset()
 		}
 
 		resp, err := sp.currentClient().SendChatRequestStream(ctx, messages, tools, reasoning, false, callback)
@@ -197,6 +225,14 @@ func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages
 		}
 
 		lastErr = err
+
+		// A cancelled context caused by the repetition guard cutting a
+		// degenerate stream is not a provider failure: skip the error record
+		// and retry event and surface the cancellation unchanged. A genuine
+		// user cancellation still records/publishes as before.
+		if guard != nil && guard.Looping() && ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 
 		// Record the error for observability and emit retry event.
 		sp.recordProviderError(err, attempt)

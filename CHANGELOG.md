@@ -2,6 +2,20 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.24.0] - 2026-10-07
+
+- feat(starters): three reference starters — `static-site` (Astro), `web-app` (React + Vite + React Router) and `web-app-data` (the web app plus a Hono API on Cloudflare Workers with D1 through Drizzle, run locally with Wrangler and no account) — each with pinned dependencies, one working test, quality config, a README and a design scaffold; a CI job instantiates, builds, tests and serves every starter.
+- feat(skills): a stack skill per starter (layout, how to add a page/feature/test, patterns to use and avoid, known failure modes) that activates automatically for projects created from it.
+- feat(deploy): the starter manifest declares `deploy_target`; apps with an API deploy to Cloudflare Workers, the rest to Pages, and an explicit target still overrides.
+- feat(benchmark): frozen-plan benchmark tasks for all three starters.
+- feat(agent): a streaming repetition guard cuts a reply that loops — repeating a short line, or cycling a few short phrases — without a tool call, and retries once with a nudge; code blocks, lists and progress logs are not flagged.
+- feat(providers): per-model sampling parameters (temperature, top_p and extra request parameters) in provider configs, overriding provider defaults; user config overrides both.
+- feat(workspace): `@sprout-foundry/workspace` composition API — the `SproutHost` contract, `SproutWorkspace` and `SproutProviders` (`/views`, `/providers`), self-contained type declarations, a scoped stylesheet and content-hashed WASM; the local web UI runs on the same API.
+- feat(host): host-specific product logic moved behind the host contract; the build no longer branches on a hosted/local flag.
+- feat(design): the web UI's tokens live in the `@sprout-foundry/design` package.
+- feat(ui): drag-and-drop image attach on the chat composer.
+- fix(webui): the settings bootstrap and the skills tab retry instead of loading forever; `ask_user` questions reach every window.
+
 ## [v0.23.0] - 2026-10-07
 
 - feat(plans): structured plans — `sprout plan --structured` writes a versioned `.sprout/plan.json` (scopes, steps, acceptance criteria) through the `write_plan` tool, validated and rendered to `plan.md`; todo items carry their scope.

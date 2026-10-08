@@ -1,0 +1,72 @@
+{
+  "id": "add-item-description",
+  "request": "Items only have a name, so there is no way to record a short note about one. Add an optional description to items: a new Drizzle migration that adds the column, the field in the worker's table schema, the create route accepting an optional description alongside the name, and the items page showing each item's description when it has one. Add a test that creates an item with a description, and make sure the app still builds and the API still responds.",
+  "starter": "web-app-data",
+  "plan": {
+    "version": 1,
+    "revision": 1,
+    "created": "2026-10-07T09:00:00Z",
+    "updated": "2026-10-07T09:00:00Z",
+    "goal": "Let an item carry an optional short description, persisted in the database and visible on the items page.",
+    "scope": [
+      {
+        "id": "item-description",
+        "title": "An optional description column on items",
+        "description": "Add a nullable description column to the items table: a new SQL migration under drizzle/migrations alongside the initial one, the column in src/worker/schema.ts, the field read and stored by POST /api/items in src/worker/index.ts, and the description rendered per item in src/pages/Items.tsx. Extend test/api.test.ts to cover creating an item with a description."
+      }
+    ],
+    "steps": [
+      {
+        "scope": "item-description",
+        "description": "Add a new migration file under drizzle/migrations/ that runs ALTER TABLE `items` ADD COLUMN `description` text."
+      },
+      {
+        "scope": "item-description",
+        "description": "Add the nullable description column to the items table in src/worker/schema.ts so the Drizzle types match the migrated table."
+      },
+      {
+        "scope": "item-description",
+        "description": "Update src/worker/index.ts so POST /api/items reads an optional description from the body and stores it, while a missing or non-string description stores null."
+      },
+      {
+        "scope": "item-description",
+        "description": "Render each item's description beneath its name in src/pages/Items.tsx when a description is present."
+      },
+      {
+        "scope": "item-description",
+        "description": "Extend test/api.test.ts with a case that creates an item with a description and reads it back, and run the build and both test suites."
+      }
+    ],
+    "starter": "web-app-data",
+    "acceptance": [
+      {
+        "id": "build-passes",
+        "scope": "item-description",
+        "check": "npm run build",
+        "kind": "build"
+      },
+      {
+        "id": "tests-pass",
+        "scope": "item-description",
+        "check": "npm test",
+        "kind": "test"
+      },
+      {
+        "id": "api-responds",
+        "scope": "item-description",
+        "check": "/api/items",
+        "kind": "page"
+      }
+    ],
+    "out_of_scope": [
+      {
+        "item": "Making the description required",
+        "reason": "Existing rows have no description, so requiring it would break them; the request is an optional note."
+      },
+      {
+        "item": "Adding a description field to the items page's create form",
+        "reason": "The request covers the stored column and its display; a second form field is a UI change that can follow separately."
+      }
+    ]
+  }
+}

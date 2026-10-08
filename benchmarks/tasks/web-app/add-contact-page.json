@@ -1,0 +1,68 @@
+{
+  "id": "add-contact-page",
+  "request": "The app only has a home page and an about page, so there is nowhere to send visitors who want to get in touch. Add a new /contact route that renders inside the shared layout, with a heading and a short paragraph, and add a Contact link to the primary navigation so the page is reachable. Make sure the app still builds, the pages still render, and the tests pass.",
+  "starter": "web-app",
+  "plan": {
+    "version": 1,
+    "revision": 1,
+    "created": "2026-10-07T09:00:00Z",
+    "updated": "2026-10-07T09:00:00Z",
+    "goal": "Give the app a contact page the primary navigation can reach, so visitors have somewhere to find how to get in touch.",
+    "scope": [
+      {
+        "id": "contact-page",
+        "title": "A /contact route and its nav entry",
+        "description": "Add src/pages/Contact.tsx that renders an h1 heading, a short paragraph, and a link back to the home page, register it as a child route at path \"contact\" in src/App.tsx, and add a NavLink to /contact in src/layouts/Layout.tsx so the page is reachable from every view."
+      }
+    ],
+    "steps": [
+      {
+        "scope": "contact-page",
+        "description": "Create src/pages/Contact.tsx with a heading, a short paragraph of how to get in touch, and a Link back to /."
+      },
+      {
+        "scope": "contact-page",
+        "description": "Add a { path: 'contact', element: <Contact /> } entry to the children array in src/App.tsx so the component renders inside the shared layout."
+      },
+      {
+        "scope": "contact-page",
+        "description": "Add a <NavLink to=\"/contact\">Contact</NavLink> list item to the primary navigation in src/layouts/Layout.tsx."
+      },
+      {
+        "scope": "contact-page",
+        "description": "Run the build and the test suite to confirm the app compiles, the home and about routes still render, and the existing tests pass."
+      }
+    ],
+    "starter": "web-app",
+    "acceptance": [
+      {
+        "id": "build-passes",
+        "scope": "contact-page",
+        "check": "npm run build",
+        "kind": "build"
+      },
+      {
+        "id": "tests-pass",
+        "scope": "contact-page",
+        "check": "npm test",
+        "kind": "test"
+      },
+      {
+        "id": "home-page-renders",
+        "scope": "contact-page",
+        "check": "/",
+        "kind": "page"
+      }
+    ],
+    "out_of_scope": [
+      {
+        "item": "Adding a contact form that posts somewhere",
+        "reason": "A form needs an endpoint and validation; the request is for a page that explains how to get in touch, not a submission flow."
+      },
+      {
+        "item": "Restructuring the router into nested or lazy routes",
+        "reason": "The starter registers routes as flat children of the layout; a router restructure is a larger change than adding one page."
+      }
+    ]
+  }
+}

@@ -12,7 +12,12 @@
         "frost": {
           "$value": "#68e3ee",
           "$type": "color",
-          "$description": "Frost leaf accent (flips to sprout green in light)."
+          "$description": "Frost leaf accent — a light cyan in both themes (same meaning across themes)."
+        },
+        "sprout": {
+          "$value": "#1ba03d",
+          "$type": "color",
+          "$description": "Sprout green — the brand's green leaf hue, addressable in both themes."
         },
         "active-cyan": {
           "$value": "#22d3ee",
@@ -221,9 +226,14 @@
           "$description": "Brand teal (constant across themes)."
         },
         "frost": {
+          "$value": "#0891b2",
+          "$type": "color",
+          "$description": "Frost leaf accent — still a light cyan, pulled darker for legibility on the light background."
+        },
+        "sprout": {
           "$value": "#1ba03d",
           "$type": "color",
-          "$description": "Frost leaf accent as sprout green in light mode."
+          "$description": "Sprout green — the brand's green leaf hue (same value as dark)."
         },
         "active-cyan": {
           "$value": "#0891b2",
@@ -233,7 +243,7 @@
         "navy": {
           "$value": "#10212d",
           "$type": "color",
-          "$description": "Brand navy ink (no light override in CSS; inherits dark)."
+          "$description": "Brand navy ink (declared in both themes so no brand token falls back)."
         }
       },
       "bg": {

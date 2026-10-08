@@ -23,7 +23,7 @@
       "vitest/globals",
       "@testing-library/jest-dom",
       "@cloudflare/workers-types",
-      "@cloudflare/vitest-pool-workers"
+      "@cloudflare/vitest-plugin/types"
     ]
   },
   "include": ["src", "test", "vite.config.ts", "vitest.config.ts", "vitest.workers.config.ts"],

@@ -41,3 +41,11 @@ becomes the route.
 
 `npm run build` produces a static site in `dist/`, deployable to any
 static host (the starter targets Cloudflare Pages).
+
+## Dependency security
+
+`npm audit --audit-level=high` is clean — no high or critical advisory
+remains, and no advisory is left unfixed. The stack is on Astro 7, Vite 8
+and Vitest 4; the bump to `eslint-plugin-astro` 2 also dropped the
+`fast-glob`/`micromatch`/`braces` chain that used to carry a high advisory,
+so the tree is clean end to end.

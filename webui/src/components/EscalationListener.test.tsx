@@ -26,6 +26,7 @@ import {
 } from '../services/cloudTxn';
 import { __resetFullWorkspaceForTests } from '../services/fullWorkspace';
 import { HostProvider } from '../host/HostProvider';
+import { localHost } from '../host/localHost';
 import { makeTestHost } from '../host/testHost';
 import { intentPath } from '../host/platform';
 import type { SproutHost } from '../host/types';
@@ -639,7 +640,7 @@ describe('EscalationListener — Mode A/B regressions', () => {
     expect(link.getAttribute('href')).toBe('https://platform.sprout.dev/?from=editor#/tasks/task-9');
   });
 
-  it('omits the task deep link when the host has no task page (no degraded link)', async () => {
+  it('omits the task deep link when the host resolves no intent paths', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.toString();
       if (url === '/api/tasks') return jsonResponse({ task_id: 'task-9', status: 'completed' }, { status: 201 });
@@ -648,7 +649,9 @@ describe('EscalationListener — Mode A/B regressions', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     // A host that resolves no intent paths at all: the link must not render —
-    // an empty route would otherwise degrade to the host's bare origin.
+    // the component stays host-driven and invents no route of its own. The
+    // local host resolves the tasks intent itself (see localHost), so real
+    // local users still get the link.
     const host: SproutHost = {
       ...makeTestHost(),
       navigation: { open: () => undefined, platformPagePath: (route) => route },
@@ -660,5 +663,23 @@ describe('EscalationListener — Mode A/B regressions', () => {
 
     expect(await screen.findByTestId('escalation-toast-cloud-task-status')).toBeInTheDocument();
     expect(screen.queryByTestId('escalation-toast-cloud-task-link')).toBeNull();
+  });
+
+  it('resolves the task deep link to the local hash route on the local host', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url === '/api/tasks') return jsonResponse({ task_id: 'task-9', status: 'completed' }, { status: 201 });
+      return jsonResponse({ task_id: 'task-9', status: 'completed' });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderListener(localHost);
+    fireTrigger({ command: undefined, reason: 'git_push_failed' });
+    fireEvent.click(screen.getByTestId('escalation-toast-cloud-task'));
+    await flush();
+
+    expect(await screen.findByTestId('escalation-toast-cloud-task-status')).toBeInTheDocument();
+    const link = await screen.findByTestId('escalation-toast-cloud-task-link');
+    expect(link.getAttribute('href')).toBe('/#/tasks/task-9');
   });
 });

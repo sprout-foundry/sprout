@@ -1,5 +1,80 @@
 # TODO
 
+## Hosted chat in `SproutWorkspace` — the chat view has no data
+
+A host that mounts `SproutWorkspace` with a `layout` (the views path) gets a
+chat view with no messages and no send handler: the chat state lives only in
+the standalone app (`App.tsx` / `AppContent.tsx`), `SproutWorkspace` renders
+`ViewsLayout` with no per-view props, and nothing reads `host.transport`
+beyond `authMode`. ChatView now renders an empty, disabled chat instead of
+crashing (92d8883db); these items make it work. Spec: SP-160 §160a/§160b
+(composition API and host transport) — update the spec and
+`docs/integration/host-contract.md` as each item lands.
+
+Decided by the owner: the agent behind a hosted chat is a workspace daemon
+when the host has one for the project (full tools; the daemon is the source
+of truth), else the in-browser WASM agent; chat sessions are persisted by the
+host when it offers a session store. Order matters — each item builds on the
+one above. Validation gate as for the host-contract lane (package build +
+`docs/__tests__/workspace-package.test.js`, type-check, prettier on changed
+files, the vitest files the item touched; any `.go` change → the full gate).
+
+- [ ] **hc.1** Extract the chat state into the package. Move the chat slice
+      of `AppStore`, `useWebSocketEventHandler` (+ `hooks/wsHandlers/*`),
+      `useChatSessionManager`, the queue ops and the `chatProps` /
+      `reviewProps` / `diffState` assembly (`AppContent.tsx` around the
+      `chatProps` useMemo) into one reusable unit — e.g.
+      `WorkspaceChatProvider` + `useWorkspaceChat()` — that needs only a
+      fetch function and an events provider. The standalone app uses it
+      (no behaviour change: existing chat vitest and webui e2e chat specs
+      stay green). Export it from `./views` with declarations. Tests: the
+      provider driven by a fake fetch + fake events provider produces
+      messages from delivered events and calls `/api/query` on send.
+- [ ] **hc.2** `SproutWorkspace` mounts the chat. In `"own"` mode it mounts
+      the hc.1 provider and passes `ViewsLayout` `props` for `chat` (and
+      `changes`), so a host's layout gets a working chat with no extra
+      wiring. Add an optional `viewProps` prop (per-kind overrides merged
+      over the defaults) for hosts that compose their own. Retire the
+      `EMPTY_SHELL_PROPS` chat stub where the provider replaces it. Test:
+      an own-mode `SproutWorkspace` with `DEFAULT_VIEWS_ARRANGEMENT` renders
+      an ENABLED chat and a send reaches the fake backend.
+- [ ] **hc.3** Host-driven transport. In own mode, register the host for the
+      module-level services (the `setActiveHost` the standalone entry does
+      in `index.tsx`), and make `clientFetch` and the WebSocket URL use
+      `host.transport.apiBaseURL` / `wsURL` when set (today only
+      `SPROUT_PROXY_BASE` / `VITE_WS_URL`); connect the events provider and
+      subscribe the hc.1 handler (today only `useAppInitialization` does).
+      Document "one workspace per page" (module singletons). Tests: fetch and
+      WS go to the host's URLs; the local build is unchanged.
+- [ ] **hc.4** Agent backend selection in the host contract. Extend
+      `HostTransport` with an explicit agent backend: `{ kind: 'daemon',
+      apiBaseURL, wsURL }` (a sprout daemon reachable through the host —
+      preferred) or `{ kind: 'wasm', modelEndpoint }` (the in-browser agent).
+      For `wasm`, install the cloud adapter from the host (model endpoint
+      from `transport.modelEndpoint`, not the hard-coded value in
+      `services/platformProvider.ts`), route agent events through
+      `setAgentEventDispatcher` → `deliverLocal` (as `useAppInitialization`
+      does for the hosted build), and import the repository from
+      `project.repoUrl` instead of the `?repo=` URL parameter. A host may
+      switch backends when a daemon becomes available (re-mount is fine).
+      Contract doc + SP-160 §160b updated. Tests for both kinds.
+- [ ] **hc.5** Host session store. When the host advertises a chat session
+      store (a capability, e.g. `capabilities.chatSessions`), the chat
+      session list / create / rename / delete / switch / messages calls go
+      to the host (same request shapes as the daemon's `/api/chat-sessions*`
+      endpoints, at `transport.apiBaseURL`), and finished turns are appended
+      to it — for both the daemon and WASM backends — instead of browser
+      storage. Without the capability, behaviour is unchanged
+      (`cloudChatSessions` / daemon). Document the endpoint shapes in
+      `docs/integration/host-contract.md` so a host can implement them.
+      Tests: sessions round-trip through a fake host store; a reload
+      restores the transcript.
+- [ ] **hc.6** Release prep: bump `packages/workspace` to 1.1.0, changelog
+      entry listing hc.1–hc.5 and the contract additions, and confirm the
+      consumer test (`docs/__tests__/workspace-consumer.test.mjs`) passes
+      with the new exports. Do NOT tag — tagging `workspace-v1.1.0`
+      publishes and is the owner's step (see Not automatable).
+
 ## Report a bug
 
 - [x] **bug.1** A visible "Report a bug" button that opens a new issue on
@@ -246,6 +321,10 @@ the model, lost the result.
       again. Tests for each.
 
 ## Not automatable
+
+- Publish `@sprout-foundry/workspace` 1.1.0 (hosted chat, hc.1–hc.6): push
+  `main`, then `git tag workspace-v1.1.0 -m "workspace v1.1.0"` and push the
+  tag; the publish workflow does the rest.
 
 - Resolved 2026-10-07: starter frameworks, local storage emulation and the
   Pages/Workers rule (see "SP-153 reference starters" above).

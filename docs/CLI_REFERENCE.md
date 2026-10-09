@@ -264,6 +264,74 @@ Sessions are found by walking up from the current directory to the nearest `.spr
 
 To create workflows, activate the `workflow-automation` skill in an agent session or run `sprout skill list`.
 
+### `sprout deploy`
+
+Build the current project and ship it through a deploy target. The project's
+`.sprout/deploy.json` names where it ships (`target` and `project`) and,
+optionally, a build output directory; the build command comes from the starter
+manifest `.sprout/starter.json`. The build runs in the workspace and the target
+only ever receives the built output — the adapter never rebuilds on the target.
+
+**Basic Usage:**
+
+```bash
+sprout deploy [flags]
+sprout deploy status
+sprout deploy history
+sprout deploy rollback <id>
+```
+
+**Flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--dir <path>` | Project root to deploy (default: nearest `.sprout/` walking up from the working directory) |
+| `--target <id>` | Deploy target id, overriding `.sprout/deploy.json` |
+| `--production` | Deploy to production (the live site); always requires `--yes` |
+| `-y`, `--yes` | Confirm a production deploy without an interactive prompt |
+
+**Deploy kind:** a preview deploy runs by default. A production deploy is
+always gated on explicit confirmation — pass `--yes`, otherwise the command
+refuses before anything is built or uploaded.
+
+**Cloudflare Workers bindings:** when the deploy config's target is
+`cloudflare` and the starter manifest declares `deploy_target: "workers"`, the
+adapter reads the project's `wrangler.toml` and brings the declared bindings
+with the deploy:
+
+- For each `[[d1_databases]]` block (and `[[kv_namespaces]]` /
+  `[[r2_buckets]]` blocks, only when present) the adapter finds or creates the
+  resource in the account and attaches it to the uploaded script. A
+  placeholder D1 `database_id` (all zeros, or empty) means "create it": the
+  real id is written back into `wrangler.toml` so local and deployed config
+  agree.
+- Created resources are recorded in `.sprout/deploy-resources.json` and named
+  from the worker name plus a stable suffix, so a re-run reuses them and two
+  projects never share a resource by accident.
+- Pending D1 migrations under the binding's `migrations_dir`
+  (`drizzle/migrations` for the reference starter) are applied before the
+  script goes live, tracked in the database's `d1_migrations` table so a
+  re-run is idempotent.
+- The deploy is all-or-nothing: if any declared binding cannot be created or
+  attached, the deploy fails with a message naming it and the script is never
+  uploaded — it never goes live with bindings missing.
+
+**Credentials:** the Cloudflare adapter uses the existing deploy credential,
+resolved from the credential store (preferred) or the environment variable
+`CLOUDFLARE_API_TOKEN`. The account id comes from `CLOUDFLARE_ACCOUNT_ID`.
+The token is never passed as a command argument or printed; it reaches the API
+only in the request's `Authorization` header.
+
+**Examples:**
+
+```bash
+sprout deploy                       # preview
+sprout deploy --production --yes    # confirmed production
+sprout deploy status                # latest deployment
+sprout deploy history               # every recorded deployment
+sprout deploy rollback my-app-2     # roll back to the previous deployment
+```
+
 ---
 
 ## Advanced Agent Flags

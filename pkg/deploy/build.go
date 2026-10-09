@@ -232,11 +232,13 @@ func (d *Deployer) BuildAndDeploy(ctx context.Context, req BuildRequest, snap Ve
 	}
 
 	// Upload the already-built output. The target receives the directory; it
-	// never rebuilds.
+	// never rebuilds. Root is threaded through so an adapter that needs a
+	// project file (a Workers adapter reading wrangler.toml) can find it.
 	return d.Target.Deploy(DeployRequest{
 		Project:  req.Project,
 		Kind:     req.Kind,
 		BuildDir: req.BuildDir,
+		Root:     root,
 		Version:  req.Version,
 	})
 }

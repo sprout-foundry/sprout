@@ -119,6 +119,10 @@ type DeployRequest struct {
 	// BuildDir is the directory holding the build output to upload, from
 	// the starter manifest's build_output. Required.
 	BuildDir string
+	// Root is the project root the build ran in. Optional; an adapter that
+	// needs a project file (a Workers adapter reading wrangler.toml) uses it,
+	// and an adapter that does not ignores it.
+	Root string
 	// Version identifies the build being shipped (e.g. the starter version
 	// or plan revision). Optional; adapters may fill a default.
 	Version string

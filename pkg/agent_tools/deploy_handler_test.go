@@ -517,3 +517,26 @@ func TestDefaultAdapterID_Direct(t *testing.T) {
 		})
 	}
 }
+
+// TestDefaultDeployTargetFor_CloudflareResolvesAdapter pins the tool's adapter
+// seam: a Cloudflare id resolves to the real adapter (not the old "not
+// available" error). With no account id in the environment the adapter
+// construction fails actionably, naming the variable to set.
+func TestDefaultDeployTargetFor_CloudflareResolvesAdapter(t *testing.T) {
+	root := newDeployProject(t)
+	t.Setenv("CLOUDFLARE_ACCOUNT_ID", "")
+
+	_, err := defaultDeployTargetFor(root, "cloudflare/workers")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "CLOUDFLARE_ACCOUNT_ID")
+	assert.NotContains(t, err.Error(), "not available")
+}
+
+// TestDefaultDeployTargetFor_UnknownIsActionable pins that an unrecognised id
+// still fails actionably rather than silently doing nothing.
+func TestDefaultDeployTargetFor_UnknownIsActionable(t *testing.T) {
+	root := newDeployProject(t)
+	_, err := defaultDeployTargetFor(root, "some-unknown-vendor")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not available")
+}

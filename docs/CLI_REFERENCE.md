@@ -164,6 +164,19 @@ Print version, build, and platform information.
 sprout version
 ```
 
+### `sprout bug`
+
+Open a new issue on the public repository
+([github.com/sprout-foundry/sprout](https://github.com/sprout-foundry/sprout)),
+prefilled with a short template and your environment (version, OS). The issue
+URL is also printed, so it can be copied into a browser by hand. The same
+prefilled URL is what the Web UI's "Report a bug" affordances open.
+
+**Basic Usage:**
+```bash
+sprout bug
+```
+
 ### `sprout plan`
 
 Planning and execution mode with todo creation.

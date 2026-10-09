@@ -22,6 +22,7 @@ const platformURLState: { value: string | undefined } = { value: undefined };
 
 vi.mock('../bootstrapAdapter', () => ({
   getBootstrapUser: () => userState.user,
+  getBootstrapConfig: () => ({ buildVersion: 'test-1.2.3' }),
 }));
 
 /**
@@ -171,6 +172,25 @@ describe('UserMenu (SP-016 P0.5)', () => {
       'Settings',
     ]);
     expect(list!.querySelector('.user-menu-signout')!.textContent).toBe('Sign out');
+  });
+
+  it('offers a Report a bug item that opens the platform support page in the shell (layered)', () => {
+    const { host, opened } = cloudNavHost();
+    render(host);
+    openMenu();
+    const reportBug = container.querySelector('[data-testid="user-menu-report-bug"]') as HTMLButtonElement;
+    expect(reportBug).not.toBeNull();
+    expect(reportBug.textContent).toBe('Report a bug');
+    act(() => {
+      reportBug.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    // Layered layout: the platform's support page shows inside the shell
+    // (Home), matching every other platform link, so the host is never asked
+    // to leave the editor.
+    expect(getHomeView()).toEqual({ open: true, path: '/support' });
+    expect(opened).toEqual([]);
+    // The menu closes after choosing the item.
+    expect(container.querySelector('.user-menu-list')).toBeNull();
   });
 
   it('offers Admin to platform administrators', () => {

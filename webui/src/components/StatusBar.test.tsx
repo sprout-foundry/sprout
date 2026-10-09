@@ -36,6 +36,7 @@ vi.mock('../extensions/languageRegistry', () => {
 vi.mock('lucide-react', () => ({
   GitBranch: (props: any) => <svg data-testid="git-branch-icon" {...props} />,
   FolderOpen: (props: any) => <svg data-testid="folder-open-icon" {...props} />,
+  Bug: (props: any) => <svg data-testid="bug-icon" {...props} />,
 }));
 
 vi.mock('../contexts/NotificationContext', () => ({
@@ -500,6 +501,28 @@ describe('StatusBar', () => {
         bell.click();
       });
       expect(document.querySelector('[data-testid="notification-history"]')).toBeNull();
+    });
+  });
+
+  describe('report a bug', () => {
+    test('renders a visible Report a bug button and dispatches the host intent', async () => {
+      const opened: Array<{ type: string }> = [];
+      const host = {
+        ...makeTestHost({ git: true, workspaceSwitching: true, localTerminal: true }),
+        navigation: { open: (intent: { type: string }) => opened.push(intent) },
+      };
+      await act(async () => {
+        renderStatusBar(<StatusBar />, host);
+      });
+
+      const button = container.querySelector('[data-testid="status-bar-report-bug"]') as HTMLButtonElement;
+      expect(button).not.toBeNull();
+      expect(button.getAttribute('aria-label')).toBe('Report a bug');
+
+      await act(async () => {
+        button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      expect(opened.map((i) => i.type)).toEqual(['reportBug']);
     });
   });
 });

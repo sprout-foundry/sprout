@@ -68,3 +68,8 @@ visit to a route such as `/about` returns a 404. The starter ships
 
 On other static hosts configure the equivalent SPA fallback (for example a
 `try_files` rule on nginx, or a rewrite to `/index.html`).
+
+## Dependency security
+
+`npm audit --audit-level=high` is clean — no high or critical advisory
+remains. The stack is on React 19, React Router 7.18, Vite 8 and Vitest 4.

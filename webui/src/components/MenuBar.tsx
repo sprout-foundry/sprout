@@ -10,9 +10,12 @@
  */
 import { MenuBar, type MenuDefinition, type MenuBarItem } from '@sprout/ui';
 import { useMemo, useCallback } from 'react';
+import { getBootstrapConfig } from '../bootstrapAdapter';
 import { capability } from '../config/mode';
-import { getActiveHost } from '../host';
 import { useHotkeys } from '../contexts/HotkeyContext';
+import { getActiveHost } from '../host';
+import { useHost } from '../host/useHost';
+import { collectBugReportEnvironment } from '../services/reportBug';
 
 /* ------------------------------------------------------------------ */
 /*  Menu definitions (identical to the original component)             */
@@ -122,6 +125,7 @@ const MenuBarWrapper = (): JSX.Element => {
   const username: string | null | undefined = ctx.username;
   const currentBranch: string | null | undefined = ctx.currentBranch;
   const toggleCommand = ctx.toggleCommand;
+  const host = useHost();
 
   const menus = useMemo(() => buildMenus(username, currentBranch), [username, currentBranch]);
 
@@ -135,22 +139,30 @@ const MenuBarWrapper = (): JSX.Element => {
   }, []);
 
   /* ── Command execution ─────────────────────────────────────── */
-  const handleCommandExecute = useCallback((commandId: string) => {
-    switch (commandId) {
-      case 'keyboard_shortcuts':
-        window.dispatchEvent(new CustomEvent('sprout:open-hotkeys-config'));
-        break;
-      case 'about':
-        alert('sprout WebUI\nVersion 1.0.0\n\nA modern, keyboard-accessible code editor.');
-        break;
-      case 'report_issue':
-        window.open('https://github.com/alantheprice/sprout/issues/new', '_blank', 'noopener,noreferrer');
-        break;
-      default:
-        window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId } }));
-        break;
-    }
-  }, []);
+  const handleCommandExecute = useCallback(
+    (commandId: string) => {
+      switch (commandId) {
+        case 'keyboard_shortcuts':
+          window.dispatchEvent(new CustomEvent('sprout:open-hotkeys-config'));
+          break;
+        case 'about': {
+          const version = getBootstrapConfig().buildVersion || 'dev';
+          alert(`sprout WebUI\nVersion ${version}\n\nA modern, keyboard-accessible code editor.`);
+          break;
+        }
+        case 'report_issue':
+          // The host resolves the intent: the local host opens the public
+          // repository's prefilled new-issue page; a hosted platform resolves
+          // it to its own support flow. No component hardcodes the URL.
+          void host.navigation.open({ type: 'reportBug', environment: collectBugReportEnvironment() });
+          break;
+        default:
+          window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId } }));
+          break;
+      }
+    },
+    [host],
+  );
 
   /* ── Toggle command handler ────────────────────────────────── */
   // Replicates the original: always dispatches the custom event,

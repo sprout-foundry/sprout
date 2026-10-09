@@ -196,3 +196,33 @@
   color: var(--accent-primary, #61afef);
   gap: 4px;
 }
+
+.statusbar-item-report-bug {
+  cursor: pointer;
+  color: var(--text-secondary);
+  gap: 4px;
+  padding: 2px 8px;
+  height: 22px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-subtle);
+  border-left: 1px solid var(--border-subtle);
+  border-radius: 0;
+  font: inherit;
+  flex-shrink: 0;
+}
+
+.statusbar-item-report-bug:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.statusbar-item-report-bug:focus-visible {
+  outline: 2px solid var(--border-focus, var(--accent-primary, #61afef));
+  outline-offset: 1px;
+}
+
+@container (max-width: 640px) {
+  .statusbar-item-report-bug .report-bug-label {
+    display: none;
+  }
+}

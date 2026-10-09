@@ -293,3 +293,116 @@ describe('every token the web UI uses is defined by the package', () => {
     expect(missing.some((entry) => entry.endsWith('introduces undefined token --st-color'))).toBe(true);
   });
 });
+
+const packageCss = fs.readFileSync(DESIGN_TOKENS, 'utf-8');
+
+/** The body of a `selector { … }` block (first match), or '' when absent. */
+function blockBody(css: string, selector: string): string {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return css.match(new RegExp(`${escaped}\\s*\\{([^}]*)\\}`))?.[1] ?? '';
+}
+
+/** The `--token: value` declarations in a block body, as a name → value map. */
+function declarationsIn(body: string): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const match of body.matchAll(/(--[A-Za-z0-9_-]+)\s*:\s*([^;]+);/g)) {
+    out.set(match[1], match[2].trim());
+  }
+  return out;
+}
+
+const darkRoot = declarationsIn(blockBody(packageCss, ':root'));
+const lightRoot = declarationsIn(blockBody(packageCss, ":root[data-theme='light']"));
+
+describe('each brand token has one meaning across both themes', () => {
+  const brandTokens = [...darkRoot.keys()].filter((token) => token.startsWith('--brand-'));
+
+  it('declares brand tokens in the dark :root block', () => {
+    expect(brandTokens).toEqual(
+      expect.arrayContaining([
+        '--brand-teal',
+        '--brand-frost',
+        '--brand-sprout',
+        '--brand-active-cyan',
+        '--brand-navy',
+      ]),
+    );
+  });
+
+  it('re-declares every brand token in the light :root block (no silent dark fallback)', () => {
+    // A brand token declared only in dark mode silently keeps its dark value in
+    // light mode — the exact "one name, two meanings" bug this pins.
+    const missing = brandTokens.filter((token) => !lightRoot.has(token));
+    expect(missing).toEqual([]);
+  });
+
+  it('gives --brand-frost the frost cyan in both themes, not the sprout green', () => {
+    // The regression: --brand-frost was #68e3ee in dark but #1ba03d (green) in
+    // light. It must stay a cyan in both themes; the green is --brand-sprout.
+    expect(darkRoot.get('--brand-frost')).toBe('#68e3ee');
+    expect(lightRoot.get('--brand-frost')).not.toBe('#1ba03d');
+    expect(darkRoot.get('--brand-sprout')).toBe('#1ba03d');
+    expect(lightRoot.get('--brand-sprout')).toBe('#1ba03d');
+  });
+
+  it('would fail if a brand token were dropped from the light block', () => {
+    // Non-vacuous proof: simulate removing a brand token from the light block
+    // and assert the check reports it.
+    const shrunk = new Set(lightRoot.keys());
+    shrunk.delete('--brand-frost');
+    const missing = brandTokens.filter((token) => !shrunk.has(token));
+    expect(missing).toContain('--brand-frost');
+  });
+});
+
+describe('motion tokens', () => {
+  const DURATIONS = ['--duration-fast', '--duration-base', '--duration-slow'];
+
+  it('declares the duration tokens in the base :root block', () => {
+    expect(darkRoot.get('--duration-fast')).toBe('120ms');
+    expect(darkRoot.get('--duration-base')).toBe('180ms');
+    expect(darkRoot.get('--duration-slow')).toBe('320ms');
+  });
+
+  it('declares the easing tokens alongside them', () => {
+    expect(darkRoot.has('--ease-out')).toBe(true);
+    expect(darkRoot.has('--ease-in-out')).toBe(true);
+  });
+
+  it('zeroes the duration tokens under prefers-reduced-motion', () => {
+    const media = packageCss.match(/@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
+    expect(media).not.toBe('');
+    const reduced = declarationsIn(blockBody(media, ':root'));
+    for (const token of DURATIONS) {
+      expect(reduced.get(token)).toBe('0ms');
+    }
+  });
+
+  it('would fail if the reduced-motion block were removed', () => {
+    // Non-vacuous proof: without the media block there is nothing to parse, so
+    // the `not.toBe('')` assertion above would fail. Assert that directly.
+    const stripped = packageCss.replace(/@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{[\s\S]*?\n\}/, '');
+    const media = stripped.match(/@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
+    expect(media).toBe('');
+  });
+});
+
+describe('the storybook token mirror stays in sync with the package', () => {
+  const STORYBOOK_TOKENS = path.resolve(__dirname, '../../packages/ui/.storybook/tokens.css');
+  const storybookCss = fs.readFileSync(STORYBOOK_TOKENS, 'utf-8');
+  const storybookDark = declarationsIn(blockBody(storybookCss, ':root'));
+  const storybookLight = declarationsIn(blockBody(storybookCss, ":root[data-theme='light']"));
+
+  it('mirrors the brand tokens in both theme blocks', () => {
+    for (const token of ['--brand-teal', '--brand-frost', '--brand-sprout', '--brand-active-cyan']) {
+      expect(storybookDark.get(token)).toBe(darkRoot.get(token));
+      expect(storybookLight.get(token)).toBe(lightRoot.get(token));
+    }
+  });
+
+  it('mirrors the motion tokens', () => {
+    for (const token of ['--duration-fast', '--duration-base', '--duration-slow']) {
+      expect(storybookDark.get(token)).toBe(darkRoot.get(token));
+    }
+  });
+});

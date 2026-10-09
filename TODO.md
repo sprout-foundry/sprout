@@ -1,5 +1,86 @@
 # TODO
 
+## Report a bug
+
+- [x] **bug.1** A visible "Report a bug" button that opens a new issue on
+      `github.com/sprout-foundry/sprout`:
+      - **Where:** always reachable — the help/user menu and the status bar
+        (or the equivalent spot in the layered/builder UIs where the menu bar
+        is hidden), plus the existing menu command `report_issue` in
+        `webui/src/components/MenuBar.tsx`, which today opens the old
+        `github.com/alantheprice/sprout` repo with a blank issue — fix it.
+      - **Prefill** (`/issues/new?title=…&body=…&labels=bug`): a short
+        template — what happened / what you expected / steps — plus
+        environment: sprout version (from the build/bootstrap, not a
+        literal), mode (local daemon, in-browser, desktop/studio, hosted),
+        OS and browser. Never include file paths, workspace names, session
+        ids, provider keys, prompts or model output (public repo hygiene);
+        keep the URL under GitHub's length limit.
+      - **One source of truth:** the repo URL lives in one constant (also
+        used by `sprout bug` below and any docs links); grep for and fix
+        every other `alantheprice/sprout` URL in the web UI, CLI and docs.
+      - **Hosts:** expose it through the host contract — a `reportBug`
+        navigation intent; `localHost` opens the GitHub issue; a host may
+        resolve it to its own support flow (the platform keeps its support
+        tickets), and the button uses the intent.
+      - **CLI:** `sprout bug` opens the same prefilled URL in the browser (and
+        prints it), with version/OS filled in.
+      - Fix the "About" dialog to show the real version.
+      Vitest for the URL builder (prefill, no sensitive fields, length cap)
+      and the button; Go test for `sprout bug`'s URL.
+
+## CI flake
+
+- [x] **flake.1** `TestDrainAndWait` (`pkg/utils/token_bucket_test.go:391`)
+      failed on the macOS runner with "Expected wait ~200ms, got 351ms": the
+      150–300ms window bounds scheduler latency, not the contract. Keep the
+      lower bound (it proves the wait happened) and replace the tight upper
+      bound with a generous one (e.g. 2s) or loop per
+      `docs/internal/test-flakiness.md`; scan `pkg/utils` and `pkg/agent`
+      for other single-shot wall-clock upper bounds under ~1s and fix the
+      same way. `go test -count=20 -run TestDrainAndWait ./pkg/utils/`
+      passes under `-p 4` load.
+
+## Design tokens (for the platform look-and-feel work)
+
+- [x] **design.1** Fix and extend `@sprout-foundry/design`
+      (`packages/design/tokens.css`): `--brand-frost` means a light cyan in
+      dark mode but a green (#1ba03d) in light mode — give each brand token
+      one meaning in both themes (rename or add a token for the green, and
+      update every use in `webui/` and `packages/`); add motion tokens
+      (`--duration-fast` ~120ms, `--duration-base` ~180ms,
+      `--duration-slow` ~320ms alongside the existing `--ease-*`) and a
+      `prefers-reduced-motion` block that zeroes them; document them in the
+      package README. Bump the package version (1.1.0) — publishing is the
+      owner's `design-v1.1.0` tag. Tests: a token check that each brand
+      token resolves in both themes and the web UI builds.
+
+## Starter dependency security (before builders use the starters)
+
+GitHub Dependabot reports ~100 open alerts in the starter lockfiles
+(`pkg/starters/data/{static-site,web-app,web-app-data}/package-lock.json`),
+13 critical: vitest (RCE via the UI server / malicious site), tinypool
+(prototype pollution → RCE), astro (RCE via AVIF image optimization). Every
+starter is copied into each new builder project, so these ship to users.
+
+- [x] **deps.1** Patch the starters: bump every starter's direct
+      dependencies to current releases that resolve the open Dependabot
+      alerts (`gh api repos/sprout-foundry/sprout/dependabot/alerts` filtered
+      to `pkg/starters/data/`), regenerate each lockfile with `npm install`,
+      keep exact pins where the starter pins exactly (web-app-data's caret
+      ranges become exact pins too, so a fresh copy is reproducible), and
+      run `npm audit --audit-level=high` clean in each starter (document any
+      advisory with no fix and why it does not apply). Then run
+      `scripts/ci-check-starters.sh` with the built binary: every starter
+      builds, passes its tests and serves every manifest route. Update the
+      stack skills if a major bump changes conventions. Bump each starter's
+      version in its manifest.
+- [x] **deps.2** Keep them patched: the starters CI workflow
+      (`.github/workflows/starters.yml`) runs `npm audit --audit-level=high`
+      per starter and fails on high/critical; add a `.github/dependabot.yml`
+      entry per starter directory (npm, weekly, grouped) so updates arrive
+      as PRs. actionlint clean.
+
 ## Host-contract lane — publish blockers for `@sprout-foundry/workspace`
 
 Branch `feat/host-contract` (worktree `../sprout-host`). Read

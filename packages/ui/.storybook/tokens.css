@@ -12,9 +12,12 @@
 :root {
   /* Dark theme (default) */
 
-  /* Brand tokens — see webui/src/App.css for canonical definitions. */
+  /* Brand tokens — see webui/src/App.css for canonical definitions. Each
+   * brand token has ONE meaning across both themes: --brand-frost is the
+   * light-cyan frost accent, --brand-sprout the sprout green. */
   --brand-teal: #14b8c8;
   --brand-frost: #68e3ee;
+  --brand-sprout: #1ba03d;
   --brand-active-cyan: #22d3ee;
   --brand-navy: #10212d;
 
@@ -70,12 +73,32 @@
 
   --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Consolas', monospace;
   --font-sans: 'Sora', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  /* Motion tokens — shared duration scale (bare durations) plus the easing
+   * curves, mirroring packages/design/tokens.css. The reduced-motion block
+   * below zeroes the durations. */
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --duration-slow: 320ms;
+}
+
+/* Respect the OS reduced-motion preference, mirroring the package. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+    --duration-slow: 0ms;
+  }
 }
 
 :root[data-theme='light'] {
   --brand-teal: #14b8c8;
-  --brand-frost: #1ba03d;
+  --brand-frost: #0891b2;
+  --brand-sprout: #1ba03d;
   --brand-active-cyan: #0891b2;
+  --brand-navy: #10212d;
 
   --bg-primary: #f4f7fb;
   --bg-secondary: #eef3f9;

@@ -5,6 +5,9 @@ import { createRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
 import { HotkeyProvider } from '../contexts/HotkeyContext';
 import { NotificationProvider } from '../contexts/NotificationContext';
+import { HostProvider } from '../host/HostProvider';
+import { makeTestHost } from '../host/testHost';
+import type { HostNavigationIntent, SproutHost } from '../host/types';
 import MenuBar from './MenuBar';
 
 // ---------------------------------------------------------------------------
@@ -77,9 +80,29 @@ const flushPromises = async () => {
  * Renders the MenuBar wrapped in the required providers.
  * Returns async so callers can await hotkey loading.
  */
+let openedIntents: HostNavigationIntent[] = [];
+
+function menuBarHost(): SproutHost {
+  return {
+    ...makeTestHost(),
+    navigation: {
+      open(intent) {
+        openedIntents.push(intent);
+      },
+    },
+  };
+}
+
 async function renderMenuBar() {
+  openedIntents = [];
   await act(async () => {
-    root.render(createElement(NotificationProvider, null, createElement(HotkeyProvider, null, createElement(MenuBar))));
+    root.render(
+      createElement(
+        HostProvider,
+        { host: menuBarHost() },
+        createElement(NotificationProvider, null, createElement(HotkeyProvider, null, createElement(MenuBar))),
+      ),
+    );
   });
   // Let the hotkey provider's async loadHotkeys() settle
   await flushPromises();
@@ -414,7 +437,7 @@ describe('MenuBar', () => {
     window.removeEventListener('sprout:hotkey', handler);
   });
 
-  test('clicking "About sprout" shows an alert() and closes the menu', async () => {
+  test('clicking "About sprout" shows an alert() with the real build version and closes the menu', async () => {
     const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
     await renderMenuBar();
     openMenu(4); // Help
@@ -427,7 +450,10 @@ describe('MenuBar', () => {
     });
 
     expect(alertSpy).toHaveBeenCalledTimes(1);
-    expect(alertSpy).toHaveBeenCalledWith('sprout WebUI\nVersion 1.0.0\n\nA modern, keyboard-accessible code editor.');
+    // The version comes from the build/bootstrap (defaults to 'dev'), never a
+    // hardcoded literal.
+    expect(alertSpy.mock.calls[0][0]).toMatch(/^sprout WebUI\nVersion \S+\n\n/);
+    expect(alertSpy.mock.calls[0][0]).not.toContain('Version 1.0.0');
 
     // Menu should be closed after clicking
     expect(getDropdown()).toBeNull();
@@ -703,8 +729,7 @@ describe('MenuBar', () => {
     window.removeEventListener('sprout:open-hotkeys-config', handler);
   });
 
-  test('clicking "Report Issue" opens the GitHub issues URL', async () => {
-    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+  test('clicking "Report Issue" dispatches the host reportBug intent', async () => {
     await renderMenuBar();
     openMenu(4); // Help
 
@@ -715,9 +740,9 @@ describe('MenuBar', () => {
       reportItem.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    const expectedUrl = 'https://github.com/alantheprice/sprout/issues/new';
-    expect(openSpy).toHaveBeenCalledWith(expectedUrl, '_blank', 'noopener,noreferrer');
-
-    openSpy.mockRestore();
+    // The component never hardcodes the repository URL: it asks the host to
+    // resolve the `reportBug` intent (the local host opens the prefilled
+    // public issue; a platform resolves it to its own support flow).
+    expect(openedIntents.map((i) => i.type)).toEqual(['reportBug']);
   });
 });

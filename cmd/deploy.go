@@ -91,22 +91,73 @@ func defaultDeployVerificationSnapshot(root, buildDir string) (deploy.Verificati
 }
 
 // defaultDeployTargetFor is the production adapter seam: it returns the
-// on-disk fake for the "fake" target id and a clear "not available yet"
-// error for every other id, so an unconfigured real target fails actionably
-// instead of silently doing nothing.
+// on-disk fake for the "fake" target id and resolves the Cloudflare ids to the
+// real adapter. The Cloudflare ids are qualified with the manifest's
+// deploy_target shape (see deployAdapterID): "cloudflare/pages" and
+// "cloudflare/workers". Any other id fails actionably rather than silently
+// doing nothing.
 //
-// The Cloudflare ids are qualified with the manifest's deploy_target shape
-// (see deployAdapterID): "cloudflare/pages" and "cloudflare/workers" are the
-// ids the real hosting adapter will resolve — that wiring lands in a later
-// milestone (SP-156), so for now they fall through to the actionable error
-// that keeps pointing at --target fake for tests.
+// The Cloudflare adapter authenticates with the existing deploy credential
+// (CLOUDFLARE_API_TOKEN), resolved here and never passed as an argument or
+// printed; the token reaches the wire only in the request's auth header.
 func defaultDeployTargetFor(root, targetID string) (deploy.DeployTarget, error) {
 	switch strings.TrimSpace(targetID) {
 	case "", "fake":
 		return newPersistentFakeTarget(root)
+	case deployCloudflarePagesID, deployCloudflareWorkersID:
+		return newCloudflareDeployTarget(root, targetID)
 	default:
-		return nil, fmt.Errorf("deploy target %q is not available yet (the real hosting adapter lands in a later milestone); use --target fake", targetID)
+		return nil, fmt.Errorf("deploy target %q is not available; use --target fake or configure a supported target", targetID)
 	}
+}
+
+// Cloudflare adapter ids, as produced by deployAdapterID (the vendor qualified
+// with the manifest's deploy_target shape).
+const (
+	deployCloudflarePagesID   = deployCloudflareVendor + "/" + deploy.DeployTargetPages
+	deployCloudflareWorkersID = deployCloudflareVendor + "/" + deploy.DeployTargetWorkers
+)
+
+// newCloudflareDeployTarget builds the Cloudflare adapter for a qualified id,
+// resolving the deploy credential and reading the account id from the
+// environment. The token is never passed as a command argument or printed.
+func newCloudflareDeployTarget(root, targetID string) (deploy.DeployTarget, error) {
+	shape := strings.TrimPrefix(strings.TrimSpace(targetID), deployCloudflareVendor+"/")
+	accountID := strings.TrimSpace(os.Getenv(deployCloudflareAccountIDEnvVar))
+	if accountID == "" {
+		return nil, fmt.Errorf("cloudflare deploy needs an account id: set %s", deployCloudflareAccountIDEnvVar)
+	}
+	project, err := deployProjectName(root)
+	if err != nil {
+		return nil, err
+	}
+	cred, err := deploy.ResolveCredential(deploy.DeployCredentialConfig{
+		Target: deployCloudflareVendor, Project: project, EnvVar: deploy.CloudflareAPITokenEnvVar,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return deploy.CloudflareTargetFor(shape,
+		deploy.CloudflareConfig{AccountID: accountID, Project: project},
+		cred, "", nil)
+}
+
+// deployCloudflareAccountIDEnvVar is the environment variable carrying the
+// Cloudflare account id the deploy targets. It is not a secret (unlike the
+// token), so it is read directly.
+const deployCloudflareAccountIDEnvVar = "CLOUDFLARE_ACCOUNT_ID"
+
+// deployProjectName reads the project name the Cloudflare adapter keys its
+// resources and history by: the deploy config's project, defaulting to the
+// worker/project name declared in wrangler.toml when the config names none.
+func deployProjectName(root string) (string, error) {
+	if cfg, err := deployconfig.LoadDeployConfig(root); err == nil && strings.TrimSpace(cfg.Project) != "" {
+		return strings.TrimSpace(cfg.Project), nil
+	}
+	if w, err := deploy.LoadWranglerConfig(root); err == nil && strings.TrimSpace(w.Name) != "" {
+		return strings.TrimSpace(w.Name), nil
+	}
+	return "", fmt.Errorf("cloudflare deploy needs a project name: set \"project\" in %s", deployconfig.DeployConfigPath(root))
 }
 
 var deployCmd = &cobra.Command{

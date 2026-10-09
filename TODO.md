@@ -31,7 +31,7 @@
 
 ## Workers deploys with data bindings
 
-- [ ] **prov.1** `sprout deploy` to Cloudflare Workers must bring the
+- [x] **prov.1** `sprout deploy` to Cloudflare Workers must bring the
       project's declared bindings with it. Today the Workers adapter
       (`pkg/deploy/cloudflare_workers.go`) uploads the script and ignores
       `wrangler.toml`, so the `web-app-data` starter deploys without its D1

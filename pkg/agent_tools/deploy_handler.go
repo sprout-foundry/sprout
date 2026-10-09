@@ -30,6 +30,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -72,10 +73,9 @@ var deployFakeTargets = struct {
 
 // defaultDeployTargetFor is the interim adapter for the "fake" target id (and
 // an empty id): an in-process deploy.FakeTarget, cached per root so history
-// survives between tool calls. Every other id — including the
-// manifest-qualified "cloudflare/pages" and "cloudflare/workers" the real
-// adapter will resolve in a later milestone — fails actionably rather than
-// silently doing nothing, mirroring the CLI's default.
+// survives between tool calls. The Cloudflare ids resolve to the real adapter;
+// every other id fails actionably rather than silently doing nothing,
+// mirroring the CLI's default.
 func defaultDeployTargetFor(root, targetID string) (deploy.DeployTarget, error) {
 	switch strings.TrimSpace(targetID) {
 	case "", "fake":
@@ -88,9 +88,60 @@ func defaultDeployTargetFor(root, targetID string) (deploy.DeployTarget, error) 
 			deployFakeTargets.byKey[key] = t
 		}
 		return t, nil
+	case deployCloudflarePagesID, deployCloudflareWorkersID:
+		return newCloudflareDeployTarget(root, targetID)
 	default:
-		return nil, fmt.Errorf("deploy target %q is not available in this session; use target \"fake\" (the real hosting adapter lands in a later milestone)", targetID)
+		return nil, fmt.Errorf("deploy target %q is not available in this session; use target \"fake\" or configure a supported target", targetID)
 	}
+}
+
+// Cloudflare adapter ids, as produced by defaultAdapterID (the vendor
+// qualified with the manifest's deploy_target shape).
+const (
+	deployCloudflarePagesID   = deployCloudflareVendor + "/" + deploy.DeployTargetPages
+	deployCloudflareWorkersID = deployCloudflareVendor + "/" + deploy.DeployTargetWorkers
+)
+
+// deployCloudflareAccountIDEnvVar is the environment variable carrying the
+// Cloudflare account id the deploy targets. It is not a secret (unlike the
+// token), so it is read directly.
+const deployCloudflareAccountIDEnvVar = "CLOUDFLARE_ACCOUNT_ID"
+
+// newCloudflareDeployTarget builds the Cloudflare adapter for a qualified id,
+// resolving the deploy credential with the same rules as the CLI. The token is
+// never passed as a tool argument or printed.
+func newCloudflareDeployTarget(root, targetID string) (deploy.DeployTarget, error) {
+	shape := strings.TrimPrefix(strings.TrimSpace(targetID), deployCloudflareVendor+"/")
+	accountID := strings.TrimSpace(os.Getenv(deployCloudflareAccountIDEnvVar))
+	if accountID == "" {
+		return nil, fmt.Errorf("cloudflare deploy needs an account id: set %s", deployCloudflareAccountIDEnvVar)
+	}
+	project, err := deployProjectName(root)
+	if err != nil {
+		return nil, err
+	}
+	cred, err := deploy.ResolveCredential(deploy.DeployCredentialConfig{
+		Target: deployCloudflareVendor, Project: project, EnvVar: deploy.CloudflareAPITokenEnvVar,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return deploy.CloudflareTargetFor(shape,
+		deploy.CloudflareConfig{AccountID: accountID, Project: project},
+		cred, "", nil)
+}
+
+// deployProjectName reads the project name the Cloudflare adapter keys its
+// resources and history by: the deploy config's project, defaulting to the
+// worker/project name declared in wrangler.toml when the config names none.
+func deployProjectName(root string) (string, error) {
+	if cfg, err := deployconfig.LoadDeployConfig(root); err == nil && strings.TrimSpace(cfg.Project) != "" {
+		return strings.TrimSpace(cfg.Project), nil
+	}
+	if w, err := deploy.LoadWranglerConfig(root); err == nil && strings.TrimSpace(w.Name) != "" {
+		return strings.TrimSpace(w.Name), nil
+	}
+	return "", fmt.Errorf("cloudflare deploy needs a project name: set \"project\" in %s", deployconfig.DeployConfigPath(root))
 }
 
 // resolveDeployTargetFor returns the resolver to use, preferring the test/

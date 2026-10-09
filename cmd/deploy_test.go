@@ -14,6 +14,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -407,18 +408,34 @@ func TestDeployTargetConstantsMatchPackages(t *testing.T) {
 	assert.Equal(t, startermanifest.DeployTargetWorkers, deploy.DeployTargetWorkers)
 }
 
-// TestDeployCmd_UnknownTargetIsClearError pins the adapter seam: a config
-// naming a target that has no adapter yet fails actionably, pointing at the
-// fake for this milestone.
-func TestDeployCmd_UnknownTargetIsClearError(t *testing.T) {
+// TestDeployCmd_CloudflareTargetResolvesAdapter pins the adapter seam: a
+// config naming cloudflare resolves to the real adapter (not the old
+// "not available yet" error). With no account id in the environment the
+// adapter construction fails actionably, naming the variable to set.
+func TestDeployCmd_CloudflareTargetResolvesAdapter(t *testing.T) {
 	root := setupDeployProject(t)
 	writeJSON(t, deployconfig.DeployConfigPath(root), deployconfig.DeployConfig{
 		Target: "cloudflare", Project: "fixture-app",
 	})
+	t.Setenv("CLOUDFLARE_ACCOUNT_ID", "")
 
 	_, err := executeDeployCmd(t)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not available yet")
+	assert.Contains(t, err.Error(), "CLOUDFLARE_ACCOUNT_ID")
+	assert.NotContains(t, err.Error(), "not available yet")
+}
+
+// TestDeployCmd_UnknownTargetIsClearError pins the adapter seam: a config
+// naming a target that has no adapter fails actionably, pointing at the fake.
+func TestDeployCmd_UnknownTargetIsClearError(t *testing.T) {
+	root := setupDeployProject(t)
+	writeJSON(t, deployconfig.DeployConfigPath(root), deployconfig.DeployConfig{
+		Target: "some-unknown-vendor", Project: "fixture-app",
+	})
+
+	_, err := executeDeployCmd(t)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not available")
 	assert.Contains(t, err.Error(), "--target fake")
 }
 
@@ -542,4 +559,23 @@ func TestDeployCmd_TargetOverrideOfVendorKeepsManifestShape(t *testing.T) {
 	out, err := executeDeployCmd(t, "--target", "cloudflare")
 	require.NoError(t, err, "output: %s", out)
 	assert.Equal(t, "cloudflare/workers", *got)
+}
+
+// TestDefaultDeployTargetFor_CloudflareConstructsAdapter pins the adapter
+// construction: with an account id and a resolved token in the environment,
+// the seam builds a Workers adapter without the token ever being an argument.
+func TestDefaultDeployTargetFor_CloudflareConstructsAdapter(t *testing.T) {
+	root := setupDeployProject(t)
+	writeJSON(t, deployconfig.DeployConfigPath(root), deployconfig.DeployConfig{
+		Target: "cloudflare", Project: "fixture-app",
+	})
+	t.Setenv("CLOUDFLARE_ACCOUNT_ID", "acct-1")
+	t.Setenv(deploy.CloudflareAPITokenEnvVar, "tok-not-logged")
+
+	target, err := defaultDeployTargetFor(root, "cloudflare/workers")
+	require.NoError(t, err)
+	require.NotNil(t, target)
+
+	// The token was never printed through the target's string form.
+	assert.NotContains(t, fmt.Sprintf("%v", target), "tok-not-logged")
 }

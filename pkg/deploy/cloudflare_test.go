@@ -35,12 +35,37 @@ type cloudflareFake struct {
 	deployments []fakePagesDeployment
 	nextID      int
 
+	// d1 is the account's D1 databases by id; kv by id; r2 by name.
+	d1 map[string]fakeD1
+	kv map[string]fakeKV
+	r2 map[string]bool
+
+	// d1Rows records the d1_migrations table rows per database id, so the
+	// migrations bookkeeping is idempotent across deploys.
+	d1Rows map[string]map[string]bool
+	// d1Statements records every SQL statement posted, in order.
+	d1Statements []string
+	// lastScriptMetadata is the decoded metadata of the last script upload.
+	lastScriptMetadata map[string]any
+
 	requests []fakeRequest
 
 	// failure, when set, makes the next matching request return this response.
 	failStatus int
 	failBody   string
 	failPath   string
+}
+
+// fakeD1 is one D1 database in the fake account.
+type fakeD1 struct {
+	UUID string `json:"uuid"`
+	Name string `json:"name"`
+}
+
+// fakeKV is one KV namespace in the fake account.
+type fakeKV struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
 }
 
 type fakePagesDeployment struct {
@@ -64,7 +89,15 @@ type fakeRequest struct {
 // server is closed automatically when the test ends.
 func newCloudflareFake(t *testing.T, accountID, project string) (*cloudflareFake, *httptest.Server) {
 	t.Helper()
-	f := &cloudflareFake{accountID: accountID, project: project, worker: project}
+	f := &cloudflareFake{
+		accountID: accountID,
+		project:   project,
+		worker:    project,
+		d1:        map[string]fakeD1{},
+		kv:        map[string]fakeKV{},
+		r2:        map[string]bool{},
+		d1Rows:    map[string]map[string]bool{},
+	}
 	srv := httptest.NewServer(http.HandlerFunc(f.handle))
 	t.Cleanup(srv.Close)
 	return f, srv
@@ -105,12 +138,179 @@ func (f *cloudflareFake) handle(w http.ResponseWriter, r *http.Request) {
 		f.rollback(w, r)
 	case r.Method == http.MethodGet && strings.HasPrefix(path, base+"/pages/projects/"+f.project+"/deployments/"):
 		f.getDeployment(w, strings.TrimPrefix(path, base+"/pages/projects/"+f.project+"/deployments/"))
-	case r.Method == http.MethodPut && path == base+"/workers/scripts/"+f.worker:
-		writeCFOK(w, map[string]any{"id": f.worker})
+	case r.Method == http.MethodPut && strings.HasPrefix(path, base+"/workers/scripts/"):
+		f.uploadWorkerScript(w, r)
+	case r.Method == http.MethodGet && path == base+"/d1/database":
+		f.listD1(w)
+	case r.Method == http.MethodPost && path == base+"/d1/database":
+		f.createD1(w, r)
+	case r.Method == http.MethodPost && strings.HasPrefix(path, base+"/d1/database/") && strings.HasSuffix(path, "/query"):
+		f.d1Query(w, r, strings.TrimSuffix(strings.TrimPrefix(path, base+"/d1/database/"), "/query"))
+	case r.Method == http.MethodGet && path == base+"/storage/kv/namespaces":
+		f.listKV(w)
+	case r.Method == http.MethodPost && path == base+"/storage/kv/namespaces":
+		f.createKV(w, r)
+	case r.Method == http.MethodGet && path == base+"/r2/buckets":
+		f.listR2(w)
+	case r.Method == http.MethodPost && path == base+"/r2/buckets":
+		f.createR2(w, r)
 	default:
 		w.WriteHeader(http.StatusNotFound)
 		writeCFErr(w, 404, "not found")
 	}
+}
+
+// uploadWorkerScript records a Worker script upload, decoding the multipart
+// metadata part so a test can assert the bindings that were attached.
+func (f *cloudflareFake) uploadWorkerScript(w http.ResponseWriter, r *http.Request) {
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+		meta, err := multipartMetadata(r)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			writeCFErr(w, 400, "bad multipart body")
+			return
+		}
+		f.lastScriptMetadata = meta
+	}
+	writeCFOK(w, map[string]any{"id": f.worker})
+}
+
+// multipartMetadata reads the "metadata" part of a multipart upload and
+// decodes it as JSON.
+func multipartMetadata(r *http.Request) (map[string]any, error) {
+	mr, err := r.MultipartReader()
+	if err != nil {
+		return nil, err
+	}
+	for {
+		part, err := mr.NextPart()
+		if err == io.EOF {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		if part.FormName() == "metadata" {
+			data, err := io.ReadAll(part)
+			if err != nil {
+				return nil, err
+			}
+			var meta map[string]any
+			if err := json.Unmarshal(data, &meta); err != nil {
+				return nil, err
+			}
+			return meta, nil
+		}
+	}
+}
+
+func (f *cloudflareFake) listD1(w http.ResponseWriter) {
+	out := make([]fakeD1, 0, len(f.d1))
+	for _, db := range f.d1 {
+		out = append(out, db)
+	}
+	writeCFOK(w, out)
+}
+
+func (f *cloudflareFake) createD1(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Name string `json:"name"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	id := "d1-" + itoa(len(f.d1)+1)
+	db := fakeD1{UUID: id, Name: body.Name}
+	f.d1[id] = db
+	writeCFOK(w, db)
+}
+
+func (f *cloudflareFake) d1Query(w http.ResponseWriter, r *http.Request, id string) {
+	var body struct {
+		SQL string `json:"sql"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	f.d1Statements = append(f.d1Statements, body.SQL)
+	if f.d1Rows[id] == nil {
+		f.d1Rows[id] = map[string]bool{}
+	}
+	// A bookkeeping insert records the migration name; emulate just enough of
+	// the d1_migrations table for the adapter's idempotency check.
+	if name, ok := parseMigrationInsert(body.SQL); ok {
+		f.d1Rows[id][name] = true
+	}
+	var rows []map[string]any
+	if strings.Contains(strings.ToLower(body.SQL), "select name from d1_migrations") {
+		for name := range f.d1Rows[id] {
+			rows = append(rows, map[string]any{"name": name})
+		}
+	}
+	// The real API returns result as an array of per-statement result objects.
+	writeCFOK(w, []map[string]any{{"results": rows, "success": true}})
+}
+
+// parseMigrationInsert extracts the migration name from the adapter's
+// bookkeeping insert, so the fake's d1_migrations table behaves like a real
+// one across repeated deploys. The insert may be part of a larger statement
+// string (the migration SQL and the bookkeeping row travel together), so the
+// search starts at the insert's own VALUES clause.
+func parseMigrationInsert(sql string) (string, bool) {
+	const marker = "insert into d1_migrations"
+	lower := strings.ToLower(sql)
+	idx := strings.Index(lower, marker)
+	if idx < 0 {
+		return "", false
+	}
+	rest := sql[idx:]
+	v := strings.Index(rest, "VALUES (")
+	if v < 0 {
+		return "", false
+	}
+	rest = rest[v+len("VALUES ("):]
+	end := strings.Index(rest, ",")
+	if end < 0 {
+		return "", false
+	}
+	name := strings.TrimSpace(rest[:end])
+	name = strings.Trim(name, "'")
+	return strings.ReplaceAll(name, "''", "'"), true
+}
+
+func (f *cloudflareFake) listKV(w http.ResponseWriter) {
+	out := make([]fakeKV, 0, len(f.kv))
+	for _, ns := range f.kv {
+		out = append(out, ns)
+	}
+	writeCFOK(w, out)
+}
+
+func (f *cloudflareFake) createKV(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Title string `json:"title"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	id := "kv-" + itoa(len(f.kv)+1)
+	ns := fakeKV{ID: id, Title: body.Title}
+	f.kv[id] = ns
+	writeCFOK(w, ns)
+}
+
+func (f *cloudflareFake) listR2(w http.ResponseWriter) {
+	type bucket struct {
+		Name string `json:"name"`
+	}
+	out := make([]bucket, 0, len(f.r2))
+	for name := range f.r2 {
+		out = append(out, bucket{Name: name})
+	}
+	writeCFOK(w, map[string]any{"buckets": out})
+}
+
+func (f *cloudflareFake) createR2(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Name string `json:"name"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	f.r2[body.Name] = true
+	writeCFOK(w, map[string]any{"name": body.Name})
 }
 
 func (f *cloudflareFake) createDeployment(w http.ResponseWriter) {
@@ -236,6 +436,33 @@ func newPagesTarget(t *testing.T, f *cloudflareFake, srv *httptest.Server, token
 	require.NoError(t, err)
 	return target
 }
+
+// newWorkersTarget wires a Workers adapter to the fake server.
+func newWorkersTarget(t *testing.T, f *cloudflareFake, srv *httptest.Server, token string) *CloudflareWorkers {
+	t.Helper()
+	target, err := NewCloudflareWorkersTarget(
+		CloudflareConfig{AccountID: f.accountID, Project: f.project},
+		Credential{value: token},
+		srv.URL,
+		srv.Client(),
+	)
+	require.NoError(t, err)
+	return target
+}
+
+// writeWrangler writes a wrangler.toml under root and returns root, so a
+// Workers deploy has a project root to read its declared bindings from.
+func writeWrangler(t *testing.T, root, content string) string {
+	t.Helper()
+	require.NoError(t, os.WriteFile(filepath.Join(root, WranglerFileName), []byte(content), 0o644))
+	return root
+}
+
+// minimalWrangler is the smallest wrangler.toml a Workers deploy needs: a
+// worker name and entry point, with no bindings declared.
+const minimalWrangler = `name = "my-api"
+main = "src/worker/index.ts"
+`
 
 // ---------------------------------------------------------------------------
 // Interface conformance
@@ -594,8 +821,9 @@ func TestCloudflareWorkers_DeployAndStatus(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	root := writeWrangler(t, t.TempDir(), minimalWrangler)
 	buildDir := writeBuildOutput(t, map[string]string{"worker.js": "export default { fetch() {} }"})
-	d, err := target.Deploy(DeployRequest{Project: "my-api", BuildDir: buildDir, Version: "2.0.0"})
+	d, err := target.Deploy(DeployRequest{Project: "my-api", BuildDir: buildDir, Root: root, Version: "2.0.0"})
 	require.NoError(t, err)
 	assert.Equal(t, "my-api", d.ID)
 	assert.Contains(t, d.URL, "my-api.acct-1.workers.dev")
@@ -651,8 +879,9 @@ func TestCloudflareWorkers_MissingScriptIsRefused(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	root := writeWrangler(t, t.TempDir(), minimalWrangler)
 	buildDir := writeBuildOutput(t, map[string]string{"index.html": "<h1>not a worker</h1>"})
-	_, err = target.Deploy(DeployRequest{Project: "my-api", BuildDir: buildDir})
+	_, err = target.Deploy(DeployRequest{Project: "my-api", BuildDir: buildDir, Root: root})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "worker.js")
 }
@@ -666,8 +895,9 @@ func TestCloudflareWorkers_ProjectBindingIsEnforced(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	root := writeWrangler(t, t.TempDir(), minimalWrangler)
 	buildDir := writeBuildOutput(t, map[string]string{"worker.js": "export default {}"})
-	_, err = target.Deploy(DeployRequest{Project: "other", BuildDir: buildDir})
+	_, err = target.Deploy(DeployRequest{Project: "other", BuildDir: buildDir, Root: root})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "does not match")
 	assert.Empty(t, f.requestsSnapshot(), "a mismatched worker name sends no request")
@@ -684,8 +914,9 @@ func TestCloudflareWorkers_NonSuccessResponseIsTyped(t *testing.T) {
 
 	f.fail(http.StatusForbidden, `{"success":false,"errors":[{"code":10000,"message":"Authentication error"}]}`, "/workers/scripts/")
 
+	root := writeWrangler(t, t.TempDir(), minimalWrangler)
 	buildDir := writeBuildOutput(t, map[string]string{"worker.js": "export default {}"})
-	_, err = target.Deploy(DeployRequest{Project: "my-api", BuildDir: buildDir})
+	_, err = target.Deploy(DeployRequest{Project: "my-api", BuildDir: buildDir, Root: root})
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrCloudflareRequestFailed)
 

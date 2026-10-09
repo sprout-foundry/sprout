@@ -82,10 +82,24 @@ One table ships: `items` (`id` integer primary key, `name` text, not null).
 3. Apply it locally: `npm run db:migrate`.
 4. Add the route in `src/worker/index.ts` and call it from the UI.
 
-**Deploy:** replace `database_id` in `wrangler.toml` with the id
-`wrangler d1 create web-app-data-db` prints, run
-`npm run db:migrate:remote`, then `npx wrangler deploy`. This starter's
+**Deploy:** `sprout deploy` reads this `wrangler.toml` and brings the declared
+bindings with the deploy. The `database_id` above is the all-zero placeholder,
+which means "create it": the adapter creates the D1 database in your account,
+writes the real id back into `wrangler.toml` (so local and deployed config
+agree), applies the pending migrations under `drizzle/migrations`, and attaches
+the binding to the uploaded script. A second deploy reuses the same database
+instead of creating a duplicate, and the resources it created are recorded in
+`.sprout/deploy-resources.json`.
+
+The deploy is all-or-nothing: if any declared binding cannot be created or
+attached the deploy fails, naming it, and nothing goes live. It authenticates
+with the existing deploy credential — set `CLOUDFLARE_API_TOKEN` (or store it
+with `sprout keys set cloudflare`) and `CLOUDFLARE_ACCOUNT_ID`. This starter's
 manifest declares `deploy_target: workers`.
+
+The manual path still works if you prefer it: replace `database_id` with the id
+`wrangler d1 create web-app-data-db` prints, run `npm run db:migrate:remote`,
+then `npx wrangler deploy`.
 
 ## KV and R2
 

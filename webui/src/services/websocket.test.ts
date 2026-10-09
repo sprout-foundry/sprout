@@ -620,6 +620,31 @@ describe('WebSocketService - flushQueuedMessages', () => {
   });
 });
 
+describe('WebSocketService - host transport URL', () => {
+  it('connects to the active host transport.wsURL when set', () => {
+    activeHostRef.value = { transport: { apiBaseURL: '', wsURL: 'wss://host.test/ws', authMode: 'bearer' } };
+    const ws = WebSocketService.getInstance();
+    ws.connect();
+    // appendClientIdToUrl is mocked to append '?client=test'.
+    expect(WebSocketService.instance.ws.url).toBe('wss://host.test/ws?client=test');
+  });
+
+  it('falls back to the same-origin /ws path when the host wsURL is the same-origin sentinel', () => {
+    activeHostRef.value = { transport: { apiBaseURL: '', wsURL: '', authMode: 'none' } };
+    const ws = WebSocketService.getInstance();
+    ws.connect();
+    expect(WebSocketService.instance.ws.url).toBe('ws://localhost:3000/ws?client=test');
+  });
+
+  it('the local build (no host) is unchanged: same-origin /ws through the proxy base', () => {
+    activeHostRef.value = null;
+    getProxyBase.mockReturnValue('/ssh/mac-mini%3A%3A%24HOME');
+    const ws = WebSocketService.getInstance();
+    ws.connect();
+    expect(WebSocketService.instance.ws.url).toBe('ws://localhost:3000/ssh/mac-mini%3A%3A%24HOME/ws?client=test');
+  });
+});
+
 describe('WebSocketService - Connection Status Events', () => {
   it('connection_status on close includes queuedMessageCount', () => {
     const ws = WebSocketService.getInstance();

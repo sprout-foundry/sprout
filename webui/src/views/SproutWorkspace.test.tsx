@@ -20,6 +20,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 vi.mock('../services/localEventsProvider', () => ({
   LocalEventsProvider: class {
+    static instances: Array<Record<string, unknown>> = [];
     connect = vi.fn();
     disconnect = vi.fn();
     onEvent = vi.fn();
@@ -31,6 +32,9 @@ vi.mock('../services/localEventsProvider', () => ({
     resume = vi.fn();
     resetAndReconnect = vi.fn();
     getQueuedMessageCount = vi.fn(() => 0);
+    constructor() {
+      (this.constructor as unknown as { instances: Array<Record<string, unknown>> }).instances.push(this);
+    }
   },
 }));
 
@@ -95,6 +99,7 @@ vi.mock('../services/api', () => {
 
 import { useHost } from '../host';
 import type { SproutHost } from '../host';
+import { getActiveHost, setActiveHost } from '../host/accessor';
 import { HostProvider, headlessHost } from '../host/HostProvider';
 import { SproutProviders } from '../providers/SproutProviders';
 import { registerWorkspaceMode } from '../workspaces/registry';
@@ -104,6 +109,12 @@ import type { SproutProject } from './SproutWorkspace';
 import { DEFAULT_VIEWS_ARRANGEMENT } from './ViewsLayout';
 
 const PROJECT: SproutProject = { id: '/Users/dev/project', name: 'project', root: '/Users/dev/project' };
+
+/** A distinct host used as the module-singleton baseline the tests restore to. */
+const BASELINE_HOST: SproutHost = {
+  ...headlessHost(),
+  transport: { apiBaseURL: 'https://baseline.test', wsURL: '', authMode: 'none' },
+};
 
 /** A fake fetch that records the calls the composed chat makes. */
 function createChatFetch() {
@@ -145,6 +156,9 @@ let registeredSpaceDisposer: (() => void) | null = null;
 
 beforeEach(() => {
   localStorage.clear();
+  // The active host is a module singleton shared across the file's tests; reset
+  // it to a known baseline so a registration test can assert the restore.
+  setActiveHost(BASELINE_HOST);
 });
 
 afterEach(() => {
@@ -239,6 +253,19 @@ describe('SproutWorkspace', () => {
     expect(queryCall).toBeDefined();
     expect(queryCall?.init?.method).toBe('POST');
     expect(JSON.parse(String(queryCall?.init?.body))).toMatchObject({ query: 'hello from the host' });
+  });
+
+  it('connects the shared events transport in own mode', async () => {
+    // The chat unit subscribes the transport to its reducer, but only the app's
+    // initialization hook opened the connection. Own mode must connect it, so a
+    // host that mounts a workspace gets a live event stream with no extra
+    // wiring. The mocked LocalEventsProvider records the connect call.
+    const { LocalEventsProvider } = await import('../services/localEventsProvider');
+    render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} layout={DEFAULT_VIEWS_ARRANGEMENT} />);
+    await screen.findByTestId('sprout-workspace');
+    const instances = (LocalEventsProvider as unknown as { instances?: Array<{ connect: ReturnType<typeof vi.fn> }> })
+      .instances;
+    expect(instances?.some((p) => p.connect.mock.calls.length > 0)).toBe(true);
   });
 
   it('lets a host override the assembled chat props per kind (the host wins for that kind)', async () => {
@@ -543,5 +570,38 @@ describe('SproutWorkspace rules', () => {
     const workspace = await screen.findByTestId('sprout-workspace');
     expect(workspace).toHaveClass('sprout-workspace');
     expect(workspace).toHaveClass('host-shell');
+  });
+
+  it('rule: own mode registers the host for the module-level services and restores it on unmount', async () => {
+    // The non-React services (client-session fetch, WebSocket URL) read the
+    // active host through the module singleton. Own mode must register the
+    // host prop there while mounted, and restore the previous host on unmount
+    // so an unmounted workspace leaves no stale host behind.
+    const { unmount } = render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} />);
+    await screen.findByTestId('sprout-workspace');
+    expect(getActiveHost()?.transport.apiBaseURL).toBe('https://host.test/api');
+
+    unmount();
+    // The previous host (the baseline) is restored — never the workspace's own.
+    expect(getActiveHost()).toBe(BASELINE_HOST);
+    expect(getActiveHost()?.transport.apiBaseURL).toBe('https://baseline.test');
+  });
+
+  it('rule: ambient mode does not register the host or connect the transport (the caller owns them)', async () => {
+    // Ambient mode: the caller already registered its host and owns the
+    // transport. Registering here would fight the caller's registration, and
+    // connecting here would double-connect the stream.
+    const ambientHost = makeHost({ transport: { apiBaseURL: 'https://ambient.test', wsURL: '', authMode: 'none' } });
+    render(
+      <HostProvider host={ambientHost}>
+        <SproutProviders>
+          <SproutWorkspace providers="ambient" project={PROJECT} space="code" />
+        </SproutProviders>
+      </HostProvider>,
+    );
+    await screen.findByTestId('sprout-workspace');
+    // The composition did not register the ambient host for the module-level
+    // services (the ambient caller owns that): the baseline is untouched.
+    expect(getActiveHost()).toBe(BASELINE_HOST);
   });
 });

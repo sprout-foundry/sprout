@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import type { ComponentType, ReactNode } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
-import { HostProvider, useHost } from '../host';
+import { HostProvider, registerActiveHost, useHost } from '../host';
 import type { SproutHost } from '../host';
 import { SproutProviders } from '../providers';
 import { applyHostThemeOverrides, clearHostThemeOverrides, resolveHostThemeOverrides } from '../themes/hostTheme';
@@ -42,6 +42,10 @@ import { WorkspaceChatProvider } from './WorkspaceChatContext';
  * - `"own"` (the default): the composition supplies `HostProvider` and
  *   `SproutProviders` itself, so a host gives it a `host` (and optionally a
  *   `wasmBase`) and mounts it anywhere. This is what an external host uses.
+ *   It also registers the host for the module-level services (the non-React
+ *   accessor that the client-session fetch and the WebSocket URL read) and
+ *   opens the events transport, so the host's `transport.apiBaseURL` /
+ *   `transport.wsURL` drive Sprout's calls with no extra wiring.
  * - `"ambient"`: the caller has already mounted `HostProvider` +
  *   `SproutProviders` above (Sprout's own app root does) and the composition
  *   must not build a second stack — a second `SproutProviders` would open a
@@ -301,6 +305,25 @@ export function SproutWorkspace({
   // subscribe the events the caller already routes) — there the caller owns
   // the chat unit and supplies any view props it wants.
   const chatTransport = useSproutWorkspaceChatTransport({ initialState: chatInitialState, fetchFn: chatFetch });
+
+  // Own mode: register the host for the module-level services (the non-React
+  // accessor the client-session fetch and the WebSocket URL read) and open the
+  // events transport, so a host that mounts a workspace gets working
+  // transport with no extra wiring. Ambient mode does neither — the caller
+  // registered its host and owns its transport, so doing it here would fight
+  // the caller's registration and double-connect the stream.
+  //
+  // The connection is deliberately not closed on unmount: the events
+  // transport is a process-lifetime singleton, and disconnecting it marks the
+  // close intentional and exhausts its reconnect attempts, permanently killing
+  // the stream for anything that mounts next (the same reason the app's own
+  // initialization leaves it open across remounts).
+  useEffect(() => {
+    if (ambient || !host) return;
+    const restoreActiveHost = registerActiveHost(host);
+    chatTransport.eventsProvider.connect();
+    return restoreActiveHost;
+  }, [ambient, host, chatTransport.eventsProvider]);
 
   let content: ReactNode;
   if (layout && !ambient) {

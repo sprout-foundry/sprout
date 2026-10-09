@@ -162,6 +162,33 @@ no web UI source tree required. They reference only `react` as an external
 (the registry's mode icons and the editor's CodeMirror-typed props are
 inlined).
 
+## One workspace per page
+
+Sprout's non-React services reach a few **module singletons** — process-wide
+values shared by every module in the page, not per-provider instances:
+
+- the **active host** (`getActiveHost()`), the transport the client-session
+  fetch and the WebSocket URL resolve against;
+- the **client id** (per browsing context, resolved once at boot);
+- the **events transport** (the WebSocket service behind
+  `LocalEventsProvider`).
+
+A page therefore hosts **one workspace at a time**. `SproutWorkspace` in its
+default `providers="own"` mode registers its `host` as the active host while
+it is mounted and restores the previous host on unmount (or keeps its own host
+when there was none, so the services always have a resolvable host), and it
+opens the events transport — so the mounted workspace's
+`transport.apiBaseURL` / `transport.wsURL` drive Sprout's calls. Mounting two
+own-mode workspaces on one page is not supported: the second registration
+would win the singleton and both would share one event stream. A host that
+needs two workspaces side by side mounts one provider stack (its own
+`HostProvider` + `SproutProviders`) and renders the second workspace with
+`providers="ambient"`, so exactly one registration and one transport exist.
+
+The standalone app is the same model: its entry point (`webui/src/index.tsx`)
+registers the active host once at startup and the app root owns the events
+transport, so the app renders its workspace in ambient mode.
+
 ## Styles
 
 The workspace's styles are one stylesheet the package ships and declares:

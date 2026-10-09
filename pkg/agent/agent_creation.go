@@ -234,6 +234,12 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 	// Wire tool function pointers so handlers in pkg/agent_tools can dispatch back into this agent's handler methods.
 	wireAgentToolFuncs(agent, params.isProduction)
 
+	// Open the security audit log so the LogJSON call sites (classifier,
+	// filesystem gate, shell/CD gate) actually persist entries. Best-effort:
+	// a failure leaves the agent without an audit logger rather than aborting
+	// startup. The agent owns the handle; Shutdown closes it.
+	agent.initAuditLogger()
+
 	return agent, nil
 }
 

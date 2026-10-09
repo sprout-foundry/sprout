@@ -1562,6 +1562,79 @@
           "tools",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.003,
+        "context_length": 1048576,
+        "description": "MiMo-V2.6-Flash is the efficiency-balanced model in Xiaomi's MiMo-V2.6 series: a sparse Mixture-of-Experts model with 309B total and 15B activated parameters, natively omnimodal across text, image, video and audio, with a 1M-token context window. Trained with large-scale mixed reinforcement learning across coding, general agents, visual and cybersecurity tasks, it is built for agentic workloads such as long-horizon coding, tool use and computer use.",
+        "id": "XiaomiMiMo/MiMo-V2.6-Flash",
+        "input_cost": 0.14,
+        "name": "MiMo V2.6 Flash",
+        "output_cost": 0.28,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.004,
+        "context_length": 1048576,
+        "description": "MiMo-V2.6-Pro is the flagship of Xiaomi's MiMo-V2.6 series: a sparse Mixture-of-Experts model with 1.02T total and 42B activated parameters, natively omnimodal across text, image, video and audio, with a 1M-token context window. Trained with large-scale mixed reinforcement learning and groupwise agentic grading, it is built for demanding agentic work including long-horizon coding, multi-tool agents and cybersecurity tasks.",
+        "id": "XiaomiMiMo/MiMo-V2.6-Pro",
+        "input_cost": 0.43,
+        "name": "MiMo V2.6 Pro",
+        "output_cost": 0.87,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.2,
+        "context_length": 1000000,
+        "description": "Claude Opus 5.5 is Anthropic's most capable Opus model. Better at coding, knowledge work, and long-running tasks. It's easier to collaborate with and more cost efficient than ever.",
+        "id": "anthropic/claude-opus-5-5",
+        "input_cost": 4,
+        "name": "Claude Opus 5.5",
+        "output_cost": 20,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 1000000,
+        "description": "Claude Sonnet 5.5 is Anthropic's latest Sonnet model, balancing speed and capability for everyday coding, agents, and enterprise work. It supports a 1M-token context window and up to 128K output tokens.",
+        "id": "anthropic/claude-sonnet-5-5",
+        "input_cost": 2,
+        "name": "Claude Sonnet 5.5",
+        "output_cost": 10,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.042,
+        "context_length": 1048576,
+        "description": "Hy4 preview is a 770B-parameter Mixture-of-Experts flagship model from the Tencent Hy Team, with 49B parameters activated per token and a 1M-token context window. It uses Gated DeepSeek Sparse Attention with IndexCache, and is post-trained for software engineering, office and data analysis, game development, and scientific research.",
+        "id": "tencent/Hy4-preview",
+        "input_cost": 0.834,
+        "name": "Hy4 Preview",
+        "output_cost": 2.501,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

@@ -282,7 +282,7 @@ the header (Go changes → full gate).
       Write owner-only (0600 files, 0700 dirs) and run the same redaction
       as the egress backstop (`secretdetect`) over what it writes, unless
       the user passes an explicit `--trace-unredacted`. Tests.
-- [ ] **au.3** Per-call audit events. For every model call the agent makes,
+- [x] **au.3** Per-call audit events. For every model call the agent makes,
       emit an event: time, chat/session id, provider, model, endpoint host,
       request and response SHA-256 and byte counts, tokens, outcome, and
       the trigger (user turn, tool-call follow-up, subagent). Tool calls get

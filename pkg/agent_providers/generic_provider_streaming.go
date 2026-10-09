@@ -25,12 +25,26 @@ func (p *GenericProvider) SendChatRequestStream(ctx context.Context, messages []
 
 // sendChatRequestStreamImpl is the plain streaming path;
 // SendChatRequestStream wraps it with vision-capability verification.
-func (p *GenericProvider) sendChatRequestStreamImpl(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, callback api.StreamCallback) (*api.ChatResponse, error) {
+func (p *GenericProvider) sendChatRequestStreamImpl(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, callback api.StreamCallback) (chatResp *api.ChatResponse, err error) {
 	// Snapshot model under lock for all logging calls below — prevents races
 	// with SetModel or the background warmModelsCache goroutine.
 	p.mu.RLock()
 	currentModel := p.model
 	p.mu.RUnlock()
+
+	// The audit event records the wire facts of this call (digests, byte
+	// counts, tokens, outcome) — never the request or response content. The
+	// deferred emit runs on every return path, so a call that fails over or
+	// errors still produces exactly one event. For a streamed response the
+	// digest covers the raw SSE bytes the server sent.
+	var (
+		auditSentBody []byte
+		auditRespBody []byte
+		auditFailover bool
+	)
+	defer func() {
+		p.emitCallAudit(ctx, messages, currentModel, auditSentBody, auditRespBody, chatResp, err, auditFailover, true)
+	}()
 
 	requestBody, err := p.buildChatRequest(messages, tools, reasoning, disableThinking, true)
 	if err != nil {
@@ -43,6 +57,7 @@ func (p *GenericProvider) sendChatRequestStreamImpl(ctx context.Context, message
 		logging.LogRequestPayloadOnError(sentBody, p.config.Name, currentModel, true, "build_http_request", err)
 		return nil, agenterrors.Wrap(err, "failed to build HTTP request")
 	}
+	auditSentBody = sentBody
 
 	// Read streamingClient under lock, then release before the network call.
 	p.mu.RLock()
@@ -53,7 +68,8 @@ func (p *GenericProvider) sendChatRequestStreamImpl(ctx context.Context, message
 	if err != nil {
 		// For local providers, attempt to auto-start the server and retry once.
 		if recovered := p.tryLocalServerRecovery(); recovered {
-			req2, _, err2 := p.buildHTTPRequestCtx(ctx, requestBody, true)
+			auditFailover = true
+			req2, sentBody2, err2 := p.buildHTTPRequestCtx(ctx, requestBody, true)
 			if err2 == nil {
 				p.mu.RLock()
 				c2 := p.streamingClient
@@ -61,6 +77,7 @@ func (p *GenericProvider) sendChatRequestStreamImpl(ctx context.Context, message
 				if resp2, err3 := c2.Do(req2); err3 == nil {
 					resp = resp2
 					err = nil
+					auditSentBody = sentBody2
 				}
 			}
 		}
@@ -74,6 +91,7 @@ func (p *GenericProvider) sendChatRequestStreamImpl(ctx context.Context, message
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
+		auditRespBody = body
 
 		// Log response details for non-200 responses to help diagnose
 		// provider-specific errors (e.g. ZAI returning empty-body 400s).
@@ -81,6 +99,7 @@ func (p *GenericProvider) sendChatRequestStreamImpl(ctx context.Context, message
 
 		retryBody, retryResp, retried, retryErr := p.tryMaxCompletionTokensRetry(sentBody, true, body)
 		if retried {
+			auditFailover = true
 			requestBody = retryBody
 			if retryErr != nil {
 				logging.LogRequestPayloadOnError(requestBody, p.config.Name, currentModel, true,
@@ -90,13 +109,16 @@ func (p *GenericProvider) sendChatRequestStreamImpl(ctx context.Context, message
 			defer retryResp.Body.Close()
 			if retryResp.StatusCode != http.StatusOK {
 				retryErrBody, _ := io.ReadAll(retryResp.Body)
+				auditRespBody = retryErrBody
 				formattedErr := formatProviderHTTPError(retryResp.StatusCode, retryResp.Header, retryErrBody)
 				logging.LogRequestPayloadOnError(requestBody, p.config.Name, currentModel, true,
 					fmt.Sprintf("api_error_%d", retryResp.StatusCode), formattedErr)
 				return nil, formattedErr
 			}
 
-			response, err := p.handleStreamingResponse(ctx, retryResp, callback)
+			captured := &bytes.Buffer{}
+			response, err := p.handleStreamingResponse(ctx, withTeeBody(retryResp, captured), callback)
+			auditRespBody = captured.Bytes()
 			if err != nil {
 				logging.LogRequestPayloadOnError(requestBody, p.config.Name, currentModel, true, "streaming_response", err)
 				return nil, agenterrors.NewNetwork("chat request failed", err)
@@ -113,7 +135,9 @@ func (p *GenericProvider) sendChatRequestStreamImpl(ctx context.Context, message
 	}
 	defer resp.Body.Close()
 
-	response, err := p.handleStreamingResponse(ctx, resp, callback)
+	captured := &bytes.Buffer{}
+	response, err := p.handleStreamingResponse(ctx, withTeeBody(resp, captured), callback)
+	auditRespBody = captured.Bytes()
 	if err != nil {
 		// Log request on streaming error — use the actual sent body (post-redaction)
 		logging.LogRequestPayloadOnError(sentBody, p.config.Name, currentModel, true, "streaming_response", err)
@@ -124,6 +148,24 @@ func (p *GenericProvider) sendChatRequestStreamImpl(ctx context.Context, message
 	api.RecoverInlineToolCalls(response, tools)
 	return response, nil
 }
+
+// withTeeBody returns resp with its body wrapped so every byte read from the
+// stream is also copied into captured. The audit digest is computed from those
+// bytes after the stream is drained. The original body is still closed by the
+// caller (the wrapper delegates Close).
+func withTeeBody(resp *http.Response, captured *bytes.Buffer) *http.Response {
+	resp.Body = &teeReadCloser{r: io.TeeReader(resp.Body, captured), c: resp.Body}
+	return resp
+}
+
+// teeReadCloser tees reads into a buffer while preserving the original Close.
+type teeReadCloser struct {
+	r io.Reader
+	c io.Closer
+}
+
+func (t *teeReadCloser) Read(p []byte) (int, error) { return t.r.Read(p) }
+func (t *teeReadCloser) Close() error               { return t.c.Close() }
 
 // inStreamError turns an error the server sent mid-stream into the error the
 // agent would have seen had the server answered with a failing status, so a

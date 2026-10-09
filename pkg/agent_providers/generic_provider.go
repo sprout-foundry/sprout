@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -111,11 +112,24 @@ func (p *GenericProvider) SendChatRequest(ctx context.Context, messages []api.Me
 
 // sendChatRequestImpl is the plain chat path; SendChatRequest wraps it with
 // vision-capability verification (SP-140 Phase 2).
-func (p *GenericProvider) sendChatRequestImpl(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
+func (p *GenericProvider) sendChatRequestImpl(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (chatResp *api.ChatResponse, err error) {
 	// Snapshot model under lock to prevent races with SetModel.
 	p.mu.RLock()
 	currentModel := p.model
 	p.mu.RUnlock()
+
+	// The audit event records the wire facts of this call (digests, byte
+	// counts, tokens, outcome) — never the request or response content. The
+	// deferred emit runs on every return path, so a call that fails over or
+	// errors still produces exactly one event.
+	var (
+		auditSentBody []byte
+		auditRespBody []byte
+		auditFailover bool
+	)
+	defer func() {
+		p.emitCallAudit(ctx, messages, currentModel, auditSentBody, auditRespBody, chatResp, err, auditFailover, false)
+	}()
 
 	requestBody, err := p.buildChatRequest(messages, tools, reasoning, disableThinking, false)
 	if err != nil {
@@ -128,6 +142,7 @@ func (p *GenericProvider) sendChatRequestImpl(ctx context.Context, messages []ap
 		logging.LogRequestPayloadOnError(sentBody, p.config.Name, currentModel, false, "build_http_request", err)
 		return nil, agenterrors.Wrap(err, "failed to build HTTP request")
 	}
+	auditSentBody = sentBody
 
 	// Read httpClient under lock, then release before the network call.
 	p.mu.RLock()
@@ -138,7 +153,8 @@ func (p *GenericProvider) sendChatRequestImpl(ctx context.Context, messages []ap
 	if err != nil {
 		// For local providers, attempt to auto-start the server and retry once.
 		if recovered := p.tryLocalServerRecovery(); recovered {
-			req2, _, err2 := p.buildHTTPRequestCtx(ctx, requestBody, false)
+			auditFailover = true
+			req2, sentBody2, err2 := p.buildHTTPRequestCtx(ctx, requestBody, false)
 			if err2 == nil {
 				p.mu.RLock()
 				c2 := p.httpClient
@@ -146,6 +162,7 @@ func (p *GenericProvider) sendChatRequestImpl(ctx context.Context, messages []ap
 				if resp2, err3 := c2.Do(req2); err3 == nil {
 					resp = resp2
 					err = nil
+					auditSentBody = sentBody2
 				}
 			}
 		}
@@ -163,6 +180,7 @@ func (p *GenericProvider) sendChatRequestImpl(ctx context.Context, messages []ap
 		// Retry with max_completion_tokens for backends that require it
 		retryBody, retryResp, retried, retryErr := p.tryMaxCompletionTokensRetry(sentBody, false, body)
 		if retried {
+			auditFailover = true
 			requestBody = retryBody
 			if retryErr != nil {
 				logging.LogRequestPayloadOnError(requestBody, p.config.Name, currentModel, false,
@@ -172,13 +190,19 @@ func (p *GenericProvider) sendChatRequestImpl(ctx context.Context, messages []ap
 			defer retryResp.Body.Close()
 			if retryResp.StatusCode != http.StatusOK {
 				retryErrBody, _ := io.ReadAll(retryResp.Body)
+				auditRespBody = retryErrBody
 				formattedErr := formatProviderHTTPError(retryResp.StatusCode, retryResp.Header, retryErrBody)
 				logging.LogRequestPayloadOnError(requestBody, p.config.Name, currentModel, false,
 					fmt.Sprintf("api_error_%d", retryResp.StatusCode), formattedErr)
 				return nil, formattedErr
 			}
 
-			retryResponse, err := decodeChatResponseWithCost(retryResp.Body)
+			rawRetry, readErr := io.ReadAll(retryResp.Body)
+			if readErr != nil {
+				return nil, agenterrors.NewNetwork("failed to read response", readErr)
+			}
+			auditRespBody = rawRetry
+			retryResponse, err := decodeChatResponseWithCost(bytes.NewReader(rawRetry))
 			if err != nil {
 				logging.LogRequestPayloadOnError(requestBody, p.config.Name, currentModel, false, "decode_response", err)
 				return nil, agenterrors.NewNetwork("failed to decode response", err)
@@ -187,6 +211,7 @@ func (p *GenericProvider) sendChatRequestImpl(ctx context.Context, messages []ap
 		}
 
 		// Log request on API error
+		auditRespBody = body
 		formattedErr := formatProviderHTTPError(resp.StatusCode, resp.Header, body)
 		logging.LogRequestPayloadOnError(sentBody, p.config.Name, currentModel, false,
 			fmt.Sprintf("api_error_%d", resp.StatusCode), formattedErr)
@@ -195,7 +220,12 @@ func (p *GenericProvider) sendChatRequestImpl(ctx context.Context, messages []ap
 	defer resp.Body.Close()
 
 	// Decode response (skip logging on success to avoid leaking payloads)
-	response, err := decodeChatResponseWithCost(resp.Body)
+	rawResponse, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, agenterrors.NewNetwork("failed to read response", err)
+	}
+	auditRespBody = rawResponse
+	response, err := decodeChatResponseWithCost(bytes.NewReader(rawResponse))
 	if err != nil {
 		// Log request on decode error
 		logging.LogRequestPayloadOnError(requestBody, p.config.Name, currentModel, false, "decode_response", err)

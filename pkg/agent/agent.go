@@ -449,6 +449,11 @@ type Agent struct {
 	// Shutdown may write it from a background goroutine.
 	auditLogger atomic.Pointer[tools.AuditLogger]
 
+	// callAuditSink is the per-call audit sink this agent installed
+	// process-wide (model-call and tool-execution events). Stored atomically
+	// for the same reason as auditLogger; cleared on shutdown.
+	callAuditSink atomic.Pointer[auditSink]
+
 	// queryInProgress guards ProcessQuery against concurrent execution.
 	// When two frontends share the same Agent instance, only one query can run at a time.
 	queryInProgress atomic.Bool

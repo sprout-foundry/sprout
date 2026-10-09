@@ -15,6 +15,7 @@ import (
 	core "github.com/sprout-foundry/seed/core"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/agent_audit"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/verify"
@@ -507,6 +508,16 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 		ctx = context.Background()
 	}
 	runCtx, runCancel := context.WithCancel(ctx)
+
+	// Attach the per-call audit context to the run context: the provider reads
+	// it to stamp model-call events with this chat's identity and whether the
+	// call came from a subagent. It rides the context (not the process-wide
+	// sink) so concurrent agents never clobber each other's session.
+	runCtx = agent_audit.WithCallContext(runCtx, agent_audit.CallContext{
+		ChatID:    a.GetChatID(),
+		SessionID: a.GetSessionID(),
+		Subagent:  a.IsSubagent(),
+	})
 
 	// Steer delivery wiring, phase 2: the deliverer needs the constructed
 	// seed agent. Everything else (provider hook, executor wrapper) was

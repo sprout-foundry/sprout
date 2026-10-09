@@ -18,7 +18,16 @@ import { onPlatformLinkClick, useHomeView } from '../services/homeView';
 
 const REFRESH_MS = 60_000;
 
-const compact = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
+/**
+ * Formats a credit amount the way the platform does: whole credits with
+ * thousands separators ("9,000"), at most one decimal under ten ("8.1"), and
+ * "<0.1" for a positive amount too small to show.
+ */
+export function formatCredits(n: number): string {
+  if (n > 0 && n < 0.05) return '<0.1';
+  if (Math.abs(n) < 10) return String(Math.round(n * 10) / 10);
+  return Math.round(n).toLocaleString('en-US');
+}
 
 export function CreditsChip(): JSX.Element | null {
   const host = useHost();
@@ -79,11 +88,11 @@ export function CreditsChip(): JSX.Element | null {
     <a
       href={summary.linkTarget}
       className={`header-credits-chip${empty ? ' is-empty' : ''}`}
-      title={`${numeric ? remaining.toLocaleString('en-US') : remaining} ${summary.label} remaining — usage and billing`}
+      title={`${numeric ? formatCredits(remaining) : remaining} ${summary.label} remaining — usage and billing`}
       data-testid="header-credits-chip"
       onClick={onPlatformLinkClick(summary.linkTarget)}
     >
-      {numeric ? compact.format(Math.max(remaining, 0)) : remaining} {summary.label}
+      {numeric ? formatCredits(Math.max(remaining, 0)) : remaining} {summary.label}
     </a>
   );
 }

@@ -248,14 +248,98 @@ func BuildFullEnvForServer(serverName string, config *MCPServerConfig) (map[stri
 	return result, nil
 }
 
-// buildAuthHeaders returns HTTP headers to set based on resolved credentials.
-// It iterates through all resolved env/credential values and maps them to HTTP headers:
-// - Authorization or GITHUB_PERSONAL_ACCESS_TOKEN -> "Authorization: Bearer {value}"
-// - Other credentials containing "-" (like X-API-Key, X-Auth-Token) -> header name as-is
-// This allows users to configure arbitrary auth headers for HTTP MCP servers
-// through the credential management UI.
+// buildRequestHeaders returns the HTTP headers to send on every request:
+//  1. The server's configured Headers map (values may be credential
+//     placeholders — {{credential:...}} — which resolve from the store).
+//  2. Auth headers derived from resolved credentials: Authorization or
+//     GITHUB_PERSONAL_ACCESS_TOKEN -> Bearer; hyphenated names
+//     (X-API-Key...) -> a header of the same name. Kept for configs written
+//     before the Headers field existed.
+//  3. A Bearer fallback: a credential named like an API token
+//     (FIGMA_TOKEN, API_KEY...) that would otherwise silently go nowhere
+//     on an HTTP server is sent as "Authorization: Bearer <value>".
+//
+// Explicit Headers always win over derived ones.
+func buildRequestHeaders(serverName string, config *MCPServerConfig) (map[string]string, error) {
+	resolvedEnv, err := BuildFullEnvForServer(serverName, config)
+	if err != nil {
+		return nil, err
+	}
+
+	headers := make(map[string]string)
+
+	// (1) Explicit headers, resolving credential placeholders in values.
+	for name, value := range config.Headers {
+		if value == "" {
+			continue
+		}
+		if IsSecretRef(value) {
+			_, envVarName, ok := ParseSecretRef(value)
+			if !ok {
+				continue
+			}
+			key := CredentialKey(serverName, envVarName)
+			stored, _, getErr := credentials.GetFromActiveBackend(key)
+			if getErr != nil || stored == "" {
+				stored = os.Getenv(envVarName)
+			}
+			if stored == "" {
+				log.Printf("[mcp] header %s for %s references credential %s which is not set", name, serverName, key)
+				continue
+			}
+			value = stored
+		}
+		headers[name] = value
+	}
+
+	derived := make(map[string]string)
+	for envVarName, value := range resolvedEnv {
+		if value == "" {
+			continue
+		}
+
+		envVarUpper := strings.ToUpper(envVarName)
+
+		// Handle Authorization header
+		if envVarUpper == "AUTHORIZATION" || envVarUpper == "GITHUB_PERSONAL_ACCESS_TOKEN" {
+			derived["Authorization"] = "Bearer " + value
+		} else if strings.Contains(envVarUpper, "-") {
+			// Handle header-like env vars (e.g., X-API-Key, X-Auth-Token)
+			// Normalize: convert env var name to HTTP header format
+			// e.g., "X_API_KEY" -> "X-Api-Key", "x_auth_token" -> "X-Auth-Token"
+			headerName := normalizeHeaderName(envVarName)
+			derived[headerName] = value
+		} else if looksLikeTokenEnvVar(envVarUpper) {
+			// (3) Fallback: a token-shaped credential with no header
+			// mapping would otherwise be silently unused by HTTP servers.
+			derived["Authorization"] = "Bearer " + value
+		}
+	}
+
+	for name, value := range derived {
+		if _, exists := headers[name]; !exists {
+			headers[name] = value
+		}
+	}
+
+	return headers, nil
+}
+
+// looksLikeTokenEnvVar reports whether the (uppercased) env var name names a
+// bearer-style API token. Only used for HTTP servers, where a bare env var
+// has no other way to reach the server.
+func looksLikeTokenEnvVar(upper string) bool {
+	switch upper {
+	case "API_TOKEN", "API_KEY", "ACCESS_TOKEN", "AUTH_TOKEN", "BEARER_TOKEN",
+		"MCP_AUTH_TOKEN", "PERSONAL_ACCESS_TOKEN":
+		return true
+	}
+	return strings.HasSuffix(upper, "_TOKEN") || strings.HasSuffix(upper, "_API_KEY")
+}
+
+// buildAuthHeaders is the pre-Headers-field entry point, kept for callers
+// that predate buildRequestHeaders.
 func buildAuthHeaders(serverName string, config *MCPServerConfig) (map[string]string, error) {
-	// Get all resolved environment variables (Env + Credentials)
 	resolvedEnv, err := BuildFullEnvForServer(serverName, config)
 	if err != nil {
 		return nil, err

@@ -33,9 +33,87 @@ func handleMCPRefresh(ctx context.Context, agent *Agent, args map[string]interfa
 		return handleMCPSetCredential(ctx, agent, args)
 	case "remove-credential":
 		return handleMCPRemoveCredential(ctx, agent, args)
+	case "login":
+		return handleMCPLogin(ctx, agent, args)
+	case "logout":
+		return handleMCPLogout(ctx, agent, args)
+	case "oauth-status":
+		return handleMCPOAuthStatus(ctx, agent, args)
 	default:
-		return "", agenterrors.NewInvalidInputError(fmt.Sprintf("unknown operation %q: must be one of: list, refresh, add, remove, set-credential, remove-credential", operation), nil)
+		return "", agenterrors.NewInvalidInputError(fmt.Sprintf("unknown operation %q: must be one of: list, refresh, add, remove, set-credential, remove-credential, login, logout, oauth-status", operation), nil)
 	}
+}
+
+// handleMCPLogin runs the browser OAuth flow for an HTTP MCP server and
+// reconnects it with the new token.
+func handleMCPLogin(ctx context.Context, agent *Agent, args map[string]interface{}) (string, error) {
+	name, err := getMCPStringArg(args, "name")
+	if err != nil {
+		return "", agenterrors.NewInvalidInputError("name is required for login", nil)
+	}
+
+	mgr := agent.mcpSub.GetManager()
+	if mgr == nil {
+		return "", agenterrors.NewAgent("mcp", "MCP manager is not available", nil)
+	}
+	server, exists := mgr.GetServer(name)
+	if !exists {
+		return "", agenterrors.NewNotFoundCause(fmt.Sprintf("MCP server %q", name), nil)
+	}
+	config := server.GetConfig()
+
+	result, err := mcp.StartOAuthLogin(ctx, name, &config)
+	if err != nil {
+		return "", errors.NewTool("mcp", fmt.Sprintf("OAuth login for %s", name), err)
+	}
+
+	// Reconnect so the server picks the token up immediately.
+	if refreshErr := agent.RefreshRuntimeConfig(ctx); refreshErr != nil {
+		result += fmt.Sprintf(" (warning: reconnect failed: %v)", refreshErr)
+	}
+
+	out, _ := json.MarshalIndent(map[string]interface{}{
+		"operation": "login",
+		"status":    "ok",
+		"server":    name,
+		"message":   result,
+	}, "", "  ")
+	return string(out), nil
+}
+
+func handleMCPLogout(ctx context.Context, agent *Agent, args map[string]interface{}) (string, error) {
+	name, err := getMCPStringArg(args, "name")
+	if err != nil {
+		return "", agenterrors.NewInvalidInputError("name is required for logout", nil)
+	}
+	mcp.OAuthLogout(name)
+
+	if refreshErr := agent.RefreshRuntimeConfig(ctx); refreshErr != nil {
+		return "", errors.NewTool("mcp", "refresh after logout", refreshErr)
+	}
+
+	out, _ := json.MarshalIndent(map[string]interface{}{
+		"operation": "logout",
+		"status":    "ok",
+		"server":    name,
+		"message":   fmt.Sprintf("OAuth state for %s cleared; the server will get 401s until the next mcp_refresh login.", name),
+	}, "", "  ")
+	return string(out), nil
+}
+
+func handleMCPOAuthStatus(ctx context.Context, agent *Agent, args map[string]interface{}) (string, error) {
+	name, err := getMCPStringArg(args, "name")
+	if err != nil {
+		return "", agenterrors.NewInvalidInputError("name is required for oauth-status", nil)
+	}
+	loggedIn, detail := mcp.OAuthStatus(name)
+	out, _ := json.MarshalIndent(map[string]interface{}{
+		"operation": "oauth-status",
+		"server":    name,
+		"logged_in": loggedIn,
+		"detail":    detail,
+	}, "", "  ")
+	return string(out), nil
 }
 
 func handleMCPList(agent *Agent) (string, error) {

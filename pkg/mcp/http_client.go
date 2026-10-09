@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/cookiejar"
+	"strings"
 	"sync"
 
 	"github.com/sprout-foundry/sprout/pkg/utils"
@@ -89,7 +90,10 @@ func (c *MCPHTTPClient) GetConfig() MCPServerConfig {
 	return c.config
 }
 
-// sendRequest sends an HTTP request to the MCP server
+// sendRequest sends an HTTP request to the MCP server.
+// The Streamable HTTP transport requires Accept to list both JSON and SSE,
+// and servers may answer either way — an SSE response body is parsed down
+// to its first JSON-RPC message (the one carrying this request's ID).
 func (c *MCPHTTPClient) sendRequest(ctx context.Context, method string, params interface{}) (*MCPMessage, error) {
 	// Only lock for the ID increment, not the entire method
 	c.mu.Lock()
@@ -115,15 +119,27 @@ func (c *MCPHTTPClient) sendRequest(ctx context.Context, method string, params i
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	// Required by the Streamable HTTP transport: the server may answer with
+	// plain JSON or open an SSE stream, and many reject requests that do not
+	// advertise both.
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	req.Header.Set("MCP-Protocol-Version", "2025-06-18")
 
-	// Add auth headers based on resolved credentials
-	if authHeaders, authErr := buildAuthHeaders(c.config.Name, &c.config); authErr != nil {
+	// Configured headers first (explicit wins), then resolved credentials,
+	// then the built-in auth heuristic, then an OAuth token when the server
+	// has a completed login.
+	if headers, headerErr := buildRequestHeaders(c.config.Name, &c.config); headerErr != nil {
 		if c.logger != nil {
-			c.logger.LogProcessStep(fmt.Sprintf("[WARN] Failed to build auth headers for %s: %v", c.config.Name, authErr))
+			c.logger.LogProcessStep(fmt.Sprintf("[WARN] Failed to build request headers for %s: %v", c.config.Name, headerErr))
 		}
 	} else {
-		for headerName, headerValue := range authHeaders {
+		for headerName, headerValue := range headers {
 			req.Header.Set(headerName, headerValue)
+		}
+	}
+	if oauthToken, oauthErr := EnsureFreshAccessToken(ctx, c.config.Name); oauthErr == nil && oauthToken != "" {
+		if req.Header.Get("Authorization") == "" {
+			req.Header.Set("Authorization", "Bearer "+oauthToken)
 		}
 	}
 
@@ -142,23 +158,9 @@ func (c *MCPHTTPClient) sendRequest(ctx context.Context, method string, params i
 	if err != nil {
 		return nil, fmt.Errorf("failed HTTP request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
-	responseBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed HTTP request with status %d: %s", resp.StatusCode, string(responseBody))
-	}
-
-	var response MCPMessage
-	if err := json.Unmarshal(responseBody, &response); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal MCP response: %w", err)
-	}
-
-	// Extract session ID from response header if this is an initialize request
+	// Session ID capture must happen for both response shapes.
 	if method == "initialize" {
 		if sessionID := resp.Header.Get("Mcp-Session-Id"); sessionID != "" {
 			c.mu.Lock()
@@ -170,11 +172,126 @@ func (c *MCPHTTPClient) sendRequest(ctx context.Context, method string, params i
 		}
 	}
 
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	switch {
+	case resp.StatusCode == http.StatusAccepted:
+		// A notification (no ID) — nothing to read back.
+		return &MCPMessage{JSONRPC: "2.0"}, nil
+	case resp.StatusCode == http.StatusUnauthorized:
+		return nil, fmt.Errorf("server %s rejected the request with 401 Unauthorized — this server requires OAuth (use mcp_refresh login) or a credential the server accepts (check the Authorization/X-*-Token headers)", c.config.Name)
+	case resp.StatusCode == http.StatusNotFound && method == "initialize":
+		return nil, fmt.Errorf("server %s returned 404 for %s — the MCP endpoint path may be wrong (e.g. /mcp vs /sse)", c.config.Name, c.config.URL)
+	case resp.StatusCode != http.StatusOK:
+		return nil, fmt.Errorf("failed HTTP request with status %d: %s", resp.StatusCode, string(responseBody))
+	}
+
+	var response *MCPMessage
+	if strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") {
+		response, err = parseSSEResponse(responseBody, id)
+	} else {
+		response, err = parseJSONResponse(responseBody)
+	}
+	if err != nil {
+		return nil, err
+	}
+
 	if response.Error != nil {
 		return nil, fmt.Errorf("MCP error %d: %w", response.Error.Code, response.Error)
 	}
 
+	return response, nil
+}
+
+// sendNotification sends an id-less JSON-RPC notification. Servers answer
+// 202 Accepted; any 2xx is success, and errors are returned but non-fatal
+// callers decide.
+func (c *MCPHTTPClient) sendNotification(ctx context.Context, method string) (*MCPMessage, error) {
+	request := MCPMessage{
+		JSONRPC: "2.0",
+		Method:  method,
+	}
+
+	jsonData, err := json.Marshal(request)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal notification: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", c.config.URL, bytes.NewReader(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+
+	if headers, headerErr := buildRequestHeaders(c.config.Name, &c.config); headerErr == nil {
+		for headerName, headerValue := range headers {
+			req.Header.Set(headerName, headerValue)
+		}
+	}
+	if oauthToken, oauthErr := EnsureFreshAccessToken(ctx, c.config.Name); oauthErr == nil && oauthToken != "" {
+		if req.Header.Get("Authorization") == "" {
+			req.Header.Set("Authorization", "Bearer "+oauthToken)
+		}
+	}
+
+	c.mu.RLock()
+	if c.sessionID != "" {
+		req.Header.Set("Mcp-Session-Id", c.sessionID)
+	}
+	c.mu.RUnlock()
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed HTTP request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	_, _ = io.Copy(io.Discard, resp.Body)
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return nil, fmt.Errorf("notification %s rejected with status %d", method, resp.StatusCode)
+	}
+	return &MCPMessage{JSONRPC: "2.0"}, nil
+}
+
+// parseJSONResponse decodes a single JSON-RPC message body.
+func parseJSONResponse(body []byte) (*MCPMessage, error) {
+	var response MCPMessage
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal MCP response: %w", err)
+	}
 	return &response, nil
+}
+
+// parseSSEResponse extracts the JSON-RPC response with the matching ID from
+// an SSE stream body. Per the Streamable HTTP spec the response stream
+// carries "data:" frames, each a JSON-RPC message; a request's response is
+// the frame whose id matches. Server-pushed requests (no id) and unrelated
+// notifications are skipped.
+func parseSSEResponse(body []byte, wantID int64) (*MCPMessage, error) {
+	for _, line := range strings.Split(string(body), "\n") {
+		line = strings.TrimRight(line, "\r")
+		payload, ok := strings.CutPrefix(line, "data:")
+		if !ok {
+			continue // event/id/retry fields and comments are irrelevant here
+		}
+		payload = strings.TrimLeft(payload, " ")
+
+		var msg MCPMessage
+		if err := json.Unmarshal([]byte(payload), &msg); err != nil {
+			continue // not a JSON-RPC frame (keepalive, comment, custom event)
+		}
+		if msg.ID == nil {
+			continue // server-initiated request or notification
+		}
+		if idNum, ok := msg.ID.(float64); ok && int64(idNum) == wantID {
+			return &msg, nil
+		}
+	}
+	return nil, fmt.Errorf("SSE response carried no reply for request id %d", wantID)
 }
 
 // Initialize sends initialize request to the server
@@ -210,7 +327,13 @@ func (c *MCPHTTPClient) Initialize(ctx context.Context) error {
 		return fmt.Errorf("initialize request failed: %w", err)
 	}
 
-	// Session ID extraction happens in sendRequest now
+	// The Streamable HTTP handshake: after initialize, the client must
+	// notify the server before calling tools. Servers that enforce the
+	// sequence reject tools/list with "Server not initialized" otherwise.
+	_, err = c.sendNotification(ctx, "notifications/initialized")
+	if err != nil {
+		return fmt.Errorf("initialized notification failed: %w", err)
+	}
 
 	// Set initialized state with lock
 	c.mu.Lock()

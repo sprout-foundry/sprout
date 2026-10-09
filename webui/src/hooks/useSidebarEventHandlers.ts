@@ -64,9 +64,10 @@ export function useSidebarEventHandlers({
     const handleReveal = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       const filePath = detail?.path;
-      if (!filePath) return;
 
-      // Switch to files tab — uncollapse if needed
+      // Switch to files tab — uncollapse if needed. An empty path (reveal
+      // fired with no active file) still gets the switch: the command is
+      // "Toggle File Explorer", so showing the file list IS the action.
       if (effectiveSidebarCollapsed) {
         onSectionChange?.('files');
         onSidebarToggle?.();

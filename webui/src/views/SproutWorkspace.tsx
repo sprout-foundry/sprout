@@ -5,11 +5,14 @@ import { HostProvider, useHost } from '../host';
 import type { SproutHost } from '../host';
 import { SproutProviders } from '../providers';
 import { applyHostThemeOverrides, clearHostThemeOverrides, resolveHostThemeOverrides } from '../themes/hostTheme';
+import type { AppState } from '../types/app';
 import { resolveWorkspaceMode } from '../workspaces/registry';
 import type { WorkspaceModeContext, WorkspaceModeId } from '../workspaces/registry';
 import type { WorkspaceShellProps } from '../workspaces/shell';
+import { useSproutWorkspaceChatTransport, useSproutWorkspaceViewProps } from './SproutWorkspaceChat';
 import { ViewsLayout } from './ViewsLayout';
-import type { ViewsArrangement } from './ViewsLayout';
+import type { ViewsArrangement, ViewKind } from './ViewsLayout';
+import { WorkspaceChatProvider } from './WorkspaceChatContext';
 
 /**
  * SproutWorkspace — mount one project's workspace behind a single component.
@@ -119,6 +122,33 @@ export interface SproutWorkspaceProps {
    */
   layout?: ViewsArrangement;
   /**
+   * Per-kind props for the arranged views, keyed by view kind. They are merged
+   * over the props the composition assembles: in own mode the composition
+   * supplies a live `chat` (the chat unit's assembled view props), and a kind
+   * the host supplies here REPLACES the assembled props for that kind — a host
+   * composing its own chat surface passes its own `chat` props and the
+   * assembled ones are dropped. The `changes` view self-fetches and is left
+   * with no assembled props. In ambient mode the caller owns the stack and its
+   * chat, so these are passed to the layout as-is. Only meaningful with
+   * `layout`.
+   */
+  viewProps?: Partial<Record<ViewKind, object>>;
+  /**
+   * The chat state the composed chat starts from. Omitted, an empty chat (no
+   * transcript, no sessions); a host that persists or restores its own chat
+   * state supplies that here. It must be referentially stable — the chat store
+   * is created once per identity, so a fresh object each render would reset the
+   * transcript. Only meaningful with `layout`.
+   */
+  chatInitialState?: AppState;
+  /**
+   * The fetch the composed chat's calls go through. Omitted, the web UI's
+   * adapter-aware `clientFetch`; a host that routes chat through its own
+   * transport (the same one its events provider uses) supplies it here. Only
+   * meaningful with `layout`.
+   */
+  chatFetch?: typeof fetch;
+  /**
    * Called with the resolved space id whenever the mounted space changes after
    * the initial mount. Not called on the initial mount (there is no change
    * yet). See the component note for the exact contract.
@@ -207,6 +237,9 @@ export function SproutWorkspace({
   host,
   providers = 'own',
   layout,
+  viewProps,
+  chatInitialState,
+  chatFetch,
   onSpaceChange,
   shellProps,
   hasDesignTree,
@@ -236,12 +269,6 @@ export function SproutWorkspace({
 
   const rootClass = className ? `sprout-workspace ${className}` : 'sprout-workspace';
 
-  const content = layout ? (
-    <ViewsLayout arrangement={layout} className="sprout-workspace__layout" />
-  ) : (
-    <ResolvedSpaceShell Shell={resolved.Shell} shellProps={shellProps} />
-  );
-
   // A host that supplies both is confused: `layout` replaces the space's
   // registered shell, so `shellProps` is ignored. Warn once per instance
   // rather than silently dropping the props.
@@ -268,6 +295,30 @@ export function SproutWorkspace({
     );
   }
 
+  // The chat a composed workspace mounts. Only own mode builds it: the
+  // space-shell path takes its chat through `shellProps`, and ambient mode
+  // must not build a second provider stack (whose transport would double-
+  // subscribe the events the caller already routes) — there the caller owns
+  // the chat unit and supplies any view props it wants.
+  const chatTransport = useSproutWorkspaceChatTransport({ initialState: chatInitialState, fetchFn: chatFetch });
+
+  let content: ReactNode;
+  if (layout && !ambient) {
+    content = (
+      <WorkspaceChatProvider
+        initialState={chatTransport.initialState}
+        eventsProvider={chatTransport.eventsProvider}
+        fetchFn={chatTransport.fetchFn}
+      >
+        <ArrangedViews arrangement={layout} viewProps={viewProps} />
+      </WorkspaceChatProvider>
+    );
+  } else if (layout) {
+    content = <ViewsLayout arrangement={layout} props={viewProps} className="sprout-workspace__layout" />;
+  } else {
+    content = <ResolvedSpaceShell Shell={resolved.Shell} shellProps={shellProps} />;
+  }
+
   const root = (
     <WorkspaceRoot rootClass={rootClass} projectId={project.id} spaceId={resolved.id}>
       {content}
@@ -279,9 +330,27 @@ export function SproutWorkspace({
 
   return (
     <HostProvider host={host}>
-      <SproutProviders wasmBase={wasmBase}>{root}</SproutProviders>
+      <SproutProviders eventsProvider={chatTransport.eventsProvider} wasmBase={wasmBase}>
+        {root}
+      </SproutProviders>
     </HostProvider>
   );
+}
+
+/**
+ * The arranged views, rendered inside the chat unit so the chat's assembled
+ * props are available. Split from `SproutWorkspace` because the props assembly
+ * reads the chat state, which only exists below `WorkspaceChatProvider`.
+ */
+function ArrangedViews({
+  arrangement,
+  viewProps,
+}: {
+  arrangement: ViewsArrangement;
+  viewProps?: Partial<Record<ViewKind, object>>;
+}): JSX.Element {
+  const props = useSproutWorkspaceViewProps(viewProps);
+  return <ViewsLayout arrangement={arrangement} props={props} className="sprout-workspace__layout" />;
 }
 
 /**
@@ -343,6 +412,13 @@ function WorkspaceRoot({
  * without the app-supplied props renders against the empty defaults so the
  * surface exists without crashing on undefined state; a host that mounts a
  * space for real supplies `shellProps`.
+ *
+ * The `chat` entry of those defaults is deliberately an empty stub: the
+ * space-shell path takes its chat through `shellProps`, so a shell mounted
+ * bare renders a disabled chat rather than reaching for a chat unit that is
+ * not mounted on this path. The layout path does not use these defaults — its
+ * chat comes from the chat unit — so the stub is only ever the non-layout
+ * fallback.
  */
 function ResolvedSpaceShell({
   Shell,

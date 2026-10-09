@@ -180,7 +180,12 @@ export type { SproutWorkspaceProps, SproutProject } from './SproutWorkspace';
 // mounts `WorkspaceChatProvider` with a fetch function and an events provider
 // and reads the chat through `useWorkspaceChat()` / `useWorkspaceChatProps()`;
 // the standalone app mounts it with its own transport, unchanged.
-export { WorkspaceChatProvider, useWorkspaceChat, useWorkspaceChatProps } from './WorkspaceChatContext';
+export {
+  WorkspaceChatProvider,
+  useWorkspaceChat,
+  useWorkspaceChatProps,
+  createEmptyChatState,
+} from './WorkspaceChatContext';
 export type {
   WorkspaceChatProviderProps,
   WorkspaceChatValue,

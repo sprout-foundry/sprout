@@ -143,6 +143,7 @@ const ENTRIES = [
       "WorkspaceChatProviderProps",
       "useWorkspaceChat",
       "useWorkspaceChatProps",
+      "createEmptyChatState",
       "WorkspaceChatValue",
       "WorkspaceChatRefs",
       "WorkspaceChatViewProps",

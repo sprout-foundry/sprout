@@ -20,6 +20,12 @@ export interface UseModelProviderHandlersOptions {
   /** Shared refs for tracking pending provider changes across hooks. */
   pendingProviderChangeRef?: MutableRefObject<boolean>;
   pendingProviderChangeValueRef?: MutableRefObject<string | null>;
+  /**
+   * The shared pending-provider ref. Supplied, the hook writes into this
+   * instance (so a consumer that already holds it — the chat unit's event
+   * reducer — sees the write immediately); omitted, the hook owns one.
+   */
+  pendingProviderRef?: MutableRefObject<string>;
 }
 
 export interface UseModelProviderHandlersReturn {
@@ -35,10 +41,12 @@ export function useModelProviderHandlers({
   setState,
   pendingProviderChangeRef,
   pendingProviderChangeValueRef,
+  pendingProviderRef: pendingProviderRefProp,
 }: UseModelProviderHandlersOptions): UseModelProviderHandlersReturn {
   const events = useEvents();
 
-  const pendingProviderRef = useRef<string>(state.provider);
+  const ownedPendingProviderRef = useRef<string>(state.provider);
+  const pendingProviderRef = pendingProviderRefProp ?? ownedPendingProviderRef;
   const providerRef = useRef(state.provider);
   providerRef.current = state.provider;
 

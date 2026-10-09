@@ -73,6 +73,12 @@ export interface UseWebSocketEventHandlerParams {
   setState: AppStoreSetState;
   refs: UseWebSocketEventHandlerRefs;
   apiService: { getStats: () => Promise<unknown> };
+  /**
+   * The fetch the reconnect message-reload goes through. Omitted, the app's
+   * adapter-aware `clientFetch`; an embedding supplies its own so the reload
+   * reaches its backend.
+   */
+  fetchFn?: typeof fetch;
 }
 
 export interface UseWebSocketEventHandlerReturn {
@@ -88,6 +94,7 @@ export function useWebSocketEventHandler({
   setState,
   refs,
   apiService,
+  fetchFn,
 }: UseWebSocketEventHandlerParams): UseWebSocketEventHandlerReturn {
   const {
     activeRequestsRef,
@@ -427,7 +434,7 @@ export function useWebSocketEventHandler({
             // Read-only reload: a switchChatSession here would re-broadcast
             // session_changed("switch") and risk the same echo-reload loop the
             // session_changed handler avoids.
-            fetchChatSessionMessages(chatId)
+            fetchChatSessionMessages(chatId, fetchFn)
               .then((response) => {
                 // Bail if user switched chats while we were loading.
                 if (activeChatIdRef.current !== chatId) return;
@@ -454,7 +461,7 @@ export function useWebSocketEventHandler({
         // (or a stale closure) still ends with a clean banner.
         setState((prev) => ({ ...prev, lastError: null }));
       });
-  }, [apiService, activeRequestsRef, setState]);
+  }, [apiService, activeRequestsRef, setState, fetchFn]);
 
   // Events a chat received in the background, replayed when it comes back on
   // screen: the cached state plus these is exactly its current state.

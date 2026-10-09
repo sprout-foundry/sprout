@@ -66,8 +66,41 @@ export interface WorktreeListResponse {
   current: string;
 }
 
-export async function listChatSessions(): Promise<ChatSessionsResponse> {
-  const res = await clientFetch('/api/chat-sessions');
+/**
+ * The chat-session endpoints, parameterised by the fetch they go through.
+ * The standalone app leaves `fetchFn` at the default (`clientFetch`, the
+ * adapter-aware transport); an embedding supplies its own so the session
+ * calls reach the host's backend.
+ */
+export interface ChatSessionsApi {
+  listChatSessions: () => Promise<ChatSessionsResponse>;
+  createChatSession: (
+    name?: string,
+    mode?: 'code' | 'design',
+  ) => Promise<{ message: string; chat_session: ChatSession }>;
+  deleteChatSession: (
+    id: string,
+    shouldRemoveWorktree?: boolean,
+  ) => Promise<{ message: string; worktree_removed?: boolean; worktree_error?: string }>;
+  deleteAllChatSessions: () => Promise<{ message: string; deleted_count: number; active_chat_id: string }>;
+  renameChatSession: (id: string, name: string) => Promise<{ message: string; chat_session: ChatSession }>;
+  switchChatSession: (id: string, mode?: 'code' | 'design') => Promise<ChatSessionSwitchResponse>;
+  createChatSessionInWorktree: (req: {
+    branch: string;
+    base_ref?: string;
+    name?: string;
+    auto_switch_workspace?: boolean;
+  }) => Promise<{
+    message: string;
+    chat_session: ChatSessionSwitchResponse['chat_session'];
+    worktree_path: string;
+    branch: string;
+    workspace_root: string;
+  }>;
+}
+
+export async function listChatSessions(fetchFn: typeof fetch = clientFetch): Promise<ChatSessionsResponse> {
+  const res = await fetchFn('/api/chat-sessions');
   if (!res.ok) throw new Error('Failed to list chat sessions');
   return res.json();
 }
@@ -75,8 +108,9 @@ export async function listChatSessions(): Promise<ChatSessionsResponse> {
 export async function createChatSession(
   name?: string,
   mode?: 'code' | 'design',
+  fetchFn: typeof fetch = clientFetch,
 ): Promise<{ message: string; chat_session: ChatSession }> {
-  const res = await clientFetch('/api/chat-sessions/create', {
+  const res = await fetchFn('/api/chat-sessions/create', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ...(name ? { name } : {}), ...(mode ? { mode } : {}) }),
@@ -88,8 +122,9 @@ export async function createChatSession(
 export async function deleteChatSession(
   id: string,
   shouldRemoveWorktree = false,
+  fetchFn: typeof fetch = clientFetch,
 ): Promise<{ message: string; worktree_removed?: boolean; worktree_error?: string }> {
-  const res = await clientFetch('/api/chat-sessions/delete', {
+  const res = await fetchFn('/api/chat-sessions/delete', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id, remove_worktree: shouldRemoveWorktree }),
@@ -98,12 +133,12 @@ export async function deleteChatSession(
   return res.json();
 }
 
-export async function deleteAllChatSessions(): Promise<{
+export async function deleteAllChatSessions(fetchFn: typeof fetch = clientFetch): Promise<{
   message: string;
   deleted_count: number;
   active_chat_id: string;
 }> {
-  const res = await clientFetch('/api/chat-sessions/delete-all', { method: 'POST' });
+  const res = await fetchFn('/api/chat-sessions/delete-all', { method: 'POST' });
   if (!res.ok) throw new Error('Failed to delete all chat sessions');
   return res.json();
 }
@@ -111,8 +146,9 @@ export async function deleteAllChatSessions(): Promise<{
 export async function renameChatSession(
   id: string,
   name: string,
+  fetchFn: typeof fetch = clientFetch,
 ): Promise<{ message: string; chat_session: ChatSession }> {
-  const res = await clientFetch('/api/chat-sessions/rename', {
+  const res = await fetchFn('/api/chat-sessions/rename', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id, name }),
@@ -121,8 +157,12 @@ export async function renameChatSession(
   return res.json();
 }
 
-export async function switchChatSession(id: string, mode?: 'code' | 'design'): Promise<ChatSessionSwitchResponse> {
-  const res = await clientFetch('/api/chat-sessions/switch', {
+export async function switchChatSession(
+  id: string,
+  mode?: 'code' | 'design',
+  fetchFn: typeof fetch = clientFetch,
+): Promise<ChatSessionSwitchResponse> {
+  const res = await fetchFn('/api/chat-sessions/switch', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(mode ? { id, mode } : { id }),
@@ -137,10 +177,30 @@ export async function switchChatSession(id: string, mode?: 'code' | 'design'): P
  * while the active chat streams elsewhere. Shape matches switch so the
  * same message-mapping code applies.
  */
-export async function fetchChatSessionMessages(id: string): Promise<ChatSessionSwitchResponse> {
-  const res = await clientFetch(`/api/chat-sessions/messages?chat_id=${encodeURIComponent(id)}`);
+export async function fetchChatSessionMessages(
+  id: string,
+  fetchFn: typeof fetch = clientFetch,
+): Promise<ChatSessionSwitchResponse> {
+  const res = await fetchFn(`/api/chat-sessions/messages?chat_id=${encodeURIComponent(id)}`);
   if (!res.ok) throw new Error('Failed to fetch chat session messages');
   return res.json();
+}
+
+/**
+ * Bind the chat-session endpoints to one fetch. The chat unit calls this
+ * once with the fetch it was given, so every session call goes through the
+ * same transport.
+ */
+export function createChatSessionsApi(fetchFn: typeof fetch): ChatSessionsApi {
+  return {
+    listChatSessions: () => listChatSessions(fetchFn),
+    createChatSession: (name, mode) => createChatSession(name, mode, fetchFn),
+    deleteChatSession: (id, shouldRemoveWorktree) => deleteChatSession(id, shouldRemoveWorktree, fetchFn),
+    deleteAllChatSessions: () => deleteAllChatSessions(fetchFn),
+    renameChatSession: (id, name) => renameChatSession(id, name, fetchFn),
+    switchChatSession: (id, mode) => switchChatSession(id, mode, fetchFn),
+    createChatSessionInWorktree: (req) => createChatSessionInWorktree(req, fetchFn),
+  };
 }
 
 export async function getChatSessionWorktree(
@@ -241,19 +301,22 @@ export async function checkoutWorktree(path: string): Promise<{ message: string;
   return res.json();
 }
 
-export async function createChatSessionInWorktree(req: {
-  branch: string;
-  base_ref?: string;
-  name?: string;
-  auto_switch_workspace?: boolean;
-}): Promise<{
+export async function createChatSessionInWorktree(
+  req: {
+    branch: string;
+    base_ref?: string;
+    name?: string;
+    auto_switch_workspace?: boolean;
+  },
+  fetchFn: typeof fetch = clientFetch,
+): Promise<{
   message: string;
   chat_session: ChatSessionSwitchResponse['chat_session'];
   worktree_path: string;
   branch: string;
   workspace_root: string;
 }> {
-  const res = await clientFetch('/api/chat-sessions/create-in-worktree', {
+  const res = await fetchFn('/api/chat-sessions/create-in-worktree', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(req),

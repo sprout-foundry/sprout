@@ -95,6 +95,48 @@ React and React DOM are peer dependencies; the host provides them. Heavy
 parts (the editor, the in-browser agent, space-specific code) load when a
 space opens, not when the package is imported.
 
+## The chat unit
+
+The chat surface is the most stateful part of a workspace, so it ships as one
+reusable unit rather than a view a host has to feed by hand. `./views` exports
+`WorkspaceChatProvider`, `useWorkspaceChat()` and `useWorkspaceChatProps()`:
+
+```tsx
+import {
+  WorkspaceChatProvider,
+  useWorkspaceChatProps,
+} from "@sprout-foundry/workspace/views";
+
+<WorkspaceChatProvider
+  initialState={initialState}
+  eventsProvider={events}
+  fetchFn={myFetch}
+>
+  <MyChatSurface />
+</WorkspaceChatProvider>;
+```
+
+The provider takes only what a chat needs to reach a backend — a `fetch`
+function and an events provider — and owns everything else: the chat store
+(the transcript, `isProcessing`, `lastError`, tool executions, query progress,
+file edits, stats, subagent activities, output verbosity, the per-chat cache,
+the session list and the queue), the WebSocket event reducer, the chat session
+manager (list/create/switch/delete/rename) and the send/queue operations. It
+subscribes the events provider to the reducer itself, so a host hands over its
+transport and nothing else.
+
+- `useWorkspaceChat()` reads the unit: `state`, `setState`, `handleEvent`,
+  `handleReconnect` and the `chat` session manager. A host composing its own
+  chat surface uses these directly.
+- `useWorkspaceChatProps(overrides)` assembles the `chatProps`, `reviewProps`
+  and `diffState` the `ChatView` renders from, mapping the queue to the active
+  chat. The `overrides` carry the app-specific callbacks that are not chat
+  state (opening a review buffer, the model picker, session restore, fork).
+
+The standalone app mounts the provider with its own `clientFetch` and
+`LocalEventsProvider`, so its behaviour is unchanged; a host mounts it with
+its host's transport.
+
 The `./views` and `./providers` subpaths each ship their own self-contained
 type declarations (`dist/views.d.ts`, `dist/providers.d.ts`), so importing
 `SproutWorkspace` or `SproutProviders` type-checks from `dist/` alone —

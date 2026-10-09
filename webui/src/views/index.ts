@@ -175,6 +175,22 @@ export type { WasmAssets, WasmAssetsProviderProps } from '../contexts/WasmAssets
 export { SproutWorkspace } from './SproutWorkspace';
 export type { SproutWorkspaceProps, SproutProject } from './SproutWorkspace';
 
+// The chat unit: the chat state, its WebSocket event reducer, the chat
+// session manager and the queue, plus the chat/review/diff view props. A host
+// mounts `WorkspaceChatProvider` with a fetch function and an events provider
+// and reads the chat through `useWorkspaceChat()` / `useWorkspaceChatProps()`;
+// the standalone app mounts it with its own transport, unchanged.
+export { WorkspaceChatProvider, useWorkspaceChat, useWorkspaceChatProps } from './WorkspaceChatContext';
+export type {
+  WorkspaceChatProviderProps,
+  WorkspaceChatValue,
+  WorkspaceChatRefs,
+  WorkspaceChatViewProps,
+  WorkspaceChatPropsOverrides,
+  WorkspaceChatReviewProps,
+  WorkspaceChatDiffState,
+} from './WorkspaceChatContext';
+
 // The space shell contract a host supplies through SproutWorkspace's
 // `shellProps` (the data the app root assembles today), so mounting a space's
 // registered shell is typed from this one entry point.

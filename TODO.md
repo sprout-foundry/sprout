@@ -19,7 +19,7 @@ one above. Validation gate as for the host-contract lane (package build +
 `docs/__tests__/workspace-package.test.js`, type-check, prettier on changed
 files, the vitest files the item touched; any `.go` change → the full gate).
 
-- [ ] **hc.1** Extract the chat state into the package. Move the chat slice
+- [x] **hc.1** Extract the chat state into the package. Move the chat slice
       of `AppStore`, `useWebSocketEventHandler` (+ `hooks/wsHandlers/*`),
       `useChatSessionManager`, the queue ops and the `chatProps` /
       `reviewProps` / `diffState` assembly (`AppContent.tsx` around the

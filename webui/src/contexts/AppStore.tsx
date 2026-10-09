@@ -37,7 +37,7 @@ export type AppStoreSetState = (updater: (prev: AppState) => Partial<AppState>) 
  * allowing useSyncExternalStore to skip re-renders for components that only
  * subscribe to those fields.
  */
-class AppStore {
+export class AppStore {
   private state: AppState;
   private listeners: Set<() => void>;
   /** Stable bound subscribe function — avoids creating new functions on each access. */
@@ -128,7 +128,13 @@ const AppStoreContext = createContext<AppStore | null>(null);
 // ── Provider Component ────────────────────────────────────────────────────
 
 export interface AppStoreProviderProps {
-  initialState: AppState;
+  initialState?: AppState;
+  /**
+   * An already-created store. When supplied, `initialState` is ignored and
+   * this instance is used — a unit that owns the store (the chat provider)
+   * passes it so its own hooks and the app's consumers share one store.
+   */
+  store?: AppStore;
   children: ReactNode;
 }
 
@@ -142,8 +148,16 @@ export interface AppStoreProviderProps {
  * </AppStoreProvider>
  * ```
  */
-export function AppStoreProvider({ initialState, children }: AppStoreProviderProps): React.JSX.Element {
-  const store = useMemo(() => createAppStore(initialState), [initialState]);
+export function AppStoreProvider({
+  initialState,
+  store: storeProp,
+  children,
+}: AppStoreProviderProps): React.JSX.Element {
+  const created = useMemo(() => (initialState ? createAppStore(initialState) : null), [initialState]);
+  const store = storeProp ?? created;
+  if (!store) {
+    throw new Error('AppStoreProvider requires either `initialState` or `store`');
+  }
 
   return createElement(AppStoreContext.Provider, { value: store }, children);
 }

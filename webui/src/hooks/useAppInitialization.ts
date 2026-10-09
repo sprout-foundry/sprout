@@ -44,6 +44,13 @@ export interface UseAppInitializationOptions {
   setState: AppStoreSetState;
   /** Reconnect handler that recovers stuck processing state after WebSocket reconnection. */
   handleReconnect: () => void;
+  /**
+   * Whether this hook registers the event/reconnect callbacks with the
+   * transport. Defaults to true (the app's historical behavior). When the
+   * chat unit owns the subscription (`WorkspaceChatProvider`), the app passes
+   * false so events are not delivered twice; the hook still connects.
+   */
+  manageEventSubscription?: boolean;
 }
 
 export function useAppInitialization({
@@ -55,6 +62,7 @@ export function useAppInitialization({
   setIsTablet,
   setState,
   handleReconnect,
+  manageEventSubscription = true,
 }: UseAppInitializationOptions): void {
   const { workspaceSwitching: supportsWorkspaceSwitching } = useHostCapabilities();
   // host.8: the hosted build's agent runs in the browser (WASM shell + browser
@@ -100,8 +108,10 @@ export function useAppInitialization({
 
       // Initialize WebSocket connection
       eventsProvider.connect();
-      eventsProvider.onEvent(handleEvent);
-      eventsProvider.onReconnect(handleReconnect);
+      if (manageEventSubscription) {
+        eventsProvider.onEvent(handleEvent);
+        eventsProvider.onReconnect(handleReconnect);
+      }
 
       // ── Cloud mode: eagerly preload the WASM shell ──────────────
       // In cloud mode the WASM shell (44 MB) must be compiled and
@@ -518,8 +528,10 @@ export function useAppInitialization({
         if (timeoutId) {
           clearTimeout(timeoutId);
         }
-        eventsProvider.removeEvent(handleEvent);
-        eventsProvider.onReconnect(null);
+        if (manageEventSubscription) {
+          eventsProvider.removeEvent(handleEvent);
+          eventsProvider.onReconnect(null);
+        }
         window.removeEventListener('resize', checkBreakpoints);
         clearInterval(statsInterval);
       };

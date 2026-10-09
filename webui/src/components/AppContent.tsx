@@ -1,15 +1,13 @@
 import type { TodoItem, LogEntry } from '@sprout/ui';
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { useHost, useHostCapabilities } from '../host';
-import { useAppStateField, useAppStoreSetState } from '../contexts/AppStore';
+import { useAppStoreSetState } from '../contexts/AppStore';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { useSproutFetch } from '../contexts/SproutAdapterContext';
 import { useActiveChatTab } from '../hooks/useActiveChatTab';
 import { useAppContentHotkeys } from '../hooks/useAppContentHotkeys';
-import type { QueuedMessage } from '../hooks/useChatSessionManager';
 import { useChatSessionsSync } from '../hooks/useChatSessionsSync';
-import { useCurrentTodos } from '../hooks/useCurrentTodos';
 import { getPluginViewIds } from '../services/pluginRegistry';
 import {
   loadRecentFiles,
@@ -37,7 +35,7 @@ import { fuzzyFilter } from '../utils/fuzzyMatch';
 import { useLog } from '../utils/log';
 import { extractSymbols } from '../utils/symbolUtils';
 import type { WorkspaceModeId, WorkspaceShellProps } from '../views';
-import { SproutWorkspace, useWorkspaceMode } from '../views';
+import { SproutWorkspace, useWorkspaceMode, useWorkspaceChatProps } from '../views';
 import { useDesignSectionPersistence } from '../workspaces/useDesignSectionPersistence';
 import CommandPalette, { type PaletteMode } from './CommandPalette';
 import { visibleCommands } from './CommandPalette/constants';
@@ -86,17 +84,6 @@ interface AppContentProps {
   onViewChange: (view: ViewType) => void;
   onModelChange: (model: string) => void;
   onProviderChange: (provider: string) => void;
-  onSendMessage: (message: string) => void;
-  onQueueMessage: (message: string) => void;
-  onQueueMessageRemove: (index: number) => void;
-  onQueueMessageEdit: (index: number, newText: string) => void;
-  onQueueReorder: (fromIndex: number, toIndex: number) => void;
-  onClearQueuedMessages: () => void;
-  onStopProcessing: () => void;
-  onRetractSteer: () => boolean | Promise<boolean>;
-  /** Queue entries (message + originating chat); mapped to strings for the shared panel. */
-  queuedMessages: QueuedMessage[];
-  queuedMessagesCount: number;
   onGitCommit: (message: string, files: string[]) => Promise<unknown>;
   onGitAICommit: () => Promise<{ commitMessage: string; warnings?: string[] }>;
   onGitStage: (files: string[]) => Promise<void>;
@@ -147,15 +134,6 @@ const AppContent: React.FC<AppContentProps> = ({
   onViewChange,
   onModelChange,
   onProviderChange,
-  onSendMessage,
-  onQueueMessage,
-  onQueueMessageRemove,
-  onQueueMessageEdit,
-  onQueueReorder,
-  onClearQueuedMessages,
-  onStopProcessing,
-  onRetractSteer,
-  queuedMessages,
   onGitCommit,
   onGitAICommit,
   onGitStage,
@@ -202,7 +180,6 @@ const AppContent: React.FC<AppContentProps> = ({
   } = useEditorManager();
   const apiService = ApiService.getInstance();
   const sproutFetch = useSproutFetch();
-  const currentTodos = useCurrentTodos(state.currentTodos, state.toolExecutions);
   // SP-130: home-directory gate. `useWorkspace` fetches workspace metadata
   // (is_project, needs_workspace_selection, workspace_is_home, …). When the
   // resolved workspace is the user's home directory without consent, a
@@ -339,24 +316,6 @@ const AppContent: React.FC<AppContentProps> = ({
     },
     [openWorkspaceBuffer],
   );
-
-  // Read inputValue from the store (not via props) so typing doesn't
-  // re-render AppInner and cascade prop-references to children.
-  const inputValue = useAppStateField('inputValue');
-
-  const setInputValue = useCallback(
-    (updater: React.SetStateAction<string>) => {
-      setAppState((prev) => {
-        const nextValue = typeof updater === 'function' ? updater(prev.inputValue) : updater;
-        return { inputValue: nextValue };
-      });
-    },
-    [setAppState],
-  );
-
-  const handleDismissBusy = useCallback(() => {
-    setAppState((prev) => ({ ...prev, workspaceBusy: null }));
-  }, [setAppState]);
 
   // Opens the ModelSelectionModal for the currently active provider when
   // the user clicks the model name in the status bar. The modal handles
@@ -961,119 +920,21 @@ const AppContent: React.FC<AppContentProps> = ({
     [activeChatId, isForking, setAppState],
   );
 
-  // The queue holds every chat's held-back messages; the composer shows (and
-  // edits) only this chat's, so its actions translate back to queue positions.
-  const chatQueue = useMemo(() => {
-    const positions: number[] = [];
-    queuedMessages.forEach((entry, i) => {
-      if (!entry.chatId || entry.chatId === activeChatId) positions.push(i);
-    });
-    return {
-      messages: positions.map((i) => queuedMessages[i].message),
-      remove: (index: number) => {
-        if (positions[index] !== undefined) onQueueMessageRemove(positions[index]);
-      },
-      edit: (index: number, text: string) => {
-        if (positions[index] !== undefined) onQueueMessageEdit(positions[index], text);
-      },
-      reorder: (from: number, to: number) => {
-        if (positions[from] !== undefined && positions[to] !== undefined) {
-          onQueueReorder(positions[from], positions[to]);
-        }
-      },
-      clear: () => {
-        if (positions.length === queuedMessages.length) {
-          onClearQueuedMessages();
-          return;
-        }
-        for (const i of [...positions].reverse()) onQueueMessageRemove(i);
-      },
-    };
-  }, [queuedMessages, activeChatId, onQueueMessageRemove, onQueueMessageEdit, onQueueReorder, onClearQueuedMessages]);
-
-  const chatProps = useMemo(
-    () => ({
-      messages: state.messages,
-      onSendMessage,
-      onQueueMessage,
-      onQueueMessageRemove: chatQueue.remove,
-      onQueueMessageEdit: chatQueue.edit,
-      onQueueReorder: chatQueue.reorder,
-      onClearQueuedMessages: chatQueue.clear,
-      queuedMessages: chatQueue.messages,
-      queuedMessagesCount: chatQueue.messages.length,
-      inputValue,
-      onInputChange: setInputValue,
-      isProcessing: state.isProcessing,
-      lastError: state.lastError,
-      // The notice belongs to the chat whose send was held back, not
-      // whichever chat is on screen.
-      workspaceBusy: state.workspaceBusy?.chatId === (activeChatId ?? '') ? state.workspaceBusy : null,
-      // Names the chat for per-chat actions (Export); inactive panes pass
-      // their own, so without it only background panes offered Export.
-      chatId: activeChatId ?? undefined,
-      onDismissBusy: handleDismissBusy,
-      pendingDraft: inputValue,
-      toolExecutions: state.toolExecutions,
-      queryProgress: state.queryProgress,
-      currentTodos,
-      onStopProcessing,
-      onRetractSteer,
-      onChatCleared: handleChatCleared,
-      fileEdits: state.fileEdits,
-      onReviewChange: handleReviewChange,
-      onRestoreSession: handleSessionSearchRestore,
-      queryCount: state.queryCount,
-      activeToolDetail,
-      onToolDetailToggle: handleToolDetailToggle,
-      stats: state.stats,
-      isConnected: state.isConnected,
-      onModelClick: handleChatModelClick,
-      backendReachable,
-      onRetryConnection,
-      subagentActivities: state.subagentActivities,
-      outputVerbosity: state.outputVerbosity,
-      onForkAtBreakpoint: handleForkAtBreakpoint,
-      isForking,
-    }),
-    [
-      state.messages,
-      onSendMessage,
-      onQueueMessage,
-      chatQueue,
-      inputValue,
-      setInputValue,
-      state.isProcessing,
-      state.lastError,
-      state.workspaceBusy,
-      activeChatId,
-      handleDismissBusy,
-      inputValue,
-      state.toolExecutions,
-      state.queryProgress,
-      currentTodos,
-      onStopProcessing,
-      onRetractSteer,
-      handleChatCleared,
-      state.fileEdits,
-      handleReviewChange,
-      handleSessionSearchRestore,
-      state.queryCount,
-      activeToolDetail,
-      handleToolDetailToggle,
-      state.stats,
-      state.isConnected,
-      handleChatModelClick,
-      backendReachable,
-      onRetryConnection,
-      state.subagentActivities,
-      state.outputVerbosity,
-      handleForkAtBreakpoint,
-      isForking,
-    ],
-  );
-  const reviewProps = useMemo(
-    () => ({
+  // The chat unit assembles the view props from its own chat state and the
+  // app-specific callbacks below; the queue mapping and the input value live
+  // there too, so the app no longer threads them through props.
+  const { chatProps, reviewProps, diffState } = useWorkspaceChatProps({
+    activeToolDetail,
+    onToolDetailToggle: handleToolDetailToggle,
+    onChatCleared: handleChatCleared,
+    onReviewChange: handleReviewChange,
+    onRestoreSession: handleSessionSearchRestore,
+    onModelClick: handleChatModelClick,
+    onForkAtBreakpoint: handleForkAtBreakpoint,
+    isForking,
+    backendReachable,
+    onRetryConnection,
+    review: {
       review: deepReview,
       reviewError,
       reviewFixResult,
@@ -1082,29 +943,16 @@ const AppContent: React.FC<AppContentProps> = ({
       isReviewLoading,
       isReviewFixing,
       onFixFromReview: handleFixFromReview,
-    }),
-    [
-      deepReview,
-      reviewError,
-      reviewFixResult,
-      reviewFixLogs,
-      reviewFixSessionID,
-      isReviewLoading,
-      isReviewFixing,
-      handleFixFromReview,
-    ],
-  );
-  const diffState = useMemo(
-    () => ({
+    },
+    diff: {
       activeDiffPath,
       activeDiff,
       diffMode,
       isDiffLoading,
       diffError,
       onDiffModeChange: handleDiffModeChange,
-    }),
-    [activeDiffPath, activeDiff, diffMode, isDiffLoading, diffError, handleDiffModeChange],
-  );
+    },
+  });
 
   // The active mode's shell (workspaceMode.Shell) owns the <main> column and
   // the chrome that belongs to that mode — see workspaces/shell.ts. Each

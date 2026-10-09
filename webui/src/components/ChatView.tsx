@@ -29,10 +29,16 @@ import { NATIVE_CHAT_ENABLED } from '../services/nativeChatStubs/nativeChatFlag'
 import './Chat.css';
 import { chatErrorText } from './chat/chatError';
 
+const noop = (): void => {};
+
 function Chat(props: ChatProps): JSX.Element {
+  // An embedding that places the chat view without chat data (a host whose
+  // arrangement names `chat` but supplies no chat props) gets an empty,
+  // disabled chat rather than a crash on the missing message list.
+  const chatUnavailable = typeof props.onSendMessage !== 'function';
   const {
-    messages,
-    onSendMessage,
+    messages = [],
+    onSendMessage = noop,
     onQueueMessage,
     queuedMessagesCount,
     queuedMessages = [],
@@ -40,8 +46,8 @@ function Chat(props: ChatProps): JSX.Element {
     onQueueMessageEdit,
     onQueueReorder,
     onClearQueuedMessages,
-    inputValue,
-    onInputChange,
+    inputValue = '',
+    onInputChange = noop,
     isProcessing = false,
     lastError = null,
     workspaceBusy = null,
@@ -554,17 +560,19 @@ function Chat(props: ChatProps): JSX.Element {
               onStop={onStopProcessing}
               onRetractSteer={onRetractSteer}
               placeholder={
-                providerAvailable === false
+                chatUnavailable
+                  ? 'Chat is not available here.'
+                  : providerAvailable === false
                   ? 'Configure a provider to start chatting...'
                   : needsHealthCheck && backendReachable === false
                     ? 'Waiting for server connection...'
                     : (inputPlaceholder ?? 'Ask me anything about your code...')
               }
               multiline={true}
-              autoFocus={providerAvailable !== false && !(needsHealthCheck && backendReachable === false)}
+              autoFocus={!chatUnavailable && providerAvailable !== false && !(needsHealthCheck && backendReachable === false)}
               isProcessing={isProcessing}
               isConnected={isConnected}
-              disabled={providerAvailable === false || (needsHealthCheck && backendReachable === false)}
+              disabled={chatUnavailable || providerAvailable === false || (needsHealthCheck && backendReachable === false)}
               queuedCount={queuedMessagesCount}
               queuedMessages={queuedMessages}
               onQueueMessageRemove={onQueueMessageRemove}

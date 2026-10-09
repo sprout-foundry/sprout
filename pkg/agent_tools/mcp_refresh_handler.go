@@ -35,17 +35,20 @@ func (h *mcpRefreshHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name: "mcp_refresh",
 		Description: "Reload MCP server config and reconcile servers after config changes. " +
-			"Operations: list, refresh, add, remove, set-credential, remove-credential. " +
+			"Operations: list, refresh, add, remove, set-credential, remove-credential, login, logout, oauth-status. " +
 			"set-credential stores a secret (API token etc.) in the credential backend and wires it to " +
 			"the server's environment via a placeholder — prefer pairing it with a sensitive ask_user so " +
-			"the value never passes through the conversation. remove-credential deletes one.",
+			"the value never passes through the conversation. remove-credential deletes one. " +
+			"login runs the OAuth 2.1 browser flow for an HTTP (remote) MCP server that requires OAuth " +
+			"(Figma, Linear, GitHub remote, Notion...): run it, wait for it, do not search the filesystem. " +
+			"oauth-status reports whether a server holds OAuth tokens; logout clears them.",
 		Required: []string{"operation"},
 		Parameters: []ParameterDef{
 			{
 				Name:        "operation",
 				Type:        "string",
 				Required:    true,
-				Description: "Operation: list, refresh, add, remove, set-credential, or remove-credential",
+				Description: "Operation: list, refresh, add, remove, set-credential, remove-credential, login, logout, or oauth-status",
 			},
 			{
 				Name:        "name",

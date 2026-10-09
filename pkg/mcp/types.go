@@ -17,6 +17,7 @@ type MCPServerConfig struct {
 	URL         string            `json:"url,omitempty"`         // For HTTP servers
 	Env         map[string]string `json:"env,omitempty"`         // Non-secret environment variables
 	Credentials map[string]string `json:"credentials,omitempty"` // Secret credentials (env var name -> placeholder)
+	Headers     map[string]string `json:"headers,omitempty"`     // HTTP headers for http servers (value may be a credential placeholder)
 	WorkingDir  string            `json:"working_dir,omitempty"` // For stdio servers
 	Timeout     time.Duration     `json:"timeout,omitempty"`
 	AutoStart   bool              `json:"auto_start"`
@@ -83,6 +84,7 @@ func (s MCPServerConfig) MarshalJSON() ([]byte, error) {
 		URL         string            `json:"url,omitempty"`
 		Env         map[string]string `json:"env,omitempty"`
 		Credentials map[string]string `json:"credentials,omitempty"`
+		Headers     map[string]string `json:"headers,omitempty"`
 		WorkingDir  string            `json:"working_dir,omitempty"`
 		Timeout     time.Duration     `json:"timeout,omitempty"`
 		AutoStart   bool              `json:"auto_start"`
@@ -95,6 +97,7 @@ func (s MCPServerConfig) MarshalJSON() ([]byte, error) {
 		URL:         s.URL,
 		Env:         s.Env,
 		Credentials: s.Credentials,
+		Headers:     s.Headers,
 		WorkingDir:  s.WorkingDir,
 		Timeout:     s.Timeout,
 		AutoStart:   s.AutoStart,

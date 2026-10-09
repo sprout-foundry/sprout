@@ -37,6 +37,7 @@ type mcpServerResponse struct {
 	URL         string            `json:"url,omitempty"`
 	Env         map[string]string `json:"env,omitempty"`
 	Credentials map[string]string `json:"credentials,omitempty"` // Credential env var names (masked values)
+	Headers     map[string]string `json:"headers,omitempty"`     // HTTP headers (masked values)
 	WorkingDir  string            `json:"working_dir,omitempty"`
 	Timeout     time.Duration     `json:"timeout,omitempty"`
 	AutoStart   bool              `json:"auto_start"`
@@ -55,6 +56,7 @@ func newMCPConfigResponse(cfg mcp.MCPConfig) mcpConfigResponse {
 			URL:         s.URL,
 			Env:         mcp.MaskEnvVars(s.Env),
 			Credentials: maskCredentials(s.Credentials),
+			Headers:     maskHeaders(s.Headers),
 			WorkingDir:  s.WorkingDir,
 			Timeout:     s.Timeout,
 			AutoStart:   s.AutoStart,
@@ -80,11 +82,31 @@ func newMCPServerResponse(s mcp.MCPServerConfig) mcpServerResponse {
 		URL:         s.URL,
 		Env:         mcp.MaskEnvVars(s.Env),
 		Credentials: maskCredentials(s.Credentials),
+		Headers:     maskHeaders(s.Headers),
 		WorkingDir:  s.WorkingDir,
 		Timeout:     s.Timeout,
 		AutoStart:   s.AutoStart,
 		MaxRestarts: s.MaxRestarts,
 	}
+}
+
+// maskHeaders masks header values for safe display, mirroring maskCredentials:
+// credential placeholders show as "{{stored}}", raw values via MaskValue.
+func maskHeaders(headers map[string]string) map[string]string {
+	if headers == nil {
+		return nil
+	}
+	result := make(map[string]string, len(headers))
+	for name, value := range headers {
+		if mcp.IsSecretRef(value) {
+			result[name] = "{{stored}}"
+		} else if value != "" {
+			result[name] = credentials.MaskValue(value)
+		} else {
+			result[name] = value
+		}
+	}
+	return result
 }
 
 // maskCredentials masks credential values for safe display.

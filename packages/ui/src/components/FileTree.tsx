@@ -127,6 +127,10 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
     const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set([rootPath]));
     const [loading, setLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
+    // The refreshTree promise currently in flight, if any. revealFile waits on
+    // it: a refresh finishes with a setFiles over its own pre-reveal snapshot,
+    // so expansion and children attached before it lands get clobbered.
+    const refreshInFlightRef = useRef<Promise<void> | null>(null);
     const [draft, setDraft] = useState<DraftState | null>(null);
     const [draftValue, setDraftValue] = useState('');
     const [draftError, setDraftError] = useState<string | null>(null);
@@ -218,36 +222,47 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
         setError(null);
       }
 
-      try {
-        let nextFiles = filesPropRef.current;
+      // The body runs detached so the promise it produces is exposed for
+      // revealFile to await: a refresh finishing after a reveal would
+      // otherwise clobber the reveal's expansion with its own snapshot.
+      const run = (async () => {
+        try {
+          let nextFiles = filesPropRef.current;
 
-        // If files prop is provided, use it; otherwise fetch
-        if (nextFiles === undefined) {
-          nextFiles = await fetchFiles(rootPath);
-        }
-
-        const expanded = Array.from(expandedDirs)
-          .filter((dirPath) => dirPath !== rootPath)
-          .sort((a, b) => a.split('/').length - b.split('/').length);
-
-        for (const dirPath of expanded) {
-          const dir = findFileByPath(nextFiles, dirPath);
-          if (!dir?.isDir) {
-            continue;
+          // If files prop is provided, use it; otherwise fetch
+          if (nextFiles === undefined) {
+            nextFiles = await fetchFiles(rootPath);
           }
-          const children = await fetchFiles(dirPath);
-          nextFiles = updateFileChildren(nextFiles, dirPath, children);
-        }
 
-        setFiles(nextFiles);
-        onRefresh?.();
-      } catch (err) {
-        debugLog('[refreshTree] Failed to refresh file tree:', err);
-        if (quiet) return;
-        setError(err instanceof Error ? err.message : 'Unknown error');
-        setFiles([]);
-      } finally {
-        if (!quiet) setLoading(false);
+          const expanded = Array.from(expandedDirs)
+            .filter((dirPath) => dirPath !== rootPath)
+            .sort((a, b) => a.split('/').length - b.split('/').length);
+
+          for (const dirPath of expanded) {
+            const dir = findFileByPath(nextFiles, dirPath);
+            if (!dir?.isDir) {
+              continue;
+            }
+            const children = await fetchFiles(dirPath);
+            nextFiles = updateFileChildren(nextFiles, dirPath, children);
+          }
+
+          setFiles(nextFiles);
+          onRefresh?.();
+        } catch (err) {
+          debugLog('[refreshTree] Failed to refresh file tree:', err);
+          if (quiet) return;
+          setError(err instanceof Error ? err.message : 'Unknown error');
+          setFiles([]);
+        } finally {
+          if (!quiet) setLoading(false);
+        }
+      })();
+      refreshInFlightRef.current = run;
+      try {
+        await run;
+      } catch {
+        // Swallowed: the run body already reported its own error state.
       }
     }, [expandedDirs, fetchFiles, findFileByPath, onRefresh, rootPath, updateFileChildren]);
 
@@ -268,6 +283,20 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
           return;
         }
 
+        // A refresh mid-flight will finish with a setFiles over its own
+        // pre-reveal snapshot, clobbering the expansion and children attached
+        // below (the initial fetch after mount is the common case — the
+        // reveal would silently do nothing). Let it land first.
+        const inFlight = refreshInFlightRef.current;
+        if (inFlight) {
+          try {
+            await inFlight;
+          } catch {
+            // The refresh body already surfaced its error; reveal what we can.
+          }
+          if (refreshInFlightRef.current === inFlight) refreshInFlightRef.current = null;
+        }
+
         // If the target file is ignored and we're hiding ignored files,
         // temporarily show them so the reveal can work.
         if (!showIgnoredFiles) {
@@ -277,7 +306,8 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
           }
         }
 
-        // Compute all ancestor directories
+        // Compute all ancestor directories. Re-deriving after the await is
+        // safe: the expansion update is additive and idempotent.
         const ancestors = getAncestors(filePath, rootPath);
         const newAncestors = ancestors.filter((a) => !expandedDirs.has(a));
 
@@ -310,8 +340,11 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
         // Set the selected file
         setInternalSelectedFile(filePath);
 
-        // Scroll the selected element into view after state updates
-        setTimeout(() => {
+        // Scroll the selected element into view after state updates. Retry a
+        // couple of frames: when the reveal had to wait out a refresh or
+        // expand ancestor dirs, the `.selected` row only exists after the
+        // tree re-renders, and a single timeout can fire before it does.
+        const flashSelected = (attempt: number) => {
           const selectedElement = fileListRef.current?.querySelector('.file-tree-item.selected');
           if (selectedElement) {
             // Add flash animation class
@@ -324,8 +357,11 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
             setTimeout(() => {
               selectedElement.classList.remove('revealed');
             }, 1500);
+          } else if (attempt > 0) {
+            setTimeout(() => flashSelected(attempt - 1), 100);
           }
-        }, 100);
+        };
+        setTimeout(() => flashSelected(3), 100);
       },
       [getAncestors, rootPath, expandedDirs, findFileByPath, fetchFiles, updateFileChildren, showIgnoredFiles],
     );

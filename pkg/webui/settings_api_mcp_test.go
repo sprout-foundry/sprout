@@ -603,3 +603,103 @@ func TestExtractServerNameFromCredentialsPath(t *testing.T) {
 		})
 	}
 }
+
+// ---------------------------------------------------------------------------
+// OAuth endpoints — /api/settings/mcp/servers/{name}/oauth
+// ---------------------------------------------------------------------------
+
+func TestMCPServerOAuth_StatusNotLoggedIn(t *testing.T) {
+	ws, _ := setupMCPCredTestServer(t)
+	seedMCPServer(t, ws, mcp.MCPServerConfig{Name: "figma", Type: "http", URL: "https://mcp.figma.com/mcp"})
+
+	req := makeCredRequest(t, http.MethodGet, "/api/settings/mcp/servers/figma/oauth", nil)
+	rec := httptest.NewRecorder()
+	ws.handleAPISettingsMCPServers(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	var resp struct {
+		Server   string `json:"server"`
+		LoggedIn bool   `json:"logged_in"`
+		Detail   string `json:"detail"`
+	}
+	decodeJSON(t, rec, &resp)
+	assert.Equal(t, "figma", resp.Server)
+	assert.False(t, resp.LoggedIn)
+}
+
+func TestMCPServerOAuth_ServerNotFound(t *testing.T) {
+	ws, _ := setupMCPCredTestServer(t)
+
+	req := makeCredRequest(t, http.MethodGet, "/api/settings/mcp/servers/ghost/oauth", nil)
+	rec := httptest.NewRecorder()
+	ws.handleAPISettingsMCPServers(rec, req)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestMCPServerOAuth_LogoutClearsState(t *testing.T) {
+	ws, _ := setupMCPCredTestServer(t)
+	seedMCPServer(t, ws, mcp.MCPServerConfig{Name: "figma", Type: "http", URL: "https://mcp.figma.com/mcp"})
+	storeCredential(t, "mcp-oauth/figma/access_token", "tok")
+
+	req := makeCredRequest(t, http.MethodDelete, "/api/settings/mcp/servers/figma/oauth", nil)
+	rec := httptest.NewRecorder()
+	ws.handleAPISettingsMCPServers(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	loggedIn, _ := mcp.OAuthStatus("figma")
+	assert.False(t, loggedIn)
+}
+
+// ---------------------------------------------------------------------------
+// Headers field — settings API round-trip and masking
+// ---------------------------------------------------------------------------
+
+func TestMCPServerResponse_MasksHeaderSecretRefs(t *testing.T) {
+	resp := newMCPServerResponse(mcp.MCPServerConfig{
+		Name: "figma",
+		Type: "http",
+		Headers: map[string]string{
+			"X-Figma-Token": mcp.SecretRef("figma", "X-Figma-Token"),
+			"X-Plain":       "ordinary",
+		},
+	})
+	require.NotNil(t, resp.Headers)
+	assert.Equal(t, "{{stored}}", resp.Headers["X-Figma-Token"])
+	// Non-placeholder values go through credentials.MaskValue like credentials do.
+	assert.NotEqual(t, "ordinary", resp.Headers["X-Plain"])
+	assert.Contains(t, resp.Headers["X-Plain"], "*")
+}
+
+func TestMCPServerAPI_HeadersRoundTrip(t *testing.T) {
+	ws, _ := setupMCPCredTestServer(t)
+	cm := getConfigManager(t, ws)
+	t.Cleanup(func() {
+		_ = cm.UpdateConfig(func(cfg *configuration.Config) error {
+			delete(cfg.MCP.Servers, "hd")
+			return nil
+		})
+	})
+
+	// POST with a headers map (plaintext — masked in the response).
+	req := makeCredRequest(t, http.MethodPost, "/api/settings/mcp/servers", map[string]any{
+		"name": "hd", "type": "http", "url": "https://example.com/mcp",
+		"headers": map[string]string{"X-Trace": "abc123"},
+	})
+	rec := httptest.NewRecorder()
+	ws.handleAPISettingsMCPServers(rec, req)
+	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
+
+	// Stored config carries the header verbatim.
+	cfg := cm.GetConfig()
+	server, exists := cfg.MCP.Servers["hd"]
+	require.True(t, exists)
+	assert.Equal(t, "abc123", server.Headers["X-Trace"])
+
+	// The API response masks the raw value.
+	var resp struct {
+		Server mcpServerResponse `json:"server"`
+	}
+	decodeJSON(t, rec, &resp)
+	assert.NotEqual(t, "abc123", resp.Server.Headers["X-Trace"])
+	assert.Contains(t, resp.Server.Headers["X-Trace"], "*")
+}

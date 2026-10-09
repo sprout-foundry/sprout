@@ -102,7 +102,7 @@ func runAgentCommand(cmd *cobra.Command, args []string) (err error) {
 	if traceDir != "" {
 		provider := chatAgent.GetProvider()
 		model := chatAgent.GetModel()
-		traceSession, err := trace.NewTraceSession(traceDir, provider, model)
+		traceSession, err := trace.NewTraceSession(traceDir, provider, model, trace.WithRedaction(!agentTraceUnredacted))
 		if err != nil {
 			return fmt.Errorf("failed to initialize trace session: %w", err)
 		}

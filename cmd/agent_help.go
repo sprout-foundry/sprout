@@ -37,6 +37,7 @@ var advancedAgentFlags = []string{
 	"budget-warn",
 	"heartbeat",
 	"trace-dataset-dir",
+	"trace-unredacted",
 	"prompt-stdin",
 	"no-project-skills",
 	"web-port",

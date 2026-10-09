@@ -155,12 +155,12 @@ package's, so the set a host can target is exactly what
 | Borders | `--border-subtle`, `--border-default`, `--border-strong`, `--border-focus` | Dividers, outlines, focus rings |
 | Text | `--text-primary`, `--text-secondary`, `--text-tertiary`, `--text-muted`, `--text-accent` | Foreground text hierarchy |
 | Accents | `--accent-primary`, `--accent-secondary`, `--accent-success`, `--accent-warning`, `--accent-error`, `--accent-cyan`, `--accent-primary-rgb` | Semantic colors (note `--accent-primary-rgb` is the space-separated triplet used inside `rgba()`) |
-| Brand | `--brand-teal`, `--brand-frost`, `--brand-active-cyan`, `--brand-navy` | Sprout brand surfaces |
+| Brand | `--brand-teal`, `--brand-frost`, `--brand-sprout`, `--brand-active-cyan`, `--brand-navy` | Sprout brand surfaces |
 | Typography | `--font-sans`, `--font-mono`, `--text-xs` … `--text-3xl` | Font families and sizes |
 | Spacing | `--space-1` … `--space-12` | Layout rhythm |
 | Radius | `--radius-sm`, `--radius-md`, `--radius-lg`, `--radius-xl`, `--radius-pill` | Corner rounding |
 | Shadows / gradients | `--shadow-subtle`, `--shadow-elevated`, `--shadow-float`, `--gradient-subtle`, `--gradient-elevated` | Elevation |
-| Motion | `--ease-out`, `--ease-in-out` | Transitions |
+| Motion | `--ease-out`, `--ease-in-out`, `--duration-fast`, `--duration-base`, `--duration-slow` | Transitions (durations zeroed under `prefers-reduced-motion`) |
 
 A host supplies the same names, e.g.
 `tokens: { '--accent-primary': '#8b5cf6', '--accent-primary-rgb': '139, 92, 246' }`.

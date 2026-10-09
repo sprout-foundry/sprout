@@ -7,6 +7,7 @@
 import type { ReactElement } from 'react';
 import { OPEN_COMMAND_PALETTE_EVENT } from '../../config/layout';
 import { CreditsChip } from '../CreditsChip';
+import { ReportBugButton } from '../ReportBugButton';
 
 export function LayeredSearchButton(): ReactElement {
   return (
@@ -28,6 +29,7 @@ export default function LayeredTopBar(): ReactElement {
     <div className="header-bar layered-top-bar">
       <LayeredSearchButton />
       <div className="header-bar-actions">
+        <ReportBugButton className="header-report-bug-btn" testId="layered-report-bug" />
         <CreditsChip />
       </div>
     </div>

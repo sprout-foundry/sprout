@@ -72,3 +72,18 @@ jobs:
       # are run. It starts each dev server, polls its port, and asserts every
       # route returns 200.
       run: bash scripts/ci-check-starters.sh
+
+    - name: Audit each starter for high/critical advisories
+      # The starters are copied into every new builder project, so a high or
+      # critical advisory in a committed lockfile ships to users. Audit the
+      # source trees (not the scratch instantiations) against their committed
+      # lockfiles and fail the job on any high/critical finding. Moderate and
+      # below are allowed; a no-fix advisory is documented in the starter's
+      # README rather than suppressed here.
+      run: |
+        set -euo pipefail
+        for starter in static-site web-app web-app-data; do
+          echo "::group::npm audit --audit-level=high ($starter)"
+          (cd "pkg/starters/data/$starter" && npm audit --audit-level=high)
+          echo "::endgroup::"
+        done

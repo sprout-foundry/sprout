@@ -5,8 +5,8 @@
     "in-out": { "$value": "cubic-bezier(0.4, 0, 0.2, 1)", "$type": "cubicBezier" }
   },
   "duration": {
-    "quick": { "$value": "120ms", "$type": "duration", "$description": "Hover tints, small state flips." },
-    "fast": { "$value": "150ms", "$type": "duration", "$description": "Standard control transitions." },
-    "base": { "$value": "200ms", "$type": "duration", "$description": "Sidebar width, panel slides, app-shell padding." }
+    "fast": { "$value": "120ms", "$type": "duration", "$description": "Hover tints, small state flips." },
+    "base": { "$value": "180ms", "$type": "duration", "$description": "Standard control transitions." },
+    "slow": { "$value": "320ms", "$type": "duration", "$description": "Sidebar width, panel slides, app-shell padding." }
   }
 }

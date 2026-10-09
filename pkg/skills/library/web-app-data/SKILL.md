@@ -171,7 +171,7 @@ deploy. The manifest declares `deploy_target: workers`.
   replace it only at deploy time with the real id.
 - **`compatibility_date` and `compatibility_flags = ["nodejs_compat"]`** are
   set in `wrangler.toml`; `nodejs_compat` is required by the
-  `@cloudflare/vitest-pool-workers` pool (and harmless in production).
+  `@cloudflare/vitest-plugin` pool (and harmless in production).
 - **KV and R2 are documented but NOT wired.** `wrangler.toml` carries
   commented `[[kv_namespaces]]` and `[[r2_buckets]]` blocks; nothing binds
   them by default. To use one, create the namespace/bucket, uncomment its
@@ -189,7 +189,7 @@ environments:
   `include: ['test/**/*.test.{ts,tsx}']`, `exclude: ['test/api.test.ts',
   'node_modules/**']`.
 - **`vitest.workers.config.ts`** — the API test **inside the Workers runtime**
-  (`defineWorkersConfig` from `@cloudflare/vitest-pool-workers`), reading
+  (`cloudflareTest` from `@cloudflare/vitest-plugin`), reading
   `wrangler.toml` for bindings and local D1. `include: ['test/api.test.ts']`.
 
 A new **UI** spec goes under `test/` and is picked up by the jsdom config
@@ -276,7 +276,30 @@ declaring a change done:
 
 ## Upgrade note
 
-No upgrades yet. When the starter version in `.sprout/starter.json` falls
-behind the embedded tree, this section carries the upgrade note and the agent
-may propose — but never silently apply — the upgrade; apply it only when the
-user explicitly approves.
+Starter version **1.1.0** (2026-10): the stack was bumped to **React 19**,
+**React Router 7.18**, **Vite 8**, **Vitest 4**, **ESLint 10**, **Wrangler 4**
+(from 3), **Drizzle ORM 0.45** (from 0.38) and **Drizzle Kit 0.31** (from
+0.30). The Hono app, the Drizzle schema/migration workflow, `wrangler.toml`
+bindings and the two-config vitest split all keep their shape — existing
+routes, tables and tests need no edits. The changes that matter when you touch
+config or dependencies:
+
+- **The Workers test pool moved to `@cloudflare/vitest-plugin`.** The old
+  `@cloudflare/vitest-pool-workers` package is deprecated and renamed; it is
+  now `@cloudflare/vitest-plugin` (v1), whose `cloudflareTest(options)` is a
+  Vite **plugin** configured via `defineConfig({ plugins: [...] })` rather than
+  the old `defineWorkersConfig({ test: { poolOptions: { workers: {...} } } })`.
+  `vitest.workers.config.ts` is updated accordingly; the options
+  (`wrangler.configPath`, `miniflare.d1Databases`) are unchanged. The
+  `cloudflare:test` module still exports `env` and `SELF`, but `env` is now
+  typed as **`Cloudflare.Env`** (declared in `test/env.d.ts`) instead of the
+  old `ProvidedEnv`; add a binding to `Cloudflare.Env` to type it in tests.
+- **Wrangler is now 4** (`wrangler dev`, `wrangler d1 migrations apply` and
+  `wrangler.toml` are unchanged; Wrangler 4 requires Node 22+).
+- **ESLint is now 10**; the flat config is unchanged. **Vitest 4** keeps the
+  two-config `npm test` script.
+
+When the starter version in `.sprout/starter.json` falls behind the embedded
+tree, this section carries the upgrade note and the agent may propose — but
+never silently apply — the upgrade; apply it only when the user explicitly
+approves.

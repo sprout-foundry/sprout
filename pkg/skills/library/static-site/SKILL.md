@@ -205,7 +205,21 @@ declaring a change done:
 
 ## Upgrade note
 
-No upgrades yet. When the starter version in `.sprout/starter.json` falls
-behind the embedded tree, this section carries the upgrade note and the agent
-may propose — but never silently apply — the upgrade; apply it only when the
-user explicitly approves.
+Starter version **1.1.0** (2026-10): the stack was bumped to **Astro 7** (from
+5), **Vite 8**, **Vitest 4** and **ESLint 10**. The Astro conventions this
+skill documents are unchanged — pages, layouts, components, `Astro.props`,
+`<slot />` and the static-output `astro.config.mjs` all work the same in Astro
+7, so existing pages and components need no edits. Two tooling changes matter
+when you touch config or dependencies:
+
+- **ESLint is now 10** and `eslint-plugin-astro` is on the v2 line, which
+  requires ESLint 10 (its flat-config usage in `eslint.config.mjs` is
+  unchanged). Do not downgrade `eslint` below 10 with this plugin version.
+- **Vitest is now 4**; `vitest.config.mjs` and the `vitest run` script are
+  unchanged, but a spec that relied on a Vitest 2-only option may need the
+  current option name.
+
+When the starter version in `.sprout/starter.json` falls behind the embedded
+tree, this section carries the upgrade note and the agent may propose — but
+never silently apply — the upgrade; apply it only when the user explicitly
+approves.

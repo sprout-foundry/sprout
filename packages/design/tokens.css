@@ -13,10 +13,15 @@
 
   /* Brand tokens (design system § "Color · brand") — surfaces that want
    * the sprout *brand* color rather than an Atom-One accent should
-   * resolve through these. --brand-active-cyan is the canonical "active
-   * rail / underline" hue (sidebar nav, editor tab, etc.). */
+   * resolve through these. Each brand token has ONE meaning across both
+   * themes: --brand-frost is always the light-cyan frost accent, and the
+   * sprout green lives in its own --brand-sprout token (used where the
+   * green leaf reads on the light background). --brand-active-cyan is the
+   * canonical "active rail / underline" hue (sidebar nav, editor tab,
+   * etc.). */
   --brand-teal: #14b8c8;
   --brand-frost: #68e3ee;
+  --brand-sprout: #1ba03d;
   --brand-active-cyan: #22d3ee;
   --brand-navy: #10212d;
 
@@ -190,9 +195,15 @@
   --subagent-depth-2: #c084fc;
   --subagent-depth-3: #e879f9;
 
-  /* Transitions */
+  /* Transitions — easing curves plus the shared duration scale. Duration
+   * tokens are bare durations (not shorthands) so a callsite can write
+   * `transition: color var(--duration-fast) var(--ease-out)`. The
+   * reduced-motion block below zeroes them. */
   --ease-out: cubic-bezier(0, 0, 0.2, 1);
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --duration-slow: 320ms;
 
   /* Semantic aliases for component-local vocabularies (worktree panel,
    * chat dialog, settings panel, status surfaces). These are referenced
@@ -231,13 +242,17 @@
 :root[data-theme='light'] {
   color-scheme: light;
 
-  /* Brand tokens — teal stays constant across themes per the design
-   * system. The "frost" leaf accent flips to sprout green in light mode
-   * so the logo reads on the lighter background. Active cyan stays
+  /* Brand tokens — every brand token keeps ONE meaning across themes.
+   * Teal is constant per the design system; the frost accent stays a
+   * light cyan (pulled slightly darker so it reads on the light
+   * background) rather than flipping to green; the sprout green lives in
+   * --brand-sprout, its own correctly-named token. Active cyan stays
    * cyan but pulls slightly darker for legibility. */
   --brand-teal: #14b8c8;
-  --brand-frost: #1ba03d;
+  --brand-frost: #0891b2;
+  --brand-sprout: #1ba03d;
   --brand-active-cyan: #0891b2;
+  --brand-navy: #10212d;
 
   --bg-primary: #f4f7fb;
   --bg-secondary: #eef3f9;
@@ -319,4 +334,16 @@
   --subagent-depth-1: #7c3aed;
   --subagent-depth-2: #9333ea;
   --subagent-depth-3: #c026d3;
+}
+
+/* Respect the OS reduced-motion preference: zero the duration scale so
+ * transitions/animations resolve instantly. The easing curves are left
+ * intact (a zero duration makes them moot), so callsites keep their
+ * `transition: … var(--duration-*) var(--ease-*)` shorthand unchanged. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+    --duration-slow: 0ms;
+  }
 }

@@ -17,7 +17,7 @@ import (
 
 // webAppVersion is the version the web-app tree declares; the assertions
 // below must agree with pkg/starters/data/web-app/starter.json.
-const webAppVersion = "1.0.0"
+const webAppVersion = "1.1.0"
 
 // webAppProjectFiles are the project files (relative to the destination) a
 // web-app instantiation must produce: the React + Vite source tree, the

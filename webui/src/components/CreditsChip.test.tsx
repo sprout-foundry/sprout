@@ -4,7 +4,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { HostProvider } from '../host/HostProvider';
 import { makeTestHost } from '../host/testHost';
 import type { HostEntitlements, SproutHost } from '../host/types';
-import { CreditsChip } from './CreditsChip';
+import { CreditsChip, formatCredits } from './CreditsChip';
 
 let container: HTMLDivElement;
 let root: Root;
@@ -42,15 +42,26 @@ async function render(host: SproutHost) {
   });
 }
 
+describe('formatCredits', () => {
+  it('shows whole credits with separators, one decimal under ten, never a false zero', () => {
+    expect(formatCredits(27_000)).toBe('27,000');
+    expect(formatCredits(9_000.42)).toBe('9,000');
+    expect(formatCredits(8.1)).toBe('8.1');
+    expect(formatCredits(0.4)).toBe('0.4');
+    expect(formatCredits(0.03)).toBe('<0.1');
+    expect(formatCredits(0)).toBe('0');
+  });
+});
+
 describe('CreditsChip', () => {
   it('renders from the host entitlements summary and links to its target', async () => {
     await render(
       hostWith({
-        usageSummary: { remaining: 450_000, label: 'credits', linkTarget: '/?from=editor#/account/billing' },
+        usageSummary: { remaining: 9_000.42, label: 'credits', linkTarget: '/?from=editor#/account/billing' },
       }),
     );
     const chip = container.querySelector<HTMLAnchorElement>('[data-testid="header-credits-chip"]');
-    expect(chip?.textContent).toBe('450K credits');
+    expect(chip?.textContent).toBe('9,000 credits');
     expect(chip?.getAttribute('href')).toBe('/?from=editor#/account/billing');
   });
 

@@ -271,7 +271,7 @@ audit log should actually exist. Facts only — provider, model, digests,
 tool calls — never prompt content in these records. Validation gate as in
 the header (Go changes → full gate).
 
-- [ ] **au.1** Instantiate the security audit log. `NewAuditLogger` /
+- [x] **au.1** Instantiate the security audit log. `NewAuditLogger` /
       `SetAuditLogger` are only called from tests, so every `LogJSON` site
       is a no-op and `sprout audit tail` reads a file nothing writes. Create
       the logger at agent start (path from config, default under the state

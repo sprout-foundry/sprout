@@ -109,7 +109,7 @@ func (a *Agent) GetAuditLogger() *tools.AuditLogger {
 	if a == nil {
 		return nil
 	}
-	return a.auditLogger
+	return a.auditLogger.Load()
 }
 
 // SetAuditLogger attaches a security audit logger to this agent. Also sets
@@ -118,7 +118,7 @@ func (a *Agent) SetAuditLogger(l *tools.AuditLogger) {
 	if a == nil {
 		return
 	}
-	a.auditLogger = l
+	a.auditLogger.Store(l)
 	tools.SetAuditLogger(l)
 }
 

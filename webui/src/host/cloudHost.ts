@@ -203,5 +203,8 @@ export const cloudHost: SproutHost = {
     localModels: false,
     verification: false,
     serverGit: false,
+    // The hosted platform keeps no chat session store of its own; the chat
+    // list lives in the browser (the in-browser agent), so this stays off.
+    chatSessions: false,
   },
 };

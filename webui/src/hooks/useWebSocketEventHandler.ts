@@ -3,8 +3,9 @@ import type { Message, ToolExecution } from '@sprout/ui';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { AppStoreSetState } from '../contexts/AppStore';
 import { emitAutomate, type AutomateEventType, type AutomateEventPayload } from '../services/automateEvents';
-import { fetchChatSessionMessages } from '../services/chatSessions';
+import { fetchChatSessionMessagesForActiveStore } from '../services/hostChatSessions';
 import { getServerErrorCode } from '../services/errorCodes';
+import { appendTurnToHostStore } from '../services/hostChatSessions';
 import { NATIVE_CHAT_ENABLED } from '../services/nativeChatStubs/nativeChatFlag';
 import { onChatReplay, PENDING_EVENTS_CAP } from '../utils/chatReplay';
 import { debugLog } from '../utils/log';
@@ -162,6 +163,24 @@ export function useWebSocketEventHandler({
       // today's exact behavior, byte-identical).
       if (NATIVE_CHAT_ENABLED) {
         return;
+      }
+
+      // Append finished turns to the host's chat session store when the host
+      // serves one (`capabilities.chatSessions`). This runs for both agent
+      // backends and for background chats alike: it sits above the per-chat
+      // filter below, so a chat answering off screen still records its turn.
+      // Subagent runs are excluded (they are not user turns), and /clear is a
+      // reset, not a turn. A no-op without the capability.
+      if (event.type === 'query_started' || event.type === 'query_completed') {
+        const appendChatId = eventData.chat_id != null ? String(eventData.chat_id) : activeChatIdRef.current;
+        const subDepth = Number((eventData as Record<string, unknown>).subagent_depth ?? 0);
+        const isSubagent = Number.isFinite(subDepth) && subDepth > 0;
+        const rawQuery = String(eventData.query ?? '');
+        const isClear = rawQuery.trim().toLowerCase() === '/clear';
+        if (!isSubagent && !isClear && rawQuery.trim()) {
+          const response = event.type === 'query_completed' ? eventData.response : undefined;
+          appendTurnToHostStore(appendChatId, rawQuery, typeof response === 'string' ? response : undefined);
+        }
       }
 
       // Another chat's metrics belong to that chat's cache, not the chat on
@@ -434,7 +453,7 @@ export function useWebSocketEventHandler({
             // Read-only reload: a switchChatSession here would re-broadcast
             // session_changed("switch") and risk the same echo-reload loop the
             // session_changed handler avoids.
-            fetchChatSessionMessages(chatId, fetchFn)
+            fetchChatSessionMessagesForActiveStore(chatId, fetchFn)
               .then((response) => {
                 // Bail if user switched chats while we were loading.
                 if (activeChatIdRef.current !== chatId) return;

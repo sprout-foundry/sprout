@@ -61,7 +61,11 @@ export function persistCurrentCloudSession(state: AppState): string | null {
 }
 
 export function useCloudSessionPersistence({ state }: UseCloudSessionPersistenceOptions): void {
-  const { localTerminal } = useHostCapabilities();
+  const { localTerminal, chatSessions } = useHostCapabilities();
+  // The host serves the chat session store itself: turns are appended to it
+  // (see cloudWasmHandlers), so this browser-local mirror must not run — it
+  // would double-write a second, unreachable copy of the transcript.
+  const browserStoreActive = !localTerminal && !chatSessions;
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -81,14 +85,14 @@ export function useCloudSessionPersistence({ state }: UseCloudSessionPersistence
 
   // ── Save on query completion & chat switch ───────────────────────
   useEffect(() => {
-    if (localTerminal) return;
+    if (!browserStoreActive) return;
     const messages = state.messages;
     if (!messages || messages.length === 0) return;
 
     const id = persistCurrentCloudSession(state);
     if (id) lastPersistedSessionIdRef.current = id;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- persist uses a snapshot of state; tracking message-array identity + activeChatId would be more precise but triggers during streaming
-  }, [state.isProcessing, state.activeChatId, localTerminal]);
+  }, [state.isProcessing, state.activeChatId, browserStoreActive]);
 
   // ── Rotate on /clear: when messages go non-empty → empty, the previous
   //    conversation has already been saved (by the effect above on the last
@@ -98,7 +102,7 @@ export function useCloudSessionPersistence({ state }: UseCloudSessionPersistence
   //    stays in history. Only fires on a real non-empty → empty transition —
   //    NOT on the initial mount (which would clobber a still-loading restore).
   useEffect(() => {
-    if (localTerminal) return;
+    if (!browserStoreActive) return;
     const wasNonEmpty = prevMessageCountRef.current > 0;
     const isEmpty = state.messages.length === 0;
     const sameChat = prevChatIdRef.current === state.activeChatId;
@@ -108,11 +112,11 @@ export function useCloudSessionPersistence({ state }: UseCloudSessionPersistence
       rebindChatTranscript(state.activeChatId, startNewCloudSession());
       lastPersistedSessionIdRef.current = null;
     }
-  }, [state.messages.length, state.activeChatId, localTerminal]);
+  }, [state.messages.length, state.activeChatId, browserStoreActive]);
 
   // ── Save on page unload (reload / close / tab discard) ────────────
   useEffect(() => {
-    if (localTerminal) return;
+    if (!browserStoreActive) return;
     if (typeof window === 'undefined') return;
 
     const flush = () => {
@@ -132,13 +136,13 @@ export function useCloudSessionPersistence({ state }: UseCloudSessionPersistence
       window.removeEventListener('beforeunload', flush);
       window.removeEventListener('pagehide', flush);
     };
-  }, [localTerminal]);
+  }, [browserStoreActive]);
 
   // ── Delete from store when a session is removed from chatSessions ──
   // This keeps localStorage in sync when a chat is deleted via the UI.
   const prevChatIdsRef = useRef<Set<string>>(new Set(state.chatSessions.map((s) => s.id)));
   useEffect(() => {
-    if (localTerminal) return;
+    if (!browserStoreActive) return;
     const currentIds = new Set(state.chatSessions.map((s) => s.id));
     const prev = prevChatIdsRef.current;
     for (const id of prev) {
@@ -147,5 +151,5 @@ export function useCloudSessionPersistence({ state }: UseCloudSessionPersistence
       }
     }
     prevChatIdsRef.current = currentIds;
-  }, [state.chatSessions, localTerminal]);
+  }, [state.chatSessions, browserStoreActive]);
 }

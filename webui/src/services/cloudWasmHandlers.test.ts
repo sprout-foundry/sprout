@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { handleWasmLocal, trackFileWrite } from './cloudWasmHandlers';
 import type { WasmDirEntry, WasmShell } from './wasmShell';
 
@@ -561,6 +561,63 @@ describe('/api/query in the browser — a stop is not a failure', () => {
   it('still reports a run that fails on its own', async () => {
     const events = await eventsFor((_shell, fail) => fail('upstream exploded'));
     expect(events.map((e) => e.type)).toEqual(['error']);
+  });
+});
+
+describe('/api/query in the browser — the host session store is appended by the event handler', () => {
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+
+  it('does not POST turns itself; the shared event-handler seam owns that', async () => {
+    // The append lives in useWebSocketEventHandler (above the per-chat filter),
+    // so it covers both backends and background chats uniformly. The WASM query
+    // handler must not append a second time.
+    const { setActiveHost } = await import('../host/accessor');
+    const { headlessHost } = await import('../host/HostProvider');
+    const base = headlessHost();
+    setActiveHost({
+      ...base,
+      transport: { apiBaseURL: 'https://host.test/backend', wsURL: '', authMode: 'bearer' },
+      capabilities: { ...base.capabilities, chat: true, chatSessions: true },
+    });
+
+    const fetchSpy = vi.fn(async () => new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchSpy);
+    try {
+      const shell = createMockShell({ runAgent: async () => ({ response: 'a', provider: 'p', model: 'm' }) });
+      handleWasmLocal(shell, '/api/query', 'POST', '/api/query', JSON.stringify({ query: 'q', chat_id: 'c-host' }));
+      await settle();
+      await settle();
+      expect(fetchSpy.mock.calls.some((c) => String(c[0]).includes('/api/chat-sessions/turn'))).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+      setActiveHost(headlessHost());
+    }
+  });
+
+  it('dispatches query_completed carrying the query, so the append seam sees the answer', async () => {
+    // The append seam reads `eventData.query`; the daemon's query_completed
+    // carries it, so the in-browser agent's must too, or the answer would
+    // never reach a host store for the WASM backend.
+    const { setAgentEventDispatcher } = await import('./cloudWasmHandlers');
+    const events: Array<{ type: string; data: Record<string, unknown> }> = [];
+    setAgentEventDispatcher((event) => events.push(event as { type: string; data: Record<string, unknown> }));
+    try {
+      const shell = createMockShell({ runAgent: async () => ({ response: '4', provider: 'p', model: 'm' }) });
+      handleWasmLocal(
+        shell,
+        '/api/query',
+        'POST',
+        '/api/query',
+        JSON.stringify({ query: 'what is 2+2?', chat_id: 'c1' }),
+      );
+      await settle();
+      await settle();
+      const completed = events.find((e) => e.type === 'query_completed');
+      expect(completed?.data.query).toBe('what is 2+2?');
+      expect(completed?.data.response).toBe('4');
+    } finally {
+      setAgentEventDispatcher(null);
+    }
   });
 });
 

@@ -30,6 +30,7 @@ const ALL_CAPS_OFF = {
   localModels: false,
   verification: false,
   serverGit: false,
+  chatSessions: false,
 } as const;
 
 function makeHost(overrides: Partial<SproutHost> = {}): SproutHost {
@@ -67,6 +68,7 @@ function makeHost(overrides: Partial<SproutHost> = {}): SproutHost {
       localModels: false,
       verification: false,
       serverGit: true,
+      chatSessions: false,
     },
     ...overrides,
   };

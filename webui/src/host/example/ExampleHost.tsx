@@ -105,6 +105,7 @@ export function createExampleHost(state: ExampleHostState): SproutHost {
       localModels: false,
       verification: false,
       serverGit: false,
+      chatSessions: false,
     },
   };
 }

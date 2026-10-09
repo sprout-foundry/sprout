@@ -5,9 +5,10 @@
  * by the WASM shell rather than being proxied to a backend.
  */
 
+import { getActiveHost } from '../host/accessor';
 import { describeAgentError, notifyCreditsBlocked } from './agentErrorMessage';
 import { historyForChat, isChatRunning, recordTurn, setChatRunning } from './cloudChatSessions';
-import { getActiveHost } from '../host/accessor';
+import { binaryMimeType } from './cloudWasmBinary';
 import { NATIVE_CHAT_ENABLED } from './nativeChatStubs/nativeChatFlag';
 import { platformProviderConfig, reportedManagedContextWindow } from './platformProvider';
 import {
@@ -20,7 +21,6 @@ import {
   workspaceRootOf,
 } from './vfsFiles';
 import type { WasmDirEntry, WasmShell } from './wasmShell';
-import { binaryMimeType } from './cloudWasmBinary';
 import { workspaceCwdContextLine } from './workspaceCwd';
 
 // Global event dispatcher — set by the webui's event system so WASM
@@ -1344,6 +1344,7 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
       setChatRunning(chatId, false);
       recordTurn(chatId, query, result.response);
       dispatch('query_completed', {
+        query,
         response: result.response,
         provider: result.provider,
         model: result.model,

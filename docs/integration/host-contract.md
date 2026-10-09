@@ -267,6 +267,7 @@ helpers).
 | `localModels` | Locally-hosted model selection and management |
 | `verification` | Verification flows and their results UI |
 | `serverGit` | Server-side git, distinct from in-browser git |
+| `chatSessions` | The host serves the chat session store (see "Chat session store" below) |
 
 ## The hosts Sprout ships
 
@@ -310,8 +311,9 @@ transport records the same-origin sentinel `''` rather than a fixed host.
   toasts and the NotificationCenter are unchanged.
 - Capabilities: `ssh`, `git`, `chat`, `workspaceSwitching`, `export`,
   `localTerminal`, `settings`, `automations`, `agentChanges`, `mcp`,
-  `localModels`, `verification`, `serverGit` are **on**; `folderPicker` and
-  `instances` are **off**.
+  `localModels`, `verification`, `serverGit` are **on**; `folderPicker`,
+  `instances` and `chatSessions` are **off** (the local build keeps its own
+  daemon chat session store).
 
 ### `cloudHost`
 
@@ -336,7 +338,8 @@ bootstrap adapter.
   `git`, `chat`, `instances`, `settings` are **on**; `ssh`,
   `workspaceSwitching`, `folderPicker`, `export`, `localTerminal`,
   `automations`, `agentChanges`, `mcp`, `localModels`, `verification`,
-  `serverGit` are **off**.
+  `serverGit`, `chatSessions` are **off** (the hosted platform keeps no chat
+  session store; the chat list lives in the browser).
 
 The legacy hosted program also had a `supportsSSH` flag and an
 `appMode`/`isCloud` pair; today `ssh` is the flag and `authMode === 'bearer'`
@@ -447,9 +450,131 @@ const host: SproutHost = {
     localModels: false,
     verification: false,
     serverGit: false,
+    chatSessions: false,
   },
 };
 ```
+
+### Chat session store
+
+By default Sprout keeps its own chat session store: the local daemon's
+`/api/chat-sessions*` endpoints, or — for the in-browser agent, which has no
+daemon — a browser-local store. A host that advertises
+`capabilities.chatSessions: true` takes over that store: the chat session
+list / create / rename / delete / delete-all / switch / messages calls go to
+the host, and finished turns are appended to it, for both the daemon and the
+in-browser agent backends. With the capability off (the default) behaviour is
+unchanged.
+
+When the capability is on, the calls are made at
+`transport.apiBaseURL` with the **same request and response shapes as the
+daemon's `/api/chat-sessions*` endpoints** — a host implements the endpoints
+below and the chat UI needs no host-specific branch. The base URL is the
+transport's `apiBaseURL` (`''` is the same-origin sentinel); the paths below
+are appended to it.
+
+#### `GET /api/chat-sessions`
+
+List the chats.
+
+```
+200 {
+  "message": string,
+  "chat_sessions": ChatSession[],
+  "active_chat_id": string,
+  "total_sessions": number
+}
+```
+
+`ChatSession` is the daemon's wire shape: `id`, `name`, `created_at`,
+`last_active_at`, `message_count`, `current_session_id`, `active_query`
+(boolean — a run is in progress), `is_pinned`, `mode` (`"code"` | `"design"`),
+plus the computed `is_default` / `is_active` flags the UI reads.
+
+#### `POST /api/chat-sessions/create`
+
+Create a chat. Does **not** switch the active chat — the UI switches to the
+new chat itself, as it does against the daemon.
+
+```
+body: { "name"?: string, "mode"?: "code" | "design" }
+200  { "message": string, "chat_session": ChatSession }
+```
+
+#### `POST /api/chat-sessions/switch`
+
+Make a chat active and return its transcript.
+
+```
+body: { "id": string, "mode"?: "code" | "design" }
+200 {
+  "message": string,
+  "active_chat_id": string,
+  "chat_session": ChatSession & {
+    "messages": Array<{ "role": string, "content": string,
+                        "reasoning_content"?: string, "timestamp"?: string }>,
+    "run_events"?: WsEvent[]
+  }
+}
+404 when the chat is unknown
+```
+
+#### `GET /api/chat-sessions/messages?chat_id=<id>`
+
+Read a chat's transcript **without** changing the active chat (background
+panes poll this). Same response shape as `switch`.
+
+```
+200 { "message": string, "active_chat_id": string, "chat_session": { …, "messages": [...] } }
+404 when the chat is unknown
+```
+
+#### `POST /api/chat-sessions/rename`
+
+```
+body: { "id": string, "name": string }
+200  { "message": string, "chat_session": ChatSession }
+400 on an empty name; 404 when the chat is unknown
+```
+
+#### `POST /api/chat-sessions/delete`
+
+```
+body: { "id": string, "remove_worktree"?: boolean }
+200  { "message": string, "worktree_removed"?: boolean, "worktree_error"?: string }
+404 when the chat is unknown
+```
+
+#### `POST /api/chat-sessions/delete-all`
+
+Delete every chat, keeping one fresh empty chat active.
+
+```
+200 { "message": string, "deleted_count": number, "active_chat_id": string }
+```
+
+#### `POST /api/chat-sessions/turn`
+
+Append a finished turn to a chat's transcript. Sprout calls this when a turn
+starts (the question) and again when it finishes (the question and the
+answer), for both agent backends — the daemon and the in-browser agent — and
+for a chat answering off screen. The host owns persistence and idempotency: a
+repeated call for the same question/answer pair must not duplicate the turn.
+
+```
+body: { "chat_id": string, "query": string, "response"?: string }
+200  { "message": string }
+404 when the chat is unknown
+```
+
+The call is best-effort — a failure is swallowed, because the turn has
+already rendered in the UI. A host that does not implement it still gets the
+list/create/rename/delete/switch behaviour.
+
+On reload, the active chat's transcript is restored through `GET
+/api/chat-sessions` + `POST /api/chat-sessions/switch` (the same calls the
+chat unit makes at boot), so the host store is the source of truth for the
+conversation across reloads.
 
 ## The example host
 

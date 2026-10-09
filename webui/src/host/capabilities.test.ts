@@ -48,6 +48,7 @@ function testHost(overrides: Record<string, boolean> = {}): SproutHost {
       localModels: false,
       verification: false,
       serverGit: false,
+      chatSessions: true,
       ...overrides,
     },
   };
@@ -71,6 +72,7 @@ describe('config/mode capability bindings read the active host', () => {
     expect(mode.supportsSettings).toBe(true);
     expect(mode.supportsAutomations).toBe(true);
     expect(mode.supportsAgentChanges).toBe(true);
+    expect(mode.supportsChatSessions).toBe(true);
   });
 
   it('a distinct host re-derives the bindings (host is the source of truth)', async () => {
@@ -144,6 +146,7 @@ describe('config/mode capability bindings fall back with no active host', () => 
     expect(mode.supportsSettings).toBe(true);
     expect(mode.supportsAutomations).toBe(true);
     expect(mode.supportsAgentChanges).toBe(true);
+    expect(mode.supportsChatSessions).toBe(false);
   });
 
   it('uses local defaults in a cloud build with no host (no build-flag seeding)', async () => {

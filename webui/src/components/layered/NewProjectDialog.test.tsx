@@ -51,6 +51,7 @@ beforeEach(() => {
       localModels: false,
       verification: false,
       serverGit: false,
+      chatSessions: false,
     },
     github: {
       isConnected: () => Promise.resolve(github.connected),

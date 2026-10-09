@@ -75,6 +75,14 @@ type RuntimeConfig struct {
 	// (GitHub unreachable in-browser). See webui/src/types/runtimeConfig.ts.
 	EgressProxy string `json:"egressProxy,omitempty"`
 
+	// RepoURL is the repository the workspace should open, when the host
+	// names one (a host's project repoUrl). Sourced from the SPROUT_REPO_URL
+	// env var; empty string omits the field, and the editor falls back to the
+	// ?repo= query parameter. A host that mounts a workspace supplies the repo
+	// through its own transport, so this is the daemon-side equivalent for a
+	// host that drives the bootstrap instead.
+	RepoURL string `json:"repoUrl,omitempty"`
+
 	// ContractVersion is the API contract version (the OpenAPI info.version
 	// in docs/api) this daemon build serves. The Web UI compares its major
 	// version to the value it was built against and refuses to start when
@@ -134,6 +142,10 @@ func (ws *ReactWebServer) handleAPIBootstrap(w http.ResponseWriter, r *http.Requ
 		// GitHub traffic. Empty (env unset) → the omitempty tag drops it and
 		// the agent keeps the two-origin restriction.
 		EgressProxy: os.Getenv("SPROUT_EGRESS_PROXY"),
+		// Repository the workspace should open, when the host names one.
+		// Empty (env unset) → the omitempty tag drops it and the editor falls
+		// back to the ?repo= query parameter.
+		RepoURL: os.Getenv("SPROUT_REPO_URL"),
 	}
 	writeJSON(w, http.StatusOK, config)
 }

@@ -40,6 +40,9 @@ interface BootstrapResponse {
    * platform (cloud mode) or by the daemon when SPROUT_PLATFORM_URL is set
    * (Mode B Fly workspaces). Absent when the host cannot know it. */
   platformURL?: string;
+  /** The repository the workspace should open, when the host names one.
+   * Absent when no host names a repo (the adapter falls back to ?repo=). */
+  repoUrl?: string;
   /** Workspace git snapshot (ETH-1). Absent/null when the daemon could not determine it. */
   sync?: GitSyncReport | null;
   /** Newer release available, from the daemon's cached release check. */
@@ -295,6 +298,9 @@ async function resolveRuntimeConfig(): Promise<RuntimeConfig> {
         // SP-016 P0.3: absolute platform base for account-surface exits.
         // An empty string means "the host doesn't know" → treat as absent.
         platformURL: data.platformURL || undefined,
+        // The repository the workspace should open, when the host names one.
+        // Empty means "no host repo" → the adapter falls back to ?repo=.
+        repoUrl: data.repoUrl || undefined,
         // Version negotiation: the daemon's reported contract version, checked
         // against this build's pin before the app renders (contractCompat).
         contractVersion: data.contractVersion,
@@ -362,7 +368,15 @@ async function installAdapterForConfig(config: RuntimeConfig): Promise<void> {
   // and whenever the host changes (the entry records its host after this
   // module's auto-run) so the value lands on the live host.
   recordHostPlatformURL(config.platformURL);
-  if (getActiveHost()?.transport.authMode === 'bearer') {
+  const host = getActiveHost();
+  // The host's explicit agent backend decides whether the in-browser agent is
+  // installed: a host that selected the wasm backend runs the agent in the
+  // browser, so the CloudAdapter (which serves the browser-local file ops and
+  // the wasm-local agent query) must be installed even when the transport is
+  // not the hosted platform's bearer transport. Absent an explicit backend, the
+  // hosted-build test stays exactly what it was (authMode === 'bearer').
+  const wasmAgent = host?.transport.agent?.kind === 'wasm';
+  if (host?.transport.authMode === 'bearer' || wasmAgent) {
     const { CloudAdapter } = await import('./services/cloudAdapter');
     // eslint-disable-next-line no-console
     const adapter = new CloudAdapter({
@@ -370,16 +384,21 @@ async function installAdapterForConfig(config: RuntimeConfig): Promise<void> {
       wsUrl: config.wsURL,
       navItems: config.navItems ?? getActiveHost()?.navigation.navItems ?? [],
       egressProxy: config.egressProxy,
+      // A host that mounts a workspace already knows the project, so its repo
+      // comes from the host (the project's repoUrl) rather than the `?repo=`
+      // URL parameter. Absent a host-named repo, the adapter falls back to the
+      // query parameter (the hosted build's shareable deep link).
+      repoUrl: config.repoUrl,
     });
     installAdapter(adapter);
 
-    // Auto-import repo from ?repo= query param if present. restoreRepo
-    // checks the IndexedDB import cache first (the file tree lives in the
-    // in-memory WASM VFS, so without the cache a reload loses the
-    // workspace) and only falls back to the server-side clone on a cache
-    // miss. The ?repo= param stays in the URL: it is a shareable deep
-    // link, and refreshes are served from the cache.
-    const repoParam = CloudAdapter.getRepoFromQuery();
+    // Auto-import repo from the host's project repo (or the ?repo= query
+    // param) if present. restoreRepo checks the IndexedDB import cache first
+    // (the file tree lives in the in-memory WASM VFS, so without the cache a
+    // reload loses the workspace) and only falls back to the server-side clone
+    // on a cache miss. The ?repo= param stays in the URL: it is a shareable
+    // deep link, and refreshes are served from the cache.
+    const repoParam = adapter.getStartupRepo();
     if (repoParam) {
       // Signal that an import is in progress (before WASM shell is ready).
       (window as unknown as Record<string, unknown>).__repoImporting = repoParam;

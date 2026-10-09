@@ -83,7 +83,7 @@ host passes in; Sprout never infers its host from build flags or URLs.
 |---|---|
 | Identity | Current user (id, display name, avatar) or none |
 | Entitlements | A usage summary to display (generic: remaining share, label, link target) and what to do when usage runs out |
-| Transport | Where backend calls go (160c), WebSocket URL, auth mode, and the model endpoint for the in-browser agent |
+| Transport | Where backend calls go (160c), WebSocket URL, auth mode, the agent backend (daemon vs in-browser), and the model endpoint for the in-browser agent |
 | Navigation | Outward links Sprout can request by intent (`account`, `usage`, `help`, `signOut`), each resolved by the host; deep links back into a project/space |
 | Notifications | A sink Sprout posts to, and an optional count the host displays |
 | Chrome slots | Optional React nodes the host supplies for Sprout's own header areas (e.g. account menu), or "host renders chrome" to hide them |
@@ -99,6 +99,16 @@ Rules:
   `isCloud` branch maps to a capability or moves to the host.
 - The local web UI ships `localHost`: no account, local files, local
   backend, all local capabilities on.
+- The transport selects the agent backend explicitly: `{ kind: 'daemon',
+  apiBaseURL, wsURL }` (a daemon reachable through the host — preferred) or
+  `{ kind: 'wasm', modelEndpoint }` (the in-browser agent). Absent means the
+  host did not choose and Sprout keeps its own default for the build. For the
+  wasm backend Sprout installs the cloud adapter from the host (the model
+  endpoint comes from the transport, not a hard-coded platform path), routes
+  the agent's events through the shared event bus, and opens the host project's
+  repository (`project.repoUrl`) instead of the `?repo=` URL parameter. A host
+  may switch backends when a daemon becomes available by re-mounting the
+  workspace with a new transport.
 
 See `docs/integration/host-contract.md` for the interface field by field, the
 built-in hosts, and what each former `isCloud` branch became.

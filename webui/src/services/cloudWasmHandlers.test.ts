@@ -686,3 +686,81 @@ describe('image upload in browser mode', () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe('the in-browser agent provider config follows the host backend', () => {
+  const queryBody = JSON.stringify({ query: 'hello' });
+
+  it('points the provider at the host model endpoint for a wasm backend', async () => {
+    const { setActiveHost } = await import('../host/accessor');
+    const { headlessHost } = await import('../host/HostProvider');
+    setActiveHost({
+      ...headlessHost(),
+      transport: {
+        apiBaseURL: '',
+        wsURL: '',
+        authMode: 'none',
+        agent: { kind: 'wasm', modelEndpoint: 'https://models.host.test/v1/chat' },
+      },
+    });
+    const written: Array<{ path: string; content: string }> = [];
+    const shell = createMockShell({
+      writeFile: (path: string, content: string) => {
+        written.push({ path, content });
+        return '';
+      },
+    });
+
+    handleWasmLocal(shell, '/api/query', 'POST', '/api/query', queryBody);
+    // The query handler writes the provider config synchronously before it
+    // fires the (async) agent loop.
+    const config = written.find((w) => w.path.endsWith('/providers/platform.json'));
+    expect(config).toBeDefined();
+    expect(JSON.parse(config!.content).endpoint).toBe('https://models.host.test/v1/chat');
+    setActiveHost(headlessHost());
+  });
+
+  it('points the provider at the daemon API base for a daemon backend', async () => {
+    const { setActiveHost } = await import('../host/accessor');
+    const { headlessHost } = await import('../host/HostProvider');
+    setActiveHost({
+      ...headlessHost(),
+      transport: {
+        apiBaseURL: 'https://daemon.test',
+        wsURL: 'wss://daemon.test/ws',
+        authMode: 'none',
+        agent: { kind: 'daemon', apiBaseURL: 'https://daemon.test', wsURL: 'wss://daemon.test/ws' },
+      },
+    });
+    const written: Array<{ path: string; content: string }> = [];
+    const shell = createMockShell({
+      writeFile: (path: string, content: string) => {
+        written.push({ path, content });
+        return '';
+      },
+    });
+
+    handleWasmLocal(shell, '/api/query', 'POST', '/api/query', queryBody);
+    const config = written.find((w) => w.path.endsWith('/providers/platform.json'));
+    expect(JSON.parse(config!.content).endpoint).toBe('https://daemon.test/api/proxy/chat');
+    setActiveHost(headlessHost());
+  });
+
+  it('falls back to the platform proxy path when the host names no endpoint', async () => {
+    const { setActiveHost } = await import('../host/accessor');
+    const { headlessHost } = await import('../host/HostProvider');
+    setActiveHost({ ...headlessHost() });
+    const written: Array<{ path: string; content: string }> = [];
+    const shell = createMockShell({
+      writeFile: (path: string, content: string) => {
+        written.push({ path, content });
+        return '';
+      },
+    });
+
+    handleWasmLocal(shell, '/api/query', 'POST', '/api/query', queryBody);
+    const config = written.find((w) => w.path.endsWith('/providers/platform.json'));
+    const origin = window.location.origin;
+    expect(JSON.parse(config!.content).endpoint).toBe(`${origin}/proxy/chat`);
+    setActiveHost(headlessHost());
+  });
+});

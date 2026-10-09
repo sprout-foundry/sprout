@@ -230,6 +230,67 @@ describe('bootstrapAdapter', () => {
     });
   });
 
+  describe('host that selects the wasm agent backend', () => {
+    /** A non-bearer host whose transport selects the in-browser agent. */
+    async function activateWasmAgentHost() {
+      const { setActiveHost } = await import('./host/accessor');
+      const { headlessHost } = await import('./host/HostProvider');
+      setActiveHost({
+        ...headlessHost(),
+        transport: {
+          apiBaseURL: '',
+          wsURL: '',
+          authMode: 'none',
+          agent: { kind: 'wasm', modelEndpoint: 'https://models.host.test/v1/chat' },
+        },
+      });
+    }
+
+    beforeEach(async () => {
+      vi.resetModules();
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network error')));
+      vi.unstubAllEnvs();
+      mockWindowLocation('https://app.host.test', 'https:', 'app.host.test');
+      await activateWasmAgentHost();
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+      restoreWindowLocation();
+      vi.resetModules();
+    });
+
+    it('installs the cloud adapter even without the bearer transport', async () => {
+      // The wasm backend needs the browser-local file ops and the in-browser
+      // agent query the CloudAdapter serves, so the adapter is installed for a
+      // host that selected it even when its transport is not the platform's.
+      await importWithBootstrap();
+
+      const { getAdapter } = await import('./services/apiAdapter');
+      expect(getAdapter()?.name).toBe('foundry-cloud');
+    });
+
+    it('does not install an adapter for a daemon backend host', async () => {
+      vi.resetModules();
+      const { setActiveHost } = await import('./host/accessor');
+      const { headlessHost } = await import('./host/HostProvider');
+      setActiveHost({
+        ...headlessHost(),
+        transport: {
+          apiBaseURL: 'https://daemon.test',
+          wsURL: 'wss://daemon.test/ws',
+          authMode: 'none',
+          agent: { kind: 'daemon', apiBaseURL: 'https://daemon.test', wsURL: 'wss://daemon.test/ws' },
+        },
+      });
+      await importWithBootstrap();
+
+      const { hasAdapter } = await import('./services/apiAdapter');
+      expect(hasAdapter()).toBe(false);
+    });
+  });
+
   describe('fallback when env vars are not set in a cloud build (Pages Functions proxy case)', () => {
     beforeEach(async () => {
       vi.resetModules();

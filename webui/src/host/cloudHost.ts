@@ -128,6 +128,11 @@ export const cloudHost: SproutHost = {
     wsURL: '',
     // The hosted platform authenticates requests.
     authMode: 'bearer',
+    // The hosted build's agent runs in the browser (the in-browser WASM agent).
+    // The model endpoint is the platform's managed model, resolved at runtime
+    // from the transport's `modelEndpoint`; the constant declares the shape, so
+    // the endpoint stays absent here and the bootstrap adapter records it.
+    agent: { kind: 'wasm', modelEndpoint: '' },
   },
   navigation: {
     // The platform resolves an intent to its own SPA page and opens it. The

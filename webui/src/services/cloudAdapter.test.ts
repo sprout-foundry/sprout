@@ -243,6 +243,26 @@ describe('CloudAdapter', () => {
       const adapterWithoutWs = new CloudAdapter(configWithoutWs);
       expect(adapterWithoutWs.getWebSocketURL()).toBe('');
     });
+
+    it('should prefer a host-supplied repo over the ?repo= query parameter', () => {
+      // A host that mounts a workspace already knows the project, so its repo
+      // comes from the config (the project's repoUrl), not the URL parameter.
+      window.history.replaceState({}, '', '/?repo=https://github.com/from/query');
+      const withRepo = new CloudAdapter({ ...mockConfig, repoUrl: 'https://github.com/acme/widgets' });
+      expect(withRepo.getStartupRepo()).toBe('https://github.com/acme/widgets');
+      window.history.replaceState({}, '', '/');
+    });
+
+    it('should fall back to the ?repo= query parameter when no host repo is set', () => {
+      window.history.replaceState({}, '', '/?repo=https://github.com/from/query');
+      expect(adapter.getStartupRepo()).toBe('https://github.com/from/query');
+      window.history.replaceState({}, '', '/');
+    });
+
+    it('should return null when neither a host repo nor a query parameter is present', () => {
+      window.history.replaceState({}, '', '/');
+      expect(adapter.getStartupRepo()).toBeNull();
+    });
   });
 
   describe('fetch - synthetic endpoint interception', () => {

@@ -7,6 +7,7 @@
 
 import { describeAgentError, notifyCreditsBlocked } from './agentErrorMessage';
 import { historyForChat, isChatRunning, recordTurn, setChatRunning } from './cloudChatSessions';
+import { getActiveHost } from '../host/accessor';
 import { NATIVE_CHAT_ENABLED } from './nativeChatStubs/nativeChatFlag';
 import { platformProviderConfig, reportedManagedContextWindow } from './platformProvider';
 import {
@@ -204,11 +205,28 @@ export {
   workspaceRootOf,
 } from './vfsFiles';
 
+/**
+ * The model endpoint the in-browser agent's provider config should point at,
+ * given the host's backend choice. The daemon serves the same OpenAI-compatible
+ * proxy at `/api/proxy/chat` (its LLM-only surface), so a daemon backend points
+ * there; a wasm backend uses the host's model endpoint verbatim. Undefined means
+ * the host named no endpoint and the caller falls back to the platform path.
+ */
+function hostModelEndpoint(): string | undefined {
+  const agent = getActiveHost()?.transport.agent;
+  if (agent?.kind === 'daemon') {
+    return agent.apiBaseURL ? `${agent.apiBaseURL.replace(/\/+$/, '')}/api/proxy/chat` : undefined;
+  }
+  const transport = getActiveHost()?.transport;
+  const endpoint = (agent?.kind === 'wasm' ? agent.modelEndpoint : undefined) || transport?.modelEndpoint || undefined;
+  return endpoint && endpoint.trim() ? endpoint.trim() : undefined;
+}
+
 function writePlatformProviderConfig(shell: WasmShell, apiOrigin: string): void {
   try {
     shell.writeFile(
       '/home/user/.config/sprout/providers/platform.json',
-      JSON.stringify(platformProviderConfig(apiOrigin, reportedManagedContextWindow())),
+      JSON.stringify(platformProviderConfig(apiOrigin, reportedManagedContextWindow(), hostModelEndpoint())),
     );
   } catch {
     // Keep the previously written config.

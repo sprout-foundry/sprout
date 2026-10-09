@@ -47,6 +47,32 @@ export interface HostEntitlements {
 }
 
 /**
+ * The agent backend a transport selects: where the agent's turns actually run.
+ *
+ * A host that has a daemon for the project points Sprout at it (full tools;
+ * the daemon is the source of truth); a host without one runs the agent in the
+ * browser and supplies the model endpoint the in-browser agent calls. Absent
+ * means the host did not choose explicitly, and Sprout keeps its own default
+ * for the build (the local daemon at the transport's own URLs, or the hosted
+ * platform's managed model).
+ */
+export type HostAgentBackend =
+  | {
+      /** The agent runs in a Sprout daemon reachable through the host. */
+      kind: 'daemon';
+      /** Base URL for the daemon's HTTP API (or '' for same-origin). */
+      apiBaseURL: string;
+      /** WebSocket URL for the daemon's agent event stream. */
+      wsURL: string;
+    }
+  | {
+      /** The agent runs in the browser (the in-browser WASM agent). */
+      kind: 'wasm';
+      /** Endpoint the in-browser agent's model calls go to. */
+      modelEndpoint: string;
+    };
+
+/**
  * Where Sprout's backend calls go. Transport is host-provided so Sprout never
  * infers its backend from build flags or URLs.
  */
@@ -57,6 +83,14 @@ export interface HostTransport {
   wsURL: string;
   /** How the transport authenticates requests. */
   authMode: 'none' | 'bearer';
+  /**
+   * The agent backend this transport selects, when the host chooses one
+   * explicitly. Absent means the host did not choose, and Sprout keeps its own
+   * default for the build. A host may switch backends when a daemon becomes
+   * available by re-mounting the workspace with a new transport (a re-mount is
+   * the supported switch — see the contract doc).
+   */
+  agent?: HostAgentBackend;
   /**
    * Endpoint for the in-browser agent's model calls; absent when the host does
    * not supply one (the agent falls back to the default endpoint).

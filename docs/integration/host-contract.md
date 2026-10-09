@@ -576,6 +576,144 @@ On reload, the active chat's transcript is restored through `GET
 chat unit makes at boot), so the host store is the source of truth for the
 conversation across reloads.
 
+## The agent audit trail
+
+The agent records a facts-only audit trail of everything it did: one event per
+model call and one per tool execution. The events carry digests and metadata —
+provider, model, endpoint host, request/response SHA-256 and byte counts, token
+usage, outcome, and the trigger — and **never** prompt text, response text,
+message content, or raw tool arguments. A host that runs the agent for its
+users (a workspace daemon, `sprout runner`, the in-browser agent) can consume
+the trail to answer "what did the agent send to which provider, and what did it
+run?" without storing what the agent said.
+
+The events are always written to the local JSONL audit log (the file `sprout
+audit tail` reads). A host that wants them delivered also configures an audit
+endpoint, and the agent POSTs them there in batches.
+
+### Configuring the audit endpoint
+
+The endpoint is a config field, `audit.endpoint`:
+
+```json
+{
+  "audit": {
+    "endpoint": "https://host.example.com/api/agent-audit",
+    "batch_size": 32,
+    "flush_interval_seconds": 5
+  }
+}
+```
+
+- `endpoint` — the URL the agent POSTs batches to. Empty means local-only.
+- `batch_size` — events buffered before a batch is sent (default 32).
+- `flush_interval_seconds` — how long an event may wait before its batch is
+  sent (default 5).
+
+The transport is **best-effort and never blocks a turn**: events are enqueued
+on a bounded background queue (a full queue drops the oldest event), a batch is
+POSTed from a single background goroutine, and a failed batch is retried a
+bounded number of times with backoff before being dropped. A slow or
+unreachable endpoint can never stall or fail a turn.
+
+### The batch request
+
+```
+POST <audit.endpoint>
+Content-Type: application/json
+
+[ <event>, <event>, ... ]
+```
+
+The body is a JSON array of event objects. The host answers `2xx` when it has
+accepted the batch; any other status (or a transport error) triggers a retry.
+The host owns idempotency — a retried batch may repeat events, so a host that
+must not double-count should key on the event's `time` plus its digests.
+
+### Event shape
+
+Every event is a single JSON object with a `kind` discriminator.
+
+#### `kind: "model_call"`
+
+One per model call the agent made, including calls that failed over or errored.
+
+```json
+{
+  "time": "2026-01-02T15:04:05Z",
+  "kind": "model_call",
+  "chat_id": "chat-1",
+  "session_id": "sess-1",
+  "provider": "openai",
+  "model": "gpt-5",
+  "endpoint_host": "api.openai.com",
+  "request_sha256": "…",
+  "request_bytes": 12345,
+  "response_sha256": "…",
+  "response_bytes": 678,
+  "prompt_tokens": 1024,
+  "completion_tokens": 128,
+  "outcome": "ok",
+  "trigger": "user_turn",
+  "streaming": false
+}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `time` | When the call completed (RFC 3339) |
+| `kind` | `"model_call"` |
+| `chat_id` | The chat this call belongs to (empty when none) |
+| `session_id` | The agent session id (empty when none) |
+| `provider` | The provider name (`openai`, `anthropic`, `sprout-local`, …) |
+| `model` | The model id sent to the provider |
+| `endpoint_host` | The host (host:port) of the provider endpoint — never a path or credentials |
+| `request_sha256` | SHA-256 of the request body the agent sent (after egress redaction) |
+| `request_bytes` | Byte length of that request body |
+| `response_sha256` | SHA-256 of the response body (for a streamed call, the bytes read from the SSE stream — a partial-body digest when the stream errored early) |
+| `response_bytes` | Byte length of that response |
+| `prompt_tokens` | Prompt tokens reported by the provider |
+| `completion_tokens` | Completion tokens reported by the provider |
+| `outcome` | `"ok"`, `"error"`, or `"failover"` (a retry/failover path was used) |
+| `trigger` | `"user_turn"`, `"tool_call_follow_up"`, or `"subagent"` |
+| `streaming` | Whether the call used the streaming path |
+| `failover` | Present and true when a failover path was used |
+
+#### `kind: "tool_call"`
+
+One per tool execution.
+
+```json
+{
+  "time": "2026-01-02T15:04:06Z",
+  "kind": "tool_call",
+  "chat_id": "chat-1",
+  "session_id": "sess-1",
+  "tool": "write_file",
+  "args_sha256": "…",
+  "args_bytes": 210,
+  "status": "ok",
+  "files_touched": ["src/a.go"],
+  "trigger": "user_turn"
+}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `time` | When the tool finished (RFC 3339) |
+| `kind` | `"tool_call"` |
+| `chat_id` / `session_id` | Same as the model-call event |
+| `tool` | The tool name |
+| `args_sha256` | SHA-256 of the tool's arguments (never the arguments) |
+| `args_bytes` | Byte length of the serialized arguments |
+| `status` | `"ok"` or `"error"` |
+| `files_touched` | The file paths the call's arguments declared (deduped, sorted) |
+| `trigger` | `"user_turn"` or `"subagent"` |
+
+Because the events are facts-only, a host can retain them under a stricter
+policy than the conversation transcript itself; nothing in an event needs the
+redaction a prompt would.
+
 ## The example host
 
 `webui/src/host/example/ExampleHost.tsx` is the worked example: it builds a

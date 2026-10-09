@@ -284,6 +284,13 @@ type Config struct {
 	// Wakeup controls auto-resume behavior for background task completions.
 	Wakeup WakeupConfig `json:"wakeup,omitempty"`
 
+	// Audit configures the per-call audit trail: where the local JSONL
+	// audit log lives and, when a host runs the agent for its users, the
+	// HTTP endpoint that receives batched audit events. See
+	// docs/integration/host-contract.md for the event shape and the
+	// endpoint contract.
+	Audit *AuditConfig `json:"audit,omitempty"`
+
 	// Training controls opt-in session recording for training data collection. OFF by default.
 	Training TrainingConfig `json:"training,omitempty"`
 
@@ -300,6 +307,23 @@ type WakeupConfig struct {
 	Enabled              bool `json:"enabled"`                 // Master switch; default true
 	MaxTokensPerSession  int  `json:"max_tokens_per_session"`  // Cap on auto-resume token spend between user messages; default 500000
 	MaxResumesPerSession int  `json:"max_resumes_per_session"` // Max auto-resumes before requiring user input; default 10
+}
+
+// AuditConfig configures the per-call audit trail.
+type AuditConfig struct {
+	// Endpoint is the host's audit endpoint. When set, the agent POSTs
+	// batched audit events (the per-call model and tool events) to it, in
+	// addition to writing them to the local JSONL audit log. Empty means
+	// local-only. The transport is best-effort and never blocks a turn.
+	Endpoint string `json:"endpoint,omitempty"`
+
+	// BatchSize is the number of events buffered before a batch is sent.
+	// Defaults to 32.
+	BatchSize int `json:"batch_size,omitempty"`
+
+	// FlushIntervalSeconds bounds how long an event may wait in the queue
+	// before its batch is sent. Defaults to 5.
+	FlushIntervalSeconds int `json:"flush_interval_seconds,omitempty"`
 }
 
 // DefaultWakeupConfig returns defaults. Auto-resume is ON by default: a

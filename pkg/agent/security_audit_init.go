@@ -58,6 +58,10 @@ func (a *Agent) initAuditLogger() {
 		return
 	}
 	a.SetAuditLogger(logger)
+	// Install the per-call audit sink over the same logger so model-call and
+	// tool-execution events land in the file `sprout audit tail` reads, and
+	// reach the host audit endpoint when one is configured.
+	a.callAuditSink.Store(installAuditSink(logger, a.GetConfig()))
 }
 
 // closeAuditLogger closes the agent's audit log file and detaches it from the
@@ -71,6 +75,9 @@ func (a *Agent) initAuditLogger() {
 func (a *Agent) closeAuditLogger() {
 	if a == nil {
 		return
+	}
+	if sink := a.callAuditSink.Swap(nil); sink != nil {
+		clearAuditSink(sink)
 	}
 	logger := a.auditLogger.Load()
 	if logger == nil {

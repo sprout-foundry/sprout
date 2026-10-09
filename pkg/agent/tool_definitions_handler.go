@@ -85,6 +85,9 @@ func convertHandlerToSeedToolConfig(h tools.ToolHandler, agent *Agent) core.Tool
 		// Execute via the new interface-based handler.
 		res, err := handler.Execute(ctx, env, handlerArgs)
 		if err != nil {
+			if agent != nil {
+				agent.emitToolAudit(ctx, name, args, "error")
+			}
 			return handleToolError(agent, err, name)
 		}
 
@@ -94,6 +97,9 @@ func convertHandlerToSeedToolConfig(h tools.ToolHandler, agent *Agent) core.Tool
 			if errMsg == "" {
 				errMsg = "tool returned error state"
 			}
+			if agent != nil {
+				agent.emitToolAudit(ctx, name, args, "error")
+			}
 			return handleToolError(agent, toolsErr(errMsg), name)
 		}
 
@@ -101,6 +107,7 @@ func convertHandlerToSeedToolConfig(h tools.ToolHandler, agent *Agent) core.Tool
 		// so the circuit breaker only tracks *consecutive* failures.
 		if agent != nil {
 			agent.clearSecurityBlock(name, args)
+			agent.emitToolAudit(ctx, name, args, "ok")
 		}
 
 		return postProcessResult(ctx, agent, name, args, res.Output), nil
@@ -128,6 +135,9 @@ func convertHandlerToSeedToolConfig(h tools.ToolHandler, agent *Agent) core.Tool
 
 		res, err := handler.Execute(ctx, env, handlerArgs)
 		if err != nil {
+			if agent != nil {
+				agent.emitToolAudit(ctx, name, args, "error")
+			}
 			msg, wrappedErr := handleToolError(agent, err, name)
 			return nil, msg, wrappedErr
 		}
@@ -137,12 +147,16 @@ func convertHandlerToSeedToolConfig(h tools.ToolHandler, agent *Agent) core.Tool
 			if errMsg == "" {
 				errMsg = "tool returned error state"
 			}
+			if agent != nil {
+				agent.emitToolAudit(ctx, name, args, "error")
+			}
 			msg, wrappedErr := handleToolError(agent, toolsErr(errMsg), name)
 			return nil, msg, wrappedErr
 		}
 
 		if agent != nil {
 			agent.clearSecurityBlock(name, args)
+			agent.emitToolAudit(ctx, name, args, "ok")
 		}
 
 		// Convert tools.ImageData to core.ImageData.

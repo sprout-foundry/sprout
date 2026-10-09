@@ -45,6 +45,13 @@ func (ws *ReactWebServer) handleAPISettingsMCPServers(w http.ResponseWriter, r *
 		return
 	}
 
+	// OAuth status/login/logout for the server: /oauth (GET status,
+	// POST login, DELETE logout).
+	if strings.HasSuffix(r.URL.Path, "/oauth") {
+		ws.handleAPISettingsMCPServerOAuth(w, r)
+		return
+	}
+
 	switch r.Method {
 	case http.MethodPost:
 		// POST without a name in URL means list-level create

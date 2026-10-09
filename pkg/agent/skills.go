@@ -45,7 +45,10 @@ func LoadSkill(skillID string, config *configuration.Config) (*SkillInfo, error)
 func LoadSkillInWorkspace(skillID string, config *configuration.Config, workspaceRoot string) (*SkillInfo, error) {
 	skill := config.GetSkill(skillID)
 	if skill == nil {
-		return nil, agenterrors.NewNotFound(fmt.Sprintf("skill %q", skillID))
+		return nil, agenterrors.NewNotFoundCause(
+			fmt.Sprintf("skill %q (no skill with that ID is registered — call list_skills for the available IDs; do NOT search the filesystem for skills, they come only from list_skills)", skillID),
+			nil,
+		)
 	}
 
 	if content, err := skills.ReadContent(skillID); err == nil {

@@ -233,11 +233,20 @@ func TestMCPHTTPClient_Initialize_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "POST", r.Method)
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+		// The Streamable HTTP transport requires both content types.
+		assert.Equal(t, "application/json, text/event-stream", r.Header.Get("Accept"))
 
 		// Parse request
 		var reqBody map[string]interface{}
 		err := json.NewDecoder(r.Body).Decode(&reqBody)
 		require.NoError(t, err)
+
+		if reqBody["method"] != "initialize" {
+			// The initialized notification follows initialize.
+			assert.Equal(t, "notifications/initialized", reqBody["method"])
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
 		assert.Equal(t, "initialize", reqBody["method"])
 
 		// Send response with session ID

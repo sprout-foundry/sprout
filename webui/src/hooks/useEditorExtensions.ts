@@ -90,6 +90,7 @@ export interface ExtensionSettings {
   editorUsesTabs: boolean;
   whitespaceRenderingMode: WhitespaceRenderingMode;
   inlayHintsEnabled: boolean;
+  codeLensEnabled: boolean;
   signatureHelpEnabled: boolean;
   aiCompletionsEnabled: boolean;
   /** Line numbers and the diff bar only: no lint, quick-fix or fold column (phones). */
@@ -168,6 +169,7 @@ export interface UseEditorExtensionsReturn {
     tabSize: Compartment;
     lsp: Compartment;
     inlayHints: Compartment;
+    codeLens: Compartment;
     signatureHelp: Compartment;
     aiCompletions: Compartment;
     history: Compartment;
@@ -200,6 +202,7 @@ export function useEditorExtensions(): UseEditorExtensionsReturn {
     tabSize: new Compartment(),
     lsp: new Compartment(),
     inlayHints: new Compartment(),
+    codeLens: new Compartment(),
     signatureHelp: new Compartment(),
     aiCompletions: new Compartment(),
     history: new Compartment(),
@@ -251,7 +254,7 @@ export function useEditorExtensions(): UseEditorExtensionsReturn {
       // ── Visual aids ──
       indentGuidesPlugin(),
       stickyScrollPlugin(buffer.getFileExt),
-      codeLensPlugin(buffer.getFileExt),
+      compartments.codeLens.of(settings.codeLensEnabled ? codeLensPlugin(buffer.getFileExt) : []),
       linkedScrollExtension(paneId, () => buffer.getFilePath() ?? null),
       indentOnInput(),
       highlightSpecialChars(),

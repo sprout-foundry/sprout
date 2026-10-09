@@ -11,7 +11,8 @@ interface GeneralSettingsTabProps {
 }
 
 /**
- * Editor display preferences — auto-save, format-on-save, whitespace rendering.
+ * Editor display preferences — auto-save, format-on-save, inlay hints, reference counts, whitespace
+ * rendering.
  * Runtime-scoped (Editor section).
  */
 export default function GeneralSettingsTab({
@@ -61,6 +62,18 @@ export default function GeneralSettingsTab({
         'Format on Save',
         (v) => onEditorPreferenceChanged('formatOnSaveEnabled', v),
         'Format files with Prettier before saving',
+      )}
+      {toggle(
+        editorPreferences.inlayHintsEnabled ?? true,
+        'Inlay hints',
+        (v) => onEditorPreferenceChanged('inlayHintsEnabled', v),
+        'Show inferred types and parameter names inline in the editor',
+      )}
+      {toggle(
+        editorPreferences.codeLensEnabled ?? true,
+        'Reference counts',
+        (v) => onEditorPreferenceChanged('codeLensEnabled', v),
+        'Show how many times each function, class and interface is referenced, above its definition',
       )}
       <div className="config-item">
         <label htmlFor="whitespace-rendering-select">Render whitespace</label>

@@ -3,6 +3,11 @@ import { Keyboard, Upload, Trash2 } from 'lucide-react';
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { supportsLocalTerminal } from '../config/mode';
+import {
+  CODE_LENS_SETTING_KEY,
+  INLAY_HINTS_SETTING_KEY,
+  useEditorBooleanSetting,
+} from '../hooks/useEditorBooleanSetting';
 import { useHost, useHostCapabilities } from '../host';
 import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
 import { ApiService } from '../services/api';
@@ -270,6 +275,8 @@ export default function SidebarSettingsSection({
   onModelChange,
 }: SidebarSettingsSectionProps): JSX.Element {
   const log = useLog();
+  const inlayHints = useEditorBooleanSetting(INLAY_HINTS_SETTING_KEY, true);
+  const codeLens = useEditorBooleanSetting(CODE_LENS_SETTING_KEY, true);
   const host = useHost();
   const { localTerminal } = useHostCapabilities();
   // The host's GitHub account surface, when the host manages GitHub on its own
@@ -494,11 +501,19 @@ export default function SidebarSettingsSection({
               settings={settings}
               onSettingsChanged={onSettingsChanged}
               onRequestProviderSetup={onRequestProviderSetup}
-              editorPreferences={{ autoSaveEnabled, whitespaceRenderingMode, formatOnSaveEnabled }}
+              editorPreferences={{
+                autoSaveEnabled,
+                whitespaceRenderingMode,
+                formatOnSaveEnabled,
+                inlayHintsEnabled: inlayHints.value,
+                codeLensEnabled: codeLens.value,
+              }}
               onEditorPreferenceChanged={(key, value) => {
                 if (key === 'autoSaveEnabled') setAutoSaveEnabled(value as boolean);
                 if (key === 'whitespaceRenderingMode') setWhitespaceRenderingMode(value as WhitespaceRenderingMode);
                 if (key === 'formatOnSaveEnabled') setFormatOnSaveEnabled(value as boolean);
+                if (key === 'inlayHintsEnabled') inlayHints.set(value as boolean);
+                if (key === 'codeLensEnabled') codeLens.set(value as boolean);
               }}
               agentConfig={agentConfigObj}
             />

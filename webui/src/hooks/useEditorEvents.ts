@@ -49,6 +49,7 @@ export interface UseEditorEventsOptions {
   handleFindAllReferences: () => void;
   onGoToWorkspaceSymbol?: () => void;
   onToggleInlayHints?: () => void;
+  onToggleCodeLens?: () => void;
   onToggleSignatureHelp?: () => void;
   onToggleAiCompletions?: () => void;
   onCycleTabSize?: () => void;
@@ -191,6 +192,8 @@ export function useEditorEvents(options: UseEditorEventsOptions): void {
         window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'editor_goto_symbol' } }));
       } else if (e.type === 'editor-toggle-inlay-hints') {
         optionsRef.current.onToggleInlayHints?.();
+      } else if (e.type === 'editor-toggle-code-lens') {
+        optionsRef.current.onToggleCodeLens?.();
       } else if (e.type === 'editor-toggle-signature-help') {
         optionsRef.current.onToggleSignatureHelp?.();
       } else if (e.type === 'editor-toggle-ai-completions') {
@@ -239,6 +242,7 @@ export function useEditorEvents(options: UseEditorEventsOptions): void {
       'editor-go-to-workspace-symbol',
       'editor-go-to-symbol',
       'editor-toggle-inlay-hints',
+      'editor-toggle-code-lens',
       'editor-toggle-signature-help',
       'editor-cycle-tab-size',
       'editor-zoom-in',

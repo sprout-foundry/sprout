@@ -246,6 +246,9 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
         case 'editor_toggle_inlay_hints':
           document.dispatchEvent(new CustomEvent('editor-toggle-inlay-hints'));
           break;
+        case 'editor_toggle_code_lens':
+          document.dispatchEvent(new CustomEvent('editor-toggle-code-lens'));
+          break;
         case 'editor_toggle_signature_help':
           document.dispatchEvent(new CustomEvent('editor-toggle-signature-help'));
           break;

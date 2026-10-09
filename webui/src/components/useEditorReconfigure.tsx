@@ -19,6 +19,7 @@ import { EditorView as CMEditorView, lineNumbers } from '@codemirror/view';
 import { lineNumbersRelative } from '@uiw/codemirror-extensions-line-numbers-relative';
 import { useEffect, useRef } from 'react';
 import { aiCompletionsExtension } from '../extensions/aiCompletions';
+import { codeLensPlugin } from '../extensions/codeLens';
 import { inlayHintsExtension } from '../extensions/inlayHints';
 import { resolveLanguageId, getLanguageExtensions } from '../extensions/languageRegistry';
 import { buildLSPPluginExtensions } from '../extensions/lspExtensions';
@@ -49,6 +50,7 @@ export interface UseEditorReconfigureOptions {
     minimap: Compartment;
     relativeLineNumbers: Compartment;
     inlayHints: Compartment;
+    codeLens: Compartment;
     signatureHelp: Compartment;
     aiCompletions: Compartment;
   };
@@ -62,6 +64,7 @@ export interface UseEditorReconfigureOptions {
   relativeLineNumbersEnabled: boolean;
   whitespaceRenderingMode: WhitespaceRenderingMode;
   inlayHintsEnabled: boolean;
+  codeLensEnabled: boolean;
   signatureHelpEnabled: boolean;
   aiCompletionsEnabled: boolean;
 }
@@ -87,6 +90,7 @@ export function useEditorReconfigure(options: UseEditorReconfigureOptions): void
     relativeLineNumbersEnabled,
     whitespaceRenderingMode,
     inlayHintsEnabled,
+    codeLensEnabled,
     signatureHelpEnabled,
     aiCompletionsEnabled,
   } = options;
@@ -292,6 +296,14 @@ export function useEditorReconfigure(options: UseEditorReconfigureOptions): void
     buffer?.file?.ext,
     buffer?.file?.name,
   ]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({
+      effects: compartments.codeLens.reconfigure(codeLensEnabled ? codeLensPlugin(() => buffer?.file?.ext) : []),
+    });
+  }, [codeLensEnabled, buffer?.id, buffer?.file?.ext]);
 
   // ---------------------------------------------------------------------------
   // Signature help compartment sync

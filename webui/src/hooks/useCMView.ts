@@ -34,6 +34,7 @@ export interface CMViewSettings {
   editorUsesTabs: boolean;
   whitespaceRenderingMode: 'none' | 'boundary' | 'all';
   inlayHintsEnabled: boolean;
+  codeLensEnabled: boolean;
   signatureHelpEnabled: boolean;
   aiCompletionsEnabled: boolean;
   compactGutters?: boolean;
@@ -162,6 +163,7 @@ const DEFAULT_CM_SETTINGS: CMViewSettings = {
   editorUsesTabs: false,
   whitespaceRenderingMode: 'none',
   inlayHintsEnabled: false,
+  codeLensEnabled: false,
   signatureHelpEnabled: false,
   aiCompletionsEnabled: true,
 };

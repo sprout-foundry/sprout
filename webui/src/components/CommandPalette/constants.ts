@@ -33,6 +33,7 @@ export const COMMAND_DEFINITIONS: CommandDef[] = [
   { id: 'editor_cycle_whitespace_rendering', label: 'Cycle Whitespace Rendering', category: 'View' },
   { id: 'editor_toggle_relative_line_numbers', label: 'Toggle Relative Line Numbers', category: 'View' },
   { id: 'editor_toggle_inlay_hints', label: 'Toggle Inlay Hints', category: 'View' },
+  { id: 'editor_toggle_code_lens', label: 'Toggle Reference Counts', category: 'View' },
   { id: 'editor_toggle_signature_help', label: 'Toggle Signature Help', category: 'View' },
   { id: 'editor_cycle_tab_size', label: 'Cycle Indent Size', category: 'View' },
   { id: 'editor_zoom_in', label: 'Editor: Zoom In', category: 'View' },

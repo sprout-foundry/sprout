@@ -203,7 +203,9 @@ describe('ChatView without chat props', () => {
 
   it('keeps the input enabled when the host supplies a send handler', async () => {
     await act(async () => {
-      root.render(wrap(createElement(ChatView, { messages: [], onSendMessage: vi.fn(), onInputChange: vi.fn(), inputValue: '' })));
+      root.render(
+        wrap(createElement(ChatView, { messages: [], onSendMessage: vi.fn(), onInputChange: vi.fn(), inputValue: '' })),
+      );
     });
     expect(commandInputProps.disabled).toBe(false);
   });

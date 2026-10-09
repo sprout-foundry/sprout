@@ -186,6 +186,27 @@ describe('LayeredSidebar', () => {
     );
   });
 
+  it('opens the Files drill on a reveal-in-explorer event', () => {
+    renderSidebar();
+    expect(container.querySelector('.project-nav-drill-body')).toBeNull();
+    act(() => {
+      window.dispatchEvent(new CustomEvent('sprout:reveal-in-explorer', { detail: { path: 'src/index.ts' } }));
+    });
+    expect(container.querySelector('[data-testid="section-panel"]')).toBeTruthy();
+    const active = container.querySelector('.project-nav-sibling.active');
+    expect(active?.textContent).toBe('Files');
+    expect(getHomeView().open).toBe(false);
+  });
+
+  it('reveal-in-explorer switches back to Code mode', () => {
+    const onSelectMode = vi.fn();
+    renderSidebar({ activeModeId: 'design', onSelectMode });
+    act(() => {
+      window.dispatchEvent(new CustomEvent('sprout:reveal-in-explorer', { detail: { path: 'src/index.ts' } }));
+    });
+    expect(onSelectMode).toHaveBeenCalledWith('code');
+  });
+
   it('closes the phone drawer when a new conversation is created', () => {
     const onCloseDrawer = vi.fn();
     const base = renderSidebar();

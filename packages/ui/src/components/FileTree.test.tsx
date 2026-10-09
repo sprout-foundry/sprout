@@ -377,6 +377,59 @@ describe('FileTree', () => {
     expect(noResults).not.toBeNull();
   });
 
+  it('revealFile during the initial fetch still expands and selects', async () => {
+    // Every fetch parks until its resolver is called, mimicking slow network.
+    const resolvers = new Map<string, (files: FileInfo[]) => void>();
+    const slowFetch = vi.fn(
+      (path: string) => new Promise<FileInfo[]>((resolve) => { resolvers.set(path, resolve); }),
+    );
+    const ref: { current: FileTreeHandle | null } = { current: null };
+    act(() => {
+      root.render(createElement(FileTree, {
+        ref,
+        onFileSelect: vi.fn(),
+        onFetchFiles: slowFetch,
+      }));
+    });
+
+    // Reveal arrives while the tree's initial root fetch is still pending —
+    // the common case when the Files panel mounts on the reveal itself.
+    // (The handle types revealFile as void; the implementation is async.)
+    let revealDone = false;
+    const revealPromise = (ref.current!.revealFile('src/lib/deep.ts') as unknown as Promise<void>).then(() => {
+      revealDone = true;
+    });
+    void revealPromise;
+
+    // Land the root fetch; the reveal must wake and fetch the ancestors.
+    await act(async () => {
+      resolvers.get('.')!([
+        { name: 'src', path: 'src', isDir: true, size: 0, modified: 0 },
+        { name: 'README.md', path: 'README.md', isDir: false, size: 1, modified: 0, ext: '.md' },
+      ]);
+    });
+    expect(slowFetch).toHaveBeenCalledWith('src');
+
+    await act(async () => {
+      resolvers.get('src')!([
+        { name: 'lib', path: 'src/lib', isDir: true, size: 0, modified: 0 },
+      ]);
+    });
+    await act(async () => {
+      resolvers.get('src/lib')!([
+        { name: 'deep.ts', path: 'src/lib/deep.ts', isDir: false, size: 5, modified: 0, ext: '.ts' },
+      ]);
+    });
+    await act(async () => { await revealPromise; });
+    expect(revealDone).toBe(true);
+
+    // Ancestors expanded, target selected.
+    const srcDir = container.querySelector('.file-tree-item.directory');
+    expect(srcDir?.getAttribute('aria-expanded')).toBe('true');
+    const deepItem = Array.from(container.querySelectorAll('.file-tree-item.selected'));
+    expect(deepItem.some((el) => el.textContent === 'deep.ts')).toBe(true);
+  });
+
   // ── New tests for improved coverage ─────────────────────────────────
 
   // ── Icon rendering tests ──

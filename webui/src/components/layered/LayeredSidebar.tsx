@@ -191,6 +191,19 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
     return () => window.removeEventListener('sprout:open-settings-focus', onOpenSettings);
   }, []);
 
+  // "Reveal in file list" (tab context menu, Ctrl/Cmd+Shift+E, breadcrumb
+  // click): the section switch alone is not enough here — the Files panel is
+  // the drill view, and the drill only renders while `open` names its entry.
+  useEffect(() => {
+    const onReveal = () => {
+      closeHome();
+      if (props.activeModeId !== 'code') props.onSelectMode?.('code');
+      setOpen({ kind: 'section', id: 'files' });
+    };
+    window.addEventListener('sprout:reveal-in-explorer', onReveal);
+    return () => window.removeEventListener('sprout:reveal-in-explorer', onReveal);
+  }, [props.activeModeId, props.onSelectMode]);
+
   const entry = (kind: 'section' | 'design', id: keyof typeof NAV_ICONS, label: string) => ({
     target: { kind, id } as ProjectNavTarget,
     label,

@@ -262,6 +262,37 @@ the end, without checkboxes.
 
 ---
 
+## Agent audit trail
+
+A host that runs the agent for its users (a workspace daemon, `sprout
+runner`, the in-browser agent) needs a complete record of what the agent
+did and what it sent to which model provider, and the CLI's own security
+audit log should actually exist. Facts only — provider, model, digests,
+tool calls — never prompt content in these records. Validation gate as in
+the header (Go changes → full gate).
+
+- [ ] **au.1** Instantiate the security audit log. `NewAuditLogger` /
+      `SetAuditLogger` are only called from tests, so every `LogJSON` site
+      is a no-op and `sprout audit tail` reads a file nothing writes. Create
+      the logger at agent start (path from config, default under the state
+      dir, mode 0600), and test that a denied shell command lands in the
+      file.
+- [ ] **au.2** Trace mode hygiene. `--trace-dataset-dir` writes full prompts
+      and raw responses unredacted with mode 0644 (`pkg/trace/jsonl.go`).
+      Write owner-only (0600 files, 0700 dirs) and run the same redaction
+      as the egress backstop (`secretdetect`) over what it writes, unless
+      the user passes an explicit `--trace-unredacted`. Tests.
+- [ ] **au.3** Per-call audit events. For every model call the agent makes,
+      emit an event: time, chat/session id, provider, model, endpoint host,
+      request and response SHA-256 and byte counts, tokens, outcome, and
+      the trigger (user turn, tool-call follow-up, subagent). Tool calls get
+      the same treatment (tool, args digest, result status, files touched).
+      Record locally in the audit log (au.1); when a host configures an
+      audit endpoint (daemon / runner / in-browser agent), also send them
+      there in batches, retrying without blocking the turn. Document the
+      event shape in `docs/integration/host-contract.md`. Tests: one event
+      per call including failovers; no prompt text in any event.
+
 ## Benchmark and CLI fixes (found in the first real benchmark run)
 
 A one-task run (static-site/add-about-section, ai-worker/qwen3.8-27b)

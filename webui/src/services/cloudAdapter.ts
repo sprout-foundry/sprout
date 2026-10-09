@@ -49,6 +49,14 @@ export interface CloudAdapterConfig {
    * set, the agent routes non-platform HTTP (GitHub git + REST) through it and
    * its origin joins the network allowlist. */
   egressProxy?: string;
+  /**
+   * The repository to import at startup, when the host names one (its
+   * project's `repoUrl`). A host that mounts a workspace already knows the
+   * project, so the repo does not have to arrive as a `?repo=` URL parameter;
+   * absent, the adapter falls back to the query parameter as the hosted build
+   * does today.
+   */
+  repoUrl?: string;
 }
 
 /**
@@ -146,6 +154,16 @@ export class CloudAdapter implements APIAdapter {
   constructor(config: CloudAdapterConfig) {
     this.config = config;
     this.platformNavItems = config.navItems;
+  }
+
+  /**
+   * The repository this adapter should import at startup: the host-named
+   * project repo when the config carries one, else the `?repo=` query
+   * parameter (the hosted build's shareable deep link). The host's project is
+   * the source of truth for a host that mounts a workspace, so it wins.
+   */
+  getStartupRepo(): string | null {
+    return this.config.repoUrl || CloudAdapter.getRepoFromQuery();
   }
 
   /**

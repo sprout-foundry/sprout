@@ -47,12 +47,14 @@ export function resetManagedContextWindow(): void {
   reportedVision = undefined;
 }
 
-export function platformProviderConfig(apiOrigin: string, contextWindow: number | undefined) {
+export function platformProviderConfig(apiOrigin: string, contextWindow: number | undefined, modelEndpoint?: string) {
   return {
     name: 'platform',
     // Must be an absolute URL: the provider config normalizer rejects
-    // relative ones.
-    endpoint: `${apiOrigin}/proxy/chat`,
+    // relative ones. A host that supplies its own endpoint (the agent backend's
+    // model endpoint) overrides the platform proxy path; absent, the managed
+    // model is reached through the platform's own proxy.
+    endpoint: modelEndpoint || `${apiOrigin}/proxy/chat`,
     model_name: 'managed',
     context_size: contextWindow ?? UNREPORTED_CONTEXT_WINDOW,
     requires_api_key: false,

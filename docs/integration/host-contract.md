@@ -74,8 +74,49 @@ infers its backend from build flags or URLs.
   same-origin.
 - `wsURL: string` — the WebSocket URL for the agent event stream.
 - `authMode: 'none' | 'bearer'` — how the transport authenticates requests.
+- `agent?: HostAgentBackend` — the agent backend this transport selects, when
+  the host chooses one explicitly (see "Agent backend" below). Absent means the
+  host did not choose, and Sprout keeps its own default for the build.
 - `modelEndpoint?: string` — the endpoint for the in-browser agent's model
   calls; absent means the agent falls back to its default endpoint.
+
+#### Agent backend
+
+The agent behind a chat runs either in a Sprout **daemon** the host has for the
+project (the preferred backend: full tools, the daemon is the source of truth)
+or in the **browser** (the in-browser WASM agent). A host states which, when it
+cares, through `transport.agent`:
+
+```ts
+type HostAgentBackend =
+  | { kind: 'daemon'; apiBaseURL: string; wsURL: string }
+  | { kind: 'wasm'; modelEndpoint: string };
+```
+
+- `{ kind: 'daemon', apiBaseURL, wsURL }` — the agent runs in a daemon
+  reachable through the host. The daemon's URLs drive Sprout's calls (the same
+  `clientFetch` / WebSocket resolution described below), so no extra wiring is
+  needed beyond the transport itself.
+- `{ kind: 'wasm', modelEndpoint }` — the agent runs in the browser. Sprout
+  installs the cloud adapter from the host, routes the in-browser agent's events
+  into the same event bus WebSocket events use, and points the agent's model
+  calls at `modelEndpoint` (falling back to `transport.modelEndpoint`, then the
+  platform's own proxy path). The repository to open comes from the host's
+  project (`project.repoUrl`), not the `?repo=` URL parameter.
+
+When the in-browser agent runs against a daemon backend, its model calls go to
+the daemon's own model proxy (`<apiBaseURL>/api/proxy/chat`).
+
+A host that mounts a workspace through `SproutWorkspace` gets this wiring for
+free: in own mode the composition honours `transport.agent` (a daemon backend is
+the no-wiring default; a wasm backend installs the adapter and the dispatcher).
+A host that composes its own provider stack (ambient mode) owns the wiring.
+
+**Switching backends.** A host may switch backends when a daemon becomes
+available. The supported switch is a **re-mount** with a new transport: the
+composition keys its wiring on the backend, so re-mounting `SproutWorkspace`
+with a transport whose `agent` differs re-runs the wiring against the new
+backend. In-place switching without a re-mount is not supported.
 
 **How the transport fields are consumed.** A component that mounts a
 workspace in its own provider stack (`SproutWorkspace` with the default
@@ -260,7 +301,9 @@ local capability on. The page and the local daemon share an origin, so the
 transport records the same-origin sentinel `''` rather than a fixed host.
 
 - `user: null`, `entitlements: undefined`.
-- `transport: { apiBaseURL: '', wsURL: '', authMode: 'none' }`.
+- `transport: { apiBaseURL: '', wsURL: '', authMode: 'none', agent: { kind:
+  'daemon', apiBaseURL: '', wsURL: '' } }` — the agent is the local daemon,
+  reached at the transport's own same-origin URLs.
 - `navigation.open` is a no-op and `intentPath` always returns `null` — the
   local build has no outward platform pages.
 - `notifications.post` forwards to Sprout's in-app notification bus, so local
@@ -280,9 +323,11 @@ bootstrap adapter.
 - `user` and `chrome`/`theme` are absent here (host-provided at runtime).
 - `entitlements` resolves live from the platform's billing status;
   `resolve()` refreshes the summary in place.
-- `transport: { apiBaseURL: '', wsURL: '', authMode: 'bearer' }` — `''` is the
-  "resolved at runtime" sentinel (the bootstrap adapter resolves the concrete
-  URL), and `authMode: 'bearer'` is what marks the transport as hosted.
+- `transport: { apiBaseURL: '', wsURL: '', authMode: 'bearer', agent: { kind:
+  'wasm', modelEndpoint: '' } }` — `''` is the "resolved at runtime" sentinel
+  (the bootstrap adapter resolves the concrete URL), `authMode: 'bearer'` is
+  what marks the transport as hosted, and the agent backend is the in-browser
+  WASM agent (its model endpoint resolved at runtime from the platform).
 - `navigation` resolves intents to platform SPA paths and lists the platform's
   account exits (`accountItems`) and Home work places (`workItems`).
 - `notifications.post` still forwards to the in-app bus until the platform's

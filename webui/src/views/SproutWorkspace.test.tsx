@@ -58,6 +58,15 @@ vi.mock('../components/AgentChangesPanel', () => ({
   default: () => <div data-testid="sprout-workspace-changes" />,
 }));
 
+// The host agent-backend wiring installs the cloud adapter and the agent-event
+// dispatcher (services that touch the network); stub it at its module boundary
+// so the composition's decision — whether and with what it wires the backend —
+// is what the tests observe.
+const wireHostAgentBackend = vi.fn();
+vi.mock('./hostAgentBackend', () => ({
+  wireHostAgentBackend: (host: unknown, repoUrl: unknown) => wireHostAgentBackend(host, repoUrl),
+}));
+
 // The registry pulls the built-in shells in with it; stub them so the space is
 // a distinct, assertable node without the shell's real chrome and state.
 vi.mock('../workspaces/CodeShell', () => ({
@@ -266,6 +275,64 @@ describe('SproutWorkspace', () => {
     const instances = (LocalEventsProvider as unknown as { instances?: Array<{ connect: ReturnType<typeof vi.fn> }> })
       .instances;
     expect(instances?.some((p) => p.connect.mock.calls.length > 0)).toBe(true);
+  });
+
+  it('honours a wasm agent backend: wires the host backend with the project repo', async () => {
+    // A host that selects the in-browser agent must get the cloud adapter and
+    // the agent-event dispatcher installed, with its project's repo (not the
+    // ?repo= parameter). The composition delegates that wiring; assert it ran
+    // with the host and the project repo.
+    const host = makeHost({
+      transport: {
+        apiBaseURL: 'https://host.test/api',
+        wsURL: '',
+        authMode: 'none',
+        agent: { kind: 'wasm', modelEndpoint: 'https://models.host.test/v1/chat' },
+      },
+    });
+    const project: SproutProject = { ...PROJECT, repoUrl: 'https://github.com/acme/widgets' };
+    render(<SproutWorkspace project={project} space="code" host={host} layout={DEFAULT_VIEWS_ARRANGEMENT} />);
+    await screen.findByTestId('sprout-workspace');
+
+    expect(wireHostAgentBackend).toHaveBeenCalledWith(host, 'https://github.com/acme/widgets');
+  });
+
+  it('honours a daemon agent backend: wires the host backend (the daemon default)', async () => {
+    // The daemon backend is the preferred one; the composition still routes the
+    // host through the wiring, which is a no-op for daemon (the transport URLs
+    // already drive the calls) but keeps a single decision point.
+    const host = makeHost({
+      transport: {
+        apiBaseURL: 'https://daemon.test',
+        wsURL: 'wss://daemon.test/ws',
+        authMode: 'none',
+        agent: { kind: 'daemon', apiBaseURL: 'https://daemon.test', wsURL: 'wss://daemon.test/ws' },
+      },
+    });
+    render(<SproutWorkspace project={PROJECT} space="code" host={host} layout={DEFAULT_VIEWS_ARRANGEMENT} />);
+    await screen.findByTestId('sprout-workspace');
+
+    expect(wireHostAgentBackend).toHaveBeenCalledWith(host, undefined);
+  });
+
+  it('does not wire an agent backend in ambient mode (the caller owns it)', async () => {
+    const ambientHost = makeHost({
+      transport: {
+        apiBaseURL: 'https://ambient.test',
+        wsURL: '',
+        authMode: 'none',
+        agent: { kind: 'wasm', modelEndpoint: 'https://models.host.test/v1/chat' },
+      },
+    });
+    render(
+      <HostProvider host={ambientHost}>
+        <SproutProviders>
+          <SproutWorkspace providers="ambient" project={PROJECT} space="code" />
+        </SproutProviders>
+      </HostProvider>,
+    );
+    await screen.findByTestId('sprout-workspace');
+    expect(wireHostAgentBackend).not.toHaveBeenCalled();
   });
 
   it('lets a host override the assembled chat props per kind (the host wins for that kind)', async () => {

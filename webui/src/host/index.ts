@@ -35,6 +35,7 @@ export type {
   HostSpaceIntent,
   HostTheme,
   HostTransport,
+  HostAgentBackend,
   HostUsageIntent,
   HostAccountIntent,
   HostUser,

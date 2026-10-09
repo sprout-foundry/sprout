@@ -9,6 +9,7 @@ import type { AppState } from '../types/app';
 import { resolveWorkspaceMode } from '../workspaces/registry';
 import type { WorkspaceModeContext, WorkspaceModeId } from '../workspaces/registry';
 import type { WorkspaceShellProps } from '../workspaces/shell';
+import { wireHostAgentBackend } from './hostAgentBackend';
 import { useSproutWorkspaceChatTransport, useSproutWorkspaceViewProps } from './SproutWorkspaceChat';
 import { ViewsLayout } from './ViewsLayout';
 import type { ViewsArrangement, ViewKind } from './ViewsLayout';
@@ -307,23 +308,30 @@ export function SproutWorkspace({
   const chatTransport = useSproutWorkspaceChatTransport({ initialState: chatInitialState, fetchFn: chatFetch });
 
   // Own mode: register the host for the module-level services (the non-React
-  // accessor the client-session fetch and the WebSocket URL read) and open the
-  // events transport, so a host that mounts a workspace gets working
-  // transport with no extra wiring. Ambient mode does neither — the caller
-  // registered its host and owns its transport, so doing it here would fight
-  // the caller's registration and double-connect the stream.
+  // accessor the client-session fetch and the WebSocket URL read), open the
+  // events transport, and honour the host's agent backend — so a host that
+  // mounts a workspace gets working transport with no extra wiring. Ambient
+  // mode does none of it: the caller registered its host and owns its
+  // transport, so doing it here would fight the caller's registration and
+  // double-connect the stream.
+  //
+  // The agent-backend wiring runs in the same effect, after the registration,
+  // so the host is the active one and the adapter install is ordered after the
+  // registration's own host-change hooks rather than racing them.
   //
   // The connection is deliberately not closed on unmount: the events
   // transport is a process-lifetime singleton, and disconnecting it marks the
   // close intentional and exhausts its reconnect attempts, permanently killing
   // the stream for anything that mounts next (the same reason the app's own
   // initialization leaves it open across remounts).
+  const agentBackendKind = host?.transport.agent?.kind;
   useEffect(() => {
     if (ambient || !host) return;
     const restoreActiveHost = registerActiveHost(host);
     chatTransport.eventsProvider.connect();
+    if (agentBackendKind) wireHostAgentBackend(host, project.repoUrl);
     return restoreActiveHost;
-  }, [ambient, host, chatTransport.eventsProvider]);
+  }, [ambient, host, agentBackendKind, project.repoUrl, chatTransport.eventsProvider]);
 
   let content: ReactNode;
   if (layout && !ambient) {

@@ -13,6 +13,7 @@ import { useEffect } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { fetchRuntimeConfig, getBootstrapUser } from '../bootstrapAdapter';
 import { useHost, useHostCapabilities } from '../host';
+import { getActiveHost } from '../host/accessor';
 import type { AppStoreSetState } from '../contexts/AppStore';
 import { ApiService } from '../services/api';
 import type { StatsResponse } from '../services/api';
@@ -31,6 +32,21 @@ import type { SproutEvent } from '../types/events';
 import { WebSocketService } from '../services/websocket';
 import { debugLog, useLog } from '../utils/log';
 import { canAutoRestoreLatestSession, clearedByUser } from './bootSessionRestore';
+
+/**
+ * The origin of a model endpoint, for the context-window probe (which appends
+ * its own `/proxy/chat/models` path). An endpoint that is not an absolute URL
+ * (a host may give a path) yields '' so the caller falls back to the page
+ * origin.
+ */
+function modelEndpointOrigin(endpoint: string | undefined): string {
+  if (!endpoint) return '';
+  try {
+    return new URL(endpoint, window.location.origin).origin;
+  } catch {
+    return '';
+  }
+}
 
 export interface UseAppInitializationOptions {
   eventsProvider: EventsProvider;
@@ -68,8 +84,13 @@ export function useAppInitialization({
   // host.8: the hosted build's agent runs in the browser (WASM shell + browser
   // git) and its transport authenticates against a platform (authMode
   // 'bearer'). This single flag replaces every former isCloud read in this
-  // hook.
-  const hosted = useHost().transport.authMode === 'bearer';
+  // hook. A host that explicitly selects the in-browser agent (its transport's
+  // agent backend is 'wasm') also runs the agent in the browser even when its
+  // transport is not the platform's bearer transport, so it takes the same
+  // init path (WASM preload, the agent-event dispatcher, the model-endpoint
+  // probe).
+  const hostTransport = useHost().transport;
+  const hosted = hostTransport.authMode === 'bearer' || hostTransport.agent?.kind === 'wasm';
   const log = useLog();
   const apiService = ApiService.getInstance();
 
@@ -275,9 +296,17 @@ export function useAppInitialization({
           });
         });
         // The managed model's context window decides the agent's context mode.
-        void import('../services/platformProvider').then(({ loadManagedContextWindow }) =>
-          loadManagedContextWindow(window.location.origin),
-        );
+        // The window probe goes to the host's model endpoint when the host
+        // named one (its agent backend's model endpoint, or the transport's),
+        // else the page origin (the platform proxy path).
+        void import('../services/platformProvider').then(({ loadManagedContextWindow }) => {
+          const transport = getActiveHost()?.transport;
+          const endpoint =
+            (transport?.agent?.kind === 'wasm' ? transport.agent.modelEndpoint : undefined) ||
+            transport?.modelEndpoint ||
+            '';
+          loadManagedContextWindow(modelEndpointOrigin(endpoint) || window.location.origin);
+        });
       }
 
       // Load initial stats

@@ -107,6 +107,13 @@ export interface RuntimeConfig {
    * Undefined in local mode / when the platform doesn't advertise one. */
   egressProxy?: string;
 
+  /** The repository the workspace should open, when the host names one (a
+   * host's project `repoUrl`). The hosted build's own repo arrives as the
+   * `?repo=` query parameter; a host that mounts a workspace supplies it here
+   * so the repo does not have to live in the URL. Undefined when no host names
+   * a repo — the adapter then falls back to the query parameter. */
+  repoUrl?: string;
+
   /** API contract version (the OpenAPI info.version in docs/api) reported by
    * the daemon. The client compares its major version to the value it was
    * built against (CONTRACT_VERSION in src/config/contractCompat.tsx) and

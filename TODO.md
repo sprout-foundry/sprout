@@ -46,7 +46,7 @@ files, the vitest files the item touched; any `.go` change → the full gate).
       subscribe the hc.1 handler (today only `useAppInitialization` does).
       Document "one workspace per page" (module singletons). Tests: fetch and
       WS go to the host's URLs; the local build is unchanged.
-- [ ] **hc.4** Agent backend selection in the host contract. Extend
+- [x] **hc.4** Agent backend selection in the host contract. Extend
       `HostTransport` with an explicit agent backend: `{ kind: 'daemon',
       apiBaseURL, wsURL }` (a sprout daemon reachable through the host —
       preferred) or `{ kind: 'wasm', modelEndpoint }` (the in-browser agent).

@@ -44,8 +44,20 @@ describe('localHost', () => {
     // '' is the same-origin sentinel (derived at runtime by the local
     // transport); the dev port is never hardcoded. The local host has no
     // outward platform surface, so its transport carries no platform URL.
-    expect(localHost.transport).toEqual({ apiBaseURL: '', wsURL: '', authMode: 'none' });
+    expect(localHost.transport).toEqual({
+      apiBaseURL: '',
+      wsURL: '',
+      authMode: 'none',
+      agent: { kind: 'daemon', apiBaseURL: '', wsURL: '' },
+    });
     expect(localHost.transport.platformURL).toBeUndefined();
+  });
+
+  it('selects the local daemon as its agent backend', () => {
+    // The local build's agent is the local daemon, reached at the transport's
+    // own same-origin URLs. Stating the backend explicitly lets a host that
+    // embeds the workspace read the choice off the contract.
+    expect(localHost.transport.agent).toEqual({ kind: 'daemon', apiBaseURL: '', wsURL: '' });
   });
 
   it('opens the public repository issue for a reportBug intent (local host)', () => {
@@ -122,9 +134,22 @@ describe('cloudHost', () => {
     // hardcode a platform URL. The platform base is absent here because the
     // constant itself performs no bootstrap (importing the host fetches
     // nothing).
-    expect(cloudHost.transport).toEqual({ apiBaseURL: '', wsURL: '', authMode: 'bearer' });
+    expect(cloudHost.transport).toEqual({
+      apiBaseURL: '',
+      wsURL: '',
+      authMode: 'bearer',
+      agent: { kind: 'wasm', modelEndpoint: '' },
+    });
     expect(cloudHost.transport.authMode).toBe('bearer');
     expect(cloudHost.transport.platformURL).toBeUndefined();
+  });
+
+  it('selects the in-browser agent as its backend (model endpoint resolved at runtime)', () => {
+    // The hosted build runs the agent in the browser; the model endpoint is the
+    // platform's managed model, resolved at runtime from the transport's
+    // `modelEndpoint` (the constant declares the shape, so the endpoint is
+    // empty here).
+    expect(cloudHost.transport.agent).toEqual({ kind: 'wasm', modelEndpoint: '' });
   });
 
   it('exposes the CloudAdapter capability set (hosted source of truth)', () => {

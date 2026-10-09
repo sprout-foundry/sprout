@@ -56,3 +56,21 @@ describe('managed model image support', () => {
     expect(platformProviderConfig('https://app.test', undefined).supports_vision).toBe(false);
   });
 });
+
+describe('provider endpoint', () => {
+  it('uses the platform proxy path when no endpoint is supplied', () => {
+    expect(platformProviderConfig('https://app.test', undefined).endpoint).toBe('https://app.test/proxy/chat');
+  });
+
+  it('uses the host-supplied model endpoint when one is given', () => {
+    // A host that runs the in-browser agent against its own model service must
+    // not be sent to the platform's hard-coded proxy path.
+    expect(platformProviderConfig('https://app.test', undefined, 'https://models.host.test/v1/chat').endpoint).toBe(
+      'https://models.host.test/v1/chat',
+    );
+  });
+
+  it('falls back to the platform path when the host endpoint is empty', () => {
+    expect(platformProviderConfig('https://app.test', undefined, '').endpoint).toBe('https://app.test/proxy/chat');
+  });
+});

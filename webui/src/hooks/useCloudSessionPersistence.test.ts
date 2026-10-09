@@ -64,6 +64,20 @@ describe('useCloudSessionPersistence', () => {
     expect(chats.rebindChatTranscript).not.toHaveBeenCalled();
   });
 
+  it('is a no-op when the host serves the chat session store itself', () => {
+    // The host store receives the turns (cloudWasmHandlers appends them), so
+    // the browser-local mirror must not run and double-write a second copy.
+    const state = makeState();
+    renderHook(() => useCloudSessionPersistence({ state }), {
+      wrapper: hostWrapper(makeTestHost({ localTerminal: false, chatSessions: true })),
+    });
+
+    expect(store.saveSession).not.toHaveBeenCalled();
+    expect(store.deleteSession).not.toHaveBeenCalled();
+    expect(store.startNewCloudSession).not.toHaveBeenCalled();
+    expect(chats.rebindChatTranscript).not.toHaveBeenCalled();
+  });
+
   it('deletes store entries for sessions removed from chatSessions (hosted shell only)', () => {
     const state = makeState({
       chatSessions: [{ id: 'gone-session' } as never],

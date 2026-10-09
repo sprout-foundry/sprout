@@ -7,7 +7,10 @@ import type {
   TodoUpdateData,
 } from '@sprout/events';
 import type { Message } from '@sprout/ui';
-import { fetchChatSessionMessages, listChatSessions } from '../../services/chatSessions';
+import {
+  fetchChatSessionMessagesForActiveStore,
+  listChatSessionsForActiveStore,
+} from '../../services/hostChatSessions';
 import { getWebUIClientId } from '../../services/clientSession';
 import { getServerErrorCode } from '../../services/errorCodes';
 import { debugLog } from '../../utils/log';
@@ -347,7 +350,7 @@ export const handleSessionChanged = (ctx: EventHandlerContext): void => {
     // (including this client), which would re-trigger this reload and loop
     // forever (blank-flash on every turn). We only need the new transcript,
     // not another side-effecting switch.
-    fetchChatSessionMessages(chatId)
+    fetchChatSessionMessagesForActiveStore(chatId)
       .then((response) => {
         if (activeChatIdRef.current !== chatId) return;
         const backendMessages: Message[] = chatTranscriptToMessages(chatId, response.chat_session.messages);
@@ -377,7 +380,7 @@ export const handleSessionChanged = (ctx: EventHandlerContext): void => {
 
   // rename/pin/unpin (and switch for non-active chats): refresh the session
   // list so titles and metadata stay canonical. Fire-and-forget.
-  listChatSessions()
+  listChatSessionsForActiveStore()
     .then((sessionsResp) => {
       setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? prev.chatSessions }));
     })

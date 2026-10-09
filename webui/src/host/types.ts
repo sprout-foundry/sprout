@@ -437,6 +437,15 @@ export interface HostCapabilities {
   verification: boolean;
   /** Server-side git, distinct from in-browser git. */
   serverGit: boolean;
+  /**
+   * The host serves the chat session store: the chat session list / create /
+   * rename / delete / switch / messages calls go to the host (at the
+   * transport's API base), and finished turns are appended to it, instead of
+   * browser storage. Off means Sprout keeps its own store (the daemon's
+   * `/api/chat-sessions*`, or the browser-local store for the in-browser
+   * agent).
+   */
+  chatSessions: boolean;
 }
 
 /**

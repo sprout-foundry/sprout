@@ -110,5 +110,8 @@ export const localHost: SproutHost = {
     localModels: true,
     verification: true,
     serverGit: true,
+    // The local build keeps its own chat session store (the local daemon's
+    // /api/chat-sessions*), so it does not advertise a host session store.
+    chatSessions: false,
   },
 };

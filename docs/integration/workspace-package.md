@@ -137,6 +137,11 @@ The standalone app mounts the provider with its own `clientFetch` and
 `LocalEventsProvider`, so its behaviour is unchanged; a host mounts it with
 its host's transport.
 
+`WorkspaceChatProvider` must be mounted under a `HostProvider`: it reads the
+host to decide whether the host serves the chat session store (see
+`capabilities.chatSessions` in the host contract) and to resolve that store's
+API base. `SproutWorkspace` mounts one in its own mode.
+
 **The composed workspace mounts the chat for you.** A `SproutWorkspace` that
 renders through a `layout` arrangement (SP-155) mounts the chat unit itself:
 the arranged `chat` view gets props assembled from the unit, so a host's

@@ -58,7 +58,7 @@ files, the vitest files the item touched; any `.go` change → the full gate).
       `project.repoUrl` instead of the `?repo=` URL parameter. A host may
       switch backends when a daemon becomes available (re-mount is fine).
       Contract doc + SP-160 §160b updated. Tests for both kinds.
-- [ ] **hc.5** Host session store. When the host advertises a chat session
+- [x] **hc.5** Host session store. When the host advertises a chat session
       store (a capability, e.g. `capabilities.chatSessions`), the chat
       session list / create / rename / delete / switch / messages calls go
       to the host (same request shapes as the daemon's `/api/chat-sessions*`

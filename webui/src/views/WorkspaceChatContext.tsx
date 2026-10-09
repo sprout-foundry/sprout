@@ -34,10 +34,12 @@ import type { QueuedMessage, UseChatSessionManagerReturn } from '../hooks/useCha
 import { useCurrentTodos } from '../hooks/useCurrentTodos';
 import { useWebSocketEventHandler } from '../hooks/useWebSocketEventHandler';
 import type { UseWebSocketEventHandlerRefs } from '../hooks/useWebSocketEventHandler';
+import { useHost } from '../host';
 import { ApiService } from '../services/api';
 import { retractSteer, sendQuery, steerQuery, stopQuery } from '../services/api/chatApi';
 import { createChatSessionsApi } from '../services/chatSessions';
 import { clientFetch } from '../services/clientSession';
+import { createHostChatSessionsApi } from '../services/hostChatSessions';
 import type { AppState } from '../types/app';
 import type { WorkspaceShellChat } from '../workspaces/shell';
 
@@ -140,6 +142,11 @@ export interface WorkspaceChatProviderProps {
  * reading it through the same context), the WebSocket event reducer, the chat
  * session manager and the queue, and subscribes the events provider to the
  * reducer.
+ *
+ * It must be mounted under a `HostProvider`: the unit reads the host to decide
+ * whether the host serves the chat session store (`capabilities.chatSessions`)
+ * and to resolve the store's API base. `SproutWorkspace` mounts one in its own
+ * mode; a host that composes its own stack supplies it.
  */
 export function WorkspaceChatProvider({
   initialState,
@@ -174,6 +181,11 @@ function WorkspaceChatRuntime({
   const state = useAppStoreState();
   const setState = useAppStoreSetState();
   const apiService = useMemo(() => ApiService.getInstance(), []);
+  // When the host advertises its own chat session store, the session calls go
+  // to it (same request shapes, at the host's API base) instead of the daemon
+  // or browser storage. With the capability off the fetch-bound daemon API is
+  // used, unchanged.
+  const host = useHost();
 
   const activeRequestsRef = useRef(0);
   const activeChatIdRef = useRef<string | null>(null);
@@ -218,7 +230,13 @@ function WorkspaceChatRuntime({
       }),
       [fetchFn],
     ),
-    sessions: useMemo(() => createChatSessionsApi(fetchFn), [fetchFn]),
+    sessions: useMemo(
+      () =>
+        host.capabilities.chatSessions
+          ? createHostChatSessionsApi(host.transport.apiBaseURL)
+          : createChatSessionsApi(fetchFn),
+      [host, fetchFn],
+    ),
   });
 
   // Background chat panes refresh from the read-only messages endpoint when

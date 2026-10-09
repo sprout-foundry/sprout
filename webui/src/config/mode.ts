@@ -148,6 +148,18 @@ export let supportsAutomations: boolean = true;
  */
 export let supportsAgentChanges: boolean = true;
 
+/**
+ * Host chat session store: when the host advertises `capabilities.chatSessions`
+ * it serves the chat session list / create / rename / delete / switch /
+ * messages calls itself and finished turns are appended to it, instead of the
+ * daemon or browser storage.
+ * host.3: `export let` so the active host's `capabilities.chatSessions` drives
+ * it. It is not an adapter key, so there is no adapter-refresh row; the
+ * no-host fallback is the local default (false — the local build keeps its own
+ * daemon store).
+ */
+export let supportsChatSessions: boolean = false;
+
 // Adapter-installed refresh (no-host path only): re-read every adapter-derived
 // capability against the newly installed adapter. The defaults table mirrors
 // the initializers above — a per-key map of [localDefault, cloudDefault] and
@@ -206,7 +218,8 @@ const HOST_REFRESH: Array<{
     | 'localTerminal'
     | 'settings'
     | 'automations'
-    | 'agentChanges';
+    | 'agentChanges'
+    | 'chatSessions';
   set: (v: boolean) => void;
 }> = [
   { field: 'ssh', set: (v) => (supportsSSH = v) },
@@ -220,6 +233,7 @@ const HOST_REFRESH: Array<{
   { field: 'settings', set: (v) => (supportsSettings = v) },
   { field: 'automations', set: (v) => (supportsAutomations = v) },
   { field: 'agentChanges', set: (v) => (supportsAgentChanges = v) },
+  { field: 'chatSessions', set: (v) => (supportsChatSessions = v) },
 ];
 
 function refreshFromHost(): void {

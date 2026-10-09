@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { Message } from '@sprout/ui';
-import { fetchChatSessionMessages } from '../services/chatSessions';
+import { fetchChatSessionMessagesForActiveStore } from '../services/hostChatSessions';
 import type { AppStoreSetState } from '../contexts/AppStore';
 import type { PerChatState } from '../types/app';
 import { debugLog } from '../utils/log';
@@ -63,7 +63,7 @@ export const useBackgroundChatSync = (params: {
         const seenEvents = new Set(perChatCache[chatId]?.pendingEvents ?? []);
         void (async () => {
           try {
-            const response = await fetchChatSessionMessages(chatId);
+            const response = await fetchChatSessionMessagesForActiveStore(chatId);
             const fetched: Message[] = chatTranscriptToMessages(chatId, response.chat_session.messages);
             // Bail if the user switched to this chat while we fetched — the
             // switch path already installed authoritative state.

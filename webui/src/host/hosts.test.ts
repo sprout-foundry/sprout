@@ -100,6 +100,7 @@ describe('localHost', () => {
       localModels: true,
       verification: true,
       serverGit: true,
+      chatSessions: false,
     });
   });
 });
@@ -172,6 +173,7 @@ describe('cloudHost', () => {
       localModels: false,
       verification: false,
       serverGit: false,
+      chatSessions: false,
     });
   });
 

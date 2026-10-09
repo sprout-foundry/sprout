@@ -15,6 +15,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
+import { HostProvider, headlessHost } from '../host';
+import type { SproutHost } from '../host';
 import type { AppState } from '../types/app';
 import {
   WorkspaceChatProvider,
@@ -43,14 +45,30 @@ vi.mock('../services/notificationBus', () => ({
 
 // The background-pane refresh and the chat-session list are not under test;
 // their module functions are replaced with no-op doubles so nothing reaches a
-// real transport.
+// real transport. The two session-API factories are spied so the selection
+// (host store vs daemon) is observable.
+const sessionsModule = vi.hoisted(() => ({
+  createChatSessionsApi: vi.fn(),
+  listChatSessions: vi.fn().mockResolvedValue({ chat_sessions: [], active_chat_id: '' }),
+}));
+
+const hostSessionsModule = vi.hoisted(() => ({
+  createHostChatSessionsApi: vi.fn(),
+}));
+
 vi.mock('../services/chatSessions', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/chatSessions')>();
   return {
     ...actual,
-    listChatSessions: vi.fn().mockResolvedValue({ chat_sessions: [], active_chat_id: '' }),
+    listChatSessions: sessionsModule.listChatSessions,
+    createChatSessionsApi: sessionsModule.createChatSessionsApi,
   };
 });
+
+vi.mock('../services/hostChatSessions', () => ({
+  createHostChatSessionsApi: hostSessionsModule.createHostChatSessionsApi,
+  appendTurnToHostStore: vi.fn(),
+}));
 
 function createInitialState(): AppState {
   return {
@@ -149,11 +167,46 @@ function Harness({ onValue }: { onValue: (value: ReturnType<typeof useWorkspaceC
   );
 }
 
-function renderUnit(overrides: { fetchFn?: typeof fetch } = {}) {
+/** A minimal ChatSessionsApi double. */
+function fakeSessionsApi(label: string) {
+  return {
+    __label: label,
+    listChatSessions: vi
+      .fn()
+      .mockResolvedValue({ message: 'ok', chat_sessions: [], active_chat_id: '', total_sessions: 0 }),
+    createChatSession: vi.fn(),
+    deleteChatSession: vi.fn(),
+    deleteAllChatSessions: vi.fn(),
+    renameChatSession: vi.fn(),
+    switchChatSession: vi.fn(),
+    createChatSessionInWorktree: vi.fn(),
+  };
+}
+
+/** A ChatSessionsApi double whose store holds one chat with a transcript. */
+function fakeSessionsApiWithTranscript(chatId: string, messages: Array<{ role: string; content: string }>) {
+  const api = fakeSessionsApi('host');
+  api.listChatSessions.mockResolvedValue({
+    message: 'ok',
+    chat_sessions: [{ id: chatId } as never],
+    active_chat_id: chatId,
+    total_sessions: 1,
+  });
+  api.switchChatSession.mockResolvedValue({
+    message: 'ok',
+    active_chat_id: chatId,
+    chat_session: { messages } as never,
+  });
+  return api;
+}
+
+const DEFAULT_TEST_HOST: SproutHost = headlessHost();
+
+function renderUnit(overrides: { fetchFn?: typeof fetch; host?: SproutHost } = {}) {
   const events = createEventsProvider();
   const fetch = createFetch();
   let value: ReturnType<typeof useWorkspaceChat> | null = null;
-  const utils = render(
+  const tree = (
     <WorkspaceChatProvider
       initialState={createInitialState()}
       eventsProvider={events.provider}
@@ -164,12 +217,20 @@ function renderUnit(overrides: { fetchFn?: typeof fetch } = {}) {
           value = v;
         }}
       />
-    </WorkspaceChatProvider>,
+    </WorkspaceChatProvider>
   );
+  const utils = render(<HostProvider host={overrides.host ?? DEFAULT_TEST_HOST}>{tree}</HostProvider>);
   return { ...utils, events, fetch, getValue: () => value! };
 }
 
 describe('WorkspaceChatProvider', () => {
+  beforeEach(() => {
+    sessionsModule.createChatSessionsApi.mockReset();
+    hostSessionsModule.createHostChatSessionsApi.mockReset();
+    sessionsModule.createChatSessionsApi.mockImplementation(() => fakeSessionsApi('daemon'));
+    hostSessionsModule.createHostChatSessionsApi.mockImplementation(() => fakeSessionsApi('host'));
+  });
+
   it('subscribes the events provider to the chat reducer on mount', () => {
     const { events } = renderUnit();
     expect(events.provider.onEvent).toHaveBeenCalledTimes(1);
@@ -246,5 +307,44 @@ describe('WorkspaceChatProvider', () => {
     expect(appSource).toContain('<WorkspaceChatProvider');
     expect(appSource).toMatch(/fetchFn=\{clientFetch\}/);
     expect(appSource).toMatch(/manageEventSubscription:\s*false/);
+  });
+
+  it('uses the daemon session API when the host does not advertise a session store', () => {
+    renderUnit({ host: { ...headlessHost(), capabilities: { ...headlessHost().capabilities, chat: true } } });
+    expect(sessionsModule.createChatSessionsApi).toHaveBeenCalledTimes(1);
+    expect(hostSessionsModule.createHostChatSessionsApi).not.toHaveBeenCalled();
+  });
+
+  it('uses the host session API (at the host base) when the capability is on', () => {
+    const host: SproutHost = {
+      ...headlessHost(),
+      transport: { apiBaseURL: 'https://host.test/backend', wsURL: '', authMode: 'bearer' },
+      capabilities: { ...headlessHost().capabilities, chat: true, chatSessions: true },
+    };
+    renderUnit({ host });
+    expect(hostSessionsModule.createHostChatSessionsApi).toHaveBeenCalledWith('https://host.test/backend');
+    expect(sessionsModule.createChatSessionsApi).not.toHaveBeenCalled();
+  });
+
+  it('restores the transcript from the host store on load (reload path)', async () => {
+    const host: SproutHost = {
+      ...headlessHost(),
+      transport: { apiBaseURL: 'https://host.test/backend', wsURL: '', authMode: 'bearer' },
+      capabilities: { ...headlessHost().capabilities, chat: true, chatSessions: true },
+    };
+    hostSessionsModule.createHostChatSessionsApi.mockReturnValue(
+      fakeSessionsApiWithTranscript('host-chat-1', [
+        { role: 'user', content: 'restored question' },
+        { role: 'assistant', content: 'restored answer' },
+      ]),
+    );
+    const { getValue } = renderUnit({ host });
+
+    await act(async () => {
+      await getValue().chat.loadChatSessions();
+    });
+
+    expect(getValue().state.activeChatId).toBe('host-chat-1');
+    expect(getValue().state.messages.map((m) => m.content)).toEqual(['restored question', 'restored answer']);
   });
 });

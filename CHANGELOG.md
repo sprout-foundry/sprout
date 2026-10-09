@@ -2,6 +2,10 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [Unreleased]
+
+- feat(workspace): `@sprout-foundry/workspace` 1.1.0 — the workspace composes a chat. Chat state is extracted into a reusable `WorkspaceChatProvider` (`useWorkspaceChat`, `useWorkspaceChatProps`, `createEmptyChatState`), and `SproutWorkspace` mounts it, so a host embedding the workspace gets a working chat with no extra wiring. Host transport is driven through the module services (`registerActiveHost`), the agent backend is selected through the host contract (`HostAgentBackend`), and the host serves the chat session store through the new `capabilities.chatSessions` capability.
+
 ## [v0.24.5] - 2026-10-08
 
 - feat(mcp): remote HTTP MCP servers work properly — the Streamable HTTP transport is spec-compliant (Accept headers, SSE responses, initialized notification, session IDs), credentials gain an explicit `headers` map plus a Bearer fallback for token-shaped names, and OAuth 2.1 browser logins (`mcp_refresh login`) cover OAuth-only services like Figma. Tokens live in the credential store, never in config. `activate_skill` failures now point at `list_skills` instead of inviting a filesystem hunt, and the mcp-setup skill is rewritten around the current tooling.

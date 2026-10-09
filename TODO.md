@@ -69,7 +69,7 @@ files, the vitest files the item touched; any `.go` change → the full gate).
       `docs/integration/host-contract.md` so a host can implement them.
       Tests: sessions round-trip through a fake host store; a reload
       restores the transcript.
-- [ ] **hc.6** Release prep: bump `packages/workspace` to 1.1.0, changelog
+- [x] **hc.6** Release prep: bump `packages/workspace` to 1.1.0, changelog
       entry listing hc.1–hc.5 and the contract additions, and confirm the
       consumer test (`docs/__tests__/workspace-consumer.test.mjs`) passes
       with the new exports. Do NOT tag — tagging `workspace-v1.1.0`

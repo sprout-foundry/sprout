@@ -34,6 +34,26 @@ vi.mock('../services/localEventsProvider', () => ({
   },
 }));
 
+// The chat view is a composite that needs the whole chat context stack; stub
+// it with a node that reveals whether the composition handed it a live send
+// (an enabled chat) and lets the test trigger that send.
+vi.mock('../components/ChatView', () => ({
+  default: (props: { onSendMessage?: (message: string) => void }) => (
+    <div data-testid="sprout-workspace-chat" data-enabled={String(typeof props.onSendMessage === 'function')}>
+      <button
+        type="button"
+        data-testid="sprout-workspace-chat-send"
+        onClick={() => props.onSendMessage?.('hello from the host')}
+      >
+        send
+      </button>
+    </div>
+  ),
+}));
+vi.mock('../components/AgentChangesPanel', () => ({
+  default: () => <div data-testid="sprout-workspace-changes" />,
+}));
+
 // The registry pulls the built-in shells in with it; stub them so the space is
 // a distinct, assertable node without the shell's real chrome and state.
 vi.mock('../workspaces/CodeShell', () => ({
@@ -63,6 +83,12 @@ vi.mock('../services/api', () => {
     async getWorkspace() {
       return { workspace_root: '' };
     }
+    async getStats() {
+      return {};
+    }
+    async getSettings() {
+      return {};
+    }
   }
   return { ApiService: MockApiService };
 });
@@ -71,12 +97,28 @@ import { useHost } from '../host';
 import type { SproutHost } from '../host';
 import { HostProvider, headlessHost } from '../host/HostProvider';
 import { SproutProviders } from '../providers/SproutProviders';
-import type { WorkspaceShellProps } from '../workspaces/shell';
 import { registerWorkspaceMode } from '../workspaces/registry';
+import type { WorkspaceShellProps } from '../workspaces/shell';
 import { SproutWorkspace } from './SproutWorkspace';
 import type { SproutProject } from './SproutWorkspace';
+import { DEFAULT_VIEWS_ARRANGEMENT } from './ViewsLayout';
 
 const PROJECT: SproutProject = { id: '/Users/dev/project', name: 'project', root: '/Users/dev/project' };
+
+/** A fake fetch that records the calls the composed chat makes. */
+function createChatFetch() {
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const fetchFn = vi.fn(async (url: string, init?: RequestInit) => {
+    calls.push({ url, init });
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+      text: async () => '',
+    } as unknown as Response;
+  });
+  return { fetchFn: fetchFn as unknown as typeof fetch, calls };
+}
 
 /** A host distinguishable from the headless default by its transport URL. */
 function makeHost(overrides: Partial<SproutHost> = {}): SproutHost {
@@ -169,6 +211,74 @@ describe('SproutWorkspace', () => {
     expect(within(workspace).getByTestId('views-layout')).toBeInTheDocument();
     expect(within(workspace).getByTestId('views-slot-center')).toBeInTheDocument();
     expect(screen.queryByTestId('sprout-workspace-code-shell')).not.toBeInTheDocument();
+  });
+
+  it('mounts a working chat in own mode: an enabled chat whose send reaches the fake backend', async () => {
+    const { fetchFn, calls } = createChatFetch();
+    render(
+      <SproutWorkspace
+        project={PROJECT}
+        space="code"
+        host={makeHost()}
+        layout={DEFAULT_VIEWS_ARRANGEMENT}
+        chatFetch={fetchFn}
+      />,
+    );
+
+    const workspace = await screen.findByTestId('sprout-workspace');
+    const chat = within(workspace).getByTestId('sprout-workspace-chat');
+    // The composition handed the chat a real send — an enabled chat, not the
+    // empty disabled stub.
+    expect(chat).toHaveAttribute('data-enabled', 'true');
+
+    await act(async () => {
+      screen.getByTestId('sprout-workspace-chat-send').click();
+    });
+
+    const queryCall = calls.find((c) => c.url === '/api/query');
+    expect(queryCall).toBeDefined();
+    expect(queryCall?.init?.method).toBe('POST');
+    expect(JSON.parse(String(queryCall?.init?.body))).toMatchObject({ query: 'hello from the host' });
+  });
+
+  it('lets a host override the assembled chat props per kind (the host wins for that kind)', async () => {
+    const hostSend = vi.fn();
+    render(
+      <SproutWorkspace
+        project={PROJECT}
+        space="code"
+        host={makeHost()}
+        layout={DEFAULT_VIEWS_ARRANGEMENT}
+        viewProps={{ chat: { messages: [], onSendMessage: hostSend, inputValue: '' } }}
+      />,
+    );
+
+    const workspace = await screen.findByTestId('sprout-workspace');
+    // The host supplied its own chat props, so the assembled ones are replaced
+    // for the `chat` kind; the host's send is the one the chat receives.
+    expect(within(workspace).getByTestId('sprout-workspace-chat')).toHaveAttribute('data-enabled', 'true');
+    await act(async () => {
+      screen.getByTestId('sprout-workspace-chat-send').click();
+    });
+    expect(hostSend).toHaveBeenCalledWith('hello from the host');
+  });
+
+  it('leaves the changes view to self-fetch (no assembled props) when the host overrides only chat', async () => {
+    render(
+      <SproutWorkspace
+        project={PROJECT}
+        space="code"
+        host={makeHost()}
+        layout={DEFAULT_VIEWS_ARRANGEMENT}
+        viewProps={{ chat: { messages: [], onSendMessage: () => undefined, inputValue: '' } }}
+      />,
+    );
+
+    const workspace = await screen.findByTestId('sprout-workspace');
+    // The changes view was not overridden and the composition assembles no
+    // props for it (it self-fetches its session changes), so it renders with
+    // none — the override of `chat` did not disturb it.
+    expect(within(workspace).getByTestId('sprout-workspace-changes')).toBeInTheDocument();
   });
 
   it('calls onSpaceChange only when the mounted space changes, not on mount', async () => {
@@ -290,6 +400,31 @@ describe('SproutWorkspace', () => {
     await screen.findByTestId('sprout-workspace');
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('ambient'));
     warn.mockRestore();
+  });
+
+  it('providers="ambient" with a layout does not build a second chat unit', async () => {
+    // Ambient mode: the caller owns the stack and its chat, so the composition
+    // must not mount a second chat unit (whose transport would double-subscribe
+    // the events the caller already routes). The layout renders with the host's
+    // props directly; the chat gets no assembled send from here.
+    render(
+      <HostProvider host={makeHost()}>
+        <SproutProviders>
+          <SproutWorkspace
+            providers="ambient"
+            project={PROJECT}
+            space="code"
+            layout={DEFAULT_VIEWS_ARRANGEMENT}
+            viewProps={{ chat: { messages: [], inputValue: 'host-owned' } }}
+          />
+        </SproutProviders>
+      </HostProvider>,
+    );
+
+    const workspace = await screen.findByTestId('sprout-workspace');
+    // The host supplied chat props with no send, so the chat is the disabled
+    // stub — proving the composition did not assemble a live one in ambient mode.
+    expect(within(workspace).getByTestId('sprout-workspace-chat')).toHaveAttribute('data-enabled', 'false');
   });
 });
 

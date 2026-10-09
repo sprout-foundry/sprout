@@ -80,6 +80,47 @@ export interface WorkspaceChatRefs {
 
 const WorkspaceChatContext = createContext<WorkspaceChatValue | null>(null);
 
+/**
+ * A blank chat state — no transcript, no sessions, nothing processing. The
+ * default a composition starts a chat unit from when the caller does not hold
+ * one; a host that persists or restores its own chat state supplies that
+ * instead. Every field the chat store reads is present, so the unit mounts
+ * without threading a partial state through.
+ */
+export function createEmptyChatState(): AppState {
+  return {
+    isConnected: false,
+    provider: 'unknown',
+    model: 'unknown',
+    sessionId: null,
+    queryCount: 0,
+    messages: [],
+    logs: [],
+    isProcessing: false,
+    lastError: null,
+    workspaceBusy: null,
+    currentView: 'chat',
+    toolExecutions: [],
+    queryProgress: null,
+    stats: {},
+    currentTodos: [],
+    fileEdits: [],
+    subagentActivities: [],
+    activeChatId: null,
+    chatSessions: [],
+    perChatCache: {},
+    securityApprovalRequest: null,
+    securityPromptRequest: null,
+    askUserRequest: null,
+    passwordRequest: null,
+    editApprovalRequest: null,
+    shellApprovalRequest: null,
+    modelSelectionRequest: null,
+    outputVerbosity: 'default',
+    inputValue: '',
+  };
+}
+
 export interface WorkspaceChatProviderProps {
   /** The initial app state the chat store starts from. */
   initialState: AppState;

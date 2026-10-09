@@ -19,6 +19,7 @@ import {
   ExampleEmbedding,
   SproutWorkspace,
   ViewsLayout,
+  createEmptyChatState,
   usePreviewStatus,
   copy,
   formatCopy,
@@ -121,6 +122,11 @@ describe('views entry exports', () => {
     expect(isReactComponent(SproutWorkspace)).toBe(true);
     expect(typeof useWorkspaceMode).toBe('function');
   });
+
+  it('exports the chat unit and the empty chat state a composition starts from', () => {
+    expect(typeof createEmptyChatState).toBe('function');
+    expect(createEmptyChatState().messages).toEqual([]);
+  });
 });
 
 // ── Type-level: the exported props are real, usable types ─────────────
@@ -181,6 +187,14 @@ describe('views entry typed props', () => {
   it('accepts minimal SproutWorkspace + useWorkspaceMode values', () => {
     const project: SproutProject = { id: '/ws', root: '/ws' };
     const workspaceProps: SproutWorkspaceProps = { project, space: 'code', providers: 'ambient' };
+    const composedProps: SproutWorkspaceProps = {
+      project,
+      space: 'code',
+      layout: { center: ['chat'] },
+      viewProps: { chat: { inputValue: 'host' } },
+      chatInitialState: createEmptyChatState(),
+      chatFetch: (async () => new Response()) as unknown as typeof fetch,
+    };
     const modeResult: UseWorkspaceModeResult = {
       mode: {
         id: 'code',
@@ -196,6 +210,8 @@ describe('views entry typed props', () => {
     };
     expect(workspaceProps.providers).toBe('ambient');
     expect(modeResult.canSwitch).toBe(false);
+    expect(composedProps.viewProps?.chat).toBeDefined();
+    expect(composedProps.chatInitialState?.messages).toEqual([]);
   });
 
   // ── Layout configuration types ────────────────────────────────────────

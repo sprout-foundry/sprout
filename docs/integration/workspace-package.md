@@ -137,6 +137,24 @@ The standalone app mounts the provider with its own `clientFetch` and
 `LocalEventsProvider`, so its behaviour is unchanged; a host mounts it with
 its host's transport.
 
+**The composed workspace mounts the chat for you.** A `SproutWorkspace` that
+renders through a `layout` arrangement (SP-155) mounts the chat unit itself:
+the arranged `chat` view gets props assembled from the unit, so a host's
+layout shows a working chat — the transcript, sending, queueing and the
+streaming reducer — with no extra wiring. The composition owns the events
+transport and hands the same instance to both `SproutProviders` and the chat
+unit, so the two share one subscription. The `changes` view self-fetches its
+session changes and is left with no assembled props.
+
+The app-specific callbacks that are not chat state (the model picker, session
+restore, fork, opening a review buffer) are not assembled by the composition —
+a host supplies them through `viewProps.chat`, which replaces the assembled
+chat props for that kind. `chatInitialState` seeds the chat state (an empty
+chat otherwise; it must be referentially stable) and `chatFetch` routes chat
+calls through the host's transport. Ambient mode (`providers="ambient"`)
+builds none of this: the caller owns the provider stack and its chat, so
+`viewProps` is passed to the layout as-is.
+
 The `./views` and `./providers` subpaths each ship their own self-contained
 type declarations (`dist/views.d.ts`, `dist/providers.d.ts`), so importing
 `SproutWorkspace` or `SproutProviders` type-checks from `dist/` alone —

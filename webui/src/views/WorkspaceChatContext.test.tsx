@@ -16,7 +16,12 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import type { AppState } from '../types/app';
-import { WorkspaceChatProvider, useWorkspaceChat, useWorkspaceChatProps } from './WorkspaceChatContext';
+import {
+  WorkspaceChatProvider,
+  createEmptyChatState,
+  useWorkspaceChat,
+  useWorkspaceChatProps,
+} from './WorkspaceChatContext';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -218,6 +223,18 @@ describe('WorkspaceChatProvider', () => {
     const { events, unmount } = renderUnit();
     unmount();
     expect(events.provider.removeEvent).toHaveBeenCalled();
+  });
+
+  it('provides an empty chat state a composition can start from', () => {
+    const empty = createEmptyChatState();
+    // A blank chat: no transcript, nothing processing, no sessions.
+    expect(empty.messages).toEqual([]);
+    expect(empty.isProcessing).toBe(false);
+    expect(empty.activeChatId).toBeNull();
+    expect(empty.chatSessions).toEqual([]);
+    expect(empty.inputValue).toBe('');
+    // It is a complete state — every field the store reads is present.
+    expect(Object.keys(empty).sort()).toEqual(Object.keys(createInitialState()).sort());
   });
 
   it('is mounted by the app with its own transport, and the app does not subscribe twice', () => {

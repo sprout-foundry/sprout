@@ -30,7 +30,7 @@ files, the vitest files the item touched; any `.go` change → the full gate).
       stay green). Export it from `./views` with declarations. Tests: the
       provider driven by a fake fetch + fake events provider produces
       messages from delivered events and calls `/api/query` on send.
-- [ ] **hc.2** `SproutWorkspace` mounts the chat. In `"own"` mode it mounts
+- [x] **hc.2** `SproutWorkspace` mounts the chat. In `"own"` mode it mounts
       the hc.1 provider and passes `ViewsLayout` `props` for `chat` (and
       `changes`), so a host's layout gets a working chat with no extra
       wiring. Add an optional `viewProps` prop (per-kind overrides merged

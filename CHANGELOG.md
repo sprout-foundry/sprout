@@ -2,6 +2,10 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.24.4] - 2026-10-08
+
+- fix(webui): "Open in file list" and the Ctrl/Cmd+Shift+E file explorer shortcut actually reveal the active file — the layered layout never opened its Files drill view, and the tree's reveal lost a race with its own initial fetch and discarded the expansion; with no file open, the shortcut still opens the Files panel.
+
 ## [v0.24.3] - 2026-10-08
 
 - feat(webui): a "Report a bug" action in the help menu, the status bar and the layered top bar opens a prefilled issue on the public repository; a hosted platform can route the same action to its own support flow through the host contract's new optional `reportBug` intent.

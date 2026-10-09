@@ -77,6 +77,28 @@ infers its backend from build flags or URLs.
 - `modelEndpoint?: string` — the endpoint for the in-browser agent's model
   calls; absent means the agent falls back to its default endpoint.
 
+**How the transport fields are consumed.** A component that mounts a
+workspace in its own provider stack (`SproutWorkspace` with the default
+`providers="own"`) registers its host as the *active* host for the
+module-level services while it is mounted, and restores the previous host on
+unmount. The non-React services then resolve their URLs against it:
+
+- `clientFetch` prefixes a **relative** API path with `transport.apiBaseURL`
+  when it is non-empty. Precedence, most specific first: an installed
+  adapter (which handles the request itself), then `transport.apiBaseURL`,
+  then the SSH proxy base (`window.SPROUT_PROXY_BASE`), then same-origin (no
+  prefix). An absolute URL is never prefixed, and `''` is the same-origin
+  sentinel that falls through to the proxy base.
+- The WebSocket URL resolves, most specific first: the build-time
+  `VITE_WS_URL`, then `transport.wsURL`, then the installed adapter's URL,
+  then the same-origin `/ws` path (through the proxy base when set). `''`
+  falls through.
+
+In `providers="ambient"` mode the caller has already registered its host and
+owns the transport, so the composition neither registers nor connects — see
+"one workspace per page" in
+[workspace-package.md](workspace-package.md).
+
 ### `navigation: HostNavigation`
 
 Outward navigation. Sprout requests an intent; the host resolves it however it

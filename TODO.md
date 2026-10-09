@@ -38,7 +38,7 @@ files, the vitest files the item touched; any `.go` change → the full gate).
       `EMPTY_SHELL_PROPS` chat stub where the provider replaces it. Test:
       an own-mode `SproutWorkspace` with `DEFAULT_VIEWS_ARRANGEMENT` renders
       an ENABLED chat and a send reaches the fake backend.
-- [ ] **hc.3** Host-driven transport. In own mode, register the host for the
+- [x] **hc.3** Host-driven transport. In own mode, register the host for the
       module-level services (the `setActiveHost` the standalone entry does
       in `index.tsx`), and make `clientFetch` and the WebSocket URL use
       `host.transport.apiBaseURL` / `wsURL` when set (today only

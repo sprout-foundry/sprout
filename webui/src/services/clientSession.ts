@@ -1,3 +1,4 @@
+import { getActiveHost } from '../host/accessor';
 import { debugLog } from '../utils/log';
 import { getAdapter } from './apiAdapter';
 
@@ -688,12 +689,18 @@ export async function clientFetch(input: RequestInfo | URL, init?: RequestInit):
   // Local mode: existing behavior unchanged
   const headers = new Headers(init?.headers || {});
   headers.set(WEBUI_CLIENT_ID_HEADER, clientId);
-  // If we're running behind the SSH proxy, prefix relative API paths so they
-  // route through the local server's reverse proxy to the remote backend.
-  const proxyBase = getProxyBase();
+  // Prefix relative API paths so they reach the right backend. Precedence,
+  // most specific first: an installed adapter already handled the request
+  // above, so here the active host's transport base wins when it is set
+  // (a host embedding the workspace points Sprout at its own backend), then
+  // the SSH proxy base (window.SPROUT_PROXY_BASE, injected when the page is
+  // served through the local reverse proxy), then same-origin (no prefix).
+  // An empty apiBaseURL is the same-origin sentinel, so it falls through.
+  const hostApiBase = getActiveHost()?.transport.apiBaseURL || '';
+  const base = hostApiBase || getProxyBase();
   let url: RequestInfo | URL = input;
-  if (proxyBase && typeof url === 'string' && url.startsWith('/')) {
-    url = proxyBase + url;
+  if (base && typeof url === 'string' && url.startsWith('/')) {
+    url = base + url;
   }
   const response = await fetch(url, { ...init, headers, credentials: 'include' });
   syncClientIdFromResponse(response);

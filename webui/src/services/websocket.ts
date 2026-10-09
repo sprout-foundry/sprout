@@ -186,17 +186,20 @@ class WebSocketService {
       }
     }
 
-    // Use environment variable if provided, otherwise use relative URL.
-    // When running via the SSH proxy the SPROUT_PROXY_BASE global is injected
-    // into the page so WebSocket traffic routes through the same origin.
-    // In cloud mode with an adapter, prefer the adapter's WebSocket URL.
+    // Resolve the WebSocket URL, most specific first: an explicit build-time
+    // VITE_WS_URL, then the active host's transport.wsURL (a host embedding
+    // the workspace points Sprout at its own event stream), then the installed
+    // adapter's URL, then the same-origin /ws path — through the SSH proxy base
+    // when the page is served behind the local reverse proxy.
     const adapter = getAdapter();
     const adapterWsUrl = adapter?.getWebSocketURL();
+    const hostWsUrl = getActiveHost()?.transport.wsURL || '';
     let wsUrl =
       import.meta.env.VITE_WS_URL ||
+      hostWsUrl ||
       adapterWsUrl ||
       (() => {
-        const proxyBase = window.SPROUT_PROXY_BASE || '';
+        const proxyBase = getProxyBase();
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         return `${protocol}//${window.location.host}${proxyBase}/ws`;
       })();

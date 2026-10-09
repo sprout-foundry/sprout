@@ -1199,7 +1199,7 @@
   },
   "openai": {
     "source": "https://platform.openai.com/docs/pricing",
-    "last_verified": "2026-10-08",
+    "last_verified": "2026-10-09",
     "models": [
       {
         "id": "gpt-5",
@@ -1827,12 +1827,24 @@
         "input_per_mtok": 2,
         "output_per_mtok": 10,
         "cached_per_mtok": 0.1
+      },
+      {
+        "id": "gpt-6.1-sol-pro:batch",
+        "input_per_mtok": 1,
+        "output_per_mtok": 5,
+        "cached_per_mtok": 0.05
+      },
+      {
+        "id": "gpt-6.1-sol:batch",
+        "input_per_mtok": 1,
+        "output_per_mtok": 5,
+        "cached_per_mtok": 0.05
       }
     ]
   },
   "openrouter": {
     "source": "https://openrouter.ai/api/v1/models",
-    "last_verified": "2026-10-08",
+    "last_verified": "2026-10-09",
     "models": [
       {
         "id": "ai21/jamba-large-1.7",
@@ -4838,6 +4850,24 @@
         "input_per_mtok": 2.8,
         "output_per_mtok": 8.8,
         "cached_per_mtok": 0.56
+      },
+      {
+        "id": "inclusionai/ling-3.0-flash-sante",
+        "input_per_mtok": 0.042,
+        "output_per_mtok": 0.1232,
+        "cached_per_mtok": 0.0084
+      },
+      {
+        "id": "openai/gpt-6.1-sol-pro:batch",
+        "input_per_mtok": 1,
+        "output_per_mtok": 5,
+        "cached_per_mtok": 0.05
+      },
+      {
+        "id": "openai/gpt-6.1-sol:batch",
+        "input_per_mtok": 1,
+        "output_per_mtok": 5,
+        "cached_per_mtok": 0.05
       }
     ]
   },

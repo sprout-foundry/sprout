@@ -102,7 +102,26 @@ type TraceSession struct {
 	ArtifactsFile *jsonlWriter
 	Metadata      RunMetadata
 	IsEnabled     bool
-	closed        bool
+	// Redact reports whether recorded content is passed through the secret
+	// backstop before it is written. True by default; disabled only when the
+	// caller has explicitly opted into raw capture.
+	Redact bool
+	closed bool
+}
+
+// SessionOption tunes how a trace session records content.
+type SessionOption func(*sessionOptions)
+
+type sessionOptions struct {
+	redact bool
+}
+
+// WithRedaction controls whether recorded prompt/response content is passed
+// through the secret-detection backstop before being written. Redaction is on
+// by default; pass false only when the caller has explicitly opted into raw
+// capture (e.g. an explicit --trace-unredacted flag).
+func WithRedaction(enabled bool) SessionOption {
+	return func(o *sessionOptions) { o.redact = enabled }
 }
 
 // GetRunID returns the run ID
@@ -115,10 +134,16 @@ func (s *TraceSession) GetRunDir() string {
 	return s.RunDir
 }
 
-// NewTraceSession creates a new trace session
-func NewTraceSession(traceDir, provider, model string) (*TraceSession, error) {
+// NewTraceSession creates a new trace session. Content is redacted by default;
+// pass WithRedaction(false) to record raw content.
+func NewTraceSession(traceDir, provider, model string, opts ...SessionOption) (*TraceSession, error) {
 	if traceDir == "" {
 		return &TraceSession{IsEnabled: false}, nil
+	}
+
+	options := sessionOptions{redact: true}
+	for _, opt := range opts {
+		opt(&options)
 	}
 
 	var err error
@@ -126,8 +151,14 @@ func NewTraceSession(traceDir, provider, model string) (*TraceSession, error) {
 	runID := now.Format("20060102_150405") + "_" + randomID(6)
 	runDir := filepath.Join(traceDir, runID)
 
-	if err = os.MkdirAll(runDir, 0o755); err != nil {
+	// Owner-only: the run dir holds raw prompts and responses. MkdirAll only
+	// applies the mode to directories it creates, so tighten the leaf
+	// explicitly to cover a pre-existing directory at the same path.
+	if err = os.MkdirAll(runDir, 0o700); err != nil {
 		return nil, fmt.Errorf("failed to create trace run directory: %w", err)
+	}
+	if err = os.Chmod(runDir, 0o700); err != nil {
+		return nil, fmt.Errorf("failed to set trace run directory permissions: %w", err)
 	}
 
 	// Track created writers for cleanup in case of partial initialization
@@ -152,22 +183,22 @@ func NewTraceSession(traceDir, provider, model string) (*TraceSession, error) {
 		}
 	}()
 
-	runsWriter, err = newJSONLWriter(filepath.Join(runDir, "runs.jsonl"))
+	runsWriter, err = newJSONLWriter(filepath.Join(runDir, "runs.jsonl"), options.redact)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create runs writer: %w", err)
 	}
 
-	turnsWriter, err = newJSONLWriter(filepath.Join(runDir, "turns.jsonl"))
+	turnsWriter, err = newJSONLWriter(filepath.Join(runDir, "turns.jsonl"), options.redact)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create turns writer: %w", err)
 	}
 
-	toolsWriter, err = newJSONLWriter(filepath.Join(runDir, "tool_calls.jsonl"))
+	toolsWriter, err = newJSONLWriter(filepath.Join(runDir, "tool_calls.jsonl"), options.redact)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tools writer: %w", err)
 	}
 
-	artifactsWriter, err = newJSONLWriter(filepath.Join(runDir, "artifacts_manifest.jsonl"))
+	artifactsWriter, err = newJSONLWriter(filepath.Join(runDir, "artifacts_manifest.jsonl"), options.redact)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create artifacts writer: %w", err)
 	}
@@ -193,6 +224,7 @@ func NewTraceSession(traceDir, provider, model string) (*TraceSession, error) {
 		ArtifactsFile: artifactsWriter,
 		Metadata:      metadata,
 		IsEnabled:     true,
+		Redact:        options.redact,
 	}
 
 	// Write run metadata - if this fails, close all writers and return error

@@ -277,7 +277,7 @@ the header (Go changes → full gate).
       the logger at agent start (path from config, default under the state
       dir, mode 0600), and test that a denied shell command lands in the
       file.
-- [ ] **au.2** Trace mode hygiene. `--trace-dataset-dir` writes full prompts
+- [x] **au.2** Trace mode hygiene. `--trace-dataset-dir` writes full prompts
       and raw responses unredacted with mode 0644 (`pkg/trace/jsonl.go`).
       Write owner-only (0600 files, 0700 dirs) and run the same redaction
       as the egress backstop (`secretdetect`) over what it writes, unless

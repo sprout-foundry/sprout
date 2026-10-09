@@ -2,6 +2,10 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.24.5] - 2026-10-08
+
+- feat(mcp): remote HTTP MCP servers work properly — the Streamable HTTP transport is spec-compliant (Accept headers, SSE responses, initialized notification, session IDs), credentials gain an explicit `headers` map plus a Bearer fallback for token-shaped names, and OAuth 2.1 browser logins (`mcp_refresh login`) cover OAuth-only services like Figma. Tokens live in the credential store, never in config. `activate_skill` failures now point at `list_skills` instead of inviting a filesystem hunt, and the mcp-setup skill is rewritten around the current tooling.
+
 ## [v0.24.4] - 2026-10-08
 
 - fix(webui): "Open in file list" and the Ctrl/Cmd+Shift+E file explorer shortcut actually reveal the active file — the layered layout never opened its Files drill view, and the tree's reveal lost a race with its own initial fetch and discarded the expansion; with no file open, the shortcut still opens the Files panel.

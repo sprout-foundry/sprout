@@ -298,6 +298,7 @@ function buildOpts(opts = {}) {
     editorUsesTabs: false,
     whitespaceRenderingMode: 'none',
     inlayHintsEnabled: false,
+    codeLensEnabled: true,
     signatureHelpEnabled: false,
     aiCompletionsEnabled: false,
     compactGutters: false,
@@ -319,6 +320,7 @@ function buildOpts(opts = {}) {
       editorUsesTabs: o.editorUsesTabs,
       whitespaceRenderingMode: o.whitespaceRenderingMode,
       inlayHintsEnabled: o.inlayHintsEnabled,
+      codeLensEnabled: o.codeLensEnabled,
       signatureHelpEnabled: o.signatureHelpEnabled,
       aiCompletionsEnabled: o.aiCompletionsEnabled,
       compactGutters: o.compactGutters,
@@ -364,6 +366,7 @@ describe('compartment creation', () => {
     expect(compartments.tabSize).toBeDefined();
     expect(compartments.lsp).toBeDefined();
     expect(compartments.inlayHints).toBeDefined();
+    expect(compartments.codeLens).toBeDefined();
     expect(compartments.signatureHelp).toBeDefined();
     // `history` was extracted into its own compartment so undo state can
     // be reconfigured per-buffer without rebuilding the whole extension
@@ -372,9 +375,9 @@ describe('compartment creation', () => {
     expect(compartments.history).toBeDefined();
   });
 
-  it('returns exactly 17 compartment properties', () => {
+  it('returns exactly 18 compartment properties', () => {
     const { compartments } = renderHook();
-    expect(Object.keys(compartments).length).toBe(17);
+    expect(Object.keys(compartments).length).toBe(18);
   });
 
   it('uses createEmmetCompartment and createAutoCloseTagCompartment helpers', () => {
@@ -519,6 +522,18 @@ describe('inlay hints', () => {
   it('excludes inlay hints when disabled', () => {
     const ext = renderHook().buildExtensions(buildOpts({ inlayHintsEnabled: false }));
     expect(ext.some((e) => typeof e === 'string' && e.includes('mock-inlayHints'))).toBe(false);
+  });
+});
+
+describe('code lens', () => {
+  it('includes reference counts when enabled', () => {
+    const ext = renderHook().buildExtensions(buildOpts({ codeLensEnabled: true }));
+    expect(ext).toContain('compartment-of(mock-codeLens)');
+  });
+
+  it('excludes reference counts when disabled', () => {
+    const ext = renderHook().buildExtensions(buildOpts({ codeLensEnabled: false }));
+    expect(ext.some((e) => typeof e === 'string' && e.includes('mock-codeLens'))).toBe(false);
   });
 });
 

@@ -37,6 +37,8 @@ export interface EditorPreferences {
   autoSaveEnabled: boolean;
   whitespaceRenderingMode: 'none' | 'boundary' | 'all';
   formatOnSaveEnabled?: boolean;
+  inlayHintsEnabled?: boolean;
+  codeLensEnabled?: boolean;
 }
 
 /** Props for rendering provider/model selectors inside a section body */

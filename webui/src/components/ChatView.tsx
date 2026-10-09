@@ -563,16 +563,20 @@ function Chat(props: ChatProps): JSX.Element {
                 chatUnavailable
                   ? 'Chat is not available here.'
                   : providerAvailable === false
-                  ? 'Configure a provider to start chatting...'
-                  : needsHealthCheck && backendReachable === false
-                    ? 'Waiting for server connection...'
-                    : (inputPlaceholder ?? 'Ask me anything about your code...')
+                    ? 'Configure a provider to start chatting...'
+                    : needsHealthCheck && backendReachable === false
+                      ? 'Waiting for server connection...'
+                      : (inputPlaceholder ?? 'Ask me anything about your code...')
               }
               multiline={true}
-              autoFocus={!chatUnavailable && providerAvailable !== false && !(needsHealthCheck && backendReachable === false)}
+              autoFocus={
+                !chatUnavailable && providerAvailable !== false && !(needsHealthCheck && backendReachable === false)
+              }
               isProcessing={isProcessing}
               isConnected={isConnected}
-              disabled={chatUnavailable || providerAvailable === false || (needsHealthCheck && backendReachable === false)}
+              disabled={
+                chatUnavailable || providerAvailable === false || (needsHealthCheck && backendReachable === false)
+              }
               queuedCount={queuedMessagesCount}
               queuedMessages={queuedMessages}
               onQueueMessageRemove={onQueueMessageRemove}

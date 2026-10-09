@@ -21,6 +21,7 @@ import { minimapExtension } from '../extensions/minimap';
 import { whitespaceRenderingPlugin } from '../extensions/whitespaceRendering';
 import { type WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
 import { debugLog } from '../utils/log';
+import { CODE_LENS_SETTING_KEY, INLAY_HINTS_SETTING_KEY, useEditorBooleanSetting } from './useEditorBooleanSetting';
 import { TAB_SIZE_TABS_MODE, TAB_SIZE_DEFAULT } from './useEditorExtensions';
 
 // ---------------------------------------------------------------------------
@@ -58,6 +59,7 @@ export interface UseEditorSettingsReturn {
   indentManuallySet: boolean;
   lineEnding: LineEnding;
   inlayHintsEnabled: boolean;
+  codeLensEnabled: boolean;
   signatureHelpEnabled: boolean;
   aiCompletionsEnabled: boolean;
 
@@ -68,6 +70,7 @@ export interface UseEditorSettingsReturn {
   whitespaceRenderingModeRef: React.MutableRefObject<WhitespaceRenderingMode>;
   indentManuallySetRef: React.MutableRefObject<boolean>;
   inlayHintsEnabledRef: React.MutableRefObject<boolean>;
+  codeLensEnabledRef: React.MutableRefObject<boolean>;
   signatureHelpEnabledRef: React.MutableRefObject<boolean>;
   aiCompletionsEnabledRef: React.MutableRefObject<boolean>;
 
@@ -87,6 +90,7 @@ export interface UseEditorSettingsReturn {
   onToggleRelativeLineNumbers: () => void;
   onCycleWhitespaceRendering: () => WhitespaceRenderingMode;
   onToggleInlayHints: () => void;
+  onToggleCodeLens: () => void;
   onToggleSignatureHelp: () => void;
   onToggleAiCompletions: () => void;
 }
@@ -98,69 +102,6 @@ export interface EditorSettingsCompartments {
   minimap: Compartment;
   relativeLineNumbers: Compartment;
   whitespaceRendering: Compartment;
-}
-
-/**
- * Internal: persisted boolean setting with debounced toggle. Each editor
- * setting (word wrap, minimap, relative line numbers, inlay hints, signature
- * help) used to inline ~25 lines of state + ref + sync effect + toggle +
- * localStorage write. Five identical blocks collapsed to one.
- *
- * The ref mirror is necessary because the toggle is bound to global event
- * listeners (`useEditorEvents`) whose callbacks must read the *current*
- * value, not the value captured when the effect first registered.
- */
-function useBooleanSetting(
-  storageKey: string,
-  defaultValue: boolean,
-): {
-  value: boolean;
-  ref: React.MutableRefObject<boolean>;
-  toggle: () => void;
-  set: (v: boolean) => void;
-} {
-  const [value, setValue] = useState<boolean>(() => {
-    try {
-      const stored = localStorage.getItem(storageKey);
-      return stored !== null ? stored === 'true' : defaultValue;
-    } catch (err) {
-      debugLog(`Failed to read ${storageKey} from localStorage:`, err);
-      return defaultValue;
-    }
-  });
-  const ref = useRef(value);
-  useEffect(() => {
-    ref.current = value;
-  }, [value]);
-  const lastToggleRef = useRef(0);
-  const toggle = useCallback(() => {
-    const now = Date.now();
-    // Coalesce double-fires within 100ms. Some hotkey schemes (omnibox →
-    // event → keybinding) can trigger the same toggle twice within a tick.
-    if (now - lastToggleRef.current < 100) return;
-    lastToggleRef.current = now;
-    const next = !ref.current;
-    ref.current = next;
-    setValue(next);
-    try {
-      localStorage.setItem(storageKey, String(next));
-    } catch (err) {
-      debugLog(`[toggle ${storageKey}] localStorage persist failed:`, err);
-    }
-  }, [storageKey]);
-  const set = useCallback(
-    (v: boolean) => {
-      ref.current = v;
-      setValue(v);
-      try {
-        localStorage.setItem(storageKey, String(v));
-      } catch (err) {
-        debugLog(`[set ${storageKey}] localStorage persist failed:`, err);
-      }
-    },
-    [storageKey],
-  );
-  return { value, ref, toggle, set };
 }
 
 /**
@@ -223,16 +164,17 @@ export function useEditorSettings(
   };
 
   // ---------------------------------------------------------------------------
-  // Settings state — boolean toggles delegated to useBooleanSetting (one
+  // Settings state — boolean toggles delegated to useEditorBooleanSetting (one
   // helper instead of 5 identical state + ref + sync effect + toggle blocks).
   // ---------------------------------------------------------------------------
 
-  const wordWrap = useBooleanSetting('editor:word-wrap-enabled', true);
-  const minimap = useBooleanSetting('editor:minimap-enabled', true);
-  const relativeLineNumbers = useBooleanSetting('editor:relative-line-numbers-enabled', false);
-  const inlayHints = useBooleanSetting('editor:inlay-hints-enabled', true);
-  const signatureHelp = useBooleanSetting('editor:signature-help-enabled', true);
-  const aiCompletions = useBooleanSetting('editor:ai-completions-enabled', true);
+  const wordWrap = useEditorBooleanSetting('editor:word-wrap-enabled', true);
+  const minimap = useEditorBooleanSetting('editor:minimap-enabled', true);
+  const relativeLineNumbers = useEditorBooleanSetting('editor:relative-line-numbers-enabled', false);
+  const inlayHints = useEditorBooleanSetting(INLAY_HINTS_SETTING_KEY, true);
+  const codeLens = useEditorBooleanSetting(CODE_LENS_SETTING_KEY, true);
+  const signatureHelp = useEditorBooleanSetting('editor:signature-help-enabled', true);
+  const aiCompletions = useEditorBooleanSetting('editor:ai-completions-enabled', true);
 
   // Re-export under the historical names so callers don't need to change.
   const wordWrapEnabled = wordWrap.value;
@@ -243,6 +185,8 @@ export function useEditorSettings(
   const relativeLineNumbersEnabledRef = relativeLineNumbers.ref;
   const inlayHintsEnabled = inlayHints.value;
   const inlayHintsEnabledRef = inlayHints.ref;
+  const codeLensEnabled = codeLens.value;
+  const codeLensEnabledRef = codeLens.ref;
   const signatureHelpEnabled = signatureHelp.value;
   const signatureHelpEnabledRef = signatureHelp.ref;
   const aiCompletionsEnabled = aiCompletions.value;
@@ -267,7 +211,7 @@ export function useEditorSettings(
   const [lineEnding, setLineEnding] = useState<LineEnding>('LF');
 
   // Whitespace rendering is tri-state (none/boundary/all), so it can't use
-  // useBooleanSetting. The pattern is otherwise identical.
+  // useEditorBooleanSetting. The pattern is otherwise identical.
   const whitespaceRenderingModeRef = useRef<WhitespaceRenderingMode>(getStoredWhitespaceRenderingMode());
   const lastWhitespaceToggleRef = useRef(0);
   const indentManuallySetRef = useRef(false);
@@ -383,7 +327,7 @@ export function useEditorSettings(
   }, []);
 
   // ---------------------------------------------------------------------------
-  // Toggle callbacks — boolean toggles delegate to useBooleanSetting; only
+  // Toggle callbacks — boolean toggles delegate to useEditorBooleanSetting; only
   // the tri-state whitespace cycle needs custom logic.
   // ---------------------------------------------------------------------------
 
@@ -411,6 +355,7 @@ export function useEditorSettings(
   }, []);
 
   const onToggleInlayHints = inlayHints.toggle;
+  const onToggleCodeLens = codeLens.toggle;
   const onToggleSignatureHelp = signatureHelp.toggle;
   const onToggleAiCompletions = aiCompletions.toggle;
 
@@ -426,6 +371,7 @@ export function useEditorSettings(
     indentManuallySet,
     lineEnding,
     inlayHintsEnabled,
+    codeLensEnabled,
     signatureHelpEnabled,
     aiCompletionsEnabled,
 
@@ -436,6 +382,7 @@ export function useEditorSettings(
     whitespaceRenderingModeRef,
     indentManuallySetRef,
     inlayHintsEnabledRef,
+    codeLensEnabledRef,
     signatureHelpEnabledRef,
     aiCompletionsEnabledRef,
 
@@ -455,6 +402,7 @@ export function useEditorSettings(
     onToggleRelativeLineNumbers,
     onCycleWhitespaceRendering,
     onToggleInlayHints,
+    onToggleCodeLens,
     onToggleSignatureHelp,
     onToggleAiCompletions,
   };

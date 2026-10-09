@@ -39,7 +39,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.24
 	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
-	github.com/sprout-foundry/sinter v0.6.1
+	github.com/sprout-foundry/sinter v0.7.0
 	github.com/wk8/go-ordered-map/v2 v2.1.8
 	github.com/zricethezav/gitleaks/v8 v8.30.1
 	golang.org/x/image v0.45.0

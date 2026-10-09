@@ -1,5 +1,5 @@
 import { useEvents } from '@sprout/events';
-import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { AgentEscalationBridge } from './components/AgentEscalationBridge';
 import AppContent from './components/AppContent';
 import AskUserDialog from './components/AskUserDialog';
@@ -23,12 +23,9 @@ import UpdateAvailableBanner from './components/UpdateAvailableBanner';
 import UpdateNotification from './components/UpdateNotification';
 import { WasmLoadingOverlay } from './components/WasmLoadingOverlay';
 import { MAX_PERSISTED_LOGS } from './constants/app';
-import { AppStoreProvider, useAppStoreSetState, useAppStoreState } from './contexts/AppStore';
+import { useAppStoreState } from './contexts/AppStore';
 import { useAppInitialization } from './hooks/useAppInitialization';
 import { useAppStatePersistence } from './hooks/useAppStatePersistence';
-import { useBackgroundChatSync } from './hooks/useBackgroundChatSync';
-import { useChatSessionManager } from './hooks/useChatSessionManager';
-import type { QueuedMessage } from './hooks/useChatSessionManager';
 import { useCloudSessionPersistence } from './hooks/useCloudSessionPersistence';
 import { useEscalationTriggers } from './hooks/useEscalationTriggers';
 import { useGitHandlers } from './hooks/useGitHandlers';
@@ -37,8 +34,6 @@ import useOnboarding from './hooks/useOnboarding';
 import { usePageVisibility } from './hooks/usePageVisibility';
 import { useSecurityHandlers } from './hooks/useSecurityHandlers';
 import { useSidebarState } from './hooks/useSidebarState';
-import type { UseWebSocketEventHandlerRefs } from './hooks/useWebSocketEventHandler';
-import { useWebSocketEventHandler } from './hooks/useWebSocketEventHandler';
 import { SproutProviders } from './providers';
 import { useActiveRepoURL } from './services/activeRepo';
 import { ApiService } from './services/api';
@@ -47,6 +42,7 @@ import { clientFetch } from './services/clientSession';
 import { LocalEventsProvider } from './services/localEventsProvider';
 import { notificationBus } from './services/notificationBus';
 import { debugLog } from './utils/log';
+import { WorkspaceChatProvider, useWorkspaceChat } from './views';
 import './App.css';
 import './components/UpdateNotification.css';
 
@@ -101,18 +97,18 @@ function App() {
   const eventsProvider = useMemo(() => new LocalEventsProvider(), []);
 
   return (
-    <AppStoreProvider initialState={initialState}>
-      <SproutProviders eventsProvider={eventsProvider}>
+    <SproutProviders eventsProvider={eventsProvider}>
+      <WorkspaceChatProvider initialState={initialState} eventsProvider={eventsProvider} fetchFn={clientFetch}>
         <AppInner />
-      </SproutProviders>
-    </AppStoreProvider>
+      </WorkspaceChatProvider>
+    </SproutProviders>
   );
 }
 
 function AppInner() {
   const state = useAppStoreState();
-  const setState = useAppStoreSetState();
   const events = useEvents();
+  const { setState, handleEvent, handleReconnect, chat: chatManager, refs: chatRefs } = useWorkspaceChat();
 
   // Freeze the WebSocket when the tab is hidden (clean close so the backend
   // detaches) and resume + reattach when it returns to the foreground. Without
@@ -193,18 +189,6 @@ function AppInner() {
     cycleSidebarSnap,
   } = useSidebarState();
 
-  // ── Refs ───────────────────────────────────────────────────────
-
-  const activeRequestsRef = useRef(0);
-  const queuedMessagesRef = useRef<QueuedMessage[]>([]);
-  const activeChatIdRef = useRef<string | null>(null);
-  activeChatIdRef.current = state.activeChatId;
-  const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const lastConnectionStateRef = useRef<boolean>(false);
-  // Shared refs for tracking provider change state across hooks
-  const pendingProviderChangeRef = useRef(false);
-  const pendingProviderChangeValueRef = useRef<string | null>(null);
-
   // ── Hooks ───────────────────────────────────────────────────────
 
   const apiService = ApiService.getInstance();
@@ -232,45 +216,16 @@ function AppInner() {
     };
   }, [state.isConnected, apiService, setState]);
 
-  const { handleModelChange, handleProviderChange, handleViewChange, pendingProviderRef } = useModelProviderHandlers({
+  // The chat unit owns the refs the event reducer and the send path share;
+  // the model/provider handlers write the same provider-change refs and the
+  // pending-provider ref directly, so a provider switch and the events it
+  // drives stay in step.
+  const { handleModelChange, handleProviderChange, handleViewChange } = useModelProviderHandlers({
     state,
     setState,
-    pendingProviderChangeRef,
-    pendingProviderChangeValueRef,
-  });
-
-  const wsEventHandlerRefs: UseWebSocketEventHandlerRefs = {
-    activeRequestsRef,
-    activeChatIdRef,
-    pendingProviderRef,
-    pendingProviderChangeRef,
-    pendingProviderChangeValueRef,
-    connectionTimeoutRef,
-    lastConnectionStateRef,
-  };
-
-  const { handleEvent, handleReconnect } = useWebSocketEventHandler({
-    setState,
-    refs: wsEventHandlerRefs,
-    apiService,
-  });
-
-  const chatManager = useChatSessionManager({
-    setState,
-    activeRequestsRef,
-    activeChatIdRef,
-    queuedMessagesRef,
-    isProcessing: state.isProcessing,
-    workspaceBusy: state.workspaceBusy,
-  });
-
-  // Background chat panes (chat buffers open in non-active split panes)
-  // refresh from the read-only messages endpoint when their cached entry
-  // accumulates WS events, so both panes stream independently.
-  useBackgroundChatSync({
-    perChatCache: state.perChatCache,
-    activeChatId: state.activeChatId,
-    setState,
+    pendingProviderChangeRef: chatRefs.pendingProviderChangeRef,
+    pendingProviderChangeValueRef: chatRefs.pendingProviderChangeValueRef,
+    pendingProviderRef: chatRefs.pendingProviderRef,
   });
 
   // ── Persistence ───────────────────────────────────────────────────
@@ -335,12 +290,15 @@ function AppInner() {
   useAppInitialization({
     eventsProvider: events,
     handleEvent,
-    connectionTimeoutRef,
+    connectionTimeoutRef: chatRefs.connectionTimeoutRef,
     loadChatSessions: chatManager.loadChatSessions,
     setIsMobile,
     setIsTablet,
     setState,
     handleReconnect,
+    // The chat unit owns the event/reconnect subscription; this hook only
+    // connects the transport and runs the boot sequence.
+    manageEventSubscription: false,
     // SP-147: one conversation per project — boot has no per-mode chat
     // restore, so no lane-aware create/switch hooks are passed. The server's
     // active chat (or the most recent non-empty one) comes back whatever the
@@ -450,16 +408,6 @@ function AppInner() {
             onViewChange={handleViewChange}
             onModelChange={handleModelChange}
             onProviderChange={handleProviderChange}
-            onSendMessage={chatManager.handleSendMessage}
-            onQueueMessage={chatManager.handleQueueMessage}
-            onQueueMessageRemove={chatManager.handleRemoveQueuedMessage}
-            onQueueMessageEdit={chatManager.handleEditQueuedMessage}
-            onQueueReorder={chatManager.handleReorderQueuedMessages}
-            onClearQueuedMessages={chatManager.handleClearQueuedMessages}
-            onStopProcessing={chatManager.handleStopProcessing}
-            onRetractSteer={chatManager.handleRetractSteer}
-            queuedMessages={chatManager.queuedMessages}
-            queuedMessagesCount={chatManager.queuedMessagesCount}
             onGitCommit={handleGitCommit}
             onGitAICommit={handleGitAICommit}
             onGitStage={handleGitStage}

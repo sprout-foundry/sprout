@@ -1,6 +1,6 @@
 import type { WsEvent } from '@sprout/events';
 import type { Message, ToolRef } from '@sprout/ui';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AppStoreSetState } from '../contexts/AppStore';
 import { ApiService } from '../services/api';
 import {
@@ -11,6 +11,7 @@ import {
   deleteAllChatSessions,
   renameChatSession,
   switchChatSession,
+  type ChatSessionsApi,
 } from '../services/chatSessions';
 import type { AppState, WorkspaceBusyInfo } from '../types/app';
 import { debugLog } from '../utils/log';
@@ -45,6 +46,20 @@ function extractToolRefsFromContent(content: string): ToolRef[] {
 const WORKSPACE_BUSY_RECHECK_MS = 4000;
 
 /**
+ * The module-function session endpoints, bound once. The standalone app uses
+ * this (its adapter-aware transport); an embedding injects its own.
+ */
+const DEFAULT_CHAT_SESSIONS_API: ChatSessionsApi = {
+  listChatSessions,
+  createChatSession,
+  createChatSessionInWorktree: (req) => createChatSessionInWorktree(req),
+  deleteChatSession,
+  deleteAllChatSessions,
+  renameChatSession,
+  switchChatSession,
+};
+
+/**
  * The server transcript plus local messages it doesn't have yet. A local
  * message counts as saved when the server copy's tail already holds the same
  * turn (same role and text).
@@ -63,6 +78,13 @@ export interface QueuedMessage {
   chatId: string | null;
 }
 
+export interface ChatApi {
+  sendQuery: (query: string, chatId?: string, mode?: string) => Promise<void>;
+  steerQuery: (query: string, chatId?: string) => Promise<void>;
+  stopQuery: (chatId?: string) => Promise<void>;
+  retractSteer: (chatId?: string) => Promise<{ success: boolean; message: string }>;
+}
+
 export interface UseChatSessionManagerParams {
   setState: AppStoreSetState;
   activeRequestsRef: React.MutableRefObject<number>;
@@ -71,6 +93,18 @@ export interface UseChatSessionManagerParams {
   isProcessing: boolean;
   /** The chat held back by workspace_busy, if any; its queued messages wait for the running chat. */
   workspaceBusy?: WorkspaceBusyInfo | null;
+  /**
+   * The chat transport. Omitted, the app's own `ApiService` singleton is
+   * used; an embedding supplies one bound to its fetch so sends reach its
+   * backend.
+   */
+  api?: ChatApi;
+  /**
+   * The chat-session endpoints. Omitted, the module-level functions (the
+   * app's adapter-aware transport) are used; an embedding supplies one bound
+   * to its fetch.
+   */
+  sessions?: ChatSessionsApi;
 }
 
 export interface UseChatSessionManagerReturn {
@@ -120,6 +154,8 @@ export function useChatSessionManager({
   queuedMessagesRef,
   isProcessing,
   workspaceBusy = null,
+  api,
+  sessions,
 }: UseChatSessionManagerParams): UseChatSessionManagerReturn {
   const [queuedMessagesCount, setQueuedMessagesCount] = useState(0);
   // Mirror of queuedMessagesRef for rendering. The ref is the source of
@@ -130,6 +166,19 @@ export function useChatSessionManager({
   // panel rendered empty with non-functional buttons.
   const [queuedMessages, setQueuedMessages] = useState<QueuedMessage[]>([]);
   const apiService = ApiService.getInstance();
+  // The chat transport, defaulted to the app's own service so the standalone
+  // app is unchanged; an embedding passes its own fetch-bound pair.
+  const chatApi: ChatApi = useMemo(
+    () =>
+      api ?? {
+        sendQuery: (query, chatId, mode) => apiService.sendQuery(query, chatId, mode),
+        steerQuery: (query, chatId) => apiService.steerQuery(query, chatId),
+        stopQuery: (chatId) => apiService.stopQuery(chatId),
+        retractSteer: (chatId) => apiService.retractSteer(chatId),
+      },
+    [api, apiService],
+  );
+  const chatSessions: ChatSessionsApi = useMemo(() => sessions ?? DEFAULT_CHAT_SESSIONS_API, [sessions]);
 
   // Retract state: tracks the last steer message so the user can pull it
   // back for editing with Up-arrow. Cleared when the query completes or
@@ -139,12 +188,12 @@ export function useChatSessionManager({
 
   const loadChatSessions = useCallback(async () => {
     try {
-      const response = await listChatSessions();
+      const response = await chatSessions.listChatSessions();
       const activeChatId = response.active_chat_id || null;
       let initialMessages: Message[] = [];
       if (activeChatId) {
         try {
-          const switchResp = await switchChatSession(activeChatId);
+          const switchResp = await chatSessions.switchChatSession(activeChatId);
           initialMessages = chatTranscriptToMessages(activeChatId, switchResp.chat_session.messages);
           if (!activeChatIdRef.current) {
             activeChatIdRef.current = activeChatId;
@@ -177,7 +226,7 @@ export function useChatSessionManager({
       // the visible symptom and self-heals via the session_changed WS event.
       debugLog('[chat] Failed to load chat sessions:', error);
     }
-  }, [setState, activeChatIdRef]);
+  }, [setState, activeChatIdRef, chatSessions]);
 
   const handleActiveChatChange = useCallback(
     async (id: string, mode?: 'code' | 'design'): Promise<boolean> => {
@@ -260,7 +309,7 @@ export function useChatSessionManager({
       requestChatReplay(id, replayEvents);
 
       try {
-        const response = await switchChatSession(id, mode);
+        const response = await chatSessions.switchChatSession(id, mode);
         // Bail if user switched to yet another chat while we were loading.
         // Report `false` so callers waiting on the switch (boot restore)
         // know it never landed and can fall back.
@@ -317,7 +366,8 @@ export function useChatSessionManager({
         // switch — the messages are already on screen from the switch
         // response; the list refresh is cosmetic. The session_changed WS
         // event also updates this list, so a dropped refresh self-heals.
-        void listChatSessions()
+        void chatSessions
+          .listChatSessions()
           .then((sessionsResp) => {
             if (activeChatIdRef.current !== switchId) return;
             setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? [] }));
@@ -358,7 +408,7 @@ export function useChatSessionManager({
         return false;
       }
     },
-    [setState, activeRequestsRef],
+    [setState, activeRequestsRef, chatSessions],
   );
 
   // In-flight create guard: the New Chat button stays enabled while the
@@ -371,9 +421,9 @@ export function useChatSessionManager({
       if (createChatInFlightRef.current) return null;
       createChatInFlightRef.current = true;
       try {
-        const response = await createChatSession(undefined, mode);
+        const response = await chatSessions.createChatSession(undefined, mode);
         const newId = response.chat_session.id;
-        const sessionsResp = await listChatSessions();
+        const sessionsResp = await chatSessions.listChatSessions();
         setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? [] }));
         return newId;
       } catch (error) {
@@ -395,14 +445,14 @@ export function useChatSessionManager({
   const handleCreateChatInWorktree = useCallback(
     async (branch: string, baseRef?: string, name?: string, autoSwitch?: boolean): Promise<string | null> => {
       try {
-        const response = await createChatSessionInWorktree({
+        const response = await chatSessions.createChatSessionInWorktree({
           branch,
           base_ref: baseRef || undefined,
           name: name || undefined,
           auto_switch_workspace: autoSwitch,
         });
         const newId = response.chat_session.id;
-        const sessionsResp = await listChatSessions();
+        const sessionsResp = await chatSessions.listChatSessions();
         setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? [] }));
         if (autoSwitch && newId) {
           await handleActiveChatChange(newId);
@@ -415,7 +465,7 @@ export function useChatSessionManager({
         throw error;
       }
     },
-    [handleActiveChatChange, setState],
+    [handleActiveChatChange, setState, chatSessions],
   );
 
   const handleDeleteChat = useCallback(
@@ -425,7 +475,7 @@ export function useChatSessionManager({
         // in the same lane first (most recently active; the list is sorted
         // that way).
         if (id === activeChatIdRef.current) {
-          const before = await listChatSessions();
+          const before = await chatSessions.listChatSessions();
           const doomed = before.chat_sessions.find((c) => c.id === id);
           const lane = doomed?.mode === 'design' ? 'design' : 'code';
           const next = before.chat_sessions.find(
@@ -442,8 +492,8 @@ export function useChatSessionManager({
           }
           if (!(await handleActiveChatChange(next.id))) return;
         }
-        await deleteChatSession(id, options?.removeWorktree === true);
-        const sessionsResp = await listChatSessions();
+        await chatSessions.deleteChatSession(id, options?.removeWorktree === true);
+        const sessionsResp = await chatSessions.listChatSessions();
         setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? [] }));
       } catch (error) {
         debugLog('[chat] Failed to delete chat session:', error);
@@ -451,13 +501,13 @@ export function useChatSessionManager({
         notificationBus.notify('error', 'Chat', toUserErrorMessage(error, 'Could not delete that chat session.'), 5000);
       }
     },
-    [handleActiveChatChange, setState],
+    [handleActiveChatChange, setState, chatSessions],
   );
 
   const handleDeleteAllChats = useCallback(async () => {
     try {
-      const response = await deleteAllChatSessions();
-      const sessionsResp = await listChatSessions();
+      const response = await chatSessions.deleteAllChatSessions();
+      const sessionsResp = await chatSessions.listChatSessions();
       setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? [] }));
       // The backend keeps/returns the default session as active — follow it.
       if (response.active_chat_id) {
@@ -467,13 +517,13 @@ export function useChatSessionManager({
       debugLog('[chat] Failed to delete all chat sessions:', error);
       notificationBus.notify('error', 'Chat', toUserErrorMessage(error, 'Could not delete all chat sessions.'), 5000);
     }
-  }, [handleActiveChatChange, setState]);
+  }, [handleActiveChatChange, setState, chatSessions]);
 
   const handleRenameChat = useCallback(
     async (id: string, name: string) => {
       try {
-        await renameChatSession(id, name);
-        const sessionsResp = await listChatSessions();
+        await chatSessions.renameChatSession(id, name);
+        const sessionsResp = await chatSessions.listChatSessions();
         setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? [] }));
       } catch (error) {
         debugLog('[chat] Failed to rename chat session:', error);
@@ -481,7 +531,7 @@ export function useChatSessionManager({
         notificationBus.notify('error', 'Chat', toUserErrorMessage(error, 'Could not rename that chat session.'), 5000);
       }
     },
-    [setState],
+    [setState, chatSessions],
   );
 
   const handleSendMessage = useCallback(
@@ -529,7 +579,7 @@ export function useChatSessionManager({
 
       if (isClearCommand && !allowConcurrent && activeRequestsRef.current > 0) {
         try {
-          await apiService.stopQuery();
+          await chatApi.stopQuery();
         } catch (error) {
           debugLog('[chat] stopQuery failed during /clear recovery:', error);
         }
@@ -551,7 +601,7 @@ export function useChatSessionManager({
         }));
 
         try {
-          await apiService.sendQuery('/clear', targetChatId);
+          await chatApi.sendQuery('/clear', targetChatId);
         } catch (error) {
           const errorMsg = error instanceof Error ? error.message : 'Failed to send clear command';
           setState((prev) => ({
@@ -578,7 +628,7 @@ export function useChatSessionManager({
           lastError: null,
           messages: trimMessages([...prev.messages, pendingSteerBubble(bubbleId, trimmedMessage)]),
         }));
-        await apiService.steerQuery(trimmedMessage, targetChatId);
+        await chatApi.steerQuery(trimmedMessage, targetChatId);
         // Remember the steer for possible retraction via Up-arrow.
         lastSteerMessageRef.current = trimmedMessage;
         lastSteerBubbleIdRef.current = bubbleId;
@@ -605,7 +655,7 @@ export function useChatSessionManager({
 
       try {
         debugLog('[>>] Sending message:', trimmedMessage);
-        await apiService.sendQuery(trimmedMessage, targetChatId, activeWorkspaceModeId() ?? undefined);
+        await chatApi.sendQuery(trimmedMessage, targetChatId, activeWorkspaceModeId() ?? undefined);
         setState((prev) => ({ inputValue: '' }));
         debugLog('[OK] Message sent successfully');
       } catch (error) {
@@ -656,7 +706,7 @@ export function useChatSessionManager({
             ],
           }));
           try {
-            await apiService.steerQuery(trimmedMessage, targetChatId);
+            await chatApi.steerQuery(trimmedMessage, targetChatId);
             lastSteerMessageRef.current = trimmedMessage;
             setState((prev) => ({ inputValue: '' }));
             return;
@@ -701,7 +751,7 @@ export function useChatSessionManager({
         }));
       }
     },
-    [apiService, activeRequestsRef, activeChatIdRef, queuedMessagesRef, setQueuedMessagesCount],
+    [chatApi, chatSessions, activeRequestsRef, activeChatIdRef, queuedMessagesRef, setQueuedMessagesCount],
   );
 
   const handleQueueMessage = useCallback(
@@ -759,7 +809,7 @@ export function useChatSessionManager({
 
   const handleStopProcessing = useCallback(async () => {
     try {
-      await apiService.stopQuery(activeChatIdRef.current ?? undefined);
+      await chatApi.stopQuery(activeChatIdRef.current ?? undefined);
       activeRequestsRef.current = 0;
       queuedMessagesRef.current = [];
       setQueuedMessages([]);
@@ -802,7 +852,7 @@ export function useChatSessionManager({
         ]),
       }));
     }
-  }, [apiService, setQueuedMessages, setQueuedMessagesCount]);
+  }, [chatApi, setQueuedMessages, setQueuedMessagesCount]);
 
   // Pull back the newest un-picked steer message for editing. Removes the
   // optimistic bubble and restores the text to the input. Returns false when
@@ -816,7 +866,7 @@ export function useChatSessionManager({
     retractInFlightRef.current = true;
     const bubbleId = lastSteerBubbleIdRef.current;
     try {
-      const response = await apiService.retractSteer(activeChatIdRef.current ?? undefined);
+      const response = await chatApi.retractSteer(activeChatIdRef.current ?? undefined);
       if (!response.success || !response.message) {
         retractInFlightRef.current = false;
         return false;
@@ -833,7 +883,7 @@ export function useChatSessionManager({
       retractInFlightRef.current = false;
       return false;
     }
-  }, [apiService]);
+  }, [chatApi]);
 
   // Handle session-restored window event
   useEffect(() => {
@@ -926,7 +976,8 @@ export function useChatSessionManager({
   useEffect(() => {
     if (!runningChatId) return;
     const timer = setInterval(() => {
-      void listChatSessions()
+      void chatSessions
+        .listChatSessions()
         .then((resp) => {
           const running = (resp.chat_sessions ?? []).find((c) => c.id === runningChatId);
           if (running?.active_query) return;
@@ -945,7 +996,7 @@ export function useChatSessionManager({
   const reloadActiveChatFromBackend = useCallback(
     async (id: string) => {
       try {
-        const response = await switchChatSession(id);
+        const response = await chatSessions.switchChatSession(id);
         if (activeChatIdRef.current !== id) return; // user moved on while loading
         const backendMessages: Message[] = chatTranscriptToMessages(id, response.chat_session.messages);
         const backendIsActive = response.chat_session.active_query;
@@ -958,7 +1009,7 @@ export function useChatSessionManager({
         debugLog('[chat] gap reload failed:', error);
       }
     },
-    [setState, activeChatIdRef, activeRequestsRef],
+    [setState, activeChatIdRef, activeRequestsRef, chatSessions, chatApi],
   );
 
   useEffect(() => {

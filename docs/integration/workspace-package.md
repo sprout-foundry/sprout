@@ -148,8 +148,8 @@ the arranged `chat` view gets props assembled from the unit, so a host's
 layout shows a working chat — the transcript, sending, queueing and the
 streaming reducer — with no extra wiring. The composition owns the events
 transport and hands the same instance to both `SproutProviders` and the chat
-unit, so the two share one subscription. The `changes` view self-fetches its
-session changes and is left with no assembled props.
+unit, so the two share one subscription. The files, editor and changes views
+are assembled too — see [Files and editor](#files-and-editor).
 
 The app-specific callbacks that are not chat state (the model picker, session
 restore, fork, opening a review buffer) are not assembled by the composition —
@@ -166,6 +166,88 @@ type declarations (`dist/views.d.ts`, `dist/providers.d.ts`), so importing
 no web UI source tree required. They reference only `react` as an external
 (the registry's mode icons and the editor's CodeMirror-typed props are
 inlined).
+
+## Files and editor
+
+An arranged workspace is an IDE, not just a chat: in own mode a
+`SproutWorkspace` with a `layout` also assembles the file tree, the editor and
+the changes panel, so a host that arranges them gets working surfaces with no
+extra wiring.
+
+```tsx
+import { SproutWorkspace } from "@sprout-foundry/workspace/views";
+
+<SproutWorkspace
+  project={{ id: repoUrl, repoUrl }}
+  space="code"
+  host={myHost}
+  layout={{
+    left: ["fileTree"],
+    center: ["editor"],
+    right: ["chat"],
+    overlay: [],
+  }}
+/>;
+```
+
+- **`fileTree`** gets its callbacks from `useWorkspaceFileTree()`: listing
+  through `/api/files`, create/delete/rename through `/api/create`,
+  `/api/delete` and `/api/rename`, all on the adapter-aware `clientFetch` —
+  so they reach the daemon, the in-browser workspace's VFS (WASM hosts) or the
+  host's `transport.apiBaseURL`, whichever the host's transport names. It is
+  the same hook the standalone app's Files sidebar uses. Selecting a file
+  opens it in the editor; the active file is the tree's selection.
+- **`editor`** renders `WorkspaceEditorView`: a tab per open file over the
+  editor pane, with the app's buffer plumbing (loading, edits, Cmd/Ctrl+S
+  and auto-save through `/api/file`, external-change detection).
+- **`changes`** gets an `onFileClick` that opens the file in the editor.
+- File links in the chat and tool output (the `sprout:open-in-editor` window
+  event) open in the editor too.
+
+The editor is a unit like the chat. `./views` exports
+`WorkspaceEditorProvider`, `useWorkspaceEditor()` and
+`useWorkspaceEditorProps()`; `SproutWorkspace` mounts the provider in own
+mode, and the standalone app mounts the same provider at its root. It must sit
+under `SproutProviders` (it reads the buffer manager).
+
+- `useWorkspaceEditor()` reads the unit: `openFiles`, `activeFile`,
+  `openFile(path, { line? })`, `closeFile(path)` and `saveFile(path?)` (the
+  active file when `path` is omitted).
+- `useWorkspaceEditorProps()` returns the wiring for the views around the
+  editor: `fileTree` (`onFileSelect`, `selectedFile`) and `onFileClick(path,
+line?)`.
+
+**Overriding.** A kind in `viewProps` replaces the assembled props for that
+kind, as for `chat`. A host that wants its own tree data passes
+`viewProps.fileTree` (a `FileTreeProps`); `useWorkspaceFileTree({ fetchFn,
+rootPath, onFileSelect, selectedFile })` is the starting point and needs no
+provider, so it can be called in the host component that renders the
+workspace. The host's tree sits outside the editor unit, so to open a file in
+the editor it dispatches the open request the workspace listens for:
+
+```tsx
+const fileTree = useWorkspaceFileTree({
+  fetchFn: myFetch,
+  onFileSelect: (file) =>
+    window.dispatchEvent(
+      new CustomEvent("sprout:open-in-editor", { detail: { path: file.path } }),
+    ),
+});
+
+<SproutWorkspace /* … */ layout={layout} viewProps={{ fileTree }} />;
+```
+
+A host-supplied `viewProps.editor` drops the assembled editor: the `editor`
+kind then renders the bare `Editor` primitive with the host's props.
+
+**The changes panel needs the daemon.** `AgentChangesPanel` reads the
+daemon's change tracker (`/api/changes/summary`, `/api/changes/session`). A
+host whose backend does not serve them — the in-browser agent, or a
+self-hosted backend — sets `capabilities.agentChanges: false` in its
+`SproutHost`; the panel then shows "Agent changes aren't available in this
+workspace" and makes no request. `localHost` (the daemon) declares it `true`
+and keeps the panel as it was; `headlessHost()` declares it `false`. Better
+still, leave `changes` out of the arrangement on such a host.
 
 ## Escalation (run it where it can run)
 

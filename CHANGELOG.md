@@ -4,6 +4,8 @@ All notable changes to Sprout will be documented in this file.
 
 ## [Unreleased]
 
+- feat(workspace): the `./views` entry exports the escalation seam — `AgentEscalationBridge` (installs `globalThis.__sproutEscalate`, the hook the WASM agent calls when a command exits 127), `EscalationListener`, the `useEscalationTriggers` detector and the `installEscalationBridge`/policy APIs with their types — so a host composing `SproutWorkspace` can wire the "run it in the cloud workspace / on a runner" flow (issue #113).
+
 ## [v0.25.0] - 2026-10-09
 
 - feat(workspace): `@sprout-foundry/workspace` 1.1.0 — the workspace composes a chat. Chat state is extracted into a reusable `WorkspaceChatProvider` (`useWorkspaceChat`, `useWorkspaceChatProps`, `createEmptyChatState`), and `SproutWorkspace` mounts it, so a host embedding the workspace gets a working chat with no extra wiring. Host transport is driven through the module services (`registerActiveHost`), the agent backend is selected through the host contract (`HostAgentBackend`), and the host serves the chat session store through the new `capabilities.chatSessions` capability.

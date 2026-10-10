@@ -200,3 +200,45 @@ export type {
 // `shellProps` (the data the app root assembles today), so mounting a space's
 // registered shell is typed from this one entry point.
 export type { WorkspaceShellProps } from '../workspaces/shell';
+
+// The escalation seam: when an agent command cannot run in the browser (exit
+// 127, a git push the browser can't do, the VFS quota), the WASM shell calls
+// `globalThis.__sproutEscalate.run(command)`, and the work runs instead in the
+// user's cloud workspace or on one of their runners (open → push browser
+// deltas → run → pull results back), with the user's consent. Two pieces make
+// that work, and Sprout's own app root mounts both (`webui/src/App.tsx`):
+//
+// - `AgentEscalationBridge` installs the global the WASM agent calls and asks
+//   the consent question. A host mounts it once per page with the project's
+//   repo URL — the same value `SproutWorkspace`'s `project.repoUrl` carries —
+//   so the bridge and the workspace agree on one repository.
+// - `EscalationListener` renders the "Browser limitation reached" affordance
+//   for the *user's own* terminal/preview actions (git push, quota, timeout),
+//   and `useEscalationTriggers` is the detector those events come from. It
+//   must be mounted once at the app root, before (or with) the listener.
+//
+// Everything here is WASM-side: no daemon and no local terminal involved — a
+// host needs only to serve the cloud transactional surface (`/workspace/txn`,
+// `docs/integration/host-contract.md`) for the runs to land somewhere. The
+// cloud-only services underneath (`runners`, `cloudTxn`) use relative paths
+// and go through the host's transport.
+export { AgentEscalationBridge } from '../components/AgentEscalationBridge';
+export type { AgentEscalationBridgeProps } from '../components/AgentEscalationBridge';
+export { EscalationListener } from '../components/EscalationListener';
+export {
+  installEscalationBridge,
+  escalateCommand,
+  getEscalationPolicy,
+  setEscalationPolicy,
+} from '../services/agentEscalation';
+export type {
+  ConsentAnswer,
+  ConsentContext,
+  ConsentDecision,
+  EscalationBridgeOptions,
+  EscalationPolicy,
+  EscalationResult,
+} from '../services/agentEscalation';
+export type { EscalationHost } from '../services/escalationHost';
+export { ESCALATION_TRIGGER_EVENT, useEscalationTriggers } from '../hooks/useEscalationTriggers';
+export type { EscalationTriggerEvent, UseEscalationTriggersOptions } from '../hooks/useEscalationTriggers';

@@ -12,7 +12,9 @@
  *
  * Policy (per browser, localStorage):
  *   ask    — prompt the user for each command (default)
- *   always — run without asking
+ *   always — run without asking, except on a host that needs consent for
+ *            every run (a bare-metal runner: no sandbox between the command
+ *            and the user's machine)
  *   never  — don't escalate agent commands
  */
 
@@ -77,6 +79,11 @@ export interface EscalationBridgeOptions {
   alwaysHost?: () => EscalationHost;
   /** Whether a runner host can take work right now; checked before unprompted runs. */
   isHostAvailable?: (host: EscalationHost) => Promise<boolean>;
+  /**
+   * Whether every run on this host needs the user's consent even under
+   * policy "always" (a bare-metal runner). Checked before unprompted runs.
+   */
+  requiresConsent?: (host: EscalationHost) => Promise<boolean>;
   /** Progress for UI (opening/pushing/running/pulling). */
   onPhase?: (command: string, phase: string, host: EscalationHost) => void;
   /** Override for tests. */
@@ -145,6 +152,14 @@ export async function escalateCommand(command: string, opts: EscalationBridgeOpt
     prompted = true;
   } else {
     host = opts.alwaysHost?.() ?? AUTO_HOST;
+    if (opts.requiresConsent && (await opts.requiresConsent(host))) {
+      const answer = normalizeAnswer(await opts.requestConsent(command));
+      if (answer.decision === 'deny') {
+        return { ran: false, message: 'The user declined to run this command outside the browser.' };
+      }
+      host = applyApproval(repoURL, answer);
+      prompted = true;
+    }
   }
 
   const run = opts.run ?? runTxnCommand;
@@ -178,12 +193,28 @@ export async function escalateCommand(command: string, opts: EscalationBridgeOpt
 
 type EscalateGlobal = { __sproutEscalate?: { run: (command: string) => Promise<EscalationResult> } };
 
-/** Install globalThis.__sproutEscalate; returns the uninstaller. */
+type EscalateBridge = NonNullable<EscalateGlobal['__sproutEscalate']>;
+
+/** Installed bridges, oldest first; the newest one is the live hook. */
+const installed: EscalateBridge[] = [];
+
+/**
+ * Install globalThis.__sproutEscalate; returns the uninstaller. The newest
+ * install wins, and uninstalling restores the one it replaced, so two
+ * mounted bridges never leave escalation switched off while one remains.
+ */
 export function installEscalationBridge(opts: EscalationBridgeOptions): () => void {
   const g = globalThis as EscalateGlobal;
-  const bridge = { run: (command: string) => escalateCommand(command, opts) };
+  const bridge: EscalateBridge = { run: (command: string) => escalateCommand(command, opts) };
+  installed.push(bridge);
   g.__sproutEscalate = bridge;
   return () => {
-    if (g.__sproutEscalate === bridge) delete g.__sproutEscalate;
+    const i = installed.indexOf(bridge);
+    if (i < 0) return;
+    installed.splice(i, 1);
+    if (g.__sproutEscalate !== bridge) return;
+    const previous = installed[installed.length - 1];
+    if (previous) g.__sproutEscalate = previous;
+    else delete g.__sproutEscalate;
   };
 }

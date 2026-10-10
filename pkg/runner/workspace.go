@@ -90,9 +90,9 @@ func workspaceEnv(task WorkspaceTask) map[string]string {
 	}
 	if task.LLMKey != "" {
 		if IsGatewayProvider(task.LLMProvider) {
-			// The gateway's workspace-scoped key authenticates against
-			// the platform's OpenAI-compatible /v1 (the provider file
-			// points there); it is not a public provider's key.
+			// The gateway key authenticates against the platform
+			// gateway (the provider file points there); it is not a
+			// public provider's key and must never reach one.
 			env[GatewayKeyEnvVar] = task.LLMKey
 			env["SPROUT_PROVIDER"] = GatewayProviderName
 			if strings.TrimSpace(task.Model) != "" {

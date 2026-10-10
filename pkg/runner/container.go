@@ -53,6 +53,12 @@ func (l *ContainerLauncher) Start(ctx context.Context, task WorkspaceTask) (*Wor
 	// clone workspace keeps the runner-managed volume it owns.
 	workspaceMount := ""
 	if task.WorkspaceDir != "" {
+		if task.RepoURL != "" {
+			// The image's entrypoint clears /workspace before cloning
+			// when it finds no .git there; that must never meet the
+			// user's real files.
+			return nil, fmt.Errorf("start task names both a repo and a local directory")
+		}
 		workspaceMount = task.WorkspaceDir + ":/workspace"
 	} else {
 		volume := filepath.Join(dir, "volume")
@@ -65,7 +71,13 @@ func (l *ContainerLauncher) Start(ctx context.Context, task WorkspaceTask) (*Wor
 		}
 		workspaceMount = volume + ":/workspace"
 	}
-	envFile, err := writeEnvFile(dir, workspaceEnv(task))
+	env := workspaceEnv(task)
+	if task.WorkspaceDir != "" {
+		// Inside the container the directory is the /workspace mount;
+		// the host path means nothing there and would only leak it.
+		env["WORKSPACE_DIR"] = "/workspace"
+	}
+	envFile, err := writeEnvFile(dir, env)
 	if err != nil {
 		return nil, fmt.Errorf("writing workspace env: %w", err)
 	}

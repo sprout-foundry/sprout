@@ -153,3 +153,46 @@ func TestWorkspaceEnvCarriesTheLocalDirectoryInsteadOfTheRepo(t *testing.T) {
 		t.Errorf("a dir-backed workspace must carry WORKSPACE_DIR, not REPO_URL; got %+v", env)
 	}
 }
+
+func TestLocalDirRefusesBroadDirectories(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "home", "me")
+	state := filepath.Join(root, "state")
+	config := filepath.Join(root, "config")
+	project := filepath.Join(home, "src", "proj")
+	for _, d := range []string{project, state, config} {
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("SPROUT_STATE_DIR", state)
+	t.Setenv("SPROUT_CONFIG_DIR", config)
+
+	for name, dir := range map[string]string{
+		"filesystem root":       string(filepath.Separator),
+		"home":                  home,
+		"home via tilde":        "~",
+		"ancestor of home":      filepath.Dir(home),
+		"state dir":             state,
+		"inside the state dir":  mkdir(t, filepath.Join(state, "runner", "workspaces")),
+		"inside the config dir": mkdir(t, filepath.Join(config, "providers")),
+		"ancestor of both":      root,
+	} {
+		if got, err := LocalDir(dir); err == nil {
+			t.Errorf("%s (%q) must be refused; got %q", name, dir, got)
+		}
+	}
+	if _, err := LocalDir(project); err != nil {
+		t.Errorf("a project directory inside home must be allowed: %v", err)
+	}
+}
+
+func mkdir(t *testing.T, dir string) string {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}

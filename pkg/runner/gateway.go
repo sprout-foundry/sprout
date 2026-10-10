@@ -3,6 +3,7 @@ package runner
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -10,18 +11,23 @@ import (
 )
 
 // GatewayProviderName is the workspace provider name for the platform
-// gateway's OpenAI-compatible models endpoint. A start task naming this
-// provider wires the workspace's agent to <platform_api_url>/v1 with the
-// task's workspace-scoped gateway key, so the workspace uses the gateway's
-// models (and the user's gateway quotas) instead of a public provider's
-// endpoint (issue #115).
+// gateway's OpenAI-compatible endpoint. A start task naming this provider
+// wires the workspace's agent to the gateway with the task's gateway key, so
+// the workspace uses the gateway's models (and the user's gateway quotas)
+// instead of a public provider's endpoint.
 const GatewayProviderName = "gateway"
 
-// GatewayKeyEnvVar carries the workspace-scoped gateway key in the workspace
-// daemon's environment. The gateway key authenticates against the platform's
-// OpenAI-compatible /v1 as the user, with the user's entitlements applied;
-// it is revoked platform-side when the workspace terminates.
+// GatewayKeyEnvVar carries the gateway key in the workspace daemon's
+// environment. The key's scope, lifetime and revocation are the platform's:
+// the runner only passes it to the daemon, never writes it to disk and never
+// sends it anywhere but the gateway endpoint. Code running in the workspace
+// can read the daemon's environment, so the platform should mint a key scoped
+// to the one workspace and revoke it when the workspace ends.
 const GatewayKeyEnvVar = "SPROUT_GATEWAY_KEY"
+
+// platformGatewayPath is the platform's OpenAI-compatible gateway base,
+// relative to platform_api_url, used when a task carries no gateway_url.
+const platformGatewayPath = "/internal/llm/v1"
 
 // IsGatewayProvider reports whether a start task's llm_provider names the
 // platform gateway.
@@ -29,23 +35,44 @@ func IsGatewayProvider(provider string) bool {
 	return strings.EqualFold(strings.TrimSpace(provider), GatewayProviderName)
 }
 
-// gatewayEndpoint derives the workspace's chat endpoint from the platform
-// API URL: the gateway's OpenAI-compatible base plus /v1/chat/completions
-// (the custom-provider endpoint convention: a bare origin gains /v1, an
-// explicit /v1 gains /chat/completions).
-func gatewayEndpoint(platformAPIURL string) (string, error) {
-	base := strings.TrimRight(strings.TrimSpace(platformAPIURL), "/")
-	if base == "" {
-		return "", fmt.Errorf("gateway provider needs the platform API URL, which the start task did not carry")
+// gatewayEndpoint returns the workspace's chat endpoint: the gateway base
+// (gatewayURL, or platformAPIURL plus the platform's gateway path) plus
+// /chat/completions, the custom-provider endpoint convention the daemon
+// also derives /models from. A base that already ends in /chat/completions
+// is used as is. The key travels as a bearer token, so the URL must be https
+// unless it points at this machine, and must carry no credentials, query or
+// fragment.
+func gatewayEndpoint(gatewayURL, platformAPIURL string) (string, error) {
+	raw := strings.TrimSpace(gatewayURL)
+	if raw == "" {
+		origin := strings.TrimRight(strings.TrimSpace(platformAPIURL), "/")
+		if origin == "" {
+			return "", fmt.Errorf("gateway start task carries neither a gateway URL nor the platform API URL")
+		}
+		raw = origin + platformGatewayPath
 	}
-	u, err := url.Parse(base)
-	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
-		return "", fmt.Errorf("gateway endpoint %q is not a valid http(s) URL", platformAPIURL)
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") {
+		return "", fmt.Errorf("gateway URL is not a valid http(s) URL")
 	}
-	if !strings.HasSuffix(u.Path, "/v1") {
-		u.Path = strings.TrimRight(u.Path, "/") + "/v1"
+	if u.Scheme == "http" && !loopbackHost(u.Hostname()) {
+		return "", fmt.Errorf("gateway URL must use https unless it points at this machine")
 	}
-	return u.Scheme + "://" + u.Host + u.Path + "/chat/completions", nil
+	if u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return "", fmt.Errorf("gateway URL must not carry credentials, a query or a fragment")
+	}
+	path := strings.TrimRight(u.Path, "/")
+	path = strings.TrimSuffix(path, "/chat/completions")
+	return u.Scheme + "://" + u.Host + path + "/chat/completions", nil
+}
+
+// loopbackHost reports whether host names this machine.
+func loopbackHost(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // writeGatewayProviderFile registers the gateway as the workspace's custom
@@ -53,8 +80,8 @@ func gatewayEndpoint(platformAPIURL string) (string, error) {
 // the runner user's global config): endpoint + key env var. No default model
 // is pinned — the daemon's model picker lists the models the account may use
 // from the endpoint's /v1/models. The file lives and dies with the workspace.
-func writeGatewayProviderFile(configDir, platformAPIURL string) error {
-	endpoint, err := gatewayEndpoint(platformAPIURL)
+func writeGatewayProviderFile(configDir, gatewayURL, platformAPIURL string) error {
+	endpoint, err := gatewayEndpoint(gatewayURL, platformAPIURL)
 	if err != nil {
 		return err
 	}

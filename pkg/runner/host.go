@@ -44,10 +44,10 @@ func (l *HostLauncher) Start(ctx context.Context, task WorkspaceTask) (*Workspac
 	if task.WorkspaceDir != "" {
 		// A local-directory workspace runs in place: the user's real
 		// files are the workspace root, so there is nothing to clone.
-		// The runner checked the allowlist (Runner.start, the only
-		// caller the platform reaches); re-checking here keeps the
-		// launcher safe for direct callers. The platform sends either
-		// repo_url or workspace_dir, never both.
+		// Runner.start checked the allowlist and refused a task naming
+		// both a repo and a directory before reaching the launcher; the
+		// repo check is repeated here so a direct caller can never clone
+		// into the user's directory.
 		if task.RepoURL != "" {
 			return nil, fmt.Errorf("start task names both a repo (%s) and a local directory (%s)", task.RepoURL, task.WorkspaceDir)
 		}
@@ -72,7 +72,9 @@ func (l *HostLauncher) Start(ctx context.Context, task WorkspaceTask) (*Workspac
 		// runner-owned workspace directory with the gateway's models
 		// as the backend.
 		repo = filepath.Join(dir, "repo")
-		_ = os.MkdirAll(repo, 0o700)
+		if err := os.MkdirAll(repo, 0o700); err != nil {
+			return nil, fmt.Errorf("creating workspace dir: %w", err)
+		}
 	default:
 		repo = filepath.Join(dir, "repo")
 		if err := cloneIfMissing(ctx, repo, task); err != nil {
@@ -83,9 +85,9 @@ func (l *HostLauncher) Start(ctx context.Context, task WorkspaceTask) (*Workspac
 		// Wire the workspace's provider config to the platform gateway
 		// before the daemon starts, so its model picker lists the
 		// gateway's models and its agent calls the gateway's /v1 with
-		// the workspace-scoped key (SPROUT_GATEWAY_KEY, set in env).
+		// the gateway key (SPROUT_GATEWAY_KEY, set in env).
 		configDir := filepath.Join(dir, "config")
-		if err := writeGatewayProviderFile(configDir, task.PlatformAPIURL); err != nil {
+		if err := writeGatewayProviderFile(configDir, task.GatewayURL, task.PlatformAPIURL); err != nil {
 			return nil, fmt.Errorf("wiring the gateway provider: %w", err)
 		}
 	}

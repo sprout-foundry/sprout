@@ -80,13 +80,28 @@ func (r *Runner) heartbeat(ctx context.Context) {
 	err := r.Client.SendHeartbeat(ctx, Heartbeat{
 		Status: status, RunningTasks: n,
 		Mode: r.State.Mode, Sandbox: r.Sandbox, RunnerVersion: r.Version,
-		LocalDirs: r.State.LocalDirs,
-		DirectURL: r.State.PublicURL,
-		Relayed:   r.relayed(),
+		LocalDirs:    r.State.LocalDirs,
+		Capabilities: r.capabilities(),
+		DirectURL:    r.State.PublicURL,
+		Relayed:      r.relayed(),
 	})
 	if err != nil && ctx.Err() == nil {
 		r.Log.Warn("heartbeat failed", "err", err)
 	}
+}
+
+// capabilities lists the optional start-task features this runner serves, so
+// the platform sends a feature only to runners that understand it (an older
+// runner would ignore workspace_dir or misread a gateway key).
+func (r *Runner) capabilities() []string {
+	caps := []string{CapabilityTaskErrors}
+	if len(r.State.LocalDirs) > 0 {
+		caps = append(caps, CapabilityLocalDirs)
+	}
+	if r.State.Mode != ModeContainer {
+		caps = append(caps, CapabilityGateway)
+	}
+	return caps
 }
 
 func (r *Runner) poll(ctx context.Context) {
@@ -138,44 +153,10 @@ func (r *Runner) handle(ctx context.Context, t WorkspaceTask) {
 }
 
 func (r *Runner) start(ctx context.Context, t WorkspaceTask, log *slog.Logger) {
-	if t.TxnSecret == "" {
-		// Without a secret the host server could not authenticate the
-		// platform's calls; refuse rather than serve an open daemon.
-		log.Error("start task carries no txn secret; refusing")
-		_ = r.Client.SubmitWorkspaceResult(ctx, WorkspaceResult{WorkspaceID: t.WorkspaceID, Status: "failed"})
+	if reason := r.refusal(&t); reason != "" {
+		log.Error("refusing start task", "reason", reason)
+		_ = r.Client.SubmitWorkspaceResult(ctx, WorkspaceResult{WorkspaceID: t.WorkspaceID, Status: "failed", Error: reason})
 		return
-	}
-	if t.WorkspaceDir != "" {
-		resolved, err := resolveLocalTaskDir(t.WorkspaceDir)
-		if err != nil || !allowedLocalDir(resolved, r.State.LocalDirs) {
-			// The runner serves exactly the directories its owner
-			// named on this machine, resolved the same way for both —
-			// a symlinked path the allowlist does not name never
-			// reaches the launchers.
-			log.Error("start task names a directory this runner does not serve; refusing", "dir", t.WorkspaceDir)
-			_ = r.Client.SubmitWorkspaceResult(ctx, WorkspaceResult{WorkspaceID: t.WorkspaceID, Status: "failed"})
-			return
-		}
-		t.WorkspaceDir = resolved
-	}
-	if IsGatewayProvider(t.LLMProvider) {
-		switch {
-		case r.State.Mode == ModeContainer:
-			// The gateway provider file lives in the workspace's
-			// host-side config dir, which the container cannot see;
-			// a container runner cannot serve gateway workspaces.
-			log.Error("gateway workspaces need host execution (native or bare-metal mode); refusing", "mode", r.State.Mode)
-			_ = r.Client.SubmitWorkspaceResult(ctx, WorkspaceResult{WorkspaceID: t.WorkspaceID, Status: "failed"})
-			return
-		case t.LLMKey == "":
-			log.Error("gateway start task carries no workspace key; refusing")
-			_ = r.Client.SubmitWorkspaceResult(ctx, WorkspaceResult{WorkspaceID: t.WorkspaceID, Status: "failed"})
-			return
-		case t.RepoURL != "":
-			log.Error("gateway start task names a repo; gateway workspaces are repo-less; refusing", "repo", t.RepoURL)
-			_ = r.Client.SubmitWorkspaceResult(ctx, WorkspaceResult{WorkspaceID: t.WorkspaceID, Status: "failed"})
-			return
-		}
 	}
 	if old := r.take(t.WorkspaceID); old != nil {
 		r.Host.Unbind(t.WorkspaceID)
@@ -184,7 +165,7 @@ func (r *Runner) start(ctx context.Context, t WorkspaceTask, log *slog.Logger) {
 	ws, err := r.Launcher.Start(ctx, t)
 	if err != nil {
 		log.Error("start failed", "err", err)
-		_ = r.Client.SubmitWorkspaceResult(ctx, WorkspaceResult{WorkspaceID: t.WorkspaceID, Status: "failed"})
+		_ = r.Client.SubmitWorkspaceResult(ctx, WorkspaceResult{WorkspaceID: t.WorkspaceID, Status: "failed", Error: "workspace failed to start on the runner"})
 		return
 	}
 	r.mu.Lock()
@@ -210,6 +191,52 @@ func (r *Runner) start(ctx context.Context, t WorkspaceTask, log *slog.Logger) {
 		return
 	}
 	log.Info("workspace running", "port", ws.Port)
+}
+
+// refusal checks a start task before any launcher sees it and returns why the
+// runner will not serve it, or "" when it will. A local-directory task has
+// its path replaced by the symlink-resolved form the allowlist matched. The
+// reasons go back to the platform verbatim, so they name the rule, never a
+// secret.
+func (r *Runner) refusal(t *WorkspaceTask) string {
+	if t.TxnSecret == "" {
+		// Without a secret the host server could not authenticate the
+		// platform's calls; refuse rather than serve an open daemon.
+		return "start task carries no txn secret"
+	}
+	if t.WorkspaceDir != "" {
+		if t.RepoURL != "" {
+			// A local directory is the user's real files: nothing may
+			// clone into it, reset it or treat it as a disposable
+			// checkout, so a task naming both is never served.
+			return "start task names both a repo and a local directory"
+		}
+		resolved, err := resolveLocalTaskDir(t.WorkspaceDir)
+		if err != nil || !allowedLocalDir(resolved, r.State.LocalDirs) {
+			// The runner serves exactly the directories its owner
+			// named on this machine, resolved the same way for both —
+			// a symlinked path the allowlist does not name never
+			// reaches the launchers.
+			return "start task names a directory this runner does not serve"
+		}
+		t.WorkspaceDir = resolved
+	}
+	if IsGatewayProvider(t.LLMProvider) {
+		switch {
+		case r.State.Mode == ModeContainer:
+			// The gateway provider file lives in the workspace's
+			// host-side config dir, which the container cannot see.
+			return "gateway workspaces need host execution (native or bare-metal mode)"
+		case t.LLMKey == "":
+			return "gateway start task carries no workspace key"
+		case t.RepoURL != "":
+			return "gateway workspaces are repo-less; the start task names a repo"
+		}
+		if _, err := gatewayEndpoint(t.GatewayURL, t.PlatformAPIURL); err != nil {
+			return err.Error()
+		}
+	}
+	return ""
 }
 
 func (r *Runner) take(id string) *Workspace {

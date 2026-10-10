@@ -34,7 +34,8 @@ import {
   FolderCog,
   Filter,
 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { HostContext } from '../host';
 import { ApiService } from '../services/api';
 import type {
   SessionChangeEntry,
@@ -103,7 +104,29 @@ function formatBulkCount(n?: number): string {
   return new Intl.NumberFormat(undefined).format(n) + ' file' + (n === 1 ? '' : 's');
 }
 
-function AgentChangesPanel({
+/**
+ * The changes view reads the daemon's change tracker (`/api/changes/*`). A
+ * host without those endpoints (the in-browser agent, a self-hosted backend)
+ * declares `capabilities.agentChanges: false`, and the panel then renders a
+ * plain unavailable state instead of fetching into a 404. Rendered outside
+ * any `HostProvider` the panel keeps fetching, as it always has.
+ */
+function AgentChangesPanel(props: AgentChangesPanelProps): JSX.Element {
+  const host = useContext(HostContext);
+  if (host && !host.capabilities.agentChanges) {
+    return (
+      <div className="agent-changes-panel" data-testid="context-panel-changes" data-unavailable="true">
+        <div className="changes-empty">
+          <Inbox size={32} />
+          <p>Agent changes aren&apos;t available in this workspace.</p>
+        </div>
+      </div>
+    );
+  }
+  return <AgentChangesSession {...props} />;
+}
+
+function AgentChangesSession({
   onAskAgent,
   onFileClick,
   timeline,

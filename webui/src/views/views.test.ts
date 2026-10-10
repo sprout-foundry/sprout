@@ -11,8 +11,10 @@ import { DEFAULT_VIEWS_ARRANGEMENT, SLOT_ORDER, VIEWS_BY_KIND, resolveViewsArran
 import type { ExampleEmbeddingProps, ViewKind, ViewSlot, ViewsArrangement, ViewsLayoutProps } from './ViewsLayout';
 import {
   AgentChangesPanel,
+  AgentEscalationBridge,
   ChatView,
   Editor,
+  EscalationListener,
   FileTree,
   PreviewPane,
   PreviewPanel,
@@ -20,6 +22,11 @@ import {
   SproutWorkspace,
   ViewsLayout,
   createEmptyChatState,
+  escalateCommand,
+  getEscalationPolicy,
+  installEscalationBridge,
+  setEscalationPolicy,
+  useEscalationTriggers,
   usePreviewStatus,
   copy,
   formatCopy,
@@ -27,19 +34,30 @@ import {
   resetCopyForTests,
   DEFAULT_COPY,
   COPY_KEYS,
+  ESCALATION_TRIGGER_EVENT,
   useWorkspaceMode,
 } from './index';
 import type {
   AgentChangesPanelProps,
+  AgentEscalationBridgeProps,
   ChatProps,
+  ConsentAnswer,
+  ConsentContext,
+  ConsentDecision,
   CopyKey,
   CopyOverrides,
   EditorProps,
+  EscalationBridgeOptions,
+  EscalationHost,
+  EscalationPolicy,
+  EscalationResult,
+  EscalationTriggerEvent,
   FileTreeProps,
   PreviewPaneProps,
   PreviewPanelProps,
   SproutProject,
   SproutWorkspaceProps,
+  UseEscalationTriggersOptions,
   UsePreviewStatusReturn,
   UseWorkspaceModeResult,
 } from './index';
@@ -126,6 +144,25 @@ describe('views entry exports', () => {
   it('exports the chat unit and the empty chat state a composition starts from', () => {
     expect(typeof createEmptyChatState).toBe('function');
     expect(createEmptyChatState().messages).toEqual([]);
+  });
+
+  // ── The escalation seam ──────────────────────────────────────────────
+
+  it('exports the escalation bridge + listener as components', () => {
+    expect(isReactComponent(AgentEscalationBridge)).toBe(true);
+    expect(isReactComponent(EscalationListener)).toBe(true);
+  });
+
+  it('exports the bridge installer and the policy accessors as functions', () => {
+    expect(typeof installEscalationBridge).toBe('function');
+    expect(typeof escalateCommand).toBe('function');
+    expect(typeof getEscalationPolicy).toBe('function');
+    expect(typeof setEscalationPolicy).toBe('function');
+  });
+
+  it('exports the trigger detector and the event name the listener listens for', () => {
+    expect(typeof useEscalationTriggers).toBe('function');
+    expect(ESCALATION_TRIGGER_EVENT).toBe('sprout:escalation-trigger');
   });
 });
 
@@ -243,5 +280,36 @@ describe('views entry typed props', () => {
     expect(exampleProps.arrangement).toEqual({ left: [] });
     // The resolver round-trips the minimal value.
     expect(resolveViewsArrangement({ center: [kind] }).center).toEqual(['chat']);
+  });
+
+  it('accepts minimal escalation-seam values', () => {
+    const bridgeProps: AgentEscalationBridgeProps = { repoURL: 'https://github.com/acme/app' };
+    const decision: ConsentDecision = 'once';
+    const answer: ConsentAnswer = { decision, host: { kind: 'cloud' } };
+    const context: ConsentContext = { notice: 'your runner is offline', unavailableRunnerId: 'r1' };
+    const policy: EscalationPolicy = 'ask';
+    const host: EscalationHost = { kind: 'runner', runnerId: 'r1', name: 'Mac mini' };
+    const result: EscalationResult = { ran: true, stdout: 'ok', exitCode: 0 };
+    const bridgeOptions: EscalationBridgeOptions = {
+      repoURL: 'https://github.com/acme/app',
+      requestConsent: async () => 'deny',
+    };
+    const trigger: EscalationTriggerEvent = {
+      id: 'wasm-command-unavailable-1a2b',
+      reason: 'command_unavailable_in_browser',
+      severity: 'blocking',
+      message: 'needs a real runtime',
+      command: 'go build ./...',
+    };
+    const triggerOptions: UseEscalationTriggersOptions = { repoURL: 'https://github.com/acme/app' };
+    expect(bridgeProps.repoURL).toContain('acme');
+    expect(answer.decision).toBe('once');
+    expect(context.unavailableRunnerId).toBe('r1');
+    expect(policy).toBe('ask');
+    expect(host.kind).toBe('runner');
+    expect(result.ran).toBe(true);
+    expect(bridgeOptions.requestConsent).toBeDefined();
+    expect(trigger.severity).toBe('blocking');
+    expect(triggerOptions.repoURL).toContain('acme');
   });
 });

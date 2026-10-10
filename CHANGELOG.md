@@ -4,6 +4,10 @@ All notable changes to Sprout will be documented in this file.
 
 ## [Unreleased]
 
+## [v0.26.1] - 2026-10-10
+
+- fix(agent): the daemon no longer deadlocks when overlapping web UI requests read and update a client's event metadata at the same moment. Event-metadata readers re-acquired a read lock they already held, so a writer queued between the two calls left both blocked forever, and every request needing that client's agent (settings, providers, onboarding) hung until the daemon restarted.
+
 ## [v0.26.0] - 2026-10-10
 
 - feat(runner): local-directory workspaces (issue #114) — `sprout runner start --dir <path>` (also on `link`, repeatable; `--workspace` remains as a hidden deprecated alias) names directories the runner serves **in place**: a start task naming one runs against the user's real files with no clone (container mode bind-mounts it at `/workspace`). The allowlist is exact and symlink-resolved, enforced before any start and advertised in heartbeats (`local_dirs`); the runner refuses the filesystem root, the home directory and its ancestors, and sprout's own config and state directories, and refuses any task naming both a repo and a directory, so nothing clones into or clears the user's files. The workspace is writable — in native mode the agent can change anything in the directory, including git hooks and editor task files — so name a directory you are willing to let it change. Destroying a local workspace never touches the user's files.

@@ -29,9 +29,10 @@ describe('app root renders through SproutProviders', () => {
 
   it('renders the app shell inside the wrapper', () => {
     expect(appSource).toContain('<SproutProviders');
-    // The shell closes inside the wrapper: AppInner is the wrapper's direct
-    // child, so its closing tag is immediately followed by the wrapper's.
-    expect(appSource).toMatch(/<AppInner \/>\s*<\/SproutProviders>/);
+    // The shell closes inside the wrapper: AppInner sits directly inside
+    // SproutProviders, or inside the workspace chat provider the wrapper
+    // hosts, and nothing else closes between it and the wrapper.
+    expect(appSource).toMatch(/<AppInner \/>\s*(?:<\/WorkspaceChatProvider>\s*)?<\/SproutProviders>/);
   });
 
   it('no longer assembles the stack by hand', () => {

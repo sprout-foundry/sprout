@@ -64,10 +64,29 @@ func (l *HostLauncher) Start(ctx context.Context, task WorkspaceTask) (*Workspac
 		}
 	}
 	repo := localDir
-	if localDir == "" {
+	switch {
+	case localDir != "":
+		// Local-directory workspace: the user's directory is the root.
+	case IsGatewayProvider(task.LLMProvider):
+		// Gateway workspace: no repo by design — it runs in the
+		// runner-owned workspace directory with the gateway's models
+		// as the backend.
+		repo = filepath.Join(dir, "repo")
+		_ = os.MkdirAll(repo, 0o700)
+	default:
 		repo = filepath.Join(dir, "repo")
 		if err := cloneIfMissing(ctx, repo, task); err != nil {
 			return nil, err
+		}
+	}
+	if IsGatewayProvider(task.LLMProvider) {
+		// Wire the workspace's provider config to the platform gateway
+		// before the daemon starts, so its model picker lists the
+		// gateway's models and its agent calls the gateway's /v1 with
+		// the workspace-scoped key (SPROUT_GATEWAY_KEY, set in env).
+		configDir := filepath.Join(dir, "config")
+		if err := writeGatewayProviderFile(configDir, task.PlatformAPIURL); err != nil {
+			return nil, fmt.Errorf("wiring the gateway provider: %w", err)
 		}
 	}
 

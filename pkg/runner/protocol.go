@@ -75,13 +75,17 @@ type WorkspaceTask struct {
 	// workspace runs in place: no clone, the directory is the workspace
 	// root and the runner writes the user's real files there. The runner
 	// refuses any path it was not explicitly configured to serve.
-	WorkspaceDir   string            `json:"workspace_dir,omitempty"`
-	Action         string            `json:"action"`
-	ContainerID    string            `json:"container_id"`
-	TxnSecret      string            `json:"txn_secret,omitempty"`
-	GitToken       string            `json:"git_token,omitempty"`
-	LLMProvider    string            `json:"llm_provider,omitempty"`
-	LLMKey         string            `json:"llm_key,omitempty"`
+	WorkspaceDir string `json:"workspace_dir,omitempty"`
+	Action       string `json:"action"`
+	ContainerID  string `json:"container_id"`
+	TxnSecret    string `json:"txn_secret,omitempty"`
+	GitToken     string `json:"git_token,omitempty"`
+	LLMProvider  string `json:"llm_provider,omitempty"`
+	LLMKey       string `json:"llm_key,omitempty"`
+	// Model names the model the workspace starts on, when the platform
+	// pins one (gateway provider). Empty lets the workspace's model
+	// picker decide from the endpoint's /v1/models.
+	Model          string            `json:"model,omitempty"`
 	UserEnv        map[string]string `json:"user_env,omitempty"`
 	PlatformAPIURL string            `json:"platform_api_url,omitempty"`
 }

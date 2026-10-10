@@ -47,6 +47,13 @@ func SetAuditLogger(l *AuditLogger) {
 	auditLogger.Store(l)
 }
 
+// ClassifierAuditLogger returns the package-level audit logger used by the
+// classifier, or nil when none is set. Read-only accessor for diagnostics and
+// tests; the returned logger must not be closed by the caller.
+func ClassifierAuditLogger() *AuditLogger {
+	return auditLogger.Load()
+}
+
 // SecurityRisk represents the risk level of a tool call
 type SecurityRisk int
 

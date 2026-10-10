@@ -20,6 +20,7 @@ func saveAgentFlagVars(t *testing.T) {
 	persona, provider, model, risk := agentPersona, agentProvider, agentModel, agentRiskProfile
 	iter, workflow, session, sysPrompt := maxIterations, agentWorkflowConfig, agentSessionID, agentSystemPrompt
 	sysPromptFile, resDir, traceDir := agentSystemPromptFile, agentResourceDirectory, agentTraceDatasetDir
+	traceUnredacted := agentTraceUnredacted
 	lastSess, dryRun, unsafe := agentLastSession, agentDryRun, agentUnsafe
 	unsafeShell, noSub := agentUnsafeShell, agentNoSubagents
 	subModel, subProvider, budget := agentSubagentModel, agentSubagentProvider, agentBudgetUSD
@@ -29,6 +30,7 @@ func saveAgentFlagVars(t *testing.T) {
 		agentPersona, agentProvider, agentModel, agentRiskProfile = persona, provider, model, risk
 		maxIterations, agentWorkflowConfig, agentSessionID, agentSystemPrompt = iter, workflow, session, sysPrompt
 		agentSystemPromptFile, agentResourceDirectory, agentTraceDatasetDir = sysPromptFile, resDir, traceDir
+		agentTraceUnredacted = traceUnredacted
 		agentLastSession, agentDryRun, agentUnsafe = lastSess, dryRun, unsafe
 		agentUnsafeShell, agentNoSubagents = unsafeShell, noSub
 		agentSubagentModel, agentSubagentProvider, agentBudgetUSD = subModel, subProvider, budget
@@ -151,6 +153,7 @@ func TestAgentSkipDaemonRouting_FlagMatrix(t *testing.T) {
 		"resource-dir":      func(t *testing.T) { agentResourceDirectory = "d" },
 		"budget-usd":        func(t *testing.T) { agentBudgetUSD = 5 },
 		"trace-dataset":     func(t *testing.T) { agentTraceDatasetDir = "d" },
+		"trace-unredacted":  func(t *testing.T) { agentTraceUnredacted = true },
 		"mock-llm":          func(t *testing.T) { agentMockLLM = true },
 		"no-project-skills": func(t *testing.T) { noProjectSkills = true },
 		"no-daemon":         func(t *testing.T) { agentNoDaemon = true },
@@ -170,6 +173,7 @@ func TestAgentSkipDaemonRouting_FlagMatrix(t *testing.T) {
 func resetUntransmittableFlags() {
 	agentWorkflowConfig, agentSessionID, agentSystemPrompt = "", "", ""
 	agentSystemPromptFile, agentResourceDirectory, agentTraceDatasetDir = "", "", ""
+	agentTraceUnredacted = false
 	agentLastSession, agentDryRun, agentUnsafe = false, false, false
 	agentUnsafeShell, agentNoSubagents = false, false
 	agentSubagentModel, agentSubagentProvider, agentBudgetUSD = "", "", 0

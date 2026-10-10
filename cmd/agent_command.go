@@ -56,8 +56,12 @@ var (
 	agentAutomateRecordFile string
 	agentNoConnectionCheck  bool
 	agentTraceDatasetDir    string
-	agentPromptStdin        bool
-	agentRiskProfile        string
+	// agentTraceUnredacted disables the secret-detection backstop over trace
+	// content. Off by default: trace files capture full prompts and raw model
+	// responses, so redaction is the safe default and raw capture is opt-in.
+	agentTraceUnredacted bool
+	agentPromptStdin     bool
+	agentRiskProfile     string
 	// Workflow budget overrides — populated from CLI flags on `sprout
 	// automate` and applied on top of the workflow JSON's budget block.
 	// Only positive values apply; pass 0 (or omit) to inherit the workflow
@@ -194,6 +198,7 @@ func agentSkipDaemonRouting() bool {
 		agentResourceDirectory != "" ||
 		agentBudgetUSD != 0 ||
 		agentTraceDatasetDir != "" ||
+		agentTraceUnredacted ||
 		agentMockLLM ||
 		noProjectSkills
 }
@@ -350,6 +355,7 @@ func init() {
 	agentCmd.Flags().StringVar(&agentBudgetWarn, "budget-warn", "", "Comma-separated warning thresholds as fractions of the budget, e.g. '0.5,0.8'")
 	agentCmd.Flags().IntVar(&agentHeartbeatSeconds, "heartbeat", 0, "Print [budget] progress every N seconds during the run (overrides progress.heartbeat_seconds)")
 	agentCmd.Flags().StringVar(&agentTraceDatasetDir, "trace-dataset-dir", "", "Enable dataset trace mode and write to directory (also settable via SPROUT_TRACE_DATASET_DIR env var)")
+	agentCmd.Flags().BoolVar(&agentTraceUnredacted, "trace-unredacted", false, "Write trace content without the secret-detection backstop (raw prompts/responses; use only for trusted datasets)")
 	agentCmd.Flags().BoolVar(&agentPromptStdin, "prompt-stdin", false, "Read the prompt from stdin (avoids OS ARG_MAX limits for large prompts)")
 	agentCmd.Flags().BoolVar(&agentMockLLM, "mock-llm", false, "Use a stub LLM provider that returns canned responses (for testing)")
 	agentCmd.Flags().BoolVar(&agentNoDaemon, "no-daemon", false, "Run this turn in-process instead of handing it to a running daemon (also set by SPROUT_DAEMON_AGENT=0)")

@@ -16,7 +16,7 @@ func TestJsonlWriter_Flush(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "flush_test.jsonl")
 
-	w, err := newJSONLWriter(tmpFile)
+	w, err := newJSONLWriter(tmpFile, false)
 	if err != nil {
 		t.Fatalf("newJSONLWriter failed: %v", err)
 	}
@@ -51,7 +51,7 @@ func TestJsonlWriter_WriteAfterClose(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "write_after_close.jsonl")
 
-	w, err := newJSONLWriter(tmpFile)
+	w, err := newJSONLWriter(tmpFile, false)
 	if err != nil {
 		t.Fatalf("newJSONLWriter failed: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestJsonlWriter_CloseDouble(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "close_double.jsonl")
 
-	w, err := newJSONLWriter(tmpFile)
+	w, err := newJSONLWriter(tmpFile, false)
 	if err != nil {
 		t.Fatalf("newJSONLWriter failed: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestJsonlWriter_FlushAfterClose(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "flush_after_close.jsonl")
 
-	w, err := newJSONLWriter(tmpFile)
+	w, err := newJSONLWriter(tmpFile, false)
 	if err != nil {
 		t.Fatalf("newJSONLWriter failed: %v", err)
 	}
@@ -347,7 +347,7 @@ func TestJsonlWriter_OverwriteExistingFile(t *testing.T) {
 	}
 
 	// Create writer — should truncate the existing file
-	w, err := newJSONLWriter(tmpFile)
+	w, err := newJSONLWriter(tmpFile, false)
 	if err != nil {
 		t.Fatalf("newJSONLWriter failed: %v", err)
 	}

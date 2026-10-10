@@ -104,6 +104,10 @@ func (a *Agent) shutdownLocked() {
 		_ = a.debugLogFile.Close()
 		a.debugLogFile = nil
 	}
+
+	// Close the security audit log file and detach it from the
+	// package-level classifier logger.
+	a.closeAuditLogger()
 }
 
 // SetInterruptHandler sets the interrupt handler for UI mode

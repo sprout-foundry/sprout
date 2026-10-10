@@ -20,6 +20,8 @@
 # shrinks.
 /
 # The SPA root: serves the embedded web UI (static, not a JSON operation).
+/api/agent/events
+# The agent-event SSE stream (text/event-stream, not a JSON operation).
 /api/bootstrap
 # The bootstrap/config surface the web UI fetches first, kept a plain handler by design.
 /api/lsp/ws

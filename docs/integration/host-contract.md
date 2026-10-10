@@ -576,6 +576,46 @@ On reload, the active chat's transcript is restored through `GET
 chat unit makes at boot), so the host store is the source of truth for the
 conversation across reloads.
 
+## The agent-event stream
+
+A daemon exposes its live agent-turn events as a Server-Sent Events stream at
+`GET /api/agent/events`. It is the HTTP-shaped twin of the WebSocket bridge at
+`/ws`: the same events, the same filtering, but carried over a plain HTTP
+response so a host that reaches the daemon through a request/response transport
+(the runner relay tunnel, `pkg/runner`) can consume it without a protocol
+change. The runner's host server reverse-proxies `/daemon/{workspaceID}/...`
+with streaming enabled, so the SSE bytes flow through the relay's existing
+`data` frames unchanged.
+
+```
+GET /api/agent/events?chat_id=<id>&client_id=<id>&after_seq=<n>
+200  Content-Type: text/event-stream
+```
+
+- `chat_id` scopes the stream to one chat; empty means the client's active
+  chat. `client_id` (also accepted as the `X-Sprout-Client-ID` header) selects
+  the client/window. `after_seq` replays buffered events past that sequence
+  before the live stream resumes, so a reconnecting consumer does not miss the
+  turn.
+- Each event is one `data:` frame carrying the daemon's `UIEvent` JSON
+  (`{ "id", "type", "timestamp", "data" }`). A periodic comment frame
+  (`: keep-alive`) keeps an idle stream from looking dead. When `after_seq`
+  is supplied, a leading control frame (`event: restored`, payload
+  `{ "chat_id", "after_seq", "last_seq", "gap" }`) precedes the replayed
+  events so the consumer knows where the live stream resumes and whether its
+  position predates the oldest retained event (`gap`); replayed frames come
+  from the run buffer, which stores only `type` and `data`, so their `id` and
+  `timestamp` may be empty.
+- The stream is filtered by the same per-connection policy the WebSocket path
+  uses, so a subscriber scoped to chat A never receives chat B's events.
+- **Authentication.** Unlike an ordinary GET, this endpoint is not readable
+  unauthenticated: when the daemon has `SPROUT_AUTH_TOKEN` configured, the
+  request must present `Authorization: Bearer <token>` (a constant-time
+  compare) or it is answered `401`. The stream carries prompts and model
+  output, so a bare unauthenticated GET must not reach it. Over the relay the
+  path is also gated by the runner's per-workspace secret before the daemon is
+  reached.
+
 ## The agent audit trail
 
 The agent records a facts-only audit trail of everything it did: one event per

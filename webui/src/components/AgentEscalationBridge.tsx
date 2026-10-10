@@ -7,6 +7,7 @@
 
 import { Cloud, Server } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useHostCapabilities } from '../host';
 import { useRunHostChoice } from '../hooks/useRunHostChoice';
 import {
@@ -50,6 +51,13 @@ export interface AgentEscalationBridgeProps {
    * escalation stays off until it is set.
    */
   repoURL?: string;
+  /**
+   * Element to render the consent dialog and progress line into, positioned
+   * within it instead of over the whole page. Give it a positioned layout
+   * (e.g. `position: relative`) so the dialog stays inside it. Omitted or
+   * null renders the page-level overlay.
+   */
+  container?: HTMLElement | null;
 }
 
 /** Whether a runner host is still on the user's account and able to take work. */
@@ -74,7 +82,7 @@ async function runnerRequiresConsent(host: EscalationHost): Promise<boolean> {
   }
 }
 
-export function AgentEscalationBridge({ repoURL }: AgentEscalationBridgeProps) {
+export function AgentEscalationBridge({ repoURL, container }: AgentEscalationBridgeProps) {
   const { localTerminal } = useHostCapabilities();
   const [pending, setPending] = useState<PendingConsent[]>([]);
   const [progress, setProgress] = useState<{ command: string; phase: string; host: EscalationHost } | null>(null);
@@ -155,20 +163,30 @@ export function AgentEscalationBridge({ repoURL }: AgentEscalationBridgeProps) {
 
   const onRunner = host.kind === 'runner';
   const HostIcon = onRunner ? Server : Cloud;
+  const contained = Boolean(container);
 
-  return (
+  const content = (
     <>
       {progress && !current && (
-        <div className="agent-escalation-status" role="status">
+        <div
+          className={
+            contained ? 'agent-escalation-status agent-escalation-status--contained' : 'agent-escalation-status'
+          }
+          role="status"
+        >
           {progress.host.kind === 'runner' ? <Server size={14} /> : <Cloud size={14} />}{' '}
           {txnPhaseLabel(progress.phase, progress.host)}: <code>{progress.command}</code>
         </div>
       )}
       {current && (
         <div
-          className="security-approval-overlay"
+          className={
+            contained ? 'security-approval-overlay agent-escalation-overlay--contained' : 'security-approval-overlay'
+          }
           role="dialog"
-          aria-modal="true"
+          // A contained dialog leaves the rest of the page usable, so it
+          // must not tell assistive tech that everything else is inert.
+          aria-modal={contained ? undefined : true}
           aria-labelledby="agent-escalation-title"
         >
           <div className="security-approval-card">
@@ -232,4 +250,6 @@ export function AgentEscalationBridge({ repoURL }: AgentEscalationBridgeProps) {
       )}
     </>
   );
+
+  return container ? createPortal(content, container) : content;
 }

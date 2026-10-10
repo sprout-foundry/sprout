@@ -39,12 +39,20 @@ cannot use them:
 ### 159a. Commands
 
 ```
-sprout runner link [--name "MacBook Pro"]   # device-code pairing
+sprout runner link [--name "MacBook Pro"] [--image <ref>]   # device-code pairing
 sprout runner install                       # launchd / systemd user service
-sprout runner start | stop | status
+sprout runner start [--image <ref>] | stop | status
 sprout runner mode container|native|bare-metal
 sprout runner unlink
 ```
+
+- `unlink` is local: it deletes the runner key from the credential store and
+  forgets the link. The runner protocol has **no runner-initiated revoke**,
+  so the key stays valid until the backend that issued it revokes it. That
+  revoke is a surface of the platform/backend, not of the protocol: on the
+  hosted platform it is the Runners page; a self-hosted backend implements
+  its own revoke route (owner-scoped), after which the removed runner's key
+  stops authenticating.
 
 - `link` requests a device code from the platform, prints the code and the
   verification URL, opens the browser, and polls until the user approves the
@@ -105,9 +113,17 @@ platform's gateway path (`/internal/llm/v1`). The URL must be https unless it
 points at the runner's own machine, since the key is a bearer token. The
 runner writes a `gateway` custom-provider file into the workspace's *scoped*
 config dir (endpoint + `SPROUT_GATEWAY_KEY` env var), sets the gateway key in
-the daemon's environment, and selects the provider via `SPROUT_PROVIDER` (a
-`model` field in the task pins the starting model via `SPROUT_MODEL`). The
-workspace's model picker lists the gateway's catalog from its `/models`.
+the daemon's environment, and selects the provider via `SPROUT_PROVIDER`.
+The workspace's model picker lists the gateway's catalog from its `/models`.
+
+Model selection (any provider, issue #120): the task's optional `model`
+field becomes `SPROUT_MODEL` in the daemon's environment, which outranks the
+daemon's configured default for the provider. When the task also names a
+provider the runner knows (gateway or a built-in public provider),
+`SPROUT_PROVIDER` pins it so the model is not applied to an auto-detected
+provider. Precedence: the task's `model`, else the daemon's normal default for
+the provider. What to send is the platform's decision — typically the model the
+user last chose in the platform UI; the runner never invents one.
 Code running in the workspace can read the daemon's environment, so the key's
 safety is the platform's to provide: it should be scoped to the one workspace
 and revoked when the workspace ends. Nothing global is written and nothing
@@ -125,6 +141,18 @@ reason the platform can show.
 | `container` (default) | Linux container: Docker, Podman, OrbStack; Apple's container runtime on Apple silicon if it proves out. Today's profile: non-root, read-only rootfs, all caps dropped, no-new-privileges, CPU/memory limits. | The sprout workspace image. |
 | `native` | Host process under the OS sandbox: macOS Seatbelt profile; Linux bubblewrap + Landlock + seccomp; Windows restricted token + job object (labeled weaker). | Host toolchains (Xcode, SDKs). |
 | `bare-metal` | None. Runs as the user, with the user's environment. | Anything the user can run. |
+
+Container image: `ghcr.io/sprout-foundry/sprout:latest` unless the owner
+sets another with `--image` on `link` or `start` (saved in the runner state).
+The runner never stores registry credentials: it drives the docker CLI, which
+pulls with Docker's own credential store. Before going online, `runner start`
+in container mode checks the image is present (`docker image inspect`) or
+pullable (`docker pull`) and otherwise refuses to start, naming the image and
+the fixes — `docker login <registry>` (for ghcr.io, a GitHub token with
+`read:packages` as the password), another image via `--image`, or another
+mode. `runner link` runs the same check before the device flow when Docker is
+running (and only warns when it is not), so a runner is not linked with an
+image it cannot pull.
 
 Native sandbox policy (all platforms, to the extent each OS supports it):
 

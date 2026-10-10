@@ -15,10 +15,10 @@ vi.mock('../services/cloudTxnEscalate', async (importOriginal) => ({
 
 // The bridge reads its host capability through the provider; this suite
 // exercises the hosted (WASM) shell, which has no local terminal.
-function renderBridge(props: { repoURL?: string }) {
+function renderBridge(props: { repoURL?: string; container?: HTMLElement | null }) {
   return render(
     <HostProvider host={makeTestHost({ localTerminal: false })}>
-      <AgentEscalationBridge repoURL={props.repoURL} />
+      <AgentEscalationBridge repoURL={props.repoURL} container={props.container} />
     </HostProvider>,
   );
 }
@@ -90,6 +90,38 @@ describe('AgentEscalationBridge', () => {
     await expect(pending).resolves.toMatchObject({ ran: true, stdout: 'PASS\n', exitCode: 0 });
     expect(runTxnCommand).toHaveBeenCalledWith(REPO, 'npm test', expect.any(Function), { kind: 'cloud' });
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('renders the consent dialog page-level by default', async () => {
+    const { container } = renderBridge({ repoURL: REPO });
+    const { pending } = await ask('npm test');
+    const dialog = screen.getByRole('dialog');
+    expect(container.contains(dialog)).toBe(true);
+    expect(dialog).toHaveClass('security-approval-overlay');
+    expect(dialog).not.toHaveClass('agent-escalation-overlay--contained');
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    fireEvent.click(screen.getByRole('button', { name: "Don't run" }));
+    expect((await pending).ran).toBe(false);
+  });
+
+  it('portals the consent dialog into a host container, positioned within it', async () => {
+    runTxnCommand.mockResolvedValue(OK);
+    const host = document.createElement('section');
+    document.body.appendChild(host);
+    try {
+      const { container } = renderBridge({ repoURL: REPO, container: host });
+      const { pending } = await ask('npm test');
+      const dialog = screen.getByRole('dialog');
+      expect(host.contains(dialog)).toBe(true);
+      expect(container.contains(dialog)).toBe(false);
+      expect(dialog).toHaveClass('security-approval-overlay', 'agent-escalation-overlay--contained');
+      expect(dialog).not.toHaveAttribute('aria-modal');
+      fireEvent.click(screen.getByRole('button', { name: 'Run once' }));
+      await expect(pending).resolves.toMatchObject({ ran: true });
+      expect(host.querySelector('[role="dialog"]')).toBeNull();
+    } finally {
+      host.remove();
+    }
   });
 
   it('Escape declines', async () => {
@@ -205,7 +237,9 @@ describe('AgentEscalationBridge', () => {
 
   describe('inline run status lifecycle', () => {
     /** Start a run whose phases the test drives, returning the phase emitter. */
-    async function runWithPhases(): Promise<{ emit: (phase: string) => void; settle: () => void }> {
+    async function runWithPhases(
+      container?: HTMLElement,
+    ): Promise<{ emit: (phase: string) => void; settle: () => void }> {
       let emitPhase!: (phase: string) => void;
       let resolveRun!: (v: typeof OK) => void;
       runTxnCommand.mockImplementation((_repo: string, _cmd: string, onPhase: (p: string) => void) => {
@@ -214,7 +248,7 @@ describe('AgentEscalationBridge', () => {
           resolveRun = resolve;
         });
       });
-      renderBridge({ repoURL: REPO });
+      renderBridge({ repoURL: REPO, container });
       await ask('npm test');
       fireEvent.click(screen.getByRole('button', { name: 'Run once' }));
       await waitFor(() => expect(emitPhase).toBeDefined());
@@ -223,6 +257,22 @@ describe('AgentEscalationBridge', () => {
         settle: () => act(() => resolveRun(OK)),
       };
     }
+
+    it('renders the status inside a host container when one is given', async () => {
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      try {
+        const { emit, settle } = await runWithPhases(container);
+        emit('running');
+        const status = screen.getByRole('status');
+        expect(container.contains(status)).toBe(true);
+        expect(status).toHaveClass('agent-escalation-status--contained');
+        emit('done');
+        settle();
+      } finally {
+        container.remove();
+      }
+    });
 
     it('shows a status during a run and clears it on the terminal "done" phase', async () => {
       const { emit, settle } = await runWithPhases();

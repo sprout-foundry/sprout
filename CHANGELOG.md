@@ -4,6 +4,11 @@ All notable changes to Sprout will be documented in this file.
 
 ## [Unreleased]
 
+- fix(runner): container mode checks its workspace image before going online (issue #120). `sprout runner start` in container mode inspects the image and pulls it when missing, and refuses to start when it cannot be pulled, naming the image and the fixes: `docker login <registry>` (the runner pulls with Docker's own credential store and never stores registry credentials; for ghcr.io a GitHub token with `read:packages` works) or another image or mode. `sprout runner link` runs the same check before the device flow when Docker is running. A new `--image` flag on `link` and `start` sets the image (saved in the runner state); `runner status` shows it.
+- feat(runner): a start task's `model` applies to every provider, not only the gateway (issue #120). It becomes `SPROUT_MODEL`, which outranks the daemon's default for the provider, and a known task provider is pinned with `SPROUT_PROVIDER` so the model is not applied to an auto-detected one. Precedence: the task's model, else the daemon's normal default; the platform decides what to send (e.g. the user's last-used model).
+- feat(workspace): `AgentEscalationBridge` takes an optional `container` element (issue #120); the consent dialog and progress line render into it through a portal, positioned within it rather than over the whole page. Without it the bridge renders page-level as before.
+- docs(runner): `sprout runner unlink` says revoking the key is the backend's surface — the hosted platform's Runners page, or a self-hosted backend's own revoke route — since the runner protocol has no runner-initiated revoke (issue #120).
+
 ## [v0.26.1] - 2026-10-10
 
 - fix(agent): the daemon no longer deadlocks when overlapping web UI requests read and update a client's event metadata at the same moment. Event-metadata readers re-acquired a read lock they already held, so a writer queued between the two calls left both blocked forever, and every request needing that client's agent (settings, providers, onboarding) hung until the daemon restarted.

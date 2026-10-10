@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"os/signal"
@@ -42,7 +43,10 @@ var (
 	runnerNoBrowser  bool
 	runnerWorkspaces []string
 	runnerStartLocal []string
+	runnerImage      string
 )
+
+const imageFlagUsage = "workspace image container mode runs (saved; default " + runner.DefaultImage + "); the runner pulls it with Docker's own credentials, so run `docker login <registry>` for a private image"
 
 func init() {
 	linkCmd := &cobra.Command{
@@ -58,11 +62,13 @@ func init() {
 	linkCmd.Flags().StringArrayVar(&runnerWorkspaces, "dir", nil, "local directory this runner serves workspaces in place (repeatable); the user's real files are the workspace — opt in deliberately")
 	linkCmd.Flags().StringArrayVar(&runnerWorkspaces, "workspace", nil, "alias for --dir")
 	markAlias(linkCmd.Flags(), "workspace", "dir", aliasDeprecated)
+	linkCmd.Flags().StringVar(&runnerImage, "image", "", imageFlagUsage)
 
 	startCmd := &cobra.Command{Use: "start", Short: "Run the runner in the foreground", Args: cobra.NoArgs, RunE: runRunnerStart}
 	startCmd.Flags().StringArrayVar(&runnerStartLocal, "dir", nil, "local directory this runner serves workspaces in place (repeatable; passing it replaces the saved list); the user's real files are the workspace — opt in deliberately")
 	startCmd.Flags().StringArrayVar(&runnerStartLocal, "workspace", nil, "alias for --dir")
 	markAlias(startCmd.Flags(), "workspace", "dir", aliasDeprecated)
+	startCmd.Flags().StringVar(&runnerImage, "image", "", imageFlagUsage)
 
 	runnerCmd.AddCommand(
 		linkCmd,
@@ -107,9 +113,15 @@ func runRunnerLink(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	if err := applyImageFlag(st); err != nil {
+		return err
+	}
 
 	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if err := preflightLinkImage(ctx, cmd, st, ""); err != nil {
+		return err
+	}
 	client := runner.NewClient(platform, runner.Credentials{})
 	start, err := client.StartLink(ctx, name, runtime.GOOS, runtime.GOARCH, st.Mode)
 	if err != nil {
@@ -144,6 +156,36 @@ func runRunnerLink(cmd *cobra.Command, _ []string) error {
 	}
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Linked as %q (mode: %s; key stored in the %s). Start it with `sprout runner start`, or `sprout runner install` to run at login.\n", name, st.Mode, keyStore)
 	return printLocalDirNotice(cmd, st)
+}
+
+// applyImageFlag stores --image in the state. A later `link` or `start`
+// without the flag keeps the saved image.
+func applyImageFlag(st *runner.State) error {
+	image := strings.TrimSpace(runnerImage)
+	if image == "" {
+		return nil
+	}
+	if err := runner.ValidateImage(image); err != nil {
+		return fmt.Errorf("--image: %w", err)
+	}
+	st.Image = image
+	return nil
+}
+
+// preflightLinkImage refuses to link a container-mode runner whose image
+// cannot be pulled, before the user approves anything on the platform. With
+// no Docker engine running it only warns: `runner start` checks again, and
+// the user may start Docker or switch modes in between.
+func preflightLinkImage(ctx context.Context, cmd *cobra.Command, st *runner.State, docker string) error {
+	if st.Mode != runner.ModeContainer {
+		return nil
+	}
+	if err := runner.DockerAvailable(ctx, docker); err != nil {
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Warning: %v\n`sprout runner start` needs it running, with the workspace image %s available.\n", err, st.Image)
+		return nil
+	}
+	l := &runner.ContainerLauncher{Image: st.Image, Docker: docker}
+	return l.EnsureImage(ctx, cmd.OutOrStdout())
 }
 
 // resolveWorkspaceDirs applies the --dir flags to the saved allowlist.
@@ -229,15 +271,20 @@ func runRunnerStart(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	if len(runnerStartLocal) > 0 {
+	if err := applyImageFlag(st); err != nil {
+		return err
+	}
+	if len(runnerStartLocal) > 0 || runnerImage != "" {
 		if err := st.Save(); err != nil {
 			return err
 		}
+	}
+	if len(runnerStartLocal) > 0 {
 		if err := printLocalDirNotice(cmd, st); err != nil {
 			return err
 		}
 	}
-	launcher, capability, err := launcherFor(cmd.Context(), st)
+	launcher, capability, err := launcherFor(cmd.Context(), cmd.OutOrStdout(), st, "")
 	if err != nil {
 		return err
 	}
@@ -255,14 +302,20 @@ func runRunnerStart(cmd *cobra.Command, _ []string) error {
 }
 
 // launcherFor picks the launcher for the configured mode and the sandbox name
-// reported to the platform. Native mode refuses to start unsandboxed.
-func launcherFor(ctx context.Context, st *runner.State) (runner.Launcher, string, error) {
+// reported to the platform. Native mode refuses to start unsandboxed, and
+// container mode refuses to start without its image. docker overrides the
+// docker CLI ("" means docker on PATH).
+func launcherFor(ctx context.Context, out io.Writer, st *runner.State, docker string) (runner.Launcher, string, error) {
 	switch st.Mode {
 	case runner.ModeContainer:
-		if err := runner.DockerAvailable(ctx, ""); err != nil {
+		if err := runner.DockerAvailable(ctx, docker); err != nil {
 			return nil, "", err
 		}
-		return &runner.ContainerLauncher{Image: st.Image}, "docker", nil
+		l := &runner.ContainerLauncher{Image: st.Image, Docker: docker}
+		if err := l.EnsureImage(ctx, out); err != nil {
+			return nil, "", err
+		}
+		return l, "docker", nil
 	case runner.ModeNative:
 		c := sandbox.Detect()
 		if !c.Available {
@@ -302,6 +355,7 @@ func runRunnerStatus(cmd *cobra.Command, _ []string) error {
 		}
 	}
 	if st.Mode == runner.ModeContainer {
+		_, _ = fmt.Fprintf(out, "Image:     %s\n", st.Image)
 		if err := runner.DockerAvailable(cmd.Context(), ""); err != nil {
 			_, _ = fmt.Fprintf(out, "Container: %v\n", err)
 		}
@@ -354,6 +408,14 @@ Type "bare metal" to confirm: `)
 	return nil
 }
 
+// unlinkMessage explains that unlinking is local only: the runner protocol has
+// no runner-initiated revoke, so the key stays valid until the backend that
+// issued it revokes it.
+const unlinkMessage = `Unlinked: this machine's runner key and link are removed locally.
+The key stays valid on the backend until you revoke it there: on the hosted
+platform, remove the runner on its Runners page; a self-hosted backend
+provides its own revoke route (the runner protocol has no runner-side revoke).`
+
 func runRunnerUnlink(cmd *cobra.Command, _ []string) error {
 	st, err := runner.LoadState()
 	if err != nil {
@@ -364,7 +426,7 @@ func runRunnerUnlink(cmd *cobra.Command, _ []string) error {
 	if err := st.Save(); err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Unlinked. Remove the runner from the platform's Runners page to revoke its key there too.")
+	_, _ = fmt.Fprintln(cmd.OutOrStdout(), unlinkMessage)
 	return nil
 }
 

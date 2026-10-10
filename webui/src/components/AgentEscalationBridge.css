@@ -22,3 +22,18 @@
   white-space: nowrap;
   font-family: var(--font-mono);
 }
+
+/* Rendered into a host-supplied container: positioned within it rather than
+   over the whole page. */
+.agent-escalation-status--contained {
+  position: absolute;
+  max-width: calc(100% - 32px);
+}
+
+.security-approval-overlay.agent-escalation-overlay--contained {
+  position: absolute;
+}
+
+.agent-escalation-overlay--contained .security-approval-card {
+  max-height: calc(100% - 16px);
+}

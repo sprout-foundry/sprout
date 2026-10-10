@@ -95,15 +95,26 @@ func workspaceEnv(task WorkspaceTask) map[string]string {
 			// public provider's key and must never reach one.
 			env[GatewayKeyEnvVar] = task.LLMKey
 			env["SPROUT_PROVIDER"] = GatewayProviderName
-			if strings.TrimSpace(task.Model) != "" {
-				env["SPROUT_MODEL"] = strings.TrimSpace(task.Model)
-			}
 		} else {
 			name := credentials.ProviderEnvVar(task.LLMProvider)
 			if name == "" {
 				name = "DEEPINFRA_API_KEY"
 			}
 			env[name] = task.LLMKey
+		}
+	}
+	// The task's model wins over the daemon's own default for the provider
+	// (SPROUT_MODEL outranks the config default in ResolveProviderModel).
+	// A model only makes sense for one provider, so when the task names a
+	// provider the runner knows it is pinned too; otherwise the daemon's
+	// auto-detected provider would get a model it may not serve. An
+	// unknown provider name is left out: the daemon refuses to start on a
+	// provider it cannot resolve.
+	if model := strings.TrimSpace(task.Model); model != "" {
+		env["SPROUT_MODEL"] = model
+		provider := strings.ToLower(strings.TrimSpace(task.LLMProvider))
+		if !IsGatewayProvider(provider) && credentials.ProviderEnvVar(provider) != "" {
+			env["SPROUT_PROVIDER"] = provider
 		}
 	}
 	for k, v := range task.UserEnv {

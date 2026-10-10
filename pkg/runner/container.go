@@ -3,7 +3,9 @@ package runner
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -39,6 +41,74 @@ func DockerAvailable(ctx context.Context, docker string) error {
 	out, err := exec.CommandContext(ctx, docker, "info", "--format", "{{.ServerVersion}}").CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("container mode needs a running Docker engine (Docker Desktop, OrbStack, Colima): %s", strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// ImageUnavailableError reports that the workspace image is neither present
+// locally nor pullable. The runner never holds registry credentials: the
+// docker CLI pulls with Docker's own credential store, so the fix is
+// `docker login` or a different image or mode.
+type ImageUnavailableError struct {
+	Image  string
+	Output string
+}
+
+func (e *ImageUnavailableError) Error() string {
+	return fmt.Sprintf(`container mode cannot pull the workspace image %s:
+  %s
+
+Fix one of:
+  - authenticate Docker to the registry: docker login %s
+    (the runner pulls with Docker's own credential store; for ghcr.io a
+    GitHub token with the read:packages scope works as the password)
+  - choose an image you can pull: sprout runner start --image <image>
+  - run without containers: sprout runner mode native`, e.Image, e.Output, imageRegistry(e.Image))
+}
+
+// ValidateImage rejects references that are empty, contain whitespace or
+// start with "-": the reference is passed to the docker CLI as an argument
+// and must never be read as a flag.
+func ValidateImage(image string) error {
+	if image == "" || strings.HasPrefix(image, "-") || strings.ContainsAny(image, " \t\r\n") {
+		return fmt.Errorf("invalid image reference %q", image)
+	}
+	return nil
+}
+
+// imageRegistry is the registry host an image reference pulls from: the first
+// path component when it looks like a host (has a dot or port, or is
+// localhost), otherwise Docker Hub.
+func imageRegistry(image string) string {
+	first, _, found := strings.Cut(image, "/")
+	if found && (strings.ContainsAny(first, ".:") || first == "localhost") {
+		return first
+	}
+	return "docker.io"
+}
+
+// EnsureImage makes sure the workspace image is present, pulling it when it
+// is not, so a missing image or registry credential fails before the runner
+// goes online rather than at its first task.
+func (l *ContainerLauncher) EnsureImage(ctx context.Context, progress io.Writer) error {
+	if strings.TrimSpace(l.Image) == "" {
+		return errors.New("container mode has no workspace image configured; pass --image <image>")
+	}
+	if err := ValidateImage(l.Image); err != nil {
+		return err
+	}
+	if exec.CommandContext(ctx, l.docker(), "image", "inspect", l.Image).Run() == nil { //nolint:gosec // G204: docker CLI with runner-built args
+		return nil
+	}
+	if progress != nil {
+		_, _ = fmt.Fprintf(progress, "Pulling workspace image %s…\n", l.Image)
+	}
+	out, err := exec.CommandContext(ctx, l.docker(), "pull", l.Image).CombinedOutput() //nolint:gosec // G204: docker CLI with runner-built args
+	if err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return &ImageUnavailableError{Image: l.Image, Output: strings.TrimSpace(string(out))}
 	}
 	return nil
 }

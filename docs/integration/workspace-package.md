@@ -224,6 +224,26 @@ own consent UI calls `installEscalationBridge` directly with a
 types are exported alongside), and reads or sets the user's policy through
 `getEscalationPolicy` / `setEscalationPolicy`.
 
+**Placement.** By default the consent dialog is a page-level overlay and the
+progress line sits at the bottom-left of the page. To keep both inside the
+host's own chrome — scoped to the embedded workspace's area, say — pass an
+element as `container`: the bridge renders them into it through a React
+portal, positioned within it (absolute instead of fixed). Give the element a
+positioned layout (`position: relative`) and the size the dialog should cover.
+A contained dialog does not mark the rest of the page inert (`aria-modal` is
+not set); Escape still declines. Omitted or `null`, the bridge renders
+page-level as before.
+
+```tsx
+const [pane, setPane] = useState<HTMLElement | null>(null);
+
+<div ref={setPane} style={{ position: "relative" }}>
+  <SproutWorkspace host={host} project={{ repoUrl: repoURL }} /* … */>
+    <AgentEscalationBridge repoURL={repoURL} container={pane} />
+  </SproutWorkspace>
+</div>;
+```
+
 **Consent.** The policy is per browser: `ask` (the default) asks before every
 command; `always` (the prompt's "Always allow") runs without asking on the host
 remembered for the repository; `never` keeps every command in the browser. Even

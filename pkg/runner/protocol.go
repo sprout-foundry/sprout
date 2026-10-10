@@ -100,9 +100,10 @@ type WorkspaceTask struct {
 	GitToken     string `json:"git_token,omitempty"`
 	LLMProvider  string `json:"llm_provider,omitempty"`
 	LLMKey       string `json:"llm_key,omitempty"`
-	// Model names the model the workspace starts on, when the platform
-	// pins one (gateway provider). Empty lets the workspace's model
-	// picker decide from the endpoint's /v1/models.
+	// Model names the model the workspace starts on (SPROUT_MODEL), for
+	// any provider. The platform decides what to send, e.g. the user's
+	// last-used model; empty leaves the daemon's normal default for the
+	// provider.
 	Model          string            `json:"model,omitempty"`
 	UserEnv        map[string]string `json:"user_env,omitempty"`
 	PlatformAPIURL string            `json:"platform_api_url,omitempty"`

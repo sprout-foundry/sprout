@@ -3,7 +3,51 @@ package runner
 import (
 	"strings"
 	"testing"
+
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
+
+func TestWorkspaceEnvAppliesTheTaskModelForEveryProvider(t *testing.T) {
+	cases := []struct {
+		name         string
+		task         WorkspaceTask
+		wantModel    string
+		wantProvider string
+	}{
+		{"public provider", WorkspaceTask{LLMProvider: "openai", LLMKey: "sk", Model: " gpt-test "}, "gpt-test", "openai"},
+		{"gateway", WorkspaceTask{LLMProvider: "gateway", LLMKey: "gw", Model: "m1"}, "m1", GatewayProviderName},
+		{"model without key", WorkspaceTask{LLMProvider: "deepseek", Model: "deepseek-chat"}, "deepseek-chat", "deepseek"},
+		{"unknown provider is not pinned", WorkspaceTask{LLMProvider: "nope", LLMKey: "k", Model: "m2"}, "m2", ""},
+		{"no model leaves the daemon default", WorkspaceTask{LLMProvider: "openai", LLMKey: "sk"}, "", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.task.WorkspaceID = "ws-1"
+			env := workspaceEnv(tc.task)
+			if env["SPROUT_MODEL"] != tc.wantModel {
+				t.Errorf("SPROUT_MODEL = %q, want %q", env["SPROUT_MODEL"], tc.wantModel)
+			}
+			if env["SPROUT_PROVIDER"] != tc.wantProvider {
+				t.Errorf("SPROUT_PROVIDER = %q, want %q", env["SPROUT_PROVIDER"], tc.wantProvider)
+			}
+		})
+	}
+}
+
+// The daemon resolves its starting model with configuration.ResolveProviderModel;
+// the env the runner sets must win over the config's provider default there.
+func TestTaskModelTakesEffectInTheDaemonsResolution(t *testing.T) {
+	env := workspaceEnv(WorkspaceTask{WorkspaceID: "ws-1", LLMProvider: "openai", LLMKey: "sk", Model: "task-model"})
+	t.Setenv("SPROUT_PROVIDER", env["SPROUT_PROVIDER"])
+	t.Setenv("SPROUT_MODEL", env["SPROUT_MODEL"])
+	provider, model, err := configuration.ResolveProviderModel(configuration.NewConfig(), "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if provider != "openai" || model != "task-model" {
+		t.Errorf("resolved %s/%s, want openai/task-model", provider, model)
+	}
+}
 
 func TestWorkspaceEnvUserVarsNeverOverrideTheRunner(t *testing.T) {
 	env := workspaceEnv(WorkspaceTask{

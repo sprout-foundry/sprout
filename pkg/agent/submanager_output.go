@@ -27,6 +27,7 @@ type OutputManager interface {
 	GetAsyncBufferSize() int
 	SetAsyncBufferSize(size int)
 	GetEventMetadata() map[string]interface{}
+	GetEventMetadataUnlocked() map[string]interface{}
 	SetEventMetadata(meta map[string]interface{})
 	SetEventMetadataUnlocked(meta map[string]interface{})
 	GetEventMetadataMutex() *sync.RWMutex
@@ -174,6 +175,15 @@ func (m *AgentOutputManager) SetEventMetadata(meta map[string]interface{}) {
 	m.eventMetadataMu.Lock()
 	defer m.eventMetadataMu.Unlock()
 	m.eventMetadata = meta
+}
+
+// GetEventMetadataUnlocked returns metadata without acquiring the mutex.
+// Caller must hold m.eventMetadataMu (read or write). Callers that already
+// hold the read lock must use this instead of GetEventMetadata: RWMutex read
+// locks are not reentrant, and a second RLock queued behind a pending writer
+// deadlocks both the reader and the writer.
+func (m *AgentOutputManager) GetEventMetadataUnlocked() map[string]interface{} {
+	return m.eventMetadata
 }
 
 // SetEventMetadataUnlocked sets metadata without acquiring the mutex.

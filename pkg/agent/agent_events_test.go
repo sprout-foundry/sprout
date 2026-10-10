@@ -1,8 +1,64 @@
 package agent
 
 import (
+	"sync"
 	"testing"
+	"time"
 )
+
+// TestEventMetadataReadersDoNotDeadlockWithWriter exercises every reader that
+// holds the event-metadata read lock against a concurrent SetEventMetadata.
+// sync.RWMutex forbids recursive read locking: a reader that re-acquires the
+// read lock while a writer is queued blocks forever, and the writer then waits
+// on the first read lock, wedging every later caller. The WebUI rearms the
+// shared client agent (GetChatID + SetEventMetadata) on each provider,
+// settings and onboarding request, so overlapping page loads hit this path.
+func TestEventMetadataReadersDoNotDeadlockWithWriter(t *testing.T) {
+	t.Parallel()
+	a := &Agent{output: NewAgentOutputManager()}
+	meta := func() map[string]interface{} {
+		return map[string]interface{}{"client_id": "c", "chat_id": "chat", "user_id": "u"}
+	}
+	a.SetEventMetadata(meta())
+
+	const iterations = 20000
+	readers := []func(){
+		func() { _ = a.GetChatID() },
+		func() { _ = a.GetEventClientID() },
+		func() { _ = a.GetEventChatID() },
+		func() { _ = a.GetEventUserID() },
+		func() { _ = a.decorateEventPayload(map[string]interface{}{"k": "v"}) },
+	}
+
+	var wg sync.WaitGroup
+	for _, read := range readers {
+		wg.Add(1)
+		go func(read func()) {
+			defer wg.Done()
+			for i := 0; i < iterations; i++ {
+				read()
+			}
+		}(read)
+	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iterations; i++ {
+			a.SetEventMetadata(meta())
+		}
+	}()
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("event-metadata readers deadlocked against SetEventMetadata")
+	}
+}
 
 func TestDecorateEventPayload_NilData(t *testing.T) {
 	t.Parallel()

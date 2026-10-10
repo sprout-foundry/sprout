@@ -131,28 +131,29 @@ func (m *mockStateManager) SetLastProviderError(*ProviderErrorInfo)    {}
 
 type mockOutputManager struct{}
 
-func (m *mockOutputManager) SetStreamingEnabled(bool)                        {}
-func (m *mockOutputManager) IsStreamingEnabled() bool                        { return false }
-func (m *mockOutputManager) SetStreamingCallback(func(string))               {}
-func (m *mockOutputManager) GetStreamingCallback() func(string)              { return nil }
-func (m *mockOutputManager) SetReasoningCallback(func(string))               {}
-func (m *mockOutputManager) GetReasoningCallback() func(string)              { return nil }
-func (m *mockOutputManager) SetFlushCallback(func())                         {}
-func (m *mockOutputManager) GetFlushCallback() func()                        { return nil }
-func (m *mockOutputManager) SetOutputMutex(*sync.Mutex)                      {}
-func (m *mockOutputManager) GetOutputMutex() *sync.Mutex                     { return nil }
-func (m *mockOutputManager) GetStreamingBuffer() *strings.Builder            { return nil }
-func (m *mockOutputManager) GetReasoningBuffer() *strings.Builder            { return nil }
-func (m *mockOutputManager) GetOutputRouter() *OutputRouter                  { return nil }
-func (m *mockOutputManager) SetOutputRouter(*OutputRouter)                   {}
-func (m *mockOutputManager) GetAsyncOutput() chan string                     { return nil }
-func (m *mockOutputManager) SetAsyncOutput(chan string)                      {}
-func (m *mockOutputManager) EnsureAsyncOutputWorker(func())                  {}
-func (m *mockOutputManager) GetAsyncBufferSize() int                         { return 0 }
-func (m *mockOutputManager) SetAsyncBufferSize(int)                          {}
-func (m *mockOutputManager) GetEventMetadata() map[string]interface{}        { return nil }
-func (m *mockOutputManager) SetEventMetadata(map[string]interface{})         {}
-func (m *mockOutputManager) SetEventMetadataUnlocked(map[string]interface{}) {}
+func (m *mockOutputManager) SetStreamingEnabled(bool)                         {}
+func (m *mockOutputManager) IsStreamingEnabled() bool                         { return false }
+func (m *mockOutputManager) SetStreamingCallback(func(string))                {}
+func (m *mockOutputManager) GetStreamingCallback() func(string)               { return nil }
+func (m *mockOutputManager) SetReasoningCallback(func(string))                {}
+func (m *mockOutputManager) GetReasoningCallback() func(string)               { return nil }
+func (m *mockOutputManager) SetFlushCallback(func())                          {}
+func (m *mockOutputManager) GetFlushCallback() func()                         { return nil }
+func (m *mockOutputManager) SetOutputMutex(*sync.Mutex)                       {}
+func (m *mockOutputManager) GetOutputMutex() *sync.Mutex                      { return nil }
+func (m *mockOutputManager) GetStreamingBuffer() *strings.Builder             { return nil }
+func (m *mockOutputManager) GetReasoningBuffer() *strings.Builder             { return nil }
+func (m *mockOutputManager) GetOutputRouter() *OutputRouter                   { return nil }
+func (m *mockOutputManager) SetOutputRouter(*OutputRouter)                    {}
+func (m *mockOutputManager) GetAsyncOutput() chan string                      { return nil }
+func (m *mockOutputManager) SetAsyncOutput(chan string)                       {}
+func (m *mockOutputManager) EnsureAsyncOutputWorker(func())                   {}
+func (m *mockOutputManager) GetAsyncBufferSize() int                          { return 0 }
+func (m *mockOutputManager) SetAsyncBufferSize(int)                           {}
+func (m *mockOutputManager) GetEventMetadata() map[string]interface{}         { return nil }
+func (m *mockOutputManager) GetEventMetadataUnlocked() map[string]interface{} { return nil }
+func (m *mockOutputManager) SetEventMetadata(map[string]interface{})          {}
+func (m *mockOutputManager) SetEventMetadataUnlocked(map[string]interface{})  {}
 func (m *mockOutputManager) GetEventMetadataMutex() *sync.RWMutex {
 	return &sync.RWMutex{}
 }

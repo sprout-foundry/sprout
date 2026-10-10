@@ -42,7 +42,7 @@
     "./wasm/": "./dist/wasm/"
   },
   "scripts": {
-    "build": "vite build && node scripts/scope-stylesheet.mjs && node scripts/bundle-dts.mjs && node scripts/emit-wasm-assets.mjs && node --test scripts/emit-wasm-assets.test.mjs",
+    "build": "vite build && node scripts/check-chunk-graph.mjs && node scripts/scope-stylesheet.mjs && node scripts/bundle-dts.mjs && node scripts/emit-wasm-assets.mjs && node --test scripts/emit-wasm-assets.test.mjs scripts/check-chunk-graph.test.mjs",
     "type-check": "tsc --noEmit && tsc --noEmit -p tsconfig.build.json"
   },
   "devDependencies": {

@@ -69,6 +69,12 @@ jobs:
       - name: Validate the build artifact
         run: node docs/__tests__/workspace-package.test.js
 
+      - name: Check a host's re-bundle of the packed package
+        # Hosts install the tarball and bundle dist/ again with Vite; this
+        # packs it, builds a minimal host app against it and fails if any
+        # dynamic import loses its exports in that second bundle.
+        run: node packages/workspace/scripts/check-consumer-rebundle.mjs
+
       - name: Publish to GitHub Packages
         working-directory: packages/workspace
         run: npm publish

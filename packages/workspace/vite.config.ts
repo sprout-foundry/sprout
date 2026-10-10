@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { build, defineConfig, type InlineConfig, type Plugin } from "vite";
 import { resolve } from "path";
 
 /**
@@ -21,7 +21,8 @@ import { resolve } from "path";
  * everything reachable from the entry point, so it cannot be told apart from
  * a second entry chunk by looking at what it pulls in.
  */
-export default defineConfig({
+const libraryConfig: InlineConfig = {
+  root: __dirname,
   plugins: [],
   resolve: {
     // The workspace bundles `@sprout/ui` (its host modules import the
@@ -70,4 +71,130 @@ export default defineConfig({
       },
     },
   },
+};
+
+/**
+ * A module that is imported both statically and dynamically must not keep its
+ * dynamic edge in the published chunks.
+ *
+ * Rollup cannot move such a module into a chunk of its own, so it lands in a
+ * shared chunk and the dynamic import is emitted as a namespace accessor —
+ * `await import("./shared.js").then((m) => m.i)`. That code runs as shipped,
+ * but a host re-bundles `dist/` (the documented install path), and Vite's
+ * dynamic-import tree-shaking rewrites `const { x } = await import(...)` as if
+ * `x` were a direct export of the chunk, ignoring the trailing `.then(...)`.
+ * The rewritten import resolves to `undefined` and every destructure from it
+ * throws at runtime (the agent event dispatcher, the repo restore).
+ *
+ * The dynamic edge buys no laziness for these modules anyway — a static path
+ * already loads them — so the library build turns each such `import(...)` into
+ * a static namespace import and resolves the promise to it. The application
+ * build is untouched: it is bundled once, by the same Rollup that splits it.
+ *
+ * A module whose only static importer is a package entry point stays lazy: it
+ * is the entry's own chunk (the design views behind `design`), so its dynamic
+ * import already resolves to that chunk's namespace without an accessor.
+ *
+ * The importer/target pairs come from a first, analysis-only pass over the same
+ * graph (aborted once the module graph is complete). `scripts/check-chunk-graph.mjs`
+ * verifies the emitted chunks afterwards.
+ */
+type DynamicEdges = Map<string, Set<string>>;
+
+const ANALYSIS_DONE = "workspace-chunk-graph-analysis-complete";
+
+async function sharedDynamicImports(config: InlineConfig): Promise<DynamicEdges> {
+  const edges: DynamicEdges = new Map();
+  const collect: Plugin = {
+    name: "workspace:collect-shared-dynamic-imports",
+    buildEnd(error) {
+      if (error) return;
+      const entries = new Set<string>();
+      for (const id of this.getModuleIds()) {
+        if (this.getModuleInfo(id)?.isEntry) entries.add(id);
+      }
+      for (const id of this.getModuleIds()) {
+        const info = this.getModuleInfo(id);
+        if (!info || info.dynamicImporters.length === 0) continue;
+        if (!info.importers.some((importer) => !entries.has(importer))) continue;
+        for (const importer of info.dynamicImporters) {
+          const targets = edges.get(importer) ?? new Set<string>();
+          targets.add(id);
+          edges.set(importer, targets);
+        }
+      }
+      throw new Error(ANALYSIS_DONE);
+    },
+  };
+  try {
+    await build({
+      ...config,
+      configFile: false,
+      logLevel: "silent",
+      plugins: [...(config.plugins ?? []), collect],
+      build: { ...config.build, write: false },
+    });
+  } catch (error) {
+    if (!String((error as Error)?.message ?? error).includes(ANALYSIS_DONE)) throw error;
+  }
+  return edges;
+}
+
+interface AstNode {
+  type: string;
+  start: number;
+  end: number;
+  source?: AstNode & { value?: unknown };
+  [key: string]: unknown;
+}
+
+function dynamicImportsIn(node: unknown, found: AstNode[]): AstNode[] {
+  if (Array.isArray(node)) {
+    for (const child of node) dynamicImportsIn(child, found);
+  } else if (node && typeof node === "object") {
+    const n = node as AstNode;
+    if (n.type === "ImportExpression") found.push(n);
+    for (const key in n) {
+      if (key !== "type" && key !== "start" && key !== "end") dynamicImportsIn(n[key], found);
+    }
+  }
+  return found;
+}
+
+function staticSharedDynamicImports(edges: DynamicEdges): Plugin {
+  return {
+    name: "workspace:static-shared-dynamic-imports",
+    // After the TypeScript/JSX transform, so the code parses as plain JS.
+    enforce: "post",
+    async transform(code, id) {
+      const targets = edges.get(id);
+      if (!targets) return null;
+      const replacements: { start: number; end: number; text: string }[] = [];
+      const hoisted: string[] = [];
+      for (const node of dynamicImportsIn(this.parse(code), [])) {
+        const specifier = node.source?.type === "Literal" ? node.source.value : undefined;
+        if (typeof specifier !== "string") continue;
+        const resolved = await this.resolve(specifier, id);
+        if (!resolved || !targets.has(resolved.id)) continue;
+        const binding = `__sproutSharedModule${hoisted.length}`;
+        hoisted.push(`import * as ${binding} from ${JSON.stringify(specifier)};`);
+        replacements.push({ start: node.start, end: node.end, text: `Promise.resolve(${binding})` });
+      }
+      if (replacements.length === 0) return null;
+      let out = code;
+      for (const { start, end, text } of replacements.sort((a, b) => b.start - a.start)) {
+        out = out.slice(0, start) + text + out.slice(end);
+      }
+      return { code: `${hoisted.join("\n")}\n${out}`, map: null };
+    },
+  };
+}
+
+export default defineConfig(async ({ command }) => {
+  if (command !== "build") return libraryConfig;
+  const edges = await sharedDynamicImports(libraryConfig);
+  return {
+    ...libraryConfig,
+    plugins: [...(libraryConfig.plugins ?? []), staticSharedDynamicImports(edges)],
+  };
 });

@@ -89,19 +89,36 @@ every heartbeat) serves **local-directory workspaces** in place: a start task
 naming an allowlisted directory runs against the user's real files there, with
 no clone (container mode bind-mounts the directory at `/workspace`). The
 allowlist is exact and symlink-resolved, enforced by the runner before any
-start; the platform cannot widen it.
+start; the platform cannot widen it. The runner refuses directories too
+broad to hand to a workspace — the filesystem root, the home directory or
+its ancestors, and sprout's own config and state directories — and refuses
+any task naming both a repo and a directory, so nothing ever clones into or
+clears the user's files. In native mode the directory is writable, so
+workspace code can change anything in it, including `.git/hooks`, `.envrc`
+and editor task files that later run outside the sandbox when the user works
+there; name a directory you are willing to let the agent change.
 
-Inference (issue #115): a start task naming `llm_provider: "gateway"` with a
-`platform_api_url` wires the workspace daemon to the platform gateway's
-OpenAI-compatible `/v1`. The runner writes a `gateway` custom-provider file
-into the workspace's *scoped* config dir (endpoint + `SPROUT_GATEWAY_KEY` env
-var), sets the workspace-scoped gateway key in the daemon's environment, and
-selects the provider via `SPROUT_PROVIDER` (a `model` field in the task pins
-the starting model via `SPROUT_MODEL`). The workspace's model picker lists
-the gateway's catalog from its `/v1/models`, so the user chooses among the
-models their gateway account is entitled to. The key is workspace-scoped
-(revoked platform-side when the workspace ends); nothing global is written
-and nothing persists beyond the workspace.
+Inference (issue #115): a start task naming `llm_provider: "gateway"` wires
+the workspace daemon to the platform gateway's OpenAI-compatible endpoint:
+the task's `gateway_url` when set, otherwise `platform_api_url` plus the
+platform's gateway path (`/internal/llm/v1`). The URL must be https unless it
+points at the runner's own machine, since the key is a bearer token. The
+runner writes a `gateway` custom-provider file into the workspace's *scoped*
+config dir (endpoint + `SPROUT_GATEWAY_KEY` env var), sets the gateway key in
+the daemon's environment, and selects the provider via `SPROUT_PROVIDER` (a
+`model` field in the task pins the starting model via `SPROUT_MODEL`). The
+workspace's model picker lists the gateway's catalog from its `/models`.
+Code running in the workspace can read the daemon's environment, so the key's
+safety is the platform's to provide: it should be scoped to the one workspace
+and revoked when the workspace ends. Nothing global is written and nothing
+persists beyond the workspace.
+
+Runners advertise the optional features they serve in each heartbeat's
+`capabilities` (`local_dirs`, `gateway`, `task_errors`). The platform sends
+`workspace_dir` or a gateway provider only to a runner that advertises the
+matching capability: an older runner ignores `workspace_dir` and would hand a
+gateway key to a public provider. Failed start results carry an `error`
+reason the platform can show.
 
 | Mode | Isolation | What runs |
 |---|---|---|

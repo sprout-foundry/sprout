@@ -29,33 +29,51 @@ func TestIsGatewayProvider(t *testing.T) {
 }
 
 func TestGatewayEndpoint(t *testing.T) {
-	for raw, want := range map[string]string{
-		"https://gw.example.com":        "https://gw.example.com/v1/chat/completions",
-		"https://gw.example.com/":       "https://gw.example.com/v1/chat/completions",
-		"https://gw.example.com/v1":     "https://gw.example.com/v1/chat/completions",
-		"https://gw.example.com/v1/":    "https://gw.example.com/v1/chat/completions",
-		"http://127.0.0.1:8080":         "http://127.0.0.1:8080/v1/chat/completions",
-		"https://gw.example.com/api/v1": "https://gw.example.com/api/v1/chat/completions",
+	type in struct{ gateway, platform string }
+	for c, want := range map[in]string{
+		// No gateway_url: the platform's gateway path under its API URL.
+		{"", "https://app.example.com"}:  "https://app.example.com/internal/llm/v1/chat/completions",
+		{"", "https://app.example.com/"}: "https://app.example.com/internal/llm/v1/chat/completions",
+		{"", "http://127.0.0.1:8080"}:    "http://127.0.0.1:8080/internal/llm/v1/chat/completions",
+		{"", "http://localhost:8080"}:    "http://localhost:8080/internal/llm/v1/chat/completions",
+		{"", "http://[::1]:8080"}:        "http://[::1]:8080/internal/llm/v1/chat/completions",
+		// gateway_url wins and is used as the OpenAI-compatible base.
+		{"https://gw.example.com/v1", "https://app.example.com"}: "https://gw.example.com/v1/chat/completions",
+		{"https://gw.example.com/v1/", ""}:                       "https://gw.example.com/v1/chat/completions",
+		{"https://gw.example.com/api/v1", ""}:                    "https://gw.example.com/api/v1/chat/completions",
+		{"https://gw.example.com/v1/chat/completions", ""}:       "https://gw.example.com/v1/chat/completions",
+		{"https://gw.example.com/v1/chat/completions/", ""}:      "https://gw.example.com/v1/chat/completions",
 	} {
-		got, err := gatewayEndpoint(raw)
+		got, err := gatewayEndpoint(c.gateway, c.platform)
 		if err != nil {
-			t.Errorf("gatewayEndpoint(%q): %v", raw, err)
+			t.Errorf("gatewayEndpoint(%q, %q): %v", c.gateway, c.platform, err)
 			continue
 		}
 		if got != want {
-			t.Errorf("gatewayEndpoint(%q) = %q, want %q", raw, got, want)
+			t.Errorf("gatewayEndpoint(%q, %q) = %q, want %q", c.gateway, c.platform, got, want)
 		}
 	}
-	for _, raw := range []string{"", "not a url", "ftp://x", "https://"} {
-		if _, err := gatewayEndpoint(raw); err == nil {
-			t.Errorf("gatewayEndpoint(%q) must be refused", raw)
+	for _, c := range []in{
+		{"", ""},
+		{"not a url", ""},
+		{"ftp://x", ""},
+		{"https://", ""},
+		// The key is a bearer token: plain http only to this machine.
+		{"", "http://app.example.com"},
+		{"http://172.17.0.1:8080/v1", ""},
+		{"https://user:pass@gw.example.com/v1", ""},
+		{"https://gw.example.com/v1?x=1", ""},
+		{"https://gw.example.com/v1#frag", ""},
+	} {
+		if _, err := gatewayEndpoint(c.gateway, c.platform); err == nil {
+			t.Errorf("gatewayEndpoint(%q, %q) must be refused", c.gateway, c.platform)
 		}
 	}
 }
 
 func TestWriteGatewayProviderFile(t *testing.T) {
 	configDir := t.TempDir()
-	if err := writeGatewayProviderFile(configDir, "https://gw.example.com"); err != nil {
+	if err := writeGatewayProviderFile(configDir, "", "https://gw.example.com"); err != nil {
 		t.Fatalf("writeGatewayProviderFile: %v", err)
 	}
 	data, err := os.ReadFile(filepath.Join(configDir, "providers", "gateway.json"))
@@ -75,7 +93,7 @@ func TestWriteGatewayProviderFile(t *testing.T) {
 	if cfg.Name != "gateway" || cfg.EnvVar != GatewayKeyEnvVar || !cfg.RequiresAPIKey {
 		t.Errorf("provider file: %+v", cfg)
 	}
-	if cfg.Endpoint != "https://gw.example.com/v1/chat/completions" {
+	if cfg.Endpoint != "https://gw.example.com/internal/llm/v1/chat/completions" {
 		t.Errorf("endpoint = %q", cfg.Endpoint)
 	}
 	if cfg.ModelName != "" {
@@ -90,7 +108,7 @@ func TestWriteGatewayProviderFile(t *testing.T) {
 	}
 
 	// A task with no platform URL is refused before anything is written.
-	if err := writeGatewayProviderFile(t.TempDir(), ""); err == nil {
+	if err := writeGatewayProviderFile(t.TempDir(), "", ""); err == nil {
 		t.Error("gateway wiring without a platform API URL must be refused")
 	}
 }
@@ -157,7 +175,7 @@ func TestGatewayProviderFileNotInGlobalConfig(t *testing.T) {
 	// scoped SPROUT_CONFIG_DIR), never derived from the runner's own config.
 	ws := t.TempDir()
 	other := t.TempDir()
-	if err := writeGatewayProviderFile(ws, "https://gw.example.com"); err != nil {
+	if err := writeGatewayProviderFile(ws, "", "https://gw.example.com"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(other, "providers")); !os.IsNotExist(err) {

@@ -54,15 +54,33 @@ type Heartbeat struct {
 	RunnerVersion string   `json:"runner_version"`
 	Toolchains    []string `json:"toolchains,omitempty"`
 	// LocalDirs are the user-named directories (see `sprout runner start
-	// --workspace`) this runner serves workspaces in place. A start task
-	// naming one of them runs against the user's real files, no clone.
+	// --dir`) this runner serves workspaces in place. A start task naming
+	// one of them runs against the user's real files, no clone.
 	LocalDirs []string `json:"local_dirs,omitempty"`
+	// Capabilities lists the optional start-task features this runner
+	// serves (Capability* constants). The platform sends workspace_dir or
+	// a gateway provider only to runners that advertise them: an older
+	// runner ignores workspace_dir and would hand a gateway key to a
+	// public provider.
+	Capabilities []string `json:"capabilities,omitempty"`
 	// DirectURL is where the platform reaches the host server now; empty
 	// for a relayed runner.
 	DirectURL string `json:"direct_url,omitempty"`
 	// Relayed reports that the runner serves the platform over its tunnel.
 	Relayed bool `json:"relayed,omitempty"`
 }
+
+// Optional start-task features a runner advertises in its heartbeat.
+const (
+	// CapabilityLocalDirs: the runner serves workspace_dir tasks for the
+	// directories in local_dirs.
+	CapabilityLocalDirs = "local_dirs"
+	// CapabilityGateway: the runner wires llm_provider "gateway" tasks to
+	// the platform gateway (gateway_url) with the workspace key.
+	CapabilityGateway = "gateway"
+	// CapabilityTaskErrors: failed workspace results carry an error reason.
+	CapabilityTaskErrors = "task_errors"
+)
 
 // WorkspaceTask is a start/stop/destroy instruction for one workspace.
 // Secrets arrive over the runner-key-authenticated channel and are never
@@ -88,6 +106,10 @@ type WorkspaceTask struct {
 	Model          string            `json:"model,omitempty"`
 	UserEnv        map[string]string `json:"user_env,omitempty"`
 	PlatformAPIURL string            `json:"platform_api_url,omitempty"`
+	// GatewayURL is the gateway's OpenAI-compatible base (the URL that
+	// /chat/completions and /models hang off) for a gateway task. Empty
+	// derives it from PlatformAPIURL plus the platform's gateway path.
+	GatewayURL string `json:"gateway_url,omitempty"`
 }
 
 // WorkspaceResult reports a started (or failed) workspace.
@@ -97,6 +119,9 @@ type WorkspaceResult struct {
 	Port          int    `json:"port"`
 	ConnectionURL string `json:"connection_url,omitempty"`
 	Status        string `json:"status"`
+	// Error says why a "failed" start was refused or failed, in words safe
+	// to show the user (never a secret or a raw launcher error).
+	Error string `json:"error,omitempty"`
 }
 
 // Device-flow poll outcomes the caller acts on.

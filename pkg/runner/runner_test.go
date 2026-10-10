@@ -336,7 +336,13 @@ func TestRunnerServesLocalDirectoryWorkspaces(t *testing.T) {
 		plat.mu.Unlock()
 		t.Fatalf("heartbeat must advertise the local dirs; got %v", plat.heartbeats[0].LocalDirs)
 	}
+	caps := strings.Join(plat.heartbeats[0].Capabilities, ",")
 	plat.mu.Unlock()
+	for _, c := range []string{CapabilityLocalDirs, CapabilityGateway, CapabilityTaskErrors} {
+		if !strings.Contains(caps, c) {
+			t.Errorf("a native runner with local dirs must advertise %q; got %q", c, caps)
+		}
+	}
 
 	// A path the runner was not configured to serve is refused before any
 	// launcher runs — this is the safety gate for the user's real files.
@@ -351,6 +357,25 @@ func TestRunnerServesLocalDirectoryWorkspaces(t *testing.T) {
 		plat.mu.Unlock()
 		t.Fatalf("an un-allowlisted directory must be refused; got %+v, started %v", plat.results[0], launcher.started)
 	}
+	if plat.results[0].Error == "" {
+		t.Error("a refused start must say why")
+	}
+	plat.mu.Unlock()
+
+	// Even the allowlisted directory is refused when the task also names a
+	// repo: nothing may clone into, or clear, the user's real files.
+	plat.push(WorkspaceTask{WorkspaceID: "ws-both", Action: "start", WorkspaceDir: local, RepoURL: "https://example.com/r.git", TxnSecret: "s"})
+	waitFor(t, "refused repo+dir start", func() bool {
+		plat.mu.Lock()
+		defer plat.mu.Unlock()
+		return len(plat.results) > 1
+	})
+	plat.mu.Lock()
+	if res := plat.results[1]; res.Status != "failed" || !strings.Contains(res.Error, "both a repo and a local directory") || len(launcher.started) != 0 {
+		plat.mu.Unlock()
+		t.Fatalf("a task naming a repo and a local directory must be refused; got %+v, started %v", res, launcher.started)
+	}
+	plat.results = plat.results[:1]
 	plat.mu.Unlock()
 
 	// The allowlisted directory starts in place and the task's path is

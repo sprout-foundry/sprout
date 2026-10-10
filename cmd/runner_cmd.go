@@ -55,13 +55,13 @@ func init() {
 	linkCmd.Flags().StringVar(&runnerPublicURL, "public-url", "", "HTTPS URL the platform reaches this runner at; omit to connect through the platform relay")
 	linkCmd.Flags().StringVar(&runnerListen, "listen", "", "address the runner listens on (default "+runner.DefaultListenAddr+")")
 	linkCmd.Flags().BoolVar(&runnerNoBrowser, "no-browser", false, "print the approval URL without opening a browser (SSH sessions, headless machines)")
-	linkCmd.Flags().StringSliceVar(&runnerWorkspaces, "dir", nil, "local directory this runner serves workspaces in place (repeatable); the user's real files are the workspace — opt in deliberately")
-	linkCmd.Flags().StringSliceVar(&runnerWorkspaces, "workspace", nil, "alias for --dir")
+	linkCmd.Flags().StringArrayVar(&runnerWorkspaces, "dir", nil, "local directory this runner serves workspaces in place (repeatable); the user's real files are the workspace — opt in deliberately")
+	linkCmd.Flags().StringArrayVar(&runnerWorkspaces, "workspace", nil, "alias for --dir")
 	markAlias(linkCmd.Flags(), "workspace", "dir", aliasDeprecated)
 
 	startCmd := &cobra.Command{Use: "start", Short: "Run the runner in the foreground", Args: cobra.NoArgs, RunE: runRunnerStart}
-	startCmd.Flags().StringSliceVar(&runnerStartLocal, "dir", nil, "local directory this runner serves workspaces in place (repeatable; passing it replaces the saved list); the user's real files are the workspace — opt in deliberately")
-	startCmd.Flags().StringSliceVar(&runnerStartLocal, "workspace", nil, "alias for --dir")
+	startCmd.Flags().StringArrayVar(&runnerStartLocal, "dir", nil, "local directory this runner serves workspaces in place (repeatable; passing it replaces the saved list); the user's real files are the workspace — opt in deliberately")
+	startCmd.Flags().StringArrayVar(&runnerStartLocal, "workspace", nil, "alias for --dir")
 	markAlias(startCmd.Flags(), "workspace", "dir", aliasDeprecated)
 
 	runnerCmd.AddCommand(

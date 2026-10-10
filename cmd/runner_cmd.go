@@ -55,10 +55,14 @@ func init() {
 	linkCmd.Flags().StringVar(&runnerPublicURL, "public-url", "", "HTTPS URL the platform reaches this runner at; omit to connect through the platform relay")
 	linkCmd.Flags().StringVar(&runnerListen, "listen", "", "address the runner listens on (default "+runner.DefaultListenAddr+")")
 	linkCmd.Flags().BoolVar(&runnerNoBrowser, "no-browser", false, "print the approval URL without opening a browser (SSH sessions, headless machines)")
-	linkCmd.Flags().StringSliceVar(&runnerWorkspaces, "workspace", nil, "local directory this runner serves workspaces in place (repeatable); the user's real files are the workspace — opt in deliberately")
+	linkCmd.Flags().StringSliceVar(&runnerWorkspaces, "dir", nil, "local directory this runner serves workspaces in place (repeatable); the user's real files are the workspace — opt in deliberately")
+	linkCmd.Flags().StringSliceVar(&runnerWorkspaces, "workspace", nil, "alias for --dir")
+	markAlias(linkCmd.Flags(), "workspace", "dir", aliasDeprecated)
 
 	startCmd := &cobra.Command{Use: "start", Short: "Run the runner in the foreground", Args: cobra.NoArgs, RunE: runRunnerStart}
-	startCmd.Flags().StringSliceVar(&runnerStartLocal, "workspace", nil, "local directory this runner serves workspaces in place (repeatable; passing it replaces the saved list); the user's real files are the workspace — opt in deliberately")
+	startCmd.Flags().StringSliceVar(&runnerStartLocal, "dir", nil, "local directory this runner serves workspaces in place (repeatable; passing it replaces the saved list); the user's real files are the workspace — opt in deliberately")
+	startCmd.Flags().StringSliceVar(&runnerStartLocal, "workspace", nil, "alias for --dir")
+	markAlias(startCmd.Flags(), "workspace", "dir", aliasDeprecated)
 
 	runnerCmd.AddCommand(
 		linkCmd,
@@ -142,7 +146,7 @@ func runRunnerLink(cmd *cobra.Command, _ []string) error {
 	return printLocalDirNotice(cmd, st)
 }
 
-// resolveWorkspaceDirs applies the --workspace flags to the saved allowlist.
+// resolveWorkspaceDirs applies the --dir flags to the saved allowlist.
 // Passing no flags keeps the saved list, so a plain `runner start` never
 // loses the configuration. With flags, the saved list is REPLACED (the flags
 // are the whole new list): that is how entries are removed. Re-validate every
@@ -157,7 +161,7 @@ func resolveWorkspaceDirs(flags []string, saved []string) ([]string, error) {
 	for _, raw := range flags {
 		dir, err := runner.LocalDir(raw)
 		if err != nil {
-			return nil, fmt.Errorf("--workspace: %w", err)
+			return nil, fmt.Errorf("--dir: %w", err)
 		}
 		if seen[dir] {
 			continue

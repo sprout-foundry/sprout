@@ -82,7 +82,14 @@ endpoint is what the platform consumes through the tunnel.
 Every workspace gets its own clone under the runner's data directory
 (`~/Library/Application Support/sprout/runner/workspaces/<id>` on macOS,
 `$XDG_DATA_HOME/sprout/runner/...` on Linux). A runner never operates on the
-user's own working copies.
+user's own working copies — with one explicit, local exception (issue #114):
+a runner whose owner names directories (`sprout runner start --workspace
+~/src/myproject`, repeatable, stored in the runner's state and advertised in
+every heartbeat) serves **local-directory workspaces** in place: a start task
+naming an allowlisted directory runs against the user's real files there, with
+no clone (container mode bind-mounts the directory at `/workspace`). The
+allowlist is exact and symlink-resolved, enforced by the runner before any
+start; the platform cannot widen it.
 
 | Mode | Isolation | What runs |
 |---|---|---|

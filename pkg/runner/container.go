@@ -48,13 +48,22 @@ func (l *ContainerLauncher) Start(ctx context.Context, task WorkspaceTask) (*Wor
 	if err != nil {
 		return nil, err
 	}
-	volume := filepath.Join(dir, "volume")
-	if err := os.MkdirAll(volume, 0o700); err != nil {
-		return nil, fmt.Errorf("creating workspace volume: %w", err)
-	}
-	// The container runs as uid 1000, which need not match the host user.
-	if err := os.Chmod(volume, 0o777); err != nil { //nolint:gosec // G302: the container's uid 1000 must write it; parent dir is 0700
-		return nil, err
+	// A local-directory workspace bind-mounts the user's real directory at
+	// /workspace (the allowlist was checked before the task started). A
+	// clone workspace keeps the runner-managed volume it owns.
+	workspaceMount := ""
+	if task.WorkspaceDir != "" {
+		workspaceMount = task.WorkspaceDir + ":/workspace"
+	} else {
+		volume := filepath.Join(dir, "volume")
+		if err := os.MkdirAll(volume, 0o700); err != nil {
+			return nil, fmt.Errorf("creating workspace volume: %w", err)
+		}
+		// The container runs as uid 1000, which need not match the host user.
+		if err := os.Chmod(volume, 0o777); err != nil { //nolint:gosec // G302: the container's uid 1000 must write it; parent dir is 0700
+			return nil, err
+		}
+		workspaceMount = volume + ":/workspace"
 	}
 	envFile, err := writeEnvFile(dir, workspaceEnv(task))
 	if err != nil {
@@ -75,7 +84,7 @@ func (l *ContainerLauncher) Start(ctx context.Context, task WorkspaceTask) (*Wor
 		"--tmpfs", "/tmp:size=128m",
 		"--tmpfs", "/run:size=16m",
 		"--tmpfs", "/home/sprout:size=32m,uid=1000,gid=1000,mode=0700",
-		"-v", volume + ":/workspace",
+		"-v", workspaceMount,
 		"-p", "127.0.0.1::" + strconv.Itoa(daemonPort),
 		l.Image,
 	}

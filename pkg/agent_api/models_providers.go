@@ -255,19 +255,20 @@ func (w *openRouterListModelsWrapper) ListModels(ctx context.Context) ([]ModelIn
 			ContextLength: model.ContextLength,
 		}
 
-		// Parse pricing if available
+		// Parse pricing if available. A negative value (OpenRouter's "-1"
+		// for router models priced per request) leaves the model unpriced.
 		if model.Pricing.Prompt != "" {
-			if promptCost, err := parseFloat(model.Pricing.Prompt); err == nil {
+			if promptCost, err := parseFloat(model.Pricing.Prompt); err == nil && promptCost >= 0 {
 				modelInfo.InputCost = promptCost * 1000000 // Convert to per million tokens
 			}
 		}
 		if model.Pricing.Completion != "" {
-			if completionCost, err := parseFloat(model.Pricing.Completion); err == nil {
+			if completionCost, err := parseFloat(model.Pricing.Completion); err == nil && completionCost >= 0 {
 				modelInfo.OutputCost = completionCost * 1000000 // Convert to per million tokens
 			}
 		}
 		if model.Pricing.InputCacheRead != "" {
-			if cacheCost, err := parseFloat(model.Pricing.InputCacheRead); err == nil {
+			if cacheCost, err := parseFloat(model.Pricing.InputCacheRead); err == nil && cacheCost >= 0 {
 				modelInfo.CachedInputCost = cacheCost * 1000000
 			}
 		}

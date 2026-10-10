@@ -3026,9 +3026,7 @@
         "context_length": 2000000,
         "description": "Your prompt will be processed by a meta-model and routed to one of dozens of models (see below), optimizing for the best possible output. To see which model was used,...",
         "id": "openrouter/auto",
-        "input_cost": -1000000,
         "name": "Auto Router",
-        "output_cost": -1000000,
         "tags": [
           "tools",
           "vision",
@@ -3040,9 +3038,7 @@
         "context_length": 2000000,
         "description": "Auto Router (Beta) is a task-aware router from OpenRouter. It classifies each request, then routes it the [most popular model](/rankings#task-spend) for that task based on aggregate spend, filtered by your...",
         "id": "openrouter/auto-beta",
-        "input_cost": -1000000,
         "name": "Auto Router (Beta)",
-        "output_cost": -1000000,
         "tags": [
           "tools",
           "vision",
@@ -3054,9 +3050,7 @@
         "context_length": 128000,
         "description": "Transform your natural language requests into structured OpenRouter API request objects. Describe what you want to accomplish with AI models, and Body Builder will construct the appropriate API calls. Example:...",
         "id": "openrouter/bodybuilder",
-        "input_cost": -1000000,
         "name": "Body Builder (beta)",
-        "output_cost": -1000000,
         "tags": [
           "tools",
           "structured_output"
@@ -3080,9 +3074,7 @@
         "context_length": 1000000,
         "description": "Fusion turns your prompt into a small multi-model deliberation. A panel of expert models (see below) analyzes your prompt in parallel with web search and web fetch enabled, then a...",
         "id": "openrouter/fusion",
-        "input_cost": -1000000,
         "name": "OpenRouter: Fusion",
-        "output_cost": -1000000,
         "tags": [
           "tools",
           "reasoning"
@@ -3092,9 +3084,7 @@
         "context_length": 2000000,
         "description": "The Pareto Router maintains a tiered shortlist of strong coding models, ranked by [Artificial Analysis](https://artificialanalysis.ai/) coding percentiles. Set min_coding_score between 0 and 1 on the [pareto-router plugin](https://openrouter.ai/docs/guides/routing/routers/pareto-router#the-min_coding_score-parameter) to control how...",
         "id": "openrouter/pareto-code",
-        "input_cost": -1000000,
         "name": "Pareto Code Router",
-        "output_cost": -1000000,
         "tags": [
           "coding",
           "tools"
@@ -7057,9 +7047,7 @@
         "context_length": 1000000,
         "description": "Switchyard is an open-source model router that switches between multiple models to optimize the cost of requests. By default it will use OpenRouter market data to select the most popular...",
         "id": "nvidia/switchyard",
-        "input_cost": -1000000,
-        "name": "NVIDIA: Switchyard",
-        "output_cost": -1000000
+        "name": "NVIDIA: Switchyard"
       },
       {
         "cached_input_cost": 0.01,
@@ -7274,9 +7262,7 @@
         "context_length": 1000000,
         "description": "Jev Router picks the best model and reasoning effort for each request, balancing quality, speed, and cost. It runs on [Jev](https://openrouter.ai/~typesafe/jev-latest), TypeSafe's first System One model, and adapts as your...",
         "id": "typesafe/jev-router",
-        "input_cost": -1000000,
         "name": "TypeSafe: Jev Router",
-        "output_cost": -1000000,
         "tags": [
           "tools",
           "vision",

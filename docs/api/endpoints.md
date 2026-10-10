@@ -315,6 +315,7 @@ Notes:
 | Method | Path | Handler | Served by |
 |---|---|---|---|
 | any | `/` | handleIndex | daemon |
+| GET | `/api/agent/events` | handleAPIAgentEvents | daemon |
 | POST | `/api/automate/run` | handleAPIAutomateRun | daemon |
 | GET | `/api/automate/sessions` | handleAPIAutomateSessionsList | daemon |
 | GET, POST | `/api/automate/sessions/` | handleAPIAutomateSessionsAll | daemon |
@@ -349,6 +350,7 @@ Notes:
 | any | `/ws` | handleWebSocket | daemon |
 
 Notes:
+- `/api/agent/events` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
 - `/api/automate/run` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
 - `/api/automate/sessions` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
 - `/api/automate/sessions/` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)

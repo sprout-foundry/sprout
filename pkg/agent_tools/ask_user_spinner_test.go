@@ -52,14 +52,21 @@ func TestAskUserHandler_NoSelfPublishedEvents(t *testing.T) {
 // TestRequestClarificationHandler_NoSelfPublishedEvents — same fix applies
 // to request_clarification, the other Interactive tool.
 func TestRequestClarificationHandler_NoSelfPublishedEvents(t *testing.T) {
-	t.Parallel()
-
-	// Save and restore the func pointer.
+	// Not parallel: this test swaps the package-level
+	// RequestClarificationFunc, which parallel tests read through
+	// ToolEnv.ResolveToolFuncs. Swap and restore under ToolFuncMu, the lock
+	// that guards every package-level tool function pointer.
+	ToolFuncMu.Lock()
 	saved := RequestClarificationFunc
-	defer func() { RequestClarificationFunc = saved }()
 	RequestClarificationFunc = func(ctx context.Context, args map[string]any) (string, error) {
 		return "clarified", nil
 	}
+	ToolFuncMu.Unlock()
+	defer func() {
+		ToolFuncMu.Lock()
+		RequestClarificationFunc = saved
+		ToolFuncMu.Unlock()
+	}()
 
 	h := &requestClarificationHandler{}
 	bus := events.NewEventBus()

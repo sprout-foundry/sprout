@@ -40,19 +40,35 @@ type hostProc struct {
 const stopGrace = 10 * time.Second
 
 func (l *HostLauncher) Start(ctx context.Context, task WorkspaceTask) (*Workspace, error) {
+	localDir := ""
+	if task.WorkspaceDir != "" {
+		// A local-directory workspace runs in place: the user's real
+		// files are the workspace root, so there is nothing to clone.
+		// The runner checked the allowlist (Runner.start, the only
+		// caller the platform reaches); re-checking here keeps the
+		// launcher safe for direct callers. The platform sends either
+		// repo_url or workspace_dir, never both.
+		if task.RepoURL != "" {
+			return nil, fmt.Errorf("start task names both a repo (%s) and a local directory (%s)", task.RepoURL, task.WorkspaceDir)
+		}
+		localDir = task.WorkspaceDir
+	}
 	dir, err := workspaceDir(task.WorkspaceID)
 	if err != nil {
 		return nil, err
 	}
-	repo := filepath.Join(dir, "repo")
 	tmp := filepath.Join(dir, "tmp")
 	for _, d := range []string{dir, tmp, filepath.Join(dir, "config"), filepath.Join(dir, "state")} {
 		if err := os.MkdirAll(d, 0o700); err != nil {
 			return nil, fmt.Errorf("creating workspace dirs: %w", err)
 		}
 	}
-	if err := cloneIfMissing(ctx, repo, task); err != nil {
-		return nil, err
+	repo := localDir
+	if localDir == "" {
+		repo = filepath.Join(dir, "repo")
+		if err := cloneIfMissing(ctx, repo, task); err != nil {
+			return nil, err
+		}
 	}
 
 	port, err := freePort()
@@ -61,7 +77,7 @@ func (l *HostLauncher) Start(ctx context.Context, task WorkspaceTask) (*Workspac
 	}
 	// The daemon outlives the task's request context; Stop cancels it.
 	procCtx, cancel := context.WithCancel(context.Background())
-	cmd, err := l.command(procCtx, dir, tmp, port)
+	cmd, err := l.command(procCtx, repo, dir, tmp, port)
 	if err != nil {
 		cancel()
 		return nil, err
@@ -95,7 +111,10 @@ func (l *HostLauncher) Start(ctx context.Context, task WorkspaceTask) (*Workspac
 	return &Workspace{ID: task.WorkspaceID, Port: port, Handle: strconv.Itoa(cmd.Process.Pid)}, nil
 }
 
-func (l *HostLauncher) command(ctx context.Context, dir, tmp string, port int) (*exec.Cmd, error) {
+// command builds the daemon command. workDir is the directory commands run
+// in — the clone, or the user's local directory for a path-backed workspace
+// (which native mode therefore adds to the sandbox's writable set).
+func (l *HostLauncher) command(ctx context.Context, workDir, dir, tmp string, port int) (*exec.Cmd, error) {
 	bin := l.SproutBin
 	if bin == "" {
 		exe, err := os.Executable()
@@ -113,9 +132,13 @@ func (l *HostLauncher) command(ctx context.Context, dir, tmp string, port int) (
 		return nil, err
 	}
 	return sandbox.CommandContext(ctx, sandbox.Policy{
-		WorkDir:      dir,
-		TempDir:      tmp,
-		Writable:     l.Writable,
+		WorkDir: workDir,
+		TempDir: tmp,
+		// The daemon writes its config, state and daemon.log in the
+		// workspace's runner-owned metadata directory, which is a
+		// sibling of (not inside) the clone and may be nowhere near a
+		// local-directory workspace.
+		Writable:     append(append([]string{}, l.Writable...), dir),
 		DenyRead:     sandbox.DefaultDenyRead(home),
 		AllowNetwork: true,
 	}, bin, args...)

@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -298,6 +299,109 @@ func TestRunnerServesThePlatformThroughTheRelay(t *testing.T) {
 	code, body := call("s3cret")
 	if code != http.StatusOK || !strings.Contains(body, "POST /api/txn/run") {
 		t.Fatalf("relayed call: %d %q", code, body)
+	}
+}
+
+func TestRunnerServesLocalDirectoryWorkspaces(t *testing.T) {
+	plat := &fakePlatform{statuses: map[string]string{}, pollStatus: http.StatusOK}
+	platSrv := httptest.NewServer(plat.handler())
+	t.Cleanup(platSrv.Close)
+
+	// TempDir may sit behind a symlink (macOS /var); LocalDir resolves
+	// entries, and the runner compares resolved paths on both sides, so the
+	// allowlist is built through the same normalizer the CLI uses.
+	local, err := LocalDir(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	launcher := &fakeLauncher{port: fakeDaemon(t)}
+	r := &Runner{
+		State:    &State{PlatformURL: platSrv.URL, RunnerID: "r-1", Mode: ModeNative, LocalDirs: []string{local}, PublicURL: "https://me.example/"},
+		Client:   NewClient(platSrv.URL, Credentials{RunnerID: "r-1", APIKey: "srk_key"}),
+		Launcher: launcher,
+		Host:     NewHostServer(),
+		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	go func() { _ = r.Run(ctx) }()
+
+	waitFor(t, "heartbeat advertising local dirs", func() bool {
+		plat.mu.Lock()
+		defer plat.mu.Unlock()
+		return len(plat.heartbeats) > 0
+	})
+	plat.mu.Lock()
+	if dirs := plat.heartbeats[0].LocalDirs; len(dirs) != 1 || dirs[0] != local {
+		plat.mu.Unlock()
+		t.Fatalf("heartbeat must advertise the local dirs; got %v", plat.heartbeats[0].LocalDirs)
+	}
+	plat.mu.Unlock()
+
+	// A path the runner was not configured to serve is refused before any
+	// launcher runs — this is the safety gate for the user's real files.
+	plat.push(WorkspaceTask{WorkspaceID: "ws-nope", Action: "start", WorkspaceDir: t.TempDir(), TxnSecret: "s"})
+	waitFor(t, "refused local start", func() bool {
+		plat.mu.Lock()
+		defer plat.mu.Unlock()
+		return len(plat.results) > 0
+	})
+	plat.mu.Lock()
+	if res := plat.results[0]; res.Status != "failed" || len(launcher.started) != 0 {
+		plat.mu.Unlock()
+		t.Fatalf("an un-allowlisted directory must be refused; got %+v, started %v", plat.results[0], launcher.started)
+	}
+	plat.mu.Unlock()
+
+	// The allowlisted directory starts in place and the task's path is
+	// normalized (symlinks resolved) before the launcher sees it.
+	plat.push(WorkspaceTask{WorkspaceID: "ws-local", Action: "start", WorkspaceDir: local, TxnSecret: "s"})
+	waitFor(t, "local start result", func() bool {
+		plat.mu.Lock()
+		defer plat.mu.Unlock()
+		return len(plat.results) > 1
+	})
+	plat.mu.Lock()
+	res := plat.results[1]
+	plat.mu.Unlock()
+	if res.Status != "running" {
+		t.Fatalf("an allowlisted directory must start; got %+v", res)
+	}
+	launcher.mu.Lock()
+	started := len(launcher.started)
+	launcher.mu.Unlock()
+	if started != 1 {
+		t.Fatalf("the allowlisted start must reach the launcher once; started %v", launcher.started)
+	}
+
+	// Destroying a local workspace keeps the user's directory.
+	plat.push(WorkspaceTask{WorkspaceID: "ws-local", Action: "destroy"})
+	waitFor(t, "destroy status", func() bool {
+		plat.mu.Lock()
+		defer plat.mu.Unlock()
+		return plat.statuses["ws-local"] == "terminated"
+	})
+	entries, err := os.ReadDir(local)
+	if err != nil || len(entries) != 0 {
+		t.Errorf("destroying a local workspace must not touch the user's directory (err: %v, entries: %d)", err, len(entries))
+	}
+}
+
+func TestHostLauncherRunsALocalDirectoryInPlace(t *testing.T) {
+	t.Setenv("SPROUT_STATE_DIR", t.TempDir())
+	local := t.TempDir()
+	l := &HostLauncher{SproutBin: "/nonexistent/sprout"}
+	task := WorkspaceTask{WorkspaceID: "ws-inplace", Action: "start", WorkspaceDir: local, TxnSecret: "s"}
+	// No RepoURL, no clone: Start must get as far as launching the daemon
+	// (which fails fast on the missing binary), proving the clone path was
+	// skipped for a plain directory with no git.
+	_, err := l.Start(context.Background(), task)
+	if err == nil {
+		t.Cleanup(func() { _ = l.Destroy(context.Background(), task.WorkspaceID, nil) })
+		t.Fatal("the daemon cannot start from a nonexistent binary; expected an error")
+	}
+	if strings.Contains(err.Error(), "refusing to clone") {
+		t.Fatalf("a local-directory workspace must not be cloned: %v", err)
 	}
 }
 

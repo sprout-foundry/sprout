@@ -245,6 +245,14 @@ jobs:
     - name: Check gofmt
       run: make fmt-check
 
+    # The workspace image's entrypoint and credential helper are POSIX sh;
+    # their behaviour is tested from pkg/runner (workspace_image_test.go).
+    - name: Lint workspace image scripts
+      run: |
+        sh -n docker/workspace/entrypoint.sh
+        sh -n docker/workspace/git-credential-sprout
+        shellcheck docker/workspace/entrypoint.sh docker/workspace/git-credential-sprout
+
     - name: Lint Go (new code only)
       # New-code gate: the repo predates golangci-lint, so a full-repo gate
       # would block every PR on the historical backlog (431 findings as of

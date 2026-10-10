@@ -46,7 +46,7 @@ var (
 	runnerImage      string
 )
 
-const imageFlagUsage = "workspace image container mode runs (saved; default " + runner.DefaultImage + "); the runner pulls it with Docker's own credentials, so run `docker login <registry>` for a private image"
+var imageFlagUsage = "workspace image container mode runs (saved; default " + runner.DefaultImage() + "); the runner pulls it with Docker's own credentials, so run `docker login <registry>` for a private image"
 
 func init() {
 	linkCmd := &cobra.Command{

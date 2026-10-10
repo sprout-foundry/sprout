@@ -1,0 +1,99 @@
+name: Publish workspace image
+
+# Builds the public workspace image (docker/workspace) that `sprout runner`
+# container mode runs, and pushes it to
+# ghcr.io/sprout-foundry/sprout-workspace:<tag>, plus :latest for a final
+# vX.Y.Z release. The image installs the release's own linux binaries
+# (checked against its SHA256SUMS), so it runs only once the release exists:
+# after the Release workflow succeeds for a v* tag, when a release is
+# published by hand, or on demand for an existing tag.
+#
+# The image recipe comes from the commit this workflow runs at, so a manual
+# run can rebuild an older release that predates docker/workspace.
+on:
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build (e.g. v0.27.0)"
+        required: true
+
+concurrency:
+  group: publish-workspace-image-${{ github.event.workflow_run.head_branch || github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       startsWith(github.event.workflow_run.head_branch, 'v'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Resolve the release tag
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.workflow_run.head_branch || github.event.release.tag_name || inputs.tag }}
+        run: |
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "Not a release tag: '$TAG'" >&2
+            exit 1
+          fi
+          prerelease="$(gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json isPrerelease -q .isPrerelease)"
+          latest=false
+          if [ "$prerelease" = false ] && printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            latest=true
+          fi
+          image="ghcr.io/sprout-foundry/sprout-workspace"
+          tags="${image}:${TAG}"
+          if [ "$latest" = true ]; then
+            tags="${tags},${image}:latest"
+          fi
+          {
+            echo "tag=$TAG"
+            echo "tags=$tags"
+          } >> "$GITHUB_OUTPUT"
+          echo "Publishing $tags"
+
+      - uses: docker/setup-qemu-action@v3
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/workspace
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            SPROUT_VERSION=${{ steps.tag.outputs.tag }}
+          tags: ${{ steps.tag.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.title=sprout-workspace
+            org.opencontainers.image.description=Workspace image for sprout runner container mode: the open-source sprout daemon and git
+            org.opencontainers.image.licenses=Apache-2.0
+            org.opencontainers.image.version=${{ steps.tag.outputs.tag }}
+          annotations: |
+            index:org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            index:org.opencontainers.image.description=Workspace image for sprout runner container mode: the open-source sprout daemon and git
+            index:org.opencontainers.image.licenses=Apache-2.0

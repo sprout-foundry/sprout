@@ -142,8 +142,14 @@ reason the platform can show.
 | `native` | Host process under the OS sandbox: macOS Seatbelt profile; Linux bubblewrap + Landlock + seccomp; Windows restricted token + job object (labeled weaker). | Host toolchains (Xcode, SDKs). |
 | `bare-metal` | None. Runs as the user, with the user's environment. | Anything the user can run. |
 
-Container image: `ghcr.io/sprout-foundry/sprout:latest` unless the owner
-sets another with `--image` on `link` or `start` (saved in the runner state).
+Container image: the public workspace image
+`ghcr.io/sprout-foundry/sprout-workspace`, tagged with the runner's own
+release (`:vX.Y.Z`) so the daemon in the workspace matches the runner, or
+`:latest` for source and pre-release builds — unless the owner sets another
+with `--image` on `link` or `start`. Only a chosen image is saved in the
+runner state, so an upgraded runner moves to its release's image; a state
+file holding the earlier default (`ghcr.io/sprout-foundry/sprout:latest`,
+never public) is moved to the new default on load.
 The runner never stores registry credentials: it drives the docker CLI, which
 pulls with Docker's own credential store. Before going online, `runner start`
 in container mode checks the image is present (`docker image inspect`) or
@@ -153,6 +159,32 @@ the fixes — `docker login <registry>` (for ghcr.io, a GitHub token with
 mode. `runner link` runs the same check before the device flow when Docker is
 running (and only warns when it is not), so a runner is not linked with an
 image it cannot pull.
+
+The workspace image is built from `docker/workspace` in this repository and
+contains only the open-source sprout release binary (verified against the
+release's `SHA256SUMS`), git, openssh-client, curl and tini on
+`debian:bookworm-slim`, running as uid 1000. Its entrypoint runs the daemon
+only (`sprout agent --daemon --web-port 56000 --bind 0.0.0.0`; the runner
+publishes the port on loopback, and the daemon refuses a non-loopback bind
+without `SPROUT_AUTH_TOKEN`). With `WORKSPACE_DIR` set it serves the
+bind-mounted directory in place and never clones into or deletes from it.
+Otherwise, with no `.git` in `/workspace` and `REPO_URL` (https only) set, it
+clones: only into an empty volume (`lost+found` aside), via a staging
+directory moved in with `.git` last, under a marker listing what it moved so a
+restart can clean up its own interrupted clone; any other content stops the
+container with an error. Git authenticates through a credential helper that
+returns `SPROUT_GIT_TOKEN` only for `https` and the host in `SPROUT_GIT_HOST`
+(default `github.com`; username `x-access-token` there, `oauth2` elsewhere),
+and nothing for SSH. `pkg/runner/workspace_image_test.go` runs the entrypoint
+and helper on the host with a stub `sprout` (no Docker), and CI shellchecks
+both scripts.
+
+`.github/workflows/publish-workspace-image.yml` builds it for linux/amd64 and
+linux/arm64 once the Release workflow succeeds for a `v*` tag (or a release is
+published, or on demand for a tag) and pushes `:<tag>`, plus `:latest` for a
+final `vX.Y.Z` release. The GHCR package must be made Public once by an org
+owner (package settings → Change visibility); until then pulls need
+`docker login ghcr.io`.
 
 Native sandbox policy (all platforms, to the extent each OS supports it):
 

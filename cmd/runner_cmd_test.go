@@ -82,7 +82,7 @@ func TestRunnerLinkPreflightRefusesAnUnpullableImage(t *testing.T) {
 
 func TestRunnerImageFlagIsValidatedAndSaved(t *testing.T) {
 	t.Cleanup(func() { runnerImage = "" })
-	st := &runner.State{Image: runner.DefaultImage}
+	st := &runner.State{Image: runner.DefaultImage()}
 	runnerImage = "--privileged"
 	if err := applyImageFlag(st); err == nil {
 		t.Error("a flag-like image must be rejected")

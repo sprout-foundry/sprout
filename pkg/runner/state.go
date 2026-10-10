@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 
+	"github.com/sprout-foundry/sprout/pkg/buildinfo"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/sprout-foundry/sprout/pkg/envutil"
@@ -19,8 +21,29 @@ const credentialKey = "sprout-runner"
 // DefaultListenAddr is where the host server listens for platform calls.
 const DefaultListenAddr = "127.0.0.1:8935"
 
-// DefaultImage is the workspace image container mode runs.
-const DefaultImage = "ghcr.io/sprout-foundry/sprout:latest"
+// WorkspaceImageRepo is the public workspace image, built from
+// docker/workspace and published for every release.
+const WorkspaceImageRepo = "ghcr.io/sprout-foundry/sprout-workspace"
+
+// legacyDefaultImage is the default earlier runners wrote into their state.
+// It is not a public image, so LoadState replaces exactly this value with
+// the current default; any other saved image is the owner's choice.
+const legacyDefaultImage = "ghcr.io/sprout-foundry/sprout:latest"
+
+var releaseVersionRe = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
+
+// DefaultImage is the workspace image container mode runs unless the owner
+// chose another with --image: the image built for this runner's own release,
+// so the daemon in the workspace matches the runner, or :latest for source
+// and pre-release builds.
+func DefaultImage() string { return defaultImageFor(buildinfo.Version) }
+
+func defaultImageFor(version string) string {
+	if releaseVersionRe.MatchString(version) {
+		return WorkspaceImageRepo + ":" + version
+	}
+	return WorkspaceImageRepo + ":latest"
+}
 
 // State is the runner's persistent configuration. The API key is not part of
 // it: it lives in the credential store.
@@ -81,9 +104,10 @@ func LoadState() (*State, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &State{Mode: ModeContainer, ListenAddr: DefaultListenAddr, Image: DefaultImage}
+	s := &State{Mode: ModeContainer, ListenAddr: DefaultListenAddr}
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
+		s.applyDefaultImage()
 		return s, nil
 	}
 	if err != nil {
@@ -95,7 +119,14 @@ func LoadState() (*State, error) {
 	if !ValidMode(s.Mode) {
 		return nil, fmt.Errorf("%s has unknown mode %q", path, s.Mode)
 	}
+	s.applyDefaultImage()
 	return s, nil
+}
+
+func (s *State) applyDefaultImage() {
+	if s.Image == "" || s.Image == legacyDefaultImage {
+		s.Image = DefaultImage()
+	}
 }
 
 // Save writes the state with owner-only permissions.
@@ -107,7 +138,14 @@ func (s *State) Save() error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("creating runner dir: %w", err)
 	}
-	data, err := json.MarshalIndent(s, "", "  ")
+	// The default image is not written: it follows the runner's version,
+	// so an upgraded runner moves to its own release's image. Only an
+	// image the owner chose is saved.
+	saved := *s
+	if saved.Image == DefaultImage() {
+		saved.Image = ""
+	}
+	data, err := json.MarshalIndent(&saved, "", "  ")
 	if err != nil {
 		return err
 	}

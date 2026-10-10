@@ -124,9 +124,9 @@ func (l *ContainerLauncher) Start(ctx context.Context, task WorkspaceTask) (*Wor
 	workspaceMount := ""
 	if task.WorkspaceDir != "" {
 		if task.RepoURL != "" {
-			// The image's entrypoint clears /workspace before cloning
-			// when it finds no .git there; that must never meet the
-			// user's real files.
+			// A local directory is served in place; a repo URL beside
+			// it would ask the image to clone into the user's real
+			// files, which it must never do.
 			return nil, fmt.Errorf("start task names both a repo and a local directory")
 		}
 		workspaceMount = task.WorkspaceDir + ":/workspace"

@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-08T16:34:40Z",
+  "updated_at": "2026-10-10T15:26:01Z",
   "source": "refresh_provider_catalog",
   "onboarding_order": [
     "deepinfra",
@@ -825,7 +825,17 @@
         },
         {
           "id": "mistral-large-4",
-          "name": "mistral-large-4"
+          "name": "mistral-large-4",
+          "description": "Mistral Large 4 - Mistral's open-weight flagship multimodal model (1.05T total, 49B active) with a 1M-token context window",
+          "context_length": 1000000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning"
+          ],
+          "input_cost": 0.68,
+          "output_cost": 2.09,
+          "cached_input_cost": 0.07
         },
         {
           "id": "nemotron-3-nano:30b",
@@ -1873,8 +1883,8 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.2574,
-          "output_cost": 1.0287
+          "input_cost": 0.32,
+          "output_cost": 0.8899999999999999
         },
         {
           "id": "deepseek/deepseek-chat-v3-0324",
@@ -1966,8 +1976,8 @@
             "structured_output"
           ],
           "input_cost": 0.25899999999999995,
-          "output_cost": 0.42,
-          "cached_input_cost": 0.135
+          "output_cost": 0.7999999999999999,
+          "cached_input_cost": 0.14
         },
         {
           "id": "deepseek/deepseek-v3.2-exp",
@@ -1992,9 +2002,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.009899999999999999,
+          "input_cost": 0.03,
           "output_cost": 1.28,
-          "cached_input_cost": 0.009899999999999999
+          "cached_input_cost": 0.03
         },
         {
           "id": "deepseek/deepseek-v4-flash-0731",
@@ -2006,9 +2016,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.0046,
+          "input_cost": 0.016800000000000002,
           "output_cost": 1.28,
-          "cached_input_cost": 0.0046
+          "cached_input_cost": 0.016800000000000002
         },
         {
           "id": "deepseek/deepseek-v4-flash-0731:batch",
@@ -2075,9 +2085,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.29232,
-          "output_cost": 0.58464,
-          "cached_input_cost": 0.02436
+          "input_cost": 0.20879999999999999,
+          "output_cost": 0.41759999999999997,
+          "cached_input_cost": 0.0174
         },
         {
           "id": "deepseek/deepseek-v4-pro-0813",
@@ -2118,9 +2128,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.0283,
-          "output_cost": 1,
-          "cached_input_cost": 0.01
+          "input_cost": 0.3,
+          "output_cost": 1.2,
+          "cached_input_cost": 0.006
         },
         {
           "id": "deepseek/deepseek-v4.1-flash:batch",
@@ -2719,9 +2729,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.09,
-          "output_cost": 0.3,
-          "cached_input_cost": 0.049999999999999996
+          "input_cost": 0.0675,
+          "output_cost": 0.22499999999999998,
+          "cached_input_cost": 0.0375
         },
         {
           "id": "google/gemma-4-26b-a4b-it:free",
@@ -2934,8 +2944,7 @@
           "context_length": 262144,
           "tags": [
             "tools",
-            "reasoning",
-            "structured_output"
+            "reasoning"
           ],
           "input_cost": 0.041999999999999996,
           "output_cost": 0.12319999999999999,
@@ -2952,9 +2961,22 @@
           ]
         },
         {
+          "id": "inclusionai/ling-3.0-flash-sante",
+          "name": "inclusionAI: Ling 3.0 Flash Sante",
+          "description": "Ling 3.0 Flash Sante is a health and medicine-focused mixture-of-experts model from InclusionAI, built on Ling 3.0 Flash with 5.1B active parameters out of 124B total. It is designed for...",
+          "context_length": 262144,
+          "tags": [
+            "tools",
+            "reasoning"
+          ],
+          "input_cost": 0.041999999999999996,
+          "output_cost": 0.12319999999999999,
+          "cached_input_cost": 0.008400000000000001
+        },
+        {
           "id": "inclusionai/ling-3.0-flash-sante:free",
           "name": "inclusionAI: Ling 3.0 Flash Sante (free)",
-          "description": "Ling 3.0 Flash Sante is a health and medicine-focused mixture-of-experts model from InclusionAI, built on Ling 3.0 Flash with 5.1B active parameters out of 124B total. It is designed for...",
+          "description": "Ling 3.0 Flash Sante is a health and medicine-focused mixture-of-experts model from InclusionAI, built on Ling 3.0 Flash with 5.1B active parameters out of 124B total. It is designed for medical knowledge reasoning, clinical safety, evidence-based retrieval, and long-horizon medical tasks, while retaining general capabilities in reasoning, coding, and agentic tasks.",
           "context_length": 262144,
           "tags": [
             "tools",
@@ -3182,8 +3204,9 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.09999999999999999,
-          "output_cost": 0.32
+          "input_cost": 0.22,
+          "output_cost": 0.5,
+          "cached_input_cost": 0.11
         },
         {
           "id": "meta-llama/llama-4-maverick",
@@ -3653,7 +3676,7 @@
         {
           "id": "mistralai/mistral-large-4-0",
           "name": "Mistral: Mistral Large 4",
-          "description": "Mistral Large 4 is a frontier multimodal (text and image input) model from Mistral AI built for reasoning, coding, and agentic workloads. It offers a 512K-token context window with up...",
+          "description": "Mistral Large 4 is a frontier multimodal (text and image input) model from Mistral AI built for reasoning, coding, and agentic workloads. It offers a 1M-token context window with up...",
           "context_length": 1048576,
           "tags": [
             "tools",
@@ -3744,7 +3767,7 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.019000000000000003,
+          "input_cost": 0.029,
           "output_cost": 0.03
         },
         {
@@ -3901,9 +3924,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.44999999999999996,
-          "output_cost": 2.25,
-          "cached_input_cost": 0.07
+          "input_cost": 0.5,
+          "output_cost": 2.5,
+          "cached_input_cost": 0.15
         },
         {
           "id": "moonshotai/kimi-k2.6",
@@ -3918,7 +3941,7 @@
           ],
           "input_cost": 0.4375,
           "output_cost": 2.4499999999999997,
-          "cached_input_cost": 0.1211
+          "cached_input_cost": 0.1087
         },
         {
           "id": "moonshotai/kimi-k2.7-code",
@@ -3961,9 +3984,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.62,
-          "output_cost": 12.3,
-          "cached_input_cost": 0.43
+          "input_cost": 0.5,
+          "output_cost": 13.5,
+          "cached_input_cost": 0.28
         },
         {
           "id": "moonshotai/kimi-k3:batch",
@@ -4254,9 +4277,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.049,
-          "output_cost": 0.14,
-          "cached_input_cost": 0.0245
+          "input_cost": 0.07,
+          "output_cost": 0.19999999999999998,
+          "cached_input_cost": 0.04
         },
         {
           "id": "nvidia/nemotron-3.5-lightning:free",
@@ -5527,6 +5550,36 @@
           "cached_input_cost": 0.09999999999999999
         },
         {
+          "id": "openai/gpt-6.1-sol-pro:batch",
+          "name": "OpenAI: GPT-6.1 Sol Pro (batch)",
+          "description": "GPT-6.1 Sol Pro is the same underlying model as [GPT-6.1 Sol](https://openrouter.ai/openai/gpt-6.1-sol), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks. **Cost note:** pro mode spends far more...",
+          "context_length": 1050000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 1,
+          "output_cost": 5,
+          "cached_input_cost": 0.049999999999999996
+        },
+        {
+          "id": "openai/gpt-6.1-sol:batch",
+          "name": "OpenAI: GPT-6.1 Sol (batch)",
+          "description": "GPT-6.1 Sol is an upgrade to GPT-6 Sol from OpenAI, positioned below the flagship GPT-6 Astra in the GPT-6 series. It is suited for agentic coding, computer use, document-heavy professional...",
+          "context_length": 1050000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 1,
+          "output_cost": 5,
+          "cached_input_cost": 0.049999999999999996
+        },
+        {
           "id": "openai/gpt-audio",
           "name": "OpenAI: GPT Audio",
           "description": "The gpt-audio model is OpenAI's first generally available audio model. The new snapshot features an upgraded decoder for more natural sounding voices and maintains better voice consistency. Audio is priced...",
@@ -6121,7 +6174,7 @@
           "id": "qwen/qwen3-14b",
           "name": "Qwen: Qwen3 14B",
           "description": "Qwen3-14B is a dense 14.8B parameter causal language model from the Qwen3 series, designed for both complex reasoning and efficient dialogue. It supports seamless switching between a \"thinking\" mode for...",
-          "context_length": 131072,
+          "context_length": 40960,
           "tags": [
             "tools",
             "reasoning",
@@ -6140,8 +6193,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.45499999999999996,
-          "output_cost": 1.8199999999999998
+          "input_cost": 0.455,
+          "output_cost": 1.82
         },
         {
           "id": "qwen/qwen3-235b-a22b-2507",
@@ -6160,20 +6213,19 @@
           "id": "qwen/qwen3-235b-a22b-thinking-2507",
           "name": "Qwen: Qwen3 235B A22B Thinking 2507",
           "description": "Qwen3-235B-A22B-Thinking-2507 is a high-performance, open-weight Mixture-of-Experts (MoE) language model optimized for complex reasoning tasks. It activates 22B of its 235B parameters per forward pass and natively supports up to 262,144...",
-          "context_length": 131072,
+          "context_length": 128000,
           "tags": [
             "tools",
-            "reasoning",
-            "structured_output"
+            "reasoning"
           ],
-          "input_cost": 0.22999999999999998,
-          "output_cost": 2.3
+          "input_cost": 0.44999999999999996,
+          "output_cost": 3.5
         },
         {
           "id": "qwen/qwen3-30b-a3b",
           "name": "Qwen: Qwen3 30B A3B",
           "description": "Qwen3, the latest generation in the Qwen large language model series, features both dense and mixture-of-experts (MoE) architectures to excel in reasoning, multilingual support, and advanced agent tasks. Its unique...",
-          "context_length": 131072,
+          "context_length": 40960,
           "tags": [
             "tools",
             "reasoning",
@@ -6204,7 +6256,7 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.19999999999999998,
+          "input_cost": 0.2,
           "output_cost": 2.4
         },
         {
@@ -6231,7 +6283,7 @@
             "structured_output"
           ],
           "input_cost": 0.117,
-          "output_cost": 0.45499999999999996
+          "output_cost": 0.455
         },
         {
           "id": "qwen/qwen3-coder",
@@ -6332,8 +6384,9 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.09,
-          "output_cost": 1.1
+          "input_cost": 0.09999999999999999,
+          "output_cost": 1.1,
+          "cached_input_cost": 0.07
         },
         {
           "id": "qwen/qwen3-next-80b-a3b-thinking",
@@ -6373,7 +6426,7 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.39999999999999997,
+          "input_cost": 0.4,
           "output_cost": 4
         },
         {
@@ -6400,8 +6453,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.19999999999999998,
-          "output_cost": 2.4
+          "input_cost": 0.29,
+          "output_cost": 1
         },
         {
           "id": "qwen/qwen3-vl-32b-instruct",
@@ -6413,8 +6466,8 @@
             "vision",
             "structured_output"
           ],
-          "input_cost": 0.10400000000000001,
-          "output_cost": 0.41600000000000004
+          "input_cost": 0.104,
+          "output_cost": 0.416
         },
         {
           "id": "qwen/qwen3-vl-8b-instruct",
@@ -6426,8 +6479,9 @@
             "vision",
             "structured_output"
           ],
-          "input_cost": 0.117,
-          "output_cost": 0.45499999999999996
+          "input_cost": 0.25,
+          "output_cost": 0.75,
+          "cached_input_cost": 0.12
         },
         {
           "id": "qwen/qwen3-vl-8b-thinking",
@@ -6441,7 +6495,7 @@
             "structured_output"
           ],
           "input_cost": 0.18,
-          "output_cost": 2.0999999999999996
+          "output_cost": 2.1
         },
         {
           "id": "qwen/qwen3.5-122b-a10b",
@@ -6482,9 +6536,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.15,
-          "output_cost": 1,
-          "cached_input_cost": 0.049999999999999996
+          "input_cost": 0.08,
+          "output_cost": 0.75,
+          "cached_input_cost": 0.04
         },
         {
           "id": "qwen/qwen3.5-397b-a17b",
@@ -6497,9 +6551,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.44999999999999996,
-          "output_cost": 3,
-          "cached_input_cost": 0.22
+          "input_cost": 0.55,
+          "output_cost": 3.5,
+          "cached_input_cost": 0.22499999999999998
         },
         {
           "id": "qwen/qwen3.5-9b",
@@ -6582,8 +6636,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.44999999999999996,
-          "output_cost": 2.7,
+          "input_cost": 0.32,
+          "output_cost": 3.1999999999999997,
           "cached_input_cost": 0.03
         },
         {
@@ -6625,7 +6679,7 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 1.0270000000000001,
+          "input_cost": 1.027,
           "output_cost": 6.162
         },
         {
@@ -7071,9 +7125,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.0825,
-          "output_cost": 0.33,
-          "cached_input_cost": 0.020625
+          "input_cost": 0.13199999999999998,
+          "output_cost": 0.5279999999999999,
+          "cached_input_cost": 0.032999999999999995
         },
         {
           "id": "tencent/hy3-preview",
@@ -7098,9 +7152,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.7505999999999999,
-          "output_cost": 2.2509,
-          "cached_input_cost": 0.0378
+          "input_cost": 0.834,
+          "output_cost": 2.501,
+          "cached_input_cost": 0.041999999999999996
         },
         {
           "id": "thedrummer/cydonia-24b-v4.1",
@@ -7559,9 +7613,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.43,
-          "output_cost": 1.75,
-          "cached_input_cost": 0.08
+          "input_cost": 0.5,
+          "output_cost": 2,
+          "cached_input_cost": 0.09999999999999999
         },
         {
           "id": "z-ai/glm-4.6v",
@@ -7657,9 +7711,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.03,
-          "output_cost": 10,
-          "cached_input_cost": 0.03
+          "input_cost": 0.06,
+          "output_cost": 7,
+          "cached_input_cost": 0.059
         },
         {
           "id": "z-ai/glm-5.2:batch",
@@ -7694,9 +7748,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.075,
-          "output_cost": 4.199999999999999,
-          "cached_input_cost": 0.048
+          "input_cost": 0.039,
+          "output_cost": 4.8,
+          "cached_input_cost": 0.038000000000000006
         },
         {
           "id": "z-ai/glm-5.3-flash",
@@ -7857,9 +7911,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.0283,
-          "output_cost": 1,
-          "cached_input_cost": 0.01
+          "input_cost": 0.0001,
+          "output_cost": 0.6,
+          "cached_input_cost": 0.005
         },
         {
           "id": "~deepseek/deepseek-pro-latest",
@@ -7871,9 +7925,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.1271,
-          "output_cost": 8,
-          "cached_input_cost": 0.0953
+          "input_cost": 0.21911999999999998,
+          "output_cost": 0.65736,
+          "cached_input_cost": 0.006972
         },
         {
           "id": "~deepseek/deepseek-v4-flash-latest",
@@ -7885,9 +7939,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.00368,
-          "output_cost": 0.554651,
-          "cached_input_cost": 0.00368
+          "input_cost": 0.016800000000000002,
+          "output_cost": 1.28,
+          "cached_input_cost": 0.016800000000000002
         },
         {
           "id": "~google/gemini-flash-latest",
@@ -7930,9 +7984,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.61,
-          "output_cost": 13,
-          "cached_input_cost": 0.44999999999999996
+          "input_cost": 0.31,
+          "output_cost": 14.89,
+          "cached_input_cost": 0.3
         },
         {
           "id": "~openai/gpt-astra-latest",
@@ -8050,9 +8104,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.032,
-          "output_cost": 4.835323,
-          "cached_input_cost": 0.02
+          "input_cost": 0.04,
+          "output_cost": 0.5,
+          "cached_input_cost": 0.012499999999999999
         },
         {
           "id": "~z-ai/glm-latest",
@@ -8064,9 +8118,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.06,
-          "output_cost": 12,
-          "cached_input_cost": 0.055799999999999995
+          "input_cost": 0.039,
+          "output_cost": 4.8,
+          "cached_input_cost": 0.038000000000000006
         }
       ]
     },
@@ -8166,7 +8220,8 @@
             "structured_output"
           ],
           "input_cost": 4,
-          "output_cost": 20
+          "output_cost": 20,
+          "cached_input_cost": 0.2
         },
         {
           "id": "anthropic/claude-sonnet-4-6",
@@ -8878,7 +8933,7 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.019,
+          "input_cost": 0.029,
           "output_cost": 0.030000000000000002
         },
         {
@@ -9194,7 +9249,7 @@
         },
         {
           "id": "Qwen/Qwen3-Max",
-          "name": "Qwen/Qwen3-Max",
+          "name": "Qwen3 Max",
           "description": "The latest flagship model in the Qwen family. State-of-the-art results across a comprehensive suite of benchmarks — including knowledge, reasoning, coding, instruction following, human preference alignment, agent tasks, and multilingual understanding.",
           "context_length": 256000,
           "tags": [
@@ -9202,12 +9257,12 @@
             "structured_output"
           ],
           "input_cost": 1.2,
-          "output_cost": 5.999999999999999,
+          "output_cost": 6,
           "cached_input_cost": 0.24
         },
         {
           "id": "Qwen/Qwen3-Max-Thinking",
-          "name": "Qwen/Qwen3-Max-Thinking",
+          "name": "Qwen3 Max Thinking",
           "description": "The latest flagship reasoning model in the Qwen3 family. Further enhanced by multiple innovations like adaptive tool-use and advanced test-time scaling techniques",
           "context_length": 256000,
           "tags": [
@@ -9215,7 +9270,7 @@
             "structured_output"
           ],
           "input_cost": 1.2,
-          "output_cost": 5.999999999999999,
+          "output_cost": 6,
           "cached_input_cost": 0.24
         },
         {
@@ -9484,7 +9539,8 @@
             "structured_output"
           ],
           "input_cost": 0.834,
-          "output_cost": 2.501
+          "output_cost": 2.501,
+          "cached_input_cost": 0.042
         },
         {
           "id": "thinkingmachines/Inkling",
@@ -9557,7 +9613,8 @@
             "structured_output"
           ],
           "input_cost": 0.13999999999999999,
-          "output_cost": 0.27999999999999997
+          "output_cost": 0.27999999999999997,
+          "cached_input_cost": 0.003
         },
         {
           "id": "XiaomiMiMo/MiMo-V2.6-Pro",
@@ -9571,7 +9628,8 @@
             "structured_output"
           ],
           "input_cost": 0.43,
-          "output_cost": 0.87
+          "output_cost": 0.87,
+          "cached_input_cost": 0.004
         },
         {
           "id": "zai-org/GLM-4.6",

@@ -17,7 +17,7 @@ import {
 } from '../services/agentEscalation';
 import { txnPhaseLabel } from '../services/cloudTxnEscalate';
 import { AUTO_HOST, getRememberedHost, hostDisplayName, type EscalationHost } from '../services/escalationHost';
-import { isRunnerSelectable, listRunners } from '../services/runners';
+import { isBareMetal, isRunnerSelectable, listRunners } from '../services/runners';
 import { RunHostPicker } from './RunHostPicker';
 import './ThemedDialog.css';
 import './AgentEscalationBridge.css';
@@ -59,6 +59,21 @@ async function runnerAvailable(host: EscalationHost): Promise<boolean> {
   return Boolean(runner && isRunnerSelectable(runner));
 }
 
+/**
+ * A bare-metal runner runs commands as the user with no sandbox, so each run
+ * there is confirmed even when the user chose "always". A runner that can't
+ * be looked up is treated the same way.
+ */
+async function runnerRequiresConsent(host: EscalationHost): Promise<boolean> {
+  if (host.kind !== 'runner') return false;
+  try {
+    const runner = (await listRunners()).find((r) => r.runner_id === host.runnerId);
+    return !runner || isBareMetal(runner);
+  } catch {
+    return true;
+  }
+}
+
 export function AgentEscalationBridge({ repoURL }: AgentEscalationBridgeProps) {
   const { localTerminal } = useHostCapabilities();
   const [pending, setPending] = useState<PendingConsent[]>([]);
@@ -67,17 +82,31 @@ export function AgentEscalationBridge({ repoURL }: AgentEscalationBridgeProps) {
 
   useEffect(() => {
     if (localTerminal) return undefined;
-    return installEscalationBridge({
+    // Prompts still open when the bridge goes away are answered "deny", so
+    // the agent gets an answer instead of waiting out its timeout.
+    const open = new Set<(answer: ConsentAnswer) => void>();
+    const uninstall = installEscalationBridge({
       repoURL,
       requestConsent: (command, context) =>
         new Promise<ConsentAnswer>((resolve) => {
-          setPending((q) => [...q, { command, context, resolve }]);
+          const settle = (answer: ConsentAnswer) => {
+            open.delete(settle);
+            resolve(answer);
+          };
+          open.add(settle);
+          setPending((q) => [...q, { command, context, resolve: settle }]);
         }),
       alwaysHost: () => getRememberedHost(repoURL) ?? AUTO_HOST,
       isHostAvailable: runnerAvailable,
+      requiresConsent: runnerRequiresConsent,
       onPhase: (command, phase, host) =>
         setProgress(phase === 'done' || phase === 'error' ? null : { command, phase, host }),
     });
+    return () => {
+      uninstall();
+      for (const settle of [...open]) settle({ decision: 'deny' });
+      setPending([]);
+    };
   }, [repoURL, localTerminal]);
 
   // Safety net: a run advances opening → pushing → running → pulling → done (or

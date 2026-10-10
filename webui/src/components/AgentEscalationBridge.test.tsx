@@ -256,4 +256,28 @@ describe('AgentEscalationBridge', () => {
       }
     });
   });
+
+  it('answers an open prompt "deny" when the bridge unmounts', async () => {
+    stubRunners(RUNNERS);
+    const { unmount } = renderBridge({ repoURL: REPO });
+    const { pending } = await ask('make test');
+    unmount();
+    const res = await pending;
+    expect(res.ran).toBe(false);
+    expect(runTxnCommand).not.toHaveBeenCalled();
+  });
+
+  it('"always" still asks before running on a bare-metal runner', async () => {
+    stubRunners(RUNNERS);
+    window.localStorage.setItem('sprout.agentEscalationPolicy', 'always');
+    window.localStorage.setItem(
+      escalationHostKey(REPO),
+      JSON.stringify({ kind: 'runner', runnerId: 'r-rig', name: 'rig' }),
+    );
+    renderBridge({ repoURL: REPO });
+    const { pending } = await ask('make test');
+    expect(runTxnCommand).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: "Don't run" }));
+    expect((await pending).ran).toBe(false);
+  });
 });

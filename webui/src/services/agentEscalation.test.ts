@@ -82,6 +82,31 @@ describe('installEscalationBridge', () => {
     uninstall();
     expect(g.__sproutEscalate).toBeUndefined();
   });
+
+  it('restores the bridge it replaced when a newer one is removed', () => {
+    const g = globalThis as { __sproutEscalate?: unknown };
+    const uninstallA = installEscalationBridge({ repoURL: 'a', requestConsent: async () => 'deny' });
+    const a = g.__sproutEscalate;
+    const uninstallB = installEscalationBridge({ repoURL: 'b', requestConsent: async () => 'deny' });
+    expect(g.__sproutEscalate).not.toBe(a);
+    uninstallB();
+    expect(g.__sproutEscalate).toBe(a);
+    uninstallB();
+    expect(g.__sproutEscalate).toBe(a);
+    uninstallA();
+    expect(g.__sproutEscalate).toBeUndefined();
+  });
+
+  it('removing an older bridge leaves the newer one live', () => {
+    const g = globalThis as { __sproutEscalate?: unknown };
+    const uninstallA = installEscalationBridge({ repoURL: 'a', requestConsent: async () => 'deny' });
+    const uninstallB = installEscalationBridge({ repoURL: 'b', requestConsent: async () => 'deny' });
+    const b = g.__sproutEscalate;
+    uninstallA();
+    expect(g.__sproutEscalate).toBe(b);
+    uninstallB();
+    expect(g.__sproutEscalate).toBeUndefined();
+  });
 });
 
 describe('escalateCommand host choice', () => {
@@ -114,6 +139,39 @@ describe('escalateCommand host choice', () => {
     });
     expect(requestConsent).not.toHaveBeenCalled();
     expect(run).toHaveBeenCalledWith('repo', 'make', expect.any(Function), MAC);
+  });
+
+  it('"always" still asks before running on a host that needs consent (bare metal)', async () => {
+    setEscalationPolicy('always');
+    rememberHost('repo', MAC);
+    const run = vi.fn().mockResolvedValue(outcome());
+    const requestConsent = vi.fn().mockResolvedValue({ decision: 'once', host: MAC });
+    const res = await escalateCommand('make', {
+      repoURL: 'repo',
+      requestConsent,
+      alwaysHost: () => getRememberedHost('repo') ?? { kind: 'auto' },
+      isHostAvailable: async () => true,
+      requiresConsent: async (host) => host.kind === 'runner',
+      run,
+    });
+    expect(requestConsent).toHaveBeenCalledTimes(1);
+    expect(res.ran).toBe(true);
+    expect(run).toHaveBeenCalledWith('repo', 'make', expect.any(Function), MAC);
+  });
+
+  it('"always" on a host that needs consent does not run when the user declines', async () => {
+    setEscalationPolicy('always');
+    rememberHost('repo', MAC);
+    const run = vi.fn();
+    const res = await escalateCommand('make', {
+      repoURL: 'repo',
+      requestConsent: async () => 'deny',
+      alwaysHost: () => getRememberedHost('repo') ?? { kind: 'auto' },
+      requiresConsent: async () => true,
+      run,
+    });
+    expect(res.ran).toBe(false);
+    expect(run).not.toHaveBeenCalled();
   });
 
   it('asks again with the reason when the runner is unavailable, then runs where the user picks', async () => {

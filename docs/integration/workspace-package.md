@@ -177,22 +177,43 @@ resulting deltas come back (`/workspace/txn`, see the host contract). `./views`
 exports the pieces a composing host mounts — the same two the Sprout app root
 mounts:
 
+These read the host through `HostProvider`, so they must render **inside** the
+workspace's provider. With `SproutWorkspace` in its default `providers="own"`
+mode, pass them as its `children` (rendered inside the provider it creates);
+mounted beside `SproutWorkspace` they throw "useHost must be used within a
+HostProvider". In `providers="ambient"` mode, mount them anywhere under your
+own `HostProvider`.
+
 ```tsx
 import {
   AgentEscalationBridge,
   EscalationListener,
+  SproutWorkspace,
   useEscalationTriggers,
 } from "@sprout-foundry/workspace/views";
 
-// Once, at the app root — the detector for the trigger events, and the
-// "Browser limitation reached" affordance for the user's own actions:
-useEscalationTriggers({ repoURL });
-<EscalationListener />;
+// The detector for the trigger events is a hook, so it lives in a small
+// component of the host's own.
+function EscalationTriggers({ repoURL }: { repoURL: string }) {
+  useEscalationTriggers({ repoURL });
+  return null;
+}
 
-// Once per page — installs globalThis.__sproutEscalate, the hook the WASM
-// agent calls on exit 127, and asks the consent question:
-<AgentEscalationBridge repoURL={repoURL} />;
+<SproutWorkspace host={host} project={{ repoUrl: repoURL }} /* … */>
+  {/* The detector, and the "Browser limitation reached" affordance for
+      the user's own actions (git push, VFS quota, timeouts): */}
+  <EscalationTriggers repoURL={repoURL} />
+  <EscalationListener />
+  {/* Installs globalThis.__sproutEscalate, the hook the WASM agent calls
+      on exit 127, and asks the consent question: */}
+  <AgentEscalationBridge repoURL={repoURL} />
+</SproutWorkspace>;
 ```
+
+Mount each piece once per page. If a second `AgentEscalationBridge` mounts,
+the newest one handles escalations, and unmounting it hands the hook back to
+the one it replaced. A bridge that unmounts while a consent question is open
+answers it "deny", so the agent is told the command did not run.
 
 `AgentEscalationBridge` takes the repository the workspace was imported from —
 the same value `SproutWorkspace`'s `project.repoUrl` carries, so a host threads
@@ -203,11 +224,19 @@ own consent UI calls `installEscalationBridge` directly with a
 types are exported alongside), and reads or sets the user's policy through
 `getEscalationPolicy` / `setEscalationPolicy`.
 
+**Consent.** The policy is per browser: `ask` (the default) asks before every
+command; `always` (the prompt's "Always allow") runs without asking on the host
+remembered for the repository; `never` keeps every command in the browser. Even
+under `always`, the bridge asks before every run on a bare-metal runner, which
+runs commands as the user with no sandbox; a host driving
+`installEscalationBridge` itself gets the same behavior by passing
+`requiresConsent`.
+
 The seam is WASM-side only — no daemon and no local terminal involved. The
 transactional runs go through relative paths, so they ride the host's
 transport: a host that serves the cloud transactional surface gets working
-escalation; without a backend the triggers still fire and the consent answer
-"deny" (the default-safe behavior) keeps every command in the browser.
+escalation. Without that backend the triggers still fire and the user is still
+asked; an approved run fails and the agent is told it did not run.
 
 ## One workspace per page
 

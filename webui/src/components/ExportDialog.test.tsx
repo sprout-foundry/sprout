@@ -1,7 +1,9 @@
 /**
  * Tests for ExportDialog.tsx — standalone dialog with format radios,
- * checkboxes, download/cancel buttons, ESC/overlay close, and
- * HEAD-then-anchor download flow.
+ * checkboxes, download/cancel buttons, ESC/overlay close, and the download
+ * flow. The fetch-and-save mechanics live in services/exportDownload (tested
+ * there); here the dialog's URL building and error handling are exercised
+ * against a stubbed downloadExport.
  */
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -11,6 +13,11 @@ import ExportDialog from './ExportDialog';
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
+
+const downloadMock = vi.hoisted(() => vi.fn());
+vi.mock('../services/exportDownload', () => ({
+  downloadExport: (url: string) => downloadMock(url),
+}));
 
 vi.mock('lucide-react', async (importOriginal) => {
   const actual = await importOriginal();
@@ -84,40 +91,27 @@ describe('ExportDialog', () => {
     expect(screen.getByTestId('export-include-tool-calls')).not.toBeChecked();
   });
 
-  /* ---- 6. Clicking Download triggers a HEAD fetch with correct URL ---- */
-  it('clicking Download triggers a HEAD fetch with the right URL and query params', async () => {
-    const mockFetch = vi.fn().mockResolvedValue({ ok: true, status: 200 });
-    vi.stubGlobal('fetch', mockFetch);
-
-    // Spy on appendChild to verify the download anchor is appended
-    const appendSpy = vi.spyOn(document.body, 'appendChild').mockImplementation(function (node) {
-      HTMLBodyElement.prototype.appendChild.call(this, node);
-      return node;
-    });
+  /* ---- 6. Clicking Download requests the export with the right URL ---- */
+  it('clicking Download requests the export with the right URL and query params', async () => {
+    downloadMock.mockResolvedValue({ ok: true, filename: 'x.md' });
 
     render(createElement(ExportDialog, { isOpen: true, onClose, sessionId: 'abc' }));
 
     fireEvent.click(screen.getByTestId('export-download'));
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith(
+      expect(downloadMock).toHaveBeenCalledWith(
         expect.stringMatching(
           /\/api\/sessions\/abc\/export\?format=markdown&include_tool_calls=false&include_cost=true$/,
         ),
-        { method: 'HEAD' },
       );
     });
-
-    // Verify an <a> element was appended to the body (download flow)
-    const anchorAppends = appendSpy.mock.calls.filter((c) => c[0] instanceof HTMLAnchorElement);
-    expect(anchorAppends.length).toBeGreaterThan(0);
-
-    appendSpy.mockRestore();
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
 
-  /* ---- 7. HEAD 404 shows error ---- */
-  it('shows error when HEAD returns 404', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 404 }));
+  /* ---- 7. download 404 shows error ---- */
+  it('shows error when the export returns 404', async () => {
+    downloadMock.mockResolvedValue({ ok: false, status: 404 });
 
     render(createElement(ExportDialog, { isOpen: true, onClose, sessionId: 'abc' }));
 
@@ -129,9 +123,9 @@ describe('ExportDialog', () => {
     });
   });
 
-  /* ---- 8. HEAD network error shows error ---- */
-  it('shows error when HEAD fetch rejects', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')));
+  /* ---- 8. download network error shows error ---- */
+  it('shows error when the export request rejects', async () => {
+    downloadMock.mockRejectedValue(new Error('Network error'));
 
     render(createElement(ExportDialog, { isOpen: true, onClose, sessionId: 'abc' }));
 
@@ -180,8 +174,7 @@ describe('ExportDialog', () => {
 
   /* ---- 13. Download with different format and options ---- */
   it('sends correct params when format and checkboxes change', async () => {
-    const mockFetch = vi.fn().mockResolvedValue({ ok: true, status: 200 });
-    vi.stubGlobal('fetch', mockFetch);
+    downloadMock.mockResolvedValue({ ok: true, filename: 'x' });
 
     render(createElement(ExportDialog, { isOpen: true, onClose, sessionId: 'my-session' }));
 
@@ -196,19 +189,18 @@ describe('ExportDialog', () => {
     fireEvent.click(screen.getByTestId('export-download'));
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith(
+      expect(downloadMock).toHaveBeenCalledWith(
         expect.stringMatching(
           /\/api\/sessions\/my-session\/export\?format=html&include_tool_calls=true&include_cost=false&no_secret_redaction=true$/,
         ),
-        { method: 'HEAD' },
       );
     });
   });
 
   /* ---- 14. Download button shows "Downloading..." while in progress ---- */
-  it('shows downloading state while fetch is pending', async () => {
+  it('shows downloading state while the export is pending', async () => {
     // Never-resolving promise
-    vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise(() => {})));
+    downloadMock.mockReturnValue(new Promise(() => {}));
 
     render(createElement(ExportDialog, { isOpen: true, onClose, sessionId: 'abc' }));
 
@@ -221,7 +213,7 @@ describe('ExportDialog', () => {
 
   /* ---- 15. ESC does not close while downloading ---- */
   it('Escape does not close while downloading', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise(() => {})));
+    downloadMock.mockReturnValue(new Promise(() => {}));
 
     render(createElement(ExportDialog, { isOpen: true, onClose, sessionId: 'abc' }));
 
@@ -263,17 +255,16 @@ describe('ExportDialog', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
-  /* ---- 17. Session ID with special characters is URL-encoded in HEAD request ---- */
-  it('URL-encodes special characters in session ID for HEAD request', async () => {
-    const mockFetch = vi.fn().mockResolvedValue({ ok: true, status: 200 });
-    vi.stubGlobal('fetch', mockFetch);
+  /* ---- 17. Session ID with special characters is URL-encoded in the export request ---- */
+  it('URL-encodes special characters in session ID for the export request', async () => {
+    downloadMock.mockResolvedValue({ ok: true, filename: 'x' });
 
     render(createElement(ExportDialog, { isOpen: true, onClose, sessionId: 'sess/abc?def&xyz' }));
 
     fireEvent.click(screen.getByTestId('export-download'));
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('sess%2Fabc%3Fdef%26xyz'), { method: 'HEAD' });
+      expect(downloadMock).toHaveBeenCalledWith(expect.stringContaining('sess%2Fabc%3Fdef%26xyz'));
     });
   });
 });

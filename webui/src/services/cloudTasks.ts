@@ -9,14 +9,17 @@
  *   POST /api/tasks       → 201 `{ task_id, status }` + `X-Remaining-Task-Credits`
  *   GET  /api/tasks/{id}  → 200 `{ task_id, status, ... }`
  *
- * All calls use RELATIVE paths so the CloudAdapter intercepts them in cloud
- * mode and proxies to the Foundry backend with session credentials (see
- * services/cloudAdapter.ts). In local mode they resolve against the local
+ * All calls use RELATIVE paths through clientFetch, so the CloudAdapter
+ * proxies them to the Foundry backend with session credentials in cloud mode
+ * (see services/cloudAdapter.ts), an embedding host's transport routes them
+ * to its own backend, and in local mode they resolve against the local
  * server unchanged.
  *
  * This module is side-effect free and framework agnostic (no React imports)
  * so it can be unit tested and reused outside components.
  */
+
+import { clientFetch } from './clientSession';
 
 /** Response header carrying the user's remaining task credits after a submit. */
 export const REMAINING_TASK_CREDITS_HEADER = 'X-Remaining-Task-Credits';
@@ -101,7 +104,7 @@ function requireTaskId(task: CloudTask, action: string): CloudTask {
  * fallback that names the HTTP status (e.g. credit exhaustion → 402).
  */
 export async function submitCloudTask(input: SubmitCloudTaskInput): Promise<SubmitCloudTaskResult> {
-  const res = await fetch('/api/tasks', {
+  const res = await clientFetch('/api/tasks', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
@@ -125,7 +128,7 @@ export async function getCloudTask(taskId: string): Promise<CloudTask> {
     throw new TypeError('taskId is required');
   }
 
-  const res = await fetch(`/api/tasks/${encodeURIComponent(taskId)}`, {
+  const res = await clientFetch(`/api/tasks/${encodeURIComponent(taskId)}`, {
     method: 'GET',
     credentials: 'include',
   });

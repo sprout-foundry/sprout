@@ -24,6 +24,13 @@ import {
   type TxnManifest,
 } from './cloudTxn';
 
+// clientFetch's transport routing (adapter, host apiBaseURL, proxy base) is
+// covered in hostTransportRouting.test.ts; here it passes straight through to
+// the stubbed global fetch so the assertions see this module's own request.
+vi.mock('./clientSession', () => ({
+  clientFetch: (input: RequestInfo | URL, init?: RequestInit) => fetch(input, init),
+}));
+
 /** JSON Response helper (fresh body per call — Response bodies are one-shot). */
 function jsonResponse(body: unknown, init?: { status?: number; headers?: Record<string, string> }) {
   return new Response(JSON.stringify(body), {

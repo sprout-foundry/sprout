@@ -2,6 +2,7 @@ import { LiveLog } from '@sprout/ui';
 import { Square } from 'lucide-react';
 import { useState } from 'react';
 import { cancelSubagent } from '../../services/api/subagentApi';
+import { clientFetch } from '../../services/clientSession';
 import { stripAnsiCodes } from '../../utils/ansi';
 import { formatToolDetail } from '../../utils/resultSummary';
 import { FilePathPre } from '../contextPanel/FilePathPre';
@@ -25,7 +26,7 @@ export function SubagentRunBody({ run }: { run: ContextSubagentRun }) {
     if (cancelling || runnerTaskIds.length === 0) return;
     setCancelling(true);
     try {
-      await Promise.allSettled(runnerTaskIds.map((id) => cancelSubagent(window.fetch.bind(window), id)));
+      await Promise.allSettled(runnerTaskIds.map((id) => cancelSubagent(clientFetch, id)));
     } finally {
       setCancelling(false);
     }

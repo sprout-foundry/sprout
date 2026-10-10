@@ -1,9 +1,10 @@
 /**
  * runners.ts — the user's own runners (SP-159), as listed by the platform.
  *
- * GET /runners (session cookie, relative path so the CloudAdapter/same-origin
- * platform answers it) returns every runner attached to the account with the
- * status and self-reported mode/sandbox the escalation host picker shows.
+ * GET /runners (session cookie) returns every runner attached to the account
+ * with the status and self-reported mode/sandbox the escalation host picker
+ * shows. The relative path goes through clientFetch, so the installed adapter
+ * or the embedding host's transport decides which backend answers it.
  *
  * Listing is best-effort: escalation must keep working with the cloud host
  * alone, so a signed-out session, a deployment without runners, a network
@@ -11,6 +12,8 @@
  *
  * Side-effect free and framework agnostic (no React imports).
  */
+
+import { clientFetch } from './clientSession';
 
 export type RunnerStatus = 'online' | 'busy' | 'offline';
 export type RunnerMode = 'container' | 'native' | 'bare-metal' | '';
@@ -37,7 +40,7 @@ function isRunner(value: unknown): value is Runner {
 /** List the caller's runners; any failure yields []. */
 export async function listRunners(): Promise<Runner[]> {
   try {
-    const res = await fetch('/runners', { method: 'GET', credentials: 'include' });
+    const res = await clientFetch('/runners', { method: 'GET', credentials: 'include' });
     if (!res.ok) return [];
     const body = (await res.json()) as unknown;
     return Array.isArray(body) ? body.filter(isRunner) : [];

@@ -1,6 +1,7 @@
 import { Download, Cpu, CheckCircle, Loader2, XCircle, Square } from 'lucide-react';
 import { useEffect, useState, useCallback, type ReactElement } from 'react';
 import { ApiService } from '../../services/api';
+import { clientFetch } from '../../services/clientSession';
 import type { LocalLLMStatus, LocalLLMModel } from '../../services/api/types/common';
 
 function formatBytes(n: number): string {
@@ -42,7 +43,7 @@ export function LocalLLMSettingsTab(): ReactElement {
     setMessage('');
     try {
       const params = modelId ? `?model=${encodeURIComponent(modelId)}` : '';
-      const response = await fetch(`/api/local-llm/start${params}`, { method: 'POST' });
+      const response = await clientFetch(`/api/local-llm/start${params}`, { method: 'POST' });
       const result = await response.json();
       if (!response.ok) throw new Error(String(result.message || result.error || `HTTP ${response.status}`));
       setMessage(result.status === 'already_running' ? 'Server already running' : 'Server started');

@@ -1,5 +1,6 @@
 import { Download, X, AlertCircle, FileText, Code, FileType } from 'lucide-react';
 import React, { useState, useEffect, useRef } from 'react';
+import { downloadExport } from '../services/exportDownload';
 import './ExportDialog.css';
 
 export interface ExportDialogProps {
@@ -93,24 +94,13 @@ const ExportDialog: React.FC<ExportDialogProps> = ({ isOpen, onClose, sessionId,
     try {
       const url = buildExportUrl();
 
-      // Validate the endpoint exists with a HEAD request first
-      const headResponse = await fetch(url, { method: 'HEAD' });
-      if (!headResponse.ok) {
-        const statusText =
-          headResponse.status === 404 ? 'Session not found' : `Server error (HTTP ${headResponse.status})`;
+      const result = await downloadExport(url);
+      if (!result.ok) {
+        const statusText = result.status === 404 ? 'Session not found' : `Server error (HTTP ${result.status})`;
         setDownloadError(`Download failed: ${statusText}`);
         setIsDownloading(false);
         return;
       }
-
-      // Trigger the actual download via hidden <a> tag
-      // (Content-Disposition from the server sets the filename)
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = '';
-      document.body.appendChild(anchor);
-      anchor.click();
-      document.body.removeChild(anchor);
 
       onClose();
     } catch (err) {

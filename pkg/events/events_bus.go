@@ -86,6 +86,15 @@ func (eb *EventBus) Unsubscribe(name string) {
 	}
 }
 
+// SubscriberCount reports the number of active subscribers. Test/diagnostic
+// helper for asserting that a stream handler subscribes and, on disconnect,
+// unsubscribes (no leaked subscriber/worker).
+func (eb *EventBus) SubscriberCount() int {
+	eb.mutex.RLock()
+	defer eb.mutex.RUnlock()
+	return len(eb.subscribers)
+}
+
 // runDispatcher reads coalesced events from deliveryQueue and fans them
 // out to each subscriber's inbox. Stream_chunk events are coalesced across
 // the queue (not across per-subscriber inboxes), so a burst of 50 token

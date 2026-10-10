@@ -459,6 +459,7 @@ func TestUndocumentedAllowlistIsWebSocketStreamingInternalOnly(t *testing.T) {
 	// entry (including a migrated family's /api/ route) is a regression.
 	want := []string{
 		"/",
+		"/api/agent/events",
 		"/api/bootstrap",
 		"/api/lsp/ws",
 		"/asset-manifest.json",
@@ -512,11 +513,11 @@ func TestUndocumentedAllowlistIsWebSocketStreamingInternalOnly(t *testing.T) {
 		t.Errorf("undocumented.txt is missing expected entries: %v", missing)
 	}
 
-	// No /api/ route may appear in the allowlist except the two deliberate
+	// No /api/ route may appear in the allowlist except the deliberate
 	// non-JSON surfaces; this locks the "documented-only allowlist" end-state
 	// for every migrated family.
 	for _, g := range got {
-		if strings.HasPrefix(g, "/api/") && g != "/api/lsp/ws" && g != "/api/bootstrap" {
+		if strings.HasPrefix(g, "/api/") && g != "/api/lsp/ws" && g != "/api/bootstrap" && g != "/api/agent/events" {
 			t.Errorf("undocumented.txt lists a migrated /api/ route %q; it must be a Huma operation in openapi.yaml", g)
 		}
 	}

@@ -445,7 +445,14 @@ type Agent struct {
 	budgetExceededCallback atomic.Value // func(spent, limit float64)
 
 	// auditLogger records security decisions (blocks, approvals, loops) to a JSONL file for auditing.
-	auditLogger *tools.AuditLogger
+	// Stored atomically: it is read on the tool-execution path (GetAuditLogger) while
+	// Shutdown may write it from a background goroutine.
+	auditLogger atomic.Pointer[tools.AuditLogger]
+
+	// callAuditSink is the per-call audit sink this agent installed
+	// process-wide (model-call and tool-execution events). Stored atomically
+	// for the same reason as auditLogger; cleared on shutdown.
+	callAuditSink atomic.Pointer[auditSink]
 
 	// queryInProgress guards ProcessQuery against concurrent execution.
 	// When two frontends share the same Agent instance, only one query can run at a time.

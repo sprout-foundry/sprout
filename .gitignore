@@ -196,3 +196,7 @@ docs/embed.md
 webui/docs/WEBUI-AUDIT-2026-09-11.md
 
 design/.cache/
+
+# Local model helper binaries built into the repo root by the Makefile
+/llm_download
+/llm_server

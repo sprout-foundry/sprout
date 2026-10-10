@@ -271,18 +271,18 @@ audit log should actually exist. Facts only — provider, model, digests,
 tool calls — never prompt content in these records. Validation gate as in
 the header (Go changes → full gate).
 
-- [ ] **au.1** Instantiate the security audit log. `NewAuditLogger` /
+- [x] **au.1** Instantiate the security audit log. `NewAuditLogger` /
       `SetAuditLogger` are only called from tests, so every `LogJSON` site
       is a no-op and `sprout audit tail` reads a file nothing writes. Create
       the logger at agent start (path from config, default under the state
       dir, mode 0600), and test that a denied shell command lands in the
       file.
-- [ ] **au.2** Trace mode hygiene. `--trace-dataset-dir` writes full prompts
+- [x] **au.2** Trace mode hygiene. `--trace-dataset-dir` writes full prompts
       and raw responses unredacted with mode 0644 (`pkg/trace/jsonl.go`).
       Write owner-only (0600 files, 0700 dirs) and run the same redaction
       as the egress backstop (`secretdetect`) over what it writes, unless
       the user passes an explicit `--trace-unredacted`. Tests.
-- [ ] **au.3** Per-call audit events. For every model call the agent makes,
+- [x] **au.3** Per-call audit events. For every model call the agent makes,
       emit an event: time, chat/session id, provider, model, endpoint host,
       request and response SHA-256 and byte counts, tokens, outcome, and
       the trigger (user turn, tool-call follow-up, subagent). Tool calls get
@@ -293,7 +293,34 @@ the header (Go changes → full gate).
       event shape in `docs/integration/host-contract.md`. Tests: one event
       per call including failovers; no prompt text in any event.
 
-## Benchmark and CLI fixes (found in the first real benchmark run)
+## Runner relay — daemon proxy and agent events
+
+The platform's relay (`internal/runner/relay/mux.go`, kept identical in both
+repos) carries HTTP exchanges over one WebSocket between the platform and a
+runner behind NAT. It carries task dispatch, txn calls and preview traffic
+(SP-159 §159b) — HTTP-shaped traffic only. The hosted-chat daemon path needs
+two things over the relay that the current stream model cannot express: the
+daemon proxy's HTTP calls (already HTTP-shaped, so the platform can use
+`Mux.RoundTripper`) and the daemon's agent event stream, which is a
+WebSocket upgrade on `/ws`. A WS upgrade is bidirectional and long-lived, so
+it cannot ride the request/response stream the mux models. This is the
+sprout-side half of the platform's "Runner workspaces over the relay tunnel"
+item; the platform side (using the relay transport for the daemon proxy) can
+land once this does.
+
+- [x] **relay.ws** Stream the daemon's agent events over the relay. Either
+      (a) add a WebSocket-upgrade frame type to `pkg/runner/relay/mux.go` (a
+      stream that carries raw bidirectional frames rather than a
+      request/response body), keeping the file identical in both repos and
+      pinning the new frames in the platform's `docs/runners/PROTOCOL.md`; or
+      (b) serve an SSE / long-poll agent-event endpoint from the daemon
+      (`pkg/webui`) that the platform can consume over the relay's existing
+      HTTP transport. Option (b) is the smaller change and needs no protocol
+      version bump. Tests: an agent turn's events arrive over the relay end
+      to end; the tunnel survives a stream reset. Public repo: protocol-level
+      only, no user data, no platform internals.
+
+
 
 A one-task run (static-site/add-about-section, ai-worker/qwen3.8-27b)
 recorded "fail" with `Result: null`, `Err: null` and an empty failure

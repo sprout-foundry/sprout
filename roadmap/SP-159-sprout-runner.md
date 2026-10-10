@@ -70,6 +70,13 @@ sprout daemon on loopback — the daemon's `/api/txn/*` contract is unchanged.
 The runner is a thin process: registration, tunnel, workspace lifecycle, and
 the mode-specific launcher.
 
+The daemon's agent-event stream rides the same transport: the daemon serves
+`GET /api/agent/events` as Server-Sent Events (`text/event-stream`), and the
+host server's reverse proxy streams it through the relay's existing HTTP
+frames with no protocol change (no new frame type, no version bump). The
+WebSocket bridge at `/ws` stays for the browser's direct connection; the SSE
+endpoint is what the platform consumes through the tunnel.
+
 ### 159c. Execution modes
 
 Every workspace gets its own clone under the runner's data directory

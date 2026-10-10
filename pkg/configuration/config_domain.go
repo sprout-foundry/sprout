@@ -23,8 +23,11 @@ type ComputerUseConfig struct {
 	// MaxActionsPerMinute caps the action rate. Default: 60. Set to 0 to disable.
 	MaxActionsPerMinute int `json:"max_actions_per_minute,omitempty"`
 
-	// AuditLogDir is where per-session JSONL action logs are written.
-	// Default: ~/.config/sprout/computer_use_log when empty.
+	// AuditLogDir is the directory for computer_use per-session JSONL action
+	// logs (default: ~/.config/sprout/computer_use_log when empty), and also
+	// redirects the agent's security audit log (shell-audit.jsonl). When empty,
+	// the security audit log lives under the state dir, which is where
+	// `sprout audit tail` reads it.
 	AuditLogDir string `json:"audit_log_dir,omitempty"`
 
 	// WorkspaceAllowlist lists workspace roots where computer use is auto-approved.

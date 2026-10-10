@@ -264,7 +264,7 @@ func TestJsonlWriterConcurrentWrites(t *testing.T) {
 	// Create a temporary file
 	tmpFile := t.TempDir() + "/test.jsonl"
 
-	writer, err := newJSONLWriter(tmpFile)
+	writer, err := newJSONLWriter(tmpFile, false)
 	if err != nil {
 		t.Fatalf("Failed to create jsonl writer: %v", err)
 	}
@@ -340,7 +340,7 @@ func TestJsonlWriterConcurrentWriteAndClose(t *testing.T) {
 	// Create a temporary file
 	tmpFile := t.TempDir() + "/test.jsonl"
 
-	writer, err := newJSONLWriter(tmpFile)
+	writer, err := newJSONLWriter(tmpFile, false)
 	if err != nil {
 		t.Fatalf("Failed to create jsonl writer: %v", err)
 	}

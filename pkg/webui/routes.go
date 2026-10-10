@@ -78,6 +78,12 @@ func (ws *ReactWebServer) registerCoreRoutes(mux *http.ServeMux) {
 	})
 	mux.HandleFunc("/api/bootstrap", ws.handleAPIBootstrap)
 
+	// The agent-event stream is SSE (text/event-stream), not a JSON
+	// operation, so it stays a plain handler. It is served over plain HTTP
+	// so the runner relay's existing request/response transport carries it
+	// into the platform without a protocol change.
+	mux.HandleFunc("/api/agent/events", ws.handleAPIAgentEvents)
+
 	// Always-on goroutine dump endpoint. Unlike --debug-pprof (which requires
 	// a separate port and is opt-in), this is available on the main webui port
 	// so a stuck session can be diagnosed by curling

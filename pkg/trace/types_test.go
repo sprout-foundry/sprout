@@ -812,7 +812,7 @@ func TestNewJSONLWriter_BadDirectory(t *testing.T) {
 	}
 
 	// Attempt to create writer - should fail
-	w, err := newJSONLWriter(badPath)
+	w, err := newJSONLWriter(badPath, false)
 	if err == nil {
 		t.Fatal("expected error for non-existent directory, got nil")
 	}

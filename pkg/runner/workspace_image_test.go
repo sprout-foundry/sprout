@@ -60,7 +60,7 @@ func imgSourceRepo(t *testing.T) string {
 		{"add", "."},
 		{"-c", "user.name=t", "-c", "user.email=t@example.test", "commit", "-q", "-m", "init"},
 	} {
-		cmd := exec.Command("git", args...)
+		cmd := exec.Command("git", args...) //nolint:gosec // G204: git on the test's own fixture repo
 		cmd.Dir = src
 		cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "HOME="+t.TempDir())
 		if out, err := cmd.CombinedOutput(); err != nil {
@@ -84,7 +84,7 @@ func runEntrypoint(t *testing.T, root string, env map[string]string) imgRun {
 	imgMust(t, os.WriteFile(filepath.Join(bin, "sprout"), []byte(imgStubSprout), 0o755))
 	home := t.TempDir()
 	launched := filepath.Join(t.TempDir(), "launched")
-	cmd := exec.Command("sh", filepath.Join(dir, "entrypoint.sh"))
+	cmd := exec.Command("sh", filepath.Join(dir, "entrypoint.sh")) //nolint:gosec // G204: the repo's entrypoint script under test
 	cmd.Env = []string{
 		"PATH=" + bin + string(os.PathListSeparator) + dir + string(os.PathListSeparator) + os.Getenv("PATH"),
 		"HOME=" + home,
@@ -125,7 +125,7 @@ func snapshot(t *testing.T, root string) map[string]string {
 			files[rel+"/"] = ""
 			return nil
 		}
-		data, err := os.ReadFile(p)
+		data, err := os.ReadFile(p) //nolint:gosec // G122: walking the test's own temp dir
 		files[rel] = string(data)
 		return err
 	}))
@@ -225,7 +225,7 @@ func TestWorkspaceImageClonesBesideLostAndFound(t *testing.T) {
 		}
 	}
 	assertNoCloneLeftovers(t, root)
-	status := exec.Command("git", "-C", root, "status", "--porcelain")
+	status := exec.Command("git", "-C", root, "status", "--porcelain") //nolint:gosec // G204: git on the test's own temp checkout
 	status.Env = append(os.Environ(), "HOME="+r.home, "GIT_CONFIG_NOSYSTEM=1")
 	if out, err := status.CombinedOutput(); err != nil || strings.TrimSpace(string(out)) != "?? lost+found/" {
 		t.Errorf("checkout should be clean apart from lost+found: %q, %v", out, err)
@@ -287,7 +287,7 @@ func TestWorkspaceImageGitCredentialsAreHostScoped(t *testing.T) {
 	helper := filepath.Join(dir, "git-credential-sprout")
 	ask := func(input string, env ...string) string {
 		t.Helper()
-		cmd := exec.Command("sh", helper, "get")
+		cmd := exec.Command("sh", helper, "get") //nolint:gosec // G204: the repo's credential helper under test
 		cmd.Env = append([]string{"PATH=" + os.Getenv("PATH")}, env...)
 		cmd.Stdin = strings.NewReader(input)
 		out, err := cmd.CombinedOutput()

@@ -12,8 +12,10 @@ import type { WorkspaceShellProps } from '../workspaces/shell';
 import { wireHostAgentBackend } from './hostAgentBackend';
 import { useSproutWorkspaceChatTransport, useSproutWorkspaceViewProps } from './SproutWorkspaceChat';
 import { ViewsLayout } from './ViewsLayout';
-import type { ViewsArrangement, ViewKind } from './ViewsLayout';
+import type { ViewComponent, ViewsArrangement, ViewKind } from './ViewsLayout';
 import { WorkspaceChatProvider } from './WorkspaceChatContext';
+import { WorkspaceEditorProvider, useWorkspaceEditor } from './WorkspaceEditorContext';
+import { WorkspaceEditorView } from './WorkspaceEditorView';
 
 /**
  * SproutWorkspace — mount one project's workspace behind a single component.
@@ -129,12 +131,15 @@ export interface SproutWorkspaceProps {
   /**
    * Per-kind props for the arranged views, keyed by view kind. They are merged
    * over the props the composition assembles: in own mode the composition
-   * supplies a live `chat` (the chat unit's assembled view props), and a kind
-   * the host supplies here REPLACES the assembled props for that kind — a host
-   * composing its own chat surface passes its own `chat` props and the
-   * assembled ones are dropped. The `changes` view self-fetches and is left
-   * with no assembled props. In ambient mode the caller owns the stack and its
-   * chat, so these are passed to the layout as-is. Only meaningful with
+   * supplies a live `chat` (the chat unit's assembled view props), a working
+   * `fileTree` (the workspace file API, selection opening files in the
+   * editor unit), an `editor` rendered from the editor unit, and `changes`
+   * with `onFileClick` opening the editor. A kind the host supplies here
+   * REPLACES the assembled props for that kind — a host composing its own
+   * chat surface passes its own `chat` props and the assembled ones are
+   * dropped; a host-supplied `editor` renders the bare `Editor` primitive
+   * with the host's props. In ambient mode the caller owns the stack and its
+   * units, so these are passed to the layout as-is. Only meaningful with
    * `layout`.
    */
   viewProps?: Partial<Record<ViewKind, object>>;
@@ -341,7 +346,9 @@ export function SproutWorkspace({
         eventsProvider={chatTransport.eventsProvider}
         fetchFn={chatTransport.fetchFn}
       >
-        <ArrangedViews arrangement={layout} viewProps={viewProps} />
+        <WorkspaceEditorProvider>
+          <ArrangedViews arrangement={layout} viewProps={viewProps} />
+        </WorkspaceEditorProvider>
       </WorkspaceChatProvider>
     );
   } else if (layout) {
@@ -368,10 +375,18 @@ export function SproutWorkspace({
   );
 }
 
+/** The composition's assembled editor, rendered for the `editor` kind. */
+const ASSEMBLED_VIEW_COMPONENTS: Partial<Record<ViewKind, ViewComponent>> = { editor: WorkspaceEditorView };
+
 /**
- * The arranged views, rendered inside the chat unit so the chat's assembled
- * props are available. Split from `SproutWorkspace` because the props assembly
- * reads the chat state, which only exists below `WorkspaceChatProvider`.
+ * The arranged views, rendered inside the chat and editor units so their
+ * assembled props are available. Split from `SproutWorkspace` because the
+ * props assembly reads the units' state, which only exists below their
+ * providers.
+ *
+ * The `editor` kind renders the assembled editor view unless the host
+ * supplies `viewProps.editor`; then the host gets the bare `Editor` primitive
+ * with its own props, as before.
  */
 function ArrangedViews({
   arrangement,
@@ -381,7 +396,29 @@ function ArrangedViews({
   viewProps?: Partial<Record<ViewKind, object>>;
 }): JSX.Element {
   const props = useSproutWorkspaceViewProps(viewProps);
-  return <ViewsLayout arrangement={arrangement} props={props} className="sprout-workspace__layout" />;
+  useOpenInEditorRequests();
+  const components = viewProps?.editor ? undefined : ASSEMBLED_VIEW_COMPONENTS;
+  return (
+    <ViewsLayout arrangement={arrangement} props={props} components={components} className="sprout-workspace__layout" />
+  );
+}
+
+/**
+ * Open the files the rest of the workspace asks for — file links in the chat
+ * and tool output dispatch `sprout:open-in-editor` — in the editor unit. The
+ * standalone app handles the same event at its root (where it also switches
+ * the view), so only the composed workspace listens here.
+ */
+function useOpenInEditorRequests(): void {
+  const { openFile } = useWorkspaceEditor();
+  useEffect(() => {
+    const handle = (event: Event) => {
+      const detail = (event as CustomEvent<{ path?: string; lineNumber?: number }>).detail;
+      if (detail?.path) openFile(detail.path, { line: detail.lineNumber });
+    };
+    window.addEventListener('sprout:open-in-editor', handle);
+    return () => window.removeEventListener('sprout:open-in-editor', handle);
+  }, [openFile]);
 }
 
 /**

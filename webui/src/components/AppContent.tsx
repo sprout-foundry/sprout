@@ -35,7 +35,7 @@ import { fuzzyFilter } from '../utils/fuzzyMatch';
 import { useLog } from '../utils/log';
 import { extractSymbols } from '../utils/symbolUtils';
 import type { WorkspaceModeId, WorkspaceShellProps } from '../views';
-import { SproutWorkspace, useWorkspaceMode, useWorkspaceChatProps } from '../views';
+import { SproutWorkspace, useWorkspaceMode, useWorkspaceChatProps, useWorkspaceEditor } from '../views';
 import { useDesignSectionPersistence } from '../workspaces/useDesignSectionPersistence';
 import CommandPalette, { type PaletteMode } from './CommandPalette';
 import { visibleCommands } from './CommandPalette/constants';
@@ -178,6 +178,7 @@ const AppContent: React.FC<AppContentProps> = ({
     switchPane,
     switchToBuffer,
   } = useEditorManager();
+  const { openFile: openWorkspaceFile } = useWorkspaceEditor();
   const apiService = ApiService.getInstance();
   const sproutFetch = useSproutFetch();
   // SP-130: home-directory gate. `useWorkspace` fetches workspace metadata
@@ -439,7 +440,7 @@ const AppContent: React.FC<AppContentProps> = ({
     [onViewChange, openWorkspaceBuffer, buffersRef, activeChatId],
   );
 
-  const { handleFileClick } = useFileHandler({ onViewChange, openFile });
+  const { handleFileClick } = useFileHandler({ onViewChange, openFile: openWorkspaceFile });
 
   // Open a conversation from outside the tabs (the layered sidebar): focus its
   // chat tab — or open one bound to it — exactly as clicking the tab would,
@@ -728,35 +729,23 @@ const AppContent: React.FC<AppContentProps> = ({
   // the goto-line event after the editor has mounted the buffer.
   const handlePaletteOpenFileAtLine = useCallback(
     (filePath: string, line: number) => {
-      const fileName = filePath.split('/').filter(Boolean).pop() || filePath;
-      const extensionIndex = fileName.lastIndexOf('.');
-      const fileExt = extensionIndex > 0 ? fileName.slice(extensionIndex) : '';
-      openFile({ path: filePath, name: fileName, isDir: false, size: 0, modified: 0, ext: fileExt });
-      // Defer the goto-line dispatch one tick so the editor has time to
-      // mount the new buffer's CodeMirror instance; otherwise the event
-      // fires against a buffer that doesn't exist yet and is dropped.
-      setTimeout(() => {
-        document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line } }));
-      }, 100);
+      openWorkspaceFile(filePath, { line });
     },
-    [openFile],
+    [openWorkspaceFile],
   );
   // Open a file in a new editor pane (split). Bound to ⌘/Ctrl+↵ in the
   // palette. Splits the currently-active pane to the right, then opens the
   // file in the newly-focused pane.
   const handlePaletteOpenFileInNewPane = useCallback(
     (filePath: string) => {
-      const fileName = filePath.split('/').filter(Boolean).pop() || filePath;
-      const extensionIndex = fileName.lastIndexOf('.');
-      const fileExt = extensionIndex > 0 ? fileName.slice(extensionIndex) : '';
       const sourcePaneId = activePaneId;
       const newPaneId = sourcePaneId ? splitPane(sourcePaneId, 'vertical') : null;
       if (newPaneId) {
         switchPane(newPaneId);
       }
-      openFile({ path: filePath, name: fileName, isDir: false, size: 0, modified: 0, ext: fileExt });
+      openWorkspaceFile(filePath);
     },
-    [activePaneId, splitPane, switchPane, openFile],
+    [activePaneId, splitPane, switchPane, openWorkspaceFile],
   );
   // Returning `false` from onExecuteCommand keeps the palette open — used by
   // commands that change the palette's own mode (quick_open, goto_symbol).
@@ -1206,10 +1195,7 @@ const AppContent: React.FC<AppContentProps> = ({
         onOpenFile={(filePath) => {
           // Search stays usable above Home; what it opens shows in the editor.
           closeHome();
-          const fileName = filePath.split('/').filter(Boolean).pop() || filePath;
-          const extensionIndex = fileName.lastIndexOf('.');
-          const fileExt = extensionIndex > 0 ? fileName.slice(extensionIndex) : '';
-          openFile({ path: filePath, name: fileName, isDir: false, size: 0, modified: 0, ext: fileExt });
+          openWorkspaceFile(filePath);
           // Recents are populated by the buffer-watcher effect — no explicit
           // recordRecentFile call needed here.
         }}

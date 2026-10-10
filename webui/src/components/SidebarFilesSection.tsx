@@ -4,15 +4,11 @@ import { forwardRef, useImperativeHandle, useRef, useEffect, useState, useCallba
 import { isLayeredLayout } from '../config/layout';
 import { useHost, useHostCapabilities } from '../host';
 import { getShellIdentity, onShellIdentityChange } from '../config/shell';
-import { useOptionalBufferManager } from '../contexts/BufferManagerContext';
 import { useFileTreeAutoRefresh } from '../hooks/useFileTreeAutoRefresh';
 import { setActiveRepoURL } from '../services/activeRepo';
 import { ApiService } from '../services/api';
-import { clientFetch } from '../services/clientSession';
 import { getStoredToken } from '../services/githubService';
 import { searchForRepo } from '../services/homeView';
-import { detectSproutStudio, mapWorkspaceListing, nativeFsGate, workspaceListDepth } from '../services/nativeFs';
-import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
 import { gitCorsProxy } from '../services/gitCorsProxy';
 import { cloneIntoWorkspace } from '../services/workspaceClone';
 import { useWorkspaceCwd, setWorkspaceCwd } from '../services/workspaceCwd';
@@ -20,6 +16,7 @@ import { getWorkspaceFs, listWorkspaceRepos } from '../services/workspaceFs/back
 import type { FsEntry } from '../services/workspaceFs/types';
 import { parseRepoRef, repoDir } from '../services/workspaceFs/workspaceGit';
 import { repoSlug } from '../host/repoName';
+import { useWorkspaceFileTree } from '../views/useWorkspaceFileTree';
 import GitHubRepoPicker from './GitHubRepoPicker';
 import { showThemedAlert, showThemedPrompt } from './ThemedDialog';
 import WorkspaceCwdBar from './WorkspaceCwdBar';
@@ -73,7 +70,6 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
     }));
 
     const api = ApiService.getInstance();
-    const bufferManager = useOptionalBufferManager();
     const host = useHost();
     const { localTerminal } = useHostCapabilities();
 
@@ -83,6 +79,8 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
     // before (byte-identical default-build behavior).
     const cwd = useWorkspaceCwd();
     const treeRoot = cwd === '' ? '.' : cwd;
+    const handleFileSelect = useCallback((file: FileInfo) => onFileClick?.(file.path), [onFileClick]);
+    const treeProps = useWorkspaceFileTree({ rootPath: treeRoot, workspaceRoot, onFileSelect: handleFileSelect });
 
     // Repos available for the cwd selector (repos/<owner>/<name>). Fetched
     // through the same workspaceFs seam the clone flow uses; failures degrade
@@ -364,89 +362,12 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
         <FileTree
           ref={fileTreeRef}
           key={treeRoot}
-          rootPath={treeRoot}
-          workspaceRoot={workspaceRoot}
-          onFileSelect={(file) => onFileClick?.(file.path)}
+          {...treeProps}
           onItemCreated={() => {
             fileTreeRef.current?.refresh();
           }}
           onDeleteItem={(_path) => {
             fileTreeRef.current?.refresh();
-          }}
-          onFetchFiles={async (path: string) => {
-            // Track R (R-2w): deferral to the shell's native files channel.
-            // The default build compiles NATIVE_FS_ENABLED to `false`, so this
-            // whole branch is a dead branch there (byte-identical behavior).
-            if (NATIVE_FS_ENABLED) {
-              const gate = await nativeFsGate();
-              if (gate.active) {
-                const bridge = detectSproutStudio();
-                if (bridge) {
-                  const result = await bridge.listWorkspace(workspaceListDepth(path));
-                  return mapWorkspaceListing(result, path);
-                }
-              }
-              // Gate active but bridge vanished (or failed): degrade to the
-              // client path below rather than crashing.
-            }
-            const response = await clientFetch(`/api/files?path=${encodeURIComponent(path)}`);
-            if (!response.ok) throw new Error(`Failed to fetch files: ${response.statusText}`);
-            const data = await response.json();
-            if (data.message !== 'success') throw new Error(data.message);
-            return (data.files || [])
-              .map(
-                (file: {
-                  name: string;
-                  path: string;
-                  size?: number;
-                  modified?: number;
-                  mod_time?: number;
-                  isDir?: boolean;
-                  is_dir?: boolean;
-                  git_status?: string;
-                }) => ({
-                  name: file.name,
-                  path: file.path,
-                  size: file.size || 0,
-                  modified: file.modified ?? file.mod_time ?? 0,
-                  isDir: Boolean(file.isDir ?? file.is_dir),
-                  ext:
-                    (file.isDir ?? file.is_dir)
-                      ? ''
-                      : file.name.includes('.')
-                        ? `.${file.name.split('.').pop() || ''}`
-                        : '',
-                  gitStatus: file.git_status || undefined,
-                }),
-              )
-              .sort(
-                (
-                  a: { isDir: boolean; gitStatus?: string; name: string },
-                  b: { isDir: boolean; gitStatus?: string; name: string },
-                ) => {
-                  if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
-                  if ((a.gitStatus === 'ignored') !== (b.gitStatus === 'ignored')) {
-                    return a.gitStatus === 'ignored' ? 1 : -1;
-                  }
-                  return a.name.localeCompare(b.name);
-                },
-              );
-          }}
-          onCreateFile={async (parentPath, name) => {
-            const prefix = parentPath === '.' ? '' : `${parentPath}/`;
-            await api.createItem(`${prefix}${name}`, false);
-          }}
-          onCreateFolder={async (parentPath, name) => {
-            const prefix = parentPath === '.' ? '' : `${parentPath}/`;
-            await api.createItem(`${prefix}${name}`, true);
-          }}
-          onDeletePath={async (path, _isDir) => {
-            await api.deleteItem(path);
-            bufferManager?.closeBuffersForDeletedPath(path);
-          }}
-          onRenamePath={async (oldPath, newPath) => {
-            await api.renameItem(oldPath, newPath);
-            bufferManager?.retargetBufferPaths(oldPath, newPath);
           }}
           onOpenInFileBrowser={async (path) => {
             await api.openInFileBrowser(path);

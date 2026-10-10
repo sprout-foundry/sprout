@@ -134,13 +134,19 @@ export interface ViewsLayoutProps {
   props?: Partial<Record<ViewKind, object>>;
   /** Additional class on the root, alongside `sprout-views-layout`. */
   className?: string;
+  /**
+   * Per-kind component substitutions over `VIEWS_BY_KIND`. The composed
+   * workspace uses it to render its assembled editor for the `editor` kind;
+   * omitted, every kind renders its registered view.
+   */
+  components?: Partial<Record<ViewKind, ViewComponent>>;
 }
 
 /**
  * Render an arrangement: one slot container per slot in `SLOT_ORDER`, each
  * rendering its kinds in order with the matching entry from `props`.
  */
-export function ViewsLayout({ arrangement, props, className }: ViewsLayoutProps): JSX.Element {
+export function ViewsLayout({ arrangement, props, className, components }: ViewsLayoutProps): JSX.Element {
   const resolved = resolveViewsArrangement(arrangement);
   const rootClass = className ? `sprout-views-layout ${className}` : 'sprout-views-layout';
   return (
@@ -148,7 +154,7 @@ export function ViewsLayout({ arrangement, props, className }: ViewsLayoutProps)
       {SLOT_ORDER.map((slot) => (
         <div key={slot} data-slot={slot} className="sprout-views-layout__slot" data-testid={`views-slot-${slot}`}>
           {(resolved[slot] ?? []).map((kind) => {
-            const View = VIEWS_BY_KIND[kind];
+            const View = components?.[kind] ?? VIEWS_BY_KIND[kind];
             return <View key={kind} {...(props?.[kind] ?? {})} />;
           })}
         </div>

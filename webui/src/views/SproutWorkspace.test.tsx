@@ -357,7 +357,7 @@ describe('SproutWorkspace', () => {
     expect(hostSend).toHaveBeenCalledWith('hello from the host');
   });
 
-  it('leaves the changes view to self-fetch (no assembled props) when the host overrides only chat', async () => {
+  it('keeps the changes view when the host overrides only chat', async () => {
     render(
       <SproutWorkspace
         project={PROJECT}
@@ -369,9 +369,9 @@ describe('SproutWorkspace', () => {
     );
 
     const workspace = await screen.findByTestId('sprout-workspace');
-    // The changes view was not overridden and the composition assembles no
-    // props for it (it self-fetches its session changes), so it renders with
-    // none — the override of `chat` did not disturb it.
+    // The changes view was not overridden, so it keeps its assembled props
+    // (it fetches its own session changes) — the override of `chat` did not
+    // disturb it.
     expect(within(workspace).getByTestId('sprout-workspace-changes')).toBeInTheDocument();
   });
 

@@ -42,7 +42,7 @@ import { clientFetch } from './services/clientSession';
 import { LocalEventsProvider } from './services/localEventsProvider';
 import { notificationBus } from './services/notificationBus';
 import { debugLog } from './utils/log';
-import { WorkspaceChatProvider, useWorkspaceChat } from './views';
+import { WorkspaceChatProvider, WorkspaceEditorProvider, useWorkspaceChat } from './views';
 import './App.css';
 import './components/UpdateNotification.css';
 
@@ -382,50 +382,52 @@ function AppInner() {
       <SproutProviders eventsProvider={events} isConnected={state.isConnected}>
         <UIManager>
           <NotificationCenter />
-          <AppContent
-            state={state}
-            isMobile={isMobile}
-            isTablet={isTablet}
-            isSidebarOpen={isSidebarOpen}
-            sidebarCollapsed={sidebarCollapsed}
-            isTerminalExpanded={isTerminalExpanded}
-            selectedSection={selectedSection}
-            sidebarWidth={sidebarWidth}
-            sidebarWidthRef={sidebarWidthRef}
-            onSectionChange={setSelectedSection}
-            onSidebarWidthChange={setSidebarWidth}
-            onSidebarWidthPersist={persistSidebarWidth}
-            // Double-tap/double-click on the grip cycles snap
-            // presets (narrow → standard → wide, wraps) instead
-            // of only resetting to default.
-            onSidebarWidthReset={cycleSidebarSnap}
-            stats={stats}
-            recentLogs={recentLogs}
-            gitRefreshToken={gitRefreshToken}
-            onSidebarToggle={handleSidebarToggle}
-            onToggleSidebar={toggleSidebar}
-            onCloseSidebar={closeSidebar}
-            onViewChange={handleViewChange}
-            onModelChange={handleModelChange}
-            onProviderChange={handleProviderChange}
-            onGitCommit={handleGitCommit}
-            onGitAICommit={handleGitAICommit}
-            onGitStage={handleGitStage}
-            onGitUnstage={handleGitUnstage}
-            onGitDiscard={handleGitDiscard}
-            onTerminalOutput={handleTerminalOutput}
-            onTerminalExpandedChange={setIsTerminalExpanded}
-            isConnected={state.isConnected}
-            chatSessions={state.chatSessions}
-            activeChatId={state.activeChatId}
-            onActiveChatChange={chatManager.handleActiveChatChange}
-            onCreateChat={chatManager.handleCreateChat}
-            onCreateChatInWorktree={chatManager.handleCreateChatInWorktree}
-            onDeleteChat={chatManager.handleDeleteChat}
-            onDeleteAllChats={chatManager.handleDeleteAllChats}
-            onRenameChat={chatManager.handleRenameChat}
-            perChatCache={state.perChatCache}
-          />
+          <WorkspaceEditorProvider>
+            <AppContent
+              state={state}
+              isMobile={isMobile}
+              isTablet={isTablet}
+              isSidebarOpen={isSidebarOpen}
+              sidebarCollapsed={sidebarCollapsed}
+              isTerminalExpanded={isTerminalExpanded}
+              selectedSection={selectedSection}
+              sidebarWidth={sidebarWidth}
+              sidebarWidthRef={sidebarWidthRef}
+              onSectionChange={setSelectedSection}
+              onSidebarWidthChange={setSidebarWidth}
+              onSidebarWidthPersist={persistSidebarWidth}
+              // Double-tap/double-click on the grip cycles snap
+              // presets (narrow → standard → wide, wraps) instead
+              // of only resetting to default.
+              onSidebarWidthReset={cycleSidebarSnap}
+              stats={stats}
+              recentLogs={recentLogs}
+              gitRefreshToken={gitRefreshToken}
+              onSidebarToggle={handleSidebarToggle}
+              onToggleSidebar={toggleSidebar}
+              onCloseSidebar={closeSidebar}
+              onViewChange={handleViewChange}
+              onModelChange={handleModelChange}
+              onProviderChange={handleProviderChange}
+              onGitCommit={handleGitCommit}
+              onGitAICommit={handleGitAICommit}
+              onGitStage={handleGitStage}
+              onGitUnstage={handleGitUnstage}
+              onGitDiscard={handleGitDiscard}
+              onTerminalOutput={handleTerminalOutput}
+              onTerminalExpandedChange={setIsTerminalExpanded}
+              isConnected={state.isConnected}
+              chatSessions={state.chatSessions}
+              activeChatId={state.activeChatId}
+              onActiveChatChange={chatManager.handleActiveChatChange}
+              onCreateChat={chatManager.handleCreateChat}
+              onCreateChatInWorktree={chatManager.handleCreateChatInWorktree}
+              onDeleteChat={chatManager.handleDeleteChat}
+              onDeleteAllChats={chatManager.handleDeleteAllChats}
+              onRenameChat={chatManager.handleRenameChat}
+              perChatCache={state.perChatCache}
+            />
+          </WorkspaceEditorProvider>
           <UpdateNotification />
           <UpdateAvailableBanner />
           <EscalationListener />

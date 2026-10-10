@@ -196,6 +196,32 @@ export type {
   WorkspaceChatDiffState,
 } from './WorkspaceChatContext';
 
+// The editor unit: the open files, the active file, and opening, closing and
+// saving them by path, over the buffer manager `SproutProviders` mounts. A
+// host reads it through `useWorkspaceEditor()`; `useWorkspaceEditorProps()`
+// wires the views around the editor (tree selection, the changes panel's
+// file clicks) to it, and `WorkspaceEditorView` is the assembled editor (tabs
+// over the active pane). An own-mode `SproutWorkspace` mounts the provider
+// and renders the view for an arranged `editor`; the standalone app mounts
+// the same provider at its root.
+export { WorkspaceEditorProvider, useWorkspaceEditor, useWorkspaceEditorProps } from './WorkspaceEditorContext';
+export type {
+  WorkspaceEditorProviderProps,
+  WorkspaceEditorValue,
+  WorkspaceEditorFile,
+  WorkspaceEditorProps,
+  OpenWorkspaceFileOptions,
+} from './WorkspaceEditorContext';
+export { WorkspaceEditorView } from './WorkspaceEditorView';
+export type { WorkspaceEditorViewProps } from './WorkspaceEditorView';
+
+// The file tree's data callbacks against the host transport (`/api/files`
+// and the create/delete/rename calls through `clientFetch`): the one
+// implementation the app's sidebar and the composed workspace's `fileTree`
+// view use. A host building `viewProps.fileTree` itself starts from it.
+export { useWorkspaceFileTree, fetchWorkspaceFiles } from './useWorkspaceFileTree';
+export type { UseWorkspaceFileTreeOptions } from './useWorkspaceFileTree';
+
 // The space shell contract a host supplies through SproutWorkspace's
 // `shellProps` (the data the app root assembles today), so mounting a space's
 // registered shell is typed from this one entry point.

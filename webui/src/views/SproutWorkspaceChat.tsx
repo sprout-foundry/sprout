@@ -21,7 +21,9 @@ import { clientFetch } from '../services/clientSession';
 import { LocalEventsProvider } from '../services/localEventsProvider';
 import type { AppState } from '../types/app';
 import type { ViewKind } from './ViewsLayout';
+import { useWorkspaceFileTree } from './useWorkspaceFileTree';
 import { createEmptyChatState, useWorkspaceChatProps } from './WorkspaceChatContext';
+import { useWorkspaceEditorProps } from './WorkspaceEditorContext';
 
 /** The transport + fetch the chat unit and the provider stack share. */
 export interface SproutWorkspaceChatTransport {
@@ -53,30 +55,45 @@ export function useSproutWorkspaceChatTransport({
 }
 
 /**
- * Assemble the layout's per-kind props from the chat unit and the host's
- * overrides. Runs inside the `WorkspaceChatProvider` the unit needs: the
- * provider is mounted around the layout, and this reads the chat state below
- * it. A kind the host supplies replaces the assembled props for that kind, so
- * a host composing its own chat surface is not fighting the unit's.
+ * Assemble the layout's per-kind props from the chat and editor units and the
+ * host's overrides. Runs inside the `WorkspaceChatProvider` and
+ * `WorkspaceEditorProvider` the units need: both are mounted around the
+ * layout, and this reads their state below them. A kind the host supplies
+ * replaces the assembled props for that kind, so a host composing its own
+ * surface is not fighting the unit's.
  *
- * Only the `chat` kind is assembled here. The changes view self-fetches its
- * session changes and takes only optional callbacks the app owns
- * (`onAskAgent`, `onFileClick`, …) — the composition has no such callbacks to
- * hand it, so it is left to render with none rather than handed props it does
- * not read.
+ * - `chat` — the chat unit's view props.
+ * - `fileTree` — the workspace file API (`useWorkspaceFileTree`), with
+ *   selection wired to the editor unit: picking a file opens it, and the
+ *   active file is the selected one.
+ * - `changes` — `onFileClick`, so a changed file opens in the editor. The
+ *   panel still fetches its own session changes (when the host declares
+ *   `capabilities.agentChanges`).
+ *
+ * The `editor` kind takes no props here: the composition renders the
+ * assembled editor view for it (see `SproutWorkspace`).
  */
 export function useSproutWorkspaceViewProps(
   overrides?: Partial<Record<ViewKind, object>>,
 ): Partial<Record<ViewKind, object>> {
   const { chatProps } = useWorkspaceChatProps();
+  const editor = useWorkspaceEditorProps();
+  const fileTree = useWorkspaceFileTree({
+    onFileSelect: editor.fileTree.onFileSelect,
+    selectedFile: editor.fileTree.selectedFile,
+  });
 
   return useMemo<Partial<Record<ViewKind, object>>>(() => {
-    const assembled: Partial<Record<ViewKind, object>> = { chat: chatProps };
+    const assembled: Partial<Record<ViewKind, object>> = {
+      chat: chatProps,
+      fileTree,
+      changes: { onFileClick: editor.onFileClick },
+    };
     if (overrides) {
       for (const kind of Object.keys(overrides) as ViewKind[]) {
         assembled[kind] = overrides[kind];
       }
     }
     return assembled;
-  }, [chatProps, overrides]);
+  }, [chatProps, fileTree, editor.onFileClick, overrides]);
 }

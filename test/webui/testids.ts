@@ -655,6 +655,7 @@ const TESTIDS = {
 
   // Workspace views (views/SproutWorkspace.tsx)
   "sprout-workspace": "sprout-workspace", // the workspace view root
+  "workspace-editor": "workspace-editor", // the assembled editor view (views/WorkspaceEditorView.tsx)
 } as const;
 
 // Derived set for O(1) coverage lookups

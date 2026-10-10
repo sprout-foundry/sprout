@@ -1,36 +1,18 @@
 import { useCallback, useEffect } from 'react';
 import type { ViewType } from '../types/app';
+import type { OpenWorkspaceFileOptions } from '../views/WorkspaceEditorContext';
 
 export interface UseFileHandlerParams {
   onViewChange: (view: ViewType) => void;
-  openFile: (file: { path: string; name: string; isDir: boolean; size: number; modified: number; ext: string }) => void;
+  /** The editor unit's open (`useWorkspaceEditor().openFile`), which also moves to the line. */
+  openFile: (path: string, options?: OpenWorkspaceFileOptions) => void;
 }
 
 export const useFileHandler = ({ onViewChange, openFile }: UseFileHandlerParams) => {
   const handleFileClick = useCallback(
     (filePath: string, lineNumber?: number) => {
-      const segments = filePath.split('/').filter(Boolean);
-      const fileName = segments[segments.length - 1] || filePath;
-      const extensionIndex = fileName.lastIndexOf('.');
-      const fileExt = extensionIndex > 0 ? fileName.slice(extensionIndex) : '';
-      const openInEditor = () => {
-        onViewChange('editor');
-        openFile({
-          path: filePath,
-          name: fileName,
-          isDir: false,
-          size: 0,
-          modified: 0,
-          ext: fileExt,
-        });
-      };
-
-      openInEditor();
-      if (typeof lineNumber === 'number') {
-        setTimeout(() => {
-          document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line: lineNumber } }));
-        }, 100);
-      }
+      onViewChange('editor');
+      openFile(filePath, { line: lineNumber });
     },
     [onViewChange, openFile],
   );

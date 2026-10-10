@@ -1,0 +1,20 @@
+/*
+ * The assembled editor view: tabs over one editor pane, filling its slot.
+ * Placement beyond that is the host's.
+ */
+
+.sprout-workspace-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.sprout-workspace-editor__pane {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}

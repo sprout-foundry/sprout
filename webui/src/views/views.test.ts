@@ -36,6 +36,12 @@ import {
   COPY_KEYS,
   ESCALATION_TRIGGER_EVENT,
   useWorkspaceMode,
+  WorkspaceEditorProvider,
+  WorkspaceEditorView,
+  fetchWorkspaceFiles,
+  useWorkspaceEditor,
+  useWorkspaceEditorProps,
+  useWorkspaceFileTree,
 } from './index';
 import type {
   AgentChangesPanelProps,
@@ -60,6 +66,13 @@ import type {
   UseEscalationTriggersOptions,
   UsePreviewStatusReturn,
   UseWorkspaceModeResult,
+  UseWorkspaceFileTreeOptions,
+  OpenWorkspaceFileOptions,
+  WorkspaceEditorFile,
+  WorkspaceEditorProps,
+  WorkspaceEditorProviderProps,
+  WorkspaceEditorValue,
+  WorkspaceEditorViewProps,
 } from './index';
 
 // ── Runtime: all view exports are defined ─────────────────────────────
@@ -146,6 +159,15 @@ describe('views entry exports', () => {
     expect(createEmptyChatState().messages).toEqual([]);
   });
 
+  it('exports the editor unit and the file tree hook', () => {
+    expect(isReactComponent(WorkspaceEditorProvider)).toBe(true);
+    expect(isReactComponent(WorkspaceEditorView)).toBe(true);
+    expect(typeof useWorkspaceEditor).toBe('function');
+    expect(typeof useWorkspaceEditorProps).toBe('function');
+    expect(typeof useWorkspaceFileTree).toBe('function');
+    expect(typeof fetchWorkspaceFiles).toBe('function');
+  });
+
   // ── The escalation seam ──────────────────────────────────────────────
 
   it('exports the escalation bridge + listener as components', () => {
@@ -208,6 +230,36 @@ describe('views entry typed props', () => {
     const editorProps: EditorProps = { value: 'const x = 1;', language: 'javascript' };
     expect(typeof treeProps.onFileSelect).toBe('function');
     expect(editorProps.value).toBe('const x = 1;');
+  });
+
+  it('accepts minimal editor unit and file tree hook values', () => {
+    const file: WorkspaceEditorFile = {
+      bufferId: 'b1',
+      path: '/ws/a.ts',
+      workspacePath: 'a.ts',
+      name: 'a.ts',
+      isModified: false,
+    };
+    const open: OpenWorkspaceFileOptions = { line: 3 };
+    const editor: WorkspaceEditorValue = {
+      openFiles: [file],
+      activeFile: file,
+      openFile: () => 'b1',
+      closeFile: async () => undefined,
+      saveFile: async () => undefined,
+    };
+    const editorProps: WorkspaceEditorProps = {
+      fileTree: { onFileSelect: () => undefined, selectedFile: 'a.ts' },
+      onFileClick: () => undefined,
+    };
+    const providerProps: WorkspaceEditorProviderProps = { children: null };
+    const viewProps: WorkspaceEditorViewProps = { className: 'host-editor' };
+    const treeOptions: UseWorkspaceFileTreeOptions = { rootPath: '.', fetchFn: fetch };
+    expect(editor.openFile(file.path, open)).toBe('b1');
+    expect(editorProps.fileTree.selectedFile).toBe('a.ts');
+    expect(providerProps.children).toBeNull();
+    expect(viewProps.className).toBe('host-editor');
+    expect(treeOptions.rootPath).toBe('.');
   });
 
   it('accepts a minimal UsePreviewStatusReturn value', () => {

@@ -5,6 +5,7 @@ All notable changes to Sprout will be documented in this file.
 ## [Unreleased]
 
 - feat(workspace): the `./views` entry exports the escalation seam — `AgentEscalationBridge` (installs `globalThis.__sproutEscalate`, the hook the WASM agent calls when a command exits 127), `EscalationListener`, the `useEscalationTriggers` detector and the `installEscalationBridge`/policy APIs with their types — so a host composing `SproutWorkspace` can wire the "run it in the cloud workspace / on a runner" flow (issue #113).
+- feat(runner): local-directory workspaces (issue #114) — `sprout runner start --workspace <dir>` (also on `link`, repeatable) names directories the runner serves **in place**: a start task naming one runs against the user's real files with no clone (container mode bind-mounts it at `/workspace`), the exact symlink-resolved allowlist is enforced before any start and advertised in heartbeats (`local_dirs`), and the workspace env carries `WORKSPACE_DIR` instead of `REPO_URL` so a no-repo workspace is first-class. Native mode sandboxes the chosen directory (writable), and destroying a local workspace never touches the user's files.
 
 ## [v0.25.0] - 2026-10-09
 

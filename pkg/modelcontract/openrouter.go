@@ -124,14 +124,16 @@ func parseOpenRouter(body []byte) ([]CanonicalModel, error) {
 }
 
 // parsePerTokenUSD parses an OpenRouter per-token USD price string into USD per
-// million tokens. Returns ok=false for empty/unparseable values; "0" is a valid
-// (free) price.
+// million tokens. Returns ok=false for empty/unparseable values and for
+// negative ones (OpenRouter reports "-1" for router models whose price varies
+// per request, which must stay unpriced rather than become a negative price);
+// "0" is a valid (free) price.
 func parsePerTokenUSD(s string) (float64, bool) {
 	if s == "" {
 		return 0, false
 	}
 	v, err := strconv.ParseFloat(s, 64)
-	if err != nil {
+	if err != nil || v < 0 {
 		return 0, false
 	}
 	return v * 1e6, true

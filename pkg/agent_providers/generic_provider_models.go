@@ -155,10 +155,10 @@ func (p *GenericProvider) listModelsOpenAI(ctx context.Context) ([]api.ModelInfo
 		}
 
 		if model.Pricing != nil {
-			if promptCost, err := strconv.ParseFloat(model.Pricing.Prompt, 64); err == nil {
+			if promptCost, err := strconv.ParseFloat(model.Pricing.Prompt, 64); err == nil && promptCost >= 0 {
 				modelInfo.InputCost = promptCost
 			}
-			if completionCost, err := strconv.ParseFloat(model.Pricing.Completion, 64); err == nil {
+			if completionCost, err := strconv.ParseFloat(model.Pricing.Completion, 64); err == nil && completionCost >= 0 {
 				modelInfo.OutputCost = completionCost
 			}
 		}

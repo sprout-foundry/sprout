@@ -6,7 +6,18 @@ All notable changes to Sprout will be documented in this file.
 
 - feat(workspace): the `./views` entry exports the escalation seam — `AgentEscalationBridge` (installs `globalThis.__sproutEscalate`, the hook the WASM agent calls when a command exits 127), `EscalationListener`, the `useEscalationTriggers` detector and the `installEscalationBridge`/policy APIs with their types — so a host composing `SproutWorkspace` can wire the "run it in the cloud workspace / on a runner" flow (issue #113).
 
+## [v0.25.0] - 2026-10-09
+
 - feat(workspace): `@sprout-foundry/workspace` 1.1.0 — the workspace composes a chat. Chat state is extracted into a reusable `WorkspaceChatProvider` (`useWorkspaceChat`, `useWorkspaceChatProps`, `createEmptyChatState`), and `SproutWorkspace` mounts it, so a host embedding the workspace gets a working chat with no extra wiring. Host transport is driven through the module services (`registerActiveHost`), the agent backend is selected through the host contract (`HostAgentBackend`), and the host serves the chat session store through the new `capabilities.chatSessions` capability.
+- feat(agent): per-call audit events — every model call records provider, model, endpoint host, request and response SHA-256 digests and sizes, tokens, outcome and what triggered it, and every tool call records the tool, an argument digest, the result status and files touched. Never prompt text. Events go to the local audit log and, when a host configures an audit endpoint (workspace daemon, `sprout runner`, in-browser agent), are batched to it without blocking the turn.
+- fix(agent): the security audit log is opened at agent start, so shell-safety decisions are actually recorded and `sprout audit tail` shows them (the logger was previously never created outside tests).
+- fix(trace): `--trace-dataset-dir` writes owner-only files (0600 files, 0700 directories) and runs the same secret redaction as the egress backstop; `--trace-unredacted` opts out explicitly.
+- feat(relay): the daemon serves its agent events as Server-Sent Events over the runner relay's HTTP transport, so a hosted chat on a relay-tunnelled `sprout runner` workspace streams agent progress without a WebSocket upgrade. No relay protocol version change.
+- feat(editor): reference-count and inlay-hint toggles in editor settings.
+- feat(deploy): Workers deploys bring their D1/KV/R2 data bindings with the deploy.
+- fix(chat): the chat view renders an empty, disabled chat instead of crashing when an embedder supplies no chat props; fix(webui): the credits chip uses whole-credit formatting with separators.
+- fix(pricing): provider catalog refresh with verified model pricing and corrected $0/estimated entries.
+- deps: sinter v0.7.0 (mlx-c 0.7.0) — required after the Homebrew mlx/mlx-c 0.7.0 upgrade, which otherwise breaks local attention calls.
 
 ## [v0.24.5] - 2026-10-08
 

@@ -167,6 +167,48 @@ no web UI source tree required. They reference only `react` as an external
 (the registry's mode icons and the editor's CodeMirror-typed props are
 inlined).
 
+## Escalation (run it where it can run)
+
+When an agent command cannot run in the browser (exit 127 — no compilers in
+the WASM shell), a git push the browser cannot perform, or the VFS hitting its
+quota, the work can run instead in the user's cloud workspace or on one of
+their runners: the browser's changed files are pushed, the command runs, the
+resulting deltas come back (`/workspace/txn`, see the host contract). `./views`
+exports the pieces a composing host mounts — the same two the Sprout app root
+mounts:
+
+```tsx
+import {
+  AgentEscalationBridge,
+  EscalationListener,
+  useEscalationTriggers,
+} from "@sprout-foundry/workspace/views";
+
+// Once, at the app root — the detector for the trigger events, and the
+// "Browser limitation reached" affordance for the user's own actions:
+useEscalationTriggers({ repoURL });
+<EscalationListener />;
+
+// Once per page — installs globalThis.__sproutEscalate, the hook the WASM
+// agent calls on exit 127, and asks the consent question:
+<AgentEscalationBridge repoURL={repoURL} />;
+```
+
+`AgentEscalationBridge` takes the repository the workspace was imported from —
+the same value `SproutWorkspace`'s `project.repoUrl` carries, so a host threads
+one source of truth to both. The consent question, the host picker (runners or
+cloud) and the progress line are rendered by the bridge; a host that wants its
+own consent UI calls `installEscalationBridge` directly with a
+`requestConsent` callback (its `EscalationBridgeOptions` and `EscalationResult`
+types are exported alongside), and reads or sets the user's policy through
+`getEscalationPolicy` / `setEscalationPolicy`.
+
+The seam is WASM-side only — no daemon and no local terminal involved. The
+transactional runs go through relative paths, so they ride the host's
+transport: a host that serves the cloud transactional surface gets working
+escalation; without a backend the triggers still fire and the consent answer
+"deny" (the default-safe behavior) keeps every command in the browser.
+
 ## One workspace per page
 
 Sprout's non-React services reach a few **module singletons** — process-wide

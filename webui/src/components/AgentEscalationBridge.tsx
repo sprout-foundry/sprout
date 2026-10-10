@@ -42,6 +42,16 @@ const STALL_CLEAR_MS: Record<string, number> = {
 };
 const STALL_CLEAR_DEFAULT_MS = 120_000;
 
+/** Props for the agent escalation bridge. */
+export interface AgentEscalationBridgeProps {
+  /**
+   * Repository the browser workspace was imported from. The bridge resolves
+   * workspaces against it and remembers the user's host choice per repo;
+   * escalation stays off until it is set.
+   */
+  repoURL?: string;
+}
+
 /** Whether a runner host is still on the user's account and able to take work. */
 async function runnerAvailable(host: EscalationHost): Promise<boolean> {
   if (host.kind !== 'runner') return true;
@@ -49,7 +59,7 @@ async function runnerAvailable(host: EscalationHost): Promise<boolean> {
   return Boolean(runner && isRunnerSelectable(runner));
 }
 
-export function AgentEscalationBridge({ repoURL }: { repoURL?: string }) {
+export function AgentEscalationBridge({ repoURL }: AgentEscalationBridgeProps) {
   const { localTerminal } = useHostCapabilities();
   const [pending, setPending] = useState<PendingConsent[]>([]);
   const [progress, setProgress] = useState<{ command: string; phase: string; host: EscalationHost } | null>(null);

@@ -80,6 +80,7 @@ func (r *Runner) heartbeat(ctx context.Context) {
 	err := r.Client.SendHeartbeat(ctx, Heartbeat{
 		Status: status, RunningTasks: n,
 		Mode: r.State.Mode, Sandbox: r.Sandbox, RunnerVersion: r.Version,
+		LocalDirs: r.State.LocalDirs,
 		DirectURL: r.State.PublicURL,
 		Relayed:   r.relayed(),
 	})
@@ -143,6 +144,19 @@ func (r *Runner) start(ctx context.Context, t WorkspaceTask, log *slog.Logger) {
 		log.Error("start task carries no txn secret; refusing")
 		_ = r.Client.SubmitWorkspaceResult(ctx, WorkspaceResult{WorkspaceID: t.WorkspaceID, Status: "failed"})
 		return
+	}
+	if t.WorkspaceDir != "" {
+		resolved, err := resolveLocalTaskDir(t.WorkspaceDir)
+		if err != nil || !allowedLocalDir(resolved, r.State.LocalDirs) {
+			// The runner serves exactly the directories its owner
+			// named on this machine, resolved the same way for both —
+			// a symlinked path the allowlist does not name never
+			// reaches the launchers.
+			log.Error("start task names a directory this runner does not serve; refusing", "dir", t.WorkspaceDir)
+			_ = r.Client.SubmitWorkspaceResult(ctx, WorkspaceResult{WorkspaceID: t.WorkspaceID, Status: "failed"})
+			return
+		}
+		t.WorkspaceDir = resolved
 	}
 	if old := r.take(t.WorkspaceID); old != nil {
 		r.Host.Unbind(t.WorkspaceID)

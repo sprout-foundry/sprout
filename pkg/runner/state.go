@@ -36,6 +36,11 @@ type State struct {
 	Image      string `json:"image,omitempty"`
 	// Writable are extra paths native mode may write (toolchain caches).
 	Writable []string `json:"writable,omitempty"`
+	// LocalDirs are the directories the user named (with `sprout runner
+	// start --workspace`, repeatable) that this runner serves workspaces
+	// in place: a start task naming one runs against the user's real
+	// files there, with no clone. Explicitly opt-in; never platform-set.
+	LocalDirs []string `json:"local_dirs,omitempty"`
 }
 
 // Linked reports whether the runner has completed `sprout runner link`.

@@ -62,8 +62,20 @@ func reservedEnv(name string) bool {
 func workspaceEnv(task WorkspaceTask) map[string]string {
 	env := map[string]string{
 		"SPROUT_MODE":  "daemon",
-		"REPO_URL":     task.RepoURL,
 		"WORKSPACE_ID": task.WorkspaceID,
+	}
+	if task.WorkspaceDir != "" {
+		// A local-directory workspace runs in place: the directory is
+		// the workspace root and there is no repo (the launchers skip
+		// the clone when workspace_dir is set; a task naming both is
+		// refused before it reaches a launcher). The daemon learns
+		// where its files live instead.
+		env["WORKSPACE_DIR"] = task.WorkspaceDir
+	} else {
+		env["REPO_URL"] = task.RepoURL
+		if host := repoHost(task.RepoURL); host != "" {
+			env["SPROUT_GIT_HOST"] = host
+		}
 	}
 	if task.TxnSecret != "" {
 		env["WORKSPACE_TOKEN"] = task.TxnSecret
@@ -75,9 +87,6 @@ func workspaceEnv(task WorkspaceTask) map[string]string {
 	}
 	if task.GitToken != "" {
 		env["SPROUT_GIT_TOKEN"] = task.GitToken
-		if host := repoHost(task.RepoURL); host != "" {
-			env["SPROUT_GIT_HOST"] = host
-		}
 	}
 	if task.LLMKey != "" {
 		name := credentials.ProviderEnvVar(task.LLMProvider)

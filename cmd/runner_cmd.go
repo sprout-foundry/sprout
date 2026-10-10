@@ -35,11 +35,13 @@ Modes:
 }
 
 var (
-	runnerPlatform  string
-	runnerName      string
-	runnerPublicURL string
-	runnerListen    string
-	runnerNoBrowser bool
+	runnerPlatform   string
+	runnerName       string
+	runnerPublicURL  string
+	runnerListen     string
+	runnerNoBrowser  bool
+	runnerWorkspaces []string
+	runnerStartLocal []string
 )
 
 func init() {
@@ -53,10 +55,14 @@ func init() {
 	linkCmd.Flags().StringVar(&runnerPublicURL, "public-url", "", "HTTPS URL the platform reaches this runner at; omit to connect through the platform relay")
 	linkCmd.Flags().StringVar(&runnerListen, "listen", "", "address the runner listens on (default "+runner.DefaultListenAddr+")")
 	linkCmd.Flags().BoolVar(&runnerNoBrowser, "no-browser", false, "print the approval URL without opening a browser (SSH sessions, headless machines)")
+	linkCmd.Flags().StringSliceVar(&runnerWorkspaces, "workspace", nil, "local directory this runner serves workspaces in place (repeatable); the user's real files are the workspace — opt in deliberately")
+
+	startCmd := &cobra.Command{Use: "start", Short: "Run the runner in the foreground", Args: cobra.NoArgs, RunE: runRunnerStart}
+	startCmd.Flags().StringSliceVar(&runnerStartLocal, "workspace", nil, "local directory this runner serves workspaces in place (repeatable; passing it replaces the saved list); the user's real files are the workspace — opt in deliberately")
 
 	runnerCmd.AddCommand(
 		linkCmd,
-		&cobra.Command{Use: "start", Short: "Run the runner in the foreground", Args: cobra.NoArgs, RunE: runRunnerStart},
+		startCmd,
 		&cobra.Command{Use: "status", Short: "Show link state, mode and sandbox", Args: cobra.NoArgs, RunE: runRunnerStatus},
 		&cobra.Command{
 			Use:       "mode container|native|bare-metal",
@@ -93,6 +99,10 @@ func runRunnerLink(cmd *cobra.Command, _ []string) error {
 			return fmt.Errorf("--public-url must be an https URL (got %q)", runnerPublicURL)
 		}
 	}
+	localDirs, err := resolveWorkspaceDirs(runnerWorkspaces, st.LocalDirs)
+	if err != nil {
+		return err
+	}
 
 	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -124,10 +134,50 @@ func runRunnerLink(cmd *cobra.Command, _ []string) error {
 	if runnerListen != "" {
 		st.ListenAddr = runnerListen
 	}
+	st.LocalDirs = localDirs
 	if err := st.Save(); err != nil {
 		return err
 	}
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Linked as %q (mode: %s; key stored in the %s). Start it with `sprout runner start`, or `sprout runner install` to run at login.\n", name, st.Mode, keyStore)
+	return printLocalDirNotice(cmd, st)
+}
+
+// resolveWorkspaceDirs applies the --workspace flags to the saved allowlist.
+// Passing no flags keeps the saved list, so a plain `runner start` never
+// loses the configuration. With flags, the saved list is REPLACED (the flags
+// are the whole new list): that is how entries are removed. Re-validate every
+// entry so a since-deleted directory fails with a clear error instead of
+// silently dropping from the list.
+func resolveWorkspaceDirs(flags []string, saved []string) ([]string, error) {
+	if len(flags) == 0 {
+		return saved, nil
+	}
+	seen := map[string]bool{}
+	out := make([]string, 0, len(flags))
+	for _, raw := range flags {
+		dir, err := runner.LocalDir(raw)
+		if err != nil {
+			return nil, fmt.Errorf("--workspace: %w", err)
+		}
+		if seen[dir] {
+			continue
+		}
+		seen[dir] = true
+		out = append(out, dir)
+	}
+	return out, nil
+}
+
+// printLocalDirNotice says what a local-directory allowlist means, once, in
+// the command's output.
+func printLocalDirNotice(cmd *cobra.Command, st *runner.State) error {
+	if len(st.LocalDirs) == 0 {
+		return nil
+	}
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Local workspace directories (work started there uses your real files):\n")
+	for _, dir := range st.LocalDirs {
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  %s\n", dir)
+	}
 	return nil
 }
 
@@ -170,6 +220,18 @@ func runRunnerStart(cmd *cobra.Command, _ []string) error {
 	key, err := runner.LoadAPIKey()
 	if err != nil || key == "" {
 		return errors.New("the runner key is missing from the credential store; run `sprout runner link` again")
+	}
+	st.LocalDirs, err = resolveWorkspaceDirs(runnerStartLocal, st.LocalDirs)
+	if err != nil {
+		return err
+	}
+	if len(runnerStartLocal) > 0 {
+		if err := st.Save(); err != nil {
+			return err
+		}
+		if err := printLocalDirNotice(cmd, st); err != nil {
+			return err
+		}
 	}
 	launcher, capability, err := launcherFor(cmd.Context(), st)
 	if err != nil {
@@ -229,6 +291,12 @@ func runRunnerStatus(cmd *cobra.Command, _ []string) error {
 		_, _ = fmt.Fprint(out, " (weak isolation)")
 	}
 	_, _ = fmt.Fprintf(out, "\nListen:    %s\nPublic URL: %s\n", st.ListenAddr, firstNonEmpty(st.PublicURL, "(none — connects through the platform relay)"))
+	if len(st.LocalDirs) > 0 {
+		_, _ = fmt.Fprint(out, "Local workspaces (your real files are the workspace):\n")
+		for _, dir := range st.LocalDirs {
+			_, _ = fmt.Fprintf(out, "  %s\n", dir)
+		}
+	}
 	if st.Mode == runner.ModeContainer {
 		if err := runner.DockerAvailable(cmd.Context(), ""); err != nil {
 			_, _ = fmt.Fprintf(out, "Container: %v\n", err)

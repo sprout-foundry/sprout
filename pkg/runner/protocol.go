@@ -53,6 +53,10 @@ type Heartbeat struct {
 	Sandbox       string   `json:"sandbox"`
 	RunnerVersion string   `json:"runner_version"`
 	Toolchains    []string `json:"toolchains,omitempty"`
+	// LocalDirs are the user-named directories (see `sprout runner start
+	// --workspace`) this runner serves workspaces in place. A start task
+	// naming one of them runs against the user's real files, no clone.
+	LocalDirs []string `json:"local_dirs,omitempty"`
 	// DirectURL is where the platform reaches the host server now; empty
 	// for a relayed runner.
 	DirectURL string `json:"direct_url,omitempty"`
@@ -64,9 +68,14 @@ type Heartbeat struct {
 // Secrets arrive over the runner-key-authenticated channel and are never
 // written to disk by the runner.
 type WorkspaceTask struct {
-	WorkspaceID    string            `json:"workspace_id"`
-	UserID         string            `json:"user_id"`
-	RepoURL        string            `json:"repo_url"`
+	WorkspaceID string `json:"workspace_id"`
+	UserID      string `json:"user_id"`
+	RepoURL     string `json:"repo_url"`
+	// WorkspaceDir, when set, names an allowlisted local directory the
+	// workspace runs in place: no clone, the directory is the workspace
+	// root and the runner writes the user's real files there. The runner
+	// refuses any path it was not explicitly configured to serve.
+	WorkspaceDir   string            `json:"workspace_dir,omitempty"`
 	Action         string            `json:"action"`
 	ContainerID    string            `json:"container_id"`
 	TxnSecret      string            `json:"txn_secret,omitempty"`

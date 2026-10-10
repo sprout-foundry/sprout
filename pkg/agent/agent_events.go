@@ -31,7 +31,7 @@ func (a *Agent) GetChatID() string {
 	}
 	mu.RLock()
 	defer mu.RUnlock()
-	meta := a.output.GetEventMetadata()
+	meta := a.output.GetEventMetadataUnlocked()
 	if v, ok := meta["chat_id"].(string); ok {
 		return strings.TrimSpace(v)
 	}
@@ -47,7 +47,7 @@ func (a *Agent) decorateEventPayload(data interface{}) interface{} {
 	mu := a.output.GetEventMetadataMutex()
 	mu.RLock()
 	defer mu.RUnlock()
-	eventMetadata := a.output.GetEventMetadata()
+	eventMetadata := a.output.GetEventMetadataUnlocked()
 	if len(eventMetadata) == 0 {
 		return data
 	}
@@ -229,7 +229,7 @@ func (a *Agent) SetEventBus(eventBus *events.EventBus) {
 	a.validator = validation.NewValidator(eventBus)
 	mu := a.output.GetEventMetadataMutex()
 	mu.RLock()
-	em := a.output.GetEventMetadata()
+	em := a.output.GetEventMetadataUnlocked()
 	if len(em) > 0 {
 		a.validator.SetEventMetadata(em)
 	}
@@ -284,7 +284,7 @@ func (a *Agent) GetEventClientID() string {
 	mu := a.output.GetEventMetadataMutex()
 	mu.RLock()
 	defer mu.RUnlock()
-	eventMetadata := a.output.GetEventMetadata()
+	eventMetadata := a.output.GetEventMetadataUnlocked()
 	if len(eventMetadata) == 0 {
 		return ""
 	}
@@ -299,7 +299,7 @@ func (a *Agent) GetEventChatID() string {
 	mu := a.output.GetEventMetadataMutex()
 	mu.RLock()
 	defer mu.RUnlock()
-	eventMetadata := a.output.GetEventMetadata()
+	eventMetadata := a.output.GetEventMetadataUnlocked()
 	if len(eventMetadata) == 0 {
 		return ""
 	}
@@ -314,7 +314,7 @@ func (a *Agent) GetEventUserID() string {
 	mu := a.output.GetEventMetadataMutex()
 	mu.RLock()
 	defer mu.RUnlock()
-	eventMetadata := a.output.GetEventMetadata()
+	eventMetadata := a.output.GetEventMetadataUnlocked()
 	if len(eventMetadata) == 0 {
 		return ""
 	}

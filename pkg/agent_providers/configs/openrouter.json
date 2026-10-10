@@ -7384,6 +7384,49 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.0084,
+        "context_length": 262144,
+        "description": "Ling 3.0 Flash Sante is a health and medicine-focused mixture-of-experts model from InclusionAI, built on Ling 3.0 Flash with 5.1B active parameters out of 124B total. It is designed for...",
+        "id": "inclusionai/ling-3.0-flash-sante",
+        "input_cost": 0.042,
+        "name": "inclusionAI: Ling 3.0 Flash Sante",
+        "output_cost": 0.1232,
+        "tags": [
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "cached_input_cost": 0.05,
+        "context_length": 1050000,
+        "description": "GPT-6.1 Sol Pro is the same underlying model as [GPT-6.1 Sol](https://openrouter.ai/openai/gpt-6.1-sol), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks. **Cost note:** pro mode spends far more...",
+        "id": "openai/gpt-6.1-sol-pro:batch",
+        "input_cost": 1,
+        "name": "OpenAI: GPT-6.1 Sol Pro (batch)",
+        "output_cost": 5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.05,
+        "context_length": 1050000,
+        "description": "GPT-6.1 Sol is an upgrade to GPT-6 Sol from OpenAI, positioned below the flagship GPT-6 Astra in the GPT-6 series. It is suited for agentic coding, computer use, document-heavy professional...",
+        "id": "openai/gpt-6.1-sol:batch",
+        "input_cost": 1,
+        "name": "OpenAI: GPT-6.1 Sol (batch)",
+        "output_cost": 5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

@@ -89,11 +89,22 @@ func workspaceEnv(task WorkspaceTask) map[string]string {
 		env["SPROUT_GIT_TOKEN"] = task.GitToken
 	}
 	if task.LLMKey != "" {
-		name := credentials.ProviderEnvVar(task.LLMProvider)
-		if name == "" {
-			name = "DEEPINFRA_API_KEY"
+		if IsGatewayProvider(task.LLMProvider) {
+			// The gateway's workspace-scoped key authenticates against
+			// the platform's OpenAI-compatible /v1 (the provider file
+			// points there); it is not a public provider's key.
+			env[GatewayKeyEnvVar] = task.LLMKey
+			env["SPROUT_PROVIDER"] = GatewayProviderName
+			if strings.TrimSpace(task.Model) != "" {
+				env["SPROUT_MODEL"] = strings.TrimSpace(task.Model)
+			}
+		} else {
+			name := credentials.ProviderEnvVar(task.LLMProvider)
+			if name == "" {
+				name = "DEEPINFRA_API_KEY"
+			}
+			env[name] = task.LLMKey
 		}
-		env[name] = task.LLMKey
 	}
 	for k, v := range task.UserEnv {
 		if !envNameRe.MatchString(k) || reservedEnv(k) {

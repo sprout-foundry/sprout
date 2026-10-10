@@ -91,6 +91,18 @@ no clone (container mode bind-mounts the directory at `/workspace`). The
 allowlist is exact and symlink-resolved, enforced by the runner before any
 start; the platform cannot widen it.
 
+Inference (issue #115): a start task naming `llm_provider: "gateway"` with a
+`platform_api_url` wires the workspace daemon to the platform gateway's
+OpenAI-compatible `/v1`. The runner writes a `gateway` custom-provider file
+into the workspace's *scoped* config dir (endpoint + `SPROUT_GATEWAY_KEY` env
+var), sets the workspace-scoped gateway key in the daemon's environment, and
+selects the provider via `SPROUT_PROVIDER` (a `model` field in the task pins
+the starting model via `SPROUT_MODEL`). The workspace's model picker lists
+the gateway's catalog from its `/v1/models`, so the user chooses among the
+models their gateway account is entitled to. The key is workspace-scoped
+(revoked platform-side when the workspace ends); nothing global is written
+and nothing persists beyond the workspace.
+
 | Mode | Isolation | What runs |
 |---|---|---|
 | `container` (default) | Linux container: Docker, Podman, OrbStack; Apple's container runtime on Apple silicon if it proves out. Today's profile: non-root, read-only rootfs, all caps dropped, no-new-privileges, CPU/memory limits. | The sprout workspace image. |

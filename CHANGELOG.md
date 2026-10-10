@@ -4,11 +4,18 @@ All notable changes to Sprout will be documented in this file.
 
 ## [Unreleased]
 
+## [v0.27.0] - 2026-10-10
+
 - feat(runner): a public workspace image for container mode, `ghcr.io/sprout-foundry/sprout-workspace`, built from `docker/workspace` for linux/amd64 and linux/arm64 by a new workflow after each release. It contains only the open-source sprout release binary (checked against the release's `SHA256SUMS`) with git, openssh-client, curl and tini on Debian bookworm-slim, running as uid 1000. The entrypoint runs the daemon on port 56000; it serves a local-directory workspace in place without touching it, and clones a repo only into an empty volume (aside from `lost+found`), recovering only from its own interrupted clone and refusing any other content. Git tokens go only to the https host they were issued for. The runner's default image is now this one, tagged with the runner's own release (`:latest` for source builds); `--image` still wins, and a saved earlier default (`ghcr.io/sprout-foundry/sprout:latest`) is migrated. The GHCR package must be set to Public once by an org owner.
 - fix(runner): container mode checks its workspace image before going online (issue #120). `sprout runner start` in container mode inspects the image and pulls it when missing, and refuses to start when it cannot be pulled, naming the image and the fixes: `docker login <registry>` (the runner pulls with Docker's own credential store and never stores registry credentials; for ghcr.io a GitHub token with `read:packages` works) or another image or mode. `sprout runner link` runs the same check before the device flow when Docker is running. A new `--image` flag on `link` and `start` sets the image (saved in the runner state); `runner status` shows it.
 - feat(runner): a start task's `model` applies to every provider, not only the gateway (issue #120). It becomes `SPROUT_MODEL`, which outranks the daemon's default for the provider, and a known task provider is pinned with `SPROUT_PROVIDER` so the model is not applied to an auto-detected one. Precedence: the task's model, else the daemon's normal default; the platform decides what to send (e.g. the user's last-used model).
-- feat(workspace): `AgentEscalationBridge` takes an optional `container` element (issue #120); the consent dialog and progress line render into it through a portal, positioned within it rather than over the whole page. Without it the bridge renders page-level as before.
 - docs(runner): `sprout runner unlink` says revoking the key is the backend's surface — the hosted platform's Runners page, or a self-hosted backend's own revoke route — since the runner protocol has no runner-initiated revoke (issue #120).
+- feat(workspace): `@sprout-foundry/workspace` 1.3.0 (below).
+
+## [@sprout-foundry/workspace v1.3.0] - 2026-10-10
+
+- fix(workspace): the published `dist/` survives a host's bundler (issue #119). Modules that were both statically and dynamically imported were emitted as shared chunks reached through a namespace accessor (`import(...).then(m => m.x)`), which Vite/Rollup re-bundling in a host rewrote as a direct export and lost — so every own-mode `SproutWorkspace` mount threw (`setAgentEventDispatcher` undefined) and the agent's event wiring and escalation hook never installed. The package build now imports those modules statically (each still bundled once, so `.`, `./views` and `./providers` share one copy of their singletons; the large design view stays lazy), a chunk-graph check fails the build if the pattern returns, and the publish workflow re-bundles the packed package in a scratch Vite host and fails if the export is lost.
+- feat(workspace): `AgentEscalationBridge` takes an optional `container` element (issue #120); the consent dialog and progress line render into it through a portal, positioned within it rather than over the whole page. Without it the bridge renders page-level as before.
 
 ## [v0.26.1] - 2026-10-10
 

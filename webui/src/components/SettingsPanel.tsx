@@ -45,7 +45,7 @@ function SettingsPanel({
   agentConfig,
 }: SettingsPanelProps): JSX.Element {
   // Track settings ref for async mutation callbacks
-  const { localTerminal } = useHostCapabilities();
+  const { localTerminal, mcp, localModels } = useHostCapabilities();
   const settingsRef = useRef<SproutSettings | null>(settings);
   useEffect(() => {
     settingsRef.current = settings;
@@ -136,23 +136,24 @@ function SettingsPanel({
   // When filtering, matched sections auto-expand so results are visible.
   const normalizedQuery = filterQuery.trim().toLowerCase();
   const filteredSections = useMemo(() => {
-    // In cloud mode, hide sections that require a local backend.
-    // MCP, LSP, Computer Use, Skills, and Subagents all depend on
-    // process spawning or server-side state that doesn't exist in
-    // the browser IDE.
-    const cloudHiddenSubsections = new Set<SettingsSubsection>([
-      'workspace-mcp',
-      'workspace-lsp',
-      'experimental-computer-use',
-      'agent-skills',
-      'agent-subagents',
-    ]);
+    // Hide the subsections the host has no backend for. LSP, Computer Use,
+    // Skills, and Subagents depend on process spawning or server-side state
+    // that only a local backend has; MCP servers and local models have their
+    // own capability flags, so a host can serve one without the other.
+    const hidden = new Set<SettingsSubsection>();
+    if (!localTerminal) {
+      for (const id of ['workspace-lsp', 'experimental-computer-use', 'agent-skills', 'agent-subagents'] as const) {
+        hidden.add(id);
+      }
+    }
+    if (!mcp) hidden.add('workspace-mcp');
+    if (!localModels) hidden.add('env-local-llm');
 
     let groups = SECTION_GROUPS;
-    if (!localTerminal) {
+    if (hidden.size > 0) {
       groups = SECTION_GROUPS.map((section) => ({
         ...section,
-        subsections: section.subsections.filter((sub) => !cloudHiddenSubsections.has(sub.id)),
+        subsections: section.subsections.filter((sub) => !hidden.has(sub.id)),
       })).filter((section) => section.subsections.length > 0);
     }
 
@@ -173,7 +174,7 @@ function SettingsPanel({
         return null;
       })
       .filter((s): s is (typeof SECTION_GROUPS)[number] => s !== null);
-  }, [normalizedQuery, localTerminal]);
+  }, [normalizedQuery, localTerminal, mcp, localModels]);
 
   // Auto-expand any section that has matches while filtering.
   useEffect(() => {

@@ -263,10 +263,10 @@ helpers).
 | `settings` | The settings panel |
 | `automations` | Automation workflows and their scheduling UI |
 | `agentChanges` | Agent change history (the change history tab) |
-| `mcp` | Model Context Protocol tool configuration |
-| `localModels` | Locally-hosted model selection and management |
-| `verification` | Verification flows and their results UI |
-| `serverGit` | Server-side git, distinct from in-browser git |
+| `mcp` | Model Context Protocol server configuration (the MCP Servers settings tab) |
+| `localModels` | Locally-hosted model selection and management (the Local LLM settings tab) |
+| `verification` | Reserved: verification flows and their results UI. No surface reads it yet |
+| `serverGit` | Server-side git, distinct from in-browser git (the Git sidebar's Worktrees tab) |
 | `chatSessions` | The host serves the chat session store (see "Chat session store" below) |
 
 ## The hosts Sprout ships

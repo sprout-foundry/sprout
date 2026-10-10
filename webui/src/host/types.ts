@@ -429,13 +429,16 @@ export interface HostCapabilities {
   automations: boolean;
   /** Agent change history (the change history tab). */
   agentChanges: boolean;
-  /** Model Context Protocol tool configuration. */
+  /** Model Context Protocol server configuration (the MCP Servers settings tab). */
   mcp: boolean;
-  /** Locally-hosted model selection and management. */
+  /** Locally-hosted model selection and management (the Local LLM settings tab). */
   localModels: boolean;
-  /** Verification flows and their results UI. */
+  /**
+   * Verification flows and their results UI. Reserved: no surface reads it
+   * yet, so declaring it changes nothing today.
+   */
   verification: boolean;
-  /** Server-side git, distinct from in-browser git. */
+  /** Server-side git, distinct from in-browser git (worktrees). */
   serverGit: boolean;
   /**
    * The host serves the chat session store: the chat session list / create /

@@ -158,6 +158,25 @@ func (r *Runner) start(ctx context.Context, t WorkspaceTask, log *slog.Logger) {
 		}
 		t.WorkspaceDir = resolved
 	}
+	if IsGatewayProvider(t.LLMProvider) {
+		switch {
+		case r.State.Mode == ModeContainer:
+			// The gateway provider file lives in the workspace's
+			// host-side config dir, which the container cannot see;
+			// a container runner cannot serve gateway workspaces.
+			log.Error("gateway workspaces need host execution (native or bare-metal mode); refusing", "mode", r.State.Mode)
+			_ = r.Client.SubmitWorkspaceResult(ctx, WorkspaceResult{WorkspaceID: t.WorkspaceID, Status: "failed"})
+			return
+		case t.LLMKey == "":
+			log.Error("gateway start task carries no workspace key; refusing")
+			_ = r.Client.SubmitWorkspaceResult(ctx, WorkspaceResult{WorkspaceID: t.WorkspaceID, Status: "failed"})
+			return
+		case t.RepoURL != "":
+			log.Error("gateway start task names a repo; gateway workspaces are repo-less; refusing", "repo", t.RepoURL)
+			_ = r.Client.SubmitWorkspaceResult(ctx, WorkspaceResult{WorkspaceID: t.WorkspaceID, Status: "failed"})
+			return
+		}
+	}
 	if old := r.take(t.WorkspaceID); old != nil {
 		r.Host.Unbind(t.WorkspaceID)
 		_ = r.Launcher.Stop(ctx, old)

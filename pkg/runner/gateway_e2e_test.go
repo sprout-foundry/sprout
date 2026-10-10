@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
 // TestGatewayWiringEndToEnd proves the client half of the gateway seam
@@ -100,9 +102,15 @@ func TestGatewayWiringEndToEnd(t *testing.T) {
 	}
 
 	// The provider file lives in the workspace's scoped config dir and
-	// dies with it.
-	provPath := filepath.Join(os.Getenv("SPROUT_STATE_DIR"), "runner", "workspaces", task.WorkspaceID, "config", "providers", "gateway.json")
-	if _, err := os.Stat(provPath); err != nil {
+	// dies with it. The path is the runner's own state dir under
+	// t.TempDir() (set via SPROUT_STATE_DIR above) — a test fixture, not
+	// attacker-influenced input.
+	stateDir, err := envutil.StateDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	provPath := filepath.Join(stateDir, "runner", "workspaces", task.WorkspaceID, "config", "providers", "gateway.json")
+	if _, err := os.Stat(provPath); err != nil { //nolint:gosec // G703: test-only stat of the runner's own t.TempDir state dir
 		t.Errorf("gateway provider file must be in the workspace's scoped config dir: %v", err)
 	}
 }

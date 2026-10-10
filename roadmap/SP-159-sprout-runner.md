@@ -83,7 +83,7 @@ Every workspace gets its own clone under the runner's data directory
 (`~/Library/Application Support/sprout/runner/workspaces/<id>` on macOS,
 `$XDG_DATA_HOME/sprout/runner/...` on Linux). A runner never operates on the
 user's own working copies — with one explicit, local exception (issue #114):
-a runner whose owner names directories (`sprout runner start --workspace
+a runner whose owner names directories (`sprout runner start --dir
 ~/src/myproject`, repeatable, stored in the runner's state and advertised in
 every heartbeat) serves **local-directory workspaces** in place: a start task
 naming an allowlisted directory runs against the user's real files there, with

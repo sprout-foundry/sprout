@@ -50,26 +50,59 @@ all read the same pinned version.
 
 ## Mount
 
-```tsx
-import { SproutWorkspace } from "@sprout-foundry/workspace/views";
-import { SproutProviders } from "@sprout-foundry/workspace/providers";
-import type { SproutHost } from "@sprout-foundry/workspace";
-import { myHost } from "./myHost";
+The minimal mount is one component. In its default `providers="own"` mode
+`SproutWorkspace` builds everything below it — the `HostProvider` for the
+`host` you pass, the `SproutProviders` stack, the events transport, and the
+chat and editor units — so a host renders it directly, with no provider of its
+own around it:
 
-export function ProjectSpace({
-  project,
-  space,
-}: {
-  project: string;
-  space: string;
-}) {
+```tsx
+import { useMemo } from "react";
+import "@sprout-foundry/workspace/styles.css";
+import { SproutWorkspace } from "@sprout-foundry/workspace/views";
+import type { SproutProject } from "@sprout-foundry/workspace/views";
+import { myHost } from "./myHost"; // a module-level SproutHost
+
+export function ProjectSpace({ repoUrl }: { repoUrl: string }) {
+  const project = useMemo<SproutProject>(
+    () => ({ id: repoUrl, repoUrl }),
+    [repoUrl],
+  );
   return (
-    <SproutProviders>
-      <SproutWorkspace project={project} space={space} host={myHost} />
-    </SproutProviders>
+    <SproutWorkspace
+      project={project}
+      space="code"
+      host={myHost}
+      wasmBase="/assets/sprout-wasm"
+    />
   );
 }
 ```
+
+- `project` is an object (`SproutProject`: `id`, and optionally `name`,
+  `root`, `repoUrl`), not a string.
+- `space` is a registered space id (`"code"`, `"design"`); an unknown or
+  unavailable id resolves to the registry's fallback.
+- `host` should be referentially stable (a module-level object or a memoized
+  one): the composition registers it as the active host and opens the events
+  transport when it changes.
+- Without `layout` or `shellProps`, the space's own shell renders and the
+  composition feeds it from its chat and editor units: Code gets its chat,
+  editor tabs and context panel; Design gets its agent chat. The app chrome
+  the composition does not own — the project sidebar, git status in the
+  status bar, deploys — renders inert. A host that owns that chrome passes
+  `shellProps` (the full `WorkspaceShellProps`) instead, and then supplies the
+  chat itself.
+- `layout` (an SP-155 `ViewsArrangement`) replaces the space shell with the
+  host's own placement of the individual views — see
+  [The chat unit](#the-chat-unit) and [Files and editor](#files-and-editor).
+
+Do not wrap an own-mode `SproutWorkspace` in `SproutProviders` or
+`HostProvider`: it builds its own stack, and a second one would open a second
+events transport. A host that needs the stack above the workspace (to render
+its own Sprout views beside it) mounts `HostProvider` + `SproutProviders`
+itself and passes `providers="ambient"` — see
+[One workspace per page](#one-workspace-per-page).
 
 The package exposes three entry points:
 
@@ -87,9 +120,10 @@ The package exposes three entry points:
   wraps the views it composes itself without importing the whole views
   graph.
 
-`SproutProviders` sets up the provider stack the views need (optionally
-with an `eventsProvider` for the event transport); `SproutWorkspace` takes
-the host. `myHost` implements `SproutHost`: identity, entitlements, transport,
+`SproutProviders` is the provider stack the views need (optionally with an
+`eventsProvider` for the event transport), for a host that composes views
+itself under its own `HostProvider`; an own-mode `SproutWorkspace` mounts it
+for you. `myHost` implements `SproutHost`: identity, entitlements, transport,
 navigation intents, notifications, chrome slots, theme and capabilities.
 React and React DOM are peer dependencies; the host provides them. Heavy
 parts (the editor, the in-browser agent, space-specific code) load when a
@@ -153,8 +187,27 @@ are assembled too — see [Files and editor](#files-and-editor).
 
 The app-specific callbacks that are not chat state (the model picker, session
 restore, fork, opening a review buffer) are not assembled by the composition —
-a host supplies them through `viewProps.chat`, which replaces the assembled
-chat props for that kind. `chatInitialState` seeds the chat state (an empty
+a host adds them through `chatOverrides`, a `Partial<ChatProps>` merged over
+the assembled chat props, so the live transcript and send/queue wiring stay:
+
+```tsx
+<SproutWorkspace
+  /* … */
+  chatOverrides={useMemo(
+    () => ({
+      onModelClick: openModelPicker,
+      onRestoreSession: restoreSession, // enables the header history switcher
+      onForkAtBreakpoint: forkChat,
+    }),
+    [openModelPicker, restoreSession, forkChat],
+  )}
+/>
+```
+
+`chatOverrides` applies to the arranged `chat` view and to the composed space
+shell's chat. `viewProps.chat` instead replaces the assembled chat props
+wholesale (and `chatOverrides` is then ignored), for a host rendering its own
+chat state; so does `shellProps`. `chatInitialState` seeds the chat state (an empty
 chat otherwise; it must be referentially stable) and `chatFetch` routes chat
 calls through the host's transport. Ambient mode (`providers="ambient"`)
 builds none of this: the caller owns the provider stack and its chat, so
@@ -248,6 +301,29 @@ self-hosted backend — sets `capabilities.agentChanges: false` in its
 workspace" and makes no request. `localHost` (the daemon) declares it `true`
 and keeps the panel as it was; `headlessHost()` declares it `false`. Better
 still, leave `changes` out of the arrangement on such a host.
+
+## Preview
+
+Two preview kinds can be arranged:
+
+- **`previewPanel`** — the Code preview panel, driven by the dev-server
+  lifecycle API (`/api/preview/*` through the adapter, polled while open). An
+  own-mode composition assembles its `open` state: it starts open (the host
+  placed it, and the arrangement has no toggle of its own) and its close
+  button closes it. `viewProps.previewPanel` is merged over these, so a host
+  that wants its own toggle passes `{ open, onClose }`. In ambient mode pass
+  both yourself — without `open: true` the panel renders nothing. The default
+  arrangement places `previewPanel` in the `overlay` slot, so an arrangement
+  that omits `overlay` gets it; pass `overlay: []` to leave it out.
+- **`previewPane`** — the presentational pane with no data source; the host
+  supplies everything through `viewProps.previewPane` (`PreviewPaneProps`).
+  Required: `status` (`"starting" | "running" | "stopped" | "failed"`) and
+  `onRestart`. Optional: `url` (the iframe source, shown when `running`),
+  `error` (shown when `failed`), `reloadKey` (bump to reload the app),
+  `title` (header label, default "Preview"), `restartDisabled`, and `onClose`
+  (omitted, no close button renders). Arranged without these props the pane
+  renders an empty header and body, and its Restart button calls an
+  undefined `onRestart`.
 
 ## Escalation (run it where it can run)
 

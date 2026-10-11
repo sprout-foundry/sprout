@@ -140,6 +140,10 @@ owns the transport, so the composition neither registers nor connects — see
 "one workspace per page" in
 [workspace-package.md](workspace-package.md).
 
+For an in-browser agent, which calls the adapter answers itself and which it
+forwards to `apiBaseURL` is listed in
+[Backend paths for an in-browser-agent host](#backend-paths-for-an-in-browser-agent-host).
+
 ### `navigation: HostNavigation`
 
 Outward navigation. Sprout requests an intent; the host resolves it however it
@@ -575,6 +579,64 @@ On reload, the active chat's transcript is restored through `GET
 /api/chat-sessions` + `POST /api/chat-sessions/switch` (the same calls the
 chat unit makes at boot), so the host store is the source of truth for the
 conversation across reloads.
+
+## Backend paths for an in-browser-agent host
+
+A host whose agent runs in the browser (`transport.agent.kind: 'wasm'`) has
+no daemon behind it, but it still has a backend: Sprout's adapter answers
+some API calls in the page and forwards every other call to
+`transport.apiBaseURL` (`CloudAdapter.fetch` in
+`webui/src/services/cloudAdapter.ts`). A self-hosted backend for such a host
+serves the forwarded paths below, with the daemon's request and response
+shapes. The list covers the surfaces an own-mode `SproutWorkspace` reaches
+(the composed space shell, the arranged views, the chat unit) plus the
+escalation pieces a host mounts as its children.
+
+**Answered in the browser** (never forwarded, unless the WASM shell fails to
+start, when the file, agent and decision paths fall through to the backend):
+the agent itself (`/api/query`, `/api/query/stop`, `/api/query/steer`,
+`/api/ask-user/response`); files and search (`/api/files`, `/api/file`,
+`/api/create`, `/api/delete`, `/api/rename`, `/api/browse`,
+`/api/file-index`, `/api/search`, …, see
+`cloudEndpointRegistry/endpoints/wasm-local.ts`); `/api/git/*` (in-browser
+git); `/api/sessions*` and `/api/chat-sessions*` (browser-local stores);
+`/api/upload/image`; the edit and shell approval decisions; and the stubs in
+`endpoints/synthetic.ts` / `endpoints/noop.ts` (onboarding, instances,
+hotkeys, LSP status, `/api/config`, `/api/workspace`, the MCP and skills
+settings reads).
+
+**Forwarded to `transport.apiBaseURL`**, by surface:
+
+| Surface | Paths | Needed when |
+|---------|-------|-------------|
+| Chat | `POST /api/query/steer/retract`, `POST /api/query/rewind` (Edit & Resend), `POST /api/command/execute`, `POST /api/command/complete` (slash-command completion; a failure means no completions) | always (chat) |
+| Chat reconnect | `GET /proxy/chat/status?chat_id=` (`/api/query/status` rewritten) | the events stream reconnects during a turn |
+| Provider catalog | `GET /api/providers` | `capabilities.settings`, once the events stream is connected |
+| Chat session store | `POST /api/chat-sessions/turn` | `capabilities.chatSessions` |
+| Agent changes | `GET /api/changes/summary`, `GET /api/changes/session`, `GET /api/changes/diff`, `POST /api/changes/revert`, `GET /api/changes/timeline` | `capabilities.agentChanges` (declare it `false` otherwise) |
+| Turn change strip | `GET /api/changes/diff`, `POST /api/changes/revert` | the host passes `chatOverrides.onReviewChange` |
+| Preview | `GET /api/preview/status` (polled while open), `POST /api/preview/start`, `/restart`, `/stop` | a preview panel is open (arranged `previewPanel`, or the Code shell's toggle) |
+| In-browser terminal | `GET /api/terminal/agent-sessions` (polled while expanded), `POST /api/terminal/agent-sessions/{id}/attach`, `/kill` | `capabilities.localTerminal` is `false` (the Code shell then renders the in-browser terminal) |
+| Editor | `POST /api/completion` | the user enables AI completions |
+| Escalation | `GET /workspace`, `GET /workspace/{id}`, `/workspace/txn*`, `GET /runners` | the host mounts `AgentEscalationBridge` / `EscalationListener` |
+
+**Not through the adapter.** A few calls use the page's `fetch` directly and
+go to the **page origin**, not `apiBaseURL`: `GET /api/bootstrap` (startup
+config; defaults on failure), `GET /api/query/status` (only while no client id
+is cached), `POST /api/subagent/{id}/cancel` (stopping a subagent run) and the
+session export (`/api/sessions/{id}/export`, under `capabilities.export`). The
+events WebSocket goes to `transport.wsURL` (else the page's `/ws`), and the
+in-browser agent's model calls go to `agent.modelEndpoint` (else
+`transport.modelEndpoint`, else the page origin's `/proxy/chat`). When a
+startup repository is set and the browser clone fails, the adapter falls back
+to `POST <apiBase>/api/repo/import`. A `bearer` host additionally serves
+`/git-proxy` (git over CORS) and `/workspace/fly` at the page origin.
+
+With `capabilities.chatSessions` on, the session calls are addressed to the
+host, but an installed in-browser adapter still answers
+`/api/chat-sessions*` from its browser-local store (it matches on the path);
+only `/api/chat-sessions/turn` reaches the host. A host relying on its own
+session store for an in-browser agent should expect that.
 
 ## The agent-event stream
 

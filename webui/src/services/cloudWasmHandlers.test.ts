@@ -860,3 +860,107 @@ describe('the in-browser agent provider config follows the host backend', () => 
     setActiveHost(headlessHost());
   });
 });
+
+describe('handleWasmLocal — /api/search/replace', () => {
+  /** A workspace at /workspace whose files live in `files`; writes land there too. */
+  function replaceIn(initial: Record<string, string>, request: Record<string, unknown>) {
+    const files = { ...initial };
+    const writes: string[] = [];
+    const shell = createMockShell({
+      getWorkspaceRoot: () => '/workspace',
+      readFile: (path: string) => (path in files ? { content: files[path] } : { content: '', error: 'not found' }),
+      writeFile: (path: string, content: string) => {
+        writes.push(path);
+        files[path] = content;
+        return '';
+      },
+    });
+    const res = handleWasmLocal(shell, '/api/search/replace', 'POST', '/api/search/replace', JSON.stringify(request));
+    return { res, files, writes };
+  }
+
+  const FILE = '/workspace/src/a.ts';
+
+  it('replaces a plain query literally: a.b does not touch axb', async () => {
+    const { res, files } = replaceIn(
+      { [FILE]: 'a.b axb a.b\nAXB' },
+      { search: 'a.b', replace: 'X', files: ['src/a.ts'], case_sensitive: true },
+    );
+    expect(res.status).toBe(200);
+    expect(files[FILE]).toBe('X axb X\nAXB');
+    expect((await res.json()).total_changes).toBe(2);
+  });
+
+  it('ignores case unless case_sensitive', () => {
+    expect(replaceIn({ [FILE]: 'Foo foo FOO' }, { search: 'foo', replace: 'x', files: ['src/a.ts'] }).files[FILE]).toBe(
+      'x x x',
+    );
+    expect(
+      replaceIn({ [FILE]: 'Foo foo FOO' }, { search: 'foo', replace: 'x', files: ['src/a.ts'], case_sensitive: true })
+        .files[FILE],
+    ).toBe('Foo x FOO');
+  });
+
+  it('honours whole_word', () => {
+    const { files } = replaceIn(
+      { [FILE]: 'cat concat cat_x cat.' },
+      { search: 'cat', replace: 'dog', files: ['src/a.ts'], whole_word: true },
+    );
+    expect(files[FILE]).toBe('dog concat cat_x dog.');
+  });
+
+  it('treats the query as a regex only with regex set', () => {
+    const { files } = replaceIn(
+      { [FILE]: 'a1 a22 b3' },
+      { search: 'a\\d+', replace: 'N', files: ['src/a.ts'], regex: true },
+    );
+    expect(files[FILE]).toBe('N N b3');
+  });
+
+  it('searches a leading-dash query as text', () => {
+    const { files } = replaceIn(
+      { [FILE]: 'run --force -f' },
+      { search: '--force', replace: '--yes', files: ['src/a.ts'] },
+    );
+    expect(files[FILE]).toBe('run --yes -f');
+  });
+
+  it('inserts the replacement literally, $-patterns and backslashes included', () => {
+    const { files } = replaceIn(
+      { [FILE]: 'foo(bar)' },
+      { search: '(\\w+)\\((\\w+)\\)', replace: '$2 $1 $& \\1 &', files: ['src/a.ts'], regex: true },
+    );
+    expect(files[FILE]).toBe('$2 $1 $& \\1 &');
+  });
+
+  it('writes only files with a match, previews without writing, and refuses paths outside the workspace', async () => {
+    const other = '/workspace/src/b.ts';
+    const written = replaceIn(
+      { [FILE]: 'needle', [other]: 'haystack' },
+      { search: 'needle', replace: 'pin', files: ['src/a.ts', 'src/b.ts'] },
+    );
+    expect(written.writes).toEqual([FILE]);
+
+    const preview = replaceIn(
+      { [FILE]: 'needle' },
+      { search: 'needle', replace: 'pin', files: ['src/a.ts'], preview: true },
+    );
+    expect(preview.writes).toEqual([]);
+    expect(preview.files[FILE]).toBe('needle');
+    const match = (await preview.res.json()).changes[0].matches[0];
+    expect(match).toMatchObject({ line_number: 1, new_line: 'pin', column_start: 1, column_end: 7 });
+
+    const outside = replaceIn(
+      { '/etc/passwd': 'needle' },
+      { search: 'needle', replace: 'pin', files: ['../../etc/passwd'] },
+    );
+    expect(outside.res.status).toBe(400);
+    expect(outside.writes).toEqual([]);
+  });
+
+  it('rejects a regex the browser cannot compile', () => {
+    const { res, writes } = replaceIn({ [FILE]: 'x' }, { search: '(', replace: 'y', files: ['src/a.ts'], regex: true });
+    expect(res.status).toBe(400);
+    expect(writes).toEqual([]);
+  });
+});

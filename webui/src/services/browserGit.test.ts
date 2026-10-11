@@ -371,6 +371,33 @@ describe('executeGitOp before configureBrowserGit (boot state)', () => {
     expect(result.current).toBe('');
     expect(result.branches).toEqual([]);
   });
+
+  it('diff returns an honest empty diff instead of throwing (no .git in the VFS)', async () => {
+    // The embedded ?repo= import seeds the VFS with file contents but
+    // discards the .git objects, and the embed never wires browser git
+    // (configureBrowserGit) — so the editor's per-file diff fetch can
+    // never produce history. It must not 500 (the toast fires on every
+    // file open); it returns a neutral empty GitDiffResponse.
+    __resetBrowserGitForTest();
+    const result = (await executeGitOp('diff', undefined, { path: 'src/main.ts' })) as {
+      message: string;
+      path: string;
+      has_staged: boolean;
+      has_unstaged: boolean;
+      staged_diff: string;
+      unstaged_diff: string;
+      diff: string;
+    };
+    expect(result.message).toBe('success');
+    expect(result.path).toBe('src/main.ts');
+    expect(result.has_staged).toBe(false);
+    expect(result.has_unstaged).toBe(false);
+    expect(result.diff).toBe('');
+    expect(result.staged_diff).toBe('');
+    expect(result.unstaged_diff).toBe('');
+    // Must not have touched the git helpers.
+    expect(mockGitStatusMatrix).not.toHaveBeenCalled();
+  });
 });
 
 describe('repository restore and replacement', () => {

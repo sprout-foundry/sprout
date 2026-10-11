@@ -107,6 +107,32 @@ function emptyGitStatus() {
   };
 }
 
+/**
+ * Honest empty GitDiffResponse for the boot-time guard in `executeGitOp`
+ * (the `diff` analogue of `emptyGitStatus`): browser git was never wired
+ * (the VFS bridge is absent — e.g. an embedded `SproutWorkspace` that
+ * imported a repo via `?repo=` and has no `.git` in the VFS), so there is
+ * no history to diff. Return a neutral empty-diff shape (message `success`,
+ * no staged/unstaged changes) instead of throwing `browserGit not
+ * configured`, which the handler surfaces as a 500 → the editor's
+ * "Failed to fetch git diff" toast on every file open. The editor's
+ * diff-fetch handler then takes its empty branch (clears the gutter, a
+ * debug log) rather than its error branch (the toast).
+ */
+function emptyGitDiff(path: string) {
+  return {
+    message: 'success',
+    path,
+    has_staged: false,
+    has_unstaged: false,
+    staged_diff: '',
+    unstaged_diff: '',
+    diff: '',
+    original_content: '',
+    modified_content: '',
+  };
+}
+
 async function ensureDir(path: string) {
   const fs = getFs().promises;
   // lightning-fs mkdir creates one level: make each ancestor in turn, or a
@@ -890,6 +916,23 @@ export async function executeGitOp(
     case 'branch/create':
       return gitCreateBranch(body?.name as string);
     case 'diff':
+      // Boot-time guard (matches the 'status'/'branches' cases above): before
+      // browser git is wired (configureBrowserGit — the full app's boot, or
+      // the standalone escalation page) there is no VFS bridge and no .git
+      // to diff. A ?repo= import seeds the in-memory VFS with file contents
+      // but discards the .git objects, so the embedded workspace's diff
+      // fetch can never succeed. Return an honest empty diff (the gutter
+      // simply shows nothing, no error) instead of throwing — a throw
+      // surfaces as a 500 and the editor toasts "Failed to fetch git diff"
+      // on every file open. Once browser git is wired (full-app mode), the
+      // guard falls through to the real diff; a genuine diff failure there
+      // still errors, which is the honest signal.
+      if (!getBrowserGitVfsBridge()) {
+        // Per-file HTTP surface (the panel always asks per path): an honest
+        // empty GitDiffResponse. The no-path branch (the shell's change-list
+        // diff, not the UI's per-file ask) answers with an empty list.
+        return query?.path ? emptyGitDiff(query.path) : [];
+      }
       // HTTP surface: GitDiffResponse for one file (the panel always asks per
       // path); shell consumers keep using gitDiff() for the change list.
       if (query?.path) return gitFileDiff(query.path);

@@ -45,7 +45,9 @@ const diagnosticsEndpoints: CloudEndpoint[] = [];
 // Not listed: the chat list is browser-local in cloud mode (each chat owns an
 // in-page agent and a localStorage transcript). CloudAdapter serves
 // /api/chat-sessions* from cloudChatSessions before this registry is
-// consulted; the worktree-only sub-endpoints stay synthetic (synthetic.ts).
+// consulted, unless the active host declares the `chatSessions` capability,
+// in which case they are forwarded to the host's store. The worktree-only
+// sub-endpoints stay synthetic either way (synthetic.ts).
 
 // --- History ---
 // Intentionally empty: these endpoints are not available in browser mode and

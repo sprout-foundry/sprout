@@ -4,6 +4,8 @@
 
 import { WEBUI_CLIENT_ID_HEADER, getWebUIClientId } from './clientSession';
 import { CloudAdapter, type CloudAdapterConfig } from './cloudAdapter';
+import { registerActiveHost, setActiveHost } from '../host/accessor';
+import { makeTestHost } from '../host/testHost';
 import { handleBrowserGitRequest } from './browserGitHandler';
 
 // Mock clientSession module
@@ -826,6 +828,55 @@ describe('CloudAdapter', () => {
       expect(switched.status).toBe(200);
       expect((await switched.json()).active_chat_id).toBe(created.chat_session.id);
       expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    describe('chat-sessions with a host that keeps its own store', () => {
+      let restoreHost: (() => void) | null = null;
+
+      afterEach(() => {
+        restoreHost?.();
+        restoreHost = null;
+        // The restore keeps the registered host when none was active before,
+        // so put back a host without the capability for the remaining tests.
+        setActiveHost(makeTestHost({ chatSessions: false }));
+      });
+
+      it('forwards the list and switch calls to the host when it declares chatSessions', async () => {
+        restoreHost = registerActiveHost(makeTestHost({ chatSessions: true }));
+        mockFetch.mockResolvedValue(
+          new Response(JSON.stringify({ chat_sessions: [], active_chat_id: null }), { status: 200 }),
+        );
+
+        await adapter.fetch('https://host.example/api/chat-sessions', { method: 'GET' });
+        await adapter.fetch('https://host.example/api/chat-sessions/switch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: 'c1' }),
+        });
+
+        expect(mockFetch).toHaveBeenCalledTimes(2);
+        expect(mockFetch.mock.calls[0][0]).toBe('https://host.example/api/chat-sessions');
+        expect(mockFetch.mock.calls[1][0]).toBe('https://host.example/api/chat-sessions/switch');
+        expect(JSON.parse(mockFetch.mock.calls[1][1].body as string)).toEqual({ id: 'c1' });
+      });
+
+      it('keeps the browser-local store when the host does not declare chatSessions', async () => {
+        restoreHost = registerActiveHost(makeTestHost({ chatSessions: false }));
+
+        const response = await adapter.fetch('https://host.example/api/chat-sessions', { method: 'GET' });
+
+        expect(mockFetch).not.toHaveBeenCalled();
+        expect((await response.json()).chat_sessions.length).toBeGreaterThan(0);
+      });
+
+      it('still answers the worktree sub-paths with the synthetic stubs', async () => {
+        restoreHost = registerActiveHost(makeTestHost({ chatSessions: true }));
+
+        const response = await adapter.fetch('/api/chat-sessions/worktree-mappings', { method: 'GET' });
+
+        expect(response.status).toBe(200);
+        expect(mockFetch).not.toHaveBeenCalled();
+      });
     });
 
     it('should preserve body from Request object for standard backend proxy', async () => {

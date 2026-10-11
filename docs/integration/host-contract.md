@@ -599,7 +599,8 @@ the agent itself (`/api/query`, `/api/query/stop`, `/api/query/steer`,
 `/api/create`, `/api/delete`, `/api/rename`, `/api/browse`,
 `/api/file-index`, `/api/search`, …, see
 `cloudEndpointRegistry/endpoints/wasm-local.ts`); `/api/git/*` (in-browser
-git); `/api/sessions*` and `/api/chat-sessions*` (browser-local stores);
+git); `/api/sessions*` and, unless the host declares `chatSessions`,
+`/api/chat-sessions*` (browser-local stores);
 `/api/upload/image`; the edit and shell approval decisions; and the stubs in
 `endpoints/synthetic.ts` / `endpoints/noop.ts` (onboarding, instances,
 hotkeys, LSP status, `/api/config`, `/api/workspace`, the MCP and skills
@@ -612,7 +613,7 @@ settings reads).
 | Chat | `POST /api/query/steer/retract`, `POST /api/query/rewind` (Edit & Resend), `POST /api/command/execute`, `POST /api/command/complete` (slash-command completion; a failure means no completions) | always (chat) |
 | Chat reconnect | `GET /proxy/chat/status?chat_id=` (`/api/query/status` rewritten) | the events stream reconnects during a turn |
 | Provider catalog | `GET /api/providers` | `capabilities.settings`, once the events stream is connected |
-| Chat session store | `POST /api/chat-sessions/turn` | `capabilities.chatSessions` |
+| Chat session store | `GET /api/chat-sessions`, `POST /api/chat-sessions/{create,switch,rename,delete,delete-all,turn}`, `GET /api/chat-sessions/messages` | `capabilities.chatSessions` |
 | Agent changes | `GET /api/changes/summary`, `GET /api/changes/session`, `GET /api/changes/diff`, `POST /api/changes/revert`, `GET /api/changes/timeline` | `capabilities.agentChanges` (declare it `false` otherwise) |
 | Turn change strip | `GET /api/changes/diff`, `POST /api/changes/revert` | the host passes `chatOverrides.onReviewChange` |
 | Preview | `GET /api/preview/status` (polled while open), `POST /api/preview/start`, `/restart`, `/stop` | a preview panel is open (arranged `previewPanel`, or the Code shell's toggle) |
@@ -632,11 +633,13 @@ startup repository is set and the browser clone fails, the adapter falls back
 to `POST <apiBase>/api/repo/import`. A `bearer` host additionally serves
 `/git-proxy` (git over CORS) and `/workspace/fly` at the page origin.
 
-With `capabilities.chatSessions` on, the session calls are addressed to the
-host, but an installed in-browser adapter still answers
-`/api/chat-sessions*` from its browser-local store (it matches on the path);
-only `/api/chat-sessions/turn` reaches the host. A host relying on its own
-session store for an in-browser agent should expect that.
+**Chat sessions.** Without `capabilities.chatSessions`, the adapter answers
+`/api/chat-sessions*` from a browser-local store (one transcript per chat in
+`localStorage`). With the capability on, the adapter forwards every
+`/api/chat-sessions*` call to the host's store instead (list, create, switch,
+rename, delete, messages and `turn`), so the host implements the whole
+session API listed under "Chat session store" above. The worktree and
+compaction sub-paths stay stubbed in the browser either way.
 
 ## The agent-event stream
 

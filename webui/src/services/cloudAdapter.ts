@@ -12,6 +12,7 @@
  *   cloudWasmHandlers.ts — WASM-local file operation handlers
  */
 
+import { getActiveHost } from '../host/accessor';
 import { setActiveRepoURL } from './activeRepo';
 import type { APIAdapter, PlatformNavItem } from './apiAdapter';
 import { WEBUI_CLIENT_ID_HEADER, getWebUIClientId } from './clientSession';
@@ -460,10 +461,17 @@ export class CloudAdapter implements APIAdapter {
     }
 
     // ── Chat sessions (localStorage-backed) ────────────────────────
-    // The agent runs in the page, so the chat list lives here too: each
-    // chat owns a browser-local transcript and its own in-page agent. The
-    // worktree/compaction sub-paths fall through to the synthetic stubs.
-    if (urlPath === '/api/chat-sessions' || urlPath.startsWith('/api/chat-sessions/')) {
+    // The agent runs in the page, so by default the chat list lives here
+    // too: each chat owns a browser-local transcript and its own in-page
+    // agent. A host that declares the `chatSessions` capability keeps the
+    // list in its own store, so its requests are forwarded instead. The
+    // capability decides, not the URL: the host's calls arrive as absolute
+    // URLs, but the path match ignores the origin. The worktree/compaction
+    // sub-paths fall through to the synthetic stubs either way.
+    if (
+      (urlPath === '/api/chat-sessions' || urlPath.startsWith('/api/chat-sessions/')) &&
+      !getActiveHost()?.capabilities.chatSessions
+    ) {
       // The chat client calls fetch(url, { body }), so the body is on init.
       const bodyStr = typeof init?.body === 'string' ? init.body : await this.extractRequestBody(input);
       const handled = handleCloudChatSessionsEndpoint(urlPath, method, url, bodyStr ?? undefined);

@@ -909,6 +909,35 @@ describe('handleWasmLocal — /api/search/replace', () => {
     expect(files[FILE]).toBe('dog concat cat_x dog.');
   });
 
+  it('bounds a whole regex alternation with whole_word', () => {
+    const { files } = replaceIn(
+      { [FILE]: 'catalog hotdog cat' },
+      { search: 'cat|dog', replace: 'pet', files: ['src/a.ts'], regex: true, whole_word: true },
+    );
+    expect(files[FILE]).toBe('catalog hotdog pet');
+  });
+
+  it('reports each replaced occurrence with 1-based columns, as the daemon does', async () => {
+    const { res } = replaceIn(
+      { [FILE]: 'x needle needle\nnone' },
+      { search: 'needle', replace: 'pin', files: ['src/a.ts'], preview: true },
+    );
+    expect(await res.json()).toEqual({
+      changes: [
+        {
+          file: 'src/a.ts',
+          changed_lines: 1,
+          matches: [
+            { line_number: 1, old_line: 'x needle needle', new_line: 'x pin pin', column_start: 3, column_end: 9 },
+            { line_number: 1, old_line: 'x needle needle', new_line: 'x pin pin', column_start: 10, column_end: 16 },
+          ],
+        },
+      ],
+      total_changes: 2,
+      preview: true,
+    });
+  });
+
   it('treats the query as a regex only with regex set', () => {
     const { files } = replaceIn(
       { [FILE]: 'a1 a22 b3' },

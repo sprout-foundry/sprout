@@ -376,29 +376,19 @@ func getContextLines(buffer []string, bufferLen, contextLines int, before bool) 
 // compileSearchPattern compiles a search pattern with optional modifiers
 func compileSearchPattern(query string, caseSensitive, wholeWord, isRegex bool) (*regexp.Regexp, error) {
 	pattern := query
-
-	if isRegex {
-		if !caseSensitive {
-			pattern = "(?i)" + pattern
-		}
-		if wholeWord {
-			pattern = `(?m)\b` + pattern + `\b`
-		}
-		return regexp.Compile(pattern)
+	if !isRegex {
+		// Plain text search matches the query literally.
+		pattern = regexp.QuoteMeta(pattern)
 	}
-
-	// Escape special regex characters for plain text search
-	escaped := regexp.QuoteMeta(pattern)
-
-	if !caseSensitive {
-		escaped = "(?i)" + escaped
-	}
-
 	if wholeWord {
-		escaped = `(?m)\b` + escaped + `\b`
+		// Grouped, so the boundaries bound the whole expression, not just
+		// the first and last alternative of a regex like `a|b`.
+		pattern = `\b(?:` + pattern + `)\b`
 	}
-
-	return regexp.Compile(escaped)
+	if !caseSensitive {
+		pattern = "(?i)" + pattern
+	}
+	return regexp.Compile(pattern)
 }
 
 // isBinaryFile checks if a file appears to be binary

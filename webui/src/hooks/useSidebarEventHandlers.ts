@@ -2,7 +2,10 @@ import { useEffect } from 'react';
 import type { RefObject } from 'react';
 import type { FileTreeHandle } from '../components/SidebarFilesSection';
 import { useHostCapabilities } from '../host';
+import { useCommandHandler } from '../services/commandHandlers';
 import type { SectionTab } from './useSidebarState';
+
+const SIDEBAR_COMMANDS = ['open_search'] as const;
 
 interface OpenSettingsFocusEventDetail {
   focus?: 'provider';
@@ -43,6 +46,7 @@ export function useSidebarEventHandlers({
   }, [onSidebarToggle]);
 
   // Open search tab on hotkey command
+  useCommandHandler(SIDEBAR_COMMANDS);
   useEffect(() => {
     const handleHotkey = (e: Event) => {
       const detail = (e as CustomEvent).detail;

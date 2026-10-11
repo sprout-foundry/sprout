@@ -4,9 +4,15 @@ All notable changes to Sprout will be documented in this file.
 
 ## [Unreleased]
 
-- fix(webui): the "Git Diff — Failed to fetch git diff" warning toast that fired on every file open in an embedded workspace whose repo arrived through a `?repo=` import — the import seeds the in-memory VFS with file contents but discards the `.git` objects, and an embed never wires browser git, so the editor's decorative gutter diff fetch 500'd on each open. Browser git's `diff` op now returns an honest empty diff (the `diff` analogue of the existing `status`/`branches` boot-time guards) when the VFS bridge is absent, so the gutter simply stays empty instead of toasting; a real diff failure still errors once browser git is wired.
+## [v0.30.0] - 2026-10-11
+
 - feat(commit): opt-in AI-assistance trailer. With `commit_attribution: "trailer"` (default `"off"`), commits Sprout creates — `sprout commit` and `/commit`, the agent's commit tool, and web UI commits — end with `Assisted-by: sprout/<version> (<provider>/<model>)`, one line per tool+model: the agent's model, plus the model that wrote the message when one did. The trailer joins an existing trailer block and is not repeated on an amend or re-run. Sprout never writes `Co-Authored-By` for a tool, and generated commit messages have any such line or "Generated with …" footer removed. Set it with `sprout config set commit_attribution trailer` or in Settings → Advanced.
 - ci: `scripts/check-commit-attribution.sh` also validates `Assisted-by:` trailers (`<tool>[/<version>] (<provider>/<model>)`, one per tool+model) and rejects malformed or repeated ones, alongside AI `Co-Authored-By` lines and "Generated with …" footers; its tests run in CI.
+- feat(workspace): `@sprout-foundry/workspace` 1.6.1 (below).
+
+## [@sprout-foundry/workspace v1.6.1] - 2026-10-11
+
+- fix(webui): the "Git Diff — Failed to fetch git diff" warning toast that fired on every file open in an embedded workspace whose repo arrived through a `?repo=` import — the import seeds the in-memory VFS with file contents but discards the `.git` objects, and an embed never wires browser git, so the editor's decorative gutter diff fetch 500'd on each open. Browser git's `diff` op now returns an honest empty diff (the `diff` analogue of the existing `status`/`branches` boot-time guards) when the VFS bridge is absent, so the gutter simply stays empty instead of toasting; a real diff failure still errors once browser git is wired.
 
 ## [v0.29.2] - 2026-10-11
 

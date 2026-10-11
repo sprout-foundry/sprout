@@ -211,16 +211,6 @@ function fireKeyUp(key: string, opts: Partial<KeyboardEventInit> = {}) {
 const noop = () => {};
 function HotkeyCommands() {
   useHotkeyCommandHandler({
-    onToggleCommandPalette: noop,
-    onOpenCommandPalette: noop,
-    onNewFile: noop,
-    onToggleSidebar: noop,
-    onToggleTerminal: noop,
-    onPrimaryViewChange: noop,
-    onFocusTabIndex: noop,
-    onFocusPaneIndex: noop,
-    onSplitRequest: noop,
-    onCloseBuffer: noop,
     onCloseAllBuffers: noop,
     onCloseOtherBuffers: noop,
     onSaveAllBuffers: noop,

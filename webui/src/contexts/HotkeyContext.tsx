@@ -244,7 +244,20 @@ function dispatchHotkey(entry: HotkeyEntry): void {
   );
 }
 
+/**
+ * Loads the hotkey config and turns bound key presses into `sprout:hotkey`
+ * events. A provider nested inside another one (a second provider stack
+ * around part of the tree) defers to the outer provider: each one installs
+ * its own key listener, so two of them would dispatch every shortcut twice
+ * and every toggling command would cancel itself out.
+ */
 export function HotkeyProvider({ children }: HotkeyProviderProps): JSX.Element {
+  const enclosing = useContext(HotkeyContext);
+  if (enclosing) return <>{children}</>;
+  return <HotkeyProviderRoot>{children}</HotkeyProviderRoot>;
+}
+
+function HotkeyProviderRoot({ children }: HotkeyProviderProps): JSX.Element {
   const [hotkeys, setHotkeys] = useState<HotkeyEntry[] | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const { addNotification } = useNotifications();
@@ -286,6 +299,10 @@ export function HotkeyProvider({ children }: HotkeyProviderProps): JSX.Element {
     if (!isLoaded || !ownsDocument) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      // A focused component (the code editor's own keymap, a dialog) that
+      // already acted on the key prevents its default; dispatching the
+      // command as well would run it twice.
+      if (event.defaultPrevented) return;
       const entry = resolveHotkey(event, hotkeys);
       if (!entry) return;
       event.preventDefault();

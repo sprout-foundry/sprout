@@ -26,6 +26,7 @@ import { ApiService } from '../services/api/apiService';
 import { type EditorBuffer } from '../types/editor';
 import { isSharedMode } from '../utils/sharedMode';
 import { catchIfAsync, getBufferIcon, getChatId, getFileIcon, getFileIconColor } from './editorTabIcons';
+import { closeBuffersMatching } from './closeBuffers';
 import { showThemedConfirm } from './ThemedDialog';
 import './EditorTabs.css';
 
@@ -330,30 +331,8 @@ function EditorTabs({
   // rest of the app. The list of dirty files is captured at the moment the
   // dialog opens so any new modifications made while the dialog is open
   // don't sneak into the batch.
-  const closeRelatedBuffers = async (predicate: (buffer: EditorBuffer) => boolean) => {
-    const closeTargets = Array.from(buffersRef.current.values()).filter(
-      (buffer) => buffer.isClosable !== false && !buffer.isPinned && predicate(buffer),
-    );
-    const modifiedTargets = closeTargets.filter((buffer) => buffer.isModified);
-
-    if (modifiedTargets.length > 0) {
-      const names = modifiedTargets.map((b) => b.file.name).join(', ');
-      const display = names.length > 60 ? `${names.slice(0, 60)}… and ${modifiedTargets.length - 1} more` : names;
-      const ok = await showThemedConfirm(`You have unsaved changes in:\n${display}\n\nClose all without saving?`, {
-        title: 'Unsaved changes',
-        type: 'danger',
-        confirmLabel: 'Close without saving',
-      });
-      if (!ok) return;
-    }
-
-    // Re-read at the moment of confirm so the snapshot reflects the latest
-    // buffer state (a file might have been saved while the dialog was open).
-    const finalTargets = Array.from(buffersRef.current.values()).filter(
-      (buffer) => buffer.isClosable !== false && !buffer.isPinned && predicate(buffer),
-    );
-    finalTargets.forEach((buffer) => closeBuffer(buffer.id));
-  };
+  const closeRelatedBuffers = (predicate: (buffer: EditorBuffer) => boolean) =>
+    closeBuffersMatching(() => buffersRef.current, closeBuffer, predicate);
 
   // ── Safe callbacks for chat actions (fire-and-forget with error handling) ──
   // These catch unhandled rejections when the prop is actually an async function

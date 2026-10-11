@@ -16,7 +16,14 @@ import { useCommandHandler } from '../services/commandHandlers';
 /** The daemon's built-in chat (pkg/webui defaultChatID); the server refuses to delete it. */
 const PERMANENT_DEFAULT_CHAT_ID = 'default';
 
-const isFocusSplitCommand = (commandId: string): boolean => /^focus_split_\d+$/.test(commandId);
+const SPLIT_COMMANDS = new Map<string, 'vertical' | 'horizontal'>([
+  ['split_editor_vertical', 'vertical'],
+  ['split_editor_horizontal', 'horizontal'],
+]);
+
+// The pane commands this workspace handles: it owns the split layout.
+const isPaneCommand = (commandId: string): boolean =>
+  /^focus_split_\d+$/.test(commandId) || SPLIT_COMMANDS.has(commandId);
 
 export interface EditorWorkspaceProps {
   currentView: ViewType;
@@ -653,14 +660,19 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     [panes, activePaneId, splitPane, switchPane, updatePaneSize, maxPanes],
   );
 
-  // Listen for focus_split hotkeys
-  useCommandHandler(isFocusSplitCommand);
+  // Listen for the pane hotkeys (focus_split_N, split_editor_*)
+  useCommandHandler(isPaneCommand);
   React.useEffect(() => {
     const handleHotkey = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       if (!detail?.commandId) return;
 
       const commandId = detail.commandId;
+      const splitDirection = SPLIT_COMMANDS.get(commandId);
+      if (splitDirection) {
+        handleSplitRequest(splitDirection);
+        return;
+      }
       const match = commandId.match(/^focus_split_(\d+)$/);
 
       if (match) {
@@ -671,7 +683,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
 
     window.addEventListener('sprout:hotkey', handleHotkey);
     return () => window.removeEventListener('sprout:hotkey', handleHotkey);
-  }, [handleFocusPaneIndex]);
+  }, [handleFocusPaneIndex, handleSplitRequest]);
 
   // SP-140-3 §3a is superseded by the Design empty state: a `design` view no
   // longer bounces to chat when the tree is absent — the empty workspace gets

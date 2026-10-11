@@ -21,7 +21,6 @@ export const COMMAND_DEFINITIONS: CommandDef[] = [
   { id: 'toggle_preview', label: 'Toggle Preview Panel', category: 'View' },
   { id: 'split_editor_vertical', label: 'Split Editor Vertical', category: 'View' },
   { id: 'split_editor_horizontal', label: 'Split Editor Horizontal', category: 'View' },
-  { id: 'split_editor_grid', label: 'Split Editor Grid', category: 'View' },
   { id: 'focus_split_1', label: 'Focus Editor Split 1', category: 'View' },
   { id: 'focus_split_2', label: 'Focus Editor Split 2', category: 'View' },
   { id: 'focus_split_3', label: 'Focus Editor Split 3', category: 'View' },

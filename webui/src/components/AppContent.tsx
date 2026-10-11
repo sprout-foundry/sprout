@@ -6,6 +6,7 @@ import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useSproutFetch } from '../contexts/SproutAdapterContext';
 import { useActiveChatTab } from '../hooks/useActiveChatTab';
 import { useAppContentHotkeys } from '../hooks/useAppContentHotkeys';
+import { useHotkeyCommandHandler } from '../hooks/useHotkeyCommandHandler';
 import { useChatSessionsSync } from '../hooks/useChatSessionsSync';
 import { getPluginViewIds } from '../services/pluginRegistry';
 import { useFileHandler } from '../hooks/useFileHandler';
@@ -28,6 +29,7 @@ import { useLog } from '../utils/log';
 import type { WorkspaceModeId, WorkspaceShellProps } from '../views';
 import { SproutWorkspace, useWorkspaceMode, useWorkspaceChatProps, useWorkspaceEditor } from '../views';
 import { useDesignSectionPersistence } from '../workspaces/useDesignSectionPersistence';
+import { closeBuffersMatching } from './closeBuffers';
 import CommandPalette, { type PaletteMode } from './CommandPalette';
 import { useCommandPaletteSources } from './CommandPalette/useCommandPaletteSources';
 import type { ContextPanelHandle } from './contextPanel/types';
@@ -167,6 +169,8 @@ const AppContent: React.FC<AppContentProps> = ({
     splitPane,
     switchPane,
     switchToBuffer,
+    saveAllBuffers,
+    toggleBufferPin,
   } = useEditorManager();
   const { openFile: openWorkspaceFile } = useWorkspaceEditor();
   const apiService = ApiService.getInstance();
@@ -586,6 +590,42 @@ const AppContent: React.FC<AppContentProps> = ({
     openFile,
   });
 
+  // The editor, tab and terminal commands (menu items, shortcuts, palette).
+  // useAppContentHotkeys above owns the app-level ones and EditorWorkspace the
+  // pane splits, so every command has exactly one handler.
+  const handleCloseAllBuffers = useCallback(
+    () =>
+      void closeBuffersMatching(
+        () => buffersRef.current,
+        closeBuffer,
+        () => true,
+      ),
+    [buffersRef, closeBuffer],
+  );
+  const handleCloseOtherBuffers = useCallback(() => {
+    if (!activeBufferId) return;
+    void closeBuffersMatching(
+      () => buffersRef.current,
+      closeBuffer,
+      (buffer) => buffer.id !== activeBufferId,
+    );
+  }, [activeBufferId, buffersRef, closeBuffer]);
+  const handleSaveAllBuffers = useCallback(() => void saveAllBuffers(), [saveAllBuffers]);
+  const handleTogglePinTab = useCallback(() => {
+    if (activeBufferId) toggleBufferPin(activeBufferId);
+  }, [activeBufferId, toggleBufferPin]);
+  useHotkeyCommandHandler({
+    onCloseAllBuffers: handleCloseAllBuffers,
+    onCloseOtherBuffers: handleCloseOtherBuffers,
+    onSaveAllBuffers: handleSaveAllBuffers,
+    onTogglePinTab: handleTogglePinTab,
+    onSwitchToBuffer: switchToBuffer,
+    onSwitchPane: switchPane,
+    activeBufferId,
+    activePaneId,
+    buffers,
+  });
+
   // ── Command palette plumbing ─────────────────────────────────────────
   // The palette's data sources (commands, the file index, recents, symbol
   // search) are shared with the composed workspace's palette unit.
@@ -637,10 +677,6 @@ const AppContent: React.FC<AppContentProps> = ({
         handleOpenHotkeysConfig();
         return;
       }
-      if (commandId === 'editor_cycle_whitespace_rendering') {
-        window.dispatchEvent(new CustomEvent('editor-cycle-whitespace-rendering'));
-        return;
-      }
       if (commandId === 'format_document') {
         document.dispatchEvent(new CustomEvent('editor-format-document'));
         return;
@@ -653,8 +689,8 @@ const AppContent: React.FC<AppContentProps> = ({
         document.dispatchEvent(new CustomEvent('editor-go-to-workspace-symbol'));
         return;
       }
-      // Everything else routes through the existing hotkey infrastructure
-      // (useAppContentHotkeys already listens for sprout:hotkey events).
+      // Everything else routes through the hotkey handlers (useAppContentHotkeys,
+      // useHotkeyCommandHandler, EditorWorkspace), the path menus and shortcuts take.
       window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId } }));
     },
     [onSidebarToggle, onTerminalExpandedChange, isTerminalExpanded, handleOpenHotkeysConfig],

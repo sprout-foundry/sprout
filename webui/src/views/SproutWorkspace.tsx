@@ -10,7 +10,7 @@ import type { AppState } from '../types/app';
 import { resolveWorkspaceMode } from '../workspaces/registry';
 import type { WorkspaceModeContext, WorkspaceModeId } from '../workspaces/registry';
 import type { WorkspaceShellProps } from '../workspaces/shell';
-import { wireHostAgentBackend } from './hostAgentBackend';
+import { resetHostAgentBackend, wireHostAgentBackend } from './hostAgentBackend';
 import { useSproutWorkspaceChatTransport } from './SproutWorkspaceChat';
 import { ArrangedViews, ComposedSpaceShell } from './SproutWorkspaceUnits';
 import { ViewsLayout } from './ViewsLayout';
@@ -361,9 +361,15 @@ export function SproutWorkspace({
     const restoreActiveHost = registerActiveHost(host);
     // Wire the backend before connecting, so a wasm backend reports "not
     // connected" until its adapter is installed, even if the socket opens first.
+    // A host that names no backend starts from the socket's connection
+    // state, not whatever an earlier wasm mount left behind.
     if (agentBackendKind) void wireHostAgentBackend(host, project.repoUrl);
+    else resetHostAgentBackend();
     chatTransport.eventsProvider.connect();
-    return restoreActiveHost;
+    return () => {
+      restoreActiveHost();
+      if (agentBackendKind === 'wasm') resetHostAgentBackend();
+    };
   }, [ambient, host, agentBackendKind, project.repoUrl, chatTransport.eventsProvider]);
 
   let content: ReactNode;

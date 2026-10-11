@@ -107,7 +107,13 @@ type HostAgentBackend =
   serves an events socket (the agent's events are delivered in the page), and
   as not connected until then. Work that waits for a connection (the chat
   session load, the provider catalog) therefore runs only once the adapter is
-  in place.
+  in place. A failing events socket shows no connection-error toast for such a
+  host. Once the adapter is installed, the project's `repoUrl` is imported into
+  the in-browser workspace (from the import cache when the page has one) once
+  per page, not on every mount or reconnect; a `?repo=` deep link or the
+  page's bootstrap repo is not imported over it. Unmounting the workspace
+  hands the connection state back to the events socket, as a host that names
+  no backend has it.
 
 When the in-browser agent runs against a daemon backend, its model calls go to
 the daemon's own model proxy (`<apiBaseURL>/api/proxy/chat`).

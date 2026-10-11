@@ -333,7 +333,9 @@ class WebSocketService {
       this.connecting = false;
       // Only notify on the very first connection error. Don't spam toasts during
       // reconnect cycles — onerror can fire transiently and up to 30 times.
-      if (!this.wasConnectedBefore) {
+      // When the agent runs in the page, the socket is optional (the host may
+      // serve none), so its failure is not a connection error worth a toast.
+      if (!this.wasConnectedBefore && this.localAgent === 'none') {
         notificationBus.notify('error', 'Connection Error', 'WebSocket error: ' + String(error));
       }
       // Note: onerror does not necessarily mean the connection is dead.

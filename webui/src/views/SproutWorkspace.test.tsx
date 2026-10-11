@@ -63,8 +63,10 @@ vi.mock('../components/AgentChangesPanel', () => ({
 // so the composition's decision — whether and with what it wires the backend —
 // is what the tests observe.
 const wireHostAgentBackend = vi.fn();
+const resetHostAgentBackend = vi.fn();
 vi.mock('./hostAgentBackend', () => ({
   wireHostAgentBackend: (host: unknown, repoUrl: unknown) => wireHostAgentBackend(host, repoUrl),
+  resetHostAgentBackend: () => resetHostAgentBackend(),
 }));
 
 // The registry pulls the built-in shells in with it; stub them so the space is
@@ -313,6 +315,51 @@ describe('SproutWorkspace', () => {
     await screen.findByTestId('sprout-workspace');
 
     expect(wireHostAgentBackend).toHaveBeenCalledWith(host, undefined);
+  });
+
+  it('resets the agent backend state for a host that names no backend', async () => {
+    render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} layout={DEFAULT_VIEWS_ARRANGEMENT} />);
+    await screen.findByTestId('sprout-workspace');
+
+    expect(wireHostAgentBackend).not.toHaveBeenCalled();
+    expect(resetHostAgentBackend).toHaveBeenCalledTimes(1);
+  });
+
+  it('resets the agent backend state when a wasm-backed workspace unmounts', async () => {
+    const host = makeHost({
+      transport: {
+        apiBaseURL: '',
+        wsURL: '',
+        authMode: 'none',
+        agent: { kind: 'wasm', modelEndpoint: '' },
+      },
+    });
+    const { unmount } = render(
+      <SproutWorkspace project={PROJECT} space="code" host={host} layout={DEFAULT_VIEWS_ARRANGEMENT} />,
+    );
+    await screen.findByTestId('sprout-workspace');
+    expect(resetHostAgentBackend).not.toHaveBeenCalled();
+
+    unmount();
+    expect(resetHostAgentBackend).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the state alone when a daemon-backed workspace unmounts', async () => {
+    const host = makeHost({
+      transport: {
+        apiBaseURL: 'https://daemon.test',
+        wsURL: 'wss://daemon.test/ws',
+        authMode: 'none',
+        agent: { kind: 'daemon', apiBaseURL: 'https://daemon.test', wsURL: 'wss://daemon.test/ws' },
+      },
+    });
+    const { unmount } = render(
+      <SproutWorkspace project={PROJECT} space="code" host={host} layout={DEFAULT_VIEWS_ARRANGEMENT} />,
+    );
+    await screen.findByTestId('sprout-workspace');
+
+    unmount();
+    expect(resetHostAgentBackend).not.toHaveBeenCalled();
   });
 
   it('does not wire an agent backend in ambient mode (the caller owns it)', async () => {

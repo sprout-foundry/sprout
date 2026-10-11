@@ -1359,6 +1359,28 @@ describe('WebSocketService - in-browser agent connection state', () => {
     expect(seen).toEqual([]);
   });
 
+  it.each(['starting', 'ready'] as const)(
+    'shows no connection-error toast when the socket fails (agent %s)',
+    (state) => {
+      const ws = WebSocketService.getInstance();
+      ws.setLocalAgentState(state);
+
+      ws.connect();
+      triggerWebSocketError(new Event('error'));
+
+      expect(notificationBus.notify).not.toHaveBeenCalled();
+    },
+  );
+
+  it('still shows the connection-error toast for a socket-backed agent', () => {
+    const ws = WebSocketService.getInstance();
+
+    ws.connect();
+    triggerWebSocketError(new Event('error'));
+
+    expect(notificationBus.notify).toHaveBeenCalledWith('error', 'Connection Error', expect.any(String));
+  });
+
   it('returns to the socket state when the agent is no longer in the page', () => {
     const ws = WebSocketService.getInstance();
     ws.setLocalAgentState('ready');

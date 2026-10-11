@@ -44,6 +44,7 @@
 import type { SproutHost } from '../host';
 import { installAdapter } from '../services/apiAdapter';
 import { getBootstrapConfig } from '../bootstrapAdapter';
+import { claimHostProjectRepo, importStartupRepo, releaseHostProjectRepo } from '../services/startupRepoImport';
 import { WebSocketService } from '../services/websocket';
 import type { WsEvent } from '@sprout/events';
 
@@ -59,18 +60,18 @@ import type { WsEvent } from '@sprout/events';
  * workspace). Only the bootstrap config's non-URL settings (nav items, egress
  * proxy) are inherited.
  */
-async function installWasmAdapter(host: SproutHost, repoUrl: string | undefined): Promise<void> {
+async function installWasmAdapter(host: SproutHost, repoUrl: string | undefined) {
   const { CloudAdapter } = await import('../services/cloudAdapter');
   const config = getBootstrapConfig();
-  installAdapter(
-    new CloudAdapter({
-      apiBase: host.transport.apiBaseURL,
-      wsUrl: host.transport.wsURL,
-      navItems: host.navigation.navItems ?? config.navItems ?? [],
-      egressProxy: config.egressProxy,
-      repoUrl,
-    }),
-  );
+  const adapter = new CloudAdapter({
+    apiBase: host.transport.apiBaseURL,
+    wsUrl: host.transport.wsURL,
+    navItems: host.navigation.navItems ?? config.navItems ?? [],
+    egressProxy: config.egressProxy,
+    repoUrl,
+  });
+  installAdapter(adapter);
+  return adapter;
 }
 
 /**
@@ -103,15 +104,32 @@ async function installAgentEventDispatcher(): Promise<void> {
 export async function wireHostAgentBackend(host: SproutHost, repoUrl: string | undefined): Promise<void> {
   const events = WebSocketService.getInstance();
   if (host.transport.agent?.kind !== 'wasm') {
-    events.setLocalAgentState('none');
+    resetHostAgentBackend();
     return;
   }
+  // Claimed before anything awaits, so the bootstrap's own install (which
+  // the host registration sets off) does not import its repo over this one.
+  if (repoUrl) claimHostProjectRepo(repoUrl);
   events.setLocalAgentState('starting');
   try {
-    await Promise.all([installWasmAdapter(host, repoUrl), installAgentEventDispatcher()]);
+    const [adapter] = await Promise.all([installWasmAdapter(host, repoUrl), installAgentEventDispatcher()]);
     events.setLocalAgentState('ready');
+    // Once per repo per page: a re-mount or reconnect does not import again.
+    if (repoUrl) void importStartupRepo(adapter, repoUrl, 'host');
   } catch (err) {
     console.warn('[SproutWorkspace] in-browser agent wiring failed:', err);
     events.setLocalAgentState('none');
   }
+}
+
+/**
+ * Undo what a mounted workspace's wiring declared for the page: the events
+ * transport goes back to the socket's connection state and the host project
+ * repo claim is released, so the next mount (or a host that names no backend)
+ * starts clean. The adapter and the event dispatcher stay installed (see
+ * above); a later wasm mount re-wires them.
+ */
+export function resetHostAgentBackend(): void {
+  WebSocketService.getInstance().setLocalAgentState('none');
+  releaseHostProjectRepo();
 }

@@ -11,6 +11,7 @@
  */
 
 import { getActiveHost, registerHostChangeHook } from './host/accessor';
+import { importStartupRepo } from './services/startupRepoImport';
 import { installAdapter } from './services/apiAdapter';
 import type { PlatformNavItem } from './services/apiAdapter';
 import type { GitSyncReport, RuntimeConfig } from './types/runtimeConfig';
@@ -398,40 +399,16 @@ async function installAdapterForConfig(config: RuntimeConfig): Promise<void> {
     });
     installAdapter(adapter);
 
-    // Auto-import repo from the host's project repo (or the ?repo= query
-    // param) if present. restoreRepo checks the IndexedDB import cache first
-    // (the file tree lives in the in-memory WASM VFS, so without the cache a
-    // reload loses the workspace) and only falls back to the server-side clone
-    // on a cache miss. The ?repo= param stays in the URL: it is a shareable
-    // deep link, and refreshes are served from the cache.
+    // Auto-import repo from the bootstrap's repo (or the ?repo= query param)
+    // if present. restoreRepo checks the IndexedDB import cache first (the
+    // file tree lives in the in-memory WASM VFS, so without the cache a reload
+    // loses the workspace) and only falls back to the server-side clone on a
+    // cache miss. The ?repo= param stays in the URL: it is a shareable deep
+    // link, and refreshes are served from the cache. A mounted workspace whose
+    // host names a project repo imports that one instead (startupRepoImport).
     const repoParam = adapter.getStartupRepo();
     if (repoParam) {
-      // Signal that an import is in progress (before WASM shell is ready).
-      (window as unknown as Record<string, unknown>).__repoImporting = repoParam;
-      // Fire-and-forget: import runs after adapter is installed and WASM is ready.
-      adapter.restoreRepo(repoParam).then((result) => {
-        if (result.success) {
-          console.warn(
-            `bootstrap: repo ${result.fromCache ? 'restored from cache' : 'imported'}: ${result.repo ?? repoParam}`,
-          );
-          (window as unknown as Record<string, unknown>).__repoImported = result.repo ?? repoParam;
-          delete (window as unknown as Record<string, unknown>).__repoImporting;
-          window.dispatchEvent(
-            new CustomEvent('sprout:repo-imported', {
-              detail: { repo: result.repo ?? repoParam },
-            }),
-          );
-        } else {
-          console.warn(`bootstrap: repo import failed: ${result.error}`);
-          delete (window as unknown as Record<string, unknown>).__repoImporting;
-          (window as unknown as Record<string, unknown>).__repoImportFailed = result.error;
-          window.dispatchEvent(
-            new CustomEvent('sprout:repo-import-failed', {
-              detail: { error: result.error ?? 'Unknown error' },
-            }),
-          );
-        }
-      });
+      void importStartupRepo(adapter, repoParam, 'bootstrap');
     }
   } else {
     // eslint-disable-next-line no-console

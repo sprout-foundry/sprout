@@ -7,6 +7,8 @@
  *   the host's `viewProps.previewPanel` is merged over it.
  * - Without `layout` or `shellProps`, the space shell is fed from the chat and
  *   editor units; host `shellProps` still win.
+ * - The chat session list loads once the events transport connects, on both
+ *   the layout path and the composed shell.
  *
  * The chat view, preview panel and shells are stubbed with nodes that expose
  * the props the composition handed them; the provider stack and the units are
@@ -16,8 +18,13 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const eventsProviders = vi.hoisted(() => [] as Array<{ onEvent: { mock: { calls: unknown[][] } } }>);
+
 vi.mock('../services/localEventsProvider', () => ({
   LocalEventsProvider: class {
+    constructor() {
+      eventsProviders.push(this);
+    }
     connect = vi.fn();
     disconnect = vi.fn();
     onEvent = vi.fn();
@@ -241,5 +248,33 @@ describe('SproutWorkspace space shell in own mode', () => {
     expect(shell).toHaveAttribute('data-root', '/host/root');
     expect(shell).toHaveAttribute('data-send', 'undefined');
     expect(shell).toHaveAttribute('data-model-click', 'undefined');
+  });
+});
+
+describe('SproutWorkspace chat session load', () => {
+  /** Deliver a connection event to every chat reducer subscribed so far. */
+  function connect(): void {
+    for (const provider of eventsProviders) {
+      for (const [handler] of provider.onEvent.mock.calls) {
+        (handler as (event: unknown) => void)({ type: 'connection_status', data: { connected: true } });
+      }
+    }
+  }
+
+  function sessionListCalls(): unknown[][] {
+    return vi.mocked(fetch).mock.calls.filter(([input]) => /\/api\/chat-sessions(\?|$)/.test(String(input)));
+  }
+
+  it.each([
+    ['the layout path', { layout: CHAT_ONLY }, 'composition-chat'],
+    ['the composed space shell', {}, 'composition-code-shell'],
+  ])('loads the session list on connect on %s', async (_label, extra, testId) => {
+    render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} {...extra} />);
+    await screen.findByTestId(testId);
+    expect(sessionListCalls()).toHaveLength(0);
+
+    act(() => connect());
+
+    await waitFor(() => expect(sessionListCalls().length).toBeGreaterThan(0));
   });
 });

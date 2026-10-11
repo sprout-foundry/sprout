@@ -578,7 +578,9 @@ list/create/rename/delete/switch behaviour.
 On reload, the active chat's transcript is restored through `GET
 /api/chat-sessions` + `POST /api/chat-sessions/switch` (the same calls the
 chat unit makes at boot), so the host store is the source of truth for the
-conversation across reloads.
+conversation across reloads. A workspace mounted through `SproutWorkspace` in
+own mode makes these calls each time the events transport connects (and again
+after a reconnect), so the session list is populated at start.
 
 ## Backend paths for an in-browser-agent host
 

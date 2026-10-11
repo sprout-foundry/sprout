@@ -375,6 +375,7 @@ export function SproutWorkspace({
         initialState={chatTransport.initialState}
         eventsProvider={chatTransport.eventsProvider}
         fetchFn={chatTransport.fetchFn}
+        loadSessionsOnConnect
       >
         <WorkspaceEditorProvider>
           {layout ? (

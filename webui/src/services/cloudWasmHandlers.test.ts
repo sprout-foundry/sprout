@@ -692,6 +692,45 @@ describe('handleWasmLocal — /api/search', () => {
     expect(ran).toContain("'/workspace'");
     expect(body.results.map((r: { file: string }) => r.file)).toEqual(['src/a.go']);
   });
+
+  function runSearch(params: string, stdout = '') {
+    let ran = '';
+    const shell = createMockShell({
+      getWorkspaceRoot: () => '/workspace',
+      executeCommand: (cmd: string) => {
+        ran = cmd;
+        return { stdout, stderr: '', exitCode: stdout ? 0 : 1 };
+      },
+    });
+    const res = handleWasmLocal(shell, '/api/search', 'GET', `http://x/api/search?${params}`, undefined);
+    return { flags: ran.split(' --include=')[0].split(' ').slice(1), ran, res };
+  }
+
+  it('searches literally and case-insensitively by default, the query after -e', () => {
+    const { flags, ran } = runSearch('query=-a.b');
+    expect(flags).toEqual(['-i', '-F', '-rn']);
+    expect(ran).toContain("-e '-a.b'");
+  });
+
+  it('honours case_sensitive, regex and whole_word', () => {
+    expect(runSearch('query=x&case_sensitive=true').flags).toEqual(['-F', '-rn']);
+    expect(runSearch('query=x&regex=true').flags).toEqual(['-i', '-E', '-rn']);
+    expect(runSearch('query=x&whole_word=true').flags).toEqual(['-i', '-F', '-w', '-rn']);
+    expect(runSearch('query=x&whole_word=true&regex=true&case_sensitive=true').flags).toEqual(['-E', '-w', '-rn']);
+  });
+
+  it('highlights the matched span with the same options', async () => {
+    const out = '/workspace/a.ts:1:let foo = Foo.bar;\n';
+    const span = async (params: string) => {
+      const body = await runSearch(params, out).res.json();
+      const m = body.results[0].matches[0];
+      return [m.column_start, m.column_end];
+    };
+    expect(await span('query=foo.bar')).toEqual([10, 17]);
+    expect(await span('query=foo&case_sensitive=true')).toEqual([4, 7]);
+    expect(await span('query=F%5Cw%2B&regex=true&case_sensitive=true')).toEqual([10, 13]);
+    expect(await span('query=oo&whole_word=true')).toEqual([0, 18]);
+  });
 });
 
 import { handleWasmImageUpload, uploadBodyBytes } from './cloudWasmBinary';

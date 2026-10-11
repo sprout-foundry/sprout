@@ -708,17 +708,21 @@ function handleWasmRename(shell: WasmShell, bodyStr?: string): Response {
 function handleWasmSearch(shell: WasmShell, fullUrl: string): Response {
   const query = getQueryParam(fullUrl, 'query') || '';
   const caseSensitive = getQueryParam(fullUrl, 'case_sensitive') === 'true';
+  const wholeWord = getQueryParam(fullUrl, 'whole_word') === 'true';
   const regex = getQueryParam(fullUrl, 'regex') === 'true';
   const include = getQueryParam(fullUrl, 'include') || '';
 
   if (!query) return jsonOk({ results: [], total_matches: 0, total_files: 0, truncated: false, query: '' });
 
   const cwd = workspaceRootOf(shell);
-  // Build grep command
+  // The daemon's semantics: a plain query is literal text (-F), a regex query
+  // an extended regex (-E); whole word wraps either in word boundaries (-w).
+  // `-e` keeps a query that starts with '-' from reading as an option.
   let grepCmd = 'grep';
   if (!caseSensitive) grepCmd += ' -i';
-  if (regex) grepCmd += ' -E';
-  grepCmd += ` -rn --include=${shellEscapeArg(include || '*')} ${shellEscapeArg(query)} ${shellEscapeArg(cwd)}`;
+  grepCmd += regex ? ' -E' : ' -F';
+  if (wholeWord) grepCmd += ' -w';
+  grepCmd += ` -rn --include=${shellEscapeArg(include || '*')} -e ${shellEscapeArg(query)} ${shellEscapeArg(cwd)}`;
 
   const result = shell.executeCommand(grepCmd);
   // grep returns exit code 1 when no matches — that's not an error
@@ -729,9 +733,11 @@ function handleWasmSearch(shell: WasmShell, fullUrl: string): Response {
   // Parse grep output into structured results, with workspace-relative
   // paths like the daemon's search returns.
   const prefix = cwd.endsWith('/') ? cwd : `${cwd}/`;
+  const highlight = searchHighlighter(query, { caseSensitive, wholeWord, regex });
   const results = parseGrepOutput(result.stdout).map((r) => ({
     ...r,
     file: r.file.startsWith(prefix) ? r.file.slice(prefix.length) : r.file,
+    matches: r.matches.map((m) => ({ ...m, ...highlight(m.line) })),
   }));
   const totalMatches = results.reduce((sum, r) => sum + r.match_count, 0);
   return jsonOk({
@@ -741,6 +747,29 @@ function handleWasmSearch(shell: WasmShell, fullUrl: string): Response {
     truncated: false,
     query,
   });
+}
+
+/**
+ * The matched span of a hit line, for the result's highlight. grep reports
+ * the line only, so the span is found again with the same options; a pattern
+ * the browser cannot compile (an RE2-only construct) highlights the line.
+ */
+function searchHighlighter(
+  query: string,
+  { caseSensitive, wholeWord, regex }: { caseSensitive: boolean; wholeWord: boolean; regex: boolean },
+): (line: string) => { column_start: number; column_end: number } {
+  let pattern: RegExp | null = null;
+  try {
+    const body = regex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    pattern = new RegExp(wholeWord ? `\\b(?:${body})\\b` : body, caseSensitive ? '' : 'i');
+  } catch {
+    pattern = null;
+  }
+  return (line) => {
+    const match = pattern?.exec(line);
+    if (!match || match[0] === '') return { column_start: 0, column_end: line.length };
+    return { column_start: match.index, column_end: match.index + match[0].length };
+  };
 }
 
 /**

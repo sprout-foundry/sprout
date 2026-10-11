@@ -117,6 +117,14 @@ export function useEventHandlerRegistration(eventName: string): void {
   useLayoutEffect(() => registerEventHandler(eventName), [eventName]);
 }
 
+/**
+ * Subscribe a component to registry changes; returns a counter that changes
+ * whenever a handler is registered or removed (usable as a memo dependency).
+ */
+export function useCommandHandlerVersion(): number {
+  return useSyncExternalStore(subscribe, getVersion, getVersion);
+}
+
 /** True while any of `commandIds` has a handler; re-renders as that changes. */
 export function useHasCommandHandler(commandIds: readonly string[]): boolean {
   useSyncExternalStore(subscribe, getVersion, getVersion);

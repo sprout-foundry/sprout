@@ -15,6 +15,7 @@ import { capability } from '../config/mode';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { getActiveHost } from '../host';
 import { useHost } from '../host/useHost';
+import { hasCommandHandler, hasEventHandler, isAppShell, useCommandHandlerVersion } from '../services/commandHandlers';
 import { collectBugReportEnvironment } from '../services/reportBug';
 
 /* ------------------------------------------------------------------ */
@@ -112,10 +113,60 @@ function buildMenus(username: string | null | undefined, _currentBranch: string 
 }
 
 /* ------------------------------------------------------------------ */
+/*  Handled-command filtering                                          */
+/* ------------------------------------------------------------------ */
+
+/** Commands the wrapper runs itself, whoever else is mounted. */
+const SELF_HANDLED_COMMANDS = new Set(['about', 'report_issue']);
+/** Commands the wrapper turns into a dedicated window event. */
+const EVENT_COMMANDS: Record<string, string> = { keyboard_shortcuts: 'sprout:open-hotkeys-config' };
+const TOGGLE_COMMAND_EVENT = 'sprout:toggle-command';
+
+/** Whether something acts on the menu item (always true in the standalone app). */
+function isItemHandled(item: MenuBarItem): boolean {
+  if (!item.commandId) return true;
+  if (SELF_HANDLED_COMMANDS.has(item.commandId)) return true;
+  const eventName = EVENT_COMMANDS[item.commandId];
+  if (eventName) return hasEventHandler(eventName);
+  if (item.isToggle) return hasEventHandler(TOGGLE_COMMAND_EVENT);
+  return hasCommandHandler(item.commandId);
+}
+
+/** Drop leading, trailing and repeated dividers left behind by filtering. */
+function tidyDividers(items: MenuBarItem[]): MenuBarItem[] {
+  const out: MenuBarItem[] = [];
+  for (const item of items) {
+    if (item.divider && (out.length === 0 || out[out.length - 1].divider)) continue;
+    out.push(item);
+  }
+  while (out.length > 0 && out[out.length - 1].divider) out.pop();
+  return out;
+}
+
+/**
+ * The menus with only the items something handles. The menu's commands are
+ * handled by the app root; a host embedding the workspace without it gets the
+ * items its own mounted listeners answer, and no menu bar at all when none of
+ * the routed commands has a handler (the self-handled Help items alone do not
+ * justify one).
+ */
+function handledMenus(menus: MenuDefinition[]): MenuDefinition[] {
+  // The standalone app handles every command: keep the memoized menus as-is.
+  if (isAppShell()) return menus;
+  const anyRouted = menus.some((menu) =>
+    menu.items.some((item) => item.commandId && !SELF_HANDLED_COMMANDS.has(item.commandId) && isItemHandled(item)),
+  );
+  if (!anyRouted) return [];
+  return menus
+    .map((menu) => ({ ...menu, items: tidyDividers(menu.items.filter(isItemHandled)) }))
+    .filter((menu) => menu.items.length > 0);
+}
+
+/* ------------------------------------------------------------------ */
 /*  Wrapper component                                                  */
 /* ------------------------------------------------------------------ */
 
-const MenuBarWrapper = (): JSX.Element => {
+const MenuBarWrapper = (): JSX.Element | null => {
   // Single call to useHotkeys; cast to any to access fields not in
   // the typed interface (username, currentBranch, toggleCommand).
   // This matches the original MenuBar.tsx behaviour exactly.
@@ -127,7 +178,10 @@ const MenuBarWrapper = (): JSX.Element => {
   const toggleCommand = ctx.toggleCommand;
   const host = useHost();
 
-  const menus = useMemo(() => buildMenus(username, currentBranch), [username, currentBranch]);
+  const allMenus = useMemo(() => buildMenus(username, currentBranch), [username, currentBranch]);
+  // Re-render (and re-filter) as command handlers mount and unmount.
+  useCommandHandlerVersion();
+  const menus = handledMenus(allMenus);
 
   /* ── Toggle state resolver (identical to original) ─────────── */
   const getToggleState = useMemo(() => {
@@ -176,6 +230,8 @@ const MenuBarWrapper = (): JSX.Element => {
     },
     [toggleCommand],
   );
+
+  if (menus.length === 0) return null;
 
   return (
     <MenuBar

@@ -8,6 +8,12 @@ import { NotificationProvider } from '../contexts/NotificationContext';
 import { HostProvider } from '../host/HostProvider';
 import { makeTestHost } from '../host/testHost';
 import type { HostNavigationIntent, SproutHost } from '../host/types';
+import {
+  __resetCommandHandlersForTests,
+  claimAppShell,
+  registerCommandHandler,
+  registerEventHandler,
+} from '../services/commandHandlers';
 import MenuBar from './MenuBar';
 
 // ---------------------------------------------------------------------------
@@ -54,6 +60,9 @@ beforeAll(() => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // The menu suite runs as the standalone app, which handles every command;
+  // the embed describe below resets this.
+  claimAppShell();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -64,6 +73,7 @@ afterEach(() => {
     root?.unmount();
   });
   container?.remove();
+  __resetCommandHandlersForTests();
   // Clean up any portal dropdowns left on body
   document.querySelectorAll('.menu-bar-dropdown').forEach((el) => {
     if (el.parentNode) el.parentNode.removeChild(el);
@@ -744,5 +754,56 @@ describe('MenuBar', () => {
     // resolve the `reportBug` intent (the local host opens the prefilled
     // public issue; a platform resolves it to its own support flow).
     expect(openedIntents.map((i) => i.type)).toEqual(['reportBug']);
+  });
+});
+
+describe('MenuBar in an embed (no app shell)', () => {
+  beforeEach(() => {
+    __resetCommandHandlersForTests();
+  });
+
+  function dropdownLabels(): string[] {
+    return getDropdownItems().map((el) => el.textContent ?? '');
+  }
+
+  test('renders nothing when no menu command has a handler', async () => {
+    await renderMenuBar();
+    expect(container.querySelector('.menu-bar')).toBeNull();
+  });
+
+  test('shows only the items something handles, and updates as handlers mount', async () => {
+    await renderMenuBar();
+    expect(container.querySelector('.menu-bar')).toBeNull();
+
+    let unregister: () => void = () => {};
+    act(() => {
+      unregister = registerCommandHandler(['new_file', 'toggle_sidebar']);
+    });
+    expect(getMenuTitles().map((t) => t.textContent)).toEqual(['File', 'Edit', 'Help']);
+
+    openMenu(0);
+    expect(dropdownLabels()).toHaveLength(1);
+    expect(dropdownLabels()[0]).toContain('New File');
+    closeMenu(0);
+
+    // Help keeps its self-handled items; Keyboard Shortcuts needs a listener.
+    openMenu(2);
+    expect(dropdownLabels().some((l) => l.includes('Keyboard Shortcuts'))).toBe(false);
+    expect(dropdownLabels().some((l) => l.includes('Report Issue'))).toBe(true);
+    closeMenu(2);
+
+    let unregisterEvent: () => void = () => {};
+    act(() => {
+      unregisterEvent = registerEventHandler('sprout:open-hotkeys-config');
+    });
+    openMenu(2);
+    expect(dropdownLabels().some((l) => l.includes('Keyboard Shortcuts'))).toBe(true);
+    closeMenu(2);
+
+    act(() => {
+      unregister();
+      unregisterEvent();
+    });
+    expect(container.querySelector('.menu-bar')).toBeNull();
   });
 });

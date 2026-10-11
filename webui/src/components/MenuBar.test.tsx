@@ -14,6 +14,7 @@ import {
   registerCommandHandler,
   registerEventHandler,
 } from '../services/commandHandlers';
+import { useHotkeyCommandHandler } from '../hooks/useHotkeyCommandHandler';
 import MenuBar from './MenuBar';
 
 // ---------------------------------------------------------------------------
@@ -103,14 +104,18 @@ function menuBarHost(): SproutHost {
   };
 }
 
-async function renderMenuBar() {
+async function renderMenuBar(alongside?: ReturnType<typeof createElement>) {
   openedIntents = [];
   await act(async () => {
     root.render(
       createElement(
         HostProvider,
         { host: menuBarHost() },
-        createElement(NotificationProvider, null, createElement(HotkeyProvider, null, createElement(MenuBar))),
+        createElement(
+          NotificationProvider,
+          null,
+          createElement(HotkeyProvider, null, createElement(MenuBar), alongside ?? null),
+        ),
       ),
     );
   });
@@ -360,50 +365,71 @@ describe('MenuBar', () => {
 
   // ─── Toggle items ─────────────────────────────────────────────────
 
-  test('toggle item "Toggle Minimap" shows checkmark when editor:toggle_minimap is true', async () => {
-    localStorage.setItem('editor:toggle_minimap', 'true');
+  function viewItem(label: string): HTMLElement {
+    const item = getDropdownItems().find((el) => el.textContent?.includes(label));
+    expect(item).toBeDefined();
+    return item!;
+  }
+
+  test('toggle check marks read the editor settings the toggles change', async () => {
+    localStorage.setItem('editor:minimap-enabled', 'false');
+    localStorage.removeItem('editor:word-wrap-enabled');
     await renderMenuBar();
     openMenu(2); // View
 
-    const items = getDropdownItems();
-    const minimapItem = items.find((el) => el.textContent?.includes('Toggle Minimap'));
-    expect(minimapItem).toBeDefined();
+    // Minimap explicitly off; word wrap defaults on; linked scrolling starts off.
+    expect(viewItem('Toggle Minimap').querySelector('.menu-item-check')!.textContent).toBe('');
+    expect(viewItem('Toggle Word Wrap').querySelector('.menu-item-check')!.textContent).toBe('✓');
+    expect(viewItem('Toggle Linked Scrolling').querySelector('.menu-item-check')!.textContent).toBe('');
 
-    const check = minimapItem!.querySelector('.menu-item-check');
-    expect(check).not.toBeNull();
-    expect(check!.textContent).toBe('✓');
-
-    localStorage.removeItem('editor:toggle_minimap');
+    localStorage.removeItem('editor:minimap-enabled');
   });
 
-  test('toggle item "Toggle Minimap" hides checkmark when editor:toggle_minimap is false', async () => {
-    localStorage.setItem('editor:toggle_minimap', 'false');
-    await renderMenuBar();
-    openMenu(2); // View
+  test('toggle items reach the editor through the hotkey command handler', async () => {
+    const editorToggles: string[] = [];
+    const record = (e: Event) => editorToggles.push(e.type);
+    for (const type of ['editor-toggle-word-wrap', 'editor-toggle-minimap', 'editor-toggle-linked-scroll']) {
+      document.addEventListener(type, record);
+    }
+    const noop = () => {};
+    function HotkeyCommands() {
+      useHotkeyCommandHandler({
+        onToggleCommandPalette: noop,
+        onOpenCommandPalette: noop,
+        onNewFile: noop,
+        onToggleSidebar: noop,
+        onToggleTerminal: noop,
+        onPrimaryViewChange: noop,
+        onFocusTabIndex: noop,
+        onFocusPaneIndex: noop,
+        onSplitRequest: noop,
+        onCloseBuffer: noop,
+        onCloseAllBuffers: noop,
+        onCloseOtherBuffers: noop,
+        onSaveAllBuffers: noop,
+        onSwitchToBuffer: noop,
+        onSwitchPane: noop,
+        onTogglePinTab: noop,
+        activeBufferId: null,
+        activePaneId: null,
+        buffers: new Map(),
+      });
+      return null;
+    }
+    await renderMenuBar(createElement(HotkeyCommands));
 
-    const items = getDropdownItems();
-    const minimapItem = items.find((el) => el.textContent?.includes('Toggle Minimap'));
-    expect(minimapItem).toBeDefined();
+    for (const label of ['Toggle Word Wrap', 'Toggle Minimap', 'Toggle Linked Scrolling']) {
+      openMenu(2); // View
+      const item = viewItem(label);
+      act(() => {
+        item.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+    }
 
-    const check = minimapItem!.querySelector('.menu-item-check');
-    expect(check).not.toBeNull();
-    expect(check!.textContent).toBe('');
-
-    localStorage.removeItem('editor:toggle_minimap');
-  });
-
-  test('toggle item "Toggle Minimap" hides checkmark when localStorage key is absent', async () => {
-    localStorage.removeItem('editor:toggle_minimap');
-    await renderMenuBar();
-    openMenu(2); // View
-
-    const items = getDropdownItems();
-    const minimapItem = items.find((el) => el.textContent?.includes('Toggle Minimap'));
-    expect(minimapItem).toBeDefined();
-
-    const check = minimapItem!.querySelector('.menu-item-check');
-    expect(check).not.toBeNull();
-    expect(check!.textContent).toBe('');
+    expect(editorToggles).toEqual(['editor-toggle-word-wrap', 'editor-toggle-minimap', 'editor-toggle-linked-scroll']);
+    for (const type of ['editor-toggle-word-wrap', 'editor-toggle-minimap', 'editor-toggle-linked-scroll']) {
+      document.removeEventListener(type, record);
+    }
   });
 
   // ─── Clicking menu items dispatches commands ─────────────────────

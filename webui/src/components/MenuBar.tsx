@@ -13,6 +13,7 @@ import { useMemo, useCallback } from 'react';
 import { getBootstrapConfig } from '../bootstrapAdapter';
 import { capability } from '../config/mode';
 import { useHotkeys } from '../contexts/HotkeyContext';
+import { isLinkedScrollEnabled } from '../extensions/linkedScroll';
 import { getActiveHost } from '../host';
 import { useHost } from '../host/useHost';
 import { hasCommandHandler, hasEventHandler, isAppShell, useCommandHandlerVersion } from '../services/commandHandlers';
@@ -55,25 +56,11 @@ function buildMenus(username: string | null | undefined, _currentBranch: string 
   ];
 
   // ── View menu ─────────────────────────────────────────────────
+  // Local editor preferences: no signed-in user needed.
   const viewItems: MenuBarItem[] = [
-    {
-      label: 'Toggle Word Wrap',
-      commandId: 'editor_toggle_word_wrap',
-      isToggle: true,
-      disabled: !username,
-    },
-    {
-      label: 'Toggle Minimap',
-      commandId: 'toggle_minimap',
-      isToggle: true,
-      disabled: !username,
-    },
-    {
-      label: 'Toggle Linked Scrolling',
-      commandId: 'toggle_linked_scroll',
-      isToggle: true,
-      disabled: !username,
-    },
+    { label: 'Toggle Word Wrap', commandId: 'editor_toggle_word_wrap', isToggle: true },
+    { label: 'Toggle Minimap', commandId: 'toggle_minimap', isToggle: true },
+    { label: 'Toggle Linked Scrolling', commandId: 'toggle_linked_scroll', isToggle: true },
   ];
 
   // ── Terminal menu ─────────────────────────────────────────────
@@ -120,7 +107,26 @@ function buildMenus(username: string | null | undefined, _currentBranch: string 
 const SELF_HANDLED_COMMANDS = new Set(['about', 'report_issue']);
 /** Commands the wrapper turns into a dedicated window event. */
 const EVENT_COMMANDS: Record<string, string> = { keyboard_shortcuts: 'sprout:open-hotkeys-config' };
-const TOGGLE_COMMAND_EVENT = 'sprout:toggle-command';
+
+/**
+ * Where each View toggle's current state lives, for the menu's check mark.
+ * Word wrap and minimap are persisted editor settings; linked scrolling is
+ * held by the linked-scroll extension.
+ */
+const TOGGLE_STATE: Record<string, () => boolean> = {
+  editor_toggle_word_wrap: () => readStoredBoolean('editor:word-wrap-enabled', true),
+  toggle_minimap: () => readStoredBoolean('editor:minimap-enabled', true),
+  toggle_linked_scroll: isLinkedScrollEnabled,
+};
+
+function readStoredBoolean(key: string, defaultValue: boolean): boolean {
+  try {
+    const stored = localStorage.getItem(key);
+    return stored === null ? defaultValue : stored === 'true';
+  } catch {
+    return defaultValue;
+  }
+}
 
 /** Whether something acts on the menu item (always true in the standalone app). */
 function isItemHandled(item: MenuBarItem): boolean {
@@ -128,7 +134,6 @@ function isItemHandled(item: MenuBarItem): boolean {
   if (SELF_HANDLED_COMMANDS.has(item.commandId)) return true;
   const eventName = EVENT_COMMANDS[item.commandId];
   if (eventName) return hasEventHandler(eventName);
-  if (item.isToggle) return hasEventHandler(TOGGLE_COMMAND_EVENT);
   return hasCommandHandler(item.commandId);
 }
 
@@ -168,14 +173,12 @@ function handledMenus(menus: MenuDefinition[]): MenuDefinition[] {
 
 const MenuBarWrapper = (): JSX.Element | null => {
   // Single call to useHotkeys; cast to any to access fields not in
-  // the typed interface (username, currentBranch, toggleCommand).
-  // This matches the original MenuBar.tsx behaviour exactly.
+  // the typed interface (username, currentBranch).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const ctx = useHotkeys() as any;
   const { hotkeys, hotkeyForCommand, isLoaded } = ctx;
   const username: string | null | undefined = ctx.username;
   const currentBranch: string | null | undefined = ctx.currentBranch;
-  const toggleCommand = ctx.toggleCommand;
   const host = useHost();
 
   const allMenus = useMemo(() => buildMenus(username, currentBranch), [username, currentBranch]);
@@ -183,14 +186,8 @@ const MenuBarWrapper = (): JSX.Element | null => {
   useCommandHandlerVersion();
   const menus = handledMenus(allMenus);
 
-  /* ── Toggle state resolver (identical to original) ─────────── */
-  const getToggleState = useMemo(() => {
-    return (commandId: string) => {
-      const storageKey = `editor:${commandId}`;
-      const val = localStorage.getItem(storageKey);
-      return val === 'true';
-    };
-  }, []);
+  /* ── Toggle state resolver ─────────────────────────────────── */
+  const getToggleState = useCallback((commandId: string) => TOGGLE_STATE[commandId]?.() ?? false, []);
 
   /* ── Command execution ─────────────────────────────────────── */
   const handleCommandExecute = useCallback(
@@ -219,17 +216,12 @@ const MenuBarWrapper = (): JSX.Element | null => {
   );
 
   /* ── Toggle command handler ────────────────────────────────── */
-  // Replicates the original: always dispatches the custom event,
-  // then delegates to the adapter's toggleCommand if available.
-  const handleToggleCommand = useCallback(
-    (commandId: string) => {
-      window.dispatchEvent(new CustomEvent('sprout:toggle-command', { detail: { commandId } }));
-      if (typeof toggleCommand === 'function') {
-        toggleCommand(commandId);
-      }
-    },
-    [toggleCommand],
-  );
+  // Toggles are ordinary hotkey commands: the app's hotkey command handler
+  // forwards them to the editor (editor-toggle-* events), the same path
+  // their keyboard shortcuts and the command palette take.
+  const handleToggleCommand = useCallback((commandId: string) => {
+    window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId } }));
+  }, []);
 
   if (menus.length === 0) return null;
 

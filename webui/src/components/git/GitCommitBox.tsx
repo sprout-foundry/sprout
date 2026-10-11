@@ -8,6 +8,8 @@ export interface GitCommitBoxProps {
   isReviewLoading: boolean;
   onCommitMessageChange: (value: string) => void;
   onGenerateCommitMessage: () => void;
+  /** Whether the backend can generate a commit message; false hides the action. */
+  canGenerateCommitMessage?: boolean;
   onCommit: () => void;
   onRunReview?: () => void;
 }
@@ -20,6 +22,7 @@ function GitCommitBox({
   isReviewLoading,
   onCommitMessageChange,
   onGenerateCommitMessage,
+  canGenerateCommitMessage = true,
   onCommit,
   onRunReview,
 }: GitCommitBoxProps) {
@@ -27,15 +30,17 @@ function GitCommitBox({
     <div className="git-sidebar-commit-box">
       <div className="git-sidebar-commit-header">
         <h4>Commit Message</h4>
-        <button
-          className="git-generate-icon-btn"
-          onClick={onGenerateCommitMessage}
-          disabled={!hasStagedFiles || isGeneratingCommitMessage || isActing}
-          title="Generate commit message with AI"
-          aria-label="Generate commit message"
-        >
-          <Sparkles size={14} />
-        </button>
+        {canGenerateCommitMessage && (
+          <button
+            className="git-generate-icon-btn"
+            onClick={onGenerateCommitMessage}
+            disabled={!hasStagedFiles || isGeneratingCommitMessage || isActing}
+            title="Generate commit message with AI"
+            aria-label="Generate commit message"
+          >
+            <Sparkles size={14} />
+          </button>
+        )}
       </div>
       <textarea
         value={commitMessage}

@@ -190,6 +190,8 @@ describe('SproutWorkspace source control and search views (wasm host)', () => {
     const stagedRow = within(view).getByTitle('src/staged.ts');
     expect(within(stagedRow).getByTitle('Not available in browser mode')).toBeDisabled();
     expect(within(view).queryByRole('tab', { name: /Worktrees/ })).not.toBeInTheDocument();
+    // Browser git has no commit-message generation, so the action is not offered.
+    expect(within(view).queryByRole('button', { name: 'Generate commit message' })).not.toBeInTheDocument();
 
     fireEvent.change(within(view).getByLabelText('Commit message'), { target: { value: 'From the browser' } });
     await act(async () => {

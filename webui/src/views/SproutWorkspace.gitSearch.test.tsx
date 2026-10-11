@@ -159,6 +159,7 @@ describe('SproutWorkspace source control view (daemon host)', () => {
     await within(view).findByTitle('src/changed.ts');
     expect(within(view).getByTitle('src/staged.ts')).toBeInTheDocument();
     expect(requests().some(({ url }) => url.startsWith('https://host.test/api/git/status'))).toBe(true);
+    expect(within(view).getByRole('button', { name: 'Generate commit message' })).toBeInTheDocument();
 
     fireEvent.change(within(view).getByLabelText('Commit message'), { target: { value: 'Ship it' } });
     await act(async () => {

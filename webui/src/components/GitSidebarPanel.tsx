@@ -214,6 +214,7 @@ function GitSidebarPanel({
     pull: isGitOpUnsupported('pull'),
     revert: isGitOpUnsupported('revert'),
     pullRequest: isGitOpUnsupported('pull-request'),
+    commitMessage: isGitOpUnsupported('commit-message'),
   } as const;
   const unsupportedTooltip = hostUsesBrowserGit() ? BROWSER_UNSUPPORTED_TOOLTIP : undefined;
 
@@ -289,6 +290,7 @@ function GitSidebarPanel({
         isReviewLoading={isReviewLoading}
         onCommitMessageChange={onCommitMessageChange}
         onGenerateCommitMessage={onGenerateCommitMessage}
+        canGenerateCommitMessage={!unsupported.commitMessage}
         onCommit={onCommit}
         onRunReview={onRunReview}
       />

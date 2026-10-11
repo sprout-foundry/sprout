@@ -6,7 +6,8 @@
  * - A host whose agent runs in the browser keeps the shell's in-browser
  *   terminal (the shell is told there is no local terminal), even if it also
  *   declares `localTerminal`.
- * - A host with neither gets no terminal and no toggle handler.
+ * - A host with neither gets no terminal (the shell is told not to mount its
+ *   in-browser one) and no toggle handler.
  *
  * The docked terminal and the Code shell are stubs that expose their props;
  * the provider stack, the hotkey scope and the composition are the real ones.
@@ -58,11 +59,12 @@ vi.mock('../components/Terminal', () => ({
   ),
 }));
 vi.mock('../workspaces/CodeShell', () => ({
-  default: (props: { supportsLocalTerminal: boolean; isTerminalExpanded: boolean }) => (
+  default: (props: { supportsLocalTerminal: boolean; inBrowserTerminal?: boolean; isTerminalExpanded: boolean }) => (
     <div
       data-testid="composed-code-shell"
       tabIndex={0}
       data-local-terminal={String(props.supportsLocalTerminal)}
+      data-in-browser-terminal={String(props.inBrowserTerminal ?? true)}
       data-terminal-expanded={String(props.isTerminalExpanded)}
     />
   ),
@@ -144,6 +146,7 @@ describe('SproutWorkspace composed shell terminal', () => {
     renderWorkspace(wasmHost());
     const shell = await screen.findByTestId('composed-code-shell');
     expect(shell).toHaveAttribute('data-local-terminal', 'false');
+    expect(shell).toHaveAttribute('data-in-browser-terminal', 'true');
     expect(screen.queryByTestId('composed-pty-terminal')).not.toBeInTheDocument();
     expect(hasCommandHandler('toggle_terminal')).toBe(true);
   });
@@ -152,7 +155,9 @@ describe('SproutWorkspace composed shell terminal', () => {
     const host = makeTestHost({ localTerminal: false });
     setActiveHost(host);
     renderWorkspace(host);
-    expect(await screen.findByTestId('composed-code-shell')).toHaveAttribute('data-local-terminal', 'false');
+    const shell = await screen.findByTestId('composed-code-shell');
+    expect(shell).toHaveAttribute('data-local-terminal', 'false');
+    expect(shell).toHaveAttribute('data-in-browser-terminal', 'false');
     expect(screen.queryByTestId('composed-pty-terminal')).not.toBeInTheDocument();
     expect(hasCommandHandler('toggle_terminal')).toBe(false);
   });

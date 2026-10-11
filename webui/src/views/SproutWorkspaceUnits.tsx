@@ -196,6 +196,7 @@ export function ComposedSpaceShell({
         onToggleSidebar={noop}
         onToggleContextPanel={() => contextPanelRef.current?.togglePanel()}
         supportsLocalTerminal={terminalBackend === 'pty'}
+        inBrowserTerminal={terminalBackend === 'wasm'}
         isTerminalExpanded={isTerminalExpanded}
         onTerminalExpandedChange={setTerminalExpanded}
         showContextSidebar={currentBuffer?.kind === 'chat'}

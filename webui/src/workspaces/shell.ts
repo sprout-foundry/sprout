@@ -84,6 +84,12 @@ export interface WorkspaceShellProps {
   onToggleSidebar: () => void;
   onToggleContextPanel: () => void;
   supportsLocalTerminal: boolean;
+  /**
+   * Whether the Code shell mounts its in-browser (WASM) terminal when there is
+   * no local terminal. Defaults to true; a composition whose host has no
+   * terminal at all passes false, so no hidden terminal or shell is started.
+   */
+  inBrowserTerminal?: boolean;
   isTerminalExpanded: boolean;
   onTerminalExpandedChange: (expanded: boolean) => void;
 

@@ -35,6 +35,7 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
   onToggleSidebar,
   onToggleContextPanel,
   supportsLocalTerminal,
+  inBrowserTerminal = true,
   isTerminalExpanded,
   onTerminalExpandedChange,
   showContextSidebar,
@@ -202,7 +203,7 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
             : null
         }
       />
-      {!supportsLocalTerminal && (
+      {!supportsLocalTerminal && inBrowserTerminal && (
         <ErrorBoundary panelName="Terminal">
           <Terminal
             isExpanded={isTerminalExpanded}

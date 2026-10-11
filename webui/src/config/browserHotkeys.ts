@@ -43,6 +43,8 @@ export const BROWSER_DEFAULT_HOTKEYS: HotkeyEntry[] = [
   { key: 'Ctrl+K', command_id: 'split_editor_horizontal', global: false },
   { key: 'Cmd+K', command_id: 'split_editor_horizontal', global: false },
   { key: 'Ctrl+`', command_id: 'toggle_terminal', global: true },
+  { key: 'Ctrl+Shift+P', command_id: 'command_palette', global: false },
+  { key: 'Cmd+Shift+P', command_id: 'command_palette', global: false },
   { key: 'Alt+1', command_id: 'switch_to_editor', global: false },
   { key: 'Alt+2', command_id: 'switch_to_chat', global: false },
   { key: 'Alt+3', command_id: 'switch_to_git', global: false },

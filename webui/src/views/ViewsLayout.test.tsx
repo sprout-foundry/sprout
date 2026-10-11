@@ -27,6 +27,10 @@ vi.mock('../components/PreviewPanel', () => ({
     <div data-testid="views-test-preview-panel" data-open={String(!!props.open)} />
   ),
 }));
+vi.mock('./WorkspaceCommandPalette', () => ({
+  WorkspaceCommandPalette: () => <div data-testid="views-test-command-palette" />,
+}));
+vi.mock('./WorkspaceTerminalView', () => ({ WorkspaceTerminalView: () => <div data-testid="views-test-terminal" /> }));
 // Partial mock: FileTree stubbed (it fetches when rendered bare), the rest
 // of the barrel — notably the real PreviewPane — untouched.
 vi.mock('@sprout/ui', async (importOriginal) => {
@@ -88,6 +92,14 @@ describe('ViewsLayout', () => {
     expect(
       within(screen.getByTestId('views-slot-overlay')).getByTestId('views-test-preview-panel'),
     ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('views-slot-overlay')).getByTestId('views-test-command-palette'),
+    ).toBeInTheDocument();
+  });
+
+  it('places the terminal kind like any other view', () => {
+    render(<ViewsLayout arrangement={{ left: [], center: [], right: ['terminal'], overlay: [] }} />);
+    expect(within(screen.getByTestId('views-slot-right')).getByTestId('views-test-terminal')).toBeInTheDocument();
   });
 
   it('passes per-view props through to the views', () => {

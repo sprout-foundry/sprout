@@ -95,6 +95,8 @@ const TESTIDS = {
   "terminal-toggle": "terminal-toggle",
   "terminal-collapse": "terminal-collapse",
   "terminal-tab-bar": "terminal-tab-bar",
+  "workspace-terminal": "workspace-terminal", // the arranged terminal view (SproutWorkspace `terminal` kind)
+  "workspace-terminal-unavailable": "workspace-terminal-unavailable",
 
   // Onboarding
   "onboarding-overlay": "onboarding-overlay",

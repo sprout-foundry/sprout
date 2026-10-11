@@ -3,6 +3,8 @@ import type { ElementType } from 'react';
 import AgentChangesPanel from '../components/AgentChangesPanel';
 import ChatView from '../components/ChatView';
 import { PreviewPanel } from '../components/PreviewPanel';
+import { WorkspaceCommandPalette } from './WorkspaceCommandPalette';
+import { WorkspaceTerminalView } from './WorkspaceTerminalView';
 import './ViewsLayout.css';
 
 /**
@@ -42,9 +44,19 @@ export const SLOT_ORDER: readonly ViewSlot[] = ['left', 'center', 'right', 'over
 /**
  * A view an arrangement can place. Composite kinds (`chat`, `changes`,
  * `previewPanel`) require the webui context stack; primitives
- * (`fileTree`, `editor`, `previewPane`) render standalone.
+ * (`fileTree`, `editor`, `previewPane`) render standalone. `terminal` (the
+ * host's terminal, or an unavailable notice) and `commandPalette` (an overlay
+ * that renders nothing until opened) are composite too.
  */
-export type ViewKind = 'chat' | 'changes' | 'fileTree' | 'editor' | 'previewPane' | 'previewPanel';
+export type ViewKind =
+  | 'chat'
+  | 'changes'
+  | 'fileTree'
+  | 'editor'
+  | 'previewPane'
+  | 'previewPanel'
+  | 'terminal'
+  | 'commandPalette';
 
 /**
  * The arrangement: which view kinds render in which slot, in order. An
@@ -68,7 +80,9 @@ export type ViewComponent = ElementType;
 
 /**
  * The built-in webui arrangement: files at left, the chat at center, the
- * agent-changes panel at right, the preview panel as an overlay. This is
+ * agent-changes panel at right, the preview panel as an overlay. The command
+ * palette sits in the overlay too (it renders nothing until opened); an
+ * arrangement that supplies its own `overlay` without it opts out. This is
  * what the web UI itself composes; an embedding supplies its own arrangement
  * on top of it.
  */
@@ -76,7 +90,7 @@ export const DEFAULT_VIEWS_ARRANGEMENT: ViewsArrangement = {
   left: ['fileTree'],
   center: ['chat'],
   right: ['changes'],
-  overlay: ['previewPanel'],
+  overlay: ['previewPanel', 'commandPalette'],
 };
 
 /**
@@ -91,6 +105,8 @@ export const VIEWS_BY_KIND: Record<ViewKind, ViewComponent> = {
   editor: Editor,
   previewPane: PreviewPane,
   previewPanel: PreviewPanel,
+  terminal: WorkspaceTerminalView,
+  commandPalette: WorkspaceCommandPalette,
 };
 
 /**

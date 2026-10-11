@@ -18,6 +18,11 @@ describe('BROWSER_DEFAULT_HOTKEYS', () => {
     }
   });
 
+  it('binds the command palette to the daemon default (Ctrl/Cmd+Shift+P)', () => {
+    const keys = BROWSER_DEFAULT_HOTKEYS.filter((h) => h.command_id === 'command_palette').map((h) => h.key);
+    expect(keys.sort()).toEqual(['Cmd+Shift+P', 'Ctrl+Shift+P']);
+  });
+
   it('has no duplicate key bindings across the whole set', () => {
     const seen = new Set<string>();
     for (const h of BROWSER_DEFAULT_HOTKEYS) {

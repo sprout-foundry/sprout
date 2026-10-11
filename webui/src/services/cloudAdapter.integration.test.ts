@@ -378,7 +378,7 @@ describe('CloudAdapter Integration Tests', () => {
       } else if (endpoint.path === '/api/search/replace') {
         response = await adapter.fetch(endpoint.path, {
           method: 'POST',
-          body: JSON.stringify({ search: 'foo', replace: 'bar', files: ['/src/main.go'] }),
+          body: JSON.stringify({ search: 'foo', replace: 'bar', files: ['src/main.go'] }),
         });
       } else if (endpoint.path === '/api/file') {
         // GET requires ?path= query param, POST requires body with content

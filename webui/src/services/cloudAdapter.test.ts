@@ -620,7 +620,7 @@ describe('CloudAdapter', () => {
       const response = await adapter.fetch('/api/search/replace', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ search: 'foo', replace: 'bar', files: ['/src/main.go'] }),
+        body: JSON.stringify({ search: 'foo', replace: 'bar', files: ['src/main.go'] }),
       });
 
       // MUST NOT proxy to backend

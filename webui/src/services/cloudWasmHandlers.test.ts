@@ -692,6 +692,45 @@ describe('handleWasmLocal — /api/search', () => {
     expect(ran).toContain("'/workspace'");
     expect(body.results.map((r: { file: string }) => r.file)).toEqual(['src/a.go']);
   });
+
+  function runSearch(params: string, stdout = '') {
+    let ran = '';
+    const shell = createMockShell({
+      getWorkspaceRoot: () => '/workspace',
+      executeCommand: (cmd: string) => {
+        ran = cmd;
+        return { stdout, stderr: '', exitCode: stdout ? 0 : 1 };
+      },
+    });
+    const res = handleWasmLocal(shell, '/api/search', 'GET', `http://x/api/search?${params}`, undefined);
+    return { flags: ran.split(' --include=')[0].split(' ').slice(1), ran, res };
+  }
+
+  it('searches literally and case-insensitively by default, the query after -e', () => {
+    const { flags, ran } = runSearch('query=-a.b');
+    expect(flags).toEqual(['-i', '-F', '-rn']);
+    expect(ran).toContain("-e '-a.b'");
+  });
+
+  it('honours case_sensitive, regex and whole_word', () => {
+    expect(runSearch('query=x&case_sensitive=true').flags).toEqual(['-F', '-rn']);
+    expect(runSearch('query=x&regex=true').flags).toEqual(['-i', '-E', '-rn']);
+    expect(runSearch('query=x&whole_word=true').flags).toEqual(['-i', '-F', '-w', '-rn']);
+    expect(runSearch('query=x&whole_word=true&regex=true&case_sensitive=true').flags).toEqual(['-E', '-w', '-rn']);
+  });
+
+  it('highlights the matched span with the same options', async () => {
+    const out = '/workspace/a.ts:1:let foo = Foo.bar;\n';
+    const span = async (params: string) => {
+      const body = await runSearch(params, out).res.json();
+      const m = body.results[0].matches[0];
+      return [m.column_start, m.column_end];
+    };
+    expect(await span('query=foo.bar')).toEqual([10, 17]);
+    expect(await span('query=foo&case_sensitive=true')).toEqual([4, 7]);
+    expect(await span('query=F%5Cw%2B&regex=true&case_sensitive=true')).toEqual([10, 13]);
+    expect(await span('query=oo&whole_word=true')).toEqual([0, 18]);
+  });
 });
 
 import { handleWasmImageUpload, uploadBodyBytes } from './cloudWasmBinary';
@@ -819,5 +858,138 @@ describe('the in-browser agent provider config follows the host backend', () => 
     const origin = window.location.origin;
     expect(JSON.parse(config!.content).endpoint).toBe(`${origin}/proxy/chat`);
     setActiveHost(headlessHost());
+  });
+});
+
+describe('handleWasmLocal — /api/search/replace', () => {
+  /** A workspace at /workspace whose files live in `files`; writes land there too. */
+  function replaceIn(initial: Record<string, string>, request: Record<string, unknown>) {
+    const files = { ...initial };
+    const writes: string[] = [];
+    const shell = createMockShell({
+      getWorkspaceRoot: () => '/workspace',
+      readFile: (path: string) => (path in files ? { content: files[path] } : { content: '', error: 'not found' }),
+      writeFile: (path: string, content: string) => {
+        writes.push(path);
+        files[path] = content;
+        return '';
+      },
+    });
+    const res = handleWasmLocal(shell, '/api/search/replace', 'POST', '/api/search/replace', JSON.stringify(request));
+    return { res, files, writes };
+  }
+
+  const FILE = '/workspace/src/a.ts';
+
+  it('replaces a plain query literally: a.b does not touch axb', async () => {
+    const { res, files } = replaceIn(
+      { [FILE]: 'a.b axb a.b\nAXB' },
+      { search: 'a.b', replace: 'X', files: ['src/a.ts'], case_sensitive: true },
+    );
+    expect(res.status).toBe(200);
+    expect(files[FILE]).toBe('X axb X\nAXB');
+    expect((await res.json()).total_changes).toBe(2);
+  });
+
+  it('ignores case unless case_sensitive', () => {
+    expect(replaceIn({ [FILE]: 'Foo foo FOO' }, { search: 'foo', replace: 'x', files: ['src/a.ts'] }).files[FILE]).toBe(
+      'x x x',
+    );
+    expect(
+      replaceIn({ [FILE]: 'Foo foo FOO' }, { search: 'foo', replace: 'x', files: ['src/a.ts'], case_sensitive: true })
+        .files[FILE],
+    ).toBe('Foo x FOO');
+  });
+
+  it('honours whole_word', () => {
+    const { files } = replaceIn(
+      { [FILE]: 'cat concat cat_x cat.' },
+      { search: 'cat', replace: 'dog', files: ['src/a.ts'], whole_word: true },
+    );
+    expect(files[FILE]).toBe('dog concat cat_x dog.');
+  });
+
+  it('bounds a whole regex alternation with whole_word', () => {
+    const { files } = replaceIn(
+      { [FILE]: 'catalog hotdog cat' },
+      { search: 'cat|dog', replace: 'pet', files: ['src/a.ts'], regex: true, whole_word: true },
+    );
+    expect(files[FILE]).toBe('catalog hotdog pet');
+  });
+
+  it('reports each replaced occurrence with 1-based columns, as the daemon does', async () => {
+    const { res } = replaceIn(
+      { [FILE]: 'x needle needle\nnone' },
+      { search: 'needle', replace: 'pin', files: ['src/a.ts'], preview: true },
+    );
+    expect(await res.json()).toEqual({
+      changes: [
+        {
+          file: 'src/a.ts',
+          changed_lines: 1,
+          matches: [
+            { line_number: 1, old_line: 'x needle needle', new_line: 'x pin pin', column_start: 3, column_end: 9 },
+            { line_number: 1, old_line: 'x needle needle', new_line: 'x pin pin', column_start: 10, column_end: 16 },
+          ],
+        },
+      ],
+      total_changes: 2,
+      preview: true,
+    });
+  });
+
+  it('treats the query as a regex only with regex set', () => {
+    const { files } = replaceIn(
+      { [FILE]: 'a1 a22 b3' },
+      { search: 'a\\d+', replace: 'N', files: ['src/a.ts'], regex: true },
+    );
+    expect(files[FILE]).toBe('N N b3');
+  });
+
+  it('searches a leading-dash query as text', () => {
+    const { files } = replaceIn(
+      { [FILE]: 'run --force -f' },
+      { search: '--force', replace: '--yes', files: ['src/a.ts'] },
+    );
+    expect(files[FILE]).toBe('run --yes -f');
+  });
+
+  it('inserts the replacement literally, $-patterns and backslashes included', () => {
+    const { files } = replaceIn(
+      { [FILE]: 'foo(bar)' },
+      { search: '(\\w+)\\((\\w+)\\)', replace: '$2 $1 $& \\1 &', files: ['src/a.ts'], regex: true },
+    );
+    expect(files[FILE]).toBe('$2 $1 $& \\1 &');
+  });
+
+  it('writes only files with a match, previews without writing, and refuses paths outside the workspace', async () => {
+    const other = '/workspace/src/b.ts';
+    const written = replaceIn(
+      { [FILE]: 'needle', [other]: 'haystack' },
+      { search: 'needle', replace: 'pin', files: ['src/a.ts', 'src/b.ts'] },
+    );
+    expect(written.writes).toEqual([FILE]);
+
+    const preview = replaceIn(
+      { [FILE]: 'needle' },
+      { search: 'needle', replace: 'pin', files: ['src/a.ts'], preview: true },
+    );
+    expect(preview.writes).toEqual([]);
+    expect(preview.files[FILE]).toBe('needle');
+    const match = (await preview.res.json()).changes[0].matches[0];
+    expect(match).toMatchObject({ line_number: 1, new_line: 'pin', column_start: 1, column_end: 7 });
+
+    const outside = replaceIn(
+      { '/etc/passwd': 'needle' },
+      { search: 'needle', replace: 'pin', files: ['../../etc/passwd'] },
+    );
+    expect(outside.res.status).toBe(400);
+    expect(outside.writes).toEqual([]);
+  });
+
+  it('rejects a regex the browser cannot compile', () => {
+    const { res, writes } = replaceIn({ [FILE]: 'x' }, { search: '(', replace: 'y', files: ['src/a.ts'], regex: true });
+    expect(res.status).toBe(400);
+    expect(writes).toEqual([]);
   });
 });

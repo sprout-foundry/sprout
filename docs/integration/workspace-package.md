@@ -325,6 +325,90 @@ Two preview kinds can be arranged:
   renders an empty header and body, and its Restart button calls an
   undefined `onRestart`.
 
+## Source control
+
+An arranged `git` view is a working source-control surface: the app's git
+sidebar section (`WorkspaceGitView`), running against the workspace's
+transport. The standalone app's sidebar and the view build their panel from
+the same state hook (`useGitWorkspace`) and the same panel components.
+
+```tsx
+<SproutWorkspace
+  project={{ id: repoUrl, repoUrl }}
+  space="code"
+  host={myHost}
+  layout={{ left: ["git"], center: ["editor"], right: ["chat"], overlay: [] }}
+/>
+```
+
+- **Changes** — branch and ahead/behind, staged / modified / untracked /
+  deleted files, stage and unstage (per file, per section, or a selection),
+  discard, commit (with an AI commit message where the backend offers one),
+  branch checkout and create, pull, push and a pull request.
+- **Diffs** — clicking a changed file shows its diff inside the view; the
+  diff's open button (and the row's context menu) opens the file in the
+  editor unit. Commit diffs from the History tab show there too.
+- **History** — the commit log, a commit's files and diffs, checkout and
+  revert.
+- **Worktrees** — only with `capabilities.serverGit`: worktrees are extra
+  checkouts on the server's disk.
+
+The view leaves out two things the app's sidebar has: the commit box's
+**Review** action (the review opens as an editor tab) and History's
+**compare** tabs, because the assembled editor shows file buffers only.
+
+**Capabilities.** A host without `capabilities.git` gets an empty state
+("Source control isn't available") and no git request is made. A workspace
+that is not a repository shows "No git repository" with a Refresh button.
+
+**WASM vs daemon.** Git calls go through the workspace fetch. On a daemon host
+they reach `/api/git/*` on the daemon (or `transport.apiBaseURL`). On an
+in-browser-agent host (`transport.agent.kind: 'wasm'`) the in-browser adapter
+answers them with the browser's own git (isomorphic-git over the browser
+file store); nothing is forwarded. Browser git cannot unstage, discard,
+revert or open a pull request, so those actions are shown disabled ("Not
+available in browser mode"), and it has no AI commit message, so that action
+is not offered. A failed push is
+published on the workspace's request channel, so a host that mounts
+`useEscalationTriggers` / `EscalationListener` (see
+[Escalation](#escalation-run-it-where-it-can-run)) gets the same "start a
+full workspace" escalation the app offers.
+
+**Overriding.** `viewProps.git` replaces the assembled props
+(`WorkspaceGitViewProps`): `onOpenFile(path)` (assembled: the editor unit;
+omitted outside a composition: a `sprout:open-in-editor` request) and
+`className`. A host that owns the git state passes `gitPanel`
+(`WorkspaceGitPanelProps`), and the view renders that panel as-is with no git
+requests of its own.
+
+## Search
+
+An arranged `search` view is the app's workspace search
+(`WorkspaceSearchView`, the same panel as the app's Search sidebar): a query
+with case / whole-word / regex options, exclude patterns, and replace-all.
+Clicking a result opens the file in the editor unit at the matched line.
+
+```tsx
+<SproutWorkspace
+  /* … */
+  layout={{ left: ["fileTree", "search"], center: ["editor"], right: ["chat"] }}
+/>
+```
+
+Queries go to `GET /api/search` (replace-all to `POST /api/search/replace`)
+through the workspace fetch. A daemon host answers from the daemon; an
+in-browser-agent host answers in the page, by searching the browser file
+store through the WASM shell with the same options (literal text unless
+`regex`, `case_sensitive`, `whole_word`). Replace-all applies those same
+options in the page and rewrites only matched text in the listed workspace
+files; the replacement is inserted literally (no backreferences, as on the
+daemon). No capability gates it.
+
+**Overriding.** `viewProps.search` replaces the assembled props
+(`WorkspaceSearchViewProps`): `onFileClick(path, line)` (assembled: the
+editor unit's `openFile(path, { line })`), `autoFocus` (default `false` for an
+arranged view; the app's sidebar panel focuses its input) and `className`.
+
 ## Escalation (run it where it can run)
 
 When an agent command cannot run in the browser (exit 127 — no compilers in

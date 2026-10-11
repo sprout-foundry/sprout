@@ -4,6 +4,8 @@ import AgentChangesPanel from '../components/AgentChangesPanel';
 import ChatView from '../components/ChatView';
 import { PreviewPanel } from '../components/PreviewPanel';
 import './ViewsLayout.css';
+import { WorkspaceGitView } from './WorkspaceGitView';
+import { WorkspaceSearchView } from './WorkspaceSearchView';
 
 /**
  * Layout configuration + arrangement renderer.
@@ -42,9 +44,11 @@ export const SLOT_ORDER: readonly ViewSlot[] = ['left', 'center', 'right', 'over
 /**
  * A view an arrangement can place. Composite kinds (`chat`, `changes`,
  * `previewPanel`) require the webui context stack; primitives
- * (`fileTree`, `editor`, `previewPane`) render standalone.
+ * (`fileTree`, `editor`, `previewPane`) render standalone. The `git`
+ * (source control) and `search` views are composites too: they call the
+ * workspace's git and search endpoints through its transport.
  */
-export type ViewKind = 'chat' | 'changes' | 'fileTree' | 'editor' | 'previewPane' | 'previewPanel';
+export type ViewKind = 'chat' | 'changes' | 'fileTree' | 'editor' | 'previewPane' | 'previewPanel' | 'git' | 'search';
 
 /**
  * The arrangement: which view kinds render in which slot, in order. An
@@ -91,6 +95,8 @@ export const VIEWS_BY_KIND: Record<ViewKind, ViewComponent> = {
   editor: Editor,
   previewPane: PreviewPane,
   previewPanel: PreviewPanel,
+  git: WorkspaceGitView,
+  search: WorkspaceSearchView,
 };
 
 /**

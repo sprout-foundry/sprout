@@ -28,6 +28,8 @@ import {
   setEscalationPolicy,
   useEscalationTriggers,
   usePreviewStatus,
+  WorkspaceGitView,
+  WorkspaceSearchView,
   copy,
   formatCopy,
   installCopy,
@@ -121,12 +123,17 @@ describe('views entry exports', () => {
     expect(DEFAULT_VIEWS_ARRANGEMENT).toBeDefined();
     expect(SLOT_ORDER).toEqual(['left', 'center', 'right', 'overlay']);
     expect(Object.keys(VIEWS_BY_KIND).sort()).toEqual(
-      ['chat', 'changes', 'editor', 'fileTree', 'previewPane', 'previewPanel'].sort(),
+      ['chat', 'changes', 'editor', 'fileTree', 'previewPane', 'previewPanel', 'git', 'search'].sort(),
     );
     // Each registered kind maps to something renderable.
     for (const kind of Object.keys(VIEWS_BY_KIND) as ViewKind[]) {
       expect(VIEWS_BY_KIND[kind]).toBeDefined();
     }
+  });
+
+  it('registers the source control and search views under their kinds', () => {
+    expect(VIEWS_BY_KIND.git).toBe(WorkspaceGitView);
+    expect(VIEWS_BY_KIND.search).toBe(WorkspaceSearchView);
   });
 
   // ── Copy keys (the embedding's wording seam) ─────────────────────────

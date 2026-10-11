@@ -16,7 +16,10 @@ export interface SearchResult {
 }
 
 export interface SearchViewProps {
+  /** Open a result: the file and the 1-based line of the match. */
   onFileClick?: (filePath: string, lineNumber?: number) => void;
+  /** Focus the query input on mount (the default). */
+  autoFocus?: boolean;
 }
 
 export interface SearchContextMenuState {

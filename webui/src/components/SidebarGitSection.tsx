@@ -3,49 +3,15 @@ import { useState, useEffect, useCallback } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { type SectionTab } from '../hooks/useSidebarState';
 import { useHostCapabilities } from '../host';
-import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
 import GitHistoryPanel from './GitHistoryPanel';
 import GitSidebarPanel from './GitSidebarPanel';
-import type { GitSidebarPanelProps } from './GitSidebarPanel';
+import type { SidebarGitPanelProps } from './git/gitPanelProps';
 import WorktreePanel from './WorktreePanel';
 
 type GitSubTab = 'changes' | 'history' | 'worktrees';
 
-interface ExtendedGitSidebarPanelProps extends GitSidebarPanelProps {
-  openWorkspaceBuffer: (options: {
-    kind: 'chat' | 'diff' | 'review' | 'compare';
-    path: string;
-    title: string;
-    content?: string;
-    ext?: string;
-    isPinned?: boolean;
-    isClosable?: boolean;
-    metadata?: Record<string, unknown>;
-  }) => string;
-  onLoadCommits: (
-    limit: number,
-    offset: number,
-    opts?: { signal?: AbortSignal },
-  ) => Promise<{
-    commits: GitCommitSummary[];
-    total: number;
-  }>;
-  onLoadCommitDetail: (hash: string) => Promise<GitCommitDetail>;
-  onLoadCommitFileDiff: (
-    hash: string,
-    filePath: string,
-  ) => Promise<{
-    message: string;
-    hash: string;
-    path: string;
-    diff: string;
-  }>;
-  onCheckoutCommit: (commitHash: string) => Promise<{ message: string }>;
-  onRevertCommit: (commitHash: string) => Promise<{ message: string }>;
-}
-
 interface SidebarGitSectionProps {
-  gitPanel?: ExtendedGitSidebarPanelProps;
+  gitPanel?: SidebarGitPanelProps;
   currentView?: string;
   onSectionChange?: (section: SectionTab) => void;
 }

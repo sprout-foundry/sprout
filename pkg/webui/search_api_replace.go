@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"unicode/utf16"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
@@ -105,9 +106,13 @@ func (ws *ReactWebServer) handleAPIQuerySearchReplace(w http.ResponseWriter, r *
 		return
 	}
 
+	totalChanges := 0
+	for _, change := range changes {
+		totalChanges += len(change.Matches)
+	}
 	response := ReplaceResponse{
 		Changes:      changes,
-		TotalChanges: len(changes),
+		TotalChanges: totalChanges,
 		Preview:      req.Preview,
 	}
 
@@ -140,32 +145,38 @@ func (ws *ReactWebServer) performReplace(clientID, workspaceRoot string, req Rep
 		var fileChanges []ReplaceMatch
 		var newLines []string
 
-		// Process each line
+		// Every non-empty match on a line is replaced by the replacement text
+		// as written: the replacement has no backreference syntax, so `$1`,
+		// `$&` and `\` stay literal. Each replaced occurrence is one entry,
+		// with 1-based UTF-16 columns, the in-browser handler's shape.
+		changedLines := 0
 		for i, line := range lines {
-			newLine := line
-			matches := pattern.FindAllStringSubmatchIndex(line, -1)
-
-			if len(matches) > 0 {
-				// Apply replacements from end to start to maintain indices
-				for j := len(matches) - 1; j >= 0; j-- {
-					match := matches[j]
-					columnStart := match[2]
-					columnEnd := match[3]
-
-					// Create ReplaceMatch for preview
-					fileChanges = append(fileChanges, ReplaceMatch{
-						LineNumber:  i + 1,
-						OldLine:     line,
-						NewLine:     line[:columnStart] + req.Replace + line[columnEnd:],
-						ColumnStart: columnStart + 1, // Convert to 1-based
-						ColumnEnd:   columnEnd + 1,   // Convert to 1-based
-					})
-
-					// Apply replacement
-					newLine = line[:columnStart] + req.Replace + line[columnEnd:]
-				}
+			spans := nonEmptyMatches(pattern, line)
+			if len(spans) == 0 {
+				newLines = append(newLines, line)
+				continue
 			}
-
+			var b strings.Builder
+			cursor := 0
+			for _, span := range spans {
+				b.WriteString(line[cursor:span[0]])
+				b.WriteString(req.Replace)
+				cursor = span[1]
+			}
+			b.WriteString(line[cursor:])
+			newLine := b.String()
+			for _, span := range spans {
+				fileChanges = append(fileChanges, ReplaceMatch{
+					LineNumber:  i + 1,
+					OldLine:     line,
+					NewLine:     newLine,
+					ColumnStart: utf16Len(line[:span[0]]) + 1,
+					ColumnEnd:   utf16Len(line[:span[1]]) + 1,
+				})
+			}
+			if newLine != line {
+				changedLines++
+			}
 			newLines = append(newLines, newLine)
 		}
 
@@ -173,10 +184,10 @@ func (ws *ReactWebServer) performReplace(clientID, workspaceRoot string, req Rep
 			change := ReplaceFileChange{
 				File:         filePath,
 				Matches:      fileChanges,
-				ChangedLines: len(fileChanges),
+				ChangedLines: changedLines,
 			}
 
-			if !req.Preview {
+			if !req.Preview && changedLines > 0 {
 				// Write changes to file
 				newContent := strings.Join(newLines, "\n")
 				if err := os.WriteFile(absFilePath, []byte(newContent), 0644); err != nil {
@@ -193,6 +204,28 @@ func (ws *ReactWebServer) performReplace(clientID, workspaceRoot string, req Rep
 	}
 
 	return changes, nil
+}
+
+// nonEmptyMatches returns the byte spans of the pattern's non-empty matches
+// in line. An empty match (a regex such as `x*`) replaces nothing.
+func nonEmptyMatches(pattern *regexp.Regexp, line string) [][2]int {
+	var spans [][2]int
+	for _, m := range pattern.FindAllStringIndex(line, -1) {
+		if m[1] > m[0] {
+			spans = append(spans, [2]int{m[0], m[1]})
+		}
+	}
+	return spans
+}
+
+// utf16Len is the length of s in UTF-16 code units, the unit browser
+// string offsets use.
+func utf16Len(s string) int {
+	n := 0
+	for _, r := range s {
+		n += utf16.RuneLen(r)
+	}
+	return n
 }
 
 // parsePatterns parses a comma-separated pattern string into a slice

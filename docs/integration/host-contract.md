@@ -635,6 +635,19 @@ settings reads).
 | Editor | `POST /api/completion` | the user enables AI completions |
 | Escalation | `GET /workspace`, `GET /workspace/{id}`, `/workspace/txn*`, `GET /runners` | the host mounts `AgentEscalationBridge` / `EscalationListener` |
 
+**Source control and search views.** On an in-browser-agent host an arranged
+`git` or `search` view forwards nothing: `/api/git/*` is answered by browser
+git, `/api/search` and `/api/search/replace` by the WASM shell, and
+`/api/workspace` by a stub. A daemon-backed host serves the daemon's paths
+for them: `GET /api/git/status`, `/api/git/branches`, `/api/git/diff?path=`,
+`/api/git/log`, `/api/git/commit/show`, `/api/git/commit/show/file`;
+`POST /api/git/stage`, `/unstage`, `/discard`, `/commit`, `/commit-message`,
+`/checkout`, `/branch/create`, `/pull`, `/push`, `/pull-request`, `/revert`;
+with `capabilities.serverGit`, `GET /api/git/worktrees` and
+`POST /api/git/worktree/{create,remove,checkout}`; `GET /api/workspace` (the
+root shown in file paths); and `GET /api/search`, `POST /api/search/replace`.
+Each git call carries the session's repo directory (`dir`) when one is set.
+
 **Not through the adapter.** A few calls use the page's `fetch` directly and
 go to the **page origin**, not `apiBaseURL`: `GET /api/bootstrap` (startup
 config; defaults on failure), `GET /api/query/status` (only while no client id

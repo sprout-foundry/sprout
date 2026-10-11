@@ -17,6 +17,7 @@ import {
 } from '../services/paletteRecents';
 import { useFileHandler } from '../hooks/useFileHandler';
 import { useGitWorkspace } from '../hooks/useGitWorkspace';
+import { buildGitPanelProps } from './git/gitPanelProps';
 import { useHotkeysConfig } from '../hooks/useHotkeysConfig';
 import { useInstances } from '../hooks/useInstances';
 import { type SectionTab } from '../hooks/useSidebarState';
@@ -794,60 +795,7 @@ const AppContent: React.FC<AppContentProps> = ({
     [onSidebarToggle, onTerminalExpandedChange, isTerminalExpanded, handleOpenHotkeysConfig],
   );
 
-  const {
-    gitStatus,
-    gitBranches,
-    workspaceRoot,
-    selectedFiles,
-    activeDiffSelectionKey,
-    activeDiffPath,
-    activeDiff,
-    diffMode,
-    isDiffLoading,
-    diffError,
-    isGitLoading,
-    isGitActing,
-    isGeneratingCommitMessage,
-    gitActionError,
-    gitActionWarning,
-    isReviewLoading,
-    isReviewFixing,
-    reviewError,
-    reviewFixResult,
-    reviewFixLogs,
-    reviewFixSessionID,
-    deepReview,
-    handleToggleFileSelection,
-    handleToggleSectionSelection,
-    clearSelectedFiles,
-    handleSelectFiles,
-    handlePreviewGitFile,
-    handleStageSelected,
-    handleUnstageSelected,
-    handleDiscardSelected,
-    handleStageFile,
-    handleUnstageFile,
-    handleDiscardFile,
-    handleSectionAction,
-    handleGitCommitClick,
-    handleGenerateCommitMessage,
-    handleRunReview,
-    handleFixFromReview,
-    handleDiffModeChange,
-    handleCheckoutBranch,
-    handleCreateBranch,
-    handlePull,
-    handlePush,
-    handleCreatePullRequest,
-    handleLoadCommits,
-    handleLoadCommitDetail,
-    handleLoadCommitFileDiff,
-    handleCheckoutCommit,
-    handleRevertCommit,
-    refreshGitStatus,
-    commitMessage,
-    setCommitMessage,
-  } = useGitWorkspace({
+  const gitWorkspace = useGitWorkspace({
     fetchFn: sproutFetch,
     gitRefreshToken,
     selectedGitFilePath: null,
@@ -859,6 +807,26 @@ const AppContent: React.FC<AppContentProps> = ({
     onGitDiscard,
     openWorkspaceBuffer,
   });
+
+  const {
+    gitStatus,
+    gitBranches,
+    workspaceRoot,
+    activeDiffPath,
+    activeDiff,
+    diffMode,
+    isDiffLoading,
+    diffError,
+    isReviewLoading,
+    isReviewFixing,
+    reviewError,
+    reviewFixResult,
+    reviewFixLogs,
+    reviewFixSessionID,
+    deepReview,
+    handleFixFromReview,
+    handleDiffModeChange,
+  } = gitWorkspace;
 
   // Open/close the inline tool detail from a tool pill. The chat
   // renders the detail inline (below the message) instead of routing it to
@@ -1118,49 +1086,7 @@ const AppContent: React.FC<AppContentProps> = ({
             onSidebarWidthPersist={onSidebarWidthPersist}
             onSidebarWidthReset={onSidebarWidthReset}
             onProviderChange={onProviderChange}
-            gitPanel={{
-              gitStatus,
-              gitBranches,
-              workspaceRoot,
-              selectedFiles,
-              activeDiffSelectionKey,
-              commitMessage,
-              isLoading: isGitLoading,
-              isActing: isGitActing,
-              isGeneratingCommitMessage,
-              isReviewLoading,
-              actionError: gitActionError,
-              actionWarning: gitActionWarning,
-              onCommitMessageChange: setCommitMessage,
-              onGenerateCommitMessage: handleGenerateCommitMessage,
-              onCommit: handleGitCommitClick,
-              onRunReview: handleRunReview,
-              onCheckoutBranch: handleCheckoutBranch,
-              onCreateBranch: handleCreateBranch,
-              onPull: handlePull,
-              onPush: handlePush,
-              onPullRequest: handleCreatePullRequest,
-              onRefresh: refreshGitStatus,
-              onToggleFileSelection: handleToggleFileSelection,
-              onToggleSectionSelection: handleToggleSectionSelection,
-              onClearSelection: clearSelectedFiles,
-              onSelectFiles: handleSelectFiles,
-              onPreviewFile: handlePreviewGitFile,
-              onStageSelected: handleStageSelected,
-              onUnstageSelected: handleUnstageSelected,
-              onDiscardSelected: handleDiscardSelected,
-              onStageFile: handleStageFile,
-              onUnstageFile: handleUnstageFile,
-              onDiscardFile: handleDiscardFile,
-              onSectionAction: handleSectionAction,
-              onOpenFile: handleFileClick,
-              onLoadCommits: handleLoadCommits,
-              onLoadCommitDetail: handleLoadCommitDetail,
-              onLoadCommitFileDiff: handleLoadCommitFileDiff,
-              onCheckoutCommit: handleCheckoutCommit,
-              onRevertCommit: handleRevertCommit,
-              openWorkspaceBuffer,
-            }}
+            gitPanel={buildGitPanelProps(gitWorkspace, { openWorkspaceBuffer, onOpenFile: handleFileClick })}
           />
         </ErrorBoundary>
         <SproutWorkspace

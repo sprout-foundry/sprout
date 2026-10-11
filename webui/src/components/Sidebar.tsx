@@ -22,13 +22,12 @@ import type { ProviderLogEntry } from '../providers/types';
 import type { SproutInstance } from '../services/api';
 import { NATIVE_GIT_ENABLED } from '../services/nativeGitStubs/nativeGitFlag';
 import type { ViewType } from '../types/app';
-import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
 import { debugLog } from '../utils/log';
 import ModeSwitcher from '../workspaces/ModeSwitcher';
 import type { ModeRailProps } from '../workspaces/rail';
 import type { WorkspaceMode, WorkspaceModeId } from '../workspaces/registry';
 import AutomationsPanel from './AutomationsPanel';
-import type { GitSidebarPanelProps } from './GitSidebarPanel';
+import type { SidebarGitPanelProps } from './git/gitPanelProps';
 import LocationSwitcher from './LocationSwitcher';
 import ResizeHandle from './ResizeHandle';
 import {
@@ -126,31 +125,7 @@ interface SidebarProps {
   isOpen?: boolean;
   onClose?: () => void;
   isMobile?: boolean;
-  gitPanel?: GitSidebarPanelProps & {
-    openWorkspaceBuffer: (options: {
-      kind: 'chat' | 'diff' | 'review' | 'compare';
-      path: string;
-      title: string;
-      content?: string;
-      ext?: string;
-      isPinned?: boolean;
-      isClosable?: boolean;
-      metadata?: Record<string, unknown>;
-    }) => string;
-    // Git history callbacks
-    onLoadCommits: (
-      limit: number,
-      offset: number,
-      opts?: { signal?: AbortSignal },
-    ) => Promise<{ commits: GitCommitSummary[]; total: number }>;
-    onLoadCommitDetail: (hash: string) => Promise<GitCommitDetail>;
-    onLoadCommitFileDiff: (
-      hash: string,
-      filePath: string,
-    ) => Promise<{ message: string; hash: string; path: string; diff: string }>;
-    onCheckoutCommit: (commitHash: string) => Promise<{ message: string }>;
-    onRevertCommit: (commitHash: string) => Promise<{ message: string }>;
-  };
+  gitPanel?: SidebarGitPanelProps;
 }
 
 /**

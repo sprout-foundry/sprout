@@ -44,7 +44,7 @@ export interface DeepReviewResult {
   warnings?: string[];
 }
 
-interface UseGitWorkspaceOptions {
+export interface UseGitWorkspaceOptions {
   fetchFn: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
   gitRefreshToken: number;
   selectedGitFilePath?: string | null;
@@ -91,6 +91,7 @@ export const useGitWorkspace = ({
   const [isDiffLoading, setIsDiffLoading] = useState(false);
   const [diffError, setDiffError] = useState<string | null>(null);
   const [isGitLoading, setIsGitLoading] = useState(false);
+  const [hasLoadedGitStatus, setHasLoadedGitStatus] = useState(false);
   const [isGitActing, setIsGitActing] = useState(false);
   const [isGeneratingCommitMessage, setIsGeneratingCommitMessage] = useState(false);
   const [gitActionError, setGitActionError] = useState<string | null>(null);
@@ -193,6 +194,7 @@ export const useGitWorkspace = ({
       setGitActionError(error instanceof Error ? error.message : 'Failed to load git status');
     } finally {
       setIsGitLoading(false);
+      setHasLoadedGitStatus(true);
     }
   }, [fetchFn, log]);
 
@@ -773,6 +775,7 @@ export const useGitWorkspace = ({
     isDiffLoading,
     diffError,
     isGitLoading,
+    hasLoadedGitStatus,
     isGitActing,
     isGeneratingCommitMessage,
     gitActionError,
@@ -817,3 +820,5 @@ export const useGitWorkspace = ({
     refreshGitStatus: loadGitStatus,
   };
 };
+
+export type UseGitWorkspaceResult = ReturnType<typeof useGitWorkspace>;

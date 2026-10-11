@@ -708,17 +708,21 @@ function handleWasmRename(shell: WasmShell, bodyStr?: string): Response {
 function handleWasmSearch(shell: WasmShell, fullUrl: string): Response {
   const query = getQueryParam(fullUrl, 'query') || '';
   const caseSensitive = getQueryParam(fullUrl, 'case_sensitive') === 'true';
+  const wholeWord = getQueryParam(fullUrl, 'whole_word') === 'true';
   const regex = getQueryParam(fullUrl, 'regex') === 'true';
   const include = getQueryParam(fullUrl, 'include') || '';
 
   if (!query) return jsonOk({ results: [], total_matches: 0, total_files: 0, truncated: false, query: '' });
 
   const cwd = workspaceRootOf(shell);
-  // Build grep command
+  // The daemon's semantics: a plain query is literal text (-F), a regex query
+  // an extended regex (-E); whole word wraps either in word boundaries (-w).
+  // `-e` keeps a query that starts with '-' from reading as an option.
   let grepCmd = 'grep';
   if (!caseSensitive) grepCmd += ' -i';
-  if (regex) grepCmd += ' -E';
-  grepCmd += ` -rn --include=${shellEscapeArg(include || '*')} ${shellEscapeArg(query)} ${shellEscapeArg(cwd)}`;
+  grepCmd += regex ? ' -E' : ' -F';
+  if (wholeWord) grepCmd += ' -w';
+  grepCmd += ` -rn --include=${shellEscapeArg(include || '*')} -e ${shellEscapeArg(query)} ${shellEscapeArg(cwd)}`;
 
   const result = shell.executeCommand(grepCmd);
   // grep returns exit code 1 when no matches — that's not an error
@@ -729,9 +733,11 @@ function handleWasmSearch(shell: WasmShell, fullUrl: string): Response {
   // Parse grep output into structured results, with workspace-relative
   // paths like the daemon's search returns.
   const prefix = cwd.endsWith('/') ? cwd : `${cwd}/`;
+  const highlight = searchHighlighter(query, { caseSensitive, wholeWord, regex });
   const results = parseGrepOutput(result.stdout).map((r) => ({
     ...r,
     file: r.file.startsWith(prefix) ? r.file.slice(prefix.length) : r.file,
+    matches: r.matches.map((m) => ({ ...m, ...highlight(m.line) })),
   }));
   const totalMatches = results.reduce((sum, r) => sum + r.match_count, 0);
   return jsonOk({
@@ -743,9 +749,76 @@ function handleWasmSearch(shell: WasmShell, fullUrl: string): Response {
   });
 }
 
+interface SearchOptions {
+  caseSensitive: boolean;
+  wholeWord: boolean;
+  regex: boolean;
+}
+
+/**
+ * The daemon's search pattern (`compileSearchPattern` in
+ * pkg/webui/search_api.go) as a browser RegExp: a plain query is literal
+ * text, a regex query is used as written, whole word wraps either in word
+ * boundaries, and matching ignores case unless case-sensitive. Throws for a
+ * regex the browser cannot compile.
+ */
+function searchRegExp(query: string, { caseSensitive, wholeWord, regex }: SearchOptions, global = false): RegExp {
+  const body = regex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const flags = `${global ? 'g' : ''}${caseSensitive ? '' : 'i'}`;
+  return new RegExp(wholeWord ? `\\b(?:${body})\\b` : body, flags);
+}
+
+/**
+ * The matched span of a hit line, for the result's highlight. grep reports
+ * the line only, so the span is found again with the same options; a pattern
+ * the browser cannot compile (an RE2-only construct) highlights the line.
+ */
+function searchHighlighter(
+  query: string,
+  options: SearchOptions,
+): (line: string) => { column_start: number; column_end: number } {
+  let pattern: RegExp | null = null;
+  try {
+    pattern = searchRegExp(query, options);
+  } catch {
+    pattern = null;
+  }
+  return (line) => {
+    const match = pattern?.exec(line);
+    if (!match || match[0] === '') return { column_start: 0, column_end: line.length };
+    return { column_start: match.index, column_end: match.index + match[0].length };
+  };
+}
+
+/**
+ * A replace target as a workspace path: relative paths (the search results'
+ * form) resolve against the workspace root, and a path that leaves the
+ * workspace is refused, as the daemon refuses it.
+ */
+function workspaceFilePath(root: string, file: string): string | null {
+  const base = sanitizePath(root);
+  const resolved = sanitizePath(file.startsWith('/') ? file : `${base}/${file}`);
+  if (base === '/') return resolved;
+  return resolved === base || resolved.startsWith(`${base}/`) ? resolved : null;
+}
+
+interface ReplaceMatch {
+  line_number: number;
+  old_line: string;
+  new_line: string;
+  column_start: number;
+  column_end: number;
+}
+
 /**
  * POST /api/search/replace — Search and replace across files.
  * Body: { search, replace, files, case_sensitive?, whole_word?, regex?, preview }
+ *
+ * The matching is the search's (`searchRegExp`), so only text the search
+ * reported is rewritten: every non-empty match on a line is replaced, and
+ * the replacement is inserted literally — `$1`, `$&` and `\` are text, as in
+ * the daemon, which has no backreferences. Each entry in `matches` is one
+ * replaced occurrence (1-based columns, the daemon's convention).
  */
 function handleWasmSearchReplace(shell: WasmShell, bodyStr?: string): Response {
   if (!bodyStr) return jsonError('Missing request body', 400);
@@ -755,71 +828,80 @@ function handleWasmSearchReplace(shell: WasmShell, bodyStr?: string): Response {
   const files = parsed?.files as string[] | undefined;
   const preview = !!parsed?.preview;
 
-  if (!search || !replace || !files?.length) {
+  if (!search || typeof replace !== 'string' || !files?.length) {
     return jsonError('Missing search, replace, or files', 400);
   }
 
-  const changes: Array<{
-    file: string;
-    matches: Array<{
-      line_number: number;
-      old_line: string;
-      new_line: string;
-      column_start: number;
-      column_end: number;
-    }>;
-    changed_lines: number;
-  }> = [];
+  let pattern: RegExp;
+  try {
+    pattern = searchRegExp(
+      search,
+      { caseSensitive: !!parsed?.case_sensitive, wholeWord: !!parsed?.whole_word, regex: !!parsed?.regex },
+      true,
+    );
+  } catch (err) {
+    return jsonError(`Invalid search pattern: ${err instanceof Error ? err.message : String(err)}`, 400);
+  }
 
-  for (const filePath of files) {
-    const safePath = sanitizePath(filePath);
-    const readResult = shell.readFile(safePath);
+  const root = workspaceRootOf(shell);
+  const targets: Array<{ file: string; path: string }> = [];
+  for (const file of files) {
+    const path = workspaceFilePath(root, file);
+    if (!path) return jsonError(`File outside workspace: ${file}`, 400);
+    targets.push({ file, path });
+  }
+
+  const changes: Array<{ file: string; matches: ReplaceMatch[]; changed_lines: number }> = [];
+
+  for (const { file, path } of targets) {
+    const readResult = shell.readFile(path);
     if (readResult.error) continue;
 
-    const content = readResult.content;
-    const lines = content.split('\n');
-    const matches: Array<{
-      line_number: number;
-      old_line: string;
-      new_line: string;
-      column_start: number;
-      column_end: number;
-    }> = [];
+    const lines = readResult.content.split('\n');
+    const matches: ReplaceMatch[] = [];
     let changedLines = 0;
 
     for (let i = 0; i < lines.length; i++) {
-      const idx = lines[i].indexOf(search);
-      if (idx !== -1) {
-        const oldLine = lines[i];
-        const newLine = lines[i].replace(search, replace);
-        if (oldLine !== newLine) {
-          matches.push({
-            line_number: i + 1,
-            old_line: oldLine,
-            new_line: newLine,
-            column_start: idx,
-            column_end: idx + search.length,
-          });
-          if (!preview) {
-            lines[i] = newLine;
-          }
-          changedLines++;
-        }
+      const oldLine = lines[i];
+      let newLine = '';
+      let cursor = 0;
+      const spans: Array<[number, number]> = [];
+      for (const match of oldLine.matchAll(pattern)) {
+        if (match[0] === '') continue;
+        const start = match.index ?? 0;
+        spans.push([start, start + match[0].length]);
+        newLine += oldLine.slice(cursor, start) + replace;
+        cursor = start + match[0].length;
       }
+      if (spans.length === 0) continue;
+      newLine += oldLine.slice(cursor);
+      for (const [start, end] of spans) {
+        matches.push({
+          line_number: i + 1,
+          old_line: oldLine,
+          new_line: newLine,
+          column_start: start + 1,
+          column_end: end + 1,
+        });
+      }
+      if (newLine !== oldLine) changedLines++;
+      lines[i] = newLine;
     }
 
-    if (matches.length > 0) {
-      if (!preview) {
-        const err = shell.writeFile(safePath, lines.join('\n'));
-        if (err) {
-          console.warn(`[CloudAdapter] searchReplace: failed to write ${safePath}:`, err);
-        }
+    if (matches.length === 0) continue;
+    if (!preview && changedLines > 0) {
+      const err = shell.writeFile(path, lines.join('\n'));
+      if (err) {
+        console.warn(`[CloudAdapter] searchReplace: failed to write ${path}:`, err);
+        continue;
       }
-      changes.push({ file: safePath, matches, changed_lines: changedLines });
+      trackWrite(path);
+      announceFileChange(path, 'write');
     }
+    changes.push({ file, matches, changed_lines: changedLines });
   }
 
-  const totalChanges = changes.reduce((sum, c) => sum + c.changed_lines, 0);
+  const totalChanges = changes.reduce((sum, c) => sum + c.matches.length, 0);
   return jsonOk({ changes, total_changes: totalChanges, preview });
 }
 

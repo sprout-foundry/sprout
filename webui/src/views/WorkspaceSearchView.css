@@ -1,0 +1,14 @@
+/* The workspace search view fills its slot; placement beyond that is the host's. */
+
+.sprout-workspace-search {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.sprout-workspace-search > .search-view {
+  flex: 1;
+  min-height: 0;
+}

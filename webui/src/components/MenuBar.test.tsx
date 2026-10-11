@@ -729,7 +729,9 @@ describe('MenuBar', () => {
 
     const items = getDropdownItems();
     const texts = items.map((el) => el.textContent?.trim());
-    expect(texts).toEqual(['Keyboard Shortcuts', 'Export Diagnostics', 'Report Issue', 'About sprout']);
+    expect(texts).toEqual(['Keyboard Shortcuts', 'Report Issue', 'About sprout']);
+    // No diagnostics exporter exists, so the menu offers none.
+    expect(container.ownerDocument.body.textContent).not.toContain('Export Diagnostics');
 
     const dividers = getDropdownDividers();
     expect(dividers.length).toBe(2);

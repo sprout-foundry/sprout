@@ -100,7 +100,6 @@ function buildMenus(editor: EditorMenuState): MenuDefinition[] {
   // ── Help menu ─────────────────────────────────────────────────
   const helpItems: MenuBarItem[] = [
     { label: 'Keyboard Shortcuts', commandId: 'keyboard_shortcuts' },
-    { label: 'Export Diagnostics', commandId: 'export_diagnostics' },
     { divider: true },
     { label: 'Report Issue', commandId: 'report_issue' },
     { divider: true },

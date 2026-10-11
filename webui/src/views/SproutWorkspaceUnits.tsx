@@ -19,7 +19,10 @@ import type { ContextPanelHandle } from '../components/contextPanel/types';
 import type { DesignTab } from '../components/design/DesignView';
 import type { PreviewPanelProps } from '../components/PreviewPanel';
 import { useEditorManager } from '../contexts/EditorManagerContext';
-import { useHostCapabilities } from '../host';
+import ErrorBoundary from '../components/ErrorBoundary';
+import Terminal from '../components/Terminal';
+import { useHost } from '../host';
+import { useCommandHandler } from '../services/commandHandlers';
 import type { ViewType } from '../types/app';
 import type { WorkspaceModeId } from '../workspaces/registry';
 import type { WorkspaceShellProps } from '../workspaces/shell';
@@ -29,6 +32,7 @@ import type { ViewComponent, ViewsArrangement, ViewKind } from './ViewsLayout';
 import { useWorkspaceChat } from './WorkspaceChatContext';
 import { useWorkspaceEditor } from './WorkspaceEditorContext';
 import { WorkspaceEditorView } from './WorkspaceEditorView';
+import { resolveWorkspaceTerminalBackend } from './WorkspaceTerminalView';
 
 /** The composition's assembled editor, rendered for the `editor` kind. */
 const ASSEMBLED_VIEW_COMPONENTS: Partial<Record<ViewKind, ViewComponent>> = { editor: WorkspaceEditorView };
@@ -94,6 +98,8 @@ export function useOpenInEditorRequests(onOpen?: () => void): void {
 const NO_GIT: WorkspaceShellProps['git']['gitBranches'] = { current: '', branches: [] };
 const NO_SHIP: WorkspaceShellProps['ship'] = { live: {}, availability: { canDeploy: false }, history: [] };
 const noop = (): void => undefined;
+const TERMINAL_COMMANDS: readonly string[] = ['toggle_terminal'];
+const NO_COMMANDS: readonly string[] = [];
 
 export interface ComposedSpaceShellProps {
   Shell: ComponentType<WorkspaceShellProps>;
@@ -125,7 +131,7 @@ export function ComposedSpaceShell({
   const { chatProps, reviewProps, diffState } = useSproutWorkspaceChatViewProps(chatOverrides);
   const { buffers, activeBufferId } = useEditorManager();
   const { openFile } = useWorkspaceEditor();
-  const { localTerminal } = useHostCapabilities();
+  const terminalBackend = resolveWorkspaceTerminalBackend(useHost());
 
   const [currentView, setCurrentView] = useState<ViewType>('chat');
   const [isTerminalExpanded, setTerminalExpanded] = useState(false);
@@ -133,6 +139,7 @@ export function ComposedSpaceShell({
   const contextPanelRef = useRef<ContextPanelHandle>(null);
 
   useOpenInEditorRequests(() => setCurrentView('editor'));
+  useToggleTerminalCommand(setTerminalExpanded, terminalBackend !== 'none');
 
   const lane: 'code' | 'design' = spaceId === 'design' ? 'design' : 'code';
   const currentBuffer = (activeBufferId ? buffers.get(activeBufferId) : undefined) ?? null;
@@ -178,46 +185,78 @@ export function ComposedSpaceShell({
   const activeChatName = state.chatSessions?.find((session) => session.id === state.activeChatId)?.name ?? null;
 
   return (
-    <Shell
-      isMobile={false}
-      isTablet={false}
-      isSidebarOpen={false}
-      isConnected={state.isConnected}
-      currentView={currentView}
-      onViewChange={setCurrentView}
-      onToggleSidebar={noop}
-      onToggleContextPanel={() => contextPanelRef.current?.togglePanel()}
-      supportsLocalTerminal={localTerminal}
-      isTerminalExpanded={isTerminalExpanded}
-      onTerminalExpandedChange={setTerminalExpanded}
-      showContextSidebar={currentBuffer?.kind === 'chat'}
-      contextPanelRef={contextPanelRef}
-      toolExecutions={state.toolExecutions}
-      logs={state.logs}
-      subagentActivities={state.subagentActivities}
-      messages={state.messages}
-      isProcessing={state.isProcessing}
-      lastError={state.lastError}
-      queryProgress={state.queryProgress}
-      currentBuffer={currentBuffer}
-      handleOutlineNavigateToSymbol={(line) =>
-        document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line } }))
-      }
-      chat={shellChat}
-      design={{
-        loading: false,
-        present: !!hasDesignTree,
-        treeState: hasDesignTree ? 'recognized' : 'none',
-        frontendLike: false,
-        recheck: noop,
-        tab: designTab,
-        onTabChange: setDesignTab,
-        onOpenFile: handleOpenFile,
-        agentChatName: lane === 'design' ? activeChatName : null,
-        onAgentCreateChat: () => void handleCreateChat('design'),
-      }}
-      git={{ gitBranches: NO_GIT, gitStatus: null, workspaceRoot: workspaceRoot ?? '' }}
-      ship={NO_SHIP}
-    />
+    <>
+      <Shell
+        isMobile={false}
+        isTablet={false}
+        isSidebarOpen={false}
+        isConnected={state.isConnected}
+        currentView={currentView}
+        onViewChange={setCurrentView}
+        onToggleSidebar={noop}
+        onToggleContextPanel={() => contextPanelRef.current?.togglePanel()}
+        supportsLocalTerminal={terminalBackend === 'pty'}
+        isTerminalExpanded={isTerminalExpanded}
+        onTerminalExpandedChange={setTerminalExpanded}
+        showContextSidebar={currentBuffer?.kind === 'chat'}
+        contextPanelRef={contextPanelRef}
+        toolExecutions={state.toolExecutions}
+        logs={state.logs}
+        subagentActivities={state.subagentActivities}
+        messages={state.messages}
+        isProcessing={state.isProcessing}
+        lastError={state.lastError}
+        queryProgress={state.queryProgress}
+        currentBuffer={currentBuffer}
+        handleOutlineNavigateToSymbol={(line) =>
+          document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line } }))
+        }
+        chat={shellChat}
+        design={{
+          loading: false,
+          present: !!hasDesignTree,
+          treeState: hasDesignTree ? 'recognized' : 'none',
+          frontendLike: false,
+          recheck: noop,
+          tab: designTab,
+          onTabChange: setDesignTab,
+          onOpenFile: handleOpenFile,
+          agentChatName: lane === 'design' ? activeChatName : null,
+          onAgentCreateChat: () => void handleCreateChat('design'),
+        }}
+        git={{ gitBranches: NO_GIT, gitStatus: null, workspaceRoot: workspaceRoot ?? '' }}
+        ship={NO_SHIP}
+      />
+      {/* The PTY terminal for a host whose backend serves one: the docked
+          terminal the standalone app renders beside its shell (the shell
+          itself renders only the in-browser one). Hidden while collapsed, so
+          an embed shows no strip across the host page until it is opened. */}
+      {terminalBackend === 'pty' && (
+        <ErrorBoundary panelName="Terminal">
+          <Terminal isExpanded={isTerminalExpanded} onToggleExpand={setTerminalExpanded} hideWhenCollapsed />
+        </ErrorBoundary>
+      )}
+    </>
   );
+}
+
+/**
+ * Handle `toggle_terminal` (Ctrl+` and the palette's Toggle Terminal) for the
+ * composed shell's terminal, registered so the scoped hotkeys dispatch it
+ * from inside the workspace. Nothing registers when the host has no terminal.
+ */
+function useToggleTerminalCommand(
+  setExpanded: (update: (expanded: boolean) => boolean) => void,
+  enabled: boolean,
+): void {
+  useCommandHandler(enabled ? TERMINAL_COMMANDS : NO_COMMANDS);
+  useEffect(() => {
+    if (!enabled) return;
+    const handle = (event: Event) => {
+      if ((event as CustomEvent<{ commandId?: string }>).detail?.commandId !== 'toggle_terminal') return;
+      setExpanded((expanded) => !expanded);
+    };
+    window.addEventListener('sprout:hotkey', handle);
+    return () => window.removeEventListener('sprout:hotkey', handle);
+  }, [enabled, setExpanded]);
 }

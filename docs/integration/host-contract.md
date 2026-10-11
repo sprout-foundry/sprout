@@ -632,6 +632,7 @@ settings reads).
 | Turn change strip | `GET /api/changes/diff`, `POST /api/changes/revert` | the host passes `chatOverrides.onReviewChange` |
 | Preview | `GET /api/preview/status` (polled while open), `POST /api/preview/start`, `/restart`, `/stop` | a preview panel is open (arranged `previewPanel`, or the Code shell's toggle) |
 | In-browser terminal | `GET /api/terminal/agent-sessions` (polled while expanded), `POST /api/terminal/agent-sessions/{id}/attach`, `/kill` | `capabilities.localTerminal` is `false` (the Code shell then renders the in-browser terminal) |
+| Arranged `terminal` view | the in-browser terminal's paths above (polled while it is mounted) | the arrangement places `terminal` on a wasm-agent host |
 | Editor | `POST /api/completion` | the user enables AI completions |
 | Escalation | `GET /workspace`, `GET /workspace/{id}`, `/workspace/txn*`, `GET /runners` | the host mounts `AgentEscalationBridge` / `EscalationListener` |
 
@@ -659,6 +660,20 @@ in-browser agent's model calls go to `agent.modelEndpoint` (else
 startup repository is set and the browser clone fails, the adapter falls back
 to `POST <apiBase>/api/repo/import`. A `bearer` host additionally serves
 `/git-proxy` (git over CORS) and `/workspace/fly` at the page origin.
+
+**Terminal (daemon-backed hosts).** A host that declares
+`capabilities.localTerminal` (and runs no in-browser agent) gets the PTY
+terminal: the standalone app's docked terminal, and an arranged `terminal`
+view in a composed workspace. Its backend serves, under
+`transport.apiBaseURL`: the PTY WebSocket at `/terminal` (`?shell=<name>` for
+a new session, `?reattach=<id>` to resume one; the client sends `input`,
+`resize` and `ping` frames and handles `session_created`,
+`session_restored`, `output`, `pty_exit` and `error` messages, in the
+daemon's shapes), `GET /api/terminal/shells` (the shell picker), and the
+background-session paths `GET /api/terminal/agent-sessions` (polled while the
+terminal shows), `POST /api/terminal/agent-sessions/{id}/attach` and `/kill`.
+An absolute `http(s)` base becomes `ws(s)` for the socket; an empty base is
+the page origin (`VITE_TERMINAL_WS_URL`, when built in, overrides both).
 
 **Chat sessions.** Without `capabilities.chatSessions`, the adapter answers
 `/api/chat-sessions*` from a browser-local store (one transcript per chat in

@@ -409,6 +409,95 @@ daemon). No capability gates it.
 editor unit's `openFile(path, { line })`), `autoFocus` (default `false` for an
 arranged view; the app's sidebar panel focuses its input) and `className`.
 
+## Terminal
+
+An arranged **`terminal`** is a working terminal on the host's backend — the
+same terminal surface the standalone app docks at the bottom of the page
+(session tabs, splits, the shell picker, background agent sessions), rendered
+in place in its slot and always expanded:
+
+```tsx
+<SproutWorkspace
+  project={{ id: repoUrl, repoUrl }}
+  space="code"
+  host={myHost}
+  layout={{
+    left: ["fileTree"],
+    center: ["editor", "terminal"],
+    right: ["chat"],
+  }}
+/>
+```
+
+What it attaches to follows the host (`resolveWorkspaceTerminalBackend`,
+exported from `./views`):
+
+- **In-browser agent** (`transport.agent.kind: "wasm"`): a terminal on the
+  in-browser WASM shell — the shell the agent runs in, over the same
+  workspace files. Commands the browser cannot run (compilers, runtimes) exit
+  127 and feed the escalation flow, as in the hosted app.
+- **Daemon terminal** (`capabilities.localTerminal: true`, and no wasm
+  agent): the PTY terminal. Its WebSocket goes to `/terminal` under
+  `transport.apiBaseURL` (`https://…` becomes `wss://…`; an empty base is the
+  page origin), and its `/api/terminal/*` calls go through the same transport
+  — see the host contract's [backend paths](./host-contract.md#backend-paths-for-an-in-browser-agent-host).
+- **Neither**: the view renders "Terminal not available in this workspace."
+  (`data-testid="workspace-terminal-unavailable"`) instead of a dead surface.
+
+`viewProps.terminal` (`WorkspaceTerminalViewProps`) overrides: `backend`
+(`"auto"` by default; `"wasm"`, `"pty"` or `"none"` pins one — `"none"` shows
+the unavailable state), `unavailableMessage` (replaces the default text) and
+`className`. The view fills its slot (with a 240px floor); its size beyond
+that is the host's CSS. `WorkspaceTerminalView` is exported for hosts that
+place it themselves under the provider stack.
+
+Without a `layout`, the composed space shell picks its terminal by the same
+rule: an in-browser-agent host keeps the Code shell's in-browser terminal, and
+a `localTerminal` host gets the PTY terminal docked at the bottom of the page,
+as in the standalone app. Either is hidden until opened — ``Ctrl+` `` inside the
+workspace, or Toggle Terminal in the command palette — and a host with
+neither gets no terminal and no toggle.
+
+## Command palette
+
+The app's command palette (files, symbols, commands) is a workspace unit too.
+**`commandPalette`** is an overlay kind: it renders nothing until opened. It is
+**on by default** in own mode — the default arrangement's `overlay` is
+`["previewPanel", "commandPalette"]`, and the composed space shell (no
+`layout`) always mounts it. An arrangement that supplies its own `overlay`
+without it opts out:
+
+```tsx
+layout={{ center: ["chat"], overlay: ["previewPanel"] }} // no palette
+layout={{ center: ["chat"], overlay: ["commandPalette"] }} // palette, no preview
+```
+
+- **Opening.** Its shortcuts — `command_palette` (Ctrl/Cmd+Shift+P),
+  `quick_open` and `editor_goto_symbol`, from the hotkey config — open it
+  when the key is pressed **inside the workspace**; the same key pressed in
+  the host page around it is left to the host. Dispatching
+  `OPEN_COMMAND_PALETTE_EVENT` (exported from `./views`) on `window` opens it
+  from host chrome. Mounting it registers for that event, which is what makes
+  the workspace header's search control appear; without the palette there is
+  no dead control.
+- **What it lists.** Workspace files (the `/api/file-index` walk through the
+  host transport) and the recently opened editors; symbols in the active file
+  and across the workspace; and only the built-in commands something mounted
+  in the embed handles. A host makes a built-in command id available by
+  handling its `sprout:hotkey` event and calling
+  `registerCommandHandler([id])` (exported; returns the unregister
+  function), or adds its own commands through `viewProps.commandPalette`:
+  `{ commands: CommandDef[], onExecuteCommand(id) }` (return `false` to keep
+  the palette open). `onOpenChange(open)` reports the palette opening and
+  closing.
+- **Opening files.** A picked file opens through the `sprout:open-in-editor`
+  request, so it lands in the arranged editor (or the composed shell's).
+
+The standalone app keeps its own palette (the same component, fed by the same
+`useCommandPaletteSources` hook); inside the app shell the workspace unit
+renders nothing. In ambient mode, leave `commandPalette` out of the overlay if
+the caller mounts its own palette.
+
 ## Escalation (run it where it can run)
 
 When an agent command cannot run in the browser (exit 127 — no compilers in

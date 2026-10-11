@@ -1,0 +1,26 @@
+/*
+ * The arranged terminal: the docked terminal's surface, in flow in its slot
+ * instead of fixed to the viewport bottom. Placement beyond filling the slot
+ * is the host's.
+ */
+
+.sprout-terminal-view.terminal-container.expanded {
+  position: relative;
+  inset: auto;
+  z-index: auto;
+  height: 100%;
+  min-height: 240px;
+  min-width: 0;
+}
+
+.sprout-terminal-view--unavailable {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 120px;
+  padding: 16px;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  font-size: 13px;
+}

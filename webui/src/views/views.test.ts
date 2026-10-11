@@ -123,7 +123,7 @@ describe('views entry exports', () => {
     expect(DEFAULT_VIEWS_ARRANGEMENT).toBeDefined();
     expect(SLOT_ORDER).toEqual(['left', 'center', 'right', 'overlay']);
     expect(Object.keys(VIEWS_BY_KIND).sort()).toEqual(
-      ['chat', 'changes', 'editor', 'fileTree', 'previewPane', 'previewPanel', 'git', 'search'].sort(),
+      ['chat', 'changes', 'editor', 'fileTree', 'previewPane', 'previewPanel', 'git', 'search', 'terminal', 'commandPalette'].sort(),
     );
     // Each registered kind maps to something renderable.
     for (const kind of Object.keys(VIEWS_BY_KIND) as ViewKind[]) {

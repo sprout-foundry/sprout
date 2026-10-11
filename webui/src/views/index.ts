@@ -280,3 +280,24 @@ export { WorkspaceGitView } from './WorkspaceGitView';
 export type { WorkspaceGitViewProps, WorkspaceGitPanelProps } from './WorkspaceGitView';
 export { WorkspaceSearchView } from './WorkspaceSearchView';
 export type { WorkspaceSearchViewProps } from './WorkspaceSearchView';
+
+// The terminal view (composite — reads the host): the app's terminal surface,
+// rendered in place for an arranged `terminal`. It attaches to the host's
+// in-browser WASM shell (`transport.agent.kind: 'wasm'`) or, for a host that
+// declares `capabilities.localTerminal`, to the PTY on its backend; with
+// neither it renders an unavailable notice.
+export { WorkspaceTerminalView, resolveWorkspaceTerminalBackend } from './WorkspaceTerminalView';
+export type { WorkspaceTerminalViewProps, WorkspaceTerminalBackend } from './WorkspaceTerminalView';
+
+// The command palette unit (composite — requires the webui context stack):
+// the app's palette as an overlay an arrangement places (the default overlay
+// includes it). It opens from its shortcuts inside the workspace and from
+// `OPEN_COMMAND_PALETTE_EVENT`, and lists only commands something handles; a
+// host registers handlers for built-in command ids with
+// `registerCommandHandler` or passes its own commands through
+// `viewProps.commandPalette`.
+export { WorkspaceCommandPalette } from './WorkspaceCommandPalette';
+export type { WorkspaceCommandPaletteProps } from './WorkspaceCommandPalette';
+export type { CommandDef } from '../components/CommandPalette';
+export { OPEN_COMMAND_PALETTE_EVENT } from '../config/layout';
+export { registerCommandHandler } from '../services/commandHandlers';

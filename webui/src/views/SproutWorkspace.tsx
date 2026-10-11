@@ -16,6 +16,7 @@ import { ArrangedViews, ComposedSpaceShell } from './SproutWorkspaceUnits';
 import { ViewsLayout } from './ViewsLayout';
 import type { ViewsArrangement, ViewKind } from './ViewsLayout';
 import { WorkspaceChatProvider } from './WorkspaceChatContext';
+import { WorkspaceCommandPalette } from './WorkspaceCommandPalette';
 import { WorkspaceEditorProvider } from './WorkspaceEditorContext';
 
 /**
@@ -146,7 +147,9 @@ export interface SproutWorkspaceProps {
    * instead); a host-supplied `editor` renders the bare `Editor` primitive
    * with the host's props. `previewPanel` is the exception: the host's props
    * are merged over the assembled `open`/`onClose`, so passing `open` alone
-   * drives it. In ambient mode the caller owns the stack and its
+   * drives it. `terminal` takes `WorkspaceTerminalViewProps` and
+   * `commandPalette` takes `WorkspaceCommandPaletteProps`; neither has
+   * assembled props. In ambient mode the caller owns the stack and its
    * units, so these are passed to the layout as-is. Only meaningful with
    * `layout`.
    */
@@ -389,13 +392,18 @@ export function SproutWorkspace({
           {layout ? (
             <ArrangedViews arrangement={layout} viewProps={viewProps} chatOverrides={chatOverrides} />
           ) : (
-            <ComposedSpaceShell
-              Shell={resolved.Shell}
-              spaceId={resolved.id}
-              chatOverrides={chatOverrides}
-              hasDesignTree={hasDesignTree}
-              workspaceRoot={project.root}
-            />
+            <>
+              <ComposedSpaceShell
+                Shell={resolved.Shell}
+                spaceId={resolved.id}
+                chatOverrides={chatOverrides}
+                hasDesignTree={hasDesignTree}
+                workspaceRoot={project.root}
+              />
+              {/* The layout path mounts the palette through its arrangement
+                  (the default overlay); the composed shell always has it. */}
+              <WorkspaceCommandPalette />
+            </>
           )}
         </WorkspaceEditorProvider>
       </WorkspaceChatProvider>

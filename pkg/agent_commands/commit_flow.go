@@ -408,6 +408,12 @@ func (cf *CommitFlow) CommitStagedWithMessage() error {
 
 	// Use the shared commit executor with user instructions
 	executor := git.NewCommitExecutor(client, "", cf.userInstructions)
+	executor.AttributeMessage = func(message string, generated bool) string {
+		if generated && client != nil {
+			return cf.agent.AttributeCommitMessage(message, git.SproutAssistant(client.GetProvider(), client.GetModel()))
+		}
+		return cf.agent.AttributeCommitMessage(message)
+	}
 	commitHash, err := executor.ExecuteCommit()
 	if err != nil {
 		return fmt.Errorf("commit failed: %w", err)

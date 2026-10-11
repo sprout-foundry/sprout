@@ -18,6 +18,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/factory"
+	gitops "github.com/sprout-foundry/sprout/pkg/git"
 )
 
 // prepareCommitClient builds the LLM client for commit message generation:
@@ -226,4 +227,24 @@ func editInEditor(initial string) (string, error) {
 		return "", fmt.Errorf("failed to read edited file: %w", err)
 	}
 	return strings.TrimSpace(string(data)), nil
+}
+
+// attributeCommitCommand appends the opt-in Assisted-by trailer
+// (commit_attribution: "trailer") for sprout commit and /commit. The
+// trailer names the agent's provider/model — the session model when /commit
+// runs inside a session; for the standalone CLI, which cannot see the
+// session that made the changes, the configured model — plus the model that
+// generated the message, when one did. Duplicates collapse to one line.
+func attributeCommitCommand(cfg *configuration.Config, chatAgent *agent.Agent, msgProvider api.ClientType, msgModel string, generated bool, message string) string {
+	var extra []gitops.Assistant
+	if generated {
+		extra = append(extra, gitops.SproutAssistant(string(msgProvider), msgModel))
+	}
+	if chatAgent != nil {
+		return chatAgent.AttributeCommitMessage(message, extra...)
+	}
+	if cfg.CommitAttributionEnabled() {
+		return gitops.AppendAssistedBy(message, extra...)
+	}
+	return message
 }

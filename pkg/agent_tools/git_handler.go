@@ -175,7 +175,7 @@ func (h *gitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]a
 	// For commit with -m message, use the temp-file approach shared with
 	// the commit tool. This prevents shell expansion of backticks, $(), etc.
 	if useCommitMessage && commitMsg != "" {
-		result, err := commitMessage(ctx, commitMsg, effectiveDir, remainingCommitArgs)
+		result, err := commitMessage(ctx, attributeCommit(env, commitMsg, false), effectiveDir, remainingCommitArgs)
 		if err != nil {
 			return result, err
 		}

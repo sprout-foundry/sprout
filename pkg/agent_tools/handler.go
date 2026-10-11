@@ -229,6 +229,12 @@ type ToolFuncSet struct {
 	// CLI flow share one prompt and one LLM call. Nil in standalone runs —
 	// the commit handler then refuses to commit rather than guessing.
 	GenerateCommitMessage func(diff []byte, notes string) (string, error)
+	// AttributeCommitMessage rewrites a commit message just before the
+	// commit tools create the commit, appending the opt-in Assisted-by
+	// trailer when commit_attribution is "trailer". generated is true when
+	// GenerateCommitMessage wrote the message. Nil in standalone runs (no
+	// agent, no model to attribute): the message is committed unchanged.
+	AttributeCommitMessage func(message string, generated bool) string
 	// TrackFileWrite records a full-file write (write_file, and the
 	// write-through path of write_structured_file) with the agent's
 	// ChangeTracker. originalContent is the file's pre-write state
@@ -283,17 +289,18 @@ func (e ToolEnv) ResolveToolFuncs() *ToolFuncSet {
 	ToolFuncMu.RLock()
 	defer ToolFuncMu.RUnlock()
 	return &ToolFuncSet{
-		RunSubagent:           RunSubagentFunc,
-		RunParallelSubagents:  RunParallelSubagentsFunc,
-		RequestClarification:  RequestClarificationFunc,
-		RespondClarification:  RespondClarificationFunc,
-		ListChanges:           ListChangesFunc,
-		RecoverFile:           RecoverFileFunc,
-		RevertMyChanges:       RevertMyChangesFunc,
-		MCPRefresh:            MCPRefreshFunc,
-		RunAutomate:           RunAutomateFunc,
-		CreatePullRequest:     CreatePullRequestFunc,
-		GenerateCommitMessage: GenerateCommitMessageFunc,
+		RunSubagent:            RunSubagentFunc,
+		RunParallelSubagents:   RunParallelSubagentsFunc,
+		RequestClarification:   RequestClarificationFunc,
+		RespondClarification:   RespondClarificationFunc,
+		ListChanges:            ListChangesFunc,
+		RecoverFile:            RecoverFileFunc,
+		RevertMyChanges:        RevertMyChangesFunc,
+		MCPRefresh:             MCPRefreshFunc,
+		RunAutomate:            RunAutomateFunc,
+		CreatePullRequest:      CreatePullRequestFunc,
+		GenerateCommitMessage:  GenerateCommitMessageFunc,
+		AttributeCommitMessage: AttributeCommitMessageFunc,
 		// Track* funcs are per-agent by design (the ChangeTracker lives on
 		// the Agent); the package-level fallback has no tracker, so leaving
 		// them nil here is correct — handlers skip tracking when nil.

@@ -252,7 +252,9 @@ Return ONLY the description paragraph. No title, no markdown, no code blocks, no
 		// LLM returned empty title — generate one from file changes
 		shortTitle = generateFallbackCommitMessage([]CommitFileChange{})
 	}
-	description := strings.TrimSpace(descResp.Choices[0].Message.Content)
+	// A model may imitate attribution footers it has seen in training
+	// data; sprout's own attribution is the opt-in Assisted-by trailer.
+	description := StripToolAttribution(strings.TrimSpace(descResp.Choices[0].Message.Content))
 	wrappedDesc := WrapText(description, 72)
 	commitMessage := strings.TrimSpace(shortTitle + "\n\n" + wrappedDesc)
 	if commitMessage == "" {

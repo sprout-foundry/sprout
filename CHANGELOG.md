@@ -4,6 +4,9 @@ All notable changes to Sprout will be documented in this file.
 
 ## [Unreleased]
 
+- feat(commit): opt-in AI-assistance trailer. With `commit_attribution: "trailer"` (default `"off"`), commits Sprout creates — `sprout commit` and `/commit`, the agent's commit tool, and web UI commits — end with `Assisted-by: sprout/<version> (<provider>/<model>)`, one line per tool+model: the agent's model, plus the model that wrote the message when one did. The trailer joins an existing trailer block and is not repeated on an amend or re-run. Sprout never writes `Co-Authored-By` for a tool, and generated commit messages have any such line or "Generated with …" footer removed. Set it with `sprout config set commit_attribution trailer` or in Settings → Advanced.
+- ci: `scripts/check-commit-attribution.sh` also validates `Assisted-by:` trailers (`<tool>[/<version>] (<provider>/<model>)`, one per tool+model) and rejects malformed or repeated ones, alongside AI `Co-Authored-By` lines and "Generated with …" footers; its tests run in CI.
+
 ## [v0.29.2] - 2026-10-11
 
 - fix(service): security — `sprout service install` on macOS no longer writes API keys and tokens into the launchd plist (`~/Library/LaunchAgents/com.sprout.daemon.plist`). Every captured `*_API_KEY` / `*_TOKEN` / `*_SECRET` variable was inlined there in plaintext; they now stay only in `service.env` (0600, in the state directory) and the daemon loads that file itself at startup when it runs as the service, with variables already in its environment taking precedence. The plist sets only `SPROUT_SERVICE`, `HOME`, `SPROUT_DAEMON_ROOT` and `PATH`. Re-running `sprout service install` rewrites an older plist clean and names the variables it removed; `sprout service start` / `restart` warn about such a plist, and `sprout service diagnose` flags it by variable name. Rotate keys from an old plist that was backed up or shared.

@@ -231,10 +231,10 @@ jobs:
         # Full history so golangci-lint's only-new-issues diff is accurate.
         fetch-depth: 0
 
-    # Commits carry no AI-tool attribution (Co-Authored-By trailers naming an
-    # AI assistant, "Generated with …" footers). Checks every commit in the
-    # pull request or the pushed range.
-    - name: Commit messages carry no AI-tool attribution
+    # AI assistance is recorded only as a well-formed Assisted-by trailer:
+    # no Co-Authored-By trailers naming an AI assistant, no "Generated with …"
+    # footers. Checks every commit in the pull request or the pushed range.
+    - name: Commit messages carry well-formed AI attribution
       env:
         EVENT_NAME: ${{ github.event_name }}
         PR_BASE: ${{ github.event.pull_request.base.sha }}
@@ -249,6 +249,7 @@ jobs:
         else
           range="$PUSH_AFTER~1..$PUSH_AFTER"
         fi
+        bash scripts/check-commit-attribution_test.sh
         scripts/check-commit-attribution.sh "$range"
 
     - name: Set up Go

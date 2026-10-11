@@ -38,6 +38,11 @@ const (
 	OutputVerbosityCompact = "compact"
 	OutputVerbosityDefault = "default"
 	OutputVerbosityVerbose = "verbose"
+
+	// CommitAttributionOff (the default) writes no AI-assistance marker.
+	CommitAttributionOff = "off"
+	// CommitAttributionTrailer appends an Assisted-by git trailer.
+	CommitAttributionTrailer = "trailer"
 )
 
 // Config represents the unified application configuration
@@ -186,6 +191,11 @@ type Config struct {
 	// Commit Configuration
 	CommitProvider string `json:"commit_provider,omitempty"` // Provider for commit message generation (defaults to LastUsedProvider)
 	CommitModel    string `json:"commit_model,omitempty"`    // Model for commit message generation (defaults to provider's default model)
+	// CommitAttribution controls whether commits sprout creates record the
+	// AI assistance: "off" (default, also when empty) or "trailer", which
+	// appends "Assisted-by: sprout/<version> (<provider>/<model>)". Sprout
+	// never writes a Co-Authored-By line for a tool.
+	CommitAttribution string `json:"commit_attribution,omitempty"`
 
 	// Review Configuration
 	ReviewProvider string `json:"review_provider,omitempty"` // Provider for review commands (defaults to LastUsedProvider)
@@ -471,10 +481,23 @@ func (c *Config) Validate() error {
 			c.OutputVerbosity, OutputVerbosityCompact, OutputVerbosityDefault, OutputVerbosityVerbose)
 	}
 
+	switch c.CommitAttribution {
+	case "", CommitAttributionOff, CommitAttributionTrailer:
+	default:
+		return fmt.Errorf("invalid commit_attribution %q: must be %q or %q",
+			c.CommitAttribution, CommitAttributionOff, CommitAttributionTrailer)
+	}
+
 	// Validate shell config
 	if err := c.Shell.Validate(); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+// CommitAttributionEnabled reports whether commits sprout creates should
+// carry the Assisted-by trailer. Off unless explicitly set to "trailer".
+func (c *Config) CommitAttributionEnabled() bool {
+	return c != nil && c.CommitAttribution == CommitAttributionTrailer
 }

@@ -19,6 +19,11 @@ type CommitExecutor struct {
 	// Dir is the working directory for git commands. If empty, the current directory is used.
 	Dir         string
 	secretCheck SecretCheckHandler // Optional callback for security checking before commit
+	// AttributeMessage, when set, rewrites the final commit message before
+	// the commit is created — used to append the opt-in Assisted-by
+	// trailer. generated is true when the message came from the LLM
+	// rather than from the caller.
+	AttributeMessage func(message string, generated bool) string
 }
 
 // SecretCheckHandler is a callback for handling detected secrets in commit flow.
@@ -122,9 +127,12 @@ func (e *CommitExecutor) ExecuteCommit() (string, error) {
 	}
 
 	// Generate commit message
-	commitMessage := e.generateCommitMessage(string(diffOutput), branch, fileChanges)
+	commitMessage, generated := e.generateCommitMessage(string(diffOutput), branch, fileChanges)
 	if commitMessage == "" {
 		return "", fmt.Errorf("failed to generate commit message")
+	}
+	if e.AttributeMessage != nil {
+		commitMessage = e.AttributeMessage(commitMessage, generated)
 	}
 
 	// Create commit using secure temp file
@@ -165,10 +173,10 @@ func parseStagedFileChanges(output string) []CommitFileChange {
 // 2. LLM-generated message (always tried if client is available), passing user instructions as context
 // 3. User instructions verbatim (if no LLM client available)
 // 4. Fallback message based on file changes
-func (e *CommitExecutor) generateCommitMessage(diff, branch string, fileChanges []CommitFileChange) string {
+func (e *CommitExecutor) generateCommitMessage(diff, branch string, fileChanges []CommitFileChange) (message string, generated bool) {
 	// Priority 1: Use user-provided message directly
 	if e.UserMessage != "" {
-		return e.UserMessage
+		return e.UserMessage, false
 	}
 
 	// Priority 2: Generate using LLM (always try if client is available), passing notes as context
@@ -180,17 +188,17 @@ func (e *CommitExecutor) generateCommitMessage(diff, branch string, fileChanges 
 			UserInstructions: e.UserInstructions,
 		})
 		if err == nil && result != nil && result.Message != "" {
-			return result.Message
+			return result.Message, true
 		}
 	}
 
 	// Priority 3: If no LLM client, use user instructions verbatim as last resort
 	if e.UserInstructions != "" {
-		return e.UserInstructions
+		return e.UserInstructions, false
 	}
 
 	// Priority 4: Fallback message
-	return generateFallbackCommitMessage(fileChanges)
+	return generateFallbackCommitMessage(fileChanges), false
 }
 
 // generateFallbackCommitMessage creates a simple commit message when LLM is not available.

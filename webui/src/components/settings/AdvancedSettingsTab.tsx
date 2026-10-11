@@ -32,6 +32,7 @@ export default function AdvancedSettingsTab({
 }: AdvancedSettingsTabProps) {
   const currentCommitProvider = String(getNestedValue(settings, 'commit_provider') || '');
   const currentCommitModel = String(getNestedValue(settings, 'commit_model') || '');
+  const currentCommitAttribution = String(getNestedValue(settings, 'commit_attribution') || 'off');
   const currentReviewProvider = String(getNestedValue(settings, 'review_provider') || '');
   const currentReviewModel = String(getNestedValue(settings, 'review_model') || '');
 
@@ -128,6 +129,23 @@ export default function AdvancedSettingsTab({
                 </option>
               ))}
             </select>
+          </div>
+
+          <div className="config-item">
+            <label htmlFor="commit-attribution-select-advanced">AI-assistance trailer</label>
+            <select
+              id="commit-attribution-select-advanced"
+              className="styled-select"
+              value={currentCommitAttribution}
+              onChange={(e) => updateSetting('commit_attribution', e.target.value)}
+            >
+              <option value="off">Off</option>
+              <option value="trailer">Assisted-by trailer</option>
+            </select>
+            <div className="config-help">
+              Adds &quot;Assisted-by: sprout/&lt;version&gt; (&lt;provider&gt;/&lt;model&gt;)&quot; to commits Sprout
+              creates. Never a Co-Authored-By line.
+            </div>
           </div>
 
           <div className="settings-section-spaced-bordered">

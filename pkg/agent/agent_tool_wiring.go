@@ -51,6 +51,7 @@ func wireAgentToolFuncs(agent *Agent, isProduction bool) {
 	tools.RevertMyChangesFunc = set.RevertMyChanges
 	tools.MCPRefreshFunc = set.MCPRefresh
 	tools.GenerateCommitMessageFunc = set.GenerateCommitMessage
+	tools.AttributeCommitMessageFunc = set.AttributeCommitMessage
 }
 
 // buildAgentToolFuncs returns the per-agent dispatch set for agent's
@@ -100,6 +101,10 @@ func buildAgentToolFuncs(agent *Agent) *tools.ToolFuncSet {
 		GenerateCommitMessage: func(diff []byte, notes string) (string, error) {
 			return handleGenerateCommitMessage(agent, diff, notes)
 		},
+		// AttributeCommitMessage appends the opt-in Assisted-by trailer
+		// naming this agent's model (and the commit-message model when
+		// the message was generated) to the commit tools' messages.
+		AttributeCommitMessage: agent.attributeToolCommit,
 		// ChangeTracker hooks: keep session file-mutation tracking working
 		// now that write/edit execution lives in pkg/agent_tools. Without
 		// these the Agent Changes panel and revert tooling see nothing.

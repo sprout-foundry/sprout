@@ -1686,7 +1686,7 @@ func TestGenerateMessage_Priorities(t *testing.T) {
 			branch := "main"
 			changes := []CommitFileChange{{Status: "A", Path: "new.go"}}
 
-			result := e.generateCommitMessage(diffs, branch, changes)
+			result, _ := e.generateCommitMessage(diffs, branch, changes)
 			assert.Contains(t, result, tt.wantPrefix)
 		})
 	}
@@ -1698,7 +1698,7 @@ func TestGenerateMessage_ClientNil(t *testing.T) {
 		UserMessage:      "",
 		UserInstructions: "",
 	}
-	result := e.generateCommitMessage("+diff", "main", []CommitFileChange{{Status: "A", Path: "a.go"}})
+	result, _ := e.generateCommitMessage("+diff", "main", []CommitFileChange{{Status: "A", Path: "a.go"}})
 	// Should fall through to fallback
 	assert.Contains(t, result, "Update a.go")
 }
@@ -1716,7 +1716,7 @@ func TestGenerateMessage_ClientReturnsEmpty(t *testing.T) {
 		UserMessage:      "",
 		UserInstructions: "",
 	}
-	result := e.generateCommitMessage("+diff", "main", []CommitFileChange{{Status: "A", Path: "a.go"}})
+	result, _ := e.generateCommitMessage("+diff", "main", []CommitFileChange{{Status: "A", Path: "a.go"}})
 	// Even with empty LLM content, the prefix is added so result is non-empty
 	// This verifies the LLM path is exercised
 	assert.NotEmpty(t, result)
@@ -1732,7 +1732,7 @@ func TestGenerateMessage_ClientReturnsNilResult(t *testing.T) {
 		UserMessage:      "",
 		UserInstructions: "",
 	}
-	result := e.generateCommitMessage("+diff", "main", []CommitFileChange{{Status: "M", Path: "file.go"}})
+	result, _ := e.generateCommitMessage("+diff", "main", []CommitFileChange{{Status: "M", Path: "file.go"}})
 	// Error from client → falls back
 	assert.Contains(t, result, "Update file.go")
 }
@@ -1748,7 +1748,7 @@ func TestGenerateMessage_ClientHappyPath(t *testing.T) {
 		UserMessage:      "",
 		UserInstructions: "",
 	}
-	result := e.generateCommitMessage("+validation code", "main", []CommitFileChange{{Status: "A", Path: "validate.go"}})
+	result, _ := e.generateCommitMessage("+validation code", "main", []CommitFileChange{{Status: "A", Path: "validate.go"}})
 	assert.Contains(t, result, "Adds validation")
 }
 
@@ -1784,7 +1784,7 @@ func TestGenerateMessage_AllEmptyPriorities(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := e.generateCommitMessage("+diff", "main", tt.changes)
+			result, _ := e.generateCommitMessage("+diff", "main", tt.changes)
 			assert.Contains(t, result, tt.want, "fallback message should contain %q", tt.want)
 		})
 	}

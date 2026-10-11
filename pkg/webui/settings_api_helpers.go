@@ -134,6 +134,7 @@ func sanitizedConfig(cfg *configuration.Config) map[string]interface{} {
 		"subagent_parallel_enabled": cfg.GetSubagentParallelEnabled(),
 		"commit_provider":           cfg.CommitProvider,
 		"commit_model":              cfg.CommitModel,
+		"commit_attribution":        cfg.CommitAttribution,
 		"review_provider":           cfg.ReviewProvider,
 		"review_model":              cfg.ReviewModel,
 		// Per-role model selection. Carries only provider
@@ -357,6 +358,7 @@ func truncateConfigStrings(cfg *configuration.Config) *configuration.Config {
 	cfg.ReasoningEffort = truncateString(cfg.ReasoningEffort, maxSettingEnumLength)
 	cfg.HistoryScope = truncateString(cfg.HistoryScope, maxSettingEnumLength)
 	cfg.OutputVerbosity = truncateString(cfg.OutputVerbosity, maxSettingEnumLength)
+	cfg.CommitAttribution = truncateString(cfg.CommitAttribution, maxSettingEnumLength)
 	cfg.ResourceDirectory = truncateString(cfg.ResourceDirectory, maxSettingPathLength)
 	cfg.SystemPromptText = truncateString(cfg.SystemPromptText, maxSettingPromptLength)
 	cfg.LastUsedProvider = truncateString(cfg.LastUsedProvider, maxSettingNameLength)

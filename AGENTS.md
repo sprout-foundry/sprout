@@ -25,7 +25,7 @@ Guidance for AI agents working in this repository.
 - `git add <file>` only; `git add .`/`-A` is blocked.
 - Pre-push: `git fetch origin` → `git log HEAD..FETCH_HEAD` → merge if non-empty → `make build-all` → push.
 - Commit messages are shell-safe (temp file, not `-m`).
-- **No tool attribution in commits**: no `Co-Authored-By` trailers naming an AI assistant or agent and no "Generated with …" footers, whichever tool helped. Enforced by `scripts/check-commit-attribution.sh` (commit-msg hook via `make hooks`, and CI).
+- **AI assistance is a trailer, never a co-author**: an AI-assisted commit carries exactly one `Assisted-by: <tool>[/<version>] (<provider>/<model>)` trailer per tool+model, and never a `Co-Authored-By` naming a tool or a "Generated with …" footer. Agents committing with their own tooling add it themselves, e.g. `Assisted-by: Claude Code (anthropic/claude-opus-5-5)` (omit the version when the tool doesn't expose one); sprout's own commits get it from `commit_attribution: "trailer"`. Enforced by `scripts/check-commit-attribution.sh` (commit-msg hook via `make hooks`, and CI).
 
 ## Test Isolation
 

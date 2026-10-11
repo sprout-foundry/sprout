@@ -203,6 +203,9 @@ func executeCommit(userMessage, notes string, configManager configManagerInterfa
 		executor = git.NewCommitExecutor(client, userMessage, notes)
 	}
 	executor.Dir = workDir
+	if chatAgent != nil {
+		executor.AttributeMessage = chatAgent.attributeToolCommit
+	}
 
 	return executor.ExecuteCommit()
 }

@@ -76,6 +76,9 @@ func MergeConfig(base, override *Config) *Config {
 	if override.OutputVerbosity != "" {
 		result.OutputVerbosity = override.OutputVerbosity
 	}
+	if override.CommitAttribution != "" {
+		result.CommitAttribution = override.CommitAttribution
+	}
 	if override.overrides("show_tool_invocations", override.ShowToolInvocations) {
 		result.ShowToolInvocations = override.ShowToolInvocations
 	}

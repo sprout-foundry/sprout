@@ -26,6 +26,19 @@ import (
 // Guarded by ToolFuncMu like the other package-level function pointers.
 var GenerateCommitMessageFunc func(diff []byte, notes string) (string, error)
 
+// AttributeCommitMessageFunc is the package-level fallback for
+// ToolFuncSet.AttributeCommitMessage, set by pkg/agent alongside
+// GenerateCommitMessageFunc. Guarded by ToolFuncMu.
+var AttributeCommitMessageFunc func(message string, generated bool) string
+
+// attributeCommit applies the agent's commit attribution hook, if any.
+func attributeCommit(env ToolEnv, message string, generated bool) string {
+	if attribute := env.ResolveToolFuncs().AttributeCommitMessage; attribute != nil {
+		return attribute(message, generated)
+	}
+	return message
+}
+
 type commitHandler struct{}
 
 func (h *commitHandler) Name() string { return "commit" }
@@ -68,7 +81,7 @@ func (h *commitHandler) Execute(ctx context.Context, env ToolEnv, args map[strin
 	}
 
 	if message != "" {
-		return commitMessage(ctx, message, effectiveDir)
+		return commitMessage(ctx, attributeCommit(env, message, false), effectiveDir)
 	}
 
 	// message omitted: generate a Conventional Commit message from the
@@ -110,7 +123,7 @@ func (h *commitHandler) Execute(ctx context.Context, env ToolEnv, args map[strin
 		}, nil
 	}
 
-	return commitMessage(ctx, commitMsg, effectiveDir)
+	return commitMessage(ctx, attributeCommit(env, commitMsg, true), effectiveDir)
 }
 
 // previewStagedDiff caps a staged diff for display in error results,

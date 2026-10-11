@@ -195,6 +195,22 @@ var settingDefsHistory = []settingDef{
 			return nil
 		},
 	},
+	{
+		Key:         "commit_attribution",
+		Description: "Record AI assistance in commits sprout creates as an Assisted-by trailer",
+		ValidValues: "off, trailer",
+		GetValue:    func(cfg *configuration.Config) string { return cfg.CommitAttribution },
+		SetValue: func(cfg *configuration.Config, value string) error {
+			switch v := strings.ToLower(strings.TrimSpace(value)); v {
+			case "", configuration.CommitAttributionOff, configuration.CommitAttributionTrailer:
+				cfg.CommitAttribution = v
+				return nil
+			default:
+				return agenterrors.NewValidation(fmt.Sprintf("commit_attribution must be off or trailer, got %q", value), nil)
+			}
+		},
+		EnumValues: []string{configuration.CommitAttributionOff, configuration.CommitAttributionTrailer},
+	},
 	// --- Review ---
 	{
 		Key:         "review_provider",

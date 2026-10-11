@@ -5,6 +5,8 @@
 export interface SproutSettings {
   reasoning_effort: string;
   output_verbosity: string;
+  /** "off" (default) or "trailer": Assisted-by trailer on commits Sprout creates. */
+  commit_attribution?: string;
   disable_thinking?: boolean;
   risk_profile?: string;
   system_prompt_text: string;

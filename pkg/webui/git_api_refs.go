@@ -46,8 +46,15 @@ func (ws *ReactWebServer) handleAPIGitCommit(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Opt-in Assisted-by trailer naming the session agent's model: the
+	// web UI commits work that agent made in this workspace.
+	message := req.Message
+	if agentInst, err := ws.getClientAgent(ws.resolveClientID(r)); err == nil && agentInst != nil {
+		message = agentInst.AttributeCommitMessage(message)
+	}
+
 	// Create the commit
-	cmd = ws.gitCommandForWorkspace(workspaceRoot, "commit", "-m", req.Message)
+	cmd = ws.gitCommandForWorkspace(workspaceRoot, "commit", "-m", message)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_create_commit", fmt.Sprintf("Failed to create commit: %v\nOutput: %s", err, string(output)))

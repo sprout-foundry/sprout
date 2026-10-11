@@ -472,6 +472,7 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 		}
 	}
 
+	commitMessage = attributeCommitCommand(cfg, chatAgent, clientType, model, client != nil, commitMessage)
 	return c.runCommitCreation(commitMessage)
 }
 

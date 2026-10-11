@@ -312,6 +312,17 @@ func applyProviderRoutingSettings(cfg *configuration.Config, patch map[string]in
 		s, _ := v.(string)
 		cfg.CommitModel = truncateString(s, maxSettingNameLength)
 	}
+	if v, ok := patch["commit_attribution"]; ok {
+		knownKeys["commit_attribution"] = true
+		s, _ := v.(string)
+		s = strings.ToLower(strings.TrimSpace(truncateString(s, maxSettingEnumLength)))
+		switch s {
+		case "", configuration.CommitAttributionOff, configuration.CommitAttributionTrailer:
+			cfg.CommitAttribution = s
+		default:
+			return fmt.Errorf("validate commit_attribution: must be 'off' or 'trailer' (got %q)", s)
+		}
+	}
 	if v, ok := patch["review_provider"]; ok {
 		knownKeys["review_provider"] = true
 		s, _ := v.(string)

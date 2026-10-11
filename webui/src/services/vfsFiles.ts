@@ -53,6 +53,50 @@ export function normalizeVfsPath(p: string): string {
   return '/' + resolved.join('/');
 }
 
+/** Collapse '.', '..' and repeated slashes in an absolute path; '..' stops at '/'. */
+function collapseVfsPath(p: string): string {
+  const resolved: string[] = [];
+  for (const part of p.split('/')) {
+    if (part === '' || part === '.') continue;
+    if (part === '..') {
+      resolved.pop();
+      continue;
+    }
+    resolved.push(part);
+  }
+  return '/' + resolved.join('/');
+}
+
+/**
+ * Resolve a path the file API was handed to the absolute VFS path it names.
+ *
+ * The file API takes the daemon's paths: workspace-relative (`src/a.ts`, the
+ * form search results, the file tree's created children and the workspaceFs
+ * seam use) or absolute (`/workspace/src/a.ts`, the form listings return).
+ * Relative paths resolve against the workspace root, never `/`, so the file
+ * API reads and writes the same files the agent and its shell see. Every
+ * spelling of the root names it: '', '.', './', the root with or without a
+ * trailing slash, and the root without its leading slash (`workspace`) —
+ * unless the workspace itself holds an entry by that name (`hasEntry`), in
+ * which case the workspace-relative reading wins.
+ */
+export function resolveWorkspacePath(raw: string, root: string, hasEntry?: (absPath: string) => boolean): string {
+  const rootAbs = collapseVfsPath(root || '/');
+  const clean = raw.replace(/\0/g, '').replace(/\\/g, '/').trim();
+  if (clean === '') return rootAbs;
+  if (clean.startsWith('/')) return collapseVfsPath(clean);
+
+  const relative = collapseVfsPath(`${rootAbs}/${clean}`);
+  if (rootAbs !== '/') {
+    const spelledAbsolute = collapseVfsPath(`/${clean}`);
+    if (spelledAbsolute === rootAbs || spelledAbsolute.startsWith(`${rootAbs}/`)) {
+      const top = rootAbs.split('/')[1];
+      if (!hasEntry?.(joinVfsPath(rootAbs, top))) return spelledAbsolute;
+    }
+  }
+  return relative;
+}
+
 /** Track a file write in the manifest. */
 export function trackFileWrite(rawPath: string): void {
   vfsManifest.add(normalizeVfsPath(rawPath));

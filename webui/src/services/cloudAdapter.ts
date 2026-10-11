@@ -31,6 +31,7 @@ import {
   handleWasmLocal,
   handleWasmEditDecision,
   handleWasmShellApprovalDecision,
+  handleWasmWorkspaceInfo,
   trackFileWrite,
 } from './cloudWasmHandlers';
 import { gitCorsProxy } from './gitCorsProxy';
@@ -491,6 +492,14 @@ export class CloudAdapter implements APIAdapter {
           console.warn('[CloudAdapter] WASM shell unavailable for image upload, falling through to proxy:', err);
         }
       }
+    }
+
+    // ── Workspace root (from the shell once it is up) ──────────────
+    // The file routes resolve paths against the shell's workspace root, so
+    // that is the root reported; before the shell is up the synthetic
+    // answer below reports the same default.
+    if (urlPath === '/api/workspace' && method === 'GET' && !nativeFs && this.wasmShell) {
+      return handleWasmWorkspaceInfo(this.wasmShell);
     }
 
     // ── Synthetic response interception ────────────────────────────

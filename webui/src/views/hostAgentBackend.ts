@@ -88,10 +88,30 @@ async function installAgentEventDispatcher(): Promise<void> {
 
 /**
  * Wire the host's agent backend. A no-op for a host that named no backend or
- * named the daemon (the transport URLs already drive the calls).
+ * named the daemon (the transport URLs already drive the calls, and the events
+ * socket's state is the connection state).
+ *
+ * For the wasm backend the agent is reachable once the adapter and the event
+ * dispatcher are installed, not when an events socket opens (a host may serve
+ * none). So the events transport reports not connected while they install and
+ * connected once they are, and work that waits for a connection (the chat
+ * session load, the provider catalog) cannot run ahead of the adapter. If the
+ * install fails, the connection state falls back to the socket's.
+ *
+ * Resolves when the wiring is done.
  */
-export function wireHostAgentBackend(host: SproutHost, repoUrl: string | undefined): void {
-  if (host.transport.agent?.kind !== 'wasm') return;
-  void installWasmAdapter(host, repoUrl);
-  void installAgentEventDispatcher();
+export async function wireHostAgentBackend(host: SproutHost, repoUrl: string | undefined): Promise<void> {
+  const events = WebSocketService.getInstance();
+  if (host.transport.agent?.kind !== 'wasm') {
+    events.setLocalAgentState('none');
+    return;
+  }
+  events.setLocalAgentState('starting');
+  try {
+    await Promise.all([installWasmAdapter(host, repoUrl), installAgentEventDispatcher()]);
+    events.setLocalAgentState('ready');
+  } catch (err) {
+    console.warn('[SproutWorkspace] in-browser agent wiring failed:', err);
+    events.setLocalAgentState('none');
+  }
 }

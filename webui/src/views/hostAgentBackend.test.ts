@@ -69,6 +69,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  WebSocketService.getInstance().setLocalAgentState('none');
 });
 
 describe('wireHostAgentBackend', () => {
@@ -137,5 +138,35 @@ describe('wireHostAgentBackend', () => {
     wireHostAgentBackend(wasmHost(), undefined);
     await vi.waitFor(() => expect(setAgentEventDispatcher).toHaveBeenCalled());
     expect(setAgentEventDispatcher).not.toHaveBeenCalledWith(null);
+  });
+
+  it('reports a wasm backend connected only once its adapter is installed', async () => {
+    const events = WebSocketService.getInstance();
+    const statuses: unknown[] = [];
+    const listener = (event: { type: string; data?: unknown }) => {
+      if (event.type === 'connection_status') statuses.push(event.data);
+    };
+    events.onEvent(listener);
+    const { CloudAdapter } = await import('../services/cloudAdapter');
+
+    const wired = wireHostAgentBackend(wasmHost(), undefined);
+    // Still installing: not connected, and the adapter is not in place yet.
+    expect(events.isConnected()).toBe(false);
+    expect(getAdapter()).toBe(NOOP_ADAPTER);
+
+    await wired;
+    expect(getAdapter()).toBeInstanceOf(CloudAdapter);
+    expect(events.isConnected()).toBe(true);
+    expect(statuses).toEqual([{ connected: true }]);
+    events.removeEvent(listener);
+  });
+
+  it('leaves a daemon backend on the socket state (never reported connected without one)', async () => {
+    const events = WebSocketService.getInstance();
+    events.setLocalAgentState('ready');
+
+    await wireHostAgentBackend(daemonHost(), undefined);
+
+    expect(events.isConnected()).toBe(false);
   });
 });

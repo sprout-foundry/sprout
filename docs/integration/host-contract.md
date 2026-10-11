@@ -102,7 +102,12 @@ type HostAgentBackend =
   into the same event bus WebSocket events use, and points the agent's model
   calls at `modelEndpoint` (falling back to `transport.modelEndpoint`, then the
   platform's own proxy path). The repository to open comes from the host's
-  project (`project.repoUrl`), not the `?repo=` URL parameter.
+  project (`project.repoUrl`), not the `?repo=` URL parameter. The workspace
+  counts as connected once the adapter is installed, whether or not the host
+  serves an events socket (the agent's events are delivered in the page), and
+  as not connected until then. Work that waits for a connection (the chat
+  session load, the provider catalog) therefore runs only once the adapter is
+  in place.
 
 When the in-browser agent runs against a daemon backend, its model calls go to
 the daemon's own model proxy (`<apiBaseURL>/api/proxy/chat`).
@@ -579,8 +584,9 @@ On reload, the active chat's transcript is restored through `GET
 /api/chat-sessions` + `POST /api/chat-sessions/switch` (the same calls the
 chat unit makes at boot), so the host store is the source of truth for the
 conversation across reloads. A workspace mounted through `SproutWorkspace` in
-own mode makes these calls each time the events transport connects (and again
-after a reconnect), so the session list is populated at start.
+own mode makes these calls each time the workspace connects (and again after
+a reconnect), so the session list is populated at start. For an in-browser
+agent, "connected" means the adapter is installed (see "Agent backend").
 
 ## Backend paths for an in-browser-agent host
 
@@ -614,7 +620,7 @@ settings reads).
 |---------|-------|-------------|
 | Chat | `POST /api/query/steer/retract`, `POST /api/query/rewind` (Edit & Resend), `POST /api/command/execute`, `POST /api/command/complete` (slash-command completion; a failure means no completions) | always (chat) |
 | Chat reconnect | `GET /proxy/chat/status?chat_id=` (`/api/query/status` rewritten) | the events stream reconnects during a turn |
-| Provider catalog | `GET /api/providers` | `capabilities.settings`, once the events stream is connected |
+| Provider catalog | `GET /api/providers` | `capabilities.settings`, once connected (for an in-browser agent: once the adapter is installed) |
 | Chat session store | `GET /api/chat-sessions`, `POST /api/chat-sessions/{create,switch,rename,delete,delete-all,turn}`, `GET /api/chat-sessions/messages` | `capabilities.chatSessions` |
 | Agent changes | `GET /api/changes/summary`, `GET /api/changes/session`, `GET /api/changes/diff`, `POST /api/changes/revert`, `GET /api/changes/timeline` | `capabilities.agentChanges` (declare it `false` otherwise) |
 | Turn change strip | `GET /api/changes/diff`, `POST /api/changes/revert` | the host passes `chatOverrides.onReviewChange` |

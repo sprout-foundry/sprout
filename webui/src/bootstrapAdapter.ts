@@ -378,10 +378,16 @@ async function installAdapterForConfig(config: RuntimeConfig): Promise<void> {
   const wasmAgent = host?.transport.agent?.kind === 'wasm';
   if (host?.transport.authMode === 'bearer' || wasmAgent) {
     const { CloudAdapter } = await import('./services/cloudAdapter');
+    // A wasm host that is not the platform's bearer transport is an embedding
+    // host: its transport URLs are authoritative (as in the composition's own
+    // install, views/hostAgentBackend.ts), and the bootstrap's URLs belong to
+    // the server the page came from. Both installs then route the same way,
+    // whichever of them lands last.
+    const hostURLs = wasmAgent && host?.transport.authMode !== 'bearer';
     // eslint-disable-next-line no-console
     const adapter = new CloudAdapter({
-      apiBase: config.apiBaseURL,
-      wsUrl: config.wsURL,
+      apiBase: hostURLs ? host.transport.apiBaseURL : config.apiBaseURL,
+      wsUrl: hostURLs ? host.transport.wsURL : config.wsURL,
       navItems: config.navItems ?? getActiveHost()?.navigation.navItems ?? [],
       egressProxy: config.egressProxy,
       // A host that mounts a workspace already knows the project, so its repo

@@ -359,8 +359,10 @@ export function SproutWorkspace({
   useEffect(() => {
     if (ambient || !host) return;
     const restoreActiveHost = registerActiveHost(host);
+    // Wire the backend before connecting, so a wasm backend reports "not
+    // connected" until its adapter is installed, even if the socket opens first.
+    if (agentBackendKind) void wireHostAgentBackend(host, project.repoUrl);
     chatTransport.eventsProvider.connect();
-    if (agentBackendKind) wireHostAgentBackend(host, project.repoUrl);
     return restoreActiveHost;
   }, [ambient, host, agentBackendKind, project.repoUrl, chatTransport.eventsProvider]);
 

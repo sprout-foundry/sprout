@@ -12,8 +12,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-
-	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
 // serviceManager defines the interface for platform-specific service management.
@@ -396,14 +394,4 @@ func resolveDaemonRoot(flagValue, homeDir string) (string, error) {
 		return "", fmt.Errorf("--root %s is not a directory", abs)
 	}
 	return abs, nil
-}
-
-// daemonLogDir is where the daemon writes its own rotated logs
-// (setupDaemonLogging in cmd).
-func daemonLogDir() (string, error) {
-	stateDir, err := envutil.StateDirPath()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(stateDir, "logs"), nil
 }

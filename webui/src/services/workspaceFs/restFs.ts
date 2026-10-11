@@ -10,6 +10,7 @@
  * backend is what runs on desktop/web where the shell bridge is absent.
  */
 
+import { clientFetch } from '../clientSession';
 import type { BatchResult, FsOk, FsEntry, ListResult, ReadResult, StatResult, WorkspaceFs, WriteEntry } from './types';
 import { normalizeFsPath, WRITE_BATCH_CAP } from './types';
 
@@ -58,7 +59,12 @@ function json(init: BodyInit): RequestInit {
   return { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: init };
 }
 
-export function createRestFs(fetchFn: FetchFn = fetch): WorkspaceFs {
+/**
+ * The default fetch is clientFetch so the relative daemon paths reach the
+ * same backend as every other webui request (installed adapter, embedding
+ * host's transport, SSH proxy base) rather than the page origin.
+ */
+export function createRestFs(fetchFn: FetchFn = clientFetch): WorkspaceFs {
   return {
     // The file endpoint answers a read with the raw bytes: text types come
     // back as content, anything else as base64.

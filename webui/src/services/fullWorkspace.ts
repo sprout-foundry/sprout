@@ -5,6 +5,8 @@
 
 import { useEffect, useSyncExternalStore } from 'react';
 
+import { clientFetch } from './clientSession';
+
 /** The platform's 503 wording when no workspace compute is configured. */
 const NOT_CONFIGURED = /not available on this deployment/i;
 
@@ -28,7 +30,7 @@ function setAvailability(next: Availability): void {
 export function probeFullWorkspaces(): Promise<void> {
   if (!probe) {
     probe = Promise.resolve()
-      .then(() => fetch(`${window.location.origin}/workspace/fly`, { credentials: 'include' }))
+      .then(() => clientFetch('/workspace/fly', { credentials: 'include' }))
       .then(async (res) => {
         if (!res || res.status !== 503) {
           setAvailability('available');
@@ -74,7 +76,7 @@ export type StartFullWorkspaceResult =
  * workspace's auth exchange. Rejects only on network failure.
  */
 export async function startFullWorkspace(repoURL: string): Promise<StartFullWorkspaceResult> {
-  const response = await fetch(`${window.location.origin}/workspace/fly`, {
+  const response = await clientFetch('/workspace/fly', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ repo_url: repoURL }),

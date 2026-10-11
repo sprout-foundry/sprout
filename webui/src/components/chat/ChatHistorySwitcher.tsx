@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { clientFetch } from '../../services/clientSession';
 import { useHostCapabilities } from '../../host';
 import { getSessions, searchSessions } from '../../services/api/sessionApi';
+import { downloadExport } from '../../services/exportDownload';
 import type { SessionEntry, SessionSearchResult } from '../../services/api/types/session';
 import { highlightExcerpt } from './highlightExcerpt';
 import { showThemedConfirm } from '../ThemedDialog';
@@ -171,17 +172,11 @@ function ChatHistorySwitcherInner({ chatId, onRestoreSession, iconOnly = false }
       for (const s of targets) {
         const url = `/api/sessions/${encodeURIComponent(s.session_id)}/export?format=markdown&include_tool_calls=false&include_cost=true`;
         try {
-          const head = await fetch(url, { method: 'HEAD' });
-          if (!head.ok) continue;
+          const result = await downloadExport(url);
+          if (!result.ok) continue;
         } catch {
           continue;
         }
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = '';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
         await new Promise((r) => setTimeout(r, 300));
       }
     } finally {

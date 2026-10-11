@@ -11,6 +11,7 @@
  * - editor-undo / editor-redo
  * - editor-find / editor-find-replace
  * - editor-select-all
+ * - editor-cut / editor-copy / editor-paste
  * - editor-format-document
  * - editor-find-all-references
  * - editor-go-to-workspace-symbol
@@ -28,6 +29,56 @@ import { formatCodeWithConfigDiscovery } from '../services/formatter';
 import { notificationBus } from '../services/notificationBus';
 import type { EditorBuffer } from '../types/editor';
 import { debugLog } from '../utils/log';
+
+// ---------------------------------------------------------------------------
+// Clipboard commands
+// ---------------------------------------------------------------------------
+
+// The cut/copy/paste commands come from menus and the command palette, not
+// from a key press inside the editor, so the browser's own clipboard events
+// never fire; they go through the async Clipboard API instead.
+
+function clipboardBlocked(err: unknown): void {
+  debugLog('[useEditorEvents] clipboard access failed:', err);
+  notificationBus.notify(
+    'warning',
+    'Clipboard',
+    'The browser blocked clipboard access. Use the keyboard shortcut instead.',
+  );
+}
+
+/** Copy the selected text (every non-empty range, one per line); cut also deletes it. */
+async function copySelection(view: EditorView, cut: boolean): Promise<void> {
+  const ranges = view.state.selection.ranges.filter((r) => !r.empty);
+  if (ranges.length === 0) return;
+  const text = ranges.map((r) => view.state.sliceDoc(r.from, r.to)).join(view.state.lineBreak);
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (err) {
+    clipboardBlocked(err);
+    return;
+  }
+  if (cut) {
+    view.dispatch({
+      changes: ranges.map((r) => ({ from: r.from, to: r.to })),
+      userEvent: 'delete.cut',
+    });
+  }
+  view.focus();
+}
+
+/** Replace the selection with the clipboard's text. */
+async function pasteClipboard(view: EditorView): Promise<void> {
+  let text: string;
+  try {
+    text = await navigator.clipboard.readText();
+  } catch (err) {
+    clipboardBlocked(err);
+    return;
+  }
+  view.dispatch(view.state.replaceSelection(text), { userEvent: 'input.paste', scrollIntoView: true });
+  view.focus();
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -160,6 +211,10 @@ export function useEditorEvents(options: UseEditorEventsOptions): void {
             annotations: [Transaction.addToHistory.of(false)],
           });
         }
+      } else if (e.type === 'editor-cut' || e.type === 'editor-copy') {
+        if (viewRef.current) void copySelection(viewRef.current, e.type === 'editor-cut');
+      } else if (e.type === 'editor-paste') {
+        if (viewRef.current) void pasteClipboard(viewRef.current);
       } else if (e.type === 'editor-format-document') {
         const currentBuffer = bufferRef.current;
         if (viewRef.current && currentBuffer) {
@@ -237,6 +292,9 @@ export function useEditorEvents(options: UseEditorEventsOptions): void {
       'editor-find',
       'editor-find-replace',
       'editor-select-all',
+      'editor-cut',
+      'editor-copy',
+      'editor-paste',
       'editor-format-document',
       'editor-find-all-references',
       'editor-go-to-workspace-symbol',

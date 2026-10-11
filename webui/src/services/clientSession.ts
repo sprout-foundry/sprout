@@ -1,6 +1,7 @@
 import { getActiveHost } from '../host/accessor';
 import { debugLog } from '../utils/log';
 import { getAdapter } from './apiAdapter';
+import { publishWorkspaceResponse } from './workspaceResponses';
 
 export const WEBUI_CLIENT_ID_HEADER = 'X-Sprout-Client-ID';
 export const WEBUI_CLIENT_ID_QUERY_PARAM = 'client_id';
@@ -683,6 +684,7 @@ export async function clientFetch(input: RequestInfo | URL, init?: RequestInit):
     headers.set(WEBUI_CLIENT_ID_HEADER, clientId);
     const response = await adapter.fetch(input, { ...init, headers });
     syncClientIdFromResponse(response);
+    publishWorkspaceResponse(input, response, init);
     return response;
   }
 
@@ -704,5 +706,6 @@ export async function clientFetch(input: RequestInfo | URL, init?: RequestInit):
   }
   const response = await fetch(url, { ...init, headers, credentials: 'include' });
   syncClientIdFromResponse(response);
+  publishWorkspaceResponse(input, response, init);
   return response;
 }

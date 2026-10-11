@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo, type ReactNode, useCallback, useSta
 import type { APIAdapter } from '../services/apiAdapter';
 import { getAdapter, ADAPTER_INSTALLED_EVENT } from '../services/apiAdapter';
 import { clientFetch, resolveWebUIClientId, WEBUI_CLIENT_ID_HEADER } from '../services/clientSession';
+import { publishWorkspaceResponse } from '../services/workspaceResponses';
 
 interface SproutAdapterContextValue {
   adapter: APIAdapter | null;
@@ -47,7 +48,9 @@ export function useSproutFetch(): (input: RequestInfo | URL, init?: RequestInit)
 
       if (adapter) {
         // Cloud mode: route through adapter (adapter.fetch does NOT add client ID header)
-        return adapter.fetch(input, { ...init, headers });
+        const response = await adapter.fetch(input, { ...init, headers });
+        publishWorkspaceResponse(input, response, init);
+        return response;
       }
 
       // Local mode: fall back to clientFetch.

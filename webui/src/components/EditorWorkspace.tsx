@@ -11,9 +11,12 @@ import Chat from './ChatView';
 import { useIsMobileViewport } from '../hooks/useMobileSheets';
 import { MobileChatSwitcher } from './chat/MobileChatSwitcher';
 import { useEngagedWithin } from '../hooks/useEngagedWithin';
+import { useCommandHandler } from '../services/commandHandlers';
 
 /** The daemon's built-in chat (pkg/webui defaultChatID); the server refuses to delete it. */
 const PERMANENT_DEFAULT_CHAT_ID = 'default';
+
+const isFocusSplitCommand = (commandId: string): boolean => /^focus_split_\d+$/.test(commandId);
 
 export interface EditorWorkspaceProps {
   currentView: ViewType;
@@ -651,6 +654,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   );
 
   // Listen for focus_split hotkeys
+  useCommandHandler(isFocusSplitCommand);
   React.useEffect(() => {
     const handleHotkey = (e: Event) => {
       const detail = (e as CustomEvent).detail;

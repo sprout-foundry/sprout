@@ -3,7 +3,8 @@
  * surfaces the "Start Building" escalation path to the user.
  *
  * Three trigger categories:
- *   1. Git push failure — CloudAdapter intercepts POST /api/git/push error
+ *   1. Git push failure — a failed /api/git/push response on the workspace's
+ *      request channel (services/workspaceResponses.ts)
  *   2. VFS quota error — wasmShell.writeFile returns ENOSPC
  *   3. Command timeout — WASM terminal long-running command timeout
  *   4. Build commands — informational detection of npm install, make, cargo build
@@ -14,6 +15,7 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { useHostCapabilities } from '../host';
+import { onWorkspaceResponse } from '../services/workspaceResponses';
 
 export interface EscalationTriggerEvent {
   /** Unique trigger identifier */
@@ -86,13 +88,14 @@ export interface UseEscalationTriggersOptions {
 /**
  * useEscalationTriggers hook.
  *
- * In cloud mode, intercepts fetch responses for git push failures and
- * WASM shell errors to detect when the user hits browser limitations.
+ * In cloud mode, watches the workspace's request responses for git push
+ * failures and WASM shell errors to detect when the user hits browser
+ * limitations.
  * Fires EscalationTriggerEvent custom events that the app's toast
  * system can listen for.
  *
- * Must be mounted once at the app root level. Designed to work with
- * the CloudAdapter by monkey-patching the fetch response handling.
+ * Must be mounted once at the app root level. It never wraps the page's
+ * global fetch.
  */
 export function useEscalationTriggers({
   onBlockingTrigger,
@@ -130,14 +133,10 @@ export function useEscalationTriggers({
   useEffect(() => {
     if (localTerminal) return;
 
-    // ── Intercept git push responses from CloudAdapter ──────────
-    // Wrap the global fetch to detect push failures.
-    const originalFetch = window.fetch;
-    const pushFailureDetector: typeof window.fetch = async (...args) => {
-      const response = await originalFetch(...args);
-
-      // Only intercept git push requests.
-      const url = typeof args[0] === 'string' ? args[0] : args[0] instanceof URL ? args[0].toString() : args[0].url;
+    // ── Watch the workspace's git push responses ───────────────
+    // Observes the workspace's own request channel rather than wrapping the
+    // global fetch, which belongs to the page (the host, in an embed).
+    const stopWatchingResponses = onWorkspaceResponse((url, response) => {
       if (!response.ok && (url.includes('/api/git/push') || url.includes('/api/proxy/git/push'))) {
         fireTrigger({
           id: 'git-push-failure',
@@ -147,13 +146,7 @@ export function useEscalationTriggers({
           repoURL: repoURLRef.current ?? undefined,
         });
       }
-      return response;
-    };
-
-    // Only patch if we haven't already (idempotent mount).
-    if (!localTerminal && window.fetch !== pushFailureDetector) {
-      window.fetch = pushFailureDetector;
-    }
+    });
 
     // ── Listen for VFS quota errors from wasmShell ─────────────
     const handleQuotaError = (e: Event) => {
@@ -216,11 +209,7 @@ export function useEscalationTriggers({
     window.addEventListener('sprout:terminal-command', handleTerminalCommand);
 
     return () => {
-      // Restore original fetch if we patched it.
-      // Only restore if no other escalation hook instance is active.
-      if (window.fetch === pushFailureDetector) {
-        window.fetch = originalFetch;
-      }
+      stopWatchingResponses();
       window.removeEventListener('sprout:vfs-error', handleQuotaError);
       window.removeEventListener('sprout:terminal-timeout', handleTerminalTimeout);
       window.removeEventListener('sprout:terminal-command', handleTerminalCommand);

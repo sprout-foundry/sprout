@@ -16,8 +16,9 @@
  * (SP-BUILDER-12); the platform routes per workspace backend, so the client
  * never needs to know which.
  *
- * All calls use RELATIVE paths so the CloudAdapter intercepts them in cloud
- * mode and proxies to the Foundry backend with session credentials (same
+ * All calls use RELATIVE paths through clientFetch, so the CloudAdapter
+ * proxies them to the Foundry backend with session credentials in cloud mode
+ * and an embedding host's transport routes them to its own backend (same
  * convention as cloudTasks.ts).
  *
  * The delta-manifest builders live in cloudTxnManifest.ts and are
@@ -26,6 +27,7 @@
  * Side-effect free and framework agnostic (no React imports).
  */
 
+import { clientFetch } from './clientSession';
 import type { TxnManifest, TxnSkipped } from './cloudTxnManifest';
 
 export {
@@ -52,7 +54,7 @@ export const TXN_RUN_TIMEOUT_SECONDS = 600;
 export const TXN_OPEN_TIMEOUT_MS = 120_000;
 
 /**
- * fetch() with a hard timeout. Aborts (and rejects) after `timeoutMs` so a
+ * clientFetch() with a hard timeout. Aborts (and rejects) after `timeoutMs` so a
  * stalled platform request surfaces as an error the toast can show instead of
  * an eternal progress spinner.
  */
@@ -60,7 +62,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: numbe
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(url, { ...init, signal: controller.signal });
+    return await clientFetch(url, { ...init, signal: controller.signal });
   } catch (err) {
     if (controller.signal.aborted) {
       throw new Error(`request timed out after ${Math.round(timeoutMs / 1000)}s`);
@@ -275,7 +277,7 @@ async function postJSON<T>(url: string, action: string, body?: unknown, timeoutM
     credentials: 'include',
     body: JSON.stringify(body ?? {}),
   };
-  const res = timeoutMs ? await fetchWithTimeout(url, init, timeoutMs) : await fetch(url, init);
+  const res = timeoutMs ? await fetchWithTimeout(url, init, timeoutMs) : await clientFetch(url, init);
   if (!res.ok) throw await toTxnError(res, action);
   return (await res.json()) as T;
 }
@@ -313,7 +315,7 @@ export function txnRun(
 }
 
 export async function txnPull(workspaceId: string, txnId: string): Promise<TxnManifest> {
-  const res = await fetch(txnURL(workspaceId, txnId, '/pull'), { method: 'POST', credentials: 'include' });
+  const res = await clientFetch(txnURL(workspaceId, txnId, '/pull'), { method: 'POST', credentials: 'include' });
   if (!res.ok) throw await toTxnError(res, 'Cloud txn pull');
   const manifest = (await res.json()) as TxnManifest;
   return {
@@ -326,7 +328,7 @@ export async function txnPull(workspaceId: string, txnId: string): Promise<TxnMa
 }
 
 export async function txnStatus(workspaceId: string, txnId: string): Promise<TxnStatus> {
-  const res = await fetch(txnURL(workspaceId, txnId), { method: 'GET', credentials: 'include' });
+  const res = await clientFetch(txnURL(workspaceId, txnId), { method: 'GET', credentials: 'include' });
   if (!res.ok) throw await toTxnError(res, 'Cloud txn status');
   const status = (await res.json()) as TxnStatus;
   if (typeof status?.txn_id !== 'string' || status.txn_id === '') {

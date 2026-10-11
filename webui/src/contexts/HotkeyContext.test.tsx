@@ -3,6 +3,10 @@
 import { act, createElement } from 'react';
 import type { Dispatch } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { __resetCommandHandlersForTests, claimAppShell, registerCommandHandler } from '../services/commandHandlers';
+import { useSidebarEventHandlers } from '../hooks/useSidebarEventHandlers';
+import { HostProvider } from '../host/HostProvider';
+import { makeTestHost } from '../host/testHost';
 import { buildKeyString, HotkeyProvider } from './HotkeyContext';
 
 // ---------------------------------------------------------------------------
@@ -233,7 +237,29 @@ describe('HotkeyProvider', () => {
   });
 });
 
-describe('fallback hotkeys are wired to hotkey commands', () => {
+describe('fallback hotkeys are wired to hotkey commands (standalone app)', () => {
+  beforeEach(() => {
+    claimAppShell();
+  });
+
+  afterEach(() => {
+    __resetCommandHandlersForTests();
+  });
+
+  it('consumes a bound shortcut document-wide even when nothing registered a handler', async () => {
+    act(() => {
+      root.render(createElement(HotkeyProvider, null, createElement('div')));
+    });
+    await flushPromises();
+
+    const ev = new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true, cancelable: true });
+    document.body.dispatchEvent(ev);
+
+    expect(ev.defaultPrevented).toBe(true);
+    // No scope wrapper: the app's DOM is unchanged.
+    expect(container.querySelector('.sprout-hotkey-scope')).toBeNull();
+  });
+
   it('dispatches sprout:hotkey when a fallback hotkey matches', async () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     act(() => {
@@ -363,6 +389,8 @@ describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
   beforeEach(() => {
     registeredCallback = null;
     _cleanupFn = undefined;
+    // The desktop shell runs the standalone app.
+    claimAppShell();
     // Install a mock sproutDesktop API on the window.
     (window as any).sproutDesktop = {
       platform: 'linux',
@@ -382,6 +410,7 @@ describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
     delete (window as any).sproutDesktop;
     registeredCallback = null;
     _cleanupFn = undefined;
+    __resetCommandHandlersForTests();
   });
 
   it('dispatches sprout:hotkey when onDesktopHotkey fires a global command', async () => {
@@ -523,5 +552,157 @@ describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
     expect(handler.mock.calls[0][0].detail.commandId).toBe('save_file');
 
     window.removeEventListener('sprout:hotkey', handler);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: embedded in a host page (no app shell)
+// ---------------------------------------------------------------------------
+
+describe('embedded workspace (no app shell)', () => {
+  let handler: ReturnType<typeof vi.fn>;
+  let hostKeydown: ReturnType<typeof vi.fn>;
+  let inside: HTMLButtonElement;
+
+  beforeEach(async () => {
+    __resetCommandHandlersForTests();
+    handler = vi.fn();
+    hostKeydown = vi.fn();
+    window.addEventListener('sprout:hotkey', handler);
+    window.addEventListener('keydown', hostKeydown);
+    act(() => {
+      root.render(createElement(HotkeyProvider, null, createElement('button', { 'data-testid': 'inside' }, 'x')));
+    });
+    await flushPromises();
+    inside = container.querySelector('[data-testid="inside"]') as HTMLButtonElement;
+  });
+
+  afterEach(() => {
+    window.removeEventListener('sprout:hotkey', handler);
+    window.removeEventListener('keydown', hostKeydown);
+    __resetCommandHandlersForTests();
+  });
+
+  function press(target: EventTarget, init: KeyboardEventInit): KeyboardEvent {
+    const ev = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
+    target.dispatchEvent(ev);
+    return ev;
+  }
+
+  it('leaves keys pressed outside the workspace to the host page', () => {
+    const unregister = registerCommandHandler(['save_file']);
+    const outside = document.createElement('button');
+    document.body.appendChild(outside);
+
+    const ev = press(outside, { key: 's', ctrlKey: true });
+
+    expect(ev.defaultPrevented).toBe(false);
+    expect(handler).not.toHaveBeenCalled();
+    expect(hostKeydown).toHaveBeenCalledTimes(1);
+    outside.remove();
+    unregister();
+  });
+
+  it('leaves a bound shortcut alone when nothing handles its command', () => {
+    for (const key of ['s', 'w', '1']) {
+      const ev = press(inside, { key, ctrlKey: true });
+      expect(ev.defaultPrevented).toBe(false);
+    }
+    expect(handler).not.toHaveBeenCalled();
+    expect(hostKeydown).toHaveBeenCalledTimes(3);
+  });
+
+  it('handles and consumes a shortcut inside the workspace once a handler is registered', () => {
+    const unregister = registerCommandHandler(['save_file']);
+
+    const ev = press(inside, { key: 's', ctrlKey: true });
+
+    expect(ev.defaultPrevented).toBe(true);
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler.mock.calls[0][0].detail.commandId).toBe('save_file');
+    // Consumed: the host's own window listener does not also act on it.
+    expect(hostKeydown).not.toHaveBeenCalled();
+
+    unregister();
+    const after = press(inside, { key: 's', ctrlKey: true });
+    expect(after.defaultPrevented).toBe(false);
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: the sidebar's Cmd/Ctrl+\ toggle (useWorkspaceKeyDown)
+// ---------------------------------------------------------------------------
+
+describe('sidebar toggle shortcut', () => {
+  let onSidebarToggle: ReturnType<typeof vi.fn>;
+
+  function SidebarProbe() {
+    useSidebarEventHandlers({
+      effectiveSidebarCollapsed: false,
+      isMobile: false,
+      onSidebarToggle,
+      fileTreeRef: { current: null },
+      settingsFocusTarget: null,
+      setSettingsFocusTarget: () => {},
+    });
+    return createElement('button', { 'data-testid': 'inside' }, 'x');
+  }
+
+  async function mount() {
+    act(() => {
+      root.render(
+        createElement(
+          HostProvider,
+          { host: makeTestHost() },
+          createElement(HotkeyProvider, null, createElement(SidebarProbe)),
+        ),
+      );
+    });
+    await flushPromises();
+    return container.querySelector('[data-testid="inside"]') as HTMLButtonElement;
+  }
+
+  function press(target: EventTarget): KeyboardEvent {
+    const ev = new KeyboardEvent('keydown', { key: '\\', ctrlKey: true, bubbles: true, cancelable: true });
+    act(() => {
+      target.dispatchEvent(ev);
+    });
+    return ev;
+  }
+
+  beforeEach(() => {
+    __resetCommandHandlersForTests();
+    onSidebarToggle = vi.fn();
+  });
+
+  afterEach(() => {
+    __resetCommandHandlersForTests();
+  });
+
+  it('in an embed, toggles only for presses inside the workspace', async () => {
+    const inside = await mount();
+    const outside = document.createElement('input');
+    document.body.appendChild(outside);
+
+    const fromHost = press(outside);
+    expect(onSidebarToggle).not.toHaveBeenCalled();
+    expect(fromHost.defaultPrevented).toBe(false);
+
+    const fromWorkspace = press(inside);
+    expect(onSidebarToggle).toHaveBeenCalledTimes(1);
+    expect(fromWorkspace.defaultPrevented).toBe(true);
+    outside.remove();
+  });
+
+  it('in the standalone app, toggles from anywhere on the page', async () => {
+    claimAppShell();
+    await mount();
+    const elsewhere = document.createElement('div');
+    document.body.appendChild(elsewhere);
+
+    press(elsewhere);
+    expect(onSidebarToggle).toHaveBeenCalledTimes(1);
+    elsewhere.remove();
   });
 });

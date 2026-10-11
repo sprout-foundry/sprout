@@ -1,5 +1,16 @@
-import { createContext, type ReactNode, useContext, useMemo, useState, useEffect, useCallback } from 'react';
+import {
+  createContext,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+  useContext,
+  useMemo,
+  useRef,
+  useState,
+  useEffect,
+  useCallback,
+} from 'react';
 import { ApiService, type HotkeyEntry } from '../services/api';
+import { hasCommandHandler, isAppShell } from '../services/commandHandlers';
 import { error as logError } from '../utils/log';
 import { useNotifications } from './NotificationContext';
 import { BROWSER_DEFAULT_HOTKEYS } from '../config/browserHotkeys';
@@ -15,6 +26,41 @@ interface HotkeyContextValue {
 const apiService = ApiService.getInstance();
 
 const HotkeyContext = createContext<HotkeyContextValue | null>(null);
+
+type WorkspaceKeyListener = (event: KeyboardEvent) => void;
+
+/**
+ * Key listeners for presses inside the workspace, fed by an embed's
+ * HotkeyProvider scope. Null when the provider owns the whole document
+ * (standalone) or there is no provider.
+ */
+const WorkspaceKeyScopeContext = createContext<Set<WorkspaceKeyListener> | null>(null);
+
+/**
+ * Listen for keydowns that belong to the workspace. In the standalone app
+ * that is every keydown on the page (a window listener, as before); in an
+ * embed it is only keys pressed inside the workspace's React tree, so a
+ * shortcut never fires while the user is typing in the host page. Outside
+ * the app and any HotkeyProvider nothing is the workspace's, so it listens to
+ * nothing.
+ */
+export function useWorkspaceKeyDown(listener: WorkspaceKeyListener): void {
+  const scope = useContext(WorkspaceKeyScopeContext);
+  const listenerRef = useRef(listener);
+  listenerRef.current = listener;
+  useEffect(() => {
+    const forward: WorkspaceKeyListener = (event) => listenerRef.current(event);
+    if (scope) {
+      scope.add(forward);
+      return () => {
+        scope.delete(forward);
+      };
+    }
+    if (!isAppShell()) return;
+    window.addEventListener('keydown', forward);
+    return () => window.removeEventListener('keydown', forward);
+  }, [scope]);
+}
 
 export const useHotkeys = (): HotkeyContextValue => {
   const context = useContext(HotkeyContext);
@@ -140,6 +186,64 @@ function isMac(): boolean {
   return navigator.platform.includes('Mac') || navigator.userAgent.includes('Macintosh');
 }
 
+/**
+ * Normalize modifier order in a hotkey string to the canonical order
+ * used by `buildKeyString`: Cmd, Ctrl, Alt, Shift, then the main key.
+ * This ensures "Shift+Alt+F" matches "Alt+Shift+F" from keyboard events.
+ */
+function normalizeKeyOrder(key: string): string {
+  const parts = key.split('+');
+  const modifierOrder = ['Cmd', 'Ctrl', 'Alt', 'Shift'];
+  const modifiers: string[] = [];
+  const rest: string[] = [];
+  for (const part of parts) {
+    if (modifierOrder.includes(part)) {
+      modifiers.push(part);
+    } else {
+      rest.push(part);
+    }
+  }
+  // Sort modifiers by their canonical position
+  modifiers.sort((a, b) => modifierOrder.indexOf(a) - modifierOrder.indexOf(b));
+  return [...modifiers, ...rest].join('+');
+}
+
+/**
+ * The configured hotkey (or built-in fallback) bound to this key press, or
+ * undefined when none is bound or the binding is not global and focus is in
+ * a text field.
+ */
+function resolveHotkey(event: KeyboardEvent, hotkeys: HotkeyEntry[] | null): HotkeyEntry | undefined {
+  const keyString = buildKeyString(event).toLowerCase();
+  const mac = isMac();
+  const matches = (entry: HotkeyEntry) => {
+    const storedKey = mac ? entry.key.replace(/\bCtrl\b/g, 'Cmd') : entry.key.replace(/\bCmd\b/g, 'Ctrl');
+    return normalizeKeyOrder(storedKey).toLowerCase() === keyString;
+  };
+  const configured = Array.isArray(hotkeys) ? hotkeys.find(matches) : undefined;
+  const entry = configured ?? fallbackHotkeys.find(matches);
+  if (!entry) return undefined;
+
+  const target = event.target as HTMLElement | null;
+  const isInputFocused =
+    target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.isContentEditable === true;
+  if (isInputFocused && !entry.global) return undefined;
+  return entry;
+}
+
+function dispatchHotkey(entry: HotkeyEntry): void {
+  window.dispatchEvent(
+    new CustomEvent('sprout:hotkey', {
+      detail: {
+        commandId: entry.command_id,
+        key: entry.key,
+      },
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
+}
+
 export function HotkeyProvider({ children }: HotkeyProviderProps): JSX.Element {
   const [hotkeys, setHotkeys] = useState<HotkeyEntry[] | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -168,86 +272,49 @@ export function HotkeyProvider({ children }: HotkeyProviderProps): JSX.Element {
     [loadHotkeys],
   );
 
-  /**
-   * Normalize modifier order in a hotkey string to the canonical order
-   * used by `buildKeyString`: Cmd, Ctrl, Alt, Shift, then the main key.
-   * This ensures "Shift+Alt+F" matches "Alt+Shift+F" from keyboard events.
-   */
-  function normalizeKeyOrder(key: string): string {
-    const parts = key.split('+');
-    const modifierOrder = ['Cmd', 'Ctrl', 'Alt', 'Shift'];
-    const modifiers: string[] = [];
-    const rest: string[] = [];
-    for (const part of parts) {
-      if (modifierOrder.includes(part)) {
-        modifiers.push(part);
-      } else {
-        rest.push(part);
-      }
-    }
-    // Sort modifiers by their canonical position
-    modifiers.sort((a, b) => modifierOrder.indexOf(a) - modifierOrder.indexOf(b));
-    return [...modifiers, ...rest].join('+');
-  }
+  // Which keys this provider answers is fixed at mount. The standalone app
+  // (which claims the page before rendering) owns the document: every bound
+  // shortcut is handled from a window listener, as it always has been. In an
+  // embed the host owns the page, so shortcuts are handled only for keys
+  // pressed inside the workspace's React tree (portals included), and a key
+  // is consumed only when something registered a handler for its command;
+  // anything else reaches the host untouched.
+  const [ownsDocument] = useState(isAppShell);
 
-  // Global keydown handler
+  // Document-wide keydown handler (standalone app only).
   useEffect(() => {
-    if (!isLoaded) return;
+    if (!isLoaded || !ownsDocument) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      const keyString = buildKeyString(event);
-      const mac = isMac();
-
-      let matchingHotkey: HotkeyEntry | undefined;
-      if (hotkeys && Array.isArray(hotkeys)) {
-        matchingHotkey = hotkeys.find((entry) => {
-          let storedKey = entry.key;
-          if (mac) {
-            storedKey = storedKey.replace(/\bCtrl\b/g, 'Cmd');
-          } else {
-            storedKey = storedKey.replace(/\bCmd\b/g, 'Ctrl');
-          }
-          return normalizeKeyOrder(storedKey).toLowerCase() === keyString.toLowerCase();
-        });
-      }
-
-      if (!matchingHotkey) {
-        matchingHotkey = fallbackHotkeys.find((entry) => {
-          let storedKey = entry.key;
-          if (mac) {
-            storedKey = storedKey.replace(/\bCtrl\b/g, 'Cmd');
-          } else {
-            storedKey = storedKey.replace(/\bCmd\b/g, 'Ctrl');
-          }
-          return normalizeKeyOrder(storedKey).toLowerCase() === keyString.toLowerCase();
-        });
-      }
-
-      if (matchingHotkey) {
-        const target = event.target as HTMLElement;
-        const isInputFocused = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
-
-        if (isInputFocused && !matchingHotkey.global) return;
-
-        event.preventDefault();
-        event.stopPropagation();
-
-        window.dispatchEvent(
-          new CustomEvent('sprout:hotkey', {
-            detail: {
-              commandId: matchingHotkey.command_id,
-              key: matchingHotkey.key,
-            },
-            bubbles: true,
-            cancelable: true,
-          }),
-        );
-      }
+      const entry = resolveHotkey(event, hotkeys);
+      if (!entry) return;
+      event.preventDefault();
+      event.stopPropagation();
+      dispatchHotkey(entry);
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [hotkeys, isLoaded]);
+  }, [hotkeys, isLoaded, ownsDocument]);
+
+  // Workspace-scoped keydown handler (embeds): React's synthetic keydown on the
+  // scope wrapper sees exactly the keys pressed inside the workspace tree.
+  const [scopedKeyListeners] = useState(() => new Set<WorkspaceKeyListener>());
+  const handleScopedKeyDown = useCallback(
+    (event: ReactKeyboardEvent) => {
+      // Workspace-level key listeners (useWorkspaceKeyDown) see every key
+      // pressed in the scope; one that handles a key prevents its default.
+      for (const listener of scopedKeyListeners) listener(event.nativeEvent);
+      if (event.nativeEvent.defaultPrevented) event.stopPropagation();
+      if (!isLoaded) return;
+      const entry = resolveHotkey(event.nativeEvent, hotkeys);
+      if (!entry || !hasCommandHandler(entry.command_id)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      dispatchHotkey(entry);
+    },
+    [hotkeys, isLoaded, scopedKeyListeners],
+  );
 
   useEffect(() => {
     loadHotkeys();
@@ -314,7 +381,18 @@ export function HotkeyProvider({ children }: HotkeyProviderProps): JSX.Element {
     [hotkeys, loadHotkeys, applyPreset, hotkeyForCommand, isLoaded],
   );
 
-  return <HotkeyContext.Provider value={value}>{children}</HotkeyContext.Provider>;
+  if (ownsDocument) {
+    return <HotkeyContext.Provider value={value}>{children}</HotkeyContext.Provider>;
+  }
+  return (
+    <HotkeyContext.Provider value={value}>
+      <WorkspaceKeyScopeContext.Provider value={scopedKeyListeners}>
+        <div className="sprout-hotkey-scope" style={{ display: 'contents' }} onKeyDown={handleScopedKeyDown}>
+          {children}
+        </div>
+      </WorkspaceKeyScopeContext.Provider>
+    </HotkeyContext.Provider>
+  );
 }
 
 export default HotkeyContext;

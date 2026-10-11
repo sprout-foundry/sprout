@@ -18,6 +18,7 @@ import { applyHostCapabilities } from './host/applyHostCapabilities';
 import { cloudHost } from './host/platform';
 import { ADAPTER_INSTALLED_EVENT, getAdapter } from './services/apiAdapter';
 import { resolveClientIdentity } from './services/clientSession';
+import { claimAppShell } from './services/commandHandlers';
 
 // External plugins (e.g. the platform IIFE bundle) externalize 'react' and
 // 'react/jsx-runtime' to these window globals so plugin components run in
@@ -97,6 +98,9 @@ function insideAnotherEditor(): boolean {
     // this listener attached): apply once more, idempotently.
     onAdapterInstalled();
   }
+  // This page is the standalone app: it owns the document's shortcuts and its
+  // root handles every command the header and menus fire.
+  claimAppShell();
   const root = ReactDOMClient.createRoot(document.getElementById('root') as HTMLElement);
 
   // Version negotiation (SP-160 §160c): before the editor renders, check the

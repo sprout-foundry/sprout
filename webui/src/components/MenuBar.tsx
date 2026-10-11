@@ -12,67 +12,83 @@ import { MenuBar, type MenuDefinition, type MenuBarItem } from '@sprout/ui';
 import { useMemo, useCallback } from 'react';
 import { getBootstrapConfig } from '../bootstrapAdapter';
 import { capability } from '../config/mode';
+import { useOptionalEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
+import { isLinkedScrollEnabled } from '../extensions/linkedScroll';
 import { getActiveHost } from '../host';
 import { useHost } from '../host/useHost';
+import { hasCommandHandler, hasEventHandler, isAppShell, useCommandHandlerVersion } from '../services/commandHandlers';
 import { collectBugReportEnvironment } from '../services/reportBug';
 
 /* ------------------------------------------------------------------ */
 /*  Menu definitions (identical to the original component)             */
 /* ------------------------------------------------------------------ */
 
-function buildMenus(username: string | null | undefined, _currentBranch: string | null | undefined): MenuDefinition[] {
+/**
+ * What the File and Edit items act on. Save and the editing commands go to
+ * the active text editor (useEditorEvents), close and save-all to the open
+ * buffers, so each item is enabled only when its target exists.
+ */
+interface EditorMenuState {
+  /** A buffer is active in the editor. */
+  hasActiveBuffer: boolean;
+  /** The active buffer is a text file in a code editor. */
+  hasActiveTextEditor: boolean;
+  openBufferCount: number;
+  hasUnsavedBuffers: boolean;
+}
+
+const NO_EDITOR: EditorMenuState = {
+  hasActiveBuffer: false,
+  hasActiveTextEditor: false,
+  openBufferCount: 0,
+  hasUnsavedBuffers: false,
+};
+
+function buildMenus(editor: EditorMenuState): MenuDefinition[] {
+  const noTextEditor = !editor.hasActiveTextEditor;
+
   // ── File menu ─────────────────────────────────────────────────
   const fileItems: MenuBarItem[] = [
     { label: 'New File', commandId: 'new_file' },
-    { label: 'Open File…', commandId: 'open_file' },
-    { label: 'Save', commandId: 'save_file', disabled: !username },
-    { label: 'Save All', commandId: 'save_all_files', disabled: !username },
+    { label: 'Open File…', commandId: 'quick_open' },
+    { label: 'Save', commandId: 'save_file', disabled: noTextEditor },
+    { label: 'Save All', commandId: 'save_all_files', disabled: !editor.hasUnsavedBuffers },
     { divider: true },
-    { label: 'Close Editor', commandId: 'close_editor', disabled: !username },
-    { label: 'Close All Editors', commandId: 'close_all_editors', disabled: !username },
-    { label: 'Close Other Editors', commandId: 'close_other_editors', disabled: !username },
+    { label: 'Close Editor', commandId: 'close_editor', disabled: !editor.hasActiveBuffer },
+    { label: 'Close All Editors', commandId: 'close_all_editors', disabled: editor.openBufferCount === 0 },
+    {
+      label: 'Close Other Editors',
+      commandId: 'close_other_editors',
+      disabled: !editor.hasActiveBuffer || editor.openBufferCount < 2,
+    },
   ];
 
   // ── Edit menu ─────────────────────────────────────────────────
   const editItems: MenuBarItem[] = [
-    { label: 'Undo', commandId: 'undo', disabled: !username },
-    { label: 'Redo', commandId: 'redo', disabled: !username },
+    { label: 'Undo', commandId: 'undo', disabled: noTextEditor },
+    { label: 'Redo', commandId: 'redo', disabled: noTextEditor },
     { divider: true },
-    { label: 'Cut', commandId: 'cut', disabled: !username },
-    { label: 'Copy', commandId: 'copy', disabled: !username },
-    { label: 'Paste', commandId: 'paste', disabled: !username },
+    { label: 'Cut', commandId: 'editor_cut', disabled: noTextEditor },
+    { label: 'Copy', commandId: 'editor_copy', disabled: noTextEditor },
+    { label: 'Paste', commandId: 'editor_paste', disabled: noTextEditor },
     { divider: true },
-    { label: 'Find', commandId: 'find', disabled: !username },
-    { label: 'Find and Replace', commandId: 'find_and_replace', disabled: !username },
-    { label: 'Select All', commandId: 'select_all', disabled: !username },
+    { label: 'Find', commandId: 'editor_find', disabled: noTextEditor },
+    { label: 'Find and Replace', commandId: 'editor_replace', disabled: noTextEditor },
+    { label: 'Select All', commandId: 'editor_select_all', disabled: noTextEditor },
     { divider: true },
-    { label: 'Command Palette…', commandId: 'open_command_palette' },
+    { label: 'Command Palette…', commandId: 'command_palette' },
     { label: 'Toggle File Explorer', commandId: 'toggle_explorer' },
     { label: 'Toggle Sidebar', commandId: 'toggle_sidebar' },
     { label: 'Toggle Terminal', commandId: 'toggle_terminal' },
   ];
 
   // ── View menu ─────────────────────────────────────────────────
+  // Local editor preferences: no signed-in user needed.
   const viewItems: MenuBarItem[] = [
-    {
-      label: 'Toggle Word Wrap',
-      commandId: 'editor_toggle_word_wrap',
-      isToggle: true,
-      disabled: !username,
-    },
-    {
-      label: 'Toggle Minimap',
-      commandId: 'toggle_minimap',
-      isToggle: true,
-      disabled: !username,
-    },
-    {
-      label: 'Toggle Linked Scrolling',
-      commandId: 'toggle_linked_scroll',
-      isToggle: true,
-      disabled: !username,
-    },
+    { label: 'Toggle Word Wrap', commandId: 'editor_toggle_word_wrap', isToggle: true },
+    { label: 'Toggle Minimap', commandId: 'toggle_minimap', isToggle: true },
+    { label: 'Toggle Linked Scrolling', commandId: 'toggle_linked_scroll', isToggle: true },
   ];
 
   // ── Terminal menu ─────────────────────────────────────────────
@@ -84,7 +100,6 @@ function buildMenus(username: string | null | undefined, _currentBranch: string 
   // ── Help menu ─────────────────────────────────────────────────
   const helpItems: MenuBarItem[] = [
     { label: 'Keyboard Shortcuts', commandId: 'keyboard_shortcuts' },
-    { label: 'Export Diagnostics', commandId: 'export_diagnostics' },
     { divider: true },
     { label: 'Report Issue', commandId: 'report_issue' },
     { divider: true },
@@ -112,31 +127,107 @@ function buildMenus(username: string | null | undefined, _currentBranch: string 
 }
 
 /* ------------------------------------------------------------------ */
+/*  Handled-command filtering                                          */
+/* ------------------------------------------------------------------ */
+
+/** Commands the wrapper runs itself, whoever else is mounted. */
+const SELF_HANDLED_COMMANDS = new Set(['about', 'report_issue']);
+/** Commands the wrapper turns into a dedicated window event. */
+const EVENT_COMMANDS: Record<string, string> = { keyboard_shortcuts: 'sprout:open-hotkeys-config' };
+
+/**
+ * Where each View toggle's current state lives, for the menu's check mark.
+ * Word wrap and minimap are persisted editor settings; linked scrolling is
+ * held by the linked-scroll extension.
+ */
+const TOGGLE_STATE: Record<string, () => boolean> = {
+  editor_toggle_word_wrap: () => readStoredBoolean('editor:word-wrap-enabled', true),
+  toggle_minimap: () => readStoredBoolean('editor:minimap-enabled', true),
+  toggle_linked_scroll: isLinkedScrollEnabled,
+};
+
+function readStoredBoolean(key: string, defaultValue: boolean): boolean {
+  try {
+    const stored = localStorage.getItem(key);
+    return stored === null ? defaultValue : stored === 'true';
+  } catch {
+    return defaultValue;
+  }
+}
+
+/** Whether something acts on the menu item (always true in the standalone app). */
+function isItemHandled(item: MenuBarItem): boolean {
+  if (!item.commandId) return true;
+  if (SELF_HANDLED_COMMANDS.has(item.commandId)) return true;
+  const eventName = EVENT_COMMANDS[item.commandId];
+  if (eventName) return hasEventHandler(eventName);
+  return hasCommandHandler(item.commandId);
+}
+
+/** Drop leading, trailing and repeated dividers left behind by filtering. */
+function tidyDividers(items: MenuBarItem[]): MenuBarItem[] {
+  const out: MenuBarItem[] = [];
+  for (const item of items) {
+    if (item.divider && (out.length === 0 || out[out.length - 1].divider)) continue;
+    out.push(item);
+  }
+  while (out.length > 0 && out[out.length - 1].divider) out.pop();
+  return out;
+}
+
+/**
+ * The menus with only the items something handles. The menu's commands are
+ * handled by the app root; a host embedding the workspace without it gets the
+ * items its own mounted listeners answer, and no menu bar at all when none of
+ * the routed commands has a handler (the self-handled Help items alone do not
+ * justify one).
+ */
+function handledMenus(menus: MenuDefinition[]): MenuDefinition[] {
+  // The standalone app handles every command: keep the memoized menus as-is.
+  if (isAppShell()) return menus;
+  const anyRouted = menus.some((menu) =>
+    menu.items.some((item) => item.commandId && !SELF_HANDLED_COMMANDS.has(item.commandId) && isItemHandled(item)),
+  );
+  if (!anyRouted) return [];
+  return menus
+    .map((menu) => ({ ...menu, items: tidyDividers(menu.items.filter(isItemHandled)) }))
+    .filter((menu) => menu.items.length > 0);
+}
+
+/* ------------------------------------------------------------------ */
 /*  Wrapper component                                                  */
 /* ------------------------------------------------------------------ */
 
-const MenuBarWrapper = (): JSX.Element => {
-  // Single call to useHotkeys; cast to any to access fields not in
-  // the typed interface (username, currentBranch, toggleCommand).
-  // This matches the original MenuBar.tsx behaviour exactly.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const ctx = useHotkeys() as any;
-  const { hotkeys, hotkeyForCommand, isLoaded } = ctx;
-  const username: string | null | undefined = ctx.username;
-  const currentBranch: string | null | undefined = ctx.currentBranch;
-  const toggleCommand = ctx.toggleCommand;
+const MenuBarWrapper = (): JSX.Element | null => {
+  const { hotkeys, hotkeyForCommand, isLoaded } = useHotkeys();
   const host = useHost();
+  const editorManager = useOptionalEditorManager();
 
-  const menus = useMemo(() => buildMenus(username, currentBranch), [username, currentBranch]);
+  const activeBuffer = editorManager?.activeBufferId ? editorManager.buffers.get(editorManager.activeBufferId) : null;
+  const hasActiveBuffer = !!activeBuffer;
+  const hasActiveTextEditor = activeBuffer?.kind === 'file';
+  const openBufferCount = editorManager?.buffers.size ?? 0;
+  let hasUnsavedBuffers = false;
+  for (const buffer of editorManager?.buffers.values() ?? []) {
+    if (buffer.isModified) {
+      hasUnsavedBuffers = true;
+      break;
+    }
+  }
 
-  /* ── Toggle state resolver (identical to original) ─────────── */
-  const getToggleState = useMemo(() => {
-    return (commandId: string) => {
-      const storageKey = `editor:${commandId}`;
-      const val = localStorage.getItem(storageKey);
-      return val === 'true';
-    };
-  }, []);
+  const allMenus = useMemo(
+    () =>
+      editorManager
+        ? buildMenus({ hasActiveBuffer, hasActiveTextEditor, openBufferCount, hasUnsavedBuffers })
+        : buildMenus(NO_EDITOR),
+    [editorManager, hasActiveBuffer, hasActiveTextEditor, openBufferCount, hasUnsavedBuffers],
+  );
+  // Re-render (and re-filter) as command handlers mount and unmount.
+  useCommandHandlerVersion();
+  const menus = handledMenus(allMenus);
+
+  /* ── Toggle state resolver ─────────────────────────────────── */
+  const getToggleState = useCallback((commandId: string) => TOGGLE_STATE[commandId]?.() ?? false, []);
 
   /* ── Command execution ─────────────────────────────────────── */
   const handleCommandExecute = useCallback(
@@ -165,17 +256,14 @@ const MenuBarWrapper = (): JSX.Element => {
   );
 
   /* ── Toggle command handler ────────────────────────────────── */
-  // Replicates the original: always dispatches the custom event,
-  // then delegates to the adapter's toggleCommand if available.
-  const handleToggleCommand = useCallback(
-    (commandId: string) => {
-      window.dispatchEvent(new CustomEvent('sprout:toggle-command', { detail: { commandId } }));
-      if (typeof toggleCommand === 'function') {
-        toggleCommand(commandId);
-      }
-    },
-    [toggleCommand],
-  );
+  // Toggles are ordinary hotkey commands: the app's hotkey command handler
+  // forwards them to the editor (editor-toggle-* events), the same path
+  // their keyboard shortcuts and the command palette take.
+  const handleToggleCommand = useCallback((commandId: string) => {
+    window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId } }));
+  }, []);
+
+  if (menus.length === 0) return null;
 
   return (
     <MenuBar

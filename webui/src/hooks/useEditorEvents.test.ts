@@ -1,4 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { EditorSelection, EditorState } from '@codemirror/state';
+import { EditorView } from '@codemirror/view';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { useEditorEvents } from './useEditorEvents';
 import type { EditorBuffer } from '../types/editor';
@@ -87,5 +89,60 @@ describe('useEditorEvents — editor-save-current', () => {
     unmount();
     fireSave();
     expect(handleSave).not.toHaveBeenCalled();
+  });
+});
+
+describe('useEditorEvents — clipboard commands', () => {
+  let view: EditorView;
+  let clipboard: { writeText: ReturnType<typeof vi.fn>; readText: ReturnType<typeof vi.fn> };
+  let unmount: () => void;
+
+  beforeEach(() => {
+    view = new EditorView({
+      state: EditorState.create({ doc: 'hello world', selection: EditorSelection.range(0, 5) }),
+      parent: document.body,
+    });
+    clipboard = { writeText: vi.fn().mockResolvedValue(undefined), readText: vi.fn().mockResolvedValue('bye') };
+    Object.defineProperty(navigator, 'clipboard', { value: clipboard, configurable: true });
+    ({ unmount } = renderHook(() =>
+      useEditorEvents({
+        viewRef: { current: view },
+        bufferRef: { current: null as EditorBuffer | null },
+        isActiveRef: { current: true },
+        handleGoToLine: () => undefined,
+        onToggleWordWrap: () => undefined,
+        onToggleMinimap: () => undefined,
+        onToggleRelativeLineNumbers: () => undefined,
+        onCycleWhitespaceRendering: () => undefined,
+        toggleLinkedScroll: () => undefined,
+        handleFindAllReferences: () => undefined,
+      }),
+    ));
+  });
+
+  afterEach(() => {
+    unmount();
+    view.destroy();
+  });
+
+  function fire(type: string) {
+    document.dispatchEvent(new CustomEvent(type));
+  }
+
+  it('copy writes the selection and leaves the document alone', async () => {
+    fire('editor-copy');
+    await vi.waitFor(() => expect(clipboard.writeText).toHaveBeenCalledWith('hello'));
+    expect(view.state.doc.toString()).toBe('hello world');
+  });
+
+  it('cut writes the selection and deletes it', async () => {
+    fire('editor-cut');
+    await vi.waitFor(() => expect(clipboard.writeText).toHaveBeenCalledWith('hello'));
+    await vi.waitFor(() => expect(view.state.doc.toString()).toBe(' world'));
+  });
+
+  it('paste replaces the selection with the clipboard text', async () => {
+    fire('editor-paste');
+    await vi.waitFor(() => expect(view.state.doc.toString()).toBe('bye world'));
   });
 });

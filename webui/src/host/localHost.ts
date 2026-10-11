@@ -104,6 +104,9 @@ export const localHost: SproutHost = {
     settings: true,
     automations: true,
     agentChanges: true,
+    // The local daemon serves the dev-server preview lifecycle
+    // (pkg/webui/api_preview.go).
+    preview: true,
     // Spec-only flags (not yet in mode.ts). A full local desktop build offers
     // all of these, so they are on:
     mcp: true,

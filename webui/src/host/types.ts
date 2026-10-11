@@ -429,6 +429,13 @@ export interface HostCapabilities {
   automations: boolean;
   /** Agent change history (the change history tab). */
   agentChanges: boolean;
+  /**
+   * The backend serves the dev-server preview lifecycle (`/api/preview/status`,
+   * `/start`, `/restart`, `/stop`), so the preview panel can be offered.
+   * Absent or false means it does not: a composed workspace mounts no preview
+   * panel, offers no toggle for it, and never calls those paths.
+   */
+  preview?: boolean;
   /** Model Context Protocol server configuration (the MCP Servers settings tab). */
   mcp: boolean;
   /** Locally-hosted model selection and management (the Local LLM settings tab). */

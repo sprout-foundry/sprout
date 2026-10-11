@@ -278,6 +278,7 @@ helpers).
 | `settings` | The settings panel |
 | `automations` | Automation workflows and their scheduling UI |
 | `agentChanges` | Agent change history (the change history tab) |
+| `preview` | Optional (absent means `false`). The backend serves the dev-server preview lifecycle (`/api/preview/*`), so a composed workspace mounts the preview panel and its toggle |
 | `mcp` | Model Context Protocol server configuration (the MCP Servers settings tab) |
 | `localModels` | Locally-hosted model selection and management (the Local LLM settings tab) |
 | `verification` | Reserved: verification flows and their results UI. No surface reads it yet |
@@ -325,8 +326,8 @@ transport records the same-origin sentinel `''` rather than a fixed host.
 - `notifications.post` forwards to Sprout's in-app notification bus, so local
   toasts and the NotificationCenter are unchanged.
 - Capabilities: `ssh`, `git`, `chat`, `workspaceSwitching`, `export`,
-  `localTerminal`, `settings`, `automations`, `agentChanges`, `mcp`,
-  `localModels`, `verification`, `serverGit` are **on**; `folderPicker`,
+  `localTerminal`, `settings`, `automations`, `agentChanges`, `preview`,
+  `mcp`, `localModels`, `verification`, `serverGit` are **on**; `folderPicker`,
   `instances` and `chatSessions` are **off** (the local build keeps its own
   daemon chat session store).
 
@@ -352,9 +353,13 @@ bootstrap adapter.
 - Capabilities mirror what a hosted build actually exposes:
   `git`, `chat`, `instances`, `settings` are **on**; `ssh`,
   `workspaceSwitching`, `folderPicker`, `export`, `localTerminal`,
-  `automations`, `agentChanges`, `mcp`, `localModels`, `verification`,
-  `serverGit`, `chatSessions` are **off** (the hosted platform keeps no chat
-  session store; the chat list lives in the browser).
+  `automations`, `agentChanges`, `preview`, `mcp`, `localModels`,
+  `verification`, `serverGit`, `chatSessions` are **off** (the hosted
+  platform keeps no chat session store; the chat list lives in the browser).
+  `preview` is off because the preview lifecycle (`/api/preview/*`) is served
+  by a Sprout daemon — a platform-registered preview is reported by the daemon
+  inside a full workspace — and the in-browser agent has none: the adapter
+  does not answer those paths and the platform API does not serve them.
 
 The legacy hosted program also had a `supportsSSH` flag and an
 `appMode`/`isCloud` pair; today `ssh` is the flag and `authMode === 'bearer'`
@@ -461,6 +466,7 @@ const host: SproutHost = {
     settings: true,
     automations: false,
     agentChanges: true,
+    preview: false, // optional; true only if the backend serves /api/preview/*
     mcp: false,
     localModels: false,
     verification: false,
@@ -630,7 +636,7 @@ settings reads).
 | Chat session store | `GET /api/chat-sessions`, `POST /api/chat-sessions/{create,switch,rename,delete,delete-all,turn}`, `GET /api/chat-sessions/messages` | `capabilities.chatSessions` |
 | Agent changes | `GET /api/changes/summary`, `GET /api/changes/session`, `GET /api/changes/diff`, `POST /api/changes/revert`, `GET /api/changes/timeline` | `capabilities.agentChanges` (declare it `false` otherwise) |
 | Turn change strip | `GET /api/changes/diff`, `POST /api/changes/revert` | the host passes `chatOverrides.onReviewChange` |
-| Preview | `GET /api/preview/status` (polled while open), `POST /api/preview/start`, `/restart`, `/stop` | a preview panel is open (arranged `previewPanel`, or the Code shell's toggle) |
+| Preview | `GET /api/preview/status` (polled while open), `POST /api/preview/start`, `/restart`, `/stop` | `capabilities.preview`, and only while the preview panel is open (it starts closed). Without the capability no preview path is ever called |
 | In-browser terminal | `GET /api/terminal/agent-sessions` (polled while expanded), `POST /api/terminal/agent-sessions/{id}/attach`, `/kill` | `capabilities.localTerminal` is `false` (the Code shell then renders the in-browser terminal) |
 | Arranged `terminal` view | the in-browser terminal's paths above (polled while it is mounted) | the arrangement places `terminal` on a wasm-agent host |
 | Editor | `POST /api/completion` | the user enables AI completions |

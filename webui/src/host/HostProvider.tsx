@@ -32,6 +32,7 @@ export function headlessHost(): SproutHost {
       settings: false,
       automations: false,
       agentChanges: false,
+      preview: false,
       mcp: false,
       localModels: false,
       verification: false,

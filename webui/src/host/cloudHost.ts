@@ -198,6 +198,14 @@ export const cloudHost: SproutHost = {
     folderPicker: false,
     automations: false,
     agentChanges: false,
+    // The preview lifecycle (/api/preview/*) is served by a Sprout daemon:
+    // a platform-registered ("hosted") preview is reported by the daemon
+    // running inside a full workspace, which registers its port with the
+    // platform. The hosted build's in-browser agent has no daemon, the
+    // adapter does not answer /api/preview/*, and the platform API does not
+    // serve it (it only proxies registered ports under /preview/), so the
+    // calls would 404.
+    preview: false,
     // Hosted builds are pre-configured and don't expose these:
     mcp: false,
     localModels: false,

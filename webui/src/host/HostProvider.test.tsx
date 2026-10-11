@@ -26,6 +26,7 @@ const ALL_CAPS_OFF = {
   settings: false,
   automations: false,
   agentChanges: false,
+  preview: false,
   mcp: false,
   localModels: false,
   verification: false,

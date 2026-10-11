@@ -7,7 +7,9 @@
  * through `viewProps` wins. The tree, the bare editor primitive, the editor
  * pane and the composite views are stubbed with nodes that expose the props
  * the composition handed them; the provider stack and the editor unit are
- * the real ones.
+ * the real ones. Because the editor pane is stubbed, no file is read here:
+ * `SproutWorkspace.fileSelect.test.tsx` covers selection with the real tree
+ * and editor, as the package mounts them.
  */
 
 import { act, render, screen, waitFor, within } from '@testing-library/react';
@@ -66,6 +68,7 @@ vi.mock('@sprout/ui', async (importOriginal) => {
       onFileSelect: (file: { path: string; name: string; isDir: boolean }) => void;
       selectedFile?: string;
       onFetchFiles?: (path: string) => Promise<unknown>;
+      onDeletePath?: (path: string, isDir: boolean) => Promise<void>;
     }) => (
       <div
         data-testid="files-test-tree"
@@ -82,6 +85,13 @@ vi.mock('@sprout/ui', async (importOriginal) => {
         <button type="button" data-testid="files-test-tree-fetch" onClick={() => void props.onFetchFiles?.('.')}>
           fetch
         </button>
+        <button
+          type="button"
+          data-testid="files-test-tree-delete"
+          onClick={() => void props.onDeletePath?.('src/app.ts', false)}
+        >
+          delete
+        </button>
       </div>
     ),
     Editor: (props: { value?: string }) => <div data-testid="files-test-primitive-editor" data-value={props.value} />,
@@ -97,6 +107,8 @@ import type { ViewsArrangement } from './ViewsLayout';
 
 const PROJECT: SproutProject = { id: 'acme/widgets', repoUrl: 'https://github.com/acme/widgets' };
 const IDE: ViewsArrangement = { left: ['fileTree'], center: ['editor', 'chat'], right: ['changes'], overlay: [] };
+/** Files beside the chat with no editor placed: selection must still show the file. */
+const NO_EDITOR: ViewsArrangement = { left: ['fileTree'], center: ['chat'], right: ['changes'] };
 
 function makeHost(): SproutHost {
   return {
@@ -158,6 +170,37 @@ describe('SproutWorkspace files and editor', () => {
       expect(screen.getByTestId('files-test-editor-pane')).toHaveAttribute('data-path', 'src/app.ts'),
     );
     expect(screen.getByTestId('files-test-tree')).toHaveAttribute('data-selected', 'src/app.ts');
+  });
+
+  it('shows the editor in the center slot for a file picked in a tree arranged without one', async () => {
+    render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} layout={NO_EDITOR} />);
+    await screen.findByTestId('files-test-tree');
+    expect(screen.queryByTestId('workspace-editor')).not.toBeInTheDocument();
+
+    act(() => {
+      screen.getByTestId('files-test-tree-select').click();
+    });
+
+    const center = screen.getByTestId('views-slot-center');
+    await waitFor(() =>
+      expect(within(center).getByTestId('files-test-editor-pane')).toHaveAttribute('data-path', 'src/app.ts'),
+    );
+    expect(within(center).getByTestId('files-test-chat')).toBeInTheDocument();
+  });
+
+  it('closes the open file when the tree deletes it, through the same buffer manager', async () => {
+    render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} layout={NO_EDITOR} />);
+    await screen.findByTestId('files-test-tree');
+    act(() => {
+      screen.getByTestId('files-test-tree-select').click();
+    });
+    await screen.findByTestId('workspace-editor');
+
+    await act(async () => {
+      screen.getByTestId('files-test-tree-delete').click();
+    });
+    expect(fetchSpy.mock.calls.some(([url]) => String(url).includes('/api/delete'))).toBe(true);
+    await waitFor(() => expect(screen.queryByTestId('workspace-editor')).not.toBeInTheDocument());
   });
 
   it('opens a changed file in the editor from the changes panel and from an open-in-editor request', async () => {

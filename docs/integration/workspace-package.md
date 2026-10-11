@@ -249,19 +249,40 @@ import { SproutWorkspace } from "@sprout-foundry/workspace/views";
   so they reach the daemon, the in-browser workspace's VFS (WASM hosts) or the
   host's `transport.apiBaseURL`, whichever the host's transport names. It is
   the same hook the standalone app's Files sidebar uses. Selecting a file
-  opens it in the editor; the active file is the tree's selection.
+  opens it in the editor; the active file is the tree's selection. Deleting
+  or renaming an open file closes or retargets its editor tab.
 - **`editor`** renders `WorkspaceEditorView`: a tab per open file over the
-  editor pane, with the app's buffer plumbing (loading, edits, Cmd/Ctrl+S
-  and auto-save through `/api/file`, external-change detection).
+  editor pane, with the app's buffer plumbing (loading through `/api/file`,
+  edits, Cmd/Ctrl+S and auto-save, external-change detection). The file is
+  read when the editor shows it.
 - **`changes`** gets an `onFileClick` that opens the file in the editor.
 - File links in the chat and tool output (the `sprout:open-in-editor` window
   event) open in the editor too.
+
+**Without an arranged `editor`.** An arrangement does not have to place the
+editor — `{ left: ["fileTree"], center: ["chat"], right: ["changes"] }` is
+fine. Opening a file (from the tree, the changes panel, a chat link or the
+palette) then shows the assembled editor at the start of the `center` slot,
+which it splits with the views you placed there; closing the last file tab
+removes it and gives the slot back. Give the workspace root a height (see
+[Styles](#styles)) so the split has room. A host that wants selection to do
+something else passes its own `viewProps.fileTree` (below).
+
+**The tree follows the workspace's contents.** The assembled tree lists when
+it mounts and lists again, in place, when an agent adapter is installed and
+when the startup repo import (the host project's `repoUrl` on an in-browser
+agent host) completes (`sprout:repo-imported`). A tree mounted before the
+in-browser agent is ready or before the repository is imported therefore
+fills in by itself; a host needs no refresh of its own.
 
 The editor is a unit like the chat. `./views` exports
 `WorkspaceEditorProvider`, `useWorkspaceEditor()` and
 `useWorkspaceEditorProps()`; `SproutWorkspace` mounts the provider in own
 mode, and the standalone app mounts the same provider at its root. It must sit
-under `SproutProviders` (it reads the buffer manager).
+under `SproutProviders`, which holds the buffer manager the editor's open files
+live in. An own-mode `SproutWorkspace` builds that stack itself, so the
+assembled tree, the editor view and the editor unit share one buffer manager
+with no host wiring; a host does not mount `WorkspaceEditorProvider` for them.
 
 - `useWorkspaceEditor()` reads the unit: `openFiles`, `activeFile`,
   `openFile(path, { line? })`, `closeFile(path)` and `saveFile(path?)` (the

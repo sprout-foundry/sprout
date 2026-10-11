@@ -138,7 +138,10 @@ export interface SproutWorkspaceProps {
    * over the props the composition assembles: in own mode the composition
    * supplies a live `chat` (the chat unit's assembled view props), a working
    * `fileTree` (the workspace file API, selection opening files in the
-   * editor unit), an `editor` rendered from the editor unit, `changes`
+   * editor unit, relisting when the in-browser agent or the startup repo
+   * import lands), an `editor` rendered from the editor unit (shown at the
+   * start of the `center` slot while files are open when the arrangement
+   * places no `editor`), `changes`
    * with `onFileClick` opening the editor, and a `previewPanel` that starts
    * open and closes from its own close affordance. A kind the host supplies
    * here REPLACES the assembled props for that kind — a host composing its

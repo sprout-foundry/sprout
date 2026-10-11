@@ -353,6 +353,10 @@ the same state hook (`useGitWorkspace`) and the same panel components.
 - **Worktrees** — only with `capabilities.serverGit`: worktrees are extra
   checkouts on the server's disk.
 
+The view leaves out two things the app's sidebar has: the commit box's
+**Review** action (the review opens as an editor tab) and History's
+**compare** tabs, because the assembled editor shows file buffers only.
+
 **Capabilities.** A host without `capabilities.git` gets an empty state
 ("Source control isn't available") and no git request is made. A workspace
 that is not a repository shows "No git repository" with a Refresh button.
@@ -363,7 +367,8 @@ in-browser-agent host (`transport.agent.kind: 'wasm'`) the in-browser adapter
 answers them with the browser's own git (isomorphic-git over the browser
 file store); nothing is forwarded. Browser git cannot unstage, discard,
 revert or open a pull request, so those actions are shown disabled ("Not
-available in browser mode"), and it has no AI commit message. A failed push is
+available in browser mode"), and it has no AI commit message, so that action
+is not offered. A failed push is
 published on the workspace's request channel, so a host that mounts
 `useEscalationTriggers` / `EscalationListener` (see
 [Escalation](#escalation-run-it-where-it-can-run)) gets the same "start a
@@ -393,8 +398,8 @@ Clicking a result opens the file in the editor unit at the matched line.
 Queries go to `GET /api/search` (replace-all to `POST /api/search/replace`)
 through the workspace fetch. A daemon host answers from the daemon; an
 in-browser-agent host answers in the page, by searching the browser file
-store through the WASM shell (`whole_word` is not applied there). No
-capability gates it.
+store through the WASM shell with the same options (literal text unless
+`regex`, `case_sensitive`, `whole_word`). No capability gates it.
 
 **Overriding.** `viewProps.search` replaces the assembled props
 (`WorkspaceSearchViewProps`): `onFileClick(path, line)` (assembled: the

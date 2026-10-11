@@ -182,8 +182,11 @@ function MenuBarDropdown({
         if (item.divider) {
           return <div key={`d-${rawIndex}`} className="context-menu-divider" role="separator" />;
         }
-        const currentActionableIndex = actionableCounter;
-        actionableCounter++;
+        // Disabled items are shown but are not actionable: they take no index,
+        // so the indices here match getActionableItems() used to execute and
+        // to navigate with the keyboard.
+        const currentActionableIndex = item.disabled ? null : actionableCounter;
+        if (!item.disabled) actionableCounter++;
         const shortcut =
           item.commandId && hotkeyForCommand ? hotkeyForCommand(item.commandId) : null;
         const isChecked =
@@ -193,11 +196,29 @@ function MenuBarDropdown({
         return (
           <button
             key={`i-${rawIndex}`}
-            id={`menu-bar-item-${menuIndex}-${currentActionableIndex}`}
+            id={
+              currentActionableIndex === null
+                ? undefined
+                : `menu-bar-item-${menuIndex}-${currentActionableIndex}`
+            }
             tabIndex={-1}
-            className={`context-menu-item ${activeItemIndex === currentActionableIndex ? 'selected' : ''}`}
-            onClick={() => onItemAction(menuIndex, currentActionableIndex)}
-            onMouseEnter={() => onItemHover(currentActionableIndex)}
+            disabled={item.disabled}
+            aria-disabled={item.disabled || undefined}
+            className={`context-menu-item${item.disabled ? ' disabled' : ''}${
+              currentActionableIndex !== null && activeItemIndex === currentActionableIndex
+                ? ' selected'
+                : ''
+            }`}
+            onClick={
+              currentActionableIndex === null
+                ? undefined
+                : () => onItemAction(menuIndex, currentActionableIndex)
+            }
+            onMouseEnter={
+              currentActionableIndex === null
+                ? undefined
+                : () => onItemHover(currentActionableIndex)
+            }
             role={item.isToggle ? 'menuitemcheckbox' : 'menuitem'}
             aria-checked={item.isToggle ? isChecked : undefined}
           >

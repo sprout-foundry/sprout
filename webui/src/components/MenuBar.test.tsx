@@ -21,6 +21,17 @@ import MenuBar from './MenuBar';
 // Mocks
 // ---------------------------------------------------------------------------
 
+// The File and Edit items follow the editor's state; tests set it here (null =
+// rendered outside an editor).
+let mockEditor: {
+  activeBufferId: string | null;
+  buffers: Map<string, { id: string; kind: string; isModified: boolean }>;
+} | null = null;
+vi.mock('../contexts/EditorManagerContext', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../contexts/EditorManagerContext')>()),
+  useOptionalEditorManager: () => mockEditor,
+}));
+
 vi.mock('../services/api', () => {
   class MockApiService {
     private static instance: MockApiService;
@@ -195,6 +206,33 @@ function fireKeyUp(key: string, opts: Partial<KeyboardEventInit> = {}) {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+/** Mounts the app's sprout:hotkey command handler with inert callbacks. */
+const noop = () => {};
+function HotkeyCommands() {
+  useHotkeyCommandHandler({
+    onToggleCommandPalette: noop,
+    onOpenCommandPalette: noop,
+    onNewFile: noop,
+    onToggleSidebar: noop,
+    onToggleTerminal: noop,
+    onPrimaryViewChange: noop,
+    onFocusTabIndex: noop,
+    onFocusPaneIndex: noop,
+    onSplitRequest: noop,
+    onCloseBuffer: noop,
+    onCloseAllBuffers: noop,
+    onCloseOtherBuffers: noop,
+    onSaveAllBuffers: noop,
+    onSwitchToBuffer: noop,
+    onSwitchPane: noop,
+    onTogglePinTab: noop,
+    activeBufferId: null,
+    activePaneId: null,
+    buffers: new Map(),
+  });
+  return null;
+}
 
 describe('MenuBar', () => {
   // ─── Basic rendering ──────────────────────────────────────────────
@@ -390,31 +428,6 @@ describe('MenuBar', () => {
     const record = (e: Event) => editorToggles.push(e.type);
     for (const type of ['editor-toggle-word-wrap', 'editor-toggle-minimap', 'editor-toggle-linked-scroll']) {
       document.addEventListener(type, record);
-    }
-    const noop = () => {};
-    function HotkeyCommands() {
-      useHotkeyCommandHandler({
-        onToggleCommandPalette: noop,
-        onOpenCommandPalette: noop,
-        onNewFile: noop,
-        onToggleSidebar: noop,
-        onToggleTerminal: noop,
-        onPrimaryViewChange: noop,
-        onFocusTabIndex: noop,
-        onFocusPaneIndex: noop,
-        onSplitRequest: noop,
-        onCloseBuffer: noop,
-        onCloseAllBuffers: noop,
-        onCloseOtherBuffers: noop,
-        onSaveAllBuffers: noop,
-        onSwitchToBuffer: noop,
-        onSwitchPane: noop,
-        onTogglePinTab: noop,
-        activeBufferId: null,
-        activePaneId: null,
-        buffers: new Map(),
-      });
-      return null;
     }
     await renderMenuBar(createElement(HotkeyCommands));
 
@@ -831,5 +844,146 @@ describe('MenuBar in an embed (no app shell)', () => {
       unregisterEvent();
     });
     expect(container.querySelector('.menu-bar')).toBeNull();
+  });
+});
+
+describe('File and Edit items follow the editor', () => {
+  function item(label: string): HTMLButtonElement {
+    const found = getDropdownItems().find((el) => el.textContent?.trim().startsWith(label));
+    expect(found, label).toBeDefined();
+    return found as HTMLButtonElement;
+  }
+
+  function enabledLabels(menuIndex: number): string[] {
+    openMenu(menuIndex);
+    const labels = getDropdownItems()
+      .filter((el) => !(el as HTMLButtonElement).disabled)
+      .map((el) => el.querySelector('.menu-item-label')?.textContent?.trim() ?? '');
+    closeMenu(menuIndex);
+    return labels;
+  }
+
+  afterEach(() => {
+    mockEditor = null;
+  });
+
+  test('outside an editor only the items with no editor target are enabled', async () => {
+    mockEditor = null;
+    await renderMenuBar();
+    expect(enabledLabels(0)).toEqual(['New File', 'Open File…']);
+    expect(enabledLabels(1)).toEqual(['Command Palette…', 'Toggle File Explorer', 'Toggle Sidebar', 'Toggle Terminal']);
+
+    // Disabled items take no action index, so the enabled ones after them
+    // still run themselves.
+    const hotkey = vi.fn();
+    window.addEventListener('sprout:hotkey', hotkey);
+    openMenu(1);
+    expect(item('Undo').disabled).toBe(true);
+    act(() => {
+      item('Command Palette').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(hotkey).toHaveBeenCalledTimes(1);
+    expect(hotkey.mock.calls[0][0].detail.commandId).toBe('command_palette');
+    window.removeEventListener('sprout:hotkey', hotkey);
+  });
+
+  test('a clean text editor enables save, close and the editing commands', async () => {
+    mockEditor = {
+      activeBufferId: 'a',
+      buffers: new Map([['a', { id: 'a', kind: 'file', isModified: false }]]),
+    };
+    await renderMenuBar();
+    // Save All needs an unsaved buffer; Close Other needs a second one.
+    expect(enabledLabels(0)).toEqual(['New File', 'Open File…', 'Save', 'Close Editor', 'Close All Editors']);
+    expect(enabledLabels(1)).toHaveLength(12);
+  });
+
+  test('a non-text buffer can be closed but not saved or edited', async () => {
+    mockEditor = {
+      activeBufferId: 'd',
+      buffers: new Map([
+        ['d', { id: 'd', kind: 'diff', isModified: false }],
+        ['b', { id: 'b', kind: 'file', isModified: true }],
+      ]),
+    };
+    await renderMenuBar();
+    expect(enabledLabels(0)).toEqual([
+      'New File',
+      'Open File…',
+      'Save All',
+      'Close Editor',
+      'Close All Editors',
+      'Close Other Editors',
+    ]);
+    expect(enabledLabels(1)).not.toContain('Undo');
+  });
+
+  test('clicks send the commands the shortcuts and command palette use', async () => {
+    mockEditor = {
+      activeBufferId: 'a',
+      buffers: new Map([
+        ['a', { id: 'a', kind: 'file', isModified: true }],
+        ['b', { id: 'b', kind: 'file', isModified: false }],
+      ]),
+    };
+    const editorEvents: string[] = [];
+    const record = (e: Event) => editorEvents.push(e.type);
+    const types = [
+      'editor-save-current',
+      'editor-undo',
+      'editor-cut',
+      'editor-copy',
+      'editor-paste',
+      'editor-find',
+      'editor-find-replace',
+      'editor-select-all',
+    ];
+    for (const type of types) document.addEventListener(type, record);
+    const hotkeys: string[] = [];
+    const recordHotkey = (e: Event) => hotkeys.push((e as CustomEvent).detail.commandId);
+    window.addEventListener('sprout:hotkey', recordHotkey);
+    await renderMenuBar(createElement(HotkeyCommands));
+
+    const click = (menuIndex: number, label: string) => {
+      openMenu(menuIndex);
+      act(() => {
+        item(label).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+    };
+    click(0, 'Save');
+    click(0, 'Open File');
+    click(1, 'Undo');
+    click(1, 'Cut');
+    click(1, 'Copy');
+    click(1, 'Paste');
+    click(1, 'Find and Replace');
+    click(1, 'Find');
+    click(1, 'Select All');
+    click(1, 'Command Palette');
+
+    expect(hotkeys).toEqual([
+      'save_file',
+      'quick_open',
+      'undo',
+      'editor_cut',
+      'editor_copy',
+      'editor_paste',
+      'editor_replace',
+      'editor_find',
+      'editor_select_all',
+      'command_palette',
+    ]);
+    expect(editorEvents).toEqual([
+      'editor-save-current',
+      'editor-undo',
+      'editor-cut',
+      'editor-copy',
+      'editor-paste',
+      'editor-find-replace',
+      'editor-find',
+      'editor-select-all',
+    ]);
+    for (const type of types) document.removeEventListener(type, record);
+    window.removeEventListener('sprout:hotkey', recordHotkey);
   });
 });

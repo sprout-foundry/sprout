@@ -12,6 +12,7 @@ import { MenuBar, type MenuDefinition, type MenuBarItem } from '@sprout/ui';
 import { useMemo, useCallback } from 'react';
 import { getBootstrapConfig } from '../bootstrapAdapter';
 import { capability } from '../config/mode';
+import { useOptionalEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { isLinkedScrollEnabled } from '../extensions/linkedScroll';
 import { getActiveHost } from '../host';
@@ -23,33 +24,60 @@ import { collectBugReportEnvironment } from '../services/reportBug';
 /*  Menu definitions (identical to the original component)             */
 /* ------------------------------------------------------------------ */
 
-function buildMenus(username: string | null | undefined, _currentBranch: string | null | undefined): MenuDefinition[] {
+/**
+ * What the File and Edit items act on. Save and the editing commands go to
+ * the active text editor (useEditorEvents), close and save-all to the open
+ * buffers, so each item is enabled only when its target exists.
+ */
+interface EditorMenuState {
+  /** A buffer is active in the editor. */
+  hasActiveBuffer: boolean;
+  /** The active buffer is a text file in a code editor. */
+  hasActiveTextEditor: boolean;
+  openBufferCount: number;
+  hasUnsavedBuffers: boolean;
+}
+
+const NO_EDITOR: EditorMenuState = {
+  hasActiveBuffer: false,
+  hasActiveTextEditor: false,
+  openBufferCount: 0,
+  hasUnsavedBuffers: false,
+};
+
+function buildMenus(editor: EditorMenuState): MenuDefinition[] {
+  const noTextEditor = !editor.hasActiveTextEditor;
+
   // ── File menu ─────────────────────────────────────────────────
   const fileItems: MenuBarItem[] = [
     { label: 'New File', commandId: 'new_file' },
-    { label: 'Open File…', commandId: 'open_file' },
-    { label: 'Save', commandId: 'save_file', disabled: !username },
-    { label: 'Save All', commandId: 'save_all_files', disabled: !username },
+    { label: 'Open File…', commandId: 'quick_open' },
+    { label: 'Save', commandId: 'save_file', disabled: noTextEditor },
+    { label: 'Save All', commandId: 'save_all_files', disabled: !editor.hasUnsavedBuffers },
     { divider: true },
-    { label: 'Close Editor', commandId: 'close_editor', disabled: !username },
-    { label: 'Close All Editors', commandId: 'close_all_editors', disabled: !username },
-    { label: 'Close Other Editors', commandId: 'close_other_editors', disabled: !username },
+    { label: 'Close Editor', commandId: 'close_editor', disabled: !editor.hasActiveBuffer },
+    { label: 'Close All Editors', commandId: 'close_all_editors', disabled: editor.openBufferCount === 0 },
+    {
+      label: 'Close Other Editors',
+      commandId: 'close_other_editors',
+      disabled: !editor.hasActiveBuffer || editor.openBufferCount < 2,
+    },
   ];
 
   // ── Edit menu ─────────────────────────────────────────────────
   const editItems: MenuBarItem[] = [
-    { label: 'Undo', commandId: 'undo', disabled: !username },
-    { label: 'Redo', commandId: 'redo', disabled: !username },
+    { label: 'Undo', commandId: 'undo', disabled: noTextEditor },
+    { label: 'Redo', commandId: 'redo', disabled: noTextEditor },
     { divider: true },
-    { label: 'Cut', commandId: 'cut', disabled: !username },
-    { label: 'Copy', commandId: 'copy', disabled: !username },
-    { label: 'Paste', commandId: 'paste', disabled: !username },
+    { label: 'Cut', commandId: 'editor_cut', disabled: noTextEditor },
+    { label: 'Copy', commandId: 'editor_copy', disabled: noTextEditor },
+    { label: 'Paste', commandId: 'editor_paste', disabled: noTextEditor },
     { divider: true },
-    { label: 'Find', commandId: 'find', disabled: !username },
-    { label: 'Find and Replace', commandId: 'find_and_replace', disabled: !username },
-    { label: 'Select All', commandId: 'select_all', disabled: !username },
+    { label: 'Find', commandId: 'editor_find', disabled: noTextEditor },
+    { label: 'Find and Replace', commandId: 'editor_replace', disabled: noTextEditor },
+    { label: 'Select All', commandId: 'editor_select_all', disabled: noTextEditor },
     { divider: true },
-    { label: 'Command Palette…', commandId: 'open_command_palette' },
+    { label: 'Command Palette…', commandId: 'command_palette' },
     { label: 'Toggle File Explorer', commandId: 'toggle_explorer' },
     { label: 'Toggle Sidebar', commandId: 'toggle_sidebar' },
     { label: 'Toggle Terminal', commandId: 'toggle_terminal' },
@@ -172,16 +200,29 @@ function handledMenus(menus: MenuDefinition[]): MenuDefinition[] {
 /* ------------------------------------------------------------------ */
 
 const MenuBarWrapper = (): JSX.Element | null => {
-  // Single call to useHotkeys; cast to any to access fields not in
-  // the typed interface (username, currentBranch).
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const ctx = useHotkeys() as any;
-  const { hotkeys, hotkeyForCommand, isLoaded } = ctx;
-  const username: string | null | undefined = ctx.username;
-  const currentBranch: string | null | undefined = ctx.currentBranch;
+  const { hotkeys, hotkeyForCommand, isLoaded } = useHotkeys();
   const host = useHost();
+  const editorManager = useOptionalEditorManager();
 
-  const allMenus = useMemo(() => buildMenus(username, currentBranch), [username, currentBranch]);
+  const activeBuffer = editorManager?.activeBufferId ? editorManager.buffers.get(editorManager.activeBufferId) : null;
+  const hasActiveBuffer = !!activeBuffer;
+  const hasActiveTextEditor = activeBuffer?.kind === 'file';
+  const openBufferCount = editorManager?.buffers.size ?? 0;
+  let hasUnsavedBuffers = false;
+  for (const buffer of editorManager?.buffers.values() ?? []) {
+    if (buffer.isModified) {
+      hasUnsavedBuffers = true;
+      break;
+    }
+  }
+
+  const allMenus = useMemo(
+    () =>
+      editorManager
+        ? buildMenus({ hasActiveBuffer, hasActiveTextEditor, openBufferCount, hasUnsavedBuffers })
+        : buildMenus(NO_EDITOR),
+    [editorManager, hasActiveBuffer, hasActiveTextEditor, openBufferCount, hasUnsavedBuffers],
+  );
   // Re-render (and re-filter) as command handlers mount and unmount.
   useCommandHandlerVersion();
   const menus = handledMenus(allMenus);

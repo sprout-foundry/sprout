@@ -113,6 +113,9 @@ export const useEditorManager = () => {
   return context;
 };
 
+/** The editor manager, or null outside an EditorManagerProvider. */
+export const useOptionalEditorManager = () => useContext(EditorManagerContext);
+
 interface EditorManagerProviderProps {
   children: ReactNode;
 }

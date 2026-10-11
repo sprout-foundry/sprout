@@ -4,6 +4,8 @@ All notable changes to Sprout will be documented in this file.
 
 ## [Unreleased]
 
+- fix(workspace): a host that serves the chat session store (`capabilities.chatSessions`) now gets the workspace's project on every chat-session call — a `project` query parameter on `GET /api/chat-sessions` and `/messages`, a `project` body field on create, switch, rename, delete, delete-all and `turn` — taken from `SproutWorkspace`'s `project.repoUrl`, else `project.id`. Chats no longer mix across projects in one unscoped bucket, and a turn the host seeds into a project's bucket shows in that project's workspace. `WorkspaceChatProvider` takes the project as `chatSessionsProject`. Hosts without the capability, and the standalone app, are unchanged.
+
 ## [v0.30.0] - 2026-10-11
 
 - feat(commit): opt-in AI-assistance trailer. With `commit_attribution: "trailer"` (default `"off"`), commits Sprout creates — `sprout commit` and `/commit`, the agent's commit tool, and web UI commits — end with `Assisted-by: sprout/<version> (<provider>/<model>)`, one line per tool+model: the agent's model, plus the model that wrote the message when one did. The trailer joins an existing trailer block and is not repeated on an amend or re-run. Sprout never writes `Co-Authored-By` for a tool, and generated commit messages have any such line or "Generated with …" footer removed. Set it with `sprout config set commit_attribution trailer` or in Settings → Advanced.

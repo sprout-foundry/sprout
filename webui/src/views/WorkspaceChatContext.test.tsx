@@ -54,6 +54,7 @@ const sessionsModule = vi.hoisted(() => ({
 
 const hostSessionsModule = vi.hoisted(() => ({
   createHostChatSessionsApi: vi.fn(),
+  registerActiveChatSessionsProject: vi.fn(() => () => undefined),
 }));
 
 vi.mock('../services/chatSessions', async (importOriginal) => {
@@ -67,6 +68,7 @@ vi.mock('../services/chatSessions', async (importOriginal) => {
 
 vi.mock('../services/hostChatSessions', () => ({
   createHostChatSessionsApi: hostSessionsModule.createHostChatSessionsApi,
+  registerActiveChatSessionsProject: hostSessionsModule.registerActiveChatSessionsProject,
   appendTurnToHostStore: vi.fn(),
 }));
 
@@ -202,7 +204,7 @@ function fakeSessionsApiWithTranscript(chatId: string, messages: Array<{ role: s
 
 const DEFAULT_TEST_HOST: SproutHost = headlessHost();
 
-function renderUnit(overrides: { fetchFn?: typeof fetch; host?: SproutHost } = {}) {
+function renderUnit(overrides: { fetchFn?: typeof fetch; host?: SproutHost; chatSessionsProject?: string } = {}) {
   const events = createEventsProvider();
   const fetch = createFetch();
   let value: ReturnType<typeof useWorkspaceChat> | null = null;
@@ -211,6 +213,7 @@ function renderUnit(overrides: { fetchFn?: typeof fetch; host?: SproutHost } = {
       initialState={createInitialState()}
       eventsProvider={events.provider}
       fetchFn={overrides.fetchFn ?? fetch.fetchFn}
+      chatSessionsProject={overrides.chatSessionsProject}
     >
       <Harness
         onValue={(v) => {
@@ -322,8 +325,25 @@ describe('WorkspaceChatProvider', () => {
       capabilities: { ...headlessHost().capabilities, chat: true, chatSessions: true },
     };
     renderUnit({ host });
-    expect(hostSessionsModule.createHostChatSessionsApi).toHaveBeenCalledWith('https://host.test/backend');
+    expect(hostSessionsModule.createHostChatSessionsApi).toHaveBeenCalledWith('https://host.test/backend', '');
     expect(sessionsModule.createChatSessionsApi).not.toHaveBeenCalled();
+  });
+
+  it("scopes the host session API and the module-level host calls to the workspace's project", () => {
+    hostSessionsModule.registerActiveChatSessionsProject.mockClear();
+    const host: SproutHost = {
+      ...headlessHost(),
+      transport: { apiBaseURL: 'https://host.test/backend', wsURL: '', authMode: 'bearer' },
+      capabilities: { ...headlessHost().capabilities, chat: true, chatSessions: true },
+    };
+    renderUnit({ host, chatSessionsProject: 'https://github.com/acme/widgets' });
+    expect(hostSessionsModule.createHostChatSessionsApi).toHaveBeenCalledWith(
+      'https://host.test/backend',
+      'https://github.com/acme/widgets',
+    );
+    expect(hostSessionsModule.registerActiveChatSessionsProject).toHaveBeenCalledWith(
+      'https://github.com/acme/widgets',
+    );
   });
 
   it('restores the transcript from the host store on load (reload path)', async () => {

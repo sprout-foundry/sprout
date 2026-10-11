@@ -69,6 +69,15 @@ vi.mock('./hostAgentBackend', () => ({
   resetHostAgentBackend: () => resetHostAgentBackend(),
 }));
 
+// The host chat-session store factory is spied (and still delegates) so the
+// project a mounted workspace scopes its host sessions to is observable.
+const createHostChatSessionsApiSpy = vi.hoisted(() => vi.fn());
+vi.mock('../services/hostChatSessions', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../services/hostChatSessions')>();
+  createHostChatSessionsApiSpy.mockImplementation(actual.createHostChatSessionsApi);
+  return { ...actual, createHostChatSessionsApi: createHostChatSessionsApiSpy };
+});
+
 // The registry pulls the built-in shells in with it; stub them so the space is
 // a distinct, assertable node without the shell's real chrome and state.
 vi.mock('../workspaces/CodeShell', () => ({
@@ -186,6 +195,29 @@ describe('SproutWorkspace', () => {
     expect(workspace).toHaveAttribute('data-project', PROJECT.id);
     expect(workspace).toHaveAttribute('data-space', 'code');
     expect(screen.getByTestId('sprout-workspace-code-shell')).toBeInTheDocument();
+  });
+
+  it("scopes a session-store host's chats to the project: repo URL, else the project id", async () => {
+    createHostChatSessionsApiSpy.mockClear();
+    const base = makeHost();
+    const host: SproutHost = { ...base, capabilities: { ...base.capabilities, chat: true, chatSessions: true } };
+    const repoProject: SproutProject = { id: 'proj-1', repoUrl: 'https://github.com/acme/widgets' };
+    const { unmount } = render(<SproutWorkspace project={repoProject} space="code" host={host} />);
+    render(<SproutWorkspace project={{ id: 'acme-gadgets' }} space="code" host={host} />);
+    await screen.findAllByTestId('sprout-workspace');
+
+    const projects = createHostChatSessionsApiSpy.mock.calls.map((call) => call[1]);
+    expect(projects).toContain('https://github.com/acme/widgets');
+    expect(projects).toContain('acme-gadgets');
+    expect(createHostChatSessionsApiSpy.mock.calls.every((call) => call[0] === 'https://host.test/api')).toBe(true);
+    unmount();
+  });
+
+  it('does not use the host session store for a host without one', async () => {
+    createHostChatSessionsApiSpy.mockClear();
+    render(<SproutWorkspace project={{ id: 'acme-gadgets' }} space="code" host={makeHost()} />);
+    await screen.findByTestId('sprout-workspace');
+    expect(createHostChatSessionsApiSpy).not.toHaveBeenCalled();
   });
 
   it('mounts a different space through the registry', async () => {

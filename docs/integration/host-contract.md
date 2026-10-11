@@ -494,6 +494,19 @@ below and the chat UI needs no host-specific branch. The base URL is the
 transport's `apiBaseURL` (`''` is the same-origin sentinel); the paths below
 are appended to it.
 
+**Project scope.** A host store keeps one chat list per project. When the
+workspace has a project — `SproutWorkspace`'s `project.repoUrl`, else
+`project.id` — every call below carries it as `project`: a `project` query
+parameter on the `GET`s, a `project` field in the JSON body of the `POST`s
+(delete-all, which otherwise has no body, sends `{ "project": … }`). The host
+keys its buckets by it (normalizing a repository URL and an `owner/repo` id
+to the same key is the host's choice), so chats never mix across projects and
+a turn the host seeds into a project's bucket is what that project's
+workspace lists. Without a project (a `WorkspaceChatProvider` mounted with no
+`chatSessionsProject`) no `project` is sent and the host serves its unscoped
+bucket. The daemon and the browser-local store are not project-scoped and
+never receive it.
+
 #### `GET /api/chat-sessions`
 
 List the chats.
@@ -696,8 +709,9 @@ the page origin (`VITE_TERMINAL_WS_URL`, when built in, overrides both).
 `/api/chat-sessions*` from a browser-local store (one transcript per chat in
 `localStorage`). With the capability on, the adapter forwards every
 `/api/chat-sessions*` call to the host's store instead (list, create, switch,
-rename, delete, messages and `turn`), so the host implements the whole
-session API listed under "Chat session store" above. The worktree and
+rename, delete, messages and `turn`, each carrying the workspace's
+`project`), so the host implements the whole session API listed under "Chat
+session store" above. The worktree and
 compaction sub-paths stay stubbed in the browser either way.
 
 ## The agent-event stream

@@ -174,7 +174,10 @@ its host's transport.
 `WorkspaceChatProvider` must be mounted under a `HostProvider`: it reads the
 host to decide whether the host serves the chat session store (see
 `capabilities.chatSessions` in the host contract) and to resolve that store's
-API base. `SproutWorkspace` mounts one in its own mode.
+API base. `SproutWorkspace` mounts one in its own mode. Its
+`chatSessionsProject` prop scopes a host store's chats to a project (sent as
+`project` on every session call); `SproutWorkspace` passes `project.repoUrl`,
+else `project.id`. A host mounting the provider itself passes its own.
 
 **The composed workspace mounts the chat for you.** A `SproutWorkspace` that
 renders through a `layout` arrangement (SP-155) mounts the chat unit itself:

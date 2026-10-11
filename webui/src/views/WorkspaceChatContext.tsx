@@ -39,7 +39,7 @@ import { ApiService } from '../services/api';
 import { retractSteer, sendQuery, steerQuery, stopQuery } from '../services/api/chatApi';
 import { createChatSessionsApi } from '../services/chatSessions';
 import { clientFetch } from '../services/clientSession';
-import { createHostChatSessionsApi } from '../services/hostChatSessions';
+import { createHostChatSessionsApi, registerActiveChatSessionsProject } from '../services/hostChatSessions';
 import type { AppState } from '../types/app';
 import type { WorkspaceShellChat } from '../workspaces/shell';
 
@@ -142,6 +142,14 @@ export interface WorkspaceChatProviderProps {
    * against its boot-time chat restore.
    */
   loadSessionsOnConnect?: boolean;
+  /**
+   * The project a host chat session store scopes this chat's sessions to. When
+   * the host declares `capabilities.chatSessions`, every session call names it
+   * (`project`), so each project keeps its own chat list in the host's store.
+   * Ignored by the daemon and browser-local stores. Omitted, the host's
+   * unscoped bucket.
+   */
+  chatSessionsProject?: string;
   children: ReactNode;
 }
 
@@ -161,6 +169,7 @@ export function WorkspaceChatProvider({
   eventsProvider,
   fetchFn = clientFetch,
   loadSessionsOnConnect = false,
+  chatSessionsProject,
   children,
 }: WorkspaceChatProviderProps): JSX.Element {
   const store = useMemo(() => createAppStore(initialState), [initialState]);
@@ -170,6 +179,7 @@ export function WorkspaceChatProvider({
         eventsProvider={eventsProvider}
         fetchFn={fetchFn}
         loadSessionsOnConnect={loadSessionsOnConnect}
+        chatSessionsProject={chatSessionsProject?.trim() ?? ''}
       >
         {children}
       </WorkspaceChatRuntime>
@@ -186,11 +196,13 @@ function WorkspaceChatRuntime({
   eventsProvider,
   fetchFn,
   loadSessionsOnConnect,
+  chatSessionsProject,
   children,
 }: {
   eventsProvider: EventsProvider;
   fetchFn: typeof fetch;
   loadSessionsOnConnect: boolean;
+  chatSessionsProject: string;
   children: ReactNode;
 }): JSX.Element {
   const state = useAppStoreState();
@@ -201,6 +213,10 @@ function WorkspaceChatRuntime({
   // or browser storage. With the capability off the fetch-bound daemon API is
   // used, unchanged.
   const host = useHost();
+  // The turn append and the list/messages refreshes run outside this
+  // component (event handlers, background sync), so they read the project
+  // from the module-level scope this records.
+  useEffect(() => registerActiveChatSessionsProject(chatSessionsProject), [chatSessionsProject]);
 
   const activeRequestsRef = useRef(0);
   const activeChatIdRef = useRef<string | null>(null);
@@ -248,9 +264,9 @@ function WorkspaceChatRuntime({
     sessions: useMemo(
       () =>
         host.capabilities.chatSessions
-          ? createHostChatSessionsApi(host.transport.apiBaseURL)
+          ? createHostChatSessionsApi(host.transport.apiBaseURL, chatSessionsProject)
           : createChatSessionsApi(fetchFn),
-      [host, fetchFn],
+      [host, fetchFn, chatSessionsProject],
     ),
   });
 

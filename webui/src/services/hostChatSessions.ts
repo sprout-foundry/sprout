@@ -40,25 +40,94 @@ export function hostApiURL(apiBaseURL: string, path: string): string {
 }
 
 /**
- * A fetch that resolves relative API paths against the host's base URL. The
- * underlying fetch is the app's adapter-aware `clientFetch`, so the client id
- * header and any installed adapter are honoured; only the URL changes,
- * pointing at the host's store.
+ * The project the host's chat session store is scoped to. A host store keeps
+ * one chat list per project (see `docs/integration/host-contract.md`), so every
+ * host session call names the project of the mounted workspace. Recorded by
+ * the chat unit (`WorkspaceChatProvider`'s `chatSessionsProject`) for the
+ * module-level paths — the turn append and the list/messages refreshes — the
+ * same way the active host is recorded for them; the chat unit's own session
+ * API binds its project explicitly. Empty means no project: the host's
+ * unscoped bucket.
  */
-export function hostChatSessionsFetch(apiBaseURL: string): typeof fetch {
-  return (input, init) =>
-    typeof input === 'string' && input.startsWith('/')
-      ? clientFetch(hostApiURL(apiBaseURL, input), init)
-      : clientFetch(input, init);
+let activeChatSessionsProject = '';
+
+/**
+ * Record the project the host chat session calls are scoped to, returning a
+ * restore function that puts back the previous one (the `registerActiveHost`
+ * pattern, so an unmounting workspace hands the scope back).
+ */
+export function registerActiveChatSessionsProject(project: string | undefined): () => void {
+  const previous = activeChatSessionsProject;
+  activeChatSessionsProject = project?.trim() ?? '';
+  let restored = false;
+  return () => {
+    if (restored) return;
+    restored = true;
+    activeChatSessionsProject = previous;
+  };
+}
+
+/** The project the module-level host chat session calls are scoped to. */
+export function activeChatSessionsProjectForHost(): string {
+  return activeChatSessionsProject;
 }
 
 /**
- * A `ChatSessionsApi` bound to the host's base URL, so the list/create/switch
- * and the rest of the session calls reach the host's store with the daemon's
- * request shapes.
+ * Add the project to one chat session request: a `project` query parameter on
+ * a GET, a `project` field on a JSON body otherwise (a body-less POST such as
+ * delete-all gets a `{ project }` body). This is the single place the project
+ * reaches the wire, so every call through `hostChatSessionsFetch` carries it.
  */
-export function createHostChatSessionsApi(apiBaseURL: string): ChatSessionsApi {
-  return createChatSessionsApi(hostChatSessionsFetch(apiBaseURL));
+export function withChatSessionsProject(
+  path: string,
+  init: RequestInit | undefined,
+  project: string,
+): [string, RequestInit | undefined] {
+  if (!project) return [path, init];
+  const method = (init?.method ?? 'GET').toUpperCase();
+  if (method === 'GET' || method === 'HEAD') {
+    const sep = path.includes('?') ? '&' : '?';
+    return [`${path}${sep}project=${encodeURIComponent(project)}`, init];
+  }
+  if (init?.body == null) {
+    const headers = new Headers(init?.headers);
+    headers.set('Content-Type', 'application/json');
+    return [path, { ...init, headers, body: JSON.stringify({ project }) }];
+  }
+  if (typeof init.body !== 'string') return [path, init];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(init.body);
+  } catch {
+    return [path, init];
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return [path, init];
+  return [path, { ...init, body: JSON.stringify({ ...(parsed as Record<string, unknown>), project }) }];
+}
+
+/**
+ * A fetch that resolves relative API paths against the host's base URL and
+ * scopes them to a project. The underlying fetch is the app's adapter-aware
+ * `clientFetch`, so the client id header and any installed adapter are
+ * honoured; only the URL (and the project) change, pointing at the host's
+ * store. `project` omitted, the call uses the recorded active project at call
+ * time.
+ */
+export function hostChatSessionsFetch(apiBaseURL: string, project?: string): typeof fetch {
+  return (input, init) => {
+    if (typeof input !== 'string' || !input.startsWith('/')) return clientFetch(input, init);
+    const [path, scoped] = withChatSessionsProject(input, init, project ?? activeChatSessionsProject);
+    return clientFetch(hostApiURL(apiBaseURL, path), scoped);
+  };
+}
+
+/**
+ * A `ChatSessionsApi` bound to the host's base URL and a project, so the
+ * list/create/switch and the rest of the session calls reach that project's
+ * chats in the host's store with the daemon's request shapes.
+ */
+export function createHostChatSessionsApi(apiBaseURL: string, project?: string): ChatSessionsApi {
+  return createChatSessionsApi(hostChatSessionsFetch(apiBaseURL, project ?? ''));
 }
 
 /**
@@ -115,10 +184,11 @@ export async function appendHostTurn(
   chatId: string | null | undefined,
   query: string,
   response?: string,
+  project?: string,
 ): Promise<void> {
   if (!chatId || !query.trim()) return;
   try {
-    await clientFetch(hostApiURL(apiBaseURL, '/api/chat-sessions/turn'), {
+    await hostChatSessionsFetch(apiBaseURL, project)('/api/chat-sessions/turn', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(response === undefined ? { chat_id: chatId, query } : { chat_id: chatId, query, response }),

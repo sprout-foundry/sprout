@@ -408,6 +408,7 @@ export function SproutWorkspace({
         eventsProvider={chatTransport.eventsProvider}
         fetchFn={chatTransport.fetchFn}
         loadSessionsOnConnect
+        chatSessionsProject={chatSessionsProjectOf(project)}
       >
         <WorkspaceEditorProvider>
           {layout ? (
@@ -524,6 +525,16 @@ function ResolvedSpaceShell({
 }
 
 SproutWorkspace.displayName = 'SproutWorkspace';
+
+/**
+ * The project a host chat session store keys this workspace's chats by: the
+ * repository URL when the host gave one, else the project id. A host store
+ * normalizes either form to its project key, so a repo project lands in the
+ * same bucket whether the host addresses it by URL or by id.
+ */
+function chatSessionsProjectOf(project: SproutProject): string {
+  return project.repoUrl?.trim() || project.id.trim();
+}
 
 export default SproutWorkspace;
 

@@ -11,12 +11,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { headlessHost } from '../host/HostProvider';
 import { setActiveHost } from '../host/accessor';
+import { fetchChatSessionMessages } from './chatSessions';
 import {
   appendHostTurn,
   createHostChatSessionsApi,
   fetchChatSessionMessagesForActiveStore,
   hostApiURL,
+  hostChatSessionsFetch,
   listChatSessionsForActiveStore,
+  registerActiveChatSessionsProject,
+  withChatSessionsProject,
 } from './hostChatSessions';
 import { __setRepoScopeForTests } from './repoScope';
 
@@ -310,5 +314,139 @@ describe('the active-store read helpers route to the host store', () => {
     };
     await listChatSessionsForActiveStore(fetchFn);
     expect(calls[0]).toBe('/api/chat-sessions');
+  });
+});
+
+describe('host chat sessions are scoped to the workspace project', () => {
+  const PROJECT_A = 'https://github.com/acme/widgets';
+  const PROJECT_B = 'acme-gadgets';
+
+  /** One fake host store per `project` bucket, recording every request. */
+  function bucketedHostStore() {
+    const buckets = new Map<string, ReturnType<typeof fakeHostStore>>();
+    const requests: Array<{ path: string; method: string; project: string | null; body: Record<string, unknown> }> = [];
+    const fetchFn: typeof fetch = async (input, init) => {
+      const url = new URL(typeof input === 'string' ? input : input.toString());
+      const method = (init?.method ?? 'GET').toUpperCase();
+      const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
+      const project = method === 'GET' ? url.searchParams.get('project') : ((body.project as string) ?? null);
+      requests.push({ path: url.pathname.replace(new URL(HOST_BASE).pathname, ''), method, project, body });
+      const key = project ?? '';
+      if (!buckets.has(key)) buckets.set(key, fakeHostStore());
+      return buckets.get(key)!.fetchFn(input, init);
+    };
+    return { fetchFn, requests, buckets };
+  }
+
+  let store: ReturnType<typeof bucketedHostStore>;
+  let restoreProject: (() => void) | null = null;
+
+  beforeEach(() => {
+    store = bucketedHostStore();
+    vi.stubGlobal('fetch', store.fetchFn);
+  });
+
+  afterEach(() => {
+    restoreProject?.();
+    restoreProject = null;
+    setActiveHost(headlessHost());
+  });
+
+  it('sends the project on every session call: query on GETs, body field on POSTs', async () => {
+    const api = createHostChatSessionsApi(HOST_BASE, PROJECT_A);
+    const chatId = (await api.listChatSessions()).active_chat_id;
+    const created = await api.createChatSession('Second', 'code');
+    await api.switchChatSession(created.chat_session.id);
+    await api.renameChatSession(created.chat_session.id, 'Renamed');
+    await fetchChatSessionMessages(chatId, hostChatSessionsFetch(HOST_BASE, PROJECT_A));
+    await appendHostTurn(HOST_BASE, chatId, 'q', 'a', PROJECT_A);
+    await api.deleteChatSession(created.chat_session.id);
+    await api.deleteAllChatSessions();
+
+    expect(store.requests.map((r) => r.path)).toEqual([
+      '/api/chat-sessions',
+      '/api/chat-sessions/create',
+      '/api/chat-sessions/switch',
+      '/api/chat-sessions/rename',
+      '/api/chat-sessions/messages',
+      '/api/chat-sessions/turn',
+      '/api/chat-sessions/delete',
+      '/api/chat-sessions/delete-all',
+    ]);
+    expect(store.requests.every((r) => r.project === PROJECT_A)).toBe(true);
+    // The request's own fields are kept alongside the project.
+    expect(store.requests[1].body).toMatchObject({ name: 'Second', mode: 'code' });
+    expect(store.requests[5].body).toMatchObject({ chat_id: chatId, query: 'q', response: 'a' });
+  });
+
+  it('keeps two projects in separate buckets', async () => {
+    const a = createHostChatSessionsApi(HOST_BASE, PROJECT_A);
+    const b = createHostChatSessionsApi(HOST_BASE, PROJECT_B);
+    await a.createChatSession('Only in A');
+
+    expect((await a.listChatSessions()).chat_sessions.map((c) => c.name)).toContain('Only in A');
+    expect((await b.listChatSessions()).chat_sessions.map((c) => c.name)).not.toContain('Only in A');
+    expect([...store.buckets.keys()].sort()).toEqual([PROJECT_B, PROJECT_A].sort());
+  });
+
+  it('scopes the module-level host calls to the registered project', async () => {
+    const base = headlessHost();
+    setActiveHost({
+      ...base,
+      transport: { apiBaseURL: HOST_BASE, wsURL: '', authMode: 'bearer' },
+      capabilities: { ...base.capabilities, chat: true, chatSessions: true },
+    });
+    restoreProject = registerActiveChatSessionsProject(PROJECT_B);
+
+    const chatId = (await listChatSessionsForActiveStore()).active_chat_id;
+    await fetchChatSessionMessagesForActiveStore(chatId);
+    await appendHostTurn(HOST_BASE, chatId, 'q');
+
+    expect(store.requests.map((r) => r.project)).toEqual([PROJECT_B, PROJECT_B, PROJECT_B]);
+
+    restoreProject();
+    restoreProject = null;
+    await listChatSessionsForActiveStore();
+    expect(store.requests[3].project).toBeNull();
+  });
+
+  it('sends no project without one, and none to a host without a session store', async () => {
+    await createHostChatSessionsApi(HOST_BASE).listChatSessions();
+    expect(store.requests[0].project).toBeNull();
+
+    setActiveHost(headlessHost());
+    restoreProject = registerActiveChatSessionsProject(PROJECT_A);
+    const calls: Array<{ url: string; body?: unknown }> = [];
+    const fetchFn: typeof fetch = async (input, init) => {
+      calls.push({ url: typeof input === 'string' ? input : input.toString(), body: init?.body });
+      return new Response(JSON.stringify({ message: 'ok', chat_sessions: [], active_chat_id: '' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    };
+    await listChatSessionsForActiveStore(fetchFn);
+    await fetchChatSessionMessagesForActiveStore('chat-1', fetchFn).catch(() => undefined);
+    expect(calls.map((c) => c.url)).toEqual(['/api/chat-sessions', '/api/chat-sessions/messages?chat_id=chat-1']);
+  });
+
+  it('adds the project to a request without disturbing it', () => {
+    expect(withChatSessionsProject('/api/chat-sessions', undefined, 'acme/w')).toEqual([
+      '/api/chat-sessions?project=acme%2Fw',
+      undefined,
+    ]);
+    expect(withChatSessionsProject('/api/chat-sessions/messages?chat_id=c1', undefined, 'p')[0]).toBe(
+      '/api/chat-sessions/messages?chat_id=c1&project=p',
+    );
+    const [, posted] = withChatSessionsProject(
+      '/api/chat-sessions/rename',
+      { method: 'POST', body: '{"id":"c1"}' },
+      'p',
+    );
+    expect(JSON.parse(String(posted?.body))).toEqual({ id: 'c1', project: 'p' });
+    const [, bodyless] = withChatSessionsProject('/api/chat-sessions/delete-all', { method: 'POST' }, 'p');
+    expect(JSON.parse(String(bodyless?.body))).toEqual({ project: 'p' });
+    expect(new Headers(bodyless?.headers).get('Content-Type')).toBe('application/json');
+    const init = { method: 'POST', body: '{"id":"c1"}' };
+    expect(withChatSessionsProject('/api/chat-sessions/rename', init, '')).toEqual(['/api/chat-sessions/rename', init]);
   });
 });

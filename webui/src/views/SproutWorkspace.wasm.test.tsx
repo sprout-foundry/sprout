@@ -131,10 +131,8 @@ describe('SproutWorkspace with a wasm agent backend', () => {
 
     gate.release();
 
-    await waitFor(() => {
-      expect(gate.adapterCalls.some(isSessionList)).toBe(true);
-      expect(gate.adapterCalls.some(isCatalog)).toBe(true);
-    });
+    await waitFor(() => expect(gate.adapterCalls.some(isSessionList)).toBe(true));
+    await waitFor(() => expect(gate.adapterCalls.some(isCatalog)).toBe(true));
     expect(WebSocketService.getInstance().isConnected()).toBe(true);
     // Both went through the installed adapter, none to the page origin.
     expect(pageCalls().filter((url) => isSessionList(url) || isCatalog(url))).toEqual([]);

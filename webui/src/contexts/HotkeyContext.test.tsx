@@ -564,18 +564,21 @@ describe('embedded workspace (no app shell)', () => {
   let hostKeydown: ReturnType<typeof vi.fn>;
   let inside: HTMLButtonElement;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     __resetCommandHandlersForTests();
     handler = vi.fn();
     hostKeydown = vi.fn();
     window.addEventListener('sprout:hotkey', handler);
     window.addEventListener('keydown', hostKeydown);
+  });
+
+  async function mountWorkspace(): Promise<void> {
     act(() => {
       root.render(createElement(HotkeyProvider, null, createElement('button', { 'data-testid': 'inside' }, 'x')));
     });
     await flushPromises();
     inside = container.querySelector('[data-testid="inside"]') as HTMLButtonElement;
-  });
+  }
 
   afterEach(() => {
     window.removeEventListener('sprout:hotkey', handler);
@@ -589,7 +592,8 @@ describe('embedded workspace (no app shell)', () => {
     return ev;
   }
 
-  it('leaves keys pressed outside the workspace to the host page', () => {
+  it('leaves keys pressed outside the workspace to the host page', async () => {
+    await mountWorkspace();
     const unregister = registerCommandHandler(['save_file']);
     const outside = document.createElement('button');
     document.body.appendChild(outside);
@@ -603,7 +607,8 @@ describe('embedded workspace (no app shell)', () => {
     unregister();
   });
 
-  it('leaves a bound shortcut alone when nothing handles its command', () => {
+  it('leaves a bound shortcut alone when nothing handles its command', async () => {
+    await mountWorkspace();
     for (const key of ['s', 'w', '1']) {
       const ev = press(inside, { key, ctrlKey: true });
       expect(ev.defaultPrevented).toBe(false);
@@ -612,7 +617,8 @@ describe('embedded workspace (no app shell)', () => {
     expect(hostKeydown).toHaveBeenCalledTimes(3);
   });
 
-  it('handles and consumes a shortcut inside the workspace once a handler is registered', () => {
+  it('handles and consumes a shortcut inside the workspace once a handler is registered', async () => {
+    await mountWorkspace();
     const unregister = registerCommandHandler(['save_file']);
 
     const ev = press(inside, { key: 's', ctrlKey: true });

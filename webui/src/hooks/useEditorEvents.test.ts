@@ -95,7 +95,7 @@ describe('useEditorEvents — editor-save-current', () => {
 describe('useEditorEvents — clipboard commands', () => {
   let view: EditorView;
   let clipboard: { writeText: ReturnType<typeof vi.fn>; readText: ReturnType<typeof vi.fn> };
-  let unmount: () => void;
+  let unmount: (() => void) | undefined;
 
   beforeEach(() => {
     view = new EditorView({
@@ -104,6 +104,9 @@ describe('useEditorEvents — clipboard commands', () => {
     });
     clipboard = { writeText: vi.fn().mockResolvedValue(undefined), readText: vi.fn().mockResolvedValue('bye') };
     Object.defineProperty(navigator, 'clipboard', { value: clipboard, configurable: true });
+  });
+
+  function mountHook(): void {
     ({ unmount } = renderHook(() =>
       useEditorEvents({
         viewRef: { current: view },
@@ -118,10 +121,10 @@ describe('useEditorEvents — clipboard commands', () => {
         handleFindAllReferences: () => undefined,
       }),
     ));
-  });
+  }
 
   afterEach(() => {
-    unmount();
+    unmount?.();
     view.destroy();
   });
 
@@ -130,18 +133,21 @@ describe('useEditorEvents — clipboard commands', () => {
   }
 
   it('copy writes the selection and leaves the document alone', async () => {
+    mountHook();
     fire('editor-copy');
     await vi.waitFor(() => expect(clipboard.writeText).toHaveBeenCalledWith('hello'));
     expect(view.state.doc.toString()).toBe('hello world');
   });
 
   it('cut writes the selection and deletes it', async () => {
+    mountHook();
     fire('editor-cut');
     await vi.waitFor(() => expect(clipboard.writeText).toHaveBeenCalledWith('hello'));
     await vi.waitFor(() => expect(view.state.doc.toString()).toBe(' world'));
   });
 
   it('paste replaces the selection with the clipboard text', async () => {
+    mountHook();
     fire('editor-paste');
     await vi.waitFor(() => expect(view.state.doc.toString()).toBe('bye world'));
   });

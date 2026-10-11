@@ -18,3 +18,20 @@
   min-height: 0;
   overflow: hidden;
 }
+
+/*
+ * The editor a composed workspace shows in the center slot while files are
+ * open in an arrangement that places no editor: the slot is split between it
+ * and the views the host placed there, rather than the editor's full height
+ * pushing them out of view.
+ */
+.sprout-workspace .sprout-views-layout__slot:has(> .sprout-workspace-editor--on-demand) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.sprout-workspace .sprout-views-layout__slot:has(> .sprout-workspace-editor--on-demand) > * {
+  flex: 1 1 0;
+  min-height: 0;
+}

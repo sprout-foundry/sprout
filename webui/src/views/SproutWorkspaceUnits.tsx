@@ -33,10 +33,31 @@ import type { ViewComponent, ViewsArrangement, ViewKind } from './ViewsLayout';
 import { useWorkspaceChat } from './WorkspaceChatContext';
 import { useWorkspaceEditor } from './WorkspaceEditorContext';
 import { WorkspaceEditorView } from './WorkspaceEditorView';
+import { WorkspaceFileTreeView } from './WorkspaceFileTreeView';
 import { resolveWorkspaceTerminalBackend } from './WorkspaceTerminalView';
 
-/** The composition's assembled editor, rendered for the `editor` kind. */
-const ASSEMBLED_VIEW_COMPONENTS: Partial<Record<ViewKind, ViewComponent>> = { editor: WorkspaceEditorView };
+/**
+ * The components the composition renders in place of the primitives: the
+ * assembled editor for `editor`, and a tree that reloads when the workspace's
+ * contents arrive for `fileTree`.
+ */
+const ASSEMBLED_VIEW_COMPONENTS: Partial<Record<ViewKind, ViewComponent>> = {
+  editor: WorkspaceEditorView,
+  fileTree: WorkspaceFileTreeView,
+};
+
+/** With a host-supplied `viewProps.editor`, the `editor` kind keeps the bare primitive. */
+const HOST_EDITOR_VIEW_COMPONENTS: Partial<Record<ViewKind, ViewComponent>> = { fileTree: WorkspaceFileTreeView };
+
+/** The editor shown in the center slot while files are open in an arrangement without one. */
+function OnDemandEditorView(): JSX.Element {
+  return <WorkspaceEditorView className="sprout-workspace-editor--on-demand" />;
+}
+
+const ON_DEMAND_EDITOR_VIEW_COMPONENTS: Partial<Record<ViewKind, ViewComponent>> = {
+  ...ASSEMBLED_VIEW_COMPONENTS,
+  editor: OnDemandEditorView,
+};
 
 /**
  * The arranged views, rendered inside the chat and editor units so their
@@ -45,6 +66,13 @@ const ASSEMBLED_VIEW_COMPONENTS: Partial<Record<ViewKind, ViewComponent>> = { ed
  * The `editor` kind renders the assembled editor view unless the host
  * supplies `viewProps.editor`; then the host gets the bare `Editor` primitive
  * with its own props.
+ *
+ * An arrangement without an `editor` still opens files: selecting one in the
+ * tree (or the changes panel, a chat file link, the palette) opens it in the
+ * editor unit, and while any file is open the assembled editor is shown at
+ * the start of the `center` slot, splitting it with what the host placed
+ * there. Closing the last file removes it again. Without this the selection
+ * would open a buffer nothing renders, so nothing would load or show.
  *
  * An arranged `previewPanel` is mounted only when the host declares
  * `capabilities.preview` (its backend serves `/api/preview/*`); otherwise it
@@ -76,10 +104,16 @@ export function ArrangedViews({
   );
   const props = useSproutWorkspaceViewProps(viewProps, { chatOverrides, previewPanel });
   useOpenInEditorRequests();
-  const components = viewProps?.editor ? undefined : ASSEMBLED_VIEW_COMPONENTS;
-  return (
-    <ViewsLayout arrangement={resolved} props={props} components={components} className="sprout-workspace__layout" />
+  const { openFiles } = useWorkspaceEditor();
+  const onDemandEditor = !viewProps?.editor && !arrangementHas(resolved, 'editor') && openFiles.length > 0;
+  const shown = useMemo(
+    () => (onDemandEditor ? { ...resolved, center: ['editor' as const, ...(resolved.center ?? [])] } : resolved),
+    [resolved, onDemandEditor],
   );
+  let components = ASSEMBLED_VIEW_COMPONENTS;
+  if (viewProps?.editor) components = HOST_EDITOR_VIEW_COMPONENTS;
+  else if (onDemandEditor) components = ON_DEMAND_EDITOR_VIEW_COMPONENTS;
+  return <ViewsLayout arrangement={shown} props={props} components={components} className="sprout-workspace__layout" />;
 }
 
 /** Whether any slot of a resolved arrangement places `kind`. */

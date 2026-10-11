@@ -4,6 +4,9 @@ All notable changes to Sprout will be documented in this file.
 
 ## [Unreleased]
 
+- fix(workspace): selecting a file in an own-mode `SproutWorkspace` whose `layout` places no `editor` (for example `{ left: ['fileTree'], center: ['chat'], right: ['changes'] }`) shows it (issue #121). The selection opened a buffer in the editor unit, but with no editor view rendered nothing read or showed the file. While any file is open the assembled editor is now shown at the start of the `center` slot, splitting it with the host's views, and closing the last file removes it; the same applies to files opened from the changes panel, chat links and the palette. An arranged `editor` and a host's `viewProps.fileTree` / `viewProps.editor` behave as before.
+- fix(workspace): the arranged file tree lists again when an agent adapter is installed and when the startup repo import completes. On an in-browser-agent host it could list before the agent was ready or the host project's repository was imported and then stay empty for the session; hosts no longer need to refresh it themselves.
+
 - feat(workspace): `SproutWorkspace` takes `commandPalette={false}` for hosts with their own palette. It removes the palette from any arrangement — the default overlay included — and from the composed space shell, so its shortcut (Ctrl/Cmd+Shift+P inside the workspace) and the header search control stay with the host. The palette remains on by default.
 
 ## [v0.29.0] - 2026-10-11

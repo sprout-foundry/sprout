@@ -268,3 +268,15 @@ export type {
 export type { EscalationHost } from '../services/escalationHost';
 export { ESCALATION_TRIGGER_EVENT, useEscalationTriggers } from '../hooks/useEscalationTriggers';
 export type { EscalationTriggerEvent, UseEscalationTriggersOptions } from '../hooks/useEscalationTriggers';
+
+// The source control and search views: what an arranged `git` and `search`
+// render. `WorkspaceGitView` is the app's git section (status, staging,
+// commit, branches, pull/push, history) against the workspace transport —
+// the daemon's git or, for an in-browser host, the browser's own — with
+// worktrees gated on `serverGit`; `WorkspaceSearchView` is the app's search
+// panel over `/api/search`. Both open files through `onOpenFile` /
+// `onFileClick`, which the composed workspace wires to the editor unit.
+export { WorkspaceGitView } from './WorkspaceGitView';
+export type { WorkspaceGitViewProps, WorkspaceGitPanelProps } from './WorkspaceGitView';
+export { WorkspaceSearchView } from './WorkspaceSearchView';
+export type { WorkspaceSearchViewProps } from './WorkspaceSearchView';

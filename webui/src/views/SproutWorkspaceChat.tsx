@@ -98,6 +98,8 @@ export interface SproutWorkspaceViewAssembly {
  *   panel still fetches its own session changes (when the host declares
  *   `capabilities.agentChanges`).
  * - `previewPanel` — the composition's open state and close handler.
+ * - `git` — `onOpenFile`, so a changed file opens in the editor unit.
+ * - `search` — `onFileClick`, so a result opens in the editor at its line.
  *
  * The `editor` kind takes no props here: the composition renders the
  * assembled editor view for it (see `SproutWorkspace`).
@@ -118,6 +120,8 @@ export function useSproutWorkspaceViewProps(
       chat: chatProps,
       fileTree,
       changes: { onFileClick: editor.onFileClick },
+      git: { onOpenFile: editor.onFileClick },
+      search: { onFileClick: editor.onFileClick },
     };
     if (previewPanel) assembled.previewPanel = previewPanel;
     if (overrides) {

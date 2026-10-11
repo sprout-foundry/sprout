@@ -183,6 +183,11 @@ const ENTRIES = [
       "useEscalationTriggers",
       "EscalationTriggerEvent",
       "UseEscalationTriggersOptions",
+      "WorkspaceGitView",
+      "WorkspaceGitViewProps",
+      "WorkspaceGitPanelProps",
+      "WorkspaceSearchView",
+      "WorkspaceSearchViewProps",
     ],
   },
   {

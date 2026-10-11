@@ -11,6 +11,20 @@ export type { WsEvent };
 type EventCallback = (event: WsEvent) => void;
 
 /**
+ * Whether the agent runs in the page, and how far it has started.
+ *
+ * - `none`: the agent is behind the socket (a daemon or the platform), so the
+ *   socket's state is the connection state.
+ * - `starting`: the in-browser agent is being wired (its adapter is not
+ *   installed yet), so nothing is reachable: not connected, whatever the
+ *   socket does.
+ * - `ready`: the in-browser agent is wired. Its calls are answered by the
+ *   installed adapter and its events are delivered in the page, so the
+ *   workspace is connected whether or not an events socket is open.
+ */
+export type LocalAgentState = 'none' | 'starting' | 'ready';
+
+/**
  * Event types excluded from the sprout:wsevent DOM bridge. These arrive at
  * token/byte-level frequency; every DOM-bridge consumer only cares about
  * lifecycle events, so dispatching them to `window` was pure overhead —
@@ -47,6 +61,7 @@ class WebSocketService {
   private activeChatId: string | null = null;
   private chatSeq = new Map<string, number>();
   private connecting = false;
+  private localAgent: LocalAgentState = 'none';
 
   private constructor() {
     // A real tab close / navigation fires `pagehide` (a background does not).
@@ -281,7 +296,7 @@ class WebSocketService {
         this.onReconnectCallback();
       }
 
-      this.notifyCallbacks({
+      this.notifySocketStatus({
         type: 'connection_status',
         data: { connected: true, reconnected: isReconnect, queuedMessageCount: this.pendingQueue.length },
       });
@@ -293,7 +308,7 @@ class WebSocketService {
       this.stopPingInterval();
       this.stopPongWatchdog();
       const willReconnect = !this.intentionalClose && this.reconnectAttempts < this.maxReconnectAttempts;
-      this.notifyCallbacks({
+      this.notifySocketStatus({
         type: 'connection_status',
         data: { connected: false, reconnecting: willReconnect, queuedMessageCount: this.pendingQueue.length },
       });
@@ -318,7 +333,9 @@ class WebSocketService {
       this.connecting = false;
       // Only notify on the very first connection error. Don't spam toasts during
       // reconnect cycles — onerror can fire transiently and up to 30 times.
-      if (!this.wasConnectedBefore) {
+      // When the agent runs in the page, the socket is optional (the host may
+      // serve none), so its failure is not a connection error worth a toast.
+      if (!this.wasConnectedBefore && this.localAgent === 'none') {
         notificationBus.notify('error', 'Connection Error', 'WebSocket error: ' + String(error));
       }
       // Note: onerror does not necessarily mean the connection is dead.
@@ -513,6 +530,32 @@ class WebSocketService {
     this.notifyCallbacks(event);
   }
 
+  /**
+   * Record how far the in-browser agent has started (see
+   * {@link LocalAgentState}) and tell listeners when that changes whether the
+   * workspace is connected. A daemon-backed workspace never calls this, so its
+   * connection state stays the socket's.
+   */
+  setLocalAgentState(state: LocalAgentState): void {
+    if (state === this.localAgent) return;
+    const wasConnected = this.isConnected();
+    this.localAgent = state;
+    const connected = this.isConnected();
+    if (connected !== wasConnected) {
+      this.notifyCallbacks({ type: 'connection_status', data: { connected } });
+    }
+  }
+
+  /**
+   * Report a socket open/close, unless the agent runs in the page: then the
+   * connection state follows the agent (setLocalAgentState), and an events
+   * socket coming or going does not change whether the agent is reachable.
+   */
+  private notifySocketStatus(event: WsEvent): void {
+    if (this.localAgent !== 'none') return;
+    this.notifyCallbacks(event);
+  }
+
   private notifyCallbacks(event: WsEvent) {
     this.callbacks.forEach((callback) => callback(event));
     // Bridge server events onto the DOM so decoupled components
@@ -558,6 +601,7 @@ class WebSocketService {
   }
 
   isConnected(): boolean {
+    if (this.localAgent !== 'none') return this.localAgent === 'ready';
     return this.ws !== null && this.ws.readyState === WebSocket.OPEN;
   }
 

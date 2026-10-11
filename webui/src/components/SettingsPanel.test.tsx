@@ -196,7 +196,10 @@ afterEach(() => {
   container?.remove();
 });
 
-function renderPanel(extraProps?: Record<string, unknown>, host: SproutHost = makeTestHost({ localTerminal: true })) {
+function renderPanel(
+  extraProps?: Record<string, unknown>,
+  host: SproutHost = makeTestHost({ localTerminal: true, mcp: true, localModels: true }),
+) {
   const baseProps = {
     settings: null,
     onSettingsChanged: vi.fn(),
@@ -485,7 +488,7 @@ describe('filter bar', () => {
 // subagents tab is the cleanest flip signal.
 describe('host capability flips the local-only subsection filtering', () => {
   it('local terminal: all 5 sections render and the agent subagents tab is visible', () => {
-    renderPanel({}, makeTestHost({ localTerminal: true }));
+    renderPanel({}, makeTestHost({ localTerminal: true, mcp: true, localModels: true }));
 
     expect(container.querySelectorAll('.settings-section')).toHaveLength(5);
     expect(container.querySelector('[data-testid="settings-agent-subagents-tab"]')).not.toBeNull();
@@ -501,5 +504,33 @@ describe('host capability flips the local-only subsection filtering', () => {
     expect(container.querySelector('[data-testid="settings-agent-subagents-tab"]')).toBeNull();
     expect(container.querySelector('[data-testid="settings-agent-skills-tab"]')).toBeNull();
     expect(container.querySelector('[data-testid="settings-agent-general-tab"]')).not.toBeNull();
+  });
+});
+
+// The MCP Servers and Local LLM subsections follow their own capability flags
+// (`mcp`, `localModels`), independent of the local terminal.
+describe('host capabilities gate the MCP and local-model subsections', () => {
+  const mcpTab = '[data-testid="settings-workspace-mcp-tab"]';
+  const localLLMTab = '[data-testid="settings-env-local-llm-tab"]';
+  const expandAllSectionsOnOpen = () =>
+    localStorage.setItem(
+      'sprout.settingsPanel.state.v1',
+      JSON.stringify({ expanded: ['agent', 'workspace', 'environment', 'editor', 'experimental'] }),
+    );
+
+  it('hides both when the host declares neither, even with a local terminal', () => {
+    expandAllSectionsOnOpen();
+    renderPanel({}, makeTestHost({ localTerminal: true, mcp: false, localModels: false }));
+    expect(container.querySelector(mcpTab)).toBeNull();
+    expect(container.querySelector(localLLMTab)).toBeNull();
+    expect(container.querySelector('[data-testid="settings-workspace-lsp-tab"]')).not.toBeNull();
+  });
+
+  it('shows both when the host declares them without a local terminal', () => {
+    expandAllSectionsOnOpen();
+    renderPanel({}, makeTestHost({ localTerminal: false, mcp: true, localModels: true }));
+    expect(container.querySelector(mcpTab)).not.toBeNull();
+    expect(container.querySelector(localLLMTab)).not.toBeNull();
+    expect(container.querySelector('[data-testid="settings-workspace-lsp-tab"]')).toBeNull();
   });
 });

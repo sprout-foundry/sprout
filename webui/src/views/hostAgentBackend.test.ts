@@ -14,7 +14,8 @@ import type { APIAdapter } from '../services/apiAdapter';
 import { headlessHost } from '../host/HostProvider';
 import type { SproutHost } from '../host';
 import { WebSocketService } from '../services/websocket';
-import { wireHostAgentBackend } from './hostAgentBackend';
+import { __resetStartupRepoImportForTests, importStartupRepo } from '../services/startupRepoImport';
+import { resetHostAgentBackend, wireHostAgentBackend } from './hostAgentBackend';
 
 const setAgentEventDispatcher = vi.fn();
 vi.mock('../services/cloudWasmHandlers', () => ({
@@ -62,13 +63,18 @@ function daemonHost(): SproutHost {
   };
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   installAdapter(NOOP_ADAPTER);
   setAgentEventDispatcher.mockClear();
+  // Wiring a wasm host with a repo imports it; keep that off the network.
+  const { CloudAdapter } = await import('../services/cloudAdapter');
+  vi.spyOn(CloudAdapter.prototype, 'restoreRepo').mockResolvedValue({ success: true });
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
+  resetHostAgentBackend();
+  __resetStartupRepoImportForTests();
 });
 
 describe('wireHostAgentBackend', () => {
@@ -137,5 +143,76 @@ describe('wireHostAgentBackend', () => {
     wireHostAgentBackend(wasmHost(), undefined);
     await vi.waitFor(() => expect(setAgentEventDispatcher).toHaveBeenCalled());
     expect(setAgentEventDispatcher).not.toHaveBeenCalledWith(null);
+  });
+
+  it('reports a wasm backend connected only once its adapter is installed', async () => {
+    const events = WebSocketService.getInstance();
+    const statuses: unknown[] = [];
+    const listener = (event: { type: string; data?: unknown }) => {
+      if (event.type === 'connection_status') statuses.push(event.data);
+    };
+    events.onEvent(listener);
+    const { CloudAdapter } = await import('../services/cloudAdapter');
+
+    const wired = wireHostAgentBackend(wasmHost(), undefined);
+    // Still installing: not connected, and the adapter is not in place yet.
+    expect(events.isConnected()).toBe(false);
+    expect(getAdapter()).toBe(NOOP_ADAPTER);
+
+    await wired;
+    expect(getAdapter()).toBeInstanceOf(CloudAdapter);
+    expect(events.isConnected()).toBe(true);
+    expect(statuses).toEqual([{ connected: true }]);
+    events.removeEvent(listener);
+  });
+
+  it('leaves a daemon backend on the socket state (never reported connected without one)', async () => {
+    const events = WebSocketService.getInstance();
+    events.setLocalAgentState('ready');
+
+    await wireHostAgentBackend(daemonHost(), undefined);
+
+    expect(events.isConnected()).toBe(false);
+  });
+
+  it("imports the host project's repo once the adapter is installed, once per repo", async () => {
+    const { CloudAdapter } = await import('../services/cloudAdapter');
+    const restore = vi.spyOn(CloudAdapter.prototype, 'restoreRepo').mockResolvedValue({ success: true });
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    await wireHostAgentBackend(wasmHost(), 'https://github.com/acme/widgets');
+    // A re-mount (or a reconnect re-running the wiring) does not import again.
+    await wireHostAgentBackend(wasmHost(), 'https://github.com/acme/widgets');
+
+    expect(restore).toHaveBeenCalledTimes(1);
+    expect(restore).toHaveBeenCalledWith('https://github.com/acme/widgets');
+  });
+
+  it("keeps the bootstrap's startup repo from importing over the host project's", async () => {
+    const { CloudAdapter } = await import('../services/cloudAdapter');
+    vi.spyOn(CloudAdapter.prototype, 'restoreRepo').mockResolvedValue({ success: true });
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const bootstrapAdapter = { restoreRepo: vi.fn() };
+
+    const wired = wireHostAgentBackend(wasmHost(), 'https://github.com/acme/widgets');
+    // The bootstrap install lands while the composition's is still in flight.
+    expect(importStartupRepo(bootstrapAdapter, 'https://github.com/other/deep-link', 'bootstrap')).toBeNull();
+    await wired;
+
+    expect(bootstrapAdapter.restoreRepo).not.toHaveBeenCalled();
+  });
+
+  it('releases the state on reset, so the next mount starts clean', async () => {
+    const events = WebSocketService.getInstance();
+    await wireHostAgentBackend(wasmHost(), 'https://github.com/acme/widgets');
+    expect(events.isConnected()).toBe(true);
+
+    resetHostAgentBackend();
+
+    expect(events.isConnected()).toBe(false);
+    const bootstrapAdapter = { restoreRepo: vi.fn().mockResolvedValue({ success: true }) };
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await importStartupRepo(bootstrapAdapter, 'https://github.com/other/deep-link', 'bootstrap');
+    expect(bootstrapAdapter.restoreRepo).toHaveBeenCalledTimes(1);
   });
 });

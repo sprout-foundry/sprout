@@ -16,13 +16,16 @@
  */
 
 import type { EventsProvider } from '@sprout/events';
+import type { ChatProps } from '@sprout/ui';
 import { useMemo } from 'react';
+import type { PreviewPanelProps } from '../components/PreviewPanel';
 import { clientFetch } from '../services/clientSession';
 import { LocalEventsProvider } from '../services/localEventsProvider';
 import type { AppState } from '../types/app';
 import type { ViewKind } from './ViewsLayout';
 import { useWorkspaceFileTree } from './useWorkspaceFileTree';
 import { createEmptyChatState, useWorkspaceChatProps } from './WorkspaceChatContext';
+import type { WorkspaceChatViewProps } from './WorkspaceChatContext';
 import { useWorkspaceEditorProps } from './WorkspaceEditorContext';
 
 /** The transport + fetch the chat unit and the provider stack share. */
@@ -55,28 +58,55 @@ export function useSproutWorkspaceChatTransport({
 }
 
 /**
+ * The chat unit's view props with the host's `chatOverrides` merged over the
+ * assembled chat props. The overrides are the host's own callbacks and
+ * values (the model picker, session restore, fork, …) that the unit does not
+ * own; anything they set wins over the unit's value for that prop.
+ */
+export function useSproutWorkspaceChatViewProps(chatOverrides?: Partial<ChatProps>): WorkspaceChatViewProps {
+  const { chatProps, reviewProps, diffState } = useWorkspaceChatProps();
+  const merged = useMemo(
+    () => (chatOverrides ? { ...chatProps, ...chatOverrides } : chatProps),
+    [chatProps, chatOverrides],
+  );
+  return useMemo(() => ({ chatProps: merged, reviewProps, diffState }), [merged, reviewProps, diffState]);
+}
+
+/** What the composition assembles beyond the units' own props. */
+export interface SproutWorkspaceViewAssembly {
+  /** Merged over the assembled chat props (see `useSproutWorkspaceChatViewProps`). */
+  chatOverrides?: Partial<ChatProps>;
+  /** The preview panel's open state and close handler, owned by the composition. */
+  previewPanel?: PreviewPanelProps;
+}
+
+/**
  * Assemble the layout's per-kind props from the chat and editor units and the
  * host's overrides. Runs inside the `WorkspaceChatProvider` and
  * `WorkspaceEditorProvider` the units need: both are mounted around the
  * layout, and this reads their state below them. A kind the host supplies
  * replaces the assembled props for that kind, so a host composing its own
- * surface is not fighting the unit's.
+ * surface is not fighting the unit's — except `previewPanel`, whose host
+ * props are merged over the assembled `open`/`onClose`, so a host can pass
+ * just `open` to drive it.
  *
- * - `chat` — the chat unit's view props.
+ * - `chat` — the chat unit's view props, with `chatOverrides` merged over.
  * - `fileTree` — the workspace file API (`useWorkspaceFileTree`), with
  *   selection wired to the editor unit: picking a file opens it, and the
  *   active file is the selected one.
  * - `changes` — `onFileClick`, so a changed file opens in the editor. The
  *   panel still fetches its own session changes (when the host declares
  *   `capabilities.agentChanges`).
+ * - `previewPanel` — the composition's open state and close handler.
  *
  * The `editor` kind takes no props here: the composition renders the
  * assembled editor view for it (see `SproutWorkspace`).
  */
 export function useSproutWorkspaceViewProps(
   overrides?: Partial<Record<ViewKind, object>>,
+  { chatOverrides, previewPanel }: SproutWorkspaceViewAssembly = {},
 ): Partial<Record<ViewKind, object>> {
-  const { chatProps } = useWorkspaceChatProps();
+  const { chatProps } = useSproutWorkspaceChatViewProps(chatOverrides);
   const editor = useWorkspaceEditorProps();
   const fileTree = useWorkspaceFileTree({
     onFileSelect: editor.fileTree.onFileSelect,
@@ -89,11 +119,13 @@ export function useSproutWorkspaceViewProps(
       fileTree,
       changes: { onFileClick: editor.onFileClick },
     };
+    if (previewPanel) assembled.previewPanel = previewPanel;
     if (overrides) {
       for (const kind of Object.keys(overrides) as ViewKind[]) {
-        assembled[kind] = overrides[kind];
+        assembled[kind] =
+          kind === 'previewPanel' ? { ...assembled.previewPanel, ...overrides.previewPanel } : overrides[kind];
       }
     }
     return assembled;
-  }, [chatProps, fileTree, editor.onFileClick, overrides]);
+  }, [chatProps, fileTree, editor.onFileClick, previewPanel, overrides]);
 }

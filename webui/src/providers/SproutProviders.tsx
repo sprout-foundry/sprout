@@ -1,6 +1,6 @@
 import { EventsContextProvider } from '@sprout/events';
 import type { EventsProvider } from '@sprout/events';
-import { useCallback, useSyncExternalStore, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { EditorManagerProvider } from '../contexts/EditorManagerContext';
 import { HotkeyProvider } from '../contexts/HotkeyContext';
 import { NotificationProvider, type NotificationSink } from '../contexts/NotificationContext';
@@ -38,8 +38,10 @@ import { WasmAssetsProvider } from '../contexts/WasmAssetsContext';
  *   created once and never replaced, so the provider identity stays stable
  *   across re-renders.
  * - `isConnected` — the connection state `ProviderCatalogProvider` fetches
- *   its catalog against, defaulting to the default transport's own state (and
- *   to `false` when a transport is supplied without one).
+ *   its catalog against. Omitted, the wrapper tracks the events transport's
+ *   own state: it subscribes to the transport's `connection_status` events, so
+ *   the catalog loads once the transport opens rather than reading the state
+ *   once at mount (before `connect()` has run).
  */
 export interface SproutProvidersProps {
   /** The events transport every view under the wrapper reads. */
@@ -115,6 +117,29 @@ function useDefaultEventsProvider(): EventsProvider | null {
 }
 
 /**
+ * The transport's connection state, kept current. `EventsProvider` has no
+ * dedicated connection listener; the transport announces open and close as
+ * `connection_status` events on its ordinary event stream (the WebSocket
+ * service emits one on every open and close, initial connect included), so
+ * the state is re-read from `isConnected()` whenever one arrives. Reading the
+ * transport rather than the event payload keeps per-client status events
+ * (which carry another client's id) from flipping the state.
+ */
+function useTransportConnected(events: EventsProvider | null): boolean {
+  const [connected, setConnected] = useState(() => events?.isConnected() ?? false);
+  useEffect(() => {
+    if (!events) return;
+    setConnected(events.isConnected());
+    const handle = (event: { type: string }) => {
+      if (event.type === 'connection_status') setConnected(events.isConnected());
+    };
+    events.onEvent(handle);
+    return () => events.removeEvent(handle);
+  }, [events]);
+  return connected;
+}
+
+/**
  * The wrapper itself. Nests the provider stack around `children` in the app
  * root's order and renders its children unchanged. Until a lazily loaded
  * default transport is present nothing renders: a view must never mount
@@ -152,10 +177,11 @@ export function SproutProviders({
   }, []);
 
   const sink = sinkProp ?? defaultSink;
+  const transportConnected = useTransportConnected(events);
 
   if (!events) return <></>;
 
-  const connected = isConnected ?? events.isConnected();
+  const connected = isConnected ?? transportConnected;
 
   return (
     <NotificationProvider sink={sink}>

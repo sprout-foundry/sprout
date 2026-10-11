@@ -56,7 +56,7 @@ export default function SidebarGitSection({
   onSectionChange,
 }: SidebarGitSectionProps): JSX.Element {
   const [gitSubTab, setGitSubTab] = useState<GitSubTab>('changes');
-  const { localTerminal } = useHostCapabilities();
+  const { serverGit } = useHostCapabilities();
 
   // Auto-switch to git tab and changes sub-tab when currentView === 'git'
   useEffect(() => {
@@ -119,10 +119,10 @@ export default function SidebarGitSection({
           <History size={14} />
           <span>History</span>
         </button>
-        {/* Worktrees are extra checkouts on the host's disk; the browser's
-            in-memory git has no such disk and the platform serves no
-            worktree API, so the hosted editor doesn't offer the tab. */}
-        {localTerminal && (
+        {/* Worktrees are extra checkouts on the server's disk, served by
+            server-side git; the browser's in-memory git has no such disk, so
+            a host without server git doesn't offer the tab. */}
+        {serverGit && (
           <button
             type="button"
             role="tab"
@@ -173,7 +173,7 @@ export default function SidebarGitSection({
       )}
 
       {/* Worktrees sub-tab: WorktreePanel */}
-      {localTerminal && gitSubTab === 'worktrees' && (
+      {serverGit && gitSubTab === 'worktrees' && (
         <div id="git-panel-worktrees" role="tabpanel" aria-labelledby="git-tab-worktrees" className="git-subtab-panel">
           <WorktreePanel onClose={() => setGitSubTab('changes')} />
         </div>

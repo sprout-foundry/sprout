@@ -36,7 +36,7 @@ vi.mock('../components/AgentChangesPanel', () => ({
     </button>
   ),
 }));
-vi.mock('./hostAgentBackend', () => ({ wireHostAgentBackend: vi.fn() }));
+vi.mock('./hostAgentBackend', () => ({ wireHostAgentBackend: vi.fn(), resetHostAgentBackend: vi.fn() }));
 vi.mock('../services/apiFileCheck', () => ({ checkFilesModified: vi.fn().mockResolvedValue({ modified: [] }) }));
 vi.mock('../services/api', () => {
   const instance = {

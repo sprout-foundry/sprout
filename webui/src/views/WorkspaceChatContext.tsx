@@ -134,6 +134,14 @@ export interface WorkspaceChatProviderProps {
    * session calls reach its backend.
    */
   fetchFn?: typeof fetch;
+  /**
+   * Load the chat session list (and the active chat's transcript) each time
+   * the events transport connects. A composition that has no startup sequence
+   * of its own sets this so the session list is not empty at start; the app
+   * leaves it off because its initialization loads the list itself, ordered
+   * against its boot-time chat restore.
+   */
+  loadSessionsOnConnect?: boolean;
   children: ReactNode;
 }
 
@@ -152,12 +160,17 @@ export function WorkspaceChatProvider({
   initialState,
   eventsProvider,
   fetchFn = clientFetch,
+  loadSessionsOnConnect = false,
   children,
 }: WorkspaceChatProviderProps): JSX.Element {
   const store = useMemo(() => createAppStore(initialState), [initialState]);
   return (
     <AppStoreProvider store={store}>
-      <WorkspaceChatRuntime eventsProvider={eventsProvider} fetchFn={fetchFn}>
+      <WorkspaceChatRuntime
+        eventsProvider={eventsProvider}
+        fetchFn={fetchFn}
+        loadSessionsOnConnect={loadSessionsOnConnect}
+      >
         {children}
       </WorkspaceChatRuntime>
     </AppStoreProvider>
@@ -172,10 +185,12 @@ export function WorkspaceChatProvider({
 function WorkspaceChatRuntime({
   eventsProvider,
   fetchFn,
+  loadSessionsOnConnect,
   children,
 }: {
   eventsProvider: EventsProvider;
   fetchFn: typeof fetch;
+  loadSessionsOnConnect: boolean;
   children: ReactNode;
 }): JSX.Element {
   const state = useAppStoreState();
@@ -251,6 +266,15 @@ function WorkspaceChatRuntime({
   // subscription so an embedding needs only to hand over its provider; the
   // app's initialization hook does not register it again.
   useSubscribeEvents(eventsProvider, handleEvent, handleReconnect);
+
+  // The session calls need the backend, so the list loads once the transport
+  // reports connected, and again after a reconnect, when the list may have
+  // changed while the stream was down.
+  const { loadChatSessions } = chat;
+  useEffect(() => {
+    if (!loadSessionsOnConnect || !state.isConnected) return;
+    void loadChatSessions();
+  }, [loadSessionsOnConnect, state.isConnected, loadChatSessions]);
 
   const value = useMemo<WorkspaceChatValue>(
     () => ({

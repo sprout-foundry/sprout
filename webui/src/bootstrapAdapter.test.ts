@@ -271,6 +271,32 @@ describe('bootstrapAdapter', () => {
       expect(getAdapter()?.name).toBe('foundry-cloud');
     });
 
+    it("routes through the host's transport URLs, not the bootstrap's", async () => {
+      // The page's /api/bootstrap names the server the page came from; the
+      // embedding host's transport is where its calls belong.
+      const { setActiveHost } = await import('./host/accessor');
+      const { headlessHost } = await import('./host/HostProvider');
+      setActiveHost({
+        ...headlessHost(),
+        transport: {
+          apiBaseURL: 'https://api.host.test',
+          wsURL: 'wss://api.host.test/ws',
+          authMode: 'none',
+          agent: { kind: 'wasm', modelEndpoint: '' },
+        },
+      });
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          json: async () => ({ apiBaseURL: 'https://page-origin.test', wsURL: 'wss://page-origin.test/ws' }),
+        }),
+      );
+      await importWithBootstrap();
+
+      const { getAdapter } = await import('./services/apiAdapter');
+      expect(getAdapter()?.getWebSocketURL?.()).toBe('wss://api.host.test/ws');
+    });
+
     it('does not install an adapter for a daemon backend host', async () => {
       vi.resetModules();
       const { setActiveHost } = await import('./host/accessor');

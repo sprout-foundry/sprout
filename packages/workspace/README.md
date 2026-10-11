@@ -16,11 +16,28 @@ Two parts are exported:
 
 ## Status
 
-Scaffold. The package builds today (ESM, code-split, type declarations, the
-scoped stylesheet) and re-exports the two public entry points of the web UI
-(`webui/src/views/index.ts` and `webui/src/host/index.ts`). The
-`SproutWorkspace` component and `SproutProviders` land in the following steps
-of the composition work.
+Published and in use. Three entry points: `.` (the host contract),
+`./views` (`SproutWorkspace`, the space registry, the individual views, the
+chat and editor units) and `./providers` (`SproutProviders`). The minimal
+mount is `SproutWorkspace` with a `project`, a `space` and a `host`; in its
+default own mode it builds the provider stack itself, so the host does not
+wrap it:
+
+```tsx
+import "@sprout-foundry/workspace/styles.css";
+import { SproutWorkspace } from "@sprout-foundry/workspace/views";
+
+<SproutWorkspace
+  project={{ id: repoUrl, repoUrl }}
+  space="code"
+  host={myHost}
+/>;
+```
+
+The integration guide (`docs/integration/workspace-package.md` in the Sprout
+repository) covers layouts, the chat and editor units, escalation, styles and
+the WASM assets; `docs/integration/host-contract.md` covers the `SproutHost`
+a host provides.
 
 ## Styles
 

@@ -1310,3 +1310,85 @@ describe('WebSocketService - deliverLocal', () => {
     ws.removeEvent(second);
   });
 });
+
+describe('WebSocketService - in-browser agent connection state', () => {
+  function statusEvents(ws: WebSocketService): unknown[] {
+    const seen: unknown[] = [];
+    ws.onEvent((event) => {
+      if (event.type === 'connection_status') seen.push(event.data);
+    });
+    return seen;
+  }
+
+  it('is connected once the in-browser agent is ready, with no socket open', () => {
+    const ws = WebSocketService.getInstance();
+    const seen = statusEvents(ws);
+
+    ws.setLocalAgentState('starting');
+    expect(ws.isConnected()).toBe(false);
+    expect(seen).toEqual([]);
+
+    ws.setLocalAgentState('ready');
+    expect(ws.isConnected()).toBe(true);
+    expect(seen).toEqual([{ connected: true }]);
+  });
+
+  it('does not report connected while the agent is starting, even if the socket opens', async () => {
+    const ws = WebSocketService.getInstance();
+    const seen = statusEvents(ws);
+    ws.setLocalAgentState('starting');
+
+    ws.connect();
+    mockReadyState = MockWebSocket.OPEN;
+    await triggerWebSocketOpen();
+
+    expect(ws.isConnected()).toBe(false);
+    expect(seen).toEqual([]);
+  });
+
+  it('stays connected when the events socket closes while the agent is ready', () => {
+    const ws = WebSocketService.getInstance();
+    ws.setLocalAgentState('ready');
+    const seen = statusEvents(ws);
+
+    ws.connect();
+    mockReadyState = MockWebSocket.CLOSED;
+    triggerWebSocketClose({ code: 1006, reason: 'Abnormal closure' });
+
+    expect(ws.isConnected()).toBe(true);
+    expect(seen).toEqual([]);
+  });
+
+  it.each(['starting', 'ready'] as const)(
+    'shows no connection-error toast when the socket fails (agent %s)',
+    (state) => {
+      const ws = WebSocketService.getInstance();
+      ws.setLocalAgentState(state);
+
+      ws.connect();
+      triggerWebSocketError(new Event('error'));
+
+      expect(notificationBus.notify).not.toHaveBeenCalled();
+    },
+  );
+
+  it('still shows the connection-error toast for a socket-backed agent', () => {
+    const ws = WebSocketService.getInstance();
+
+    ws.connect();
+    triggerWebSocketError(new Event('error'));
+
+    expect(notificationBus.notify).toHaveBeenCalledWith('error', 'Connection Error', expect.any(String));
+  });
+
+  it('returns to the socket state when the agent is no longer in the page', () => {
+    const ws = WebSocketService.getInstance();
+    ws.setLocalAgentState('ready');
+    const seen = statusEvents(ws);
+
+    ws.setLocalAgentState('none');
+
+    expect(ws.isConnected()).toBe(false);
+    expect(seen).toEqual([{ connected: false }]);
+  });
+});

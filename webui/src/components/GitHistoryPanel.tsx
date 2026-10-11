@@ -6,6 +6,7 @@ import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
 import { formatRelativeDate, formatAbsoluteDate, firstLine } from '../utils/format';
 import { debugLog } from '../utils/log';
 import CommitDetailPanel from './CommitDetailPanel';
+import { transportUsesBrowserGit } from './git/browserGitHost';
 import GitHistoryContextMenu from './GitHistoryContextMenu';
 import './GitHistoryPanel.css';
 
@@ -49,10 +50,8 @@ function GitHistoryPanel({
   isActing,
   openWorkspaceBuffer,
 }: GitHistoryPanelProps): JSX.Element {
-  // host.8: the hosted build runs browser git, which cannot revert; the
-  // hosted transport authenticates against a platform (authMode 'bearer') —
-  // the former isCloud branch.
-  const browserGit = useHost().transport.authMode === 'bearer';
+  // Browser git cannot revert.
+  const browserGit = transportUsesBrowserGit(useHost().transport);
   const [commits, setCommits] = useState<GitCommitSummary[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);

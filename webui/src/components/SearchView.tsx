@@ -17,7 +17,7 @@ import { useSearchState } from './search/useSearchState';
  * Composition root that wires the search state hook, result renderers, and
  * context menu together.
  */
-function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
+function SearchView({ onFileClick, autoFocus = true }: SearchViewProps): JSX.Element {
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const state = useSearchState(onFileClick, searchInputRef);
@@ -40,8 +40,8 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
 
   // ── Focus search input on mount ──────────────────────────────
   useEffect(() => {
-    searchInputRef.current?.focus();
-  }, []);
+    if (autoFocus) searchInputRef.current?.focus();
+  }, [autoFocus]);
 
   // ── Destructure state for readability ────────────────────────
   const {

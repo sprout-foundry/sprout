@@ -5,6 +5,7 @@ import { MAX_FILES_INITIAL, LOAD_MORE_INCREMENT } from '../constants/git-constan
 import { BROWSER_GIT_UNSUPPORTED_OPS } from '../services/browserGit';
 import type { FileSection, GitBranchesState, GitFile, GitStatusData } from '../types/git-types';
 import { parseSelectionKey } from '../types/git-types';
+import { transportUsesBrowserGit } from './git/browserGitHost';
 import GitCommitBox from './git/GitCommitBox';
 import GitContextMenu from './git/GitContextMenu';
 import GitFileSections from './git/GitFileSections';
@@ -16,13 +17,11 @@ import { showThemedPrompt } from './ThemedDialog';
 const BROWSER_UNSUPPORTED_TOOLTIP = 'Not available in browser mode';
 
 /**
- * Whether the active host serves git from the browser (the hosted build's
- * WASM/browser git) rather than from a local daemon. host.8: this replaces the
- * former isCloud read with the host contract — the hosted transport
- * authenticates against a platform (authMode 'bearer').
+ * Whether the active host serves git from the browser (WASM/browser git)
+ * rather than from a backend.
  */
 function hostUsesBrowserGit(): boolean {
-  return getActiveHost()?.transport.authMode === 'bearer';
+  return transportUsesBrowserGit(getActiveHost()?.transport);
 }
 
 /**
@@ -54,7 +53,8 @@ export interface GitSidebarPanelProps {
   onCommitMessageChange: (value: string) => void;
   onGenerateCommitMessage: () => void;
   onCommit: () => void;
-  onRunReview: () => void;
+  /** Runs the deep review; omitted, the commit box offers no Review action. */
+  onRunReview?: () => void;
   onCheckoutBranch: (branch: string) => void;
   onCreateBranch: (name: string) => void;
   onPull: () => void;

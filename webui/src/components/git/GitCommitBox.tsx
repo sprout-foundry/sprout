@@ -9,7 +9,7 @@ export interface GitCommitBoxProps {
   onCommitMessageChange: (value: string) => void;
   onGenerateCommitMessage: () => void;
   onCommit: () => void;
-  onRunReview: () => void;
+  onRunReview?: () => void;
 }
 
 function GitCommitBox({
@@ -62,14 +62,16 @@ function GitCommitBox({
         >
           Commit Changes
         </button>
-        <button
-          className="sidebar-action-btn"
-          onClick={onRunReview}
-          disabled={!hasStagedFiles || isReviewLoading || isActing}
-        >
-          <ShieldCheck size={14} />
-          {isReviewLoading ? 'Reviewing…' : 'Review'}
-        </button>
+        {onRunReview && (
+          <button
+            className="sidebar-action-btn"
+            onClick={onRunReview}
+            disabled={!hasStagedFiles || isReviewLoading || isActing}
+          >
+            <ShieldCheck size={14} />
+            {isReviewLoading ? 'Reviewing…' : 'Review'}
+          </button>
+        )}
       </div>
     </div>
   );

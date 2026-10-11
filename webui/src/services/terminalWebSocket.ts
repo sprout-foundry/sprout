@@ -1,9 +1,34 @@
 import type { WsEvent } from '@sprout/events';
+import { getActiveHost } from '../host/accessor';
 import { debugLog, warn } from '../utils/log';
 import { appendClientIdToUrl, getWebUIClientId } from './clientSession';
 import { notificationBus } from './notificationBus';
 
 type TerminalEventCallback = (event: WsEvent) => void;
+
+/**
+ * The PTY WebSocket URL, most specific first: an explicit build-time
+ * VITE_TERMINAL_WS_URL; then `/terminal` under the active host's
+ * `transport.apiBaseURL`, so a host that embeds the workspace reaches the PTY
+ * on the same backend its `/api/terminal/*` calls go to; then the page
+ * origin's `/terminal`, through the SSH proxy base when the page is served
+ * behind the local reverse proxy. An empty `apiBaseURL` is the same-origin
+ * sentinel and falls through.
+ */
+export function resolveTerminalWsUrl(): string {
+  const explicit = import.meta.env.VITE_TERMINAL_WS_URL;
+  if (explicit) return explicit;
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const hostApiBase = (getActiveHost()?.transport.apiBaseURL || '').replace(/\/+$/, '');
+  if (hostApiBase) {
+    if (/^https?:\/\//i.test(hostApiBase)) return `${hostApiBase.replace(/^http/i, 'ws')}/terminal`;
+    if (/^wss?:\/\//i.test(hostApiBase)) return `${hostApiBase}/terminal`;
+    const path = hostApiBase.startsWith('/') ? hostApiBase : `/${hostApiBase}`;
+    return `${protocol}//${window.location.host}${path}/terminal`;
+  }
+  const proxyBase = window.SPROUT_PROXY_BASE || '';
+  return `${protocol}//${window.location.host}${proxyBase}/terminal`;
+}
 
 class TerminalWebSocketService {
   private static instance: TerminalWebSocketService;
@@ -146,16 +171,7 @@ class TerminalWebSocketService {
       this.reconnectTimeout = null;
     }
 
-    // Use environment variable if provided, otherwise use relative URL.
-    // When running via the SSH proxy the SPROUT_PROXY_BASE global is injected
-    // into the page so WebSocket traffic routes through the same origin.
-    let wsUrl =
-      import.meta.env.VITE_TERMINAL_WS_URL ||
-      (() => {
-        const proxyBase = window.SPROUT_PROXY_BASE || '';
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        return `${protocol}//${window.location.host}${proxyBase}/terminal`;
-      })();
+    let wsUrl = resolveTerminalWsUrl();
 
     // Build query parameters for the WebSocket URL.
     // On reconnect with a sessionId, pass it so server can reattach to the

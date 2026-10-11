@@ -12,6 +12,7 @@ import { act, render } from '@testing-library/react';
 import { createElement } from 'react';
 import { HostProvider } from '../host/HostProvider';
 import { makeTestHost } from '../host/testHost';
+import { clientFetch } from '../services/clientSession';
 import {
   ESCALATION_TRIGGER_EVENT,
   hashCommand,
@@ -153,5 +154,41 @@ describe('hashCommand', () => {
     expect(hashCommand('make')).toBe(hashCommand('make'));
     expect(hashCommand('make')).not.toBe(hashCommand('make install'));
     expect(hashCommand('')).toBe(hashCommand(''));
+  });
+});
+
+describe('useEscalationTriggers — git push failures', () => {
+  it('leaves the page fetch alone and ignores requests the workspace did not make', async () => {
+    const pageFetch = window.fetch;
+    vi.mocked(window.fetch).mockImplementation(async () => new Response('nope', { status: 500 }));
+    const { captured } = mountHook();
+
+    expect(window.fetch).toBe(pageFetch);
+    await act(async () => {
+      await window.fetch('/api/git/push', { method: 'POST' });
+    });
+    expect(captured.blocking).toHaveLength(0);
+  });
+
+  it('fires when a workspace push request fails', async () => {
+    vi.mocked(window.fetch).mockImplementation(async (input) =>
+      String(input).includes('/api/git/push') ? new Response('nope', { status: 500 }) : new Response('{}'),
+    );
+    const { captured } = mountHook('https://github.com/acme/app');
+
+    await act(async () => {
+      await clientFetch('/api/git/status');
+    });
+    expect(captured.blocking).toHaveLength(0);
+
+    await act(async () => {
+      await clientFetch('/api/git/push', { method: 'POST' });
+    });
+    expect(captured.blocking).toHaveLength(1);
+    expect(captured.blocking[0]).toMatchObject({
+      id: 'git-push-failure',
+      reason: 'git_push_failed',
+      repoURL: 'https://github.com/acme/app',
+    });
   });
 });

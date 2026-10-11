@@ -485,13 +485,25 @@ The app's command palette (files, symbols, commands) is a workspace unit too.
 **`commandPalette`** is an overlay kind: it renders nothing until opened. It is
 **on by default** in own mode — the default arrangement's `overlay` is
 `["previewPanel", "commandPalette"]`, and the composed space shell (no
-`layout`) always mounts it. An arrangement that supplies its own `overlay`
-without it opts out:
+`layout`) mounts it too. A host with its own palette turns it off with
+`commandPalette={false}`, which removes it from any arrangement (the default
+overlay included) and from the composed shell, so Ctrl/Cmd+Shift+P and the
+header search control stay with the host:
+
+```tsx
+<SproutWorkspace project={project} host={host} commandPalette={false} />
+```
+
+An arrangement that supplies its own `overlay` without it also leaves it out:
 
 ```tsx
 layout={{ center: ["chat"], overlay: ["previewPanel"] }} // no palette
 layout={{ center: ["chat"], overlay: ["commandPalette"] }} // palette, no preview
 ```
+
+Ctrl/Cmd+Shift+P only reaches the palette while focus is inside the
+workspace; elsewhere on the page the browser's own binding applies (in
+Firefox, Ctrl+Shift+P opens a private window).
 
 - **Opening.** Its shortcuts — `command_palette` (Ctrl/Cmd+Shift+P),
   `quick_open` and `editor_goto_symbol`, from the hotkey config — open it

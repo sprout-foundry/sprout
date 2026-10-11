@@ -4,6 +4,8 @@ All notable changes to Sprout will be documented in this file.
 
 ## [Unreleased]
 
+- feat(workspace): `SproutWorkspace` takes `commandPalette={false}` for hosts with their own palette. It removes the palette from any arrangement — the default overlay included — and from the composed space shell, so its shortcut (Ctrl/Cmd+Shift+P inside the workspace) and the header search control stay with the host. The palette remains on by default.
+
 ## [v0.29.0] - 2026-10-11
 
 - fix(webui): with browser git the git panel no longer offers the AI commit-message action, which browser git cannot serve (it failed with an error).

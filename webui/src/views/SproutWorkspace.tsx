@@ -13,7 +13,7 @@ import type { WorkspaceShellProps } from '../workspaces/shell';
 import { resetHostAgentBackend, wireHostAgentBackend } from './hostAgentBackend';
 import { useSproutWorkspaceChatTransport } from './SproutWorkspaceChat';
 import { ArrangedViews, ComposedSpaceShell, usePreviewGatedArrangement } from './SproutWorkspaceUnits';
-import { ViewsLayout } from './ViewsLayout';
+import { ViewsLayout, resolveViewsArrangement } from './ViewsLayout';
 import type { ViewsArrangement, ViewKind } from './ViewsLayout';
 import { WorkspaceChatProvider } from './WorkspaceChatContext';
 import { WorkspaceCommandPalette } from './WorkspaceCommandPalette';
@@ -183,6 +183,16 @@ export interface SproutWorkspaceProps {
    */
   chatOverrides?: Partial<ChatProps>;
   /**
+   * Whether the workspace mounts its command palette (default `true`). The
+   * palette renders nothing until opened — from Ctrl/Cmd+Shift+P while focus
+   * is inside the workspace, or `OPEN_COMMAND_PALETTE_EVENT` — so it costs a
+   * host nothing until used. A host with its own palette passes `false`: the
+   * palette is removed from the arrangement (including the default overlay)
+   * and the composed shell does not mount it, so its shortcut and the header
+   * search button stay with the host.
+   */
+  commandPalette?: boolean;
+  /**
    * Called with the resolved space id whenever the mounted space changes after
    * the initial mount. Not called on the initial mount (there is no change
    * yet). See the component note for the exact contract.
@@ -279,6 +289,7 @@ export function SproutWorkspace({
   chatInitialState,
   chatFetch,
   chatOverrides,
+  commandPalette = true,
   onSpaceChange,
   shellProps,
   hasDesignTree,
@@ -377,7 +388,10 @@ export function SproutWorkspace({
 
   // The ambient host's capabilities gate the arranged preview panel too; own
   // mode gates it inside its own HostProvider (`ArrangedViews`).
-  const ambientLayout = usePreviewGatedArrangement(ambient ? layout : undefined);
+  // A host that opts out of the palette has it removed from the arrangement,
+  // including the default overlay it would otherwise inherit.
+  const arranged = useMemo(() => withoutCommandPalette(layout, commandPalette), [layout, commandPalette]);
+  const ambientLayout = usePreviewGatedArrangement(ambient ? arranged : undefined);
 
   let content: ReactNode;
   if (ambient && layout) {
@@ -394,7 +408,7 @@ export function SproutWorkspace({
       >
         <WorkspaceEditorProvider>
           {layout ? (
-            <ArrangedViews arrangement={layout} viewProps={viewProps} chatOverrides={chatOverrides} />
+            <ArrangedViews arrangement={arranged ?? layout} viewProps={viewProps} chatOverrides={chatOverrides} />
           ) : (
             <>
               <ComposedSpaceShell
@@ -405,8 +419,9 @@ export function SproutWorkspace({
                 workspaceRoot={project.root}
               />
               {/* The layout path mounts the palette through its arrangement
-                  (the default overlay); the composed shell always has it. */}
-              <WorkspaceCommandPalette />
+                  (the default overlay); the composed shell mounts it unless
+                  the host opted out. */}
+              {commandPalette && <WorkspaceCommandPalette />}
             </>
           )}
         </WorkspaceEditorProvider>
@@ -508,3 +523,18 @@ function ResolvedSpaceShell({
 SproutWorkspace.displayName = 'SproutWorkspace';
 
 export default SproutWorkspace;
+
+/**
+ * The arrangement with the command palette removed from every slot when the
+ * host opted out. The arrangement is resolved first so the default overlay —
+ * which includes the palette — is filtered too rather than re-applied.
+ */
+function withoutCommandPalette(layout: ViewsArrangement | undefined, enabled: boolean): ViewsArrangement | undefined {
+  if (enabled || !layout) return layout;
+  const resolved = resolveViewsArrangement(layout);
+  const out: ViewsArrangement = {};
+  for (const [slot, kinds] of Object.entries(resolved) as [keyof ViewsArrangement, ViewKind[] | undefined][]) {
+    if (kinds) out[slot] = kinds.filter((kind) => kind !== 'commandPalette');
+  }
+  return out;
+}

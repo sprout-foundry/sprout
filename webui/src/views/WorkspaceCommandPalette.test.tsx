@@ -215,4 +215,18 @@ describe('WorkspaceCommandPalette in an own-mode workspace', () => {
     });
     expect(palette()).toBeNull();
   });
+
+  it('is left out when the host passes commandPalette={false}, default overlay included', async () => {
+    // CHAT_ONLY supplies no overlay, so without the opt-out the default overlay
+    // would mount the palette.
+    render(<Page commandPalette={false} />);
+    await screen.findByTestId('palette-test-chat');
+    expect(screen.queryByTestId('header-search')).toBeNull();
+    fireEvent.keyDown(screen.getByTestId('palette-test-chat'), PALETTE_SHORTCUT);
+    expect(palette()).toBeNull();
+    act(() => {
+      window.dispatchEvent(new Event(OPEN_COMMAND_PALETTE_EVENT));
+    });
+    expect(palette()).toBeNull();
+  });
 });

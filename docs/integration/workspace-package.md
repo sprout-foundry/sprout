@@ -367,6 +367,13 @@ the unavailable state), `unavailableMessage` (replaces the default text) and
 that is the host's CSS. `WorkspaceTerminalView` is exported for hosts that
 place it themselves under the provider stack.
 
+Without a `layout`, the composed space shell picks its terminal by the same
+rule: an in-browser-agent host keeps the Code shell's in-browser terminal, and
+a `localTerminal` host gets the PTY terminal docked at the bottom of the page,
+as in the standalone app. Either is hidden until opened — Ctrl+` inside the
+workspace, or Toggle Terminal in the command palette — and a host with
+neither gets no terminal and no toggle.
+
 ## Command palette
 
 The app's command palette (files, symbols, commands) is a workspace unit too.

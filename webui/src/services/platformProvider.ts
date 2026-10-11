@@ -47,14 +47,58 @@ export function resetManagedContextWindow(): void {
   reportedVision = undefined;
 }
 
-export function platformProviderConfig(apiOrigin: string, contextWindow: number | undefined, modelEndpoint?: string) {
+/**
+ * Thrown when the host's model endpoint cannot be turned into an absolute
+ * http(s) URL. The provider config normalizer accepts only absolute URLs, and
+ * a config it rejects leaves the provider unregistered, so the turn surfaces
+ * this message instead.
+ */
+export class ModelEndpointError extends Error {
+  constructor(endpoint: string) {
+    super(
+      `The host's model endpoint "${endpoint}" is not usable: expected an absolute http(s) URL or a path such as "/proxy/chat".`,
+    );
+    this.name = 'ModelEndpointError';
+  }
+}
+
+/**
+ * Resolve a host model endpoint to an absolute URL. An absolute http(s) URL is
+ * used as given; a relative one (a host may pass a path such as
+ * `/proxy/chat`) is resolved against `base`, the host's API base URL (or the
+ * page origin). Anything else throws a `ModelEndpointError`.
+ */
+export function resolveModelEndpoint(endpoint: string, base: string): string {
+  const raw = endpoint.trim();
+  let url: URL;
+  try {
+    if (!raw || /\s/.test(raw)) throw new Error('blank or contains whitespace');
+    url = new URL(raw, base);
+  } catch {
+    throw new ModelEndpointError(endpoint);
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new ModelEndpointError(endpoint);
+  return url.toString();
+}
+
+/**
+ * The in-browser agent's provider config. With no host `modelEndpoint` the
+ * managed model is reached through the platform proxy at `apiOrigin`; a
+ * relative host endpoint resolves against `endpointBase` (the host's API base,
+ * defaulting to `apiOrigin`). Throws a `ModelEndpointError` for an endpoint
+ * that cannot be made absolute.
+ */
+export function platformProviderConfig(
+  apiOrigin: string,
+  contextWindow: number | undefined,
+  modelEndpoint?: string,
+  endpointBase: string = apiOrigin,
+) {
   return {
     name: 'platform',
     // Must be an absolute URL: the provider config normalizer rejects
-    // relative ones. A host that supplies its own endpoint (the agent backend's
-    // model endpoint) overrides the platform proxy path; absent, the managed
-    // model is reached through the platform's own proxy.
-    endpoint: modelEndpoint || `${apiOrigin}/proxy/chat`,
+    // relative ones, which would leave the provider unregistered.
+    endpoint: modelEndpoint ? resolveModelEndpoint(modelEndpoint, endpointBase) : `${apiOrigin}/proxy/chat`,
     model_name: 'managed',
     context_size: contextWindow ?? UNREPORTED_CONTEXT_WINDOW,
     requires_api_key: false,

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   UNREPORTED_CONTEXT_WINDOW,
   loadManagedContextWindow,
+  ModelEndpointError,
   platformProviderConfig,
   reportedManagedContextWindow,
   resetManagedContextWindow,
@@ -73,4 +74,20 @@ describe('provider endpoint', () => {
   it('falls back to the platform path when the host endpoint is empty', () => {
     expect(platformProviderConfig('https://app.test', undefined, '').endpoint).toBe('https://app.test/proxy/chat');
   });
+
+  it('resolves a relative endpoint against the endpoint base', () => {
+    expect(platformProviderConfig('https://app.test', undefined, '/proxy/chat').endpoint).toBe(
+      'https://app.test/proxy/chat',
+    );
+    expect(
+      platformProviderConfig('https://app.test', undefined, '/proxy/chat', 'https://api.host.test/backend').endpoint,
+    ).toBe('https://api.host.test/proxy/chat');
+  });
+
+  it.each(['ftp://models.host.test/chat', 'javascript:alert(1)', 'https://bad host/chat', '   '])(
+    'rejects the unusable endpoint %j',
+    (endpoint) => {
+      expect(() => platformProviderConfig('https://app.test', undefined, endpoint)).toThrow(ModelEndpointError);
+    },
+  );
 });

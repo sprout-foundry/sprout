@@ -5,6 +5,7 @@ All notable changes to Sprout will be documented in this file.
 ## [Unreleased]
 
 - fix(workspace): a host that serves the chat session store (`capabilities.chatSessions`) now gets the workspace's project on every chat-session call — a `project` query parameter on `GET /api/chat-sessions` and `/messages`, a `project` body field on create, switch, rename, delete, delete-all and `turn` — taken from `SproutWorkspace`'s `project.repoUrl`, else `project.id`. Chats no longer mix across projects in one unscoped bucket, and a turn the host seeds into a project's bucket shows in that project's workspace. `WorkspaceChatProvider` takes the project as `chatSessionsProject`. Hosts without the capability, and the standalone app, are unchanged.
+- fix(workspace): a relative host model endpoint (`transport.modelEndpoint` / `agent.modelEndpoint`, e.g. `/proxy/chat`) is resolved against the host's `apiBaseURL` (else the page origin) before it goes into the in-browser agent's provider config. It was written verbatim, the provider config was rejected, and every turn failed with `provider "platform" is not registered`. An endpoint that cannot be made an absolute `http(s)` URL now fails the turn with an error in the chat naming the endpoint.
 
 ## [v0.30.0] - 2026-10-11
 

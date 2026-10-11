@@ -211,8 +211,9 @@ export {
  * The model endpoint the in-browser agent's provider config should point at,
  * given the host's backend choice. The daemon serves the same OpenAI-compatible
  * proxy at `/api/proxy/chat` (its LLM-only surface), so a daemon backend points
- * there; a wasm backend uses the host's model endpoint verbatim. Undefined means
- * the host named no endpoint and the caller falls back to the platform path.
+ * there; a wasm backend uses the host's model endpoint, which may be relative
+ * (resolved in `platformProviderConfig`). Undefined means the host named no
+ * endpoint and the caller falls back to the platform path.
  */
 function hostModelEndpoint(): string | undefined {
   const agent = getActiveHost()?.transport.agent;
@@ -224,12 +225,32 @@ function hostModelEndpoint(): string | undefined {
   return endpoint && endpoint.trim() ? endpoint.trim() : undefined;
 }
 
-function writePlatformProviderConfig(shell: WasmShell, apiOrigin: string): void {
+/**
+ * The base a relative host model endpoint resolves against: the host's API
+ * base URL (itself resolved against the page origin), else the page origin.
+ */
+function hostApiBase(pageOrigin: string): string {
+  const apiBaseURL = getActiveHost()?.transport.apiBaseURL?.trim();
+  if (!apiBaseURL) return pageOrigin;
   try {
-    shell.writeFile(
-      '/home/user/.config/sprout/providers/platform.json',
-      JSON.stringify(platformProviderConfig(apiOrigin, reportedManagedContextWindow(), hostModelEndpoint())),
-    );
+    return new URL(apiBaseURL, pageOrigin).toString();
+  } catch {
+    return pageOrigin;
+  }
+}
+
+/**
+ * The provider config for this turn. Throws a `ModelEndpointError` when the
+ * host's model endpoint is unusable, so the turn fails with that message
+ * rather than with an unregistered provider.
+ */
+export function resolvePlatformProviderConfig(apiOrigin: string): ReturnType<typeof platformProviderConfig> {
+  return platformProviderConfig(apiOrigin, reportedManagedContextWindow(), hostModelEndpoint(), hostApiBase(apiOrigin));
+}
+
+function writePlatformProviderConfig(shell: WasmShell, config: ReturnType<typeof platformProviderConfig>): void {
+  try {
+    shell.writeFile('/home/user/.config/sprout/providers/platform.json', JSON.stringify(config));
   } catch {
     // Keep the previously written config.
   }
@@ -1408,6 +1429,13 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
   // The agent's provider routes to the platform proxy, on this origin in
   // both local dev and production.
   const apiOrigin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8080';
+  let providerConfig: ReturnType<typeof platformProviderConfig>;
+  try {
+    providerConfig = resolvePlatformProviderConfig(apiOrigin);
+  } catch (err) {
+    dispatch('error', { message: err instanceof Error ? err.message : String(err) });
+    return jsonOk({ status: 'processing', message: 'Agent query started' });
+  }
 
   // Fire the agent loop asynchronously — events stream via the dispatcher.
   // The chat's transcript records the turn itself, so switching away mid-turn
@@ -1418,7 +1446,7 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
   // A chat is named after its first question: have the list pick it up, as
   // the daemon's session_changed does.
   if (chatId) dispatch('session_changed', { change: 'updated', summary: { id: chatId } });
-  writePlatformProviderConfig(shell, apiOrigin);
+  writePlatformProviderConfig(shell, providerConfig);
   shell
     .runAgent(
       'platform',

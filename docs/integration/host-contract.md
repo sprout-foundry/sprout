@@ -78,7 +78,12 @@ infers its backend from build flags or URLs.
   the host chooses one explicitly (see "Agent backend" below). Absent means the
   host did not choose, and Sprout keeps its own default for the build.
 - `modelEndpoint?: string` — the endpoint for the in-browser agent's model
-  calls; absent means the agent falls back to its default endpoint.
+  calls; absent means the agent falls back to its default endpoint. It may be
+  an absolute `http(s)` URL or relative (a path such as `/proxy/chat`); a
+  relative endpoint is resolved against `apiBaseURL` (itself resolved against
+  the page origin; `''` means the page origin), so `/proxy/chat` reaches the
+  API host's `/proxy/chat`. An endpoint that cannot be made an absolute
+  `http(s)` URL fails each turn with an error in the chat naming the endpoint.
 
 #### Agent backend
 
@@ -101,7 +106,8 @@ type HostAgentBackend =
   installs the cloud adapter from the host, routes the in-browser agent's events
   into the same event bus WebSocket events use, and points the agent's model
   calls at `modelEndpoint` (falling back to `transport.modelEndpoint`, then the
-  platform's own proxy path). The repository to open comes from the host's
+  platform's own proxy path; a relative endpoint resolves as described under
+  `transport.modelEndpoint`). The repository to open comes from the host's
   project (`project.repoUrl`), not the `?repo=` URL parameter. The workspace
   counts as connected once the adapter is installed, whether or not the host
   serves an events socket (the agent's events are delivered in the page), and
@@ -686,7 +692,8 @@ is cached), `POST /api/subagent/{id}/cancel` (stopping a subagent run) and the
 session export (`/api/sessions/{id}/export`, under `capabilities.export`). The
 events WebSocket goes to `transport.wsURL` (else the page's `/ws`), and the
 in-browser agent's model calls go to `agent.modelEndpoint` (else
-`transport.modelEndpoint`, else the page origin's `/proxy/chat`). When a
+`transport.modelEndpoint`, else the page origin's `/proxy/chat`; a relative
+endpoint resolves against `apiBaseURL`). When a
 startup repository is set and the browser clone fails, the adapter falls back
 to `POST <apiBase>/api/repo/import`. A `bearer` host additionally serves
 `/git-proxy` (git over CORS) and `/workspace/fly` at the page origin.

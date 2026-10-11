@@ -861,6 +861,63 @@ describe('the in-browser agent provider config follows the host backend', () => 
   });
 });
 
+describe('a relative or unusable host model endpoint', () => {
+  const queryBody = JSON.stringify({ query: 'hello', chat_id: 'chat-1' });
+
+  async function runWith(apiBaseURL: string, modelEndpoint: string) {
+    const { setActiveHost } = await import('../host/accessor');
+    const { headlessHost } = await import('../host/HostProvider');
+    const { setAgentEventDispatcher } = await import('./cloudWasmHandlers');
+    setActiveHost({
+      ...headlessHost(),
+      transport: { apiBaseURL, wsURL: '', authMode: 'none', agent: { kind: 'wasm', modelEndpoint } },
+    });
+    const events: Array<{ type: string; data: Record<string, unknown> }> = [];
+    setAgentEventDispatcher((event) => events.push(event as { type: string; data: Record<string, unknown> }));
+    const written: Array<{ path: string; content: string }> = [];
+    const runAgent = vi.fn(async () => ({ response: '', provider: '', model: '' }));
+    const shell = createMockShell({
+      runAgent,
+      writeFile: (path: string, content: string) => {
+        written.push({ path, content });
+        return '';
+      },
+    });
+    const res = handleWasmLocal(shell, '/api/query', 'POST', '/api/query', queryBody);
+    await Promise.resolve();
+    setAgentEventDispatcher(null);
+    setActiveHost(headlessHost());
+    const config = written.find((w) => w.path.endsWith('/providers/platform.json'));
+    return { res, events, runAgent, endpoint: config ? JSON.parse(config.content).endpoint : undefined };
+  }
+
+  it('resolves a relative endpoint against the page origin for a same-origin host', async () => {
+    const { endpoint, runAgent } = await runWith('', '/proxy/chat');
+    expect(endpoint).toBe(`${window.location.origin}/proxy/chat`);
+    expect(runAgent).toHaveBeenCalled();
+  });
+
+  it("resolves a relative endpoint against the host's API base", async () => {
+    const { endpoint } = await runWith('https://api.host.test/backend', '/proxy/chat');
+    expect(endpoint).toBe('https://api.host.test/proxy/chat');
+  });
+
+  it('keeps an absolute endpoint as given', async () => {
+    const { endpoint } = await runWith('https://api.host.test', 'https://models.host.test/v1/chat');
+    expect(endpoint).toBe('https://models.host.test/v1/chat');
+  });
+
+  it('fails the turn with a clear error instead of running against an unregistered provider', async () => {
+    const { endpoint, runAgent, events, res } = await runWith('', 'ftp://models.host.test/chat');
+    expect(res.status).toBe(200);
+    expect(endpoint).toBeUndefined();
+    expect(runAgent).not.toHaveBeenCalled();
+    const error = events.find((e) => e.type === 'error');
+    expect(error?.data.message).toMatch(/model endpoint "ftp:\/\/models\.host\.test\/chat" is not usable/);
+    expect(error?.data.chat_id).toBe('chat-1');
+  });
+});
+
 describe('handleWasmLocal — /api/search/replace', () => {
   /** A workspace at /workspace whose files live in `files`; writes land there too. */
   function replaceIn(initial: Record<string, string>, request: Record<string, unknown>) {

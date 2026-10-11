@@ -23,7 +23,7 @@ func TestGenerateSystemdUnit(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			out, err := generateSystemdUnit(tt.binaryPath, tt.homeDir)
+			out, err := generateSystemdUnit(tt.binaryPath, tt.homeDir, "")
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("generateSystemdUnit() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -103,7 +103,7 @@ func TestSystemdUnitPaths(t *testing.T) {
 	t.Run("paths are properly quoted for systemd", func(t *testing.T) {
 		binary := "/opt/sprout/bin/sprout"
 		home := "/home/testuser"
-		out, err := generateSystemdUnit(binary, home)
+		out, err := generateSystemdUnit(binary, home, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -131,7 +131,7 @@ func TestSystemdUnitPaths(t *testing.T) {
 	t.Run("paths with spaces are properly handled", func(t *testing.T) {
 		binary := "/usr/bin/sprout"
 		home := "/home/user with spaces"
-		out, err := generateSystemdUnit(binary, home)
+		out, err := generateSystemdUnit(binary, home, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -151,4 +151,18 @@ func TestSystemdUnitPaths(t *testing.T) {
 			t.Errorf("ExecStart should have unquoted binary path\ngot:\n%s", s)
 		}
 	})
+}
+
+func TestSystemdUnitDaemonRoot(t *testing.T) {
+	t.Setenv("SPROUT_STATE_DIR", t.TempDir())
+	out, err := generateSystemdUnit("/usr/bin/sprout", "/home/u", "/srv/projects")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), "Environment=SPROUT_DAEMON_ROOT=/srv/projects\n") {
+		t.Errorf("unit should set SPROUT_DAEMON_ROOT to --root\n%s", out)
+	}
+	if !strings.Contains(string(out), "WorkingDirectory=/home/u\n") {
+		t.Errorf("--root must not change WorkingDirectory\n%s", out)
+	}
 }

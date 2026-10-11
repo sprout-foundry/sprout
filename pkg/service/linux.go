@@ -83,6 +83,9 @@ func (m *pidFileManager) writePID(pid int) error {
 }
 
 func (m *pidFileManager) Install() error {
+	if installRootFlag != "" {
+		fmt.Println("Note: --root is ignored without systemd; set SPROUT_DAEMON_ROOT when starting the daemon instead.")
+	}
 	fmt.Println("No systemd detected — no service installation needed.")
 	fmt.Println("Use 'sprout service start' to run the daemon directly.")
 	fmt.Println("The daemon will persist via PID file at ~/.local/state/sprout/daemon.pid")

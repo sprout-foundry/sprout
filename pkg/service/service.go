@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
 // serviceManager defines the interface for platform-specific service management.
@@ -28,6 +30,12 @@ type serviceDiagnostics interface {
 	Diagnose() error
 }
 
+// serviceLogReporter is implemented by managers that know where the daemon's
+// logs are, so `service status` can point at them.
+type serviceLogReporter interface {
+	LogLocations() []string
+}
+
 // newServiceManager is set by platform-specific init() functions.
 var newServiceManager func() serviceManager
 
@@ -39,6 +47,10 @@ const (
 
 // ForceConfirm skips confirmation prompts when true (set by -y flag).
 var ForceConfirm bool
+
+// installRootFlag is `service install --root`: the directory baked into the
+// service as SPROUT_DAEMON_ROOT. Empty means the home directory.
+var installRootFlag string
 
 // ServiceCmd is the root command for service management.
 var ServiceCmd = &cobra.Command{
@@ -53,7 +65,30 @@ web UI to start automatically on boot and run persistently in the background.`,
 var serviceInstallCmd = &cobra.Command{
 	Use:   "install",
 	Short: "Install the sprout daemon as a system service",
+	Long: `Install the sprout daemon as a system service (launchd on macOS,
+systemd on Linux).
+
+API keys and tokens exported in the installing shell (*_API_KEY, *_TOKEN,
+...) are captured into service.env in the sprout state directory (mode
+0600). They are never written into the launchd plist or systemd unit.
+Providers also resolve keys stored with 'sprout keys set <provider>' when
+no environment variable is set.
+
+--root sets SPROUT_DAEMON_ROOT, the directory that scopes the daemon's
+storage and the web UI's workspace browser (default: your home directory).
+It does not choose the agent's workspace; the web UI asks for that.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if installRootFlag != "" {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return fmt.Errorf("failed to determine home directory: %w", err)
+			}
+			root, err := resolveDaemonRoot(installRootFlag, home)
+			if err != nil {
+				return err
+			}
+			installRootFlag = root
+		}
 		// Check for legacy services before installing
 		legacyPaths, err := detectLegacyService()
 		if err != nil {
@@ -169,6 +204,11 @@ var serviceStatusCmd = &cobra.Command{
 		} else {
 			fmt.Println("stopped")
 		}
+		if reporter, ok := sm.(serviceLogReporter); ok {
+			for _, loc := range reporter.LogLocations() {
+				fmt.Printf("  log: %s\n", loc)
+			}
+		}
 		return nil
 	},
 }
@@ -276,6 +316,7 @@ var serviceDiagnoseCmd = &cobra.Command{
 
 func init() {
 	serviceInstallCmd.Flags().BoolVarP(&ForceConfirm, "yes", "y", false, "Skip confirmation prompts and auto-remove legacy services")
+	serviceInstallCmd.Flags().StringVar(&installRootFlag, "root", "", "Daemon root (SPROUT_DAEMON_ROOT): scopes daemon storage and the workspace browser; must exist (default: home directory)")
 	serviceUninstallCmd.Flags().BoolVarP(&ForceConfirm, "yes", "y", false, "Skip confirmation prompts")
 	serviceRestartCmd.Flags().BoolVarP(&ForceConfirm, "yes", "y", false, "Restart without confirming when queries are still active")
 
@@ -326,4 +367,43 @@ func getBinaryPath() (string, error) {
 		return "", fmt.Errorf("failed to determine sprout binary path: %w", err)
 	}
 	return exe, nil
+}
+
+// resolveDaemonRoot validates `service install --root`. An empty value means
+// homeDir; anything else must be an existing directory and is made absolute.
+func resolveDaemonRoot(flagValue, homeDir string) (string, error) {
+	root := strings.TrimSpace(flagValue)
+	if root == "" {
+		return homeDir, nil
+	}
+	if root == "~" {
+		root = homeDir
+	} else if strings.HasPrefix(root, "~/") {
+		root = filepath.Join(homeDir, root[2:])
+	}
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		return "", fmt.Errorf("invalid --root %q: %w", flagValue, err)
+	}
+	info, err := os.Stat(abs)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("--root %s does not exist", abs)
+		}
+		return "", fmt.Errorf("--root %s: %w", abs, err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("--root %s is not a directory", abs)
+	}
+	return abs, nil
+}
+
+// daemonLogDir is where the daemon writes its own rotated logs
+// (setupDaemonLogging in cmd).
+func daemonLogDir() (string, error) {
+	stateDir, err := envutil.StateDirPath()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(stateDir, "logs"), nil
 }

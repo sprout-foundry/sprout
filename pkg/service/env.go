@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/envutil"
@@ -36,6 +37,20 @@ func MatchesAPIKeyPattern(key string) bool {
 			return true
 		}
 	}
+	for _, suffix := range APIEnvKeyPatterns {
+		if strings.HasSuffix(upperKey, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+// IsSecretEnvName reports whether a variable name looks like a credential
+// (`*_API_KEY`, `*_TOKEN`, `*_SECRET`, ...). Unlike MatchesAPIKeyPattern it
+// ignores the non-secret SPROUT_PROVIDER-style settings service.env also
+// carries.
+func IsSecretEnvName(key string) bool {
+	upperKey := strings.ToUpper(key)
 	for _, suffix := range APIEnvKeyPatterns {
 		if strings.HasSuffix(upperKey, suffix) {
 			return true
@@ -201,4 +216,30 @@ func LoadServiceEnvFile() (map[string]string, error) {
 	}
 
 	return envMap, nil
+}
+
+// ApplyServiceEnvFile sets the variables from service.env in the current
+// process. A service-managed daemon calls it at startup: launchd has no
+// EnvironmentFile equivalent, so this is how captured keys reach the daemon
+// on macOS without being written into the plist. Variables already present in
+// the environment win (on Linux systemd has already applied the same file, so
+// this changes nothing there). It returns the names it set — never values —
+// and its errors carry no values either.
+func ApplyServiceEnvFile() ([]string, error) {
+	envVars, err := LoadServiceEnvFile()
+	if err != nil {
+		return nil, err
+	}
+	var applied []string
+	for key, value := range envVars {
+		if _, exists := os.LookupEnv(key); exists {
+			continue
+		}
+		if err := os.Setenv(key, value); err != nil {
+			return applied, fmt.Errorf("setting %s from service.env failed", key)
+		}
+		applied = append(applied, key)
+	}
+	sort.Strings(applied)
+	return applied, nil
 }

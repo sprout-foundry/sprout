@@ -255,8 +255,9 @@ mental models, easy to forget the wrapper on new handlers).
 |---|---|---|
 | `~/.config/sprout/config.json` | Provider settings, preferences | Low |
 | `~/.config/sprout/api_keys.json` | API keys (encrypted at rest via OS keyring when available) | **High** |
-| `~/.sprout/service.env` | Environment variables for daemon | **High** |
-| `~/.sprout/logs/` | Daemon logs, rotated (10MB, 5 backups) | Medium |
+| `~/.local/state/sprout/service.env` | API keys and settings captured by `sprout service install` (0600); never copied into the launchd plist or systemd unit | **High** |
+| `~/.local/state/sprout/logs/` | Daemon logs, rotated (10MB, 5 backups) | Medium |
+| `~/Library/Logs/sprout/daemon.log` | macOS: launchd startup and crash output (0600) | Medium |
 | `~/.config/sprout/memories/` | Agent memory .md files | Medium |
 | `.sprout/workspace.log` | Per-workspace run log | Medium |
 | `~/.config/sprout/embeddings/` | Conversation turn embeddings | Medium |

@@ -30,36 +30,56 @@ func init() {
 
 // ── plist generation ────────────────────────────────────────────────
 
-// generateLaunchdPlist generates a launchd plist with environment variables from service.env.
-// The plist is built as a string rather than via Go's xml.Marshal to guarantee correct
-// structure — in particular to avoid the double-nested <dict> that xml.Marshal produces
-// when a struct has both XMLName "dict" and a child field also tagged xml:"dict".
-func generateLaunchdPlist(binaryPath, homeDir string) ([]byte, error) {
-	// Load API keys and other environment variables from service.env.
-	envVars, err := LoadServiceEnvFile()
-	if err != nil {
-		return nil, fmt.Errorf("failed to load service.env: %w", err)
+// launchdPlistConfig holds the values baked into the launchd plist. None of
+// them are secrets: launchd has no EnvironmentFile equivalent, so captured API
+// keys and tokens stay in service.env (0600) and the daemon loads that file
+// itself at startup (see ApplyServiceEnvFile).
+type launchdPlistConfig struct {
+	BinaryPath string
+	HomeDir    string
+	// DaemonRoot scopes daemon storage (sessions, config) and the web UI's
+	// workspace browser. It does NOT set the agent workspace — since SP-130
+	// the webui gates on explicit workspace selection instead of silently
+	// inheriting it. Empty means HomeDir.
+	DaemonRoot string
+	// LogPath receives launchd's stdout/stderr for the daemon process.
+	LogPath string
+	// Path is the PATH the daemon uses to locate developer tools.
+	Path string
+}
+
+// generateLaunchdPlist builds the launchd plist. It is built as a string
+// rather than via xml.Marshal to avoid the double-nested <dict> that
+// xml.Marshal produces when a struct has both XMLName "dict" and a child field
+// also tagged xml:"dict".
+func generateLaunchdPlist(cfg launchdPlistConfig) ([]byte, error) {
+	if cfg.BinaryPath == "" {
+		return nil, fmt.Errorf("binary path must not be empty")
+	}
+	if cfg.HomeDir == "" {
+		return nil, fmt.Errorf("home directory must not be empty")
+	}
+	daemonRoot := cfg.DaemonRoot
+	if daemonRoot == "" {
+		daemonRoot = cfg.HomeDir
 	}
 
-	// Build the EnvironmentVariables dict entries.
 	var envBuf strings.Builder
 	addEnvEntry := func(key, value string) {
 		fmt.Fprintf(&envBuf, "\t\t<key>%s</key>\n\t\t<string>%s</string>\n",
 			xmlEscapeStr(key), xmlEscapeStr(value))
 	}
 	addEnvEntry("SPROUT_SERVICE", "1")
-	addEnvEntry("HOME", homeDir)
-	// SPROUT_DAEMON_ROOT scopes daemon storage (sessions, config, workspace
-	// browser) to the user's home. It does NOT set the agent workspace —
-	// since SP-130 the webui gates on explicit workspace selection instead
-	// of silently inheriting home. SP-130.
-	addEnvEntry("SPROUT_DAEMON_ROOT", homeDir)
-	// Include the user's PATH so the daemon can locate developer tools.
-	if path := os.Getenv("PATH"); path != "" {
-		addEnvEntry("PATH", path)
+	addEnvEntry("HOME", cfg.HomeDir)
+	addEnvEntry("SPROUT_DAEMON_ROOT", daemonRoot)
+	if cfg.Path != "" {
+		addEnvEntry("PATH", cfg.Path)
 	}
-	for key, value := range envVars {
-		addEnvEntry(key, value)
+
+	var logBuf strings.Builder
+	if cfg.LogPath != "" {
+		fmt.Fprintf(&logBuf, "\t<key>StandardOutPath</key>\n\t<string>%s</string>\n\t<key>StandardErrorPath</key>\n\t<string>%s</string>\n",
+			xmlEscapeStr(cfg.LogPath), xmlEscapeStr(cfg.LogPath))
 	}
 
 	plist := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
@@ -89,14 +109,15 @@ func generateLaunchdPlist(binaryPath, homeDir string) ([]byte, error) {
 	</dict>
 	<key>ThrottleInterval</key>
 	<integer>30</integer>
-	<key>EnvironmentVariables</key>
+%s	<key>EnvironmentVariables</key>
 	<dict>
 %s	</dict>
 </dict>
 </plist>`,
 		xmlEscapeStr(launchdLabel),
-		xmlEscapeStr(binaryPath),
-		xmlEscapeStr(homeDir),
+		xmlEscapeStr(cfg.BinaryPath),
+		xmlEscapeStr(cfg.HomeDir),
+		logBuf.String(),
 		envBuf.String(),
 	)
 
@@ -148,8 +169,13 @@ func (m *launchdManager) Install() error {
 		return fmt.Errorf("failed to determine home directory: %w", err)
 	}
 
-	// Capture API keys from the current environment and write to service.env
-	// This is done before generating the plist so the environment variables can be inlined
+	daemonRoot, err := resolveDaemonRoot(installRootFlag, homeDir)
+	if err != nil {
+		return err
+	}
+
+	// Captured API keys go to service.env (0600); the daemon reads it at
+	// startup, so nothing secret is written into the plist.
 	if err := GenerateServiceEnvFile(); err != nil {
 		fmt.Printf("Warning: failed to generate service.env: %v\n", err)
 		fmt.Println("The service will be installed but may not have access to API keys.")
@@ -163,13 +189,11 @@ func (m *launchdManager) Install() error {
 	if err != nil {
 		return fmt.Errorf("failed to resolve state directory: %w", err)
 	}
-	logDir := filepath.Join(stateDir, "logs")
-	if err := os.MkdirAll(logDir, 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(stateDir, "logs"), 0700); err != nil {
 		return fmt.Errorf("failed to create log directory: %w", err)
 	}
-
-	data, err := generateLaunchdPlist(binaryPath, homeDir)
-	if err != nil {
+	logPath := launchdLogPath(homeDir)
+	if err := ensureLaunchdLogFile(logPath); err != nil {
 		return err
 	}
 
@@ -177,9 +201,17 @@ func (m *launchdManager) Install() error {
 	if err != nil {
 		return fmt.Errorf("failed to determine plist path: %w", err)
 	}
-	if err := writePlistFile(pPath, data); err != nil {
+	removedSecrets, err := writeLaunchdPlist(pPath, launchdPlistConfig{
+		BinaryPath: binaryPath,
+		HomeDir:    homeDir,
+		DaemonRoot: daemonRoot,
+		LogPath:    logPath,
+		Path:       os.Getenv("PATH"),
+	})
+	if err != nil {
 		return err
 	}
+	reportPlistMigration(removedSecrets)
 
 	domain := launchdDomain()
 	servicePath := domain + "/" + launchdLabel
@@ -219,6 +251,8 @@ func (m *launchdManager) Install() error {
 	}
 
 	fmt.Printf("Installed launchd agent: %s\n", pPath)
+	fmt.Printf("Daemon root: %s\n", daemonRoot)
+	fmt.Printf("Startup/crash log: %s\n", logPath)
 	return nil
 }
 
@@ -272,6 +306,7 @@ func (m *launchdManager) Uninstall() error {
 }
 
 func (m *launchdManager) Start() error {
+	warnIfPlistHasInlinedSecrets()
 	servicePath := launchdDomain() + "/" + launchdLabel
 
 	// Check if the service is currently loaded in launchd.
@@ -354,6 +389,7 @@ func (m *launchdManager) Status() (bool, error) {
 // so a failed restart is retried by launchd instead of leaving the service
 // unloaded.
 func (m *launchdManager) Restart() error {
+	warnIfPlistHasInlinedSecrets()
 	servicePath := launchdDomain() + "/" + launchdLabel
 	if _, err := runLaunchctl("print", servicePath); err != nil {
 		// Not loaded — a restart degenerates to a start.
@@ -365,17 +401,10 @@ func (m *launchdManager) Restart() error {
 	return nil
 }
 
-// plistFileMode is the permission the launchd plist must carry.
-//
-// launchd has no EnvironmentFile equivalent, so every API key captured by
-// GenerateServiceEnvFile is inlined into the plist's EnvironmentVariables dict
-// in plaintext. Writing that 0644 published a world-readable copy of every
-// provider key and token on the machine — strictly worse than service.env,
-// which is already 0600. launchd reads LaunchAgents plists as the owning user,
-// so 0600 is sufficient.
-//
-// (systemd does not have this problem: the unit references service.env via
-// EnvironmentFile= and inlines no secrets.)
+// plistFileMode is the permission the launchd plist must carry. The plist
+// holds no secrets, but it records the binary path, home and PATH, and older
+// installs inlined API keys into it, so it stays owner-only. launchd reads
+// LaunchAgents plists as the owning user, so 0600 is sufficient.
 const plistFileMode = 0600
 
 // writePlistFile atomically writes the launchd plist with restricted

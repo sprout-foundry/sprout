@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"testing"
 )
 
@@ -71,114 +70,6 @@ func TestLumberjackConfig_StorageFootprint(t *testing.T) {
 		t.Fatalf("max uncompressed footprint %d MB is unreasonably small", maxUncompressed)
 	}
 	t.Logf("Max uncompressed footprint: %d MB (with compression, typically much less)", maxUncompressed)
-}
-
-// =============================================================================
-// Log Path Generation Tests
-// =============================================================================
-
-// TestGenerateLaunchdPlist_NoStdoutStderrPaths verifies that the plist does NOT
-// reference StandardOutPath/StandardErrorPath — log rotation is handled
-// in-process by setupDaemonLogging() via lumberjack, not by launchd.
-func TestGenerateLaunchdPlist_NoStdoutStderrPaths(t *testing.T) {
-	homeDir := t.TempDir()
-
-	// Create a minimal service.env file so loadServiceEnvFile succeeds
-	sproutDir := filepath.Join(homeDir, ".sprout")
-	if err := os.MkdirAll(sproutDir, 0755); err != nil {
-		t.Fatalf("failed to create .sprout dir: %v", err)
-	}
-	envPath := filepath.Join(sproutDir, "service.env")
-	if err := os.WriteFile(envPath, []byte(""), 0600); err != nil {
-		t.Fatalf("failed to write empty service.env: %v", err)
-	}
-
-	binaryPath := filepath.Join(homeDir, "bin", "sprout")
-
-	data, err := generateLaunchdPlist(binaryPath, homeDir)
-	if err != nil {
-		t.Fatalf("generateLaunchdPlist() error = %v", err)
-	}
-
-	plist := string(data)
-
-	// The plist must NOT contain StandardOutPath/StandardErrorPath —
-	// log rotation is handled in-process by lumberjack (daemon_logging.go).
-	if strings.Contains(plist, "StandardOutPath") {
-		t.Errorf("plist should NOT contain StandardOutPath (handled by in-process lumberjack)\nplist:\n%s", plist)
-	}
-	if strings.Contains(plist, "StandardErrorPath") {
-		t.Errorf("plist should NOT contain StandardErrorPath (handled by in-process lumberjack)\nplist:\n%s", plist)
-	}
-}
-
-// TestGenerateLaunchdPlist_NoLogPathsInPlist ensures the plist does not embed
-// log file paths — log rotation is handled in-process, not by launchd.
-func TestGenerateLaunchdPlist_NoLogPathsInPlist(t *testing.T) {
-	homeDir := t.TempDir()
-
-	sproutDir := filepath.Join(homeDir, ".sprout")
-	if err := os.MkdirAll(sproutDir, 0755); err != nil {
-		t.Fatalf("failed to create .sprout dir: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(sproutDir, "service.env"), []byte(""), 0600); err != nil {
-		t.Fatalf("failed to write empty service.env: %v", err)
-	}
-
-	data, err := generateLaunchdPlist("/usr/local/bin/sprout", homeDir)
-	if err != nil {
-		t.Fatalf("generateLaunchdPlist() error = %v", err)
-	}
-
-	plist := string(data)
-
-	// The plist should NOT contain daemon log paths — these are managed
-	// in-process by setupDaemonLogging() using lumberjack.
-	if strings.Contains(plist, "daemon.stdout.log") {
-		t.Error("plist should NOT contain daemon.stdout.log path (managed by in-process lumberjack)")
-	}
-	if strings.Contains(plist, "daemon.stderr.log") {
-		t.Error("plist should NOT contain daemon.stderr.log path (managed by in-process lumberjack)")
-	}
-}
-
-// TestGenerateLaunchdPlist_EnvVars tests that environment variables are included
-// in the generated plist.
-func TestGenerateLaunchdPlist_EnvVars(t *testing.T) {
-	homeDir := t.TempDir()
-	t.Setenv("SPROUT_STATE_DIR", filepath.Join(homeDir, ".local", "state", "sprout"))
-
-	stateDir := filepath.Join(homeDir, ".local", "state", "sprout")
-	if err := os.MkdirAll(stateDir, 0o755); err != nil {
-		t.Fatalf("failed to create state dir: %v", err)
-	}
-	envPath, err := ServiceEnvPath()
-	if err != nil {
-		t.Fatalf("ServiceEnvPath() error: %v", err)
-	}
-	if err := os.WriteFile(envPath, []byte("MY_API_KEY=secret123\nANOTHER_TOKEN=abc\n"), 0600); err != nil {
-		t.Fatalf("failed to write service.env: %v", err)
-	}
-
-	data, err := generateLaunchdPlist("/usr/local/bin/sprout", homeDir)
-	if err != nil {
-		t.Fatalf("generateLaunchdPlist() error = %v", err)
-	}
-
-	plist := string(data)
-
-	// Should contain hardcoded env vars
-	if !strings.Contains(plist, "SPROUT_SERVICE") || !strings.Contains(plist, "<string>1</string>") {
-		t.Error("plist should contain SPROUT_SERVICE=1")
-	}
-
-	// Should contain loaded env vars
-	if !strings.Contains(plist, "MY_API_KEY") {
-		t.Error("plist should contain MY_API_KEY from service.env")
-	}
-	if !strings.Contains(plist, "ANOTHER_TOKEN") {
-		t.Error("plist should contain ANOTHER_TOKEN from service.env")
-	}
 }
 
 // =============================================================================
@@ -297,9 +188,8 @@ func TestLaunchdDomain(t *testing.T) {
 	}
 }
 
-// The launchd plist inlines every API key from service.env (launchd has no
-// EnvironmentFile equivalent), so it must never be world-readable. It shipped
-// as 0644, publishing a readable copy of every provider key and token.
+// The plist must never be world-readable: older installs inlined API keys
+// into it, and it still records the binary path, home and PATH.
 func TestWritePlistFileIsNotWorldReadable(t *testing.T) {
 	pPath := filepath.Join(t.TempDir(), "com.sprout.daemon.plist")
 
@@ -315,7 +205,7 @@ func TestWritePlistFileIsNotWorldReadable(t *testing.T) {
 		t.Errorf("plist mode = %04o, want %04o", got, plistFileMode)
 	}
 	if info.Mode().Perm()&0077 != 0 {
-		t.Errorf("plist is group/world accessible (%04o) — it contains API keys", info.Mode().Perm())
+		t.Errorf("plist is group/world accessible (%04o)", info.Mode().Perm())
 	}
 }
 

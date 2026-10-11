@@ -41,12 +41,16 @@ func systemdExecArg(s string) string {
 }
 
 // generateSystemdUnit produces a systemd user unit file for the sprout daemon.
-func generateSystemdUnit(binaryPath, homeDir string) ([]byte, error) {
+// An empty daemonRoot means homeDir.
+func generateSystemdUnit(binaryPath, homeDir, daemonRoot string) ([]byte, error) {
 	if binaryPath == "" {
 		return nil, fmt.Errorf("binary path must not be empty")
 	}
 	if homeDir == "" {
 		return nil, fmt.Errorf("home directory must not be empty")
+	}
+	if daemonRoot == "" {
+		daemonRoot = homeDir
 	}
 
 	// Build absolute path to service.env file for EnvironmentFile directive
@@ -60,7 +64,7 @@ func generateSystemdUnit(binaryPath, homeDir string) ([]byte, error) {
 	// unquoted paths — systemd treats quotes as part of the value.
 	//
 	// SPROUT_DAEMON_ROOT scopes daemon storage (sessions, config, workspace
-	// browser) to the user's home. It does NOT set the agent workspace —
+	// browser); it defaults to the user's home. It does NOT set the agent workspace —
 	// since SP-130 the webui gates on explicit workspace selection instead
 	// of silently inheriting home.
 	unit := fmt.Sprintf(`[Unit]
@@ -85,7 +89,7 @@ StandardError=null
 
 [Install]
 WantedBy=default.target
-`, systemdExecArg(binaryPath), homeDir, homeDir, homeDir, envFile)
+`, systemdExecArg(binaryPath), homeDir, homeDir, daemonRoot, envFile)
 
 	return []byte(unit), nil
 }
@@ -103,6 +107,10 @@ func (m *systemdManager) Install() error {
 	if err != nil {
 		return fmt.Errorf("failed to get home directory: %w", err)
 	}
+	daemonRoot, err := resolveDaemonRoot(installRootFlag, homeDir)
+	if err != nil {
+		return err
+	}
 
 	// Capture API keys from the current environment and write to service.env
 	// This is done before writing the unit file so the EnvironmentFile can reference it
@@ -116,7 +124,7 @@ func (m *systemdManager) Install() error {
 		return fmt.Errorf("failed to create systemd user directory: %w", err)
 	}
 
-	content, err := generateSystemdUnit(binaryPath, homeDir)
+	content, err := generateSystemdUnit(binaryPath, homeDir, daemonRoot)
 	if err != nil {
 		return fmt.Errorf("failed to generate unit file: %w", err)
 	}

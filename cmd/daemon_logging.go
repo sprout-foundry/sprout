@@ -45,7 +45,7 @@ func setupDaemonLogging() {
 		return
 	}
 	logDir := filepath.Join(stateDir, "logs")
-	if err := os.MkdirAll(logDir, 0o755); err != nil {
+	if err := os.MkdirAll(logDir, 0o700); err != nil {
 		return
 	}
 

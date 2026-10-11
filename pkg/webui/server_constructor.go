@@ -87,7 +87,11 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 	// both the heuristic AND the disk-existence check on macOS (synthetic
 	// firmlinks). user.Current().HomeDir reads /etc/passwd (or its platform
 	// equivalent), which is always authoritative for the current user.
-	if serviceMode {
+	//
+	// A root chosen with `sprout service install --root` differs from the
+	// HOME baked next to it and is kept as long as it exists; a stale
+	// home-derived root equals that HOME and is still reconciled.
+	if serviceMode && !isExplicitDaemonRoot(daemonRoot, rootSource) {
 		if u, uErr := user.Current(); uErr == nil && u.HomeDir != "" && u.HomeDir != daemonRoot {
 			webuiLogger.Warn("configured daemon root differs from current user home; using current user home",
 				slog.String("configured_daemon_root", daemonRoot),
@@ -274,4 +278,18 @@ func isLocalhostAddr(addr string) bool {
 		return true
 	}
 	return false
+}
+
+// isExplicitDaemonRoot reports whether a SPROUT_DAEMON_ROOT was set to
+// something other than the service's HOME (via `service install --root`) and
+// still names an existing directory.
+func isExplicitDaemonRoot(daemonRoot, rootSource string) bool {
+	if rootSource != "SPROUT_DAEMON_ROOT" || daemonRoot == "" {
+		return false
+	}
+	if home := os.Getenv("HOME"); home == "" || filepath.Clean(home) == filepath.Clean(daemonRoot) {
+		return false
+	}
+	info, err := os.Stat(daemonRoot)
+	return err == nil && info.IsDir()
 }

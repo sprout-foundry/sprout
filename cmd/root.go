@@ -45,6 +45,7 @@ var rootCmd = &cobra.Command{
   sprout                      start an interactive session (opens the web UI too)
   sprout agent "your intent"  run one task non-interactively and exit`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		loadServiceEnvForDaemon(os.Stderr)
 		console.MakeStdioPollable()
 		routeGoLogForTerminal()
 		if noColorFlag {

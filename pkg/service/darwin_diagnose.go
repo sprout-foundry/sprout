@@ -8,6 +8,7 @@ package service
 // common-fix suggestions. isServiceLoaded is its launchd-state probe.
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -50,6 +51,7 @@ func (m *launchdManager) Diagnose() error {
 			console.GlyphWarning.Fprintln(os.Stdout, "  STALE plist: missing SPROUT_DAEMON_ROOT — workspace browser may start in the wrong directory.")
 			fmt.Println("      Reinstall to regenerate: sprout service uninstall && sprout service install")
 		}
+		diagnoseInlinedSecrets(os.Stdout, plistContent)
 	}
 	fmt.Println()
 
@@ -94,18 +96,24 @@ func (m *launchdManager) Diagnose() error {
 	} else {
 		fmt.Println("📝 Checking log files:")
 		logDir := filepath.Join(stateDir, "logs")
-		stdoutPath := filepath.Join(logDir, "daemon.stdout.log")
-		stderrPath := filepath.Join(logDir, "daemon.stderr.log")
-
-		for _, logPath := range []string{stdoutPath, stderrPath} {
+		logPaths := []string{
+			filepath.Join(logDir, "daemon.stdout.log"),
+			filepath.Join(logDir, "daemon.stderr.log"),
+		}
+		if home, homeErr := os.UserHomeDir(); homeErr == nil {
+			logPaths = append(logPaths, launchdLogPath(home))
+		}
+		for _, logPath := range logPaths {
 			if info, err := os.Stat(logPath); err == nil {
-				fmt.Printf("  ✅ %s (%d bytes)\n", filepath.Base(logPath), info.Size())
+				fmt.Printf("  ✅ %s (%d bytes)\n", logPath, info.Size())
 			} else if os.IsNotExist(err) {
-				fmt.Printf("  ℹ️  %s does not exist\n", filepath.Base(logPath))
+				fmt.Printf("  ℹ️  %s does not exist\n", logPath)
 			} else {
-				console.GlyphWarning.Fprintf(os.Stdout, "  %s error: %v", filepath.Base(logPath), err)
+				console.GlyphWarning.Fprintf(os.Stdout, "  %s error: %v", logPath, err)
 			}
 		}
+		fmt.Println("     Rotated daemon logs (10 MB x 5, gzip) are in the state directory;")
+		fmt.Println("     daemon.log under ~/Library/Logs/sprout holds launchd's startup and crash output.")
 		fmt.Println()
 	}
 
@@ -146,7 +154,7 @@ func (m *launchdManager) Diagnose() error {
 		fmt.Println("  • Service not loaded: Try 'sprout service start'")
 	} else {
 		fmt.Println("  • Service loaded but may not be running: Try 'sprout service start'")
-		fmt.Println("  • Check logs in ~/.local/state/sprout/logs/ for errors")
+		fmt.Println("  • Check logs for errors (see the log files listed above)")
 	}
 	fmt.Println("  • If problems persist, try: 'sprout service uninstall && sprout service install'")
 	fmt.Println("  • Rebuild launchd database: 'launchctl reboot 2>/dev/null || sudo killall launchd'")
@@ -159,4 +167,25 @@ func (m *launchdManager) Diagnose() error {
 func isServiceLoaded(servicePath string) bool {
 	_, err := runLaunchctl("print", servicePath)
 	return err == nil
+}
+
+// diagnoseInlinedSecrets flags a plist written by an older install that
+// inlined captured API keys and tokens into EnvironmentVariables. Only the
+// variable names are printed.
+func diagnoseInlinedSecrets(w io.Writer, plistContent []byte) {
+	names, err := inlinedSecretNames(plistContent)
+	if err != nil {
+		console.GlyphWarning.Fprintf(w, "  Could not parse plist: %v", err)
+		return
+	}
+	if len(names) == 0 {
+		fmt.Fprintln(w, "  ✅ No secrets stored in the plist")
+		return
+	}
+	console.GlyphWarning.Fprintf(w, "  INSECURE plist: %d secret variable(s) stored in plaintext: %s", len(names), strings.Join(names, ", "))
+	fmt.Fprintln(w, "      Fix: export your keys and run 'sprout service install' — it rewrites the plist without")
+	fmt.Fprintln(w, "      secrets and keeps them in service.env (0600). Rotate any key that was shared or backed up.")
+	if !strings.Contains(string(plistContent), "StandardErrorPath") {
+		fmt.Fprintln(w, "      The reinstall also adds a launchd log at ~/Library/Logs/sprout/daemon.log.")
+	}
 }

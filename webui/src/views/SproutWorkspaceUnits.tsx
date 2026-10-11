@@ -13,7 +13,7 @@
  */
 
 import type { ChatProps } from '@sprout/ui';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ComponentType } from 'react';
 import type { ContextPanelHandle } from '../components/contextPanel/types';
 import type { DesignTab } from '../components/design/DesignView';
@@ -21,13 +21,14 @@ import type { PreviewPanelProps } from '../components/PreviewPanel';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import ErrorBoundary from '../components/ErrorBoundary';
 import Terminal from '../components/Terminal';
-import { useHost } from '../host';
+import { useTogglePreviewCommand } from '../hooks/useTogglePreviewCommand';
+import { HostContext, useHost } from '../host';
 import { useCommandHandler } from '../services/commandHandlers';
 import type { ViewType } from '../types/app';
 import type { WorkspaceModeId } from '../workspaces/registry';
 import type { WorkspaceShellProps } from '../workspaces/shell';
 import { useSproutWorkspaceChatViewProps, useSproutWorkspaceViewProps } from './SproutWorkspaceChat';
-import { ViewsLayout } from './ViewsLayout';
+import { resolveViewsArrangement, SLOT_ORDER, ViewsLayout } from './ViewsLayout';
 import type { ViewComponent, ViewsArrangement, ViewKind } from './ViewsLayout';
 import { useWorkspaceChat } from './WorkspaceChatContext';
 import { useWorkspaceEditor } from './WorkspaceEditorContext';
@@ -45,10 +46,14 @@ const ASSEMBLED_VIEW_COMPONENTS: Partial<Record<ViewKind, ViewComponent>> = { ed
  * supplies `viewProps.editor`; then the host gets the bare `Editor` primitive
  * with its own props.
  *
- * An arranged `previewPanel` starts open — the host placed it, and the
- * arrangement has no toggle of its own to open it — and its close affordance
- * closes it. A host that wants to drive it passes `open` (and `onClose`)
- * through `viewProps.previewPanel`, which is merged over these defaults.
+ * An arranged `previewPanel` is mounted only when the host declares
+ * `capabilities.preview` (its backend serves `/api/preview/*`); otherwise it
+ * is dropped from the arrangement, so it renders nothing and makes no
+ * request. When mounted it starts closed and is opened by the `toggle_preview`
+ * command (the command palette, or a host dispatching it); its close
+ * affordance closes it. A host that passes `open` through
+ * `viewProps.previewPanel` drives it instead (with its `onClose`), and the
+ * command is not registered.
  */
 export function ArrangedViews({
   arrangement,
@@ -59,8 +64,12 @@ export function ArrangedViews({
   viewProps?: Partial<Record<ViewKind, object>>;
   chatOverrides?: Partial<ChatProps>;
 }): JSX.Element {
-  const [previewOpen, setPreviewOpen] = useState(true);
+  const resolved = usePreviewGatedArrangement(arrangement);
+  const hostControlled = (viewProps?.previewPanel as Partial<PreviewPanelProps> | undefined)?.open !== undefined;
+  const previewArranged = arrangementHas(resolved, 'previewPanel');
+  const [previewOpen, setPreviewOpen] = useState(false);
   const closePreview = useCallback(() => setPreviewOpen(false), []);
+  useTogglePreviewCommand(setPreviewOpen, previewArranged && !hostControlled);
   const previewPanel = useMemo<PreviewPanelProps>(
     () => ({ open: previewOpen, onClose: closePreview }),
     [previewOpen, closePreview],
@@ -69,8 +78,33 @@ export function ArrangedViews({
   useOpenInEditorRequests();
   const components = viewProps?.editor ? undefined : ASSEMBLED_VIEW_COMPONENTS;
   return (
-    <ViewsLayout arrangement={arrangement} props={props} components={components} className="sprout-workspace__layout" />
+    <ViewsLayout arrangement={resolved} props={props} components={components} className="sprout-workspace__layout" />
   );
+}
+
+/** Whether any slot of a resolved arrangement places `kind`. */
+function arrangementHas(arrangement: ViewsArrangement, kind: ViewKind): boolean {
+  return SLOT_ORDER.some((slot) => arrangement[slot]?.includes(kind) ?? false);
+}
+
+/**
+ * Resolve an arrangement against the default and drop `previewPanel` when the
+ * host's backend does not serve the preview lifecycle, so the panel is never
+ * mounted there (and never polls `/api/preview/status`). Reads the host
+ * through the context directly: an ambient caller may render the layout
+ * without a `HostProvider`, which counts as no capability.
+ */
+export function usePreviewGatedArrangement(arrangement?: ViewsArrangement): ViewsArrangement {
+  const previewCapable = useContext(HostContext)?.capabilities.preview === true;
+  return useMemo(() => {
+    const resolved = resolveViewsArrangement(arrangement);
+    if (previewCapable) return resolved;
+    const gated: ViewsArrangement = {};
+    for (const slot of SLOT_ORDER) {
+      gated[slot] = (resolved[slot] ?? []).filter((kind) => kind !== 'previewPanel');
+    }
+    return gated;
+  }, [arrangement, previewCapable]);
 }
 
 /**
@@ -131,7 +165,8 @@ export function ComposedSpaceShell({
   const { chatProps, reviewProps, diffState } = useSproutWorkspaceChatViewProps(chatOverrides);
   const { buffers, activeBufferId } = useEditorManager();
   const { openFile } = useWorkspaceEditor();
-  const terminalBackend = resolveWorkspaceTerminalBackend(useHost());
+  const host = useHost();
+  const terminalBackend = resolveWorkspaceTerminalBackend(host);
 
   const [currentView, setCurrentView] = useState<ViewType>('chat');
   const [isTerminalExpanded, setTerminalExpanded] = useState(false);
@@ -197,6 +232,7 @@ export function ComposedSpaceShell({
         onToggleContextPanel={() => contextPanelRef.current?.togglePanel()}
         supportsLocalTerminal={terminalBackend === 'pty'}
         inBrowserTerminal={terminalBackend === 'wasm'}
+        previewAvailable={host.capabilities.preview === true}
         isTerminalExpanded={isTerminalExpanded}
         onTerminalExpandedChange={setTerminalExpanded}
         showContextSidebar={currentBuffer?.kind === 'chat'}

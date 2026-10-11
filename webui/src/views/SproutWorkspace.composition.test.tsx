@@ -3,8 +3,10 @@
  *
  * - `chatOverrides` merge over the assembled chat props (the arranged chat
  *   and the composed space shell's chat) without dropping the live send.
- * - An arranged `previewPanel` gets an open state the composition owns, and
- *   the host's `viewProps.previewPanel` is merged over it.
+ * - An arranged `previewPanel` mounts only with `capabilities.preview`, starts
+ *   closed with an open state the composition owns (toggled by
+ *   `toggle_preview`), and the host's `viewProps.previewPanel` is merged over
+ *   it.
  * - Without `layout` or `shellProps`, the space shell is fed from the chat and
  *   editor units; host `shellProps` still win.
  * - The chat session list loads once the events transport connects, on both
@@ -121,6 +123,15 @@ function makeHost(): SproutHost {
   return { ...headlessHost(), transport: { apiBaseURL: 'https://host.test', wsURL: '', authMode: 'none' } };
 }
 
+const PREVIEW_HOST: SproutHost = (() => {
+  const host = makeHost();
+  return { ...host, capabilities: { ...host.capabilities, preview: true } };
+})();
+
+function makePreviewHost(): SproutHost {
+  return PREVIEW_HOST;
+}
+
 beforeAll(() => {
   // @ts-expect-error — declare the React act-environment flag for act() mode
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -176,13 +187,27 @@ describe('SproutWorkspace chatOverrides', () => {
 });
 
 describe('SproutWorkspace arranged preview panel', () => {
-  it('starts open and closes from its own close affordance', async () => {
+  const togglePreview = () =>
+    act(() => {
+      window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'toggle_preview' } }));
+    });
+
+  it('is not mounted when the host does not declare capabilities.preview', async () => {
     render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} layout={PREVIEW_ONLY} />);
+    await screen.findByTestId('views-layout');
+    expect(screen.queryByTestId('composition-preview')).not.toBeInTheDocument();
+  });
+
+  it('starts closed, opens from toggle_preview and closes from its own close affordance', async () => {
+    render(<SproutWorkspace project={PROJECT} space="code" host={makePreviewHost()} layout={PREVIEW_ONLY} />);
     const preview = await screen.findByTestId('composition-preview');
-    expect(preview).toHaveAttribute('data-open', 'true');
+    expect(preview).toHaveAttribute('data-open', 'false');
     expect(preview).toHaveAttribute('data-close', 'function');
 
-    act(() => fireEvent.click(preview));
+    togglePreview();
+    expect(screen.getByTestId('composition-preview')).toHaveAttribute('data-open', 'true');
+
+    act(() => fireEvent.click(screen.getByTestId('composition-preview')));
     expect(screen.getByTestId('composition-preview')).toHaveAttribute('data-open', 'false');
   });
 
@@ -191,7 +216,7 @@ describe('SproutWorkspace arranged preview panel', () => {
       <SproutWorkspace
         project={PROJECT}
         space="code"
-        host={makeHost()}
+        host={makePreviewHost()}
         layout={PREVIEW_ONLY}
         viewProps={{ previewPanel: { open: false } }}
       />,
@@ -199,6 +224,38 @@ describe('SproutWorkspace arranged preview panel', () => {
     const preview = await screen.findByTestId('composition-preview');
     expect(preview).toHaveAttribute('data-open', 'false');
     expect(preview).toHaveAttribute('data-close', 'function');
+  });
+
+  it("leaves a host-controlled panel to the host: open and onClose are the host's", async () => {
+    const onClose = vi.fn();
+    const { rerender } = render(
+      <SproutWorkspace
+        project={PROJECT}
+        space="code"
+        host={makePreviewHost()}
+        layout={PREVIEW_ONLY}
+        viewProps={{ previewPanel: { open: true, onClose } }}
+      />,
+    );
+    const preview = await screen.findByTestId('composition-preview');
+    expect(preview).toHaveAttribute('data-open', 'true');
+    // The composition does not claim the command for a panel the host drives.
+    togglePreview();
+    expect(screen.getByTestId('composition-preview')).toHaveAttribute('data-open', 'true');
+
+    act(() => fireEvent.click(screen.getByTestId('composition-preview')));
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <SproutWorkspace
+        project={PROJECT}
+        space="code"
+        host={makePreviewHost()}
+        layout={PREVIEW_ONLY}
+        viewProps={{ previewPanel: { open: false, onClose } }}
+      />,
+    );
+    expect(screen.getByTestId('composition-preview')).toHaveAttribute('data-open', 'false');
   });
 });
 

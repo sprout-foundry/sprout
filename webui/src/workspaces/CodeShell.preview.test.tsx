@@ -196,4 +196,25 @@ describe('CodeShell preview panel', () => {
 
     expect(container.querySelector('[data-testid="preview-pane-stopped"]')).not.toBeNull();
   });
+
+  it('opens from the toggle_preview command', () => {
+    act(() => {
+      root.render(host(createElement(CodeShell, makeShellProps())));
+    });
+    act(() => {
+      window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'toggle_preview' } }));
+    });
+    expect(container.querySelector('[data-testid="preview-panel"]')).not.toBeNull();
+  });
+
+  it('offers no toggle and mounts no panel when the preview is unavailable', () => {
+    act(() => {
+      root.render(host(createElement(CodeShell, makeShellProps({ previewAvailable: false }))));
+    });
+    expect(container.querySelector('[data-testid="preview-panel-toggle"]')).toBeNull();
+    act(() => {
+      window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'toggle_preview' } }));
+    });
+    expect(container.querySelector('[data-testid="preview-panel"]')).toBeNull();
+  });
 });

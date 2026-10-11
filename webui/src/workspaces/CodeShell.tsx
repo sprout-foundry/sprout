@@ -21,9 +21,13 @@ import Terminal from '../components/Terminal';
 import type { WorkspaceShellProps } from './shell';
 import { isLayeredLayout } from '../config/layout';
 import { copy } from '../config/copy';
+import { TOGGLE_PREVIEW_COMMAND, useTogglePreviewCommand } from '../hooks/useTogglePreviewCommand';
 import { useHost, useHostCapabilities } from '../host';
 import { useActiveRepoURL } from '../services/activeRepo';
+import { useHasCommandHandler } from '../services/commandHandlers';
 import { repoSlug } from '../host/repoName';
+
+const PREVIEW_TOGGLE_COMMANDS: readonly string[] = [TOGGLE_PREVIEW_COMMAND];
 
 const CodeShell: React.FC<WorkspaceShellProps> = ({
   isMobile,
@@ -36,6 +40,7 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
   onToggleContextPanel,
   supportsLocalTerminal,
   inBrowserTerminal = true,
+  previewAvailable = true,
   isTerminalExpanded,
   onTerminalExpandedChange,
   showContextSidebar,
@@ -77,6 +82,11 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
   // The Code-mode preview panel (the running-app dev server),
   // collapsed by default so it never steals editor space or polls.
   const [previewPanelOpen, setPreviewPanelOpen] = useState(false);
+  useTogglePreviewCommand(setPreviewPanelOpen, previewAvailable);
+  // Inside an embed the toggle shows only while the command is handled; the
+  // standalone app shell handles every command, so its toggle always shows.
+  const previewToggleHandled = useHasCommandHandler(PREVIEW_TOGGLE_COMMANDS);
+  const showPreview = previewAvailable && previewToggleHandled;
   // On phones the project sidebar lives in the drawer, so name the project
   // on the toolbar; tapping it opens the drawer.
   const activeRepoSlug = repoSlug(useActiveRepoURL());
@@ -96,7 +106,7 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
         onToggleSidebar={onToggleSidebar}
         onToggleContextPanel={onToggleContextPanel}
         hasContextPanel={hasContextPanel}
-        onTogglePreviewPanel={() => setPreviewPanelOpen((open) => !open)}
+        onTogglePreviewPanel={showPreview ? () => setPreviewPanelOpen((open) => !open) : undefined}
         previewPanelOpen={previewPanelOpen}
       />
       <div className="main-view-content">
@@ -170,7 +180,7 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
             />
           </ErrorBoundary>
         </div>
-        <PreviewPanel open={previewPanelOpen} onClose={() => setPreviewPanelOpen(false)} />
+        {showPreview && <PreviewPanel open={previewPanelOpen} onClose={() => setPreviewPanelOpen(false)} />}
         <div className="context-panel-container">
           <ContextSidebar
             isMobile={isMobile}

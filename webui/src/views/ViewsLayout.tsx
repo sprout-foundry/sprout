@@ -86,7 +86,9 @@ export type ViewComponent = ElementType;
 
 /**
  * The built-in webui arrangement: files at left, the chat at center, the
- * agent-changes panel at right, the preview panel as an overlay. The command
+ * agent-changes panel at right, the preview panel as an overlay (a composed
+ * workspace mounts it only for a host that declares `capabilities.preview`,
+ * closed until opened). The command
  * palette sits in the overlay too (it renders nothing until opened); an
  * arrangement that supplies its own `overlay` without it opts out. This is
  * what the web UI itself composes; an embedding supplies its own arrangement

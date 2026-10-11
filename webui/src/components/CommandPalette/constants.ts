@@ -1,5 +1,6 @@
 import { capability } from '../../config/mode';
 import { getActiveHost } from '../../host';
+import { isAppShell } from '../../services/commandHandlers';
 import type { CommandDef } from './CommandPalette';
 
 // ── Command definitions ────────────────────────────────────────────────────
@@ -17,6 +18,7 @@ export const COMMAND_DEFINITIONS: CommandDef[] = [
   { id: 'toggle_explorer', label: 'Toggle File Explorer', category: 'View' },
   { id: 'toggle_sidebar', label: 'Toggle Sidebar', category: 'View' },
   { id: 'toggle_terminal', label: 'Toggle Terminal', category: 'View' },
+  { id: 'toggle_preview', label: 'Toggle Preview Panel', category: 'View' },
   { id: 'split_editor_vertical', label: 'Split Editor Vertical', category: 'View' },
   { id: 'split_editor_horizontal', label: 'Split Editor Horizontal', category: 'View' },
   { id: 'split_editor_grid', label: 'Split Editor Grid', category: 'View' },
@@ -68,6 +70,10 @@ export function visibleCommands(): CommandDef[] {
   const supportsLocalTerminal =
     getActiveHost()?.capabilities.localTerminal ?? capability('supportsLocalTerminal', true, false);
   return COMMAND_DEFINITIONS.filter((cmd) => {
+    // The standalone app opens its preview panel from the Code header toggle;
+    // the command is for a composed workspace, whose palette lists it only
+    // while a preview panel has registered to handle it.
+    if (cmd.id === 'toggle_preview' && isAppShell()) return false;
     if (!supportsLocalTerminal && (cmd.id === 'split_terminal_vertical' || cmd.id === 'split_terminal_horizontal')) {
       return false;
     }

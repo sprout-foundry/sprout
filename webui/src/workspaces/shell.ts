@@ -90,6 +90,13 @@ export interface WorkspaceShellProps {
    * terminal at all passes false, so no hidden terminal or shell is started.
    */
   inBrowserTerminal?: boolean;
+  /**
+   * Whether the Code shell offers its preview panel (and the header toggle and
+   * `toggle_preview` command that open it). Defaults to true; a composition
+   * whose host's backend does not serve `/api/preview/*` passes false, so the
+   * panel is never mounted and nothing polls the preview status.
+   */
+  previewAvailable?: boolean;
   isTerminalExpanded: boolean;
   onTerminalExpandedChange: (expanded: boolean) => void;
 

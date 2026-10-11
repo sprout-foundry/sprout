@@ -12,7 +12,7 @@ import type { WorkspaceModeContext, WorkspaceModeId } from '../workspaces/regist
 import type { WorkspaceShellProps } from '../workspaces/shell';
 import { resetHostAgentBackend, wireHostAgentBackend } from './hostAgentBackend';
 import { useSproutWorkspaceChatTransport } from './SproutWorkspaceChat';
-import { ArrangedViews, ComposedSpaceShell } from './SproutWorkspaceUnits';
+import { ArrangedViews, ComposedSpaceShell, usePreviewGatedArrangement } from './SproutWorkspaceUnits';
 import { ViewsLayout } from './ViewsLayout';
 import type { ViewsArrangement, ViewKind } from './ViewsLayout';
 import { WorkspaceChatProvider } from './WorkspaceChatContext';
@@ -375,9 +375,13 @@ export function SproutWorkspace({
     };
   }, [ambient, host, agentBackendKind, project.repoUrl, chatTransport.eventsProvider]);
 
+  // The ambient host's capabilities gate the arranged preview panel too; own
+  // mode gates it inside its own HostProvider (`ArrangedViews`).
+  const ambientLayout = usePreviewGatedArrangement(ambient ? layout : undefined);
+
   let content: ReactNode;
   if (ambient && layout) {
-    content = <ViewsLayout arrangement={layout} props={viewProps} className="sprout-workspace__layout" />;
+    content = <ViewsLayout arrangement={ambientLayout} props={viewProps} className="sprout-workspace__layout" />;
   } else if (ambient || (!layout && shellProps)) {
     content = <ResolvedSpaceShell Shell={resolved.Shell} shellProps={shellProps} />;
   } else {

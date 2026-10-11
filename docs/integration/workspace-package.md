@@ -307,14 +307,35 @@ still, leave `changes` out of the arrangement on such a host.
 Two preview kinds can be arranged:
 
 - **`previewPanel`** — the Code preview panel, driven by the dev-server
-  lifecycle API (`/api/preview/*` through the adapter, polled while open). An
-  own-mode composition assembles its `open` state: it starts open (the host
-  placed it, and the arrangement has no toggle of its own) and its close
-  button closes it. `viewProps.previewPanel` is merged over these, so a host
-  that wants its own toggle passes `{ open, onClose }`. In ambient mode pass
-  both yourself — without `open: true` the panel renders nothing. The default
-  arrangement places `previewPanel` in the `overlay` slot, so an arrangement
-  that omits `overlay` gets it; pass `overlay: []` to leave it out.
+  lifecycle API (`/api/preview/status` polled while open, plus `start`,
+  `restart` and `stop`, through the adapter). Only a backend that serves
+  those paths can back it, so the host declares it with
+  `capabilities.preview: true` (`localHost`, the daemon, does; `cloudHost`
+  and `headlessHost()` do not, and a host that omits the flag counts as
+  `false`). Without the capability the panel is **not mounted**, even when
+  arranged: it renders nothing, offers no toggle, and no `/api/preview/*`
+  request is made. The default arrangement places `previewPanel` in the
+  `overlay` slot, so this is what keeps an arrangement that omits `overlay`
+  from polling a backend that has no previews; pass `overlay: []` (or an
+  `overlay` without it) to leave it out regardless.
+
+  With the capability, an own-mode composition owns its `open` state: it
+  **starts closed** and mounts its pane, and polls, only once opened. It
+  registers the `toggle_preview` command, so the command palette lists
+  Toggle Preview Panel, and a host control can open it by dispatching
+  `new CustomEvent("sprout:hotkey", { detail: { commandId: "toggle_preview" } })`
+  on `window`; its close button closes it. A host that wants to drive it
+  passes `viewProps.previewPanel: { open, onClose }`: whenever `open` is
+  supplied the panel is host-controlled (the composition's state and the
+  `toggle_preview` command step aside, and the close button calls the host's
+  `onClose`). In ambient mode pass both yourself — without `open: true` the
+  panel renders nothing — and the ambient host's `capabilities.preview`
+  gates it the same way.
+
+  The composed space shell (no `layout`) follows the same rule for the Code
+  shell's own preview panel: with the capability the header shows its
+  toggle and `toggle_preview` works; without it there is no toggle and no
+  panel. The standalone app's Code header toggle is unchanged.
 - **`previewPane`** — the presentational pane with no data source; the host
   supplies everything through `viewProps.previewPane` (`PreviewPaneProps`).
   Required: `status` (`"starting" | "running" | "stopped" | "failed"`) and

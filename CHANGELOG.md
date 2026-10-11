@@ -4,9 +4,12 @@ All notable changes to Sprout will be documented in this file.
 
 ## [Unreleased]
 
+## [v0.29.2] - 2026-10-11
+
 - fix(service): security — `sprout service install` on macOS no longer writes API keys and tokens into the launchd plist (`~/Library/LaunchAgents/com.sprout.daemon.plist`). Every captured `*_API_KEY` / `*_TOKEN` / `*_SECRET` variable was inlined there in plaintext; they now stay only in `service.env` (0600, in the state directory) and the daemon loads that file itself at startup when it runs as the service, with variables already in its environment taking precedence. The plist sets only `SPROUT_SERVICE`, `HOME`, `SPROUT_DAEMON_ROOT` and `PATH`. Re-running `sprout service install` rewrites an older plist clean and names the variables it removed; `sprout service start` / `restart` warn about such a plist, and `sprout service diagnose` flags it by variable name. Rotate keys from an old plist that was backed up or shared.
 - feat(service): the macOS daemon's launchd output (startup messages and crash traces) goes to `~/Library/Logs/sprout/daemon.log` (directory 0700, file 0600); the rotated daemon logs stay in the state directory, whose log directory is now 0700. `sprout service status` and `diagnose` print both locations.
 - feat(service): `sprout service install --root <dir>` sets `SPROUT_DAEMON_ROOT`, which scopes daemon storage and the web UI's workspace browser (default: the home directory). The directory must exist. In service mode the web UI keeps an explicit root instead of resetting it to the user's home.
+- ci: commits carry no AI-tool attribution. `scripts/check-commit-attribution.sh` rejects `Co-Authored-By` trailers naming an AI assistant and "Generated with …" footers, in a `commit-msg` hook (`make hooks`) and in CI for every pushed or proposed commit.
 
 ## [v0.29.1] - 2026-10-11
 

@@ -672,3 +672,9 @@ build-fast:
 dev: deploy-ui
 	@echo "Development build ready: React UI deployed"
 	@echo "Run 'make build' to create Go binary with embedded UI"
+
+# Enable the repo's git hooks (commit-msg rejects AI-tool attribution).
+.PHONY: hooks
+hooks:
+	@git config core.hooksPath .githooks
+	@echo "git hooks enabled (core.hooksPath=.githooks)"

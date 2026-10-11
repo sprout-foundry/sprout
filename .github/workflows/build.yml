@@ -231,6 +231,26 @@ jobs:
         # Full history so golangci-lint's only-new-issues diff is accurate.
         fetch-depth: 0
 
+    # Commits carry no AI-tool attribution (Co-Authored-By trailers naming an
+    # AI assistant, "Generated with …" footers). Checks every commit in the
+    # pull request or the pushed range.
+    - name: Commit messages carry no AI-tool attribution
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        PR_BASE: ${{ github.event.pull_request.base.sha }}
+        PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        PUSH_BEFORE: ${{ github.event.before }}
+        PUSH_AFTER: ${{ github.sha }}
+      run: |
+        if [ "$EVENT_NAME" = "pull_request" ]; then
+          range="$PR_BASE..$PR_HEAD"
+        elif [ -n "$PUSH_BEFORE" ] && [ "$PUSH_BEFORE" != "0000000000000000000000000000000000000000" ] && git cat-file -e "$PUSH_BEFORE^{commit}" 2>/dev/null; then
+          range="$PUSH_BEFORE..$PUSH_AFTER"
+        else
+          range="$PUSH_AFTER~1..$PUSH_AFTER"
+        fi
+        scripts/check-commit-attribution.sh "$range"
+
     - name: Set up Go
       uses: actions/setup-go@v5
       with:

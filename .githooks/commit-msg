@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Enabled with `make hooks` (sets core.hooksPath to .githooks).
+exec "$(git rev-parse --show-toplevel)/scripts/check-commit-attribution.sh" --message-file "$1"

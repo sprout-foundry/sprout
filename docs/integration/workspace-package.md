@@ -399,7 +399,10 @@ Queries go to `GET /api/search` (replace-all to `POST /api/search/replace`)
 through the workspace fetch. A daemon host answers from the daemon; an
 in-browser-agent host answers in the page, by searching the browser file
 store through the WASM shell with the same options (literal text unless
-`regex`, `case_sensitive`, `whole_word`). No capability gates it.
+`regex`, `case_sensitive`, `whole_word`). Replace-all applies those same
+options in the page and rewrites only matched text in the listed workspace
+files; the replacement is inserted literally (no backreferences, as on the
+daemon). No capability gates it.
 
 **Overriding.** `viewProps.search` replaces the assembled props
 (`WorkspaceSearchViewProps`): `onFileClick(path, line)` (assembled: the

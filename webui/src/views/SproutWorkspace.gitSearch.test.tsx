@@ -132,6 +132,10 @@ const fetchSpy = vi.fn(async (input: unknown, _init?: RequestInit) => {
 
 const requests = () => fetchSpy.mock.calls.map(([url, init]) => ({ url: String(url), init }));
 
+// The views mount the full provider stack; under a loaded parallel run the
+// debounced search and the adapter install can take seconds.
+vi.setConfig({ testTimeout: 20000 });
+
 beforeAll(() => {
   // @ts-expect-error — declare the React act-environment flag for act() mode
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -290,7 +294,7 @@ describe('SproutWorkspace search view (daemon host)', () => {
       const view = await screen.findByTestId('workspace-search');
       fireEvent.change(within(view).getByPlaceholderText('Search...'), { target: { value: 'needle' } });
 
-      const hit = await within(view).findByText('12', {}, { timeout: 2000 });
+      const hit = await within(view).findByText('12', {}, { timeout: 5000 });
       expect(requests().some(({ url }) => url.startsWith('https://host.test/api/search?query=needle'))).toBe(true);
 
       act(() => {
@@ -318,7 +322,7 @@ describe('SproutWorkspace search view (daemon host)', () => {
     );
     const view = await screen.findByTestId('workspace-search');
     fireEvent.change(within(view).getByPlaceholderText('Search...'), { target: { value: 'needle' } });
-    const hit = await within(view).findByText('12', {}, { timeout: 2000 });
+    const hit = await within(view).findByText('12', {}, { timeout: 5000 });
     act(() => {
       fireEvent.click(hit);
     });

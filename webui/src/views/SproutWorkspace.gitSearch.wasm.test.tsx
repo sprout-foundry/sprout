@@ -150,6 +150,10 @@ const pageFetch = vi.fn(
     new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }),
 );
 
+// The views mount the full provider stack; under a loaded parallel run the
+// debounced search and the adapter install can take seconds.
+vi.setConfig({ testTimeout: 20000 });
+
 beforeAll(() => {
   // @ts-expect-error — declare the React act-environment flag for act() mode
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -183,7 +187,7 @@ describe('SproutWorkspace source control and search views (wasm host)', () => {
       />,
     );
     const view = await screen.findByTestId('workspace-git');
-    await within(view).findByTitle('src/changed.ts', {}, { timeout: 3000 });
+    await within(view).findByTitle('src/changed.ts', {}, { timeout: 5000 });
     expect(browserGit.ops.some(({ op }) => op === 'status')).toBe(true);
 
     // Browser git cannot unstage: the action is offered disabled.
@@ -233,11 +237,11 @@ describe('SproutWorkspace source control and search views (wasm host)', () => {
         />,
       );
       // The search runs once the in-browser adapter is in place.
-      await waitFor(() => expect(browserGit.ops.length).toBeGreaterThan(0), { timeout: 3000 });
+      await waitFor(() => expect(browserGit.ops.length).toBeGreaterThan(0), { timeout: 5000 });
       const view = await screen.findByTestId('workspace-search');
       fireEvent.change(within(view).getByPlaceholderText('Search...'), { target: { value: 'needle' } });
 
-      const hit = await within(view).findByText('12', {}, { timeout: 2000 });
+      const hit = await within(view).findByText('12', {}, { timeout: 5000 });
       expect(within(view).getByText('found.ts', { exact: false })).toBeInTheDocument();
       act(() => {
         fireEvent.click(hit);

@@ -4,6 +4,7 @@ import {
   type ReactNode,
   useContext,
   useMemo,
+  useRef,
   useState,
   useEffect,
   useCallback,
@@ -25,6 +26,41 @@ interface HotkeyContextValue {
 const apiService = ApiService.getInstance();
 
 const HotkeyContext = createContext<HotkeyContextValue | null>(null);
+
+type WorkspaceKeyListener = (event: KeyboardEvent) => void;
+
+/**
+ * Key listeners for presses inside the workspace, fed by an embed's
+ * HotkeyProvider scope. Null when the provider owns the whole document
+ * (standalone) or there is no provider.
+ */
+const WorkspaceKeyScopeContext = createContext<Set<WorkspaceKeyListener> | null>(null);
+
+/**
+ * Listen for keydowns that belong to the workspace. In the standalone app
+ * that is every keydown on the page (a window listener, as before); in an
+ * embed it is only keys pressed inside the workspace's React tree, so a
+ * shortcut never fires while the user is typing in the host page. Outside
+ * the app and any HotkeyProvider nothing is the workspace's, so it listens to
+ * nothing.
+ */
+export function useWorkspaceKeyDown(listener: WorkspaceKeyListener): void {
+  const scope = useContext(WorkspaceKeyScopeContext);
+  const listenerRef = useRef(listener);
+  listenerRef.current = listener;
+  useEffect(() => {
+    const forward: WorkspaceKeyListener = (event) => listenerRef.current(event);
+    if (scope) {
+      scope.add(forward);
+      return () => {
+        scope.delete(forward);
+      };
+    }
+    if (!isAppShell()) return;
+    window.addEventListener('keydown', forward);
+    return () => window.removeEventListener('keydown', forward);
+  }, [scope]);
+}
 
 export const useHotkeys = (): HotkeyContextValue => {
   const context = useContext(HotkeyContext);
@@ -263,8 +299,13 @@ export function HotkeyProvider({ children }: HotkeyProviderProps): JSX.Element {
 
   // Workspace-scoped keydown handler (embeds): React's synthetic keydown on the
   // scope wrapper sees exactly the keys pressed inside the workspace tree.
+  const [scopedKeyListeners] = useState(() => new Set<WorkspaceKeyListener>());
   const handleScopedKeyDown = useCallback(
     (event: ReactKeyboardEvent) => {
+      // Workspace-level key listeners (useWorkspaceKeyDown) see every key
+      // pressed in the scope; one that handles a key prevents its default.
+      for (const listener of scopedKeyListeners) listener(event.nativeEvent);
+      if (event.nativeEvent.defaultPrevented) event.stopPropagation();
       if (!isLoaded) return;
       const entry = resolveHotkey(event.nativeEvent, hotkeys);
       if (!entry || !hasCommandHandler(entry.command_id)) return;
@@ -272,7 +313,7 @@ export function HotkeyProvider({ children }: HotkeyProviderProps): JSX.Element {
       event.stopPropagation();
       dispatchHotkey(entry);
     },
-    [hotkeys, isLoaded],
+    [hotkeys, isLoaded, scopedKeyListeners],
   );
 
   useEffect(() => {
@@ -345,9 +386,11 @@ export function HotkeyProvider({ children }: HotkeyProviderProps): JSX.Element {
   }
   return (
     <HotkeyContext.Provider value={value}>
-      <div className="sprout-hotkey-scope" style={{ display: 'contents' }} onKeyDown={handleScopedKeyDown}>
-        {children}
-      </div>
+      <WorkspaceKeyScopeContext.Provider value={scopedKeyListeners}>
+        <div className="sprout-hotkey-scope" style={{ display: 'contents' }} onKeyDown={handleScopedKeyDown}>
+          {children}
+        </div>
+      </WorkspaceKeyScopeContext.Provider>
     </HotkeyContext.Provider>
   );
 }

@@ -4,6 +4,9 @@ import { act, createElement } from 'react';
 import type { Dispatch } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { __resetCommandHandlersForTests, claimAppShell, registerCommandHandler } from '../services/commandHandlers';
+import { useSidebarEventHandlers } from '../hooks/useSidebarEventHandlers';
+import { HostProvider } from '../host/HostProvider';
+import { makeTestHost } from '../host/testHost';
 import { buildKeyString, HotkeyProvider } from './HotkeyContext';
 
 // ---------------------------------------------------------------------------
@@ -624,5 +627,82 @@ describe('embedded workspace (no app shell)', () => {
     const after = press(inside, { key: 's', ctrlKey: true });
     expect(after.defaultPrevented).toBe(false);
     expect(handler).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: the sidebar's Cmd/Ctrl+\ toggle (useWorkspaceKeyDown)
+// ---------------------------------------------------------------------------
+
+describe('sidebar toggle shortcut', () => {
+  let onSidebarToggle: ReturnType<typeof vi.fn>;
+
+  function SidebarProbe() {
+    useSidebarEventHandlers({
+      effectiveSidebarCollapsed: false,
+      isMobile: false,
+      onSidebarToggle,
+      fileTreeRef: { current: null },
+      settingsFocusTarget: null,
+      setSettingsFocusTarget: () => {},
+    });
+    return createElement('button', { 'data-testid': 'inside' }, 'x');
+  }
+
+  async function mount() {
+    act(() => {
+      root.render(
+        createElement(
+          HostProvider,
+          { host: makeTestHost() },
+          createElement(HotkeyProvider, null, createElement(SidebarProbe)),
+        ),
+      );
+    });
+    await flushPromises();
+    return container.querySelector('[data-testid="inside"]') as HTMLButtonElement;
+  }
+
+  function press(target: EventTarget): KeyboardEvent {
+    const ev = new KeyboardEvent('keydown', { key: '\\', ctrlKey: true, bubbles: true, cancelable: true });
+    act(() => {
+      target.dispatchEvent(ev);
+    });
+    return ev;
+  }
+
+  beforeEach(() => {
+    __resetCommandHandlersForTests();
+    onSidebarToggle = vi.fn();
+  });
+
+  afterEach(() => {
+    __resetCommandHandlersForTests();
+  });
+
+  it('in an embed, toggles only for presses inside the workspace', async () => {
+    const inside = await mount();
+    const outside = document.createElement('input');
+    document.body.appendChild(outside);
+
+    const fromHost = press(outside);
+    expect(onSidebarToggle).not.toHaveBeenCalled();
+    expect(fromHost.defaultPrevented).toBe(false);
+
+    const fromWorkspace = press(inside);
+    expect(onSidebarToggle).toHaveBeenCalledTimes(1);
+    expect(fromWorkspace.defaultPrevented).toBe(true);
+    outside.remove();
+  });
+
+  it('in the standalone app, toggles from anywhere on the page', async () => {
+    claimAppShell();
+    await mount();
+    const elsewhere = document.createElement('div');
+    document.body.appendChild(elsewhere);
+
+    press(elsewhere);
+    expect(onSidebarToggle).toHaveBeenCalledTimes(1);
+    elsewhere.remove();
   });
 });

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import type { RefObject } from 'react';
 import type { FileTreeHandle } from '../components/SidebarFilesSection';
+import { useWorkspaceKeyDown } from '../contexts/HotkeyContext';
 import { useHostCapabilities } from '../host';
 import { useCommandHandler } from '../services/commandHandlers';
 import type { SectionTab } from './useSidebarState';
@@ -33,17 +34,14 @@ export function useSidebarEventHandlers({
   setSettingsFocusTarget,
 }: UseSidebarEventHandlersParams): void {
   const { settings: supportsSettings } = useHostCapabilities();
-  // Ctrl+\ or Cmd+\ to toggle sidebar width (collapsed/expanded)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === '\\' && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        onSidebarToggle?.();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onSidebarToggle]);
+  // Ctrl+\ or Cmd+\ to toggle sidebar width (collapsed/expanded). Scoped to
+  // the workspace, so in an embed it fires only for keys pressed inside it.
+  useWorkspaceKeyDown((e) => {
+    if (e.key === '\\' && (e.ctrlKey || e.metaKey) && onSidebarToggle) {
+      e.preventDefault();
+      onSidebarToggle();
+    }
+  });
 
   // Open search tab on hotkey command
   useCommandHandler(SIDEBAR_COMMANDS);

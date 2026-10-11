@@ -39,9 +39,7 @@ interface FileIndexResponse {
  * Rows arrive workspace-relative (small payload, no root duplicated per
  * row); they are joined with the response's workspace root here so the
  * result matches the absolute-path shape the /api/browse crawl produced —
- * buffers, readFileWithConsent, and the WASM sanitizePath all expect
- * absolute paths (sanitizePath would turn a bare relative path into a
- * root-absolute one and miss the file).
+ * buffers and readFileWithConsent expect absolute paths.
  */
 async function fetchBulkIndex(fallbackRoot: string): Promise<FileResult[]> {
   const response = await clientFetch('/api/file-index');

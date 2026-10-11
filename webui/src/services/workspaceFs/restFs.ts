@@ -145,7 +145,7 @@ export function createRestFs(fetchFn: FetchFn = clientFetch): WorkspaceFs {
     async rename(from, to) {
       const resp = await fetchFn(
         '/api/rename',
-        json(JSON.stringify({ oldPath: normalizeFsPath(from), newPath: normalizeFsPath(to) })),
+        json(JSON.stringify({ old_path: normalizeFsPath(from), new_path: normalizeFsPath(to) })),
       );
       const r = await toResult(resp);
       return r.ok ? { ok: true } : { ok: false, error: r.error };

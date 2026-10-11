@@ -541,174 +541,182 @@ export async function initWasmShell(config?: {
     }
 
     // 6. Create the shell interface.
-    //
-    // Every bridge call returns a JSON string produced by the Go side. If the
-    // binary ever emits malformed (or non-JSON) output — version skew, a panic
-    // string, a truncated frame — `safeJsonParse` degrades to a typed fallback
-    // instead of throwing into the caller's line editor or render path.
-    const shell: WasmShell = {
-      executeCommand(input: string): WasmShellResult {
-        const json = wasm.executeCommand(input);
-        return safeJsonParse<WasmShellResult>(json, {
-          stdout: '',
-          stderr: `shell returned an unreadable response${json ? `: ${String(json).slice(0, 120)}` : ''}`,
-          exitCode: 1,
-        });
-      },
-
-      async executeCommandAsync(input: string): Promise<WasmShellResult> {
-        if (!wasm.executeCommandAsync) return shell.executeCommand(input);
-        const json = await wasm.executeCommandAsync(input);
-        return safeJsonParse<WasmShellResult>(json, {
-          stdout: '',
-          stderr: `shell returned an unreadable response${json ? `: ${String(json).slice(0, 120)}` : ''}`,
-          exitCode: 1,
-        });
-      },
-
-      autoComplete(input: string): WasmCompletionResult {
-        const json = wasm.autoComplete(input);
-        return safeJsonParse<WasmCompletionResult>(json, { completions: [] });
-      },
-
-      getCwd(): string {
-        return wasm.getCwd();
-      },
-
-      getWorkspaceRoot(): string {
-        return wasm.getWorkspaceRoot ? wasm.getWorkspaceRoot() : wasm.getCwd();
-      },
-
-      changeDir(dir: string): WasmChangeDirResult {
-        const json = wasm.changeDir(dir);
-        return safeJsonParse<WasmChangeDirResult>(json, {
-          cwd: '',
-          error: 'shell returned an unreadable response',
-        });
-      },
-
-      writeFile(path: string, content: string): string {
-        return wasm.writeFile(path, content);
-      },
-
-      readFile(path: string): WasmReadFileResult {
-        const json = wasm.readFile(path);
-        return safeJsonParse<WasmReadFileResult>(json, { content: '', error: 'unreadable response' });
-      },
-
-      readFileBytes(path: string): WasmReadFileBytesResult {
-        const api = wasm as SproutWasmAPI;
-        if (!api.readFileBytes) return { error: 'WASM binary does not expose readFileBytes' };
-        return api.readFileBytes(path);
-      },
-
-      saveImage(bytes: Uint8Array): WasmSaveImageResult {
-        const api = wasm as SproutWasmAPI;
-        if (!api.saveImage) return { error: 'WASM binary does not expose saveImage' };
-        return api.saveImage(bytes);
-      },
-
-      listDir(path: string): WasmListDirResult {
-        const json = wasm.listDir(path);
-        // The WASM export returns a bare array of entries (JSON null for an
-        // empty directory) on success and {"error": "..."} on failure.
-        const parsed = safeJsonParse<WasmDirEntry[] | WasmListDirResult | null | undefined>(json, undefined);
-        if (parsed === undefined) return { entries: [], error: json };
-        if (parsed === null) return { entries: [] };
-        if (Array.isArray(parsed)) return { entries: parsed };
-        return { entries: parsed.entries ?? [], error: parsed.error };
-      },
-
-      walkFiles(path?: string): string {
-        const api = wasm as SproutWasmAPI;
-        if (!api.walkFiles) return JSON.stringify({ error: 'WASM binary does not expose walkFiles' });
-        return api.walkFiles(path);
-      },
-
-      deleteFile(path: string): string {
-        return wasm.deleteFile(path);
-      },
-
-      getBuildInfo(): { version: string; commit: string; date: string } | null {
-        if (typeof wasm.getBuildInfo !== 'function') return null;
-        const json = wasm.getBuildInfo();
-        return safeJsonParse<{ version: string; commit: string; date: string } | null>(json, null);
-      },
-
-      runAgent(
-        provider: string,
-        model: string,
-        query: string,
-        onEvent?: (eventJson: string) => void,
-        chatId?: string,
-        history?: string,
-        mode?: string,
-      ): Promise<{ response: string; provider: string; model: string }> {
-        const api = wasm as SproutWasmAPI;
-        if (!api.runAgent) {
-          return Promise.reject(new Error('WASM binary does not expose runAgent'));
-        }
-        return api.runAgent(provider, model, query, onEvent, chatId, history, mode);
-      },
-
-      clearConversation(chatId?: string): void {
-        const api = wasm as SproutWasmAPI;
-        if (api.clearConversation) {
-          if (chatId === undefined) api.clearConversation();
-          else api.clearConversation(chatId);
-        }
-      },
-
-      stopAgent(chatId?: string): void {
-        const api = wasm as SproutWasmAPI;
-        if (api.stopAgent) {
-          if (chatId === undefined) api.stopAgent();
-          else api.stopAgent(chatId);
-        }
-      },
-
-      steerAgent(message: string, chatId?: string): Record<string, unknown> {
-        const api = wasm as SproutWasmAPI;
-        if (api.steerAgent) {
-          return chatId === undefined ? api.steerAgent(message) : api.steerAgent(message, chatId);
-        }
-        return { steered: false, error: 'steerAgent not available' };
-      },
-
-      respondToAskUser(requestId: string, response: string): { delivered: boolean } {
-        const api = wasm as SproutWasmAPI;
-        if (api.respondToAskUser) {
-          return api.respondToAskUser(requestId, response);
-        }
-        return { delivered: false };
-      },
-
-      respondToEditDecision(requestId: string, approved: boolean, acceptedHunks: string[]): { delivered: boolean } {
-        const api = wasm as SproutWasmAPI;
-        if (api.respondToEditDecision) {
-          return api.respondToEditDecision(requestId, approved, acceptedHunks);
-        }
-        return { delivered: false };
-      },
-
-      respondToShellApproval(requestId: string, decisions: Record<string, boolean>): { delivered: boolean } {
-        const api = wasm as SproutWasmAPI;
-        if (api.respondToShellApproval) {
-          return api.respondToShellApproval(requestId, decisions);
-        }
-        return { delivered: false };
-      },
-
-      get wasm() {
-        return window as typeof globalThis & { SproutWasm: unknown };
-      },
-    };
+    const shell = createWasmShellBridge(wasm);
 
     sharedInstance = shell;
     return shell;
   })();
 
   return initPromise;
+}
+
+/**
+ * The WasmShell bridge over a running binary's SproutWasm export.
+ *
+ * Every bridge call returns a JSON string produced by the Go side. If the
+ * binary ever emits malformed (or non-JSON) output — version skew, a panic
+ * string, a truncated frame — `safeJsonParse` degrades to a typed fallback
+ * instead of throwing into the caller's line editor or render path.
+ */
+export function createWasmShellBridge(wasm: SproutWasmAPI): WasmShell {
+  const shell: WasmShell = {
+    executeCommand(input: string): WasmShellResult {
+      const json = wasm.executeCommand(input);
+      return safeJsonParse<WasmShellResult>(json, {
+        stdout: '',
+        stderr: `shell returned an unreadable response${json ? `: ${String(json).slice(0, 120)}` : ''}`,
+        exitCode: 1,
+      });
+    },
+
+    async executeCommandAsync(input: string): Promise<WasmShellResult> {
+      if (!wasm.executeCommandAsync) return shell.executeCommand(input);
+      const json = await wasm.executeCommandAsync(input);
+      return safeJsonParse<WasmShellResult>(json, {
+        stdout: '',
+        stderr: `shell returned an unreadable response${json ? `: ${String(json).slice(0, 120)}` : ''}`,
+        exitCode: 1,
+      });
+    },
+
+    autoComplete(input: string): WasmCompletionResult {
+      const json = wasm.autoComplete(input);
+      return safeJsonParse<WasmCompletionResult>(json, { completions: [] });
+    },
+
+    getCwd(): string {
+      return wasm.getCwd();
+    },
+
+    getWorkspaceRoot(): string {
+      return wasm.getWorkspaceRoot ? wasm.getWorkspaceRoot() : wasm.getCwd();
+    },
+
+    changeDir(dir: string): WasmChangeDirResult {
+      const json = wasm.changeDir(dir);
+      return safeJsonParse<WasmChangeDirResult>(json, {
+        cwd: '',
+        error: 'shell returned an unreadable response',
+      });
+    },
+
+    writeFile(path: string, content: string): string {
+      return wasm.writeFile(path, content);
+    },
+
+    readFile(path: string): WasmReadFileResult {
+      const json = wasm.readFile(path);
+      return safeJsonParse<WasmReadFileResult>(json, { content: '', error: 'unreadable response' });
+    },
+
+    readFileBytes(path: string): WasmReadFileBytesResult {
+      const api = wasm as SproutWasmAPI;
+      if (!api.readFileBytes) return { error: 'WASM binary does not expose readFileBytes' };
+      return api.readFileBytes(path);
+    },
+
+    saveImage(bytes: Uint8Array): WasmSaveImageResult {
+      const api = wasm as SproutWasmAPI;
+      if (!api.saveImage) return { error: 'WASM binary does not expose saveImage' };
+      return api.saveImage(bytes);
+    },
+
+    listDir(path: string): WasmListDirResult {
+      const json = wasm.listDir(path);
+      // The WASM export returns a bare array of entries (JSON null for an
+      // empty directory) on success and {"error": "..."} on failure.
+      const parsed = safeJsonParse<WasmDirEntry[] | WasmListDirResult | null | undefined>(json, undefined);
+      if (parsed === undefined) return { entries: [], error: json };
+      if (parsed === null) return { entries: [] };
+      if (Array.isArray(parsed)) return { entries: parsed };
+      return { entries: parsed.entries ?? [], error: parsed.error };
+    },
+
+    walkFiles(path?: string): string {
+      const api = wasm as SproutWasmAPI;
+      if (!api.walkFiles) return JSON.stringify({ error: 'WASM binary does not expose walkFiles' });
+      return api.walkFiles(path);
+    },
+
+    deleteFile(path: string): string {
+      return wasm.deleteFile(path);
+    },
+
+    getBuildInfo(): { version: string; commit: string; date: string } | null {
+      if (typeof wasm.getBuildInfo !== 'function') return null;
+      const json = wasm.getBuildInfo();
+      return safeJsonParse<{ version: string; commit: string; date: string } | null>(json, null);
+    },
+
+    runAgent(
+      provider: string,
+      model: string,
+      query: string,
+      onEvent?: (eventJson: string) => void,
+      chatId?: string,
+      history?: string,
+      mode?: string,
+    ): Promise<{ response: string; provider: string; model: string }> {
+      const api = wasm as SproutWasmAPI;
+      if (!api.runAgent) {
+        return Promise.reject(new Error('WASM binary does not expose runAgent'));
+      }
+      return api.runAgent(provider, model, query, onEvent, chatId, history, mode);
+    },
+
+    clearConversation(chatId?: string): void {
+      const api = wasm as SproutWasmAPI;
+      if (api.clearConversation) {
+        if (chatId === undefined) api.clearConversation();
+        else api.clearConversation(chatId);
+      }
+    },
+
+    stopAgent(chatId?: string): void {
+      const api = wasm as SproutWasmAPI;
+      if (api.stopAgent) {
+        if (chatId === undefined) api.stopAgent();
+        else api.stopAgent(chatId);
+      }
+    },
+
+    steerAgent(message: string, chatId?: string): Record<string, unknown> {
+      const api = wasm as SproutWasmAPI;
+      if (api.steerAgent) {
+        return chatId === undefined ? api.steerAgent(message) : api.steerAgent(message, chatId);
+      }
+      return { steered: false, error: 'steerAgent not available' };
+    },
+
+    respondToAskUser(requestId: string, response: string): { delivered: boolean } {
+      const api = wasm as SproutWasmAPI;
+      if (api.respondToAskUser) {
+        return api.respondToAskUser(requestId, response);
+      }
+      return { delivered: false };
+    },
+
+    respondToEditDecision(requestId: string, approved: boolean, acceptedHunks: string[]): { delivered: boolean } {
+      const api = wasm as SproutWasmAPI;
+      if (api.respondToEditDecision) {
+        return api.respondToEditDecision(requestId, approved, acceptedHunks);
+      }
+      return { delivered: false };
+    },
+
+    respondToShellApproval(requestId: string, decisions: Record<string, boolean>): { delivered: boolean } {
+      const api = wasm as SproutWasmAPI;
+      if (api.respondToShellApproval) {
+        return api.respondToShellApproval(requestId, decisions);
+      }
+      return { delivered: false };
+    },
+
+    get wasm() {
+      return window as typeof globalThis & { SproutWasm: unknown };
+    },
+  };
+  return shell;
 }
 
 // ── Synchronous cache for IndexedDB (used during WASM init) ──────────────

@@ -626,6 +626,17 @@ git); `/api/sessions*` and, unless the host declares `chatSessions`,
 hotkeys, LSP status, `/api/config`, `/api/workspace`, the MCP and skills
 settings reads).
 
+The in-browser workspace has one filesystem: the startup repo import, the
+agent and its shell, and the file paths above all work on the WASM shell's
+workspace root, which `GET /api/workspace` reports (`/workspace`). The file
+paths take the daemon's path forms: workspace-relative (`src/a.ts`) or
+absolute (`/workspace/src/a.ts`, the form listings return), and `''`, `.`,
+`./`, `/workspace` and `workspace` (with or without a trailing slash) all
+name the root. These calls are answered in the page only when they go
+through the adapter (`clientFetch`, or the `fetchFn` the workspace hooks take
+by default); a plain `fetch('/api/files')` from the page reaches the backend
+instead.
+
 **Forwarded to `transport.apiBaseURL`**, by surface:
 
 | Surface | Paths | Needed when |

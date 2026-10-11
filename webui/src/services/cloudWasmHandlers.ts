@@ -16,8 +16,10 @@ import {
   isRuntimePath,
   joinVfsPath,
   normalizeVfsPath as normalizePath,
+  resolveWorkspacePath,
   RUNTIME_DIRS,
   trackFileWrite as trackWrite,
+  untrackFileWrite as untrackWrite,
   workspaceRootOf,
 } from './vfsFiles';
 import type { WasmDirEntry, WasmShell } from './wasmShell';
@@ -252,6 +254,25 @@ function hiddenFromWorkspace(shell: WasmShell, absPath: string, root: string): b
 
 // ── Individual wasm-local route handlers ─────────────────────────
 
+/**
+ * The absolute VFS path a file API request names, resolved against the
+ * shell's workspace root (see resolveWorkspacePath). Every file route goes
+ * through here, so listings, reads, writes and tree operations address the
+ * files the agent and its shell work on.
+ */
+function workspacePathOf(shell: WasmShell, raw: string): string {
+  return resolveWorkspacePath(raw, workspaceRootOf(shell), (p) => !shell.listDir(p).error);
+}
+
+/**
+ * GET /api/workspace — the workspace root the file routes resolve against,
+ * in the daemon's shape.
+ */
+export function handleWasmWorkspaceInfo(shell: WasmShell): Response {
+  const root = normalizePath(workspaceRootOf(shell) || '/');
+  return jsonOk({ message: 'ok', workspace_root: root, daemon_root: root });
+}
+
 /** Path relative to the shell's CWD (the browser workspace root). */
 function vfsRelative(absPath: string, rootDir: string): string {
   if (rootDir === '/') return absPath.replace(/^\/+/, '');
@@ -335,8 +356,7 @@ function groupManifestChildren(dir: string, rootDir?: string): Array<{ name: str
  */
 function handleWasmFileList(shell: WasmShell, fullUrl?: string): Response {
   const root = workspaceRootOf(shell);
-  const cwd = fullUrl ? getQueryParam(fullUrl, 'path') || root : root;
-  const dir = normalizePath(cwd);
+  const dir = workspacePathOf(shell, (fullUrl && getQueryParam(fullUrl, 'path')) || '');
   const rootDir = normalizePath(root);
 
   // Try listDir first; fall back to the manifest.
@@ -562,7 +582,7 @@ function handleWasmFile(shell: WasmShell, method: string, fullUrl: string, bodyS
   if (!path) {
     return jsonError('Missing path parameter', 400);
   }
-  const safePath = sanitizePath(path);
+  const safePath = workspacePathOf(shell, path);
 
   if (method === 'GET') {
     const binaryMime = binaryMimeType(safePath);
@@ -637,7 +657,7 @@ function handleWasmCreate(shell: WasmShell, bodyStr?: string): Response {
   const isDir = !!(parsed?.directory || parsed?.is_directory);
   if (!path) return jsonError('Missing path', 400);
 
-  const safePath = sanitizePath(path);
+  const safePath = workspacePathOf(shell, path);
 
   if (isDir) {
     const result = shell.executeCommand(`mkdir -p ${shellEscapeArg(safePath)}`);
@@ -657,6 +677,16 @@ function handleWasmCreate(shell: WasmShell, bodyStr?: string): Response {
 }
 
 /**
+ * Drop a path and everything under it from the write manifest, so the
+ * manifest fallback listing doesn't resurrect it. Returns the dropped paths.
+ */
+function untrackTree(absPath: string): string[] {
+  const dropped = Array.from(snapshot()).filter((p) => p === absPath || p.startsWith(`${absPath}/`));
+  for (const p of dropped) untrackWrite(p);
+  return dropped;
+}
+
+/**
  * DELETE /api/delete — Delete a file.
  * Body: { path }
  */
@@ -666,7 +696,7 @@ function handleWasmDelete(shell: WasmShell, bodyStr?: string): Response {
   const path = parsed?.path as string | undefined;
   if (!path) return jsonError('Missing path', 400);
 
-  const safePath = sanitizePath(path);
+  const safePath = workspacePathOf(shell, path);
   const err = shell.deleteFile(safePath);
   if (err) {
     // If file delete fails, try rm via command (handles directories)
@@ -675,6 +705,7 @@ function handleWasmDelete(shell: WasmShell, bodyStr?: string): Response {
       return jsonError(result.stderr || err, 500);
     }
   }
+  untrackTree(safePath);
   announceFileChange(safePath, 'deleted');
   return jsonOk({ message: 'ok', path: safePath });
 }
@@ -686,15 +717,18 @@ function handleWasmDelete(shell: WasmShell, bodyStr?: string): Response {
 function handleWasmRename(shell: WasmShell, bodyStr?: string): Response {
   if (!bodyStr) return jsonError('Missing request body', 400);
   const parsed = safeParseJson(bodyStr);
-  const oldPath = parsed?.old_path as string | undefined;
-  const newPath = parsed?.new_path as string | undefined;
+  const oldPath = (parsed?.old_path ?? parsed?.oldPath) as string | undefined;
+  const newPath = (parsed?.new_path ?? parsed?.newPath) as string | undefined;
   if (!oldPath || !newPath) return jsonError('Missing old_path or new_path', 400);
 
-  const safeOld = sanitizePath(oldPath);
-  const safeNew = sanitizePath(newPath);
+  const safeOld = workspacePathOf(shell, oldPath);
+  const safeNew = workspacePathOf(shell, newPath);
   const result = shell.executeCommand(`mv ${shellEscapeArg(safeOld)} ${shellEscapeArg(safeNew)}`);
   if (result.exitCode !== 0) {
     return jsonError(result.stderr || 'rename failed', 500);
+  }
+  for (const moved of untrackTree(safeOld)) {
+    trackWrite(safeNew + moved.slice(safeOld.length));
   }
   announceFileChange(safeOld, 'deleted');
   announceFileChange(safeNew, 'created');

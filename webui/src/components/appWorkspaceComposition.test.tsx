@@ -80,7 +80,7 @@ describe('the local app composes its workspace through SproutWorkspace', () => {
     // second events transport and a second set of buffer/notification contexts.
     expect(appContentSource).toMatch(/<SproutWorkspace[\s\S]*?providers="ambient"/);
     expect(appContentSource).not.toContain('<SproutProviders');
-    expect(appSource).toContain('<SproutProviders');
+    expect(appSource.match(/<SproutProviders\b/g)).toHaveLength(1);
   });
 
   it('feeds the resolved space and shell props down, and syncs space changes back', () => {

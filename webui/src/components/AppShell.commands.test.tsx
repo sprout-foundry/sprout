@@ -26,6 +26,30 @@ import { useEditorEvents } from '../hooks/useEditorEvents';
 import { HostProvider, localHost } from '../host';
 import { claimAppShell } from '../services/commandHandlers';
 
+// Live instance counts of the provider stack's providers: the app renders
+// the stack once, so each has exactly one mounted instance.
+const mounted = vi.hoisted(() => new Map<string, number>());
+async function countingProvider<M extends Record<string, unknown>>(load: () => Promise<M>, name: keyof M & string) {
+  const { createElement, useEffect } = await import('react');
+  const actual = await load();
+  const Provider = actual[name] as React.ComponentType<Record<string, unknown>>;
+  function Counted(props: Record<string, unknown>) {
+    useEffect(() => {
+      mounted.set(name, (mounted.get(name) ?? 0) + 1);
+      return () => {
+        mounted.set(name, (mounted.get(name) ?? 1) - 1);
+      };
+    }, []);
+    return createElement(Provider, props);
+  }
+  return { ...actual, [name]: Counted };
+}
+vi.mock('../providers/SproutProviders', (load) => countingProvider(load, 'SproutProviders'));
+vi.mock('../contexts/EditorManagerContext', (load) => countingProvider(load, 'EditorManagerProvider'));
+vi.mock('../contexts/HotkeyContext', (load) => countingProvider(load, 'HotkeyProvider'));
+vi.mock('../contexts/ThemeContext', (load) => countingProvider(load, 'ThemeProvider'));
+vi.mock('../contexts/NotificationContext', (load) => countingProvider(load, 'NotificationProvider'));
+
 vi.mock('../services/localEventsProvider', () => ({
   LocalEventsProvider: class {
     connect() {}
@@ -183,6 +207,27 @@ describe('the standalone app shell routes every command to one handler', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it('renders the provider stack once', async () => {
+    await renderApp();
+    for (const name of [
+      'SproutProviders',
+      'EditorManagerProvider',
+      'HotkeyProvider',
+      'ThemeProvider',
+      'NotificationProvider',
+    ]) {
+      expect(mounted.get(name), name).toBe(1);
+    }
+
+    // One hotkey listener on the page: a shortcut is dispatched once.
+    const dispatched: string[] = [];
+    const record = (event: Event) => dispatched.push((event as CustomEvent).detail.commandId);
+    window.addEventListener('sprout:hotkey', record);
+    pressShortcut({ key: 'P', code: 'KeyP', ctrlKey: true, shiftKey: true });
+    window.removeEventListener('sprout:hotkey', record);
+    expect(dispatched).toEqual(['command_palette']);
   });
 
   it('opens the command palette on its shortcut', async () => {

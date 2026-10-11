@@ -22,10 +22,10 @@ func loadServiceEnvForDaemon(stderr io.Writer) {
 	}
 	applied, err := service.ApplyServiceEnvFile()
 	if err != nil {
-		fmt.Fprintf(stderr, "sprout service: could not load service.env: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "sprout service: could not load service.env: %v\n", err)
 		return
 	}
 	if len(applied) > 0 {
-		fmt.Fprintf(stderr, "sprout service: loaded %d variable(s) from service.env\n", len(applied))
+		_, _ = fmt.Fprintf(stderr, "sprout service: loaded %d variable(s) from service.env\n", len(applied))
 	}
 }

@@ -21,7 +21,7 @@ func captureStdio(t *testing.T, fn func()) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { r.Close() })
+	t.Cleanup(func() { _ = r.Close() })
 	oldOut, oldErr := os.Stdout, os.Stderr
 	os.Stdout, os.Stderr = w, w
 	done := make(chan string)
@@ -33,7 +33,7 @@ func captureStdio(t *testing.T, fn func()) string {
 		defer func() { os.Stdout, os.Stderr = oldOut, oldErr }()
 		fn()
 	}()
-	w.Close()
+	_ = w.Close()
 	return <-done
 }
 

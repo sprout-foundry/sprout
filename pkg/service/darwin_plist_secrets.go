@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
 // launchdLogPath is where launchd sends the daemon's stdout/stderr. Once the
@@ -145,4 +146,14 @@ func (m *launchdManager) LogLocations() []string {
 		locs = append(locs, filepath.Join(dir, "daemon.stdout.log")+", daemon.stderr.log (rotated)")
 	}
 	return locs
+}
+
+// daemonLogDir is where the daemon writes its own rotated logs
+// (setupDaemonLogging in cmd).
+func daemonLogDir() (string, error) {
+	stateDir, err := envutil.StateDirPath()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(stateDir, "logs"), nil
 }

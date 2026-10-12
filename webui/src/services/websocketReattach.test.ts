@@ -1,13 +1,13 @@
 /**
  * websocketReattach.test.ts — Tests for WebSocket reattach on reconnect.
  *
- * Covers the new reattach functionality added to WebSocketService:
+ * Covers the reattach functionality of WebSocketService:
  * - trackSeq() extracts __seq from incoming events and stores highest seq per chat
  * - setActiveChatId() sets the current active chat for reattach context
  * - getLastSeq() / getActiveChatSeq() return tracked sequences
- * - connect() on reconnect with active query → reattach URL params
+ * - connect() on reconnect with a known seq → reattach URL params
  * - connect() on initial connection → no reattach params
- * - connect() on reconnect without active query → no reattach params
+ * - events whose seq was already delivered are dropped
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -407,42 +407,6 @@ describe('reattach on reconnect', () => {
     expect(clientFetch).not.toHaveBeenCalled();
   });
 
-  it('does NOT add reattach params when query is not active', async () => {
-    const { MockWebSocket, instances } = createMockWebSocket();
-    vi.stubGlobal('WebSocket', MockWebSocket);
-
-    const service = resetSingleton();
-
-    // First connection
-    await service.connect();
-    const firstMock = instances[0];
-    firstMock.onopen?.(new Event('open'));
-
-    service.setActiveChatId('chat-def');
-    firstMock.onmessage?.(
-      new MessageEvent('message', {
-        data: JSON.stringify({ type: 'stream_chunk', __seq: 5, data: { chat_id: 'chat-def' } }),
-      }),
-    );
-
-    simulateDisconnect(firstMock);
-
-    // Set up mock for inactive query
-    (clientFetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
-      new Response(JSON.stringify({ active: false }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    );
-
-    await service.connect();
-
-    // Reconnect — no reattach params
-    const reconnectMock = instances[1];
-    expect(reconnectMock).toBeDefined();
-    expect(reconnectMock!.url).not.toContain('reattach');
-  });
-
   it('does NOT add reattach params when activeChatId is null', async () => {
     const { MockWebSocket, instances } = createMockWebSocket();
     vi.stubGlobal('WebSocket', MockWebSocket);
@@ -491,72 +455,6 @@ describe('reattach on reconnect', () => {
     expect(clientFetch).not.toHaveBeenCalled();
   });
 
-  it('uses server-returned chat_id in reattach params when provided', async () => {
-    const { MockWebSocket, instances } = createMockWebSocket();
-    vi.stubGlobal('WebSocket', MockWebSocket);
-
-    const service = resetSingleton();
-
-    // First connection
-    await service.connect();
-    const firstMock = instances[0];
-    firstMock.onopen?.(new Event('open'));
-
-    service.setActiveChatId('chat-local');
-    firstMock.onmessage?.(
-      new MessageEvent('message', {
-        data: JSON.stringify({ type: 'stream_chunk', __seq: 15, data: { chat_id: 'chat-local' } }),
-      }),
-    );
-
-    simulateDisconnect(firstMock);
-
-    // Server returns a different chat_id
-    (clientFetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
-      new Response(JSON.stringify({ active: true, chat_id: 'chat-server' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    );
-
-    await service.connect();
-
-    const reconnectMock = instances[1];
-    expect(reconnectMock).toBeDefined();
-    expect(reconnectMock!.url).toContain('reattach=chat-server');
-    expect(reconnectMock!.url).toContain('after_seq=15');
-  });
-
-  it('gracefully handles clientFetch failure (no reattach params added)', async () => {
-    const { MockWebSocket, instances } = createMockWebSocket();
-    vi.stubGlobal('WebSocket', MockWebSocket);
-
-    const service = resetSingleton();
-
-    // First connection
-    await service.connect();
-    const firstMock = instances[0];
-    firstMock.onopen?.(new Event('open'));
-
-    service.setActiveChatId('chat-err');
-    firstMock.onmessage?.(
-      new MessageEvent('message', {
-        data: JSON.stringify({ type: 'stream_chunk', __seq: 20, data: { chat_id: 'chat-err' } }),
-      }),
-    );
-
-    simulateDisconnect(firstMock);
-
-    // Mock clientFetch to throw
-    (clientFetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Network error'));
-
-    await service.connect();
-
-    const reconnectMock = instances[1];
-    expect(reconnectMock).toBeDefined();
-    expect(reconnectMock!.url).not.toContain('reattach');
-  });
-
   it('sends after_seq=0 when last tracked seq is 0', async () => {
     const { MockWebSocket, instances } = createMockWebSocket();
     vi.stubGlobal('WebSocket', MockWebSocket);
@@ -595,63 +493,130 @@ describe('reattach on reconnect', () => {
     expect(reconnectMock!.url).toContain('after_seq=0');
   });
 
-  it('retries reattach on subsequent reconnects after query becomes active again', async () => {
+  it('reattaches without a status round-trip, even after the run ended', async () => {
     const { MockWebSocket, instances } = createMockWebSocket();
     vi.stubGlobal('WebSocket', MockWebSocket);
 
     const service = resetSingleton();
 
-    // First connection
     await service.connect();
     const firstMock = instances[0];
     firstMock.onopen?.(new Event('open'));
 
+    service.setActiveChatId('chat-done');
+    firstMock.onmessage?.(
+      new MessageEvent('message', {
+        data: JSON.stringify({ type: 'stream_chunk', data: { chat_id: 'chat-done', __seq: 5 } }),
+      }),
+    );
+
+    simulateDisconnect(firstMock);
+    await service.connect();
+
+    // The server keeps the run's buffer after it ends, so the tail of a run
+    // that finished during the outage still comes back.
+    const reconnect = instances[1];
+    expect(reconnect!.url).toContain('reattach=chat-done');
+    expect(reconnect!.url).toContain('after_seq=5');
+    expect(clientFetch).not.toHaveBeenCalled();
+  });
+
+  it('follows the highest seq across reconnects', async () => {
+    const { MockWebSocket, instances } = createMockWebSocket();
+    vi.stubGlobal('WebSocket', MockWebSocket);
+
+    const service = resetSingleton();
+
+    await service.connect();
+    const firstMock = instances[0];
+    firstMock.onopen?.(new Event('open'));
     service.setActiveChatId('chat-retry');
     firstMock.onmessage?.(
       new MessageEvent('message', {
-        data: JSON.stringify({ type: 'stream_chunk', __seq: 5, data: { chat_id: 'chat-retry' } }),
+        data: JSON.stringify({ type: 'stream_chunk', data: { chat_id: 'chat-retry', __seq: 5 } }),
       }),
     );
 
-    // First reconnect attempt (query is no longer active)
     simulateDisconnect(firstMock);
-
-    (clientFetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
-      new Response(JSON.stringify({ active: false }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    );
-
     await service.connect();
-
     const reconnect1 = instances[1];
-    expect(reconnect1).toBeDefined();
-    expect(reconnect1!.url).not.toContain('reattach');
+    expect(reconnect1!.url).toContain('after_seq=5');
     reconnect1.onopen?.(new Event('open'));
-
-    // More events arrive on the new connection (seq increases)
     reconnect1.onmessage?.(
       new MessageEvent('message', {
-        data: JSON.stringify({ type: 'stream_chunk', __seq: 8, data: { chat_id: 'chat-retry' } }),
+        data: JSON.stringify({ type: 'stream_chunk', data: { chat_id: 'chat-retry', __seq: 8 } }),
       }),
     );
 
-    // Second reconnect (now query is active again)
     simulateDisconnect(reconnect1);
-
-    (clientFetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
-      new Response(JSON.stringify({ active: true, chat_id: 'chat-retry' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    );
-
     await service.connect();
+    expect(instances[2]!.url).toContain('reattach=chat-retry');
+    expect(instances[2]!.url).toContain('after_seq=8');
+  });
+});
 
-    const reconnect2 = instances[2];
-    expect(reconnect2).toBeDefined();
-    expect(reconnect2!.url).toContain('reattach=chat-retry');
-    expect(reconnect2!.url).toContain('after_seq=8');
+describe('duplicate suppression', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  function connected() {
+    const { MockWebSocket, instances } = createMockWebSocket();
+    vi.stubGlobal('WebSocket', MockWebSocket);
+    const service = resetSingleton();
+    service.connect();
+    const mock = instances[0];
+    mock.readyState = WS_OPEN;
+    mock.onopen?.(new Event('open'));
+    const received: unknown[] = [];
+    service.onEvent((e) => received.push(e));
+    const send = (frame: unknown) => mock.onmessage?.(new MessageEvent('message', { data: JSON.stringify(frame) }));
+    return { service, received, send };
+  }
+
+  it('delivers an event once when a replay repeats a seq the live stream already sent', () => {
+    const { received, send } = connected();
+    const chunk = (seq: number) => ({ type: 'stream_chunk', data: { chat_id: 'c', chunk: `t${seq}`, __seq: seq } });
+
+    send(chunk(1));
+    send(chunk(2));
+    send({ type: 'chat_run_restored', data: { chat_id: 'c', after_seq: 1, last_seq: 3, gap: false } });
+    send(chunk(2));
+    send(chunk(3));
+
+    const chunks = received.filter((e) => (e as { type: string }).type === 'stream_chunk');
+    expect(chunks.map((e) => (e as { data: { chunk: string } }).data.chunk)).toEqual(['t1', 't2', 't3']);
+  });
+
+  it('keeps per-chat seqs apart and passes events without a seq', () => {
+    const { received, send } = connected();
+    send({ type: 'stream_chunk', data: { chat_id: 'a', __seq: 7 } });
+    send({ type: 'stream_chunk', data: { chat_id: 'b', __seq: 7 } });
+    send({ type: 'metrics_update', data: {} });
+    send({ type: 'metrics_update', data: {} });
+    expect(received).toHaveLength(4);
+  });
+
+  it("forgets a chat's seqs when the server restarted its buffer", () => {
+    const { service, received, send } = connected();
+    send({ type: 'stream_chunk', data: { chat_id: 'c', __seq: 50 } });
+    send({ type: 'chat_run_restored', data: { chat_id: 'c', after_seq: 50, last_seq: 2, gap: true } });
+    expect(service.getLastSeq('c')).toBeUndefined();
+    send({ type: 'stream_chunk', data: { chat_id: 'c', __seq: 50 } });
+    expect(received.filter((e) => (e as { type: string }).type === 'stream_chunk')).toHaveLength(2);
+  });
+
+  it('markApplied reports server-snapshot events the stream already delivered', () => {
+    const { service, send } = connected();
+    send({ type: 'tool_start', data: { chat_id: 'c', __seq: 4 } });
+    expect(service.markApplied({ type: 'tool_start', data: { chat_id: 'c', __seq: 4 } } as never)).toBe(false);
+    expect(service.markApplied({ type: 'tool_end', data: { chat_id: 'c', __seq: 5 } } as never)).toBe(true);
+    expect(service.markApplied({ type: 'tool_end', data: { chat_id: 'c', __seq: 5 } } as never)).toBe(false);
   });
 });

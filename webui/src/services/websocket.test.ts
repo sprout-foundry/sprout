@@ -980,75 +980,29 @@ describe('WebSocketService - reattach on reconnect', () => {
     await connectPromise;
   }
 
-  it('adds reattach params when backend is processing during reconnect', async () => {
+  it('adds reattach params on reconnect when a seq is known', async () => {
     const ws = WebSocketService.getInstance();
     ws.connect();
 
     mockReadyState = MockWebSocket.OPEN;
     triggerWebSocketOpen(); // Initial connection
 
-    // Set active chat and simulate some events to establish seq
     ws.setActiveChatId('chat-abc');
-    triggerWebSocketMessage({ type: 'stream_chunk', data: { chat_id: 'chat-abc' }, __seq: 42 });
-
+    triggerWebSocketMessage({ type: 'stream_chunk', data: { chat_id: 'chat-abc', __seq: 42 } });
     expect(ws.getLastSeq('chat-abc')).toBe(42);
 
-    // Simulate backend is still processing
-    clientFetch.mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve({ active: true, chat_id: 'chat-abc' }),
-        headers: new Headers(),
-      } as Response),
-    );
-
-    // Disconnect
     mockReadyState = MockWebSocket.CLOSED;
     triggerWebSocketClose();
 
-    // Reconnect — should add reattach params
-    // Keep readyState CLOSED so connect() doesn't early-return.
-    // Set it to OPEN only when triggering onopen below.
     mockSend.mockClear();
     await connectAndAwaitReconnect(ws);
     mockReadyState = MockWebSocket.OPEN;
     await triggerWebSocketOpen();
 
-    // Verify clientFetch was called for status check
-    expect(clientFetch).toHaveBeenCalledWith('/api/query/status?chat_id=chat-abc');
-
-    // Verify the WebSocket URL includes reattach params
+    // No status round-trip: the server's run buffer decides what to replay.
+    expect(clientFetch).not.toHaveBeenCalled();
     expect(appendClientIdToUrl).toHaveBeenCalledWith(expect.stringContaining('reattach=chat-abc'));
     expect(appendClientIdToUrl).toHaveBeenCalledWith(expect.stringContaining('after_seq=42'));
-  });
-
-  it('skips reattach when backend is NOT processing', async () => {
-    const ws = WebSocketService.getInstance();
-    ws.connect();
-
-    mockReadyState = MockWebSocket.OPEN;
-    triggerWebSocketOpen();
-
-    ws.setActiveChatId('chat-abc');
-    triggerWebSocketMessage({ type: 'stream_chunk', data: { chat_id: 'chat-abc' }, __seq: 15 });
-
-    // Backend reports not active (default mock)
-    // Disconnect
-    mockReadyState = MockWebSocket.CLOSED;
-    triggerWebSocketClose();
-
-    // Reconnect — keep readyState CLOSED so connect() runs
-    mockSend.mockClear();
-    await connectAndAwaitReconnect(ws);
-    mockReadyState = MockWebSocket.OPEN;
-    await triggerWebSocketOpen();
-
-    // Verify clientFetch was called
-    expect(clientFetch).toHaveBeenCalled();
-
-    // Verify reattach params are NOT in the URL
-    expect(appendClientIdToUrl).not.toHaveBeenCalledWith(expect.stringContaining('reattach='));
   });
 
   it('skips reattach when activeChatId is null', async () => {
@@ -1096,32 +1050,6 @@ describe('WebSocketService - reattach on reconnect', () => {
 
     // clientFetch should NOT have been called (no last seq)
     expect(clientFetch).not.toHaveBeenCalled();
-  });
-
-  it('handles clientFetch failure gracefully (no reattach params)', async () => {
-    const ws = WebSocketService.getInstance();
-    ws.connect();
-
-    mockReadyState = MockWebSocket.OPEN;
-    triggerWebSocketOpen();
-
-    ws.setActiveChatId('chat-abc');
-    triggerWebSocketMessage({ type: 'stream_chunk', data: { chat_id: 'chat-abc' }, __seq: 20 });
-
-    // Simulate clientFetch failure
-    clientFetch.mockRejectedValueOnce(new Error('network error'));
-
-    // Disconnect
-    mockReadyState = MockWebSocket.CLOSED;
-    triggerWebSocketClose();
-
-    // Reconnect — keep readyState CLOSED so connect() runs
-    await connectAndAwaitReconnect(ws);
-    mockReadyState = MockWebSocket.OPEN;
-    await triggerWebSocketOpen();
-
-    // Reattach params should NOT be in URL (fetch failed)
-    expect(appendClientIdToUrl).not.toHaveBeenCalledWith(expect.stringContaining('reattach='));
   });
 
   it('does not add reattach params on initial connection (wasConnectedBefore=false)', async () => {

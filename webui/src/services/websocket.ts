@@ -3,7 +3,7 @@ import { capability } from '../config/mode';
 import { getActiveHost } from '../host/accessor';
 import { debugLog } from '../utils/log';
 import { getAdapter } from './apiAdapter';
-import { appendClientIdToUrl, clientFetch, getProxyBase } from './clientSession';
+import { appendClientIdToUrl, getProxyBase } from './clientSession';
 import { notificationBus } from './notificationBus';
 
 export type { WsEvent };
@@ -23,6 +23,9 @@ type EventCallback = (event: WsEvent) => void;
  *   workspace is connected whether or not an events socket is open.
  */
 export type LocalAgentState = 'none' | 'starting' | 'ready';
+
+/** How many recent seqs per chat are remembered for duplicate detection. */
+const SEEN_SEQ_WINDOW = 4096;
 
 /**
  * Event types excluded from the sprout:wsevent DOM bridge. These arrive at
@@ -60,6 +63,7 @@ class WebSocketService {
   private isReplayingQueue = false;
   private activeChatId: string | null = null;
   private chatSeq = new Map<string, number>();
+  private seenSeqs = new Map<string, Set<number>>();
   private connecting = false;
   private localAgent: LocalAgentState = 'none';
 
@@ -146,8 +150,7 @@ class WebSocketService {
 
   async connect() {
     // Guard against concurrent connect() calls — if we're already in the
-    // middle of connecting (e.g., the clientFetch reattach check is still
-    // in-flight), skip to avoid creating a second WebSocket.
+    // middle of connecting, skip to avoid creating a second WebSocket.
     if (this.connecting) {
       debugLog('[WebSocket] connect() already in progress, skipping');
       return;
@@ -176,28 +179,21 @@ class WebSocketService {
       this.reconnectTimeout = null;
     }
 
-    // ── Reattach check on reconnect ──────────────────────────────────────
-    // If we're reconnecting during an active chat, check with the backend
-    // whether there are missed events. If so, add reattach params so the
-    // server replays events from where we left off.
+    // ── Reattach on reconnect ────────────────────────────────────────────
+    // A reconnect for a chat we have seen sequenced events for asks the
+    // server to replay what was published after the last one. The server
+    // keeps a chat's run buffer through the run and for a while after it
+    // ends, so this also recovers the tail of a run that finished while the
+    // socket was down; an empty buffer just yields the restored frame.
     let reattachChatId: string | null = null;
     let reattachAfterSeq: number | undefined = undefined;
 
     if (this.wasConnectedBefore && this.activeChatId) {
-      const chatId = this.activeChatId;
-      const lastSeq = this.chatSeq.get(chatId);
+      const lastSeq = this.chatSeq.get(this.activeChatId);
       if (lastSeq !== undefined) {
-        try {
-          const resp = await clientFetch(`/api/query/status?chat_id=${encodeURIComponent(chatId)}`);
-          const body: { active?: boolean; chat_id?: string } = await resp.json();
-          if (body.active === true) {
-            reattachChatId = body.chat_id ?? chatId;
-            reattachAfterSeq = lastSeq;
-            debugLog('[WebSocket] Reattach reconnect for chat', reattachChatId, 'after_seq', reattachAfterSeq);
-          }
-        } catch (err) {
-          debugLog('[WebSocket] Reattach status check failed:', err);
-        }
+        reattachChatId = this.activeChatId;
+        reattachAfterSeq = lastSeq;
+        debugLog('[WebSocket] Reattach reconnect for chat', reattachChatId, 'after_seq', reattachAfterSeq);
       }
     }
 
@@ -400,8 +396,14 @@ class WebSocketService {
           return;
         }
 
-        // Track __seq per chat for reattach support
-        this.trackSeq(data);
+        if (data.type === 'chat_run_restored') this.handleRunRestored(data);
+
+        // Track __seq per chat for reattach support; drop frames already
+        // applied (a reattach replay overlapping the live stream).
+        if (!this.trackSeq(data)) {
+          debugLog('[WebSocket] Dropping duplicate event', data.type);
+          return;
+        }
 
         this.notifyCallbacks(data);
       } catch (error) {
@@ -639,6 +641,25 @@ class WebSocketService {
     this.activeChatId = chatId;
   }
 
+  /** The chat the UI is showing, as last set by {@link setActiveChatId}. */
+  getActiveChatId(): string | null {
+    return this.activeChatId;
+  }
+
+  /** How far the in-page agent has started ('none' when it runs behind the socket). */
+  getLocalAgentState(): LocalAgentState {
+    return this.localAgent;
+  }
+
+  /**
+   * Record an event's seq as applied and report whether it is new. Events
+   * without a seq are always new. Replays of server snapshots use this to
+   * skip events the live stream already delivered.
+   */
+  markApplied(event: WsEvent, fallbackChatId?: string | null): boolean {
+    return this.trackSeq(event, fallbackChatId);
+  }
+
   /** Get the last seen __seq for a specific chat. */
   getLastSeq(chatId: string): number | undefined {
     return this.chatSeq.get(chatId);
@@ -649,16 +670,50 @@ class WebSocketService {
     return this.activeChatId ? this.chatSeq.get(this.activeChatId) : undefined;
   }
 
-  /** Track __seq from incoming events for reattach support. */
-  private trackSeq(event: WsEvent): void {
-    const seq = (event as WsEvent & { __seq?: unknown }).__seq;
-    if (typeof seq !== 'number') return;
-    const dataChatId = (event.data as Record<string, unknown> | null)?.chat_id;
-    const chatId = typeof dataChatId === 'string' ? dataChatId : this.activeChatId;
-    if (!chatId) return;
+  /**
+   * Track the server's per-chat `__seq` (stamped into the event data) for
+   * reattach, and report whether the event is new: false when this seq was
+   * already seen for the chat. Seqs are recorded per chat in a bounded
+   * window; events without a seq are always new.
+   */
+  private trackSeq(event: WsEvent, fallbackChatId: string | null = this.activeChatId): boolean {
+    const data = (event.data ?? null) as Record<string, unknown> | null;
+    const raw = data?.__seq ?? (event as WsEvent & { __seq?: unknown }).__seq;
+    const seq = typeof raw === 'number' ? raw : Number.NaN;
+    if (!Number.isFinite(seq)) return true;
+    const chatId = typeof data?.chat_id === 'string' ? data.chat_id : fallbackChatId;
+    if (!chatId) return true;
+    let seen = this.seenSeqs.get(chatId);
+    if (!seen) {
+      seen = new Set();
+      this.seenSeqs.set(chatId, seen);
+    }
+    if (seen.has(seq)) return false;
+    seen.add(seq);
+    if (seen.size > SEEN_SEQ_WINDOW) {
+      const oldest = seen.values().next().value;
+      if (oldest !== undefined) seen.delete(oldest);
+    }
     const current = this.chatSeq.get(chatId);
     if (current === undefined || seq > current) {
       this.chatSeq.set(chatId, seq);
+    }
+    return true;
+  }
+
+  /**
+   * A reattach replay is starting. When the server's newest seq for the
+   * chat is below what we hold, its buffer was recreated (daemon restart):
+   * forget the old seqs so the new run's events are not taken for
+   * duplicates.
+   */
+  private handleRunRestored(event: WsEvent): void {
+    const data = (event.data ?? {}) as { chat_id?: unknown; last_seq?: unknown };
+    if (typeof data.chat_id !== 'string' || typeof data.last_seq !== 'number') return;
+    const held = this.chatSeq.get(data.chat_id);
+    if (held !== undefined && data.last_seq < held) {
+      this.chatSeq.delete(data.chat_id);
+      this.seenSeqs.delete(data.chat_id);
     }
   }
 }

@@ -6,11 +6,19 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
+
+// safeConnWriteTimeout bounds a single frame write. A client that stops
+// reading (frozen tab, dead network path) would otherwise block the writer —
+// and every event queued behind it — until TCP gives up minutes later. On
+// timeout the connection is closed so the client reconnects and resyncs.
+var safeConnWriteTimeout = 10 * time.Second
 
 // SafeConn wraps a WebSocket connection with write mutex and panic recovery
 type SafeConn struct {
@@ -84,7 +92,21 @@ func (sc *SafeConn) WriteJSON(v interface{}) error {
 		}
 	}()
 
-	return sc.conn.WriteJSON(v)
+	_ = sc.conn.SetWriteDeadline(time.Now().Add(safeConnWriteTimeout))
+	err := sc.conn.WriteJSON(v)
+	if err != nil && isWriteTimeout(err) {
+		webuiLogger.Warn("WebSocket write timed out; closing stalled connection", slog.Duration("timeout", safeConnWriteTimeout))
+		sc.closed.Store(true)
+		_ = sc.conn.Close()
+	}
+	return err
+}
+
+// isWriteTimeout reports whether err is a deadline expiry rather than a
+// closed or reset connection.
+func isWriteTimeout(err error) bool {
+	var netErr net.Error
+	return errors.As(err, &netErr) && netErr.Timeout()
 }
 
 // extractOutboundMessageType peeks at the value being written and
@@ -142,6 +164,7 @@ func (sc *SafeConn) writeDirectJSONLocked(v interface{}) {
 	if sc.conn == nil {
 		return
 	}
+	_ = sc.conn.SetWriteDeadline(time.Now().Add(safeConnWriteTimeout))
 	_ = sc.conn.WriteJSON(v)
 }
 

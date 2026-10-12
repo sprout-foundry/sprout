@@ -153,7 +153,11 @@ func (ws *ReactWebServer) handleAPIChatSessionsDelete(w http.ResponseWriter, r *
 	// own goroutines keep it running until it is shut down explicitly.
 	// releaseAgents skips the shared-mode CLI agent, which the server does not
 	// own even when a chat session references it.
-	ws.releaseAgents("chat_session_deleted", deletedAgent)
+	if req.RemoveWorktree && worktreePath != "" {
+		ws.releaseAgentsAndWait("chat_session_deleted", deletedAgent)
+	} else {
+		ws.releaseAgents("chat_session_deleted", deletedAgent)
+	}
 
 	ws.log().Info("deleted chat session", slog.String("chat_id", chatID), slog.String("client_id", clientID))
 

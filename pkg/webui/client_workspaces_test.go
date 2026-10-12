@@ -43,6 +43,9 @@ func newProjectTestServer(t *testing.T) projectTestServer {
 	}
 	ws.daemonRoot = daemonRoot
 	ws.workspaceRoot = daemonRoot
+	// Registered after TempDir, so it runs first: released agents flush their
+	// history into the chat directories before those are removed.
+	t.Cleanup(ws.waitForAgentTeardown)
 	return projectTestServer{ws: ws, daemonRoot: daemonRoot, project: project, worktree: worktree}
 }
 

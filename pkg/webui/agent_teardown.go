@@ -4,6 +4,7 @@ package webui
 
 import (
 	"log/slog"
+	"sync"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/utils"
@@ -26,6 +27,21 @@ import (
 // servers up to 5s to stop — so it must run outside ws.mutex and off the
 // request path. Each agent is released in its own recovered goroutine.
 func (ws *ReactWebServer) releaseAgents(reason string, agents ...*agent.Agent) {
+	ws.releaseAgentsTracked(reason, nil, agents...)
+}
+
+// releaseAgentsAndWait is releaseAgents for callers about to remove the
+// directory those agents flush their history into (a chat's worktree): it
+// returns only after they have shut down, so a late flush can neither block
+// `git worktree remove` with untracked files nor recreate the directory after
+// it is gone. It must still be called outside ws.mutex.
+func (ws *ReactWebServer) releaseAgentsAndWait(reason string, agents ...*agent.Agent) {
+	var done sync.WaitGroup
+	ws.releaseAgentsTracked(reason, &done, agents...)
+	done.Wait()
+}
+
+func (ws *ReactWebServer) releaseAgentsTracked(reason string, done *sync.WaitGroup, agents ...*agent.Agent) {
 	seen := make(map[*agent.Agent]struct{}, len(agents))
 
 	var shared *agent.Agent
@@ -43,8 +59,14 @@ func (ws *ReactWebServer) releaseAgents(reason string, agents ...*agent.Agent) {
 		seen[a] = struct{}{}
 
 		ws.agentTeardownWg.Add(1)
+		if done != nil {
+			done.Add(1)
+		}
 		utils.SafeGo(ws.log(), "agent-shutdown", func() {
 			defer ws.agentTeardownWg.Done()
+			if done != nil {
+				defer done.Done()
+			}
 			a.Shutdown()
 		}, slog.String("reason", reason))
 	}

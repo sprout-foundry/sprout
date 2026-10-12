@@ -66,6 +66,13 @@ export interface WorkspaceShellGit {
   gitBranches: GitBranchesState;
   gitStatus: GitStatusData | null;
   workspaceRoot: string;
+  /**
+   * The name the status bar labels the workspace with. An embedding host
+   * passes its project's name, since its workspace root (a container path such
+   * as `/workspace`) names nothing the user recognises. Unset, the label comes
+   * from the root's basename or the open repository.
+   */
+  projectName?: string;
 }
 
 /**

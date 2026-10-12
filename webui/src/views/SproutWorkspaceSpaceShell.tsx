@@ -360,6 +360,7 @@ function SpaceShellLayout({
               gitBranches: git?.workspace.gitBranches ?? NO_GIT,
               gitStatus: git?.workspace.gitStatus ?? null,
               workspaceRoot: resolvedRoot,
+              projectName,
             }}
             ship={NO_SHIP}
           />

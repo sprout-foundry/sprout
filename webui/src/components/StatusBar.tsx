@@ -32,6 +32,11 @@ interface WebuiStatusBarProps {
    */
   workspacePath?: string;
   /**
+   * Overrides the workspace indicator's label. An embedding host's project
+   * name, shown instead of a basename derived from `workspacePath`.
+   */
+  projectName?: string;
+  /**
    * SP-022-W2.3: Callback fired when the workspace indicator is clicked.
    * Typically used to open a workspace picker or focus the sidebar.
    */
@@ -69,6 +74,7 @@ function StatusBar({
   encoding,
   indentation,
   workspacePath,
+  projectName,
   onWorkspaceClick,
 }: WebuiStatusBarProps): JSX.Element {
   const { git: supportsGit, workspaceSwitching, localTerminal } = useHostCapabilities();
@@ -99,14 +105,16 @@ function StatusBar({
   const workspaceLabel = !workspaceSwitching ? repoSlug : workspacePath;
 
   // SP-022-W2.3: derive workspace basename from the full path
+  const hostProjectName = projectName?.trim() || '';
   const workspaceName = useMemo(() => {
+    if (hostProjectName) return hostProjectName;
     if (!workspaceSwitching) return repoNameFromURL(activeRepoURL) ?? '';
     if (!workspacePath || workspacePath.trim() === '') return '';
     // Handle trailing slashes and extract last non-empty segment
     const trimmed = workspacePath.replace(/\/+$/, '');
     const segments = trimmed.split('/');
     return segments[segments.length - 1] || '';
-  }, [workspacePath, repoSlug, workspaceSwitching]);
+  }, [hostProjectName, workspacePath, repoSlug, workspaceSwitching]);
 
   // Language name — derived from buffer metadata using local language registry
   const language = useMemo(() => {
@@ -141,8 +149,20 @@ function StatusBar({
           onClick={onWorkspaceClick}
           role="button"
           tabIndex={0}
-          title={!workspaceSwitching ? `Repository: ${workspaceLabel}` : `Workspace: ${workspacePath}`}
-          aria-label={!workspaceSwitching ? `Repository: ${workspaceName}` : `Workspace: ${workspaceName}`}
+          title={
+            hostProjectName
+              ? `Project: ${hostProjectName}`
+              : !workspaceSwitching
+                ? `Repository: ${workspaceLabel}`
+                : `Workspace: ${workspacePath}`
+          }
+          aria-label={
+            hostProjectName
+              ? `Project: ${hostProjectName}`
+              : !workspaceSwitching
+                ? `Repository: ${workspaceName}`
+                : `Workspace: ${workspaceName}`
+          }
           data-testid="status-bar-workspace"
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {

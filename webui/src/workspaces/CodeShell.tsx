@@ -200,6 +200,7 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
       <StatusBar
         branch={git.gitBranches.current || git.gitStatus?.branch}
         workspacePath={git.workspaceRoot}
+        projectName={git.projectName}
         onWorkspaceClick={() => onToggleSidebar()}
         buffer={
           currentBuffer

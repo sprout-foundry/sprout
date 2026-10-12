@@ -446,6 +446,31 @@ describe('StatusBar', () => {
       expect(indicator?.getAttribute('aria-label')).toContain('Workspace:');
     });
 
+    // An embedding host's workspace root is a container path such as
+    // `/workspace`; the project name it passes labels the indicator instead.
+    test('a host project name labels the indicator instead of the root basename', async () => {
+      await act(async () => {
+        renderStatusBar(
+          <StatusBar workspacePath="/workspace" projectName="acme-api" />,
+          makeTestHost({ git: true, workspaceSwitching: true, localTerminal: false }),
+        );
+      });
+      const indicator = container.querySelector('.statusbar-item-workspace');
+      expect(indicator?.textContent).toContain('acme-api');
+      expect(indicator?.textContent).not.toContain('workspace');
+      expect(indicator?.getAttribute('aria-label')).toBe('Project: acme-api');
+    });
+
+    test('a host project name shows even without workspace switching or a repo', async () => {
+      await act(async () => {
+        renderStatusBar(
+          <StatusBar projectName="acme-api" />,
+          makeTestHost({ git: true, workspaceSwitching: false, localTerminal: false }),
+        );
+      });
+      expect(container.querySelector('.statusbar-item-workspace')?.textContent).toContain('acme-api');
+    });
+
     test('does not render for root path', async () => {
       await act(async () => {
         renderStatusBar(<StatusBar workspacePath="/" />);

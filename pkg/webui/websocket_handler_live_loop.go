@@ -131,7 +131,7 @@ func (ws *ReactWebServer) runConnectionLiveLoop(
 			}
 		}()
 
-		ws.deliverChatRunReplay(safeConn, clientID, reattachChatID, afterSeq)
+		lastReplayed := ws.deliverChatRunReplay(safeConn, clientID, reattachChatID, afterSeq)
 
 		// Stop the drain goroutine and flush captured live events.
 		close(drainStop)
@@ -148,6 +148,9 @@ func (ws *ReactWebServer) runConnectionLiveLoop(
 		captured := capturedEvents
 		capturedMu.Unlock()
 		for _, ev := range captured {
+			if replayedAlready(ev, reattachChatID, lastReplayed) {
+				continue
+			}
 			if connInfo != nil && !ws.shouldForwardEventToConnection(ev, connInfo) {
 				continue
 			}

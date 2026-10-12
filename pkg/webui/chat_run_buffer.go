@@ -68,6 +68,21 @@ func newChatRunRingBuffer() *chatRunRingBuffer {
 	}
 }
 
+// runBufferSeqSeed returns the first seq base for a chat's lazily created
+// run buffer. Seeding from the clock (microseconds, well inside the 2^53
+// range a browser number holds exactly) keeps seqs increasing across daemon
+// restarts and chat-session re-creation, so a client deduplicating by seq
+// never mistakes a fresh run's events for ones it already applied.
+var runBufferSeqSeed = func() int64 { return time.Now().UnixMicro() }
+
+// newSeededChatRunRingBuffer constructs a default-capped buffer whose first
+// seq follows runBufferSeqSeed.
+func newSeededChatRunRingBuffer() *chatRunRingBuffer {
+	b := newChatRunRingBuffer()
+	b.nextSeq = runBufferSeqSeed()
+	return b
+}
+
 // newChatRunRingBufferWithCaps lets tests construct small buffers without
 // reaching into unexported fields. Negative or zero caps fall back to the
 // defaults so a misconfigured caller doesn't get an unbounded buffer.
@@ -103,6 +118,27 @@ func (b *chatRunRingBuffer) Append(ev events.UIEvent) int64 {
 
 	// Evict oldest entries until both caps are satisfied. We trim by
 	// count first since that's cheaper; the byte cap is checked after.
+	for len(b.events) > b.maxEvents || (b.curBytes > b.maxBytes && len(b.events) > 1) {
+		b.curBytes -= b.events[0].cost
+		b.events = b.events[1:]
+	}
+	return seq
+}
+
+// appendStamped is Append for map payloads that also carry their seq: the
+// "__seq" key is written before the event becomes visible to readers, so a
+// concurrent replay never observes the map mid-mutation.
+func (b *chatRunRingBuffer) appendStamped(ev events.UIEvent, data map[string]interface{}) int64 {
+	cost := estimateEventCost(ev)
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.nextSeq++
+	seq := b.nextSeq
+	data["__seq"] = seq
+	b.events = append(b.events, chatRunBufferedEvent{Seq: seq, Event: ev, cost: cost})
+	b.curBytes += cost
 	for len(b.events) > b.maxEvents || (b.curBytes > b.maxBytes && len(b.events) > 1) {
 		b.curBytes -= b.events[0].cost
 		b.events = b.events[1:]

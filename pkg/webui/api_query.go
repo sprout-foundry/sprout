@@ -116,9 +116,7 @@ func (ws *ReactWebServer) publishClientEventWithChat(clientID, chatID, eventType
 		data["user_id"] = userID
 	}
 
-	if seq := ws.appendChatEventToRunBuffer(clientID, chatID, eventType, data); seq > 0 {
-		data["__seq"] = seq
-	}
+	ws.appendChatEventToRunBuffer(clientID, chatID, eventType, data)
 
 	ws.eventBus.Publish(eventType, data)
 }
@@ -196,10 +194,17 @@ var reattachBufferedEventTypes = map[string]struct{}{
 }
 
 // appendChatEventToRunBuffer pushes the event into the chat's run buffer
-// if the type is reattach-relevant and the chatID resolves. Returns the
-// assigned seq, or 0 when not buffered. Lazy-creates the buffer on the
-// chat session.
+// if the type is reattach-relevant and the chatID resolves, stamping the
+// assigned seq onto data as "__seq". Returns the seq, or 0 when not
+// buffered. Lazy-creates the buffer on the chat session.
 func (ws *ReactWebServer) appendChatEventToRunBuffer(clientID, chatID, eventType string, data map[string]interface{}) int64 {
+	return ws.appendChatEventToRunBufferWith(clientID, chatID, eventType, data, ws.lookupChatSession)
+}
+
+// appendChatEventToRunBufferWith is appendChatEventToRunBuffer with the chat
+// session lookup supplied by the caller (blocking, or non-blocking from the
+// bus publish hook).
+func (ws *ReactWebServer) appendChatEventToRunBufferWith(clientID, chatID, eventType string, data map[string]interface{}, lookup func(clientID, chatID string) *chatSession) int64 {
 	if strings.TrimSpace(chatID) == "" {
 		return 0
 	}
@@ -207,20 +212,14 @@ func (ws *ReactWebServer) appendChatEventToRunBuffer(clientID, chatID, eventType
 		return 0
 	}
 
-	ws.mutex.RLock()
-	ctx := ws.clientContexts[clientID]
-	ws.mutex.RUnlock()
-	if ctx == nil {
-		return 0
-	}
-	cs := ctx.getChatSession(chatID)
+	cs := lookup(clientID, chatID)
 	if cs == nil {
 		return 0
 	}
 
 	cs.mu.Lock()
 	if cs.runBuffer == nil {
-		cs.runBuffer = newChatRunRingBuffer()
+		cs.runBuffer = newSeededChatRunRingBuffer()
 	}
 	buf := cs.runBuffer
 
@@ -251,7 +250,36 @@ func (ws *ReactWebServer) appendChatEventToRunBuffer(clientID, chatID, eventType
 	}
 	cs.mu.Unlock()
 
-	return buf.Append(events.UIEvent{Type: eventType, Data: data})
+	return buf.appendStamped(events.UIEvent{Type: eventType, Data: data}, data)
+}
+
+// lookupChatSession resolves a chat session under ws.mutex.
+func (ws *ReactWebServer) lookupChatSession(clientID, chatID string) *chatSession {
+	ws.mutex.RLock()
+	defer ws.mutex.RUnlock()
+	if ctx := ws.clientContexts[clientID]; ctx != nil {
+		return ctx.getChatSession(chatID)
+	}
+	return nil
+}
+
+// tryLookupChatSession is lookupChatSession for the event-bus publish hook,
+// which runs on whatever goroutine publishes — possibly one already holding
+// ws.mutex. It never blocks on the lock: after a short bounded retry it
+// gives up and the event goes out unbuffered rather than deadlocking.
+func (ws *ReactWebServer) tryLookupChatSession(clientID, chatID string) *chatSession {
+	for attempt := 0; attempt < 20; attempt++ {
+		if ws.mutex.TryRLock() {
+			var cs *chatSession
+			if ctx := ws.clientContexts[clientID]; ctx != nil {
+				cs = ctx.getChatSession(chatID)
+			}
+			ws.mutex.RUnlock()
+			return cs
+		}
+		time.Sleep(time.Millisecond)
+	}
+	return nil
 }
 
 // queryRequest is the request body for POST /api/query. It mirrors the

@@ -59,6 +59,10 @@ func TestMain(m *testing.M) {
 	// (observed: 16-24GB RSS per webui.test process, machine-freezing).
 	// Pin the provider to its inert backend for this whole process.
 	localmodel.DisableForTesting()
+	// Run-buffer seqs start at a clock-derived base in production; tests
+	// assert exact seqs, so start every lazily created buffer at zero.
+	// TestRunBufferSeqSeedIsMonotonicAcrossBuffers covers the real seed.
+	runBufferSeqSeed = func() int64 { return 0 }
 	tmpDir, err := os.MkdirTemp("", "sprout-webui-test-state-*")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "TestMain: create temp state dir: %v\n", err)

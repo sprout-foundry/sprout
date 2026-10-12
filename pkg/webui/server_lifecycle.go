@@ -153,9 +153,9 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 		ws.installSessionUpdateHook(ws.terminalManager) // Start heartbeat monitor to detect and cancel stale connections with active queries
 		go ws.startHeartbeatMonitor(ctx)
 
-		// Start run-buffer subscriber so agent-published events (which bypass
-		// publishClientEventWithChat) are captured for WebSocket reattach replay.
-		ws.startRunBufferSubscriber()
+		// Stamp and buffer agent-published chat events (which bypass
+		// publishClientEventWithChat) for WebSocket reattach replay.
+		ws.installRunBufferStamping()
 
 		// Record hosted-preview registrations:
 		// the agent's register_preview_port tool publishes preview_port_registered

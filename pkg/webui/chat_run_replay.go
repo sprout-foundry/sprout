@@ -86,16 +86,54 @@ func (ws *ReactWebServer) buildChatRunReplayMessages(clientID, chatID string, af
 }
 
 // deliverChatRunReplay sends the buffered chat events with seq > afterSeq
-// to the freshly-connected WebSocket. Thin wrapper over
-// buildChatRunReplayMessages so the WS handler doesn't have to know the
-// replay shape — and tests don't have to spin up a socket.
-func (ws *ReactWebServer) deliverChatRunReplay(safeConn *SafeConn, clientID, chatID string, afterSeq int64) {
+// to the freshly-connected WebSocket and returns the highest seq it sent
+// (afterSeq when none). Thin wrapper over buildChatRunReplayMessages so the
+// WS handler doesn't have to know the replay shape — and tests don't have to
+// spin up a socket.
+func (ws *ReactWebServer) deliverChatRunReplay(safeConn *SafeConn, clientID, chatID string, afterSeq int64) int64 {
+	last := afterSeq
 	for _, msg := range ws.buildChatRunReplayMessages(clientID, chatID, afterSeq) {
 		if err := safeConn.WriteJSON(msg); err != nil {
 			ws.log().Error("chat run replay frame send failed", slog.String("chat_id", chatID), slog.Any("err", err))
-			return
+			return last
+		}
+		if seq := eventSeq(msg["data"]); seq > last {
+			last = seq
 		}
 	}
+	return last
+}
+
+// eventSeq returns the "__seq" stamped on an event payload, or 0.
+func eventSeq(data interface{}) int64 {
+	m, ok := data.(map[string]interface{})
+	if !ok {
+		return 0
+	}
+	switch v := m["__seq"].(type) {
+	case int64:
+		return v
+	case int:
+		return int64(v)
+	case float64:
+		return int64(v)
+	}
+	return 0
+}
+
+// replayedAlready reports whether a live event captured while a replay was
+// being written was itself part of that replay: it is stamped for the
+// replayed chat with a seq the replay already covered.
+func replayedAlready(ev events.UIEvent, chatID string, lastReplayed int64) bool {
+	data, ok := ev.Data.(map[string]interface{})
+	if !ok {
+		return false
+	}
+	if id, _ := data["chat_id"].(string); id != chatID {
+		return false
+	}
+	seq := eventSeq(data)
+	return seq > 0 && seq <= lastReplayed
 }
 
 // currentRunEvents returns the buffered events of the run in progress, from

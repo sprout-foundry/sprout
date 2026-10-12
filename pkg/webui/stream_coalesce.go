@@ -72,6 +72,11 @@ func mergeStreamChunks(a, b events.UIEvent) events.UIEvent {
 		}
 	}
 	data["chunk"] = streamField(a, "chunk") + streamField(b, "chunk")
+	// The merged frame carries the later chunk's seq: a client that resumes
+	// after it must not have the second half replayed.
+	if seq := eventSeq(b.Data); seq > 0 {
+		data["__seq"] = seq
+	}
 
 	merged := a
 	merged.Data = data

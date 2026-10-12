@@ -247,6 +247,8 @@ func (ws *ReactWebServer) handleAPIChatSessionsDeleteAll(w http.ResponseWriter, 
 	deletedCount := 0
 	var releasing []*agent.Agent
 	rootWasDeletedWorktree := false
+	var previousRoot, newRoot string
+	rootChanged := false
 	for _, chatID := range chatIDsToDelete {
 		if cs := ctx.ChatSessions[chatID]; cs != nil {
 			if wt := cs.getWorktreePath(); wt != "" && wt == ctx.WorkspaceRoot {
@@ -289,20 +291,17 @@ func (ws *ReactWebServer) handleAPIChatSessionsDeleteAll(w http.ResponseWriter, 
 		// Switch workspace root to the default chat's worktree if it has one;
 		// if the root was a deleted chat's worktree, return it to the project.
 		if wtPath == "" && rootWasDeletedWorktree {
-			wtPath = ctx.ProjectRoot
-			if wtPath == "" {
-				wtPath = ws.daemonRoot
-			}
+			wtPath = ctx.projectRootOr(ws.daemonRoot)
 		}
-		if wtPath != "" {
-			ctx.WorkspaceRoot = wtPath
-			if clientID == defaultWebClientID {
-				ws.workspaceRoot = wtPath
-			}
-		}
+		previousRoot, rootChanged = ws.setClientActiveRootLocked(clientID, ctx, wtPath)
+		newRoot = ctx.WorkspaceRoot
 	}
 
 	ws.mutex.Unlock()
+
+	if rootChanged {
+		ws.publishWorkspaceChanged(clientID, previousRoot, newRoot, "chat_delete_all")
+	}
 
 	ws.releaseAgents("chat_sessions_deleted_all", releasing...)
 

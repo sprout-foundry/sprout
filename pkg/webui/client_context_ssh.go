@@ -42,30 +42,6 @@ func (ws *ReactWebServer) clearClientSSHContextForSessionKey(sessionKey string) 
 	}
 }
 
-// rememberClientWorkspacesLocked snapshots every client context's current
-// workspace root into ws.clientWorkspaces. Called while holding ws.mutex —
-// from setClientWorkspaceRoot (after a selection changes) and from the idle
-// eviction worker (before it deletes contexts). Default-client entries are
-// skipped: that client already follows ws.workspaceRoot.
-//
-// The map is bounded: it only ever holds one entry per client ID that has
-// had a context in this process's lifetime. Stale entries for tabs that
-// never return are replaced (same ID reuse) or pruned lazily when the
-// remembered path no longer exists.
-func (ws *ReactWebServer) rememberClientWorkspacesLocked() {
-	if ws.clientWorkspaces == nil {
-		ws.clientWorkspaces = make(map[string]string)
-	}
-	for clientID, ctx := range ws.clientContexts {
-		if clientID == defaultWebClientID || ctx == nil {
-			continue
-		}
-		if root := strings.TrimSpace(ctx.WorkspaceRoot); root != "" {
-			ws.clientWorkspaces[clientID] = root
-		}
-	}
-}
-
 func (ws *ReactWebServer) setClientWorkspaceRoot(clientID, path string) (string, error) {
 	workspaceRoot, err := filepathAbsEval(path)
 	if err != nil {
@@ -122,6 +98,7 @@ func (ws *ReactWebServer) setClientWorkspaceRoot(clientID, path string) (string,
 	}
 
 	ctx.WorkspaceRoot = workspaceRoot
+	ctx.ProjectRoot = workspaceRoot
 	ctx.SSHHostAlias = ""
 	ctx.SSHSessionKey = ""
 	ctx.SSHLauncherURL = ""
@@ -160,10 +137,7 @@ func (ws *ReactWebServer) setClientWorkspaceRoot(clientID, path string) (string,
 	} else {
 		// Remember non-default selections so an evicted context is recreated
 		// in the workspace the user actually chose (see clientWorkspaces).
-		if ws.clientWorkspaces == nil {
-			ws.clientWorkspaces = make(map[string]string)
-		}
-		ws.clientWorkspaces[clientID] = workspaceRoot
+		ws.rememberClientWorkspaceLocked(clientID, ctx)
 	}
 
 	// Non-blocking: hands each agent to its own goroutine, so this is safe

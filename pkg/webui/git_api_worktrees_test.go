@@ -398,15 +398,14 @@ func TestHandleAPIGitWorktreeCheckoutSiblingAccepted(t *testing.T) {
 	}
 }
 
-// TestHandleAPIGitWorktreeCheckoutUpdatesWorkspaceRootUnconditionally
-// verifies that ws.workspaceRoot is always updated, even when the
-// clientID is NOT "default".
-func TestHandleAPIGitWorktreeCheckoutUpdatesWorkspaceRootUnconditionally(t *testing.T) {
+// TestHandleAPIGitWorktreeCheckoutNonDefaultClientKeepsServerRoot verifies
+// that a non-default client's checkout moves only that client: the
+// server-level root is what other new contexts fall back to.
+func TestHandleAPIGitWorktreeCheckoutNonDefaultClientKeepsServerRoot(t *testing.T) {
 	mainPath, worktreePath := setupGitRepoWithWorktree(t)
 
 	ws := newWorktreeTestWebServer(t, mainPath)
 
-	// Use a non-default client ID via the header.
 	body := fmt.Sprintf(`{"path":%s}`, jsonQuote(worktreePath))
 	req := httptest.NewRequest(http.MethodPost, "/api/git/worktree-checkout", strings.NewReader(body))
 	req.Header.Set(webClientIDHeader, "non-default-client")
@@ -417,21 +416,38 @@ func TestHandleAPIGitWorktreeCheckoutUpdatesWorkspaceRootUnconditionally(t *test
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	// ws.workspaceRoot must be updated regardless of clientID.
-	if ws.workspaceRoot != worktreePath {
-		t.Errorf("ws.workspaceRoot = %q, want %q (not updated for non-default clientID)",
-			ws.workspaceRoot, worktreePath)
-	}
-
-	// The per-client context should also be updated.
 	ws.mutex.RLock()
+	defer ws.mutex.RUnlock()
+	if ws.workspaceRoot != mainPath {
+		t.Errorf("ws.workspaceRoot = %q, want unchanged %q", ws.workspaceRoot, mainPath)
+	}
 	ctx := ws.clientContexts["non-default-client"]
-	ws.mutex.RUnlock()
 	if ctx == nil {
 		t.Fatal("client context not found for non-default-client")
 	}
-	if ctx.WorkspaceRoot != worktreePath {
-		t.Errorf("ctx.WorkspaceRoot = %q, want %q", ctx.WorkspaceRoot, worktreePath)
+	if ctx.WorkspaceRoot != worktreePath || ctx.ProjectRoot != worktreePath {
+		t.Errorf("ctx roots = (%q, %q), want both %q", ctx.WorkspaceRoot, ctx.ProjectRoot, worktreePath)
+	}
+	if got := ws.clientWorkspaces["non-default-client"]; got != worktreePath {
+		t.Errorf("remembered workspace = %q, want %q", got, worktreePath)
+	}
+}
+
+func TestHandleAPIGitWorktreeCheckoutDefaultClientMovesServerRoot(t *testing.T) {
+	mainPath, worktreePath := setupGitRepoWithWorktree(t)
+
+	ws := newWorktreeTestWebServer(t, mainPath)
+
+	body := fmt.Sprintf(`{"path":%s}`, jsonQuote(worktreePath))
+	req := httptest.NewRequest(http.MethodPost, "/api/git/worktree-checkout", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	ws.handleAPIGitWorktreeCheckout(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if got := ws.GetWorkspaceRoot(); got != worktreePath {
+		t.Errorf("ws.workspaceRoot = %q, want %q", got, worktreePath)
 	}
 }
 

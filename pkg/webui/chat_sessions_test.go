@@ -388,25 +388,27 @@ func TestSetChatSessionStateKeepsTopLevelOnActiveChat(t *testing.T) {
 }
 
 func TestChatWithoutWorktreeUsesProjectRoot(t *testing.T) {
-	main := newDefaultChatSession()
+	p := newProjectTestServer(t)
+	const client = "tab-project"
+	if _, err := p.ws.setClientWorkspaceRoot(client, p.project); err != nil {
+		t.Fatal(err)
+	}
+	p.switchChat(t, client, p.addWorktreeChat(t, client))
+
+	p.ws.mutex.RLock()
+	got := p.ws.clientContexts[client].rootForChatWithoutWorktree("/daemon")
+	p.ws.mutex.RUnlock()
+	if got != p.project {
+		t.Errorf("root while a worktree chat is active = %q, want the selected project %q", got, p.project)
+	}
+
 	wtChat := newChatSession("chat-wt", "Worktree chat")
 	wtChat.setWorktreePath("/repo-wt")
 	cc := &webClientContext{
-		WorkspaceRoot: "/repo-wt", // following the active worktree chat
-		ProjectRoot:   "/repo",
+		WorkspaceRoot: "/repo-wt",
 		DefaultChatID: wtChat.ID,
-		ChatSessions:  map[string]*chatSession{main.ID: main, wtChat.ID: wtChat},
+		ChatSessions:  map[string]*chatSession{wtChat.ID: wtChat},
 	}
-	if got := cc.rootForChatWithoutWorktree("/daemon"); got != "/repo" {
-		t.Errorf("root while a worktree chat is active = %q, want the project root /repo", got)
-	}
-
-	cc.WorkspaceRoot = "/repo"
-	if got := cc.rootForChatWithoutWorktree("/daemon"); got != "/repo" {
-		t.Errorf("root on the project = %q, want /repo", got)
-	}
-
-	cc.WorkspaceRoot, cc.ProjectRoot = "/repo-wt", ""
 	if got := cc.rootForChatWithoutWorktree("/daemon"); got != "/daemon" {
 		t.Errorf("root with no recorded project = %q, want the fallback /daemon", got)
 	}

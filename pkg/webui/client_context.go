@@ -87,6 +87,7 @@ type webClientContext struct {
 func newWebClientContext(workspaceRoot, sshHostAlias, sshSessionKey, sshLauncherURL, sshHomePath string) *webClientContext {
 	ctx := &webClientContext{
 		WorkspaceRoot:  workspaceRoot,
+		ProjectRoot:    workspaceRoot,
 		SSHHostAlias:   strings.TrimSpace(sshHostAlias),
 		SSHSessionKey:  strings.TrimSpace(sshSessionKey),
 		SSHLauncherURL: strings.TrimSpace(sshLauncherURL),
@@ -260,7 +261,7 @@ func (ws *ReactWebServer) getOrCreateClientContextLocked(clientID string) *webCl
 			if info, err := os.Stat(remembered); err == nil && info.IsDir() {
 				workspaceRoot = remembered
 			} else {
-				delete(ws.clientWorkspaces, clientID)
+				ws.forgetClientWorkspaceLocked(clientID)
 			}
 		}
 	}
@@ -269,6 +270,7 @@ func (ws *ReactWebServer) getOrCreateClientContextLocked(clientID string) *webCl
 	if clientID == defaultWebClientID {
 		ctx = &webClientContext{
 			WorkspaceRoot:  workspaceRoot,
+			ProjectRoot:    workspaceRoot,
 			SSHHostAlias:   ws.sshHostAlias,
 			SSHSessionKey:  ws.sshSessionKey,
 			SSHLauncherURL: ws.sshLauncherURL,

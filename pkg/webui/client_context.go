@@ -260,6 +260,8 @@ func (ws *ReactWebServer) getOrCreateClientContextLocked(clientID string) *webCl
 		if remembered := strings.TrimSpace(ws.clientWorkspaces[clientID]); remembered != "" {
 			if info, err := os.Stat(remembered); err == nil && info.IsDir() {
 				workspaceRoot = remembered
+				ws.touchClientWorkspaceLocked(clientID)
+				ws.saveClientWorkspacesLocked()
 			} else {
 				ws.forgetClientWorkspaceLocked(clientID)
 			}

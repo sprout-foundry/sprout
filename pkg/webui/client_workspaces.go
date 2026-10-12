@@ -4,7 +4,8 @@ package webui
 
 // client_workspaces.go — per-client workspace bookkeeping: the project root a
 // client selected, the server-level mirror for the default client, and the
-// remembered selection that outlives an evicted context.
+// remembered selection that outlives an evicted context. Its on-disk copy
+// lives in client_workspaces_store.go.
 
 import (
 	"strings"
@@ -73,6 +74,8 @@ func (ws *ReactWebServer) rememberClientWorkspaceLocked(clientID string, ctx *we
 		return
 	}
 	ws.clientWorkspaces[clientID] = root
+	ws.touchClientWorkspaceLocked(clientID)
+	ws.saveClientWorkspacesLocked()
 }
 
 // rememberClientWorkspacesLocked snapshots every non-default client
@@ -90,4 +93,6 @@ func (ws *ReactWebServer) forgetClientWorkspaceLocked(clientID string) {
 		return
 	}
 	delete(ws.clientWorkspaces, clientID)
+	delete(ws.clientWorkspacesUpdatedAt, clientID)
+	ws.saveClientWorkspacesLocked()
 }

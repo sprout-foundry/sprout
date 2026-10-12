@@ -82,6 +82,11 @@ type ReactWebServer struct {
 	// the daemon's launch directory — every new terminal session spawned
 	// in the wrong cwd while the UI still displayed the chosen workspace.
 	clientWorkspaces map[string]string
+	// clientWorkspacesUpdatedAt and clientWorkspacesPath back the on-disk
+	// copy of clientWorkspaces (client_workspaces.go), so a selection also
+	// survives a daemon restart. An empty path disables persistence.
+	clientWorkspacesUpdatedAt map[string]time.Time
+	clientWorkspacesPath      string
 
 	// agentTeardownWg tracks in-flight releaseAgents goroutines so Shutdown
 	// (and tests) can wait for agent teardown — which writes history — to

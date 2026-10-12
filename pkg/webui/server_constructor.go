@@ -232,7 +232,7 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		workspaceRoot = evaled
 	}
 
-	return &ReactWebServer{
+	ws := &ReactWebServer{
 		logger:            webuiLogger,
 		agent:             agent,
 		eventBus:          eventBus,
@@ -267,7 +267,9 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		trustedUserHeader:        trustedUserHeader,
 		serviceMode:              serviceMode,
 		authToken:                resolvedAuthToken,
-	}, nil
+	}
+	ws.initClientWorkspaceStore()
+	return ws, nil
 }
 
 // isLocalhostAddr returns true if the given bind address is a safe local-only

@@ -3,6 +3,7 @@
 package webui
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -190,5 +191,73 @@ func TestNewClientContextRecordsProjectRoot(t *testing.T) {
 		if _, project := p.clientRoots(client); project != p.daemonRoot {
 			t.Errorf("%s: ProjectRoot = %q, want the root it was created in %q", client, project, p.daemonRoot)
 		}
+	}
+}
+
+func TestClientWorkspacesSurviveRestart(t *testing.T) {
+	p := newProjectTestServer(t)
+	storePath := filepath.Join(t.TempDir(), clientWorkspacesFileName)
+	p.ws.clientWorkspacesPath = storePath
+
+	if _, err := p.ws.setClientWorkspaceRoot("tab-d", p.project); err != nil {
+		t.Fatal(err)
+	}
+
+	restarted, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	restarted.daemonRoot = p.daemonRoot
+	restarted.workspaceRoot = p.daemonRoot
+	restarted.mutex.Lock()
+	restarted.clientWorkspacesPath = storePath
+	restarted.loadClientWorkspacesLocked()
+	restarted.mutex.Unlock()
+
+	ctx := restarted.getOrCreateClientContext("tab-d")
+	if ctx.WorkspaceRoot != p.project || ctx.ProjectRoot != p.project {
+		t.Fatalf("restarted context roots = (%q, %q), want %q", ctx.WorkspaceRoot, ctx.ProjectRoot, p.project)
+	}
+}
+
+func TestLoadClientWorkspacesDropsInvalidEntries(t *testing.T) {
+	p := newProjectTestServer(t)
+	outside := t.TempDir()
+	stale := time.Now().Add(-2 * clientWorkspaceMaxAge)
+	stored := persistedClientWorkspaces{Version: 1, Clients: map[string]persistedClientWorkspace{
+		"live":     {Path: p.project, UpdatedAt: time.Now()},
+		"stale":    {Path: p.project, UpdatedAt: stale},
+		"vanished": {Path: filepath.Join(p.daemonRoot, "gone"), UpdatedAt: time.Now()},
+		"outside":  {Path: outside, UpdatedAt: time.Now()},
+		"default":  {Path: p.project, UpdatedAt: time.Now()},
+	}}
+	for i := 0; i < maxPersistedClientWorkspaces+10; i++ {
+		stored.Clients[fmt.Sprintf("old-%d", i)] = persistedClientWorkspace{Path: p.worktree, UpdatedAt: time.Now().Add(-time.Hour - time.Duration(i)*time.Minute)}
+	}
+	data, err := json.Marshal(stored)
+	if err != nil {
+		t.Fatal(err)
+	}
+	storePath := filepath.Join(t.TempDir(), clientWorkspacesFileName)
+	if err := os.WriteFile(storePath, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	p.ws.mutex.Lock()
+	defer p.ws.mutex.Unlock()
+	p.ws.clientWorkspaces = map[string]string{}
+	p.ws.clientWorkspacesPath = storePath
+	p.ws.loadClientWorkspacesLocked()
+
+	if got := p.ws.clientWorkspaces["live"]; got != p.project {
+		t.Errorf("live entry = %q, want %q", got, p.project)
+	}
+	for _, id := range []string{"stale", "vanished", "outside", "default"} {
+		if got, ok := p.ws.clientWorkspaces[id]; ok {
+			t.Errorf("entry %q was loaded (%q), want it dropped", id, got)
+		}
+	}
+	if n := len(p.ws.clientWorkspaces); n > maxPersistedClientWorkspaces {
+		t.Errorf("loaded %d entries, want at most %d", n, maxPersistedClientWorkspaces)
 	}
 }

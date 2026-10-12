@@ -95,6 +95,7 @@ var allowedOutboundMessageTypes = map[string]struct{}{
 	events.EventTypeProviderNoCredential:           {},
 	events.EventTypeWorkspaceChanged:               {},
 	events.EventTypeSessionTerminated:              {},
+	events.EventTypeWorkspaceStopping:              {},
 	events.EventTypeSessionChanged:                 {}, // SP-034-3e
 	events.EventTypeCompactStarted:                 {},
 	events.EventTypeCompactCompleted:               {},

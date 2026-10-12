@@ -3,6 +3,7 @@ package events
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -78,6 +79,10 @@ const (
 	EventTypeProviderNoCredential = "provider_no_credential"
 	EventTypeWorkspaceChanged     = "workspace_changed"
 	EventTypeSessionTerminated    = "session_terminated"
+	// EventTypeWorkspaceStopping warns connected clients that the workspace
+	// is about to stop (idle timeout, runtime cap, drain). Payload:
+	// {reason, at, deadline_seconds}.
+	EventTypeWorkspaceStopping = "workspace_stopping"
 	// EventTypeSessionChanged signals that a chat session's metadata
 	// (name, pin state, active state) changed and tabs viewing that chat
 	// should reconcile. SP-034-3e.
@@ -220,6 +225,8 @@ type EventBus struct {
 	nextID      int64
 
 	deliveryQueue chan eventDelivery
+
+	publishHook atomic.Pointer[PublishHook]
 }
 
 // subscriberWorker holds the inbox and stop signal for one subscriber's

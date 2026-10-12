@@ -11,9 +11,16 @@ import (
 )
 
 // isCriticalEvent reports whether eventType must never be silently dropped.
+// Run boundaries (query_started, query_completed, and the error that ends a
+// failed query) are critical too: a client that misses one shows a run that
+// never started or never ends.
 func isCriticalEvent(eventType string) bool {
 	switch eventType {
-	case EventTypeSecurityApprovalRequest,
+	case EventTypeQueryStarted,
+		EventTypeQueryCompleted,
+		EventTypeError,
+		EventTypeWorkspaceStopping,
+		EventTypeSecurityApprovalRequest,
 		EventTypeSecurityPromptRequest,
 		EventTypeAskUserRequest,
 		EventTypeEditApprovalRequest,
@@ -282,6 +289,10 @@ func forwardToReceive(ch chan UIEvent, ev UIEvent) {
 // macOS streaming-freeze: hundreds of token-level chunks/sec no longer
 // spawn hundreds of goroutines/sec.
 func (eb *EventBus) Publish(eventType string, data any) {
+	if hook := eb.publishHook.Load(); hook != nil {
+		data = (*hook)(eventType, data)
+	}
+
 	eb.mutex.Lock()
 	eb.nextID++
 	event := UIEvent{
@@ -355,6 +366,20 @@ func (eb *EventBus) Publish(eventType string, data any) {
 		return
 	}
 	wg.Wait()
+}
+
+// PublishHook rewrites an event's payload before it is delivered. It runs
+// synchronously on the publishing goroutine, outside the bus locks, and its
+// return value replaces the payload every subscriber sees.
+type PublishHook func(eventType string, data any) any
+
+// SetPublishHook installs (or, with nil, removes) the bus's publish hook.
+func (eb *EventBus) SetPublishHook(hook PublishHook) {
+	if hook == nil {
+		eb.publishHook.Store(nil)
+		return
+	}
+	eb.publishHook.Store(&hook)
 }
 
 // generateEventID creates a unique event ID

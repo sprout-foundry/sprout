@@ -908,7 +908,7 @@ describe('error cause surfacing', () => {
     act(() => {
       hookHandleEvent!({
         type: 'error',
-        data: { message: 'Query failed', error: 'provider unreachable after 4 attempts' },
+        data: { message: 'Query failed', error: 'provider unreachable after 4 attempts', terminal: true },
       } as WsEvent);
     });
 
@@ -923,7 +923,7 @@ describe('error cause surfacing', () => {
     const { stateHolder } = setup();
 
     act(() => {
-      hookHandleEvent!({ type: 'error', data: { message: 'boom' } } as WsEvent);
+      hookHandleEvent!({ type: 'error', data: { message: 'boom', terminal: true } } as WsEvent);
     });
 
     expect(stateHolder.current.lastError).toBe('boom');

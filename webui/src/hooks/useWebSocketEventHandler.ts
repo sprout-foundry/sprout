@@ -7,7 +7,10 @@ import { fetchChatSessionMessagesForActiveStore } from '../services/hostChatSess
 import { getServerErrorCode } from '../services/errorCodes';
 import { appendTurnToHostStore } from '../services/hostChatSessions';
 import { NATIVE_CHAT_ENABLED } from '../services/nativeChatStubs/nativeChatFlag';
-import { onChatReplay, PENDING_EVENTS_CAP } from '../utils/chatReplay';
+import { fetchChatRunning } from '../services/runStatus';
+import { WebSocketService } from '../services/websocket';
+import { isRunEndingError, onChatReplay, PENDING_EVENTS_CAP } from '../utils/chatReplay';
+import { noteRunStarted, runEpoch } from '../utils/runEpoch';
 import { debugLog } from '../utils/log';
 import { appendCappedLog } from '../utils/logCap';
 import { trimMessages } from '../utils/messageWindow';
@@ -34,6 +37,7 @@ import {
   handleSessionDisplaced,
   handleSessionTerminated,
   handleTodoUpdate,
+  handleWorkspaceStopping,
 } from './wsHandlers/chat';
 import {
   handleCompactCompleted,
@@ -58,6 +62,10 @@ import {
 import { handleSubagentActivity, handleToolEnd, handleToolStart } from './wsHandlers/tools';
 import { chatTranscriptToMessages } from '../utils/chatTranscript';
 
+/** Reconnect run-status lookups: attempts and the first retry delay (doubling). */
+const RECONNECT_STATUS_ATTEMPTS = 5;
+const RECONNECT_STATUS_BASE_DELAY_MS = 500;
+
 // ── Hook Interface ───────────────────────────────────────────────────────
 
 export interface UseWebSocketEventHandlerRefs {
@@ -68,6 +76,8 @@ export interface UseWebSocketEventHandlerRefs {
   pendingProviderChangeValueRef: React.MutableRefObject<string | null>;
   connectionTimeoutRef: React.MutableRefObject<NodeJS.Timeout | null>;
   lastConnectionStateRef: React.MutableRefObject<boolean>;
+  /** Mirror of the store's isProcessing, read when the socket drops and reconnects. */
+  isProcessingRef?: React.MutableRefObject<boolean>;
 }
 
 export interface UseWebSocketEventHandlerParams {
@@ -105,7 +115,17 @@ export function useWebSocketEventHandler({
     pendingProviderChangeValueRef,
     connectionTimeoutRef,
     lastConnectionStateRef,
+    isProcessingRef,
   } = refs;
+
+  // Whether the active chat was running when the socket dropped; read by the
+  // reconnect sync to tell "finished while we were away" from "never ran".
+  const processingAtDisconnectRef = useRef<boolean | null>(null);
+  const reconnectGenerationRef = useRef(0);
+  const isProcessingNow = useCallback(
+    () => isProcessingRef?.current ?? activeRequestsRef.current > 0,
+    [isProcessingRef, activeRequestsRef],
+  );
 
   // Stream-chunk buffer (see makeStreamFlusher) — refs survive re-renders;
   // the flusher closes over them and over setState.
@@ -163,6 +183,21 @@ export function useWebSocketEventHandler({
       // today's exact behavior, byte-identical).
       if (NATIVE_CHAT_ENABLED) {
         return;
+      }
+
+      // Every primary run start bumps its chat's run epoch, so an in-flight
+      // status snapshot taken before it cannot end the new run.
+      const eventDepth = Number(eventData.subagent_depth ?? 0);
+      const isPrimaryEvent = !(Number.isFinite(eventDepth) && eventDepth > 0);
+      if (event.type === 'query_started' && isPrimaryEvent) {
+        noteRunStarted(eventData.chat_id != null ? String(eventData.chat_id) : activeChatIdRef.current);
+      }
+      if (
+        event.type === 'connection_status' &&
+        eventData.connected === false &&
+        processingAtDisconnectRef.current === null
+      ) {
+        processingAtDisconnectRef.current = isProcessingNow();
       }
 
       // Append finished turns to the host's chat session store when the host
@@ -233,8 +268,9 @@ export function useWebSocketEventHandler({
         const eventChatId = String(eventData.chat_id);
         const bgSubagentDepth = Number(eventData.subagent_depth ?? 0);
         const endsBackgroundRun =
-          (event.type === 'query_completed' || event.type === 'error') &&
-          !(Number.isFinite(bgSubagentDepth) && bgSubagentDepth > 0);
+          event.type === 'error'
+            ? isRunEndingError(eventData, true)
+            : event.type === 'query_completed' && !(Number.isFinite(bgSubagentDepth) && bgSubagentDepth > 0);
         setState((prev) => {
           // The chat holding the workspace finished: release the chat whose
           // send was held back behind it (its queue drains next).
@@ -284,6 +320,20 @@ export function useWebSocketEventHandler({
       }
 
       debugLog('[msg] Received event:', event.type, eventData);
+
+      // Safety net: the active chat's primary run is visibly producing output
+      // while the UI shows it idle (a missed or late query_started, a stale
+      // snapshot). Its own output is proof it is running.
+      if (
+        isPrimaryEvent &&
+        (event.type === 'stream_chunk' || event.type === 'tool_start' || event.type === 'query_progress') &&
+        eventData.chat_id != null &&
+        String(eventData.chat_id) === activeChatIdRef.current &&
+        !isProcessingNow()
+      ) {
+        if (activeRequestsRef.current === 0) activeRequestsRef.current = 1;
+        setState((prev) => (prev.isProcessing ? {} : { isProcessing: true }));
+      }
 
       // Flush buffered stream chunks BEFORE any other event routes. The
       // completion heuristics in query_completed compare streamed text
@@ -377,6 +427,8 @@ export function useWebSocketEventHandler({
           return handleWorkspacePatch(ctx);
         case 'session_displaced':
           return handleSessionDisplaced(ctx);
+        case 'workspace_stopping':
+          return handleWorkspaceStopping(ctx);
         default:
           const logEntry = createLogEntry(event);
           logEntry.level = 'warning';
@@ -395,100 +447,114 @@ export function useWebSocketEventHandler({
       apiService,
       pendingProviderRef,
       streamFlusher,
+      isProcessingNow,
     ],
   );
 
+  // Reconnect sync. The running flag comes from the per-chat query status
+  // (or, for an in-page agent, the page's own run registry), retried with
+  // backoff; an idle answer is dropped when a run started after it was
+  // requested. Missed events themselves arrive through the reattach replay.
   const handleReconnect = useCallback(() => {
     debugLog('[reconnect] syncing state after websocket reconnect');
-    setState((prev) => ({ ...prev, lastError: null }));
+    const generation = ++reconnectGenerationRef.current;
+    const chatId = activeChatIdRef.current;
+    const wasProcessing = processingAtDisconnectRef.current ?? isProcessingNow();
+    processingAtDisconnectRef.current = null;
+    const epochAtRequest = runEpoch(chatId);
+    setState(() => ({ lastError: null }));
+
     apiService
       .getStats()
       .then((stats: unknown) => {
-        const statsRecord = stats as Record<string, unknown>;
-        const backendProcessing = statsRecord.is_processing === true;
-        activeRequestsRef.current = backendProcessing ? 1 : 0;
-
-        const wasProcessing = (() => {
-          // Read the current isProcessing before setState overwrites it.
-          let processing = false;
-          setState((prev) => {
-            processing = prev.isProcessing;
-            return prev;
-          });
-          return processing;
-        })();
-
-        setState((prev) => {
-          const nextToolExecutions = backendProcessing
-            ? prev.toolExecutions
-            : prev.toolExecutions.map((tool: ToolExecution) => {
-                if (tool.status === 'started' || tool.status === 'running') {
-                  return {
-                    ...tool,
-                    status: 'error' as const,
-                    endTime: tool.endTime || new Date(),
-                    result: 'Interrupted while connection was paused/reconnecting',
-                  };
-                }
-                return tool;
-              });
-          return {
-            isConnected: true,
-            isProcessing: backendProcessing,
-            queryProgress: backendProcessing ? prev.queryProgress : null,
-            lastError: null,
-            toolExecutions: nextToolExecutions,
-            stats: { ...prev.stats, ...statsRecord, connection_phase: 'reconnected' },
-          };
-        });
-
-        // If a query was processing when we disconnected but the backend
-        // says it's done now, the query_completed event was lost during
-        // the disconnect. Reload messages for the active chat to recover
-        // the assistant's response.
-        if (wasProcessing && !backendProcessing) {
-          const chatId = activeChatIdRef.current;
-          if (chatId) {
-            debugLog('[reconnect] query completed during disconnect — reloading messages for', chatId);
-            // Read-only reload: a switchChatSession here would re-broadcast
-            // session_changed("switch") and risk the same echo-reload loop the
-            // session_changed handler avoids.
-            fetchChatSessionMessagesForActiveStore(chatId, fetchFn)
-              .then((response) => {
-                // Bail if user switched chats while we were loading.
-                if (activeChatIdRef.current !== chatId) return;
-                const backendMessages: Message[] = chatTranscriptToMessages(chatId, response.chat_session.messages);
-                setState((prev) => {
-                  // Backend is authoritative when it has caught up or the
-                  // query is no longer active. The old length-only heuristic
-                  // preferred shorter local state when streaming hadn't
-                  // persisted yet, losing the assistant's response.
-                  const useBackendMessages = backendMessages.length >= prev.messages.length || !backendProcessing;
-                  return useBackendMessages ? { messages: trimMessages(backendMessages) } : {};
-                });
-              })
-              .catch((err) => {
-                debugLog('[reconnect] failed to reload messages:', err);
-              });
-          }
-        }
+        if (generation !== reconnectGenerationRef.current) return;
+        const statsRecord = { ...(stats as Record<string, unknown>) };
+        // The running flag is resolved per chat below; a client-wide stats
+        // flag must not overwrite it.
+        delete statsRecord.is_processing;
+        setState((prev) => ({ stats: { ...prev.stats, ...statsRecord, connection_phase: 'reconnected' } }));
       })
-      .catch((error: unknown) => {
-        debugLog('[reconnect] failed to sync backend state:', error);
-        // Defensive: the up-front clear above already covers the no-flash
-        // case, but re-clear here so any error path that re-sets lastError
-        // (or a stale closure) still ends with a clean banner.
-        setState((prev) => ({ ...prev, lastError: null }));
-      });
-  }, [apiService, activeRequestsRef, setState, fetchFn]);
+      .catch((error: unknown) => debugLog('[reconnect] failed to refresh stats:', error));
+
+    const applyRunning = (running: boolean) => {
+      if (generation !== reconnectGenerationRef.current || activeChatIdRef.current !== chatId) return;
+      if (running) {
+        if (activeRequestsRef.current === 0) activeRequestsRef.current = 1;
+        setState(() => ({ isConnected: true, isProcessing: true }));
+        return;
+      }
+      if (runEpoch(chatId) !== epochAtRequest) {
+        debugLog('[reconnect] idle status is older than a run that started since; keeping it running');
+        return;
+      }
+      activeRequestsRef.current = 0;
+      setState((prev) => ({
+        isConnected: true,
+        isProcessing: false,
+        queryProgress: null,
+        toolExecutions: prev.toolExecutions.map((tool: ToolExecution) =>
+          tool.status === 'started' || tool.status === 'running'
+            ? {
+                ...tool,
+                status: 'error' as const,
+                endTime: tool.endTime || new Date(),
+                result: 'Interrupted while connection was paused/reconnecting',
+              }
+            : tool,
+        ),
+      }));
+
+      // The run ended while the socket was down. The reattach replay
+      // normally delivers its tail; reload the transcript as well so the
+      // answer shows even when the replay window had already closed.
+      if (wasProcessing && chatId) {
+        debugLog('[reconnect] query completed during disconnect — reloading messages for', chatId);
+        // Read-only reload: a switchChatSession here would re-broadcast
+        // session_changed("switch") and risk the same echo-reload loop the
+        // session_changed handler avoids.
+        fetchChatSessionMessagesForActiveStore(chatId, fetchFn)
+          .then((response) => {
+            if (activeChatIdRef.current !== chatId) return;
+            const backendMessages: Message[] = chatTranscriptToMessages(chatId, response.chat_session.messages);
+            setState((prev) =>
+              backendMessages.length >= prev.messages.length || !response.chat_session.active_query
+                ? { messages: trimMessages(backendMessages) }
+                : {},
+            );
+          })
+          .catch((err) => debugLog('[reconnect] failed to reload messages:', err));
+      }
+    };
+
+    const attempt = (n: number) => {
+      fetchChatRunning(chatId, fetchFn)
+        .then(applyRunning)
+        .catch((error: unknown) => {
+          if (generation !== reconnectGenerationRef.current) return;
+          if (n + 1 >= RECONNECT_STATUS_ATTEMPTS) {
+            debugLog('[reconnect] giving up on run status after retries:', error);
+            return;
+          }
+          const delay = RECONNECT_STATUS_BASE_DELAY_MS * 2 ** n;
+          debugLog(`[reconnect] run status failed, retrying in ${delay}ms:`, error);
+          setTimeout(() => attempt(n + 1), delay);
+        });
+    };
+    attempt(0);
+  }, [apiService, activeRequestsRef, activeChatIdRef, setState, fetchFn, isProcessingNow]);
 
   // Events a chat received in the background, replayed when it comes back on
   // screen: the cached state plus these is exactly its current state.
   useEffect(
     () =>
-      onChatReplay((chatId, events) => {
+      onChatReplay((chatId, events, options) => {
         if (activeChatIdRef.current !== chatId) return;
-        for (const event of events) handleEvent(event);
+        const socket = WebSocketService.getInstance();
+        for (const event of events) {
+          // A server snapshot overlaps the live stream; apply each event once.
+          if (options.fromServer && !socket.markApplied(event, chatId)) continue;
+          handleEvent(event);
+        }
       }),
     [handleEvent, activeChatIdRef],
   );

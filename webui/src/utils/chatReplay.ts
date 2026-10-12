@@ -6,24 +6,35 @@ export const PENDING_EVENTS_CAP = 200;
 
 const REPLAY_CHAT_EVENTS = 'sprout:replay-chat-events';
 
+export interface ReplayOptions {
+  /**
+   * The events are a server snapshot (a chat's `run_events`) that may overlap
+   * what the live stream already delivered; skip any whose seq was seen.
+   */
+  fromServer?: boolean;
+}
+
 interface ReplayDetail {
   chatId: string;
   events: WsEvent[];
+  options: ReplayOptions;
 }
 
 /**
  * Asks the WebSocket event handler to apply events a chat received while it
  * wasn't on screen, in order, as if they had just arrived.
  */
-export function requestChatReplay(chatId: string, events: WsEvent[]): void {
+export function requestChatReplay(chatId: string, events: WsEvent[], options: ReplayOptions = {}): void {
   if (events.length === 0) return;
-  window.dispatchEvent(new CustomEvent<ReplayDetail>(REPLAY_CHAT_EVENTS, { detail: { chatId, events } }));
+  window.dispatchEvent(new CustomEvent<ReplayDetail>(REPLAY_CHAT_EVENTS, { detail: { chatId, events, options } }));
 }
 
-export function onChatReplay(listener: (chatId: string, events: WsEvent[]) => void): () => void {
+export function onChatReplay(
+  listener: (chatId: string, events: WsEvent[], options: ReplayOptions) => void,
+): () => void {
   const handler = (e: Event) => {
     const detail = (e as CustomEvent<ReplayDetail>).detail;
-    if (detail?.chatId && Array.isArray(detail.events)) listener(detail.chatId, detail.events);
+    if (detail?.chatId && Array.isArray(detail.events)) listener(detail.chatId, detail.events, detail.options ?? {});
   };
   window.addEventListener(REPLAY_CHAT_EVENTS, handler);
   return () => window.removeEventListener(REPLAY_CHAT_EVENTS, handler);
@@ -34,24 +45,41 @@ function isPrimary(event: WsEvent): boolean {
   return !(Number.isFinite(depth) && depth > 0);
 }
 
+/**
+ * Whether an error event ends its chat's run. The daemon marks the errors
+ * that end a query with `terminal: true` and informational ones with
+ * `terminal: false`; for a payload without the flag (older servers, the
+ * in-page agent) an error scoped to a chat's primary run ends it, and a
+ * chatless or subagent error does not. `scopedToChat` says the event is
+ * already known to belong to one chat (its queued events), so a missing
+ * chat_id does not make it chatless.
+ */
+export function isRunEndingError(data: unknown, scopedToChat = false): boolean {
+  const d = asRecord(data);
+  if (typeof d.terminal === 'boolean') return d.terminal;
+  if (!scopedToChat && (typeof d.chat_id !== 'string' || !d.chat_id)) return false;
+  const depth = Number(d.subagent_depth ?? 0);
+  return !(Number.isFinite(depth) && depth > 0);
+}
+
+function endsPrimaryRun(event: WsEvent): boolean {
+  if (event.type === 'error') return isRunEndingError(event.data, true);
+  return isPrimary(event) && (event.type === 'query_completed' || event.type === 'session_terminated');
+}
+
 /** Whether a chat still has a run in flight after these events. */
 export function processingAfter(wasProcessing: boolean, events: WsEvent[]): boolean {
   let processing = wasProcessing;
   for (const event of events) {
-    if (!isPrimary(event)) continue;
-    if (event.type === 'query_started') processing = true;
-    else if (event.type === 'query_completed' || event.type === 'error' || event.type === 'session_terminated') {
-      processing = false;
-    }
+    if (isPrimary(event) && event.type === 'query_started') processing = true;
+    else if (endsPrimaryRun(event)) processing = false;
   }
   return processing;
 }
 
 /** Whether these events include the end of a primary run. */
 export function endsRun(events: WsEvent[]): boolean {
-  return events.some(
-    (e) => isPrimary(e) && (e.type === 'query_completed' || e.type === 'error' || e.type === 'session_terminated'),
-  );
+  return events.some(endsPrimaryRun);
 }
 
 function asRecord(v: unknown): Record<string, unknown> {

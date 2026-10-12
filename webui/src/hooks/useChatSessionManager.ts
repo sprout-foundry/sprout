@@ -21,7 +21,9 @@ import { generateMessageId } from '../utils/messageId';
 import { trimMessages } from '../utils/messageWindow';
 import { NATIVE_CHAT_ENABLED } from '../services/nativeChatStubs/nativeChatFlag';
 import { chatTranscriptToMessages } from '../utils/chatTranscript';
-import { processingAfter, requestChatReplay } from '../utils/chatReplay';
+import { isRunEndingError, processingAfter, requestChatReplay } from '../utils/chatReplay';
+import { noteRunStarted, runEpoch } from '../utils/runEpoch';
+import { fetchChatRunning } from '../services/runStatus';
 import { markSteerPending, pendingSteerBubble } from '../utils/pendingSteer';
 import { activeWorkspaceModeId } from '../workspaces/useWorkspaceMode';
 import { recordConversationCleared } from './bootSessionRestore';
@@ -191,10 +193,14 @@ export function useChatSessionManager({
       const response = await chatSessions.listChatSessions();
       const activeChatId = response.active_chat_id || null;
       let initialMessages: Message[] = [];
+      let initialActive = false;
+      let initialRunEvents: WsEvent[] = [];
       if (activeChatId) {
         try {
           const switchResp = await chatSessions.switchChatSession(activeChatId);
           initialMessages = chatTranscriptToMessages(activeChatId, switchResp.chat_session.messages);
+          initialActive = switchResp.chat_session.active_query === true;
+          initialRunEvents = switchResp.chat_session.run_events ?? [];
           if (!activeChatIdRef.current) {
             activeChatIdRef.current = activeChatId;
           }
@@ -202,6 +208,11 @@ export function useChatSessionManager({
           debugLog('[chat] Failed to load initial messages:', e);
         }
       }
+      // A run in progress on the chat we boot into (started from another tab
+      // or before a reload) shows as running, and its turn so far is rebuilt
+      // from the run's buffered events on top of the stored transcript.
+      const adoptRun = initialActive && (!activeChatIdRef.current || activeChatIdRef.current === activeChatId);
+      if (adoptRun && activeRequestsRef.current === 0) activeRequestsRef.current = 1;
       setState((prev) => {
         // Don't adopt this chat's transcript when the active chat
         // moved on while we were fetching (a design-mode boot switch runs
@@ -219,14 +230,18 @@ export function useChatSessionManager({
             initialChatStillActive && initialMessages.length > 0
               ? trimMessages(appendNotYetSaved(initialMessages, prev.messages))
               : prev.messages,
+          ...(adoptRun && initialChatStillActive ? { isProcessing: true } : {}),
         };
       });
+      if (adoptRun && activeChatId) {
+        requestChatReplay(activeChatId, initialRunEvents, { fromServer: true });
+      }
     } catch (error) {
       // best-effort: background list refresh on connect; an empty tab bar is
       // the visible symptom and self-heals via the session_changed WS event.
       debugLog('[chat] Failed to load chat sessions:', error);
     }
-  }, [setState, activeChatIdRef, chatSessions]);
+  }, [setState, activeChatIdRef, activeRequestsRef, chatSessions]);
 
   const handleActiveChatChange = useCallback(
     async (id: string, mode?: 'code' | 'design'): Promise<boolean> => {
@@ -241,6 +256,9 @@ export function useChatSessionManager({
       // server's stored copy of a running chat lacks the turn in progress.
       let replayEvents: WsEvent[] = [];
       activeChatIdRef.current = id;
+      // A run that starts after the switch request makes the response's
+      // "not active" stale.
+      const epochAtSwitch = runEpoch(id);
 
       setState((prev) => {
         const cached = prev.perChatCache[id];
@@ -253,7 +271,10 @@ export function useChatSessionManager({
         // The backend fetch below will confirm, but this prevents a brief
         // phantom spinner on switch-back.
         const hasCompletionInPending = pending.some(
-          (e) => e.type === 'query_completed' || e.type === 'session_terminated' || e.type === 'error',
+          (e) =>
+            e.type === 'query_completed' ||
+            e.type === 'session_terminated' ||
+            (e.type === 'error' && isRunEndingError(e.data, true)),
         );
         const restoredIsProcessing = replayLocally
           ? processingAfter(cached.isProcessing ?? false, pending)
@@ -337,7 +358,8 @@ export function useChatSessionManager({
             newPerChatCache[id] = { ...cached };
             delete newPerChatCache[id].pendingEvents;
           }
-          const finalIsProcessing = backendIsActive;
+          const startedSinceRequest = runEpoch(id) !== epochAtSwitch;
+          const finalIsProcessing = backendIsActive || (startedSinceRequest && prev.isProcessing);
           // A message sent (or an answer streamed) while this switch was in
           // flight isn't in the server copy yet; dropping it lost the user's
           // bubble and let the answer run into the previous reply.
@@ -359,7 +381,7 @@ export function useChatSessionManager({
         // progress; the server sends that turn's events to rebuild it.
         // Only on top of that stored copy: a cached view already has the run.
         if (installedStoredCopy && backendIsActive && activeChatIdRef.current === switchId) {
-          requestChatReplay(id, response.chat_session.run_events ?? []);
+          requestChatReplay(id, response.chat_session.run_events ?? [], { fromServer: true });
         }
 
         // Refresh the session list (tab titles/counts) without blocking the
@@ -637,6 +659,7 @@ export function useChatSessionManager({
       }
 
       activeRequestsRef.current += 1;
+      noteRunStarted(targetChatId ?? activeChatIdRef.current);
 
       const userBubbleId = generateMessageId();
       setState((prev) => ({
@@ -730,6 +753,14 @@ export function useChatSessionManager({
             }));
             return;
           }
+        }
+        // workspace_stopping: the daemon is draining before the workspace
+        // stops. The server already reported it on the chat (a terminal error
+        // event); only undo the optimistic running state here.
+        if (error instanceof Error && (error as Error & { code?: string }).code === 'workspace_stopping') {
+          if (activeRequestsRef.current > 0) activeRequestsRef.current -= 1;
+          setState((prev) => ({ isProcessing: activeRequestsRef.current > 0, lastError: error.message }));
+          return;
         }
         console.error('[FAIL] Failed to send message:', error);
         if (activeRequestsRef.current > 0) {
@@ -830,27 +861,28 @@ export function useChatSessionManager({
         return { isProcessing: false, queryProgress: null, lastError: null, messages };
       });
     } catch (error) {
-      activeRequestsRef.current = 0;
+      // The stop request did not get through, so the run may well still be
+      // going: keep showing it as running until its query_completed arrives
+      // or the server says the chat is idle.
       queuedMessagesRef.current = [];
       setQueuedMessages([]);
       setQueuedMessagesCount(0);
-      lastSteerMessageRef.current = '';
-      lastSteerBubbleIdRef.current = '';
       const errorMsg = error instanceof Error ? error.message : 'Failed to stop query';
-      setState((prev) => ({
-        isProcessing: false,
-        queryProgress: null,
-        lastError: errorMsg,
-        messages: trimMessages([
-          ...prev.messages,
-          {
-            id: generateMessageId(),
-            type: 'assistant',
-            content: `[FAIL] Error: ${errorMsg}`,
-            timestamp: new Date(),
-          },
-        ]),
-      }));
+      notificationBus.notify('error', 'Stop', `${errorMsg}. The run may still be going.`, 5000);
+      setState(() => ({ lastError: errorMsg }));
+      const chatId = activeChatIdRef.current;
+      const epoch = runEpoch(chatId);
+      try {
+        const running = await fetchChatRunning(chatId);
+        if (!running && activeChatIdRef.current === chatId && runEpoch(chatId) === epoch) {
+          activeRequestsRef.current = 0;
+          lastSteerMessageRef.current = '';
+          lastSteerBubbleIdRef.current = '';
+          setState(() => ({ isProcessing: false, queryProgress: null }));
+        }
+      } catch (statusError) {
+        debugLog('[chat] run status check after failed stop failed:', statusError);
+      }
     }
   }, [chatApi, setQueuedMessages, setQueuedMessagesCount]);
 

@@ -32,6 +32,7 @@ import { useBackgroundChatSync } from '../hooks/useBackgroundChatSync';
 import { useChatSessionManager } from '../hooks/useChatSessionManager';
 import type { QueuedMessage, UseChatSessionManagerReturn } from '../hooks/useChatSessionManager';
 import { useCurrentTodos } from '../hooks/useCurrentTodos';
+import { useRunStateReconciler } from '../hooks/useRunStateReconciler';
 import { useWebSocketEventHandler } from '../hooks/useWebSocketEventHandler';
 import type { UseWebSocketEventHandlerRefs } from '../hooks/useWebSocketEventHandler';
 import { useHost } from '../host';
@@ -40,6 +41,7 @@ import { retractSteer, sendQuery, steerQuery, stopQuery } from '../services/api/
 import { createChatSessionsApi } from '../services/chatSessions';
 import { clientFetch } from '../services/clientSession';
 import { createHostChatSessionsApi, registerActiveChatSessionsProject } from '../services/hostChatSessions';
+import { reportInterruptedInPageRuns } from '../services/inPageRunGuard';
 import type { AppState } from '../types/app';
 import type { WorkspaceShellChat } from '../workspaces/shell';
 
@@ -227,6 +229,8 @@ function WorkspaceChatRuntime({
   const pendingProviderChangeValueRef = useRef<string | null>(null);
   const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastConnectionStateRef = useRef(false);
+  const isProcessingRef = useRef(false);
+  isProcessingRef.current = state.isProcessing;
 
   const refs: UseWebSocketEventHandlerRefs = {
     activeRequestsRef,
@@ -236,6 +240,7 @@ function WorkspaceChatRuntime({
     pendingProviderChangeValueRef,
     connectionTimeoutRef,
     lastConnectionStateRef,
+    isProcessingRef,
   };
 
   const { handleEvent, handleReconnect } = useWebSocketEventHandler({
@@ -282,6 +287,29 @@ function WorkspaceChatRuntime({
   // subscription so an embedding needs only to hand over its provider; the
   // app's initialization hook does not register it again.
   useSubscribeEvents(eventsProvider, handleEvent, handleReconnect);
+
+  // The transport reattaches to the chat on screen after a reconnect and
+  // deduplicates its events by seq, so it needs to know which chat that is.
+  useEffect(() => {
+    (eventsProvider as EventsProvider & { setActiveChatId?: (id: string | null) => void }).setActiveChatId?.(
+      state.activeChatId,
+    );
+  }, [eventsProvider, state.activeChatId]);
+
+  // An in-page agent run dies with the page; one recorded as in flight when
+  // the page last went away is reported instead of left hanging.
+  useEffect(() => reportInterruptedInPageRuns(), []);
+
+  // Correct a running indicator that disagrees with the server (or the
+  // in-page agent) for consecutive polls.
+  useRunStateReconciler({
+    isProcessing: state.isProcessing,
+    activeChatIdRef,
+    activeRequestsRef,
+    setState,
+    fetchFn,
+    enabled: state.isConnected,
+  });
 
   // The session calls need the backend, so the list loads once the transport
   // reports connected, and again after a reconnect, when the list may have

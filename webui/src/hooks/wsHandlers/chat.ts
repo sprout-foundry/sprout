@@ -13,6 +13,7 @@ import {
 } from '../../services/hostChatSessions';
 import { getWebUIClientId } from '../../services/clientSession';
 import { getServerErrorCode } from '../../services/errorCodes';
+import { notificationBus } from '../../services/notificationBus';
 import { debugLog } from '../../utils/log';
 import { appendCappedLog } from '../../utils/logCap';
 import { generateMessageId } from '../../utils/messageId';
@@ -26,11 +27,12 @@ import {
   shouldSuppressAgentMessageInChat,
 } from '../webSocketEventHelpers';
 import { chatTranscriptToMessages } from '../../utils/chatTranscript';
+import { isRunEndingError } from '../../utils/chatReplay';
 import { recordConversationCleared } from '../bootSessionRestore';
 
 // Handle connection_status event
 export const handleConnectionStatus = (ctx: EventHandlerContext): void => {
-  const { event, setState, connectionTimeoutRef, lastConnectionStateRef, activeRequestsRef } = ctx;
+  const { event, setState, connectionTimeoutRef, lastConnectionStateRef } = ctx;
   const logEntry = createLogEntry(event);
   const data = (event.data ?? {}) as ConnectionStatusData;
   if (data.client_id && String(data.client_id) !== getWebUIClientId()) return;
@@ -53,18 +55,13 @@ export const handleConnectionStatus = (ctx: EventHandlerContext): void => {
 
     if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
 
-    // On disconnect, reset the active request counter immediately — any
-    // in-flight turn's completion event will never arrive over a dead
-    // socket. On reconnect, the backend replay (handleReconnect) will
-    // set it correctly if the turn is still running server-side.
-    if (!newConnectionState) {
-      activeRequestsRef.current = 0;
-    }
-
+    // A dropped socket does not end the run: the agent keeps working on the
+    // server. The running state is kept through the outage and resynced on
+    // reconnect (handleReconnect), which replays missed events and asks the
+    // server whether the run is still going.
     setState((prev) => ({
       sessionId: incomingSessionId || prev.sessionId,
       isConnected: newConnectionState,
-      isProcessing: newConnectionState ? prev.isProcessing : false,
       stats: {
         ...prev.stats,
         connection_phase: phase,
@@ -223,12 +220,19 @@ export const handleAgentChangesReverted = (ctx: EventHandlerContext): void => {
   window.dispatchEvent(new CustomEvent('agent-changes-reverted', { detail: { scope: data.scope } }));
 };
 
-// Handle error event
+// Handle error event.
+//
+// Only an error that ends the active chat's run closes the turn: one the
+// server marks terminal, or (without the marker) one scoped to the chat's
+// primary run. Chatless transport errors ("Cannot change provider while this
+// chat has an active run", approval/model/persona failures) and subagent
+// errors are reported as a toast and a log entry; the run keeps going.
 export const handleError = (ctx: EventHandlerContext): void => {
   const {
     event,
     setState,
     activeRequestsRef,
+    activeChatIdRef,
     apiService,
     pendingProviderRef,
     pendingProviderChangeRef,
@@ -237,8 +241,7 @@ export const handleError = (ctx: EventHandlerContext): void => {
   const logEntry = createLogEntry(event);
   logEntry.category = 'system';
   logEntry.level = 'error';
-  if (activeRequestsRef.current > 0) activeRequestsRef.current -= 1;
-  const data = (event.data ?? {}) as ErrorData;
+  const data = (event.data ?? {}) as ErrorData & { chat_id?: string };
   const errorMessage = String(data.message || 'Unknown error');
   // Error payloads pair a short label (message, e.g. "Query failed") with
   // the underlying cause (error, e.g. "dial tcp: connection refused").
@@ -246,36 +249,13 @@ export const handleError = (ctx: EventHandlerContext): void => {
   // and no way to tell a dead provider from a bad API key.
   const displayMessage = data.error ? `${errorMessage}: ${String(data.error)}` : errorMessage;
   const errorCode = getServerErrorCode(data);
-
-  if (errorCode === 'model_not_available') {
-    setState((prev) => ({
-      isProcessing: activeRequestsRef.current > 0,
-      queryProgress: null,
-      modelSelectionRequest: { provider: prev.provider },
-      logs: appendCappedLog(prev.logs, logEntry),
-    }));
-    debugLog('[model-not-available] Model not available, showing selection modal');
-    return;
-  }
+  const forOtherChat = !!data.chat_id && !!activeChatIdRef.current && data.chat_id !== activeChatIdRef.current;
+  const endsTurn = isRunEndingError(data) && !forOtherChat;
+  if (endsTurn && activeRequestsRef.current > 0) activeRequestsRef.current -= 1;
 
   if (pendingProviderChangeRef.current) {
     pendingProviderChangeRef.current = false;
     pendingProviderChangeValueRef.current = null;
-    setState((prev) => ({
-      isProcessing: activeRequestsRef.current > 0,
-      queryProgress: null,
-      lastError: displayMessage,
-      messages: trimMessages([
-        ...prev.messages,
-        {
-          id: generateMessageId(),
-          type: 'assistant',
-          content: `[FAIL] Error: ${displayMessage}`,
-          timestamp: new Date(),
-        },
-      ]),
-      logs: appendCappedLog(prev.logs, logEntry),
-    }));
     apiService
       .getStats()
       .then((stats: unknown) => {
@@ -295,24 +275,61 @@ export const handleError = (ctx: EventHandlerContext): void => {
           isProviderChangePending: pendingProviderChangeRef.current,
         });
       });
-  } else {
+  }
+
+  if (errorCode === 'model_not_available') {
     setState((prev) => ({
-      isProcessing: activeRequestsRef.current > 0,
-      queryProgress: null,
-      lastError: displayMessage,
-      messages: trimMessages([
-        ...prev.messages,
-        {
-          id: generateMessageId(),
-          type: 'assistant',
-          content: `[FAIL] Error: ${displayMessage}`,
-          timestamp: new Date(),
-        },
-      ]),
+      ...(endsTurn ? { isProcessing: activeRequestsRef.current > 0, queryProgress: null } : {}),
+      modelSelectionRequest: { provider: prev.provider },
       logs: appendCappedLog(prev.logs, logEntry),
     }));
+    debugLog('[model-not-available] Model not available, showing selection modal');
+    return;
   }
+
+  if (!endsTurn) {
+    notificationBus.notify('error', 'Error', displayMessage);
+    setState((prev) => ({ logs: appendCappedLog(prev.logs, logEntry) }));
+    console.error('[FAIL] Error event (run continues):', data);
+    return;
+  }
+
+  setState((prev) => ({
+    isProcessing: activeRequestsRef.current > 0,
+    queryProgress: null,
+    lastError: displayMessage,
+    messages: trimMessages([
+      ...prev.messages,
+      {
+        id: generateMessageId(),
+        type: 'assistant',
+        content: `[FAIL] Error: ${displayMessage}`,
+        timestamp: new Date(),
+      },
+    ]),
+    logs: appendCappedLog(prev.logs, logEntry),
+  }));
   console.error('[FAIL] Error event:', data);
+};
+
+// Handle workspace_stopping: the hosting platform is about to stop this
+// workspace (idle timeout, runtime cap, drain) and warns ahead of time.
+export const handleWorkspaceStopping = (ctx: EventHandlerContext): void => {
+  const { event, setState } = ctx;
+  const logEntry = createLogEntry(event);
+  logEntry.category = 'system';
+  logEntry.level = 'warning';
+  const data = (event.data ?? {}) as { reason?: string; deadline_seconds?: number };
+  const seconds = typeof data.deadline_seconds === 'number' ? data.deadline_seconds : 0;
+  const when =
+    seconds >= 120 ? `in ${Math.round(seconds / 60)} minutes` : seconds > 0 ? `in ${seconds} seconds` : 'shortly';
+  notificationBus.notify(
+    'warning',
+    'Workspace stopping',
+    `This workspace will stop ${when}. Uncommitted work is checkpointed; start it again to continue.`,
+    15000,
+  );
+  setState((prev) => ({ logs: appendCappedLog(prev.logs, logEntry) }));
 };
 
 // Handle session_changed (SP-034-3e). Rename/pin/unpin/switch mutations can

@@ -22,7 +22,7 @@ import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useTabDragReorder } from '../hooks/useTabDragReorder';
 import { readFileWithConsent } from '../services/fileAccess';
 import { notificationBus } from '../services/notificationBus';
-import { ApiService } from '../services/api/apiService';
+import { useWorkspaceRoot } from '../services/workspaceStore';
 import { type EditorBuffer } from '../types/editor';
 import { isSharedMode } from '../utils/sharedMode';
 import { catchIfAsync, getBufferIcon, getChatId, getFileIcon, getFileIconColor } from './editorTabIcons';
@@ -91,10 +91,6 @@ function EditorTabs({
   } = useEditorManager();
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; bufferId: string } | null>(null);
   const [emptyAreaContextMenu, setEmptyAreaContextMenu] = useState<{ x: number; y: number } | null>(null);
-  // Workspace root for Copy Absolute Path (the editor context menu keeps the
-  // same root fetch; file.path is root-relative or already absolute).
-  const apiServiceRef = useRef(ApiService.getInstance()).current;
-  const [workspaceRoot, setWorkspaceRoot] = useState('');
   const tabRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const buffersRef = useRef(buffers);
   useEffect(() => {
@@ -111,23 +107,10 @@ function EditorTabs({
     }
   }, [buffers]);
 
-  // Workspace root backs Copy Absolute Path on the tab menu. Best-effort:
-  // a failed fetch leaves the root empty and the item falls back to the
-  // stored path (the editor context menu behaves the same way).
-  useEffect(() => {
-    let cancelled = false;
-    apiServiceRef
-      .getWorkspace()
-      .then((ws) => {
-        if (!cancelled) setWorkspaceRoot(ws.workspace_root || '');
-      })
-      .catch(() => {
-        /* best-effort */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [apiServiceRef]);
+  // Workspace root backs Copy Absolute Path on the tab menu. Until it is
+  // known the item falls back to the stored path (the editor context menu
+  // behaves the same way).
+  const workspaceRoot = useWorkspaceRoot();
 
   const handleCopyRelativePath = useCallback((buffer: EditorBuffer) => {
     const path = buffer.file?.path;

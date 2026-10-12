@@ -274,6 +274,41 @@ describe('resolveClientIdentity — cloned popup oracle', () => {
     expect(session['sprout.webuiClientId']).toBeTruthy();
   });
 
+  it('does not adopt the cookie id of a live but backgrounded window', async () => {
+    // The owner's claim heartbeat lapsed (background timer throttling), so
+    // the registry no longer protects the id — only the live oracle does.
+    const { win, session } = mockWindowWithChannel(true);
+    delete session['sprout.webuiClientId'];
+    win.document.cookie = 'sprout_client_id=inherited-id';
+    Object.defineProperty(global, 'window', { value: win, writable: true });
+    const { resolveClientIdentity, getWebUIClientId } = await import('./clientSession');
+    await resolveClientIdentity();
+    const id = getWebUIClientId();
+    expect(id).toBeTruthy();
+    expect(id).not.toBe('inherited-id');
+  });
+
+  it('resolveWebUIClientId mints its own id when a live window owns the cookie id', async () => {
+    const { win, session } = mockWindowWithChannel(true);
+    delete session['sprout.webuiClientId'];
+    win.document.cookie = 'sprout_client_id=inherited-id';
+    Object.defineProperty(global, 'window', { value: win, writable: true });
+    const { resolveWebUIClientId } = await import('./clientSession');
+    const id = await resolveWebUIClientId();
+    expect(id).not.toBe('inherited-id');
+    expect(session['sprout.webuiClientId']).toBe(id);
+  });
+
+  it('still resumes the cookie id when no live window answers', async () => {
+    const { win, session } = mockWindowWithChannel(false);
+    delete session['sprout.webuiClientId'];
+    win.document.cookie = 'sprout_client_id=inherited-id';
+    Object.defineProperty(global, 'window', { value: win, writable: true });
+    const { resolveClientIdentity, getWebUIClientId } = await import('./clientSession');
+    await resolveClientIdentity();
+    expect(getWebUIClientId()).toBe('inherited-id');
+  });
+
   it('keeps the client id when no live window answers (reload / tab discard)', async () => {
     const { win, session } = mockWindowWithChannel(false);
     Object.defineProperty(global, 'window', { value: win, writable: true });

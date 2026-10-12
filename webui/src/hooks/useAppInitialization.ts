@@ -26,6 +26,8 @@ import type { CloudAdapter } from '../services/cloudAdapter';
 import { NATIVE_FS_ENABLED } from '../services/nativeFsStubs/nativeFsFlag';
 import { NATIVE_GIT_ENABLED } from '../services/nativeGitStubs/nativeGitFlag';
 import { registerServiceWorker } from '../services/serviceWorkerRegistration';
+import { refreshWorkspace } from '../services/workspaceStore';
+import { installWorkspaceReconnectSync, reconcileTabWorkspace } from '../services/workspaceSync';
 import type { AppState } from '../types/app';
 import type { WsEvent } from '@sprout/events';
 import type { SproutEvent } from '../types/events';
@@ -129,6 +131,9 @@ export function useAppInitialization({
 
       // Initialize WebSocket connection
       eventsProvider.connect();
+      // Re-check the workspace after every reconnect: the server may have
+      // restarted or evicted this tab's context while the stream was down.
+      const uninstallWorkspaceSync = installWorkspaceReconnectSync(eventsProvider, supportsWorkspaceSwitching);
       if (manageEventSubscription) {
         eventsProvider.onEvent(handleEvent);
         eventsProvider.onReconnect(handleReconnect);
@@ -352,27 +357,26 @@ export function useAppInitialization({
       // Restore workspace and session startup state
       const restoreStartupState = async () => {
         try {
-          const workspace = await apiService.getWorkspace();
+          // A server at its default root has lost (or never had) this tab's
+          // choice: reconcile re-selects the remembered workspace silently
+          // and notifies the workspace store, so no surface keeps the
+          // default root it may have fetched first.
+          const workspace = await refreshWorkspace({ force: true });
+          const outcome = await reconcileTabWorkspace(workspace, supportsWorkspaceSwitching);
           const workspaceRoot = String(workspace?.workspace_root || '').trim();
           const daemonRoot = String(workspace?.daemon_root || '').trim();
-          if (workspaceRoot && daemonRoot && workspaceRoot === daemonRoot) {
-            const savedWorkspace = getTabWorkspacePath().trim();
-            if (savedWorkspace && savedWorkspace !== workspaceRoot) {
-              // A previous workspace was explicitly chosen — restore it silently.
-              try {
-                await apiService.setWorkspace(savedWorkspace);
-                return;
-              } catch (restoreError) {
-                debugLog('[startup] failed to auto-restore saved workspace:', restoreError);
-              }
-            }
-            // Only prompt when there is genuinely no prior choice. If savedWorkspace
-            // equals workspaceRoot the user intentionally set their workspace to the
-            // daemon root (e.g. home dir) — don't interrupt them with the picker.
-            // In cloud mode, workspace switching is disabled.
-            if (!savedWorkspace && supportsWorkspaceSwitching) {
-              window.dispatchEvent(new CustomEvent('sprout:open-workspace-switcher'));
-            }
+          // Only prompt when there is genuinely no prior choice. A remembered
+          // path equal to the daemon root is the user's deliberate choice
+          // (e.g. home dir) — don't interrupt them with the picker. In cloud
+          // mode, workspace switching is disabled.
+          if (
+            outcome === 'unresolved' &&
+            workspaceRoot &&
+            workspaceRoot === daemonRoot &&
+            !getTabWorkspacePath().trim() &&
+            supportsWorkspaceSwitching
+          ) {
+            window.dispatchEvent(new CustomEvent('sprout:open-workspace-switcher'));
           }
         } catch (error) {
           debugLog('[startup] workspace check failed:', error);
@@ -552,6 +556,7 @@ export function useAppInitialization({
         }
         window.removeEventListener('resize', checkBreakpoints);
         clearInterval(statsInterval);
+        uninstallWorkspaceSync();
       };
     } // end startDataLoading
 

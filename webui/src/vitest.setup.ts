@@ -302,6 +302,11 @@ if (!isNodeEnv) {
 // Reset all mocks before each test
 beforeEach(() => {
   vi.clearAllMocks();
+  // The workspace store (services/workspaceStore.ts) is a module singleton;
+  // start every test without a cached workspace or pending retry. Reached
+  // through a global so this file does not import the store ahead of a test
+  // file's vi.mock of the API service.
+  (globalThis as { __resetWorkspaceStoreForTests?: () => void }).__resetWorkspaceStoreForTests?.();
 });
 
 // Restore original implementations after each test

@@ -131,6 +131,7 @@ func TestMain(m *testing.M) {
 	// their temp paths filled all ten slots, evicting every real project from
 	// the user's workspace picker. Redirect it for the whole package so no test
 	// can leak, whether or not its author remembers.
+	clientWorkspaceStoreDisabled = true
 	realRecentPath, realRecentBefore := snapshotRealRecentWorkspaces()
 	recentWorkspaces.mu.Lock()
 	recentWorkspaces.filePath = filepath.Join(tmpDir, "recent_workspaces.json")

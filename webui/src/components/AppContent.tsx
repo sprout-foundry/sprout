@@ -180,11 +180,12 @@ const AppContent: React.FC<AppContentProps> = ({
   // resolved workspace is the user's home directory without consent, a
   // blocking overlay renders on top of the normal UI until the user either
   // selects a project folder or explicitly consents to running in home.
-  const { workspaceInfo, setWorkspace: setWorkspaceViaHook } = useWorkspace();
+  const { workspaceInfo, setWorkspace: setWorkspaceViaHook, consentHome } = useWorkspace();
   const handleConsentHome = useCallback(async () => {
-    await setWorkspaceViaHook(workspaceInfo.workspace_root, true);
-    // setWorkspace triggers a reload, so the modal closes implicitly.
-  }, [setWorkspaceViaHook, workspaceInfo.workspace_root]);
+    // Re-reads the workspace first; a successful consent reloads the page,
+    // and a project restored meanwhile closes the modal through the store.
+    await consentHome();
+  }, [consentHome]);
   // Swipe-left/right gesture to toggle the sidebar on mobile viewports.
   useSwipeGesture({
     onSwipeLeft: onCloseSidebar,

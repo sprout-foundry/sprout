@@ -87,6 +87,13 @@ type DaemonSpec struct {
 	// LogPath is where the spawned daemon's stdout/stderr are redirected.
 	// If empty, output goes to os.DevNull.
 	LogPath string
+
+	// Dir is the working directory of the spawned daemon. The daemon's
+	// default workspace derives from its cwd, so inheriting whatever
+	// directory the triggering command ran in would make the workspace of
+	// every respawned daemon depend on where `sprout` happened to be
+	// invoked. Empty inherits the caller's cwd.
+	Dir string
 }
 
 // DefaultDaemonSpec returns a DaemonSpec with all fields set to their
@@ -103,7 +110,15 @@ func DefaultDaemonSpec() DaemonSpec {
 		dataDir = filepath.Join(os.TempDir(), "sprout")
 	}
 
+	// A stable directory: the user's home, which the web UI's home-workspace
+	// gate turns into an explicit project selection.
+	dir, err := os.UserHomeDir()
+	if err != nil {
+		dir = ""
+	}
+
 	return DaemonSpec{
+		Dir:           dir,
 		DaemonURL:     fmt.Sprintf("http://127.0.0.1:%d", defaultDaemonPort),
 		SocketPath:    filepath.Join(dataDir, "daemon.sock"),
 		PIDFilePath:   filepath.Join(dataDir, "daemon.pid"),
@@ -216,6 +231,7 @@ func startDaemonInner(ctx context.Context, spec DaemonSpec, logger *slog.Logger)
 	// tied to the caller's context lifetime. The daemon must survive the
 	// CLI exiting and be reaped later by the idle timer.
 	cmd := exec.Command(spec.DaemonCommand[0], spec.DaemonCommand[1:]...)
+	cmd.Dir = spec.Dir
 
 	// Merge extra environment variables (e.g. SPROUT_DAEMON_IDLE_TIMEOUT)
 	// over the parent's environment.

@@ -376,14 +376,13 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCheckout(w http.ResponseWriter, r 
 	clientID := ws.resolveClientID(r)
 	ws.mutex.Lock()
 	ctx := ws.getOrCreateClientContextLocked(clientID)
-	ctx.WorkspaceRoot = absPath
-	// Update ws.workspaceRoot unconditionally — a worktree switch is an
-	// explicit user action and should always update the server-level root
-	// so that post-reload re-initialization picks up the correct workspace.
-	ws.workspaceRoot = absPath
-	if clientID != defaultWebClientID {
-		ws.rememberClientWorkspacesLocked()
-	}
+	// A checkout moves the whole workspace (every chat follows below), so it
+	// becomes the project root that chats without a worktree, worktree
+	// clears and a recreated context return to. Only the default client
+	// moves the server-level root; the remembered per-client selection is
+	// what restores other tabs after a reload or eviction.
+	ctx.ProjectRoot = absPath
+	ws.setClientActiveRootLocked(clientID, ctx, absPath)
 
 	// Update chat session worktree paths: follow the switch for all sessions
 	// whose WorktreePath is empty or matches the previous workspace root.

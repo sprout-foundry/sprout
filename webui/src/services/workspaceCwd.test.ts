@@ -19,6 +19,8 @@ import {
   resolveWorkspacePath,
   resolveCdTarget,
   useWorkspaceCwd,
+  setWorkspaceCwdScope,
+  workspaceCwdStorageKey,
   __resetWorkspaceCwdForTests,
 } from './workspaceCwd';
 
@@ -207,5 +209,32 @@ describe('resolveCdTarget (terminal session cd)', () => {
     expect(resolveCdTarget('/etc', 'repos')).toBe(null);
     expect(resolveCdTarget('/', '')).toBe(null);
     expect(resolveCdTarget(undefined as unknown as string, '')).toBe(null);
+  });
+});
+
+describe('workspace cwd scoping', () => {
+  it('keeps a separate cwd per workspace root', () => {
+    setWorkspaceCwdScope('/work/alpha');
+    setWorkspaceCwd('repos/acme/api');
+    expect(window.localStorage.getItem(workspaceCwdStorageKey('/work/alpha'))).toBe('repos/acme/api');
+
+    const seen: string[] = [];
+    const unsubscribe = subscribeWorkspaceCwd((cwd) => seen.push(cwd));
+    setWorkspaceCwdScope('/work/beta');
+    expect(getWorkspaceCwd()).toBe('');
+    expect(seen).toEqual(['']);
+
+    setWorkspaceCwd('repos/other/web');
+    setWorkspaceCwdScope('/work/alpha');
+    expect(getWorkspaceCwd()).toBe('repos/acme/api');
+    unsubscribe();
+  });
+
+  it('does not carry the unscoped value into a known workspace', () => {
+    window.localStorage.setItem(WORKSPACE_CWD_STORAGE_KEY, 'repos/x/y');
+    expect(getWorkspaceCwd()).toBe('repos/x/y');
+    setWorkspaceCwdScope('/work/gamma');
+    expect(getWorkspaceCwd()).toBe('');
+    window.localStorage.removeItem(WORKSPACE_CWD_STORAGE_KEY);
   });
 });

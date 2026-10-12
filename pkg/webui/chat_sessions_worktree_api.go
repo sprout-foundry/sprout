@@ -123,17 +123,17 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSet(w http.ResponseWriter,
 	}
 
 	// When clearing a worktree from the active chat, if the client's
-	// workspace root was pointing at that worktree, reset it to the
-	// daemon root so subsequent file operations use the main workspace.
+	// workspace root was pointing at that worktree, return it to the
+	// project so subsequent file operations use the main workspace.
 	didResetWorkspace := false
+	resetRoot := ""
 	if req.WorktreePath == "" && oldWorktreePath != "" && chatID == ctx.DefaultChatID && ctx.WorkspaceRoot == oldWorktreePath {
-		ctx.WorkspaceRoot = ws.daemonRoot
-		if clientID == defaultWebClientID {
-			ws.workspaceRoot = ws.daemonRoot
+		resetRoot = ctx.projectRootOr(ws.daemonRoot)
+		if _, changed := ws.setClientActiveRootLocked(clientID, ctx, resetRoot); changed {
+			ctx.Agent = nil
+			ctx.Terminal = nil
+			didResetWorkspace = true
 		}
-		ctx.Agent = nil
-		ctx.Terminal = nil
-		didResetWorkspace = true
 	}
 
 	// Get the updated session for the response
@@ -143,14 +143,8 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSet(w http.ResponseWriter,
 
 	ws.log().Info("set chat session worktree", slog.String("worktree_path", req.WorktreePath), slog.String("chat_id", chatID))
 
-	// Notify frontend if the workspace root was reset to daemon root.
 	if didResetWorkspace {
-		ws.publishClientEvent(clientID, events.EventTypeWorkspaceChanged, map[string]interface{}{
-			"daemon_root":             ws.GetDaemonRoot(),
-			"workspace_root":          ws.daemonRoot,
-			"previous_workspace_root": oldWorktreePath,
-			"source":                  "worktree_clear",
-		})
+		ws.publishWorkspaceChanged(clientID, oldWorktreePath, resetRoot, "worktree_clear")
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
@@ -232,12 +226,7 @@ func (ws *ReactWebServer) handleAPIChatSessionWorktreeSwitch(w http.ResponseWrit
 
 	// Switch workspace root directly — do NOT call setClientWorkspaceRoot
 	// because it nukes all chat sessions (including the one we just updated).
-	ctx.WorkspaceRoot = absPath
-	if clientID == defaultWebClientID {
-		ws.workspaceRoot = absPath
-	} else {
-		ws.rememberClientWorkspacesLocked()
-	}
+	ws.setClientActiveRootLocked(clientID, ctx, absPath)
 	// Clear transient state (agent, terminals) like handleAPIGitWorktreeCheckout does.
 	ctx.Agent = nil
 	ctx.Terminal = nil
@@ -455,12 +444,7 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 	// destroy the session we just created.
 	previousWorkspaceRoot := ctx.WorkspaceRoot
 	if req.AutoSwitchWorkspace {
-		ctx.WorkspaceRoot = worktreePath
-		if clientID == defaultWebClientID {
-			ws.workspaceRoot = worktreePath
-		} else {
-			ws.rememberClientWorkspacesLocked()
-		}
+		ws.setClientActiveRootLocked(clientID, ctx, worktreePath)
 		// Clear transient state (agent, terminals) like other workspace-switch handlers.
 		ctx.Agent = nil
 		ctx.Terminal = nil

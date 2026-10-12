@@ -103,16 +103,15 @@ func (ws *ReactWebServer) handleAPIChatSessionsSwitch(w http.ResponseWriter, r *
 	if wtPath == "" {
 		wtPath = ctx.rootForChatWithoutWorktree(ws.daemonRoot)
 	}
-	if wtPath != "" && wtPath != ctx.WorkspaceRoot {
-		ctx.WorkspaceRoot = wtPath
-		if clientID == defaultWebClientID {
-			ws.workspaceRoot = wtPath
-		}
-	}
+	previousRoot, rootChanged := ws.setClientActiveRootLocked(clientID, ctx, wtPath)
 
 	ctx.AgentState = append([]byte(nil), snapshot...)
 	ctx.CurrentSessionID = currentSessionID
 	ws.mutex.Unlock()
+
+	if rootChanged {
+		ws.publishWorkspaceChanged(clientID, previousRoot, wtPath, "chat_switch")
+	}
 
 	ws.log().Info("switched chat session", slog.String("chat_id", chatID), slog.String("client_id", clientID))
 

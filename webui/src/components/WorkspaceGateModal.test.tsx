@@ -460,6 +460,12 @@ describe('WorkspaceGateModal', () => {
       daemon_root: '/home/alice/.sprout',
       message: 'Workspace updated',
     });
+    getWorkspaceMock.mockResolvedValue({
+      workspace_root: '/home/alice',
+      daemon_root: '/home/alice',
+      workspace_is_home: true,
+      needs_workspace_selection: true,
+    });
 
     renderModal();
     await act(async () => {
@@ -470,6 +476,25 @@ describe('WorkspaceGateModal', () => {
     // POSTs /api/workspace with { path, consent_home: true }.
     expect(setWorkspaceMock).toHaveBeenCalledTimes(1);
     expect(setWorkspaceMock).toHaveBeenCalledWith('/home/alice', true);
+  });
+
+  it('does not consent to home when a re-read shows a project was restored meanwhile', async () => {
+    modeState.studio = true;
+    // The modal's snapshot still says home; the server already moved on.
+    getWorkspaceMock.mockResolvedValue({
+      workspace_root: '/home/alice/project',
+      daemon_root: '/home/alice',
+      workspace_is_home: false,
+      needs_workspace_selection: false,
+    });
+
+    renderModal();
+    await act(async () => {
+      container!.querySelector<HTMLButtonElement>('[data-testid="workspace-gate-home-btn"]')!.click();
+    });
+
+    expect(getWorkspaceMock).toHaveBeenCalled();
+    expect(setWorkspaceMock).not.toHaveBeenCalled();
   });
 
   // ── Starter chooser ────────────────────────────────────────────────

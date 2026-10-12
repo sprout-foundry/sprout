@@ -9,9 +9,9 @@ import type { Transport, LSPClientConfig, LSPClient } from '@codemirror/lsp-clie
 import { LSPClient as LSPClientClass, languageServerExtensions } from '@codemirror/lsp-client';
 import type { EditorView } from '@codemirror/view';
 import { debugLog } from '../utils/log';
-import { ApiService } from './api';
 import { clientFetch } from './clientSession';
 import { getWorkspaceCwd, normalizeWorkspaceCwd, resolveWorkspacePath } from './workspaceCwd';
+import { ensureWorkspace, getWorkspaceRoot } from './workspaceStore';
 
 // Types from @codemirror/lsp-client
 
@@ -358,7 +358,7 @@ class LSPClientService {
   }
 
   /**
-   * Convenience: get lspClientService instance (matches ApiService pattern).
+   * Convenience: get lspClientService instance (matches the ApiService singleton pattern).
    * Use this in lspExtensions.ts to access the service.
    */
   static get lspClientService(): LSPClientService {
@@ -366,17 +366,17 @@ class LSPClientService {
   }
 
   /**
-   * Get the workspace path from ApiService.
-   * Returns empty string if workspace not set.
+   * Get the workspace path from the shared workspace store.
+   * Falls back to the last known root, or '' when none is known yet.
    */
   async getWorkspacePath(): Promise<string> {
     try {
-      const workspace = await ApiService.getInstance().getWorkspace();
+      const workspace = await ensureWorkspace();
       this.workspacePath = workspace.workspace_root;
       return this.workspacePath;
     } catch (err) {
       console.error('[LSPClientService] Failed to get workspace:', err);
-      return '';
+      return getWorkspaceRoot() || this.workspacePath;
     }
   }
 

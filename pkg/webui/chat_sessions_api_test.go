@@ -493,32 +493,22 @@ func TestResolveChatID(t *testing.T) {
 }
 
 func TestDeleteAllReturnsRootFromDeletedWorktree(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
-	if err != nil {
+	p := newProjectTestServer(t)
+	const client = "root-client"
+	if _, err := p.ws.setClientWorkspaceRoot(client, p.project); err != nil {
 		t.Fatal(err)
 	}
-	ctx := ws.getOrCreateClientContext("root-client")
-	ws.mutex.Lock()
-	ctx.ensureDefaultChatSession()
-	wtChat := newChatSession("chat-wt", "Worktree chat")
-	wtChat.setWorktreePath("/repo-wt")
-	ctx.ChatSessions[wtChat.ID] = wtChat
-	ctx.DefaultChatID = wtChat.ID
-	ctx.ProjectRoot = "/repo"
-	ctx.WorkspaceRoot = "/repo-wt"
-	ws.mutex.Unlock()
+	p.switchChat(t, client, p.addWorktreeChat(t, client))
 
 	req := httptest.NewRequest(http.MethodPost, "/api/chat-sessions/delete-all", nil)
-	req.Header.Set(webClientIDHeader, "root-client")
+	req.Header.Set(webClientIDHeader, client)
 	rec := httptest.NewRecorder()
-	ws.handleAPIChatSessionsDeleteAll(rec, req)
+	p.ws.handleAPIChatSessionsDeleteAll(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	ws.mutex.RLock()
-	defer ws.mutex.RUnlock()
-	if ctx.WorkspaceRoot != "/repo" {
-		t.Errorf("workspace root = %q, want the project root /repo", ctx.WorkspaceRoot)
+	if root, _ := p.clientRoots(client); root != p.project {
+		t.Errorf("workspace root = %q, want the selected project %q", root, p.project)
 	}
 }

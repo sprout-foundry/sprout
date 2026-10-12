@@ -17,6 +17,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { resolveLanguageId } from '../extensions/languageRegistry';
 import { ApiService } from '../services/api';
 import { setConfigFetcher } from '../services/formatter';
+import { useWorkspaceRoot } from '../services/workspaceStore';
 import type { EditorBuffer } from '../types/editor';
 import { copyToClipboard } from '../utils/clipboard';
 import { debugLog, warn } from '../utils/log';
@@ -74,7 +75,7 @@ export function useEditorContextMenu(
   // ---------------------------------------------------------------------------
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-  const [workspaceRoot, setWorkspaceRoot] = useState<string>('');
+  const workspaceRoot = useWorkspaceRoot();
 
   // ---------------------------------------------------------------------------
   // Helpers
@@ -164,19 +165,10 @@ export function useEditorContextMenu(
   }, [hideContextMenu, onFindAllReferences]);
 
   // ---------------------------------------------------------------------------
-  // Workspace root fetch
+  // Formatter config
   // ---------------------------------------------------------------------------
 
   useEffect(() => {
-    apiService
-      .getWorkspace()
-      .then((ws) => {
-        setWorkspaceRoot(ws.workspace_root || '');
-      })
-      .catch((err) => {
-        warn(`Failed to fetch workspace root: ${err instanceof Error ? err.message : String(err)}`);
-      });
-
     // Set up Prettier config fetcher for formatter service
     setConfigFetcher(async (filePath: string) => {
       return apiService.getPrettierConfig(filePath);

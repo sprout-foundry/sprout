@@ -87,9 +87,14 @@ func TestConvertMessages_EmptyContentAssistantWithToolCallsIsNull(t *testing.T) 
 	}
 }
 
-// TestConvertMessages_EmptyContentToolMessageIsNull verifies the same null
-// normalization applies to tool-role messages with empty content.
-func TestConvertMessages_EmptyContentToolMessageIsNull(t *testing.T) {
+// TestConvertMessages_EmptyContentToolMessageIsPlaceholder verifies that an
+// empty tool result is emitted as a non-empty string placeholder (not null):
+// strict backends (ninfer, vLLM, llama.cpp) reject a tool message whose
+// content is null with HTTP 400 "tool messages must contain content", so the
+// placeholder keeps the wire valid while signalling "the tool ran, it
+// produced nothing". This is the mirror image of the assistant+tool_calls
+// case, which must stay null for Z.AI/GLM.
+func TestConvertMessages_EmptyContentToolMessageIsPlaceholder(t *testing.T) {
 	config := &ProviderConfig{
 		Name:     "openai",
 		Endpoint: "https://api.openai.com/v1/chat/completions",
@@ -135,13 +140,26 @@ func TestConvertMessages_EmptyContentToolMessageIsNull(t *testing.T) {
 
 	converted := provider.convertMessages(messages, "")
 
-	// Find the tool message and verify content is nil
+	// Find the tool message and verify content is the non-empty placeholder
+	// (a string), never nil.
+	found := false
 	for _, msg := range converted {
 		if msg["role"] == "tool" {
-			if content := msg["content"]; content != nil {
-				t.Fatalf("expected tool message content to be nil, got %v (type %T)", content, content)
+			found = true
+			content, ok := msg["content"].(string)
+			if !ok {
+				t.Fatalf("expected tool message content to be a string, got %v (type %T)", msg["content"], msg["content"])
+			}
+			if content == "" {
+				t.Fatalf("expected non-empty placeholder tool content, got empty string")
+			}
+			if content != emptyToolContentPlaceholder {
+				t.Fatalf("expected tool content %q, got %q", emptyToolContentPlaceholder, content)
 			}
 		}
+	}
+	if !found {
+		t.Fatal("expected a tool message in the converted output")
 	}
 }
 
@@ -276,9 +294,132 @@ func TestBuildChatRequest_EmptyContentAssistantSerializesAsNull(t *testing.T) {
 	}
 }
 
+// TestBuildChatRequest_EmptyToolResultSerializesAsPlaceholder is an
+// end-to-end test mirroring the strict-backends invariant (ninfer, vLLM,
+// llama.cpp): a tool-role message must never carry a null or missing
+// content field, or the server rejects the whole request with HTTP 400
+// "tool messages must contain content". An empty tool result must therefore
+// be serialized as a non-empty string placeholder. We inspect the actual
+// JSON body and assert every tool-role message has a string content.
+func TestBuildChatRequest_EmptyToolResultSerializesAsPlaceholder(t *testing.T) {
+	config := &ProviderConfig{
+		Name:     "ai-worker",
+		Endpoint: "https://ai-worker.example/v1/chat/completions",
+		Auth:     AuthConfig{Type: "bearer", EnvVar: "AI_WORKER_API_KEY"},
+		Defaults: RequestDefaults{Model: "qwen3.8-27b"},
+		Conversion: MessageConversion{
+			IncludeToolCallID: true,
+		},
+		Models: ModelConfig{
+			DefaultContextLimit: 200000,
+			DefaultModel:        "qwen3.8-27b",
+		},
+	}
+
+	provider, err := NewGenericProvider(config)
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	// A realistic tool loop where one tool call yields an empty result —
+	// the exact pattern that 400s on ninfer-style backends.
+	messages := []api.Message{
+		{Role: "system", Content: "You are a coding assistant."},
+		{Role: "user", Content: "Check the deployment"},
+		{
+			Role:    "assistant",
+			Content: "",
+			ToolCalls: []api.ToolCall{
+				{ID: "c1", Type: "function", Function: api.ToolCallFunction{Name: "shell_command", Arguments: `{"command":"kubectl get pods"}`}},
+			},
+		},
+		{Role: "tool", Content: "pod-1 1/1 Running", ToolCallID: "c1"},
+		{
+			Role:    "assistant",
+			Content: "",
+			ToolCalls: []api.ToolCall{
+				{ID: "c2", Type: "function", Function: api.ToolCallFunction{Name: "shell_command", Arguments: `{"command":"true"}`}},
+			},
+		},
+		{Role: "tool", Content: "", ToolCallID: "c2"}, // empty tool result
+		{Role: "user", Content: "Done"},
+	}
+
+	body, err := provider.buildChatRequest(messages, nil, "", false, false)
+	if err != nil {
+		t.Fatalf("buildChatRequest failed: %v", err)
+	}
+
+	// Decode the wire body and assert the tool-role invariant.
+	var payload struct {
+		Messages []map[string]interface{} `json:"messages"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("failed to unmarshal request body: %v", err)
+	}
+	for i, m := range payload.Messages {
+		if m["role"] != "tool" {
+			continue
+		}
+		content, isString := m["content"].(string)
+		if !isString {
+			t.Fatalf("tool message %d has non-string content %v (type %T); strict backends 400 on null tool content", i, m["content"], m["content"])
+		}
+		if strings.TrimSpace(content) == "" {
+			t.Fatalf("tool message %d has empty/whitespace content %q; strict backends require non-empty tool content", i, content)
+		}
+	}
+	// The empty tool result specifically must carry the placeholder.
+	if !strings.Contains(string(body), `"content":"`+emptyToolContentPlaceholder+`"`) {
+		t.Fatalf("expected the empty tool result to serialize as %q in the wire body.\nBody: %s",
+			emptyToolContentPlaceholder, truncateForLog(string(body), 600))
+	}
+}
+
 func truncateForLog(s string, n int) string {
 	if len(s) <= n {
 		return s
 	}
 	return s[:n] + "...(truncated)"
+}
+
+// TestEnforceToolContentInvariantIsDefenseInDepth verifies the final wire
+// guard repairs a tool message that reached the wire with a null or missing
+// content field — the exact shape that 400s on strict backends — regardless
+// of which code path produced it. Non-tool messages are left untouched.
+func TestEnforceToolContentInvariantIsDefenseInDepth(t *testing.T) {
+	cases := []struct {
+		name string
+		in   map[string]interface{}
+	}{
+		{"null content", map[string]interface{}{"role": "tool", "content": nil}},
+		{"missing content", map[string]interface{}{"role": "tool"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out := enforceToolContentInvariant([]map[string]interface{}{tc.in})
+			if out[0]["role"] != "tool" {
+				t.Fatalf("role mangled: %v", out[0]["role"])
+			}
+			if c, ok := out[0]["content"].(string); !ok || c != emptyToolContentPlaceholder {
+				t.Fatalf("expected tool content repaired to %q, got %v (type %T)", emptyToolContentPlaceholder, out[0]["content"], out[0]["content"])
+			}
+		})
+	}
+
+	// A tool message with a real (non-null) string must be left as-is.
+	kept := enforceToolContentInvariant([]map[string]interface{}{
+		{"role": "tool", "content": "result"},
+	})
+	if kept[0]["content"] != "result" {
+		t.Fatalf("expected existing tool content preserved, got %v", kept[0]["content"])
+	}
+	// A non-tool message with null content must be untouched (assistant+
+	// tool_calls legitimately carries null for Z.AI/GLM).
+	assistant := enforceToolContentInvariant([]map[string]interface{}{
+		{"role": "assistant", "content": nil},
+	})
+	if assistant[0]["content"] != nil {
+		t.Fatalf("expected assistant null content untouched, got %v", assistant[0]["content"])
+	}
 }

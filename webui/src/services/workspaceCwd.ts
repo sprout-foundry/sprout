@@ -19,9 +19,13 @@
  *   - gitApi / useGitWorkspace / useGitHandlers → target the repo at cwd.
  *   - Chat send path → appends a one-line working-directory context note.
  *
- * Persistence: localStorage key `sprout-workspace-cwd` (plain string, not
- * JSON — the value is already an unambiguous path or ''). Storage failures
- * (private mode, quota) degrade to an in-memory store, never throw.
+ * Persistence: localStorage key `sprout-workspace-cwd:<workspace root>`
+ * (plain string, not JSON — the value is already an unambiguous path or '').
+ * The cwd is relative to one workspace, so it is stored per workspace root:
+ * a single shared key carried a repo subdirectory chosen in one project into
+ * every other project (and every other window). Until the root is known
+ * (setWorkspaceCwdScope) the unscoped key is used. Storage failures (private
+ * mode, quota) degrade to an in-memory store, never throw.
  *
  * Default build: cwd starts `''` (workspace root), so every consumer's
  * "cwd active" branch is a no-op and behavior is identical to before.
@@ -30,8 +34,13 @@
 import { useSyncExternalStore } from 'react';
 import { debugLog } from '../utils/log';
 
-/** localStorage key holding the workspace-relative cwd ('' = workspace root). */
+/** localStorage key prefix holding the workspace-relative cwd ('' = workspace root). */
 export const WORKSPACE_CWD_STORAGE_KEY = 'sprout-workspace-cwd';
+
+/** The storage key for the cwd within `workspaceRoot` ('' = root not known yet). */
+export function workspaceCwdStorageKey(workspaceRoot: string): string {
+  return workspaceRoot ? `${WORKSPACE_CWD_STORAGE_KEY}:${workspaceRoot}` : WORKSPACE_CWD_STORAGE_KEY;
+}
 
 /** The store's state. Kept as an object so future fields can be added. */
 export interface WorkspaceCwdState {
@@ -65,11 +74,14 @@ export function normalizeWorkspaceCwd(input: string): string | null {
 type CwdListener = (cwd: string) => void;
 const listeners = new Set<CwdListener>();
 
+/** The workspace root the cwd is relative to ('' until known). */
+let scope = '';
+
 /** Safely read the persisted cwd; '' on any failure (also outside browsers). */
 function readPersistedCwd(): string {
   try {
     if (typeof window === 'undefined' || !window.localStorage) return '';
-    const raw = window.localStorage.getItem(WORKSPACE_CWD_STORAGE_KEY);
+    const raw = window.localStorage.getItem(workspaceCwdStorageKey(scope));
     if (!raw) return '';
     const normalized = normalizeWorkspaceCwd(raw);
     return normalized ?? '';
@@ -83,7 +95,7 @@ function readPersistedCwd(): string {
 function persistCwd(cwd: string): void {
   try {
     if (typeof window === 'undefined' || !window.localStorage) return;
-    window.localStorage.setItem(WORKSPACE_CWD_STORAGE_KEY, cwd);
+    window.localStorage.setItem(workspaceCwdStorageKey(scope), cwd);
   } catch (err) {
     // Private mode / quota: the session still works, just not across reloads.
     debugLog('[workspaceCwd] failed to persist cwd:', err);
@@ -131,15 +143,33 @@ export function setWorkspaceCwd(dir: string): boolean {
   if (current.cwd === normalized) return false;
   state = { cwd: normalized };
   persistCwd(normalized);
+  notify(normalized);
+  return true;
+}
+
+function notify(cwd: string): void {
   for (const listener of listeners) {
     try {
-      listener(normalized);
+      listener(cwd);
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[workspaceCwd] Listener error (swallowed):', err);
     }
   }
-  return true;
+}
+
+/**
+ * Point the store at the workspace the cwd is relative to. A different root
+ * loads that workspace's own persisted cwd (the root when it has none) and
+ * notifies subscribers if the effective cwd changed.
+ */
+export function setWorkspaceCwdScope(workspaceRoot: string): void {
+  const next = (workspaceRoot || '').trim();
+  if (next === scope) return;
+  const previous = getState().cwd;
+  scope = next;
+  state = { cwd: readPersistedCwd() };
+  if (state.cwd !== previous) notify(state.cwd);
 }
 
 /**
@@ -242,11 +272,14 @@ const subscribeWorkspaceCwdForReact = (listener: () => void): (() => void) => su
 /** Test hook: drop the in-memory state (and the persisted copy) so the next
  *  read re-reads localStorage — mirrors workspaceFs's `__reset…ForTests`. */
 export function __resetWorkspaceCwdForTests(): void {
+  const persistedScope = scope;
   state = null;
+  scope = '';
   listeners.clear();
   try {
     if (typeof window !== 'undefined' && window.localStorage) {
       window.localStorage.removeItem(WORKSPACE_CWD_STORAGE_KEY);
+      if (persistedScope) window.localStorage.removeItem(workspaceCwdStorageKey(persistedScope));
     }
   } catch {
     // best-effort: reset() already cleared in-memory state; a leftover

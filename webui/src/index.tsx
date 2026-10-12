@@ -1,5 +1,4 @@
-import { Buffer } from 'buffer';
-globalThis.Buffer = globalThis.Buffer || Buffer;
+import './services/bufferGlobal';
 import '@sprout/ui/dist/style.css';
 import './bootstrapAdapter'; // Must be first — installs adapter before component tree
 import React from 'react';

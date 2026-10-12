@@ -12,6 +12,7 @@
  * they never show up as deleted.
  */
 
+import './bufferGlobal'; // isomorphic-git needs a global Buffer
 import FS from '@isomorphic-git/lightning-fs';
 import * as git from 'isomorphic-git';
 

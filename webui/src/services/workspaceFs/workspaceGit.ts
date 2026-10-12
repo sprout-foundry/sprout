@@ -14,6 +14,7 @@
  * into the git transport.
  */
 
+import '../bufferGlobal'; // isomorphic-git needs a global Buffer
 import git from 'isomorphic-git';
 import http from 'isomorphic-git/http/web';
 import { gitCorsProxy } from '../gitCorsProxy';

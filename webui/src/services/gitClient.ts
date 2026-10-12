@@ -9,6 +9,7 @@
  * The .git directory is stored alongside the working tree.
  */
 
+import './bufferGlobal'; // isomorphic-git needs a global Buffer
 import LightningFS from '@isomorphic-git/lightning-fs';
 import git from 'isomorphic-git';
 import http from 'isomorphic-git/http/web';

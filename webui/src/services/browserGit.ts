@@ -8,6 +8,7 @@
  * - GitHub push/pull via the user's token or anonymous HTTPS clone
  */
 
+import './bufferGlobal'; // isomorphic-git needs a global Buffer
 import * as git from 'isomorphic-git';
 import type { ProgressCallback } from 'isomorphic-git';
 import http from 'isomorphic-git/http/web';

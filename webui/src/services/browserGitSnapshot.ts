@@ -9,6 +9,7 @@
  * repository, so pushing it would be rejected — and the git panel says so.
  */
 
+import './bufferGlobal'; // isomorphic-git needs a global Buffer
 import * as git from 'isomorphic-git';
 import {
   REPO_DIR,

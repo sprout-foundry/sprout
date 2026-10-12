@@ -25,6 +25,7 @@ import {
   saveSession,
   startNewCloudSession,
 } from './cloudSessionStore';
+import { noteInPageRun } from './inPageRunGuard';
 import { repoScopedKey } from './repoScope';
 
 const STORAGE_KEY = 'sprout-cloud-chats';
@@ -40,6 +41,7 @@ export function setChatRunning(chatId: string | null | undefined, running: boole
   if (!chatId) return;
   if (running) runningChats.add(chatId);
   else runningChats.delete(chatId);
+  noteInPageRun(chatId, running);
 }
 
 /** Whether a chat's in-page agent is answering right now (this page only). */

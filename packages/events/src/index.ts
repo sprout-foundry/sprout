@@ -20,6 +20,7 @@ export type {
   FileContentChangedData,
   MetricsUpdateData,
   WorkspaceChangedData,
+  WorkspaceStoppingData,
   SecurityApprovalRequestData,
   SecurityPromptRequestData,
   PasswordRequestData,

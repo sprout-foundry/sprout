@@ -86,6 +86,7 @@ export type ServerEventType =
   | 'agent_message'
   | 'workspace_changed'
   | 'session_terminated'
+  | 'workspace_stopping'
   | 'session_changed'
   | 'delegate_clarification_requested'
   | 'delegate_clarification_responded'

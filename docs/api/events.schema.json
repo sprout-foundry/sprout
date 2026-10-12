@@ -439,6 +439,12 @@
         },
         "message": {
           "type": "string"
+        },
+        "subagent_depth": {
+          "type": "number"
+        },
+        "terminal": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -631,8 +637,14 @@
       "type": "object"
     },
     "ProgressMilestoneData": {
-      "description": "Payload for a progress_milestone event: a plan scope item (SP-148) started or finished, with the files-touched count and the scope item's elapsed wall time. Go: pkg/events/progress_events.go::ProgressMilestoneData",
+      "description": "Payload for a progress_milestone event: a plan scope item (SP-148) started or finished, with the files-touched count and the scope item's elapsed wall time. This one interface models BOTH wire shapes the event type carries: a flat single-milestone payload (mirrors the Go struct below) and the coalesced batch envelope, which is built by the webui stream coalescer (pkg/webui/stream_coalesce.go::mergeMilestones), not by the Go struct. The batch carries only run_id, the milestones array, and the route keys at the top level — plan_revision, phase, and elapsed_ms exist only on the per-entry flat payloads — which is why those fields are optional. Go: pkg/events/progress_events.go::ProgressMilestoneData",
       "properties": {
+        "chat_id": {
+          "type": "string"
+        },
+        "client_id": {
+          "type": "string"
+        },
         "elapsed_ms": {
           "type": "number"
         },
@@ -659,12 +671,12 @@
         },
         "scope_title": {
           "type": "string"
+        },
+        "user_id": {
+          "type": "string"
         }
       },
       "required": [
-        "elapsed_ms",
-        "phase",
-        "plan_revision",
         "run_id"
       ],
       "type": "object"
@@ -1331,6 +1343,26 @@
         "size"
       ],
       "type": "object"
+    },
+    "WorkspaceStoppingData": {
+      "description": "A warning that the hosting platform is about to stop the workspace.",
+      "properties": {
+        "at": {
+          "type": "string"
+        },
+        "deadline_seconds": {
+          "type": "number"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "at",
+        "deadline_seconds",
+        "reason"
+      ],
+      "type": "object"
     }
   },
   "$id": "https://github.com/sprout-foundry/sprout/docs/api/events.schema.json",
@@ -1495,6 +1527,9 @@
     },
     "workspace_patch": {
       "$ref": "#/$defs/WorkspacePatchData"
+    },
+    "workspace_stopping": {
+      "$ref": "#/$defs/WorkspaceStoppingData"
     }
   },
   "x-sprout-generated-by": "packages/events/scripts/generate-events-schema.mjs",

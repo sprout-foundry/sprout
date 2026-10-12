@@ -73,6 +73,23 @@ export interface ErrorData {
   error?: string;
   code?: string;
   chat_id?: string;
+  /**
+   * True when the error ends the chat's query (the turn is over); false for
+   * an informational error during a run that keeps going. Absent on older
+   * servers.
+   */
+  terminal?: boolean;
+  subagent_depth?: number;
+}
+
+/** A warning that the hosting platform is about to stop the workspace. */
+export interface WorkspaceStoppingData {
+  /** Why: idle, max_runtime, credits, drain, user, txn_finish. */
+  reason: string;
+  /** RFC 3339 time the notice was issued. */
+  at: string;
+  /** Seconds until the stop. */
+  deadline_seconds: number;
 }
 
 export interface ToolStartData {
@@ -678,6 +695,12 @@ export type WsEvent =
       timestamp?: string;
     }
   | { type: "error"; data?: ErrorData; id?: string; timestamp?: string }
+  | {
+      type: "workspace_stopping";
+      data?: WorkspaceStoppingData;
+      id?: string;
+      timestamp?: string;
+    }
   | {
       type: "tool_start";
       data?: ToolStartData;

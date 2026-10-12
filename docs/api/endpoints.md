@@ -210,6 +210,9 @@ Notes:
 
 | Method | Path | Handler | Served by |
 |---|---|---|---|
+| GET | `/api/lifecycle/activity` | lifecycleActivity | daemon |
+| POST | `/api/lifecycle/notice` | lifecycleNotice | daemon |
+| POST | `/api/lifecycle/prepare-stop` | lifecyclePrepareStop | daemon |
 | GET | `/api/sync` | syncStatus | daemon |
 | POST | `/api/sync` | syncPull | daemon |
 | POST | `/api/sync/batch` | syncBatch | daemon |
@@ -221,6 +224,9 @@ Notes:
 | GET | `/api/txn/status` | txnStatus | daemon |
 
 Notes:
+- `/api/lifecycle/activity` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
+- `/api/lifecycle/notice` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
+- `/api/lifecycle/prepare-stop` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
 - `/api/sync` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
 - `/api/sync` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
 - `/api/sync/batch` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)

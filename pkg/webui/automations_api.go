@@ -119,6 +119,10 @@ func (ws *ReactWebServer) handleAPIAutomateRun(w http.ResponseWriter, r *http.Re
 	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
+	if !ws.acceptingWork() {
+		writeJSONErr(w, http.StatusServiceUnavailable, errCodeWorkspaceStopping, "The workspace is stopping and is not accepting new work")
+		return
+	}
 
 	var req struct {
 		Workflow   string   `json:"workflow"`

@@ -255,6 +255,7 @@ func (ws *ReactWebServer) runConnectionLiveLoop(
 				// paused Chrome tab could have its client context garbage-collected
 				// by the idle cleanup worker because no HTTP requests arrive.
 				ws.touchClientLastSeen(clientID)
+				ws.noteClientMessage(msg.Type)
 
 				// Handle incoming WebSocket messages
 				ws.handleWebSocketMessage(safeConn, sessionID, msg, clientID, userID, chatID, daemon)

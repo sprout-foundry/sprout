@@ -133,6 +133,7 @@ func DefaultProbes() []Probe {
 		makeProbe("syncStatus", "sync/txn", "/api/sync", nil),
 		makeProbe("syncAgentStatus", "sync/txn", "/api/sync/status", nil),
 		makeProbe("txnStatus", "sync/txn", "/api/txn/status", nil),
+		makeProbe("lifecycleActivity", "sync/txn", "/api/lifecycle/activity", nil),
 
 		// search (needs a query parameter to return a 200 on a fresh workspace)
 		makeProbe("searchQuery", "search", "/api/search", map[string]string{"query": "x"}),

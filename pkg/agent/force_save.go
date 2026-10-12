@@ -17,3 +17,14 @@ func (a *Agent) ForceSaveAndExit(code int) {
 	console.RestoreTerminal()
 	os.Exit(code)
 }
+
+// FlushState synchronously writes the conversation to its session file. The
+// web daemon calls it before the workspace stops so the transcript on disk
+// matches what the user last saw. Agents with no messages are skipped so an
+// idle chat does not leave an empty session file behind.
+func (a *Agent) FlushState() {
+	if a == nil || a.state == nil || a.IsSubagent() || len(a.GetMessages()) == 0 {
+		return
+	}
+	a.autoSaveState()
+}

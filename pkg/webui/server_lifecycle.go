@@ -38,6 +38,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	// cross-origin session persistence (Cloudflare Pages + tunnel) where
 	// custom headers are not preserved across page reloads.
 	var handler http.Handler = securityHeadersMiddleware(mux)
+	handler = ws.userActivityMiddleware(handler)
 
 	// Wrap with user ID extraction middleware for service mode
 	if ws.serviceMode && ws.trustedUserHeader != "" {

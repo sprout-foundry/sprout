@@ -116,6 +116,9 @@ type ReactWebServer struct {
 	// Guarded by hostedPreviewMu.
 	hostedPreview   *hostedPreviewInfo
 	hostedPreviewMu sync.RWMutex
+
+	// lifecycle tracks activity and the prepare-stop drain (workspace_lifecycle.go).
+	lifecycle lifecycleState
 }
 
 // IsSharedMode reports whether the server is in "shared agent" mode —

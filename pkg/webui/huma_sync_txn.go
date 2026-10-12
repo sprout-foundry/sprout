@@ -2,7 +2,8 @@
 
 // huma_sync_txn.go holds the Huma operations and their thin handlers for the
 // sync/txn family: the /api/txn/* (container-side git transaction) and
-// /api/sync* (workspace sync) routes (registered via registerSyncTxnHumaOperations
+// /api/sync* (workspace sync) routes, plus the /api/lifecycle/* routes the
+// platform drives alongside them (registered via registerSyncTxnHumaOperations
 // from registerHumaOperations in huma_routes.go).
 //
 // Method semantics are load-bearing and are preserved by registering exactly
@@ -106,6 +107,51 @@ func registerSyncTxnHumaOperations(api huma.API, ws *ReactWebServer) {
 		Description: "Returns the current file-sync state (the agent's tracked files) for the client's workspace.",
 		Tags:        []string{"sync/txn"},
 	}, ws.syncAgentStatusHumaHandler)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "lifecycleActivity",
+		Method:      http.MethodGet,
+		Path:        "/api/lifecycle/activity",
+		Summary:     "Report whether the workspace is busy and when it was last used.",
+		Description: "Returns busy (any in-flight query, running automation or background task, or a prepare-stop checkpoint in progress), the busy reasons, the active query count, the last user and agent activity timestamps (RFC 3339 UTC, null when none since start) and whether the daemon still accepts work. Read-only; authenticated like GET /api/sync.",
+		Tags:        []string{"sync/txn"},
+	}, ws.lifecycleActivityHumaHandler)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "lifecyclePrepareStop",
+		Method:      http.MethodPost,
+		Path:        "/api/lifecycle/prepare-stop",
+		Summary:     "Drain the workspace before it stops.",
+		Description: "Bounded by deadline_seconds (default 60): stops accepting new work, interrupts in-flight runs (cancelling any left at the deadline), persists chat sessions, checkpoints uncommitted work to refs/sprout/wip/<unix-ts> and refs/sprout/wip/latest without touching HEAD, the index or the working tree, and syncs the filesystem. Idempotent: later calls return the first call's result.",
+		Tags:        []string{"sync/txn"},
+	}, ws.lifecyclePrepareStopHumaHandler)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "lifecycleNotice",
+		Method:      http.MethodPost,
+		Path:        "/api/lifecycle/notice",
+		Summary:     "Warn connected clients that the workspace will stop.",
+		Description: "Relays a workspace_stopping event ({reason, at, deadline_seconds}) to every connected client so the UI can warn before a timer-driven stop. Does not change daemon state.",
+		Tags:        []string{"sync/txn"},
+	}, ws.lifecycleNoticeHumaHandler)
+}
+
+// lifecycleActivityHumaHandler is the Huma handler for GET /api/lifecycle/activity.
+func (ws *ReactWebServer) lifecycleActivityHumaHandler(ctx context.Context, in *humaRequestInput) (*writtenResponseOutput, error) {
+	ws.handleAPILifecycleActivity(in.Resp, in.Req)
+	return &writtenResponseOutput{Body: noopWrittenResponse}, nil
+}
+
+// lifecyclePrepareStopHumaHandler is the Huma handler for POST /api/lifecycle/prepare-stop.
+func (ws *ReactWebServer) lifecyclePrepareStopHumaHandler(ctx context.Context, in *humaRequestInput) (*writtenResponseOutput, error) {
+	ws.handleAPILifecyclePrepareStop(in.Resp, in.Req)
+	return &writtenResponseOutput{Body: noopWrittenResponse}, nil
+}
+
+// lifecycleNoticeHumaHandler is the Huma handler for POST /api/lifecycle/notice.
+func (ws *ReactWebServer) lifecycleNoticeHumaHandler(ctx context.Context, in *humaRequestInput) (*writtenResponseOutput, error) {
+	ws.handleAPILifecycleNotice(in.Resp, in.Req)
+	return &writtenResponseOutput{Body: noopWrittenResponse}, nil
 }
 
 // txnPushHumaHandler is the Huma handler for POST /api/txn/push.

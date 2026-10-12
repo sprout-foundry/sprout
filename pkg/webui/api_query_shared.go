@@ -192,6 +192,10 @@ func (ws *ReactWebServer) runChatQuery(
 	if logTag == "" {
 		logTag = "runChatQuery"
 	}
+	if ws.rejectWhileStopping(w, clientID, chatID) {
+		return
+	}
+	ws.markUserActivity()
 
 	// Resolve workspace root with worktree awareness - check if chat has a worktree path
 	workspaceRoot := ws.resolveWorkspaceRootForChat(clientID, chatID)
@@ -432,7 +436,7 @@ func (ws *ReactWebServer) runChatQuery(
 						"assistant_text",
 					))
 				}
-				ws.publishClientEventWithChat(clientID, chatID, events.EventTypeError, events.ErrorEvent("Slash command failed", err))
+				ws.publishClientEventWithChat(clientID, chatID, events.EventTypeError, terminalErrorEvent("Slash command failed", err))
 				return
 			}
 
@@ -485,7 +489,7 @@ func (ws *ReactWebServer) runChatQuery(
 				slog.Duration("duration", queryDuration),
 				slog.Any("err", err),
 			)
-			ws.publishClientEventWithChat(clientID, chatID, events.EventTypeError, events.ErrorEvent("Query failed", err))
+			ws.publishClientEventWithChat(clientID, chatID, events.EventTypeError, terminalErrorEvent("Query failed", err))
 		} else {
 			// Success-path log: lets operators see that the provider responded
 			// and at what cost. Without this the log goes silent after the
@@ -568,4 +572,14 @@ func (ws *ReactWebServer) watchWakeupTurns(a *agent.Agent, clientID, chatID stri
 		recordQueryCost(a, chat)
 		ws.syncChatStateAsync(clientID, chat, "wakeup")
 	})
+}
+
+// terminalErrorEvent is an error event that ends the chat's query. The
+// "terminal" flag tells clients this error closes the turn; error frames
+// without it (transport, settings, subagent errors) are informational and
+// must not flip a running chat to idle.
+func terminalErrorEvent(message string, err error) map[string]interface{} {
+	data := events.ErrorEvent(message, err)
+	data["terminal"] = true
+	return data
 }

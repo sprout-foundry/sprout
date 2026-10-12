@@ -326,6 +326,7 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 				})
 
 			case "input":
+				ws.markUserActivity()
 				data, ok := msg["data"].(map[string]interface{})
 				if !ok {
 					continue

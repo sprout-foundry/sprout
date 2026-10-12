@@ -30,6 +30,7 @@ func (ws *ReactWebServer) stampChatEvent(eventType string, data any) any {
 	if !ok {
 		return data
 	}
+	ws.noteAgentEvent(eventType, payload)
 	if _, buffered := reattachBufferedEventTypes[eventType]; !buffered {
 		return data
 	}

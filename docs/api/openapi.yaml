@@ -1304,6 +1304,54 @@ paths:
       summary: List active SSH sessions.
       tags:
         - workspace/instances
+  /api/lifecycle/activity:
+    get:
+      description: Returns busy (any in-flight query, running automation or background task, or a prepare-stop checkpoint in progress), the busy reasons, the active query count, the last user and agent activity timestamps (RFC 3339 UTC, null when none since start) and whether the daemon still accepts work. Read-only; authenticated like GET /api/sync.
+      operationId: lifecycleActivity
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Report whether the workspace is busy and when it was last used.
+      tags:
+        - sync/txn
+  /api/lifecycle/notice:
+    post:
+      description: Relays a workspace_stopping event ({reason, at, deadline_seconds}) to every connected client so the UI can warn before a timer-driven stop. Does not change daemon state.
+      operationId: lifecycleNotice
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Warn connected clients that the workspace will stop.
+      tags:
+        - sync/txn
+  /api/lifecycle/prepare-stop:
+    post:
+      description: 'Bounded by deadline_seconds (default 60): stops accepting new work, interrupts in-flight runs (cancelling any left at the deadline), persists chat sessions, checkpoints uncommitted work to refs/sprout/wip/<unix-ts> and refs/sprout/wip/latest without touching HEAD, the index or the working tree, and syncs the filesystem. Idempotent: later calls return the first call''s result.'
+      operationId: lifecyclePrepareStop
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Drain the workspace before it stops.
+      tags:
+        - sync/txn
   /api/local-llm/download:
     post:
       description: Starts downloading the model identified by `model` for local use. Returns the download status.

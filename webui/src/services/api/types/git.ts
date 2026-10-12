@@ -24,6 +24,9 @@ export interface GitStatusResponse {
     in_git_repo: boolean;
   };
   files: Array<{ path: string; status: string; staged?: boolean }>;
+  /** A caveat about the repository the panel shows alongside the status
+   * (e.g. an in-browser repository imported without its history). */
+  note?: string;
 }
 
 export interface GitBranchesResponse {

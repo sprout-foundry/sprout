@@ -4,6 +4,9 @@ All notable changes to Sprout will be documented in this file.
 
 ## [Unreleased]
 
+- feat(webui): a repository imported into an in-browser workspace (`project.repoUrl` or `?repo=`) is now a git repository in the browser, so source control works instead of showing "No git repository": status, diff (and the editor gutter), staging, commit, branches and history run through browser git. A mounted `SproutWorkspace` with an in-browser agent now wires browser git to its workspace itself (it never did, so its import had no git at all). With a host git proxy the repository is cloned (depth 1, one branch, history and origin remote included; downloads past 200 MB fall back), its text files mirrored into `/workspace` and binary or over-1 MB files kept in git only; push and pull use the proxy. Without a proxy, or when the clone fails, the imported files are committed as an "Imported snapshot" baseline and the git panel notes that remote history isn't available. Reopening the same repository keeps local commits, and git operations wait for an import in progress instead of reading a half-seeded tree. Clone progress is published as `sprout:repo-import-progress` events.
+- feat(workspace): `transport.gitProxyURL` names a host's git smart-HTTP proxy for in-browser git (absent: `/git-proxy` on the page origin for a `bearer` host, none otherwise; `''`: none). The proxy contract is in `docs/integration/host-contract.md`.
+
 ## [v0.30.1] - 2026-10-11
 
 - feat(workspace): `@sprout-foundry/workspace` 1.6.2 (below).

@@ -174,33 +174,22 @@ export function useAppInitialization({
             // (byte-identical behavior).
             if (!NATIVE_GIT_ENABLED) {
               if (hosted) {
-                import('../services/cloudWasmHandlers').then(({ listAllVfsFiles }) => {
+                void import('../services/browserGitBridge').then(({ browserGitBridgeFor }) =>
                   import('../services/browserGit').then(({ configureBrowserGit }) => {
                     const shell = (getAdapter() as CloudAdapter | null)?.getWasmShell?.();
                     if (shell) {
                       // Commits are authored as the signed-in account, so
                       // pushed history is attributed to the user on GitHub.
                       const user = getBootstrapUser();
-                      configureBrowserGit({
-                        name: user?.email ? user.email.split('@')[0] : 'Browser IDE',
-                        email: user?.email || 'browser-ide@sprout.dev',
-                        readVfsFiles: async () => {
-                          return listAllVfsFiles(shell);
-                        },
-                        writeVfsFiles: async (files) => {
-                          for (const f of files) {
-                            shell.writeFile(f.path, f.content);
-                          }
-                        },
-                        deleteVfsFiles: async (paths) => {
-                          for (const p of paths) {
-                            shell.deleteFile(p);
-                          }
-                        },
-                      });
+                      configureBrowserGit(
+                        browserGitBridgeFor(shell, {
+                          name: user?.email ? user.email.split('@')[0] : undefined,
+                          email: user?.email,
+                        }),
+                      );
                     }
-                  });
-                });
+                  }),
+                );
               }
             }
             // Register the agent git tool bridge so the WASM agent can call

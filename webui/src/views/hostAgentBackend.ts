@@ -69,6 +69,7 @@ async function installWasmAdapter(host: SproutHost, repoUrl: string | undefined)
     navItems: host.navigation.navItems ?? config.navItems ?? [],
     egressProxy: config.egressProxy,
     repoUrl,
+    gitAuthor: host.user?.displayName ? { name: host.user.displayName } : undefined,
   });
   installAdapter(adapter);
   return adapter;

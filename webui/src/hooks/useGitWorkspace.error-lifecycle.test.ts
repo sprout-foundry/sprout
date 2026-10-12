@@ -131,4 +131,11 @@ describe('useGitWorkspace — gitActionError lifecycle (stale banner after recov
     await waitFor(() => expect(result.current.gitActionError).toBe('Failed to fetch git status'));
     expect(result.current.gitStatus).toBeNull();
   });
+
+  it("shows the repository's note (an imported snapshot) as the panel warning", async () => {
+    getGitStatus.mockResolvedValue({ ...okStatus, note: 'Imported without git history.' });
+    const { result } = renderHook(() => useGitWorkspace(options));
+    await waitFor(() => expect(result.current.gitStatus).not.toBeNull());
+    expect(result.current.gitActionWarning).toBe('Imported without git history.');
+  });
 });

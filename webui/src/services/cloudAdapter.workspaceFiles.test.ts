@@ -161,6 +161,9 @@ vi.mock('./gitCorsProxy', () => ({ gitCorsProxy: () => mocks.proxy }));
 // store, then the app's VFS bridge (useAppInitialization) writes each file
 // through the shell by its repo-relative path.
 vi.mock('./browserGit', () => ({
+  holdBrowserGitWorkTree: <T>(work: Promise<T>) => work,
+  snapshotSource: () => Promise.resolve(null),
+  gitInitSnapshot: () => Promise.resolve('snapshot-oid'),
   whenBrowserGitConfigured: () => Promise.resolve(),
   gitOriginUrl: () => Promise.resolve(null),
   restoreGitWorkingTree: () => Promise.resolve(0),
@@ -228,6 +231,8 @@ beforeEach(() => {
     return new Response(JSON.stringify({ message: 'success', files: [] }), { status: 200 });
   });
   vi.stubGlobal('fetch', fetchSpy);
+  // Browser git's store needs IndexedDB to exist (browserGit is mocked).
+  vi.stubGlobal('indexedDB', {});
   adapter = new CloudAdapter({ apiBase: 'https://platform.test', wsUrl: 'wss://platform.test/ws', navItems: [] });
 });
 

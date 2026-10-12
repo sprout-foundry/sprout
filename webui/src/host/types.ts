@@ -97,6 +97,17 @@ export interface HostTransport {
    */
   modelEndpoint?: string;
   /**
+   * Base URL of the host's git smart-HTTP proxy for in-browser git (the
+   * isomorphic-git `corsProxy`): `<gitProxyURL>/<git host>/<repo path>/…`
+   * forwards to `https://<git host>/<repo path>/…`. An imported repository is
+   * cloned through it with its history; push and pull use it too. A path
+   * resolves against the page origin. Absent, a `bearer` host is assumed to
+   * serve one at `/git-proxy` and any other host has none; `''` declares that
+   * the host serves none. Without a proxy an import opens as an
+   * imported-snapshot repository with no remote history.
+   */
+  gitProxyURL?: string;
+  /**
    * Absolute base URL of the host's outward platform surface (its SPA pages,
    * account pages and platform API). Present only for a host that has one —
    * the hosted build's bootstrap resolves the concrete value at startup and

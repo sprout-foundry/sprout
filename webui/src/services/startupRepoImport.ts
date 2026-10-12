@@ -43,7 +43,9 @@ export function releaseHostProjectRepo(): void {
  *
  * Progress is published the way the app's file views expect: the
  * `__repoImporting` / `__repoImported` / `__repoImportFailed` window markers
- * and the `sprout:repo-imported` / `sprout:repo-import-failed` events.
+ * and the `sprout:repo-imported` / `sprout:repo-import-failed` events. The
+ * imported event's `history` says how git was set up (`clone`, `snapshot` or
+ * `none`); clone progress arrives as `sprout:repo-import-progress` events.
  */
 export function importStartupRepo(
   adapter: Pick<CloudAdapter, 'restoreRepo'>,
@@ -65,7 +67,11 @@ export function importStartupRepo(
         );
         markers.__repoImported = result.repo ?? repoUrl;
         delete markers.__repoImporting;
-        window.dispatchEvent(new CustomEvent('sprout:repo-imported', { detail: { repo: result.repo ?? repoUrl } }));
+        window.dispatchEvent(
+          new CustomEvent('sprout:repo-imported', {
+            detail: { repo: result.repo ?? repoUrl, history: result.history },
+          }),
+        );
       } else {
         importFailed(repoUrl, result.error ?? 'Unknown error');
       }

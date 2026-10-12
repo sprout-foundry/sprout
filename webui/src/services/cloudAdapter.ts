@@ -38,7 +38,7 @@ import { gitCorsProxy } from './gitCorsProxy';
 import { NATIVE_FS_ENABLED } from './nativeFsStubs/nativeFsFlag';
 import { loadRepoImport, saveRepoImport } from './repoImportCache';
 import { initWasmShell, type WasmShell } from './wasmShell';
-import { GIT_REPO_CHANGED_EVENT } from './workspaceClone';
+import { restoreRepoWithBrowserGit, type RepoRestoreResult } from './repoGitImport';
 
 export interface CloudAdapterConfig {
   /** Base URL for the Foundry API (e.g., 'https://api.sprout.dev') */
@@ -59,6 +59,8 @@ export interface CloudAdapterConfig {
    * does today.
    */
   repoUrl?: string;
+  /** Author for commits made in the browser repository (defaults to a generic one). */
+  gitAuthor?: { name?: string; email?: string };
 }
 
 /**
@@ -289,19 +291,25 @@ export class CloudAdapter implements APIAdapter {
   }
 
   /**
-   * Re-seed the workspace for a repo. The hosted IDE opens it as a git
-   * checkout (restoreRepoWithGit); otherwise, or if that fails, the local
-   * import cache is preferred.
-   *
-   * Cache hit: writes the persisted manifest straight into the WASM VFS —
-   * no network, no server clone. Cache miss: falls back to the network
-   * import (which persists its result on success).
+   * Open a repository in the workspace, with browser git set up for it
+   * (repoGitImport.ts): cloned through the host's git proxy when there is
+   * one, else its files imported and committed as a snapshot.
    */
-  async restoreRepo(
-    repoURL: string,
-  ): Promise<{ success: boolean; repo?: string; error?: string; fromCache?: boolean }> {
-    const cloned = await this.restoreRepoWithGit(repoURL);
-    if (cloned) return cloned;
+  restoreRepo(repoURL: string): Promise<RepoRestoreResult> {
+    return restoreRepoWithBrowserGit(repoURL, {
+      shell: () => this.ensureWasmShell(),
+      importFiles: (url) => this.restoreRepoFiles(url),
+      author: this.config.gitAuthor,
+    });
+  }
+
+  /**
+   * Seed the workspace with a repository's files, without git. Cache hit:
+   * writes the persisted manifest straight into the WASM VFS — no network,
+   * no server clone. Cache miss: falls back to the network import (which
+   * persists its result on success).
+   */
+  private async restoreRepoFiles(repoURL: string): Promise<RepoRestoreResult> {
     const cached = await loadRepoImport(repoURL);
     if (!cached || !cached.files || cached.files.length === 0) {
       const result = await this.importRepo(repoURL);
@@ -313,42 +321,6 @@ export class CloudAdapter implements APIAdapter {
       return { success: true, repo: cached.repo, fromCache: true };
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : String(err) };
-    }
-  }
-
-  /**
-   * Open a repository as a real git checkout (history, remote, branches) in
-   * the hosted IDE: a reload of the repo already cloned only restores missing
-   * files, anything else clones through the platform's git proxy. Returns
-   * null when git isn't available here or the clone fails (a private repo
-   * without a connected GitHub account), so the caller falls back to the
-   * plain file import.
-   */
-  private async restoreRepoWithGit(
-    repoURL: string,
-  ): Promise<{ success: boolean; repo?: string; fromCache?: boolean } | null> {
-    if (!gitCorsProxy()) return null;
-    try {
-      const { parseRepoRef } = await import('./workspaceFs/workspaceGit');
-      const want = parseRepoRef(repoURL);
-      const repo = `${want.owner}/${want.name}`;
-      const browserGit = await import('./browserGit');
-      await this.ensureWasmShell();
-      await browserGit.whenBrowserGitConfigured();
-
-      const origin = await browserGit.gitOriginUrl();
-      const sameRepo = origin !== null && sameRepoRef(origin, want, parseRepoRef);
-      if (sameRepo) {
-        await browserGit.restoreGitWorkingTree();
-      } else {
-        await browserGit.gitClone(want.url);
-      }
-      setActiveRepoURL(repoURL);
-      window.dispatchEvent(new Event(GIT_REPO_CHANGED_EVENT));
-      return { success: true, repo, fromCache: sameRepo };
-    } catch (err) {
-      console.warn('[CloudAdapter] git clone failed; falling back to file import:', err);
-      return null;
     }
   }
 
@@ -657,25 +629,5 @@ export class CloudAdapter implements APIAdapter {
 
   getWebSocketURL(): string | null {
     return this.config.wsUrl;
-  }
-}
-
-/** Whether a remote URL points at owner/name (case-insensitive, .git optional). */
-function sameRepoRef(
-  remoteURL: string,
-  want: { host: string; owner: string; name: string },
-  parseRepoRef: (input: string) => { host: string; owner: string; name: string },
-): boolean {
-  // Host and full path must both match: the same owner/name can exist on
-  // several hosts, and owner may span segments (GitLab subgroups).
-  try {
-    const have = parseRepoRef(remoteURL);
-    return (
-      have.host === want.host &&
-      have.owner.toLowerCase() === want.owner.toLowerCase() &&
-      have.name.toLowerCase() === want.name.toLowerCase()
-    );
-  } catch {
-    return false;
   }
 }

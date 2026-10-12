@@ -84,6 +84,11 @@ infers its backend from build flags or URLs.
   the page origin; `''` means the page origin), so `/proxy/chat` reaches the
   API host's `/proxy/chat`. An endpoint that cannot be made an absolute
   `http(s)` URL fails each turn with an error in the chat naming the endpoint.
+- `gitProxyURL?: string` — the base URL of the host's git smart-HTTP proxy
+  for in-browser git (see "Git proxy for in-browser git" below). An absolute
+  URL or a path (resolved against the page origin). Absent, a `bearer` host is
+  taken to serve one at `/git-proxy` on the page origin and any other host to
+  serve none; `''` declares that the host serves none.
 
 #### Agent backend
 
@@ -694,9 +699,59 @@ events WebSocket goes to `transport.wsURL` (else the page's `/ws`), and the
 in-browser agent's model calls go to `agent.modelEndpoint` (else
 `transport.modelEndpoint`, else the page origin's `/proxy/chat`; a relative
 endpoint resolves against `apiBaseURL`). When a
-startup repository is set and the browser clone fails, the adapter falls back
-to `POST <apiBase>/api/repo/import`. A `bearer` host additionally serves
-`/git-proxy` (git over CORS) and `/workspace/fly` at the page origin.
+startup repository is set and there is no git proxy or the browser clone
+fails, the adapter falls back to `POST <apiBase>/api/repo/import`. The git
+proxy (below) is at `transport.gitProxyURL`, by default `/git-proxy` at the
+page origin for a `bearer` host, which also serves `/workspace/fly` there.
+
+**Git proxy for in-browser git.** A startup repository (`project.repoUrl`, or
+the hosted build's `?repo=`) opens as a git repository in the browser, so the
+source control view, the editor's gutter diff, staging, commit, branches and
+history work through browser git. How depends on whether the host serves a
+git proxy:
+
+- **With a proxy**, the repository is cloned with isomorphic-git (depth 1, one
+  branch) into the browser's git store, and its files are mirrored into the
+  WASM shell's workspace (`/workspace`), so the editor, the agent's shell and
+  git see the same files. Binary files and files over 1 MB stay in the git
+  store only (the VFS holds text) and are not reported as deleted. The clone
+  stops past 200 MB of download and falls back to the snapshot below. Push
+  and pull go through the same proxy; a failed push is an error response on
+  the workspace's request channel, as before. Clone progress is published as
+  `sprout:repo-import-progress` window events (`{ repo, phase, loaded, total }`).
+- **Without one** (or when the clone fails — a private repository without a
+  credential, say), the files come from `POST <apiBase>/api/repo/import` as
+  before and are committed as one "Imported snapshot of owner/name" commit on
+  `main`. Status, diff, staging and commit work against that baseline; the
+  repository has no remote, the git panel shows a note that remote history
+  isn't available, and push fails with an explanation. Reopening the same
+  repository later keeps the snapshot and its local commits.
+
+The `sprout:repo-imported` event's `history` says which happened (`clone`,
+`snapshot`, or `none` when browser git is unavailable).
+
+The proxy is isomorphic-git's `corsProxy`: a request for
+`https://<git host>/<repo path>/<endpoint>` arrives as
+`<gitProxyURL>/<git host>/<repo path>/<endpoint>`, where `<endpoint>` is
+`info/refs?service=git-upload-pack|git-receive-pack` (GET),
+`git-upload-pack` or `git-receive-pack` (POST). The host forwards it to the
+git host and streams the response back:
+
+- forward only the smart-HTTP endpoints of git hosts it supports (never an
+  open relay), with the request's `Content-Type`, `Accept`, `Git-Protocol`
+  and `Content-Encoding` headers and its `Authorization` when the page sent
+  one; otherwise it may add the user's own credential for that git host, so a
+  private repository clones without the token reaching the page;
+- return the git host's status, `Content-Type` and caching headers, but not
+  its `WWW-Authenticate` (the browser would show its own sign-in dialog);
+- authenticate the caller itself. On the page origin the session cookie does
+  this and no CORS headers are needed. A proxy on another origin answers CORS
+  preflights for those methods and headers, and allows credentials when it
+  relies on cookies;
+- bound request bodies (pushes) to a size it accepts.
+
+The hosted platform serves this at `/git-proxy` on its origin, authenticated by
+the session and adding the user's connected git-host credential.
 
 **Terminal (daemon-backed hosts).** A host that declares
 `capabilities.localTerminal` (and runs no in-browser agent) gets the PTY
@@ -972,7 +1027,7 @@ branch is recoverable from the conversion commits (`git show 536a191c2`,
 | `bootstrapAdapter.ts` — decide whether to install the `CloudAdapter` (the `appMode === 'cloud'` branch) | `getActiveHost()?.transport.authMode === 'bearer'` |
 | `bootstrapAdapter.ts` — hosted-vs-local fallback URL | `getActiveHost()?.transport.authMode === 'bearer'` |
 | `services/backendHealth.ts` — adapter fetch vs `clientFetch` for the health probe | `transport.authMode === 'bearer'` |
-| `services/gitCorsProxy.ts` — the `/git-proxy` CORS proxy for browser git | `transport.authMode === 'bearer'` |
+| `services/gitCorsProxy.ts` — the `/git-proxy` CORS proxy for browser git | `transport.gitProxyURL`, else `transport.authMode === 'bearer'` |
 | `host/PlatformGitHubAccountCard.tsx` — open account settings inside the editor when hosted | `transport.authMode === 'bearer'` |
 | `services/websocket.ts` — send the pause dead-letter on tab freeze | `capabilities.localTerminal` |
 | `services/serviceWorkerRegistration.ts` — register the service worker | `capabilities.localTerminal` |

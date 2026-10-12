@@ -1,8 +1,8 @@
 import { Monitor, Server } from 'lucide-react';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useHostCapabilities } from '../host';
-import { ApiService } from '../services/api';
 import { getSSHProxyContext } from '../services/clientSession';
+import { refreshWorkspace, useWorkspaceState } from '../services/workspaceStore';
 import { debugLog } from '../utils/log';
 
 interface WorkspaceBarProps {
@@ -19,65 +19,25 @@ interface BarState {
 
 const WorkspaceBar: React.FC<WorkspaceBarProps> = ({ isConnected, isMobileMenuOpen = false, isMobile = false }) => {
   const { workspaceSwitching } = useHostCapabilities();
-  const [bar, setBar] = useState<BarState>({ hostAlias: null, isRemote: false });
-  const apiService = useRef(ApiService.getInstance());
+  const { workspace } = useWorkspaceState();
 
   useEffect(() => {
-    if (!isConnected) {
-      setBar({ hostAlias: null, isRemote: false });
-      return;
-    }
-    let cancelled = false;
-    apiService.current
-      .getWorkspace()
-      .then((ws) => {
-        if (cancelled) return;
-        const homePath = ws.ssh_context?.home_path || '';
-        const collapsed =
-          ws.workspace_root && homePath && ws.workspace_root.startsWith(homePath)
-            ? `~${ws.workspace_root.slice(homePath.length)}`
-            : ws.workspace_root || '';
-        // Prefer ssh_context from the API; fall back to the proxy base set by the
-        // local server when serving the SSH proxy page (SPROUT_PROXY_BASE).
-        const proxyCtx = getSSHProxyContext();
-        const isRemote = Boolean(ws.ssh_context?.is_remote) || Boolean(proxyCtx);
-        const hostAlias =
-          (ws.ssh_context?.is_remote ? ws.ssh_context?.host_alias : null) ?? proxyCtx?.hostAlias ?? null;
-        setBar({ hostAlias, isRemote });
-      })
-      .catch((err) => {
-        debugLog('[WorkspaceBar] Failed to fetch workspace:', err);
-      });
-    return () => {
-      cancelled = true;
-    };
+    if (!isConnected) return;
+    refreshWorkspace().catch((err) => {
+      debugLog('[WorkspaceBar] Failed to fetch workspace:', err);
+    });
   }, [isConnected]);
 
-  // Subscribe to workspace changes from the workspace switcher
-  useEffect(() => {
-    const onWorkspaceChange = () => {
-      if (!isConnected) return;
-      apiService.current
-        .getWorkspace()
-        .then((ws) => {
-          const homePath = ws.ssh_context?.home_path || '';
-          const collapsed =
-            ws.workspace_root && homePath && ws.workspace_root.startsWith(homePath)
-              ? `~${ws.workspace_root.slice(homePath.length)}`
-              : ws.workspace_root || '';
-          const proxyCtx = getSSHProxyContext();
-          const isRemote = Boolean(ws.ssh_context?.is_remote) || Boolean(proxyCtx);
-          const hostAlias =
-            (ws.ssh_context?.is_remote ? ws.ssh_context?.host_alias : null) ?? proxyCtx?.hostAlias ?? null;
-          setBar({ hostAlias, isRemote });
-        })
-        .catch((err) => {
-          debugLog('[WorkspaceBar] Failed to refresh workspace:', err);
-        });
-    };
-    window.addEventListener('sprout:workspace-changed', onWorkspaceChange);
-    return () => window.removeEventListener('sprout:workspace-changed', onWorkspaceChange);
-  }, [isConnected]);
+  // The last known workspace stays on screen while disconnected; the proxy
+  // base set by the local server when serving the SSH proxy page
+  // (SPROUT_PROXY_BASE) is the fallback when the API has no ssh_context.
+  const bar = useMemo<BarState>(() => {
+    const proxyCtx = getSSHProxyContext();
+    const isRemote = Boolean(workspace?.ssh_context?.is_remote) || Boolean(proxyCtx);
+    const hostAlias =
+      (workspace?.ssh_context?.is_remote ? workspace.ssh_context.host_alias : null) ?? proxyCtx?.hostAlias ?? null;
+    return { hostAlias, isRemote };
+  }, [workspace]);
 
   // Hide on mobile when the sidebar menu is covering the content
   if (isMobile && isMobileMenuOpen) return null;

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ApiService } from '../../services/api';
 import { getSSHProxyContext } from '../../services/clientSession';
+import { applyWorkspaceRoot, refreshWorkspace, useWorkspaceState } from '../../services/workspaceStore';
 import { showThemedConfirm } from '../ThemedDialog';
 import { normalizePath } from './pathUtils';
 import type { SwitchingState, SSHFailureState, RemoteWorkspaceContext } from './types';
@@ -48,8 +49,11 @@ export interface UseWorkspaceDataResult {
 }
 
 export function useWorkspaceData({ isConnected }: UseWorkspaceDataProps): UseWorkspaceDataResult {
-  const [workspaceRoot, setWorkspaceRoot] = useState('');
-  const [daemonRoot, setDaemonRoot] = useState('');
+  // The shared store keeps the last known workspace across disconnects, so
+  // the switcher never blanks the path while the connection recovers.
+  const { workspace, error: workspaceError } = useWorkspaceState();
+  const workspaceRoot = normalizePath(workspace?.workspace_root || '');
+  const daemonRoot = normalizePath(workspace?.daemon_root || '');
   const [remoteContext, setRemoteContext] = useState<RemoteWorkspaceContext | null>(null);
   const [switchingState, setSwitchingState] = useState<SwitchingState>({
     isSwitching: false,
@@ -135,55 +139,50 @@ export function useWorkspaceData({ isConnected }: UseWorkspaceDataProps): UseWor
     });
   }, []);
 
-  // Load workspace data on connect
+  // Fetch when the connection comes up (the store joins an in-flight request).
   useEffect(() => {
-    if (!isConnected) {
-      setWorkspaceRoot('');
-      setDaemonRoot('');
-      setRemoteContext(null);
+    if (!isConnected) return;
+    refreshWorkspace().catch(() => {
+      // best-effort: the store records the failure and retries.
+    });
+  }, [isConnected]);
+
+  // Derive the remote context and record recents from each new workspace.
+  useEffect(() => {
+    if (!workspace) return;
+    const nextWS = normalizePath(workspace.workspace_root || '');
+    if (workspace.ssh_context?.is_remote && workspace.ssh_context.host_alias) {
+      const next = {
+        hostAlias: workspace.ssh_context.host_alias,
+        sessionKey: workspace.ssh_context.session_key,
+        launcherUrl: workspace.ssh_context.launcher_url,
+        homePath: workspace.ssh_context.home_path,
+      };
+      setRemoteContext(next);
+      if (next.homePath) setSshHomePaths((c) => ({ ...c, [next.hostAlias]: next.homePath as string }));
+      addRemoteRecentWorkspace(next.hostAlias, nextWS);
       return;
     }
-    let cancelled = false;
-    (async () => {
-      try {
-        const workspace = await apiService.current.getWorkspace();
-        if (cancelled) return;
-        const nextWS = normalizePath(workspace.workspace_root || '');
-        setWorkspaceRoot(nextWS);
-        setDaemonRoot(normalizePath(workspace.daemon_root || ''));
-        if (workspace.ssh_context?.is_remote && workspace.ssh_context.host_alias) {
-          const next = {
-            hostAlias: workspace.ssh_context.host_alias,
-            sessionKey: workspace.ssh_context.session_key,
-            launcherUrl: workspace.ssh_context.launcher_url,
-            homePath: workspace.ssh_context.home_path,
-          };
-          setRemoteContext(next);
-          if (next.homePath) setSshHomePaths((c) => ({ ...c, [next.hostAlias]: next.homePath as string }));
-          addRemoteRecentWorkspace(next.hostAlias, nextWS);
-        } else {
-          const proxyCtx = getSSHProxyContext();
-          if (proxyCtx) {
-            setRemoteContext({ hostAlias: proxyCtx.hostAlias });
-            addRemoteRecentWorkspace(proxyCtx.hostAlias, nextWS);
-          } else {
-            setRemoteContext(null);
-            addRecentWorkspace(nextWS);
-          }
-        }
-      } catch (err) {
-        const proxyCtx = getSSHProxyContext();
-        if (proxyCtx) {
-          setRemoteContext({ hostAlias: proxyCtx.hostAlias });
-          addRemoteRecentWorkspace(proxyCtx.hostAlias, '');
-        }
-        console.error('Failed to load workspace data:', err);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [addRecentWorkspace, addRemoteRecentWorkspace, isConnected, setSshHomePaths]);
+    const proxyCtx = getSSHProxyContext();
+    if (proxyCtx) {
+      setRemoteContext({ hostAlias: proxyCtx.hostAlias });
+      addRemoteRecentWorkspace(proxyCtx.hostAlias, nextWS);
+    } else {
+      setRemoteContext(null);
+      addRecentWorkspace(nextWS);
+    }
+  }, [addRecentWorkspace, addRemoteRecentWorkspace, workspace, setSshHomePaths]);
+
+  // Without any workspace yet, an SSH proxy page still knows its host.
+  useEffect(() => {
+    if (workspace || !workspaceError) return;
+    const proxyCtx = getSSHProxyContext();
+    if (proxyCtx) {
+      setRemoteContext({ hostAlias: proxyCtx.hostAlias });
+      addRemoteRecentWorkspace(proxyCtx.hostAlias, '');
+    }
+    console.error('Failed to load workspace data:', workspaceError);
+  }, [addRemoteRecentWorkspace, workspace, workspaceError]);
 
   // After an SSH connect to a specific remote folder, open it. Otherwise the
   // remote daemon sits in its home, and the workspace gate asks for a folder —
@@ -235,7 +234,7 @@ export function useWorkspaceData({ isConnected }: UseWorkspaceDataProps): UseWor
         }
         const response = await apiService.current.setWorkspace(normalizedTarget);
         const nextWS = normalizePath(response.workspace_root || normalizedTarget);
-        setWorkspaceRoot(nextWS);
+        void applyWorkspaceRoot(nextWS, response.daemon_root);
         if (response.ssh_context?.is_remote && response.ssh_context.host_alias) {
           const next = {
             hostAlias: response.ssh_context.host_alias,
@@ -286,27 +285,7 @@ export function useWorkspaceData({ isConnected }: UseWorkspaceDataProps): UseWor
     if (!isConnected) return;
     setIsLoading(true);
     try {
-      const workspace = await apiService.current.getWorkspace();
-      const nextWS = normalizePath(workspace.workspace_root || '');
-      setWorkspaceRoot(nextWS);
-      setDaemonRoot(normalizePath(workspace.daemon_root || ''));
-      if (workspace.ssh_context?.is_remote && workspace.ssh_context.host_alias) {
-        const next = {
-          hostAlias: workspace.ssh_context.host_alias,
-          sessionKey: workspace.ssh_context.session_key,
-          launcherUrl: workspace.ssh_context.launcher_url,
-          homePath: workspace.ssh_context.home_path,
-        };
-        setRemoteContext(next);
-        if (next.homePath) setSshHomePaths((c) => ({ ...c, [next.hostAlias]: next.homePath as string }));
-        addRemoteRecentWorkspace(next.hostAlias, nextWS);
-      } else {
-        const proxyCtx = getSSHProxyContext();
-        if (proxyCtx) {
-          setRemoteContext({ hostAlias: proxyCtx.hostAlias });
-          addRemoteRecentWorkspace(proxyCtx.hostAlias, nextWS);
-        } else addRecentWorkspace(nextWS);
-      }
+      await refreshWorkspace({ force: true });
       setSshFailure(null);
     } catch (error) {
       console.error('Failed to refresh workspace data:', error);
@@ -314,7 +293,7 @@ export function useWorkspaceData({ isConnected }: UseWorkspaceDataProps): UseWor
     } finally {
       setIsLoading(false);
     }
-  }, [addRecentWorkspace, addRemoteRecentWorkspace, isConnected, setSshHomePaths]);
+  }, [isConnected]);
 
   const handleReloadWithoutSSHPath = useCallback(() => {
     const { origin, pathname } = window.location;

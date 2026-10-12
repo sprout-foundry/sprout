@@ -3,10 +3,10 @@ import { showThemedConfirm } from '../components/ThemedDialog';
 import { useEvents } from '../contexts/EventsContext';
 import * as gitApi from '../services/api/gitApi';
 import * as miscApi from '../services/api/miscApi';
-import * as workspaceApi from '../services/api/workspaceApi';
 import { notificationBus } from '../services/notificationBus';
 import { GIT_REPO_CHANGED_EVENT } from '../services/workspaceClone';
 import { getWorkspaceCwd, subscribeWorkspaceCwd } from '../services/workspaceCwd';
+import { useWorkspaceRoot } from '../services/workspaceStore';
 import type { SproutEvent } from '../types/events';
 import { changesWorkspaceFiles } from './workspaceFileEvents';
 import type {
@@ -97,7 +97,7 @@ export const useGitWorkspace = ({
   const [gitActionError, setGitActionError] = useState<string | null>(null);
   const [gitActionWarning, setGitActionWarning] = useState<string | null>(null);
   const [gitBranches, setGitBranches] = useState<GitBranchesState>({ current: '', branches: [] });
-  const [workspaceRoot, setWorkspaceRoot] = useState<string>('');
+  const workspaceRoot = useWorkspaceRoot();
   const [isReviewLoading, setIsReviewLoading] = useState(false);
   const [isReviewFixing, setIsReviewFixing] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
@@ -214,20 +214,6 @@ export const useGitWorkspace = ({
     window.addEventListener(GIT_REPO_CHANGED_EVENT, reload);
     return () => window.removeEventListener(GIT_REPO_CHANGED_EVENT, reload);
   }, [loadGitStatus]);
-
-  // Fetch workspace root once on mount (workspace rarely changes during a session).
-  useEffect(() => {
-    workspaceApi
-      .getWorkspace(fetchFn)
-      .then((ws) => {
-        if (ws?.workspace_root) {
-          setWorkspaceRoot(String(ws.workspace_root));
-        }
-      })
-      .catch((err) => {
-        debugLog('[useGitWorkspace] failed to fetch workspace root:', err);
-      });
-  }, [fetchFn]);
 
   // Debounced git status refresh on file change and tool completion events.
   // When files are written (editor save, agent edits, search replace, shell

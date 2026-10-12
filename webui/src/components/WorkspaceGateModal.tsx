@@ -5,6 +5,7 @@ import type { WorkspaceInfo } from '../hooks/useWorkspace';
 import { ApiService, type Starter } from '../services/api';
 import { createWorkspaceNative, pickWorkspaceNative } from '../services/nativeFs';
 import { setWorkspaceGateOpen } from '../services/workspaceGate';
+import { refreshWorkspace } from '../services/workspaceStore';
 import WorkspaceBrowser from './WorkspaceBrowser';
 import WorkspacePicker from './WorkspacePicker';
 import './WorkspaceGateModal.css';
@@ -156,7 +157,7 @@ function WorkspaceGateModal({
                     // starter there. "Blank" skips this step, leaving the
                     // create flow byte-identical to a plain folder create.
                     if (selectedStarter !== '') {
-                      const ws = await ApiService.getInstance().getWorkspace();
+                      const ws = await refreshWorkspace({ force: true });
                       await ApiService.getInstance().instantiateStarter({
                         starter: selectedStarter,
                         path: ws.workspace_root,

@@ -6,9 +6,10 @@
  *  recent_workspaces) and to change the workspace.
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { ApiService } from '../services/api';
 import type { WorkspaceResponse } from '../services/api/types';
+import { applyWorkspaceRoot, refreshWorkspace, useWorkspaceState } from '../services/workspaceStore';
 
 /* ── Public types ─────────────────────────────────────────────────── */
 
@@ -70,6 +71,18 @@ function mapWorkspaceResponse(data: WorkspaceResponse): WorkspaceInfo {
 
 /* ── Hook ─────────────────────────────────────────────────────────── */
 
+const EMPTY_WORKSPACE_INFO: WorkspaceInfo = {
+  daemon_root: '',
+  workspace_root: '',
+  is_project: false,
+  project_markers: [],
+  needs_workspace_selection: false,
+  workspace_is_home: false,
+  home_dir: '',
+  suggested_projects: [],
+  recent_workspaces: [],
+};
+
 export interface UseWorkspaceResult {
   workspaceInfo: WorkspaceInfo;
   homeDir: string;
@@ -79,47 +92,30 @@ export interface UseWorkspaceResult {
 }
 
 export function useWorkspace(): UseWorkspaceResult {
-  const [workspaceInfo, setWorkspaceInfo] = useState<WorkspaceInfo>({
-    daemon_root: '',
-    workspace_root: '',
-    is_project: false,
-    project_markers: [],
-    needs_workspace_selection: false,
-    workspace_is_home: false,
-    home_dir: '',
-    suggested_projects: [],
-    recent_workspaces: [],
-  });
-  const [homeDir, setHomeDir] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  const { workspace, updatedAt, error } = useWorkspaceState();
+  const workspaceInfo = useMemo(
+    () => (workspace ? mapWorkspaceResponse(workspace) : EMPTY_WORKSPACE_INFO),
+    [workspace],
+  );
+  // Loading until the first fetch settles, successfully or not.
+  const isLoading = updatedAt === 0 && error === null;
 
   const apiService = useRef(ApiService.getInstance());
 
-  const fetchWorkspace = useCallback(async () => {
+  const refresh = useCallback(async () => {
     try {
-      const data = await apiService.current.getWorkspace();
-      const info = mapWorkspaceResponse(data);
-      setWorkspaceInfo(info);
-      setHomeDir(info.home_dir);
+      await refreshWorkspace({ force: true });
     } catch {
-      // best-effort: initial metadata fetch. An empty picker (no recents, no
-      // suggestions) is the visible symptom; `refresh()` can be re-invoked.
-      // The switch path is separate and DOES surface its failure to the user.
-    } finally {
-      setIsLoading(false);
+      // best-effort: metadata refresh. An empty picker (no recents, no
+      // suggestions) is the visible symptom and the store retries; the
+      // switch path is separate and DOES surface its failure to the user.
     }
   }, []);
-
-  useEffect(() => {
-    fetchWorkspace();
-  }, [fetchWorkspace]);
 
   const setWorkspace = useCallback(async (path: string, consentHome?: boolean) => {
     try {
       const data = await apiService.current.setWorkspace(path, consentHome);
-      const info = mapWorkspaceResponse(data);
-      setWorkspaceInfo(info);
-      setHomeDir(info.home_dir);
+      void applyWorkspaceRoot(data.workspace_root || path, data.daemon_root);
       // Reload the page so the whole app picks up the new workspace
       window.setTimeout(() => window.location.reload(), 300);
     } catch (err) {
@@ -129,7 +125,5 @@ export function useWorkspace(): UseWorkspaceResult {
     }
   }, []);
 
-  const refresh = fetchWorkspace;
-
-  return { workspaceInfo, homeDir, isLoading, setWorkspace, refresh };
+  return { workspaceInfo, homeDir: workspaceInfo.home_dir, isLoading, setWorkspace, refresh };
 }

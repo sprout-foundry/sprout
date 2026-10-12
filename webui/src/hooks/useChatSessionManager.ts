@@ -17,14 +17,14 @@ import type { AppState, WorkspaceBusyInfo } from '../types/app';
 import { debugLog } from '../utils/log';
 import { toUserErrorMessage } from '../utils/errorMessage';
 import { notificationBus } from '../services/notificationBus';
+import { fetchChatRunning } from '../services/runStatus';
 import { generateMessageId } from '../utils/messageId';
 import { trimMessages } from '../utils/messageWindow';
 import { NATIVE_CHAT_ENABLED } from '../services/nativeChatStubs/nativeChatFlag';
 import { chatTranscriptToMessages } from '../utils/chatTranscript';
 import { isRunEndingError, processingAfter, requestChatReplay } from '../utils/chatReplay';
-import { noteRunStarted, runEpoch } from '../utils/runEpoch';
-import { fetchChatRunning } from '../services/runStatus';
 import { markSteerPending, pendingSteerBubble } from '../utils/pendingSteer';
+import { noteRunStarted, runEpoch } from '../utils/runEpoch';
 import { activeWorkspaceModeId } from '../workspaces/useWorkspaceMode';
 import { recordConversationCleared } from './bootSessionRestore';
 
@@ -759,7 +759,7 @@ export function useChatSessionManager({
         // event); only undo the optimistic running state here.
         if (error instanceof Error && (error as Error & { code?: string }).code === 'workspace_stopping') {
           if (activeRequestsRef.current > 0) activeRequestsRef.current -= 1;
-          setState((prev) => ({ isProcessing: activeRequestsRef.current > 0, lastError: error.message }));
+          setState(() => ({ isProcessing: activeRequestsRef.current > 0, lastError: error.message }));
           return;
         }
         console.error('[FAIL] Failed to send message:', error);

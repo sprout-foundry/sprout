@@ -10,10 +10,10 @@ import { NATIVE_CHAT_ENABLED } from '../services/nativeChatStubs/nativeChatFlag'
 import { fetchChatRunning } from '../services/runStatus';
 import { WebSocketService } from '../services/websocket';
 import { isRunEndingError, onChatReplay, PENDING_EVENTS_CAP } from '../utils/chatReplay';
-import { noteRunStarted, runEpoch } from '../utils/runEpoch';
 import { debugLog } from '../utils/log';
 import { appendCappedLog } from '../utils/logCap';
 import { trimMessages } from '../utils/messageWindow';
+import { noteRunStarted, runEpoch } from '../utils/runEpoch';
 import { createLogEntry, type EventHandlerContext } from './webSocketEventHelpers';
 import {
   handleAskUserRequest,

@@ -190,14 +190,15 @@ describe('SproutWorkspace source control and search views (wasm host)', () => {
     await within(view).findByTitle('src/changed.ts', {}, { timeout: 15000 });
     expect(browserGit.ops.some(({ op }) => op === 'status')).toBe(true);
 
-    // Browser git cannot unstage: the action is offered disabled.
-    const stagedRow = within(view).getByTitle('src/staged.ts');
+    // Browser git cannot unstage: the action is offered disabled. The staged
+    // row can land a render after the modified one, so wait for it too.
+    const stagedRow = await within(view).findByTitle('src/staged.ts');
     expect(within(stagedRow).getByTitle('Not available in browser mode')).toBeDisabled();
     expect(within(view).queryByRole('tab', { name: /Worktrees/ })).not.toBeInTheDocument();
     // Browser git has no commit-message generation, so the action is not offered.
     expect(within(view).queryByRole('button', { name: 'Generate commit message' })).not.toBeInTheDocument();
 
-    fireEvent.change(within(view).getByLabelText('Commit message'), { target: { value: 'From the browser' } });
+    fireEvent.change(await within(view).findByLabelText('Commit message'), { target: { value: 'From the browser' } });
     await act(async () => {
       fireEvent.click(within(view).getByRole('button', { name: 'Commit Changes' }));
     });

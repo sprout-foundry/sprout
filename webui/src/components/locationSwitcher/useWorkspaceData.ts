@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ApiService } from '../../services/api';
-import { getSSHProxyContext } from '../../services/clientSession';
+import { getSSHProxyContext, persistTabWorkspacePath } from '../../services/clientSession';
 import { applyWorkspaceRoot, refreshWorkspace, useWorkspaceState } from '../../services/workspaceStore';
 import { showThemedConfirm } from '../ThemedDialog';
 import { normalizePath } from './pathUtils';
@@ -234,6 +234,7 @@ export function useWorkspaceData({ isConnected }: UseWorkspaceDataProps): UseWor
         }
         const response = await apiService.current.setWorkspace(normalizedTarget);
         const nextWS = normalizePath(response.workspace_root || normalizedTarget);
+        persistTabWorkspacePath(nextWS);
         void applyWorkspaceRoot(nextWS, response.daemon_root);
         if (response.ssh_context?.is_remote && response.ssh_context.host_alias) {
           const next = {

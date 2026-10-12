@@ -9,7 +9,9 @@
 import { useCallback, useMemo, useRef } from 'react';
 import { ApiService } from '../services/api';
 import type { WorkspaceResponse } from '../services/api/types';
+import { persistTabWorkspacePath } from '../services/clientSession';
 import { applyWorkspaceRoot, refreshWorkspace, useWorkspaceState } from '../services/workspaceStore';
+import { consentToHomeWorkspace } from '../services/workspaceSync';
 
 /* ── Public types ─────────────────────────────────────────────────── */
 
@@ -88,6 +90,8 @@ export interface UseWorkspaceResult {
   homeDir: string;
   isLoading: boolean;
   setWorkspace: (path: string, consentHome?: boolean) => Promise<void>;
+  /** Consent to the home directory, unless a project was selected meanwhile. */
+  consentHome: () => Promise<void>;
   refresh: () => Promise<void>;
 }
 
@@ -115,6 +119,7 @@ export function useWorkspace(): UseWorkspaceResult {
   const setWorkspace = useCallback(async (path: string, consentHome?: boolean) => {
     try {
       const data = await apiService.current.setWorkspace(path, consentHome);
+      persistTabWorkspacePath(data.workspace_root || path);
       void applyWorkspaceRoot(data.workspace_root || path, data.daemon_root);
       // Reload the page so the whole app picks up the new workspace
       window.setTimeout(() => window.location.reload(), 300);
@@ -125,5 +130,9 @@ export function useWorkspace(): UseWorkspaceResult {
     }
   }, []);
 
-  return { workspaceInfo, homeDir: workspaceInfo.home_dir, isLoading, setWorkspace, refresh };
+  const consentHome = useCallback(async () => {
+    await consentToHomeWorkspace(setWorkspace);
+  }, [setWorkspace]);
+
+  return { workspaceInfo, homeDir: workspaceInfo.home_dir, isLoading, setWorkspace, consentHome, refresh };
 }

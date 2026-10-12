@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react';
-import { ApiService } from '../services/api';
 import { getAppStateStorageKey } from '../services/appStatePersistence';
-import { persistTabWorkspacePath } from '../services/clientSession';
+import { getTabWorkspacePath, persistTabWorkspacePath } from '../services/clientSession';
 import {
   saveLayoutSnapshot,
   loadLayoutSnapshot,
@@ -23,6 +22,7 @@ import {
   type BufferLayoutEntry,
   type LayoutSnapshot,
 } from '../services/layoutPersistence';
+import { ensureWorkspace } from '../services/workspaceStore';
 import type { EditorBuffer, EditorPane, PaneLayout, PaneSize } from '../types/editor';
 import { resolveEditorFilePath, getLSPClientService } from '../services/lspClientService';
 import { debugLog } from '../utils/log';
@@ -236,15 +236,19 @@ export function useLayoutPersistence({
     }
   }, [buffersRef, panesRef, setBuffers, setPanes, setActivePaneId, setActiveBufferId, setPaneLayout, setPaneSizes]);
 
-  // Auto-restore layout on first mount — wait for workspace path to be set first
-  // so that restoreLayout loads the correct workspace-scoped snapshot.
+  // Auto-restore layout on first mount, once the workspace is known.
+  //
+  // The snapshot is keyed by the tab's remembered workspace path, which this
+  // fetch must NOT overwrite: at boot the server can still be at its default
+  // root (the home directory) while startup restores the tab's project, and
+  // persisting that interim root here replaced the saved project path — the
+  // restore then saw nothing to restore. The remembered path only changes
+  // through an explicit selection or a workspace_changed event.
   useEffect(() => {
     let cancelled = false;
-    ApiService.getInstance()
-      .getWorkspace()
+    ensureWorkspace()
       .then((ws) => {
         if (!cancelled && ws.workspace_root) {
-          persistTabWorkspacePath(ws.workspace_root);
           // Seed the LSP client service's cached workspace root so path
           // resolution (relative → absolute) works before any LSP client connects.
           getLSPClientService().setWorkspaceRoot(ws.workspace_root);
@@ -425,8 +429,14 @@ export function useLayoutPersistence({
   useEffect(() => {
     const handleWorkspaceChanged = (event: Event) => {
       const detail = (event as CustomEvent).detail;
-      if (detail?.workspaceRoot) {
-        persistTabWorkspacePath(detail.workspaceRoot);
+      const nextRoot = typeof detail?.workspaceRoot === 'string' ? detail.workspaceRoot : '';
+      if (nextRoot) {
+        getLSPClientService().setWorkspaceRoot(nextRoot);
+        // The server returning to the workspace this tab already shows (a
+        // restore after a reconnect or daemon restart) leaves the tab's
+        // buffers and saved layout valid; only a different root clears them.
+        if (nextRoot === getTabWorkspacePath()) return;
+        persistTabWorkspacePath(nextRoot);
       }
       // Clear chat persistence so stale messages from old workspace don't load
       window.localStorage.removeItem(getAppStateStorageKey());

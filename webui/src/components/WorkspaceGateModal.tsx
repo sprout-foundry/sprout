@@ -6,6 +6,7 @@ import { ApiService, type Starter } from '../services/api';
 import { createWorkspaceNative, pickWorkspaceNative } from '../services/nativeFs';
 import { setWorkspaceGateOpen } from '../services/workspaceGate';
 import { refreshWorkspace } from '../services/workspaceStore';
+import { consentToHomeWorkspace } from '../services/workspaceSync';
 import WorkspaceBrowser from './WorkspaceBrowser';
 import WorkspacePicker from './WorkspacePicker';
 import './WorkspaceGateModal.css';
@@ -305,10 +306,10 @@ function WorkspaceGateModal({
               className="workspace-gate-home-btn"
               type="button"
               onClick={() =>
-                // Same api-service path as the desktop variant's consent
-                // handler in AppContent: setWorkspace POSTs /api/workspace
-                // with consent_home: true and reloads on success.
-                run('consent', () => ApiService.getInstance().setWorkspace(workspaceInfo.workspace_root, true))
+                // Same path as the desktop variant's consent handler in
+                // AppContent: re-read the workspace, then POST
+                // /api/workspace with consent_home: true if still needed.
+                run('consent', () => consentToHomeWorkspace())
               }
               disabled={pending !== null}
               data-testid="workspace-gate-home-btn"

@@ -109,6 +109,57 @@ func (a *Agent) ClearInterrupt() {
 	}
 }
 
+// ensureLiveInterruptCtx returns a usable interrupt context: when the
+// current one is already canceled and no query holds the guard, it swaps in
+// a fresh context before returning so callers never receive a dead ctx.
+//
+// The stale-canceled state is reachable in practice: TriggerInterrupt
+// cancels the ctx, and the only reset points are resetInterruptForNewQuery
+// (start of a normal query) and ClearInterrupt (currently only reachable
+// from Agent.HandleInterrupt, which has no production wiring). Anything
+// that runs an LLM call outside a normal query turn —
+// the /compact, /review, /review-deep, and /shell slash commands — reads
+// InterruptCtx() directly, so after a stopped turn its summarize/review
+// call fails instantly with "context canceled" until an unrelated normal
+// query happens to reset it. Returning a fresh ctx here heals that state
+// lazily; an in-flight query is never disturbed because the guard check
+// refuses to swap while one is running.
+func (a *Agent) ensureLiveInterruptCtx() context.Context {
+	a.interruptMu.Lock()
+	ctx := a.interruptCtx
+	if ctx == nil {
+		base := a.parentInterruptCtx
+		if base == nil {
+			base = context.Background()
+		}
+		newCtx, newCancel := context.WithCancel(base)
+		a.interruptCtx, a.interruptCancel = newCtx, newCancel
+		a.interruptMu.Unlock()
+		return newCtx
+	}
+	select {
+	case <-ctx.Done():
+		// Already canceled. Leave it alone while a query is running — its
+		// in-flight calls must keep observing the cancellation.
+		if a.queryInProgress.Load() {
+			a.interruptMu.Unlock()
+			return ctx
+		}
+		base := a.parentInterruptCtx
+		if base == nil {
+			base = context.Background()
+		}
+		newCtx, newCancel := context.WithCancel(base)
+		a.interruptCtx = newCtx
+		a.interruptCancel = newCancel
+		a.interruptMu.Unlock()
+		return newCtx
+	default:
+		a.interruptMu.Unlock()
+		return ctx
+	}
+}
+
 // resetInterruptForNewQuery ensures the interruptCtx is fresh at the start of a new ProcessQuery.
 // For subagents, derives from parentInterruptCtx so cancelling the parent still propagates.
 func (a *Agent) resetInterruptForNewQuery() {

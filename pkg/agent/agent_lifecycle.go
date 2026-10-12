@@ -119,7 +119,18 @@ func (a *Agent) SetInterruptHandler(ch chan struct{}) {
 
 // InterruptCtx returns the agent's interrupt context so child operations
 // (e.g., tool execution) can derive from it and respect user cancellations.
+//
+// When the stored context is stale-canceled (a previous turn was
+// interrupted and no query is running to reset it) this returns a fresh
+// context instead — see ensureLiveInterruptCtx. Snapshotting the dead
+// context here made every post-interrupt slash command that takes a
+// context (/compact, /review, /review-deep, /shell) fail instantly with
+// "context canceled".
+//
+// Healing is not sticky: a between-turns call clears the interrupted
+// state, so a later CheckForInterrupt() no longer observes the earlier
+// interrupt. Callers that must remember an interrupt should capture it at
+// the point it happens, not re-read it between turns.
 func (a *Agent) InterruptCtx() context.Context {
-	ctx, _ := a.snapshotInterrupt()
-	return ctx
+	return a.ensureLiveInterruptCtx()
 }

@@ -2,6 +2,7 @@ package commands
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -776,6 +777,32 @@ func TestCompactCommand_Execute_NilAgent(t *testing.T) {
 	err := c.Execute(nil, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "agent not available")
+}
+
+// TestCompactCommand_ContextWiring pins the context-selection contract:
+// the context the registry wired via SetContext wins over a fresh
+// InterruptCtx() read. The registry wires chatAgent.InterruptCtx() before
+// every Execute (commands.go), and the agent side heals a stale-cancelled
+// context there (pkg/agent InterruptCtx → ensureLiveInterruptCtx) — so
+// after a stopped turn /compact gets a live context instead of failing
+// instantly with "LLM summarization failed: context canceled".
+func TestCompactCommand_ContextWiring(t *testing.T) {
+	a := agent.NewTestAgent()
+
+	wired, wiredCancel := context.WithCancel(context.Background())
+	defer wiredCancel()
+
+	c := &CompactCommand{}
+	c.SetContext(wired)
+	assert.Equal(t, wired, c.getContext(a), "wired context must win over a fresh InterruptCtx read")
+
+	cNoWired := &CompactCommand{}
+	fallback := cNoWired.getContext(a)
+	require.NotNil(t, fallback)
+	assert.NoError(t, fallback.Err(), "InterruptCtx fallback should be live")
+
+	cNoAgent := &CompactCommand{}
+	assert.Equal(t, context.Background(), cNoAgent.getContext(nil))
 }
 
 func TestCompactCommand_Execute_MiddleTooSmallShortCircuits(t *testing.T) {

@@ -2,12 +2,14 @@
  * The composed space shell's terminal (own mode, no `layout`), per host.
  *
  * - A host with `capabilities.localTerminal` and no in-browser agent gets the
- *   PTY terminal beside the shell, which Ctrl+` inside the workspace toggles.
- * - A host whose agent runs in the browser keeps the shell's in-browser
- *   terminal (the shell is told there is no local terminal), even if it also
- *   declares `localTerminal`.
- * - A host with neither gets no terminal (the shell is told not to mount its
- *   in-browser one) and no toggle handler.
+ *   PTY terminal docked under the shell, which Ctrl+` inside the workspace
+ *   toggles.
+ * - A host whose agent runs in the browser gets the docked terminal on the
+ *   in-browser shell, even if it also declares `localTerminal`.
+ * - A host with neither gets no terminal and no toggle handler.
+ *
+ * In every case the shell is told not to mount its own viewport-fixed
+ * in-browser terminal: the docked one takes its place.
  *
  * The docked terminal and the Code shell are stubs that expose their props;
  * the provider stack, the hotkey scope and the composition are the real ones.
@@ -48,14 +50,10 @@ vi.mock('../services/api', () => {
   };
   return { ApiService: { getInstance: () => instance } };
 });
-vi.mock('../components/Terminal', () => ({
-  default: (props: { isExpanded?: boolean; isConnected?: boolean; hideWhenCollapsed?: boolean }) => (
-    <div
-      data-testid="composed-pty-terminal"
-      data-expanded={String(!!props.isExpanded)}
-      data-connected={String(props.isConnected ?? true)}
-      data-hidden-collapsed={String(!!props.hideWhenCollapsed)}
-    />
+vi.mock('./WorkspaceDockedTerminal', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./WorkspaceDockedTerminal')>()),
+  WorkspaceDockedTerminal: (props: { backend: string; expanded: boolean }) => (
+    <div data-testid="composed-docked-terminal" data-backend={props.backend} data-expanded={String(props.expanded)} />
   ),
 }));
 vi.mock('../workspaces/CodeShell', () => ({
@@ -118,37 +116,40 @@ afterEach(() => {
 });
 
 describe('SproutWorkspace composed shell terminal', () => {
-  it('mounts the PTY terminal for a local-terminal host and toggles it with Ctrl+` inside the workspace', async () => {
+  it('docks the PTY terminal for a local-terminal host and toggles it with Ctrl+` inside the workspace', async () => {
     setActiveHost(ptyHost());
     renderWorkspace(ptyHost());
     const shell = await screen.findByTestId('composed-code-shell');
     expect(shell).toHaveAttribute('data-local-terminal', 'true');
-    const terminal = screen.getByTestId('composed-pty-terminal');
-    expect(terminal).toHaveAttribute('data-connected', 'true');
-    expect(terminal).toHaveAttribute('data-hidden-collapsed', 'true');
+    expect(shell).toHaveAttribute('data-in-browser-terminal', 'false');
+    const terminal = screen.getByTestId('composed-docked-terminal');
+    expect(terminal).toHaveAttribute('data-backend', 'pty');
     expect(terminal).toHaveAttribute('data-expanded', 'false');
     expect(hasCommandHandler('toggle_terminal')).toBe(true);
+    expect(hasCommandHandler('clear_terminal')).toBe(true);
 
     await waitFor(() => expect(hotkeysLoaded.count).toBeGreaterThan(0));
     await act(async () => {
       await Promise.resolve();
     });
     fireEvent.keyDown(shell, TOGGLE_TERMINAL);
-    expect(screen.getByTestId('composed-pty-terminal')).toHaveAttribute('data-expanded', 'true');
+    expect(screen.getByTestId('composed-docked-terminal')).toHaveAttribute('data-expanded', 'true');
     expect(screen.getByTestId('composed-code-shell')).toHaveAttribute('data-terminal-expanded', 'true');
 
     fireEvent.keyDown(screen.getByTestId('composed-code-shell'), TOGGLE_TERMINAL);
-    expect(screen.getByTestId('composed-pty-terminal')).toHaveAttribute('data-expanded', 'false');
+    expect(screen.getByTestId('composed-docked-terminal')).toHaveAttribute('data-expanded', 'false');
   });
 
-  it('keeps the in-browser terminal for a host whose agent runs in the browser', async () => {
+  it('docks the in-browser terminal for a host whose agent runs in the browser', async () => {
     setActiveHost(wasmHost());
     renderWorkspace(wasmHost());
     const shell = await screen.findByTestId('composed-code-shell');
     expect(shell).toHaveAttribute('data-local-terminal', 'false');
-    expect(shell).toHaveAttribute('data-in-browser-terminal', 'true');
-    expect(screen.queryByTestId('composed-pty-terminal')).not.toBeInTheDocument();
+    expect(shell).toHaveAttribute('data-in-browser-terminal', 'false');
+    expect(screen.getByTestId('composed-docked-terminal')).toHaveAttribute('data-backend', 'wasm');
     expect(hasCommandHandler('toggle_terminal')).toBe(true);
+    // The in-browser shell has no splits or process control.
+    expect(hasCommandHandler('clear_terminal')).toBe(false);
   });
 
   it('mounts no terminal and no toggle for a host with neither', async () => {
@@ -158,7 +159,7 @@ describe('SproutWorkspace composed shell terminal', () => {
     const shell = await screen.findByTestId('composed-code-shell');
     expect(shell).toHaveAttribute('data-local-terminal', 'false');
     expect(shell).toHaveAttribute('data-in-browser-terminal', 'false');
-    expect(screen.queryByTestId('composed-pty-terminal')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('composed-docked-terminal')).not.toBeInTheDocument();
     expect(hasCommandHandler('toggle_terminal')).toBe(false);
   });
 });

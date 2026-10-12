@@ -5,10 +5,10 @@ import type { OpenWorkspaceBuffer, SidebarGitPanelProps } from '../components/gi
 import { buildGitPanelProps } from '../components/git/gitPanelProps';
 import SidebarGitSection from '../components/SidebarGitSection';
 import { useSproutFetch } from '../contexts/SproutAdapterContext';
-import { useHostCapabilities } from '../host';
 import { useGitHandlers } from '../hooks/useGitHandlers';
 import { useGitWorkspace } from '../hooks/useGitWorkspace';
-import type { GitDiffResponse } from '../hooks/useGitWorkspace';
+import type { GitDiffResponse, UseGitWorkspaceResult } from '../hooks/useGitWorkspace';
+import { useHostCapabilities } from '../host';
 import { requestOpenInEditor } from './openInEditor';
 import '../components/Sidebar.css';
 import './WorkspaceGitView.css';
@@ -124,15 +124,10 @@ function ConnectedGitView({
     onRunReview: undefined,
   };
 
-  const { gitStatus, hasLoadedGitStatus, isGitLoading, gitActionError, refreshGitStatus } = gitWorkspace;
-  if (hasLoadedGitStatus && !isGitLoading && !gitStatus) {
+  if (isMissingRepository(gitWorkspace)) {
     return (
       <div className={rootClass} data-testid="workspace-git">
-        <GitEmptyState
-          title="No git repository"
-          detail={gitActionError ?? 'This workspace is not a git repository.'}
-          onRefresh={() => void refreshGitStatus()}
-        />
+        <MissingRepositoryState workspace={gitWorkspace} />
       </div>
     );
   }
@@ -175,6 +170,50 @@ function ConnectedGitView({
           </div>
         </section>
       )}
+    </div>
+  );
+}
+
+/** Whether the git backend answered and reported no repository (no history to show). */
+function isMissingRepository(workspace: UseGitWorkspaceResult): boolean {
+  return workspace.hasLoadedGitStatus && !workspace.isGitLoading && !workspace.gitStatus;
+}
+
+function MissingRepositoryState({ workspace }: { workspace: UseGitWorkspaceResult }): JSX.Element {
+  return (
+    <GitEmptyState
+      title="No git repository"
+      detail={workspace.gitActionError ?? 'This workspace is not a git repository.'}
+      onRefresh={() => void workspace.refreshGitStatus()}
+    />
+  );
+}
+
+/**
+ * The Source control section for git state the caller owns (the composed
+ * space shell runs one `useGitWorkspace` for the section, the status bar and
+ * the editor's diff tabs): the app's git section, or a clear empty state
+ * once the backend reports no repository.
+ */
+export function WorkspaceGitStatusPanel({
+  workspace,
+  panel,
+}: {
+  workspace: UseGitWorkspaceResult;
+  panel: SidebarGitPanelProps;
+}): JSX.Element {
+  if (isMissingRepository(workspace)) {
+    return (
+      <div className="sprout-workspace-git" data-testid="workspace-git">
+        <MissingRepositoryState workspace={workspace} />
+      </div>
+    );
+  }
+  return (
+    <div className="sprout-workspace-git" data-testid="workspace-git">
+      <div className="sprout-workspace-git__panel">
+        <SidebarGitSection gitPanel={panel} />
+      </div>
     </div>
   );
 }

@@ -1,11 +1,11 @@
-import { ChevronUp, ChevronDown } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import './Terminal.css';
+import { createPortal } from 'react-dom';
 import { usePersistedNumber } from '../hooks/usePersistedPref';
 import { useTerminalWorkbench } from '../hooks/useTerminalWorkbench';
 import { type UIScale } from '../hooks/useUIScale';
 import { useVerticalDragResize } from '../hooks/useVerticalDragResize';
-import { createPortal } from 'react-dom';
+import { TerminalCollapseButton, TerminalCollapsedStrip } from './TerminalDockControls';
 import {
   TERMINAL_HEIGHT_STORAGE_KEY,
   defaultTerminalHeight,
@@ -180,30 +180,11 @@ function Terminal({
         )}
 
         {!isExpanded && (
-          <button
-            type="button"
-            className="terminal-collapsed-strip"
-            onClick={toggleExpanded}
-            title="Expand terminal (Ctrl+`)"
-            aria-label="Expand terminal"
-            aria-expanded={false}
-            data-testid="terminal-toggle"
-          >
-            <span className="terminal-collapsed-mark" aria-hidden="true">
-              $
-            </span>
-            {focusedSession && (
-              <span className="terminal-collapsed-session" title={focusedSession.name}>
-                <span className="terminal-collapsed-sep" aria-hidden="true">
-                  ·
-                </span>
-                <span className="terminal-collapsed-session-name">{focusedSession.name}</span>
-                {totalSessions > 1 && <span className="terminal-collapsed-count">{totalSessions}</span>}
-              </span>
-            )}
-            <span className="terminal-collapsed-spacer" />
-            <ChevronUp size={16} aria-hidden="true" data-testid="terminal-collapse" />
-          </button>
+          <TerminalCollapsedStrip
+            onExpand={toggleExpanded}
+            sessionName={focusedSession?.name}
+            totalSessions={totalSessions}
+          />
         )}
 
         {/* Body */}
@@ -212,17 +193,7 @@ function Terminal({
           isConnected={isConnected}
           isExpanded={isExpanded}
           isActive={hasActivated || isExpanded}
-          trailingActions={
-            <button
-              className="terminal-btn toggle-btn"
-              onClick={toggleExpanded}
-              title="Collapse terminal (Ctrl+`)"
-              aria-label="Collapse terminal"
-              aria-expanded={isExpanded}
-            >
-              <ChevronDown size={16} />
-            </button>
-          }
+          trailingActions={<TerminalCollapseButton onCollapse={toggleExpanded} expanded={isExpanded} />}
         />
       </div>
     </div>,

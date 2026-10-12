@@ -12,7 +12,8 @@ import type { WorkspaceModeContext, WorkspaceModeId } from '../workspaces/regist
 import type { WorkspaceShellProps } from '../workspaces/shell';
 import { resetHostAgentBackend, wireHostAgentBackend } from './hostAgentBackend';
 import { useSproutWorkspaceChatTransport } from './SproutWorkspaceChat';
-import { ArrangedViews, ComposedSpaceShell, usePreviewGatedArrangement } from './SproutWorkspaceUnits';
+import { ComposedSpaceShell } from './SproutWorkspaceSpaceShell';
+import { ArrangedViews, usePreviewGatedArrangement } from './SproutWorkspaceUnits';
 import { ViewsLayout, resolveViewsArrangement } from './ViewsLayout';
 import type { ViewsArrangement, ViewKind } from './ViewsLayout';
 import { WorkspaceChatProvider } from './WorkspaceChatContext';
@@ -65,13 +66,17 @@ import { WorkspaceEditorProvider } from './WorkspaceEditorContext';
  *   registry's own render path — the space's chrome and surface as the app
  *   composes them — so mounting a space here is the space that ships, not a
  *   second implementation of it. It is driven by the `shellProps` the host/app
- *   supplies; in own mode without `shellProps` the composition feeds it from
- *   its own chat and editor units, so Code and Design have a working chat and
- *   editor with no further wiring.
+ *   supplies; in own mode without `shellProps` the composition renders the
+ *   app's space chrome around it (`ComposedSpaceShell`: the project sidebar
+ *   with Files, Search and Source control, the docked terminal, the app's
+ *   editor and view commands) and feeds it from its own chat, editor and git
+ *   units — the full IDE, with no further wiring. This is the recommended
+ *   mount for a host that wants the code or design space.
  * - The `layout` arrangement: when a host wants its own placement of the
  *   individual views (chat, changes, files, editor, preview), it passes an
  *   SP-155 `ViewsArrangement` and the space's content is rendered through
- *   `ViewsLayout` instead of the space's built-in shell.
+ *   `ViewsLayout` instead of the space's built-in shell. It is for custom or
+ *   minimal surfaces; the arranged views carry none of the space's chrome.
  *
  * `project` is the project this workspace is for. It is a minimal, host-facing
  * description; the web UI models the same thing as a workspace root
@@ -130,7 +135,9 @@ export interface SproutWorkspaceProps {
   /**
    * A host-supplied arrangement of the individual views. When present, the
    * space's content is rendered through `ViewsLayout` with it instead of the
-   * space's registered shell.
+   * space's registered shell. For custom or minimal surfaces: omit it for the
+   * full space (sidebar, editor tabs, conversation, docked terminal, status
+   * bar).
    */
   layout?: ViewsArrangement;
   /**
@@ -204,11 +211,11 @@ export interface SproutWorkspaceProps {
   /**
    * The resolved space shell's props (the data the app root supplies today).
    * Used by the default space-shell path; not used when `layout` is supplied.
-   * Omitted in own mode, the composition assembles them from its chat and
-   * editor units (with inert values for the app chrome it does not own: the
-   * project sidebar, git status, deploys); supplied, they win and the
-   * composition's units are not mounted. Omitted in ambient mode, the shell
-   * renders against empty defaults.
+   * Omitted in own mode, the composition assembles them from its chat, editor
+   * and git units and renders the app's space chrome around the shell (the
+   * project sidebar, the docked terminal; deploys are not offered); supplied,
+   * they win and the composition's units and chrome are not mounted. Omitted
+   * in ambient mode, the shell renders against empty defaults.
    */
   shellProps?: WorkspaceShellProps;
   /** Whether the workspace root has a `design/` tree — the space availability context. */
@@ -421,6 +428,7 @@ export function SproutWorkspace({
                 chatOverrides={chatOverrides}
                 hasDesignTree={hasDesignTree}
                 workspaceRoot={project.root}
+                projectName={projectNameOf(project)}
               />
               {/* The layout path mounts the palette through its arrangement
                   (the default overlay); the composed shell mounts it unless
@@ -534,6 +542,20 @@ SproutWorkspace.displayName = 'SproutWorkspace';
  */
 function chatSessionsProjectOf(project: SproutProject): string {
   return project.repoUrl?.trim() || project.id.trim();
+}
+
+/**
+ * The name the composed shell's sidebar titles the project with: the host's
+ * `name`, else the last segment of its root, repository URL or id.
+ */
+function projectNameOf(project: SproutProject): string {
+  if (project.name?.trim()) return project.name.trim();
+  const source = project.root || project.repoUrl || project.id;
+  const segments = source
+    .replace(/\.git$/, '')
+    .split('/')
+    .filter(Boolean);
+  return segments[segments.length - 1] ?? source;
 }
 
 export default SproutWorkspace;

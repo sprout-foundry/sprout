@@ -1,6 +1,7 @@
 import { FileTree } from '@sprout/ui';
 import type { FileTreeHandle, FileTreeProps } from '@sprout/ui';
-import { useEffect, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import { useFileTreeAutoRefresh } from '../hooks/useFileTreeAutoRefresh';
 import { ADAPTER_INSTALLED_EVENT } from '../services/apiAdapter';
 
 /** Fired by the startup repo import once the repository is in the workspace. */
@@ -17,22 +18,37 @@ const REPO_IMPORTED_EVENT = 'sprout:repo-imported';
  * before the host project's repository has been imported (so the store is
  * still empty). Nothing would list it again, leaving the tree empty or stale
  * for the session. It therefore reloads, in place, when an adapter is
- * installed and when the startup repo import completes.
+ * installed and when the startup repo import completes — and, as the app's
+ * sidebar tree does, after the agent, a shell command or a save changes the
+ * workspace's files.
+ *
+ * The ref is the tree's handle (`refresh`, `revealFile`).
  */
-export function WorkspaceFileTreeView(props: FileTreeProps): JSX.Element {
-  const treeRef = useRef<FileTreeHandle>(null);
+export const WorkspaceFileTreeView = forwardRef<FileTreeHandle, FileTreeProps>(
+  function WorkspaceFileTreeView(props, ref): JSX.Element {
+    const treeRef = useRef<FileTreeHandle>(null);
+    useImperativeHandle(
+      ref,
+      () => ({
+        refresh: (options) => treeRef.current?.refresh(options),
+        revealFile: (path) => treeRef.current?.revealFile(path),
+      }),
+      [],
+    );
+    useFileTreeAutoRefresh(() => treeRef.current?.refresh({ quiet: true }));
 
-  useEffect(() => {
-    const reload = () => treeRef.current?.refresh({ quiet: true });
-    window.addEventListener(ADAPTER_INSTALLED_EVENT, reload);
-    window.addEventListener(REPO_IMPORTED_EVENT, reload);
-    return () => {
-      window.removeEventListener(ADAPTER_INSTALLED_EVENT, reload);
-      window.removeEventListener(REPO_IMPORTED_EVENT, reload);
-    };
-  }, []);
+    useEffect(() => {
+      const reload = () => treeRef.current?.refresh({ quiet: true });
+      window.addEventListener(ADAPTER_INSTALLED_EVENT, reload);
+      window.addEventListener(REPO_IMPORTED_EVENT, reload);
+      return () => {
+        window.removeEventListener(ADAPTER_INSTALLED_EVENT, reload);
+        window.removeEventListener(REPO_IMPORTED_EVENT, reload);
+      };
+    }, []);
 
-  return <FileTree ref={treeRef} {...props} />;
-}
+    return <FileTree ref={treeRef} {...props} />;
+  },
+);
 
 export default WorkspaceFileTreeView;

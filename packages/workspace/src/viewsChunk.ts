@@ -15,9 +15,11 @@ import '../../ui/src/components/ChatPanel.css';
 export * from '../../../webui/src/views/index';
 export { ViewsLayout } from '../../../webui/src/views/ViewsLayout';
 
-// The app's shell chrome (the header, the editor and context-panel columns,
-// the pane layout) is styled by the app stylesheet, which the app imports at
-// its root rather than from the components. The space shells render that
-// chrome, so the package carries the stylesheet too — after the views, as the
-// app orders it after its components.
+// The app's shell chrome is styled by stylesheets the app loads with its own
+// chrome rather than from the components the space shells render: the project
+// sidebar's (with the app's sidebar) and the header, editor and context-panel
+// columns' (the app stylesheet, imported at its root). The composed space
+// shell renders that chrome, so the package carries both — after the views,
+// in the order the app loads them.
+import '../../../webui/src/components/layered/Layered.css';
 import '../../../webui/src/App.css';

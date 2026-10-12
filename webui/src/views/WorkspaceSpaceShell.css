@@ -1,0 +1,86 @@
+/*
+ * The composed space shell: the app's layout — the project sidebar beside the
+ * space's main column, the terminal docked under that column — in flow inside
+ * the workspace root rather than against the viewport, so it fills whatever
+ * box the host gives the workspace and nothing escapes it.
+ */
+
+.sprout-workspace-shell {
+  /* The app's document typography (index.css/App.css `body`), which a host
+   * page does not carry. */
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+  background: var(--app-shell-bg);
+}
+
+.sprout-workspace-shell__sidebar {
+  height: 100%;
+}
+
+.sprout-workspace-shell__sidebar > .sidebar {
+  height: 100%;
+}
+
+.sprout-workspace-shell__rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  width: 40px;
+  padding-top: var(--space-2);
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border-subtle);
+}
+
+.sprout-workspace-shell__main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.sprout-workspace-shell__main > .main-content {
+  flex: 1;
+  min-height: 0;
+}
+
+.sprout-workspace-shell__terminal {
+  position: relative;
+  flex-shrink: 0;
+  max-height: 85%;
+}
+
+.sprout-workspace-shell__terminal[hidden] {
+  display: none;
+}
+
+.sprout-workspace-shell__terminal > .terminal-container {
+  position: relative;
+  inset: auto;
+  z-index: auto;
+  height: 100%;
+  min-height: 0;
+}
+
+/* Collapsed (a PTY terminal): the strip, with the panes kept mounted under it. */
+.sprout-workspace-shell__terminal:not(.sprout-workspace-shell__terminal--expanded) {
+  height: 42px;
+  overflow: hidden;
+}
+
+/* A workspace showing the full space fills its parent, so a host sizes the
+ * box it mounts the workspace in. */
+.sprout-workspace:has(> .sprout-workspace-shell) {
+  height: 100%;
+}

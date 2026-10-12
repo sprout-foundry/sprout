@@ -86,16 +86,18 @@ export function ProjectSpace({ repoUrl }: { repoUrl: string }) {
 - `host` should be referentially stable (a module-level object or a memoized
   one): the composition registers it as the active host and opens the events
   transport when it changes.
-- Without `layout` or `shellProps`, the space's own shell renders and the
-  composition feeds it from its chat and editor units: Code gets its chat,
-  editor tabs and context panel; Design gets its agent chat. The app chrome
-  the composition does not own — the project sidebar, git status in the
-  status bar, deploys — renders inert. A host that owns that chrome passes
-  `shellProps` (the full `WorkspaceShellProps`) instead, and then supplies the
-  chat itself.
+- Without `layout` or `shellProps`, the workspace renders the space the way
+  the standalone app does — sidebar, editor tabs, conversation, docked
+  terminal, status bar — fed from its own chat, editor and git units. This is
+  the recommended mount for the code and design spaces; see
+  [The full space (no layout)](#the-full-space-no-layout). A host that owns
+  that chrome passes `shellProps` (the full `WorkspaceShellProps`) instead,
+  and then supplies the chat itself.
 - `layout` (an SP-155 `ViewsArrangement`) replaces the space shell with the
-  host's own placement of the individual views — see
-  [The chat unit](#the-chat-unit) and [Files and editor](#files-and-editor).
+  host's own placement of the individual views, without the space's chrome.
+  It is for custom or minimal surfaces (a chat beside a preview, a file tree
+  in a side panel) — see [The chat unit](#the-chat-unit) and
+  [Files and editor](#files-and-editor).
 
 Do not wrap an own-mode `SproutWorkspace` in `SproutProviders` or
 `HostProvider`: it builds its own stack, and a second one would open a second
@@ -128,6 +130,75 @@ navigation intents, notifications, chrome slots, theme and capabilities.
 React and React DOM are peer dependencies; the host provides them. Heavy
 parts (the editor, the in-browser agent, space-specific code) load when a
 space opens, not when the package is imported.
+
+## The full space (no layout)
+
+Mounted without `layout` (and without `shellProps`), an own-mode
+`SproutWorkspace` renders the space with the standalone app's own components,
+so a host gets the same IDE the app shows with no wiring:
+
+```tsx
+import "@sprout-foundry/design/tokens.css";
+import "@sprout-foundry/design/reset.css";
+import "@sprout-foundry/workspace/styles.css";
+import { SproutWorkspace } from "@sprout-foundry/workspace/views";
+
+// No `layout`: the full space. It fills the box it is given.
+<div style={{ height: "100%" }}>
+  <SproutWorkspace
+    project={{ id: repoUrl, repoUrl, name: "widgets" }}
+    space="code" // or "design"
+    host={myHost}
+    wasmBase="/assets/sprout-wasm"
+  />
+</div>;
+```
+
+What it renders, left to right and top to bottom:
+
+- **The project sidebar** — the app's project navigation, titled with
+  `project.name` (else the last segment of `root`, `repoUrl` or `id`):
+  the conversations (select, create, rename, delete through the chat unit),
+  then the space's sections, each a panel with its siblings one click away.
+  Code lists **Files** (the file tree; selecting a file opens it in the
+  editor, and the tree reloads as the agent, a shell command or the startup
+  repo import changes the workspace), **Search** (find and replace across the
+  workspace; a result opens at its line) and **Source control** (status,
+  staging, commit, branches, pull/push, history; diffs open as editor tabs).
+  Design lists Screens, Flows, Tokens and Feedback. The sidebar resizes,
+  collapses to a rail (its own button, Ctrl/Cmd+\\, `toggle_sidebar`) and
+  answers `open_search` and "reveal in file list".
+- **The space** — Code renders the app's Code shell: the header (search, the
+  menus, which list only commands something handles), the editor with tabs —
+  the conversation in its own tab beside open files, diffs and reviews — the
+  context panel with the agent's changes, and the status bar (the project,
+  the branch, and for the active file the cursor position, language,
+  encoding, line ending and indentation). Design renders the design surface
+  with its agent chat.
+- **The terminal**, docked under the space: the app's terminal workbench
+  (tabs, splits, shell picker) in flow inside the workspace, never over the
+  host page. Ctrl/Cmd+\` and the palette's Toggle Terminal open and close it.
+- **The command palette** (unless `commandPalette={false}`) and the app's
+  editor, tab and view commands, registered so the scoped hotkeys, the menus
+  and the palette reach them from inside the workspace.
+
+`chatOverrides` applies to the conversation here as on the layout path.
+
+**What gates what.** Parts without a backend are not rendered rather than
+shown inert:
+
+| Part | Shown when |
+| --- | --- |
+| Source control, the status bar's branch, diff and review tabs | `capabilities.git`. Worktrees also need `serverGit`; the review needs a backend (not browser git). Without a repository the section says so ("No git repository") and offers Refresh. |
+| Terminal (PTY), collapsed to a strip | `capabilities.localTerminal` on a host whose agent does not run in the browser |
+| Terminal (in-browser shell), hidden until opened; a Terminal entry in the sidebar | `transport.agent.kind: "wasm"` |
+| No terminal, no toggle | neither |
+| The preview panel and its header toggle | `capabilities.preview` |
+| The agent-changes panel | `capabilities.agentChanges` |
+
+The workspace fills its parent (`height: 100%`), so size the box you mount it
+in. Import the design tokens and reset as above — the shell's spacing,
+type and controls are styled through them (see [Styles](#styles)).
 
 ## The chat unit
 
@@ -497,11 +568,12 @@ that is the host's CSS. `WorkspaceTerminalView` is exported for hosts that
 place it themselves under the provider stack.
 
 Without a `layout`, the composed space shell picks its terminal by the same
-rule: an in-browser-agent host keeps the Code shell's in-browser terminal, and
-a `localTerminal` host gets the PTY terminal docked at the bottom of the page,
-as in the standalone app. Either is hidden until opened — ``Ctrl+` `` inside the
-workspace, or Toggle Terminal in the command palette — and a host with
-neither gets no terminal and no toggle.
+rule and docks it under the space, inside the workspace (never fixed to the
+page): a `localTerminal` host gets the PTY terminal collapsed to a strip, as
+in the standalone app, and an in-browser-agent host gets the in-browser shell,
+hidden until opened (the sidebar's Terminal entry). Either toggles with
+``Ctrl+` `` inside the workspace or Toggle Terminal in the command palette; a
+host with neither gets no terminal and no toggle.
 
 ## Command palette
 

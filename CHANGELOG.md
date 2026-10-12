@@ -4,7 +4,8 @@ All notable changes to Sprout will be documented in this file.
 
 ## [Unreleased]
 
-- fix(workspace): the package stylesheet now carries the app shell's styles (the header, editor and context-panel columns, pane layout) and the chat panel's, which the space shell and the arranged chat render with; they were missing from the artifact, so embedded surfaces rendered unstyled.
+- feat(workspace): an own-mode `SproutWorkspace` mounted without `layout` renders the full code (or design) space as the standalone app shows it: the project sidebar with Files (the file tree; a selection opens an editor tab), Search (results open at their line) and Source control (status, staging, commit, branches, history; diffs open as editor tabs; a clear "No git repository" state), the editor with tabs and the conversation, the agent-changes panel, the status bar with the branch and the active file's position and language, and the terminal docked under the space (PTY or in-browser shell) toggled with Ctrl/Cmd+` and the palette. It is assembled from the app's own components (`ProjectNav`, `CodeShell`/`DesignShell`, `TerminalWorkbench`, the app's git workspace and editor commands). Parts without a backend are not rendered: Source control needs `capabilities.git`, the terminal needs `localTerminal` or an in-browser agent, the preview needs `preview`. This is the recommended mount for a full IDE; `layout` remains for custom or minimal surfaces. The workspace fills its parent.
+- fix(workspace): the package stylesheet now carries the app shell's styles (the header, editor and context-panel columns, pane layout), the project sidebar's and the chat panel's, which the space shell and the arranged chat render with; they were missing from the artifact, so embedded surfaces rendered unstyled.
 
 ## [v0.30.1] - 2026-10-11
 

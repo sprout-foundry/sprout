@@ -663,6 +663,10 @@ const TESTIDS = {
   "workspace-git-diff": "workspace-git-diff", // the source control view's inline diff
   "workspace-git-diff-open": "workspace-git-diff-open", // opens the diffed file in the editor
   "workspace-search": "workspace-search", // the search view root (views/WorkspaceSearchView.tsx)
+  "workspace-space-shell": "workspace-space-shell", // the composed space shell root (views/SproutWorkspaceSpaceShell.tsx)
+  "workspace-sidebar": "workspace-sidebar", // the composed shell's project sidebar (views/WorkspaceSidebar.tsx)
+  "workspace-sidebar-rail": "workspace-sidebar-rail", // the collapsed sidebar's rail
+  "workspace-docked-terminal": "workspace-docked-terminal", // the composed shell's docked terminal (views/WorkspaceDockedTerminal.tsx)
   "user-menu-report-bug": "user-menu-report-bug", // UserMenu "Report a bug" action
 } as const;
 

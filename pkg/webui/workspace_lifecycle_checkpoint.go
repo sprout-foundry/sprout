@@ -51,7 +51,7 @@ func checkpointWorkingTree(ctx context.Context, root string, ts int64, updateLat
 		return nil, fmt.Errorf("create temp index: %w", err)
 	}
 	tmpPath := tmp.Name()
-	defer os.Remove(tmpPath)
+	defer func() { _ = os.Remove(tmpPath) }()
 	copied, err := copyIndexInto(indexPath, tmp)
 	_ = tmp.Close()
 	if err != nil {
@@ -126,7 +126,7 @@ func copyIndexInto(indexPath string, dst *os.File) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer src.Close()
+	defer func() { _ = src.Close() }()
 	if _, err := io.Copy(dst, src); err != nil {
 		return false, err
 	}
@@ -136,7 +136,7 @@ func copyIndexInto(indexPath string, dst *os.File) (bool, error) {
 // checkpointGit runs git in dir with optional extra environment and returns its
 // trimmed stdout.
 func checkpointGit(ctx context.Context, dir string, env []string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd := exec.CommandContext(ctx, "git", args...) //nolint:gosec // G204: fixed git binary; args are built by this package, not user input
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GIT_OPTIONAL_LOCKS=0")
 	cmd.Env = append(cmd.Env, env...)

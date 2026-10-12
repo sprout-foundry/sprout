@@ -13,7 +13,7 @@ import (
 
 func gitOut(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	cmd := exec.Command("git", args...)
+	cmd := exec.Command("git", args...) //nolint:gosec // G204: test helper running git on a temp repo
 	cmd.Dir = dir
 	out, err := cmd.Output()
 	if err != nil {
@@ -98,7 +98,7 @@ func TestCheckpointWorkingTree_CleanTreeAndNonRepoSkip(t *testing.T) {
 	if err != nil || cp != nil {
 		t.Fatalf("clean tree: cp=%v err=%v, want nil/nil", cp, err)
 	}
-	if out, _ := exec.Command("git", "-C", dir, "show-ref").Output(); strings.Contains(string(out), "refs/sprout/") {
+	if out, _ := exec.Command("git", "-C", dir, "show-ref").Output(); strings.Contains(string(out), "refs/sprout/") { //nolint:gosec // G204: test runs git on its temp repo
 		t.Fatalf("clean tree wrote a wip ref: %s", out)
 	}
 
@@ -130,7 +130,7 @@ func TestCheckpointWorkingTree_UnbornHead(t *testing.T) {
 	if got := gitOut(t, dir, "show", cp.WipSHA+":first.txt"); got != "hello" {
 		t.Fatalf("first.txt = %q", got)
 	}
-	if out, err := exec.Command("git", "-C", dir, "rev-parse", "--verify", "-q", "HEAD").Output(); err == nil {
+	if out, err := exec.Command("git", "-C", dir, "rev-parse", "--verify", "-q", "HEAD").Output(); err == nil { //nolint:gosec // G204: test runs git on its temp repo
 		t.Fatalf("checkpoint created HEAD: %s", out)
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".git", "index")); !os.IsNotExist(err) {

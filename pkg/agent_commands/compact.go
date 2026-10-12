@@ -37,14 +37,15 @@ func (c *CompactCommand) SetContext(ctx context.Context) {
 	c.ctx = ctx
 }
 
-// getContext returns the stored context or the agent's interrupt context,
-// falling back to context.Background() as a last resort.
+// getContext returns the context the registry wired via SetContext, falling
+// back to the agent's interrupt context and then context.Background() as
+// last resorts (direct Execute calls outside the registry).
 func (c *CompactCommand) getContext(chatAgent *agent.Agent) context.Context {
-	if chatAgent != nil {
-		return chatAgent.InterruptCtx()
-	}
 	if c.ctx != nil {
 		return c.ctx
+	}
+	if chatAgent != nil {
+		return chatAgent.InterruptCtx()
 	}
 	return context.Background()
 }

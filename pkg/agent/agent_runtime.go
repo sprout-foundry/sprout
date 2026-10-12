@@ -13,7 +13,10 @@ import (
 
 // GenerateResponse generates a simple response using the current model without tool calls.
 func (a *Agent) GenerateResponse(messages []api.Message) (string, error) {
-	resp, err := a.getClient().SendChatRequest(a.interruptCtx, messages, nil, "", false) // No tools, no reasoning, no disableThinking
+	// InterruptCtx (not the raw field) so between-turns callers get a
+	// healed context after a stopped turn; during an active query this
+	// returns the same live ctx the field holds.
+	resp, err := a.getClient().SendChatRequest(a.InterruptCtx(), messages, nil, "", false) // No tools, no reasoning, no disableThinking
 	if err != nil {
 		return "", agenterrors.NewProviderError("failed to generate response", err, a.GetProvider(), a.GetModel())
 	}

@@ -163,7 +163,7 @@ export const useGitWorkspace = ({
           'Too many files changed. Showing only the first 500 files per section. Use git status or command line to see all files.',
         );
       } else {
-        setGitActionWarning(null);
+        setGitActionWarning(data.note ?? null);
       }
 
       setGitStatus({

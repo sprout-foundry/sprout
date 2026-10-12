@@ -3,84 +3,43 @@
  *
  * In cloud mode, git runs entirely in the browser. This service:
  * - Uses lightning-fs (IndexedDB-backed) for the git repository state
- * - Syncs files between the WASM VFS and lightning-fs before/after git ops
+ *   (browserGitStore.ts, which also mirrors files to and from the WASM VFS)
  * - Supports: init, status, add, commit, log, branch, checkout, push, pull, diff
  * - GitHub push/pull via the user's token or anonymous HTTPS clone
  */
 
-import FS from '@isomorphic-git/lightning-fs';
 import * as git from 'isomorphic-git';
+import type { ProgressCallback } from 'isomorphic-git';
 import http from 'isomorphic-git/http/web';
 import { generateUnifiedDiff } from '../utils/simpleDiff';
+import { snapshotNote, snapshotSource } from './browserGitSnapshot';
+import {
+  REPO_DIR,
+  clearRepoDir,
+  ensureDir,
+  ensureInitialized,
+  getBrowserGitVfsBridge,
+  getFs,
+  markRepoInitialized,
+  syncGitFsToVfs,
+  syncVfsToGitFs,
+  workTreePaths,
+} from './browserGitStore';
 import { gitCorsProxy } from './gitCorsProxy';
+import { CloneTooLargeError, byteLimitedHttp } from './gitHttpLimit';
 
-const FS_NAME = 'sprout-git';
-const REPO_DIR = '/repo';
+export {
+  configureBrowserGit,
+  whenBrowserGitConfigured,
+  __resetBrowserGitForTest,
+  getBrowserGitVfsBridge,
+  holdBrowserGitWorkTree,
+  restoreGitWorkingTree,
+} from './browserGitStore';
+export type { BrowserGitConfig } from './browserGitStore';
+export { gitInitSnapshot, snapshotSource } from './browserGitSnapshot';
 
-let pfsInstance: FS | null = null;
-
-function getFs(): FS {
-  if (!pfsInstance) {
-    pfsInstance = new FS(FS_NAME);
-  }
-  return pfsInstance;
-}
-
-let repoInitialized = false;
-
-export interface BrowserGitConfig {
-  token?: string;
-  name?: string;
-  email?: string;
-  readVfsFiles: () => Promise<Array<{ path: string; content: string }>>;
-  writeVfsFiles: (files: Array<{ path: string; content: string }>) => Promise<void>;
-  deleteVfsFiles?: (paths: string[]) => Promise<void>;
-}
-
-let config: BrowserGitConfig | null = null;
-
-// Resolves once the app wires the VFS bridge; boot-time work (the ?repo=
-// deep link) starts before that and waits on it.
-let markConfigured: () => void = () => undefined;
-let configured = new Promise<void>((resolve) => {
-  markConfigured = resolve;
-});
-
-export function configureBrowserGit(cfg: BrowserGitConfig) {
-  config = cfg;
-  repoInitialized = false;
-  markConfigured();
-}
-
-/** Wait for configureBrowserGit, failing after timeoutMs. */
-export function whenBrowserGitConfigured(timeoutMs = 30000): Promise<void> {
-  if (config) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('browser git was not configured in time')), timeoutMs);
-    void configured.then(() => {
-      clearTimeout(timer);
-      resolve();
-    });
-  });
-}
-
-/** Test-only: restore the pre-bootstrap (never-configured) state. */
-export function __resetBrowserGitForTest(): void {
-  config = null;
-  repoInitialized = false;
-  configured = new Promise<void>((resolve) => {
-    markConfigured = resolve;
-  });
-}
-
-/**
- * The VFS bridge configureBrowserGit was called with, or null when browser
- * git was never wired up (local mode / pre-bootstrap). The ETH-2 txn path
- * uses it to enumerate files for push and write pulled files back.
- */
-export function getBrowserGitVfsBridge(): BrowserGitConfig | null {
-  return config;
-}
+const bridge = () => getBrowserGitVfsBridge();
 
 /**
  * Honest empty-repo GitStatusResponse (the same shape the local daemon's
@@ -133,120 +92,6 @@ function emptyGitDiff(path: string) {
   };
 }
 
-async function ensureDir(path: string) {
-  const fs = getFs().promises;
-  // lightning-fs mkdir creates one level: make each ancestor in turn, or a
-  // file two folders deep under a new folder fails with ENOENT.
-  const parts = path.split('/').filter(Boolean);
-  for (let i = 1; i <= parts.length; i++) {
-    try {
-      await fs.mkdir(`/${parts.slice(0, i).join('/')}`);
-    } catch {
-      // best-effort: may already exist.
-    }
-  }
-}
-
-async function ensureInitialized() {
-  if (repoInitialized) return;
-  const fs = getFs().promises;
-  await ensureDir(REPO_DIR);
-
-  try {
-    await fs.stat(`${REPO_DIR}/.git/config`);
-    repoInitialized = true;
-    return;
-  } catch {
-    // best-effort: not initialized — fall through to git.init.
-  }
-
-  await git.init({ fs: getFs().promises, dir: REPO_DIR });
-
-  if (config?.name) {
-    await git.setConfig({ fs: getFs().promises, dir: REPO_DIR, path: 'user.name', value: config.name });
-  }
-  if (config?.email) {
-    await git.setConfig({ fs: getFs().promises, dir: REPO_DIR, path: 'user.email', value: config.email });
-  }
-  repoInitialized = true;
-}
-
-async function readdirRecursive(dir: string, prefix = ''): Promise<string[]> {
-  const fs = getFs().promises;
-  const results: string[] = [];
-  let entries: string[];
-  try {
-    entries = await fs.readdir(dir);
-  } catch {
-    // best-effort: unreadable directory contributes no entries.
-    return results;
-  }
-  for (const entry of entries) {
-    const fullPath = `${dir}/${entry}`;
-    const relPath = prefix ? `${prefix}/${entry}` : entry;
-    try {
-      const stat = await fs.stat(fullPath);
-      if (stat.isDirectory()) {
-        results.push(...(await readdirRecursive(fullPath, relPath)));
-      } else {
-        results.push(relPath);
-      }
-    } catch {
-      // best-effort: skip entries that can't be stat'd.
-    }
-  }
-  return results;
-}
-
-async function syncVfsToGitFs() {
-  if (!config) throw new Error('browserGit not configured — call configureBrowserGit first');
-  const fs = getFs().promises;
-  const files = await config.readVfsFiles();
-
-  // Clear non-.git files in repo dir
-  try {
-    const existing = await readdirRecursive(REPO_DIR);
-    for (const relPath of existing) {
-      if (!relPath.startsWith('.git/') && !relPath.startsWith('.git')) {
-        try {
-          await fs.unlink(`${REPO_DIR}/${relPath}`);
-        } catch {
-          // best-effort: already gone.
-        }
-      }
-    }
-  } catch {
-    // best-effort: fresh repo (nothing to clear).
-  }
-
-  // Write VFS files
-  for (const file of files) {
-    const fullPath = `${REPO_DIR}/${file.path}`;
-    const dir = fullPath.substring(0, fullPath.lastIndexOf('/'));
-    if (dir && dir !== REPO_DIR) {
-      await ensureDir(dir);
-    }
-    await fs.writeFile(fullPath, file.content, 'utf8');
-  }
-}
-
-async function syncGitFsToVfs() {
-  if (!config) throw new Error('browserGit not configured');
-  const entries = await readdirRecursive(REPO_DIR);
-  const files: Array<{ path: string; content: string }> = [];
-  for (const relPath of entries) {
-    if (relPath.startsWith('.git')) continue;
-    try {
-      const content = await getFs().promises.readFile(`${REPO_DIR}/${relPath}`, 'utf8');
-      files.push({ path: relPath, content: String(content) });
-    } catch {
-      // best-effort: skip binary/unreadable files.
-    }
-  }
-  await config.writeVfsFiles(files);
-  return files.length;
-}
-
 /** GitHub's git endpoints take a token as Basic auth, not Bearer. */
 function gitHubTokenAuth(token: string): string {
   return `Basic ${btoa(`x-access-token:${token}`)}`;
@@ -258,8 +103,9 @@ function gitHubTokenAuth(token: string): string {
  * proxy adds the credential the user connected for that host.
  */
 function getAuth(remoteURL: string | null | undefined) {
-  if (config?.token && isGitHubURL(remoteURL)) {
-    return { headers: { Authorization: gitHubTokenAuth(config.token) } };
+  const token = bridge()?.token;
+  if (token && isGitHubURL(remoteURL)) {
+    return { headers: { Authorization: gitHubTokenAuth(token) } };
   }
   return undefined;
 }
@@ -296,7 +142,7 @@ export async function gitStatus() {
     // Unborn HEAD (fresh git.init with no commits yet): statusMatrix cannot
     // resolve the HEAD tree and throws. Report the working files as
     // untracked instead of surfacing a 500 to the git panel.
-    const files = (await readdirRecursive(REPO_DIR)).filter((p) => !p.startsWith('.git'));
+    const files = await workTreePaths();
     return {
       staged: [] as Array<{ path: string; status: string; staged: boolean }>,
       unstaged: [] as Array<{ path: string; status: string; staged: boolean }>,
@@ -375,8 +221,8 @@ export async function gitCommit(message: string) {
     dir: REPO_DIR,
     message,
     author: {
-      name: config?.name || 'Browser IDE',
-      email: config?.email || 'browser-ide@sprout.dev',
+      name: bridge()?.name || 'Browser IDE',
+      email: bridge()?.email || 'browser-ide@sprout.dev',
     },
   });
   return { message: 'ok', sha };
@@ -521,49 +367,21 @@ export async function gitOriginUrl(): Promise<string | null> {
   }
 }
 
-/**
- * Put the repository's files back into the VFS where they are missing,
- * leaving every file already there (including unsaved-to-git edits) alone.
- * Returns how many files were written.
- */
-export async function restoreGitWorkingTree(): Promise<number> {
-  if (!config) throw new Error('browserGit not configured');
-  const present = new Set((await config.readVfsFiles()).map((f) => f.path));
-  const files: Array<{ path: string; content: string }> = [];
-  for (const relPath of await readdirRecursive(REPO_DIR)) {
-    if (relPath.startsWith('.git') || present.has(relPath)) continue;
-    try {
-      const content = await getFs().promises.readFile(`${REPO_DIR}/${relPath}`, 'utf8');
-      files.push({ path: relPath, content: String(content) });
-    } catch {
-      // best-effort: skip binary/unreadable files.
-    }
-  }
-  if (files.length > 0) await config.writeVfsFiles(files);
-  return files.length;
+export interface GitCloneOptions {
+  token?: string;
+  /** Clone progress, as isomorphic-git reports it (phase, loaded, total). */
+  onProgress?: ProgressCallback;
+  /** Stop the download past this many bytes (CloneTooLargeError). */
+  maxBytes?: number;
 }
 
-export async function gitClone(url: string, opts?: { token?: string }) {
+export async function gitClone(url: string, opts?: GitCloneOptions) {
   const fs = getFs().promises;
   // The previous repository's files leave the workspace with it, so two
   // repositories never mix in one tree.
-  const previousFiles = (await readdirRecursive(REPO_DIR).catch(() => [] as string[])).filter(
-    (p) => !p.startsWith('.git'),
-  );
-  if (previousFiles.length > 0) await config?.deleteVfsFiles?.(previousFiles);
-  // Clear existing repo contents
-  try {
-    const existing = await readdirRecursive(REPO_DIR);
-    for (const relPath of existing) {
-      try {
-        await fs.unlink(`${REPO_DIR}/${relPath}`);
-      } catch {
-        // best-effort: already gone.
-      }
-    }
-  } catch {
-    // best-effort: nothing to clear yet (fresh repo dir).
-  }
+  const previousFiles = await workTreePaths();
+  if (previousFiles.length > 0) await bridge()?.deleteVfsFiles?.(previousFiles);
+  await clearRepoDir();
 
   await ensureDir(REPO_DIR);
   // Per-call auth (authenticated clone from the GitHub repo picker) wins over
@@ -573,17 +391,27 @@ export async function gitClone(url: string, opts?: { token?: string }) {
   if (opts?.token && isGitHubURL(url)) {
     headers.Authorization = gitHubTokenAuth(opts.token);
   }
-  await git.clone({
-    fs,
-    http,
-    corsProxy: gitCorsProxy(),
-    dir: REPO_DIR,
-    url,
-    depth: 1,
-    singleBranch: true,
-    headers: Object.keys(headers).length > 0 ? headers : undefined,
-  });
-  repoInitialized = true;
+  const limited = opts?.maxBytes ? byteLimitedHttp(http, opts.maxBytes) : null;
+  try {
+    await git.clone({
+      fs,
+      http: limited ?? http,
+      corsProxy: gitCorsProxy(),
+      dir: REPO_DIR,
+      url,
+      depth: 1,
+      singleBranch: true,
+      headers: Object.keys(headers).length > 0 ? headers : undefined,
+      onProgress: opts?.onProgress,
+    });
+  } catch (err) {
+    if (limited?.exceeded && opts?.maxBytes) {
+      await clearRepoDir();
+      throw new CloneTooLargeError(opts.maxBytes);
+    }
+    throw err;
+  }
+  markRepoInitialized();
   const files = await syncGitFsToVfs();
   let branch: string | null = null;
   try {
@@ -599,6 +427,11 @@ export async function gitPush(remote = 'origin', branch?: string) {
   const fs = getFs().promises;
   const remotes = await git.listRemotes({ fs, dir: REPO_DIR });
   if (!remotes.some((r) => r.remote === remote)) {
+    if (await snapshotSource()) {
+      throw new Error(
+        'This workspace was imported without git history, so it has no remote to push to. Run the push from a cloud workspace instead.',
+      );
+    }
     throw new Error(
       `This repository has no "${remote}" remote to push to. Open the repository from its git host (Files › Add repository) to push.`,
     );
@@ -645,7 +478,7 @@ export async function gitPull() {
   }
   const fs = getFs().promises;
   const ref = (await git.currentBranch({ fs, dir: REPO_DIR })) || undefined;
-  const before = new Set((await readdirRecursive(REPO_DIR)).filter((p) => !p.startsWith('.git')));
+  const before = new Set(await workTreePaths());
   try {
     await git.fastForward({
       fs,
@@ -664,9 +497,9 @@ export async function gitPull() {
     throw new Error(`Pull failed: ${message}`);
   }
   await syncGitFsToVfs();
-  const after = new Set((await readdirRecursive(REPO_DIR)).filter((p) => !p.startsWith('.git')));
+  const after = new Set(await workTreePaths());
   const removed = [...before].filter((p) => !after.has(p));
-  if (removed.length > 0) await config?.deleteVfsFiles?.(removed);
+  if (removed.length > 0) await bridge()?.deleteVfsFiles?.(removed);
   return { message: 'ok', pulled: true };
 }
 
@@ -681,7 +514,7 @@ export async function gitCreateBranch(name: string) {
 export async function gitInit() {
   await ensureDir(REPO_DIR);
   await git.init({ fs: getFs().promises, dir: REPO_DIR });
-  repoInitialized = true;
+  markRepoInitialized();
   return { message: 'ok', initialized: true };
 }
 
@@ -740,7 +573,7 @@ export async function gitRemove(filepaths: string[]) {
   for (const filepath of filepaths) {
     await git.remove({ fs: getFs().promises, dir: REPO_DIR, filepath });
   }
-  await config?.deleteVfsFiles?.(filepaths);
+  await bridge()?.deleteVfsFiles?.(filepaths);
   return { message: 'ok', removed: filepaths.length };
 }
 
@@ -760,8 +593,8 @@ export async function gitMove(from: string, to: string) {
   }
   // Reflect the move in the VFS: the destination is written, the source removed.
   const moved = String(await fs.readFile(`${REPO_DIR}/${to}`, 'utf8'));
-  await config?.writeVfsFiles?.([{ path: to, content: moved }]);
-  await config?.deleteVfsFiles?.([from]);
+  await bridge()?.writeVfsFiles?.([{ path: to, content: moved }]);
+  await bridge()?.deleteVfsFiles?.([from]);
   return { message: 'ok', from, to };
 }
 
@@ -852,6 +685,7 @@ export async function executeGitOp(
       // ({staged, unstaged, untracked}) stays for the shell/txn consumers.
       const s = await gitStatus();
       const branch = await currentBranchName();
+      const note = (await snapshotSource()) ? snapshotNote() : undefined;
       const modified = s.unstaged.filter((f) => f.status !== 'new' && f.status !== 'deleted');
       const deleted = s.unstaged.filter((f) => f.status === 'deleted');
       return {
@@ -869,6 +703,7 @@ export async function executeGitOp(
           in_git_repo: true,
         },
         files: [...s.staged, ...modified, ...s.untracked, ...deleted],
+        ...(note ? { note } : {}),
       };
     }
     case 'add':
@@ -918,11 +753,10 @@ export async function executeGitOp(
     case 'diff':
       // Boot-time guard (matches the 'status'/'branches' cases above): before
       // browser git is wired (configureBrowserGit — the full app's boot, or
-      // the standalone escalation page) there is no VFS bridge and no .git
-      // to diff. A ?repo= import seeds the in-memory VFS with file contents
-      // but discards the .git objects, so the embedded workspace's diff
-      // fetch can never succeed. Return an honest empty diff (the gutter
-      // simply shows nothing, no error) instead of throwing — a throw
+      // the standalone escalation page, or a repository import, which wires
+      // it itself) there is no VFS bridge and no .git to diff. Return an
+      // honest empty diff (the gutter simply shows nothing, no error)
+      // instead of throwing — a throw
       // surfaces as a 500 and the editor toasts "Failed to fetch git diff"
       // on every file open. Once browser git is wired (full-app mode), the
       // guard falls through to the real diff; a genuine diff failure there

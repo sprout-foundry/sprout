@@ -212,8 +212,13 @@ export function resolveClientIdentity(): Promise<void> {
 
     const stored = window.sessionStorage.getItem(WEBUI_CLIENT_ID_STORAGE_KEY);
     if (!stored) {
-      // Nothing adopted yet; getWebUIClientId's normal minting path runs
-      // later (first real caller). Bring the responder online for it.
+      // Nothing adopted yet; getWebUIClientId's normal path runs later
+      // (first real caller). That path can adopt the shared cookie's id,
+      // and its claim-registry check misses a backgrounded owner: browsers
+      // throttle background timers, so the owner's heartbeat lapses past
+      // the claim TTL while the tab is still open. Ask the live windows
+      // first and mint our own id if one of them still owns the cookie's.
+      await avoidCookieIdOwnedByLiveWindow();
       startOwnershipResponder();
       startClaimHeartbeat();
       return;
@@ -245,6 +250,34 @@ export function resolveClientIdentity(): Promise<void> {
     debugLog('[clientSession] inherited client id from opener; minted fresh id', fresh);
   })();
   return identityResolved;
+}
+
+/**
+ * When this window would fall back to the shared cookie's client id, take a
+ * fresh one instead if a live window answers for the cookie's id. Window.name
+ * recovery comes before the cookie in getWebUIClientId, so it is left alone.
+ */
+async function avoidCookieIdOwnedByLiveWindow(): Promise<void> {
+  if (readClientIdFromWindowName()) return;
+  const cookieId = readCookie(clientIDCookieName);
+  if (!cookieId || cookieId === 'default') return;
+  if (!(await isIdOwnedByLiveWindow(cookieId))) return;
+  if (window.sessionStorage.getItem(WEBUI_CLIENT_ID_STORAGE_KEY)) return;
+  const fresh = generateClientId();
+  window.sessionStorage.setItem(WEBUI_CLIENT_ID_STORAGE_KEY, fresh);
+  writeClientIdToWindowName(fresh);
+  claimOrGenerateClientId(fresh);
+  debugLog('[clientSession] cookie client id is owned by a live window; minted fresh id', fresh);
+}
+
+/**
+ * The id this window should use in place of `candidate` (from the shared
+ * cookie or the server's echo): the candidate itself, unless a live window
+ * answers for it. Registering the claim (claimOrGenerateClientId) is left to
+ * the caller, which also consults the registry.
+ */
+async function sharedClientIdCandidate(candidate: string): Promise<string> {
+  return (await isIdOwnedByLiveWindow(candidate)) ? generateClientId() : candidate;
 }
 
 /**
@@ -618,7 +651,10 @@ export function resolveWebUIClientId(): Promise<string> {
     // cookie would otherwise fuse two windows into one server context).
     const cookieValue = readCookie(clientIDCookieName);
     if (cookieValue && cookieValue !== 'default') {
-      const claimed = claimOrGenerateClientId(cookieValue);
+      const candidate = await sharedClientIdCandidate(cookieValue);
+      const adoptedMeanwhile = adoptedDuringRecovery();
+      if (adoptedMeanwhile) return adoptedMeanwhile;
+      const claimed = claimOrGenerateClientId(candidate);
       window.sessionStorage.setItem(WEBUI_CLIENT_ID_STORAGE_KEY, claimed);
       writeClientIdToWindowName(claimed);
       return claimed;
@@ -640,7 +676,10 @@ export function resolveWebUIClientId(): Promise<string> {
       if (adoptedMeanwhile) return adoptedMeanwhile;
       const echoedId = resp.headers.get(WEBUI_CLIENT_ID_HEADER);
       if (echoedId && echoedId !== 'default') {
-        const claimed = claimOrGenerateClientId(echoedId);
+        const candidate = await sharedClientIdCandidate(echoedId);
+        const adoptedWhileProbing = adoptedDuringRecovery();
+        if (adoptedWhileProbing) return adoptedWhileProbing;
+        const claimed = claimOrGenerateClientId(candidate);
         window.sessionStorage.setItem(WEBUI_CLIENT_ID_STORAGE_KEY, claimed);
         writeClientIdToWindowName(claimed);
         return claimed;

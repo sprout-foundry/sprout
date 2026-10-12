@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -260,4 +261,47 @@ func TestLoadClientWorkspacesDropsInvalidEntries(t *testing.T) {
 	if n := len(p.ws.clientWorkspaces); n > maxPersistedClientWorkspaces {
 		t.Errorf("loaded %d entries, want at most %d", n, maxPersistedClientWorkspaces)
 	}
+}
+
+// TestWorkspaceGetDoesNotRaceChatSwitch exercises the GET handler against
+// concurrent root changes; run with -race to check the locking.
+func TestWorkspaceGetDoesNotRaceChatSwitch(t *testing.T) {
+	p := newProjectTestServer(t)
+	const client = "tab-e"
+	if _, err := p.ws.setClientWorkspaceRoot(client, p.project); err != nil {
+		t.Fatal(err)
+	}
+	wtChat := p.addWorktreeChat(t, client)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 20; i++ {
+			target := wtChat
+			if i%2 == 1 {
+				target = defaultChatID
+			}
+			req := httptest.NewRequest(http.MethodPost, "/api/chat-sessions/switch", strings.NewReader(fmt.Sprintf(`{"id":%q}`, target)))
+			req.Header.Set(webClientIDHeader, client)
+			rec := httptest.NewRecorder()
+			p.ws.handleAPIChatSessionsSwitch(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Errorf("switch: %d", rec.Code)
+			}
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 20; i++ {
+			req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
+			req.Header.Set(webClientIDHeader, client)
+			rec := httptest.NewRecorder()
+			p.ws.handleAPIWorkspaceGet(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Errorf("GET /api/workspace: %d", rec.Code)
+			}
+		}
+	}()
+	wg.Wait()
 }

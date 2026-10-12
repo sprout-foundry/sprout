@@ -123,7 +123,7 @@ func (ws *ReactWebServer) handleAPIWorkspace(w http.ResponseWriter, r *http.Requ
 }
 
 func (ws *ReactWebServer) handleAPIWorkspaceGet(w http.ResponseWriter, r *http.Request) {
-	clientCtx := ws.getClientContextForRequest(r)
+	clientCtx := ws.workspaceViewForRequest(r)
 	workspaceRoot := clientCtx.WorkspaceRoot
 	isProject, markers := IsProjectDirectory(workspaceRoot)
 
@@ -291,7 +291,7 @@ func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.R
 		"message":        "Workspace updated",
 		"workspace_root": workspaceRoot,
 	}
-	clientCtx := ws.getClientContextForRequest(r)
+	clientCtx := ws.workspaceViewForRequest(r)
 	if clientCtx.SSHHostAlias != "" {
 		sshContext := map[string]interface{}{
 			"host_alias":  clientCtx.SSHHostAlias,
@@ -442,4 +442,28 @@ func (ws *ReactWebServer) handleAPIWorkspaceProjects(w http.ResponseWriter, r *h
 		"daemon_root": ws.GetDaemonRoot(),
 		"cached":      cached,
 	})
+}
+
+// clientWorkspaceView is a copy of the workspace-related client context
+// fields, read under ws.mutex: handlers that switch chats or worktrees write
+// them concurrently.
+type clientWorkspaceView struct {
+	WorkspaceRoot  string
+	SSHHostAlias   string
+	SSHSessionKey  string
+	SSHLauncherURL string
+	SSHHomePath    string
+}
+
+func (ws *ReactWebServer) workspaceViewForRequest(r *http.Request) clientWorkspaceView {
+	ctx := ws.getClientContextForRequest(r)
+	ws.mutex.RLock()
+	defer ws.mutex.RUnlock()
+	return clientWorkspaceView{
+		WorkspaceRoot:  ctx.WorkspaceRoot,
+		SSHHostAlias:   ctx.SSHHostAlias,
+		SSHSessionKey:  ctx.SSHSessionKey,
+		SSHLauncherURL: ctx.SSHLauncherURL,
+		SSHHomePath:    ctx.SSHHomePath,
+	}
 }

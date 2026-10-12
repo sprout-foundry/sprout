@@ -103,7 +103,7 @@
         "context_length": 262144,
         "description": "Qwen3.6 27B on confidential TEE compute",
         "id": "Qwen/Qwen3.6-27B-TEE",
-        "input_cost": 0.3,
+        "input_cost": 0.25,
         "name": "Qwen3.6 27B (TEE)",
         "output_cost": 2,
         "tags": [
@@ -139,9 +139,9 @@
         "context_length": 262144,
         "description": "Moonshot Kimi K2.6 on confidential TEE compute",
         "id": "moonshotai/Kimi-K2.6-TEE",
-        "input_cost": 0.5,
+        "input_cost": 0.45,
         "name": "Kimi K2.6 (TEE)",
-        "output_cost": 2.85,
+        "output_cost": 1.95,
         "tags": [
           "vision",
           "tools",
@@ -152,9 +152,9 @@
         "context_length": 1048576,
         "description": "Moonshot Kimi K3 on confidential TEE compute",
         "id": "moonshotai/Kimi-K3-TEE",
-        "input_cost": 3,
+        "input_cost": 1.85,
         "name": "Kimi K3 (TEE)",
-        "output_cost": 15,
+        "output_cost": 9.5,
         "tags": [
           "tools",
           "reasoning"
@@ -211,9 +211,9 @@
         "context_length": 262144,
         "description": "Qwen3.8 27B on confidential TEE compute",
         "id": "Qwen/Qwen3.8-27B-TEE",
-        "input_cost": 0.24,
+        "input_cost": 0.039,
         "name": "Qwen3.8 27B (TEE)",
-        "output_cost": 2.2,
+        "output_cost": 1.25,
         "tags": [
           "vision",
           "tools",

@@ -754,11 +754,11 @@
         ]
       },
       {
-        "cached_input_cost": 0.03,
+        "cached_input_cost": 0.0228,
         "context_length": 1048576,
         "description": "DeepSeek V4 Flash is an efficiency-optimized Mixture-of-Experts model from DeepSeek with 284B total parameters and 13B activated parameters, supporting a 1M-token context window. It is designed for fast inference and...",
         "id": "deepseek/deepseek-v4-flash",
-        "input_cost": 0.03,
+        "input_cost": 0.0228,
         "name": "DeepSeek: DeepSeek V4 Flash",
         "output_cost": 1.28,
         "tags": [
@@ -768,11 +768,11 @@
         ]
       },
       {
-        "cached_input_cost": 0.018,
+        "cached_input_cost": 0.016,
         "context_length": 1048576,
         "description": "DeepSeek V4 Flash 0731 is a sparse mixture-of-experts model from DeepSeek, with 13B active parameters out of 284B total. This re-post-trained revision is suited for coding, reasoning, and agent workflows.",
         "id": "deepseek/deepseek-v4-flash-0731",
-        "input_cost": 0.018,
+        "input_cost": 0.016,
         "name": "DeepSeek: DeepSeek V4 Flash 0731",
         "output_cost": 0.64,
         "tags": [
@@ -782,13 +782,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.0174,
+        "cached_input_cost": 0.034365,
         "context_length": 1048576,
         "description": "DeepSeek V4 Pro is a large-scale Mixture-of-Experts model from DeepSeek with 1.6T total parameters and 49B activated parameters, supporting a 1M-token context window. It is designed for advanced reasoning, coding,...",
         "id": "deepseek/deepseek-v4-pro",
-        "input_cost": 0.2088,
+        "input_cost": 0.41238,
         "name": "DeepSeek: DeepSeek V4 Pro",
-        "output_cost": 0.4176,
+        "output_cost": 0.82476,
         "tags": [
           "tools",
           "reasoning",
@@ -1133,13 +1133,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.0375,
+        "cached_input_cost": 0.0425,
         "context_length": 262144,
         "description": "Gemma 4 26B A4B IT is an instruction-tuned Mixture-of-Experts (MoE) model from Google DeepMind. Despite 25.2B total parameters, only 3.8B activate per token during inference — delivering near-31B quality at...",
         "id": "google/gemma-4-26b-a4b-it",
-        "input_cost": 0.0675,
+        "input_cost": 0.0765,
         "name": "Google: Gemma 4 26B A4B ",
-        "output_cost": 0.225,
+        "output_cost": 0.255,
         "tags": [
           "tools",
           "vision",
@@ -1456,9 +1456,9 @@
         "context_length": 1310720,
         "description": "Llama 4 Scout 17B Instruct (16E) is a mixture-of-experts (MoE) language model developed by Meta, activating 17 billion parameters out of a total of 109B. It supports native multimodal input...",
         "id": "meta-llama/llama-4-scout",
-        "input_cost": 0.1,
+        "input_cost": 0.18,
         "name": "Meta: Llama 4 Scout",
-        "output_cost": 0.3,
+        "output_cost": 0.59,
         "tags": [
           "tools",
           "vision",
@@ -1945,7 +1945,7 @@
         "context_length": 1048576,
         "description": "Kimi K3 is a 2.8T parameter open-weight multimodal reasoning model from Moonshot AI. It is suited for complex coding, knowledge work, and long-horizon agentic workflows, and is particularly strong at...",
         "id": "moonshotai/kimi-k3",
-        "input_cost": 0.8,
+        "input_cost": 0.73,
         "name": "MoonshotAI: Kimi K3",
         "output_cost": 10,
         "tags": [
@@ -4400,11 +4400,11 @@
         ]
       },
       {
-        "cached_input_cost": 0.05,
+        "cached_input_cost": 0.059,
         "context_length": 1048576,
         "description": "GLM-5.3 is a large-scale reasoning model from Z.ai, built for complex software engineering and long-horizon agent tasks. It supports text input and output with a 1M-token context window, and improves...",
         "id": "z-ai/glm-5.3",
-        "input_cost": 0.07,
+        "input_cost": 0.079,
         "name": "Z.ai: GLM 5.3",
         "output_cost": 4.8,
         "tags": [
@@ -4519,13 +4519,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.29,
+        "cached_input_cost": 0.55,
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the MoonshotAI Kimi family.",
         "id": "~moonshotai/kimi-latest",
-        "input_cost": 0.75,
+        "input_cost": 0.73,
         "name": "MoonshotAI Kimi Latest",
-        "output_cost": 14.9,
+        "output_cost": 10,
         "tags": [
           "tools",
           "vision",
@@ -4594,13 +4594,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.018,
+        "cached_input_cost": 0.0128,
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the DeepSeek V4 Flash family.",
         "id": "~deepseek/deepseek-v4-flash-latest",
-        "input_cost": 0.018,
+        "input_cost": 0.0128,
         "name": "DeepSeek V4 Flash Latest",
-        "output_cost": 0.64,
+        "output_cost": 0.768,
         "tags": [
           "tools",
           "reasoning",
@@ -5901,13 +5901,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.05,
+        "cached_input_cost": 0.06,
         "context_length": 1048576,
         "description": "This model always redirects to the latest GLM model from Z.ai.",
         "id": "~z-ai/glm-latest",
-        "input_cost": 0.07,
+        "input_cost": 0.055,
         "name": "Z.ai: GLM Latest",
-        "output_cost": 4.8,
+        "output_cost": 5,
         "tags": [
           "tools",
           "reasoning",
@@ -5942,13 +5942,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.03,
+        "cached_input_cost": 0.0232,
         "context_length": 1310720,
         "description": "GLM-5.3-Flash is Z.ai's first natively multimodal model, delivering frontier coding and agentic performance at flash-tier cost. With 320B total and 18B active parameters, it outperforms GLM-5.2 at one-tenth the price while approaching Claude Opus 4.8 on coding and agentic benchmarks.",
         "id": "z-ai/glm-5.3-flash",
-        "input_cost": 0.15,
+        "input_cost": 0.0232,
         "name": "Z.ai: GLM 5.3 Flash",
-        "output_cost": 0.5,
+        "output_cost": 1.2,
         "tags": [
           "tools",
           "vision",
@@ -6267,13 +6267,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.0125,
+        "cached_input_cost": 0.0232,
         "context_length": 1310720,
         "description": "This model always redirects to the latest model in the GLM Flash family.",
         "id": "~z-ai/glm-flash-latest",
-        "input_cost": 0.04,
+        "input_cost": 0.0232,
         "name": "Z.ai: GLM Flash Latest",
-        "output_cost": 0.5,
+        "output_cost": 1.2,
         "tags": [
           "tools",
           "vision",
@@ -6541,13 +6541,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.006,
+        "cached_input_cost": 0.003,
         "context_length": 1048576,
         "description": "DeepSeek V4.1 Flash is a sparse mixture-of-experts model from DeepSeek, and the cost-efficient tier of the V4.1 family. DeepSeek reports that it exceeds V4 Pro on performance, speed, and task completion time, so it sits ahead of the previous flagship rather than beneath it.",
         "id": "deepseek/deepseek-v4.1-flash",
-        "input_cost": 0.3,
+        "input_cost": 0.15,
         "name": "DeepSeek: DeepSeek V4.1 Flash",
-        "output_cost": 1.2,
+        "output_cost": 0.6,
         "tags": [
           "tools",
           "vision",
@@ -6698,13 +6698,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.000696,
+        "cached_input_cost": 0.0336,
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the DeepSeek Flash family.",
         "id": "~deepseek/deepseek-flash-latest",
-        "input_cost": 0.0348,
+        "input_cost": 0.0336,
         "name": "DeepSeek: DeepSeek Flash Latest",
-        "output_cost": 0.1392,
+        "output_cost": 1.188,
         "tags": [
           "tools",
           "vision",
@@ -6713,13 +6713,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.006972,
+        "cached_input_cost": 0.007938,
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the DeepSeek Pro family.",
         "id": "~deepseek/deepseek-pro-latest",
-        "input_cost": 0.21912,
+        "input_cost": 0.24948,
         "name": "DeepSeek: DeepSeek Pro Latest",
-        "output_cost": 0.65736,
+        "output_cost": 0.74844,
         "tags": [
           "tools",
           "reasoning",
@@ -7423,6 +7423,21 @@
         "input_cost": 1,
         "name": "OpenAI: GPT-6.1 Sol (batch)",
         "output_cost": 5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.2,
+        "context_length": 1048576,
+        "description": "Muse Wonder is a frontier reasoning model from Meta, designed for complex personal and professional agentic tasks. It accepts text, images, video, audio, and PDF documents and returns text, with a 1M-token context window. The model handles long-horizon work: it plans, delegates to sub-agents, calls tools in parallel, and recovers from errors, and it can operate browsers and desktop and mobile applications across many files in existing repositories.",
+        "id": "meta/muse-wonder",
+        "input_cost": 4,
+        "name": "Meta: Muse Wonder",
+        "output_cost": 20,
         "tags": [
           "tools",
           "vision",

@@ -1,9 +1,3 @@
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
 :root {
   /* The design tokens themselves live in @sprout-foundry/design
    * (packages/design/tokens.css, imported by index.css). Only the

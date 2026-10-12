@@ -4,6 +4,8 @@ All notable changes to Sprout will be documented in this file.
 
 ## [Unreleased]
 
+- fix(workspace): the package stylesheet now carries the app shell's styles (the header, editor and context-panel columns, pane layout) and the chat panel's, which the space shell and the arranged chat render with; they were missing from the artifact, so embedded surfaces rendered unstyled.
+
 ## [v0.30.1] - 2026-10-11
 
 - feat(workspace): `@sprout-foundry/workspace` 1.6.2 (below).

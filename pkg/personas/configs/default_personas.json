@@ -244,6 +244,30 @@
         "web_scraper",
         "scraper"
       ]
+    },
+    {
+      "allowed_tools": [
+        "shell_command",
+        "read_file",
+        "write_file",
+        "edit_file",
+        "write_structured_file",
+        "patch_structured_file",
+        "search",
+        "repo_map",
+        "list_directory",
+        "list_changes",
+        "activate_skill",
+        "list_skills",
+        "request_clarification"
+      ],
+      "delegatable": true,
+      "description": "Routine delegated subtasks on a cheaper model: read/search, summarise, mechanical edits, and running tests. Falls back to the coder model when the worker role is unset.",
+      "enabled": true,
+      "id": "worker",
+      "_rules_source": "inherit:DefaultAutoApproveRules",
+      "name": "Worker",
+      "system_prompt": "pkg/agent/prompts/subagent_prompts/worker.md"
     }
   ]
 }

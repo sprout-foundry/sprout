@@ -140,6 +140,25 @@ func resolveSubagentProviderModel(a *Agent, persona string, personaExplicitlyPro
 			}
 		}
 
+		// The worker persona always runs on the worker role's resolved
+		// provider/model: an explicit roles.worker selection, or the coder
+		// role's resolved (provider, model) when the worker role is unset
+		// (an unset worker behaves like a coder-model delegation). Unlike the
+		// reviewer override, this is not gated on HasExplicitRole —
+		// ResolveWorkerRole carries the coder fallback itself, so a worker
+		// delegation is attributed to the worker role either way.
+		if isWorkerPersona(a, persona) {
+			workerProvider, workerModel := config.ResolveWorkerRole()
+			if strings.TrimSpace(workerProvider) != "" {
+				provider = strings.TrimSpace(workerProvider)
+			}
+			if workerModel != "" {
+				model = workerModel
+			}
+			role = configuration.RoleWorker
+			a.Logger().Debug("Worker persona delegation: provider=%s model=%s role=%s\n", provider, model, role)
+		}
+
 		// Log no-persona spawn resolution for observability. persona is defaulted
 		// to "general" earlier in this function (or to cfg.DefaultSubagentPersona),
 		// so we check the explicit-provided flag rather than the empty string —

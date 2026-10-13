@@ -30,6 +30,15 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 	subagentProvider, subagentModel := resolveParallelSubagentConfig(a)
 	applyParallelTaskConfig(parallelTasks, subagentProvider, subagentModel)
 
+	// Per-task persona resolution: each task's persona is resolved to its own
+	// provider/model/role/system prompt (a worker persona runs on the worker
+	// role, a reviewer persona gets the pre-loaded change context), refining
+	// the flat defaults above. Tasks without a persona resolve through the
+	// default persona, which inherits the same defaults.
+	if err := resolveParallelTaskPersonas(ctx, a, parallelTasks); err != nil {
+		return "", err
+	}
+
 	// Validate parallel subagent configuration
 	if err := validateParallelSubagentConfig(a, parallelTasks); err != nil {
 		return "", err

@@ -86,6 +86,13 @@ func isReviewerPersona(a *Agent, persona string) bool {
 	return canonicalPersonaID(a, persona) == personas.IDReviewer
 }
 
+// isWorkerPersona reports whether persona resolves (by ID or alias) to the
+// canonical worker persona (delegated routine subtasks on the worker role's
+// model).
+func isWorkerPersona(a *Agent, persona string) bool {
+	return canonicalPersonaID(a, persona) == personas.IDWorker
+}
+
 // canonicalPersonaID resolves a persona ID or alias to its canonical catalog
 // ID. Unknown personas are returned normalized but otherwise unchanged.
 func canonicalPersonaID(a *Agent, persona string) string {

@@ -5,7 +5,7 @@ import type { SproutSettings } from '../../services/api';
 // Built-in role names. Mirrors configuration.BuiltInRoles() in
 // pkg/configuration/config_roles.go. The role set is fixed — keep this
 // list in sync with the Go side if roles are added there.
-const BUILTIN_ROLES = ['planner', 'coder', 'summarizer', 'reviewer', 'commit'] as const;
+const BUILTIN_ROLES = ['planner', 'coder', 'summarizer', 'reviewer', 'commit', 'worker'] as const;
 
 const BUILTIN_ROLE_SET: ReadonlySet<string> = new Set(BUILTIN_ROLES);
 
@@ -49,8 +49,9 @@ function rolesKey(roles: RolesMap | undefined): string {
 
 /**
  * Role models section. Pin a specific provider or model to a
- * built-in role (planner, coder, summarizer, reviewer, commit). Collapsed by
- * default so it stays out of the way of the primary provider settings.
+ * built-in role (planner, coder, summarizer, reviewer, commit, worker).
+ * Collapsed by default so it stays out of the way of the primary provider
+ * settings.
  *
  * Typing updates local draft state only; each row's Save button commits the
  * whole roles map via updateSetting('roles', next), dropping built-in rows

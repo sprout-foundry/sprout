@@ -35,6 +35,25 @@ func TestSetSettingValue_RoleProvider(t *testing.T) {
 	assert.Equal(t, configuration.RoleConfig{Provider: "zai", Model: "GLM-4.6"}, cfg.GetRole(configuration.RolePlanner))
 }
 
+// TestSetSettingValue_WorkerRoleKeys verifies the worker role has config-set
+// keys (role.worker.model / role.worker.provider) that derive from the
+// built-in role list and write the stored worker entry.
+func TestSetSettingValue_WorkerRoleKeys(t *testing.T) {
+	keys := SupportedSettingKeys()
+	assert.Contains(t, keys, "role.worker.model")
+	assert.Contains(t, keys, "role.worker.provider")
+
+	cfg := &configuration.Config{}
+	require.NoError(t, SetSettingValue(cfg, "role.worker.provider", "zai"))
+	require.NoError(t, SetSettingValue(cfg, "role.worker.model", "glm-4.5-flash"))
+	assert.Equal(t, configuration.RoleConfig{Provider: "zai", Model: "glm-4.5-flash"}, cfg.GetRole(configuration.RoleWorker))
+
+	// Read-back through the registry.
+	v, err := GetSettingValue(cfg, "role.worker.model")
+	require.NoError(t, err)
+	assert.Equal(t, "glm-4.5-flash", v)
+}
+
 // TestSetSettingValue_RoleTestProviderRejected pins the CLI-facing guard:
 // the literal test provider cannot be persisted through a role def.
 // Config.SetRole would silently drop the write (a no-op that looks like
@@ -47,8 +66,8 @@ func TestSetSettingValue_RoleTestProviderRejected(t *testing.T) {
 	assert.Equal(t, configuration.RoleConfig{}, cfg.GetRole(configuration.RoleCoder))
 }
 
-// TestSupportedSettingKeys_IncludesRoleKeys verifies all ten role keys
-// (5 built-in roles x {model, provider}) are registered for
+// TestSupportedSettingKeys_IncludesRoleKeys verifies all twelve role keys
+// (6 built-in roles x {model, provider}) are registered for
 // `sprout config set` validation and --help-keys.
 func TestSupportedSettingKeys_IncludesRoleKeys(t *testing.T) {
 	keys := SupportedSettingKeys()

@@ -123,6 +123,36 @@ Configures timeouts for API requests:
 
 Separate provider/model configuration for subagents. Leave empty to use the main provider/model.
 
+#### `roles`
+
+Maps a model role to a provider and model. A role pins a specific
+provider/model to a named purpose, so e.g. planning can run on a stronger
+model while routine work runs on a cheaper one. The built-in roles are
+`planner` (plan mode), `coder` (the main agent loop), `summarizer` (progress
+and change summaries), `reviewer` (code review), `commit` (commit messages),
+and `worker` (delegated routine subtasks).
+
+```json
+"roles": {
+  "coder":  { "provider": "…", "model": "…" },
+  "worker": { "provider": "…", "model": "…" }
+}
+```
+
+Set one with `sprout config set role.<name>.model …` /
+`role.<name>.provider …`, or under Settings → Role Models. An unset field
+falls back to the conversation's provider/model; an unset role resolves to the
+conversation's pair, so behaviour is unchanged until a role is pointed at a
+model.
+
+The `worker` role serves the `worker` subagent persona, which the main agent
+uses for delegated routine subtasks — reading and searching, summarising files
+or logs, mechanical edits, running a test and reporting the result, and
+boilerplate. Leave `worker` unset and it falls back to the coder model, so
+delegation is unchanged until you point it at a cheaper model. Planning,
+debugging, design decisions, and the final review stay on the coder model;
+only the well-scoped routine work above is handed to the worker.
+
 #### `commit_attribution`
 
 Records AI assistance in the commits Sprout itself creates. `"off"` (default) adds nothing; `"trailer"` appends a git trailer per tool+model:

@@ -393,7 +393,7 @@ across models, so delegate to subagents with small, focused contexts rather than
 switching the main loop's model mid-session (a switch re-reads ~250K tokens
 cold and can erase the saving).
 
-- [ ] **ca.1** Worker role and delegation. Add a `worker` model role (config,
+- [x] **ca.1** Worker role and delegation. Add a `worker` model role (config,
       `sprout custom`/settings UI, docs) for delegated routine subtasks; unset,
       it falls back to the coder model so behaviour is unchanged. Give the main
       agent a way to hand a scoped task to a worker subagent with only the

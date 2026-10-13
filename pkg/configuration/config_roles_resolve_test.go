@@ -401,7 +401,7 @@ func TestHasExplicitRole_Reviewer(t *testing.T) {
 // TestBuiltInRoles verifies the stable ordering of the built-in role names.
 func TestBuiltInRoles(t *testing.T) {
 	assert.Equal(t,
-		[]string{RolePlanner, RoleCoder, RoleSummarizer, RoleReviewer, RoleCommit},
+		[]string{RolePlanner, RoleCoder, RoleSummarizer, RoleReviewer, RoleCommit, RoleWorker},
 		BuiltInRoles(),
 	)
 }
@@ -478,4 +478,203 @@ func TestResolveRole_SummarizerResolvable(t *testing.T) {
 			assert.Equal(t, tt.wantModel, model)
 		})
 	}
+}
+
+// TestResolveWorkerRole pins the worker role's resolution contract: an
+// explicit roles.worker entry wins field-wise, and an unset worker falls
+// back to the coder role's fully-resolved (provider, model) — so an unset
+// worker behaves exactly like the coder model until a host or user points
+// it at a cheaper model. The worker role has no legacy alias.
+func TestResolveWorkerRole(t *testing.T) {
+	newCfg := func() *Config {
+		return &Config{
+			LastUsedProvider: "openrouter",
+			ProviderModels:   map[string]string{"openrouter": "openai/gpt-5", "zai": "GLM-4.6"},
+		}
+	}
+
+	tests := []struct {
+		name         string
+		mutate       func(c *Config)
+		wantProvider string
+		wantModel    string
+	}{
+		{
+			name: "explicit worker entry wins (provider + model)",
+			mutate: func(c *Config) {
+				c.SubagentProvider = "zai" // coder alias must not leak into worker
+				c.Roles = map[string]RoleConfig{RoleWorker: {Provider: "zai", Model: "cheap-model"}}
+			},
+			wantProvider: "zai",
+			wantModel:    "cheap-model",
+		},
+		{
+			name: "model-only worker entry keeps the last-used provider",
+			mutate: func(c *Config) {
+				c.Roles = map[string]RoleConfig{RoleWorker: {Model: "cheap-model"}}
+			},
+			wantProvider: "openrouter",
+			wantModel:    "cheap-model",
+		},
+		{
+			name: "provider-only worker entry uses that provider's configured model",
+			mutate: func(c *Config) {
+				c.Roles = map[string]RoleConfig{RoleWorker: {Provider: "zai"}}
+			},
+			wantProvider: "zai",
+			wantModel:    "GLM-4.6",
+		},
+		{
+			// An unset worker falls back to the coder role's full chain:
+			// the coder role's legacy subagent alias when set.
+			name: "unset worker falls back to the coder role (subagent alias)",
+			mutate: func(c *Config) {
+				c.SubagentProvider = "zai"
+				c.SubagentModel = "sub-m"
+			},
+			wantProvider: "zai",
+			wantModel:    "sub-m",
+		},
+		{
+			// An unset worker falls back to the coder role's roles entry
+			// when the subagent alias is unset.
+			name: "unset worker falls back to the coder role (roles entry)",
+			mutate: func(c *Config) {
+				c.Roles = map[string]RoleConfig{RoleCoder: {Provider: "zai", Model: "coder-m"}}
+			},
+			wantProvider: "zai",
+			wantModel:    "coder-m",
+		},
+		{
+			// With nothing set anywhere, the unset worker resolves to the
+			// conversation's (last-used provider, its configured model) —
+			// the same as ResolveRole(coder).
+			name:         "unset worker with nothing set resolves the conversation",
+			wantProvider: "openrouter",
+			wantModel:    "openai/gpt-5",
+		},
+		{
+			// With an empty Config (no last-used provider, no provider
+			// models), the unset worker resolves to ("",""), matching the
+			// coder role's empty resolution.
+			name: "completely empty config resolves to an empty pair",
+			mutate: func(c *Config) {
+				*c = Config{}
+			},
+		},
+		{
+			// The worker role has no legacy alias: the coder's subagent
+			// settings must not be read directly by the worker resolver when
+			// the worker entry is explicit (the explicit entry wins
+			// field-wise, so an explicit provider must not be overridden by
+			// the coder's provider).
+			name: "explicit worker provider beats the coder's subagent provider",
+			mutate: func(c *Config) {
+				c.SubagentProvider = "zai"
+				c.Roles = map[string]RoleConfig{RoleWorker: {Provider: "openrouter"}}
+			},
+			wantProvider: "openrouter",
+			wantModel:    "openai/gpt-5",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := newCfg()
+			if tt.mutate != nil {
+				tt.mutate(cfg)
+			}
+			provider, model := cfg.ResolveWorkerRole()
+			assert.Equal(t, tt.wantProvider, provider)
+			assert.Equal(t, tt.wantModel, model)
+		})
+	}
+}
+
+// TestResolveWorkerRole_UnsetEqualsCoderRole pins the core fallback contract
+// at the pair level: when the worker role is unset, ResolveWorkerRole must
+// return exactly the coder role's fully-resolved (provider, model) pair, so
+// an unset worker leaves behaviour unchanged.
+func TestResolveWorkerRole_UnsetEqualsCoderRole(t *testing.T) {
+	cfg := &Config{
+		LastUsedProvider: "openrouter",
+		ProviderModels:   map[string]string{"openrouter": "openai/gpt-5", "zai": "GLM-4.6"},
+	}
+
+	// Case 1: nothing set — both resolve to the conversation.
+	coderProvider, coderModel := cfg.ResolveRole(RoleCoder)
+	workerProvider, workerModel := cfg.ResolveWorkerRole()
+	assert.Equal(t, coderProvider, workerProvider, "unset worker provider must equal the coder role's")
+	assert.Equal(t, coderModel, workerModel, "unset worker model must equal the coder role's")
+
+	// Case 2: the coder role is configured (roles entry) — the unset worker
+	// must inherit the coder role's configured pair, not the conversation's.
+	cfg.Roles = map[string]RoleConfig{RoleCoder: {Provider: "zai", Model: "coder-m"}}
+	coderProvider, coderModel = cfg.ResolveRole(RoleCoder)
+	workerProvider, workerModel = cfg.ResolveWorkerRole()
+	assert.Equal(t, "zai", coderProvider)
+	assert.Equal(t, "coder-m", coderModel)
+	assert.Equal(t, coderProvider, workerProvider, "unset worker must inherit the coder role's provider")
+	assert.Equal(t, coderModel, workerModel, "unset worker must inherit the coder role's model")
+
+	// Case 3: only the coder's legacy subagent alias is set — the unset
+	// worker inherits it through the coder chain.
+	cfg2 := &Config{
+		LastUsedProvider: "openrouter",
+		ProviderModels:   map[string]string{"openrouter": "openai/gpt-5", "zai": "GLM-4.6"},
+		SubagentProvider: "zai",
+		SubagentModel:    "sub-m",
+	}
+	coderProvider, coderModel = cfg2.ResolveRole(RoleCoder)
+	workerProvider, workerModel = cfg2.ResolveWorkerRole()
+	assert.Equal(t, "zai", coderProvider)
+	assert.Equal(t, "sub-m", coderModel)
+	assert.Equal(t, coderProvider, workerProvider)
+	assert.Equal(t, coderModel, workerModel)
+}
+
+// TestResolveWorkerRole_NilReceiver pins the nil-receiver contract: a nil
+// Config resolves to ("",""), the same as ResolveRole.
+func TestResolveWorkerRole_NilReceiver(t *testing.T) {
+	var cfg *Config
+	provider, model := cfg.ResolveWorkerRole()
+	assert.Equal(t, "", provider)
+	assert.Equal(t, "", model)
+}
+
+// TestHasExplicitRole_Worker pins the explicit-worker gate: it fires only on
+// an explicit roles.worker selection (the worker role has no legacy alias),
+// never on the resolver's coder fallback.
+func TestHasExplicitRole_Worker(t *testing.T) {
+	cfg := &Config{
+		LastUsedProvider: "openrouter",
+		ProviderModels:   map[string]string{"openrouter": "openai/gpt-5", "zai": "GLM-4.6"},
+	}
+	// Unset worker: false even though the resolver would fall back to the
+	// coder role (which has a last-used provider).
+	assert.False(t, cfg.HasExplicitRole(RoleWorker))
+
+	// The coder's legacy subagent alias must not make the worker explicit
+	// (the worker role has no legacy alias).
+	cfg.SubagentProvider = "zai"
+	cfg.SubagentModel = "sub-m"
+	assert.False(t, cfg.HasExplicitRole(RoleWorker), "coder alias must not mark the worker explicit")
+
+	// An explicit roles.worker entry (provider or model) makes it explicit.
+	cfg.Roles = map[string]RoleConfig{RoleWorker: {Model: "cheap-model"}}
+	assert.True(t, cfg.HasExplicitRole(RoleWorker))
+	cfg.Roles[RoleWorker] = RoleConfig{Provider: "zai"}
+	assert.True(t, cfg.HasExplicitRole(RoleWorker))
+
+	// A nil receiver reports false.
+	var nilCfg *Config
+	assert.False(t, nilCfg.HasExplicitRole(RoleWorker))
+}
+
+// TestBuiltInRoles_ContainsWorker pins that the worker role is part of the
+// built-in role set (the settings defs and config-set keys derive from it).
+func TestBuiltInRoles_ContainsWorker(t *testing.T) {
+	roles := BuiltInRoles()
+	assert.Contains(t, roles, RoleWorker, "the worker role must be a built-in role")
+	assert.Len(t, roles, 6, "the built-in role set has six roles")
 }

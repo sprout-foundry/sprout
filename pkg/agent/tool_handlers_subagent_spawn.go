@@ -51,15 +51,61 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 			Role:         spec.role,
 		})
 	}
+
+	// Verify a worker-role result before the primary relies on it; on
+	// failure, retry once on the coder model (the escalation). The
+	// verification outcome rides on the envelope so it is never silent.
+	// Non-worker subagents are not subject to worker verification, so they
+	// carry the zero outcome (no verified/escalated fields).
+	var verification workerVerifyResult
+	if isWorkerRoleTask(spec.role) {
+		verification = verifyWorkerResult(a, spec, result)
+		if !verification.Verified {
+			result, verification = escalateWorkerRun(ctx, a, spec, result, verification)
+		}
+	}
+
 	printSubagentDone(spec.persona, result)
-	return finishSubagentRun(ctx, a, spec, result)
+	return finishSubagentRun(ctx, a, spec, result, verification)
+}
+
+// escalateWorkerRun retries a worker task that failed verification ONCE on
+// the coder model and re-verifies the escalated result. It records the
+// escalation on the returned verification so the caller can surface it. The
+// retry happens at most once — a second failure is reported, not retried
+// again.
+func escalateWorkerRun(ctx context.Context, a *Agent, spec *subagentLaunchSpec, failed *SubagentResult, first workerVerifyResult) (*SubagentResult, workerVerifyResult) {
+	a.Logger().Info("worker task failed verification (%s); escalating to the coder model\n", first.Reason)
+	publishSubagentActivity(ctx, a, "escalate", fmt.Sprintf("Worker result failed verification: %s", first.Reason), map[string]interface{}{
+		"persona":     spec.persona,
+		"is_parallel": false,
+		"reason":      first.Reason,
+	})
+
+	escalated, err := escalateWorkerTask(ctx, a, spec)
+	if err != nil || escalated == nil {
+		// The escalation could not run: surface the original failure rather
+		// than a success-looking envelope.
+		reason := first.Reason
+		if err != nil {
+			reason = first.Reason + "; escalation failed: " + err.Error()
+		}
+		return failed, workerVerifyResult{Verified: false, Reason: reason, Escalated: true}
+	}
+
+	second := verifyWorkerResult(a, spec, escalated)
+	second.Escalated = true
+	if !second.Verified {
+		second.Reason = "escalated run also failed verification: " + second.Reason
+	}
+	return escalated, second
 }
 
 // finishSubagentRun turns a completed subagent run into the tool result the
 // primary sees: merges its file changes, tracks cost, applies the security
 // and failure handling, and marshals the result envelope. Shared by the
 // blocking and background paths.
-func finishSubagentRun(ctx context.Context, a *Agent, spec *subagentLaunchSpec, result *SubagentResult) (string, error) {
+func finishSubagentRun(ctx context.Context, a *Agent, spec *subagentLaunchSpec, result *SubagentResult, verification workerVerifyResult) (string, error) {
 	// Merge the subagent's tracked changes into the primary's ChangeTracker
 	// so list_changes, recover_file, and revert_my_changes see subagent edits.
 	a.MergeSubagentChanges(result.FileChanges, spec.persona)
@@ -151,8 +197,17 @@ func finishSubagentRun(ctx context.Context, a *Agent, spec *subagentLaunchSpec, 
 		return failMsg, nil
 	}
 
+	// A worker-role task whose result failed verification (even after the
+	// single escalation) must never be handed to the primary as an
+	// unqualified success: mark it failed and carry the reason.
+	if isWorkerRoleTask(spec.role) && !verification.Verified {
+		resultMap["exit_code"] = "1"
+		resultMap["stderr"] = "worker verification failed: " + verification.Reason
+		resultMap["error"] = "worker verification failed: " + verification.Reason
+	}
+
 	// Marshal and return the final result
-	return buildSubagentFinalResult(a, resultMap, result)
+	return buildSubagentFinalResult(a, resultMap, result, verification)
 }
 
 // ---------------------------------------------------------------------------

@@ -62,6 +62,11 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 	}
 	results := runner.RunParallel(ctx, tasks, opts)
 
+	// Verify worker-role results before the primary relies on them; a
+	// failed worker task is retried once on the coder model. Non-worker
+	// tasks are untouched.
+	verifyParallelWorkerResults(ctx, a, parallelTasks, results)
+
 	// Phase 2: Collect and process results
 	resultMap, failedCount := collectParallelResults(results, tasks, a)
 	publishParallelSubagentComplete(ctx, a, resultMap, failedCount)
@@ -149,6 +154,10 @@ func parseParallelTasks(args map[string]interface{}) ([]SubagentTask, error) {
 
 			if persona, ok := taskMap["persona"].(string); ok {
 				task.Persona = strings.TrimSpace(persona)
+			}
+
+			if format, ok := taskMap["output_format"].(string); ok {
+				task.OutputFormat = strings.TrimSpace(format)
 			}
 
 			// Note: model and provider are set from configuration, not from LLM parameters
@@ -347,6 +356,7 @@ func buildParallelSubagentTasks(tasks []SubagentTask) []SubagentTask {
 			Persona:      pt.Persona,
 			SystemPrompt: pt.SystemPrompt,
 			Role:         pt.Role,
+			OutputFormat: pt.OutputFormat,
 		}
 	}
 	return result

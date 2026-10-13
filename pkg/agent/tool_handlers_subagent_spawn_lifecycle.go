@@ -31,7 +31,12 @@ type subagentLaunchSpec struct {
 	// role is the role the subagent's usage is attributed to
 	// (the role its model was resolved through; see
 	// resolveSubagentProviderModel).
-	role                  string
+	role string
+	// outputFormat is the output format the caller requested for the
+	// task's result (the `output_format` argument). Empty means the
+	// caller requested no specific format, in which case the worker
+	// result's format-conformance check is not applicable.
+	outputFormat          string
 	systemPromptText      string
 	enhancedPrompt        string
 	subagentWorkspaceRoot string
@@ -79,6 +84,17 @@ func prepareSubagentLaunch(ctx context.Context, a *Agent, args map[string]interf
 		if wdStr, ok := wdVal.(string); ok && wdStr != "" {
 			spec.workingDir = wdStr
 			a.Logger().Debug("Subagent working_dir specified: %s\n", spec.workingDir)
+		}
+	}
+
+	// --- Parse optional output_format ---
+	// The requested output format for the task's result. A worker-role
+	// subagent's result is checked against it before the primary relies
+	// on it; empty means no format was requested, so the check is skipped.
+	if fmtVal, ok := args["output_format"]; ok && fmtVal != nil {
+		if fmtStr, ok := fmtVal.(string); ok && strings.TrimSpace(fmtStr) != "" {
+			spec.outputFormat = strings.TrimSpace(fmtStr)
+			a.Logger().Debug("Subagent output_format specified: %s\n", spec.outputFormat)
 		}
 	}
 

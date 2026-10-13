@@ -403,7 +403,7 @@ cold and can erase the saving).
       Parallel delegation reuses the existing parallel-subagent path. Tests:
       worker resolution and fallback, delegated task gets a focused context
       (not the parent's full history), events show which model ran each step.
-- [ ] **ca.2** Verify and escalate. Check a worker's result before the main
+- [x] **ca.2** Verify and escalate. Check a worker's result before the main
       agent relies on it: an edit applies cleanly, the stated tests pass, the
       output matches the requested format. On failure or low confidence, retry
       the task once on the coder model and record that it escalated. Never let

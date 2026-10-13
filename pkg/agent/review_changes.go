@@ -90,7 +90,14 @@ type ReviewChangesResult struct {
 	// Verdict is "APPROVE", "CHANGES_REQUIRED", or "INCONCLUSIVE" (a
 	// reviewer failed or returned no structured verdict, and no MUST_FIX
 	// was found elsewhere).
-	Verdict   string          `json:"verdict"`
+	Verdict string `json:"verdict"`
+	// Branch identifies the tree the review ran in: the absolute repo root
+	// plus the short HEAD it resolved when the review started. Multi-
+	// worktree setups make a range like <sha>..HEAD meaningless without
+	// knowing which HEAD — the caller checks this before trusting the
+	// findings.
+	RepoRoot  string          `json:"repo_root,omitempty"`
+	Branch    string          `json:"branch,omitempty"`
 	Findings  []ReviewFinding `json:"findings"`
 	Reviewers []ReviewerRun   `json:"reviewers"`
 	Elapsed   time.Duration   `json:"elapsed"`
@@ -120,6 +127,12 @@ func (a *Agent) ReviewChanges(ctx context.Context, opts ReviewChangesOptions) (*
 	if repoRoot == "" {
 		return nil, agenterrors.NewValidation("review_changes requires a git repository", nil)
 	}
+	// Capture which tree and HEAD the review resolves to. In a
+	// multi-worktree setup a range like <sha>..HEAD means nothing without
+	// this — the caller must be able to see the review looked at the right
+	// branch before trusting its findings.
+	reviewHead, _ := runReviewGit(ctx, repoRoot, "rev-parse", "--short", "HEAD")
+	resolvedHead := strings.TrimSpace(reviewHead)
 
 	provider, model, role, systemPrompt, err := resolveSubagentProviderModel(a, personas.IDReviewer, true, workspaceRoot)
 	if err != nil {
@@ -168,6 +181,8 @@ func (a *Agent) ReviewChanges(ctx context.Context, opts ReviewChangesOptions) (*
 
 	review := mergeReviewResults(tasks, groups, results)
 	review.Elapsed = time.Since(start)
+	review.RepoRoot = repoRoot
+	review.Branch = resolvedHead
 	return review, nil
 }
 
@@ -415,6 +430,14 @@ func (r *ReviewChangesResult) Markdown() string {
 		r.Verdict, countSeverity(r.Findings, "MUST_FIX"), countSeverity(r.Findings, "VERIFY"), countSeverity(r.Findings, "NOTE"),
 		len(r.Reviewers), r.Elapsed.Round(time.Second), tokens)
 
+	// Tree disclosure: which repository and HEAD this review resolved to.
+	// The caller checks this line before trusting the findings — a range
+	// like <sha>..HEAD resolves against THIS HEAD, and in a multi-worktree
+	// setup the wrong tree produces confident nonsense.
+	if r.RepoRoot != "" || r.Branch != "" {
+		fmt.Fprintf(&b, "Reviewed tree: %s (HEAD %s)\n", r.RepoRoot, orDash(r.Branch))
+	}
+
 	for _, severity := range []string{"MUST_FIX", "VERIFY", "NOTE"} {
 		first := true
 		for _, f := range r.Findings {
@@ -544,12 +567,29 @@ func displayOrDefault(s string) string {
 	return s
 }
 
+// orDash renders empty strings as a dash so disclosure lines stay readable.
+func orDash(s string) string {
+	if strings.TrimSpace(s) == "" {
+		return "-"
+	}
+	return s
+}
+
 // handleReviewChanges is the review_changes tool entry point.
 func handleReviewChanges(ctx context.Context, a *Agent, args map[string]any) (string, error) {
 	opts := ReviewChangesOptions{}
 	opts.Scope, _ = args["scope"].(string)
 	opts.Range, _ = args["range"].(string)
 	opts.Focus, _ = args["focus"].(string)
+	// repo_dir lets the caller point the review at a worktree of the
+	// workspace repository that lives outside the workspace root. Without
+	// it the review resolves HEAD in the workspace root and — in a
+	// multi-worktree setup — reviews the wrong tree: main's unrelated
+	// in-progress work surfaced as "the change", with the branch's own
+	// files reported as deleted.
+	if rd, ok := args["repo_dir"].(string); ok && strings.TrimSpace(rd) != "" {
+		opts.Dir = strings.TrimSpace(rd)
+	}
 	background := true
 	if v, ok := args["background"].(bool); ok {
 		background = v

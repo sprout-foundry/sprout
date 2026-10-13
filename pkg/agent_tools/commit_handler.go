@@ -53,7 +53,7 @@ func (h *commitHandler) Definition() ToolDefinition {
 		Parameters: []ParameterDef{
 			{Name: "message", Type: "string", Description: "Explicit commit message, used as-is when provided (shell-safe: backticks, $(), and other special characters are not expanded). When omitted, a Conventional Commit message is generated from the staged diff, with notes as context; if generation fails, nothing is committed."},
 			{Name: "notes", Type: "string", Description: "Context used to shape the commit message when message is omitted (e.g., 'fixes the flaky auth test'). Ignored when message is provided."},
-			{Name: "repo_dir", Type: "string", Description: "Subdirectory within the workspace to commit in (e.g., for submodules or monorepo workspaces). Must be within the workspace root. Defaults to workspace root if omitted."},
+			{Name: "repo_dir", Type: "string", Description: "Directory to commit in: a subdirectory of the workspace, or a git worktree of the workspace repository even when checked out outside the workspace root (worktrees of the same repo share one .git dir and are allowed). Defaults to workspace root if omitted."},
 		},
 	}
 }

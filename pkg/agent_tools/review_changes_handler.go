@@ -25,6 +25,11 @@ func (h *reviewChangesHandler) Definition() ToolDefinition {
 			"After substantial fixes, one re-review is enough.",
 		Parameters: []ParameterDef{
 			{
+				Name:        "repo_dir",
+				Type:        "string",
+				Description: "Repository root to review: a subdirectory of the workspace, or a git worktree of the workspace repository even when checked out outside the workspace root. Required when the change under review lives in a worktree other than the workspace root — without it the tool resolves HEAD in the workspace root and reviews the wrong tree. Defaults to workspace root if omitted.",
+			},
+			{
 				Name:        "scope",
 				Type:        "string",
 				Description: "What to review: \"working_tree\" (default: staged + unstaged changes vs HEAD, plus new untracked files), \"staged\" (what the next commit contains), or \"range\" (a commit or branch range; set `range`).",

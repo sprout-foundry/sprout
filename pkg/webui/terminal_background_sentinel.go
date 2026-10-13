@@ -4,27 +4,24 @@ package webui
 
 // terminal_background_sentinel.go — the background completion-sentinel
 // machinery, split out of terminal_background.go. wrapBackgroundCommand
-// wraps a command so it echoes the completion marker; checkBackgroundSentinel
-// scans PTY output for that marker (recording the exit code and closing
-// bgDone exactly once); closeBackgroundDoneLocked is the no-sentinel
-// fallback for sessions that die before reporting.
+// materializes the command as a temp script and returns the short launcher
+// line to write to the PTY; checkBackgroundSentinel scans PTY output for
+// that marker (recording the exit code and closing bgDone exactly once);
+// closeBackgroundDoneLocked is the no-sentinel fallback for sessions that
+// die before reporting.
 import (
 	"bytes"
-	"fmt"
 	"strconv"
-	"strings"
 )
 
-// wrapBackgroundCommand wraps a command with the completion sentinel, the
-// same convention ExecuteCommandAndWait uses. Both the success and failure
-// branches echo the marker with the command's exit status, so the sentinel
-// fires regardless of exit code.
-func wrapBackgroundCommand(command, marker string) string {
-	escapedCmd := strings.ReplaceAll(command, "'", "'\\''")
-	return fmt.Sprintf(
-		"/bin/sh -c '%s && echo \"%s$?\" || echo \"%s$?\"'\n",
-		escapedCmd, sentinelPrefix+marker+":", sentinelPrefix+marker+":",
-	)
+// wrapBackgroundCommand materializes command with the completion sentinel —
+// the same convention ExecuteCommandAndWait uses — via writeCommandScript,
+// and returns the launcher line. The sentinel fires regardless of exit
+// code, and the PTY receives only a short launcher line (see
+// terminal_script.go for why inline wrapping is unsafe).
+func wrapBackgroundCommand(command, marker string) (string, error) {
+	_, launcher, err := writeCommandScript(command, marker)
+	return launcher, err
 }
 
 // checkBackgroundSentinel examines newly-arrived output for the session's

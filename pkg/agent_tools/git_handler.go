@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -24,7 +25,7 @@ func (h *gitHandler) Definition() ToolDefinition {
 		Parameters: []ParameterDef{
 			{Name: "operation", Type: "string", Required: true, Description: "Git operation: commit, push, pull, fetch, add, rm, mv, reset, rebase, merge, checkout, branch_delete, tag, clean, stash, am, apply, cherry_pick, revert, restore"},
 			{Name: "args", Type: "string", Description: "Args to pass to the git command"},
-			{Name: "repo_dir", Type: "string", Description: "Subdirectory within the workspace to run git operations in (e.g., for submodules or monorepo workspaces). Must be within the workspace root. Defaults to workspace root if omitted."},
+			{Name: "repo_dir", Type: "string", Description: "Directory to run git operations in: a subdirectory of the workspace, or a git worktree of the workspace repository even when checked out outside the workspace root (worktrees of the same repo share one .git dir and are allowed). Defaults to workspace root if omitted."},
 		},
 	}
 }
@@ -260,9 +261,19 @@ func (h *gitHandler) MaxResultSize() int     { return 0 }
 func (h *gitHandler) SafeForParallel() bool  { return false }
 func (h *gitHandler) Interactive() bool      { return false }
 
-// validateRepoDir validates that repoDir resolves to a path within workspaceRoot.
-// Returns the absolute resolved path, or an error if the path is invalid or escapes
-// the workspace boundary.
+// validateRepoDir validates that repoDir resolves to a path the git tools
+// may operate on: within the workspace root, OR a git worktree of the same
+// repository that backs the workspace (every linked worktree shares one
+// common git dir, so the shared-.git check admits exactly that family —
+// including worktrees that live outside the workspace, e.g. <repo>-bugfix
+// as a sibling of <repo>). Returns the absolute resolved path, or an error
+// if the path is invalid or escapes both checks.
+//
+// The shared-repository branch exists because git worktrees of the workspace
+// repo legitimately live outside the workspace root, and refusing them
+// forced agents onto raw shell git for exactly the sanctioned
+// commit/review workflows. An unrelated repository outside the workspace is
+// still refused.
 func validateRepoDir(repoDir, workspaceRoot string) (string, error) {
 	if workspaceRoot == "" {
 		return "", agenterrors.NewConfig("workspace root is not set", nil)
@@ -289,13 +300,12 @@ func validateRepoDir(repoDir, workspaceRoot string) (string, error) {
 		return "", agenterrors.NewAgent("git", "resolve repo_dir", err)
 	}
 
-	// Check the resolved path is within the workspace root.
-	rel, err := filepath.Rel(absWorkspace, absRepoDir)
-	if err != nil {
-		return "", agenterrors.NewAgent("git", "compute relative path", err)
-	}
-	if strings.HasPrefix(rel, "..") {
-		return "", agenterrors.NewPermission(fmt.Sprintf("repo_dir %q resolves outside workspace root %q", repoDir, workspaceRoot), nil)
+	// Check the resolved path is within the workspace root; if not, admit
+	// a linked worktree of the workspace's own repository.
+	if !pathWithin(absRepoDir, absWorkspace) {
+		if !sameCommonGitDir(absRepoDir, absWorkspace) {
+			return "", agenterrors.NewPermission(fmt.Sprintf("repo_dir %q resolves outside workspace root %q (and is not a git worktree of the workspace repository)", repoDir, workspaceRoot), nil)
+		}
 	}
 
 	// Verify the directory exists.
@@ -308,6 +318,46 @@ func validateRepoDir(repoDir, workspaceRoot string) (string, error) {
 	}
 
 	return absRepoDir, nil
+}
+
+// pathWithin is declared in security_path_lexical.go (component-aware,
+// Windows-safe); the worktree check reuses it.
+
+// sameCommonGitDir reports whether dir and ref are checkouts of the same
+// repository — that is, both are git work trees and their common git
+// directories (the .git dir shared by every linked worktree) resolve to the
+// same path. Symlink-resolved on both sides so /tmp-style aliases compare
+// equal.
+func sameCommonGitDir(dir, ref string) bool {
+	dirCommon := commonGitDir(dir)
+	if dirCommon == "" {
+		return false
+	}
+	refCommon := commonGitDir(ref)
+	return refCommon != "" && dirCommon == refCommon
+}
+
+// commonGitDir resolves the repository-wide .git directory for a work tree
+// at dir ("git rev-parse --git-common-dir", made absolute against dir and
+// symlink-resolved). Returns "" when dir is not inside a git work tree.
+func commonGitDir(dir string) string {
+	cmd := exec.Command("git", "-C", dir, "rev-parse", "--git-common-dir") //nolint:gosec // G204: dir is the caller-resolved repo path; rev-parse is read-only
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	p := strings.TrimSpace(string(out))
+	if p == "" {
+		return ""
+	}
+	if !filepath.IsAbs(p) {
+		p = filepath.Join(dir, p)
+	}
+	resolved, err := filepath.EvalSymlinks(p)
+	if err != nil {
+		return ""
+	}
+	return resolved
 }
 
 // extractCommitMessage extracts -m <message> from git commit args, handling

@@ -10,6 +10,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/agent/subagents"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/personas"
 )
 
 // defaultSubagentTimeout bounds a subagent run when the caller didn't set
@@ -41,4 +42,20 @@ func (r *SubagentRunner) resolveSubagentTimeout(opts SubagentOptions) time.Durat
 // subagents.IsOrchestratorPersona.
 func (r *SubagentRunner) isOrchestratorPersona(persona string) bool {
 	return subagents.IsOrchestratorPersona(r.sharedConfigManager(), persona)
+}
+
+// appendPreambleForPersona appends the shared subagent preamble with the
+// git bullet chosen by the persona's capabilities. Personas whose catalog
+// entry grants git_write (the orchestrator family) get the incremental-
+// commit rule: their runs are long, time-budgeted, and expected to commit
+// their own work as they go, so a hard deadline must cost at most the last
+// committed slice.
+func (r *SubagentRunner) appendPreambleForPersona(prompt, persona string) string {
+	hasGitWrite := false
+	if cm := r.sharedConfigManager(); cm != nil && persona != "" {
+		if st := cm.GetConfig().GetSubagentType(persona); st != nil {
+			hasGitWrite = st.HasCapability(personas.CapabilityGitWrite)
+		}
+	}
+	return subagents.AppendSubagentPreambleForPersona(prompt, hasGitWrite)
 }

@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/agent/subagents"
 	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
@@ -476,6 +477,38 @@ func (r *SubagentRunner) runTask(
 		}
 	}
 
+	// A timed-out run reached the deadline mid-work: its buffered output is
+	// the only record of what it did. Attach the recent tail so the primary
+	// can see the last actions and recover the work instead of starting
+	// blind — a timed-out orchestrator otherwise leaves an uncommitted tree
+	// and no report, and every timeout costs a manual recovery pass.
+	if result != nil && rc.runCtx.Err() != nil && result.Output == "" {
+		result.Output = subagentTimeoutTail(*rc.progressLog, rc.progressMu)
+	}
+
 	// Finalize
 	return r.finalizeSubagentResult(rc, result, subAgent, taskID, startTime, opts)
+}
+
+// subagentTimeoutTail renders the run's recent progress entries as the
+// output for a result that died before producing a final report. Bounded to
+// the last few entries — enough to see what the subagent was doing, not a
+// full transcript.
+func subagentTimeoutTail(log []SubagentProgressEntry, mu *sync.Mutex) string {
+	if mu != nil {
+		mu.Lock()
+		defer mu.Unlock()
+	}
+	const tailEntries = 8
+	start := 0
+	if len(log) > tailEntries {
+		start = len(log) - tailEntries
+	}
+	var b strings.Builder
+	b.WriteString(subagents.TimeoutTailHeader + "\n")
+	for _, e := range log[start:] {
+		fmt.Fprintf(&b, "- %s: %s\n", e.Phase, strings.TrimSpace(e.Message))
+	}
+	b.WriteString("Inspect the tracked file changes before re-running: the work up to the deadline is likely intact.")
+	return b.String()
 }

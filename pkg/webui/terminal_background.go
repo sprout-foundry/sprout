@@ -130,11 +130,15 @@ func (tm *TerminalManager) ExecuteCommandInBackground(ctx context.Context, chatI
 		return "", fmt.Errorf("session became inactive before command could be sent")
 	}
 
-	// Wrap with the completion sentinel: /bin/sh -c '... && echo M:$? || echo M:$?'.
-	// /bin/sh guarantees $? semantics regardless of the session's login shell
-	// (fish uses $status). Both branches echo, so the sentinel fires
-	// regardless of the command's exit code.
-	wrappedCmd := wrapBackgroundCommand(command, marker)
+	// Materialize with the completion sentinel and write only the short
+	// launcher line to the PTY: /bin/sh guarantees $? semantics regardless
+	// of the session's login shell (fish uses $status), and the launcher
+	// stays far below the PTY's canonical-mode line limit.
+	wrappedCmd, wrapErr := wrapBackgroundCommand(command, marker)
+	if wrapErr != nil {
+		_ = tm.CloseSession(sessionID)
+		return "", fmt.Errorf("failed to prepare command: %w", wrapErr)
+	}
 	if _, err := pty.Write([]byte(wrappedCmd)); err != nil {
 		// Clean up the failed session
 		_ = tm.CloseSession(sessionID)

@@ -5,6 +5,8 @@ package webui
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
@@ -799,6 +801,101 @@ func TestExecuteCommandAndWait_Backticks(t *testing.T) {
 	}
 }
 
+func TestExecuteCommandAndWait_MultiStatementChained(t *testing.T) {
+	dir := t.TempDir()
+	tm := newTestTerminalManager(t, dir)
+
+	session := createAndReadySession(t, tm, "exec-chained")
+	defer tm.CloseSession("exec-chained")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Chained statements must all execute: under the old inline wrap a
+	// command this long risked the PTY's ~4KB canonical-mode line
+	// truncation, which silently ran only the first statement; the
+	// launcher-line path is immune.
+	cmd := "mkdir -p trunc-test && cd trunc-test && " +
+		"echo anchor > a.txt && echo second > b.txt && echo third > c.txt && " +
+		"printf '%s\\n' padding padding padding padding padding padding padding padding && " +
+		"echo final >> d.txt"
+	output, exitCode, err := tm.ExecuteCommandAndWait(ctx, session, cmd)
+	if err != nil {
+		t.Fatalf("ExecuteCommandAndWait failed: %v", err)
+	}
+	if exitCode != 0 {
+		t.Errorf("expected exit code 0, got %d", exitCode)
+	}
+	// Every statement's side effect must be present.
+	for _, f := range []string{"trunc-test/a.txt", "trunc-test/b.txt", "trunc-test/c.txt"} {
+		if _, statErr := os.Stat(filepath.Join(dir, f)); statErr != nil {
+			t.Errorf("chained statement producing %s did not run: %v", f, statErr)
+		}
+	}
+	dContent, readErr := os.ReadFile(filepath.Join(dir, "trunc-test", "d.txt"))
+	if readErr != nil {
+		t.Errorf("final chained statement did not run: %v", readErr)
+	} else if !strings.Contains(string(dContent), "final") {
+		t.Errorf("d.txt content wrong: %q", string(dContent))
+	}
+	if !strings.Contains(output, "padding") {
+		t.Errorf("output missing later-statement markers, got %q", output)
+	}
+}
+
+func TestExecuteCommandAndWait_MultiLineHeredoc(t *testing.T) {
+	dir := t.TempDir()
+	tm := newTestTerminalManager(t, dir)
+
+	session := createAndReadySession(t, tm, "exec-heredoc")
+	defer tm.CloseSession("exec-heredoc")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Multi-line commands were previously rejected outright ("commands with
+	// embedded newlines are not supported"); the script path runs them.
+	cmd := "cat > heredoc.txt <<'EOF'\nline one\nline two\nEOF\necho done-heredoc"
+	output, exitCode, err := tm.ExecuteCommandAndWait(ctx, session, cmd)
+	if err != nil {
+		t.Fatalf("ExecuteCommandAndWait failed: %v", err)
+	}
+	if exitCode != 0 {
+		t.Errorf("expected exit code 0, got %d", exitCode)
+	}
+	content, readErr := os.ReadFile(filepath.Join(dir, "heredoc.txt"))
+	if readErr != nil {
+		t.Fatalf("heredoc file not written: %v", readErr)
+	}
+	if !strings.Contains(string(content), "line two") {
+		t.Errorf("heredoc content wrong: %q", string(content))
+	}
+	if !strings.Contains(output, "done-heredoc") {
+		t.Errorf("statement after heredoc did not run, output: %q", output)
+	}
+}
+
+func TestExecuteCommandAndWait_ExitCodePropagation(t *testing.T) {
+	dir := t.TempDir()
+	tm := newTestTerminalManager(t, dir)
+
+	session := createAndReadySession(t, tm, "exec-exitcode")
+	defer tm.CloseSession("exec-exitcode")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// A failing chained command must surface the real exit code through the
+	// script's sentinel.
+	_, exitCode, err := tm.ExecuteCommandAndWait(ctx, session, "echo before && false && echo never")
+	if err != nil {
+		t.Fatalf("ExecuteCommandAndWait failed: %v", err)
+	}
+	if exitCode == 0 {
+		t.Error("expected non-zero exit code for 'false', got 0")
+	}
+}
+
 func TestExecuteCommandAndWait_OutputContainsEchoPrefix(t *testing.T) {
 	dir := t.TempDir()
 	tm := newTestTerminalManager(t, dir)
@@ -932,15 +1029,17 @@ func TestExecuteCommandAndWait_EmbeddedNewlines(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	_, exitCode, err := tm.ExecuteCommandAndWait(ctx, session, "echo hello\necho world")
-	if err == nil {
-		t.Fatal("expected error for embedded newlines, got nil")
+	// Multi-line commands run through the materialized script; each line
+	// executes and the last statement's output marks completion.
+	output, exitCode, err := tm.ExecuteCommandAndWait(ctx, session, "echo hello\necho world-marker")
+	if err != nil {
+		t.Fatalf("ExecuteCommandAndWait failed for multi-line command: %v", err)
 	}
-	if !strings.Contains(err.Error(), "newline") {
-		t.Errorf("expected error to mention 'newline', got: %v", err)
+	if exitCode != 0 {
+		t.Errorf("expected exit code 0, got %d", exitCode)
 	}
-	if exitCode != -1 {
-		t.Errorf("expected exit code -1, got %d", exitCode)
+	if !strings.Contains(output, "hello") || !strings.Contains(output, "world-marker") {
+		t.Errorf("expected both lines' output, got %q", output)
 	}
 }
 

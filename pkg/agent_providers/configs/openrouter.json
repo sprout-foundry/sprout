@@ -754,13 +754,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.0228,
+        "cached_input_cost": 0.0182,
         "context_length": 1048576,
         "description": "DeepSeek V4 Flash is an efficiency-optimized Mixture-of-Experts model from DeepSeek with 284B total parameters and 13B activated parameters, supporting a 1M-token context window. It is designed for fast inference and...",
         "id": "deepseek/deepseek-v4-flash",
-        "input_cost": 0.0228,
+        "input_cost": 0.091,
         "name": "DeepSeek: DeepSeek V4 Flash",
-        "output_cost": 1.28,
+        "output_cost": 0.182,
         "tags": [
           "tools",
           "reasoning",
@@ -782,13 +782,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.034365,
+        "cached_input_cost": 0.036337,
         "context_length": 1048576,
         "description": "DeepSeek V4 Pro is a large-scale Mixture-of-Experts model from DeepSeek with 1.6T total parameters and 49B activated parameters, supporting a 1M-token context window. It is designed for advanced reasoning, coding,...",
         "id": "deepseek/deepseek-v4-pro",
-        "input_cost": 0.41238,
+        "input_cost": 0.436044,
         "name": "DeepSeek: DeepSeek V4 Pro",
-        "output_cost": 0.82476,
+        "output_cost": 0.872088,
         "tags": [
           "tools",
           "reasoning",
@@ -1133,13 +1133,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.0425,
+        "cached_input_cost": 0.05,
         "context_length": 262144,
         "description": "Gemma 4 26B A4B IT is an instruction-tuned Mixture-of-Experts (MoE) model from Google DeepMind. Despite 25.2B total parameters, only 3.8B activate per token during inference — delivering near-31B quality at...",
         "id": "google/gemma-4-26b-a4b-it",
-        "input_cost": 0.0765,
+        "input_cost": 0.09,
         "name": "Google: Gemma 4 26B A4B ",
-        "output_cost": 0.255,
+        "output_cost": 0.3,
         "tags": [
           "tools",
           "vision",
@@ -1426,13 +1426,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.11,
+        "cached_input_cost": 0.295,
         "context_length": 131072,
         "description": "The Meta Llama 3.3 multilingual large language model (LLM) is a pretrained and instruction tuned generative model in 70B (text in/text out). The Llama 3.3 instruction tuned text only model...",
         "id": "meta-llama/llama-3.3-70b-instruct",
-        "input_cost": 0.22,
+        "input_cost": 0.59,
         "name": "Meta: Llama 3.3 70B Instruct",
-        "output_cost": 0.5,
+        "output_cost": 0.79,
         "tags": [
           "tools",
           "structured_output"
@@ -1592,13 +1592,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.042,
+        "cached_input_cost": 0.06,
         "context_length": 204800,
         "description": "MiniMax-M2.7 is a next-generation large language model designed for autonomous, real-world productivity and continuous improvement. Built to actively participate in its own evolution, M2.7 integrates advanced agentic capabilities through multi-agent...",
         "id": "minimax/minimax-m2.7",
-        "input_cost": 0.21,
+        "input_cost": 0.3,
         "name": "MiniMax: MiniMax M2.7",
-        "output_cost": 0.84,
+        "output_cost": 1.2,
         "tags": [
           "tools",
           "reasoning",
@@ -2855,12 +2855,13 @@
         ]
       },
       {
+        "cached_input_cost": 0.075,
         "context_length": 131072,
         "description": "gpt-oss-120b is an open-weight, 117B-parameter Mixture-of-Experts (MoE) language model from OpenAI designed for high-reasoning, agentic, and general-purpose production use cases. It activates 5.1B parameters per forward pass and is optimized...",
         "id": "openai/gpt-oss-120b",
-        "input_cost": 0.037,
+        "input_cost": 0.15,
         "name": "OpenAI: gpt-oss-120b",
-        "output_cost": 0.17,
+        "output_cost": 0.6,
         "tags": [
           "tools",
           "reasoning",
@@ -3665,13 +3666,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.04,
+        "cached_input_cost": 0.05,
         "context_length": 262144,
         "description": "The Qwen3.5 Series 35B-A3B is a native vision-language model designed with a hybrid architecture that integrates linear attention mechanisms and a sparse mixture-of-experts model, achieving higher inference efficiency. Its overall...",
         "id": "qwen/qwen3.5-35b-a3b",
-        "input_cost": 0.08,
+        "input_cost": 0.15,
         "name": "Qwen: Qwen3.5-35B-A3B",
-        "output_cost": 0.75,
+        "output_cost": 1,
         "tags": [
           "tools",
           "vision",
@@ -4594,13 +4595,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.0128,
+        "cached_input_cost": 0.0108,
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the DeepSeek V4 Flash family.",
         "id": "~deepseek/deepseek-v4-flash-latest",
-        "input_cost": 0.0128,
+        "input_cost": 0.0144,
         "name": "DeepSeek V4 Flash Latest",
-        "output_cost": 0.768,
+        "output_cost": 0.576,
         "tags": [
           "tools",
           "reasoning",
@@ -5942,13 +5943,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.0232,
+        "cached_input_cost": 0.0108,
         "context_length": 1310720,
         "description": "GLM-5.3-Flash is Z.ai's first natively multimodal model, delivering frontier coding and agentic performance at flash-tier cost. With 320B total and 18B active parameters, it outperforms GLM-5.2 at one-tenth the price while approaching Claude Opus 4.8 on coding and agentic benchmarks.",
         "id": "z-ai/glm-5.3-flash",
-        "input_cost": 0.0232,
+        "input_cost": 0.0261,
         "name": "Z.ai: GLM 5.3 Flash",
-        "output_cost": 1.2,
+        "output_cost": 0.9,
         "tags": [
           "tools",
           "vision",
@@ -6267,13 +6268,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.0232,
+        "cached_input_cost": 0.0108,
         "context_length": 1310720,
         "description": "This model always redirects to the latest model in the GLM Flash family.",
         "id": "~z-ai/glm-flash-latest",
-        "input_cost": 0.0232,
+        "input_cost": 0.0261,
         "name": "Z.ai: GLM Flash Latest",
-        "output_cost": 1.2,
+        "output_cost": 0.9,
         "tags": [
           "tools",
           "vision",
@@ -6541,13 +6542,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.003,
+        "cached_input_cost": 0.0054,
         "context_length": 1048576,
         "description": "DeepSeek V4.1 Flash is a sparse mixture-of-experts model from DeepSeek, and the cost-efficient tier of the V4.1 family. DeepSeek reports that it exceeds V4 Pro on performance, speed, and task completion time, so it sits ahead of the previous flagship rather than beneath it.",
         "id": "deepseek/deepseek-v4.1-flash",
-        "input_cost": 0.15,
+        "input_cost": 0.0441,
         "name": "DeepSeek: DeepSeek V4.1 Flash",
-        "output_cost": 0.6,
+        "output_cost": 0.63,
         "tags": [
           "tools",
           "vision",
@@ -6698,13 +6699,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.0336,
+        "cached_input_cost": 0.0054,
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the DeepSeek Flash family.",
         "id": "~deepseek/deepseek-flash-latest",
-        "input_cost": 0.0336,
+        "input_cost": 0.0441,
         "name": "DeepSeek: DeepSeek Flash Latest",
-        "output_cost": 1.188,
+        "output_cost": 0.63,
         "tags": [
           "tools",
           "vision",
@@ -7000,12 +7001,13 @@
         ]
       },
       {
+        "cached_input_cost": 0.015,
         "context_length": 262144,
         "description": "Ling 3.1 Flash is a hybrid reasoning mixture-of-experts model from inclusionAI, with 25B active parameters out of 560B total.",
         "id": "inclusionai/ling-3.1-flash",
-        "input_cost": 0,
+        "input_cost": 0.075,
         "name": "inclusionAI: Ling 3.1 Flash",
-        "output_cost": 0,
+        "output_cost": 0.225,
         "tags": [
           "tools",
           "reasoning"
@@ -7443,6 +7445,43 @@
           "vision",
           "reasoning",
           "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.1,
+        "context_length": 1048576,
+        "description": "Gemini 4 Argon is Google's flagship reasoning model, built for complex software engineering, deep mathematical and scientific problem solving, and autonomous multi-step agents. Google trained it to keep context across long, multi-step tasks and to turn long documents mixing text, tables, charts and images into a single grounded output. It leads the Vals Index across finance, legal, coding and tax work, and supports long decode of up to 1M output tokens in a single response.",
+        "id": "google/gemini-4-argon",
+        "input_cost": 2,
+        "name": "Google: Gemini 4 Argon",
+        "output_cost": 10,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 1000000,
+        "description": "Extract is a description-driven entity extraction model from ScaleDown. Instead of a fixed set of entity types, callers describe the fields they want in plain English through `provider.options.scaledown.entities`, and the model returns each matching span with a confidence score, character offsets, and surrounding context. It is suited for pulling structured values out of contracts, invoices, emails, and transcripts, and includes built-in OCR so scanned images and PDFs work without a separate step.\n\nLearn more in ScaleDown's docs: https://docs.scaledown.ai/api-reference/extract-overview",
+        "id": "scaledown/extract",
+        "input_cost": 0.04,
+        "name": "ScaleDown: Extract",
+        "output_cost": 0,
+        "tags": [
+          "vision"
+        ]
+      },
+      {
+        "context_length": 1000000,
+        "description": "Summarize is an abstractive summarization model from ScaleDown. It condenses long text and documents into a fluent, faithful rewrite rather than lifting sentences from the source, and is suited for document review, transcript digests, and RAG pre-processing where retrieved content must be shortened before reaching another model. Format, focus, language, and length are steered through the system prompt, while sampling is fixed to a configuration tuned for faithful output.\n\nLearn more in ScaleDown's docs: https://docs.scaledown.ai/api-reference/summarize-overview",
+        "id": "scaledown/summarize",
+        "input_cost": 0.04,
+        "name": "ScaleDown: Summarize",
+        "output_cost": 0,
+        "tags": [
+          "vision"
         ]
       }
     ],

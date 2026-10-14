@@ -53,6 +53,16 @@ type ModelSpec struct {
 	// Provider is the provider name to run against (e.g. "anthropic").
 	// Empty → the run's configuration default provider.
 	Provider string
+	// RunMode selects how the run delegates work: RunModeCoder (or empty —
+	// the default), RunModeDelegated, or RunModeEconomy. See delegation.go.
+	RunMode string
+	// WorkerModel / WorkerProvider point the worker role at a cheaper model
+	// for RunModeDelegated / RunModeEconomy. An empty WorkerModel leaves the
+	// worker role unset, in which case delegation is a no-op and the run
+	// behaves like RunModeCoder. An empty WorkerProvider uses the run's own
+	// provider (the run's active provider, pinned by configureRun).
+	WorkerModel    string
+	WorkerProvider string
 }
 
 // AgentFactory builds the headless agent for one run. It receives the
@@ -159,6 +169,11 @@ type Run struct {
 	// agent's per-role usage, captured from its metrics.
 	// Empty when the run errored before the agent's turn recorded usage.
 	RoleUsage []agent.RoleUsage
+	// RunMode is the delegation mode the run used (RunModeCoder when unset).
+	RunMode string
+	// Delegation is the run's delegation outcome (task/verified/escalated/
+	// failed counts and the worker share). Zero for a coder-only run.
+	Delegation DelegationMetrics
 }
 
 // Runner runs a benchmark task's headless runs.
@@ -333,12 +348,17 @@ func (r *Runner) SuiteModels() []ModelSpec {
 // so the benchmark reports every run: one bad setup does not abort the
 // suite. The run's fresh copy is always removed, success or failure.
 func (r *Runner) runOnce(task *Task, spec ModelSpec, runNumber int) Run {
+	runMode := spec.RunMode
+	if runMode == "" {
+		runMode = RunModeCoder
+	}
 	run := Run{
 		TaskID:    task.ID,
 		Starter:   task.Starter,
 		Model:     spec.Model,
 		Provider:  spec.Provider,
 		RunNumber: runNumber,
+		RunMode:   runMode,
 		StartedAt: time.Now(),
 	}
 	fail := func(err error) Run {
@@ -383,6 +403,9 @@ func (r *Runner) runOnce(task *Task, spec ModelSpec, runNumber int) Run {
 	if err := r.configureRun(spec); err != nil {
 		return fail(fmt.Errorf("benchmark: configure run for task %s run %d: %w", task.ID, runNumber, err))
 	}
+	if err := r.applyRunMode(spec); err != nil {
+		return fail(fmt.Errorf("benchmark: apply run mode for task %s run %d: %w", task.ID, runNumber, err))
+	}
 	agFactory := r.AgentFactory
 	if agFactory == nil {
 		agFactory = r.defaultAgentFactory
@@ -392,6 +415,7 @@ func (r *Runner) runOnce(task *Task, spec ModelSpec, runNumber int) Run {
 		return fail(fmt.Errorf("benchmark: build agent for task %s run %d: %w", task.ID, runNumber, err))
 	}
 	defer ag.Shutdown()
+	applyRunModeToAgent(ag, spec)
 
 	// The run's non-interactive posture: no approval surface exists in a
 	// headless run, so the run opts into the narrow --unsafe-shell posture —
@@ -460,6 +484,11 @@ func (r *Runner) runOnce(task *Task, spec ModelSpec, runNumber int) Run {
 	// agent's per-role usage (fresh agent → the conversation total is the
 	// run's usage, so the per-role split is the run's per-role usage).
 	run.RoleUsage = ag.GetRoleUsage()
+	// Delegation outcome: the agent's delegated-task records (empty for a
+	// coder-only run, so the metrics stay zero). RunMode was set on the run
+	// literal at entry, so a setup-failure run is still accounted under its
+	// intended mode.
+	run.Delegation = delegationMetricsFromOutcomes(ag.GetDelegatedTaskOutcomes())
 	if tv != nil {
 		run.RepairRounds = tv.Rounds
 		run.RepairAttempts = tv.Attempts

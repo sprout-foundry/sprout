@@ -425,7 +425,7 @@ cold and can erase the saving).
       worker model (no main-loop model switch, so the prompt cache is kept).
       Show the mode and its effect plainly in the UI. Tests: mode on/off,
       host-set mode via the API, no mid-session main-loop switch.
-- [ ] **ca.5** Benchmark the delegation. Extend the benchmark harness so a run
+- [x] **ca.5** Benchmark the delegation. Extend the benchmark harness so a run
       can compare "coder only" with "coder + worker delegation" (and economy
       mode) on the same tasks: task success, escalation rate, tokens and cost.
       Mock-provider tests in CI; real-model runs belong to the benchmark

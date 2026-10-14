@@ -65,26 +65,32 @@ func writeCommandScript(command, marker string) (scriptPath, launcher string, er
 	path := f.Name()
 
 	if _, writeErr := f.WriteString(buildScriptBody(command, marker)); writeErr != nil {
-		f.Close()
-		os.Remove(path)
+		discardScript(f, path)
 		return "", "", fmt.Errorf("write command script: %w", writeErr)
 	}
 	if chmodErr := f.Chmod(0o700); chmodErr != nil {
-		f.Close()
-		os.Remove(path)
+		discardScript(f, path)
 		return "", "", fmt.Errorf("chmod command script: %w", chmodErr)
 	}
 	if closeErr := f.Close(); closeErr != nil {
-		os.Remove(path)
+		_ = os.Remove(path)
 		return "", "", fmt.Errorf("close command script: %w", closeErr)
 	}
 
 	launcher = "sh " + shQuote(path) + "\n"
 	if len(launcher) > launcherMaxBytes {
-		os.Remove(path)
+		_ = os.Remove(path)
 		return "", "", fmt.Errorf("command launcher exceeds %d bytes", launcherMaxBytes)
 	}
 	return path, launcher, nil
+}
+
+// discardScript cleans up a partially written script after a failure. The
+// caller is already returning the primary error, so the cleanup's own
+// error carries no information worth surfacing.
+func discardScript(f *os.File, path string) {
+	_ = f.Close()
+	_ = os.Remove(path)
 }
 
 // buildScriptBody renders the script content. The command is stored

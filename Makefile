@@ -427,7 +427,8 @@ vet: prepare-grammars
 	go vet ./...
 
 fmt-check:
-	@unformatted=$$(gofmt -l pkg/ cmd/ internal/ 2>/dev/null); \
+	@gofmt_bin="$$(scripts/gofmt-toolchain.sh)"; \
+	unformatted=$$("$$gofmt_bin" -l pkg/ cmd/ internal/ 2>/dev/null); \
 	if [ -n "$$unformatted" ]; then \
 		echo "❌ gofmt found unformatted files:"; \
 		echo "$$unformatted"; \

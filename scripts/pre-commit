@@ -28,10 +28,13 @@ all_staged="$(git diff --cached --name-only --diff-filter=ACM)"
 # --- 1. gofmt on staged Go files -------------------------------------------
 go_files="$(printf '%s\n' "$all_staged" | grep '\.go$' || true)"
 if [ -n "$go_files" ]; then
-  if ! command -v gofmt >/dev/null 2>&1; then
+  # Use the gofmt matching go.mod's pinned toolchain so the hook agrees with
+  # CI (see scripts/gofmt-toolchain.sh); fall back to PATH's gofmt.
+  gofmt_bin="$("$ROOT/scripts/gofmt-toolchain.sh" 2>/dev/null || command -v gofmt)"
+  if [ -z "$gofmt_bin" ]; then
     echo "pre-commit: gofmt not found — skipping Go format check"
   else
-    unformatted="$(printf '%s\n' "$go_files" | xargs gofmt -l 2>/dev/null)"
+    unformatted="$(printf '%s\n' "$go_files" | xargs "$gofmt_bin" -l 2>/dev/null)"
     if [ -n "$unformatted" ]; then
       echo "❌ gofmt: unformatted files (run: gofmt -w <files> then git add):"
       printf '%s\n' "$unformatted" | sed 's/^/    /'

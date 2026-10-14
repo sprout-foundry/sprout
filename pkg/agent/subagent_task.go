@@ -483,7 +483,7 @@ func (r *SubagentRunner) runTask(
 	// blind — a timed-out orchestrator otherwise leaves an uncommitted tree
 	// and no report, and every timeout costs a manual recovery pass.
 	if result != nil && rc.runCtx.Err() != nil && result.Output == "" {
-		result.Output = subagentTimeoutTail(*rc.progressLog, rc.progressMu)
+		result.Output = subagentTimeoutTail(rc.progressLog, rc.progressMu)
 	}
 
 	// Finalize
@@ -494,19 +494,28 @@ func (r *SubagentRunner) runTask(
 // output for a result that died before producing a final report. Bounded to
 // the last few entries — enough to see what the subagent was doing, not a
 // full transcript.
-func subagentTimeoutTail(log []SubagentProgressEntry, mu *sync.Mutex) string {
+//
+// The slice is read under mu: the progress goroutine appends to it (which
+// can reallocate the backing array) and is still alive here — it exits only
+// after runTask returns — so reading the header unlocked would race the
+// append.
+func subagentTimeoutTail(log *[]SubagentProgressEntry, mu *sync.Mutex) string {
 	if mu != nil {
 		mu.Lock()
 		defer mu.Unlock()
 	}
+	var entries []SubagentProgressEntry
+	if log != nil {
+		entries = *log
+	}
 	const tailEntries = 8
 	start := 0
-	if len(log) > tailEntries {
-		start = len(log) - tailEntries
+	if len(entries) > tailEntries {
+		start = len(entries) - tailEntries
 	}
 	var b strings.Builder
 	b.WriteString(subagents.TimeoutTailHeader + "\n")
-	for _, e := range log[start:] {
+	for _, e := range entries[start:] {
 		fmt.Fprintf(&b, "- %s: %s\n", e.Phase, strings.TrimSpace(e.Message))
 	}
 	b.WriteString("Inspect the tracked file changes before re-running: the work up to the deadline is likely intact.")

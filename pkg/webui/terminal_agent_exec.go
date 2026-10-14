@@ -304,26 +304,31 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 									output := buf.String()[:idx]
 
 									// Strip the launcher-line echo from the beginning of the
-									// output. Pipe (NoPTY) sessions have no echo. The PTY echoes
-									// the launcher we sent (`sh '/tmp/sprout-cmd-*.sh'`) as the
-									// FIRST line of the session transcript; the script path
-									// (via shQuote) is embedded in that echo. Anchor the match
-									// at the start of the output so a command that merely
-									// prints a "sh '...'" string is not mis-stripped; fall
-									// back to the first occurrence (covers shells that emit
-									// OSC/title sequences before the echo).
-									echoPrefix := "sh '"
-									echoIdx := -1
-									if strings.HasPrefix(output, echoPrefix) {
-										echoIdx = 0
-									} else if echoesInput {
-										echoIdx = strings.Index(output, echoPrefix)
-									}
-									if echoIdx != -1 {
-										restAfterEcho := output[echoIdx:]
-										newlineIdx := newlineRegex.FindStringIndex(restAfterEcho)
-										if newlineIdx != nil {
-											output = output[echoIdx+newlineIdx[1]:]
+									// output. Pipe (NoPTY) sessions have no echo at all, so
+									// skip the strip entirely there: a pipe session's output
+									// may legitimately begin with "sh '".
+									if echoesInput {
+										// The PTY echoes the launcher we sent
+										// (`sh '/tmp/sprout-cmd-*.sh'`) as the FIRST line of
+										// the session transcript; the script path (via
+										// shQuote) is embedded in that echo. Anchor the match
+										// at the start of the output so a command that merely
+										// prints a "sh '...'" string is not mis-stripped; fall
+										// back to the first occurrence (covers shells that emit
+										// OSC/title sequences before the echo).
+										echoPrefix := "sh '"
+										echoIdx := -1
+										if strings.HasPrefix(output, echoPrefix) {
+											echoIdx = 0
+										} else {
+											echoIdx = strings.Index(output, echoPrefix)
+										}
+										if echoIdx != -1 {
+											restAfterEcho := output[echoIdx:]
+											newlineIdx := newlineRegex.FindStringIndex(restAfterEcho)
+											if newlineIdx != nil {
+												output = output[echoIdx+newlineIdx[1]:]
+											}
 										}
 									}
 

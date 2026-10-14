@@ -918,6 +918,41 @@ func TestExecuteCommandAndWait_OutputContainsEchoPrefix(t *testing.T) {
 	}
 }
 
+// A pipe (NoPTY) session has no echo, so the launcher-echo strip must not run:
+// a command whose output legitimately begins with "sh '" must survive intact.
+func TestExecuteCommandAndWait_PipeKeepsOutputStartingWithEchoPrefix(t *testing.T) {
+	dir := t.TempDir()
+	tm := newTestTerminalManager(t, dir)
+
+	shell, shellArgs, err := tm.resolveShell("")
+	if err != nil {
+		t.Skipf("no shell available: %v", err)
+	}
+	session, err := tm.startPipeSession("exec-pipe-echoprefix", shell, shellArgs)
+	if err != nil {
+		t.Skipf("pipe session unavailable: %v", err)
+	}
+	defer tm.CloseSession("exec-pipe-echoprefix")
+
+	session.mutex.Lock()
+	session.Hidden = true
+	session.mutex.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	output, exitCode, err := tm.ExecuteCommandAndWait(ctx, session, `printf "sh 'literal'\n"`)
+	if err != nil {
+		t.Fatalf("ExecuteCommandAndWait failed: %v", err)
+	}
+	if exitCode != 0 {
+		t.Errorf("expected exit code 0, got %d", exitCode)
+	}
+	if !strings.Contains(output, "sh 'literal'") {
+		t.Errorf("pipe output starting with the echo prefix must not be stripped, got %q", output)
+	}
+}
+
 func TestGetOrCreateHiddenSessionForChat_ShellReady(t *testing.T) {
 	dir := t.TempDir()
 	tm := newTestTerminalManager(t, dir)

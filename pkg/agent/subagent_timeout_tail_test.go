@@ -49,7 +49,7 @@ func TestSubagentTimeoutTail(t *testing.T) {
 		{Phase: "tool_call", Message: "go build ./..."},
 	}
 	var mu sync.Mutex
-	out := subagentTimeoutTail(log, &mu)
+	out := subagentTimeoutTail(&log, &mu)
 	if !strings.Contains(out, subagents.TimeoutTailHeader) {
 		t.Errorf("tail missing header:\n%s", out)
 	}
@@ -64,7 +64,7 @@ func TestSubagentTimeoutTail(t *testing.T) {
 	for i := range long {
 		long[i] = SubagentProgressEntry{Phase: "output", Message: strings.Repeat("x", i+1)}
 	}
-	trimmed := subagentTimeoutTail(long, &mu)
+	trimmed := subagentTimeoutTail(&long, &mu)
 	if strings.Count(trimmed, "\n- ") > 8 {
 		t.Errorf("tail not bounded to 8 entries:\n%s", trimmed)
 	}
@@ -73,4 +73,30 @@ func TestSubagentTimeoutTail(t *testing.T) {
 	if !strings.Contains(empty, "Recent activity") {
 		t.Errorf("empty log still needs the recovery guidance:\n%s", empty)
 	}
+}
+
+// The progress goroutine appends to the log (which can reallocate the backing
+// array) and is still alive when a timed-out run renders its tail. Reading the
+// slice under the same mutex is what keeps that safe; this exercises the
+// concurrent append so `go test -race` catches a regression.
+func TestSubagentTimeoutTail_ConcurrentAppend(t *testing.T) {
+	var mu sync.Mutex
+	log := []SubagentProgressEntry{{Phase: "spawn", Message: "task started"}}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 500; i++ {
+			mu.Lock()
+			log = append(log, SubagentProgressEntry{Phase: "output", Message: "step"})
+			mu.Unlock()
+		}
+	}()
+
+	for i := 0; i < 200; i++ {
+		if out := subagentTimeoutTail(&log, &mu); !strings.Contains(out, subagents.TimeoutTailHeader) {
+			t.Fatalf("tail missing header during concurrent append:\n%s", out)
+		}
+	}
+	<-done
 }

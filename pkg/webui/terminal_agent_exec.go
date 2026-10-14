@@ -317,11 +317,9 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 										// back to the first occurrence (covers shells that emit
 										// OSC/title sequences before the echo).
 										echoPrefix := "sh '"
-										echoIdx := -1
+										echoIdx := strings.Index(output, echoPrefix)
 										if strings.HasPrefix(output, echoPrefix) {
 											echoIdx = 0
-										} else {
-											echoIdx = strings.Index(output, echoPrefix)
 										}
 										if echoIdx != -1 {
 											restAfterEcho := output[echoIdx:]

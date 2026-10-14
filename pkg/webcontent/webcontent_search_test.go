@@ -44,8 +44,10 @@ func TestSearchProviderInterface(t *testing.T) {
 }
 
 func TestDuckDuckGoSearch(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping network-dependent test in short mode")
+	// Live DuckDuckGo call: not run in CI, where third-party throttling makes
+	// it fail at random. Run it locally to check the real search path.
+	if testing.Short() || os.Getenv("SKIP_NETWORK_TESTS") != "" || os.Getenv("CI") != "" {
+		t.Skip("skipping live network test (short mode, SKIP_NETWORK_TESTS or CI)")
 	}
 	logger := utils.GetLogger(false)
 

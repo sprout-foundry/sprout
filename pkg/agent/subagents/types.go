@@ -97,6 +97,17 @@ type SubagentReturn struct {
 	Status SubagentStatus `json:"status"`
 	// ErrorReason carries free-form context when Status != completed.
 	ErrorReason string `json:"error_reason,omitempty"`
+	// Verified reports whether a worker-role subagent's result passed the
+	// pre-reliance checks (edit applied, stated tests pass, output format
+	// matches). Absent for non-worker subagents, which are not subject to
+	// worker verification.
+	Verified *bool `json:"verified,omitempty"`
+	// VerificationReason explains a failed worker verification (which check
+	// failed and why). Empty when verification passed or did not apply.
+	VerificationReason string `json:"verification_reason,omitempty"`
+	// Escalated reports that a worker task failed verification and was
+	// retried once on the coder model. Absent unless an escalation ran.
+	Escalated *bool `json:"escalated,omitempty"`
 	// FilesModified is the change-tracker-sourced manifest. nil when
 	// change tracking is disabled (caller treats nil as "not reported").
 	FilesModified []FileChange `json:"files_modified,omitempty"`
@@ -227,6 +238,19 @@ type SubagentResult struct {
 	// subagent did, not just the final assistant message. Capped to
 	// ProgressLogCap entries.
 	ProgressLog []SubagentProgressEntry
+	// ShellHistory is the subagent's recorded shell-command history
+	// (command → record), captured at finalize time. Used to verify a
+	// worker's claimed test runs against what it actually executed.
+	ShellHistory map[string]ShellCommandRecord
+}
+
+// ShellCommandRecord is the minimal shell-command record a subagent result
+// carries for verification: the command and whether it failed. Kept in the
+// subagents package (not pkg/agent's richer ShellCommandResult) so the result
+// type does not depend on the parent package.
+type ShellCommandRecord struct {
+	Command string
+	Failed  bool
 }
 
 // outputCompleteThreshold is the minimum trimmed output length (in bytes)
@@ -286,6 +310,10 @@ type SubagentTask struct {
 	// coder role (createSubagent's fallback). Set by the caller that
 	// resolved the model (e.g. the reviewer path sets "reviewer").
 	Role string
+	// OutputFormat is the output format the caller requested for this
+	// task's result. Empty means no format was requested; a worker task's
+	// format-conformance check is then not applicable.
+	OutputFormat string
 }
 
 // SubagentMetrics tracks operational metrics for the subagent runner.

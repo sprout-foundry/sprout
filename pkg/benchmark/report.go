@@ -57,6 +57,35 @@ type Report struct {
 	// failureCategories); nil — omitted from the JSON — when nothing
 	// failed.
 	FailureCategories map[string]int `json:"failure_categories,omitempty"`
+	// Delegation compares the suite's runs by delegation mode (coder only,
+	// worker delegation, economy): task success, escalation rate, tokens
+	// and cost. Empty when no run recorded a mode.
+	Delegation []DelegationReport `json:"delegation,omitempty"`
+}
+
+// DelegationReport pools one run mode's runs so the report can compare
+// "coder only" with "coder + worker delegation" (and economy mode) on the
+// same tasks: the pooled pass rate, the escalation rate (how often the
+// cheap model could not finish and the coder model took over), and the
+// token/cost totals.
+type DelegationReport struct {
+	// RunMode is the mode these runs used (RunModeCoder when unset).
+	RunMode string `json:"run_mode"`
+	// Runs is the number of runs in this mode.
+	Runs int `json:"runs"`
+	// Passed is how many of those runs passed.
+	Passed int `json:"passed"`
+	// PassRate is Passed/Runs (0 when there are no runs).
+	PassRate float64 `json:"pass_rate"`
+	// DelegatedTasks is the pooled delegated-task count.
+	DelegatedTasks int `json:"delegated_tasks"`
+	// Escalated is the pooled escalated-task count, and EscalationRate the
+	// pooled share (0 when no delegated tasks).
+	Escalated      int     `json:"escalated"`
+	EscalationRate float64 `json:"escalation_rate"`
+	// Tokens and Cost are the pooled totals across the mode's runs.
+	Tokens int     `json:"tokens"`
+	Cost   float64 `json:"cost"`
 }
 
 // TaskReport is one (task, model) pair's slice of the report: the
@@ -107,10 +136,11 @@ type StarterReport struct {
 // as-is, never re-derived from the runs.
 func BuildReport(runs []Run, models []ModelSpec, meta Meta) Report {
 	rep := Report{
-		Meta:     meta,
-		Models:   models,
-		Tasks:    make([]TaskReport, 0, len(runs)),
-		Starters: make([]StarterReport, 0, len(runs)),
+		Meta:       meta,
+		Models:     models,
+		Tasks:      make([]TaskReport, 0, len(runs)),
+		Starters:   make([]StarterReport, 0, len(runs)),
+		Delegation: delegationReports(runs),
 	}
 
 	type pairKey struct{ task, model, provider string }
@@ -296,6 +326,18 @@ func (rep Report) Markdown() string {
 			passRateCell(sr.Passed, sr.RunsTotal))
 	}
 
+	if len(rep.Delegation) > 0 {
+		b.WriteString("\n## Delegation by run mode\n\n")
+		b.WriteString("| Mode | Runs | Passed | Pass rate | Delegated tasks | Escalated | Escalation rate | Tokens | Cost |\n")
+		b.WriteString("|---|---|---|---|---|---|---|---|---|\n")
+		for _, d := range rep.Delegation {
+			fmt.Fprintf(&b, "| %s | %d | %d | %s | %d | %d | %s | %d | $%.4f |\n",
+				d.RunMode, d.Runs, d.Passed, passRateCell(d.Passed, d.Runs),
+				d.DelegatedTasks, d.Escalated, passRateCell(d.Escalated, d.DelegatedTasks),
+				d.Tokens, d.Cost)
+		}
+	}
+
 	b.WriteString("\n## Failure categories\n\n")
 	if len(rep.FailureCategories) == 0 {
 		b.WriteString("No failures.\n")
@@ -325,6 +367,68 @@ func (rep Report) Markdown() string {
 		b.WriteString("\n")
 	}
 	return b.String()
+}
+
+// delegationReports pools the runs by run mode, in a fixed order (coder,
+// delegated, economy) so the report is deterministic. A mode with no runs
+// is omitted; the slice is empty when there are no runs.
+func delegationReports(runs []Run) []DelegationReport {
+	order := []string{RunModeCoder, RunModeDelegated, RunModeEconomy}
+	byMode := make(map[string]*DelegationReport, len(order))
+	for _, r := range runs {
+		mode := r.RunMode
+		if mode == "" {
+			mode = RunModeCoder
+		}
+		d, ok := byMode[mode]
+		if !ok {
+			d = &DelegationReport{RunMode: mode}
+			byMode[mode] = d
+		}
+		d.Runs++
+		if r.Passed {
+			d.Passed++
+		}
+		d.DelegatedTasks += r.Delegation.TaskCount
+		d.Escalated += r.Delegation.Escalated
+		d.Tokens += r.Tokens
+		d.Cost += r.Cost
+	}
+	out := make([]DelegationReport, 0, len(byMode))
+	emitted := make(map[string]bool, len(order))
+	for _, mode := range order {
+		d, ok := byMode[mode]
+		if !ok {
+			continue
+		}
+		emitted[mode] = true
+		out = append(out, finalizeDelegationReport(*d))
+	}
+	// Any run mode outside the known set is emitted as its own row (sorted)
+	// so the delegation section always accounts for every run rather than
+	// silently dropping an unrecognized mode.
+	extra := make([]string, 0, len(byMode))
+	for mode := range byMode {
+		if !emitted[mode] {
+			extra = append(extra, mode)
+		}
+	}
+	sort.Strings(extra)
+	for _, mode := range extra {
+		out = append(out, finalizeDelegationReport(*byMode[mode]))
+	}
+	return out
+}
+
+// finalizeDelegationReport computes a pooled row's rates from its counts.
+func finalizeDelegationReport(d DelegationReport) DelegationReport {
+	if d.Runs > 0 {
+		d.PassRate = float64(d.Passed) / float64(d.Runs)
+	}
+	if d.DelegatedTasks > 0 {
+		d.EscalationRate = float64(d.Escalated) / float64(d.DelegatedTasks)
+	}
+	return d
 }
 
 // modelLabel renders one model as "provider/model", the report's

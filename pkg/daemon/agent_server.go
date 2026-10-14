@@ -98,6 +98,11 @@ type QueryOptions struct {
 	Model         string `json:"model,omitempty"`
 	RiskProfile   string `json:"risk_profile,omitempty"`
 	MaxIterations int    `json:"max_iterations,omitempty"`
+	// EconomyMode routes more delegated work to the cheaper worker model for
+	// this session (and starts the main loop on the worker model for a new
+	// session). A host may set it to switch a session to economy as a user
+	// nears their credit limit.
+	EconomyMode bool `json:"economy_mode,omitempty"`
 }
 
 // AgentRequest is a single protocol request.

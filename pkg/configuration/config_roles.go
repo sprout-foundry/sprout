@@ -20,11 +20,12 @@ const (
 	RoleSummarizer = "summarizer" // progress & change summaries
 	RoleReviewer   = "reviewer"   // code review
 	RoleCommit     = "commit"     // commit message generation
+	RoleWorker     = "worker"     // delegated routine subtasks
 )
 
 // BuiltInRoles returns the built-in role names in a stable order.
 func BuiltInRoles() []string {
-	return []string{RolePlanner, RoleCoder, RoleSummarizer, RoleReviewer, RoleCommit}
+	return []string{RolePlanner, RoleCoder, RoleSummarizer, RoleReviewer, RoleCommit, RoleWorker}
 }
 
 // GetRole returns the stored selection for a role, or the zero
@@ -150,4 +151,33 @@ func (c *Config) ResolveRole(name string) (string, string) {
 		model = c.GetModelForProvider(provider)
 	}
 	return provider, model
+}
+
+// ResolveWorkerRole resolves the worker role to a (provider, model) pair.
+// An explicit worker selection (roles.worker) wins, field-wise; when the
+// worker role is unset it falls back to the coder role's fully-resolved
+// (provider, model) — not the conversation's — so a delegated worker step
+// runs on exactly the model the coder role resolves to, leaving behaviour
+// unchanged until a host or user points the worker role at a cheaper model.
+// The coder fallback itself applies the coder role's own chain (roles.coder,
+// then the legacy subagent settings, then the last-used provider), and its
+// model comes from the resolved provider's configured model. A nil receiver
+// resolves to ("",""), the same as ResolveRole.
+func (c *Config) ResolveWorkerRole() (string, string) {
+	if c == nil {
+		return "", ""
+	}
+	worker := c.GetRole(RoleWorker)
+	if worker.Provider != "" || worker.Model != "" {
+		provider := worker.Provider
+		if provider == "" {
+			provider = c.LastUsedProvider
+		}
+		model := worker.Model
+		if model == "" {
+			model = c.GetModelForProvider(provider)
+		}
+		return provider, model
+	}
+	return c.ResolveRole(RoleCoder)
 }

@@ -140,6 +140,45 @@ func resolveSubagentProviderModel(a *Agent, persona string, personaExplicitlyPro
 			}
 		}
 
+		// The worker persona always runs on the worker role's resolved
+		// provider/model: an explicit roles.worker selection, or the coder
+		// role's resolved (provider, model) when the worker role is unset
+		// (an unset worker behaves like a coder-model delegation). Unlike the
+		// reviewer override, this is not gated on HasExplicitRole —
+		// ResolveWorkerRole carries the coder fallback itself, so a worker
+		// delegation is attributed to the worker role either way.
+		if isWorkerPersona(a, persona) {
+			workerProvider, workerModel := config.ResolveWorkerRole()
+			if strings.TrimSpace(workerProvider) != "" {
+				provider = strings.TrimSpace(workerProvider)
+			}
+			if workerModel != "" {
+				model = workerModel
+			}
+			role = configuration.RoleWorker
+			a.Logger().Debug("Worker persona delegation: provider=%s model=%s role=%s\n", provider, model, role)
+		}
+
+		// Economy mode routes a subagent that would otherwise run on the
+		// coder model onto the worker model, so more delegated work runs on
+		// the cheaper model. It applies only when the resolution fell through
+		// to the coder role AND the persona named no explicit provider/model:
+		// an explicit selection always wins, and flipping the role of a
+		// persona that named its own model would wrongly pull it into worker
+		// verification and worker cost attribution.
+		if role == configuration.RoleCoder && !personaProviderExplicit && !personaModelExplicit {
+			if ecoProvider, ecoModel, applies := a.economySubagentRoute(); applies {
+				if strings.TrimSpace(ecoProvider) != "" {
+					provider = strings.TrimSpace(ecoProvider)
+				}
+				if ecoModel != "" {
+					model = ecoModel
+				}
+				role = configuration.RoleWorker
+				a.Logger().Debug("Economy mode: subagent routed to the worker model: provider=%s model=%s\n", provider, model)
+			}
+		}
+
 		// Log no-persona spawn resolution for observability. persona is defaulted
 		// to "general" earlier in this function (or to cfg.DefaultSubagentPersona),
 		// so we check the explicit-provided flag rather than the empty string —
@@ -344,13 +383,14 @@ func handleSubagentNonSecurityFailure(a *Agent, resultMap map[string]string) str
 
 // buildSubagentFinalResult marshals the typed envelope and returns the
 // JSON string for the handler's return value.
-func buildSubagentFinalResult(a *Agent, resultMap map[string]string, result *SubagentResult) (string, error) {
+func buildSubagentFinalResult(a *Agent, resultMap map[string]string, result *SubagentResult, verification workerVerifyResult) (string, error) {
 	// Marshal the typed envelope (preserves all old JSON keys for LLM compat)
 	// plus the new status / metrics / manifest fields. The Status enum
 	// supersedes the SUBAGENT_* sentinel string prefixes for in-process
 	// callers — the sentinels themselves still appear in earlier returned
 	// error messages so model-side behavior is unchanged.
 	ret := buildSubagentReturn(resultMap, result, statusFromResult(result, resultMap))
+	applyWorkerVerificationToEnvelope(ret, verification)
 	jsonStr, jsonErr := ret.MarshalJSONIndent()
 	if jsonErr != nil {
 		return "", agenterrors.NewAgent("subagent.spawn", "failed to marshal subagent result", jsonErr)
@@ -358,6 +398,25 @@ func buildSubagentFinalResult(a *Agent, resultMap map[string]string, result *Sub
 
 	a.Logger().Debug("Subagent spawn result: %s\n", jsonStr)
 	return jsonStr, nil
+}
+
+// applyWorkerVerificationToEnvelope records a worker-role verification
+// outcome on the envelope: verified/reason, and the escalation flag when the
+// task was retried on the coder model. It is a no-op for a result that was
+// not verified (non-worker subagents), leaving their envelope unchanged.
+func applyWorkerVerificationToEnvelope(ret *SubagentReturn, verification workerVerifyResult) {
+	if !verification.Verified && verification.Reason == "" && !verification.Escalated {
+		return // verification did not apply (non-worker subagent)
+	}
+	verified := verification.Verified
+	ret.Verified = &verified
+	if !verified {
+		ret.VerificationReason = verification.Reason
+	}
+	if verification.Escalated {
+		escalated := true
+		ret.Escalated = &escalated
+	}
 }
 
 // subagentSecurityMarkers identify failures caused by a security or

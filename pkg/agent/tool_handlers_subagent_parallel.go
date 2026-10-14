@@ -30,6 +30,15 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 	subagentProvider, subagentModel := resolveParallelSubagentConfig(a)
 	applyParallelTaskConfig(parallelTasks, subagentProvider, subagentModel)
 
+	// Per-task persona resolution: each task's persona is resolved to its own
+	// provider/model/role/system prompt (a worker persona runs on the worker
+	// role, a reviewer persona gets the pre-loaded change context), refining
+	// the flat defaults above. Tasks without a persona resolve through the
+	// default persona, which inherits the same defaults.
+	if err := resolveParallelTaskPersonas(ctx, a, parallelTasks); err != nil {
+		return "", err
+	}
+
 	// Validate parallel subagent configuration
 	if err := validateParallelSubagentConfig(a, parallelTasks); err != nil {
 		return "", err
@@ -52,6 +61,11 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 		opts.MaxConcurrentSubagents = maxParallel
 	}
 	results := runner.RunParallel(ctx, tasks, opts)
+
+	// Verify worker-role results before the primary relies on them; a
+	// failed worker task is retried once on the coder model. Non-worker
+	// tasks are untouched.
+	verifyParallelWorkerResults(ctx, a, parallelTasks, results)
 
 	// Phase 2: Collect and process results
 	resultMap, failedCount := collectParallelResults(results, tasks, a)
@@ -140,6 +154,10 @@ func parseParallelTasks(args map[string]interface{}) ([]SubagentTask, error) {
 
 			if persona, ok := taskMap["persona"].(string); ok {
 				task.Persona = strings.TrimSpace(persona)
+			}
+
+			if format, ok := taskMap["output_format"].(string); ok {
+				task.OutputFormat = strings.TrimSpace(format)
 			}
 
 			// Note: model and provider are set from configuration, not from LLM parameters
@@ -254,6 +272,19 @@ func resolveParallelSubagentConfig(a *Agent) (string, string) {
 		subagentProvider = a.GetProvider()
 		subagentModel = a.GetModel()
 	}
+	// Economy mode routes parallel subagents that would otherwise run on the
+	// coder model onto the worker model. Per-task persona resolution
+	// (resolveParallelTaskPersonas) refines this afterwards and applies the
+	// same routing for tasks that resolve to the coder role, so a task with
+	// an explicit persona provider/model still wins.
+	if ecoProvider, ecoModel, applies := a.economySubagentRoute(); applies {
+		if strings.TrimSpace(ecoProvider) != "" {
+			subagentProvider = strings.TrimSpace(ecoProvider)
+		}
+		if ecoModel != "" {
+			subagentModel = ecoModel
+		}
+	}
 	return subagentProvider, subagentModel
 }
 
@@ -338,6 +369,7 @@ func buildParallelSubagentTasks(tasks []SubagentTask) []SubagentTask {
 			Persona:      pt.Persona,
 			SystemPrompt: pt.SystemPrompt,
 			Role:         pt.Role,
+			OutputFormat: pt.OutputFormat,
 		}
 	}
 	return result

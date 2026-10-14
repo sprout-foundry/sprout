@@ -335,6 +335,38 @@
       ],
       "type": "object"
     },
+    "DelegatedTaskOutcomeData": {
+      "properties": {
+        "completion_tokens": {
+          "type": "number"
+        },
+        "cost": {
+          "type": "number"
+        },
+        "model": {
+          "type": "string"
+        },
+        "outcome": {
+          "type": "string"
+        },
+        "prompt_tokens": {
+          "type": "number"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "task_type": {
+          "type": "string"
+        },
+        "tokens": {
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
     "EditApprovalRequestData": {
       "description": "Payload for an edit_approval_request event (SP-072-3).",
       "properties": {
@@ -1412,6 +1444,9 @@
     },
     "delegate_clarification_responded": {
       "$ref": "#/$defs/DelegateClarificationRespondedData"
+    },
+    "delegated_task_outcome": {
+      "$ref": "#/$defs/DelegatedTaskOutcomeData"
     },
     "edit_approval_request": {
       "$ref": "#/$defs/EditApprovalRequestData"

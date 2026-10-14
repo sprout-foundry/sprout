@@ -144,6 +144,22 @@ export interface SubagentActivityData {
   elapsed_ms?: number;
 }
 
+export interface DelegatedTaskOutcomeData {
+  /** Model that produced the delegated task's final result */
+  model?: string;
+  provider?: string;
+  /** Role the model was resolved through (e.g. "worker", "coder") */
+  role?: string;
+  /** Task type: "read/search", "summarise", "edit", "test", or "other" */
+  task_type?: string;
+  /** Verification outcome: "verified", "escalated", or "failed" */
+  outcome?: string;
+  tokens?: number;
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  cost?: number;
+}
+
 export interface AgentMessageData {
   category: string;
   message: string;
@@ -729,6 +745,12 @@ export type WsEvent =
   | {
       type: "subagent_activity";
       data?: SubagentActivityData;
+      id?: string;
+      timestamp?: string;
+    }
+  | {
+      type: "delegated_task_outcome";
+      data?: DelegatedTaskOutcomeData;
       id?: string;
       timestamp?: string;
     }

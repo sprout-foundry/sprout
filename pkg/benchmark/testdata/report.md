@@ -9,6 +9,12 @@ Models: prov-a/alpha, prov-b/beta (4 runs per task)
 | fixture | prov-a/alpha | 2 | 6 | 3 | 3/6 (50%) |
 | fixture | prov-b/beta | 2 | 7 | 2 | 2/7 (29%) |
 
+## Delegation by run mode
+
+| Mode | Runs | Passed | Pass rate | Delegated tasks | Escalated | Escalation rate | Tokens | Cost |
+|---|---|---|---|---|---|---|---|---|
+| coder | 13 | 5 | 5/13 (38%) | 0 | 0 | 0/0 (—) | 4975 | $0.0292 |
+
 ## Failure categories
 
 | Category | Failed runs |

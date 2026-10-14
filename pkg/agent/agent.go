@@ -222,6 +222,13 @@ type Agent struct {
 	// signal that it happened.
 	wakeupDoneFn atomic.Pointer[func(error)]
 	usage        usageLedger
+	// delegatedOutcomes is the bounded per-session record of every
+	// delegated (subagent) task's outcome — the model that ran it, its task
+	// type, the verification result, and its tokens/cost — the session stats
+	// backing the usage view's delegation summary. Guarded by
+	// delegatedOutcomesMu; head-trimmed past delegatedOutcomeCap.
+	delegatedOutcomes   []DelegatedTaskOutcome
+	delegatedOutcomesMu sync.Mutex
 	// pendingWakeupResume holds formatted wakeup batches stashed by
 	// TryAutoResume for the REPL to run as auto-queued turns. Guarded
 	// by wakeupMu.
@@ -414,6 +421,11 @@ type Agent struct {
 	// riskProfileOverride is a transient (per-session) override for the risk cascade profile.
 	// Set by --risk-profile CLI flag and per-step risk_profile in workflow JSON. Empty means fall through to Config.RiskProfile, then "default".
 	riskProfileOverride configuration.RiskProfile
+
+	// economy is the per-session economy-mode state: whether the mode is on,
+	// and whether the main loop was started in economy mode (a new-session
+	// change). Guarded by its own mutex; see economy_mode.go.
+	economy economyState
 
 	// filesReadThisTurn tracks paths the agent called read_file on during the current turn.
 	// Used by the staleness rule in checkWriteStaleness. Reset at turn boundaries.

@@ -393,7 +393,7 @@ across models, so delegate to subagents with small, focused contexts rather than
 switching the main loop's model mid-session (a switch re-reads ~250K tokens
 cold and can erase the saving).
 
-- [ ] **ca.1** Worker role and delegation. Add a `worker` model role (config,
+- [x] **ca.1** Worker role and delegation. Add a `worker` model role (config,
       `sprout custom`/settings UI, docs) for delegated routine subtasks; unset,
       it falls back to the coder model so behaviour is unchanged. Give the main
       agent a way to hand a scoped task to a worker subagent with only the
@@ -403,20 +403,20 @@ cold and can erase the saving).
       Parallel delegation reuses the existing parallel-subagent path. Tests:
       worker resolution and fallback, delegated task gets a focused context
       (not the parent's full history), events show which model ran each step.
-- [ ] **ca.2** Verify and escalate. Check a worker's result before the main
+- [x] **ca.2** Verify and escalate. Check a worker's result before the main
       agent relies on it: an edit applies cleanly, the stated tests pass, the
       output matches the requested format. On failure or low confidence, retry
       the task once on the coder model and record that it escalated. Never let
       a failed worker result through silently. Tests for each check and for
       the single escalation.
-- [ ] **ca.3** Per-model outcome tracking. For every delegated task record the
+- [x] **ca.3** Per-model outcome tracking. For every delegated task record the
       model, the task type (read/search, summarise, edit, test, other), the
       outcome (verified, escalated, failed), tokens and cost, in the session
       stats and as an agent event a host can aggregate. Add a summary to the
       session usage view: share of work done by the worker model and the
       credits saved versus running it all on the coder model. This is the
       evidence for when a cheaper model "holds up".
-- [ ] **ca.4** Economy mode. A per-session setting (CLI flag, web UI toggle,
+- [x] **ca.4** Economy mode. A per-session setting (CLI flag, web UI toggle,
       and an API a host can set, e.g. the platform switching a session to
       economy when a user nears their credit limit) that delegates more work
       to the worker model and, for a NEW session only, may run the main loop on
@@ -425,7 +425,7 @@ cold and can erase the saving).
       worker model (no main-loop model switch, so the prompt cache is kept).
       Show the mode and its effect plainly in the UI. Tests: mode on/off,
       host-set mode via the API, no mid-session main-loop switch.
-- [ ] **ca.5** Benchmark the delegation. Extend the benchmark harness so a run
+- [x] **ca.5** Benchmark the delegation. Extend the benchmark harness so a run
       can compare "coder only" with "coder + worker delegation" (and economy
       mode) on the same tasks: task success, escalation rate, tokens and cost.
       Mock-provider tests in CI; real-model runs belong to the benchmark

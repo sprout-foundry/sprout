@@ -274,6 +274,7 @@ const sentinelEventTypes = [
   'tool_start',
   'tool_end',
   'subagent_activity',
+  'delegated_task_outcome',
   'metrics_update',
   'file_content_changed',
   'workspace_patch',

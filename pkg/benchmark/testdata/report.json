@@ -6,11 +6,17 @@
   "models": [
     {
       "Model": "alpha",
-      "Provider": "prov-a"
+      "Provider": "prov-a",
+      "RunMode": "",
+      "WorkerModel": "",
+      "WorkerProvider": ""
     },
     {
       "Model": "beta",
-      "Provider": "prov-b"
+      "Provider": "prov-b",
+      "RunMode": "",
+      "WorkerModel": "",
+      "WorkerProvider": ""
     }
   ],
   "tasks": [
@@ -59,7 +65,18 @@
               "token_cost": 0.0011,
               "calls": 2
             }
-          ]
+          ],
+          "RunMode": "",
+          "Delegation": {
+            "task_count": 0,
+            "verified": 0,
+            "escalated": 0,
+            "failed": 0,
+            "worker_tokens": 0,
+            "total_tokens": 0,
+            "escalation_rate": 0,
+            "worker_token_share": 0
+          }
         },
         {
           "TaskID": "add-badge",
@@ -90,7 +107,18 @@
           "Cost": 0.0013,
           "LangChecks": 1,
           "LangMismatches": 1,
-          "RoleUsage": null
+          "RoleUsage": null,
+          "RunMode": "",
+          "Delegation": {
+            "task_count": 0,
+            "verified": 0,
+            "escalated": 0,
+            "failed": 0,
+            "worker_tokens": 0,
+            "total_tokens": 0,
+            "escalation_rate": 0,
+            "worker_token_share": 0
+          }
         },
         {
           "TaskID": "add-badge",
@@ -121,7 +149,18 @@
           "Cost": 0.0012,
           "LangChecks": 0,
           "LangMismatches": 0,
-          "RoleUsage": null
+          "RoleUsage": null,
+          "RunMode": "",
+          "Delegation": {
+            "task_count": 0,
+            "verified": 0,
+            "escalated": 0,
+            "failed": 0,
+            "worker_tokens": 0,
+            "total_tokens": 0,
+            "escalation_rate": 0,
+            "worker_token_share": 0
+          }
         }
       ],
       "Passed": 3,
@@ -167,7 +206,18 @@
           "Cost": 0.0031,
           "LangChecks": 0,
           "LangMismatches": 0,
-          "RoleUsage": null
+          "RoleUsage": null,
+          "RunMode": "",
+          "Delegation": {
+            "task_count": 0,
+            "verified": 0,
+            "escalated": 0,
+            "failed": 0,
+            "worker_tokens": 0,
+            "total_tokens": 0,
+            "escalation_rate": 0,
+            "worker_token_share": 0
+          }
         },
         {
           "TaskID": "dark-mode",
@@ -206,7 +256,18 @@
           "Cost": 0.0033,
           "LangChecks": 0,
           "LangMismatches": 0,
-          "RoleUsage": null
+          "RoleUsage": null,
+          "RunMode": "",
+          "Delegation": {
+            "task_count": 0,
+            "verified": 0,
+            "escalated": 0,
+            "failed": 0,
+            "worker_tokens": 0,
+            "total_tokens": 0,
+            "escalation_rate": 0,
+            "worker_token_share": 0
+          }
         },
         {
           "TaskID": "dark-mode",
@@ -228,7 +289,18 @@
           "Cost": 0,
           "LangChecks": 0,
           "LangMismatches": 0,
-          "RoleUsage": null
+          "RoleUsage": null,
+          "RunMode": "",
+          "Delegation": {
+            "task_count": 0,
+            "verified": 0,
+            "escalated": 0,
+            "failed": 0,
+            "worker_tokens": 0,
+            "total_tokens": 0,
+            "escalation_rate": 0,
+            "worker_token_share": 0
+          }
         }
       ],
       "Passed": 0,
@@ -269,7 +341,18 @@
           "Cost": 0.0021,
           "LangChecks": 0,
           "LangMismatches": 0,
-          "RoleUsage": null
+          "RoleUsage": null,
+          "RunMode": "",
+          "Delegation": {
+            "task_count": 0,
+            "verified": 0,
+            "escalated": 0,
+            "failed": 0,
+            "worker_tokens": 0,
+            "total_tokens": 0,
+            "escalation_rate": 0,
+            "worker_token_share": 0
+          }
         },
         {
           "TaskID": "add-badge",
@@ -300,7 +383,18 @@
           "Cost": 0.0022,
           "LangChecks": 0,
           "LangMismatches": 0,
-          "RoleUsage": null
+          "RoleUsage": null,
+          "RunMode": "",
+          "Delegation": {
+            "task_count": 0,
+            "verified": 0,
+            "escalated": 0,
+            "failed": 0,
+            "worker_tokens": 0,
+            "total_tokens": 0,
+            "escalation_rate": 0,
+            "worker_token_share": 0
+          }
         },
         {
           "TaskID": "add-badge",
@@ -333,7 +427,18 @@
           "Cost": 0.0027,
           "LangChecks": 0,
           "LangMismatches": 0,
-          "RoleUsage": null
+          "RoleUsage": null,
+          "RunMode": "",
+          "Delegation": {
+            "task_count": 0,
+            "verified": 0,
+            "escalated": 0,
+            "failed": 0,
+            "worker_tokens": 0,
+            "total_tokens": 0,
+            "escalation_rate": 0,
+            "worker_token_share": 0
+          }
         }
       ],
       "Passed": 2,
@@ -374,7 +479,18 @@
           "Cost": 0.0029,
           "LangChecks": 0,
           "LangMismatches": 0,
-          "RoleUsage": null
+          "RoleUsage": null,
+          "RunMode": "",
+          "Delegation": {
+            "task_count": 0,
+            "verified": 0,
+            "escalated": 0,
+            "failed": 0,
+            "worker_tokens": 0,
+            "total_tokens": 0,
+            "escalation_rate": 0,
+            "worker_token_share": 0
+          }
         },
         {
           "TaskID": "dark-mode",
@@ -410,7 +526,18 @@
           "Cost": 0.003,
           "LangChecks": 0,
           "LangMismatches": 0,
-          "RoleUsage": null
+          "RoleUsage": null,
+          "RunMode": "",
+          "Delegation": {
+            "task_count": 0,
+            "verified": 0,
+            "escalated": 0,
+            "failed": 0,
+            "worker_tokens": 0,
+            "total_tokens": 0,
+            "escalation_rate": 0,
+            "worker_token_share": 0
+          }
         },
         {
           "TaskID": "dark-mode",
@@ -432,7 +559,18 @@
           "Cost": 0.0032,
           "LangChecks": 0,
           "LangMismatches": 0,
-          "RoleUsage": null
+          "RoleUsage": null,
+          "RunMode": "",
+          "Delegation": {
+            "task_count": 0,
+            "verified": 0,
+            "escalated": 0,
+            "failed": 0,
+            "worker_tokens": 0,
+            "total_tokens": 0,
+            "escalation_rate": 0,
+            "worker_token_share": 0
+          }
         },
         {
           "TaskID": "dark-mode",
@@ -463,7 +601,18 @@
           "Cost": 0.0031,
           "LangChecks": 0,
           "LangMismatches": 0,
-          "RoleUsage": null
+          "RoleUsage": null,
+          "RunMode": "",
+          "Delegation": {
+            "task_count": 0,
+            "verified": 0,
+            "escalated": 0,
+            "failed": 0,
+            "worker_tokens": 0,
+            "total_tokens": 0,
+            "escalation_rate": 0,
+            "worker_token_share": 0
+          }
         }
       ],
       "Passed": 0,
@@ -498,5 +647,18 @@
     "page": 1,
     "stopped_by_rule": 1,
     "test": 1
-  }
+  },
+  "delegation": [
+    {
+      "run_mode": "coder",
+      "runs": 13,
+      "passed": 5,
+      "pass_rate": 0.38461538461538464,
+      "delegated_tasks": 0,
+      "escalated": 0,
+      "escalation_rate": 0,
+      "tokens": 4975,
+      "cost": 0.029199999999999997
+    }
+  ]
 }

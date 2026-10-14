@@ -14,6 +14,8 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
+
+	"github.com/sprout-foundry/sprout/pkg/agent/subagents"
 )
 
 // subagentRunContext holds all the state wired up during setupSubagentRun
@@ -346,6 +348,18 @@ func (r *SubagentRunner) finalizeSubagentResult(
 		// Snapshot the subagent's change tracker for the parent.
 		if tracker := subAgent.GetChangeTracker(); tracker != nil {
 			result.FileChanges = tracker.GetChanges()
+		}
+		// Snapshot the subagent's shell-command history so a worker result
+		// can be verified against the test commands it actually ran.
+		if hist := subAgent.GetAllShellCommandHistory(); len(hist) > 0 {
+			records := make(map[string]subagents.ShellCommandRecord, len(hist))
+			for command, entry := range hist {
+				if entry == nil {
+					continue
+				}
+				records[command] = subagents.ShellCommandRecord{Command: command, Failed: entry.Error != nil}
+			}
+			result.ShellHistory = records
 		}
 		// Copy the captured progress log into the result.
 		rc.progressMu.Lock()

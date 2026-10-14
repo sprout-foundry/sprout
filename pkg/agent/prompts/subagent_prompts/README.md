@@ -12,6 +12,7 @@ This directory contains the system prompts for each specialized subagent persona
 6. **[Coordinator](coordinator.md)** - Cross-project coordination and delegation
 7. **[Computer User](computer_user.md)** - Desktop automation: screenshots, mouse, and keyboard
 8. **[General](general.md)** - General-purpose tasks that don't fit specialized categories
+9. **[Worker](worker.md)** - Routine delegated subtasks on a cheaper model (read/search, summarise, mechanical edits, running tests)
 
 ## Quick Reference
 
@@ -25,6 +26,7 @@ This directory contains the system prompts for each specialized subagent persona
 | Coordinator | Cross-project coordination | run_subagent |
 | Computer User | Desktop automation: mouse, keyboard, screenshots | take_screenshot, mouse_click, keyboard_type |
 | General | Anything not specialized | all defaults |
+| Worker | Routine subtasks on a cheaper model: read/search, summarise, mechanical edits, run tests | read_file, search, edit_file, shell_command |
 
 ## Usage
 
@@ -39,6 +41,7 @@ These prompts are loaded automatically when a subagent is spawned with a specifi
 - **Investigate codebase / web research / scrape content** → `researcher`
 - **Coordinate cross-project work** → `coordinator`
 - **Drive the desktop (mouse, keyboard, screenshots)** → `computer_user`
+- **Delegate a routine, well-scoped subtask on a cheaper model** (read/search, summarise, mechanical edits, run a test) → `worker`
 - **Hands-on shell / sysadmin** → `coder` or `general` (use `shell_command` directly)
 - **General-purpose task** → `general`
 

@@ -128,15 +128,44 @@ describe('RoleModelsSection', () => {
     expect(details().open).toBe(false);
   });
 
-  it('renders all five built-in roles', () => {
+  it('renders all six built-in roles', () => {
     render({ settings: {} as SproutSettings });
     clickSummary();
-    for (const role of ['planner', 'coder', 'summarizer', 'reviewer', 'commit']) {
+    for (const role of ['planner', 'coder', 'summarizer', 'reviewer', 'commit', 'worker']) {
       expect(document.querySelector(`[data-testid="role-model-row-${role}"]`)).not.toBeNull();
       expect(document.querySelector(`[data-testid="role-model-input-${role}"]`)).not.toBeNull();
       expect(document.querySelector(`[data-testid="role-provider-input-${role}"]`)).not.toBeNull();
       expect(document.querySelector(`[data-testid="role-model-save-${role}"]`)).not.toBeNull();
     }
+  });
+
+  it('pre-fills the worker row from settings.roles', () => {
+    render({
+      settings: {
+        roles: {
+          worker: { provider: 'zai', model: 'glm-4.5-flash' },
+        },
+      } as SproutSettings,
+    });
+    clickSummary();
+    expect((document.querySelector('[data-testid="role-model-input-worker"]') as HTMLInputElement).value).toBe(
+      'glm-4.5-flash',
+    );
+    expect((document.querySelector('[data-testid="role-provider-input-worker"]') as HTMLInputElement).value).toBe(
+      'zai',
+    );
+  });
+
+  it('persists the worker row on save', () => {
+    const { updateSetting } = render({ settings: {} as SproutSettings });
+    clickSummary();
+    setInputValue('[data-testid="role-provider-input-worker"]', 'zai');
+    setInputValue('[data-testid="role-model-input-worker"]', 'glm-4.5-flash');
+    clickSelector('[data-testid="role-model-save-worker"]');
+    expect(updateSetting).toHaveBeenCalledTimes(1);
+    expect(updateSetting).toHaveBeenCalledWith('roles', {
+      worker: { provider: 'zai', model: 'glm-4.5-flash' },
+    });
   });
 
   it('pre-fills inputs from settings.roles', () => {

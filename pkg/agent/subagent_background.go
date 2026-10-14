@@ -240,7 +240,19 @@ func startBackgroundSubagent(a *Agent, spec *subagentLaunchSpec, isolate bool) (
 				Role:         spec.role,
 			}, nil, 0)
 		}
-		text, err := finishSubagentRun(bgCtx, a, spec, result)
+		var verification workerVerifyResult
+		// workerBefore captures the worker's first result before the
+		// escalation (nil unless the task is a worker task) so the outcome
+		// record attributes the final model correctly.
+		var workerBefore *SubagentResult
+		if isWorkerRoleTask(spec.role) {
+			workerBefore = result
+			verification = verifyWorkerResult(a, spec, result)
+			if !verification.Verified {
+				result, verification = escalateWorkerRun(bgCtx, a, spec, result, verification)
+			}
+		}
+		text, err := finishSubagentRun(bgCtx, a, spec, result, workerBefore, verification)
 		status := "completed"
 		switch {
 		case result != nil && result.Cancelled:
@@ -248,6 +260,8 @@ func startBackgroundSubagent(a *Agent, spec *subagentLaunchSpec, isolate bool) (
 		case err != nil:
 			status, text = "failed", err.Error()
 		case result != nil && result.Error != nil:
+			status = "failed"
+		case isWorkerRoleTask(spec.role) && !verification.Verified:
 			status = "failed"
 		}
 		a.finishBackground(t, status, text)

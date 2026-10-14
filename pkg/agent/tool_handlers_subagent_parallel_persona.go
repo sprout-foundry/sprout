@@ -9,10 +9,15 @@ import (
 )
 
 // resolveParallelTaskPersonas resolves persona, provider, model, and system
-// prompt for every parallel task, applying the same spawnability checks and
-// default persona as run_subagent. Reviewer tasks get the working-tree change
-// context prepended; it is captured once and shared so every reviewer in a
-// split review sees the same snapshot.
+// prompt for every parallel task, applying the same default persona as
+// run_subagent. A task that names an explicit persona which is unknown or
+// disabled fails the whole batch (fail-fast) rather than silently running it
+// as the default persona: a mistyped persona in a batch is a caller error, and
+// running the wrong persona would quietly produce wrong work. This differs
+// from the single-subagent path, which warns and falls back to the default
+// persona. Reviewer tasks get the working-tree change context prepended; it is
+// captured once and shared so every reviewer in a split review sees the same
+// snapshot.
 func resolveParallelTaskPersonas(ctx context.Context, a *Agent, tasks []SubagentTask) error {
 	if len(tasks) == 0 {
 		return nil

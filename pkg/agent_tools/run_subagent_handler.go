@@ -110,6 +110,11 @@ func (h *runSubagentHandler) Definition() ToolDefinition {
 				Type:        "string",
 				Description: "Optional: directory to use as the subagent's working directory (must be within $HOME). Use this to spawn subagents operating in a different project directory.",
 			},
+			{
+				Name:        "output_format",
+				Type:        "string",
+				Description: "Optional: the exact output format the task's result must follow (e.g. 'a single JSON object with keys x and y', 'a one-line summary'). A worker-role subagent's result is checked against it before you rely on it; if the format does not match, the task is retried once on the coder model. Omit when no specific format is required.",
+			},
 		},
 	}
 }

@@ -229,6 +229,17 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.
 	// during delegation.
 	agent.riskProfileOverride = r.parentAgent.riskProfileOverride
 
+	// Propagate the parent's economy mode so a subagent that delegates
+	// further work (a nested subagent) routes its own subagents to the worker
+	// model too. Without this, second-level delegation would silently fall
+	// back to the coder model. The subagent is past session start (marked
+	// first, so the mode change is a mid-session change for it), so this only
+	// affects its subagent routing, never its own main loop.
+	if r.parentAgent.GetEconomyMode() {
+		agent.markSessionStarted()
+		agent.SetEconomyMode(true)
+	}
+
 	// Propagate session folder allowlist into the subagent so paths
 	// the user already approved at the root level don't re-prompt
 	// inside delegated work. The snapshot is a copy — the subagent

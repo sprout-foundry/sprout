@@ -40,10 +40,11 @@ func (h *runParallelSubagentsHandler) Definition() ToolDefinition {
 		Description: "Execute 2+ INDEPENDENT subagent tasks CONCURRENTLY. " +
 			"Use when tasks have no dependencies on each other (e.g. researching different code areas, code + tests, analyzing multiple files). " +
 			"Waits for ALL to complete; returns per-ID `{stdout, stderr, exit_code, completed, timed_out}`.\n\n" +
-			"Each task is either a plain string (\"task 1\") or an object {\"prompt\": \"task 1\", \"id\"?, \"persona\"?}. " +
+			"Each task is either a plain string (\"task 1\") or an object {\"prompt\": \"task 1\", \"id\"?, \"persona\"?, \"output_format\"?}. " +
 			"IDs auto-generate as task-1, task-2, etc. when omitted.\n\n" +
 			"`persona` is optional per task (same IDs as `run_subagent`) and applies that persona's system prompt, tools, and provider/model. " +
 			"Tasks without a persona use the default subagent persona, as with `run_subagent`. " +
+			"`output_format` is optional and names the exact output format the task's result must follow; a `worker`-persona task's result is checked against it before you rely on it. " +
 			"For a large diff review, split it across `reviewer` tasks by file group so each reviewer judges a slice concurrently.\n\n" +
 			"**Result contract**: each subagent's `files_modified` (also mirrored as " +
 			"`[subagent files modified] … [/subagent files modified]` at the top of its `stdout`) " +
@@ -60,9 +61,10 @@ func (h *runParallelSubagentsHandler) Definition() ToolDefinition {
 				Items: map[string]any{
 					"type": "object",
 					"properties": map[string]any{
-						"id":      map[string]any{"type": "string", "description": "Optional task ID (auto-generated as task-N when omitted)"},
-						"prompt":  map[string]any{"type": "string", "description": "Task description for the subagent to execute"},
-						"persona": map[string]any{"type": "string", "description": "Optional persona ID or alias (see /persona list)"},
+						"id":            map[string]any{"type": "string", "description": "Optional task ID (auto-generated as task-N when omitted)"},
+						"prompt":        map[string]any{"type": "string", "description": "Task description for the subagent to execute"},
+						"persona":       map[string]any{"type": "string", "description": "Optional persona ID or alias (see /persona list)"},
+						"output_format": map[string]any{"type": "string", "description": "Optional: the exact output format the task's result must follow; a worker-persona result is checked against it"},
 					},
 					"required": []any{"prompt"},
 				},

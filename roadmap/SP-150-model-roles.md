@@ -38,7 +38,9 @@ model:
 
 - Built-in role names: `planner` (plan mode and plan edits, SP-148),
   `coder` (the main agent loop), `summarizer` (progress summaries and
-  change summaries, SP-151, SP-157), `reviewer`, `commit`.
+  change summaries, SP-151, SP-157), `reviewer`, `commit`, and `worker`
+  (delegated routine subtasks via the worker persona; unset, it falls back
+  to the coder role so behaviour is unchanged).
 - Unset roles fall back to the main conversation's provider and model,
   exactly as today.
 - Existing settings (`subagent_model`, `commit_model`, review and

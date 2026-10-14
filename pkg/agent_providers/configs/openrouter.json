@@ -782,13 +782,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.036337,
+        "cached_input_cost": 0.035902,
         "context_length": 1048576,
         "description": "DeepSeek V4 Pro is a large-scale Mixture-of-Experts model from DeepSeek with 1.6T total parameters and 49B activated parameters, supporting a 1M-token context window. It is designed for advanced reasoning, coding,...",
         "id": "deepseek/deepseek-v4-pro",
-        "input_cost": 0.436044,
+        "input_cost": 0.430824,
         "name": "DeepSeek: DeepSeek V4 Pro",
-        "output_cost": 0.872088,
+        "output_cost": 0.861648,
         "tags": [
           "tools",
           "reasoning",
@@ -1541,9 +1541,9 @@
         "context_length": 204800,
         "description": "MiniMax-M2 is a compact, high-efficiency large language model optimized for end-to-end coding and agentic workflows. With 10 billion activated parameters (230 billion total), it delivers near-frontier intelligence across general reasoning,...",
         "id": "minimax/minimax-m2",
-        "input_cost": 0.3,
+        "input_cost": 0.255,
         "name": "MiniMax: MiniMax M2",
-        "output_cost": 1.2,
+        "output_cost": 1.02,
         "tags": [
           "tools",
           "reasoning",
@@ -1941,13 +1941,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.55,
+        "cached_input_cost": 0.32,
         "context_length": 1048576,
         "description": "Kimi K3 is a 2.8T parameter open-weight multimodal reasoning model from Moonshot AI. It is suited for complex coding, knowledge work, and long-horizon agentic workflows, and is particularly strong at...",
         "id": "moonshotai/kimi-k3",
-        "input_cost": 0.73,
+        "input_cost": 0.7,
         "name": "MoonshotAI: Kimi K3",
-        "output_cost": 10,
+        "output_cost": 15,
         "tags": [
           "tools",
           "vision",
@@ -2855,13 +2855,12 @@
         ]
       },
       {
-        "cached_input_cost": 0.075,
         "context_length": 131072,
         "description": "gpt-oss-120b is an open-weight, 117B-parameter Mixture-of-Experts (MoE) language model from OpenAI designed for high-reasoning, agentic, and general-purpose production use cases. It activates 5.1B parameters per forward pass and is optimized...",
         "id": "openai/gpt-oss-120b",
-        "input_cost": 0.15,
+        "input_cost": 0.037,
         "name": "OpenAI: gpt-oss-120b",
-        "output_cost": 0.6,
+        "output_cost": 0.17,
         "tags": [
           "tools",
           "reasoning",
@@ -3681,13 +3680,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.225,
+        "cached_input_cost": 0.3,
         "context_length": 262144,
         "description": "The Qwen3.5 series 397B-A17B native vision-language model is built on a hybrid architecture that integrates a linear attention mechanism with a sparse mixture-of-experts model, achieving higher inference efficiency. It delivers...",
         "id": "qwen/qwen3.5-397b-a17b",
-        "input_cost": 0.55,
+        "input_cost": 0.5,
         "name": "Qwen: Qwen3.5 397B A17B",
-        "output_cost": 3.5,
+        "output_cost": 3.6,
         "tags": [
           "tools",
           "vision",
@@ -4003,13 +4002,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.020625,
+        "cached_input_cost": 0.033,
         "context_length": 262144,
         "description": "Hy3 is a 295B-parameter Mixture-of-Experts model from Tencent (21B active, 192 experts with top-8 routing) built for reasoning, agentic workflows, and real-world production use. It supports a configurable reasoning effort:...",
         "id": "tencent/hy3",
-        "input_cost": 0.0825,
+        "input_cost": 0.132,
         "name": "Tencent: Hy3",
-        "output_cost": 0.33,
+        "output_cost": 0.528,
         "tags": [
           "tools",
           "reasoning",
@@ -4373,13 +4372,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.1794,
+        "cached_input_cost": 0.247,
         "context_length": 204800,
         "description": "GLM-5.1 delivers a major leap in coding capability, with particularly significant gains in handling long-horizon tasks. Unlike previous models built around minute-level interactions, GLM-5.1 can work independently and continuously on...",
         "id": "z-ai/glm-5.1",
-        "input_cost": 0.966,
+        "input_cost": 1.33,
         "name": "Z.ai: GLM 5.1",
-        "output_cost": 3.036,
+        "output_cost": 4.18,
         "tags": [
           "tools",
           "reasoning",
@@ -4387,11 +4386,11 @@
         ]
       },
       {
-        "cached_input_cost": 0.059,
+        "cached_input_cost": 0.049,
         "context_length": 1048576,
         "description": "GLM 5.2 is a large-scale reasoning model from Z.ai. It supports text input and output with a 1M-token context window, and is suited for long-horizon agent workflows, project-level software engineering,...",
         "id": "z-ai/glm-5.2",
-        "input_cost": 0.06,
+        "input_cost": 0.05,
         "name": "Z.ai: GLM 5.2",
         "output_cost": 7,
         "tags": [
@@ -4520,13 +4519,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.55,
+        "cached_input_cost": 0.3,
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the MoonshotAI Kimi family.",
         "id": "~moonshotai/kimi-latest",
-        "input_cost": 0.73,
+        "input_cost": 0.536,
         "name": "MoonshotAI Kimi Latest",
-        "output_cost": 10,
+        "output_cost": 14,
         "tags": [
           "tools",
           "vision",
@@ -5902,13 +5901,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.06,
+        "cached_input_cost": 0.0536,
         "context_length": 1048576,
         "description": "This model always redirects to the latest GLM model from Z.ai.",
         "id": "~z-ai/glm-latest",
-        "input_cost": 0.055,
+        "input_cost": 0.0576,
         "name": "Z.ai: GLM Latest",
-        "output_cost": 5,
+        "output_cost": 4.4,
         "tags": [
           "tools",
           "reasoning",
@@ -5947,7 +5946,7 @@
         "context_length": 1310720,
         "description": "GLM-5.3-Flash is Z.ai's first natively multimodal model, delivering frontier coding and agentic performance at flash-tier cost. With 320B total and 18B active parameters, it outperforms GLM-5.2 at one-tenth the price while approaching Claude Opus 4.8 on coding and agentic benchmarks.",
         "id": "z-ai/glm-5.3-flash",
-        "input_cost": 0.0261,
+        "input_cost": 0.036,
         "name": "Z.ai: GLM 5.3 Flash",
         "output_cost": 0.9,
         "tags": [
@@ -6167,13 +6166,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.0378,
+        "cached_input_cost": 0.042,
         "context_length": 1048576,
         "description": "Tencent: Hy4 preview is a mixture-of-experts model from Tencent, with 49B active parameters out of 770B total. It is designed for coding agents, complex tool-use workflows, and productivity tasks that demand strong reasoning and long-context understanding.",
         "id": "tencent/hy4-preview",
-        "input_cost": 0.7506,
+        "input_cost": 0.834,
         "name": "Tencent: Hy4 preview",
-        "output_cost": 2.2509,
+        "output_cost": 2.501,
         "tags": [
           "tools",
           "reasoning",
@@ -6272,7 +6271,7 @@
         "context_length": 1310720,
         "description": "This model always redirects to the latest model in the GLM Flash family.",
         "id": "~z-ai/glm-flash-latest",
-        "input_cost": 0.0261,
+        "input_cost": 0.036,
         "name": "Z.ai: GLM Flash Latest",
         "output_cost": 0.9,
         "tags": [
@@ -6546,9 +6545,9 @@
         "context_length": 1048576,
         "description": "DeepSeek V4.1 Flash is a sparse mixture-of-experts model from DeepSeek, and the cost-efficient tier of the V4.1 family. DeepSeek reports that it exceeds V4 Pro on performance, speed, and task completion time, so it sits ahead of the previous flagship rather than beneath it.",
         "id": "deepseek/deepseek-v4.1-flash",
-        "input_cost": 0.0441,
+        "input_cost": 0.02016,
         "name": "DeepSeek: DeepSeek V4.1 Flash",
-        "output_cost": 0.63,
+        "output_cost": 0.891,
         "tags": [
           "tools",
           "vision",
@@ -6557,13 +6556,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.0042,
+        "cached_input_cost": 0.012,
         "context_length": 131072,
         "description": "Ling 3.0 Flash VL builds on Ling 3.0 Flash (124B total / 5.5B active MoE from InclusionAI), further strengthening its language capabilities while adding native visual perception and advanced visual...",
         "id": "inclusionai/ling-3.0-flash-vl",
-        "input_cost": 0.021,
+        "input_cost": 0.06,
         "name": "inclusionAI: Ling 3.0 Flash VL",
-        "output_cost": 0.0616,
+        "output_cost": 0.18,
         "tags": [
           "tools",
           "vision",
@@ -6703,9 +6702,9 @@
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the DeepSeek Flash family.",
         "id": "~deepseek/deepseek-flash-latest",
-        "input_cost": 0.0441,
+        "input_cost": 0.02016,
         "name": "DeepSeek: DeepSeek Flash Latest",
-        "output_cost": 0.63,
+        "output_cost": 0.891,
         "tags": [
           "tools",
           "vision",
@@ -6714,13 +6713,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.007938,
+        "cached_input_cost": 0.15,
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the DeepSeek Pro family.",
         "id": "~deepseek/deepseek-pro-latest",
-        "input_cost": 0.24948,
+        "input_cost": 0.1461,
         "name": "DeepSeek: DeepSeek Pro Latest",
-        "output_cost": 0.74844,
+        "output_cost": 8,
         "tags": [
           "tools",
           "reasoning",
@@ -7482,6 +7481,63 @@
         "output_cost": 0,
         "tags": [
           "vision"
+        ]
+      },
+      {
+        "cached_input_cost": 0.05,
+        "context_length": 1048576,
+        "description": "Gemini 4 Argon is Google's flagship reasoning model, built for complex software engineering, deep mathematical and scientific problem solving, and autonomous multi-step agents. Google trained it to keep context across long, multi-step tasks and to turn long documents mixing text, tables, charts and images into a single grounded output. It leads the Vals Index across finance, legal, coding and tax work, and supports long decode of up to 1M output tokens in a single response.",
+        "id": "google/gemini-4-argon:batch",
+        "input_cost": 1,
+        "name": "Google: Gemini 4 Argon (batch)",
+        "output_cost": 5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.025,
+        "context_length": 128000,
+        "description": "LFM2.5-24B-A2B is a mixture-of-experts reasoning model from Liquid AI with 24B total and 2.45B active parameters. It always reasons before answering and is built for agents that call tools. Liquid recommends pairing it with retrieval or web search for knowledge-heavy tasks.",
+        "id": "liquid/lfm-2.5-24b-a2b",
+        "input_cost": 0.05,
+        "name": "LiquidAI: LFM2.5-24B-A2B",
+        "output_cost": 0.7,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.25,
+        "context_length": 262144,
+        "description": "Pareto is a multimodal composite model built for research, coding, and agentic workflows, while delivering frontier-level performance across a broad range of general-purpose tasks.",
+        "id": "unbiased/pareto-26.9",
+        "input_cost": 2.5,
+        "name": "Pareto 26.9",
+        "output_cost": 7.5,
+        "tags": [
+          "tools",
+          "vision",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.25,
+        "context_length": 262144,
+        "description": "This model always redirects to the latest model in the Pareto family.",
+        "id": "~unbiased/pareto-latest",
+        "input_cost": 2.5,
+        "name": "Pareto Latest",
+        "output_cost": 7.5,
+        "tags": [
+          "tools",
+          "vision",
+          "structured_output"
         ]
       }
     ],

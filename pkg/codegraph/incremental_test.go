@@ -48,10 +48,10 @@ func TestIncrementalPreservesIncomingEdges(t *testing.T) {
 			return syms, nil, nil
 		case "app.go":
 			return []Symbol{
-					{QualifiedName: "pkg.run", DisplayName: "run", Line: 5, Kind: "func", Language: "go"},
-				}, []Edge{
-					{SourceQualifiedName: "pkg.run", TargetQualifiedName: "pkg.DoWork", EdgeType: "calls", Line: 6},
-				}, nil
+				{QualifiedName: "pkg.run", DisplayName: "run", Line: 5, Kind: "func", Language: "go"},
+			}, []Edge{
+				{SourceQualifiedName: "pkg.run", TargetQualifiedName: "pkg.DoWork", EdgeType: "calls", Line: 6},
+			}, nil
 		}
 		return nil, nil, nil
 	}
@@ -126,10 +126,10 @@ func TestIncrementalRemovesDeletedCalleeEdge(t *testing.T) {
 			return syms, nil, nil
 		case "app.go":
 			return []Symbol{
-					{QualifiedName: "pkg.run", DisplayName: "run", Line: 5, Kind: "func", Language: "go"},
-				}, []Edge{
-					{SourceQualifiedName: "pkg.run", TargetQualifiedName: "pkg.DoWork", EdgeType: "calls", Line: 6},
-				}, nil
+				{QualifiedName: "pkg.run", DisplayName: "run", Line: 5, Kind: "func", Language: "go"},
+			}, []Edge{
+				{SourceQualifiedName: "pkg.run", TargetQualifiedName: "pkg.DoWork", EdgeType: "calls", Line: 6},
+			}, nil
 		}
 		return nil, nil, nil
 	}
@@ -181,16 +181,16 @@ func TestIncrementalPreservesTransitiveChain(t *testing.T) {
 		switch path {
 		case "x.go":
 			return []Symbol{
-					{QualifiedName: "pkg.xFunc", DisplayName: "xFunc", Line: 5, Kind: "func", Language: "go"},
-				}, []Edge{
-					{SourceQualifiedName: "pkg.xFunc", TargetQualifiedName: "pkg.aFunc", EdgeType: "calls", Line: 6},
-				}, nil
+				{QualifiedName: "pkg.xFunc", DisplayName: "xFunc", Line: 5, Kind: "func", Language: "go"},
+			}, []Edge{
+				{SourceQualifiedName: "pkg.xFunc", TargetQualifiedName: "pkg.aFunc", EdgeType: "calls", Line: 6},
+			}, nil
 		case "a.go":
 			return []Symbol{
-					{QualifiedName: "pkg.aFunc", DisplayName: "aFunc", Line: 5, Kind: "func", Language: "go"},
-				}, []Edge{
-					{SourceQualifiedName: "pkg.aFunc", TargetQualifiedName: "pkg.bFunc", EdgeType: "calls", Line: 6},
-				}, nil
+				{QualifiedName: "pkg.aFunc", DisplayName: "aFunc", Line: 5, Kind: "func", Language: "go"},
+			}, []Edge{
+				{SourceQualifiedName: "pkg.aFunc", TargetQualifiedName: "pkg.bFunc", EdgeType: "calls", Line: 6},
+			}, nil
 		case "b.go":
 			return []Symbol{
 				{QualifiedName: "pkg.bFunc", DisplayName: "bFunc", Line: 5, Kind: "func", Language: "go"},

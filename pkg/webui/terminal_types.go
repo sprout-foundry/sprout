@@ -143,6 +143,13 @@ type TerminalSession struct {
 	// (interactive terminals, foreground hidden sessions).
 	bgMarker string
 
+	// bgScriptPath is the temp script the background command was
+	// materialized into. The script removes itself via its EXIT trap once
+	// it runs; this path lets CloseSession remove it when the session dies
+	// before the launcher runs, which would otherwise leak the file.
+	// Guarded by mutex.
+	bgScriptPath string
+
 	// bgTail carries the last few bytes of previously-scanned output so a
 	// sentinel that straddles a chunk boundary is still detected. Only
 	// used for background sessions. Guarded by mutex.

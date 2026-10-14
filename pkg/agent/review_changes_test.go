@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 )
 
 const findingsMustFix = "Checked main.go.\n```json\n" +
@@ -88,6 +90,100 @@ func TestReviewChanges_SingleReviewerParsesFindings(t *testing.T) {
 	}
 	if len(*prompts) == 0 || !strings.Contains((*prompts)[0], "# Change Under Review") || !strings.Contains((*prompts)[0], "Focus: debug output") {
 		t.Errorf("reviewer task missing context or focus")
+	}
+	// Tree disclosure: the result must name the repo root and the HEAD it
+	// resolved, so a multi-worktree caller can verify the right tree was
+	// reviewed before trusting the findings. Compare symlink-resolved
+	// (macOS /var → /private/var).
+	if got, want := resolveTestPath(t, review.RepoRoot), resolveTestPath(t, dir); got != want {
+		t.Errorf("RepoRoot = %q, want %q", got, want)
+	}
+	if review.Branch == "" {
+		t.Error("Branch must carry the resolved short HEAD")
+	}
+	if !strings.Contains(md, "(HEAD ") || !strings.Contains(md, "Reviewed tree:") {
+		t.Errorf("markdown missing tree disclosure line:\n%s", md)
+	}
+}
+
+// resolveTestPath resolves symlinks for path comparison in assertions.
+func resolveTestPath(t *testing.T, p string) string {
+	t.Helper()
+	if p == "" {
+		return ""
+	}
+	resolved, err := filepath.EvalSymlinks(p)
+	if err != nil {
+		return p
+	}
+	return resolved
+}
+
+// The repo_dir parameter must redirect the review to a worktree of the
+// workspace repo: without it, HEAD resolved in the workspace root and the
+// review covered the wrong tree.
+func TestHandleReviewChanges_RepoDirOverridesWorkspace(t *testing.T) {
+	parent, _ := newReviewTestRunner(t)
+	ws := initReviewRepo(t)
+	wtRoot := filepath.Join(filepath.Dir(ws), "review-wt")
+	out, err := runReviewGit(context.Background(), ws, "worktree", "add", "-q", "-b", "review-wt", wtRoot)
+	if err != nil {
+		t.Fatalf("worktree add: %v: %s", err, out)
+	}
+	t.Cleanup(func() {
+		_, _ = runReviewGit(context.Background(), ws, "worktree", "remove", "--force", wtRoot)
+	})
+
+	// A change that exists only in the worktree.
+	writeFile(t, wtRoot, "feature.go", "package feature\n\nfunc Feature() {}\n")
+
+	prompts := scriptReviewers(t, parent, func(string) string { return findingsClean })
+
+	// Reviewing with repo_dir set must see the worktree's untracked file.
+	review, err := parent.ReviewChanges(context.Background(), ReviewChangesOptions{Dir: wtRoot})
+	if err != nil {
+		t.Fatalf("ReviewChanges(Dir=worktree): %v", err)
+	}
+	if got, want := resolveTestPath(t, review.RepoRoot), resolveTestPath(t, wtRoot); got != want {
+		t.Errorf("RepoRoot = %q, want the worktree %q", got, want)
+	}
+	if len(*prompts) == 0 || !strings.Contains((*prompts)[0], "feature.go") {
+		t.Errorf("reviewer did not receive the worktree's change; prompt head: %.200s", firstPrompt(*prompts))
+	}
+}
+
+func firstPrompt(prompts []string) string {
+	if len(prompts) == 0 {
+		return ""
+	}
+	return prompts[0]
+}
+
+// review_changes must gate repo_dir through the same containment the git and
+// commit handlers enforce: an arbitrary path outside the workspace is
+// refused, so a caller cannot point the review at an unrelated repo (whose
+// files the reviewers would read and run git in).
+func TestHandleReviewChanges_RepoDirRejectsOutOfWorkspacePath(t *testing.T) {
+	parent, _ := newReviewTestRunner(t)
+	ws := initReviewRepo(t)
+	parent.SetWorkspaceRoot(ws)
+
+	// A directory that is neither the workspace nor a worktree of it.
+	outside := t.TempDir()
+
+	_, err := handleReviewChanges(context.Background(), parent, map[string]any{
+		"repo_dir": outside,
+	})
+	if err == nil {
+		t.Fatalf("repo_dir %q outside the workspace must be refused", outside)
+	}
+	if !strings.Contains(err.Error(), "outside workspace root") {
+		t.Errorf("error should explain the containment failure, got: %v", err)
+	}
+
+	// The workspace root itself is admitted by the same gate the handler uses.
+	if _, err := tools.ValidateRepoDir(ws, ws); err != nil {
+		t.Errorf("in-workspace repo_dir should be admitted, got: %v", err)
 	}
 }
 

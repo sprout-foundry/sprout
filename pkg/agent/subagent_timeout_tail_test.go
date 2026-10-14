@@ -1,0 +1,128 @@
+package agent
+
+import (
+	"context"
+	"strings"
+	"sync"
+	"testing"
+
+	"github.com/sprout-foundry/sprout/pkg/agent/subagents"
+)
+
+// Git-write personas (the orchestrator family) get the incremental-commit
+// git bullet in their preamble; everyone else keeps the read-only one.
+func TestCreateSubagent_PreambleFollowsGitWriteCapability(t *testing.T) {
+	_, runner := newReviewTestRunner(t)
+
+	orch, err := runner.createSubagent(SubagentOptions{Persona: "orchestrator"}, context.Background())
+	if err != nil {
+		t.Fatalf("createSubagent(orchestrator): %v", err)
+	}
+	defer orch.Shutdown()
+	if !strings.Contains(orch.systemPrompt, "Commit incrementally") {
+		t.Errorf("orchestrator preamble missing incremental-commit rule:\n%.400s", orch.systemPrompt)
+	}
+	if strings.Contains(orch.systemPrompt, "Do NOT commit or push") {
+		t.Errorf("orchestrator preamble carries the read-only commit ban:\n%.400s", orch.systemPrompt)
+	}
+
+	coder, err := runner.createSubagent(SubagentOptions{Persona: "coder"}, context.Background())
+	if err != nil {
+		t.Fatalf("createSubagent(coder): %v", err)
+	}
+	defer coder.Shutdown()
+	if strings.Contains(coder.systemPrompt, "Commit incrementally") {
+		t.Errorf("coder preamble must not carry the commit rule:\n%.400s", coder.systemPrompt)
+	}
+	if !strings.Contains(coder.systemPrompt, "Do NOT commit or push") {
+		t.Errorf("coder preamble missing the read-only git rule:\n%.400s", coder.systemPrompt)
+	}
+}
+
+// A timed-out run must surface its recent progress as the result output so
+// the primary can see what the subagent was doing and recover the work
+// instead of starting blind.
+func TestSubagentTimeoutTail(t *testing.T) {
+	log := []SubagentProgressEntry{
+		{Phase: "spawn", Message: "task started"},
+		{Phase: "output", Message: "reading pkg/foo"},
+		{Phase: "tool_call", Message: "go build ./..."},
+	}
+	var mu sync.Mutex
+	out := subagentTimeoutTail(&log, &mu)
+	if !strings.Contains(out, subagents.TimeoutTailHeader) {
+		t.Errorf("tail missing header:\n%s", out)
+	}
+	for _, want := range []string{"task started", "reading pkg/foo", "go build ./..."} {
+		if !strings.Contains(out, want) {
+			t.Errorf("tail missing entry %q:\n%s", want, out)
+		}
+	}
+
+	// Bounded to the last entries.
+	long := make([]SubagentProgressEntry, 40)
+	for i := range long {
+		long[i] = SubagentProgressEntry{Phase: "output", Message: strings.Repeat("x", i+1)}
+	}
+	trimmed := subagentTimeoutTail(&long, &mu)
+	if strings.Count(trimmed, "\n- ") > 8 {
+		t.Errorf("tail not bounded to 8 entries:\n%s", trimmed)
+	}
+
+	empty := subagentTimeoutTail(nil, &mu)
+	if !strings.Contains(empty, "Recent activity") {
+		t.Errorf("empty log still needs the recovery guidance:\n%s", empty)
+	}
+}
+
+// The progress goroutine appends to the log (which can reallocate the backing
+// array) and is still alive when a timed-out run renders its tail. Reading the
+// slice under the same mutex is what keeps that safe; this exercises the
+// concurrent append so `go test -race` catches a regression.
+func TestSubagentTimeoutTail_ConcurrentAppend(t *testing.T) {
+	var mu sync.Mutex
+	log := []SubagentProgressEntry{{Phase: "spawn", Message: "task started"}}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 500; i++ {
+			mu.Lock()
+			log = append(log, SubagentProgressEntry{Phase: "output", Message: "step"})
+			mu.Unlock()
+		}
+	}()
+
+	for i := 0; i < 200; i++ {
+		if out := subagentTimeoutTail(&log, &mu); !strings.Contains(out, subagents.TimeoutTailHeader) {
+			t.Fatalf("tail missing header during concurrent append:\n%s", out)
+		}
+	}
+	<-done
+}
+
+// A timed-out subagent has usually already streamed partial output, so the
+// tail must be appended to it rather than used only when output is empty.
+func TestAppendTimeoutTail(t *testing.T) {
+	tail := subagents.TimeoutTailHeader + "\n- output: last step"
+
+	// Empty output: the tail stands alone.
+	if got := appendTimeoutTail("", tail); got != tail {
+		t.Errorf("empty output should yield the bare tail, got %q", got)
+	}
+	if got := appendTimeoutTail("   \n", tail); got != tail {
+		t.Errorf("whitespace-only output should yield the bare tail, got %q", got)
+	}
+
+	// Partial output: the tail is appended after it, preserving the partials.
+	got := appendTimeoutTail("partial report so far", tail)
+	if !strings.HasPrefix(got, "partial report so far") {
+		t.Errorf("partial output must be preserved, got %q", got)
+	}
+	if !strings.Contains(got, subagents.TimeoutTailHeader) {
+		t.Errorf("appended tail missing header, got %q", got)
+	}
+	if !strings.Contains(got, "last step") {
+		t.Errorf("appended tail missing entries, got %q", got)
+	}
+}

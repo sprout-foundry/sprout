@@ -68,6 +68,12 @@ func ResolveSubagentTimeout(cm *configuration.Manager, opts SubagentOptions) tim
 // output after the budget expires.
 const wrapUpGrace = 3 * time.Minute
 
+// TimeoutTailHeader starts the output attached to a run that hit its hard
+// time budget before writing a final report (see the runner's
+// subagentTimeoutTail). Exported so the runner and its tests share the
+// exact marker.
+const TimeoutTailHeader = "[timeout] run reached its time budget before writing a final report. Recent activity:"
+
 // personaTimeBudget returns the configured time budget for a persona, or 0
 // when the persona or its budget is unset. A nil config manager (no shared
 // state) also returns 0 — the persona defaults apply instead.

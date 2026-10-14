@@ -490,6 +490,65 @@ func (r *SubagentRunner) runTask(
 		}
 	}
 
+	// A timed-out run reached the deadline mid-work: its buffered output is
+	// the only record of what it did. Attach the recent tail so the primary
+	// can see the last actions and recover the work instead of starting
+	// blind — a timed-out orchestrator otherwise leaves an uncommitted tree
+	// and no report, and every timeout costs a manual recovery pass.
+	//
+	// Attach it whenever the run was cancelled, not only when output is
+	// empty: a subagent killed at its deadline has almost always already
+	// streamed some reasoning or a partial report, and that truncated text
+	// is exactly the case the tail exists to supplement. Append to whatever
+	// partial output exists.
+	if result != nil && rc.runCtx.Err() != nil {
+		result.Output = appendTimeoutTail(result.Output, subagentTimeoutTail(rc.progressLog, rc.progressMu))
+	}
+
 	// Finalize
 	return r.finalizeSubagentResult(rc, result, subAgent, taskID, startTime, opts)
+}
+
+// appendTimeoutTail combines a timed-out run's partial output with the
+// recent-activity tail. A subagent killed at its deadline has almost always
+// already streamed some reasoning or a partial report, so the tail is
+// appended rather than only used when output is empty — that truncated text
+// is exactly the case the tail exists to supplement.
+func appendTimeoutTail(output, tail string) string {
+	if strings.TrimSpace(output) == "" {
+		return tail
+	}
+	return strings.TrimRight(output, "\n") + "\n\n" + tail
+}
+
+// subagentTimeoutTail renders the run's recent progress entries as the
+// output for a result that died before producing a final report. Bounded to
+// the last few entries — enough to see what the subagent was doing, not a
+// full transcript.
+//
+// The slice is read under mu: the progress goroutine appends to it (which
+// can reallocate the backing array) and is still alive here — it exits only
+// after runTask returns — so reading the header unlocked would race the
+// append.
+func subagentTimeoutTail(log *[]SubagentProgressEntry, mu *sync.Mutex) string {
+	if mu != nil {
+		mu.Lock()
+		defer mu.Unlock()
+	}
+	var entries []SubagentProgressEntry
+	if log != nil {
+		entries = *log
+	}
+	const tailEntries = 8
+	start := 0
+	if len(entries) > tailEntries {
+		start = len(entries) - tailEntries
+	}
+	var b strings.Builder
+	b.WriteString(subagents.TimeoutTailHeader + "\n")
+	for _, e := range entries[start:] {
+		fmt.Fprintf(&b, "- %s: %s\n", e.Phase, strings.TrimSpace(e.Message))
+	}
+	b.WriteString("Inspect the tracked file changes before re-running: the work up to the deadline is likely intact.")
+	return b.String()
 }

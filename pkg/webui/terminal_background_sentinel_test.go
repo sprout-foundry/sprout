@@ -4,6 +4,7 @@ package webui
 
 import (
 	"context"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -181,17 +182,26 @@ func TestHasRunningBackgroundSessions(t *testing.T) {
 	}
 }
 
-// wrapBackgroundCommand must escape single quotes so a command containing
-// them can't terminate the /bin/sh -c wrapper early.
+// wrapBackgroundCommand must produce a bounded launcher line, whatever
+// quotes the command contains: the PTY receives only this line, so an
+// unbalanced or oversized one would break the session.
 func TestWrapBackgroundCommand_EscapesQuotes(t *testing.T) {
-	wrapped := wrapBackgroundCommand("echo 'nested'", "deadbeef")
-	// The inner command's quotes must be escaped, not terminate the outer
-	// single-quoted wrapper.
-	if strings.Count(wrapped, "'")%2 != 0 {
-		t.Fatalf("unbalanced quotes in wrapped command: %q", wrapped)
+	scriptPath, wrapped, err := wrapBackgroundCommand("echo 'nested'", "deadbeef")
+	if err != nil {
+		t.Fatalf("wrapBackgroundCommand failed: %v", err)
 	}
-	if !strings.Contains(wrapped, "/bin/sh -c '") {
-		t.Fatalf("expected /bin/sh -c wrapper, got: %q", wrapped)
+	if scriptPath == "" {
+		t.Fatal("wrapBackgroundCommand must return the script path for cleanup")
+	}
+	t.Cleanup(func() { _ = os.Remove(scriptPath) })
+	if strings.Count(strings.ReplaceAll(wrapped, `'\''`, "Q"), "'")%2 != 0 {
+		t.Fatalf("unbalanced quotes in launcher: %q", wrapped)
+	}
+	if !strings.HasPrefix(wrapped, "sh '") {
+		t.Fatalf("expected sh launcher, got: %q", wrapped)
+	}
+	if len(wrapped) > launcherMaxBytes {
+		t.Fatalf("launcher exceeds %d bytes: %d", launcherMaxBytes, len(wrapped))
 	}
 }
 

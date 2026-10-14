@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -91,11 +92,6 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 		return "", -1, fmt.Errorf("failed to generate sentinel marker: %w", err)
 	}
 
-	// Reject commands with embedded newlines.
-	if strings.Contains(command, "\n") {
-		return "", -1, fmt.Errorf("commands with embedded newlines are not supported; use separate commands")
-	}
-
 	// Validate that the command is not empty or whitespace-only.
 	if strings.TrimSpace(command) == "" {
 		return "", -1, fmt.Errorf("command is empty")
@@ -106,13 +102,25 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 		return "", -1, fmt.Errorf("command too long: %d bytes (max %d)", len(command), maxCommandLength)
 	}
 
-	// Build the wrapped command with sentinel-based exit code detection.
-	// We use a subshell pattern to ensure $? always reflects the command's exit status.
-	// Use /bin/sh to ensure the sentinel command works on all shells.
-	// $? is not supported by fish (which uses $status). Hidden sessions
-	// may be running under the user's login shell via resolveShell.
-	escapedCmd := strings.ReplaceAll(command, "'", "'\\''")
-	wrappedCmd := fmt.Sprintf("/bin/sh -c '%s && echo \"__SPROUT_DONE__%s:$?\" || echo \"__SPROUT_DONE__%s:$?\"'\n", escapedCmd, marker, marker)
+	// Materialize the command as a temp script and send only a short
+	// launcher line to the PTY. A PTY in canonical mode truncates input
+	// lines at ~4KB, so the previous inline wrap
+	// (/bin/sh -c '<whole command>') silently executed only the first
+	// statement of any longer chained command; the launcher line is
+	// bounded (launcherMaxBytes) and the command travels through the
+	// filesystem, which also makes multi-line commands (heredocs, chained
+	// statements over newlines) safe here — no echo-stripping ambiguity,
+	// because the PTY echo is one short line and the script output carries
+	// no copy of the command text.
+	scriptPath, launcher, err := writeCommandScript(command, marker)
+	if err != nil {
+		return "", -1, err
+	}
+	// The script self-deletes via its EXIT trap once it runs, but any early
+	// return below (cancelled context, dead session, write failure) skips
+	// the launcher entirely, so the file would leak. Remove it on the way
+	// out regardless; removing an already-deleted path is a no-op.
+	defer func() { _ = os.Remove(scriptPath) }()
 
 	// Pre-allocate the sentinel prefix for fast bytes.Index search.
 	// markerStr is constant for the entire call so we allocate once.
@@ -138,7 +146,7 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 	if pty == nil || !active {
 		return "", -1, fmt.Errorf("session became inactive before command could be sent")
 	}
-	_, err = pty.Write([]byte(wrappedCmd))
+	_, err = pty.Write([]byte(launcher))
 	if err != nil {
 		return "", -1, fmt.Errorf("failed to write command to PTY: %w", err)
 	}
@@ -301,17 +309,30 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 
 									output := buf.String()[:idx]
 
-									// Strip the command echo from the beginning of the output.
-									// Pipe (NoPTY) sessions have no echo. The PTY echoes the wrapped command we sent ("/bin/sh -c '...'").
-									// We find the echo by looking for the "/bin/sh -c '" prefix and
-									// stripping everything up to and including the first newline after it.
-									echoPrefix := "/bin/sh -c '"
-									echoIdx := strings.Index(output, echoPrefix)
-									if echoesInput && echoIdx != -1 {
-										restAfterEcho := output[echoIdx:]
-										newlineIdx := newlineRegex.FindStringIndex(restAfterEcho)
-										if newlineIdx != nil {
-											output = output[echoIdx+newlineIdx[1]:]
+									// Strip the launcher-line echo from the beginning of the
+									// output. Pipe (NoPTY) sessions have no echo at all, so
+									// skip the strip entirely there: a pipe session's output
+									// may legitimately begin with "sh '".
+									if echoesInput {
+										// The PTY echoes the launcher we sent
+										// (`sh '/tmp/sprout-cmd-*.sh'`) as the FIRST line of
+										// the session transcript; the script path (via
+										// shQuote) is embedded in that echo. Anchor the match
+										// at the start of the output so a command that merely
+										// prints a "sh '...'" string is not mis-stripped; fall
+										// back to the first occurrence (covers shells that emit
+										// OSC/title sequences before the echo).
+										echoPrefix := "sh '"
+										echoIdx := strings.Index(output, echoPrefix)
+										if strings.HasPrefix(output, echoPrefix) {
+											echoIdx = 0
+										}
+										if echoIdx != -1 {
+											restAfterEcho := output[echoIdx:]
+											newlineIdx := newlineRegex.FindStringIndex(restAfterEcho)
+											if newlineIdx != nil {
+												output = output[echoIdx+newlineIdx[1]:]
+											}
 										}
 									}
 

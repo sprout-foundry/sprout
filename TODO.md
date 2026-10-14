@@ -243,6 +243,35 @@ make build-all`.
       manifest. Pinned by the package emit test and the artifact test
       (exactly one WASM binary and one `wasm_exec`, plus a single-copy
       size budget derived from the emitted binary).
+- [ ] **ws.11** Host access to the in-browser files. A host that moves a
+      project off the in-browser WASM agent onto a container (the platform's
+      "Run in a container" upgrade) must carry along the files the user
+      edited in the browser but never pushed; today the host contract has no
+      way to read them (`HostCapabilities` in `webui/src/host/types.ts` has
+      no file API). Add a capability-gated, read-only workspace file API to
+      the contract, offered only when the agent runs in-browser: list the
+      project's files (path, size, mode, and whether each differs from the
+      repository checkout) and read a file's bytes. Build it on the existing
+      VFS enumeration in `webui/src/services/vfsFiles.ts`, excluding the
+      runtime dirs (`RUNTIME_DIRS`). Export it from the package with
+      declarations and document it in `docs/integration/host-contract.md`.
+      The platform's consumer is `BrowserFileCollector` in its
+      `webui/src/shell/browserSeed.ts`, which today reports "not reachable".
+      Tests: vitest for listing and reading against a populated VFS
+      (an edited file, a new file, a runtime-dir file excluded), plus the
+      package declaration test. Spec: SP-160 §160a.
+- [ ] **ws.12** Switch the agent backend without a remount. A host
+      re-reads `host.transport` only on mount, so moving from the in-browser
+      agent to a container daemon forces a remount (the platform's
+      `agentKey`), which drops the open editor tabs. Either let a host swap
+      `transport` (the agent backend) on a mounted `SproutWorkspace`, with
+      the chat and file views reconnecting to the new backend, or let the
+      host supply and read back the editor-tab state so it survives a
+      remount. Prefer the in-place swap if the views can reconnect cleanly;
+      record the choice in SP-160. Tests: vitest that mounts the workspace
+      with the WASM backend and open tabs, switches to a daemon transport,
+      and asserts the tabs and the active chat session survive. Spec:
+      SP-160 §160b.
 
 
 Active work tracked here. Each item is a small, independently committable

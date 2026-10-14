@@ -240,6 +240,14 @@ func escalateWorkerTask(ctx context.Context, a *Agent, spec *subagentLaunchSpec)
 // parallel batch and retries a failed one ONCE on the coder model, replacing
 // its entry in results in place. Non-worker tasks are left untouched. A task
 // is a worker task when its resolved role is the worker role.
+//
+// It also records each task's outcome in the agent's bounded store and as a
+// delegated_task_outcome event, at the point the verification outcome is
+// determined: a worker task that held up is recorded under the worker model;
+// one that was retried is recorded under the coder model that produced the
+// final result; a non-worker task is recorded under its own model (verified
+// when it completed normally, failed otherwise). This is the parallel path's
+// single completion point, so each task is recorded exactly once.
 func verifyParallelWorkerResults(ctx context.Context, a *Agent, tasks []SubagentTask, results []*SubagentResult) {
 	if len(results) == 0 {
 		return
@@ -253,7 +261,20 @@ func verifyParallelWorkerResults(ctx context.Context, a *Agent, tasks []Subagent
 			continue
 		}
 		task, ok := byID[r.ID]
-		if !ok || !isWorkerRoleTask(task.Role) {
+		if !ok {
+			continue
+		}
+		if !isWorkerRoleTask(task.Role) {
+			// A non-worker task is not subject to worker verification: record
+			// it with the model that ran it so the worker model's share of the
+			// delegated work is measured against ALL delegated work, not just
+			// the worker's. A completed task is verified; a failed/aborted
+			// run is recorded as failed.
+			outcome := OutcomeVerified
+			if isFailedSubagentRun(r) {
+				outcome = OutcomeFailed
+			}
+			a.recordDelegatedTaskOutcome(task.Prompt, r, task.Model, task.Provider, task.Role, outcome)
 			continue
 		}
 		spec := &subagentLaunchSpec{
@@ -263,6 +284,7 @@ func verifyParallelWorkerResults(ctx context.Context, a *Agent, tasks []Subagent
 		}
 		verification := verifyWorkerResult(a, spec, r)
 		if verification.Verified {
+			a.recordDelegatedTaskOutcome(task.Prompt, r, task.Model, task.Provider, task.Role, OutcomeVerified)
 			continue
 		}
 		// Escalate once on the coder model, re-verifying the escalated run.
@@ -270,6 +292,9 @@ func verifyParallelWorkerResults(ctx context.Context, a *Agent, tasks []Subagent
 		spec.systemPromptText = task.SystemPrompt
 		escalated, err := escalateWorkerTask(ctx, a, spec)
 		if err != nil || escalated == nil {
+			// The escalation could not run: the worker's result stands and the
+			// task failed. Record it under the worker model that produced it.
+			a.recordDelegatedTaskOutcome(task.Prompt, r, task.Model, task.Provider, task.Role, OutcomeFailed)
 			continue // keep the failed original; collectParallelResults reports it
 		}
 		escalated.ID = r.ID
@@ -281,6 +306,14 @@ func verifyParallelWorkerResults(ctx context.Context, a *Agent, tasks []Subagent
 			// reports it rather than passing it through silently.
 			escalated.Error = errWorkerVerificationFailed(second.Reason)
 		}
+		// The final result is the coder model's (the escalation ran): record
+		// it under the coder model that produced it, escalated or failed.
+		coderProvider, coderModel := a.coderModelForDelegation()
+		outcome := OutcomeEscalated
+		if !second.Verified {
+			outcome = OutcomeFailed
+		}
+		a.recordDelegatedTaskOutcome(task.Prompt, escalated, coderModel, coderProvider, configuration.RoleCoder, outcome)
 		results[i] = escalated
 	}
 }

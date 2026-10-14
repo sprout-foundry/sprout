@@ -2,6 +2,7 @@ package commands
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -334,5 +335,62 @@ func TestUsageRender_ShowsUnknownNotZero(t *testing.T) {
 	}
 	if strings.Contains(output, "Cache savings  $0.000000") {
 		t.Errorf("dashboard rendered misleading $0.000000 savings:\n%s", output)
+	}
+}
+
+// TestUsageJSONPayload_IncludesDelegation pins that the /usage --json payload
+// carries the delegation summary (the share of delegated work the worker model
+// did and the credits saved). With no delegated work yet it reports zero tasks
+// and, trivially, $0 saved (known, because there is no worker work to measure).
+func TestUsageJSONPayload_IncludesDelegation(t *testing.T) {
+	chatAgent := newAgentForUsageTest(t)
+
+	payload := buildUsageJSONPayload(chatAgent)
+	if payload.Delegation.TaskCount != 0 {
+		t.Errorf("Delegation.TaskCount = %d, want 0 (no delegated work yet)", payload.Delegation.TaskCount)
+	}
+	if !payload.Delegation.CreditsSavedKnown {
+		t.Errorf("Delegation.CreditsSavedKnown = false, want true when there is no worker work to measure")
+	}
+	if payload.Delegation.CreditsSaved != 0 {
+		t.Errorf("Delegation.CreditsSaved = %f, want 0 with no delegated work", payload.Delegation.CreditsSaved)
+	}
+	// The delegation object must survive the JSON round-trip (the host reads
+	// it from the payload), not be omitted.
+	b, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	if !strings.Contains(string(b), `"delegation"`) {
+		t.Errorf("payload JSON missing the delegation object:\n%s", string(b))
+	}
+}
+
+// TestRenderDelegation pins the dashboard text for the delegation summary: the
+// worker share of delegated work and the credits saved, with "unknown" (never
+// $0) when the coder rate could not be determined.
+func TestRenderDelegation(t *testing.T) {
+	known := agent.DelegationSummary{
+		TaskCount: 4, WorkerTaskCount: 3, TotalTokens: 1000, WorkerTokens: 750,
+		WorkerTokenShare: 0.75, CreditsSaved: 0.042, CreditsSavedKnown: true,
+	}
+	knownLines := strings.Join(renderDelegation(known), "\n")
+	if !strings.Contains(knownLines, "75.0% of delegated work (3/4 tasks") {
+		t.Errorf("known summary missing worker share line:\n%s", knownLines)
+	}
+	if !strings.Contains(knownLines, "$0.042000") {
+		t.Errorf("known summary missing the credited saving amount:\n%s", knownLines)
+	}
+
+	unknown := agent.DelegationSummary{
+		TaskCount: 2, WorkerTaskCount: 2, TotalTokens: 200, WorkerTokens: 200,
+		WorkerTokenShare: 1.0, CreditsSaved: 0, CreditsSavedKnown: false,
+	}
+	unknownLines := strings.Join(renderDelegation(unknown), "\n")
+	if !strings.Contains(unknownLines, "unknown") {
+		t.Errorf("unknown summary must render the savings as \"unknown\":\n%s", unknownLines)
+	}
+	if strings.Contains(unknownLines, "$0.000000") {
+		t.Errorf("unknown summary must not fabricate a $0.000000 saving:\n%s", unknownLines)
 	}
 }

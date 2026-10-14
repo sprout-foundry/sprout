@@ -29,11 +29,18 @@ const (
 	// EventTypeSteerDelivered marks the moment a steer message sent during a
 	// run reaches the model: text streamed before it answers the earlier
 	// input, text after it may answer the steer.
-	EventTypeSteerDelivered          = "steer_delivered"
-	EventTypeError                   = "error"
-	EventTypeToolStart               = "tool_start"
-	EventTypeToolEnd                 = "tool_end"
-	EventTypeSubagentActivity        = "subagent_activity"
+	EventTypeSteerDelivered   = "steer_delivered"
+	EventTypeError            = "error"
+	EventTypeToolStart        = "tool_start"
+	EventTypeToolEnd          = "tool_end"
+	EventTypeSubagentActivity = "subagent_activity"
+	// EventTypeDelegatedTaskOutcome is published when a delegated (subagent)
+	// task completes, recording the model that produced its final result,
+	// the task type, the verification outcome (verified/escalated/failed),
+	// and the tokens and cost. A host aggregates these events to see the
+	// share of work a cheaper worker model handled and the credits saved.
+	// No prompt text is carried.
+	EventTypeDelegatedTaskOutcome    = "delegated_task_outcome"
 	EventTypeTodoUpdate              = "todo_update"
 	EventTypeFileChanged             = "file_changed"
 	EventTypeWorkspacePatch          = "workspace_patch"

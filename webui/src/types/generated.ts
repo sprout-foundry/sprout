@@ -73,6 +73,7 @@ export type ServerEventType =
   | 'tool_start'
   | 'tool_end'
   | 'subagent_activity'
+  | 'delegated_task_outcome'
   | 'todo_update'
   | 'file_changed'
   | 'file_content_changed'

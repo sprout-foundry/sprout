@@ -222,6 +222,13 @@ type Agent struct {
 	// signal that it happened.
 	wakeupDoneFn atomic.Pointer[func(error)]
 	usage        usageLedger
+	// delegatedOutcomes is the bounded per-session record of every
+	// delegated (subagent) task's outcome — the model that ran it, its task
+	// type, the verification result, and its tokens/cost — the session stats
+	// backing the usage view's delegation summary. Guarded by
+	// delegatedOutcomesMu; head-trimmed past delegatedOutcomeCap.
+	delegatedOutcomes   []DelegatedTaskOutcome
+	delegatedOutcomesMu sync.Mutex
 	// pendingWakeupResume holds formatted wakeup batches stashed by
 	// TryAutoResume for the REPL to run as auto-queued turns. Guarded
 	// by wakeupMu.

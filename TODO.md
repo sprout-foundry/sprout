@@ -409,7 +409,7 @@ cold and can erase the saving).
       the task once on the coder model and record that it escalated. Never let
       a failed worker result through silently. Tests for each check and for
       the single escalation.
-- [ ] **ca.3** Per-model outcome tracking. For every delegated task record the
+- [x] **ca.3** Per-model outcome tracking. For every delegated task record the
       model, the task type (read/search, summarise, edit, test, other), the
       outcome (verified, escalated, failed), tokens and cost, in the session
       stats and as an agent event a host can aggregate. Add a summary to the

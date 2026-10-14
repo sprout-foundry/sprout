@@ -58,7 +58,12 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	// Non-worker subagents are not subject to worker verification, so they
 	// carry the zero outcome (no verified/escalated fields).
 	var verification workerVerifyResult
+	// workerBefore captures the worker's first result before the escalation
+	// (nil unless the task is a worker task), so the outcome record can tell
+	// whether the coder model or the worker model produced the final result.
+	var workerBefore *SubagentResult
 	if isWorkerRoleTask(spec.role) {
+		workerBefore = result
 		verification = verifyWorkerResult(a, spec, result)
 		if !verification.Verified {
 			result, verification = escalateWorkerRun(ctx, a, spec, result, verification)
@@ -66,7 +71,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	}
 
 	printSubagentDone(spec.persona, result)
-	return finishSubagentRun(ctx, a, spec, result, verification)
+	return finishSubagentRun(ctx, a, spec, result, workerBefore, verification)
 }
 
 // escalateWorkerRun retries a worker task that failed verification ONCE on
@@ -104,8 +109,18 @@ func escalateWorkerRun(ctx context.Context, a *Agent, spec *subagentLaunchSpec, 
 // finishSubagentRun turns a completed subagent run into the tool result the
 // primary sees: merges its file changes, tracks cost, applies the security
 // and failure handling, and marshals the result envelope. Shared by the
-// blocking and background paths.
-func finishSubagentRun(ctx context.Context, a *Agent, spec *subagentLaunchSpec, result *SubagentResult, verification workerVerifyResult) (string, error) {
+// blocking and background paths. workerBefore is the worker-role result
+// BEFORE the single escalation (nil when no escalation ran or the task is
+// not a worker task); it lets the outcome record attribute the final model
+// correctly (the coder model when the escalation produced the result).
+func finishSubagentRun(ctx context.Context, a *Agent, spec *subagentLaunchSpec, result *SubagentResult, workerBefore *SubagentResult, verification workerVerifyResult) (string, error) {
+	// Record this delegated task's outcome (the model that produced the
+	// final result, its type, the verification result, and its tokens/cost)
+	// in the session stats and as an event a host can aggregate. Exactly one
+	// record per delegated task: the blocking and background paths both flow
+	// through here, and the parallel path records on its own.
+	a.recordDelegatedOutcome(spec, result, workerBefore, verification)
+
 	// Merge the subagent's tracked changes into the primary's ChangeTracker
 	// so list_changes, recover_file, and revert_my_changes see subagent edits.
 	a.MergeSubagentChanges(result.FileChanges, spec.persona)

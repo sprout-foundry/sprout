@@ -161,6 +161,18 @@ func (u *UsageCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		}
 	}
 
+	// Delegation summary: the share of delegated work the worker model
+	// handled and the credits saved versus running it on the coder model.
+	// Omitted when no delegated (subagent) task has completed, so a session
+	// without delegation renders exactly as before.
+	if delegation := chatAgent.GetDelegationSummary(); delegation.TaskCount > 0 {
+		fmt.Println()
+		fmt.Println(" Delegation")
+		for _, line := range renderDelegation(delegation) {
+			fmt.Println(line)
+		}
+	}
+
 	fmt.Println("──────────────────────────────────────────────────────────────────")
 	fmt.Println()
 
@@ -200,6 +212,11 @@ type usageJSONPayload struct {
 	// each model role. Empty (omitted) when no usage was recorded with a
 	// role.
 	RoleUsage []agent.RoleUsage `json:"role_usage,omitempty"`
+	// Delegation is the session's delegated-work summary: the share of the
+	// delegated work the worker model completed and the credits saved versus
+	// running it on the coder model. TaskCount is 0 (no delegated work)
+	// until a subagent task completes.
+	Delegation agent.DelegationSummary `json:"delegation"`
 }
 
 // ExecuteWithJSONOutput emits the usage dashboard data as JSON.
@@ -274,6 +291,23 @@ func buildUsageJSONPayload(chatAgent *agent.Agent) usageJSONPayload {
 		CacheEfficiencyPct: cacheEfficiencyPct,
 		EstimatedResponses: estimatedResponses,
 		RoleUsage:          chatAgent.GetRoleUsage(),
+		Delegation:         chatAgent.GetDelegationSummary(),
+	}
+}
+
+// renderDelegation renders the delegation summary as dashboard lines: the
+// share of delegated work the worker model completed and the credits saved
+// versus running it on the coder model. Savings show "unknown" when the
+// coder model's rate could not be determined (never a fabricated $0).
+func renderDelegation(d agent.DelegationSummary) []string {
+	savings := fmt.Sprintf("$%.6f", d.CreditsSaved)
+	if !d.CreditsSavedKnown {
+		savings = "unknown"
+	}
+	return []string{
+		fmt.Sprintf("   Worker model  %5.1f%% of delegated work (%d/%d tasks, %s tokens)",
+			d.WorkerTokenShare*100, d.WorkerTaskCount, d.TaskCount, formatTokens(d.WorkerTokens)),
+		fmt.Sprintf("   Credits saved %s vs coder model", savings),
 	}
 }
 

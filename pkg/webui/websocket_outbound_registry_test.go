@@ -116,6 +116,7 @@ func TestOutboundRegistryCoversAllEventTypes(t *testing.T) {
 		events.EventTypeToolStart,
 		events.EventTypeToolEnd,
 		events.EventTypeSubagentActivity,
+		events.EventTypeDelegatedTaskOutcome,
 		events.EventTypeTodoUpdate,
 		events.EventTypeFileChanged,
 		events.EventTypeFileContentChanged,

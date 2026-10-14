@@ -14,6 +14,7 @@ export type {
   ToolStartData,
   ToolEndData,
   SubagentActivityData,
+  DelegatedTaskOutcomeData,
   AgentMessageData,
   TodoUpdateData,
   FileChangedData,

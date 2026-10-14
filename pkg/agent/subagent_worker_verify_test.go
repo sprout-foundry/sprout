@@ -296,7 +296,9 @@ func TestFinishSubagentRun_FailedWorkerVerificationIsNotSilent(t *testing.T) {
 	result := &SubagentResult{Output: "I edited the file.", OutputComplete: true}
 	verification := workerVerifyResult{Verified: false, Reason: "task asked for a file change but the worker reported no modified files"}
 
-	out, err := finishSubagentRun(context.Background(), a, spec, result, verification)
+	// workerBefore == result: the worker's first result stands (the
+	// escalation could not run), so the outcome is attributed to the worker.
+	out, err := finishSubagentRun(context.Background(), a, spec, result, result, verification)
 	if err != nil {
 		t.Fatalf("finishSubagentRun: %v", err)
 	}
@@ -318,7 +320,7 @@ func TestFinishSubagentRun_NonWorkerUnaffected(t *testing.T) {
 	spec := &subagentLaunchSpec{prompt: "implement the feature", persona: "coder", role: configuration.RoleCoder}
 	result := &SubagentResult{Output: "Implemented the feature and ran the tests.", OutputComplete: true}
 
-	out, err := finishSubagentRun(context.Background(), a, spec, result, workerVerifyResult{})
+	out, err := finishSubagentRun(context.Background(), a, spec, result, nil, workerVerifyResult{})
 	if err != nil {
 		t.Fatalf("finishSubagentRun: %v", err)
 	}
@@ -410,7 +412,9 @@ func TestFinishSubagentRun_VerifiedWorkerCarriesVerifiedTrue(t *testing.T) {
 	result := &SubagentResult{Output: "The file defines two helpers.", OutputComplete: true}
 	verification := workerVerifyResult{Verified: true}
 
-	out, err := finishSubagentRun(context.Background(), a, spec, result, verification)
+	// workerBefore == result: the worker verified on the first pass (no
+	// escalation), so the outcome is attributed to the worker model.
+	out, err := finishSubagentRun(context.Background(), a, spec, result, result, verification)
 	if err != nil {
 		t.Fatalf("finishSubagentRun: %v", err)
 	}

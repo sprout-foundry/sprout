@@ -373,6 +373,11 @@ export function useWebSocketEventHandler({
           return handleToolEnd(ctx);
         case 'subagent_activity':
           return handleSubagentActivity(ctx);
+        case 'delegated_task_outcome':
+          // Host-facing aggregation event (which model ran a delegated task,
+          // its type, outcome, tokens/cost). The WebUI does not render it;
+          // return without logging so it is not reported as an unknown event.
+          return;
         case 'agent_message':
           return handleAgentMessage(ctx);
         case 'todo_update':

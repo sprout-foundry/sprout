@@ -73,9 +73,13 @@ var allowedOutboundMessageTypes = map[string]struct{}{
 	// tool_start/tool_end), and validation has no consumer on any
 	// surface — its diagnostics remain on the event bus for internal
 	// subscribers, but they were never rendered in the WebUI.
-	events.EventTypeToolStart:                      {},
-	events.EventTypeToolEnd:                        {},
-	events.EventTypeSubagentActivity:               {},
+	events.EventTypeToolStart:        {},
+	events.EventTypeToolEnd:          {},
+	events.EventTypeSubagentActivity: {},
+	// Delegated-task outcomes: which model did the work, its task type, the
+	// verification result, and its tokens/cost. A host aggregates these to
+	// see the share of work a cheaper worker model handled. No prompt text.
+	events.EventTypeDelegatedTaskOutcome:           {},
 	events.EventTypeDelegateClarificationRequested: {},
 	events.EventTypeDelegateClarificationResponded: {},
 	events.EventTypeTodoUpdate:                     {},

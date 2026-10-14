@@ -302,6 +302,9 @@ func newEphemeralDaemonAgent(workDir string, opts daemon.QueryOptions) (*agent.A
 	if opts.MaxIterations > 0 {
 		callAgent.SetMaxIterations(opts.MaxIterations)
 	}
+	if opts.EconomyMode {
+		callAgent.SetEconomyMode(true)
+	}
 	return callAgent, nil
 }
 
@@ -465,6 +468,7 @@ func tryDaemonOneShot(ctx context.Context, query string, jsonOut bool) (bool, er
 		Model:         agentModel,
 		RiskProfile:   agentRiskProfile,
 		MaxIterations: maxIterations,
+		EconomyMode:   agentEconomy,
 	}
 
 	console.GlyphAction.Printf("Running via daemon at %s", AgentSocketPath())

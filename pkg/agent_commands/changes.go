@@ -221,6 +221,7 @@ type statusJSONPayload struct {
 	Model                 string   `json:"model"`
 	Persona               string   `json:"persona"`
 	RiskProfile           string   `json:"risk_profile"`
+	EconomyMode           string   `json:"economy_mode"`
 	VisionAvailable       bool     `json:"vision_available"`
 	ToolCount             int      `json:"tool_count"`
 	Tools                 []string `json:"tools"`
@@ -250,6 +251,7 @@ func (s *StatusCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Ag
 		Model:                 chatAgent.GetModel(),
 		Persona:               chatAgent.GetActivePersona(),
 		RiskProfile:           string(chatAgent.GetActiveRiskProfile()),
+		EconomyMode:           chatAgent.EconomyDescription(),
 		VisionAvailable:       tools.HasVisionCapability(),
 		ToolCount:             len(toolNames),
 		Tools:                 toolNames,

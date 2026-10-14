@@ -208,6 +208,21 @@ func runAgentCommand(cmd *cobra.Command, args []string) (err error) {
 		chatAgent.SetSessionID(state.SessionID)
 	}
 
+	// Apply --economy: route more delegated work to the cheaper worker model,
+	// and (for a NEW session) start the main loop on the worker model. Applied
+	// after the resume block so a resumed conversation is treated as an
+	// already-started session: the main loop keeps the model its prompt cache
+	// was built on, and --economy only re-routes subagents. A fresh session
+	// starts the main loop in economy mode.
+	if agentEconomy {
+		if agentLastSession || strings.TrimSpace(agentSessionID) != "" {
+			// Resumed session: mark it started first so the mode change is a
+			// mid-session change (subagent routing only).
+			chatAgent.MarkSessionStarted()
+		}
+		chatAgent.SetEconomyMode(true)
+	}
+
 	// Check if we're in a CI environment or non-interactive mode
 	isCI := os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != ""
 

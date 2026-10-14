@@ -130,6 +130,16 @@ func (a *Agent) processQueryWithSeed(source, userQuery string) (string, error) {
 	if err := a.TryBeginQueryAs(source); err != nil {
 		return "", err
 	}
+
+	// Session-start economy hook, on the common funnel every turn entry
+	// (ProcessQuery / ProcessQueryAs / ProcessQueryWithContinuityAs, and the
+	// daemon one-shot path) passes through. The first turn marks the session
+	// started (so a later economy-mode change is a mid-session change) and,
+	// for a session that started in economy mode, switches the main loop onto
+	// the worker model before the first request. Both are idempotent: the
+	// marker is set once and the model switch is once-guarded.
+	a.markSessionStarted()
+	a.applyEconomyMainLoopModel()
 	defer func() {
 		a.turnTimestampMu.Lock()
 		a.turnTimestamp = time.Time{}

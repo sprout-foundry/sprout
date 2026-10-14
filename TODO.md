@@ -416,7 +416,7 @@ cold and can erase the saving).
       session usage view: share of work done by the worker model and the
       credits saved versus running it all on the coder model. This is the
       evidence for when a cheaper model "holds up".
-- [ ] **ca.4** Economy mode. A per-session setting (CLI flag, web UI toggle,
+- [x] **ca.4** Economy mode. A per-session setting (CLI flag, web UI toggle,
       and an API a host can set, e.g. the platform switching a session to
       economy when a user nears their credit limit) that delegates more work
       to the worker model and, for a NEW session only, may run the main loop on

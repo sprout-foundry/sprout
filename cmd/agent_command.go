@@ -62,6 +62,7 @@ var (
 	agentTraceUnredacted bool
 	agentPromptStdin     bool
 	agentRiskProfile     string
+	agentEconomy         bool
 	// Workflow budget overrides — populated from CLI flags on `sprout
 	// automate` and applied on top of the workflow JSON's budget block.
 	// Only positive values apply; pass 0 (or omit) to inherit the workflow
@@ -333,6 +334,7 @@ func init() {
 	agentCmd.Flags().BoolVar(&agentLastSession, "last-session", false, "Resume the most recent session from the current working directory scope")
 	agentCmd.Flags().StringVar(&agentPersona, "persona", "", "Persona to activate at startup (e.g., general, coder, refactor, debugger, tester, reviewer, researcher, web_scraper)")
 	agentCmd.Flags().StringVar(&agentRiskProfile, "risk-profile", "", "Shell-command risk cascade profile: readonly | cautious | default | permissive | unrestricted. Overrides config.risk_profile for this session. Persona-defined rules still win.")
+	agentCmd.Flags().BoolVar(&agentEconomy, "economy", false, "Economy mode: route more delegated work to the cheaper worker model, and start the main loop on the worker model (switch back with /model or /provider). A mid-session toggle only re-routes subagents.")
 	agentCmd.Flags().BoolVar(&agentDryRun, "dry-run", false, "Run tools in simulation mode (enhanced safety)")
 	agentCmd.Flags().IntVar(&maxIterations, "max-iterations", 0, "Maximum iterations per prompt before stopping (default: 0 = unlimited)")
 	agentCmd.Flags().BoolVar(&agentNoStreaming, "no-stream", false, "Disable streaming mode (useful for scripts and pipelines) (or set SPROUT_NO_STREAM=1)")

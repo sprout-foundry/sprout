@@ -422,6 +422,11 @@ type Agent struct {
 	// Set by --risk-profile CLI flag and per-step risk_profile in workflow JSON. Empty means fall through to Config.RiskProfile, then "default".
 	riskProfileOverride configuration.RiskProfile
 
+	// economy is the per-session economy-mode state: whether the mode is on,
+	// and whether the main loop was started in economy mode (a new-session
+	// change). Guarded by its own mutex; see economy_mode.go.
+	economy economyState
+
 	// filesReadThisTurn tracks paths the agent called read_file on during the current turn.
 	// Used by the staleness rule in checkWriteStaleness. Reset at turn boundaries.
 	filesReadThisTurn *turnFileTracker

@@ -272,6 +272,19 @@ func resolveParallelSubagentConfig(a *Agent) (string, string) {
 		subagentProvider = a.GetProvider()
 		subagentModel = a.GetModel()
 	}
+	// Economy mode routes parallel subagents that would otherwise run on the
+	// coder model onto the worker model. Per-task persona resolution
+	// (resolveParallelTaskPersonas) refines this afterwards and applies the
+	// same routing for tasks that resolve to the coder role, so a task with
+	// an explicit persona provider/model still wins.
+	if ecoProvider, ecoModel, applies := a.economySubagentRoute(); applies {
+		if strings.TrimSpace(ecoProvider) != "" {
+			subagentProvider = strings.TrimSpace(ecoProvider)
+		}
+		if ecoModel != "" {
+			subagentModel = ecoModel
+		}
+	}
 	return subagentProvider, subagentModel
 }
 

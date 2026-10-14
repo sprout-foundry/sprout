@@ -159,6 +159,26 @@ func resolveSubagentProviderModel(a *Agent, persona string, personaExplicitlyPro
 			a.Logger().Debug("Worker persona delegation: provider=%s model=%s role=%s\n", provider, model, role)
 		}
 
+		// Economy mode routes a subagent that would otherwise run on the
+		// coder model onto the worker model, so more delegated work runs on
+		// the cheaper model. It applies only when the resolution fell through
+		// to the coder role AND the persona named no explicit provider/model:
+		// an explicit selection always wins, and flipping the role of a
+		// persona that named its own model would wrongly pull it into worker
+		// verification and worker cost attribution.
+		if role == configuration.RoleCoder && !personaProviderExplicit && !personaModelExplicit {
+			if ecoProvider, ecoModel, applies := a.economySubagentRoute(); applies {
+				if strings.TrimSpace(ecoProvider) != "" {
+					provider = strings.TrimSpace(ecoProvider)
+				}
+				if ecoModel != "" {
+					model = ecoModel
+				}
+				role = configuration.RoleWorker
+				a.Logger().Debug("Economy mode: subagent routed to the worker model: provider=%s model=%s\n", provider, model)
+			}
+		}
+
 		// Log no-persona spawn resolution for observability. persona is defaulted
 		// to "general" earlier in this function (or to cfg.DefaultSubagentPersona),
 		// so we check the explicit-provided flag rather than the empty string —

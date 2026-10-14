@@ -159,6 +159,9 @@ func NewCommandRegistry() *CommandRegistry {
 	// risk profile management
 	registry.Register(&RiskProfileCommand{})
 
+	// economy mode (delegate more work to the cheaper worker model)
+	registry.Register(&EconomyCommand{})
+
 	// Cost control
 	registry.Register(&MaxContextCommand{})
 

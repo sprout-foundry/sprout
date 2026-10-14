@@ -73,7 +73,7 @@ func (h *commitHandler) Execute(ctx context.Context, env ToolEnv, args map[strin
 	// Determine the effective working directory.
 	effectiveDir := env.WorkspaceRoot
 	if repoDir != "" {
-		resolvedDir, err := validateRepoDir(repoDir, env.WorkspaceRoot)
+		resolvedDir, err := ValidateRepoDir(repoDir, env.WorkspaceRoot)
 		if err != nil {
 			return ToolResult{Output: fmt.Sprintf("Invalid repo_dir: %v", err), IsError: true}, nil
 		}

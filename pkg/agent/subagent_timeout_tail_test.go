@@ -100,3 +100,29 @@ func TestSubagentTimeoutTail_ConcurrentAppend(t *testing.T) {
 	}
 	<-done
 }
+
+// A timed-out subagent has usually already streamed partial output, so the
+// tail must be appended to it rather than used only when output is empty.
+func TestAppendTimeoutTail(t *testing.T) {
+	tail := subagents.TimeoutTailHeader + "\n- output: last step"
+
+	// Empty output: the tail stands alone.
+	if got := appendTimeoutTail("", tail); got != tail {
+		t.Errorf("empty output should yield the bare tail, got %q", got)
+	}
+	if got := appendTimeoutTail("   \n", tail); got != tail {
+		t.Errorf("whitespace-only output should yield the bare tail, got %q", got)
+	}
+
+	// Partial output: the tail is appended after it, preserving the partials.
+	got := appendTimeoutTail("partial report so far", tail)
+	if !strings.HasPrefix(got, "partial report so far") {
+		t.Errorf("partial output must be preserved, got %q", got)
+	}
+	if !strings.Contains(got, subagents.TimeoutTailHeader) {
+		t.Errorf("appended tail missing header, got %q", got)
+	}
+	if !strings.Contains(got, "last step") {
+		t.Errorf("appended tail missing entries, got %q", got)
+	}
+}

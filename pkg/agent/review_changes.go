@@ -11,6 +11,7 @@ import (
 	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/factory"
 	"github.com/sprout-foundry/sprout/pkg/personas"
@@ -588,7 +589,11 @@ func handleReviewChanges(ctx context.Context, a *Agent, args map[string]any) (st
 	// in-progress work surfaced as "the change", with the branch's own
 	// files reported as deleted.
 	if rd, ok := args["repo_dir"].(string); ok && strings.TrimSpace(rd) != "" {
-		opts.Dir = strings.TrimSpace(rd)
+		resolved, err := tools.ValidateRepoDir(strings.TrimSpace(rd), a.currentWorkspaceRoot())
+		if err != nil {
+			return "", err
+		}
+		opts.Dir = resolved
 	}
 	background := true
 	if v, ok := args["background"].(bool); ok {

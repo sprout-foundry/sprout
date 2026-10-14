@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 )
 
 const findingsMustFix = "Checked main.go.\n```json\n" +
@@ -156,6 +157,34 @@ func firstPrompt(prompts []string) string {
 		return ""
 	}
 	return prompts[0]
+}
+
+// review_changes must gate repo_dir through the same containment the git and
+// commit handlers enforce: an arbitrary path outside the workspace is
+// refused, so a caller cannot point the review at an unrelated repo (whose
+// files the reviewers would read and run git in).
+func TestHandleReviewChanges_RepoDirRejectsOutOfWorkspacePath(t *testing.T) {
+	parent, _ := newReviewTestRunner(t)
+	ws := initReviewRepo(t)
+	parent.SetWorkspaceRoot(ws)
+
+	// A directory that is neither the workspace nor a worktree of it.
+	outside := t.TempDir()
+
+	_, err := handleReviewChanges(context.Background(), parent, map[string]any{
+		"repo_dir": outside,
+	})
+	if err == nil {
+		t.Fatalf("repo_dir %q outside the workspace must be refused", outside)
+	}
+	if !strings.Contains(err.Error(), "outside workspace root") {
+		t.Errorf("error should explain the containment failure, got: %v", err)
+	}
+
+	// The workspace root itself is admitted by the same gate the handler uses.
+	if _, err := tools.ValidateRepoDir(ws, ws); err != nil {
+		t.Errorf("in-workspace repo_dir should be admitted, got: %v", err)
+	}
 }
 
 func TestReviewChanges_SplitsLargeChangeAcrossReviewers(t *testing.T) {

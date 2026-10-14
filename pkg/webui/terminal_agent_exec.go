@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -111,10 +112,15 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 	// statements over newlines) safe here — no echo-stripping ambiguity,
 	// because the PTY echo is one short line and the script output carries
 	// no copy of the command text.
-	_, launcher, err := writeCommandScript(command, marker)
+	scriptPath, launcher, err := writeCommandScript(command, marker)
 	if err != nil {
 		return "", -1, err
 	}
+	// The script self-deletes via its EXIT trap once it runs, but any early
+	// return below (cancelled context, dead session, write failure) skips
+	// the launcher entirely, so the file would leak. Remove it on the way
+	// out regardless; removing an already-deleted path is a no-op.
+	defer func() { _ = os.Remove(scriptPath) }()
 
 	// Pre-allocate the sentinel prefix for fast bytes.Index search.
 	// markerStr is constant for the entire call so we allocate once.

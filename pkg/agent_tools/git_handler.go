@@ -54,7 +54,7 @@ func (h *gitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]a
 	// Determine the effective working directory: repo_dir overrides WorkspaceRoot.
 	effectiveDir := env.WorkspaceRoot
 	if repoDir != "" {
-		resolvedDir, err := validateRepoDir(repoDir, env.WorkspaceRoot)
+		resolvedDir, err := ValidateRepoDir(repoDir, env.WorkspaceRoot)
 		if err != nil {
 			return ToolResult{Output: fmt.Sprintf("Invalid repo_dir: %v", err), IsError: true}, nil
 		}
@@ -269,12 +269,15 @@ func (h *gitHandler) Interactive() bool      { return false }
 // as a sibling of <repo>). Returns the absolute resolved path, or an error
 // if the path is invalid or escapes both checks.
 //
+// ValidateRepoDir resolves repoDir against workspaceRoot and admits it only
+// when it is inside the workspace or a worktree of the workspace repository.
+//
 // The shared-repository branch exists because git worktrees of the workspace
 // repo legitimately live outside the workspace root, and refusing them
 // forced agents onto raw shell git for exactly the sanctioned
 // commit/review workflows. An unrelated repository outside the workspace is
 // still refused.
-func validateRepoDir(repoDir, workspaceRoot string) (string, error) {
+func ValidateRepoDir(repoDir, workspaceRoot string) (string, error) {
 	if workspaceRoot == "" {
 		return "", agenterrors.NewConfig("workspace root is not set", nil)
 	}
@@ -340,8 +343,14 @@ func sameCommonGitDir(dir, ref string) bool {
 // commonGitDir resolves the repository-wide .git directory for a work tree
 // at dir ("git rev-parse --git-common-dir", made absolute against dir and
 // symlink-resolved). Returns "" when dir is not inside a git work tree.
+//
+// Bounded by a short timeout: this runs on the repo_dir validation path,
+// and an unbounded git (a hung network mount, lock contention) would block
+// the tool call indefinitely.
 func commonGitDir(dir string) string {
-	cmd := exec.Command("git", "-C", dir, "rev-parse", "--git-common-dir") //nolint:gosec // G204: dir is the caller-resolved repo path; rev-parse is read-only
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", "-C", dir, "rev-parse", "--git-common-dir") //nolint:gosec // G204: dir is the caller-resolved repo path; rev-parse is read-only
 	out, err := cmd.Output()
 	if err != nil {
 		return ""

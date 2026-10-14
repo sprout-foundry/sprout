@@ -52,7 +52,7 @@ func TestValidateRepoDir_WorktreeOfWorkspaceRepoAllowed(t *testing.T) {
 	ws := initWorkspaceRepo(t)
 	wt := addLinkedWorktree(t, ws, "bugfix-wt")
 
-	got, err := validateRepoDir(wt, ws)
+	got, err := ValidateRepoDir(wt, ws)
 	if err != nil {
 		t.Fatalf("linked worktree of the workspace repo must be admitted, got: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestValidateRepoDir_RelativeWithinWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := validateRepoDir("pkg/mod", ws)
+	got, err := ValidateRepoDir("pkg/mod", ws)
 	if err != nil {
 		t.Fatalf("relative in-workspace path refused: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestValidateRepoDir_UnrelatedOutsideRepoRefused(t *testing.T) {
 	ws := initWorkspaceRepo(t)
 	other := initWorkspaceRepo(t) // a different repo, sibling of ws's temp dir
 
-	if _, err := validateRepoDir(other, ws); err == nil {
+	if _, err := ValidateRepoDir(other, ws); err == nil {
 		t.Fatal("an unrelated outside repository must be refused")
 	}
 }
@@ -93,7 +93,7 @@ func TestValidateRepoDir_PlainOutsideDirRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := validateRepoDir(plain, ws); err == nil {
+	if _, err := ValidateRepoDir(plain, ws); err == nil {
 		t.Fatal("a plain outside directory must be refused")
 	}
 }
@@ -102,7 +102,7 @@ func TestValidateRepoDir_MissingPathRefused(t *testing.T) {
 	ws := initWorkspaceRepo(t)
 	// A worktree-shaped path that does not exist still reports not-found,
 	// not a permission error.
-	_, err := validateRepoDir(filepath.Join(filepath.Dir(ws), "ghost-wt"), ws)
+	_, err := ValidateRepoDir(filepath.Join(filepath.Dir(ws), "ghost-wt"), ws)
 	if err == nil {
 		t.Fatal("missing path must be refused")
 	}

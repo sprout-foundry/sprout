@@ -16,12 +16,13 @@ import (
 
 // wrapBackgroundCommand materializes command with the completion sentinel —
 // the same convention ExecuteCommandAndWait uses — via writeCommandScript,
-// and returns the launcher line. The sentinel fires regardless of exit
-// code, and the PTY receives only a short launcher line (see
-// terminal_script.go for why inline wrapping is unsafe).
-func wrapBackgroundCommand(command, marker string) (string, error) {
-	_, launcher, err := writeCommandScript(command, marker)
-	return launcher, err
+// and returns the script path plus the launcher line. The sentinel fires
+// regardless of exit code, and the PTY receives only a short launcher line
+// (see terminal_script.go for why inline wrapping is unsafe). The caller
+// records the path so a session that dies before the launcher runs can
+// remove the script (its EXIT trap only fires once it runs).
+func wrapBackgroundCommand(command, marker string) (scriptPath, launcher string, err error) {
+	return writeCommandScript(command, marker)
 }
 
 // checkBackgroundSentinel examines newly-arrived output for the session's

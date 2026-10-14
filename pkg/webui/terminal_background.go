@@ -134,11 +134,14 @@ func (tm *TerminalManager) ExecuteCommandInBackground(ctx context.Context, chatI
 	// launcher line to the PTY: /bin/sh guarantees $? semantics regardless
 	// of the session's login shell (fish uses $status), and the launcher
 	// stays far below the PTY's canonical-mode line limit.
-	wrappedCmd, wrapErr := wrapBackgroundCommand(command, marker)
+	scriptPath, wrappedCmd, wrapErr := wrapBackgroundCommand(command, marker)
 	if wrapErr != nil {
 		_ = tm.CloseSession(sessionID)
 		return "", fmt.Errorf("failed to prepare command: %w", wrapErr)
 	}
+	session.mutex.Lock()
+	session.bgScriptPath = scriptPath
+	session.mutex.Unlock()
 	if _, err := pty.Write([]byte(wrappedCmd)); err != nil {
 		// Clean up the failed session
 		_ = tm.CloseSession(sessionID)

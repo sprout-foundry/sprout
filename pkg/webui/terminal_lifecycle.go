@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"time"
 )
 
@@ -34,8 +35,17 @@ func (tm *TerminalManager) CloseSession(sessionID string) error {
 	if session.IsBackground {
 		tm.recordBgExitTombstoneLocked(sessionID, session.bgExitCode)
 	}
+	// The background command's temp script removes itself via its EXIT trap
+	// once it runs; if the session dies before the launcher runs, the file
+	// would leak. Remove it here (a no-op when the trap already did).
+	scriptPath := session.bgScriptPath
+	session.bgScriptPath = ""
 	session.mutex.Unlock()
 	tm.mutex.Unlock()
+
+	if scriptPath != "" {
+		_ = os.Remove(scriptPath)
+	}
 
 	// Ensure no ExecuteCommandAndWait call is in-flight. execMu is per-session,
 	// so holding it here only blocks other callers of this exact session — it

@@ -350,6 +350,40 @@
           "vision",
           "reasoning"
         ]
+      },
+      {
+        "context_length": 1048576,
+        "description": "Beam is an open model by Reflection designed to deliver strong performance for areas such as agentic tool use, coding and general reasoning with an emphasis on token efficient usage.",
+        "id": "beam",
+        "name": "Beam",
+        "tags": [
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Clef is a 27B multimodal model created by Cloudflare that turns a state and a schema of typed questions into decisions.",
+        "id": "clef:27b",
+        "input_cost": 0.24,
+        "name": "Clef 27B",
+        "tags": [
+          "vision"
+        ]
+      },
+      {
+        "cached_input_cost": 0.15,
+        "context_length": 1048576,
+        "description": "Muse Spark Open is a natively multimodal model with 816B total parameters (42B active) and a 1M-token context window. Built for coding and agentic work, it excels at long-horizon tasks, complex software engineering, and multi-step reasoning.",
+        "id": "muse-spark-open",
+        "input_cost": 1.25,
+        "name": "Muse Spark Open",
+        "output_cost": 4.25,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning"
+        ]
       }
     ]
   },

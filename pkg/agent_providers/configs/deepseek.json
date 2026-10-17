@@ -10,7 +10,7 @@
   },
   "defaults": {
     "max_tokens": 32768,
-    "model": "deepseek-v4-flash",
+    "model": "deepseek-flash",
     "temperature": 0.7,
     "top_p": 1
   },
@@ -35,7 +35,7 @@
       "deepseek-flash"
     ],
     "default_context_limit": 1000000,
-    "default_model": "deepseek-v4-flash",
+    "default_model": "deepseek-flash",
     "model_info": [
       {
         "cached_input_cost": 0.006,

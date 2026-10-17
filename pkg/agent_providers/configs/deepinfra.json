@@ -1652,7 +1652,7 @@
         ]
       },
       {
-        "cached_input_cost": 0.05,
+        "cached_input_cost": 0.1,
         "context_length": 1048576,
         "description": "Step 5 Preview is StepFun's flagship model for agentic work. It is a sparse Mixture-of-Experts model with 600B total parameters and 27B active per token, a 1M-token context window, and text and image input. It delivers frontier-level performance in software engineering, long-horizon agentic execution with repeated tool calls, and professional knowledge work, with particular strength in finance.",
         "id": "stepfun-ai/Step-5-Preview",
@@ -1667,13 +1667,28 @@
         ]
       },
       {
-        "cached_input_cost": 0.1,
+        "cached_input_cost": 0.08,
         "context_length": 262144,
         "description": "NVIDIA Nemotron 3.5 Super VL is an open multimodal model for agents that see, reason, and act. Its 120B-parameter Mixture-of-Experts design (12B active) understands text, images, documents, GUIs, and video, and adds reasoning and tool use on top.",
         "id": "nvidia/NVIDIA-Nemotron-3.5-Super-VL",
-        "input_cost": 0.2,
+        "input_cost": 0.1,
         "name": "Nemotron 3.5 Super VL",
-        "output_cost": 1,
+        "output_cost": 0.4,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.006,
+        "context_length": 1048576,
+        "description": "DeepSeek-V4.1-Flash-1017 is a minor update to DeepSeek-V4.1-Flash, delivering substantial improvements across reasoning, coding, agentic tasks, and visual benchmarks. Alongside these gains, the model reduces task execution time and output length, enabling users to complete tasks faster and at lower cost and advancing the performance–cost Pareto frontier across multiple agent harnesses.",
+        "id": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+        "input_cost": 0.2,
+        "name": "DeepSeek V4.1 Flash 1017",
+        "output_cost": 0.6,
         "tags": [
           "tools",
           "vision",

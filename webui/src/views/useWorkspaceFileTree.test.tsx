@@ -60,6 +60,47 @@ describe('fetchWorkspaceFiles', () => {
     const { fetchFn } = fakeFetch({ message: 'path outside workspace' });
     await expect(fetchWorkspaceFiles('.', fetchFn)).rejects.toThrow('path outside workspace');
   });
+
+  // The daemon sends BOTH spellings: `path` is absolute, `relative` is the
+  // workspace-relative one. The tree composes its node paths from rootPath +
+  // child names, so a node carrying the absolute path matches nothing it
+  // builds — ancestor expansion, selection and reveal all compare against
+  // the relative form. Fixtures using a relative `path` hid this.
+  it('maps the daemon absolute path to the workspace-relative one', async () => {
+    const { fetchFn } = fakeFetch({
+      message: 'success',
+      files: [
+        { name: 'a.ts', path: '/w/src/a.ts', relative: 'src/a.ts', size: 1 },
+        { name: 'lib', path: '/w/src/lib', relative: 'src/lib', is_dir: true },
+      ],
+    });
+
+    const files = await fetchWorkspaceFiles('src', fetchFn, '/w');
+
+    expect(files.map((f) => f.path)).toEqual(['src/lib', 'src/a.ts']);
+  });
+
+  it('strips a known workspace root when only the absolute path is sent', async () => {
+    const { fetchFn } = fakeFetch({
+      message: 'success',
+      files: [{ name: 'a.ts', path: '/w/src/a.ts', size: 1 }],
+    });
+
+    const files = await fetchWorkspaceFiles('src', fetchFn, '/w');
+
+    expect(files[0].path).toBe('src/a.ts');
+  });
+
+  it('keeps a path that is already relative when no root is known', async () => {
+    const { fetchFn } = fakeFetch({
+      message: 'success',
+      files: [{ name: 'a.ts', path: 'src/a.ts', size: 1 }],
+    });
+
+    const files = await fetchWorkspaceFiles('src', fetchFn);
+
+    expect(files[0].path).toBe('src/a.ts');
+  });
 });
 
 describe('useWorkspaceFileTree', () => {

@@ -196,13 +196,7 @@ test.describe("New file (Ctrl/Cmd+N)", () => {
     await expect(untitledTab).toHaveCount(0);
   });
 
-  // KNOWN OPEN (not caused by the save fix): the reveal event reaches the
-  // tree and the tree fetches the collapsed ancestor, but the expansion does
-  // not render in the assembled app — the row stays aria-expanded="false" and
-  // no row is selected. The component behaves correctly in isolation
-  // (FileTree.reveal.test.tsx), so the gap is in the app's sidebar wiring.
-  // Left as fixme rather than deleted so the reproduction is kept.
-  test.fixme("reveal-in-file-list expands ancestors and highlights the active file", async () => {
+  test("reveal-in-file-list expands ancestors and highlights the active file", async () => {
     await openFilesPanel();
     await openFileFromTree("newfile-e2e.ts");
 

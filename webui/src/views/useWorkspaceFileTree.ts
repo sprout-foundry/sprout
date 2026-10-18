@@ -43,6 +43,8 @@ export interface UseWorkspaceFileTreeOptions {
 interface ApiFileEntry {
   name: string;
   path: string;
+  /** Workspace-relative spelling of `path`; the daemon sends both. */
+  relative?: string;
   size?: number;
   modified?: number;
   mod_time?: number;
@@ -51,17 +53,37 @@ interface ApiFileEntry {
   git_status?: string;
 }
 
-function toFileInfo(file: ApiFileEntry): FileInfo {
+/**
+ * A listing entry as the tree's node.
+ *
+ * `FileInfo.path` must be the WORKSPACE-RELATIVE path: the tree composes its
+ * own node paths from `rootPath` + child names (`childPath`), so a node
+ * carrying the daemon's absolute `path` matches nothing the tree builds —
+ * ancestor expansion, selection and reveal all compare against the relative
+ * form. The daemon sends both spellings; prefer `relative` and fall back to
+ * `path` for adapters (the WASM file bridge) that only send one, stripping a
+ * known workspace root when the fallback is absolute.
+ */
+function toFileInfo(file: ApiFileEntry, workspaceRoot?: string): FileInfo {
   const isDir = Boolean(file.isDir ?? file.is_dir);
   return {
     name: file.name,
-    path: file.path,
+    path: workspaceRelativePath(file, workspaceRoot),
     size: file.size || 0,
     modified: file.modified ?? file.mod_time ?? 0,
     isDir,
     ext: isDir ? '' : file.name.includes('.') ? `.${file.name.split('.').pop() || ''}` : '',
     gitStatus: (file.git_status || undefined) as FileInfo['gitStatus'],
   };
+}
+
+function workspaceRelativePath(file: ApiFileEntry, workspaceRoot?: string): string {
+  const relative = (file.relative || '').replace(/^\.\//, '').replace(/\/+$/, '');
+  if (relative) return relative;
+  const raw = (file.path || '').replace(/\\/g, '/');
+  const root = (workspaceRoot || '').replace(/\\/g, '/').replace(/\/+$/, '');
+  if (root && raw.startsWith(`${root}/`)) return raw.slice(root.length + 1);
+  return raw.replace(/^\.\//, '');
 }
 
 /** Directories first, ignored entries last, then by name. */
@@ -74,7 +96,11 @@ function compareEntries(a: FileInfo, b: FileInfo): number {
 }
 
 /** List one directory of the workspace. */
-export async function fetchWorkspaceFiles(path: string, fetchFn: typeof fetch = clientFetch): Promise<FileInfo[]> {
+export async function fetchWorkspaceFiles(
+  path: string,
+  fetchFn: typeof fetch = clientFetch,
+  workspaceRoot?: string,
+): Promise<FileInfo[]> {
   // The default build compiles NATIVE_FS_ENABLED to `false`, so the native
   // files channel is a dead branch there.
   if (NATIVE_FS_ENABLED) {
@@ -92,7 +118,7 @@ export async function fetchWorkspaceFiles(path: string, fetchFn: typeof fetch = 
   if (!response.ok) throw new Error(`Failed to fetch files: ${response.statusText}`);
   const data = await response.json();
   if (data.message !== 'success') throw new Error(data.message);
-  return ((data.files || []) as ApiFileEntry[]).map(toFileInfo).sort(compareEntries);
+  return ((data.files || []) as ApiFileEntry[]).map((f) => toFileInfo(f, workspaceRoot)).sort(compareEntries);
 }
 
 function childPath(parentPath: string, name: string): string {
@@ -104,7 +130,10 @@ export function useWorkspaceFileTree(options: UseWorkspaceFileTreeOptions = {}):
   const { onFileSelect, selectedFile, rootPath = '.', workspaceRoot, fetchFn = clientFetch } = options;
   const bufferManager = useOptionalBufferManager();
 
-  const onFetchFiles = useCallback((path: string) => fetchWorkspaceFiles(path, fetchFn), [fetchFn]);
+  const onFetchFiles = useCallback(
+    (path: string) => fetchWorkspaceFiles(path, fetchFn, workspaceRoot),
+    [fetchFn, workspaceRoot],
+  );
   const onCreateFile = useCallback(
     async (parentPath: string, name: string) => {
       await filesApi.createItem(fetchFn, childPath(parentPath, name), false);

@@ -387,7 +387,6 @@ class LSPClientService {
   getWorkspacePathSync(): string {
     return this.workspacePath;
   }
-
   /**
    * Seed the cached workspace path without a network round-trip.
    * Callers that already have the workspace root (e.g. layout restore)
@@ -814,6 +813,23 @@ class LSPClientService {
 // ---------------------------------------------------------------------------
 
 /**
+ * The workspace root, from whichever source knows it.
+ *
+ * The LSP client's cache is the fast path but is only seeded by layout
+ * restore and the first LSP connect, so it is empty for a while after boot
+ * (and stays empty in a shell that never restores a layout). The workspace
+ * store is populated by the app's own workspace fetch, so it covers that
+ * window. Callers that resolve or strip a workspace-relative path must use
+ * this rather than `getWorkspacePathSync()` alone: an empty root silently
+ * turns a relative path into an absolute one (or leaves an absolute path
+ * unstripped), which is how a path comparison against the file tree's
+ * relative node paths stops matching.
+ */
+export function getWorkspaceRootPath(): string {
+  return LSPClientService.getInstance().getWorkspacePathSync() || getWorkspaceRoot();
+}
+
+/**
  * Resolve a path that may be workspace-relative (or session-cwd-relative)
  * to an absolute filesystem path.
  *
@@ -857,7 +873,7 @@ export function resolveEditorFilePath(path: string): string {
     }
   }
 
-  const root = LSPClientService.getInstance().getWorkspacePathSync() || getWorkspaceRoot();
+  const root = getWorkspaceRootPath();
   if (!root) return workspaceRelative;
   return `${root.replace(/\/+$/, '')}/${workspaceRelative.replace(/^\//, '')}`;
 }

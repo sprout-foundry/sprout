@@ -125,6 +125,10 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
 
     const [files, setFiles] = useState<FileInfo[]>([]);
     const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set([rootPath]));
+    // Mirror of expandedDirs for callbacks that must read the CURRENT set
+    // rather than the one captured when they were memoized (refreshTree).
+    const expandedDirsRef = useRef(expandedDirs);
+    expandedDirsRef.current = expandedDirs;
     const [loading, setLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
     // The refreshTree promise currently in flight, if any. revealFile waits on
@@ -234,7 +238,11 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
             nextFiles = await fetchFiles(rootPath);
           }
 
-          const expanded = Array.from(expandedDirs)
+          // Read the expansion set from the ref, not this closure: a refresh
+          // that starts before a reveal expands an ancestor would otherwise
+          // rebuild the tree from the pre-reveal expansion and drop the
+          // children the reveal attached, leaving the row collapsed.
+          const expanded = Array.from(expandedDirsRef.current)
             .filter((dirPath) => dirPath !== rootPath)
             .sort((a, b) => a.split('/').length - b.split('/').length);
 
@@ -264,7 +272,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
       } catch {
         // Swallowed: the run body already reported its own error state.
       }
-    }, [expandedDirs, fetchFiles, findFileByPath, onRefresh, rootPath, updateFileChildren]);
+    }, [fetchFiles, findFileByPath, onRefresh, rootPath, updateFileChildren]);
 
     // Ancestor directories of `filePath` in the tree's own path space.
     //
@@ -349,10 +357,11 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
           }
         }
 
-        // Compute all ancestor directories. Re-deriving after the await is
-        // safe: the expansion update is additive and idempotent.
+        // Compute all ancestor directories. Read the expansion from the ref:
+        // a reveal that ran while a refresh was in flight must see the set
+        // that refresh just built, not this closure's snapshot.
         const ancestors = getAncestors(treePath);
-        const newAncestors = ancestors.filter((a) => !expandedDirs.has(a));
+        const newAncestors = ancestors.filter((a) => !expandedDirsRef.current.has(a));
 
         // Add new ancestors to expandedDirs
         if (newAncestors.length > 0) {

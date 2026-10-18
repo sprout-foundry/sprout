@@ -23,6 +23,18 @@ describe('BROWSER_DEFAULT_HOTKEYS', () => {
     expect(keys.sort()).toEqual(['Cmd+Shift+P', 'Ctrl+Shift+P']);
   });
 
+  // Ctrl+N and the reveal hotkey must fire while the editor has focus — a
+  // CodeMirror document is a contentEditable, and a non-global command is
+  // suppressed there. Without the global flag both keys resolve to nothing
+  // in the editor, which is the only place they are pressed.
+  it('binds new-file and toggle-explorer globally', () => {
+    for (const id of ['new_file', 'toggle_explorer']) {
+      const bindings = BROWSER_DEFAULT_HOTKEYS.filter((h) => h.command_id === id);
+      expect(bindings.map((h) => h.key).sort()).toEqual([`Cmd+${id === 'new_file' ? 'N' : 'Shift+E'}`, `Ctrl+${id === 'new_file' ? 'N' : 'Shift+E'}`]);
+      for (const b of bindings) expect(b.global).toBe(true);
+    }
+  });
+
   it('has no duplicate key bindings across the whole set', () => {
     const seen = new Set<string>();
     for (const h of BROWSER_DEFAULT_HOTKEYS) {

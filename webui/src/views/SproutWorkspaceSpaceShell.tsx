@@ -62,6 +62,8 @@ const NO_COMMANDS: readonly string[] = [];
 
 /** The commands `useHotkeyCommandHandler` turns into editor and tab actions. */
 const EDITOR_COMMANDS: readonly string[] = [
+  'new_file',
+  'toggle_explorer',
   'focus_next_tab',
   'focus_prev_tab',
   'close_all_editors',
@@ -207,6 +209,19 @@ function SpaceShellLayout({
     },
     [openWorkspaceBuffer],
   );
+
+  // A new untitled buffer: the Save As prompt on first save gives it a real
+  // path. Ctrl+N / File▸New File reach this through the editor commands.
+  const newFile = useCallback(() => {
+    openWorkspaceBuffer({
+      kind: 'file',
+      path: `__workspace/untitled-${Date.now()}`,
+      title: 'Untitled',
+      ext: '',
+      isClosable: true,
+    });
+    setCurrentView('editor');
+  }, [openWorkspaceBuffer]);
 
   const chatViewOverrides = useMemo(
     () => ({ activeToolDetail, onToolDetailToggle, onReviewChange, review: git?.review, diff: git?.diff }),
@@ -375,7 +390,7 @@ function SpaceShellLayout({
           )}
         </div>
       </div>
-      <EditorCommands />
+      <EditorCommands onNewFile={newFile} />
     </DesignWorkspaceProvider>
   );
 }
@@ -432,7 +447,7 @@ function useDesignPresenceProbe(): ReturnType<typeof useDesignPresence> {
 }
 
 /** The app root's editor and tab commands (`useHotkeyCommandHandler`), registered for the embed. */
-function EditorCommands(): null {
+function EditorCommands({ onNewFile }: { onNewFile: () => void }): null {
   const {
     buffers,
     buffersRef,
@@ -470,6 +485,7 @@ function EditorCommands(): null {
     onCloseAllBuffers,
     onCloseOtherBuffers,
     onSaveAllBuffers,
+    onNewFile,
     onTogglePinTab,
     onSwitchToBuffer: switchToBuffer,
     onSwitchPane: switchPane,

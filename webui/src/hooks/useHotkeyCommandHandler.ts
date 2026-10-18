@@ -11,6 +11,10 @@ export interface UseHotkeyCommandHandlerOptions {
   onCloseOtherBuffers: () => void;
   /** Save all buffers */
   onSaveAllBuffers: () => void;
+  /** Open a new untitled buffer (Ctrl+N / File▸New File). Omitted by shells
+   *  whose own hotkey layer already owns `new_file` (AppContent's
+   *  useAppContentHotkeys), which keeps the command single-handled. */
+  onNewFile?: () => void;
   /** Switch to a specific pane and buffer */
   onSwitchToBuffer: (bufferId: string) => void;
   /** Switch to a specific pane */
@@ -42,6 +46,7 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
     onCloseAllBuffers,
     onCloseOtherBuffers,
     onSaveAllBuffers,
+    onNewFile,
     onTogglePinTab,
     onSwitchToBuffer,
     onSwitchPane,
@@ -117,6 +122,9 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
           }
           break;
         }
+        case 'new_file':
+          onNewFile?.();
+          break;
         case 'close_all_editors':
           onCloseAllBuffers();
           break;
@@ -174,7 +182,8 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
         case 'editor_toggle_format_on_save':
           document.dispatchEvent(new CustomEvent('editor-toggle-format-on-save'));
           break;
-        case 'editor_reveal_in_explorer': {
+        case 'editor_reveal_in_explorer':
+        case 'toggle_explorer': {
           const buf = activeBufferId ? buffersRef.current.get(activeBufferId) : null;
           const path = buf?.file?.path;
           if (path && !path.startsWith('__workspace/')) {
@@ -287,6 +296,7 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
     onCloseAllBuffers,
     onCloseOtherBuffers,
     onSaveAllBuffers,
+    onNewFile,
     onTogglePinTab,
     onSwitchToBuffer,
     onSwitchPane,

@@ -13,6 +13,16 @@ import (
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
+// emptyToolContentPlaceholder is the wire string for a tool result with no
+// output. Tool-role messages must always carry string content: strict
+// OpenAI-compat backends (ninfer, vLLM, llama.cpp) reject a tool message
+// whose content is null with HTTP 400 ("tool messages must contain content").
+// A placeholder is the OpenAI-canonical way to signal "the tool ran, it
+// produced nothing" — it preserves role alternation and tool_call_id
+// threading and gives the model an explicit no-output signal instead of a
+// blank that it could mistake for a failure.
+const emptyToolContentPlaceholder = "(no output)"
+
 // convertMessages converts messages according to provider configuration.
 // It also merges consecutive same-role messages (e.g. two user messages in a row)
 // which can occur when an API call fails and the user retries — no assistant
@@ -85,7 +95,21 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 			// reconcileVisionCapability.
 			content := interface{}(msg.Content)
 			if content == "" {
-				content = nil
+				// Empty-content normalization is role-aware. A tool result with
+				// no output must stay a STRING on the wire: backends such as
+				// ninfer (and vLLM/llama.cpp strict modes) reject a tool message
+				// whose content is null with HTTP 400 "tool messages must
+				// contain content". The placeholder keeps role alternation and
+				// tool_call_id threading intact and gives the model an explicit
+				// "no output" signal. Assistant content, by contrast, may be
+				// null alongside tool_calls — that is what Z.AI/GLM require
+				// (they 400 on "" for assistant+tool_calls, error 1214) and what
+				// the OpenAI schema allows, so assistant keeps nil.
+				if msg.Role == "tool" {
+					content = emptyToolContentPlaceholder
+				} else {
+					content = nil
+				}
 			}
 			if msg.Role == "tool" {
 				convertedMsg := map[string]interface{}{
@@ -192,6 +216,10 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 	converted = stripUnansweredToolCalls(converted)
 	converted = dropOrphanToolResults(converted)
 	converted = mergeConsecutiveAssistants(converted)
+
+	// Final wire invariant: no tool-role message may carry a missing or null
+	// content field — strict backends 400 the whole request over it.
+	converted = enforceToolContentInvariant(converted)
 
 	// Inject cache_control breakpoints for providers that support prompt-prefix
 	// caching (Anthropic via OpenRouter). Anthropic allows up to 4 breakpoints

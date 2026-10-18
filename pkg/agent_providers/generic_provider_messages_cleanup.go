@@ -3,7 +3,8 @@ package providers
 // generic_provider_messages_cleanup.go — the post-construction cleanup
 // passes over the provider wire map: dropOrphanToolResults, stripUnansweredToolCalls,
 // the assistant merge / drop-empty passes, the tool-image delivery insertion,
-// and the map helpers. Split out of generic_provider_messages.go.
+// the tool-content invariant guard, and the map helpers. Split out of
+// generic_provider_messages.go.
 
 import (
 	"fmt"
@@ -11,6 +12,30 @@ import (
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
+
+// enforceToolContentInvariant is the final wire guard: it guarantees no
+// tool-role message goes out with a missing or null content field. This is
+// defense in depth for the "tool messages must contain content" HTTP 400 that
+// strict OpenAI-compat backends (ninfer, vLLM, llama.cpp) reject the entire
+// request over. The primary normalization in convertMessages already fills
+// empty tool content with the placeholder; this guard catches any path (a
+// future code path, a provider with a non-string content, or a cleanup pass
+// that strips content) that could still leave a tool message null, so the
+// invariant holds on the wire regardless of how the message was built.
+func enforceToolContentInvariant(converted []map[string]interface{}) []map[string]interface{} {
+	for i := range converted {
+		entry := converted[i]
+		role, _ := entry["role"].(string)
+		if role != "tool" {
+			continue
+		}
+		content, present := entry["content"]
+		if !present || content == nil {
+			entry["content"] = emptyToolContentPlaceholder
+		}
+	}
+	return converted
+}
 
 // dropOrphanToolResults walks a converted message slice and drops any
 // tool-role message whose tool_call_id is not declared by the nearest

@@ -753,15 +753,35 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
 
         const trimmedPath = filePath.trim();
 
+        // Resolve the typed path against the workspace root before writing.
+        // The prompt's value is what the user sees in the tree — a
+        // workspace-relative path like `src/new.ts` — while the file API
+        // resolves relative paths against the daemon's process cwd. Writing
+        // the raw value would land the file outside the workspace tree
+        // (and, for a synthetic buffer path, create a literal
+        // `__workspace/` directory inside the workspace).
+        const resolvedPath = resolveEditorFilePath(trimmedPath);
+
+        // Announce the save BEFORE the write, exactly as the normal-save
+        // path does: the watcher must learn this path's mtime and enter its
+        // cooldown before the file's first appearance on disk is polled.
+        // Without it the newly created file reads as an external change and
+        // the conflict dialog fires against the buffer the user just saved.
+        document.dispatchEvent(
+          new CustomEvent('file:editor-saved', {
+            detail: { path: resolvedPath, mtime: Math.floor(Date.now() / 1000) },
+          }),
+        );
+
         try {
-          const response = await writeFileWithFetch(sproutFetch, trimmedPath, buffer.content);
+          const response = await writeFileWithFetch(sproutFetch, resolvedPath, buffer.content);
           if (!response.ok) {
             const errorText = await response.text().catch(() => response.statusText);
             throw new Error(errorText || `Failed to save file: ${response.statusText}`);
           }
 
-          const ext = trimmedPath.includes('.') ? trimmedPath.split('.').pop() : '';
-          const name = trimmedPath.split('/').pop() || trimmedPath;
+          const data = await response.json().catch(() => ({}));
+          const serverMtime = typeof data.mod_time === 'number' ? data.mod_time : undefined;
 
           setBuffers((prev) => {
             const newBuffers = new Map(prev);
@@ -769,23 +789,36 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
             if (buf) {
               newBuffers.set(bufferId, {
                 ...buf,
+                // fileEntryAtPath derives name/ext (ext keeps its leading
+                // dot, matching every other entry point) from the path.
                 file: {
-                  ...buf.file,
-                  name,
-                  path: trimmedPath,
-                  ext: ext || undefined,
+                  ...fileEntryAtPath(buf.file, resolvedPath),
+                  // Adopt the real mtime: the buffer was created with
+                  // modified: 0, and leaving it there makes the watcher's
+                  // learned mtime wrong for the file's whole lifetime.
+                  ...(serverMtime != null ? { modified: serverMtime } : {}),
                 },
                 originalContent: buf.content,
                 isModified: false,
+                externallyModified: false,
+                diskContent: null,
               });
             }
             return newBuffers;
           });
+
+          // Re-announce with the authoritative server mtime once the HTTP
+          // response lands (same contract as the normal-save path).
+          document.dispatchEvent(
+            new CustomEvent('file:editor-saved', {
+              detail: { path: resolvedPath, mtime: serverMtime ?? Math.floor(Date.now() / 1000) },
+            }),
+          );
+          return { mod_time: serverMtime };
         } catch (error) {
           console.error('Failed to save new file:', error);
           throw error;
         }
-        return;
       }
 
       // Normal save for existing files

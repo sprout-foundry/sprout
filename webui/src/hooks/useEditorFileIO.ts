@@ -421,8 +421,15 @@ export function useEditorFileIO(
       const buf = bufferRef.current;
       if (!buf || !cmViewApiRef.current?.view) return;
 
-      // Only save real file buffers with on-disk paths.
-      if (buf.kind !== 'file' || buf.file.path.startsWith('__workspace/')) return;
+      if (buf.kind !== 'file') return;
+
+      // An untitled buffer (Ctrl+N) has no on-disk path yet, so saving it
+      // means Save As. saveBuffer owns that prompt and the path adoption;
+      // returning silently here made Cmd+S a no-op on a new file.
+      if (buf.file.path.startsWith('__workspace/')) {
+        await saveBuffer(buf.id, { force: true });
+        return;
+      }
 
       setSaving(true);
       setError(null);

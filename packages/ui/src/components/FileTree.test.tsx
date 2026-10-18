@@ -430,6 +430,52 @@ describe('FileTree', () => {
     expect(deepItem.some((el) => el.textContent === 'deep.ts')).toBe(true);
   });
 
+  it('reveals an absolute path from the editor against workspace-relative tree nodes', async () => {
+    // The editor's buffers carry absolute paths (LSP document URIs need the
+    // real on-disk location), while the tree's nodes are workspace-relative.
+    // A reveal must translate between the two: splitting the absolute path
+    // yields ancestors like "Users", "Users/dev" that match no tree node, so
+    // nothing expands and no row highlights.
+    const resolvers = new Map<string, (files: FileInfo[]) => void>();
+    const slowFetch = vi.fn(
+      (path: string) => new Promise<FileInfo[]>((resolve) => { resolvers.set(path, resolve); }),
+    );
+    const ref: { current: FileTreeHandle | null } = { current: null };
+    act(() => {
+      root.render(createElement(FileTree, {
+        ref,
+        onFileSelect: vi.fn(),
+        onFetchFiles: slowFetch,
+        workspaceRoot: '/Users/dev/proj',
+      }));
+    });
+
+    const revealPromise = ref.current!.revealFile('/Users/dev/proj/src/lib/deep.ts') as unknown as Promise<void>;
+
+    await act(async () => {
+      resolvers.get('.')!([
+        { name: 'src', path: 'src', isDir: true, size: 0, modified: 0 },
+        { name: 'README.md', path: 'README.md', isDir: false, size: 1, modified: 0, ext: '.md' },
+      ]);
+    });
+    expect(slowFetch).toHaveBeenCalledWith('src');
+
+    await act(async () => {
+      resolvers.get('src')!([{ name: 'lib', path: 'src/lib', isDir: true, size: 0, modified: 0 }]);
+    });
+    await act(async () => {
+      resolvers.get('src/lib')!([
+        { name: 'deep.ts', path: 'src/lib/deep.ts', isDir: false, size: 5, modified: 0, ext: '.ts' },
+      ]);
+    });
+    await act(async () => { await revealPromise; });
+
+    const srcDir = container.querySelector('.file-tree-item.directory');
+    expect(srcDir?.getAttribute('aria-expanded')).toBe('true');
+    const selected = Array.from(container.querySelectorAll('.file-tree-item.selected'));
+    expect(selected.some((el) => el.textContent === 'deep.ts')).toBe(true);
+  });
+
   // ── New tests for improved coverage ─────────────────────────────────
 
   // ── Icon rendering tests ──

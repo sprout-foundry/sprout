@@ -720,7 +720,9 @@ describe('handleSave', () => {
     expect(setup.setters.setSaving).toHaveBeenCalledWith(false);
   });
 
-  it('skips save for workspace buffers', async () => {
+  it('routes workspace buffers to saveBuffer so Save As can run', async () => {
+    mockSaveBuffer.mockReset();
+    mockSaveBuffer.mockResolvedValue({ mod_time: 1234567890 });
     const setup = setupHook({
       bufferOptions: { filePath: '__workspace/scratch', content: 'workspace content' },
     });
@@ -730,7 +732,9 @@ describe('handleSave', () => {
       await hook.handleSave();
     });
 
-    expect(mockSaveBuffer).not.toHaveBeenCalled();
+    // The virtual path must never be written to disk; saveBuffer owns the
+    // Save As prompt and the path adoption that gives the buffer a real path.
+    expect(mockSaveBuffer).toHaveBeenCalledWith('buf-1', { force: true });
   });
 
   it('skips save for non-file buffers', async () => {

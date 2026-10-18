@@ -837,6 +837,15 @@ export function resolveEditorFilePath(path: string): string {
     return normalized;
   }
 
+  // Virtual buffers (untitled files from Ctrl+N, chat tabs, compare/diff
+  // views) live under the synthetic `__workspace/` prefix and have no
+  // on-disk counterpart. Resolving them against the workspace root would
+  // make `<root>/__workspace/untitled-123` look like a real file path: the
+  // save path's virtual-buffer branch and every `startsWith('__workspace/')`
+  // guard downstream would miss, and a save would write the synthetic name
+  // to disk as a literal `__workspace/` directory inside the workspace.
+  if (normalized.startsWith('__workspace/')) return normalized;
+
   // Resolve cwd-relative paths (terminal links, agent output under a
   // session cwd) to workspace-relative first.
   let workspaceRelative = normalized;
@@ -848,7 +857,7 @@ export function resolveEditorFilePath(path: string): string {
     }
   }
 
-  const root = LSPClientService.getInstance().getWorkspacePathSync();
+  const root = LSPClientService.getInstance().getWorkspacePathSync() || getWorkspaceRoot();
   if (!root) return workspaceRelative;
   return `${root.replace(/\/+$/, '')}/${workspaceRelative.replace(/^\//, '')}`;
 }

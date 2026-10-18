@@ -266,20 +266,63 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
       }
     }, [expandedDirs, fetchFiles, findFileByPath, onRefresh, rootPath, updateFileChildren]);
 
-    const getAncestors = useCallback((filePath: string, _dirRoot: string): string[] => {
-      const segments = filePath.split('/').filter(Boolean);
-      const ancestors: string[] = [];
-      for (let i = 0; i < segments.length - 1; i++) {
-        const ancestorPath = segments.slice(0, i + 1).join('/');
-        ancestors.push(ancestorPath);
-      }
-      return ancestors;
-    }, []);
+    // Ancestor directories of `filePath` in the tree's own path space.
+    //
+    // Callers hand revealFile paths from several sources: the editor's
+    // buffers (absolute — LSP document URIs need the real on-disk location),
+    // the search panel and the tree itself (workspace-relative). The tree's
+    // nodes are always workspace-relative, so an absolute path must lose its
+    // workspace-root prefix first. Splitting an absolute path unchanged
+    // yields ancestors like "Users", "Users/dev" that match no node: nothing
+    // expands and no row highlights.
+    const toTreePath = useCallback(
+      (filePath: string): string => {
+        let relative = filePath.replace(/\\/g, '/');
+
+        // Strip the workspace root prefix when the path is absolute (or
+        // spelled with the root's own name, e.g. "proj/src/a.ts").
+        const roots = [workspaceRoot, rootPath]
+          .filter((r): r is string => typeof r === 'string' && r !== '' && r !== '.')
+          .map((r) => r.replace(/\\/g, '/').replace(/\/+$/, ''));
+        for (const root of roots) {
+          if (relative === root) {
+            relative = '';
+            break;
+          }
+          if (relative.startsWith(`${root}/`)) {
+            relative = relative.slice(root.length + 1);
+            break;
+          }
+        }
+        return relative.replace(/^\/+/, '');
+      },
+      [workspaceRoot, rootPath],
+    );
+
+    const getAncestors = useCallback(
+      (filePath: string): string[] => {
+        const segments = toTreePath(filePath).split('/').filter(Boolean);
+        const ancestors: string[] = [];
+        for (let i = 0; i < segments.length - 1; i++) {
+          const ancestorPath = segments.slice(0, i + 1).join('/');
+          ancestors.push(ancestorPath);
+        }
+        return ancestors;
+      },
+      [toTreePath],
+    );
 
     const revealFile = useCallback(
       async (filePath: string) => {
         // Skip empty paths
         if (!filePath) {
+          return;
+        }
+
+        // Reveal in the tree's own path space: an absolute path from the
+        // editor must become workspace-relative or no node will match it.
+        const treePath = toTreePath(filePath);
+        if (!treePath) {
           return;
         }
 
@@ -300,7 +343,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
         // If the target file is ignored and we're hiding ignored files,
         // temporarily show them so the reveal can work.
         if (!showIgnoredFiles) {
-          const target = findFileByPath(filesRef.current, filePath);
+          const target = findFileByPath(filesRef.current, treePath);
           if (target?.gitStatus === 'ignored') {
             setShowIgnoredFiles(true);
           }
@@ -308,7 +351,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
 
         // Compute all ancestor directories. Re-deriving after the await is
         // safe: the expansion update is additive and idempotent.
-        const ancestors = getAncestors(filePath, rootPath);
+        const ancestors = getAncestors(treePath);
         const newAncestors = ancestors.filter((a) => !expandedDirs.has(a));
 
         // Add new ancestors to expandedDirs
@@ -338,7 +381,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
         }
 
         // Set the selected file
-        setInternalSelectedFile(filePath);
+        setInternalSelectedFile(treePath);
 
         // Scroll the selected element into view after state updates. Retry a
         // couple of frames: when the reveal had to wait out a refresh or
@@ -363,7 +406,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
         };
         setTimeout(() => flashSelected(3), 100);
       },
-      [getAncestors, rootPath, expandedDirs, findFileByPath, fetchFiles, updateFileChildren, showIgnoredFiles],
+      [getAncestors, toTreePath, expandedDirs, findFileByPath, fetchFiles, updateFileChildren, showIgnoredFiles],
     );
 
     useImperativeHandle(ref, () => ({

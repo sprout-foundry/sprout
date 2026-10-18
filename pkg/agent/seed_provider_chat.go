@@ -27,6 +27,14 @@ import (
 // shrink-and-retry cascade in the retry loops below.
 const maxLiveRequestImages = 3
 
+// bodyBudgetKeepTail is the number of most-recent non-system messages kept
+// when a 413 persists after every inline image has been shed — the point at
+// which the text body (system prompt + history) is the overflow. Each
+// further retry halves the tail (see the 413 branch in the retry loops), so
+// a still-too-large request converges on a small recent-turn window instead
+// of failing the whole turn.
+const bodyBudgetKeepTail = 16
+
 // doChatWithRetry performs a chat request with exponential backoff retry (max 3).
 func (sp *sproutProvider) doChatWithRetry(ctx context.Context, req *core.ChatRequest) (*core.ChatResponse, error) {
 	const maxRetries = 3
@@ -60,17 +68,25 @@ func (sp *sproutProvider) doChatWithRetry(ctx context.Context, req *core.ChatReq
 		if sp.agent != nil && sp.agent.eventBus != nil {
 			retryable := attempt < maxRetries && isRetryableProviderError(err)
 			if isBodyTooLargeError(err) {
-				retryable = attempt < maxRetries && api.CountImages(req.Messages) > 0
+				// A 413 is always worth another attempt while retries remain:
+				// images can be shed, then the text history can be trimmed.
+				retryable = attempt < maxRetries
 			}
 			sp.agent.publishRetryEvent(err, attempt, maxRetries, sp.agent.GetProvider(), retryable)
 		}
 
 		// HTTP 413 (body too large): the payload, not the endpoint, is the
-		// problem — shed half the inline images (most recent kept) and
-		// retry. n/2 == 0 strips every image, leaving the text-only
-		// request that actually fits.
+		// problem. Shed inline images first (most recent kept); once the
+		// images are gone and the request still overflows, the text body
+		// (system prompt + accumulated history) is the cause — drop the
+		// oldest non-system history and retry. Without this second stage a
+		// long session whose text alone exceeds the server limit 413s
+		// forever, since image shedding can never make it fit.
 		if isBodyTooLargeError(err) {
-			if n := api.CountImages(req.Messages); n > 0 && attempt < maxRetries {
+			if attempt >= maxRetries {
+				return nil, err
+			}
+			if n := api.CountImages(req.Messages); n > 0 {
 				// Shed against the WIRE view: doChatOnce live-trims each
 				// attempt to maxLiveRequestImages, so counting req.Messages
 				// raw would let a large n keep shrinking to a value the
@@ -82,8 +98,13 @@ func (sp *sproutProvider) doChatWithRetry(ctx context.Context, req *core.ChatReq
 				req.Messages = api.TrimImagesBeyondLatest(req.Messages, wire/2)
 				sp.clearPastedImages()
 			} else {
-				// Nothing left to shed, or out of attempts.
-				return nil, err
+				// Images exhausted: shrink the text history. Each retry
+				// keeps a smaller tail so repeated 413s converge.
+				keep := bodyBudgetKeepTail >> uint(attempt)
+				if keep < 1 {
+					keep = 1
+				}
+				req.Messages = api.TrimMessagesForBodyBudget(req.Messages, keep)
 			}
 		} else if !isRetryableProviderError(err) {
 			// Check if this error is retryable. If not, fail immediately.

@@ -117,10 +117,11 @@ func TestStreaming413ShedsImagesAndRetries(t *testing.T) {
 	}
 }
 
-// TestStreaming413ExhaustsToTextOnly pins the terminal state: when every
-// image is shed (n/2 == 0) the text-only request goes out, and if the
-// server still 413s a text-only body there is nothing left to shed — the
-// error surfaces instead of looping.
+// TestStreaming413ExhaustsToTextOnly pins the cascade's terminal state:
+// once every image is shed (n/2 == 0), the retry switches to shedding the
+// text history — the request goes out text-only and, when it still 413s,
+// the oldest non-system turns are dropped on each remaining attempt rather
+// than failing immediately. With retries exhausted the 413 surfaces.
 func TestStreaming413ExhaustsToTextOnly(t *testing.T) {
 	client := &bodyLimitClient{MockClient: &MockClient{model: "m"}, fail413: 99}
 	agent := newBudgetTestAgent(t)
@@ -140,6 +141,109 @@ func TestStreaming413ExhaustsToTextOnly(t *testing.T) {
 	// 4 -> 2 -> 1 -> 0: the final attempt must be text-only.
 	if got := client.seenImages[len(client.seenImages)-1]; got != 0 {
 		t.Errorf("final request carried %d images, want 0 (sequence %v)", got, client.seenImages)
+	}
+}
+
+// textTrimmingClient fails every call with a 413 and records the message
+// count of each request, so a test can assert the text history shrinks
+// once images are gone.
+type textTrimmingClient struct {
+	*MockClient
+	calls      int
+	seenCounts []int
+	seenImages []int
+}
+
+func (c *textTrimmingClient) SendChatRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
+	c.calls++
+	c.seenCounts = append(c.seenCounts, len(messages))
+	c.seenImages = append(c.seenImages, api.CountImages(messages))
+	return nil, fmt.Errorf("HTTP 413: body too large")
+}
+
+// TestChat413TrimsTextHistoryWhenImagesExhausted pins the second stage of
+// the cascade: a long text-only history that keeps 413ing is shrunk by
+// dropping the oldest non-system messages, keeping the system prompt and a
+// recent-turn tail. Without this the retry gave up as soon as images were
+// gone, so a session whose text body alone exceeded the server limit could
+// never recover.
+func TestChat413TrimsTextHistoryWhenImagesExhausted(t *testing.T) {
+	client := &textTrimmingClient{MockClient: &MockClient{model: "m"}}
+	agent := newBudgetTestAgent(t)
+	provider, err := NewSproutProvider(agent, client)
+	if err != nil {
+		t.Fatalf("NewSproutProvider: %v", err)
+	}
+	sp := provider.(*sproutProvider)
+
+	// A system prompt plus a long user/assistant history, no images.
+	msgs := []core.Message{{Role: "system", Content: "system prompt"}}
+	for i := 0; i < 40; i++ {
+		role := "user"
+		if i%2 == 1 {
+			role = "assistant"
+		}
+		msgs = append(msgs, core.Message{Role: role, Content: fmt.Sprintf("turn %d", i)})
+	}
+	req := &core.ChatRequest{Messages: msgs}
+
+	_, err = sp.doChatWithRetry(context.Background(), req)
+	if err == nil {
+		t.Fatal("expected the unfixable 413 to surface")
+	}
+
+	// The history must have been truncated on retries: later requests carry
+	// fewer messages than the first.
+	if len(client.seenCounts) < 2 {
+		t.Fatalf("expected multiple attempts, saw %d", len(client.seenCounts))
+	}
+	first, last := client.seenCounts[0], client.seenCounts[len(client.seenCounts)-1]
+	if last >= first {
+		t.Errorf("text history did not shrink: first=%d last=%d (counts %v)", first, last, client.seenCounts)
+	}
+	// The system prompt must survive every truncation.
+	if req.Messages[0].Role != "system" {
+		t.Errorf("system prompt dropped: first role = %q", req.Messages[0].Role)
+	}
+}
+
+// TestTrimMessagesForBodyBudget pins the helper directly: system messages
+// are always kept, the tail is kept, the cut lands on a user boundary so a
+// tool sequence is never split, and the input is not mutated.
+func TestTrimMessagesForBodyBudget(t *testing.T) {
+	msgs := []api.Message{
+		{Role: "system", Content: "sys"},
+		{Role: "user", Content: "u0"},
+		{Role: "assistant", Content: "a0", ToolCalls: []api.ToolCall{{ID: "t0"}}},
+		{Role: "tool", Content: "r0", ToolCallID: "t0"},
+		{Role: "assistant", Content: "a1"},
+		{Role: "user", Content: "u1"},
+		{Role: "assistant", Content: "a2"},
+		{Role: "user", Content: "u2"},
+	}
+
+	got := api.TrimMessagesForBodyBudget(msgs, 3)
+
+	// System kept, tail of 3 starts at a user boundary (u1), so the kept
+	// window is sys,u1,a2,u2.
+	if got[0].Role != "system" {
+		t.Fatalf("system message dropped: %v", got)
+	}
+	if got[1].Content != "u1" {
+		t.Errorf("cut did not land on a user boundary: got %q, want u1 (full %v)", got[1].Content, got)
+	}
+	if len(got) != 4 {
+		t.Errorf("len(got) = %d, want 4 (%v)", len(got), got)
+	}
+	// Input untouched.
+	if len(msgs) != 8 {
+		t.Errorf("input mutated: len = %d", len(msgs))
+	}
+
+	// Nothing to drop: an already-small history is returned unchanged.
+	small := []api.Message{{Role: "system", Content: "s"}, {Role: "user", Content: "u"}}
+	if out := api.TrimMessagesForBodyBudget(small, 16); len(out) != 2 {
+		t.Errorf("small history trimmed: %v", out)
 	}
 }
 

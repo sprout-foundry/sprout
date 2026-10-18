@@ -239,21 +239,34 @@ func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages
 		if sp.agent != nil && sp.agent.eventBus != nil {
 			retryable := attempt < maxRetries && isRetryableProviderError(err)
 			if isBodyTooLargeError(err) {
-				retryable = attempt < maxRetries && api.CountImages(messages) > 0
+				// A 413 is always worth another attempt while retries remain:
+				// images can be shed, then the text history can be trimmed.
+				retryable = attempt < maxRetries
 			}
 			sp.agent.publishRetryEvent(err, attempt, maxRetries, sp.agent.GetProvider(), retryable)
 		}
 
 		// HTTP 413 (body too large): the payload, not the endpoint, is the
-		// problem — shed half the inline images (most recent kept) and
-		// retry. n/2 == 0 strips every image, leaving the text-only
-		// request that actually fits.
+		// problem. Shed inline images first (most recent kept); once the
+		// images are gone and the request still overflows, the text body
+		// (system prompt + accumulated history) is the cause — drop the
+		// oldest non-system history and retry. Without this second stage a
+		// long session whose text alone exceeds the server limit 413s
+		// forever, since image shedding can never make it fit.
 		if isBodyTooLargeError(err) {
-			if n := api.CountImages(messages); n > 0 && attempt < maxRetries {
+			if attempt >= maxRetries {
+				return nil, err
+			}
+			if n := api.CountImages(messages); n > 0 {
 				messages = api.TrimImagesBeyondLatest(messages, n/2)
 			} else {
-				// Nothing left to shed, or out of attempts.
-				return nil, err
+				// Images exhausted: shrink the text history. Each retry
+				// keeps a smaller tail so repeated 413s converge.
+				keep := bodyBudgetKeepTail >> uint(attempt)
+				if keep < 1 {
+					keep = 1
+				}
+				messages = api.TrimMessagesForBodyBudget(messages, keep)
 			}
 		} else if !isRetryableProviderError(err) {
 			// Check if this error is retryable. If not, fail immediately.

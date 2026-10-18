@@ -384,6 +384,20 @@
           "vision",
           "reasoning"
         ]
+      },
+      {
+        "cached_input_cost": 0.003,
+        "context_length": 1048576,
+        "description": "DeepSeek V4.1 Flash 1017 - October 17 snapshot of DeepSeek V4.1 Flash, a multimodal MoE model (552B backbone) with 1M context and KV cache compression",
+        "id": "deepseek-v4.1-flash:1017",
+        "input_cost": 0.15,
+        "name": "DeepSeek V4.1 Flash 1017",
+        "output_cost": 0.6,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning"
+        ]
       }
     ]
   },

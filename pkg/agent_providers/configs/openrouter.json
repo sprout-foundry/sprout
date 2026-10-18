@@ -7677,6 +7677,19 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.03,
+        "context_length": 1048576,
+        "description": "Pareto is a multimodal composite model built for research, coding, and agentic workflows, while delivering frontier-level performance across a broad range of general-purpose tasks.",
+        "id": "unbiased/pareto-26.10",
+        "input_cost": 0.8,
+        "name": "Pareto 26.10",
+        "output_cost": 3.2,
+        "tags": [
+          "tools",
+          "vision"
+        ]
       }
     ],
     "model_overrides": {

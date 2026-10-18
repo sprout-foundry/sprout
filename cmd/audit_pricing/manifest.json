@@ -1071,7 +1071,7 @@
   },
   "ollama-cloud": {
     "source": "https://ollama.com/pricing",
-    "last_verified": "2026-10-16",
+    "last_verified": "2026-10-18",
     "models": [
       {
         "id": "deepseek-v4-flash",
@@ -1235,6 +1235,12 @@
         "input_per_mtok": 1.25,
         "output_per_mtok": 4.25,
         "cached_per_mtok": 0.15
+      },
+      {
+        "id": "deepseek-v4.1-flash:1017",
+        "input_per_mtok": 0.15,
+        "output_per_mtok": 0.6,
+        "cached_per_mtok": 0.003
       }
     ]
   },
@@ -1885,7 +1891,7 @@
   },
   "openrouter": {
     "source": "https://openrouter.ai/api/v1/models",
-    "last_verified": "2026-10-17",
+    "last_verified": "2026-10-18",
     "models": [
       {
         "id": "ai21/jamba-large-1.7",
@@ -5012,6 +5018,12 @@
         "id": "xingchen-agi/xing4.0-29b-a4b:free",
         "input_per_mtok": 0,
         "output_per_mtok": 0
+      },
+      {
+        "id": "unbiased/pareto-26.10",
+        "input_per_mtok": 0.8,
+        "output_per_mtok": 3.2,
+        "cached_per_mtok": 0.03
       }
     ]
   },

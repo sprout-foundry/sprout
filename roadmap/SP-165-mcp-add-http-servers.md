@@ -1,8 +1,10 @@
 # SP-165 — `sprout mcp add` for HTTP Servers
 
-Status: Proposed (2026-10-19). Split from a 17-item user nit list. Touches
-`cmd/mcp_add.go`, `cmd/mcp_add_servers.go`, and the MCP server type in
-`pkg/mcp/types.go`.
+Status: Implemented (2026-10-19). 11 tests in `cmd`, plus a shared-reader
+test in `pkg/console`; `cmd` and `pkg/console` suites pass and `make vet` /
+`make fmt-check` are clean. Split from a 17-item user nit list. Touches
+`cmd/mcp_add.go`, `cmd/mcp_add_servers.go`, `cmd/mcp_test_cmd.go`, and
+`pkg/console/select_list.go`.
 
 ## Problem
 
@@ -86,14 +88,47 @@ than inventing one here.
 
 ## Acceptance criteria
 
-- [ ] `sprout mcp add` → custom → HTTP prompts for a URL and writes a server
+- [x] `sprout mcp add` → custom → HTTP prompts for a URL and writes a server
       with `Type: "http"` and the URL set (test).
-- [ ] The same flow → stdio behaves as today (test — no regression).
-- [ ] An HTTP server with no URL, or a malformed URL, is rejected with a
+      Tests: `TestSetupCustomMCPServer_HTTPFlow`,
+      `TestRunMCPAdd_CustomHTTPMenuToEndToEnd`.
+- [x] The same flow → stdio behaves as today (test — no regression).
+      Test: `TestSetupCustomMCPServer_StdioFlowUnchanged`.
+- [x] An HTTP server with no URL, or a malformed URL, is rejected with a
       message naming the problem (test).
-- [ ] `sprout mcp test` connects to an HTTP server added this way (test).
-- [ ] The menu label and the flow agree (no label promising a capability the
+      Tests: `TestSetupCustomMCPServer_HTTPRequiresURL`,
+      `TestSetupCustomMCPServer_HTTPRejectsMalformedURL`,
+      `TestValidateHTTPURL`, `TestLooksLikeHTTPURL`.
+- [x] `sprout mcp test` connects to an HTTP server added this way (test).
+      Test: `TestMCPTest_HTTPServerAddedViaCustomFlow`; `mcp test` now
+      prints the URL for an HTTP server instead of an empty command line.
+- [x] The menu label and the flow agree (no label promising a capability the
       flow lacks).
+      Test: `TestMCPAddMenuItems_CustomEntryCoversBothTypes`.
+
+## Decisions (Open Questions)
+
+- **Un-filter the generics?** No. `http-generic`/`stdio-generic` stay
+  filtered from the main menu; the custom flow subsumes them and now
+  collects the same input plus a type picker they lack.
+- **Type picker vs inference?** A picker, as the flow's first question. It
+  is unambiguous and makes the branch explicit. Inference is still applied
+  as a *guard* on the stdio path: a value that parses as an http(s) URL with
+  a host is rejected with a pointer at the HTTP type
+  (`TestSetupCustomMCPServer_StdioCommandThatLooksLikeURL`), which is the
+  user's "using a url in place of a command didn't work" made legible.
+- **Non-interactive path**: none exists for `sprout mcp add`; it is
+  interactive-only, so 165e has nothing to extend. Noted as a follow-up
+  rather than invented here.
+
+## Found while implementing
+
+- The picker's non-TTY fallback created a private `bufio.Reader` over
+  stdin, so a piped script's remaining lines were swallowed into the
+  picker's buffer and the setup flow's first prompt read EOF. Fixed by
+  adding `SelectListOptions.FallbackReader` so the caller can share its own
+  buffered reader across the picker and the prompts that follow
+  (`TestSelectListRunFallbackSharedReaderPreservesQueuedInput`).
 
 ## Non-goals
 

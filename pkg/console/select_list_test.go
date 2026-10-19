@@ -1,6 +1,7 @@
 package console
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"io"
@@ -8,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/term"
 
 	"github.com/sprout-foundry/sprout/pkg/testutil"
 )
@@ -640,6 +643,38 @@ func TestSelectListRunFallbackHonorsContext(t *testing.T) {
 	}
 	if val != "" || ok || err != nil {
 		t.Fatalf("Run = (%q, %v, %v) want (\"\", false, nil)", val, ok, err)
+	}
+}
+
+// A shared bufio.Reader (FallbackReader) must keep one buffer across the
+// picker and its follow-up reads: lines queued behind the menu choice stay
+// available to the next reader instead of vanishing into the picker's
+// private buffer.
+func TestSelectListRunFallbackSharedReaderPreservesQueuedInput(t *testing.T) {
+	if term.IsTerminal(int(os.Stdin.Fd())) {
+		t.Skip("test environment has TTY stdin; fallback path not exercised")
+	}
+	shared := bufio.NewReader(strings.NewReader("2\nfirst-after-menu\nsecond-after-menu\n"))
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{
+			{Label: "alpha", Value: "A"},
+			{Label: "bravo", Value: "B"},
+		},
+		FallbackReader: shared,
+	})
+	val, ok, err := s.Run(context.Background())
+	if err != nil || !ok {
+		t.Fatalf("Run = (%q, %v, %v)", val, ok, err)
+	}
+	if val != "B" {
+		t.Fatalf("picked %q, want B", val)
+	}
+	next, err := shared.ReadString('\n')
+	if err != nil {
+		t.Fatalf("follow-up read from shared reader: %v", err)
+	}
+	if strings.TrimSpace(next) != "first-after-menu" {
+		t.Fatalf("follow-up read got %q; the picker must not consume input queued behind its choice", next)
 	}
 }
 

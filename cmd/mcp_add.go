@@ -42,34 +42,23 @@ func runMCPAdd() error {
 	}
 
 	// Display templates (filter out generic templates for main menu)
-	var visibleTemplates []mcp.MCPServerTemplate
-	for _, t := range templates {
-		if t.ID == "http-generic" || t.ID == "stdio-generic" {
-			continue
-		}
-		visibleTemplates = append(visibleTemplates, t)
-	}
+	items := mcpAddMenuItems(templates)
 
-	items := make([]console.SelectItem, 0, len(visibleTemplates)+1)
-	for _, t := range visibleTemplates {
-		items = append(items, console.SelectItem{
-			Label:  t.Name,
-			Detail: t.Description,
-			Value:  t.ID,
-		})
-	}
-	items = append(items, console.SelectItem{
-		Label:  "Custom MCP Server (stdio or http)",
-		Detail: "configure manually",
-		Value:  "__custom__",
-	})
-
-	sl := console.NewSelectList(console.SelectListOptions{
+	slOpts := console.SelectListOptions{
 		Title:      "Pick a server type",
 		Items:      items,
 		Searchable: true,
 		PageSize:   10,
-	})
+	}
+	// Non-TTY (piped) runs share the buffered stdin reader with the setup
+	// flow that follows: the picker's fallback would otherwise consume the
+	// piped script's remaining lines into its private buffer and the flow's
+	// first prompt would read EOF.
+	if !StdinIsTerminal() {
+		slOpts.FallbackReader = reader
+	}
+
+	sl := console.NewSelectList(slOpts)
 
 	ctx := context.Background()
 	value, ok, err := sl.Run(ctx)
@@ -89,7 +78,7 @@ func runMCPAdd() error {
 
 	// Find the matching template by ID (picker returns the template's ID).
 	var selectedTemplate mcp.MCPServerTemplate
-	for _, t := range visibleTemplates {
+	for _, t := range templates {
 		if t.ID == value {
 			selectedTemplate = t
 			break
@@ -196,6 +185,30 @@ func runMCPAdd() error {
 	}
 
 	return nil
+}
+
+// mcpAddMenuItems builds the `sprout mcp add` picker: one entry per visible
+// template plus the custom flow, whose entry subsumes the two generic
+// templates (http-generic / stdio-generic stay filtered — the custom flow
+// collects the same input, plus a type picker they lack).
+func mcpAddMenuItems(templates []mcp.MCPServerTemplate) []console.SelectItem {
+	items := make([]console.SelectItem, 0, len(templates)+1)
+	for _, t := range templates {
+		if t.ID == "http-generic" || t.ID == "stdio-generic" {
+			continue
+		}
+		items = append(items, console.SelectItem{
+			Label:  t.Name,
+			Detail: t.Description,
+			Value:  t.ID,
+		})
+	}
+	items = append(items, console.SelectItem{
+		Label:  "Custom MCP Server (stdio or http)",
+		Detail: "configure manually",
+		Value:  "__custom__",
+	})
+	return items
 }
 
 // mcpSetupFunc is the signature shared by the guided per-server setup flows.

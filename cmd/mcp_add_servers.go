@@ -11,12 +11,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/sprout-foundry/sprout/pkg/mcp"
 	"github.com/sprout-foundry/sprout/pkg/secretdetect"
 )
@@ -120,10 +122,16 @@ func setupGitMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
 }
 
 // promptInstallMethod shows the install-method picker used by the setup*MCPServer
-// helpers. On a TTY it delegates to console.SelectList for a slick interactive UI;
-// in non-TTY contexts (e.g. piped stdin in tests) it falls back to a direct
-// bufio.Reader numeric read so EOF surfaces as a wrapped error rather than being
-// silently absorbed by the picker's runFallback path.
+// helpers. See promptChoice for the TTY / non-TTY contract.
+func promptInstallMethod(reader *bufio.Reader, items []console.SelectItem) (string, bool, error) {
+	return promptChoice(reader, "Pick an installation method", items)
+}
+
+// promptChoice shows a single-choice picker. On a TTY it delegates to
+// console.SelectList for a slick interactive UI; in non-TTY contexts (e.g.
+// piped stdin in tests) it falls back to a direct bufio.Reader numeric read
+// so EOF surfaces as a wrapped error rather than being silently absorbed by
+// the picker's runFallback path.
 //
 // Returns:
 //   - (value, true, nil) on confirm
@@ -132,17 +140,17 @@ func setupGitMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
 //
 // Callers treat ("", false, nil) as a graceful cancel that returns nil to the
 // user, and any non-nil error as a setup failure.
-func promptInstallMethod(reader *bufio.Reader, items []console.SelectItem) (string, bool, error) {
+func promptChoice(reader *bufio.Reader, title string, items []console.SelectItem) (string, bool, error) {
 	if StdinIsTerminal() {
 		sl := console.NewSelectList(console.SelectListOptions{
-			Title:      "Pick an installation method",
+			Title:      title,
 			Items:      items,
 			Searchable: false,
 		})
 		return sl.Run(context.Background())
 	}
 
-	fmt.Println("Pick an installation method:")
+	fmt.Println(title)
 	for i, item := range items {
 		label := item.Label
 		if item.Detail != "" {
@@ -167,10 +175,46 @@ func promptInstallMethod(reader *bufio.Reader, items []console.SelectItem) (stri
 	return items[n-1].Value, true, nil
 }
 
+// looksLikeHTTPURL reports whether s parses as an http(s) URL with a host —
+// the shape of a web endpoint, which belongs in a server's URL field, not its
+// command.
+func looksLikeHTTPURL(s string) bool {
+	u, err := url.Parse(s)
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
+}
+
+func validateHTTPURL(raw string) error {
+	if !looksLikeHTTPURL(raw) {
+		return fmt.Errorf("%q is not a valid HTTP URL — include the scheme and host, e.g. https://example.com/mcp", raw)
+	}
+	return nil
+}
+
 func setupCustomMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader, registry *mcp.MCPServerRegistry) error {
 	fmt.Println()
 	console.Heading(os.Stdout, "Custom MCP Server Setup")
 	fmt.Println()
+
+	serverType, ok, err := promptChoice(reader, "What kind of MCP server are you adding?", []console.SelectItem{
+		{
+			Label:  "stdio",
+			Detail: "a local command (npx, uvx, a binary) sprout talks to over stdin/stdout",
+			Value:  "stdio",
+		},
+		{
+			Label:  "http",
+			Detail: "a remote URL sprout talks to over HTTP (Streamable HTTP / SSE)",
+			Value:  "http",
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to read server type: %w", err)
+	}
+	if !ok {
+		fmt.Println()
+		console.GlyphInfo.Print("Setup cancelled.")
+		return nil
+	}
 
 	// Server name
 	fmt.Print("Enter server name: ")
@@ -194,91 +238,14 @@ func setupCustomMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader, regist
 		}
 	}
 
-	// Command
-	fmt.Print("Enter command to run the server: ")
-	commandInput, err := reader.ReadString('\n')
+	var serverConfig mcp.MCPServerConfig
+	if serverType == "http" {
+		serverConfig, err = promptHTTPCustomServer(serverName, reader)
+	} else {
+		serverConfig, err = promptStdioCustomServer(serverName, reader)
+	}
 	if err != nil {
-		return fmt.Errorf("failed to read command: %w", err)
-	}
-	command := strings.TrimSpace(commandInput)
-
-	if command == "" {
-		return errors.New("command is required")
-	}
-
-	// Arguments
-	fmt.Print("Enter command arguments (space-separated, or press Enter for none): ")
-	argsInput, err := reader.ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("failed to read arguments: %w", err)
-	}
-	argsStr := strings.TrimSpace(argsInput)
-
-	var args []string
-	if argsStr != "" {
-		args = strings.Fields(argsStr)
-	}
-
-	// Environment variables
-	fmt.Print("Enter environment variables (KEY=VALUE format, comma-separated, or press Enter for none): ")
-	envInput, err := reader.ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("failed to read environment variables: %w", err)
-	}
-	envStr := strings.TrimSpace(envInput)
-
-	env := make(map[string]string)
-	if envStr != "" {
-		envPairs := strings.Split(envStr, ",")
-		for _, pair := range envPairs {
-			pair = strings.TrimSpace(pair)
-			if parts := strings.SplitN(pair, "=", 2); len(parts) == 2 {
-				env[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
-			}
-		}
-	}
-
-	// Working directory
-	fmt.Print("Enter working directory (or press Enter for default): ")
-	workDirInput, err := reader.ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("failed to read working directory: %w", err)
-	}
-	workDir := strings.TrimSpace(workDirInput)
-
-	// Auto-start
-	fmt.Print("Auto-start this server? (Y/n): ")
-	autoStartInput, err := reader.ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("failed to read auto-start preference: %w", err)
-	}
-	autoStart := strings.ToLower(strings.TrimSpace(autoStartInput)) != "n"
-
-	// Timeout
-	fmt.Print("Server timeout in seconds (default: 30): ")
-	timeoutInput, err := reader.ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("failed to read timeout: %w", err)
-	}
-	timeoutStr := strings.TrimSpace(timeoutInput)
-
-	timeout := 30 * time.Second
-	if timeoutStr != "" {
-		if timeoutSecs, err := strconv.Atoi(timeoutStr); err == nil && timeoutSecs > 0 {
-			timeout = time.Duration(timeoutSecs) * time.Second
-		}
-	}
-
-	// Create server config
-	serverConfig := mcp.MCPServerConfig{
-		Name:        serverName,
-		Command:     command,
-		Args:        args,
-		Env:         env,
-		WorkingDir:  workDir,
-		AutoStart:   autoStart,
-		MaxRestarts: 3,
-		Timeout:     timeout,
+		return err
 	}
 
 	// Add server to config
@@ -292,9 +259,199 @@ func setupCustomMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader, regist
 
 	fmt.Println()
 	console.GlyphSuccess.Fprintf(os.Stdout, "Custom MCP Server '%s' configured successfully!", serverName)
-	fmt.Printf("Command: %s %v\n", serverConfig.Command, secretdetect.RedactOpaque(fmt.Sprintf("%v", serverConfig.Args)))
+	if serverConfig.Type == "http" {
+		fmt.Printf("URL: %s\n", serverConfig.URL)
+	} else {
+		fmt.Printf("Command: %s %v\n", serverConfig.Command, secretdetect.RedactOpaque(fmt.Sprintf("%v", serverConfig.Args)))
+	}
 	fmt.Println()
 	fmt.Printf("To test the configuration, run: sprout mcp test %s\n", serverName)
 
 	return nil
+}
+
+func promptStdioCustomServer(serverName string, reader *bufio.Reader) (mcp.MCPServerConfig, error) {
+	fmt.Print("Enter command to run the server: ")
+	commandInput, err := reader.ReadString('\n')
+	if err != nil {
+		return mcp.MCPServerConfig{}, fmt.Errorf("failed to read command: %w", err)
+	}
+	command := strings.TrimSpace(commandInput)
+
+	if command == "" {
+		return mcp.MCPServerConfig{}, errors.New("command is required")
+	}
+	if looksLikeHTTPURL(command) {
+		return mcp.MCPServerConfig{}, fmt.Errorf("%q looks like a URL; did you mean an HTTP server? Pick http when asked for the server type", command)
+	}
+
+	fmt.Print("Enter command arguments (space-separated, or press Enter for none): ")
+	argsInput, err := reader.ReadString('\n')
+	if err != nil {
+		return mcp.MCPServerConfig{}, fmt.Errorf("failed to read arguments: %w", err)
+	}
+	argsStr := strings.TrimSpace(argsInput)
+
+	var args []string
+	if argsStr != "" {
+		args = strings.Fields(argsStr)
+	}
+
+	env, err := promptEnvVars(reader)
+	if err != nil {
+		return mcp.MCPServerConfig{}, err
+	}
+
+	fmt.Print("Enter working directory (or press Enter for default): ")
+	workDirInput, err := reader.ReadString('\n')
+	if err != nil {
+		return mcp.MCPServerConfig{}, fmt.Errorf("failed to read working directory: %w", err)
+	}
+	workDir := strings.TrimSpace(workDirInput)
+
+	autoStart, timeout, err := promptAutoStartAndTimeout(reader)
+	if err != nil {
+		return mcp.MCPServerConfig{}, err
+	}
+
+	return mcp.MCPServerConfig{
+		Name:        serverName,
+		Type:        "stdio",
+		Command:     command,
+		Args:        args,
+		Env:         env,
+		WorkingDir:  workDir,
+		AutoStart:   autoStart,
+		MaxRestarts: 3,
+		Timeout:     timeout,
+	}, nil
+}
+
+func promptHTTPCustomServer(serverName string, reader *bufio.Reader) (mcp.MCPServerConfig, error) {
+	fmt.Print("Enter server URL: ")
+	urlInput, err := reader.ReadString('\n')
+	if err != nil {
+		return mcp.MCPServerConfig{}, fmt.Errorf("failed to read URL: %w", err)
+	}
+	serverURL := strings.TrimSpace(urlInput)
+
+	if serverURL == "" {
+		return mcp.MCPServerConfig{}, errors.New("server URL is required for an HTTP server")
+	}
+	if err := validateHTTPURL(serverURL); err != nil {
+		return mcp.MCPServerConfig{}, err
+	}
+
+	headers, err := promptHTTPHeaders(reader)
+	if err != nil {
+		return mcp.MCPServerConfig{}, err
+	}
+	// Header values are frequently credentials (Authorization: Bearer …),
+	// so store secret-looking ones in the credential store and keep only a
+	// placeholder in the config file — the same protection the Env map gets
+	// at save time. buildRequestHeaders resolves the placeholder on request.
+	for name, value := range headers {
+		if value == "" || mcp.IsSecretRef(value) {
+			continue
+		}
+		if mcp.IsSecretEnvVar(name) {
+			key := mcp.CredentialKey(serverName, name)
+			if err := credentials.SetToActiveBackend(key, value); err != nil {
+				return mcp.MCPServerConfig{}, fmt.Errorf("failed to store credential for header %s: %w", name, err)
+			}
+			headers[name] = mcp.SecretRef(serverName, name)
+		}
+	}
+
+	env, err := promptEnvVars(reader)
+	if err != nil {
+		return mcp.MCPServerConfig{}, err
+	}
+
+	autoStart, timeout, err := promptAutoStartAndTimeout(reader)
+	if err != nil {
+		return mcp.MCPServerConfig{}, err
+	}
+
+	return mcp.MCPServerConfig{
+		Name:        serverName,
+		Type:        "http",
+		URL:         serverURL,
+		Env:         env,
+		Headers:     headers,
+		AutoStart:   autoStart,
+		MaxRestarts: 3,
+		Timeout:     timeout,
+	}, nil
+}
+
+func promptEnvVars(reader *bufio.Reader) (map[string]string, error) {
+	fmt.Print("Enter environment variables (KEY=VALUE format, comma-separated, or press Enter for none): ")
+	envInput, err := reader.ReadString('\n')
+	if err != nil {
+		return nil, fmt.Errorf("failed to read environment variables: %w", err)
+	}
+	envStr := strings.TrimSpace(envInput)
+
+	env := make(map[string]string)
+	if envStr != "" {
+		for _, pair := range strings.Split(envStr, ",") {
+			pair = strings.TrimSpace(pair)
+			if parts := strings.SplitN(pair, "=", 2); len(parts) == 2 {
+				env[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
+			}
+		}
+	}
+	return env, nil
+}
+
+func promptHTTPHeaders(reader *bufio.Reader) (map[string]string, error) {
+	fmt.Print("Enter HTTP headers (Name: VALUE, separated by \", \", or press Enter for none): ")
+	headersInput, err := reader.ReadString('\n')
+	if err != nil {
+		return nil, fmt.Errorf("failed to read HTTP headers: %w", err)
+	}
+	headersStr := strings.TrimSpace(headersInput)
+
+	headers := make(map[string]string)
+	if headersStr != "" {
+		// Split on comma+space so values that legitimately contain commas
+		// (e.g. "Accept: text/html,application/xhtml+xml") survive intact;
+		// a lone comma can't be told apart from a separator inside a value.
+		for _, pair := range strings.Split(headersStr, ", ") {
+			pair = strings.TrimSpace(pair)
+			if parts := strings.SplitN(pair, ":", 2); len(parts) == 2 {
+				name := strings.TrimSpace(parts[0])
+				value := strings.TrimSpace(parts[1])
+				if name != "" {
+					headers[name] = value
+				}
+			}
+		}
+	}
+	return headers, nil
+}
+
+func promptAutoStartAndTimeout(reader *bufio.Reader) (bool, time.Duration, error) {
+	fmt.Print("Auto-start this server? (Y/n): ")
+	autoStartInput, err := reader.ReadString('\n')
+	if err != nil {
+		return false, 0, fmt.Errorf("failed to read auto-start preference: %w", err)
+	}
+	autoStart := strings.ToLower(strings.TrimSpace(autoStartInput)) != "n"
+
+	fmt.Print("Server timeout in seconds (default: 30): ")
+	timeoutInput, err := reader.ReadString('\n')
+	if err != nil {
+		return false, 0, fmt.Errorf("failed to read timeout: %w", err)
+	}
+	timeoutStr := strings.TrimSpace(timeoutInput)
+
+	timeout := 30 * time.Second
+	if timeoutStr != "" {
+		if timeoutSecs, err := strconv.Atoi(timeoutStr); err == nil && timeoutSecs > 0 {
+			timeout = time.Duration(timeoutSecs) * time.Second
+		}
+	}
+	return autoStart, timeout, nil
 }

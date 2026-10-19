@@ -1597,6 +1597,36 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.05,
+        "context_length": 1050000,
+        "description": "GPT-6.1 Sol Pro via the Batch API at 50% of standard pricing. Runs GPT-6.1 Sol with reasoning.mode set to pro for higher-quality responses on complex tasks.",
+        "id": "gpt-6.1-sol-pro:batch",
+        "input_cost": 1,
+        "name": "GPT-6.1 Sol Pro (batch)",
+        "output_cost": 5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.05,
+        "context_length": 1050000,
+        "description": "GPT-6.1 Sol via the Batch API at 50% of standard pricing. Cost-efficient high-end model for demanding professional, agentic, and coding workloads.",
+        "id": "gpt-6.1-sol:batch",
+        "input_cost": 1,
+        "name": "GPT-6.1 Sol (batch)",
+        "output_cost": 5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

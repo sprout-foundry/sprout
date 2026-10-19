@@ -398,6 +398,20 @@
           "vision",
           "reasoning"
         ]
+      },
+      {
+        "cached_input_cost": 0.015,
+        "context_length": 1000000,
+        "description": "MiniMax M3.1 Flash - frontier multimodal coding model with 1M context and tunable thinking depth",
+        "id": "minimax-m3.1-flash",
+        "input_cost": 0.15,
+        "name": "MiniMax M3.1 Flash",
+        "output_cost": 0.6,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning"
+        ]
       }
     ]
   },

@@ -1,7 +1,7 @@
 {
   "chutes": {
     "source": "https://llm.chutes.ai/v1/models",
-    "last_verified": "2026-10-12",
+    "last_verified": "2026-10-19",
     "models": [
       {
         "id": "Nemotron-3-Nano-Omni-30B-TEE",
@@ -760,7 +760,7 @@
   },
   "deepseek": {
     "source": "https://api-docs.deepseek.com/quick_start/pricing",
-    "last_verified": "2026-10-11",
+    "last_verified": "2026-10-19",
     "models": [
       {
         "id": "deepseek-v4-flash",
@@ -820,7 +820,7 @@
   },
   "minimax": {
     "source": "https://platform.minimax.io/docs/guides/pricing-paygo",
-    "last_verified": "2026-10-11",
+    "last_verified": "2026-10-19",
     "models": [
       {
         "id": "MiniMax-M2",
@@ -887,6 +887,12 @@
         "input_per_mtok": 0.3,
         "output_per_mtok": 1.2,
         "cached_per_mtok": 0.06
+      },
+      {
+        "id": "MiniMax-M3.1-Flash",
+        "input_per_mtok": 0.15,
+        "output_per_mtok": 0.6,
+        "cached_per_mtok": 0.015
       }
     ]
   },
@@ -1071,7 +1077,7 @@
   },
   "ollama-cloud": {
     "source": "https://ollama.com/pricing",
-    "last_verified": "2026-10-18",
+    "last_verified": "2026-10-19",
     "models": [
       {
         "id": "deepseek-v4-flash",
@@ -1241,6 +1247,12 @@
         "input_per_mtok": 0.15,
         "output_per_mtok": 0.6,
         "cached_per_mtok": 0.003
+      },
+      {
+        "id": "minimax-m3.1-flash",
+        "input_per_mtok": 0.15,
+        "output_per_mtok": 0.6,
+        "cached_per_mtok": 0.015
       }
     ]
   },
@@ -1891,7 +1903,7 @@
   },
   "openrouter": {
     "source": "https://openrouter.ai/api/v1/models",
-    "last_verified": "2026-10-18",
+    "last_verified": "2026-10-19",
     "models": [
       {
         "id": "ai21/jamba-large-1.7",
@@ -3129,18 +3141,18 @@
       },
       {
         "id": "openrouter/auto",
-        "input_per_mtok": -1000000,
-        "output_per_mtok": -1000000
+        "input_per_mtok": 0,
+        "output_per_mtok": 0
       },
       {
         "id": "openrouter/auto-beta",
-        "input_per_mtok": -1000000,
-        "output_per_mtok": -1000000
+        "input_per_mtok": 0,
+        "output_per_mtok": 0
       },
       {
         "id": "openrouter/bodybuilder",
-        "input_per_mtok": -1000000,
-        "output_per_mtok": -1000000
+        "input_per_mtok": 0,
+        "output_per_mtok": 0
       },
       {
         "id": "openrouter/free",
@@ -3149,13 +3161,13 @@
       },
       {
         "id": "openrouter/fusion",
-        "input_per_mtok": -1000000,
-        "output_per_mtok": -1000000
+        "input_per_mtok": 0,
+        "output_per_mtok": 0
       },
       {
         "id": "openrouter/pareto-code",
-        "input_per_mtok": -1000000,
-        "output_per_mtok": -1000000
+        "input_per_mtok": 0,
+        "output_per_mtok": 0
       },
       {
         "id": "perceptron/perceptron-mk1",
@@ -4767,8 +4779,8 @@
       },
       {
         "id": "nvidia/switchyard",
-        "input_per_mtok": -1000000,
-        "output_per_mtok": -1000000
+        "input_per_mtok": 0,
+        "output_per_mtok": 0
       },
       {
         "id": "openai/gpt-6-luna",
@@ -4855,8 +4867,8 @@
       },
       {
         "id": "typesafe/jev-router",
-        "input_per_mtok": -1000000,
-        "output_per_mtok": -1000000
+        "input_per_mtok": 0,
+        "output_per_mtok": 0
       },
       {
         "id": "unbiased/pareto-26.10-preview",
@@ -5024,12 +5036,17 @@
         "input_per_mtok": 0.8,
         "output_per_mtok": 3.2,
         "cached_per_mtok": 0.03
+      },
+      {
+        "id": "minimax/minimax-m3.1-flash:free",
+        "input_per_mtok": 0,
+        "output_per_mtok": 0
       }
     ]
   },
   "zai": {
     "source": "https://docs.z.ai/guides/overview/pricing",
-    "last_verified": "2026-10-11",
+    "last_verified": "2026-10-19",
     "models": [
       {
         "id": "glm-4.5v",
@@ -5159,7 +5176,7 @@
   },
   "zai-coding": {
     "source": "https://docs.z.ai/guides/overview/pricing",
-    "last_verified": "2026-10-11",
+    "last_verified": "2026-10-19",
     "models": [
       {
         "id": "glm-4.5",

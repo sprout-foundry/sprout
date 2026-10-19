@@ -7676,6 +7676,20 @@
           "tools",
           "vision"
         ]
+      },
+      {
+        "context_length": 1000000,
+        "description": "MiniMax-M3.1-Flash is a multimodal model from MiniMax. Compared with M3, it delivers significant improvements across multiple benchmarks, particularly in complex agentic tasks, coding, and cybersecurity. It is built for complex,...",
+        "id": "minimax/minimax-m3.1-flash:free",
+        "input_cost": 0,
+        "name": "MiniMax: MiniMax M3.1 Flash (free)",
+        "output_cost": 0,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

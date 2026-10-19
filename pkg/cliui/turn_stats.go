@@ -219,7 +219,7 @@ func SetTurnEndSinkForTest(w io.Writer) (restore func()) {
 // the caller.
 func writeTurnEnd(line string) {
 	if sink := turnEndSink.Load(); sink != nil && *sink != nil {
-		fmt.Fprintln(*sink, line)
+		_, _ = fmt.Fprintln(*sink, line)
 		return
 	}
 	if !ShouldShowTurnStats() {

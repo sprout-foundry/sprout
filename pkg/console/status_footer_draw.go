@@ -168,7 +168,7 @@ func (f *StatusFooter) drawFullLocked() {
 	if hintRows > 0 {
 		hintRow := rows - 1 - hintRows // hintRows is always 1 → rows-2
 		rendered := padToWidth(truncateToWidth(hintLine, cols, "…"), cols)
-		fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s%s", hintRow, footerBaseColor, rendered, footerResetAll)
+		_, _ = fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s%s", hintRow, footerBaseColor, rendered, footerResetAll)
 	}
 	fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s%s", rows-1, footerBaseColor, rule, footerResetAll)
 	fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s%s\0338", rows, footerBaseColor, line, footerResetAll)

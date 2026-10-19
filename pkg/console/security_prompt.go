@@ -388,9 +388,9 @@ func writeSecurityAnalysisChainStepper(w io.Writer, a *utils.SecurityAnalysisVie
 		if shown != sub {
 			for _, part := range wrapChainContinuation(sub, MaxChainStepperSubcommandWidth-len(chainContinuationPrefix)) {
 				if useColor {
-					fmt.Fprintf(w, "%s        %s%s%s\n", dim, chainContinuationPrefix, part, reset)
+					_, _ = fmt.Fprintf(w, "%s        %s%s%s\n", dim, chainContinuationPrefix, part, reset)
 				} else {
-					fmt.Fprintf(w, "        %s%s\n", chainContinuationPrefix, part)
+					_, _ = fmt.Fprintf(w, "        %s%s\n", chainContinuationPrefix, part)
 				}
 			}
 		}
@@ -399,9 +399,9 @@ func writeSecurityAnalysisChainStepper(w io.Writer, a *utils.SecurityAnalysisVie
 	hidden := a.ChainLength - visible
 	if hidden > 0 {
 		if useColor {
-			fmt.Fprintf(w, "%s    (+%d more steps — the full command printed above lists them)%s\n", dim, hidden, reset)
+			_, _ = fmt.Fprintf(w, "%s    (+%d more steps — the full command printed above lists them)%s\n", dim, hidden, reset)
 		} else {
-			fmt.Fprintf(w, "    (+%d more steps — the full command printed above lists them)\n", hidden)
+			_, _ = fmt.Fprintf(w, "    (+%d more steps — the full command printed above lists them)\n", hidden)
 		}
 	}
 }

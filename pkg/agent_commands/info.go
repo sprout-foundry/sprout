@@ -115,7 +115,7 @@ func (c *InfoCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	fmt.Fprintf(c.out(), "Cost: $%.6f\n", totalCost)
 	fmt.Fprintf(c.out(), "Workspace: %s\n", workspace)
 	fmt.Fprintf(c.out(), "Persona: %s\n", persona)
-	fmt.Fprintf(c.out(), "Risk profile: %s\n", riskProfile)
+	_, _ = fmt.Fprintf(c.out(), "Risk profile: %s\n", riskProfile)
 	fmt.Fprintf(c.out(), "Subagent provider: %s model: %s\n", subagentProvider, subagentModel)
 	fmt.Fprintln(c.out())
 

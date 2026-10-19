@@ -422,10 +422,12 @@ func replaceStdinWithContent(t *testing.T, content string) (restore func()) {
 	if _, err := w.WriteString(content); err != nil {
 		t.Fatalf("failed to write stdin script: %v", err)
 	}
-	w.Close()
+	if err := w.Close(); err != nil {
+		t.Fatalf("failed to close stdin script writer: %v", err)
+	}
 	os.Stdin = r
 	return func() {
-		r.Close()
+		_ = r.Close()
 		os.Stdin = oldStdin
 	}
 }

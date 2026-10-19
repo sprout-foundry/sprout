@@ -175,6 +175,10 @@ func runInteractiveREPL(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 				// rebuild the prompt prefix so the next prompt reflects it.
 				inputReader.SetPrompt(cliui.BuildPromptPrefix(chatAgent.GetModel()))
 				footer.Refresh()
+				// A slash command is a turn too: close it with the same
+				// unconditional marker an LLM turn gets, so the user is
+				// never left guessing whether the command finished.
+				cliui.PrintTurnEndMarker()
 				continue
 			}
 
@@ -252,6 +256,7 @@ func runInteractiveREPL(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 
 			// Only start the spinner (and the full agent turn) when no fast
 			// path handled the query.
+			var turnErr error
 			if !fastPathExecuted {
 				indicator.Start(fmt.Sprintf("Thinking · %s", chatAgent.GetModel()))
 
@@ -269,6 +274,7 @@ func runInteractiveREPL(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 
 					// No fast path triggered, process normally via LLM
 					if err := ProcessQuery(ctx, chatAgent, eventBus, query); err != nil {
+						turnErr = err
 						indicator.Stop()
 						if !isReported(err) {
 							fmt.Fprint(os.Stderr, console.FormatErrorBlock(console.GlyphError.Prefix()+"Error", err))
@@ -309,6 +315,22 @@ func runInteractiveREPL(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// SP-048-3: refresh the footer at turn-end so cost / context /
 			// model changes (e.g. /model switch) land immediately.
 			footer.Refresh()
+			// State the outcome in plain language before the closing
+			// marker: succeeded, failed (with the classified cause, not a
+			// raw exception), or stopped partway. A fast-path turn needs no
+			// outcome line — its own output already is the outcome — but an
+			// LLM turn always gets one, because the REPL's own completion
+			// lines are suppressed while the terminal subscriber is active.
+			if !fastPathExecuted {
+				cliui.PrintTurnOutcome(cliui.TurnOutcomeFacts{
+					Err:               turnErr,
+					TerminationReason: chatAgent.GetLastRunTerminationReason(),
+					Verification:      chatAgent.LastVerificationResult(),
+					ChangedPaths:      chatAgent.TurnChangedPaths(),
+					Duration:          time.Since(turnStart),
+					MaxIterations:     chatAgent.GetMaxIterations(),
+				})
+			}
 			// SP-048-5c: print the per-turn summary line if any LLM tokens
 			// were actually consumed. Suppressed for zero-cost turns (slash
 			// commands, zsh fast paths, empty responses).

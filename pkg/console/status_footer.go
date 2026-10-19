@@ -81,6 +81,13 @@ type StatusFooter struct {
 	// hintOverride, when set, replaces the hint row's wording (an open
 	// picker shows its own keys there).
 	hintOverride string
+	// workingLabel, when set, replaces the hint row's keymap wording for
+	// the whole duration of a turn ("⚙ working — steer or Ctrl+C to
+	// stop"). It is the turn's stable in-progress indication: unlike the
+	// spinner it does not change or stop while tools run. hintOverride
+	// still wins (a transient picker keeps its own keys visible);
+	// cleared by SetWorkingLabel("").
+	workingLabel string
 
 	// SP-078 Phase 1: steerWrappedActive selects the width-aware
 	// WrapSteerLayout render path in drawLocked (instead of the legacy
@@ -380,6 +387,39 @@ func (f *StatusFooter) SetTurnActive(active bool) {
 	if f.setComposerMode(mode) {
 		f.Refresh()
 	}
+}
+
+// SetWorkingLabel pins a stable working indication to the hint row for
+// the whole duration of a turn, replacing the keymap wording; "" restores
+// the keymap hints. This is the turn's in-progress signal that does not
+// depend on the composer label appearing and disappearing: unlike the
+// activity spinner it stays for tools and subagents, because nothing in
+// the tool path rewrites the hint row. An open picker's hintOverride
+// still wins while it is set.
+func (f *StatusFooter) SetWorkingLabel(text string) {
+	if f == nil {
+		return
+	}
+	f.mu.Lock()
+	changed := f.workingLabel != text
+	f.workingLabel = text
+	f.mu.Unlock()
+	if changed {
+		f.Refresh()
+	}
+}
+
+// workingLabelLocked returns the hint-row text for the current state:
+// the picker override, else the turn's working label, else the keymap
+// hints. Caller must hold f.mu.
+func (f *StatusFooter) workingHintLocked(mode ComposerMode) string {
+	if f.hintOverride != "" {
+		return f.hintOverride
+	}
+	if f.workingLabel != "" {
+		return f.workingLabel
+	}
+	return KeymapHintRow(mode)
 }
 
 // SetComposerMode records what the input box does on Enter. The caller's

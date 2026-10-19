@@ -146,7 +146,7 @@ func (f *StatusFooter) drawFullLocked() {
 	steerRows := f.steerBlockRows()
 	hintRows := f.hintRowCount()
 	mode := f.composerMode
-	hintOverride := f.hintOverride
+	hintLine := f.workingHintLocked(mode)
 	f.mu.Unlock()
 	if rows < reserved+1 {
 		return
@@ -163,16 +163,12 @@ func (f *StatusFooter) drawFullLocked() {
 	}
 	// SP-115: keyboard shortcut hint row. Sits at rows-2 when hintRows=1
 	// (above the rule at rows-1, below the steer panel when active).
+	// While a turn runs, the working label (SetWorkingLabel) replaces the
+	// keymap wording so the row states "work is in progress" instead.
 	if hintRows > 0 {
-		hintLine := KeymapHintRow(mode)
-		if hintOverride != "" {
-			hintLine = hintOverride
-		}
-		if hintLine != "" {
-			hintRow := rows - 1 - hintRows // hintRows is always 1 → rows-2
-			rendered := padToWidth(truncateToWidth(hintLine, cols, "…"), cols)
-			fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s%s", hintRow, footerBaseColor, rendered, footerResetAll)
-		}
+		hintRow := rows - 1 - hintRows // hintRows is always 1 → rows-2
+		rendered := padToWidth(truncateToWidth(hintLine, cols, "…"), cols)
+		fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s%s", hintRow, footerBaseColor, rendered, footerResetAll)
 	}
 	fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s%s", rows-1, footerBaseColor, rule, footerResetAll)
 	fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s%s\0338", rows, footerBaseColor, line, footerResetAll)

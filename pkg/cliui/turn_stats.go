@@ -4,6 +4,7 @@ package cliui
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -185,18 +186,64 @@ func ResetTurnFirstToken() {
 	atomic.StoreInt64(&TurnFirstTokenAt, 0)
 }
 
+// PrintTurnEndMarker emits the closing marker every turn ends with,
+// regardless of token count, fast path, or error. When the turn consumed
+// tokens PrintPerTurnSummary's stats line already closes it; this shorter
+// marker covers every other end — slash commands, shell fast paths, and
+// turns that failed before any token — so "if you see it, the turn is
+// over" holds unconditionally. Only shown when stderr is a TTY.
+func PrintTurnEndMarker() {
+	rule := console.Sym().RuleThin
+	if envutil.ResolveColorPreference(true) {
+		writeTurnEnd("\033[2m" + rule + " turn over " + rule + "\033[0m")
+		return
+	}
+	writeTurnEnd(rule + " turn over " + rule)
+}
+
+// turnEndSink lets tests capture the turn-end lines (the outcome line and
+// the closing marker) that production TTY-gates behind ShouldShowTurnStats.
+// Nil in production; every write checks it first. The pointer indirection
+// keeps concurrent readers safe without locking a plain interface field.
+var turnEndSink atomic.Pointer[io.Writer]
+
+// SetTurnEndSinkForTest redirects turn-end output to w. Tests must restore
+// with the returned reset function.
+func SetTurnEndSinkForTest(w io.Writer) (restore func()) {
+	prev := turnEndSink.Swap(&w)
+	return func() { turnEndSink.Store(prev) }
+}
+
+// writeTurnEnd appends one turn-end line to the configured sink, or to
+// stderr when the TTY gate passes. The newline belongs to the writer, not
+// the caller.
+func writeTurnEnd(line string) {
+	if sink := turnEndSink.Load(); sink != nil && *sink != nil {
+		fmt.Fprintln(*sink, line)
+		return
+	}
+	if !ShouldShowTurnStats() {
+		return
+	}
+	fmt.Fprintln(os.Stderr, line)
+}
+
 // PrintPerTurnSummary emits a dim single-line summary of what just happened
 // in the LLM round-trip: input/output tokens consumed, $ spent, elapsed
-// wall time, plus ttft when available. Silent when no tokens were used
-// (e.g. the turn was a slash command or zsh fast path). Only shown when
-// stderr is a TTY (respects NO_COLOR for ANSI codes). SP-048-5a.
+// wall time, plus ttft when available. When no tokens were used (e.g. the
+// turn was a slash command or zsh fast path, or the turn failed before any
+// token) the stats segments are dropped and a short closing marker still
+// prints — the marker is the contract: if you see it, the turn is over.
+// Only shown when stderr is a TTY (respects NO_COLOR for ANSI codes).
+// SP-048-5a.
 func PrintPerTurnSummary(chatAgent *agent.Agent, start time.Time, promptBefore, completionBefore int, costBefore float64) {
-	if !ShouldShowTurnStats() {
+	if turnEndSink.Load() == nil && !ShouldShowTurnStats() {
 		return
 	}
 	promptDelta := chatAgent.GetPromptTokens() - promptBefore
 	completionDelta := chatAgent.GetCompletionTokens() - completionBefore
 	if promptDelta <= 0 && completionDelta <= 0 {
+		PrintTurnEndMarker()
 		return
 	}
 	elapsed := time.Since(start)
@@ -210,7 +257,7 @@ func PrintPerTurnSummary(chatAgent *agent.Agent, start time.Time, promptBefore, 
 	}
 
 	costDelta := chatAgent.GetTotalCost() - costBefore
-	fmt.Fprint(os.Stderr, FormatTurnStatsLine(promptDelta, completionDelta, costDelta, elapsed, ttft))
+	writeTurnEnd(strings.TrimRight(FormatTurnStatsLine(promptDelta, completionDelta, costDelta, elapsed, ttft), "\n"))
 }
 
 // CompactTokens formats token counts compactly.

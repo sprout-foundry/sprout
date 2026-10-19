@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/credentials"
@@ -81,27 +82,63 @@ func getConfigDir() (string, error) {
 	return envutil.ConfigDir()
 }
 
-// LoadMCPConfig loads MCP configuration from file
+// mcpConfigFileName is the standalone MCP config file, resolved per config
+// layer. It is separate from the layered config.json/workspace.json that
+// carries mcp.servers; both are merged at agent startup.
+const mcpConfigFileName = "mcp_config.json"
+
+// mcpConfigCandidates returns the config files to consult for a workspace,
+// in precedence order: the workspace layer first, then the global config
+// root. A workspace root that is empty or is the user's home directory
+// contributes no workspace layer — $HOME is not a project, and its .sprout
+// would alias the user-level state directory.
+//
+// The global root comes from envutil.ConfigDir(), which honors
+// SPROUT_CONFIG. That is correct for the *global* half: the env var names
+// the process's config root. The workspace half is explicit so an agent
+// serving a workspace reads that workspace's file regardless of which
+// process (CLI or daemon) is running the turn.
+func mcpConfigCandidates(workspaceRoot string) []string {
+	var paths []string
+	if ws := strings.TrimSpace(workspaceRoot); ws != "" {
+		if abs, err := filepath.Abs(ws); err == nil {
+			ws = abs
+		}
+		if home, err := envutil.HomeDir(); err != nil || ws != home {
+			paths = append(paths, filepath.Join(ws, ".sprout", mcpConfigFileName))
+		}
+	}
+	if globalDir, err := getConfigDir(); err == nil {
+		paths = append(paths, filepath.Join(globalDir, mcpConfigFileName))
+	}
+	return paths
+}
+
+// LoadMCPConfig loads MCP configuration from the process's config root.
 func LoadMCPConfig() (MCPConfig, error) {
+	return LoadMCPConfigForWorkspace("")
+}
+
+// LoadMCPConfigForWorkspace loads MCP configuration for a workspace,
+// consulting the workspace layer first and the global config root second.
+// Servers are merged with the workspace winning on a name collision, so a
+// repo-local mcp_config.json is visible to an agent serving that repo no
+// matter which process constructed it. An empty workspaceRoot reads only
+// the global root, matching LoadMCPConfig.
+func LoadMCPConfigForWorkspace(workspaceRoot string) (MCPConfig, error) {
 	mcpConfig := DefaultMCPConfig()
 
-	// Try to load from config file if it exists
-	configDir, err := getConfigDir()
-	if err != nil {
-		return mcpConfig, fmt.Errorf("failed to get config directory: %w", err)
-	}
-	configPath := filepath.Join(configDir, "mcp_config.json")
-	if _, err := os.Stat(configPath); err == nil {
-		data, err := os.ReadFile(configPath)
-		if err != nil {
-			return mcpConfig, fmt.Errorf("failed to read MCP config file: %w", err)
+	// Merge each layer in precedence order: the first layer that exists
+	// supplies the scalar flags, and later layers only contribute servers
+	// the higher-precedence layers did not define.
+	flagsApplied := false
+	for _, configPath := range mcpConfigCandidates(workspaceRoot) {
+		layer, ok := readMCPConfigFile(configPath)
+		if !ok {
+			continue
 		}
-
-		if err := json.Unmarshal(data, &mcpConfig); err != nil {
-			return mcpConfig, fmt.Errorf("failed to parse MCP config file: %w", err)
-		}
-		// Auto-migrate any plaintext secrets found in the config file
-		migrateSecretsOnLoad(&mcpConfig)
+		mergeMCPConfig(&mcpConfig, layer, !flagsApplied)
+		flagsApplied = true
 	}
 
 	// Override with environment variables if present
@@ -214,13 +251,68 @@ func isPlaywrightAvailable() bool {
 	return false
 }
 
-// SaveMCPConfig saves MCP configuration to file
+// readMCPConfigFile reads and parses one mcp_config.json. A missing file is
+// "no layer", not an error; a malformed file is reported so a typo in a
+// workspace config is visible rather than silently ignored.
+func readMCPConfigFile(path string) (MCPConfig, bool) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return MCPConfig{}, false
+	}
+	var cfg MCPConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		log.Printf("[mcp] Warning: ignoring malformed MCP config %s: %v", path, err)
+		return MCPConfig{}, false
+	}
+	migrateSecretsOnLoad(&cfg)
+	return cfg, true
+}
+
+// mergeMCPConfig folds one layer into dst. dst is the higher-precedence
+// layer, so its servers win on a name collision; the layer only contributes
+// servers dst does not already define.
+//
+// applyFlags is true only for the highest-precedence layer that exists. The
+// scalar flags take that layer's own value rather than OR-ing with dst:
+// DefaultMCPConfig starts Enabled and AutoDiscover true, so OR-ing would
+// let those defaults override an explicit "false" in a config file — which
+// silently re-enables auto-discovery (and, via it, Enabled) for a user who
+// turned it off.
+func mergeMCPConfig(dst *MCPConfig, layer MCPConfig, applyFlags bool) {
+	if dst.Servers == nil {
+		dst.Servers = make(map[string]MCPServerConfig)
+	}
+	for name, server := range layer.Servers {
+		if _, exists := dst.Servers[name]; !exists {
+			dst.Servers[name] = server
+		}
+	}
+	if !applyFlags {
+		return
+	}
+	dst.Enabled = layer.Enabled
+	dst.AutoStart = layer.AutoStart
+	dst.AutoDiscover = layer.AutoDiscover
+	if layer.Timeout > 0 {
+		dst.Timeout = layer.Timeout
+	}
+}
+
+// SaveMCPConfig saves MCP configuration to the process's config root.
 func SaveMCPConfig(mcpConfig *MCPConfig) error {
+	return SaveMCPConfigForWorkspace(mcpConfig, "")
+}
+
+// SaveMCPConfigForWorkspace saves MCP configuration for a workspace. With a
+// workspace root it writes the workspace layer (so a repo-local config is
+// what `mcp add` produces inside a repo); with an empty root it writes the
+// global config root, matching SaveMCPConfig.
+func SaveMCPConfigForWorkspace(mcpConfig *MCPConfig, workspaceRoot string) error {
 	// Migrate secrets before persisting. This is a defense-in-depth measure:
-	// migrateSecretsOnLoad (called by LoadMCPConfig) also migrates on read.
-	// Both paths are intentional — if secrets are somehow injected between
-	// load and save, they will still be caught here. Already-migrated refs
-	// are safely skipped, so the double-check is idempotent and low-cost.
+	// migrateSecretsOnLoad (called on read) also migrates. Both paths are
+	// intentional — if secrets are somehow injected between load and save,
+	// they will still be caught here. Already-migrated refs are safely
+	// skipped, so the double-check is idempotent and low-cost.
 	for name := range mcpConfig.Servers {
 		s := mcpConfig.Servers[name]
 		count, err := MigrateSecretsToCredentialsField(name, &s)
@@ -231,11 +323,11 @@ func SaveMCPConfig(mcpConfig *MCPConfig) error {
 		}
 	}
 
-	configDir, err := getConfigDir()
+	configDir, err := mcpConfigWriteDir(workspaceRoot)
 	if err != nil {
-		return fmt.Errorf("failed to get config directory: %w", err)
+		return err
 	}
-	configPath := filepath.Join(configDir, "mcp_config.json")
+	configPath := filepath.Join(configDir, mcpConfigFileName)
 
 	// Create config directory if it doesn't exist
 	if err := os.MkdirAll(filepath.Dir(configPath), 0700); err != nil {
@@ -252,6 +344,37 @@ func SaveMCPConfig(mcpConfig *MCPConfig) error {
 	}
 
 	return nil
+}
+
+// mcpConfigWriteDir picks the directory a save targets: the workspace layer
+// when there is one, else the global config root. Mirrors
+// mcpConfigCandidates' workspace rule so a write lands where a read looks.
+func mcpConfigWriteDir(workspaceRoot string) (string, error) {
+	if ws := strings.TrimSpace(workspaceRoot); ws != "" {
+		if abs, err := filepath.Abs(ws); err == nil {
+			ws = abs
+		}
+		if home, err := envutil.HomeDir(); err != nil || ws != home {
+			return filepath.Join(ws, ".sprout"), nil
+		}
+	}
+	return getConfigDir()
+}
+
+// MCPConfigSourcePath returns the file a workspace's MCP config is read
+// from — the workspace layer when it exists, else the global root — so a
+// caller can tell the user which config was consulted.
+func MCPConfigSourcePath(workspaceRoot string) string {
+	candidates := mcpConfigCandidates(workspaceRoot)
+	for _, path := range candidates {
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+	if len(candidates) > 0 {
+		return candidates[0]
+	}
+	return ""
 }
 
 // AddGitHubServer adds a GitHub MCP server to the configuration

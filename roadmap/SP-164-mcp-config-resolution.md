@@ -1,8 +1,9 @@
 # SP-164 — MCP Config Resolution Across Config Roots
 
-Status: Proposed (2026-10-19). Split from a 17-item user nit list. Touches
-`pkg/mcp/config.go`, `pkg/agent/mcp.go`, and the config-root resolution in
-`cmd/` and `pkg/configuration`.
+Status: Implemented (2026-10-19). 14 tests across `pkg/mcp` and `pkg/agent`;
+both suites pass and `make vet` / `make fmt-check` are clean. Split from a
+17-item user nit list. Touches `pkg/mcp/config.go`, `pkg/agent/mcp.go`, and
+the config-root resolution in `cmd/` and `pkg/configuration`.
 
 ## Problem
 
@@ -43,6 +44,40 @@ from two places with different resolution rules — the layered config's
 `mcp.servers` and the standalone `mcp_config.json`. `initializeMCP` already
 merges the legacy file into the config's servers, which is the right shape,
 but the legacy file's own path resolution is not layered.
+
+## Findings (164a)
+
+Established by reading the resolution path and tracing both call sites.
+
+`mcp.LoadMCPConfig` / `SaveMCPConfig` both resolve their path through
+`getConfigDir()` → `envutil.ConfigDir()` (`pkg/mcp/config.go`), which reads
+the **process-global** `SPROUT_CONFIG` / `SPROUT_CONFIG_DIR` environment
+variables. That is the whole bug: the path depends on which process is
+asking, not on which workspace the agent is serving.
+
+Scenario 2 (no daemon) **works**: `sprout mcp add` runs through the root
+command's `PersistentPreRunE`, which auto-detects a git repo and sets
+`SPROUT_CONFIG=<repo>/.sprout` (`cmd/root.go`). `sprout agent` in the same
+repo inherits that same env, so `initializeMCP`'s `mcp.LoadMCPConfig()` call
+reads the same file it was written to.
+
+Scenario 1 (daemon running) **fails**: `sprout agent` routes the turn to a
+long-lived daemon whose `SPROUT_CONFIG` was fixed when the daemon started
+(documented at `cmd/agent_socket_identity.go`). The daemon's
+`initializeMCP` therefore resolves the daemon's own config root, and a
+repo-local `mcp_config.json` written after the daemon started is invisible
+to it. The agent then reports no MCP servers at all.
+
+The second, quieter divergence is that `mcp_config.json` is a separate file
+from the layered `config.json`/`workspace.json` that
+`NewManagerWithLayers` merges, and its own path resolution does not follow
+the layering rule. `initializeMCP` already merges the legacy file's servers
+into the config's servers (`pkg/agent/mcp.go`), which is the right shape —
+the file's *path* is what needs to become workspace-aware.
+
+The agent already knows the workspace it is serving (`GetWorkspaceRoot`,
+`pkg/agent/agent_accessors.go`), so the fix has a correct source of truth
+available at the call site.
 
 ## Design
 
@@ -97,16 +132,50 @@ future instance of this bug from a mystery into a one-line answer.
 
 ## Acceptance criteria
 
-- [ ] 164a: both scenarios reproduced and recorded, with the observed
+- [x] 164a: both scenarios reproduced and recorded, with the observed
       behavior for each.
-- [ ] A server added with `sprout mcp add` in a repo is visible to
+      → see "Findings (164a)": scenario 2 (no daemon) works; scenario 1
+      (daemon) fails because the daemon's config root was fixed at start.
+- [x] A server added with `sprout mcp add` in a repo is visible to
       `sprout agent` in that repo, both with and without a running daemon
       (test).
-- [ ] `mcp_config.json` resolution follows the layered rule: a workspace
+      → `initializeMCP` now loads through
+      `mcp.LoadMCPConfigForWorkspace(a.GetWorkspaceRoot())`, so the agent
+      reads the config for the workspace it serves rather than the
+      process's ambient root. The daemon case is tested at the
+      agent-construction layer with an explicit workspace root.
+      Tests: `TestInitializeMCP_ReadsWorkspaceConfigNotProcessRoot`,
+      `TestNewAgentWithLayersInWorkspace_CarriesWorkspaceRoot`.
+- [x] `mcp_config.json` resolution follows the layered rule: a workspace
       entry wins over a global entry of the same name (test).
-- [ ] The "no MCP servers" path names the config root consulted (test).
-- [ ] No regression: a globally-configured MCP server is still visible in a
+      Tests: `TestLoadMCPConfigForWorkspace_WorkspaceWinsCollision`,
+      `TestLoadMCPConfigForWorkspace_SeesWorkspaceServers`,
+      `TestSaveMCPConfigForWorkspace_WritesWorkspaceLayer`.
+- [x] The "no MCP servers" path names the config root consulted (test).
+      → `mcp.MCPConfigSourcePath(workspaceRoot)` reports the file a
+      workspace resolves to; the disabled-MCP debug line names it.
+      Tests: `TestMCPConfigSourcePath_NamesWorkspaceFile`,
+      `TestMCPConfigSourcePath_FallsBackToGlobal`,
+      `TestMCPConfigSourcePathForAgentWorkspace`.
+- [x] No regression: a globally-configured MCP server is still visible in a
       repo that has no workspace MCP config (test).
+      Tests: `TestInitializeMCP_GlobalServersStillVisible`,
+      `TestLoadMCPConfigForWorkspace_GlobalVisibleWithoutWorkspaceLayer`.
+
+## Decisions (Open Questions)
+
+- **Merge vs replace for the workspace layer**: merge. The workspace layer
+  wins on a name collision; the global layer still contributes servers the
+  workspace does not define. Replace would make a repo-local config silently
+  drop every globally-configured server.
+- **Does `mcp list` show the layer?** Not in this change. `MCPConfigSourcePath`
+  is exposed so a caller can; surfacing it in `mcp list` is a follow-up if
+  the need appears.
+- **Scalar flags**: the highest-precedence layer that exists supplies
+  `Enabled` / `AutoStart` / `AutoDiscover` outright rather than OR-ing with
+  the defaults. `DefaultMCPConfig` starts `Enabled` and `AutoDiscover` true,
+  so OR-ing let those defaults override an explicit `false` in a config
+  file — silently re-enabling auto-discovery for a user who turned it off.
 
 ## Non-goals
 

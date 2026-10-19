@@ -31,11 +31,17 @@ func (a *Agent) initializeMCP() error {
 
 	ctx := context.Background()
 
-	// First, load servers from the legacy mcp_config.json file (if it exists)
-	// This ensures servers added via CLI commands are available
-	// Load BEFORE checking if MCP is enabled - legacy config may have servers
+	// First, load servers from the standalone mcp_config.json file (if it
+	// exists). This ensures servers added via CLI commands are available.
+	// Load BEFORE checking if MCP is enabled - the file may have servers.
+	//
+	// The load is scoped to the workspace this agent serves, not to the
+	// process's ambient config root: a daemon's config root was fixed when
+	// the daemon started, so reading it would hide a repo-local config
+	// written afterwards. The workspace layer wins over the global one.
+	workspaceRoot := a.GetWorkspaceRoot()
 	var legacyEnabled bool
-	if legacyMCPConfig, err := mcp.LoadMCPConfig(); err == nil {
+	if legacyMCPConfig, err := mcp.LoadMCPConfigForWorkspace(workspaceRoot); err == nil {
 		legacyEnabled = len(legacyMCPConfig.Servers) > 0 && legacyMCPConfig.Enabled
 		for name, serverConfig := range legacyMCPConfig.Servers {
 			// Only add if not already in main config
@@ -68,7 +74,10 @@ func (a *Agent) initializeMCP() error {
 	mcpEnabled := config.MCP.Enabled || legacyEnabled
 	if !mcpEnabled {
 		if a.debug {
-			a.Logger().Debug("MCP is disabled in configuration")
+			// Name the config consulted: "no MCP servers" is otherwise
+			// indistinguishable from "read the wrong config root".
+			a.Logger().Debug("MCP is disabled in configuration (config: %s)",
+				mcp.MCPConfigSourcePath(workspaceRoot))
 		}
 		return nil
 	}

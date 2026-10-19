@@ -48,7 +48,7 @@ func (c *InfoCommand) Usage() string {
 		"/info   Quick one-shot overview of live agent state.",
 		"",
 		"Shows model, provider, context tokens (used/limit/%), cost, workspace,",
-		"persona, and subagent provider/model.",
+		"persona, risk profile, and subagent provider/model.",
 		"Use /status for detailed runtime status or /setup for persisted config.",
 		"",
 		"Flags:",
@@ -104,12 +104,18 @@ func (c *InfoCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		subagentProvider, subagentModel = cfg.ResolveRole(configuration.RoleCoder)
 	}
 
+	riskProfile := string(chatAgent.GetActiveRiskProfile())
+	if riskProfile == "" {
+		riskProfile = "(unknown)"
+	}
+
 	fmt.Fprintln(c.out())
 	fmt.Fprintf(c.out(), "Agent: %s (%s)\n", model, provider)
 	fmt.Fprintf(c.out(), "Context: %d/%d tokens (%.1f%%)\n", used, limit, pct)
 	fmt.Fprintf(c.out(), "Cost: $%.6f\n", totalCost)
 	fmt.Fprintf(c.out(), "Workspace: %s\n", workspace)
 	fmt.Fprintf(c.out(), "Persona: %s\n", persona)
+	fmt.Fprintf(c.out(), "Risk profile: %s\n", riskProfile)
 	fmt.Fprintf(c.out(), "Subagent provider: %s model: %s\n", subagentProvider, subagentModel)
 	fmt.Fprintln(c.out())
 
@@ -126,6 +132,7 @@ type infoJSONPayload struct {
 	Cost             float64 `json:"cost"`
 	Workspace        string  `json:"workspace"`
 	Persona          string  `json:"persona"`
+	RiskProfile      string  `json:"risk_profile"`
 	SubagentProvider string  `json:"subagent_provider"`
 	SubagentModel    string  `json:"subagent_model"`
 }
@@ -167,6 +174,11 @@ func (c *InfoCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Agen
 		subagentProvider, subagentModel = cfg.ResolveRole(configuration.RoleCoder)
 	}
 
+	riskProfile := string(chatAgent.GetActiveRiskProfile())
+	if riskProfile == "" {
+		riskProfile = "(unknown)"
+	}
+
 	return WriteJSON(c.out(), infoJSONPayload{
 		Model:            model,
 		Provider:         provider,
@@ -176,6 +188,7 @@ func (c *InfoCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Agen
 		Cost:             chatAgent.GetTotalCost(),
 		Workspace:        workspace,
 		Persona:          persona,
+		RiskProfile:      riskProfile,
 		SubagentProvider: subagentProvider,
 		SubagentModel:    subagentModel,
 	})

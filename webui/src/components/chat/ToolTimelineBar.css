@@ -47,8 +47,8 @@
 }
 
 .tool-timeline-card--error {
-  background: color-mix(in srgb, var(--accent-error) 12%, var(--bg-elevated));
-  border-color: color-mix(in srgb, var(--accent-error) 35%, var(--border-subtle));
+  background: color-mix(in srgb, var(--accent-warning) 12%, var(--bg-elevated));
+  border-color: color-mix(in srgb, var(--accent-warning) 35%, var(--border-subtle));
   opacity: 0.7;
 }
 
@@ -77,7 +77,7 @@
 }
 
 .tool-timeline-icon-error {
-  color: var(--accent-error, #e06c75);
+  color: var(--accent-warning, #e5c07b);
 }
 
 .tool-timeline-persona {

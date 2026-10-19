@@ -83,6 +83,11 @@ func styleComposerRow(rendered string, firstRow, empty bool, mode ComposerMode, 
 	return head + body
 }
 
+// composerContinuationMarker prefixes a wrapped composer row, marking it
+// as a continuation of the row above rather than a new line of input.
+// SP-161d.
+const composerContinuationMarker = "↪ "
+
 // composerRule is the dim rule drawn above the input box, separating it
 // from the conversation scrolling above.
 func composerRule(cols int) string {

@@ -1,9 +1,12 @@
 package commands
 
 import (
+	"bytes"
+	"strings"
 	"testing"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -347,4 +350,67 @@ func TestProviderDropdownItemInterface(t *testing.T) {
 	// Test that value returns correct type
 	_, isClientType := value.(api.ClientType)
 	assert.True(t, isClientType, "Value() should return api.ClientType")
+}
+
+// SP-161g: /custom and /provider are different verbs, so they stay
+// separate commands — but an unknown provider is almost always a custom
+// endpoint the user has not registered, and the error should say so
+// rather than leave them to discover /custom by accident.
+func TestProvidersCommand_UnknownProviderPointsAtCustom(t *testing.T) {
+	mgr, cleanup := configuration.NewTestManager(t)
+	if cleanup != nil {
+		defer cleanup()
+	}
+
+	var buf bytes.Buffer
+	p := &ProvidersCommand{}
+	p.SetOutput(&buf)
+
+	err := p.setProvider("definitely-not-a-provider-xyz", mgr, nil)
+	if err == nil {
+		t.Fatal("expected an error for an unknown provider")
+	}
+	if !strings.Contains(err.Error(), "/custom add") {
+		t.Errorf("error should point at /custom add, got: %v", err)
+	}
+}
+
+// A user-registered endpoint is marked in the list so it is clear which
+// entries came from /custom add and which ship built in.
+func TestProvidersCommand_ListMarksCustomProviders(t *testing.T) {
+	mgr, cleanup := configuration.NewTestManager(t)
+	if cleanup != nil {
+		defer cleanup()
+	}
+
+	if err := mgr.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		if cfg.CustomProviders == nil {
+			cfg.CustomProviders = map[string]configuration.CustomProviderConfig{}
+		}
+		cfg.CustomProviders["my-endpoint"] = configuration.CustomProviderConfig{
+			Name:           "my-endpoint",
+			Endpoint:       "https://example.invalid/v1",
+			ModelName:      "some-model",
+			RequiresAPIKey: false,
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("register custom provider: %v", err)
+	}
+
+	var buf bytes.Buffer
+	p := &ProvidersCommand{}
+	p.SetOutput(&buf)
+
+	if err := p.listProviders(mgr); err != nil {
+		t.Fatalf("listProviders: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "my-endpoint") {
+		t.Errorf("custom provider missing from the list:\n%s", out)
+	}
+	if !strings.Contains(out, "[custom]") {
+		t.Errorf("custom provider not marked as custom:\n%s", out)
+	}
 }

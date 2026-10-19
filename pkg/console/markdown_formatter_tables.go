@@ -79,7 +79,15 @@ func (f *MarkdownFormatter) renderTable(rows []string, sepIndex int) string {
 	if available < colCount {
 		available = colCount // minimum: 1 char per column
 	}
-	clampColumnWidths(colWidths, available)
+	// The full-width floor: a column may not shrink below the width it
+	// needs to render every cell, so clamping never truncates a value.
+	// A table that cannot fit at those widths stacks instead. SP-161c.
+	if !clampColumnWidths(colWidths, colWidths, available) {
+		// Even at the legibility floor the columns don't fit. Degrade to
+		// the stacked layout — one record per block — so every value stays
+		// readable instead of cells truncating into noise. SP-161c.
+		return f.renderStackedTable(allCells, sepIndex, colCount)
+	}
 
 	// Build output.
 	var sb strings.Builder
@@ -139,35 +147,119 @@ func (f *MarkdownFormatter) renderTable(rows []string, sepIndex int) string {
 	return sb.String()
 }
 
-// clampColumnWidths ensures the total width of all columns fits within maxTotal.
-// If the sum exceeds maxTotal, widths are reduced proportionally, with a
-// minimum of 1 character per column.
-func clampColumnWidths(widths []int, maxTotal int) {
+// minColumnWidth is the narrowest a column may be clamped to before the
+// table is considered unfittable. A column below this renders as a
+// character or two plus an ellipsis — the reader cannot tell what the
+// value is, which is worse than a layout change. SP-161c.
+const minColumnWidth = 4
+
+// clampColumnWidths shrinks the widest columns until their total fits
+// within maxTotal. A column is never clamped below minColumnWidth, and
+// never below the width it needs to render every cell in full — going
+// lower would truncate a value. Returns true when the widths now fit,
+// false when even those floors overflow; the caller then degrades to a
+// layout that stays readable.
+//
+// fullWidths[i] is the display width column i needs so that no cell in
+// it is truncated (the widest cell, header included). A column of 8-char
+// values may not shrink below 8: clamping it to 4 would render "aaaa…"
+// and lose the value.
+func clampColumnWidths(widths, fullWidths []int, maxTotal int) bool {
 	sum := 0
 	for _, w := range widths {
 		sum += w
 	}
 	if sum <= maxTotal {
-		return
+		return true
 	}
 
-	// Iterative clamping: reduce the widest columns first.
-	for sum > maxTotal && len(widths) > 0 {
-		// Find the widest column that's above minimum (1).
+	// Snapshot the floors before mutating widths — callers pass the same
+	// slice for both, and the loop below shrinks widths in place.
+	floors := make([]int, len(widths))
+	copy(floors, fullWidths)
+
+	floor := func(i int) int {
+		f := minColumnWidth
+		if i < len(floors) && floors[i] > f {
+			f = floors[i]
+		}
+		return f
+	}
+
+	// Iterative clamping: reduce the widest column first. A column at its
+	// floor is no longer a candidate, so the loop terminates when every
+	// column is at its floor rather than draining to 1.
+	for sum > maxTotal {
 		maxIdx := -1
-		maxW := 1
+		maxW := 0
 		for i, w := range widths {
-			if w > maxW {
+			if w > floor(i) && w > maxW {
 				maxIdx = i
 				maxW = w
 			}
 		}
 		if maxIdx < 0 {
-			break // all columns at minimum
+			return false // every column at its floor; still too wide
 		}
 		widths[maxIdx]--
 		sum--
 	}
+	return true
+}
+
+// renderStackedTable renders a table as one block per record when the
+// columns cannot fit at the legibility floor. Each record shows every
+// header/value pair on its own line, so no value is truncated and the
+// reader can still tell what each field is. SP-161c.
+func (f *MarkdownFormatter) renderStackedTable(allCells [][]string, sepIndex, colCount int) string {
+	headers := make([]string, colCount)
+	if len(allCells) > 0 {
+		for i := 0; i < colCount; i++ {
+			if i < len(allCells[0]) {
+				headers[i] = strings.TrimSpace(allCells[0][i])
+			}
+		}
+	}
+
+	labelWidth := 0
+	for _, h := range headers {
+		if w := displayWidth(h); w > labelWidth {
+			labelWidth = w
+		}
+	}
+
+	var sb strings.Builder
+	first := true
+	for ri, row := range allCells {
+		if ri == sepIndex || ri == 0 {
+			continue
+		}
+		if !first {
+			sb.WriteString("\n")
+		}
+		first = false
+		for i := 0; i < colCount; i++ {
+			cell := ""
+			if i < len(row) {
+				cell = strings.TrimSpace(row[i])
+			}
+			if cell == "" {
+				continue
+			}
+			label := headers[i]
+			pad := strings.Repeat(" ", max(labelWidth-displayWidth(label), 0))
+			sb.WriteString("  ")
+			sb.WriteString(ColorDim)
+			sb.WriteString(label)
+			sb.WriteString(pad)
+			sb.WriteString(ColorReset)
+			sb.WriteString("  ")
+			sb.WriteString(f.formatInlineElements(cell))
+			sb.WriteString("\n")
+		}
+	}
+
+	return sb.String()
 }
 
 // padCell pads (or truncates) a cell string to the given width with the

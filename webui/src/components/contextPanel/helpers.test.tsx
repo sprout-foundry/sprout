@@ -30,7 +30,7 @@ vi.mock('lucide-react', () => {
     'Rocket',
     'Zap',
     'CheckCircle2',
-    'XCircle',
+    'AlertTriangle',
     'Hourglass',
   ];
   const result: Record<string, (props: any) => JSX.Element> = {};
@@ -301,9 +301,12 @@ describe('getStatusIcon', () => {
     expect(icon).toBeTruthy();
   });
 
-  it('returns non-null JSX for "error" (XCircle)', () => {
+  // SP-161b: a failed tool call is usually an expected outcome (a grep with
+  // no matches, a test run that fails on purpose), so it reads as a warning
+  // rather than an error that needs fixing.
+  it('returns non-null JSX for "error" (AlertTriangle)', () => {
     const { container } = render(<div>{getStatusIcon('error')}</div>);
-    const icon = container.querySelector('[data-testid="xcircle"]');
+    const icon = container.querySelector('[data-testid="alerttriangle"]');
     expect(icon).toBeTruthy();
   });
 

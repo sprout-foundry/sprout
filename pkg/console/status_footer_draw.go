@@ -313,9 +313,22 @@ func (f *StatusFooter) drawComposerLocked(steerLine string, steerCursor int, ste
 		} else {
 			withCursor = i == len(lines)-1
 		}
-		rendered := steerRowTextWithCursor(lineText, cols, withCursor, col)
+		// SP-161d: a row past the label row is a wrapped continuation of
+		// the same input. Mark it so the wrap point is visible — without
+		// it the rows read as separate lines and typos go unnoticed. The
+		// marker takes its width out of the row's budget so the padded
+		// row still ends exactly at the terminal edge.
+		continuation := prefixRow >= 0 && i > prefixRow
+		rowCols := cols
+		if continuation {
+			rowCols = max(cols-displayWidth(composerContinuationMarker), 1)
+		}
+		rendered := steerRowTextWithCursor(lineText, rowCols, withCursor, col)
 		empty := i == prefixRow && lineText == prefix && len(lines) == prefixRow+1
-		styled := styleComposerRow(rendered, i == prefixRow, empty, mode, cols)
+		styled := styleComposerRow(rendered, i == prefixRow, empty, mode, rowCols)
+		if continuation {
+			styled = composerContinuationMarker + styled
+		}
 		_, _ = fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s", steerRowFor(rows, blockRows, hintRows, i+1), styled, footerResetAll)
 	}
 }

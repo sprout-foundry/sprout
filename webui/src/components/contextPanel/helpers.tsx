@@ -16,7 +16,7 @@ import {
   Rocket,
   Zap,
   CheckCircle2,
-  XCircle,
+  AlertTriangle,
   Hourglass,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -76,7 +76,7 @@ export const getStatusIcon = (status: string): ReactNode => {
     case 'completed':
       return <CheckCircle2 size={14} />;
     case 'error':
-      return <XCircle size={14} />;
+      return <AlertTriangle size={14} />;
     default:
       return <Hourglass size={14} />;
   }

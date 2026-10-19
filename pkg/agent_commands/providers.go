@@ -185,6 +185,7 @@ func (p *ProvidersCommand) showProviderStatus(configManager *configuration.Manag
 // listProviders shows all supported providers
 func (p *ProvidersCommand) listProviders(configManager *configuration.Manager) error {
 	available := configManager.GetAvailableProviders()
+	config := configManager.GetConfig()
 
 	p.println()
 	console.GlyphInfo.Fprintln(p.out(), "All Providers:")
@@ -201,7 +202,16 @@ func (p *ProvidersCommand) listProviders(configManager *configuration.Manager) e
 			status = console.GlyphSuccess.Prefix() + "(ready)"
 		}
 
-		p.printf("%d. **%s** %s - %s\n", i+1, name, status, model)
+		// SP-161g: mark user-registered endpoints so it is clear which
+		// entries came from /custom add and which ship built in.
+		suffix := ""
+		if config != nil && config.CustomProviders != nil {
+			if _, isCustom := config.CustomProviders[string(provider)]; isCustom {
+				suffix = " [custom]"
+			}
+		}
+
+		p.printf("%d. **%s** %s - %s%s\n", i+1, name, status, model, suffix)
 	}
 
 	return nil
@@ -312,7 +322,12 @@ func (p *ProvidersCommand) setProvider(providerArg string, configManager *config
 		for _, p := range available {
 			names = append(names, string(p))
 		}
-		return fmt.Errorf("unknown provider '%s'. Available: %s", providerName, strings.Join(names, ", "))
+		// SP-161g: the usual cause of an unknown provider is a custom
+		// OpenAI-compatible endpoint the user has not registered yet.
+		// Point at the command that does it instead of leaving them to
+		// guess that /custom exists.
+		return fmt.Errorf("unknown provider '%s'. Available: %s\nTo add an OpenAI-compatible endpoint, use /custom add.",
+			providerName, strings.Join(names, ", "))
 	}
 
 	// If an explicit model was provided, persist it before switching so

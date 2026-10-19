@@ -1,5 +1,5 @@
 import { getPersonaColor, type ToolExecution } from '@sprout/ui';
-import { CheckCircle2, Loader2, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import './ToolTimelineBar.css';
 
@@ -124,7 +124,7 @@ function ToolTimelineCard({ tool, now }: ToolTimelineCardProps): JSX.Element {
         {isRunning ? (
           <Loader2 size={12} className="tool-timeline-spinner" />
         ) : isError ? (
-          <XCircle size={12} className="tool-timeline-icon-error" />
+          <AlertTriangle size={12} className="tool-timeline-icon-error" />
         ) : (
           <CheckCircle2 size={12} className="tool-timeline-icon-ok" />
         )}

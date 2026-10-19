@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 
@@ -107,5 +108,32 @@ func TestKeysCommand_RemoveUnknownProvider(t *testing.T) {
 	rmErr := k.removeKey(mgr, "nonexistent-provider-xyz")
 	if rmErr == nil {
 		t.Error("Expected error for unknown provider")
+	}
+}
+
+// SP-161f: the credential store is config-root scoped, and inside a git
+// repo the root command repoints that root at <repo>/.sprout — so a key
+// set in one repo is invisible from another. The success message must say
+// where the key landed rather than let the user discover it by surprise.
+func TestKeysCommand_SetReportsStorePath(t *testing.T) {
+	mgr, cleanup := configuration.NewTestManager(t)
+	if cleanup != nil {
+		defer cleanup()
+	}
+
+	var buf bytes.Buffer
+	k := &KeysCommand{}
+	k.SetOutput(&buf)
+
+	if err := k.setKey(mgr, "openrouter", "test-key-for-unit-tests"); err != nil {
+		t.Fatalf("setKey: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "Stored in ") {
+		t.Errorf("success message does not name the store path:\n%s", out)
+	}
+	if !strings.Contains(out, "api_keys.json") {
+		t.Errorf("success message does not name the credential file:\n%s", out)
 	}
 }

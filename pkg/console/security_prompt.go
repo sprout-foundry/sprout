@@ -307,10 +307,19 @@ const MaxChainStepperVisible = 3
 // terminal when accounting for the dot prefix and indentation. SP-124b Phase 2.
 const MaxChainStepperSubcommandWidth = 80
 
+// chainContinuationPrefix labels the continuation lines that carry the
+// full text of a subcommand the stepper line clipped. SP-161a: a clipped
+// stepper line must never be the only place a subcommand is visible.
+const chainContinuationPrefix = "↪ "
+
 // writeSecurityAnalysisChainStepper renders the per-subcommand chain
 // stepper for CLI users. Each subcommand is on its own line with a
 // tone-coded bullet dot prefix; chains longer than MaxChainStepperVisible
-// entries collapse to the first three plus a "(+N more)" marker. SP-124b Phase 2.
+// entries collapse to the first three plus a "(+N more)" marker. When a
+// subcommand is too wide for the stepper it is clipped to
+// MaxChainStepperSubcommandWidth and its full text is spelled out on
+// continuation lines below it, so the stepper never shows a subcommand
+// only in clipped form. SP-124b Phase 2, SP-161a.
 func writeSecurityAnalysisChainStepper(w io.Writer, a *utils.SecurityAnalysisView) {
 	if a == nil || a.ChainLength <= 1 || len(a.ChainSubcommands) == 0 {
 		return
@@ -362,26 +371,80 @@ func writeSecurityAnalysisChainStepper(w io.Writer, a *utils.SecurityAnalysisVie
 	}
 
 	for i := 0; i < visible; i++ {
-		sub := truncateForStepper(a.ChainSubcommands[i], MaxChainStepperSubcommandWidth)
+		sub := a.ChainSubcommands[i]
+		shown := truncateForStepper(sub, MaxChainStepperSubcommandWidth)
 		tone := ""
 		if i < len(a.ChainClassifications) {
 			tone = a.ChainClassifications[i]
 		}
 		if useColor {
-			fmt.Fprintf(w, "%s    [%s●%s] %s\n", dim, toneColor(tone), reset, sub)
+			fmt.Fprintf(w, "%s    [%s●%s] %s\n", dim, toneColor(tone), reset, shown)
 		} else {
-			fmt.Fprintf(w, "    [%s%s] %s\n", toneGlyph(tone), reset, sub)
+			fmt.Fprintf(w, "    [%s%s] %s\n", toneGlyph(tone), reset, shown)
+		}
+		// SP-161a: spell out the full subcommand when the stepper line
+		// clipped it, wrapped to the same width so the panel stays
+		// inside the terminal.
+		if shown != sub {
+			for _, part := range wrapChainContinuation(sub, MaxChainStepperSubcommandWidth-len(chainContinuationPrefix)) {
+				if useColor {
+					fmt.Fprintf(w, "%s        %s%s%s\n", dim, chainContinuationPrefix, part, reset)
+				} else {
+					fmt.Fprintf(w, "        %s%s\n", chainContinuationPrefix, part)
+				}
+			}
 		}
 	}
 
 	hidden := a.ChainLength - visible
 	if hidden > 0 {
 		if useColor {
-			fmt.Fprintf(w, "%s    (+%d more — see full command above)%s\n", dim, hidden, reset)
+			fmt.Fprintf(w, "%s    (+%d more steps — the full command printed above lists them)%s\n", dim, hidden, reset)
 		} else {
-			fmt.Fprintf(w, "    (+%d more — see full command above)\n", hidden)
+			fmt.Fprintf(w, "    (+%d more steps — the full command printed above lists them)\n", hidden)
 		}
 	}
+}
+
+// wrapChainContinuation splits s into chunks of at most width runes,
+// preferring word boundaries so continuation lines stay readable. A
+// single token longer than width is hard-split. SP-161a.
+func wrapChainContinuation(s string, width int) []string {
+	if width <= 0 {
+		return []string{s}
+	}
+	runes := []rune(s)
+	if len(runes) <= width {
+		return []string{s}
+	}
+	var parts []string
+	rest := runes
+	for len(rest) > 0 {
+		if len(rest) <= width {
+			parts = append(parts, string(rest))
+			break
+		}
+		cut := width
+		if idx := lastIndexSpace(rest[:width+1]); idx > 0 {
+			cut = idx
+		}
+		parts = append(parts, strings.TrimRight(string(rest[:cut]), " "))
+		rest = rest[cut:]
+		for len(rest) > 0 && rest[0] == ' ' {
+			rest = rest[1:]
+		}
+	}
+	return parts
+}
+
+// lastIndexSpace returns the index of the last space in r, or -1.
+func lastIndexSpace(r []rune) int {
+	for i := len(r) - 1; i >= 0; i-- {
+		if r[i] == ' ' {
+			return i
+		}
+	}
+	return -1
 }
 
 // truncateForStepper shortens s to maxWidth runes, appending "…" when

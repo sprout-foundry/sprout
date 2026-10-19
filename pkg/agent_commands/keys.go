@@ -265,6 +265,16 @@ func (k *KeysCommand) setKey(configManager *configuration.Manager, provider stri
 	} else {
 		k.printf("Credential set for %s.\n", provider)
 	}
+	// SP-161f: the credential store is config-root scoped, and inside a git
+	// repo the root command repoints that root at <repo>/.sprout. A key set
+	// here is then invisible from another repo — so say where it landed
+	// rather than let the user discover it by surprise.
+	if path, err := credentials.GetAPIKeysPath(); err == nil {
+		k.printf("Stored in %s\n", path)
+	}
+	if mode, err := credentials.GetStorageMode(); err == nil && mode != "" {
+		k.printf("Backend: %s\n", mode)
+	}
 
 	return nil
 }

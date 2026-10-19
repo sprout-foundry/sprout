@@ -52,8 +52,9 @@ type ConversationState struct {
 	RoleUsage            []RoleUsage `json:"role_usage,omitempty"`
 	LastUpdated          time.Time   `json:"last_updated"`
 	SessionID            string      `json:"session_id"`
-	Name                 string      `json:"name"`              // Human-readable session name
-	WorkingDirectory     string      `json:"working_directory"` // Directory where session was created
+	Name                 string      `json:"name"`                    // Human-readable session name
+	TopicSummary         string      `json:"topic_summary,omitempty"` // One-line description of what the conversation was about; absent on sessions saved before it existed
+	WorkingDirectory     string      `json:"working_directory"`       // Directory where session was created
 	InterruptedAt        *time.Time  `json:"interrupted_at,omitempty"`
 	RecoveredFromJournal bool        `json:"recovered_from_journal,omitempty"`
 	// QueryDisplays: see AgentState.QueryDisplays.

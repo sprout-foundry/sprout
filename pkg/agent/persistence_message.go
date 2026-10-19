@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -164,6 +165,12 @@ func (a *Agent) SaveStateScoped(sessionID, workingDir string) error {
 	// Generate session name from first user message
 	sessionName := a.generateSessionName()
 
+	// Generate the one-line topic summary at this natural boundary so every
+	// save leaves the session's description current. Model-written only when
+	// the summarizer role is configured; otherwise the deterministic
+	// template, at zero model cost. Never fails the save.
+	topicSummary := a.generateTopicSummary(context.Background())
+
 	messages := a.state.GetMessages()
 	state := ConversationState{
 		Messages:                messages,
@@ -183,6 +190,7 @@ func (a *Agent) SaveStateScoped(sessionID, workingDir string) error {
 		LastUpdated:             time.Now(),
 		SessionID:               cleanSessionID,
 		Name:                    sessionName,
+		TopicSummary:            topicSummary,
 		WorkingDirectory:        cleanWorkingDir,
 		ConfigOverrides:         a.state.GetConfigOverrides(),
 		LastProviderError:       a.state.GetLastProviderError(),

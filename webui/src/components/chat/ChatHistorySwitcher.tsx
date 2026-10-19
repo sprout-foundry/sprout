@@ -201,7 +201,10 @@ function ChatHistorySwitcherInner({ chatId, onRestoreSession, iconOnly = false }
       .map((s) => ({
         id: s.session_id,
         name: s.name,
-        preview: `${s.message_count} messages`,
+        // The topic summary is the preview — what the conversation was
+        // about. Message count moves to secondary metadata; the first-
+        // message fallback keeps rows without a summary readable.
+        preview: s.topic_summary?.trim() || `${s.message_count} messages`,
         age: ageLabel(s.last_updated),
         messages: s.message_count,
       }));
@@ -270,7 +273,10 @@ function ChatHistorySwitcherInner({ chatId, onRestoreSession, iconOnly = false }
                     <span className="chs-row-name">{r.name || r.id}</span>
                     <span className="chs-row-preview">{highlightExcerpt(r.preview, query)}</span>
                   </span>
-                  <span className="chs-row-age">{r.age}</span>
+                  <span className="chs-row-age">
+                    {r.messages != null ? `${r.messages} · ` : ''}
+                    {r.age}
+                  </span>
                 </button>
               ))
             )}

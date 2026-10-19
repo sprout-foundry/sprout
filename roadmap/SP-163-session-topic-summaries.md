@@ -1,11 +1,15 @@
 # SP-163 — Session Topic Summaries
 
-Status: Proposed (2026-10-19). Split from a 17-item user nit list. Depends on
+Status: Implemented (2026-10-19). All sections landed with 26 tests across
+the agent, CLI-command and WebUI layers. `pkg/agent`, `pkg/agent_commands`
+and `pkg/webui` suites pass; the WebUI switcher vitest passes; `make vet` /
+`make fmt-check` are clean. Split from a 17-item user nit list. Depends on
 SP-150 (Model Roles — the `summarizer` role) and SP-151 (Progress Events —
 summary templates and the "never claim success without a verification"
-rule). Touches session persistence (`pkg/agent/persistence_session.go`), the
-CLI session picker (`pkg/agent_commands/sessions.go`), and the WebUI history
-switcher (`webui/src/components/chat/ChatHistorySwitcher.tsx`).
+rule). Touches session persistence (`pkg/agent/persistence_session.go`),
+the summary producer (`pkg/agent/session_summary.go`), the CLI session
+picker (`pkg/agent_commands/sessions.go`), and the WebUI history switcher
+(`webui/src/components/chat/ChatHistorySwitcher.tsx`).
 
 ## Problem
 
@@ -106,19 +110,52 @@ its own.
 
 ## Acceptance criteria
 
-- [ ] A session's summary describes its topic, not its first message (test:
+- [x] A session's summary describes its topic, not its first message (test:
       a session starting "hi" that then edits files summarizes as the work,
       not as "hi").
-- [ ] With no summarizer role configured, the deterministic template produces
+      Test: `TestTopicSummaryDescribesTopicNotFirstMessage`.
+- [x] With no summarizer role configured, the deterministic template produces
       a useful summary from session signals (test over a fixture session).
-- [ ] With a summarizer configured, a model failure falls back to the
+      Tests: `TestTopicSummaryTemplateFromSessionSignals`,
+      `TestTopicSummaryPlanGoalSignal`, `TestTemplateToolsOnlyFallback`,
+      `TestTopicSummaryNewClientNilWithoutSummarizerRole`.
+- [x] With a summarizer configured, a model failure falls back to the
       template (test).
-- [ ] `ConversationState` with no summary field loads and renders the
+      Tests: `TestTopicSummaryModelFallbackToTemplateOnModelError`,
+      `TestTopicSummaryModelEmptyReplyFallsBackToTemplate`,
+      `TestWriteTopicSummaryTimeoutFallsBack`,
+      `TestTopicSummaryModelWrittenWhenSummarizerAnswers`.
+- [x] `ConversationState` with no summary field loads and renders the
       fallback (test — existing-session compatibility).
-- [ ] CLI picker shows the summary as a second line; the label is no longer
+      Tests: `TestResolveSessionTopicSummaryFallsBackToPreviewForLegacySession`,
+      `TestSessionTopicSummaryForDisplayLoadsTemplateForOldSessions`.
+- [x] CLI picker shows the summary as a second line; the label is no longer
       truncated at 50 runes (test).
-- [ ] WebUI switcher shows the summary instead of the message count (vitest).
-- [ ] CLI and WebUI render the same summary string for the same session.
+      Tests: `TestBuildSessionPickerItemsSummaryAsDetail`,
+      `TestBuildSessionPickerItemsFallsBackToPreviewWhenNoSummary`,
+      `TestGetSessionLabelScopedUncappedPreview`,
+      `TestGetSessionPreviewScopedStillCapsAt50`.
+- [x] WebUI switcher shows the summary instead of the message count (vitest).
+      Test: `ChatHistorySwitcher.test.tsx` (7 tests).
+- [x] CLI and WebUI render the same summary string for the same session.
+      → both call `agent.SessionTopicSummaryForDisplay`; the WebUI API
+      (`buildSessionList`) carries the resolved field through rather than
+      computing its own.
+      Tests: `TestSessionInfoCarriesTopicSummary`,
+      `TestBuildSessionListCarriesStoredTopicSummary`,
+      `TestBuildSessionListLazilyResolvesTemplateForOldSessions`.
+
+## Decisions (Open Questions)
+
+- **Backfill**: lazy-on-display via the deterministic template, at zero
+  model cost. `SessionTopicSummaryForDisplay` resolves a stored summary when
+  present and otherwise computes the template from the session's own file.
+  No migration rewrites existing session files; the field stays optional.
+- **Refresh cadence**: computed at save time. The template path is cheap and
+  the model path is bounded by a 5s timeout, so recomputing on each save is
+  simpler than tracking growth.
+- **Length target**: 120 runes (`topicSummaryMaxRunes`), truncated at render
+  if the surface is narrower.
 
 ## Non-goals
 

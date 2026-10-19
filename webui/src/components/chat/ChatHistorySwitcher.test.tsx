@@ -40,6 +40,7 @@ beforeEach(() => {
       {
         session_id: 's1',
         name: 'resize fix',
+        topic_summary: 'Fixed the popover resize clipping',
         working_directory: '/w',
         last_updated: new Date().toISOString(),
         message_count: 4,
@@ -109,6 +110,22 @@ describe('ChatHistorySwitcher', () => {
     await waitFor(() => expect(pop.querySelectorAll('.chs-row').length).toBe(2));
     const first = pop.querySelector('.chs-row .chs-row-name') as HTMLElement;
     expect(first.textContent).toBe('resize fix');
+  });
+
+  it('shows the topic summary as the preview instead of the message count', async () => {
+    const pop = await openPopover();
+    await waitFor(() => expect(pop.querySelectorAll('.chs-row').length).toBe(2));
+    const previews = Array.from(pop.querySelectorAll('.chs-row .chs-row-preview')) as HTMLElement[];
+    expect(previews[0].textContent).toBe('Fixed the popover resize clipping');
+  });
+
+  it('falls back to the message count when no summary exists and shows the count as metadata', async () => {
+    const pop = await openPopover();
+    await waitFor(() => expect(pop.querySelectorAll('.chs-row').length).toBe(2));
+    const previews = Array.from(pop.querySelectorAll('.chs-row .chs-row-preview')) as HTMLElement[];
+    expect(previews[1].textContent).toBe('12 messages');
+    const ages = Array.from(pop.querySelectorAll('.chs-row-age')) as HTMLElement[];
+    expect(ages[0].textContent).toContain('4');
   });
 
   it('restore passes the owning chat id for scoping', async () => {

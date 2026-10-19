@@ -65,7 +65,10 @@ func (ws *ReactWebServer) handleAPISessions(w http.ResponseWriter, r *http.Reque
 	})
 }
 
-// buildSessionList builds the session list with message count and token info
+// buildSessionList builds the session list with topic summary, message count
+// and token info. The summary is the display preview (it replaces the old
+// message-count string); pkg/agent computes it — this endpoint carries it
+// through, it does not compute its own.
 func (ws *ReactWebServer) buildSessionList(sessionInfos []agent.SessionInfo) []map[string]interface{} {
 	sessions := make([]map[string]interface{}, 0, len(sessionInfos))
 
@@ -80,9 +83,19 @@ func (ws *ReactWebServer) buildSessionList(sessionInfos []agent.SessionInfo) []m
 			totalTokens = state.TotalTokens
 		}
 
+		// Resolve the display summary through pkg/agent. When the state is
+		// already loaded above, resolve from it directly so old sessions
+		// don't pay a second file read; the fallback re-loads via the same
+		// resolver when the load failed.
+		summary := agent.SessionTopicSummaryForDisplay(info)
+		if state != nil {
+			summary = agent.ResolveSessionTopicSummary(state)
+		}
+
 		session := map[string]interface{}{
 			"session_id":        info.SessionID,
 			"name":              info.Name,
+			"topic_summary":     summary,
 			"working_directory": info.WorkingDirectory,
 			"last_updated":      info.LastUpdated.Format(time.RFC3339),
 			"message_count":     messageCount,

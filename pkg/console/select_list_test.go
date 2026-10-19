@@ -525,9 +525,14 @@ func TestSelectList_EnableMouseTrackingEmitsSequences(t *testing.T) {
 
 	s.enableMouseTracking()
 
-	want := MouseTrackingSGR + MouseTrackingVT200
+	// SGR only: VT200 would capture the wheel and take the terminal's
+	// scrollback away while the picker is open.
+	want := MouseTrackingSGR
 	if got := buf.String(); got != want {
 		t.Fatalf("emitted=%q want %q", got, want)
+	}
+	if strings.Contains(buf.String(), MouseTrackingVT200) {
+		t.Fatalf("picker must not enable VT200 (it captures the wheel): %q", buf.String())
 	}
 }
 
@@ -580,7 +585,7 @@ func TestSelectList_MouseTrackingWritesToCustomWriter(t *testing.T) {
 	s.disableMouseTracking()
 
 	// The seam should have captured both the enable and disable bytes.
-	want := MouseTrackingSGR + MouseTrackingVT200 + MouseTrackingDisable
+	want := MouseTrackingSGR + MouseTrackingDisable
 	if got := buf.String(); got != want {
 		t.Fatalf("captured=%q want %q", got, want)
 	}

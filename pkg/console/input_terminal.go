@@ -121,6 +121,13 @@ func (ir *InputReader) updateTerminalWidth() {
 func (ir *InputReader) setupInputTerm() (resizeCh chan os.Signal, nonBlocking bool) {
 	fmt.Print(bracketedPasteEnable)
 	fmt.Print(MouseTrackingSGR)
+	// Click reporting only — deliberately NOT VT200 (?1000h), which also
+	// captures the wheel. A TUI that swallows the wheel takes the
+	// terminal's scrollback away from the user, and the transcript is
+	// exactly what they need to scroll (a long security prompt, a wall of
+	// tool output). The context menu needs clicks, not motion, so the
+	// narrower mode is sufficient and the wheel keeps working.
+	//
 	// Ask the terminal to report modified keystrokes (Shift+Enter etc.)
 	// as CSI u sequences. Terminals that don't recognize this just
 	// ignore the SGR; the new parser branch is a no-op when the

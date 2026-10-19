@@ -380,15 +380,21 @@ func (s *SelectList) mouseOut() io.Writer {
 	return os.Stderr
 }
 
-// enableMouseTracking writes the SGR + VT200 mouse-tracking enable
-// sequences. It is a no-op when stdin isn't a TTY, matching the
-// requirement that non-interactive runs never emit mouse escapes.
+// enableMouseTracking writes the SGR mouse-tracking enable sequence. It is
+// a no-op when stdin isn't a TTY, matching the requirement that
+// non-interactive runs never emit mouse escapes.
+//
+// SGR alone (no VT200) reports clicks without capturing the wheel, so the
+// terminal's own scrollback keeps working while a picker is open. The
+// picker is fully keyboard-navigable (arrows, Home/End, type-to-filter), so
+// it loses nothing by not owning the wheel — and the user keeps the ability
+// to scroll the transcript behind the prompt, which is the whole point of
+// the narrower mode.
 func (s *SelectList) enableMouseTracking() {
 	if !s.isTTY {
 		return
 	}
 	fmt.Fprint(s.mouseOut(), MouseTrackingSGR)
-	fmt.Fprint(s.mouseOut(), MouseTrackingVT200)
 }
 
 // disableMouseTracking writes the disable sequence (which tears down

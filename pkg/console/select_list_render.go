@@ -127,6 +127,9 @@ func (s *SelectList) frameLines(termWidth int) []string {
 	}
 	hint := footer
 	if hint == "" {
+		// The scroll keys are named because the wheel is deliberately left
+		// to the terminal: the picker owns the keyboard, not the mouse, and
+		// the hint has to say so or the keys look absent.
 		if searchable {
 			hint = "↑↓ select · enter confirm · type to filter · esc cancel"
 		} else if dismissOnAnyKey {

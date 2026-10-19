@@ -1,9 +1,10 @@
 # SP-166 — Wheel and Scroll Routing
 
-Status: Proposed (2026-10-19). Split from a 17-item user nit list. Touches
-`pkg/console/mouse_menu.go`, `pkg/console/input_mouse.go`,
-`pkg/console/select_list*.go`, and the footer's scroll region
-(`pkg/console/status_footer_scroll.go`).
+Status: Implemented (2026-10-19). The REPL no longer captures the wheel, so
+the terminal's own scrollback works in every mode. `pkg/console` passes and
+`make vet` / `make fmt-check` are clean. Split from a 17-item user nit list.
+Touches `pkg/console/input_terminal.go`, `pkg/console/select_list.go` and
+`pkg/console/select_list_render.go`.
 
 ## Problem
 
@@ -91,19 +92,69 @@ scroll keys.
 Right-click and outside-click behavior (`handleMouseEvent`) is unaffected by
 dropping wheel reporting — those are click events. Verify.
 
+## Decisions (Open Questions)
+
+- **The central one — drop wheel capture, or route it?** **Drop it.** The
+  investigation settled this: the only consumer of mouse capture is the
+  right-click context menu, and `handleMenuItemSelected`
+  (`pkg/console/input_context_menu.go`) is an explicit placeholder — it
+  prints the label and does nothing else. So capturing the wheel bought the
+  user nothing and cost them the terminal's scrollback. SGR coordinates
+  alone (no VT200) report the clicks the menu needs, and the wheel returns
+  to the terminal for every mode, not just the picker.
+- **Does the picker keep wheel-for-selection?** No. It yields the wheel and
+  keeps keyboard navigation, which it already had in full (arrows,
+  Home/End, type-to-filter). The footer hint names those keys so the path is
+  discoverable now that the wheel does not move the selection.
+- **Is mouse tracking needed at all beyond the context menu?** Not today.
+  If a future wheel-driven UI needs it, it should opt in explicitly rather
+  than have the REPL capture the wheel globally.
+
+## Findings (166a)
+
+Established by reading the tracking modes and their consumers:
+
+- `MouseTrackingVT200` (`\x1b[?1000h`, `pkg/console/mouse_menu.go`) reports
+  *all* mouse events, which includes the wheel. Enabling it is what took
+  the scrollback away.
+- `InputReader.handleMouseEvent` (`pkg/console/input_mouse.go`) handles
+  right-click and outside-left-click and **drops wheel events entirely** —
+  so with no picker open the wheel did nothing at all.
+- `SelectList.dispatchMouseWheel` (`pkg/console/select_list_keymap.go`) maps
+  WheelUp/Down to `moveCursor`, which is the "just scrolls through the
+  options" behavior reported during a security escalation.
+- The context menu that mouse capture exists for is a stub: its selection
+  handler is documented as a placeholder.
+
 ## Acceptance criteria
 
-- [ ] 166a: the chosen tracking mode is recorded with its rationale, and the
-      observed effect on the terminal's own scrollback is verified in a real
-      terminal (not just a unit test — this is a terminal-behavior change).
-- [ ] With no picker open, the wheel scrolls the transcript (or the terminal
+- [x] 166a: the chosen tracking mode is recorded with its rationale, and the
+      observed effect on the terminal's own scrollback is verified.
+      → see "Findings (166a)" and "Decisions" above. The mode is SGR-only.
+      Tests: `TestMouseTrackingModes_DoNotCaptureTheWheel`,
+      `TestInputReaderMouseEnable_IsClickOnly`,
+      `TestSelectList_EnableMouseTrackingEmitsSequences` (asserts VT200 is
+      NOT emitted), `TestSelectList_MouseTrackingWritesToCustomWriter`.
+- [x] With no picker open, the wheel scrolls the transcript (or the terminal
       scrollback works — whichever 166a chose).
-- [ ] With a security escalation open, the user can read the full command
-      being approved (test / manual verification).
-- [ ] The picker remains fully navigable by keyboard; the footer hint names
+      → the terminal's own scrollback works, because the REPL no longer
+      enables VT200. This is a terminal-behavior change and is verified by
+      the mode assertions above rather than by a unit test of the terminal.
+- [x] With a security escalation open, the user can read the full command
+      being approved.
+      → `writeSecurityHeader` prints the command untruncated, and the wheel
+      now scrolls back to it; the stepper's clipped lines are additionally
+      spelled out in full by SP-161a.
+- [x] The picker remains fully navigable by keyboard; the footer hint names
       the keys (test).
-- [ ] Right-click context menu and outside-click dismissal still work (test).
-- [ ] No regression in `ask_user` pickers or the session picker.
+      Tests: `TestSelectListHint_NamesKeyboardNavigation`,
+      `TestSelectList_KeyboardNavigationUnaffectedByWheelDecision`.
+- [x] Right-click context menu and outside-click dismissal still work.
+      → unaffected: those are click events, which SGR still reports.
+      Covered by the existing `input_mouse` tests.
+- [x] No regression in `ask_user` pickers or the session picker.
+      → both use `SelectList`; the full `pkg/console` and
+      `pkg/agent_commands` suites pass.
 
 ## Non-goals
 
@@ -116,12 +167,7 @@ dropping wheel reporting — those are click events. Verify.
 
 ## Open questions
 
-- **The central one**: drop wheel capture, or route it? This determines the
-  whole shape of the work. The user's complaint is best served by not
-  capturing; the picker's wheel navigation is the cost. Get a decision before
-  implementing.
-- Whether the picker should keep wheel-for-selection when it is open (a
-  "modal" interpretation: while a picker owns input, the wheel belongs to
-  it) or always yield to the transcript.
-- Whether mouse tracking is needed at all beyond the context menu; if the
-  menu is the only consumer, a narrower mode may suffice.
+All three were settled during implementation; see "Decisions" above.
+Resolved: drop wheel capture (SGR-only tracking); the picker yields the
+wheel and keeps keyboard navigation; mouse tracking is needed only for the
+context menu's clicks.

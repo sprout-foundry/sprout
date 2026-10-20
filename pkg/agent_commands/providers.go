@@ -395,7 +395,9 @@ func (p *ProvidersCommand) setProvider(providerArg string, configManager *config
 		// OpenAI-compatible endpoint the user has not registered yet.
 		// Point at the command that does it instead of leaving them to
 		// guess. SP-167 made /provider the primary entry point.
-		return fmt.Errorf("unknown provider '%s'. Available: %s\nTo add an OpenAI-compatible endpoint, use /provider add.",
+		// No trailing period: ST1005 (staticcheck) rejects error strings
+		// ending in punctuation.
+		return fmt.Errorf("unknown provider '%s'. Available: %s\nTo add an OpenAI-compatible endpoint, use /provider add",
 			providerName, strings.Join(names, ", "))
 	}
 

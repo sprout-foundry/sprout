@@ -306,6 +306,14 @@ If the user asks where to edit memories, point them at `~/.config/sprout/memorie
 
 ---
 
+## Code Comments
+- High bar: a comment stays only if it explains a non-obvious why or flags something unexpected; no change history, no PR/commit references, present tense only.
+- If a comment only documents a decision made during a change, delete it — that belongs in the commit message or PR description.
+- Don't duplicate documentation available elsewhere.
+- Comment on the definition it describes, not the use site (unless external).
+
+---
+
 ## Progress Updates
 - Tool logs are sufficient while working
 - In your **final message**, provide a compact activity summary + proof of success

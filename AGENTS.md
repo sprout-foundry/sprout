@@ -37,7 +37,6 @@ Guidance for AI agents working in this repository.
 
 ## Code Conventions
 
-- **No comments** unless explaining a non-obvious "why". Self-documenting code is the default.
 - Under 500 lines per file. Split before exceeding.
 - `fmt.Errorf("doing X: %w", err)` — wrap at boundaries, return raw at source.
 - Conventional Commits (`feat:`, `fix:`, `refactor:`, `chore:`).

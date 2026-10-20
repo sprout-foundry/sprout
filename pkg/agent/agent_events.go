@@ -128,9 +128,8 @@ func (a *Agent) PublishContextManagementDiagnostic(currentTokens, maxTokens, ite
 		events.ContextManagementDiagnosticEvent(
 			currentTokens,
 			maxTokens,
-			nativeMax,
-			a.computeCompactionTriggerFraction(),
-			reservedForResponseFraction,
+					nativeMax,
+		a.compactionTriggerFractionFor(a.getModelContextLimit()),reservedForResponseFraction,
 			reservedForThinkingFraction,
 			reservedForToolIOFraction,
 			iteration,

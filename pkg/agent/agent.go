@@ -477,6 +477,13 @@ type Agent struct {
 	secRetriesAfterCaution atomic.Int64
 	secLoopsDetected       atomic.Int64
 
+	// costPricingUnknown is set once per agent lifetime (rel.3) when a
+	// pay-per-token model has no usable pricing (registry or embedded
+	// catalog), so cost estimates fall to $0 and the USD budget guard is a
+	// no-op. Not reset on Reset()/Clear(); the warning names the first
+	// tripping model. Warned so the user knows cost tracking is blind.
+	costPricingUnknown atomic.Bool
+
 	// Background rollup worker. Lazily initialized via rollupOnce for test compatibility.
 	rollupOnce sync.Once
 	rollupW    *rollupWorker

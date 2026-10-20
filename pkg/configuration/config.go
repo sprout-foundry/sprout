@@ -230,6 +230,15 @@ type Config struct {
 	// MaxContextTokens caps the effective context window. Nil or 0 means no cap.
 	MaxContextTokens *int `json:"max_context_tokens,omitempty"`
 
+	// CompactionCeilingTokens is an absolute ceiling on the live conversation
+	// (rel.2): when the effective context window exceeds this value, compaction
+	// is triggered at this absolute size (converted to a fraction of the
+	// window) rather than at the window-share fraction, whichever is lower.
+	// This keeps a 1M-token model from running to hundreds of thousands of
+	// tokens before anything is compacted. 0 (the default) means the built-in
+	// 160K ceiling applies.
+	CompactionCeilingTokens int `json:"compaction_ceiling_tokens,omitempty"`
+
 	// Notifications controls how the agent notifies the user when long-running turns complete.
 	Notifications *NotificationsConfig `json:"notifications,omitempty"`
 
@@ -403,7 +412,7 @@ type APIKeys map[string]string
 var defaultProviderModels = map[string]string{
 	"openai":       "gpt-5-mini",
 	"zai":          "GLM-4.6",
-	"deepinfra":    "deepseek-ai/DeepSeek-V4-Flash-0731",
+	"deepinfra":    "deepseek-ai/DeepSeek-V4.1-Flash-1017",
 	"openrouter":   "openai/gpt-5",
 	"ollama-local": "qwen3-coder:30b",
 	"ollama-cloud": "deepseek-v4-flash",

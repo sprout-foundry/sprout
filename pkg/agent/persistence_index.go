@@ -80,6 +80,13 @@ type ProviderErrorInfo struct {
 	ErrorType  string `json:"error_type,omitempty"`  // e.g. "api_error_400", "streaming_response"
 	Message    string `json:"message"`               // The error message from the provider
 	Retries    int    `json:"retries,omitempty"`     // Number of retries attempted
+	// ConnReused reports whether the failed request was served by a
+	// keep-alive pooled connection (true) or a fresh dial (false). A reused
+	// connection that fails before any response byte is usually a stale-pool
+	// reset (the idle connection outlived the peer's idle limit); a fresh-dial
+	// failure is a genuine network fault. Present only when the provider
+	// attached httptrace diagnostics to the error.
+	ConnReused *bool `json:"conn_reused,omitempty"`
 }
 
 // Variable to allow overriding GetStateDir for testing

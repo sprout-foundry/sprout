@@ -160,8 +160,12 @@ func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest,
 	// The transport layer (with its backoff retries and 413 shedding) is the
 	// attempt body for the repetition guard, so a cut attempt and the
 	// retry-once nudge go through the same request plumbing.
+	reasoning, disableThinking := sp.effectiveReasoning()
+	if sproutReq.Reasoning != "" {
+		reasoning = sproutReq.Reasoning
+	}
 	attemptFn := func(attemptCtx context.Context, msgs []api.Message, cb api.StreamCallback) (*api.ChatResponse, error) {
-		return sp.doChatWithRetryStreaming(attemptCtx, msgs, sproutReq.Tools, sproutReq.Reasoning, cb, holdback, guard)
+		return sp.doChatWithRetryStreaming(attemptCtx, msgs, sproutReq.Tools, reasoning, disableThinking, cb, holdback, guard)
 	}
 	resp, err := sp.streamWithRepetitionGuard(ctx, messages, callback, holdback, guard, attemptFn)
 	sp.fireSteerFlushHook()
@@ -189,7 +193,7 @@ func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest,
 // guard (nil when the repetition guard is inactive) is reset alongside it, so a
 // transport retry's replayed chunks never accumulate into a false repetition
 // run.
-func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, callback api.StreamCallback, holdback *StreamHoldback, guard *RepetitionGuard) (*api.ChatResponse, error) {
+func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, callback api.StreamCallback, holdback *StreamHoldback, guard *RepetitionGuard) (*api.ChatResponse, error) {
 	const maxRetries = 3
 	var lastErr error
 
@@ -214,7 +218,7 @@ func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages
 			guard.Reset()
 		}
 
-		resp, err := sp.currentClient().SendChatRequestStream(ctx, messages, tools, reasoning, false, callback)
+		resp, err := sp.currentClient().SendChatRequestStream(ctx, messages, tools, reasoning, disableThinking, callback)
 		if err == nil {
 			sp.clearProviderError()
 			// Fleet budget tracking: debit tokens after each LLM call

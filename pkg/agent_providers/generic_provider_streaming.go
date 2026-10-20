@@ -64,7 +64,7 @@ func (p *GenericProvider) sendChatRequestStreamImpl(ctx context.Context, message
 	client := p.streamingClient
 	p.mu.RUnlock()
 
-	resp, err := client.Do(req)
+	resp, diag, err := p.executeChatRequest(client, req, sentBody, false)
 	if err != nil {
 		// For local providers, attempt to auto-start the server and retry once.
 		if recovered := p.tryLocalServerRecovery(); recovered {
@@ -84,7 +84,7 @@ func (p *GenericProvider) sendChatRequestStreamImpl(ctx context.Context, message
 		if err != nil {
 			// Log request on HTTP error — use the actual sent body (post-redaction)
 			logging.LogRequestPayloadOnError(sentBody, p.config.Name, currentModel, true, "http_request_failed", err)
-			return nil, agenterrors.NewNetwork("HTTP request failed", err)
+			return nil, p.networkErrorWithConnDiag("HTTP request failed", err, diag)
 		}
 	}
 

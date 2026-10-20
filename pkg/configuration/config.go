@@ -412,7 +412,7 @@ type APIKeys map[string]string
 var defaultProviderModels = map[string]string{
 	"openai":       "gpt-5-mini",
 	"zai":          "GLM-4.6",
-	"deepinfra":    "deepseek-ai/DeepSeek-V4-Flash-0731",
+	"deepinfra":    "deepseek-ai/DeepSeek-V4.1-Flash-1017",
 	"openrouter":   "openai/gpt-5",
 	"ollama-local": "qwen3-coder:30b",
 	"ollama-cloud": "deepseek-v4-flash",

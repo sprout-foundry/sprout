@@ -64,6 +64,24 @@ func TestDeepSeekV41CatalogFreshness(t *testing.T) {
 	if _, _, _, ok := FindModelPricing("openrouter", "deepseek/deepseek-v4.1-flash"); !ok {
 		t.Error("openrouter/deepseek/deepseek-v4.1-flash not in catalog — V4.1 freshness regressed")
 	}
+
+	// DeepInfra's best DeepSeek model is the V4.1-Flash-1017 snapshot: the
+	// recommendation must point at it (not the superseded plain V4.1-Flash)
+	// and it must carry nonzero cost.
+	if in, out, _, ok := FindModelPricing("deepinfra", "deepseek-ai/DeepSeek-V4.1-Flash-1017"); !ok || in <= 0 || out <= 0 {
+		t.Fatalf("deepinfra/deepseek-ai/DeepSeek-V4.1-Flash-1017 must carry nonzero cost; got in=%v out=%v ok=%v", in, out, ok)
+	}
+	if provider, found := FindProvider("deepinfra"); found {
+		want := "deepseek-ai/DeepSeek-V4.1-Flash-1017"
+		if provider.RecommendedModel != want {
+			t.Errorf("deepinfra recommended_model = %q, want %q (the -1017 snapshot is the best DeepSeek model)", provider.RecommendedModel, want)
+		}
+		if provider.DefaultModel != want {
+			t.Errorf("deepinfra default_model = %q, want %q", provider.DefaultModel, want)
+		}
+	} else {
+		t.Fatal("deepinfra provider missing from catalog")
+	}
 }
 
 func hasModel(p Provider, id string) bool {

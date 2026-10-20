@@ -8414,9 +8414,9 @@
       "api_key_label": "DeepInfra API Key",
       "api_key_help": "Create a key, then choose a current coding or reasoning model from the provider list.",
       "recommended": true,
-      "default_model": "deepseek-ai/DeepSeek-V4.1-Flash",
-      "recommended_model": "deepseek-ai/DeepSeek-V4.1-Flash",
-      "recommended_model_why": "Fast, low-cost coding model with strong tool use and a 1M-token context. GLM-5.3-Flash (zai-org/GLM-5.3-Flash) is an equally good choice.",
+      "default_model": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+      "recommended_model": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+      "recommended_model_why": "DeepInfra's best DeepSeek model (V4.1-Flash-1017 snapshot): strong tool use and a 1M-token context. GLM-5.3-Flash (zai-org/GLM-5.3-Flash) is an equally good choice.",
       "models": [
         {
           "id": "anthropic/claude-fable-5",

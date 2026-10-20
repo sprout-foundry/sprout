@@ -76,6 +76,18 @@ func NewSproutProvider(agent *Agent, client api.ClientInterface) (core.Provider,
 	}, nil
 }
 
+// effectiveReasoning resolves the reasoning effort and disable-thinking flag
+// the agent wants for this request (rel.1: the configured reasoning_effort
+// and the disable_thinking setting actually reach the provider). An empty
+// effort lets the provider apply the model family's default depth, so a
+// reasoning-capable model reasons by default with no configuration needed.
+func (sp *sproutProvider) effectiveReasoning() (reasoning string, disableThinking bool) {
+	if sp.agent == nil {
+		return "", false
+	}
+	return sp.agent.configuredReasoningEffort(), sp.agent.shouldDisableThinking()
+}
+
 // RegisterPastedImages associates extracted image data with file paths for multimodal attachment.
 func (sp *sproutProvider) RegisterPastedImages(images map[string][]api.ImageData) {
 	if images == nil {

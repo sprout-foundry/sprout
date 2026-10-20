@@ -162,7 +162,12 @@ func (sp *sproutProvider) doChatNonStream(ctx context.Context, req *core.ChatReq
 		h.SetMaxTokensHint(sp.getMaxTokensHint())
 	}
 
-	resp, err := sp.currentClient().SendChatRequest(ctx, messages, sproutReq.Tools, sproutReq.Reasoning, false)
+	reasoning, disableThinking := sp.effectiveReasoning()
+	if sproutReq.Reasoning != "" {
+		reasoning = sproutReq.Reasoning
+	}
+
+	resp, err := sp.currentClient().SendChatRequest(ctx, messages, sproutReq.Tools, reasoning, disableThinking)
 	if err != nil {
 		return nil, err
 	}
@@ -237,8 +242,12 @@ func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatReques
 	// The buffer-only path keeps its single-attempt transport (it had no
 	// backoff retries before the guard existed); the repetition guard adds
 	// only the cut-and-retry-once handling on top.
+	reasoning, disableThinking := sp.effectiveReasoning()
+	if sproutReq.Reasoning != "" {
+		reasoning = sproutReq.Reasoning
+	}
 	attemptFn := func(attemptCtx context.Context, msgs []api.Message, cb api.StreamCallback) (*api.ChatResponse, error) {
-		return sp.currentClient().SendChatRequestStream(attemptCtx, msgs, sproutReq.Tools, sproutReq.Reasoning, false, cb)
+		return sp.currentClient().SendChatRequestStream(attemptCtx, msgs, sproutReq.Tools, reasoning, disableThinking, cb)
 	}
 	resp, err := sp.streamWithRepetitionGuard(ctx, messages, callback, holdback, guard, attemptFn)
 	if err != nil {

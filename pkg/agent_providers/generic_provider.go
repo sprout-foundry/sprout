@@ -50,6 +50,13 @@ type GenericProvider struct {
 	// maxTokensHint overrides the max_tokens computation in buildChatRequest when > 0.
 	maxTokensHint   int
 	maxTokensHintMu sync.RWMutex
+
+	// reasoningWarnMu guards reasoningNoKnobWarned so a reasoning-capable
+	// model with no host knob is warned once per provider instance (session),
+	// not on every request (rel.1: a setting that cannot be applied is
+	// reported, never dropped silently).
+	reasoningWarnMu       sync.Mutex
+	reasoningNoKnobWarned bool
 }
 
 // HTTP error formatting helpers are in generic_provider_http_errors.go.

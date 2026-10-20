@@ -26,7 +26,7 @@ func TestDoChatWithRetryStreamingRetriesNetworkTypedError(t *testing.T) {
 	}
 	// No agent: the retry-event path is skipped, and trackFleetBudget /
 	// tokenAnchor are nil-safe on a bare provider.
-	resp, err := sp.doChatWithRetryStreaming(context.Background(), nil, nil, "", func(string, string) {}, nil, nil)
+	resp, err := sp.doChatWithRetryStreaming(context.Background(), nil, nil, "", false, func(string, string) {}, nil, nil)
 	if err != nil {
 		t.Fatalf("expected the network TypedError to be retried and succeed, got: %v", err)
 	}
@@ -52,7 +52,7 @@ func TestDoChatWithRetryStreamingRetriesTimeoutTypedError(t *testing.T) {
 		NewScriptedResponseBuilder().Content("ok").Build(),
 	)
 	sp := &sproutProvider{client: client}
-	if _, err := sp.doChatWithRetryStreaming(context.Background(), nil, nil, "", func(string, string) {}, nil, nil); err != nil {
+	if _, err := sp.doChatWithRetryStreaming(context.Background(), nil, nil, "", false, func(string, string) {}, nil, nil); err != nil {
 		t.Fatalf("first-token timeout should be retried, got: %v", err)
 	}
 }
@@ -68,7 +68,7 @@ func TestDoChatWithRetryStreamingNonRetryableTypedErrorFailsAtOnce(t *testing.T)
 		NewScriptedResponseBuilder().Content("should not run").Build(),
 	)
 	sp := &sproutProvider{client: client}
-	_, err := sp.doChatWithRetryStreaming(context.Background(), nil, nil, "", func(string, string) {}, nil, nil)
+	_, err := sp.doChatWithRetryStreaming(context.Background(), nil, nil, "", false, func(string, string) {}, nil, nil)
 	if err == nil {
 		t.Fatal("expected a non-retryable typed error to fail immediately")
 	}

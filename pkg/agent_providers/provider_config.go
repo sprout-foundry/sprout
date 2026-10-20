@@ -75,6 +75,17 @@ type MessageConversion struct {
 	// OpenRouter's canonical control surface and the only way to steer
 	// reasoning effort on Anthropic models through it.
 	UnifiedReasoningParam bool `json:"unified_reasoning_param,omitempty"`
+	// ReasoningEffortParam is the provider-native request field that carries a
+	// reasoning effort level (e.g. "reasoning_effort", "thinking_budget"). It
+	// is the per-provider (host) knob for steering thinking depth on
+	// reasoning-capable models — the same model family can take a different
+	// knob on different hosts (DeepInfra's `reasoning_effort` vs a vendor
+	// API's `thinking`). When set, applyReasoningEffort emits the effort (or
+	// the family's default depth) into this field for a reasoning-capable
+	// model. When empty, the provider exposes no effort knob and reasoning
+	// depth is whatever the model defaults to (always-thinking families) or
+	// is steered via the unified object (OpenRouter).
+	ReasoningEffortParam string `json:"reasoning_effort_param,omitempty"`
 	// ChatTemplateKwargs are merged into the per-request
 	// chat_template_kwargs object for template-driven local servers
 	// (vLLM, llama.cpp, LM Studio). Only emitted for localhost endpoints —
@@ -170,6 +181,28 @@ type SamplingParams struct {
 	Parameters  map[string]interface{} `json:"parameters,omitempty"`
 }
 
+// ReasoningSpec is the per-model reasoning control surface (rel.1). It tells
+// the provider which host-native knob carries the thinking effort, the
+// recommended default depth for agentic use, and whether the model always
+// thinks (no knob). The same model family can take a different knob on
+// different hosts, so this lives on the per-model (provider × family)
+// entry, not in one global value.
+type ReasoningSpec struct {
+	// Param is the request field that carries the effort level for this
+	// model on this host (e.g. "reasoning_effort", "thinking_budget").
+	// Empty means the model has no effort knob — it either always thinks or
+	// is steered via a unified object.
+	Param string `json:"param,omitempty"`
+	// DefaultEffort is the recommended depth for agentic/tool use when no
+	// effort is configured. "medium" is the fallback when unset (per the
+	// catalog-freshness lane, catalogued families should carry the vendor's
+	// recommended depth here).
+	DefaultEffort string `json:"default_effort,omitempty"`
+	// AlwaysThinking marks models that always produce reasoning (e.g.
+	// DeepSeek-R1, QwQ). They have no effort knob and cannot be turned off.
+	AlwaysThinking bool `json:"always_thinking,omitempty"`
+}
+
 // ModelInfo represents information about a model (simplified version for config)
 type ModelInfo struct {
 	ID            string   `json:"id"`
@@ -184,6 +217,10 @@ type ModelInfo struct {
 	// top_p, and free-form extra parameters). When set, these win over the
 	// provider-level defaults for this model. Optional.
 	Sampling *SamplingParams `json:"sampling,omitempty"`
+	// Reasoning holds the per-model reasoning control surface (rel.1): the
+	// host-native effort knob, the recommended default depth for agentic use,
+	// and whether the model always thinks. Optional.
+	Reasoning *ReasoningSpec `json:"reasoning,omitempty"`
 	// Pricing (USD per million tokens) — optional, used by enrich_registry
 	// to estimate probe cost for models sourced from embedded configs.
 	InputCost  float64 `json:"input_cost,omitempty"`

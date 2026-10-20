@@ -8,25 +8,143 @@ import (
 	"strings"
 
 	modelsettings "github.com/sprout-foundry/sprout/pkg/model_settings"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
+
+// defaultReasoningDepth is the recommended agentic depth when a
+// reasoning-capable model's family does not carry an explicit default.
+// Catalogued families are expected to carry the vendor's recommended depth in
+// their ReasoningSpec (rel.3); this is the fallback for an uncatalogued
+// model.
+const defaultReasoningDepth = "medium"
 
 func (p *GenericProvider) applyReasoningEffort(model, reasoning string, request map[string]interface{}) {
 	effort := strings.ToLower(strings.TrimSpace(reasoning))
-	if effort == "" {
-		return
-	}
-	if !isReasoningEffortLevel(effort) {
-		return
-	}
+	supports := p.modelSupportsReasoning(model)
+	spec := p.lookupModelReasoning(model)
+	configured := effort != "" && isReasoningEffortLevel(effort)
+
 	// OpenRouter's unified reasoning object is the canonical control surface
 	// and the only knob that reaches Anthropic models through it. Emit it
 	// only for models the catalog says accept `reasoning`.
-	if p.config.Conversion.UnifiedReasoningParam && modelsettings.ResolveModelSettings(model).Supported["reasoning"] {
-		request["reasoning"] = map[string]interface{}{"effort": effort}
+	if p.config.Conversion.UnifiedReasoningParam {
+		if !supports {
+			return
+		}
+		request["reasoning"] = map[string]interface{}{
+			"effort": reasoningEffortValue(effort, spec),
+		}
 		return
 	}
+
+	// gpt-oss models use the reasoning_effort field directly. They think by
+	// default (always-reasoning family), so the field is only needed to steer
+	// the depth when an effort is actually configured.
 	if strings.Contains(strings.ToLower(model), "gpt-oss") {
-		request["reasoning_effort"] = effort
+		if configured {
+			request["reasoning_effort"] = effort
+		}
+		return
+	}
+
+	// Host-native knob: a per-model ReasoningSpec (this host's knob for this
+	// family) wins over the provider-level ReasoningEffortParam.
+	hasSpec := spec != nil && (spec.Param != "" || spec.AlwaysThinking)
+	knob := p.config.Conversion.ReasoningEffortParam
+	if spec != nil && spec.Param != "" {
+		knob = spec.Param
+	}
+
+	// Always-thinking models (DeepSeek-R1, QwQ, ...) reason by default and
+	// expose no effort knob; nothing to emit and no setting to apply.
+	if spec != nil && spec.AlwaysThinking {
+		return
+	}
+
+	// The knob only applies to reasoning-capable models (a per-model spec
+	// implies the family is reasoning-capable on this host). A model with no
+	// spec and no capability is not a reasoning model: emit nothing, and
+	// report a configured effort that cannot be applied.
+	if knob == "" || (!hasSpec && !supports) {
+		if configured {
+			// A configured effort cannot be applied to this model/host —
+			// report it rather than drop it silently.
+			p.reportReasoningNoKnob(model, true)
+		}
+		return
+	}
+
+	// Emit the configured effort, or the family's default depth when unset. A
+	// reasoning-capable model (or one with an explicit knob) always gets the
+	// field so reasoning is enabled by default — that is the rel.1 guarantee.
+	request[knob] = reasoningEffortValue(effort, spec)
+}
+
+// reasoningEffortValue resolves the effort level to emit: the configured
+// (valid) effort wins; otherwise the family's default depth (spec's
+// default_effort); otherwise the global fallback. An empty result means the
+// caller should not emit the knob.
+func reasoningEffortValue(effort string, spec *ReasoningSpec) string {
+	if effort != "" && isReasoningEffortLevel(effort) {
+		return effort
+	}
+	if spec != nil && spec.DefaultEffort != "" && isReasoningEffortLevel(spec.DefaultEffort) {
+		return spec.DefaultEffort
+	}
+	return defaultReasoningDepth
+}
+
+// modelSupportsReasoning reports whether the model is reasoning-capable: the
+// provider catalog (per-model `reasoning` tag) or the OpenRouter catalog
+// ("reasoning" supported parameter) marks it. This is what the OpenRouter
+// branch has always used, now reused for the native-knob path.
+func (p *GenericProvider) modelSupportsReasoning(model string) bool {
+	if mi := p.config.GetModelInfo(model); mi != nil && modelInfoHasReasoningTag(mi) {
+		return true
+	}
+	// Fall back to the OpenRouter catalog (the existing gate).
+	return modelsettings.ResolveModelSettings(model).Supported["reasoning"]
+}
+
+// modelInfoHasReasoningTag reports whether a provider-catalog model entry is
+// tagged "reasoning".
+func modelInfoHasReasoningTag(modelInfo *ModelInfo) bool {
+	if modelInfo == nil {
+		return false
+	}
+	for _, tag := range modelInfo.Tags {
+		if strings.EqualFold(strings.TrimSpace(tag), "reasoning") {
+			return true
+		}
+	}
+	return false
+}
+
+// lookupModelReasoning returns the per-model ReasoningSpec (the host-native
+// reasoning control surface) for a model, or nil when the model's catalog
+// entry carries none.
+func (p *GenericProvider) lookupModelReasoning(model string) *ReasoningSpec {
+	if mi := p.config.GetModelInfo(model); mi != nil {
+		return mi.Reasoning
+	}
+	return nil
+}
+
+// reportReasoningNoKnob logs (once per session) and records that a
+// reasoning-capable model on this host has no steering knob, so the setting
+// is reported, never silently dropped.
+func (p *GenericProvider) reportReasoningNoKnob(model string, configured bool) {
+	p.reasoningWarnMu.Lock()
+	if p.reasoningNoKnobWarned {
+		p.reasoningWarnMu.Unlock()
+		return
+	}
+	p.reasoningNoKnobWarned = true
+	p.reasoningWarnMu.Unlock()
+	if configured {
+		utils.GetLogger(false).Logf("[reasoning] configured effort for %s/%s cannot be applied — the %s config has no reasoning knob for this model family; reasoning runs at the provider default (setting reported, not dropped)", p.config.Name, model, p.config.Name)
+	} else {
+		utils.GetLogger(false).Logf("[reasoning] %s/%s is reasoning-capable but the %s config has no knob to enable it; it runs at the provider default", p.config.Name, model, p.config.Name)
 	}
 }
 

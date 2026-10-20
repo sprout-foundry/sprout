@@ -147,9 +147,10 @@ func TestModelsCommand_Complete_CaseSensitivity(t *testing.T) {
 func TestProvidersCommand_Complete_EmptyArgs(t *testing.T) {
 	cmd := &ProvidersCommand{}
 
-	// No args + nil agent -> returns ["list", "select", "status"]
+	// No args + nil agent -> returns the subcommand set. SP-167 added the
+	// custom-provider subcommands (add/remove/custom) to /provider.
 	results := cmd.Complete(nil, nil)
-	assert.ElementsMatch(t, []string{"list", "select", "status"}, results)
+	assert.ElementsMatch(t, []string{"add", "custom", "list", "remove", "select", "status"}, results)
 	assert.True(t, sort.StringsAreSorted(results), "results should be sorted")
 }
 
@@ -160,7 +161,7 @@ func TestProvidersCommand_Complete_EmptyArgsWithAgent(t *testing.T) {
 	// -> returns basic subcommands only.
 	a := agent.NewTestAgent()
 	results := cmd.Complete(nil, a)
-	assert.ElementsMatch(t, []string{"list", "select", "status"}, results)
+	assert.ElementsMatch(t, []string{"add", "custom", "list", "remove", "select", "status"}, results)
 	assert.True(t, sort.StringsAreSorted(results), "results should be sorted")
 }
 

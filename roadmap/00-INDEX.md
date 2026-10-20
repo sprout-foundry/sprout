@@ -177,6 +177,7 @@ treating an entry as unstarted._
 | SP-164 | [MCP Config Resolution Across Config Roots](./SP-164-mcp-config-resolution.md) | ✅ Implemented (2026-10-19). `sprout mcp add` and `sprout mcp test` agreed but `sprout agent` did not see a repo-local `mcp_config.json` — a daemon's config root was fixed at its start. Resolution is now workspace-scoped and layered (workspace wins on collision), and the config consulted is reportable. |
 | SP-165 | [`sprout mcp add` for HTTP Servers](./SP-165-mcp-add-http-servers.md) | ✅ Implemented (2026-10-19). The "Custom MCP Server (stdio or http)" label promised HTTP but the flow only prompted for a command. Adds a type picker + URL prompt to the custom flow, validates URLs (including a URL typed where a command belongs), and makes `mcp test` report an HTTP server's URL. |
 | SP-166 | [Wheel and Scroll Routing](./SP-166-wheel-and-scroll-routing.md) | ✅ Implemented (2026-10-19). The REPL enabled VT200 mouse tracking, which captured the wheel: `handleMouseEvent` dropped wheel events (no transcript scroll) while `SelectList` mapped them to selection (picker scroll). Tracking is now SGR-only, so the terminal's own scrollback works in every mode. |
+| SP-167 | [Merge `/custom` into `/provider` as Subcommands](./SP-167-merge-custom-into-provider.md) | 📝 Proposed (2026-10-19). `/provider add\|remove\|custom` delegate to the existing `sprout custom` wizard; `/custom` stays as a deprecated alias. Makes `/provider` the single entry point for everything provider-shaped. Nit #12. |
 
 ## Future / On Hold
 

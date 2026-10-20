@@ -51,6 +51,11 @@ func (p *ProvidersCommand) Usage() string {
 		"/provider <name>         Switch to <name> directly.",
 		"/provider <name>:<model> Switch to <name> with an explicit model.",
 		"",
+		"Custom OpenAI-compatible endpoints:",
+		"/provider add            Register a new endpoint (interactive wizard).",
+		"/provider remove [name]  Remove a custom provider.",
+		"/provider custom         List custom providers.",
+		"",
 		"Alias: /p",
 		"",
 		"Flags:",
@@ -58,8 +63,29 @@ func (p *ProvidersCommand) Usage() string {
 	}, "\n")
 }
 
+// customSubcommandRunner is the seam through which /provider's
+// add|remove|custom subcommands reach the `sprout custom` wizard. It is a
+// package variable so tests can assert dispatch without spawning a real
+// subprocess (the wizard blocks on stdin).
+var customSubcommandRunner = runCustomSubcommand
+
 // Execute runs the providers command
 func (p *ProvidersCommand) Execute(args []string, chatAgent *agent.Agent) error {
+	// SP-167: the custom-provider subcommands (add/remove/custom) delegate to
+	// the `sprout custom` wizard and need no agent, so they are handled
+	// before the config manager is touched. Dereferencing chatAgent up front
+	// would panic for them when no agent is present.
+	if len(args) > 0 {
+		switch args[0] {
+		case "add":
+			return customSubcommandRunner("add", nil)
+		case "remove", "rm", "delete":
+			return customSubcommandRunner("remove", args[1:])
+		case "custom":
+			return customSubcommandRunner("list", nil)
+		}
+	}
+
 	configManager := chatAgent.GetConfigManager()
 
 	// If no arguments, show current status
@@ -76,7 +102,9 @@ func (p *ProvidersCommand) Execute(args []string, chatAgent *agent.Agent) error 
 	case "status":
 		return p.showProviderStatus(configManager, chatAgent)
 	default:
-		// Try to set provider directly by name
+		// Try to set provider directly by name. The custom subcommands were
+		// matched above, so `/provider add` cannot be mistaken for a request
+		// to switch to a provider named "add".
 		return p.setProvider(args[0], configManager, chatAgent)
 	}
 }
@@ -86,7 +114,9 @@ func (p *ProvidersCommand) Execute(args []string, chatAgent *agent.Agent) error 
 func (p *ProvidersCommand) Complete(args []string, chatAgent *agent.Agent) []string {
 	if len(args) == 0 {
 		// First argument: suggest subcommands plus available provider names.
-		basic := []string{"list", "select", "status"}
+		// Kept sorted: the completion contract requires sorted output, and
+		// the early returns below bypass the final sort.
+		basic := []string{"add", "custom", "list", "remove", "select", "status"}
 		if chatAgent == nil {
 			return basic
 		}
@@ -108,8 +138,19 @@ func (p *ProvidersCommand) Complete(args []string, chatAgent *agent.Agent) []str
 	prefix := strings.ToLower(args[len(args)-1])
 	var matches []string
 
+	// `remove` takes a custom provider name, not another subcommand — so it
+	// is handled before the subcommand loop, which would otherwise match
+	// every subcommand against an empty prefix.
+	if args[0] == "remove" || args[0] == "rm" || args[0] == "delete" {
+		var mgr *configuration.Manager
+		if chatAgent != nil {
+			mgr = chatAgent.GetConfigManager()
+		}
+		return customProviderNames(mgr, prefix)
+	}
+
 	// Check subcommands
-	subcommands := []string{"list", "select", "status"}
+	subcommands := []string{"add", "custom", "list", "remove", "select", "status"}
 	for _, sub := range subcommands {
 		if strings.HasPrefix(strings.ToLower(sub), prefix) {
 			matches = append(matches, sub)
@@ -178,6 +219,7 @@ func (p *ProvidersCommand) showProviderStatus(configManager *configuration.Manag
 	p.println("  /provider list              - List available providers only")
 	p.println("  /provider select            - Interactive provider selection")
 	p.println("  /provider <provider_name>   - Switch to specific provider")
+	p.println("  /provider add               - Register an OpenAI-compatible endpoint")
 
 	return nil
 }
@@ -213,6 +255,11 @@ func (p *ProvidersCommand) listProviders(configManager *configuration.Manager) e
 
 		p.printf("%d. **%s** %s - %s%s\n", i+1, name, status, model, suffix)
 	}
+
+	// SP-167: the user who needs this is exactly the one whose endpoint is
+	// not in the list above, so always offer the way to add one.
+	p.println()
+	console.GlyphDim.Fprintf(p.out(), "Add an OpenAI-compatible endpoint: /provider add")
 
 	return nil
 }
@@ -291,6 +338,28 @@ func (p *ProvidersCommand) selectProvider(configManager *configuration.Manager, 
 	return p.setProvider(chosen, configManager, chatAgent)
 }
 
+// customProviderNames returns the names of user-registered custom providers,
+// optionally filtered by a lowercase prefix. It reads through the caller's
+// config manager rather than re-loading from disk, so it sees exactly the
+// config the command is operating on.
+func customProviderNames(mgr *configuration.Manager, prefix string) []string {
+	if mgr == nil {
+		return nil
+	}
+	cfg := mgr.GetConfig()
+	if cfg == nil {
+		return nil
+	}
+	names := make([]string, 0, len(cfg.CustomProviders))
+	for name := range cfg.CustomProviders {
+		if prefix == "" || strings.HasPrefix(strings.ToLower(name), prefix) {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
 // providerDropdownItem implements agent.DropdownItem for providers
 type providerDropdownItem struct {
 	provider    api.ClientType
@@ -325,8 +394,8 @@ func (p *ProvidersCommand) setProvider(providerArg string, configManager *config
 		// SP-161g: the usual cause of an unknown provider is a custom
 		// OpenAI-compatible endpoint the user has not registered yet.
 		// Point at the command that does it instead of leaving them to
-		// guess that /custom exists.
-		return fmt.Errorf("unknown provider '%s'. Available: %s\nTo add an OpenAI-compatible endpoint, use /custom add.",
+		// guess. SP-167 made /provider the primary entry point.
+		return fmt.Errorf("unknown provider '%s'. Available: %s\nTo add an OpenAI-compatible endpoint, use /provider add.",
 			providerName, strings.Join(names, ", "))
 	}
 

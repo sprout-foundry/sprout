@@ -221,3 +221,67 @@ func TestSP125_ExplicitLowContextConfig(t *testing.T) {
 		t.Error("explicit config_mode=low_context should activate LCM even on 128K model")
 	}
 }
+
+// TestRel2_CeilingBindsOnLargeWindow is the rel.2 core: for a large model
+// context the absolute live-context ceiling (default 160K) must bind before
+// the window-share fraction, so compaction fires at min(share, ceiling) of the
+// conversation rather than letting a 1M-token window run to ~734K of live
+// context before anything is compacted.
+func TestRel2_CeilingBindsOnLargeWindow(t *testing.T) {
+	a := &Agent{} // bare agent: default 160K ceiling, base window-share 0.70.
+	got := a.compactionTriggerFractionFor(1_000_000)
+	want := float64(defaultCompactionCeilingTokens) / 1_000_000 // 0.16
+	if math.Abs(got-want) > 1e-9 {
+		t.Fatalf("1M window: trigger = %v, want %v (160K ceiling fraction)", got, want)
+	}
+	// The ceiling must actually bind (drive the fraction below the 0.70 share).
+	if got >= 0.70 {
+		t.Fatalf("1M window: fraction %v did not drop below the 0.70 share — ceiling not binding", got)
+	}
+}
+
+// TestRel2_SmallWindowUnaffected verifies the ceiling does not regress small
+// models: a 128K window has its share (0.70) below the 160K ceiling fraction
+// (1.25), so the window-share trigger is unchanged.
+func TestRel2_SmallWindowUnaffected(t *testing.T) {
+	a := &Agent{}
+	want := 1.0 - totalReservedFraction() // 0.70
+	if got := a.compactionTriggerFractionFor(128 * 1024); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("128K window: trigger = %v, want %v (share unchanged)", got, want)
+	}
+}
+
+// TestRel2_ZeroLimitReturnsShare guards the degenerate path: with no usable
+// context limit the ceiling is skipped and the plain share is returned.
+func TestRel2_ZeroLimitReturnsShare(t *testing.T) {
+	a := &Agent{}
+	want := 1.0 - totalReservedFraction()
+	if got := a.compactionTriggerFractionFor(0); got != want {
+		t.Fatalf("zero limit: trigger = %v, want %v (share, ceiling skipped)", got, want)
+	}
+}
+
+// TestRel2_ConfiguredCeilingHonorsConfig verifies a user-set ceiling tighter
+// than the built-in 160K is honored (e.g. 80K on a 1M window → 0.08).
+func TestRel2_ConfiguredCeilingHonorsConfig(t *testing.T) {
+	mgr, cleanup := configuration.NewTestManager(t)
+	defer cleanup()
+	if err := mgr.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		cfg.CompactionCeilingTokens = 80 * 1024
+		return nil
+	}); err != nil {
+		t.Fatalf("UpdateConfigNoSave failed: %v", err)
+	}
+	client := NewMockLLMProviderWithLimit(1_000_000)
+	agent, err := NewAgentWithClient(client, api.TestClientType, mgr)
+	if err != nil {
+		t.Fatalf("NewAgentWithClient failed: %v", err)
+	}
+	defer agent.Shutdown()
+
+	got := agent.compactionTriggerFractionFor(1_000_000)
+	want := float64(80*1024) / 1_000_000 // 0.08
+	if math.Abs(got-want) > 1e-9 {
+		t.Fatalf("configured 80K ceiling on 1M window: trigger = %v, want %v", got, want)
+	}
+}

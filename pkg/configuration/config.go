@@ -230,6 +230,15 @@ type Config struct {
 	// MaxContextTokens caps the effective context window. Nil or 0 means no cap.
 	MaxContextTokens *int `json:"max_context_tokens,omitempty"`
 
+	// CompactionCeilingTokens is an absolute ceiling on the live conversation
+	// (rel.2): when the effective context window exceeds this value, compaction
+	// is triggered at this absolute size (converted to a fraction of the
+	// window) rather than at the window-share fraction, whichever is lower.
+	// This keeps a 1M-token model from running to hundreds of thousands of
+	// tokens before anything is compacted. 0 (the default) means the built-in
+	// 160K ceiling applies.
+	CompactionCeilingTokens int `json:"compaction_ceiling_tokens,omitempty"`
+
 	// Notifications controls how the agent notifies the user when long-running turns complete.
 	Notifications *NotificationsConfig `json:"notifications,omitempty"`
 

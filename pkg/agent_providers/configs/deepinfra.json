@@ -103,6 +103,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.05,
         "context_length": 196608,
         "description": "MiniMax-M2.7 is MiniMax's first model deeply participating in its own evolution. M2.7 is capable of building complex agent harnesses and completing highly elaborate productivity tasks, leveraging Agent Teams, complex Skills, and dynamic tool search. ",
         "id": "MiniMaxAI/MiniMax-M2.7",
@@ -204,6 +205,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.2,
         "context_length": 262144,
         "description": "Qwen3-235B-A22B-Thinking-2507 is the Qwen3's new model with scaling the thinking capability of Qwen3-235B-A22B, improving both the quality and depth of reasoning. ",
         "id": "Qwen/Qwen3-235B-A22B-Thinking-2507",
@@ -636,6 +638,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.13,
         "context_length": 163840,
         "description": "DeepSeek-V3.1 Terminus is an update to DeepSeek V3.1 that maintains the model's original capabilities while addressing issues reported by users, including language consistency and agent capabilities, further optimizing the model's performance in coding and search agents. It is a large hybrid reasoning model (671B parameters, 37B active) that supports both thinking and non-thinking modes. It extends the DeepSeek-V3 base with a two-phase long-context training process. Users can control the reasoning behaviour with the reasoning enabled boolean. Learn more in our docs  The model improves tool use, code generation, and reasoning efficiency, achieving performance comparable to DeepSeek-R1 on difficult benchmarks while responding more quickly. It supports structured tool calling, code agents, and search agents, making it suitable for research, coding, and agentic workflows.",
         "id": "deepseek-ai/DeepSeek-V3.1-Terminus",
@@ -1009,6 +1012,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.07,
         "context_length": 262144,
         "description": "Kimi K2.5 is an open-source, native multimodal agentic model built through continual pretraining on approximately 15 trillion mixed visual and text tokens atop Kimi-K2-Base. It seamlessly integrates vision and language understanding with advanced agentic capabilities, instant and thinking modes, as well as conversational and agentic paradigms.",
         "id": "moonshotai/Kimi-K2.5",
@@ -1170,7 +1174,7 @@
         ]
       },
       {
-        "cached_input_cost": 0.035,
+        "cached_input_cost": 0.033,
         "context_length": 262144,
         "description": "Hy3 is a 295B-parameter Mixture-of-Experts (MoE) model with 21B active parameters and 3.8B MTP layer parameters, developed by the Tencent Hy Team. Following the Hy3 Preview launch in late April, we gathered feedback from 50+ products and scaled up post-training with higher quality data. Today, we introduce Hy3, which outperforms similar-size models and rivals flagship open-source models with 2-5x parameters. It also shows significant gains in utility across various products and productivity tasks.",
         "id": "tencent/Hy3",
@@ -1242,6 +1246,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.01,
         "context_length": 202752,
         "description": "GLM-4.7-Flash is a 30B-A3B MoE model. As the strongest model in the 30B class, GLM-4.7-Flash offers a new option for lightweight deployment that balances performance and efficiency.",
         "id": "zai-org/GLM-4.7-Flash",
@@ -1255,6 +1260,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.12,
         "context_length": 202752,
         "description": "GLM-5 is an advanced, open-source large language model designed for developers tackling the toughest challenges. It excels at long-context reasoning, multi-step tool orchestration, and complex systems engineering, making it the ideal choice for powering sophisticated agents and applications that require high-level cognitive tasks.",
         "id": "zai-org/GLM-5",
@@ -1667,13 +1673,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.08,
+        "cached_input_cost": 0.02,
         "context_length": 262144,
         "description": "NVIDIA Nemotron 3.5 Super VL is an open multimodal model for agents that see, reason, and act. Its 120B-parameter Mixture-of-Experts design (12B active) understands text, images, documents, GUIs, and video, and adds reasoning and tool use on top.",
         "id": "nvidia/NVIDIA-Nemotron-3.5-Super-VL",
-        "input_cost": 0.1,
+        "input_cost": 0.15,
         "name": "Nemotron 3.5 Super VL",
-        "output_cost": 0.4,
+        "output_cost": 0.5,
         "tags": [
           "tools",
           "vision",

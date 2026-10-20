@@ -231,8 +231,14 @@ func TestGitRepoAutoDetect_AlreadyIsolated(t *testing.T) {
 }
 
 // TestGitRepoAutoDetect_GitRepoFound verifies the end-to-end flow: a git repo
-// is found, .sprout/config.json is bootstrapped, and isolatedConfig
-// becomes true.
+// is found, its .sprout directory is prepared, and isolatedConfig becomes
+// true.
+//
+// The assertion is on the .sprout directory rather than on config.json:
+// BootstrapIsolatedConfig clones the user's global config when one exists and
+// writes nothing when it does not, so a fresh environment legitimately ends up
+// with a prepared directory and no config file. Asserting the file would make
+// this test depend on whether the machine running it has a global config.
 func TestGitRepoAutoDetect_GitRepoFound(t *testing.T) {
 	disableCISkip(t)
 	dir := t.TempDir()
@@ -254,10 +260,14 @@ func TestGitRepoAutoDetect_GitRepoFound(t *testing.T) {
 		t.Error("expected isolatedConfig to be set to true after successful detection")
 	}
 
-	// Verify .sprout/config.json was created
-	configPath := filepath.Join(dir, ".sprout", "config.json")
-	if _, err := os.Stat(configPath); err != nil {
-		t.Errorf("expected .sprout/config.json to exist after bootstrap: %v", err)
+	// The .sprout directory is prepared for the workspace.
+	sproutDir := filepath.Join(dir, ".sprout")
+	info, err := os.Stat(sproutDir)
+	if err != nil {
+		t.Fatalf("expected .sprout directory to exist after bootstrap: %v", err)
+	}
+	if !info.IsDir() {
+		t.Errorf(".sprout should be a directory, got mode %v", info.Mode())
 	}
 }
 
@@ -280,9 +290,28 @@ func TestGitRepoAutoDetect_NoRepo(t *testing.T) {
 }
 
 // TestGitRepoAutoDetect_IdempotentBootstrap verifies that calling
-// BootstrapIsolatedConfig twice on the same directory is safe
-// and the config.json persists.
+// BootstrapIsolatedConfig twice on the same directory is safe and leaves the
+// cloned config untouched.
+//
+// A global config is seeded first: bootstrapping clones it, and with nothing
+// to clone there is no config.json for the idempotency assertion to observe.
 func TestGitRepoAutoDetect_IdempotentBootstrap(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", "")
+	t.Setenv("SPROUT_CONFIG", "")
+	t.Setenv("SPROUT_CONFIG_DIR", "")
+
+	// Seed the global config the isolated bootstrap clones from.
+	globalDir := filepath.Join(home, ".config", "sprout")
+	if err := os.MkdirAll(globalDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	globalConfig := filepath.Join(globalDir, "config.json")
+	if err := os.WriteFile(globalConfig, []byte(`{"last_used_provider":"anthropic"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+
 	dir := t.TempDir()
 	gitDir := filepath.Join(dir, ".git")
 	if err := os.MkdirAll(gitDir, 0755); err != nil {

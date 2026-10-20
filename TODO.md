@@ -500,14 +500,25 @@ cause at once; the harness produced the conditions it failed under.
       `reasoning_content_field`, is already wired).
       Default policy: reasoning is on for every model that supports it, on
       every provider and for every persona (coordinator, orchestrator,
-      reviewer, subagents, chat), with no configuration needed. An unset
-      `reasoning_effort` means the provider's "on" at a sensible default
-      depth (`medium`), never "omit the parameter"; turning reasoning off
-      takes an explicit `disable_thinking` (session, persona or workflow) and
-      is shown in the run record. Model families whose catalog default is a
-      non-thinking/instruct mode get thinking turned on unless explicitly
-      disabled. Test: for each provider config, a request built with no
-      reasoning settings enables reasoning on a reasoning-capable model.
+      reviewer, subagents, chat), with no configuration needed; turning it
+      off takes an explicit `disable_thinking` (session, persona or
+      workflow) and is shown in the run record. The mechanism and depth are
+      model-specific, so they live in the catalog per model family and
+      provider, not in one global value: the knob (effort level, on/off
+      switch, token budget, or none for always-thinking models such as
+      DeepSeek-R1/QwQ), the recommended default depth for agentic/tool use
+      (from the vendor's guidance; `medium` only as the fallback for an
+      uncatalogued model), and the sampling that goes with thinking mode
+      (e.g. Qwen3.x's thinking vs instruct temperature/top_p, already partly
+      in `applyModelSpecificSettings`). The same model can take a different
+      parameter on different hosts (DeepInfra's `reasoning_effort` vs a
+      vendor API's `thinking`), so each provider × family entry is verified
+      by a live probe that shows nonzero reasoning tokens before it ships —
+      only DeepSeek-V4.1-Flash on DeepInfra has been measured so far.
+      Tests: for each provider config, a request built with no reasoning
+      settings enables reasoning on a reasoning-capable model with that
+      family's knob and default; a probe script (`scripts/`) reports
+      reasoning tokens per catalogued provider × family.
 - [ ] **rel.2** A working-set budget, not a share of the window. Compaction
       triggers at `1 - reserved` (70%) of the model's window
       (`pkg/agent/context_budget.go`): for a 1M-token model that is ~734k, so

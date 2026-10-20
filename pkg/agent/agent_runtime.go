@@ -9,6 +9,7 @@ import (
 	providers "github.com/sprout-foundry/sprout/pkg/agent_providers"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/providercatalog"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // GenerateResponse generates a simple response using the current model without tool calls.
@@ -40,6 +41,12 @@ func (a *Agent) accumulateResponseCost(resp *api.ChatResponse) {
 	chargedCost := api.UsageCost(resp.Usage)
 	if chargedCost == 0 && billingType == BillingPayPerToken && resp.Usage.TotalTokens > 0 {
 		chargedCost = a.estimateCostFromPricing(resp.Usage.PromptTokens, resp.Usage.CompletionTokens)
+	}
+	// rel.3: a pay-per-token model with no provider-reported cost and no
+	// catalog/registry pricing leaves chargedCost at 0, so the USD budget
+	// guard below (guarded on chargedCost > 0) is a silent no-op. Warn once.
+	if billingType == BillingPayPerToken && resp.Usage.TotalTokens > 0 && chargedCost == 0 {
+		a.warnUncataloguedModel()
 	}
 	var tokenCost float64
 	if billingType != BillingPayPerToken {
@@ -165,4 +172,21 @@ func (a *Agent) estimateCostFromPricing(promptTokens, completionTokens int) floa
 	}
 
 	return 0
+}
+
+// warnUncataloguedModel logs once per agent lifetime that a pay-per-token
+// model has no usable pricing (registry or embedded catalog), so cost
+// estimates fall to $0 and the USD budget guard is a no-op (rel.3). The
+// warning names the model so the user knows cost tracking is blind.
+func (a *Agent) warnUncataloguedModel() {
+	if a == nil || a.costPricingUnknown.Load() {
+		return
+	}
+	if !a.costPricingUnknown.CompareAndSwap(false, true) {
+		return
+	}
+	utils.GetLogger(false).Logf(
+		"[cost] %s/%s has no pricing in the provider registry or embedded catalog; cost estimates are $0 and the USD budget guard will not trip for this model — add a catalog entry or use a priced model",
+		a.GetProvider(), a.GetModel(),
+	)
 }

@@ -10,7 +10,6 @@ import (
 	core "github.com/sprout-foundry/seed/core"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
-	providers "github.com/sprout-foundry/sprout/pkg/agent_providers"
 	"github.com/sprout-foundry/sprout/pkg/providercatalog"
 )
 
@@ -24,6 +23,12 @@ func (sp *sproutProvider) accumulateResponseCost(resp *core.ChatResponse) {
 	chargedCost := api.UsageCost(resp.Usage)
 	if chargedCost == 0 && billingType == BillingPayPerToken && resp.Usage.TotalTokens > 0 {
 		chargedCost = sp.estimateCostFromPricing(resp.Usage.PromptTokens, resp.Usage.CompletionTokens)
+	}
+	// rel.3: a pay-per-token model with no provider-reported cost and no
+	// catalog/registry pricing leaves chargedCost at 0, so the USD budget
+	// guard below (guarded on chargedCost > 0) is a silent no-op. Warn once.
+	if billingType == BillingPayPerToken && resp.Usage.TotalTokens > 0 && chargedCost == 0 {
+		sp.agent.warnUncataloguedModel()
 	}
 	var tokenCost float64
 	if billingType != BillingPayPerToken {
@@ -86,21 +91,15 @@ func (sp *sproutProvider) accumulateResponseCost(resp *core.ChatResponse) {
 }
 
 // resolveBillingType returns the billing model for the current provider.
+// Delegates to the Agent's authoritative implementation (Agent.resolveBillingType),
+// which carries the local-client→free and explicit-BillingType rules the seed
+// copy previously lacked. Without parity, a free LAN-hosted local model
+// misclassifies as pay-per-token and trips the uncatalogued-cost warn (rel.3).
 func (sp *sproutProvider) resolveBillingType() string {
 	if sp.agent == nil {
 		return BillingPayPerToken
 	}
-	provider := sp.agent.GetProvider()
-	// Check embedded provider configs for explicit billing_type
-	cfg, err := providers.GlobalFactory().GetProviderConfig(provider)
-	if err == nil && cfg != nil {
-		return cfg.BillingTypeResolved()
-	}
-	// Fallback heuristics for custom/dynamic providers
-	if provider == "zai-coding" {
-		return BillingSubscription
-	}
-	return BillingPayPerToken
+	return sp.agent.resolveBillingType()
 }
 
 // estimateCostFromPricing computes a cost estimate from token counts and per-million pricing.

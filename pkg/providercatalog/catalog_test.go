@@ -42,6 +42,30 @@ func TestEmbeddedOnboardingOrderNamesKnownProviders(t *testing.T) {
 	}
 }
 
+// TestDeepSeekV41CatalogFreshness (rel.3) pins that the embedded catalog
+// carries the current DeepSeek V4.1 line with usable pricing, so the
+// DeepSeek-V4.1-Flash model resolves a nonzero cost. Without this, a
+// refreshed catalog could silently drop or zero the entry and DeepSeek
+// (whose /v1/models omits cost) would track cost as $0 with no fallback.
+func TestDeepSeekV41CatalogFreshness(t *testing.T) {
+	// The deepseek provider's flagship V4.1 line: deepseek-flash. FindModelPricing
+	// reports ok only when a model carries nonzero input OR output cost, so this
+	// also proves the "nonzero cost" half of the entry.
+	if in, out, _, ok := FindModelPricing("deepseek", "deepseek-flash"); !ok || in <= 0 || out <= 0 {
+		t.Fatalf("deepseek/deepseek-flash (V4.1 flagship) must carry nonzero cost; got in=%v out=%v ok=%v", in, out, ok)
+	}
+	if provider, found := FindProvider("deepseek"); !found {
+		t.Fatal("deepseek provider missing from catalog")
+	} else if provider.RecommendedModel == "" {
+		t.Error("deepseek provider has no recommended_model")
+	}
+
+	// The canonical OpenRouter alias for the same V4.1 model must resolve too.
+	if _, _, _, ok := FindModelPricing("openrouter", "deepseek/deepseek-v4.1-flash"); !ok {
+		t.Error("openrouter/deepseek/deepseek-v4.1-flash not in catalog — V4.1 freshness regressed")
+	}
+}
+
 func hasModel(p Provider, id string) bool {
 	for _, m := range p.Models {
 		if m.ID == id {

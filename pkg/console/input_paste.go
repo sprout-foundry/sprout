@@ -5,6 +5,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -212,11 +213,20 @@ const (
 	collapsePasteMinChars = 400
 )
 
+// pastePreviewChars bounds the inline preview a collapsed paste shows. The
+// point of the preview is to let the user confirm they pasted the *right*
+// thing, so it shows the leading text rather than only a count — a count
+// cannot distinguish one 12-line paste from another.
+const pastePreviewChars = 80
+
 func shouldCollapsePaste(content string) bool {
 	return strings.Count(content, "\n")+1 >= collapsePasteMinLines ||
 		utf8.RuneCountInString(content) > collapsePasteMinChars
 }
 
+// pastePlaceholder is the one-line stand-in shown in the composer for a
+// collapsed paste. It always leads with a bounded preview of the content so
+// the user can verify what they pasted; a count alone does not do that.
 func pastePlaceholder(content string) string {
 	if n := len(ParsePastedImagePlaceholders(content)); n > 0 && strings.HasPrefix(content, pastedImageBracketPrefix) {
 		if n == 1 {
@@ -224,10 +234,86 @@ func pastePlaceholder(content string) string {
 		}
 		return fmt.Sprintf("[%d images]", n)
 	}
+
+	preview := pastePreview(content)
 	if lines := strings.Count(content, "\n") + 1; lines > 1 {
-		return fmt.Sprintf("[pasted %d lines]", lines)
+		return fmt.Sprintf("[pasted %d lines: %s]", lines, preview)
 	}
-	return fmt.Sprintf("[pasted %d chars]", utf8.RuneCountInString(content))
+	return fmt.Sprintf("[pasted %d chars: %s]", utf8.RuneCountInString(content), preview)
+}
+
+// pastePreview returns the leading text of a paste, flattened to a single
+// line and clipped to pastePreviewChars runes with an ellipsis when longer.
+//
+// Escape sequences and non-printable runes are removed before clipping.
+// This is load-bearing, not cosmetic: the preview is echoed verbatim into
+// the composer line, so a paste of coloured terminal output or a log would
+// otherwise re-emit raw ANSI escapes and let the terminal interpret them,
+// garbling the prompt. (The image branch returns "[image]" for the same
+// reason.) Newlines and tabs collapse to single spaces so the preview
+// cannot break the composer's one-line layout.
+func pastePreview(content string) string {
+	var b strings.Builder
+	b.Grow(len(content))
+	runes := []rune(content)
+	for i := 0; i < len(runes); i++ {
+		r := runes[i]
+		switch {
+		case r == '\n' || r == '\r' || r == '\t':
+			b.WriteByte(' ')
+		case r == 0x1b:
+			// Drop the whole escape sequence, not just the introducer:
+			// a CSI sequence (ESC [ ... final-byte) would otherwise leave
+			// its printable parameters ("[31m") behind as literal noise.
+			i += escapeSequenceLen(runes[i:]) - 1
+			b.WriteByte(' ')
+		case !unicode.IsPrint(r):
+			b.WriteByte(' ')
+		default:
+			b.WriteRune(r)
+		}
+	}
+	flat := strings.TrimSpace(b.String())
+	clip := []rune(flat)
+	if len(clip) <= pastePreviewChars {
+		return flat
+	}
+	return string(clip[:pastePreviewChars]) + "…"
+}
+
+// escapeSequenceLen returns the length in runes of the escape sequence
+// starting at runes[0] (which is known to be ESC), or 1 if it is not a
+// recognizable multi-rune sequence.
+func escapeSequenceLen(runes []rune) int {
+	if len(runes) == 0 || runes[0] != 0x1b {
+		return 0
+	}
+	// CSI: ESC [ <params> <final byte in 0x40–0x7E>
+	if len(runes) >= 2 && runes[1] == '[' {
+		for i := 2; i < len(runes); i++ {
+			if runes[i] >= 0x40 && runes[i] <= 0x7e {
+				return i + 1
+			}
+		}
+		return len(runes)
+	}
+	// OSC: ESC ] <text> BEL | ESC \
+	if len(runes) >= 2 && runes[1] == ']' {
+		for i := 2; i < len(runes); i++ {
+			if runes[i] == 0x07 {
+				return i + 1
+			}
+			if runes[i] == 0x1b && i+1 < len(runes) && runes[i+1] == '\\' {
+				return i + 2
+			}
+		}
+		return len(runes)
+	}
+	// Two-rune sequences (ESC followed by a single byte).
+	if len(runes) >= 2 {
+		return 2
+	}
+	return 1
 }
 
 // insertAttachment inserts an attachment placeholder at the cursor as one

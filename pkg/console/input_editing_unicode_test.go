@@ -1,6 +1,8 @@
 package console
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 	"unicode/utf8"
 
@@ -65,7 +67,54 @@ func TestShouldCollapsePaste(t *testing.T) {
 	require.False(t, shouldCollapsePaste("./main.go"))
 	require.False(t, shouldCollapsePaste("a\nb\nc"))
 	require.True(t, shouldCollapsePaste("1\n2\n3\n4\n5"))
-	require.Equal(t, "[pasted 5 lines]", pastePlaceholder("1\n2\n3\n4\n5"))
+	require.Equal(t, "[pasted 5 lines: 1 2 3 4 5]", pastePlaceholder("1\n2\n3\n4\n5"))
+}
+
+func TestPastePlaceholderShowsPreview(t *testing.T) {
+	// A collapsed paste must lead with its actual text, not only a count —
+	// that is what lets the user confirm they pasted the right thing.
+	// Newlines and tabs flatten to single spaces so the preview stays on
+	// one line; content under the preview bound is shown in full.
+	require.Equal(t,
+		"[pasted 6 lines: func main() {  fmt.Println(\"hi\") } more more more]",
+		pastePlaceholder("func main() {\n\tfmt.Println(\"hi\")\n}\nmore\nmore\nmore"))
+
+	// Long single-line pastes clip at pastePreviewChars with an ellipsis.
+	long := strings.Repeat("x", pastePreviewChars+50)
+	got := pastePlaceholder(long)
+	require.Contains(t, got, strings.Repeat("x", pastePreviewChars)+"…")
+	require.Contains(t, got, fmt.Sprintf("[pasted %d chars: ", pastePreviewChars+50))
+
+	// Short content under the preview bound is shown in full, no ellipsis.
+	require.Equal(t, "[pasted 12 chars: hello world!]", pastePlaceholder("hello world!"))
+}
+
+// The preview is echoed verbatim into the composer, so it must never carry
+// control bytes — a paste of coloured terminal output would otherwise
+// re-emit raw ANSI escapes and let the terminal interpret them.
+func TestPastePlaceholderStripsControlBytes(t *testing.T) {
+	got := pastePlaceholder("\x1b[31mERROR\x1b[0m something failed\nsecond line")
+	require.NotContains(t, got, "\x1b")
+	require.NotContains(t, got, "[31m")
+	require.Contains(t, got, "ERROR")
+	require.Contains(t, got, "something failed")
+
+	// A bare BEL/backspace must not survive either.
+	require.NotContains(t, pastePlaceholder("a\x07b\x08c\nd\ne\nf"), "\x07")
+	require.NotContains(t, pastePlaceholder("a\x07b\x08c\nd\ne\nf"), "\x08")
+}
+
+// Truncated or unusual escape sequences must not panic or leak the ESC
+// byte — the preview is echoed straight into the terminal.
+func TestPastePreview_EscapeSequenceBounds(t *testing.T) {
+	for _, in := range []string{"\x1b", "\x1b[", "\x1b[3", "\x1b]", "\x1b]0;title", "\x1bP", "\x1b\x1b\x1b"} {
+		require.NotContains(t, pastePreview(in), "\x1b", "input %q leaked ESC", in)
+	}
+	// OSC terminated by ST (ESC \) and by BEL both resume after the sequence.
+	require.Contains(t, pastePreview("\x1b]0;t\x1b\\visible"), "visible")
+	require.Contains(t, pastePreview("\x1b]0;t\x07visible"), "visible")
+	// A two-rune ESC sequence leaves the following text intact.
+	require.Contains(t, pastePreview("\x1bMvisible"), "visible")
 }
 
 func TestHasWordMotionModifier(t *testing.T) {

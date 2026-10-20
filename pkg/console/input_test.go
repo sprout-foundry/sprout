@@ -395,10 +395,10 @@ func TestRenderLineWithCollapsedPastes(t *testing.T) {
 	ir.cursorPos = len("preline1\nline2")
 
 	display, cursor := ir.renderLineWithCollapsedPastes()
-	if display != "pre[pasted 2 lines]post" {
+	if display != "pre[pasted 2 lines: line1 line2]post" {
 		t.Fatalf("unexpected display: %q", display)
 	}
-	if cursor != len("pre[pasted 2 lines]") {
+	if cursor != len("pre[pasted 2 lines: line1 line2]") {
 		t.Fatalf("unexpected display cursor: %d", cursor)
 	}
 }

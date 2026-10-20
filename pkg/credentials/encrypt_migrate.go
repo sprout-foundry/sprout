@@ -204,9 +204,18 @@ func AtomicModifyForDir(configDir string, fn func(Store) error) error {
 		return fmt.Errorf("failed to get API keys path: %w", err)
 	}
 
-	store, err := loadFromPath(path)
-	if err != nil {
-		return fmt.Errorf("failed to load credentials for atomic modify: %w", err)
+	// A first-ever write to a fresh config root has no file yet. Treat a
+	// missing file as an empty store rather than an error, matching Load()
+	// and LoadFromDir() — otherwise the very first `--global`/`--local`
+	// set fails on a clean install.
+	var store Store
+	if _, statErr := os.Stat(path); os.IsNotExist(statErr) {
+		store = Store{}
+	} else {
+		store, err = loadFromPath(path)
+		if err != nil {
+			return fmt.Errorf("failed to load credentials for atomic modify: %w", err)
+		}
 	}
 	if store == nil {
 		store = Store{}

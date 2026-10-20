@@ -232,6 +232,21 @@ export interface SproutWorkspaceProps {
   children?: ReactNode;
 }
 
+/**
+ * The transport target the events socket was last connected under:
+ * `<agent kind>|<wsURL>` from the wiring that opened it. Module-level because
+ * the socket is — a mount that names a different target takes
+ * `resetAndReconnect` rather than a `connect()` that would no-op on the
+ * still-open socket, so a re-mount that swaps backends reconnects exactly as
+ * an in-place swap does. Null before this page ever wired a workspace.
+ */
+let lastConnectedTarget: string | null = null;
+
+/** Clear the remembered socket target (tests only). */
+export function __resetSproutWorkspaceTransportForTests(): void {
+  lastConnectedTarget = null;
+}
+
 const EMPTY_SHELL_PROPS: WorkspaceShellProps = {
   isMobile: false,
   isTablet: false,
@@ -370,26 +385,40 @@ export function SproutWorkspace({
   // transport, so doing it here would fight the caller's registration and
   // double-connect the stream.
   //
-  // The agent-backend wiring runs in the same effect, after the registration,
-  // so the host is the active one and the adapter install is ordered after the
-  // registration's own host-change hooks rather than racing them.
+  // The effect re-runs when the host changes (it is a dep), so a host that
+  // re-reads its transport in place — a new `agent` backend, a new socket URL
+  // — re-wires the backend and reconnects the stream without a re-mount: the
+  // chat and editor units keep their state (their tree shape is unchanged),
+  // and only the transport is swapped under them.
   //
-  // The connection is deliberately not closed on unmount: the events
-  // transport is a process-lifetime singleton, and disconnecting it marks the
-  // close intentional and exhausts its reconnect attempts, permanently killing
-  // the stream for anything that mounts next (the same reason the app's own
-  // initialization leaves it open across remounts).
+  // The host re-reading its transport is also what the socket needs a nudge
+  // for: `connect()` no-ops on an already-open socket, so a still-connected
+  // stream on the old URL would keep feeding the chat. The transport the last
+  // wire connected to (the backend kind plus the socket URL) is remembered,
+  // and a changed target takes `resetAndReconnect` instead — it closes the
+  // socket without marking the close intentional and reconnects immediately,
+  // resolving the URL fresh against the new host (so its `transport.wsURL`
+  // wins). The first wire has no prior socket, so it keeps the plain
+  // `connect()`. The memory is module-level, like the socket it tracks: the
+  // events transport is a process-lifetime singleton, so a re-mount with a
+  // changed transport is the same swap an in-place re-render is — a fresh
+  // instance must still see the old socket's target to reconnect it.
   const agentBackendKind = host?.transport.agent?.kind;
   useEffect(() => {
     if (ambient || !host) return;
+    const target = `${agentBackendKind ?? 'none'}|${host.transport.wsURL}`;
     const restoreActiveHost = registerActiveHost(host);
     // Wire the backend before connecting, so a wasm backend reports "not
     // connected" until its adapter is installed, even if the socket opens first.
     // A host that names no backend starts from the socket's connection
     // state, not whatever an earlier wasm mount left behind.
-    if (agentBackendKind) void wireHostAgentBackend(host, project.repoUrl);
-    else resetHostAgentBackend();
-    chatTransport.eventsProvider.connect();
+    void wireHostAgentBackend(host, project.repoUrl);
+    if (lastConnectedTarget === null || lastConnectedTarget === target) {
+      chatTransport.eventsProvider.connect();
+    } else {
+      chatTransport.eventsProvider.resetAndReconnect();
+    }
+    lastConnectedTarget = target;
     return () => {
       restoreActiveHost();
       if (agentBackendKind === 'wasm') resetHostAgentBackend();

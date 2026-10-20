@@ -107,8 +107,12 @@ Rules:
   endpoint comes from the transport, not a hard-coded platform path), routes
   the agent's events through the shared event bus, and opens the host project's
   repository (`project.repoUrl`) instead of the `?repo=` URL parameter. A host
-  may switch backends when a daemon becomes available by re-mounting the
-  workspace with a new transport.
+  may switch backends when a daemon becomes available in place — by passing the
+  updated `host` (a new `transport.agent`) to the mounted workspace: the
+  composition re-wires the backend against it (retiring the in-browser adapter
+  it installed, reconnecting the event stream, leaving the chat and editor
+  state in place). Re-mounting the workspace with a new transport also works
+  and is equivalent.
 - A host that runs its agent in-browser can advertise a `browserFiles`
   capability (off by default, on for the hosted agent) and read the
   in-browser workspace's own files read-only — list (path, size, mode, and a

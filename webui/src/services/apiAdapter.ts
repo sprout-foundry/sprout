@@ -17,7 +17,8 @@ export type { APIAdapter, PlatformNavItem } from '@sprout/ui';
 let activeAdapter: APIAdapter | null = null;
 
 /**
- * Fired after installAdapter() sets the active adapter singleton.
+ * Fired after the active adapter singleton changes (installAdapter or
+ * uninstallAdapter).
  *
  * The adapter is installed asynchronously (after the bootstrap fetch resolves),
  * so providers that cache the adapter at mount time listen for this event to
@@ -35,6 +36,26 @@ export function installAdapter(adapter: APIAdapter): void {
   console.warn(`[apiAdapter] Installed: ${adapter.name}`);
   // Notify React providers (PlatformNavProvider, SproutAdapterProvider) that
   // the adapter is available so they re-read the singleton.
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(ADAPTER_INSTALLED_EVENT));
+  }
+}
+
+/**
+ * Uninstall the active adapter, clearing the singleton.
+ *
+ * Pass the adapter instance to clear only if it is the one currently
+ * installed — this is how a mounted workspace uninstalls the adapter its own
+ * wiring installed without touching one the host (or the app's bootstrap)
+ * installed for the page. Omit it to clear whatever is installed. Like
+ * installAdapter, it notifies adapter-aware providers so they re-read the
+ * (now null) singleton.
+ */
+export function uninstallAdapter(adapter?: APIAdapter): void {
+  if (activeAdapter === null) return;
+  if (adapter !== undefined && activeAdapter !== adapter) return;
+  activeAdapter = null;
+  console.warn('[apiAdapter] Uninstalled');
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new Event(ADAPTER_INSTALLED_EVENT));
   }
@@ -59,8 +80,10 @@ export function hasAdapter(): boolean {
  * Returns false when no adapter is installed (local mode) or when the
  * adapter's requiresBackendHealthCheck property is not explicitly true.
  *
- * Adapters are installed once at app startup and never change, so the
- * return value is effectively constant across the application lifecycle.
+ * Read at call time: the singleton normally changes once at startup, but a
+ * mounted workspace that swaps its agent backend in place uninstalls the
+ * in-browser adapter when it moves to a daemon, so a cached answer can go
+ * stale.
  */
 export function requiresBackendHealthCheck(): boolean {
   return activeAdapter?.requiresBackendHealthCheck === true;

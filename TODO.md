@@ -260,7 +260,7 @@ make build-all`.
       Tests: vitest for listing and reading against a populated VFS
       (an edited file, a new file, a runtime-dir file excluded), plus the
       package declaration test. Spec: SP-160 §160a.
-- [ ] **ws.12** Switch the agent backend without a remount. A host
+- [x] **ws.12** Switch the agent backend without a remount. A host
       re-reads `host.transport` only on mount, so moving from the in-browser
       agent to a container daemon forces a remount (the platform's
       `agentKey`), which drops the open editor tabs. Either let a host swap

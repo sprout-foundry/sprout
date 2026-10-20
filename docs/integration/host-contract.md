@@ -135,10 +135,19 @@ the no-wiring default; a wasm backend installs the adapter and the dispatcher).
 A host that composes its own provider stack (ambient mode) owns the wiring.
 
 **Switching backends.** A host may switch backends when a daemon becomes
-available. The supported switch is a **re-mount** with a new transport: the
-composition keys its wiring on the backend, so re-mounting `SproutWorkspace`
-with a transport whose `agent` differs re-runs the wiring against the new
-backend. In-place switching without a re-mount is not supported.
+available. The supported switch is **in place**: the host re-reads its
+`transport` and passes the updated `host` (the new `transport.agent`) to the
+already-mounted `SproutWorkspace`. The composition re-runs its wiring against
+the new backend without a re-mount — it retires the in-browser adapter its
+wasm wiring installed (so the daemon's transport URLs drive the calls again,
+and a stale late-arriving wasm install cannot re-install it), reconnects the
+event stream to the new transport's socket, and leaves the chat and editor
+state untouched (the units keep their state; the session list reloads once
+the stream is connected). An adapter the host installed itself (an ambient
+caller) is never retired by the composition — only the adapter its own wasm
+wiring installed is. Re-mounting the workspace with a new transport also
+works and is equivalent; the in-place swap is the one that keeps the open
+editor tabs.
 
 **How the transport fields are consumed.** A component that mounts a
 workspace in its own provider stack (`SproutWorkspace` with the default

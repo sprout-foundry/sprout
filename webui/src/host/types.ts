@@ -87,8 +87,9 @@ export interface HostTransport {
    * The agent backend this transport selects, when the host chooses one
    * explicitly. Absent means the host did not choose, and Sprout keeps its own
    * default for the build. A host may switch backends when a daemon becomes
-   * available by re-mounting the workspace with a new transport (a re-mount is
-   * the supported switch — see the contract doc).
+   * available by passing the updated transport (a new `agent`) to the mounted
+   * workspace — the composition re-wires the backend in place, and a re-mount
+   * with a new transport is equivalent (see the contract doc).
    */
   agent?: HostAgentBackend;
   /**

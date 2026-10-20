@@ -406,12 +406,11 @@ the model, lost the result.
       third time in one turn returns a short note ("identical to your last
       read — use view_range [a, b] for lines a-b") instead of the content
       again. Tests for each.
-- [ ] **tool.2** Repeated tool calls inside one long turn. An automate
-      coordinator ran the same `shell_command` (a guest-shell probe of
-      `sys.path` and `pip --version`) about 125 times in a row over 30
-      minutes, every 12–15 s, editing nothing, until the owner stopped it.
-      Nothing caught it: the repeat guard covers only `read_file`
-      (tool.1), loop detection covers only security blocks
+- [ ] **tool.2** Repeated tool calls inside one long turn. A coordinator
+      can issue the same `shell_command` over and over (one every few
+      seconds, for tens of minutes) without editing anything, and nothing
+      stops it: the repeat guard covers only `read_file` (tool.1), loop
+      detection covers only security blocks
       (`pkg/agent/seed_tool_security.go`), and the workflow's `no_progress`
       stop (`pkg/workflow/continuation.go`, `MaxIdleTurns`) counts whole
       turns, so a single turn with a high `max_iterations` is never checked.
@@ -428,9 +427,7 @@ the model, lost the result.
       (default 8) or of tool calls with no file change, commit or new
       distinct command (default 60), the turn ends with a `stalled` stop
       reason, a short summary of the repeated call and its last output in
-      the run record, and an event the runner UI shows. Stalls are counted
-      across short near-duplicates too (same command with only a timeout or
-      an echo marker changed).
+      the run record, and an event the runner UI shows.
       (c) In automate, a stalled turn counts as a no-progress turn and the
       continuation prompt for the next turn says which call stalled, so the
       coordinator records the blocker against the item and moves on rather
@@ -441,36 +438,32 @@ the model, lost the result.
       provider that repeats a tool call trips (a) at 3 and (b) at 8; varied
       calls with file edits never trip; the run record carries the stall
       summary.
-- [ ] **tool.3** Loops that are not identical. Two automate stalls slipped
-      past an exact-match guard: (1) each call copied the previous command
-      and appended more of the same clause (`python3 -c "import sys;
-      print(sys.path)"; echo ===;` grew from 1 to 47 copies, `tail -N` from
-      12 to 218), so no two calls matched; (2) a coordinator cycled through
-      three command shapes (rewrite the test file, write a scratch
-      `zz_dbg.test.tsx`, swap a file back from `/tmp`) for 400+ calls, 308 of
-      461 calls being exact repeats of an earlier call but rarely of the
-      previous one. Extend tool.2's guard: (a) near-duplicates — normalise the
-      arguments (collapse whitespace, strip numbers in `tail/head -N`,
-      timeouts and echo markers) and count matches over the turn, not only
-      consecutive ones; (b) runaway repetition inside one call's arguments —
-      a clause repeated more than 5 times in a single command is refused
-      with a note naming the repeated clause (this is the model's
-      generation degenerating, not a useful command); (c) growth — the same
-      normalised call whose arguments grow on each repeat counts as a stall;
-      (d) a working-tree check for the no-progress stop: tool calls that
-      leave the tree unchanged except for scratch files (created and deleted
-      within the window, or matching `zz_*`/`/tmp`) do not count as
-      progress. Tests: replay the two recorded shapes (fixtures from the
-      sessions) and assert each trips within 10 calls; a normal debug session
-      with varied commands and edits does not.
+- [ ] **tool.3** Loops that are not identical. Two loop shapes defeat an
+      exact-match guard: (1) each call copies the previous one and appends
+      more of the same clause, so the arguments grow and no two calls match;
+      (2) the agent cycles through a few command shapes (rewrite a test
+      file, write a scratch test, restore a file from a temp copy), so most
+      calls repeat an earlier call but rarely the previous one. Extend
+      tool.2's guard: (a) near-duplicates — normalise the arguments
+      (collapse whitespace, strip numbers in `tail/head -N`, timeouts and
+      echo markers) and count matches over the turn, not only consecutive
+      ones; (b) runaway repetition inside one call's arguments — a clause
+      repeated more than 5 times in a single command is refused with a note
+      naming the repeated clause (the model's generation is degenerating,
+      not issuing a useful command); (c) growth — the same normalised call
+      whose arguments grow on each repeat counts as a stall; (d) a
+      working-tree check for the no-progress stop: tool calls that leave the
+      tree unchanged except for scratch files (created and deleted within
+      the window, or under the temp dir) do not count as progress. Tests:
+      synthetic fixtures for both shapes trip within 10 calls; a normal debug
+      session with varied commands and edits does not.
 
 ## Agent reliability — reasoning and context on long runs
 
-Diagnosed from two automate stalls (platform and firecracker-lab runners on
-`deepseek-ai/DeepSeek-V4.1-Flash-1017` via DeepInfra): both sessions carried
-zero reasoning on every message and ran to ~500k tokens in one conversation
-before degrading. Given the same bug as a fresh question the model named the
-cause at once; the harness produced the conditions it failed under.
+Long autonomous runs need reasoning actually enabled and a bounded live
+context: without either, a capable model degrades into the loop shapes in
+tool.2/tool.3 well before its context window is full, even when it can
+answer the same question at once from a fresh context.
 
 - [ ] **rel.1** `reasoning_effort` is dropped on every provider but
       OpenRouter. `applyReasoningEffort`
@@ -478,26 +471,22 @@ cause at once; the harness produced the conditions it failed under.
       only when the provider sets `unified_reasoning_param` (OpenRouter) or
       the model name contains `gpt-oss`; for DeepInfra, Chutes, Cerebras,
       Mistral, Ollama Cloud, MiniMax, Z.ai, LM Studio and sprout-local the
-      configured `reasoning_effort` (here `high`) never reaches the request.
-      Models that think by default still think at the provider's default
-      depth; models that need an opt-in never reason — measured on DeepInfra:
-      DeepSeek-V4.1-Flash-1017 returns 0 reasoning tokens with no parameter
-      and ~500 with `reasoning_effort: "high"` (`chat_template_kwargs`
-      `thinking: true` does nothing there). Fix: a per-provider (and, where
-      needed, per-model-family) reasoning mapping in the provider configs —
-      `reasoning_effort` for OpenAI-compatible hosts that accept it
-      (DeepInfra), the provider's native knob where it differs (e.g.
-      DeepSeek's own API `thinking`, Z.ai `thinking.type`, Qwen
-      `enable_thinking` + budget), and an explicit "not supported" — so
-      every configured effort is either applied or reported. When a
+      configured `reasoning_effort` never reaches the request. Models that
+      think by default still think at the provider's default depth; models
+      that need an opt-in never reason — e.g. on DeepInfra,
+      DeepSeek-V4.1-Flash returns 0 reasoning tokens with no parameter and
+      several hundred with `reasoning_effort: "high"` (`chat_template_kwargs`
+      `thinking: true` has no effect there). Fix: a per-provider (and, where
+      needed, per-model-family) reasoning mapping in the provider configs,
+      so every configured effort is either applied or reported. When a
       configured setting cannot be applied, log a warning once per session
       and show it in the run record; never drop it silently. Record
       reasoning tokens per call in the run log (`runlogs/*.jsonl` and the
       automate record) so "0 reasoning tokens" is visible. Tests: request
       building per provider config asserts the field for a reasoning model
-      at each effort; a contract test against a recorded DeepInfra response
-      shows `reasoning_content` captured and replayed (the replay path,
-      `reasoning_content_field`, is already wired).
+      at each effort; a contract test against a recorded (synthetic)
+      DeepInfra response shows `reasoning_content` captured and replayed
+      (the replay path, `reasoning_content_field`, is already wired).
       Default policy: reasoning is on for every model that supports it, on
       every provider and for every persona (coordinator, orchestrator,
       reviewer, subagents, chat), with no configuration needed; turning it
@@ -513,8 +502,7 @@ cause at once; the harness produced the conditions it failed under.
       in `applyModelSpecificSettings`). The same model can take a different
       parameter on different hosts (DeepInfra's `reasoning_effort` vs a
       vendor API's `thinking`), so each provider × family entry is verified
-      by a live probe that shows nonzero reasoning tokens before it ships —
-      only DeepSeek-V4.1-Flash on DeepInfra has been measured so far.
+      by a live probe that shows nonzero reasoning tokens before it ships.
       Tests: for each provider config, a request built with no reasoning
       settings enables reasoning on a reasoning-capable model with that
       family's knob and default; a probe script (`scripts/`) reports
@@ -522,32 +510,32 @@ cause at once; the harness produced the conditions it failed under.
 - [ ] **rel.2** A working-set budget, not a share of the window. Compaction
       triggers at `1 - reserved` (70%) of the model's window
       (`pkg/agent/context_budget.go`): for a 1M-token model that is ~734k, so
-      both stalled sessions ran from one user message to ~470–500k tokens with
-      nothing compacted, and the model degraded from about 200k. Add an
-      absolute ceiling for the live conversation (default 160k tokens,
-      configurable per model and per workflow) that triggers compaction
-      before the window share does, whichever is lower; compaction keeps the
-      task, the plan/notes, the recent tool results and a summary of the rest.
-      In automate: (a) each TODO item starts with a fresh conversation (the
-      item text, the repo state, the previous item's one-paragraph outcome),
-      not the coordinator's full history; (b) when a subagent stops on its
-      iteration cap, the takeover — by the coordinator or a re-delegation —
-      starts from the subagent's summary and the working tree, never inside
-      the coordinator's accumulated context. Tests: a long scripted session
-      compacts at the ceiling; an automate run over three items shows three
-      fresh contexts in the run record; a capped subagent's takeover context
-      stays under the ceiling.
-- [ ] **rel.3** Model catalog freshness. `deepseek-ai/DeepSeek-V4.1-Flash-1017`
-      (and `DeepSeek-V4.1-Flash`) is not in `configs/deepinfra.json`, so
+      an automate coordinator can run from one user message to hundreds of
+      thousands of tokens with nothing compacted, and quality drops long
+      before the trigger. Add an absolute ceiling for the live conversation
+      (default 160k tokens, configurable per model and per workflow) that
+      triggers compaction before the window share does, whichever is lower;
+      compaction keeps the task, the plan/notes, the recent tool results and
+      a summary of the rest. In automate: (a) each TODO item starts with a
+      fresh conversation (the item text, the repo state, the previous item's
+      one-paragraph outcome), not the coordinator's full history; (b) when a
+      subagent stops on its iteration cap, the takeover — by the coordinator
+      or a re-delegation — starts from the subagent's summary and the working
+      tree, never inside the coordinator's accumulated context. Tests: a long
+      scripted session compacts at the ceiling; an automate run over three
+      items shows three fresh contexts in the run record; a capped subagent's
+      takeover context stays under the ceiling.
+- [ ] **rel.3** Model catalog freshness. `deepseek-ai/DeepSeek-V4.1-Flash`
+      and its dated releases are not in `configs/deepinfra.json`, so
       per-model settings, the reasoning tag and pricing do not apply (the
-      context window came from DeepInfra's live `/models`). Add both; when a
+      context window comes from DeepInfra's live `/models`). Add them; when a
       session's model is missing from the catalog, warn once and record it in
       the run record; automate's USD budget must count an uncatalogued
       model's spend (live `/models` pricing, or the provider's usage cost)
-      rather than 0 — firecracker-lab run logs show `cost: 0,
-      tokens_used: 0` for whole subagent runs. Gate: the catalog refresh
-      lists the model; a session on an unknown model logs the warning and a
-      nonzero estimated cost.
+      rather than 0 — subagent run records can show `cost: 0,
+      tokens_used: 0` for whole runs. Gate: the catalog refresh lists the
+      model; a session on an unknown model logs the warning and a nonzero
+      estimated cost.
 
 ## Cost-aware delegation — cheaper models for routine work
 

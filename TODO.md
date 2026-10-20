@@ -572,6 +572,43 @@ answer the same question at once from a fresh context.
       outcome classifier on synthetic responses; ledger skip/re-probe on an
       unchanged vs a changed hash; issue dedupe and close against a fake
       `gh` (no network in unit tests).
+- [ ] **rel.5** Network failures are never retried. A connection reset
+      mid-stream, or the streaming first-token/idle timeout, is built with
+      `agenterrors.NewNetwork` (a `TypedError`, code `network`,
+      `RetryableFor(CodeNetwork)` true), but both LLM retry loops
+      (`pkg/agent/seed_provider_chat_stream.go`, `seed_provider_chat.go`)
+      retry only when `isRetryableProviderError` holds — rate limits or
+      provider-category errors — and `GetCategory`/`IsRetryable`
+      (`pkg/errors/types.go`) only understand `*AgentError`, so a
+      `TypedError` reads as non-retryable everywhere. The turn fails on
+      attempt 1 of 4 with "LLM request failed (network), giving up attempt
+      1/4". Fix, in three parts:
+      (a) Retry: make `GetCategory`/`IsRetryable` (and the `Is*` helpers)
+      understand `TypedError` (map each code to its category and use its
+      `Retryable`), so every caller agrees, and have both loops retry
+      retryable network/timeout errors with the existing backoff. A retry
+      after chunks were already delivered discards them (the hold-back and
+      repetition-guard resets already run per attempt); a non-streaming
+      tool-call turn is safe to resend. The notice says "retrying" with the
+      attempt number and "giving up" only on the final attempt. Tests: a
+      fake SSE server that resets the first stream after N chunks and
+      succeeds on the second (the turn succeeds, no duplicated content);
+      idle and first-token timeouts retry; a 401 still fails at once; the
+      `TypedError` classification table.
+      (b) Connections: give the streaming and non-streaming clients their
+      own `http.Transport` (today they use `http.DefaultTransport`, whose
+      90 s idle pool outlives the idle limits of Cloudflare-fronted
+      providers and home NATs, so a reused connection can be reset on its
+      first read): `IdleConnTimeout` around 30 s, TCP keepalive on the
+      dialer (15 s), and when a reused connection fails before any response
+      byte, retry once at once on a fresh connection without counting it as
+      an attempt. Tests: an `httptest` server that closes idle connections
+      after a short delay; the second request after the delay succeeds.
+      (c) Diagnostics: each network failure records whether the connection
+      was reused (`httptrace` `GotConn.Reused`), time since the request
+      started, time since the last chunk, and chunks received, in the
+      provider-error record and the run log, so stale-pool resets, long
+      silent prefill and mid-stream drops can be told apart.
 
 ## Cost-aware delegation — cheaper models for routine work
 

@@ -467,6 +467,17 @@ export interface HostCapabilities {
    * agent).
    */
   chatSessions: boolean;
+  /**
+   * Read-only access to the in-browser workspace's files: the host may list
+   * the project's files and read a file's bytes, so it can carry them along
+   * when the project moves off the in-browser agent (e.g. into a container).
+   * Offered only when the agent runs in-browser (the transport's agent
+   * backend is the in-browser agent, kind "wasm") and the browser's WASM
+   * shell is reachable; absent or false means the API is unavailable and its
+   * calls reject. A host whose agent runs in a daemon leaves it off — the
+   * daemon serves its own files.
+   */
+  browserFiles?: boolean;
 }
 
 /**

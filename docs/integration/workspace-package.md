@@ -116,8 +116,10 @@ The package exposes three entry points:
   (`WORKSPACE_MODES`, `availableModes`, `registerWorkspaceMode`,
   `resolveWorkspaceMode`, `useWorkspaceMode`), the individual views
   (`ChatView`, `AgentChangesPanel`, editor, files, preview, `ViewsLayout`),
-  the WASM asset seam, and `SproutProviders` (so a host that already
-  imports the views gets the wrapper from the same surface).
+  the in-browser workspace's read-only file API
+  (`listBrowserWorkspaceFiles`, `readBrowserWorkspaceFile`), the WASM asset
+  seam, and `SproutProviders` (so a host that already imports the views gets
+  the wrapper from the same surface).
 - `./providers` — just `SproutProviders` and its props, for a host that
   wraps the views it composes itself without importing the whole views
   graph.
@@ -717,6 +719,48 @@ transactional runs go through relative paths, so they ride the host's
 transport: a host that serves the cloud transactional surface gets working
 escalation. Without that backend the triggers still fire and the user is still
 asked; an approved run fails and the agent is told it did not run.
+
+## In-browser workspace files (move to a container)
+
+When a project's agent runs in the browser (`transport.agent.kind: 'wasm'`),
+its files live in the in-browser WASM shell's virtual filesystem, not on a
+daemon. A host that moves the project into a container (the platform's "run
+in a container" upgrade) must carry along the files the user edited in the
+browser but never pushed, so it needs read access to that in-browser
+workspace. The package exposes two read-only, capability-gated functions for
+exactly that:
+
+```tsx
+import {
+  listBrowserWorkspaceFiles,
+  readBrowserWorkspaceFile,
+} from "@sprout-foundry/workspace/views";
+
+const files = await listBrowserWorkspaceFiles();
+// files: { path, size, mode, differsFromCheckout }[]
+const bytes = await readBrowserWorkspaceFile(files[0].path);
+```
+
+Both are gated on the host's `capabilities.browserFiles` (off by default, on
+for the hosted/cloud host, and only meaningful when the agent is the
+in-browser WASM agent). When the capability is not offered — or the in-browser
+shell is not reachable — the calls reject with a `BrowserFilesUnavailableError`
+whose `code` is `'browser_files_unavailable'`. A host that runs its agent in a
+daemon (the local host) never sets the capability, so the API is unavailable
+and the host reads its files from the daemon instead.
+
+- `listBrowserWorkspaceFiles()` returns the project's own files (path, size,
+  mode) with a `differsFromCheckout` flag: `false` when the bytes already match
+  the repository's checkout (the container's clone carries them, skip the
+  upload), `true` when the file is new or modified or there is no checkout to
+  compare against (carry it). Runtime dirs and `.git` are excluded, and a
+  listing never reads file content.
+- `readBrowserWorkspaceFile(path)` returns one file's bytes. A path that
+  escapes the workspace root or names a runtime dir is refused.
+
+The platform's consumer is its own `BrowserFileCollector`; the contract only
+makes the in-browser workspace readable, so a host can seed a container from
+what the browser actually holds.
 
 ## One workspace per page
 

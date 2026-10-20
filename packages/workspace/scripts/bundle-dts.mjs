@@ -197,6 +197,10 @@ const ENTRIES = [
       "CommandDef",
       "OPEN_COMMAND_PALETTE_EVENT",
       "registerCommandHandler",
+      "listBrowserWorkspaceFiles",
+      "readBrowserWorkspaceFile",
+      "BrowserFilesUnavailableError",
+      "WorkspaceFileEntry",
     ],
   },
   {

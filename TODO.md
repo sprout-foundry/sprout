@@ -243,7 +243,7 @@ make build-all`.
       manifest. Pinned by the package emit test and the artifact test
       (exactly one WASM binary and one `wasm_exec`, plus a single-copy
       size budget derived from the emitted binary).
-- [ ] **ws.11** Host access to the in-browser files. A host that moves a
+- [x] **ws.11** Host access to the in-browser files. A host that moves a
       project off the in-browser WASM agent onto a container (the platform's
       "Run in a container" upgrade) must carry along the files the user
       edited in the browser but never pushed; today the host contract has no

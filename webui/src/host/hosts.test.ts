@@ -102,6 +102,7 @@ describe('localHost', () => {
       verification: true,
       serverGit: true,
       chatSessions: false,
+      browserFiles: false,
     });
   });
 });
@@ -176,6 +177,9 @@ describe('cloudHost', () => {
       verification: false,
       serverGit: false,
       chatSessions: false,
+      // The hosted agent runs in-browser, so the host may read the in-browser
+      // workspace's files (move-to-container). Not a CloudAdapter constant.
+      browserFiles: true,
     });
   });
 

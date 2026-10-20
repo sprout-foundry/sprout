@@ -289,6 +289,24 @@ export type { WorkspaceSearchViewProps } from './WorkspaceSearchView';
 export { WorkspaceTerminalView, resolveWorkspaceTerminalBackend } from './WorkspaceTerminalView';
 export type { WorkspaceTerminalViewProps, WorkspaceTerminalBackend } from './WorkspaceTerminalView';
 
+// The in-browser workspace's read-only file API: the host contract's
+// move-to-container seam. A host that moves a project off the in-browser WASM
+// agent (e.g. into a container) must carry along the files the user edited in
+// the browser but never pushed; this is how it reads them. Both functions are
+// capability-gated (the host must advertise `capabilities.browserFiles` and
+// the agent must run in-browser), so a host that offers nothing gets a stable
+// gate error instead of a crash. The VFS enumeration and the checkout
+// comparison are the same ones the app's own git and file flows use, so the
+// host sees the workspace exactly as the in-browser agent does. A host that
+// never runs the in-browser agent (a daemon backend) leaves the capability off
+// and never calls these.
+export {
+  listBrowserWorkspaceFiles,
+  readBrowserWorkspaceFile,
+  BrowserFilesUnavailableError,
+} from '../services/browserWorkspaceFiles';
+export type { WorkspaceFileEntry } from '../services/browserWorkspaceFiles';
+
 // The command palette unit (composite — requires the webui context stack):
 // the app's palette as an overlay an arrangement places (the default overlay
 // includes it). It opens from its shortcuts inside the workspace and from

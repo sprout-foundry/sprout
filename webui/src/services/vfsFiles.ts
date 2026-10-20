@@ -225,4 +225,105 @@ function flattenEntries(shell: WasmShell, dir: string): Array<{ path: string; mo
   return result;
 }
 
+/**
+ * One file the in-browser VFS holds, with the metadata the directory listing
+ * carries. The path is relative to the workspace root. `size` and `mode` are
+ * 0 when the entry came from the write manifest (which records paths only),
+ * so a consumer treats them as "unknown", not as an empty file.
+ */
+export interface VfsFileEntry {
+  /** Workspace-relative slash path, e.g. 'src/a.ts'. */
+  path: string;
+  /** The file's size in bytes, or 0 when the listing carried no size. */
+  size: number;
+  /** POSIX mode bits as the VFS records them, or 0 when the listing carried no mode. */
+  mode: number;
+}
+
+/** A workspace-relative path the repository's own files must never hold. */
+const isGitFilePath = (relPath: string) => relPath === '.git' || relPath.startsWith('.git/');
+
+/**
+ * The workspace-relative spelling of an absolute VFS path, or '' when the
+ * path is the root itself or lives outside it.
+ */
+function relativeToRoot(absPath: string, root: string): string {
+  if (absPath === root) return '';
+  const normalizedRoot = root.endsWith('/') ? root : root + '/';
+  return absPath.startsWith(normalizedRoot) ? absPath.slice(normalizedRoot.length) : '';
+}
+
+/**
+ * Every file the workspace's own directory holds, with its size and mode:
+ * a read-only view for a host that offers the in-browser files (the
+ * move-to-container collector). Runtime dirs (the agent home, the scratch
+ * space) and .git are excluded, so only the project's own files are
+ * listed. The listing reads no file content — a listing must not.
+ *
+ * The walk uses the binary's listDir, which carries sizes and modes. A
+ * listing error anywhere in the walk (the O_DIRECTORY era, or a per-
+ * directory failure) marks the walk incomplete: the write manifest (which
+ * records paths only, so those entries carry size/mode 0) is folded in so
+ * a file known to have been written is never silently dropped. A healthy,
+ * complete listing trusts listDir alone — an empty workspace is a real
+ * "no files" and the manifest is not consulted.
+ */
+export function listVfsFileEntries(shell: WasmShell): VfsFileEntry[] {
+  const root = workspaceRootOf(shell);
+
+  // The binary's listDir, recursively. A directory whose listing errors is
+  // recorded as a sentinel so the caller can tell the walk was incomplete.
+  const walked: Array<{ path: string; size: number; mode: number; error?: boolean }> = [];
+  walkVfsFileEntries(shell, root, walked);
+  const incomplete = walked.some((entry) => entry.error);
+
+  const entries = walked
+    .filter(
+      (entry) => !entry.error && !isRuntimePath(entry.path, root) && !isGitFilePath(relativeToRoot(entry.path, root)),
+    )
+    .map((entry) => ({ path: relativeToRoot(entry.path, root), size: entry.size, mode: entry.mode }))
+    .filter((entry) => entry.path !== '');
+
+  if (!incomplete) {
+    return entries.sort((a, b) => (a.path < b.path ? -1 : 1));
+  }
+
+  // Incomplete listing: fold in the write manifest (paths only) so a file that
+  // was written but lives in a dropped subtree is still carried.
+  const known = new Set(entries.map((entry) => entry.path));
+  for (const abs of Array.from(getVfsManifestSnapshot())) {
+    if (isRuntimePath(abs, root)) continue;
+    const rel = relativeToRoot(abs, root);
+    if (rel === '' || isGitFilePath(rel) || known.has(rel)) continue;
+    entries.push({ path: rel, size: 0, mode: 0 });
+  }
+  return entries.sort((a, b) => (a.path < b.path ? -1 : 1));
+}
+
+/**
+ * Recursively collect the file entries under dir, skipping .git. A directory
+ * whose listing errors is recorded as an error sentinel (so the caller can
+ * tell the walk was incomplete) rather than silently dropped.
+ */
+function walkVfsFileEntries(
+  shell: WasmShell,
+  dir: string,
+  out: Array<{ path: string; size: number; mode: number; error?: boolean }>,
+): void {
+  const result = shell.listDir(dir);
+  if (result.error) {
+    out.push({ path: dir, size: 0, mode: 0, error: true });
+    return;
+  }
+  for (const entry of result.entries) {
+    const fullPath = dir === '/' ? `/${entry.name}` : `${dir}/${entry.name}`;
+    if (entry.type === 'dir') {
+      if (entry.name === '.git') continue;
+      walkVfsFileEntries(shell, fullPath, out);
+    } else {
+      out.push({ path: fullPath, size: entry.size, mode: entry.mode });
+    }
+  }
+}
+
 export type { WasmDirEntry, WasmShell };

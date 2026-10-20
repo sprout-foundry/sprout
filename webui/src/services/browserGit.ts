@@ -205,6 +205,59 @@ export async function gitStatus() {
   return { staged, unstaged, untracked };
 }
 
+/**
+ * Which of the given workspace-relative files differ from the repository's
+ * checkout (the files a move-to-container must carry rather than re-clone).
+ *
+ * The browser repository's checkout is the committed HEAD; the working tree
+ * is synced from the VFS before the comparison, so each row's WORKDIR is the
+ * VFS's current bytes. A file differs when it is absent from the checkout
+ * (a new file, HEAD 0) or its bytes differ from the checkout (WORKDIR 2); a
+ * file identical to the checkout differs from nothing.
+ *
+ * When there is no checkout to compare against — browser git is not wired,
+ * the repo is fresh (no commits), or the comparison fails — nothing can be
+ * proven to match, so every path is reported as differing: a consumer
+ * carries them all rather than skip one the container's clone may not hold.
+ */
+export async function gitCheckoutDiffers(paths: string[]): Promise<Map<string, boolean>> {
+  const result = new Map<string, boolean>();
+  if (paths.length === 0) return result;
+
+  // Browser git was never wired (a VFS seeded without the git objects, or a
+  // local daemon build): there is no checkout to compare against, so nothing
+  // can be proven to match. Answer without touching the repository.
+  if (!getBrowserGitVfsBridge()) {
+    for (const p of paths) result.set(p, true);
+    return result;
+  }
+
+  let matrix: Array<[string, number, number, number]>;
+  try {
+    await ensureInitialized();
+    await syncVfsToGitFs();
+    matrix = await git.statusMatrix({ fs: getFs().promises, dir: REPO_DIR });
+  } catch {
+    // No checkout to compare (a fresh repo, or the sync failed): carry them all.
+    for (const p of paths) result.set(p, true);
+    return result;
+  }
+
+  const byPath = new Map<string, [string, number, number, number]>();
+  for (const row of matrix) byPath.set(row[0], row);
+  for (const p of paths) {
+    const row = byPath.get(p);
+    if (!row) {
+      // Not in the repository at all: it cannot match the checkout.
+      result.set(p, true);
+      continue;
+    }
+    const [, head, workdir] = row;
+    result.set(p, head === 0 || workdir === 2);
+  }
+  return result;
+}
+
 export async function gitAdd(filepaths: string[]) {
   await ensureInitialized();
   await syncVfsToGitFs();

@@ -295,6 +295,7 @@ helpers).
 | `verification` | Reserved: verification flows and their results UI. No surface reads it yet |
 | `serverGit` | Server-side git, distinct from in-browser git (the Git sidebar's Worktrees tab) |
 | `chatSessions` | The host serves the chat session store (see "Chat session store" below) |
+| `browserFiles` | Optional (absent means `false`). Read-only access to the in-browser workspace's files, offered only when the agent runs in-browser — see "In-browser workspace files" below |
 
 ## The hosts Sprout ships
 
@@ -339,8 +340,9 @@ transport records the same-origin sentinel `''` rather than a fixed host.
 - Capabilities: `ssh`, `git`, `chat`, `workspaceSwitching`, `export`,
   `localTerminal`, `settings`, `automations`, `agentChanges`, `preview`,
   `mcp`, `localModels`, `verification`, `serverGit` are **on**; `folderPicker`,
-  `instances` and `chatSessions` are **off** (the local build keeps its own
-  daemon chat session store).
+  `instances`, `chatSessions` and `browserFiles` are **off** (the local build
+  keeps its own daemon chat session store, and its agent is a local daemon
+  that serves its own files, so the in-browser file API has nothing to add).
 
 ### `cloudHost`
 
@@ -362,7 +364,9 @@ bootstrap adapter.
 - `notifications.post` still forwards to the in-app bus until the platform's
   own sink lands.
 - Capabilities mirror what a hosted build actually exposes:
-  `git`, `chat`, `instances`, `settings` are **on**; `ssh`,
+  `git`, `chat`, `instances`, `settings` and `browserFiles` are **on** (the
+  in-browser agent means the host may read the in-browser workspace's files —
+  see "In-browser workspace files" — to carry them into a container); `ssh`,
   `workspaceSwitching`, `folderPicker`, `export`, `localTerminal`,
   `automations`, `agentChanges`, `preview`, `mcp`, `localModels`,
   `verification`, `serverGit`, `chatSessions` are **off** (the hosted
@@ -483,6 +487,7 @@ const host: SproutHost = {
     verification: false,
     serverGit: false,
     chatSessions: false,
+    browserFiles: false, // optional; true only when the agent runs in-browser
   },
 };
 ```
@@ -623,6 +628,85 @@ conversation across reloads. A workspace mounted through `SproutWorkspace` in
 own mode makes these calls each time the workspace connects (and again after
 a reconnect), so the session list is populated at start. For an in-browser
 agent, "connected" means the adapter is installed (see "Agent backend").
+
+### In-browser workspace files
+
+The in-browser agent's workspace is a virtual filesystem (the WASM shell's
+VFS) plus a browser-side git checkout. A host that moves a project off the
+in-browser agent — the platform's "run in a container" upgrade — must carry
+along the files the user edited in the browser but never pushed. The host
+contract offers that as a capability-gated, read-only file API: when the
+host advertises `capabilities.browserFiles: true` and the agent runs
+in-browser (`transport.agent.kind: 'wasm'`), the host may list the
+project's files and read a file's bytes, so it can seed the container from
+what the browser actually holds rather than from a remote the user has not
+pushed to.
+
+A host whose agent runs in a daemon leaves the capability off (the default):
+the daemon serves its own files, so the browser-side API has nothing to add,
+and the calls below reject.
+
+**The functions** (exported from the views entry, with the types a host
+needs alongside):
+
+```ts
+listBrowserWorkspaceFiles(): Promise<WorkspaceFileEntry[]>;
+readBrowserWorkspaceFile(path: string): Promise<Uint8Array>;
+```
+
+`WorkspaceFileEntry` is one row of the listing:
+
+```ts
+interface WorkspaceFileEntry {
+  path: string;    // workspace-relative slash path, e.g. 'src/a.ts'
+  size: number;    // bytes, or 0 when the listing carried no size
+  mode: number;    // POSIX mode bits, or 0 when the listing carried no mode
+  differsFromCheckout: boolean; // new or modified relative to the browser repo's checkout
+}
+```
+
+`differsFromCheckout` tells a container seed what to skip: `false` means the
+bytes already match the repository's checkout, so the container's own clone
+carries them and the host need not upload them. `true` means the file is new
+or modified relative to the checkout and must be carried. When the browser
+repository has no checkout to compare against (browser git was never wired,
+or the repo has no commits), every file is reported `true` — nothing can be
+proven to match, so the honest default is to carry them all.
+
+The listing enumerates the VFS's own directory (a recursive listing that
+reads no file content) and excludes the runtime dirs (the agent home, the
+scratch space) and `.git`, so a host sees only the project's files. `size`
+and `mode` come from the binary's listing; when the binary's listing is
+broken and the walk falls back to the write manifest (which records paths
+only), both are `0` — a consumer treats `0` as "unknown", not as an empty
+file.
+
+**Reading.** `readBrowserWorkspaceFile` takes the same path spellings the
+file API does elsewhere (workspace-relative or absolute, resolved against the
+workspace root) and returns the file's bytes. A path that resolves outside
+the workspace root or into a runtime dir is refused with an error naming the
+path; an unknown or unreadable file rejects with an error naming the path.
+The read prefers the byte-exact reader and falls back to the text reader
+(re-encoded) when the running binary has no byte reader.
+
+**Gate errors.** When the API is unavailable — the capability is off, the
+agent is not the in-browser agent, or the browser's shell is not reachable —
+both functions reject with a `BrowserFilesUnavailableError` whose `code` is
+`'browser_files_unavailable'`. A host branches on that code (the way it
+branches on the host's other stable error codes); the message is
+human-facing and may change.
+
+**One workspace per page.** The VFS and the browser repository are page-
+scoped module singletons: the listing and the reads describe the one
+in-browser workspace this page holds, and a host that moves it to a
+container reads it while that page (and its shell) is still alive. A
+second `SproutWorkspace` on the page does not get a second file set.
+
+**The platform flow.** The platform's move-to-container upgrade collects the
+files (list, then read the ones that differ from the checkout), uploads
+them, and runs the project in a container seeded from the upload. The
+collector is the platform's own code; the contract's job is only to make
+the in-browser workspace readable by a host that offers the capability.
 
 ## Backend paths for an in-browser-agent host
 

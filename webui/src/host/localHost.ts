@@ -116,5 +116,9 @@ export const localHost: SproutHost = {
     // The local build keeps its own chat session store (the local daemon's
     // /api/chat-sessions*), so it does not advertise a host session store.
     chatSessions: false,
+    // The local agent is the local daemon, which serves its own files; the
+    // in-browser file API is offered only when the agent runs in-browser, so
+    // it is off here.
+    browserFiles: false,
   },
 };

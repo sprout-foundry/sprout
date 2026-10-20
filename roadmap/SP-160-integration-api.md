@@ -109,6 +109,13 @@ Rules:
   repository (`project.repoUrl`) instead of the `?repo=` URL parameter. A host
   may switch backends when a daemon becomes available by re-mounting the
   workspace with a new transport.
+- A host that runs its agent in-browser can advertise a `browserFiles`
+  capability (off by default, on for the hosted agent) and read the
+  in-browser workspace's own files read-only — list (path, size, mode, and a
+  per-file "differs from the checkout" flag) plus byte reads — so it can carry
+  the files the user edited but never pushed when it moves the project into a
+  container ("run in a container"). The API rejects when the capability is off
+  or the shell is unreachable.
 
 See `docs/integration/host-contract.md` for the interface field by field, the
 built-in hosts, and what each former `isCloud` branch became.

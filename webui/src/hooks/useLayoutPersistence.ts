@@ -16,6 +16,8 @@ import {
   loadSavedPanes,
   loadSavedPaneLayout,
   loadSavedPaneSizes,
+  reconcilePaneSizes,
+  evenPaneSizes,
   loadChatPanePlacement,
   loadTabOrder,
   getTabOrderStorageKey,
@@ -116,6 +118,13 @@ export function useLayoutPersistence({
   const restoreLayout = useCallback(() => {
     // The split first: the panes must exist before tabs go back into them.
     let validPaneIds = new Set(panesRef.current.map((p) => p.id));
+    // The pane to fall back to when a saved pane id no longer exists. Set
+    // inside the pane-restore block below; defaults to whatever pane exists.
+    // Hardcoding 'pane-1' orphaned buffers when the user had closed the
+    // primary pane and kept a split-created one: the buffer's paneId matched
+    // no pane, so it appeared in no tab strip yet stayed in state and was
+    // re-saved on every boot.
+    let orphanFallbackPane: string | null = panesRef.current[0]?.id ?? null;
     const savedPanes = loadSavedPanes();
     if (savedPanes && panesRef.current.length === 1) {
       const restoredIds = new Set(savedPanes.map((p) => p.id));
@@ -130,7 +139,14 @@ export function useLayoutPersistence({
       setBuffers(moved);
       // Keep the focused tab focused (its chat stays the active chat).
       const focused = activeBufferIdRef.current ? moved.get(activeBufferIdRef.current) : undefined;
-      const activePane = focused?.paneId && restoredIds.has(focused.paneId) ? focused.paneId : 'pane-1';
+      // Fall back to a pane that actually exists. Hardcoding 'pane-1' broke
+      // when the user closed the primary pane and kept a split-created one:
+      // the active pane became an id absent from restoredIds.
+      // loadSavedPanes guarantees at least one pane.
+      const fallbackPane = savedPanes.find((p) => p.id === 'pane-1')?.id ?? savedPanes[0]?.id ?? null;
+      orphanFallbackPane = fallbackPane;
+      const activePane =
+        focused?.paneId && restoredIds.has(focused.paneId) ? focused.paneId : fallbackPane;
       const shownIn = (paneId: string) => {
         const inPane = Array.from(moved.values()).filter((b) => b.paneId === paneId);
         if (paneId === activePane && focused) return focused.id;
@@ -145,13 +161,17 @@ export function useLayoutPersistence({
       panesRef.current = restoredPanes;
       setPanes(restoredPanes);
       setActivePaneId(activePane);
-      setPaneLayout?.(loadSavedPaneLayout() ?? 'split-vertical');
+      // With a single pane the layout must be 'single' regardless of what was
+      // saved: a stale 'split-*' value alongside one pane is exactly the
+      // broken geometry the user sees. Default the multi-pane case to a
+      // vertical split.
+      const savedLayout = loadSavedPaneLayout();
+      setPaneLayout?.(savedPanes.length === 1 ? 'single' : (savedLayout ?? 'split-vertical'));
       const sizes = loadSavedPaneSizes();
-      setPaneSizes?.(
-        sizes && savedPanes.every((p) => typeof sizes[p.id] === 'number')
-          ? sizes
-          : Object.fromEntries(savedPanes.map((p) => [p.id, 100 / savedPanes.length])),
-      );
+      const paneIds = savedPanes.map((p) => p.id);
+      // Reconcile against the panes that actually exist: a closed pane's size
+      // entry must not survive into the restored layout.
+      setPaneSizes?.(reconcilePaneSizes(sizes, paneIds) ?? evenPaneSizes(paneIds));
       validPaneIds = restoredIds;
     }
 
@@ -167,7 +187,7 @@ export function useLayoutPersistence({
       const name = filePath.split('/').pop() || filePath;
       const dotIndex = name.lastIndexOf('.');
       const ext = dotIndex > 0 ? name.substring(dotIndex + 1) : undefined;
-      const paneId = validPaneIds.has(entry.paneId) ? entry.paneId : 'pane-1';
+      const paneId = validPaneIds.has(entry.paneId) ? entry.paneId : orphanFallbackPane;
       const bufferId = `buffer-file-${Date.now()}-${index}`;
       pathToBufferId.set(filePath, bufferId);
       return {

@@ -17,6 +17,10 @@ import {
   dispose,
   initBeforeUnloadFlush,
   getLayoutStorageKey,
+  getPanesStorageKey,
+  loadSavedPanes,
+  reconcilePaneSizes,
+  evenPaneSizes,
   type CursorPosition,
   type ScrollPosition,
   type BufferLayoutEntry,
@@ -736,6 +740,133 @@ describe('full round-trip', () => {
     expect(loaded).not.toBeNull();
     expect(loaded!.activePaneId).toBe('debounced');
     expect(loaded!.buffers[0].cursorPosition).toEqual(makeCursor(10, 5));
+  });
+});
+
+// ===========================================================================
+// Pane structure persistence: closing a pane must not strand the size map
+// ===========================================================================
+//
+// Regression: closing the *primary* pane (pane-1) and keeping a split-created
+// pane left localStorage holding a pane list without pane-1, while paneSizes
+// and paneLayout were written by separate effects. loadSavedPanes() rejected
+// the list (it required pane-1 and >= 2 panes), so restore skipped the pane
+// block entirely and the app booted with a default pane-1 while paneSizes on
+// disk still described the survivor. The size map and the pane list then
+// disagreed, and the bad geometry survived reload.
+
+describe('loadSavedPanes', () => {
+  it('accepts a single surviving pane that is not pane-1', () => {
+    // Exactly the state observed after closing pane-1 and keeping the
+    // split-created pane.
+    window.localStorage.setItem(
+      getPanesStorageKey(),
+      JSON.stringify([{ id: 'pane-1792502003579', position: 'secondary' }]),
+    );
+
+    const panes = loadSavedPanes();
+    expect(panes).not.toBeNull();
+    expect(panes).toEqual([{ id: 'pane-1792502003579', position: 'secondary' }]);
+  });
+
+  it('accepts a single pane-1 (the default, unsplit state)', () => {
+    window.localStorage.setItem(getPanesStorageKey(), JSON.stringify([{ id: 'pane-1', position: 'primary' }]));
+
+    const panes = loadSavedPanes();
+    expect(panes).not.toBeNull();
+    expect(panes).toEqual([{ id: 'pane-1', position: 'primary' }]);
+  });
+
+  it('accepts a split whose primary pane was closed', () => {
+    window.localStorage.setItem(
+      getPanesStorageKey(),
+      JSON.stringify([
+        { id: 'pane-2', position: 'secondary' },
+        { id: 'pane-3', position: 'tertiary' },
+      ]),
+    );
+
+    const panes = loadSavedPanes();
+    expect(panes).not.toBeNull();
+    expect(panes).toHaveLength(2);
+  });
+
+  it('returns null for an empty or malformed list', () => {
+    window.localStorage.setItem(getPanesStorageKey(), JSON.stringify([]));
+    expect(loadSavedPanes()).toBeNull();
+
+    window.localStorage.setItem(getPanesStorageKey(), 'not json');
+    expect(loadSavedPanes()).toBeNull();
+  });
+
+  it('drops entries without a string id', () => {
+    window.localStorage.setItem(
+      getPanesStorageKey(),
+      JSON.stringify([{ id: 'pane-1', position: 'primary' }, { position: 'secondary' }, null]),
+    );
+    expect(loadSavedPanes()).toEqual([{ id: 'pane-1', position: 'primary' }]);
+  });
+});
+
+describe('reconcilePaneSizes', () => {
+  it('drops a closed pane and renormalises the survivor to 100', () => {
+    // The observed broken state: sizes mention only the surviving pane.
+    const result = reconcilePaneSizes({ 'pane-1792502003579': 100 }, ['pane-1792502003579']);
+    expect(result).toEqual({ 'pane-1792502003579': 100 });
+  });
+
+  it('drops entries for panes that no longer exist', () => {
+    const result = reconcilePaneSizes({ 'pane-1': 50, 'pane-2': 50 }, ['pane-2']);
+    expect(result).toEqual({ 'pane-2': 100 });
+  });
+
+  it('preserves proportions when every pane has a size', () => {
+    const result = reconcilePaneSizes({ a: 30, b: 70 }, ['a', 'b']);
+    expect(result!.a).toBeCloseTo(30);
+    expect(result!.b).toBeCloseTo(70);
+  });
+
+  it('renormalises sizes that do not sum to 100', () => {
+    const result = reconcilePaneSizes({ a: 1, b: 1 }, ['a', 'b']);
+    expect(result!.a).toBeCloseTo(50);
+    expect(result!.b).toBeCloseTo(50);
+  });
+
+  it('gives a newly added pane an even share of the remainder', () => {
+    const result = reconcilePaneSizes({ a: 50 }, ['a', 'b']);
+    expect(result!.b).toBeCloseTo(50);
+    expect(result!.a).toBeCloseTo(50);
+  });
+
+  it('returns null when nothing usable is saved', () => {
+    expect(reconcilePaneSizes(null, ['a'])).toBeNull();
+    expect(reconcilePaneSizes({}, ['a'])).toBeNull();
+    expect(reconcilePaneSizes({ b: 50 }, ['a'])).toBeNull();
+    expect(reconcilePaneSizes({ a: 0, b: 0 }, ['a', 'b'])).toBeNull();
+    expect(reconcilePaneSizes({ a: 50 }, [])).toBeNull();
+  });
+
+  it('ignores non-finite and non-numeric entries', () => {
+    const result = reconcilePaneSizes({ a: 50, b: Number.NaN } as unknown as Record<string, number>, ['a', 'b']);
+    expect(result!.a).toBeCloseTo(50);
+    expect(result!.b).toBeCloseTo(50);
+  });
+
+  it('always sums to 100', () => {
+    const result = reconcilePaneSizes({ a: 10, b: 20, c: 30 }, ['a', 'b', 'c', 'd']);
+    const total = Object.values(result!).reduce((s, v) => s + v, 0);
+    expect(total).toBeCloseTo(100);
+  });
+});
+
+describe('evenPaneSizes', () => {
+  it('splits evenly', () => {
+    expect(evenPaneSizes(['a', 'b'])).toEqual({ a: 50, b: 50 });
+    expect(evenPaneSizes(['a'])).toEqual({ a: 100 });
+  });
+
+  it('handles the empty list', () => {
+    expect(evenPaneSizes([])).toEqual({});
   });
 });
 

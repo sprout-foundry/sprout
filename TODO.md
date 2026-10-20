@@ -406,6 +406,41 @@ the model, lost the result.
       third time in one turn returns a short note ("identical to your last
       read — use view_range [a, b] for lines a-b") instead of the content
       again. Tests for each.
+- [ ] **tool.2** Repeated tool calls inside one long turn. An automate
+      coordinator ran the same `shell_command` (a guest-shell probe of
+      `sys.path` and `pip --version`) about 125 times in a row over 30
+      minutes, every 12–15 s, editing nothing, until the owner stopped it.
+      Nothing caught it: the repeat guard covers only `read_file`
+      (tool.1), loop detection covers only security blocks
+      (`pkg/agent/seed_tool_security.go`), and the workflow's `no_progress`
+      stop (`pkg/workflow/continuation.go`, `MaxIdleTurns`) counts whole
+      turns, so a single turn with a high `max_iterations` is never checked.
+      Fix, in three layers:
+      (a) Generalise the per-turn repeat guard to every tool: key on the
+      tool name plus its normalised arguments (whitespace collapsed); on the
+      third identical call the tool still runs, but its result is prefixed
+      with a note that this exact call has now run N times with this result,
+      and that repeating it will not change the outcome — change the
+      command, inspect a different signal, or record the blocker and stop.
+      Also note when the output is byte-identical to the previous identical
+      call.
+      (b) A stall stop: after a configurable number of identical calls
+      (default 8) or of tool calls with no file change, commit or new
+      distinct command (default 60), the turn ends with a `stalled` stop
+      reason, a short summary of the repeated call and its last output in
+      the run record, and an event the runner UI shows. Stalls are counted
+      across short near-duplicates too (same command with only a timeout or
+      an echo marker changed).
+      (c) In automate, a stalled turn counts as a no-progress turn and the
+      continuation prompt for the next turn says which call stalled, so the
+      coordinator records the blocker against the item and moves on rather
+      than resuming the same probe; two stalls on the same item mark it
+      skipped for the run.
+      Thresholds live in the workflow config (`stall_identical_calls`,
+      `stall_idle_calls`) with the defaults above. Tests: a scripted
+      provider that repeats a tool call trips (a) at 3 and (b) at 8; varied
+      calls with file edits never trip; the run record carries the stall
+      summary.
 
 ## Cost-aware delegation — cheaper models for routine work
 

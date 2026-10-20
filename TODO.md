@@ -536,6 +536,42 @@ answer the same question at once from a fresh context.
       tokens_used: 0` for whole runs. Gate: the catalog refresh lists the
       model; a session on an unknown model logs the warning and a nonzero
       estimated cost.
+- [ ] **rel.4** A reasoning probe in the pricing audit. Add a step to
+      `.github/workflows/pricing-audit-agent.yml` that runs on every
+      scheduled run, independent of the drift check's skip: `go run
+      ./cmd/audit_pricing --probe-reasoning`. For each catalogued model (per
+      provider, keys from the workflow's existing secrets; a provider without
+      a key is skipped and reported), build the request with sprout's own
+      request path — the provider config and `GenericProvider` exactly as a
+      session would, with no reasoning settings, so the probe tests sprout's
+      defaults rather than a hand-written call — send one short prompt
+      (bounded `max_tokens`, per-call timeout) and read the response's
+      reasoning tokens / `reasoning_content`. Outcomes: `pass` (reasoning
+      present on a reasoning-capable model), `fail` (a model the catalog tags
+      `reasoning` returned none), `untagged-reasons` (a model without the tag
+      reasons when its family's knob is sent — the tag is missing), `n/a`
+      (not reasoning-capable), `error` (transport, 429/5xx — retried on the
+      next run, never an issue).
+      Once per model: results go in a checked-in ledger
+      (`cmd/audit_pricing/reasoning_probes.json`: provider, model, outcome,
+      reasoning tokens, the knob and value sent, date, and a hash of the
+      model's catalog entry plus the provider's reasoning mapping), committed
+      through the audit PR. A model is probed again only when that hash
+      changes (its config or the mapping changed), so each model costs one
+      call unless sprout's configuration for it changes. Cap probes per run
+      (default 40) so a large discovery batch spreads over days.
+      On `fail` or `untagged-reasons`, open a GitHub issue for that model
+      (label `reasoning-probe`, title `Reasoning not enabled by default:
+      <provider>/<model>`), deduplicated by title against open issues; the
+      body carries the provider, model, the parameter sprout sent, the
+      reasoning token count and the usage fields — never keys or response
+      text. When a later probe of that model passes, comment on and close
+      its issue. The job needs `issues: write`. Run after rel.1 lands, or in
+      a report-only mode (`--no-issues`) until then, since today every
+      opt-in model on a non-OpenRouter provider would fail. Tests: the
+      outcome classifier on synthetic responses; ledger skip/re-probe on an
+      unchanged vs a changed hash; issue dedupe and close against a fake
+      `gh` (no network in unit tests).
 
 ## Cost-aware delegation — cheaper models for routine work
 

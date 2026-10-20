@@ -145,8 +145,7 @@ export function useLayoutPersistence({
       // loadSavedPanes guarantees at least one pane.
       const fallbackPane = savedPanes.find((p) => p.id === 'pane-1')?.id ?? savedPanes[0]?.id ?? null;
       orphanFallbackPane = fallbackPane;
-      const activePane =
-        focused?.paneId && restoredIds.has(focused.paneId) ? focused.paneId : fallbackPane;
+      const activePane = focused?.paneId && restoredIds.has(focused.paneId) ? focused.paneId : fallbackPane;
       const shownIn = (paneId: string) => {
         const inPane = Array.from(moved.values()).filter((b) => b.paneId === paneId);
         if (paneId === activePane && focused) return focused.id;

@@ -33,7 +33,7 @@
       {
         "cached_input_cost": 0.007,
         "context_length": 1048576,
-        "description": "DeepSeek V4 Flash - efficient MoE model (284B total, 13B active) with 1M context",
+        "description": "DeepSeek V4 Flash - efficient MoE model (284B total, 13B active) with 1M context. Retired on August 27, 2026; requests are served by deepseek-v4.1-flash",
         "id": "deepseek-v4-flash",
         "input_cost": 0.22,
         "name": "DeepSeek V4 Flash",
@@ -46,7 +46,7 @@
       {
         "cached_input_cost": 0.007,
         "context_length": 1048576,
-        "description": "DeepSeek V4 Flash 0731 - official V4-Flash release with enhanced agentic capabilities",
+        "description": "DeepSeek V4 Flash 0731 - official V4-Flash release with enhanced agentic capabilities. Retired on August 27, 2026; requests are served by deepseek-v4.1-flash",
         "id": "deepseek-v4-flash:0731",
         "input_cost": 0.22,
         "name": "DeepSeek V4 Flash 0731",
@@ -86,7 +86,7 @@
       {
         "cached_input_cost": 0.2,
         "context_length": 200000,
-        "description": "GLM-5.1 - Z.AI flagship agentic coding model with 200K context",
+        "description": "GLM-5.1 - Z.AI flagship agentic coding model with 200K context. Retired on September 25, 2026; superseded by GLM-5.2 and GLM-5.3",
         "id": "glm-5.1",
         "input_cost": 1,
         "name": "GLM-5.1",
@@ -259,7 +259,7 @@
       {
         "cached_input_cost": 0.007,
         "context_length": 1048576,
-        "description": "DeepSeek V4 Flash preview - Mixture-of-Experts model (284B total, 13B active) built for efficient reasoning across a 1M-token context window",
+        "description": "DeepSeek V4 Flash preview - Mixture-of-Experts model (284B total, 13B active) with a 1M-token context window. Retired on August 27, 2026; requests are served by deepseek-v4.1-flash",
         "id": "deepseek-v4-flash:preview",
         "input_cost": 0.22,
         "name": "DeepSeek V4 Flash Preview",

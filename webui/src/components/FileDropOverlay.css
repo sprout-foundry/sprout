@@ -60,18 +60,20 @@
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
-/* Light theme adjustments */
-:root[data-theme='light'] .file-drop-overlay {
+/* Light theme adjustments. The selectors are attribute-only (no `:root`) so
+ * they also apply in a host page, where the theme attribute lands on the
+ * workspace root rather than the document element. */
+[data-theme='light'] .file-drop-overlay {
   background: rgba(244, 247, 251, 0.85);
 }
 
-:root[data-theme='light'] .file-drop-overlay-content {
+[data-theme='light'] .file-drop-overlay-content {
   background: var(--bg-elevated);
   border-color: var(--accent-primary);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
 }
 
-:root[data-theme='light'] .file-drop-overlay-text {
+[data-theme='light'] .file-drop-overlay-text {
   color: var(--text-primary);
   text-shadow: none;
 }

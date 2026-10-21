@@ -1,0 +1,11 @@
+/* The package stylesheet a host page loads.
+ *
+ * The package's views are styled by `@sprout-foundry/workspace/workspace.css`,
+ * every rule of which is scoped to `.sprout-workspace`. That stylesheet
+ * references the design tokens but does not define them — the app defines
+ * them on `:root` (index.css). A host page does not, so importing this file
+ * alongside the stylesheet gives the mounted workspace its token values.
+ *
+ * `ThemeProvider` layers the active theme pack on top of these, on the
+ * workspace root, so a host theme still wins. */
+@import '@sprout-foundry/design/tokens.css';

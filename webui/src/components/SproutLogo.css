@@ -50,17 +50,19 @@
   fill: #68e3ee;
 }
 
-/* Light mode — subtle tinted background + earth + robust green */
-:root[data-theme='light'] .sprout-logo-bg {
+/* Light mode — subtle tinted background + earth + robust green. The selectors
+ * carry no `:root` so they also apply where the theme attribute sits on the
+ * workspace root (a host page) instead of the document element. */
+[data-theme='light'] .sprout-logo-bg {
   fill: #f0f4f8;
 }
-:root[data-theme='light'] .sprout-logo-line {
+[data-theme='light'] .sprout-logo-line {
   stroke: #6b4c2a;
 }
-:root[data-theme='light'] .sprout-logo-accent {
+[data-theme='light'] .sprout-logo-accent {
   stroke: #1ba03d;
 }
-:root[data-theme='light'] .sprout-logo-accent-fill {
+[data-theme='light'] .sprout-logo-accent-fill {
   fill: #1ba03d;
 }
 

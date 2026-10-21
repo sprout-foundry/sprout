@@ -64,6 +64,7 @@ vi.mock('../services/api', () => {
 import { useHost } from '../host';
 import { headlessHost } from '../host/HostProvider';
 import type { SproutHost } from '../host/types';
+import { THEME_PACKS } from '../themes/themePacks';
 import { SproutWorkspace } from './SproutWorkspace';
 import type { SproutProject } from './SproutWorkspace';
 
@@ -141,11 +142,26 @@ describe('a host theme overrides tokens only inside the workspace root', () => {
     expect(document.documentElement.style.getPropertyValue('--accent-primary')).not.toBe('#222222');
   });
 
-  it('writes nothing when the host theme carries no tokens', async () => {
+  it('writes no host override when the host theme carries no tokens', async () => {
     render(<SproutWorkspace project={PROJECT} space="code" host={hostWithTokens({})} />);
     const workspace = await screen.findByTestId('sprout-workspace');
-    // No custom properties on the root beyond what the workspace itself sets.
-    expect(workspace.style.getPropertyValue('--accent-primary')).toBe('');
+    // The root carries the theme pack's value (mirrored so a host page's
+    // workspace is themed), and nothing from the host.
+    const packValue = THEME_PACKS.find((pack) => pack.id === 'atom-one-dark')?.variables['--accent-primary'];
+    expect(packValue).toBeTruthy();
+    await waitFor(() => expect(workspace.style.getPropertyValue('--accent-primary')).toBe(packValue));
+  });
+
+  it('mirrors the theme mode and pack onto the root, so host-page scoped rules match', async () => {
+    render(<SproutWorkspace project={PROJECT} space="code" host={hostWithTokens({}, 'light')} />);
+    const workspace = await screen.findByTestId('sprout-workspace');
+    // A host page's `documentElement` is the host's; the workspace carries its
+    // own `data-theme` for the `[data-theme='light'] .x` rules, and the pack's
+    // variables for the tokens those rules and the components read.
+    await waitFor(() => expect(workspace.getAttribute('data-theme')).toBe('light'));
+    const pack = THEME_PACKS.find((candidate) => candidate.id === 'atom-one-light');
+    expect(pack).toBeTruthy();
+    expect(workspace.style.getPropertyValue('--accent-primary')).toBe(pack!.variables['--accent-primary']);
   });
 
   it('ignores non-custom-property keys (a token is a CSS custom property)', async () => {
@@ -162,7 +178,7 @@ describe('a host theme overrides tokens only inside the workspace root', () => {
     expect(workspace.style.color).toBe('');
   });
 
-  it('clears the overrides it wrote when the workspace unmounts', async () => {
+  it('clears the host overrides it wrote when the workspace unmounts', async () => {
     const { unmount } = render(
       <SproutWorkspace project={PROJECT} space="code" host={hostWithTokens({ '--accent-primary': '#8b5cf6' })} />,
     );
@@ -170,7 +186,9 @@ describe('a host theme overrides tokens only inside the workspace root', () => {
     await waitFor(() => expect(workspace.style.getPropertyValue('--accent-primary')).toBe('#8b5cf6'));
 
     unmount();
-    expect(workspace.style.getPropertyValue('--accent-primary')).toBe('');
+    // The override is gone; the theme pack's own value (mirrored onto the root
+    // so it reaches the workspace in a host page) is what remains.
+    expect(workspace.style.getPropertyValue('--accent-primary')).not.toBe('#8b5cf6');
   });
 
   it('clears only the tokens it wrote, leaving an unrelated inline custom property alone', async () => {
@@ -184,7 +202,7 @@ describe('a host theme overrides tokens only inside the workspace root', () => {
     // must not clear it on unmount (it only removes what it wrote).
     workspace.style.setProperty('--some-other-feature', '1');
     unmount();
-    expect(workspace.style.getPropertyValue('--accent-primary')).toBe('');
+    expect(workspace.style.getPropertyValue('--accent-primary')).not.toBe('#8b5cf6');
     expect(workspace.style.getPropertyValue('--some-other-feature')).toBe('1');
   });
 });

@@ -2,6 +2,7 @@ import type { ChatProps } from '@sprout/ui';
 import { useEffect, useMemo, useRef } from 'react';
 import type { ComponentType, ReactNode } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
+import { THEME_VARIABLE_KEYS } from '../themes/themePacks';
 import { HostProvider, registerActiveHost, useHost } from '../host';
 import type { SproutHost } from '../host';
 import { SproutProviders } from '../providers';
@@ -517,16 +518,28 @@ function WorkspaceRoot({
   spaceId: WorkspaceModeId;
   children: ReactNode;
 }): JSX.Element {
-  const { theme } = useTheme();
+  const { theme, themePack } = useTheme();
   const host = useHost();
   const rootRef = useRef<HTMLDivElement>(null);
 
+  // `documentElement` is where `ThemeContext` writes the active pack, and in a
+  // host page that element belongs to the host. Mirror both the pack and the
+  // theme attribute onto this root, then layer the host's own token overrides
+  // (`host.theme.tokens`) on top of the pack. One effect, in this order, so
+  // the overrides always win regardless of which provider re-rendered.
   useEffect(() => {
     const element = rootRef.current;
     if (!element) return;
+    Object.entries(themePack.variables).forEach(([key, value]) => {
+      element.style.setProperty(key, value);
+    });
+    element.setAttribute('data-theme', theme);
     applyHostThemeOverrides(element, resolveHostThemeOverrides(host));
-    return () => clearHostThemeOverrides(element);
-  }, [theme, host]);
+    return () => {
+      clearHostThemeOverrides(element);
+      THEME_VARIABLE_KEYS.forEach((key) => element.style.removeProperty(key));
+    };
+  }, [theme, themePack, host]);
 
   return (
     <div
@@ -535,7 +548,6 @@ function WorkspaceRoot({
       data-testid="sprout-workspace"
       data-project={projectId}
       data-space={spaceId}
-      data-theme={theme}
     >
       {children}
     </div>

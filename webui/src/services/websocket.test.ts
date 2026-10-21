@@ -52,6 +52,9 @@ import { notificationBus } from './notificationBus';
 
 // Mock WebSocket
 const mockSend = vi.fn();
+// The open handler reports this window's focus before anything else, so tests
+// that count sends account for this frame.
+const FOCUS_REPORT = JSON.stringify({ type: 'heartbeat', data: { foreground: false } });
 const mockClose = vi.fn();
 let mockOnOpen = null;
 let mockOnClose = null;
@@ -345,11 +348,13 @@ describe('WebSocketService - Replay on Reconnect', () => {
     mockSend.mockClear();
     triggerWebSocketOpen();
 
-    // Messages should be replayed in order
-    expect(mockSend).toHaveBeenCalledTimes(3);
-    expect(mockSend).toHaveBeenNthCalledWith(1, JSON.stringify(events[0]));
-    expect(mockSend).toHaveBeenNthCalledWith(2, JSON.stringify(events[1]));
-    expect(mockSend).toHaveBeenNthCalledWith(3, JSON.stringify(events[2]));
+    // The open handler reports this window's focus first, then replays the
+    // queued messages in order.
+    expect(mockSend).toHaveBeenCalledTimes(4);
+    expect(mockSend).toHaveBeenNthCalledWith(1, FOCUS_REPORT);
+    expect(mockSend).toHaveBeenNthCalledWith(2, JSON.stringify(events[0]));
+    expect(mockSend).toHaveBeenNthCalledWith(3, JSON.stringify(events[1]));
+    expect(mockSend).toHaveBeenNthCalledWith(4, JSON.stringify(events[2]));
 
     // Queue should be cleared after replay
     expect(ws.getQueuedMessageCount()).toBe(0);
@@ -370,8 +375,10 @@ describe('WebSocketService - Replay on Reconnect', () => {
     mockReadyState = MockWebSocket.OPEN;
     triggerWebSocketOpen();
 
-    // Messages should NOT be sent on initial connection
-    expect(mockSend).not.toHaveBeenCalled();
+    // Messages should NOT be sent on initial connection; only the focus report
+    // goes out.
+    expect(mockSend).toHaveBeenCalledTimes(1);
+    expect(mockSend).toHaveBeenCalledWith(FOCUS_REPORT);
     expect(ws.getQueuedMessageCount()).toBe(2);
   });
 
@@ -554,6 +561,7 @@ describe('WebSocketService - flushQueuedMessages', () => {
 
     mockReadyState = MockWebSocket.OPEN;
     triggerWebSocketOpen(); // Initial connection
+    mockSend.mockClear();
 
     // Queue messages (simulate reconnect scenario)
     mockReadyState = MockWebSocket.CLOSED;
@@ -713,8 +721,9 @@ describe('WebSocketService - Connection Status Events', () => {
       queuedMessageCount: 0, // After replay
     });
 
-    // Verify messages were actually replayed
-    expect(mockSend).toHaveBeenCalledTimes(3);
+    // Verify messages were actually replayed (plus the focus report)
+    expect(mockSend).toHaveBeenCalledTimes(4);
+    expect(mockSend).toHaveBeenNthCalledWith(1, FOCUS_REPORT);
   });
 
   it('connection_status on initial open includes queuedMessageCount', () => {
@@ -753,6 +762,7 @@ describe('WebSocketService - Miscellaneous Queue Tests', () => {
 
     mockReadyState = MockWebSocket.OPEN;
     triggerWebSocketOpen();
+    mockSend.mockClear(); // drop the focus report sent on open
 
     // Send while connected - immediate
     ws.sendEvent({ type: 'immediate1' });
@@ -773,12 +783,13 @@ describe('WebSocketService - Miscellaneous Queue Tests', () => {
     mockSend.mockClear();
     triggerWebSocketOpen();
 
-    // Queued messages should be sent
-    expect(mockSend).toHaveBeenCalledTimes(2);
+    // Queued messages should be sent, after the focus report
+    expect(mockSend).toHaveBeenCalledTimes(3);
+    expect(mockSend).toHaveBeenNthCalledWith(1, FOCUS_REPORT);
 
     // Send again while connected - immediate
     ws.sendEvent({ type: 'immediate2' });
-    expect(mockSend).toHaveBeenCalledTimes(3);
+    expect(mockSend).toHaveBeenCalledTimes(4);
   });
 
   it('handles empty queue flush', () => {
@@ -787,6 +798,7 @@ describe('WebSocketService - Miscellaneous Queue Tests', () => {
 
     mockReadyState = MockWebSocket.OPEN;
     triggerWebSocketOpen();
+    mockSend.mockClear();
 
     const sentCount = ws.flushQueuedMessages();
 

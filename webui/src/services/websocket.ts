@@ -96,6 +96,19 @@ class WebSocketService {
     }
   }
 
+  /** Report this window's focus to the server. Several windows of one client
+   *  share an event bus, and a question to the user (ask_user) is only shown
+   *  on the window that is on screen — see the server's window_focus.go. A
+   *  window that comes forward says so here and starts receiving questions. */
+  reportFocus(): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    try {
+      this.ws.send(JSON.stringify({ type: 'heartbeat', data: { foreground: document.hasFocus() } }));
+    } catch {
+      // best-effort: the next focus change or reconnect reports again
+    }
+  }
+
   static getInstance(): WebSocketService {
     if (!WebSocketService.instance) {
       WebSocketService.instance = new WebSocketService();
@@ -263,6 +276,10 @@ class WebSocketService {
       this.lastPongTime = Date.now();
       this.startPingInterval();
       this.startPongWatchdog();
+
+      // Tell the server whether this window is the one on screen, so a
+      // question meant for the user does not surface behind another window.
+      this.reportFocus();
 
       // Replay queued messages on reconnect (but not on initial connection)
       if (isReconnect && this.pendingQueue.length > 0) {

@@ -11,12 +11,13 @@ import { vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   mockFreeze: vi.fn(),
   mockResume: vi.fn(),
+  mockReportFocus: vi.fn(),
   mockGetInstance: vi.fn(),
   mockFreezeAll: vi.fn(),
   mockResumeAll: vi.fn(),
 }));
 
-const { mockFreeze, mockResume, mockGetInstance, mockFreezeAll, mockResumeAll } = mocks;
+const { mockFreeze, mockResume, mockReportFocus, mockGetInstance, mockFreezeAll, mockResumeAll } = mocks;
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -37,6 +38,7 @@ vi.mock('../contexts/EventsContext', () => ({
   useEvents: () => ({
     freeze: mocks.mockFreeze,
     resume: mocks.mockResume,
+    reportFocus: mocks.mockReportFocus,
     connect: vi.fn(),
     disconnect: vi.fn(),
     onEvent: vi.fn(),
@@ -331,5 +333,43 @@ describe('usePageVisibility', () => {
     expect(mockResume).toHaveBeenCalledTimes(1);
     expect(mockFreezeAll).not.toHaveBeenCalled();
     expect(mockResumeAll).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: window focus reporting
+// ---------------------------------------------------------------------------
+
+describe('usePageVisibility — window focus reporting', () => {
+  it('reports focus when the window gains focus and blur when it loses it', () => {
+    // eslint-disable-next-line testing-library/no-unnecessary-act
+    act(() => {
+      root.render(createElement(HookRunner));
+    });
+
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+    });
+    expect(mockReportFocus).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      window.dispatchEvent(new Event('blur'));
+    });
+    expect(mockReportFocus).toHaveBeenCalledTimes(2);
+  });
+
+  it('stops reporting focus after unmount', () => {
+    // eslint-disable-next-line testing-library/no-unnecessary-act
+    act(() => {
+      root.render(createElement(HookRunner));
+    });
+    act(() => {
+      root.unmount();
+    });
+    mockReportFocus.mockClear();
+
+    window.dispatchEvent(new Event('focus'));
+
+    expect(mockReportFocus).not.toHaveBeenCalled();
   });
 });

@@ -28,6 +28,8 @@ export function isPageVisible(): boolean {
  * - Calls `freeze()` on `WebSocketService` singleton + all active
  *   `TerminalWebSocketService` instances when the page becomes hidden.
  * - Calls `resume()` on all of them when the page becomes visible again.
+ * - Reports window focus/blur (`reportFocus()`) so the server knows which
+ *   window is on screen when several are open.
  * - Debounces rapid toggles within `VISIBILITY_DEBOUNCE_MS` to avoid
  *   freeze/resume thrashing (e.g. Cmd+Tab passes through hidden→visible in <1 frame).
  * - Uses a ref guard to prevent double-firing in React StrictMode.
@@ -125,10 +127,27 @@ export function usePageVisibility(): void {
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
+    // Window focus: several windows of one client share an event bus, and the
+    // server only surfaces a question to the user (ask_user) on the window
+    // that is on screen. Report focus changes so the window the user brings
+    // forward starts receiving them, and the one they leave stops.
+    const handleFocusChange = () => {
+      if (!mountedRef.current) return;
+      try {
+        events.reportFocus?.();
+      } catch (err) {
+        debugLog('[visibility] events.reportFocus() failed:', err);
+      }
+    };
+    window.addEventListener('focus', handleFocusChange);
+    window.addEventListener('blur', handleFocusChange);
+
     return () => {
       // Set guard first so any in-flight debounce callback bails out.
       mountedRef.current = false;
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocusChange);
+      window.removeEventListener('blur', handleFocusChange);
       if (debounceTimer !== null) {
         clearTimeout(debounceTimer);
         debounceTimer = null;

@@ -158,6 +158,15 @@ func (m *WebSocketMessage) Validate() error {
 	return nil
 }
 
+// HeartbeatData is the optional data payload for "heartbeat" messages.
+//
+// Foreground is the window's focus: true when it is the window the user is
+// looking at, false when it is behind another. Omitted by clients that do not
+// track focus, which leaves the connection's current state untouched.
+type HeartbeatData struct {
+	Foreground *bool `json:"foreground,omitempty"`
+}
+
 // SubscribeData is the data payload for "subscribe" messages.
 //
 // Events is the historical event-type filter (kept for backward compat,

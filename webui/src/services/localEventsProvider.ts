@@ -51,6 +51,10 @@ export class LocalEventsProvider implements EventsProvider {
     this.ws().resume();
   }
 
+  reportFocus(): void {
+    this.ws().reportFocus();
+  }
+
   resetAndReconnect(): void {
     this.ws().resetAndReconnect();
   }

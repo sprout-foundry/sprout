@@ -1013,4 +1013,15 @@ export interface EventsProvider {
 
   /** Manually flush all queued messages if connected. Returns count flushed, or 0 if not connected. */
   flushQueuedMessages(): number;
+
+  /**
+   * Report this window's focus to the server when it changes (optional).
+   *
+   * A client can have several windows open sharing one event bus; the server
+   * only shows a question to the user (ask_user) on the window that is on
+   * screen. Implementations report focus here so a window that comes forward
+   * starts receiving questions. Providers without window-level focus simply
+   * omit it, and the server keeps its default (every window is a candidate).
+   */
+  reportFocus?(): void;
 }

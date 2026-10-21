@@ -67,6 +67,16 @@ type webClientContext struct {
 	Paused   bool
 	PausedAt time.Time
 
+	// Foreground is the window's last reported focus (heartbeat "foreground"
+	// field). A client with several windows open has one foreground window
+	// and any number behind it; human-facing events (ask_user) are only
+	// written to the foreground one so a question does not surface in a
+	// window the user is not looking at. ForegroundWindow names the window
+	// that made the report and ForegroundAt stamps it (see window_focus.go).
+	Foreground       bool
+	ForegroundWindow string
+	ForegroundAt     time.Time
+
 	// Multi-chat support: one client context (tab) can have multiple
 	// independent chat sessions, each with its own agent state.
 	ChatSessions   map[string]*chatSession

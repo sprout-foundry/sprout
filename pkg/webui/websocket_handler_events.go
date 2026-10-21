@@ -5,6 +5,7 @@ package webui
 // Package webui: WebSocket event forwarding and message dispatch (split from websocket_handler.go)
 
 import (
+	"encoding/json"
 	"log/slog"
 	"strings"
 	"time"
@@ -58,8 +59,13 @@ func (ws *ReactWebServer) shouldForwardEventToConnection(event events.UIEvent, c
 	// timeout. Answers are request-ID scoped and single-winner
 	// (AskUserManager.RespondToAskUser), so rendering the dialog on every
 	// window is safe; the cancel event dismisses the losers.
+	//
+	// The fan-out stops at the window the user is actually looking at: a
+	// window that reports itself behind another (heartbeat "foreground")
+	// skips the question, so the dialog does not pop up on a background
+	// window. Windows that never report focus stay in the fan-out.
 	if event.Type == events.EventTypeAskUserRequest {
-		return true
+		return connInfo.isForeground()
 	}
 
 	// Extract target client_id and chat_id from event
@@ -179,6 +185,20 @@ func (ws *ReactWebServer) shouldForwardEventToConnection(event events.UIEvent, c
 	}
 }
 
+// connectionInfo returns the ConnectionInfo registered for a connection, or
+// nil when the registry has no entry (tests that drive handlers directly).
+func (ws *ReactWebServer) connectionInfo(safeConn *SafeConn) *ConnectionInfo {
+	if safeConn == nil {
+		return nil
+	}
+	v, ok := ws.connections.Load(safeConn.Conn())
+	if !ok {
+		return nil
+	}
+	ci, _ := v.(*ConnectionInfo)
+	return ci
+}
+
 // handleWebSocketMessage processes incoming WebSocket messages.
 //
 // The `daemon`, `userID`, and `chatID` parameters drive Mode-2-aware
@@ -200,7 +220,13 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID s
 		// The read goroutine updates lastMessage on any successful read
 
 	case AllowedMessageTypeHeartbeat:
-		ws.handleHeartbeatMessage(safeConn, clientID)
+		var hb HeartbeatData
+		if msg.Data != nil {
+			if err := json.Unmarshal(msg.Data, &hb); err != nil {
+				ws.log().Warn("invalid WebSocket heartbeat data", slog.String("session_id", sessionID), slog.Any("err", err))
+			}
+		}
+		ws.handleHeartbeatMessage(safeConn, clientID, ws.connectionInfo(safeConn), &hb)
 
 	case AllowedMessageTypePause:
 		// Tab backgrounded — keep any in-flight query running in the background

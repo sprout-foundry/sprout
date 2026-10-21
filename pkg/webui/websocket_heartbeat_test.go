@@ -93,7 +93,7 @@ func TestHeartbeatMessageUpdatesLastSeen(t *testing.T) {
 	pair := newTestingConnPair(t)
 	defer pair.server.Close()
 
-	server.handleHeartbeatMessage(pair.server, "test-client")
+	server.handleHeartbeatMessage(pair.server, "test-client", nil, nil)
 
 	// Verify LastSeenAt was updated to a recent time
 	if time.Since(ctx.LastSeenAt) > time.Second {
@@ -129,7 +129,7 @@ func TestHeartbeatMessageSendsAck(t *testing.T) {
 	pair := newTestingConnPair(t)
 	defer pair.server.Close()
 
-	server.handleHeartbeatMessage(pair.server, "test-client")
+	server.handleHeartbeatMessage(pair.server, "test-client", nil, nil)
 
 	_, data, err := pair.client.ReadMessage()
 	if err != nil {
@@ -173,7 +173,7 @@ func TestHeartbeatMessageNonexistentClient(t *testing.T) {
 
 	// Should not panic even though the client context doesn't exist
 	// touchClientLastSeen handles this gracefully (does nothing)
-	server.handleHeartbeatMessage(pair.server, "nonexistent-client")
+	server.handleHeartbeatMessage(pair.server, "nonexistent-client", nil, nil)
 
 	// Should still receive heartbeat_ack
 	_, data, err := pair.client.ReadMessage()
@@ -202,7 +202,7 @@ func TestHeartbeatMessageDefaultClientID(t *testing.T) {
 	defer pair.server.Close()
 
 	// Empty clientID should be normalized to defaultWebClientID
-	server.handleHeartbeatMessage(pair.server, "")
+	server.handleHeartbeatMessage(pair.server, "", nil, nil)
 
 	// Verify the default client's LastSeenAt was updated
 	if time.Since(ctx.LastSeenAt) > time.Second {

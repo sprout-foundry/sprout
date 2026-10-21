@@ -233,7 +233,7 @@ func TestTrackerConcurrentObserve(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, _ = tr.observe("k", "result")
+			_, _ = tr.observe("k", "k", "result")
 			_ = tr.idleCalls()
 			_ = tr.keyCount("k")
 		}()

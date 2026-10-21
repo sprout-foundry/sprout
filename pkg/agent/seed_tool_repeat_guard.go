@@ -9,6 +9,10 @@
 //
 //   - prefix the model-visible result with a repeat nudge from the 3rd
 //     identical call onward (the generalised repeat guard);
+//   - replace the model-visible result of a degenerated call (a clause
+//     repeated more than 5 times in its arguments) with a refusal and mark
+//     it an error, so the model sees the refusal instead of a huge
+//     degenerated result;
 //   - end the in-flight turn (cancel the run context) when a call crosses
 //     a stall threshold, recording a stall summary for the run record and
 //     the continuation loop.
@@ -52,6 +56,11 @@ func (e *repeatGuardExecutor) GetTools() []core.Tool {
 // Execute runs the batch, observes each call against the per-turn repeat
 // guard, and applies the repeat note / stall stop. The returned messages
 // carry the (possibly note-prefixed) content so the model sees the nudge.
+// A call whose arguments carry a runaway clause (one clause repeated more
+// than 5 times — a degenerated command) is executed for real, but its
+// model-visible result is replaced with a refusal naming the clause and the
+// call is NOT observed by the repeat guard (a refused call is not a call the
+// model should be nudged about).
 func (e *repeatGuardExecutor) Execute(ctx context.Context, calls []core.ToolCall) []core.Message {
 	results := e.inner.Execute(ctx, calls)
 	if e.agent == nil || len(calls) == 0 {
@@ -69,15 +78,23 @@ func (e *repeatGuardExecutor) Execute(ctx context.Context, calls []core.ToolCall
 	}
 
 	stalled := false
-	for i, call := range calls {
+	for _, call := range calls {
 		msg, ok := byID[call.ID]
 		if !ok || msg == nil {
 			continue
 		}
-		toolName := call.Function.Name
 		args := call.Function.Arguments
+		// Runaway refusal: the batch ran (the inner executor saw the call),
+		// but a clause repeated more than 5 times in the arguments marks
+		// the command degenerated — replace the model-visible result with
+		// the refusal and skip the repeat-guard observation for this call.
+		if clause, times := findRunawayClause(args); times > 5 {
+			msg.Content = runawayRefusalNote(clause)
+			msg.Status = core.ToolStatusError
+			continue
+		}
+		toolName := call.Function.Name
 		note, isStalled, summary := e.agent.recordToolCall(toolName, args, msg.Content)
-		_ = i
 		if note != "" {
 			// Prepend the nudge so the model sees it before the result; the
 			// result body is unchanged (it is the actual tool output).

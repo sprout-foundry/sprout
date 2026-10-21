@@ -105,58 +105,39 @@ func stallSummaryTrunc(s string, max int) string {
 	return s[:max] + fmt.Sprintf(" …(truncated, %d bytes total)", len(s))
 }
 
-// toolRepeatState is the per-(tool,args)-key state: how many times the exact
-// call has run this turn, the digest of its last result (for the
-// byte-identical note), and a truncated copy of the last result (for the
-// stall summary).
+// toolRepeatState is the per-(tool,args)-key state: how many times the call
+// has run this turn, the digest of its last result (for the byte-identical
+// note), a truncated copy of the last result (for the stall summary), and
+// the growth bookkeeping (lastLen / grewStreak, maintained by
+// observe's updateGrowthState on the NEAR-key state only — the growth rule
+// consults the near key, which stays stable while the exact arguments grow).
 type toolRepeatState struct {
 	count      int
 	lastDigest string
 	lastOutput string
+	lastLen    int
+	grewStreak int
 }
 
 // toolRepeatTracker counts identical tool calls within one turn and exposes
 // the aggregate the stall stop needs. It is owned by the Agent (guarded by
 // the agent's stallMu, like fileReadsMu guards the read tracker) and reset
-// at each turn boundary.
+// at each turn boundary. keys holds exact (tool,args) state; nearKeys holds
+// the near-normalised (tool,args) state used by the near-duplicate and
+// growth stall rules (tool_repeat_normalise.go).
 type toolRepeatTracker struct {
 	mu            sync.Mutex
 	keys          map[string]*toolRepeatState
+	nearKeys      map[string]*toolRepeatState
 	totalCalls    int
 	distinctCalls int
 }
 
 func newToolRepeatTracker() *toolRepeatTracker {
-	return &toolRepeatTracker{keys: make(map[string]*toolRepeatState)}
-}
-
-// observe records one tool call under key and returns the call's 1-based
-// count for this key and whether its result is byte-identical to the
-// previous identical call's result (false on the first call). It is the
-// single bookkeeping site, so the count, the identical flag, and the
-// aggregate can never diverge.
-func (t *toolRepeatTracker) observe(key, result string) (count int, identical bool) {
-	if t == nil {
-		return 1, false
+	return &toolRepeatTracker{
+		keys:     make(map[string]*toolRepeatState),
+		nearKeys: make(map[string]*toolRepeatState),
 	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if t.keys == nil {
-		t.keys = make(map[string]*toolRepeatState)
-	}
-	st, ok := t.keys[key]
-	if !ok {
-		st = &toolRepeatState{}
-		t.keys[key] = st
-		t.distinctCalls++
-	}
-	st.count++
-	count = st.count
-	t.totalCalls++
-	identical = st.lastDigest != "" && digestOf(result) == st.lastDigest
-	st.lastDigest = digestOf(result)
-	st.lastOutput = stallSummaryTrunc(result, stallSummaryOutputBytes)
-	return count, identical
 }
 
 // idleCalls returns how many calls this turn repeated an already-seen
@@ -210,6 +191,7 @@ func (t *toolRepeatTracker) reset() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.keys = make(map[string]*toolRepeatState)
+	t.nearKeys = make(map[string]*toolRepeatState)
 	t.totalCalls = 0
 	t.distinctCalls = 0
 }
@@ -228,8 +210,10 @@ type StallSummary struct {
 	// Repeats is how many times the call has run this turn.
 	Repeats int `json:"repeats"`
 	// Reason classifies the stall: "identical_calls" (one call hit the
-	// identical-call threshold) or "idle_calls" (a stretch of redundant
-	// calls hit the idle-call threshold).
+	// identical-call threshold), "near_duplicates" (a near-normalised call
+	// hit twice that threshold), "growing_args" (the same call's arguments
+	// grow on each repeat), or "idle_calls" (a stretch of redundant calls
+	// hit the idle-call threshold).
 	Reason string `json:"reason,omitempty"`
 }
 
@@ -292,40 +276,17 @@ func (a *Agent) recordToolCall(toolName, args, result string) (note string, stal
 	// Strip the channel suffix so the note/summary name the bare tool.
 	tool := stripToolChannel(toolName)
 	key := toolArgKey(toolName, args)
-	count, identical := tracker.observe(key, result)
+	nearKey := nearToolArgKey(toolName, args)
+	count, identical := tracker.observe(key, nearKey, result)
 	normArgs := normalizeToolArgs(args)
 
 	if count >= repeatNoteMinCount {
 		note = toolRepeatNote(tool, normArgs, count, identical)
 	}
 
-	switch {
-	case count >= a.stallIdenticalThreshold():
+	if reason, s := stallDecision(tracker, a, tool, normArgs, key, nearKey, count); reason != "" {
 		stalled = true
-		summary = &StallSummary{
-			Tool:    tool,
-			Args:    normArgs,
-			Output:  tracker.lastOutputFor(key),
-			Repeats: count,
-			Reason:  "identical_calls",
-		}
-	case tracker.idleCalls() >= a.stallIdleThreshold() && len(a.TurnChangedPaths()) == 0:
-		// A long stretch of redundant calls with no new distinct command
-		// AND no file change this turn is a stall (the model is spinning,
-		// not making progress). A turn that edits files is making progress,
-		// so it never trips here. A read-only turn whose calls keep
-		// introducing new distinct commands never accumulates redundancy,
-		// so a genuinely varied investigation is safe; cycling among a few
-		// commands (the loop shape this guards) trips, and costs one steered
-		// continuation turn — the thresholds are configurable per workflow.
-		stalled = true
-		summary = &StallSummary{
-			Tool:    tool,
-			Args:    normArgs,
-			Output:  tracker.lastOutputFor(key),
-			Repeats: tracker.idleCalls(),
-			Reason:  "idle_calls",
-		}
+		summary = s
 	}
 	return note, stalled, summary
 }

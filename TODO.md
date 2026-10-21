@@ -438,7 +438,7 @@ the model, lost the result.
       provider that repeats a tool call trips (a) at 3 and (b) at 8; varied
       calls with file edits never trip; the run record carries the stall
       summary.
-- [ ] **tool.3** Loops that are not identical. Two loop shapes defeat an
+- [x] **tool.3** Loops that are not identical. Two loop shapes defeat an
       exact-match guard: (1) each call copies the previous one and appends
       more of the same clause, so the arguments grow and no two calls match;
       (2) the agent cycles through a few command shapes (rewrite a test

@@ -280,6 +280,9 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		// cleared. Safe no-op when no budget is configured.
 		stopBudget := workflow.AttachWorkflowBudget(chatAgent, workflowConfig)
 		defer stopBudget()
+		// Apply the per-turn repeat-guard stall thresholds (no-op when the
+		// config has no stall block). Safe no-op when no stall is configured.
+		workflow.AttachWorkflowStallThresholds(chatAgent, workflowConfig)
 		if workflowConfig != nil && workflowConfig.OrchestrationEnabled() {
 			if eventErr := workflow.EmitWorkflowOrchestrationEvent(workflowConfig, "workflow_run_started", map[string]interface{}{
 				"initial_completed": workflowState.InitialCompleted,

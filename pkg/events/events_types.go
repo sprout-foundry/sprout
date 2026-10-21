@@ -188,6 +188,16 @@ const (
 	EventTypeProgressQuestion     = "progress_question"
 	EventTypeProgressVerification = "progress_verification"
 	EventTypeProgressComplete     = "progress_complete"
+	// EventTypeAgentTurnStalled is published when a single turn is cut
+	// short by the per-turn repeat guard because the model kept re-issuing
+	// the same tool call (or a stretch of calls with no file change / no
+	// new command) past the stall threshold. The payload carries the
+	// repeated tool, its normalised arguments, a short excerpt of the
+	// repeated output, and the repeat count — enough for the runner UI to
+	// show a "turn stalled" notice without replaying the whole turn. It is
+	// published on the agent's event bus (decorated with chat_id etc.) so
+	// the runner/automate UI can surface it.
+	EventTypeAgentTurnStalled = "agent_turn_stalled"
 	// EventTypePreviewPortRegistered is
 	// published by the register_preview_port tool after it successfully
 	// registers a preview port with the platform. In hosted workspaces the

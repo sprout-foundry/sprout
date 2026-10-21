@@ -479,3 +479,19 @@ func LanguageGuardReplacementEvent(chatID, replacement, original, reason string)
 	}
 	return payload
 }
+
+// AgentTurnStalledEvent creates an agent_turn_stalled event payload. The
+// payload mirrors the agent's StallSummary so a runner UI can render a
+// "turn stalled" notice: which tool, its normalised arguments, a short
+// excerpt of the repeated output, and the repeat count. `reason` is the
+// stall classification (identical-call threshold or idle-call threshold).
+func AgentTurnStalledEvent(tool, args, output string, repeats int, reason string) map[string]interface{} {
+	return map[string]interface{}{
+		"tool":      tool,
+		"args":      args,
+		"output":    output,
+		"repeats":   repeats,
+		"reason":    reason,
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	}
+}

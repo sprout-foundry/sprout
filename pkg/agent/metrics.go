@@ -16,6 +16,13 @@ const (
 	RunTerminationMaxIterations       = "max_iterations"
 	RunTerminationInterrupted         = "interrupted"
 	RunTerminationFleetBudgetExceeded = "fleet_budget_exceeded"
+	// RunTerminationStalled is set when a turn is cut short by the per-turn
+	// repeat guard: the model kept issuing the same tool call (or a stretch
+	// of calls with no file change, no new command) past the stall
+	// threshold, so the turn ended rather than spinning. It is distinct
+	// from an interrupt (a user stop) and from a real turn error — the
+	// workflow continuation loop maps it to a no-progress turn.
+	RunTerminationStalled = "stalled"
 )
 
 // GetTotalTokens returns the total tokens used across all requests

@@ -78,6 +78,15 @@ type AgentWorkflowConfig struct {
 	// so permanently skipped items cannot spin forever.
 	Continuation *AgentWorkflowContinuation `json:"continuation,omitempty"`
 
+	// Stall configures the per-turn repeat guard's stall thresholds — how
+	// many identical tool calls (or a stretch of calls with no file change
+	// and no new distinct command) end a single turn early with a "stalled"
+	// stop reason instead of letting a coordinator re-issue the same probe
+	// for minutes. It applies to every tool the coordinator invokes; the
+	// thresholds are applied to the agent at run start. See
+	// AgentWorkflowStallConfig for the fields and defaults.
+	Stall *AgentWorkflowStallConfig `json:"stall,omitempty"`
+
 	// AllowedPaths declares the external directories the workflow needs
 	// to read or write outside the workspace. Each entry is validated by
 	// AllowedPath.Validate and pre-seeded into the running agent's
@@ -309,6 +318,41 @@ const DefaultContinuationIdlePrompt = "The last turn did not commit or tick any 
 // continuation turn: it tells the coordinator to re-read the TODO file and
 // keep processing without re-deriving its whole plan.
 const DefaultContinuationPrompt = "You have finished the work you described. Re-read TODO.md from your current working directory and continue with the next runnable `[ ]` item, following the same workflow as before. Keep going until no runnable `[ ]` items remain."
+
+// DefaultContinuationStallPrompt follows a turn that STALLED (the repeat
+// guard cut it short because the coordinator kept re-issuing the same tool
+// call or made no progress). It names the stalled call and tells the
+// coordinator to record the blocker against the item and MOVE ON rather than
+// resume the same probe — so a permanently stuck item is skipped for the
+// run instead of looped on.
+const DefaultContinuationStallPrompt = "The last turn stalled: it kept issuing the same tool call without making progress, so the repeat guard ended it. Re-read TODO.md from your current working directory. For the item you were working on, record a short note under it describing the blocker (what you tried and why it did not move), then move on to the next runnable `[ ]` item rather than repeating the same probe."
+
+// DefaultStallIdenticalCalls is the default number of identical tool calls
+// (same tool + normalised args) that, within a single turn, ends it early
+// with a "stalled" stop reason. Set the workflow config's
+// stall_identical_calls to override it per run.
+const DefaultStallIdenticalCalls = 8
+
+// DefaultStallIdleCalls is the default number of tool calls with no file
+// change, commit, or new distinct command (a run of redundant calls) that,
+// within a single turn, ends it early with a "stalled" stop reason. Set the
+// workflow config's stall_idle_calls to override it per run.
+const DefaultStallIdleCalls = 60
+
+// AgentWorkflowStallConfig configures the per-turn repeat guard's stall
+// thresholds for a workflow run. The thresholds are applied to the running
+// agent at run start (via SetStallThresholds), and the stall detection runs
+// inside the agent's tool executor for every tool call.
+type AgentWorkflowStallConfig struct {
+	// StallIdenticalCalls is how many times the exact same tool call (same
+	// tool + normalised args) may run within one turn before the turn ends
+	// as "stalled". 0 (unset) uses DefaultStallIdenticalCalls.
+	StallIdenticalCalls int `json:"stall_identical_calls,omitempty"`
+	// StallIdleCalls is how many tool calls with no file change, no new
+	// commit, and no new distinct command may accumulate within one turn
+	// before the turn ends as "stalled". 0 (unset) uses DefaultStallIdleCalls.
+	StallIdleCalls int `json:"stall_idle_calls,omitempty"`
+}
 
 // AllowedPath is a single directory the workflow needs access to outside
 // the workspace. Declared at the workflow level so the user can review

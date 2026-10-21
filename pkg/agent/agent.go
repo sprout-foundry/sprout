@@ -431,6 +431,33 @@ type Agent struct {
 	// Used by the staleness rule in checkWriteStaleness. Reset at turn boundaries.
 	filesReadThisTurn *turnFileTracker
 
+	// toolRepeatTracker is the per-turn, every-tool repeat guard (see
+	// tool_repeat_guard.go): it counts identical tool calls (name +
+	// normalised args) so a 3rd identical call gets a model-visible nudge
+	// and a call past the stall threshold ends the turn as "stalled".
+	// Guarded by stallMu. Reset at turn boundaries (ResetToolRepeatGuardForNewTurn).
+	toolRepeatTracker *toolRepeatTracker
+
+	// lastStallSummary is the stall summary recorded for the current/last
+	// turn (nil when the turn did not stall). Read by the workflow
+	// continuation loop (via GetStallSummary) to treat a stalled turn as a
+	// no-progress turn. Guarded by stallMu.
+	lastStallSummary *StallSummary
+
+	// stallStopFn ends the in-flight turn's conversation loop when a stall
+	// is detected (by cancelling the run context). Installed by
+	// prepareQueryRun, cleared at the turn boundary. Guarded by stallMu.
+	stallStopFn func()
+
+	// Per-turn repeat-guard stall thresholds (configurable via the workflow
+	// config; zero means "use the package defaults"). Guarded by stallMu.
+	stallIdenticalCalls int
+	stallIdleCalls      int
+
+	// stallMu guards the stall-state fields above (toolRepeatTracker,
+	// lastStallSummary, stallStopFn, stallIdenticalCalls, stallIdleCalls).
+	stallMu sync.Mutex
+
 	// fileMetadata holds per-path WorkspaceFileMetadata populated by the platform-side sync layer.
 	// checkWriteStaleness consults it to refuse writes over files with pending unsynced browser edits.
 	fileMetadata *workspaceMetadataStore

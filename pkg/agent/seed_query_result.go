@@ -210,6 +210,36 @@ func (a *Agent) handleQueryResult(qc *queryRunContext, result string, err error)
 		// what the run produced and report it as interrupted. Classifying it
 		// turned the cancelled request into a "temporary error … could not
 		// recover" answer plus a failed-query event.
+		//
+		// A stall is a deliberate stop, not a user interrupt: when the repeat
+		// guard cut the turn (a stall summary is set), the run-context cancel
+		// surfaces as ErrInterrupted here, but the run should be reported as
+		// a no-progress "stalled" turn (the workflow continuation loop treats
+		// it that way and steers the next turn) rather than as a user stop.
+		// The summary is written only by the guard itself, so a user stop
+		// with no trip is still classified as an interrupt. A stop racing an
+		// already-tripped guard reads as the stall: the turn was ending
+		// anyway, and the continuation loop checks the run's own context
+		// before steering another turn, so a stopped run still stops.
+		if a.turnStalledThisRun() {
+			rebase := a.syncSeedStateToSprout(qc.seedAgent)
+			qc.preSeedMsgCount = rebaseQueryStart(qc.preSeedMsgCount, rebase, len(a.state.GetMessages()))
+			// syncSeedStateToSprout re-derives the termination reason from
+			// the assistant count ("completed"); re-assert "stalled" so the
+			// run record reflects the guard's cut, not a clean finish.
+			a.state.SetLastRunTerminationReason(RunTerminationStalled)
+			a.journalSeedState(qc.seedAgent.State())
+			a.publishTurnMetrics()
+			// Name the call that stalled: a subagent's task fails with this
+			// error and the parent coordinator reads it, so "which probe
+			// spun" is the difference between retrying blind and changing
+			// tack.
+			if s := a.GetStallSummary(); s != nil {
+				return "", fmt.Errorf("%w: %s %s ran %d times without progress: %w",
+					ErrTurnStalled, s.Tool, stallSummaryTrunc(s.Args, 160), s.Repeats, err)
+			}
+			return "", fmt.Errorf("%w: %w", ErrTurnStalled, err)
+		}
 		if qc.runCtx.Err() != nil || errors.Is(err, core.ErrInterrupted) {
 			rebase := a.syncSeedStateToSprout(qc.seedAgent)
 			qc.preSeedMsgCount = rebaseQueryStart(qc.preSeedMsgCount, rebase, len(a.state.GetMessages()))

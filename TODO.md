@@ -406,7 +406,7 @@ the model, lost the result.
       third time in one turn returns a short note ("identical to your last
       read — use view_range [a, b] for lines a-b") instead of the content
       again. Tests for each.
-- [ ] **tool.2** Repeated tool calls inside one long turn. A coordinator
+- [x] **tool.2** Repeated tool calls inside one long turn. A coordinator
       can issue the same `shell_command` over and over (one every few
       seconds, for tens of minutes) without editing anything, and nothing
       stops it: the repeat guard covers only `read_file` (tool.1), loop

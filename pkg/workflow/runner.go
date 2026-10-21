@@ -333,6 +333,18 @@ func singleLinePreview(s string) string {
 	return s
 }
 
+// AttachWorkflowStallThresholds applies the workflow config's per-turn
+// repeat-guard stall thresholds to the agent (via SetStallThresholds). It
+// is a no-op when the config has no stall block (the agent keeps its
+// package defaults). Called at run start, before any LLM call, so the
+// coordinator's first turn already observes the configured thresholds.
+func AttachWorkflowStallThresholds(chatAgent *agent.Agent, cfg *AgentWorkflowConfig) {
+	if chatAgent == nil || cfg == nil || cfg.Stall == nil {
+		return
+	}
+	chatAgent.SetStallThresholds(cfg.Stall.StallIdenticalCalls, cfg.Stall.StallIdleCalls)
+}
+
 // AttachWorkflowBudget wires the workflow's USD budget and progress
 // heartbeat onto the agent. Returns a stop function the caller MUST
 // invoke before the agent shuts down — it unregisters callbacks and

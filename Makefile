@@ -271,6 +271,16 @@ test-coverage: prepare-grammars
 # when the library is absent (brew install mlx-c enables it).
 BUILD_TAGS := grammar_blobs_external
 
+# Vite bundles for webui + the workspace package hold the full module graph
+# in one process and OOM at Node's default ~1.2 GB heap on low-memory
+# machines (Termux/Android), crashing `deploy-ui` with
+# "FATAL ERROR: Ineffective mark-compacts near heap limit". 8 GB matches
+# the vitest-worker precedent in webui/vite.config.ts; the ceiling is a
+# limit, not a reservation, so it is harmless on larger machines.
+# Respect a caller-provided NODE_OPTIONS (env or make command line).
+NODE_OPTIONS ?= --max-old-space-size=8192
+export NODE_OPTIONS
+
 build: prepare-grammars
 	@echo "Building sprout (tags: $(BUILD_TAGS))..."
 	GO111MODULE=on go build -tags $(BUILD_TAGS) -o sprout .

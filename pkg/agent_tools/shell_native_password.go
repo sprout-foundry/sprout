@@ -43,11 +43,15 @@ import (
 // Pattern breakdown:
 //   - (?i)                        — case-insensitive
 //   - (?:password|pass\s*phrase)  — "password" or "passphrase" or "pass phrase"
-//   - \s*(?:for\s+\S+)?           — optional "for <user>"
+//   - \s*(?:for\s+.{0,80}?)?      — optional "for <user>", or "for key '<path>'"
 //   - \s*:\s*                     — colon with optional whitespace
 //
+// The "for" clause is a bounded non-greedy span rather than a single token so
+// ssh's `Enter passphrase for key '/home/x/.ssh/id_rsa':` matches — the path
+// contains a space, which a \S+ clause cannot cross.
+//
 // Compiled once at package level to avoid per-command allocation.
-var passwordPromptRe = regexp.MustCompile(`(?i)(?:password|pass\s*phrase)\s*(?:for\s+\S+)?\s*:\s*$`)
+var passwordPromptRe = regexp.MustCompile(`(?i)(?:password|pass\s*phrase)\s*(?:for\s+.{0,80}?)?\s*:\s*$`)
 
 // maxPasswordAttempts caps the number of times we'll try to answer a password
 // prompt. Prevents infinite loops when the password is wrong and the command
@@ -147,14 +151,17 @@ func runShellCommandWithPasswordSupport(ctx context.Context, command string, pro
 	//
 	// To prevent double-close, all close paths run under mu and check
 	// stdinClosed before calling stdinPipe.Close().
-	handlePrompt := func() {
+	handlePrompt := func(secret bool) {
 		mu.Lock()
 		if promptClaimed {
 			mu.Unlock()
 			return
 		}
 		promptClaimed = true
-		if attempts >= maxPasswordAttempts {
+		// Only secret prompts count against the cap: it exists to stop a
+		// wrong-password re-prompt loop, not to limit how many questions a
+		// wizard-style command may ask.
+		if secret && attempts >= maxPasswordAttempts {
 			// Cap reached — don't call the prompter again; just close
 			// stdin so the child EOFs on its next read.
 			if !stdinClosed {
@@ -164,7 +171,9 @@ func runShellCommandWithPasswordSupport(ctx context.Context, command string, pro
 			mu.Unlock()
 			return
 		}
-		attempts++
+		if secret {
+			attempts++
+		}
 		mu.Unlock()
 
 		// Pause the CLI steer reader while the prompter reads from stdin.
@@ -184,7 +193,7 @@ func runShellCommandWithPasswordSupport(ctx context.Context, command string, pro
 			err  error
 		)
 		_ = clihooks.WithCookedStdin(func() error {
-			resp, err = prompter.Prompt(ctx, promptReason)
+			resp, err = PromptForAnswer(ctx, prompter, promptReason, secret)
 			return nil // never propagate; the caller inspects err directly
 		})
 
@@ -200,13 +209,17 @@ func runShellCommandWithPasswordSupport(ctx context.Context, command string, pro
 		}
 
 		mu.Lock()
-		password = resp
-		if !stdinClosed {
-			stdinClosed = true
-			_, _ = fmt.Fprintf(stdinPipe, "%s\n", resp)
-			_ = stdinPipe.Close()
+		defer mu.Unlock()
+		if secret {
+			password = resp
 		}
-		mu.Unlock()
+		if !stdinClosed {
+			_, _ = fmt.Fprintf(stdinPipe, "%s\n", resp)
+			if secret {
+				stdinClosed = true
+				_ = stdinPipe.Close()
+			}
+		}
 	}
 
 	// streamPipeAndDetect replaces the prior bufio.Scanner-based scanner,
@@ -297,9 +310,9 @@ func runShellCommandWithPasswordSupport(ctx context.Context, command string, pro
 				_, _ = outputBuf.Write([]byte(line))
 
 				trimmed := strings.TrimRight(line, "\r\n")
-				if passwordPromptRe.MatchString(trimmed) {
+				if ok, secret := isInteractivePrompt(trimmed); ok {
 					cancelSettle()
-					handlePrompt()
+					handlePrompt(secret)
 				}
 			}
 		}
@@ -315,17 +328,25 @@ func runShellCommandWithPasswordSupport(ctx context.Context, command string, pro
 				settleTimer = nil
 				if pending.Len() > 0 {
 					snapshot := pending.String()
-					if passwordPromptRe.MatchString(snapshot) {
+					if ok, secret := isInteractivePrompt(snapshot); ok {
 						_, _ = outputBuf.Write([]byte(snapshot))
 						pending.Reset()
-						handlePrompt()
+						handlePrompt(secret)
 					}
 				}
 			case r := <-reads:
 				if len(r.data) > 0 {
+					// New output after an answer means the command moved past
+					// the prompt it was blocked on; a later prompt is a new
+					// question.
+					mu.Lock()
+					if !stdinClosed {
+						promptClaimed = false
+					}
+					mu.Unlock()
 					_, _ = pending.Write(r.data)
 					flushCompleteLines()
-					if pending.Len() > 0 && passwordPromptRe.MatchString(pending.String()) {
+					if ok, _ := isInteractivePrompt(pending.String()); ok {
 						armSettle()
 					} else {
 						cancelSettle()

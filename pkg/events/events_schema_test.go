@@ -252,7 +252,7 @@ func TestEventPayloadsValidateAgainstSchema(t *testing.T) {
 		// Required reason + timestamp; optional request_id.
 		{"input_required", InputRequiredEvent("ask_user", "r1"), "required string + timestamp"},
 		// Required request_id/command/prompt + timestamp.
-		{"password_request", PasswordRequestEvent("r1", "sudo apt install", "[sudo] password for user:"), "required strings + timestamp"},
+		{"password_request", PasswordRequestEvent("r1", "sudo apt install", "[sudo] password for user:", true), "required strings + timestamp"},
 	}
 	for _, c := range cases {
 		validateEventPayload(t, root, c.eventType, c.payload)

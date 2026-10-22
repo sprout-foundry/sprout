@@ -67,7 +67,14 @@ func (c *ExecCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 	// Execute the shell command using the same pattern as direct shell execution
 	console.GlyphShell.Fprintf(c.out(), "Executing: %s", command)
-	result, err := tools.ExecuteShellCommand(context.Background(), command)
+	// The agent's context, not context.Background(): the password prompter,
+	// workspace root, and process manager all travel in the context, so a bare
+	// one leaves sudo/passwd prompts with no surface and the command hangs.
+	ctx := context.Background()
+	if chatAgent != nil {
+		ctx = chatAgent.ShellExecutionContext()
+	}
+	result, err := tools.ExecuteShellCommand(ctx, command)
 	if err != nil {
 		console.GlyphError.Fprintln(c.out(), err.Error())
 		return nil

@@ -126,7 +126,7 @@ func (ws *ReactWebServer) handlePasswordResponse(safeConn *SafeConn, data *Passw
 		return
 	}
 
-	delivered := ag.RespondToPasswordRequest(data.RequestID, data.Password)
+	delivered := ag.RespondToPromptRequest(data.RequestID, data.Password, data.Cancelled)
 	if !delivered {
 		ws.log().Warn("password response request not found or already answered", slog.String("request_id", data.RequestID))
 		_ = safeConn.WriteJSON(map[string]interface{}{

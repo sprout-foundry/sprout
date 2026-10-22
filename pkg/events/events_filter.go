@@ -281,16 +281,22 @@ func EditApprovalRequestEvent(requestID, path, unifiedDiff string, hunks []map[s
 	}
 }
 
-// PasswordRequestEvent (SP-089-3) creates a password_request event payload.
-// requestID uniquely identifies the request so the WebUI can POST a
-// response to /api/password/{requestID}/respond. command is the shell
-// command that triggered the prompt. prompt is the raw prompt text
-// detected on the child's stdout/stderr (e.g., "[sudo] password for user:").
-func PasswordRequestEvent(requestID, command, prompt string) map[string]interface{} {
+// PasswordRequestEvent (SP-089-3) creates the payload for an interactive
+// prompt that a running shell command is blocked on. requestID uniquely
+// identifies the request so the WebUI can POST a response to
+// /api/password/{requestID}/respond. command is the shell command that
+// triggered the prompt; prompt is the raw text detected on the child's
+// stdout/stderr (e.g., "[sudo] password for user:").
+//
+// secret distinguishes a masked answer (password, passphrase) from an
+// ordinary one (a confirmation or a value): the UI masks the input and
+// redacts the answer only when secret is true.
+func PasswordRequestEvent(requestID, command, prompt string, secret bool) map[string]interface{} {
 	return map[string]interface{}{
 		"request_id": requestID,
 		"command":    command,
 		"prompt":     prompt,
+		"secret":     secret,
 		"timestamp":  time.Now().UTC().Format(time.RFC3339),
 	}
 }

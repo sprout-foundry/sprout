@@ -31,6 +31,13 @@ func NewWebUIPasswordPrompter(agent *Agent) *WebUIPasswordPrompter {
 
 // Prompt asks the WebUI to collect a password from the user. Returns ErrNoInteractiveSurface if no event bus or active WebUI clients.
 func (wp *WebUIPasswordPrompter) Prompt(ctx context.Context, reason string) (string, error) {
+	return wp.PromptInput(ctx, reason, true)
+}
+
+// PromptInput asks the WebUI to collect an answer to a shell prompt. When
+// secret is false the dialog renders a plain text field and the answer is
+// treated as ordinary transcript content rather than a credential.
+func (wp *WebUIPasswordPrompter) PromptInput(ctx context.Context, reason string, secret bool) (string, error) {
 	if wp.agent == nil || wp.agent.GetEventBus() == nil || !wp.agent.HasActiveWebUIClients() {
 		return "", tools.ErrNoInteractiveSurface
 	}
@@ -44,23 +51,26 @@ func (wp *WebUIPasswordPrompter) Prompt(ctx context.Context, reason string) (str
 	defer passwordPrompterBroker.cleanup(requestID)
 
 	// TODO: When the shell tool passes a real PasswordRequest with separate command and prompt fields, use those instead.
-	payload := events.PasswordRequestEvent(requestID, reason, reason)
+	payload := events.PasswordRequestEvent(requestID, reason, reason, secret)
 	wp.agent.publishEvent(events.EventTypePasswordRequest, payload)
 	// Notify input-required subscribers (CLI bell, browser notification).
 	wp.agent.publishEvent(events.EventTypeInputRequired, events.InputRequiredEvent("password_request", requestID))
 
-	log.Printf("[password_prompt] request %s — waiting up to %v for WebUI response",
-		requestID, passwordPromptTimeout)
+	log.Printf("[password_prompt] request %s (secret=%v) — waiting up to %v for WebUI response",
+		requestID, secret, passwordPromptTimeout)
 
 	timer := time.NewTimer(passwordPromptTimeout)
 	defer timer.Stop()
 
 	select {
-	case password, ok := <-ch:
+	case resp, ok := <-ch:
 		if !ok {
 			return "", agenterrors.NewAgent("password_prompter", "password channel closed without response", nil)
 		}
-		return password, nil
+		if resp.Cancelled {
+			return "", tools.ErrPromptCancelled
+		}
+		return resp.Value, nil
 	case <-ctx.Done():
 		return "", ctx.Err()
 	case <-timer.C:
@@ -71,5 +81,12 @@ func (wp *WebUIPasswordPrompter) Prompt(ctx context.Context, reason string) (str
 
 // RespondToPasswordRequest delivers a user password to a pending password request. Called by the WebUI handler.
 func (a *Agent) RespondToPasswordRequest(requestID string, password string) bool {
-	return passwordPrompterBroker.respond(requestID, password)
+	return passwordPrompterBroker.respond(requestID, password, false)
+}
+
+// RespondToPromptRequest delivers a user's answer to a pending interactive
+// prompt. cancelled means the user dismissed it, which stops the command
+// rather than answering with an empty value.
+func (a *Agent) RespondToPromptRequest(requestID string, value string, cancelled bool) bool {
+	return passwordPrompterBroker.respond(requestID, value, cancelled)
 }

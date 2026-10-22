@@ -31,7 +31,7 @@ export interface UseSecurityHandlersReturn {
   handleSecurityApprovalResponse: (requestId: string, approved: boolean, action?: SecurityApprovalAction) => void;
   handleSecurityPromptResponse: (requestId: string, response: boolean) => void;
   handleAskUserResponse: (requestId: string, response: string) => void;
-  handlePasswordResponse: (requestId: string, password: string) => void;
+  handlePasswordResponse: (requestId: string, password: string, cancelled?: boolean) => void;
   handleModelSelectionResponse: (model: string) => void;
   handleModelSelectionClose: () => void;
 }
@@ -156,16 +156,25 @@ export function useSecurityHandlers({
   );
 
   // handlePasswordResponse delivers the user's typed password back to the
-  // agent's broker. Empty password = cancel (shell sees EOF on stdin).
+  // agent's broker. An empty password is a legitimate answer for a
+  // non-secret prompt (accept the default), so cancellation is signalled
+  // explicitly: the shell then closes the child's stdin and the command
+  // stops instead of receiving a blank line.
   // CRITICAL: this hook never logs the password value — the dialog's
   // state lives in React (not the store) so nothing in the persistence
   // path captures it either.
   const handlePasswordResponse = useCallback(
-    (requestId: string, password: string) => {
+    (requestId: string, password: string, cancelled = false) => {
       if (!eventsProvider.isConnected()) return;
       eventsProvider.sendEvent({
         type: 'password_response',
-        data: { request_id: requestId, password },
+        data: {
+          request_id: requestId,
+          password,
+          // An empty submission is a real answer; only an explicit dismiss
+          // cancels.
+          cancelled: password === '' && cancelled === true,
+        },
       });
       setState((_prev) => ({ passwordRequest: null }));
     },

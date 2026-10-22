@@ -493,6 +493,7 @@ function AppInner() {
             requestId={state.passwordRequest.requestId}
             command={state.passwordRequest.command}
             prompt={state.passwordRequest.prompt}
+            secret={state.passwordRequest.secret}
             onRespond={handlePasswordResponse}
           />
         )}

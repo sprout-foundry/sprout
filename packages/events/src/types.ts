@@ -608,6 +608,10 @@ export interface PasswordRequestData {
   request_id: string;
   command: string;
   prompt: string;
+  /** True when the answer is a credential: mask the field and redact the value.
+   *  False for an ordinary prompt (a confirmation or a value), which is shown
+   *  in plain text and belongs to the transcript. */
+  secret?: boolean;
   timestamp: string;
   status?: string;
   chat_id?: string;

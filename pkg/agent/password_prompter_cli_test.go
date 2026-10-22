@@ -41,7 +41,7 @@ func TestErrNoInteractiveSurface_IsExported(t *testing.T) {
 
 func TestPasswordPrompterBroker_RegisterRespond(t *testing.T) {
 	b := &passwordPrompterBrokerType{
-		pending: make(map[string]chan string),
+		pending: make(map[string]chan promptResponse),
 	}
 
 	ch := b.register("req-1")
@@ -49,7 +49,7 @@ func TestPasswordPrompterBroker_RegisterRespond(t *testing.T) {
 		t.Fatal("register returned nil channel")
 	}
 
-	if !b.respond("req-1", "hunter2") {
+	if !b.respond("req-1", "hunter2", false) {
 		t.Fatal("respond should succeed for registered request")
 	}
 
@@ -57,24 +57,24 @@ func TestPasswordPrompterBroker_RegisterRespond(t *testing.T) {
 	if !ok {
 		t.Fatal("channel was closed")
 	}
-	if got != "hunter2" {
-		t.Fatalf("expected password 'hunter2', got %q", got)
+	if got.Value != "hunter2" {
+		t.Fatalf("expected password 'hunter2', got %q", got.Value)
 	}
 }
 
 func TestPasswordPrompterBroker_RespondUnknownID(t *testing.T) {
 	b := &passwordPrompterBrokerType{
-		pending: make(map[string]chan string),
+		pending: make(map[string]chan promptResponse),
 	}
 
-	if b.respond("nonexistent", "password") {
+	if b.respond("nonexistent", "password", false) {
 		t.Fatal("respond should return false for unknown request ID")
 	}
 }
 
 func TestPasswordPrompterBroker_Cleanup(t *testing.T) {
 	b := &passwordPrompterBrokerType{
-		pending: make(map[string]chan string),
+		pending: make(map[string]chan promptResponse),
 	}
 
 	b.register("req-1")
@@ -90,18 +90,18 @@ func TestPasswordPrompterBroker_Cleanup(t *testing.T) {
 
 func TestPasswordPrompterBroker_DoubleRespond(t *testing.T) {
 	b := &passwordPrompterBrokerType{
-		pending: make(map[string]chan string),
+		pending: make(map[string]chan promptResponse),
 	}
 
 	ch := b.register("req-1")
 
 	// First respond should succeed.
-	if !b.respond("req-1", "first") {
+	if !b.respond("req-1", "first", false) {
 		t.Fatal("first respond should succeed")
 	}
 
 	// Second respond should fail (channel is full with size-1 buffer).
-	if b.respond("req-1", "second") {
+	if b.respond("req-1", "second", false) {
 		t.Fatal("second respond should return false (channel full)")
 	}
 
@@ -110,14 +110,14 @@ func TestPasswordPrompterBroker_DoubleRespond(t *testing.T) {
 	if !ok {
 		t.Fatal("channel was closed")
 	}
-	if got != "first" {
-		t.Fatalf("expected 'first', got %q", got)
+	if got.Value != "first" {
+		t.Fatalf("expected 'first', got %q", got.Value)
 	}
 }
 
 func TestPasswordPrompterBroker_ConcurrentSafety(t *testing.T) {
 	b := &passwordPrompterBrokerType{
-		pending: make(map[string]chan string),
+		pending: make(map[string]chan promptResponse),
 	}
 
 	const goroutines = 10
@@ -129,7 +129,7 @@ func TestPasswordPrompterBroker_ConcurrentSafety(t *testing.T) {
 			defer wg.Done()
 			id := fmt.Sprintf("concurrent-req-%d", i)
 			ch := b.register(id)
-			ok := b.respond(id, "password")
+			ok := b.respond(id, "password", false)
 			if !ok {
 				t.Errorf("respond failed for goroutine %d", i)
 			}
@@ -537,7 +537,7 @@ func TestRespondToPasswordRequest_UnknownID(t *testing.T) {
 // TestPasswordRequestEventPayload verifies the PasswordRequestEvent helper
 // produces the expected fields.
 func TestPasswordRequestEventPayload(t *testing.T) {
-	payload := events.PasswordRequestEvent("pwd_1", "sudo apt update", "[sudo] password for user:")
+	payload := events.PasswordRequestEvent("pwd_1", "sudo apt update", "[sudo] password for user:", true)
 
 	if payload["request_id"] != "pwd_1" {
 		t.Errorf("request_id = %v, want 'pwd_1'", payload["request_id"])
@@ -705,4 +705,30 @@ func TestExecuteShellCommand_NoPrompterInContextWhenUnset(t *testing.T) {
 
 	got := tools.PasswordPrompterFromContext(ctx)
 	assert.Nil(t, got, "no prompter should be in context when unset")
+}
+
+// TestPasswordPrompterBroker_CancelIsDistinctFromEmptyAnswer verifies that a
+// dismissed prompt is distinguishable from a submitted empty answer. A
+// non-secret prompt accepts an empty answer as "use the default"; a cancel
+// must stop the command instead.
+func TestPasswordPrompterBroker_CancelIsDistinctFromEmptyAnswer(t *testing.T) {
+	b := &passwordPrompterBrokerType{
+		pending: make(map[string]chan promptResponse),
+	}
+
+	emptyCh := b.register("empty")
+	if !b.respond("empty", "", false) {
+		t.Fatal("respond should accept an empty answer")
+	}
+	if got := <-emptyCh; got.Cancelled || got.Value != "" {
+		t.Errorf("empty answer = %+v, want an empty non-cancelled value", got)
+	}
+
+	cancelCh := b.register("cancelled")
+	if !b.respond("cancelled", "", true) {
+		t.Fatal("respond should accept a cancellation")
+	}
+	if got := <-cancelCh; !got.Cancelled {
+		t.Errorf("cancellation = %+v, want Cancelled=true", got)
+	}
 }

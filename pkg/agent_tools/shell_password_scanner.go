@@ -120,19 +120,33 @@ func (ps *passwordScanner) CloseStdin() {
 // handlePrompt invokes the prompter, pipes the response to the child,
 // and remembers the value for redaction.
 //
+// secret distinguishes a masked answer (password) from an ordinary one
+// (a confirmation or a value). Only a secret answer is remembered for
+// redaction; a non-secret answer is part of the transcript and must not be
+// scrubbed from it.
+//
 // Concurrency: two scanner goroutines (stdout + stderr) can both detect
 // the same prompt concurrently. The slot is claimed atomically under
 // mu by setting promptClaimed = true — only the goroutine that wins
 // the race calls prompter.Prompt(). Subsequent callers see promptClaimed
 // and bail.
-func (ps *passwordScanner) handlePrompt() {
+//
+// The claim is released by releasePrompt when the command produces new
+// output after an answer, which is how a second, distinct prompt ("Overwrite?
+// [y/N]" then "Enter a name:") becomes answerable. Releasing it here instead
+// would let the losing goroutine re-claim the slot for the prompt that was
+// just answered.
+func (ps *passwordScanner) handlePrompt(secret bool) {
 	ps.mu.Lock()
 	if ps.promptClaimed {
 		ps.mu.Unlock()
 		return
 	}
 	ps.promptClaimed = true
-	if ps.attempts >= maxPasswordAttempts {
+	// Only secret prompts count against the cap: it exists to stop a
+	// wrong-password re-prompt loop, not to limit how many questions a
+	// wizard-style command may ask.
+	if secret && ps.attempts >= maxPasswordAttempts {
 		if !ps.stdinClosed {
 			ps.stdinClosed = true
 			_ = ps.stdinPipe.Close()
@@ -140,7 +154,9 @@ func (ps *passwordScanner) handlePrompt() {
 		ps.mu.Unlock()
 		return
 	}
-	ps.attempts++
+	if secret {
+		ps.attempts++
+	}
 	ps.mu.Unlock()
 
 	var (
@@ -148,7 +164,7 @@ func (ps *passwordScanner) handlePrompt() {
 		err  error
 	)
 	_ = clihooks.WithCookedStdin(func() error {
-		resp, err = ps.prompter.Prompt(context.Background(), ps.promptReason)
+		resp, err = PromptForAnswer(context.Background(), ps.prompter, ps.promptReason, secret)
 		return nil
 	})
 
@@ -163,12 +179,35 @@ func (ps *passwordScanner) handlePrompt() {
 	}
 
 	ps.mu.Lock()
-	ps.password = resp
-	if !ps.stdinClosed {
-		ps.stdinClosed = true
-		_, _ = fmt.Fprintf(ps.stdinPipe, "%s\n", resp)
-		_ = ps.stdinPipe.Close()
+	defer ps.mu.Unlock()
+	if secret {
+		ps.password = resp
 	}
+	if !ps.stdinClosed {
+		_, _ = fmt.Fprintf(ps.stdinPipe, "%s\n", resp)
+		// A secret answer closes stdin: the password is the only thing the
+		// child should receive, and leaving the pipe open lets a confused
+		// program block on a second read forever. A non-secret answer keeps
+		// stdin open for follow-up prompts.
+		if secret {
+			ps.stdinClosed = true
+			_ = ps.stdinPipe.Close()
+		}
+	}
+}
+
+// releasePrompt re-opens the prompt slot so a later, distinct prompt in the
+// same command can be answered. Called when new output arrives: a duplicate
+// detection of an already-answered prompt is not preceded by new output, so
+// it cannot re-trigger a dialog.
+func (ps *passwordScanner) releasePrompt() {
+	ps.mu.Lock()
+	if ps.stdinClosed {
+		// stdin is gone; nothing can be answered any more.
+		ps.mu.Unlock()
+		return
+	}
+	ps.promptClaimed = false
 	ps.mu.Unlock()
 }
 
@@ -243,9 +282,9 @@ func (ps *passwordScanner) streamPipeAndDetect(reader io.Reader) {
 			_, _ = ps.output.Write([]byte(line))
 
 			trimmed := strings.TrimRight(line, "\r\n")
-			if passwordPromptRe.MatchString(trimmed) {
+			if ok, secret := isInteractivePrompt(trimmed); ok {
 				cancelSettle()
-				ps.handlePrompt()
+				ps.handlePrompt(secret)
 			}
 		}
 	}
@@ -261,18 +300,25 @@ func (ps *passwordScanner) streamPipeAndDetect(reader io.Reader) {
 			settleTimer = nil
 			if pending.Len() > 0 {
 				snapshot := pending.String()
-				if passwordPromptRe.MatchString(snapshot) {
+				if ok, secret := isInteractivePrompt(snapshot); ok {
 					_, _ = ps.output.Write([]byte(snapshot))
 					pending.Reset()
-					ps.handlePrompt()
+					ps.handlePrompt(secret)
 				}
 			}
 		case r := <-reads:
 			if len(r.data) > 0 {
+				// New output after an answer means the command moved past the
+				// prompt it was blocked on; a later prompt is a new question.
+				ps.releasePrompt()
 				_, _ = pending.Write(r.data)
 				flushCompleteLines()
-				if pending.Len() > 0 && passwordPromptRe.MatchString(pending.String()) {
-					armSettle()
+				if pending.Len() > 0 {
+					if ok, _ := isInteractivePrompt(pending.String()); ok {
+						armSettle()
+					} else {
+						cancelSettle()
+					}
 				} else {
 					cancelSettle()
 				}

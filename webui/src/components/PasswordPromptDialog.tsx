@@ -15,17 +15,26 @@
  * a stale modal is harmless.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Lock, X } from 'lucide-react';
+import { Check, Lock, X } from 'lucide-react';
 import './ThemedDialog.css';
 
 export interface PasswordPromptDialogProps {
   requestId: string;
   command: string;
   prompt: string;
-  onRespond: (requestId: string, password: string) => void;
+  /** True for a credential (masked input); false for an ordinary answer. */
+  secret?: boolean;
+  /** cancelled=true means the user dismissed the prompt: the command is stopped. */
+  onRespond: (requestId: string, password: string, cancelled?: boolean) => void;
 }
 
-function PasswordPromptDialog({ requestId, command, prompt, onRespond }: PasswordPromptDialogProps): JSX.Element {
+function PasswordPromptDialog({
+  requestId,
+  command,
+  prompt,
+  secret = true,
+  onRespond,
+}: PasswordPromptDialogProps): JSX.Element {
   const [password, setPassword] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -40,7 +49,7 @@ function PasswordPromptDialog({ requestId, command, prompt, onRespond }: Passwor
   );
 
   const handleCancel = useCallback(() => {
-    onRespond(requestId, '');
+    onRespond(requestId, '', true);
   }, [requestId, onRespond]);
 
   // Enter submits, Escape cancels — but only when the input is focused.
@@ -85,7 +94,7 @@ function PasswordPromptDialog({ requestId, command, prompt, onRespond }: Passwor
             <Lock size={18} />
           </div>
           <h2 id="password-prompt-title" className="password-prompt-title">
-            Password required
+            {secret ? 'Password required' : 'Input required'}
           </h2>
         </div>
 
@@ -94,21 +103,25 @@ function PasswordPromptDialog({ requestId, command, prompt, onRespond }: Passwor
           <code className="password-prompt-command">{command}</code>
 
           <label htmlFor="password-prompt-input" className="password-prompt-label">
-            Password
+            {secret ? 'Password' : 'Response'}
           </label>
           <input
             id="password-prompt-input"
             ref={inputRef}
-            type="password"
+            type={secret ? 'password' : 'text'}
             className="password-prompt-input"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
+            autoComplete={secret ? 'current-password' : 'off'}
             spellCheck={false}
-            placeholder="Enter password"
+            placeholder={secret ? 'Enter password' : 'Type your answer'}
           />
 
-          <p className="password-prompt-hint">The password is sent only to this shell process and is not stored.</p>
+          <p className="password-prompt-hint">
+            {secret
+              ? 'The password is sent only to this shell process and is not stored.'
+              : 'The answer is sent to the running command. Cancel stops it.'}
+          </p>
         </div>
 
         <div className="password-prompt-actions">
@@ -119,9 +132,9 @@ function PasswordPromptDialog({ requestId, command, prompt, onRespond }: Passwor
           <button
             type="submit"
             className="password-prompt-btn password-prompt-btn--submit"
-            disabled={password.length === 0}
+            disabled={secret && password.length === 0}
           >
-            <Lock size={14} />
+            {secret ? <Lock size={14} /> : <Check size={14} />}
             <span>Submit</span>
           </button>
         </div>

@@ -352,6 +352,11 @@ type AskUserResponseData struct {
 type PasswordResponseData struct {
 	RequestID string `json:"request_id"`
 	Password  string `json:"password"`
+	// Cancelled signals that the user dismissed the prompt rather than
+	// submitting an answer. The shell closes the child's stdin so the command
+	// stops, instead of receiving a blank line (which a non-secret prompt
+	// would accept as the default answer).
+	Cancelled bool `json:"cancelled,omitempty"`
 }
 
 // Validate performs field-level validation on PasswordResponseData.

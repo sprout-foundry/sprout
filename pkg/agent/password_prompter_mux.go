@@ -40,6 +40,12 @@ func NewCascadingPasswordPrompter(prompters ...tools.PasswordPrompter) *cascadin
 // or the last error if every prompter failed. Context cancellation is
 // honored before the first call so a pre-cancelled context never blocks.
 func (c *cascadingPasswordPrompter) Prompt(ctx context.Context, reason string) (string, error) {
+	return c.PromptInput(ctx, reason, true)
+}
+
+// PromptInput delegates to each prompter in turn, preserving whether the
+// answer is secret so a surface that supports both renders the right field.
+func (c *cascadingPasswordPrompter) PromptInput(ctx context.Context, reason string, secret bool) (string, error) {
 	if len(c.prompters) == 0 {
 		return "", tools.ErrNoInteractiveSurface
 	}
@@ -49,7 +55,7 @@ func (c *cascadingPasswordPrompter) Prompt(ctx context.Context, reason string) (
 
 	var lastErr error
 	for _, p := range c.prompters {
-		password, err := p.Prompt(ctx, reason)
+		password, err := tools.PromptForAnswer(ctx, p, reason, secret)
 		if err == nil {
 			return password, nil
 		}

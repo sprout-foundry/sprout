@@ -268,3 +268,63 @@ func TestSteerCapable_ConcurrentAccess(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+// TestSettingsCommand_SafeDuringSteerArgs pins the split between /settings'
+// two forms: `set` is a mutex-guarded config write with no turn interaction,
+// while the no-arg browser blocks on user input and must stay unsafe mid-turn.
+func TestSettingsCommand_SafeDuringSteerArgs(t *testing.T) {
+	cmd := &SettingsCommand{}
+
+	if cmd.SafeDuringSteer() {
+		t.Fatal("no-arg /settings must not be safe during steer (it blocks on input)")
+	}
+
+	cases := []struct {
+		name string
+		args []string
+		want bool
+	}{
+		{name: "set with key and value", args: []string{"set", "max_context_tokens", "300000"}, want: true},
+		{name: "set with multi-word value", args: []string{"set", "system_prompt_text", "a", "b"}, want: true},
+		{name: "set without value", args: []string{"set", "max_context_tokens"}, want: false},
+		{name: "bare set", args: []string{"set"}, want: false},
+		{name: "interactive browser", args: nil, want: false},
+		{name: "unknown subcommand", args: []string{"browse", "x", "y"}, want: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := cmd.SafeDuringSteerArgs(tc.args); got != tc.want {
+				t.Fatalf("SafeDuringSteerArgs(%v) = %v, want %v", tc.args, got, tc.want)
+			}
+			// The shared gate must agree with the command's own answer.
+			if got := IsSafeDuringSteer(cmd, tc.args); got != tc.want {
+				t.Fatalf("IsSafeDuringSteer(%v) = %v, want %v", tc.args, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestIsSafeDuringSteer_FallsBackToSteerCapable verifies the gate still honors
+// plain SteerCapable commands that don't implement the arg-aware interface.
+func TestIsSafeDuringSteer_FallsBackToSteerCapable(t *testing.T) {
+	registry := DefaultRegistry()
+
+	// /status is a plain SteerCapable read-only command.
+	status, ok := registry.GetCommand("status")
+	if !ok {
+		t.Fatal("status command not found")
+	}
+	if !IsSafeDuringSteer(status, nil) {
+		t.Fatal("IsSafeDuringSteer(status) = false, want true")
+	}
+
+	// /commit is unsafe regardless of args.
+	commit, ok := registry.GetCommand("commit")
+	if !ok {
+		t.Fatal("commit command not found")
+	}
+	if IsSafeDuringSteer(commit, nil) {
+		t.Fatal("IsSafeDuringSteer(commit) = true, want false")
+	}
+}

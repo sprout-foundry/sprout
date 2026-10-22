@@ -211,15 +211,13 @@ func buildSlashCommandCompleter(chatAgent *agent.Agent, steerOnly bool) console.
 			return nil
 		}
 
-		if steerOnly {
-			if sc, ok := cmd.(agent_commands.SteerCapable); !ok || !sc.SafeDuringSteer() {
-				return nil
-			}
-		}
-
 		var args []string
 		if len(parts) > 1 {
 			args = parts[1:]
+		}
+
+		if steerOnly && !agent_commands.IsSafeDuringSteer(cmd, args) {
+			return nil
 		}
 		if strings.HasSuffix(line, " ") {
 			args = append(args, "")
@@ -345,15 +343,13 @@ func buildRichSlashCommandCompleter(chatAgent *agent.Agent, steerOnly bool) cons
 			return nil
 		}
 
-		if steerOnly {
-			if sc, ok := cmd.(agent_commands.SteerCapable); !ok || !sc.SafeDuringSteer() {
-				return nil
-			}
-		}
-
 		var args []string
 		if len(parts) > 1 {
 			args = parts[1:]
+		}
+
+		if steerOnly && !agent_commands.IsSafeDuringSteer(cmd, args) {
+			return nil
 		}
 		if strings.HasSuffix(line, " ") {
 			args = append(args, "")

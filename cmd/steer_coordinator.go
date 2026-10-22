@@ -381,8 +381,7 @@ func (c *SteerCoordinator) executeSteerCommand(text string) bool {
 		return false
 	}
 
-	sc, ok := cmd.(agent_commands.SteerCapable)
-	if !ok || !sc.SafeDuringSteer() {
+	if !agent_commands.IsSafeDuringSteer(cmd, parts[1:]) {
 		return false // will fall through to rejectCommandIntent
 	}
 	// Execute in a goroutine to avoid blocking the steer reader goroutine.

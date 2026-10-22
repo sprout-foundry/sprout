@@ -338,8 +338,7 @@ func (ws *ReactWebServer) executeSafeSteerCommandStreaming(input string, chatAge
 	}
 
 	// Check if command is safe to run mid-turn
-	sc, ok := cmd.(agent_commands.SteerCapable)
-	if !ok || !sc.SafeDuringSteer() {
+	if !agent_commands.IsSafeDuringSteer(cmd, parts[1:]) {
 		return nil, "", nil
 	}
 

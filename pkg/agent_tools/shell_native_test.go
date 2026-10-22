@@ -37,10 +37,18 @@ func TestSyncBuffer_ConcurrentWrites(t *testing.T) {
 
 	wg.Wait()
 
+	// The buffer is bounded, so the full stream is not retained; every
+	// write must still be accepted (io.MultiWriter treats a short write
+	// as an error) and the buffer must report the true total. This payload
+	// stays under the capture limit, so it pins Len() accounting and race
+	// safety — truncation is covered by shell_capture_test.go.
+	wantBytes := int64(writers * writesPerGoroutine * len("line of output data that forces buffer growth\n"))
+	if got := buf.c.Len(); got != wantBytes {
+		t.Fatalf("expected %d bytes accepted, got %d", wantBytes, got)
+	}
 	got := buf.String()
-	wantLines := writers * writesPerGoroutine
-	if lines := strings.Count(got, "\n"); lines != wantLines {
-		t.Fatalf("expected %d lines, got %d", wantLines, lines)
+	if !strings.Contains(got, "line of output data that forces buffer growth") {
+		t.Fatalf("expected retained output to contain the written lines, got %q", got)
 	}
 }
 

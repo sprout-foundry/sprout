@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	agenttools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
@@ -151,8 +152,12 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 		return "", -1, fmt.Errorf("failed to write command to PTY: %w", err)
 	}
 
-	// Buffer to accumulate output from the PTY.
-	var buf bytes.Buffer
+	// Buffer to accumulate output from the PTY. Bounded: the command keeps
+	// writing until it exits, and a promoted command's buffer stays reachable
+	// from this goroutine until then — an unbounded buffer here grows with the
+	// command's entire output (a journalctl over a large journal is multi-GB).
+	// Only the head and tail are ever returned.
+	var buf agenttools.BoundedCapture
 
 	// Two independent timers gate the wait:
 	//
@@ -268,12 +273,16 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 			// Output is flowing — extend the inactivity grace.
 			resetInactivity()
 			buf.Write(chunk)
-
 			// Only match when the full sentinel (with numeric exit code) appears.
 			// The bytes-based detection will not match the PTY echo which contains the literal "$?".
 			// We use bytes.Index to find the marker prefix, then verify the next char is a digit
 			// (not '$' from the PTY echo which contains <marker>:$?).
-			bufBytes := buf.Bytes()
+			//
+			// The sentinel is searched in the retained head+tail of the capture,
+			// not the raw stream: the buffer is bounded, and a sentinel that
+			// scrolled out of the retained window means the command produced
+			// far more output than a tool result can carry anyway.
+			bufBytes := []byte(buf.String())
 
 			// Use bytes.Index for fast prefix search, then validate digit.
 			idx := bytes.Index(bufBytes, markerStr)
@@ -307,6 +316,9 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 										return stripANSI(buf.String()), -1, fmt.Errorf("failed to parse exit code from sentinel: %w", err)
 									}
 
+									// The sentinel is the last thing the command
+									// writes, so it lives in the retained tail;
+									// everything before it is the command's output.
 									output := buf.String()[:idx]
 
 									// Strip the launcher-line echo from the beginning of the

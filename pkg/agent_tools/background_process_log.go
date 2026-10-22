@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -36,6 +37,12 @@ func (p *BackgroundProcess) GetOutputPath() string {
 
 // CheckOutput reads accumulated output from a background session.
 // Returns the raw output string, status ("running" or "exited"), and any error.
+//
+// The read is bounded. A background command's output file grows with
+// everything the command has ever written, and it is read on every poll —
+// `check_background` on a command that has been streaming for an hour would
+// otherwise allocate the whole file each time. Only the head and tail are
+// returned, with a notice naming what was omitted.
 func (m *BackgroundProcessManager) CheckOutput(sessionID string) (string, string, error) {
 	proc, exists := m.GetProcess(sessionID)
 	if !exists {
@@ -57,13 +64,29 @@ func (m *BackgroundProcessManager) CheckOutput(sessionID string) (string, string
 		status = "exited"
 	}
 
-	// Read accumulated output from the file
-	output, err := os.ReadFile(proc.OutputPath)
+	output, err := readBoundedFile(proc.OutputPath)
 	if err != nil {
 		return "", status, fmt.Errorf("read output file: %w", err)
 	}
 
-	return string(output), status, nil
+	return output, status, nil
+}
+
+// readBoundedFile returns the contents of path through a BoundedCapture: the
+// head and tail of the file, with a truncation notice in between when the
+// file is larger than the capture limit.
+func readBoundedFile(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	var capture BoundedCapture
+	if _, err := io.Copy(&capture, f); err != nil {
+		return "", err
+	}
+	return capture.String(), nil
 }
 
 // GetBaseDir returns the base directory used for output and PID files.

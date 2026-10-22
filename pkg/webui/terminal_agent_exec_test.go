@@ -546,6 +546,49 @@ func TestExecuteCommandAndWait_MarkerUniqueness(t *testing.T) {
 	}
 }
 
+// TestExecuteCommandAndWait_LargeOutputIsBounded guards the memory contract of
+// the PTY wait path: a command that writes far more than a tool result can
+// carry must not be accumulated in full. The capture keeps the head and tail
+// and reports what it dropped; the exit code and sentinel detection must
+// survive the bound.
+func TestExecuteCommandAndWait_LargeOutputIsBounded(t *testing.T) {
+	dir := t.TempDir()
+	tm := newTestTerminalManager(t, dir)
+
+	session := createAndReadySession(t, tm, "exec-large")
+	defer tm.CloseSession("exec-large")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	// ~2 MB of output: comfortably above the capture limit, small enough to
+	// stay fast. Markers at both ends prove head and tail are retained.
+	const lines = 40000
+	cmd := fmt.Sprintf(`echo HEAD-MARKER; i=0; while [ $i -lt %d ]; do echo "0123456789012345678901234567890123456789012345678"; i=$((i+1)); done; echo TAIL-MARKER`, lines)
+
+	output, exitCode, err := tm.ExecuteCommandAndWait(ctx, session, cmd)
+	if err != nil {
+		t.Fatalf("ExecuteCommandAndWait failed: %v", err)
+	}
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d", exitCode)
+	}
+
+	const limit = 45*1024 + 16*1024
+	if len(output) > limit+2048 {
+		t.Errorf("output retained %d bytes, want <= %d (bounded capture)", len(output), limit+2048)
+	}
+	if !strings.Contains(output, "HEAD-MARKER") {
+		t.Error("output lost the head marker")
+	}
+	if !strings.Contains(output, "TAIL-MARKER") {
+		t.Error("output lost the tail marker")
+	}
+	if !strings.Contains(output, "of output omitted") {
+		t.Error("output is missing the truncation notice")
+	}
+}
+
 func TestExecuteCommandAndWait_EmptyCommand(t *testing.T) {
 	dir := t.TempDir()
 	tm := newTestTerminalManager(t, dir)

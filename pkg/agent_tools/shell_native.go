@@ -3,7 +3,6 @@
 package tools
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -16,26 +15,31 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/utils/shellexec"
 )
 
-// syncBuffer is a bytes.Buffer guarded by a Mutex. Used as the early-
-// output buffer in runShellCommandAdoptable: the cmd's stdout/stderr
-// pipe goroutines keep Write()ing concurrently with the main goroutine's
-// String() snapshot read on the background-promotion path (where
-// cmd.Wait() has not yet returned), so a plain bytes.Buffer races.
+// syncBuffer is a bytes.Buffer guarded by a Mutex. It backs the early-output
+// snapshot in runShellCommandAdoptable, where the cmd's stdout/stderr pipe
+// goroutines keep Write()ing concurrently with the main goroutine's String()
+// read on the background-promotion path (cmd.Wait() has not returned yet), so
+// a plain bytes.Buffer would race.
+//
+// The buffer is bounded: it retains at most captureHeadBytes + captureTailBytes
+// and counts the rest. A promoted command keeps writing into it long after the
+// tool call returned, so an unbounded buffer would grow with the command's
+// entire output — the very allocation this bound exists to prevent.
 type syncBuffer struct {
-	mu  sync.Mutex
-	buf bytes.Buffer
+	mu sync.Mutex
+	c  BoundedCapture
 }
 
 func (b *syncBuffer) Write(p []byte) (int, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	return b.buf.Write(p)
+	return b.c.Write(p)
 }
 
 func (b *syncBuffer) String() string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	return b.buf.String()
+	return b.c.String()
 }
 
 // extractExitCode extracts the exit code from an error, if it's an exit error.
@@ -90,9 +94,9 @@ func runShellCommand(ctx context.Context, command string, streamOutput bool) (st
 
 		// Buffer to capture output for return value. Must be concurrency-safe:
 		// stdout and stderr goroutines write to it simultaneously via io.MultiWriter.
-		// A plain bytes.Buffer races under -race (the adoption path in
-		// runShellCommandAdoptable uses syncBuffer for the same reason).
-		var outputBuf syncBuffer
+		// Bounded: a streaming command (tail -f, a build log) can produce
+		// unbounded output, and only the head and tail are ever returned.
+		var outputBuf BoundedCapture
 
 		// Stream stdout and stderr in real-time
 		// Use goroutines to handle both concurrently
@@ -140,7 +144,7 @@ func runShellCommand(ctx context.Context, command string, streamOutput bool) (st
 	}
 
 	// No BPM available — use password-aware path if a prompter is present,
-	// otherwise fall back to CombinedOutput.
+	// otherwise fall back to a bounded capture.
 	if pp := PasswordPrompterFromContext(ctx); pp != nil {
 		return runShellCommandWithPasswordSupport(ctx, command, pp)
 	}
@@ -154,14 +158,20 @@ func runShellCommand(ctx context.Context, command string, streamOutput bool) (st
 		cmd.Dir = wd
 	}
 
-	// Capture combined stdout and stderr
-	output, err := cmd.CombinedOutput()
+	// Capture combined stdout and stderr through a bounded buffer. This path
+	// has no promotion and no timeout of its own, so a command that writes
+	// faster than it is killed can produce arbitrarily much output; keeping
+	// only the head and tail bounds the allocation regardless.
+	var output BoundedCapture
+	cmd.Stdout = &output
+	cmd.Stderr = &output
+	err := cmd.Run()
 
 	// Get the exit code for status reporting
 	exitCode := extractExitCode(err)
 
 	// Build the final output with status header
-	finalOutput := buildShellOutputWithStatus(string(output), command, exitCode, err)
+	finalOutput := buildShellOutputWithStatus(output.String(), command, exitCode, err)
 
 	return finalOutput, nil
 }

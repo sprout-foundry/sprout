@@ -58,6 +58,10 @@ func TestSetSoftMemoryLimit_NoEnvRespectsFloor(t *testing.T) {
 
 	// Clear the override so the /proc/meminfo path is exercised.
 	t.Setenv("SPROUT_MEMLIMIT", "")
+	t.Setenv("GOMEMLIMIT", "")
+	// Start from "no limit" so the GOMEMLIMIT pass-through below cannot
+	// mistake an inherited limit for an operator-set one.
+	debug.SetMemoryLimit(math.MaxInt64)
 	setSoftMemoryLimit()
 
 	current := debug.SetMemoryLimit(-1)
@@ -68,5 +72,57 @@ func TestSetSoftMemoryLimit_NoEnvRespectsFloor(t *testing.T) {
 	}
 	if current < int64(memLimitFloor) {
 		t.Errorf("derived limit %d is below floor %d", current, memLimitFloor)
+	}
+}
+
+// TestSetSoftMemoryLimit_PreservesGOMEMLIMIT pins the precedence rule: an
+// operator who bounded the process through GOMEMLIMIT (a systemd unit, a
+// container environment) must not have that bound replaced by the derived
+// /proc/meminfo value. The runtime applies GOMEMLIMIT before init runs, so
+// the limit is already in place when setSoftMemoryLimit is called.
+func TestSetSoftMemoryLimit_PreservesGOMEMLIMIT(t *testing.T) {
+	original := debug.SetMemoryLimit(-1)
+	t.Cleanup(func() { debug.SetMemoryLimit(original) })
+
+	t.Setenv("SPROUT_MEMLIMIT", "")
+	const operatorLimit = 2 * 1024 * 1024 * 1024 // 2 GiB
+	debug.SetMemoryLimit(operatorLimit)
+
+	setSoftMemoryLimit()
+
+	if got := debug.SetMemoryLimit(-1); got != operatorLimit {
+		t.Errorf("GOMEMLIMIT was replaced: got %d, want %d", got, operatorLimit)
+	}
+}
+
+// TestSetSoftMemoryLimit_SproutOverrideBeatsGOMEMLIMIT pins that
+// SPROUT_MEMLIMIT remains the sprout-specific override.
+func TestSetSoftMemoryLimit_SproutOverrideBeatsGOMEMLIMIT(t *testing.T) {
+	original := debug.SetMemoryLimit(-1)
+	t.Cleanup(func() { debug.SetMemoryLimit(original) })
+
+	debug.SetMemoryLimit(2 * 1024 * 1024 * 1024) // GOMEMLIMIT
+	t.Setenv("SPROUT_MEMLIMIT", "1073741824")    // 1 GiB
+
+	setSoftMemoryLimit()
+
+	if got := debug.SetMemoryLimit(-1); got != 1073741824 {
+		t.Errorf("SPROUT_MEMLIMIT did not win: got %d, want %d", got, 1073741824)
+	}
+}
+
+// TestSetSoftMemoryLimit_DisableBeatsGOMEMLIMIT pins that SPROUT_MEMLIMIT=0
+// clears an operator GOMEMLIMIT rather than leaving it in place.
+func TestSetSoftMemoryLimit_DisableBeatsGOMEMLIMIT(t *testing.T) {
+	original := debug.SetMemoryLimit(-1)
+	t.Cleanup(func() { debug.SetMemoryLimit(original) })
+
+	debug.SetMemoryLimit(2 * 1024 * 1024 * 1024)
+	t.Setenv("SPROUT_MEMLIMIT", "0")
+
+	setSoftMemoryLimit()
+
+	if got := debug.SetMemoryLimit(-1); got != math.MaxInt64 {
+		t.Errorf("expected no limit (math.MaxInt64), got %d", got)
 	}
 }

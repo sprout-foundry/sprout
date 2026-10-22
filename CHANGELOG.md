@@ -4,7 +4,7 @@ All notable changes to Sprout will be documented in this file.
 
 ## [Unreleased]
 
-## [v0.32.2] - 2026-10-22
+## [v0.32.7] - 2026-10-22
 
 - fix(browse): the `eval` step runs ordinary JavaScript. rod wraps a script as `function() { return (<js>).apply(this, arguments) }`, so only a bare arrow function worked; a statement, an IIFE, or a plain expression failed with a `TypeError` naming `.apply`. Scripts are now evaluated as statements and return their completion value, and `wait_for_function` — which had the same constraint — accepts the same shapes.
 - fix(agent): a malformed inline image payload is no longer reported as an authentication failure. A provider 400 mentioning base64 travelled the network-error path, was retried, and ended as "Authentication failed … check your API key". Images whose payload does not decode are now stripped (with a note on the message) and the request retried once; when nothing could be stripped the turn fails immediately with a message naming the real cause.

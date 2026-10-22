@@ -342,9 +342,11 @@ describe("stylesheet scoping pass", () => {
     );
     // A bare attribute selector has no class anchor, so it too reaches
     // host-owned elements (a host root may carry `data-theme`) and is scoped.
+    // The guard compounds onto the root: the workspace root is the element
+    // that carries `data-theme`, so a descendant prefix would never match.
     assert.equal(
       scopeSelectorList(scopeStylesheet("[data-theme=dark] .x{color:red}")),
-      ".sprout-workspace [data-theme=dark] .x",
+      ".sprout-workspace[data-theme=dark] .x",
     );
   });
 

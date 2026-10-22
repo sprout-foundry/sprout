@@ -14,7 +14,7 @@
  * is what makes the host-supply and resolution cases meaningful.
  */
 
-import { act, render, screen, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import { useState } from 'react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -417,6 +417,30 @@ describe('SproutWorkspace', () => {
     );
     await screen.findByTestId('sprout-workspace');
     expect(wireHostAgentBackend).not.toHaveBeenCalled();
+  });
+
+  it('themes an ambient mount in a host page without touching the host document', async () => {
+    const ambientHost = makeHost({
+      transport: {
+        apiBaseURL: 'https://ambient.test',
+        wsURL: '',
+        authMode: 'none',
+        agent: { kind: 'wasm', modelEndpoint: 'https://models.host.test/v1/chat' },
+      },
+    });
+    render(
+      <HostProvider host={ambientHost}>
+        <SproutProviders>
+          <SproutWorkspace providers="ambient" project={PROJECT} space="code" />
+        </SproutProviders>
+      </HostProvider>,
+    );
+    const workspace = await screen.findByTestId('sprout-workspace');
+    // The workspace carries its own theme; the host's document is untouched.
+    await waitFor(() => expect(workspace.getAttribute('data-theme')).toBeTruthy());
+    expect(workspace.style.getPropertyValue('--bg-primary')).not.toBe('');
+    expect(document.documentElement.getAttribute('data-theme')).toBeNull();
+    expect(document.documentElement.style.getPropertyValue('--bg-primary')).toBe('');
   });
 
   it('lets a host override the assembled chat props per kind (the host wins for that kind)', async () => {

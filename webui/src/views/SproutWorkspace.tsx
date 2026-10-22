@@ -472,7 +472,7 @@ export function SproutWorkspace({
   }
 
   const root = (
-    <WorkspaceRoot rootClass={rootClass} projectId={project.id} spaceId={resolved.id}>
+    <WorkspaceRoot rootClass={rootClass} projectId={project.id} spaceId={resolved.id} documentScope={!ambient}>
       {content}
       {children}
     </WorkspaceRoot>
@@ -511,22 +511,32 @@ function WorkspaceRoot({
   rootClass,
   projectId,
   spaceId,
+  documentScope,
   children,
 }: {
   rootClass: string;
   projectId: string;
   spaceId: WorkspaceModeId;
+  /**
+   * Whether the workspace owns the document it is mounted in. Own mode does
+   * (it mounts its own `SproutProviders`, so nothing else in the page is
+   * Sprout's), and the app's ambient mode does. A host page's ambient mount
+   * does not: its `documentElement` is the host's, so the theme stops at the
+   * workspace root.
+   */
+  documentScope: boolean;
   children: ReactNode;
 }): JSX.Element {
   const { theme, themePack } = useTheme();
   const host = useHost();
   const rootRef = useRef<HTMLDivElement>(null);
 
-  // `documentElement` is where `ThemeContext` writes the active pack, and in a
-  // host page that element belongs to the host. Mirror both the pack and the
-  // theme attribute onto this root, then layer the host's own token overrides
-  // (`host.theme.tokens`) on top of the pack. One effect, in this order, so
-  // the overrides always win regardless of which provider re-rendered.
+  // The workspace root is the theme's scope: `ThemeContext` publishes the
+  // resolved pack but writes nothing to the DOM, because in a host page
+  // `documentElement` belongs to the host. The pack's variables land here and
+  // inherit to everything inside the workspace; the host's own token
+  // overrides (`host.theme.tokens`) are layered on top in the same pass, so
+  // they always win regardless of which provider re-rendered.
   useEffect(() => {
     const element = rootRef.current;
     if (!element) return;
@@ -534,12 +544,33 @@ function WorkspaceRoot({
       element.style.setProperty(key, value);
     });
     element.setAttribute('data-theme', theme);
+    element.setAttribute('data-theme-pack', themePack.id);
     applyHostThemeOverrides(element, resolveHostThemeOverrides(host));
     return () => {
       clearHostThemeOverrides(element);
       THEME_VARIABLE_KEYS.forEach((key) => element.style.removeProperty(key));
+      element.removeAttribute('data-theme-pack');
     };
   }, [theme, themePack, host]);
+
+  // The app's own chrome (sidebar, terminal, dialogs) is outside the
+  // workspace root and reads the pack through `documentElement`, so the app
+  // marks that element. A host page does not set this: its document is the
+  // host's, and only the workspace is Sprout's.
+  useEffect(() => {
+    if (!documentScope) return;
+    const root = document.documentElement;
+    Object.entries(themePack.variables).forEach(([key, value]) => {
+      root.style.setProperty(key, value);
+    });
+    root.setAttribute('data-theme', theme);
+    root.setAttribute('data-theme-pack', themePack.id);
+    return () => {
+      THEME_VARIABLE_KEYS.forEach((key) => root.style.removeProperty(key));
+      root.removeAttribute('data-theme');
+      root.removeAttribute('data-theme-pack');
+    };
+  }, [theme, themePack, documentScope]);
 
   return (
     <div

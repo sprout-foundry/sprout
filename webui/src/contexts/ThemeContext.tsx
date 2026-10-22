@@ -7,7 +7,6 @@ import {
   DEFAULT_THEME_PACK_ID,
   getThemePackForMode,
   THEME_PACKS,
-  THEME_VARIABLE_KEYS,
   type ThemeMode,
   type ThemePack,
 } from '../themes/themePacks';
@@ -280,23 +279,12 @@ export function ThemeProvider({ children }: ThemeProviderProps): JSX.Element {
     [themePackID, theme],
   );
 
-  // Update CSS variable tokens and document attributes for global theming.
-  // This applies the resolved pack (built-in or host-selected mode) to the
-  // document root. The host's own token overrides are deliberately not applied
-  // here — they are scoped to the workspace root (see themes/hostTheme.ts), so
-  // they cannot restyle the host page outside the mounted workspace. A
-  // host-driven theme never observes the DOM for its value.
-  useEffect(() => {
-    const root = document.documentElement;
-    THEME_VARIABLE_KEYS.forEach((key) => {
-      root.style.removeProperty(key);
-    });
-    Object.entries(themePack.variables).forEach(([key, value]) => {
-      root.style.setProperty(key, value);
-    });
-    document.documentElement.setAttribute('data-theme', theme);
-    document.documentElement.setAttribute('data-theme-pack', themePack.id);
-  }, [theme, themePack]);
+  // The resolved theme is published through the context only. It is applied
+  // to the DOM by the workspace root (`SproutWorkspace`), never here: this
+  // provider also runs in a host page, where `documentElement` belongs to the
+  // host and writing the pack onto it would restyle the host's own chrome.
+  // The workspace root is the scope that should carry the theme, and custom
+  // properties inherit from it to everything inside the workspace.
 
   const value: ThemeContextValue = {
     theme,

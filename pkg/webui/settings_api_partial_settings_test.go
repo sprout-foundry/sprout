@@ -25,10 +25,11 @@ func TestPartialSettingsAppliers_ComprehensiveEnums(t *testing.T) {
 		"output_verbosity":   "default",
 		"disable_thinking":   true,
 		// applyPathsAndContextSettings
-		"resource_directory": "/tmp",
-		"history_scope":      "global",
-		"max_context_tokens": float64(8192),
-		"ea_mode":            "interactive",
+		"resource_directory":        "/tmp",
+		"history_scope":             "global",
+		"max_context_tokens":        float64(8192),
+		"compaction_ceiling_tokens": float64(262144),
+		"ea_mode":                   "interactive",
 		// applyRiskAndSafetySettings
 		"risk_profile":            "default",
 		"self_review_gate_mode":   "code",
@@ -500,5 +501,52 @@ func TestPartialSettingsAppliers_Ordered(t *testing.T) {
 	again := len(partialSettingsAppliers)
 	if seen != again {
 		t.Fatalf("applier list is unstable: %d then %d", seen, again)
+	}
+}
+
+// TestApplyPartialSettings_CompactionCeiling pins the compaction ceiling's
+// settings-API contract: a positive value is stored, 0 and null both mean
+// "built-in default", and a value below the minimum is rejected rather than
+// silently clamped (a ceiling that low would compact on nearly every turn).
+func TestApplyPartialSettings_CompactionCeiling(t *testing.T) {
+	cases := []struct {
+		name      string
+		patch     interface{}
+		want      int
+		wantError string
+	}{
+		{name: "positive value is stored", patch: float64(262144), want: 262144},
+		{name: "zero means default", patch: float64(0), want: 0},
+		{name: "null means default", patch: nil, want: 0},
+		{name: "below minimum is rejected", patch: float64(1024), wantError: "at least"},
+		{name: "negative is rejected", patch: float64(-1), wantError: "non-negative"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := configuration.NewConfig()
+			cfg.CompactionCeilingTokens = 131072 // pre-existing value must be overwritten
+			unknown, err := applyPartialSettings(cfg, map[string]interface{}{
+				"compaction_ceiling_tokens": tc.patch,
+			})
+			if len(unknown) != 0 {
+				t.Fatalf("compaction_ceiling_tokens reported as unknown: %v", unknown)
+			}
+			if tc.wantError != "" {
+				if err == nil {
+					t.Fatalf("expected an error containing %q, got nil", tc.wantError)
+				}
+				if !strings.Contains(err.Error(), tc.wantError) {
+					t.Fatalf("error = %q, want it to contain %q", err.Error(), tc.wantError)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if cfg.CompactionCeilingTokens != tc.want {
+				t.Fatalf("CompactionCeilingTokens = %d, want %d", cfg.CompactionCeilingTokens, tc.want)
+			}
+		})
 	}
 }

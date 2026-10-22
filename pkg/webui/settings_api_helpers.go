@@ -49,6 +49,11 @@ const (
 	// (skill description, persona description).
 	maxSettingDescriptionLength = 10_000
 
+	// compactionCeilingMinimum bounds a user-set compaction ceiling. Below
+	// this the trigger would fire so early that the agent compacts on
+	// nearly every turn and never accumulates usable history.
+	compactionCeilingMinimum = 16 * 1024
+
 	// maxSettingURLLength applies to URLs and endpoint strings.
 	maxSettingURLLength = 4096
 
@@ -162,6 +167,9 @@ func sanitizedConfig(cfg *configuration.Config) map[string]interface{} {
 		"risk_profile":       cfg.RiskProfile,
 		"risk_profiles":      cfg.RiskProfiles,
 		"max_context_tokens": cfg.MaxContextTokens,
+		// Compaction ceiling: the absolute live-context size at which
+		// compaction fires. 0 means the built-in default applies.
+		"compaction_ceiling_tokens": cfg.CompactionCeilingTokens,
 		// SP-076: display verbosity for inter-tool narration filtering.
 		"output_verbosity": cfg.OutputVerbosity,
 	}

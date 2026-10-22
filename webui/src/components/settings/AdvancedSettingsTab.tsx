@@ -75,6 +75,14 @@ export default function AdvancedSettingsTab({
               1000,
               'Cap the effective context window for all models (e.g. 32000). Limits how many tokens can be claimed per request, reducing costs on large-context models. Leave blank or set to 0 for no limit.',
             )}
+            {renderNumberInput(
+              'compaction_ceiling_tokens',
+              'Compaction ceiling (tokens)',
+              0,
+              undefined,
+              1000,
+              'Absolute live-context size at which the conversation is compacted, no matter how large the model window is. Leave blank or set to 0 for the built-in default (300K). This bounds how much live history the agent carries; it does not shrink the window, so the model keeps its full output budget.',
+            )}
           </div>
           <div className="settings-section-spaced">
             <h4>Resource Storage</h4>

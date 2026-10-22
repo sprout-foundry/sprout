@@ -44,6 +44,9 @@ export interface SproutSettings {
   /** Cap the effective context window (tokens). Limits how large a request's input can be,
    *  reducing cost on models with very large native context windows. 0 or absent = no limit. */
   max_context_tokens?: number | null;
+  /** Absolute live-context size (tokens) at which compaction fires, regardless of how
+   *  large the model's window is. 0 or absent = the built-in default applies. */
+  compaction_ceiling_tokens?: number;
   /** Computer Use configuration (SP-063) — gates the computer_user persona's desktop-control tools. */
   computer_use?: {
     enabled: boolean;

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
@@ -15,10 +14,20 @@ import (
 // ExecCommand handles the /exec slash command
 // Usage: /exec <shell-command-to-execute>
 // Alias: !<shell-command-to-execute> (matches other tools like Jupyter, R, etc.)
-type ExecCommand struct{}
+type ExecCommand struct {
+	outputSink
+}
 
 func (c *ExecCommand) Name() string {
 	return "exec"
+}
+
+// SafeDuringSteer returns true - /exec runs a foreground shell command and
+// touches no turn or conversation state. The CLI steer path has always run
+// bang commands mid-turn; this makes the WebUI agree. The git checkout/discard
+// guards in Execute still apply.
+func (c *ExecCommand) SafeDuringSteer() bool {
+	return true
 }
 
 func (c *ExecCommand) Description() string {
@@ -57,19 +66,19 @@ func (c *ExecCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	}
 
 	// Execute the shell command using the same pattern as direct shell execution
-	console.GlyphShell.Fprintf(os.Stdout, "Executing: %s", command)
+	console.GlyphShell.Fprintf(c.out(), "Executing: %s", command)
 	result, err := tools.ExecuteShellCommand(context.Background(), command)
 	if err != nil {
-		console.GlyphError.Fprintln(os.Stderr, err.Error())
+		console.GlyphError.Fprintln(c.out(), err.Error())
 		return nil
 	}
 
-	fmt.Printf("----------------------------\n")
-	fmt.Print(result)
+	c.println("----------------------------")
+	c.print(result)
 	if !strings.HasSuffix(result, "\n") {
-		fmt.Print("\n")
+		c.println()
 	}
-	fmt.Printf("----------------------------\n")
+	c.println("----------------------------")
 
 	return nil
 }

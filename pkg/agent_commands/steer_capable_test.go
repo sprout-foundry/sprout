@@ -33,6 +33,7 @@ func TestSteerCapable_SafeCommands(t *testing.T) {
 		"subagent-personas", // alias for /persona - safe
 		"clear",             // rotates to a new session; prior session stays in /sessions (WebUI "New Session" depends on this)
 		"context",           // config change, no turn interaction
+		"exec",              // foreground shell run; the CLI steer path already runs bang commands
 	}
 
 	for _, name := range safeCommands {
@@ -103,7 +104,6 @@ func TestSteerCapable_CommandsWithoutInterfaceAreUnsafe(t *testing.T) {
 
 	// These commands don't implement SteerCapable and should be treated as unsafe
 	commandsWithoutInterface := []string{
-		"exec",  // shell execution - unsafe
 		"edit",  // opens editor - unsafe
 		"usage", // uses agent state - treat as unsafe for now
 	}
@@ -137,7 +137,6 @@ func TestSteerCapable_AllRegisteredCommandsHaveInterface(t *testing.T) {
 
 	// Commands that intentionally don't implement SteerCapable
 	knownMissing := map[string]bool{
-		"exec":  true,
 		"edit":  true,
 		"usage": true,
 	}
@@ -187,7 +186,7 @@ func TestDefaultRegistry_InitializesAllCommands(t *testing.T) {
 		"search", "transcript", "verbose", "tools", "keys", "custom",
 		// Mutating commands (unsafe)
 		"setup", "settings", "compact", "sessions", "commit", "clear", "exit",
-		"init", "shell", "exec", "edit", "review", "review-deep", "rollback",
+		"init", "shell", "edit", "review", "review-deep", "rollback",
 		"rewind", "fork",
 		// Subagent commands
 		"persona", "subagent-provider", "subagent-model",

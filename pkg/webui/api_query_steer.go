@@ -53,8 +53,12 @@ func (ws *ReactWebServer) buildAPIQuerySteer(w http.ResponseWriter, r *http.Requ
 		chatID = ws.resolveChatID(r, clientID)
 	}
 
-	// Handle slash commands during active query
-	if strings.HasPrefix(query.Query, "/") {
+	// Handle slash and bang commands during active query. A bang command
+	// ("!cmd") is the shell shortcut the registry translates to /exec, so it
+	// takes the same dispatch path as a slash command — without this branch it
+	// fell through to plain-text steering and was injected into the model's
+	// context as literal text instead of running.
+	if strings.HasPrefix(query.Query, "/") || strings.HasPrefix(query.Query, "!") {
 		ws.mutex.RLock()
 		ctx := ws.clientContexts[clientID]
 		hasActiveQuery := ctx != nil && ctx.hasActiveQueryForChat(chatID)
@@ -301,12 +305,24 @@ func (ws *ReactWebServer) executeSafeSteerCommand(input string, chatAgent *agent
 // Execute returns and writeEnd is closed; onChunk will not be called
 // after this function returns.
 func (ws *ReactWebServer) executeSafeSteerCommandStreaming(input string, chatAgent *agent.Agent, onChunk func(string), onComplete func(agent_commands.Command, string, error)) (agent_commands.Command, string, error) {
-	// Parse command name from input
+	// Parse command name from input. A bang command ("!cmd") is the shell
+	// shortcut for /exec: the registry rewrites it to the exec command with
+	// the whole payload as its single argument, so resolve it the same way
+	// here instead of looking up a command literally named "!cmd".
 	trimmed := strings.TrimSpace(input)
-	if !strings.HasPrefix(trimmed, "/") {
+	var parts []string
+	switch {
+	case strings.HasPrefix(trimmed, "!"):
+		payload := strings.TrimSpace(trimmed[1:])
+		if payload == "" {
+			return nil, "", nil
+		}
+		parts = []string{"exec", payload}
+	case strings.HasPrefix(trimmed, "/"):
+		parts = strings.Fields(trimmed[1:]) // Remove leading /
+	default:
 		return nil, "", nil
 	}
-	parts := strings.Fields(trimmed[1:]) // Remove leading /
 	if len(parts) == 0 {
 		return nil, "", nil
 	}

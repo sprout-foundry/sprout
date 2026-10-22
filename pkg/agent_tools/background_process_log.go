@@ -80,7 +80,7 @@ func readBoundedFile(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var capture BoundedCapture
 	if _, err := io.Copy(&capture, f); err != nil {

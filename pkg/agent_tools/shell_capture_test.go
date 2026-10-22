@@ -5,6 +5,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // TestBoundedCapture_UnderLimitIsVerbatim is the contract that matters most:
@@ -54,12 +56,15 @@ func TestBoundedCapture_OverLimitKeepsHeadAndTail(t *testing.T) {
 	var c BoundedCapture
 	// Stream in chunks the way a pipe reader would, with a recognizable
 	// marker at the very start and the very end.
-	c.Write([]byte("HEAD-MARKER\n"))
+	_, err := c.Write([]byte("HEAD-MARKER\n"))
+	require.NoError(t, err)
 	chunk := bytes.Repeat([]byte("x"), 4096)
 	for written := len("HEAD-MARKER\n"); written < total; written += len(chunk) {
-		c.Write(chunk)
+		_, err := c.Write(chunk)
+		require.NoError(t, err)
 	}
-	c.Write([]byte("\nTAIL-MARKER\n"))
+	_, err = c.Write([]byte("\nTAIL-MARKER\n"))
+	require.NoError(t, err)
 
 	got := c.String()
 
@@ -115,7 +120,9 @@ func TestBoundedCapture_LenCountsEveryByteAccepted(t *testing.T) {
 // must not leak the previous command's output or its truncation flag.
 func TestBoundedCapture_ResetClearsState(t *testing.T) {
 	var c BoundedCapture
-	c.Write(bytes.Repeat([]byte("z"), 2*captureMaxBytes))
+	if _, err := c.Write(bytes.Repeat([]byte("z"), 2*captureMaxBytes)); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
 	if !c.Truncated() {
 		t.Fatal("setup: expected truncated capture")
 	}
@@ -132,7 +139,9 @@ func TestBoundedCapture_ResetClearsState(t *testing.T) {
 		t.Errorf("String() = %q after Reset, want empty", got)
 	}
 
-	c.Write([]byte("fresh"))
+	if _, err := c.Write([]byte("fresh")); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
 	if got := c.String(); got != "fresh" {
 		t.Errorf("String() after Reset+Write = %q, want %q", got, "fresh")
 	}
@@ -151,7 +160,9 @@ func TestBoundedCapture_ConcurrentWrites(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < writes; j++ {
-				c.Write([]byte("concurrent output line\n"))
+				// A BoundedCapture never fails; the error is asserted by
+				// the single-writer tests above.
+				_, _ = c.Write([]byte("concurrent output line\n"))
 			}
 		}()
 	}

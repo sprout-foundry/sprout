@@ -64,7 +64,7 @@ func (cli *CLIPasswordPrompter) PromptInput(ctx context.Context, reason string, 
 	}
 	// Restore terminal state even if ReadPassword encounters an error or
 	// context is cancelled while the goroutine is blocked on the read.
-	defer term.Restore(fd, oldState)
+	defer func() { _ = term.Restore(fd, oldState) }()
 
 	// Read in a goroutine so we can select on context cancellation.
 	type result struct {

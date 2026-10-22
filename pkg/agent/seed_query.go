@@ -317,6 +317,10 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 	// language is undetermined.
 	a.resolveTurnLanguageGuard(processedQuery)
 
+	// A reasoning-loop nudge armed by a previous turn never carries over:
+	// the loop it steered was that turn's.
+	a.clearReasoningLoopNudge()
+
 	// Group extracted images for provider registration. All images from this
 	// query are attached to the first user message by attachPastedImages.
 	pastedImageMap := make(map[string][]api.ImageData)

@@ -18,6 +18,11 @@ type RepetitionLoopStat struct {
 	Provider string
 	Model    string
 	Loops    int64
+	// ReasoningLoops counts the subset detected in the reasoning channel
+	// rather than the visible reply. Those are steered, not cut, so they
+	// are reported separately: a model that thinks in circles while still
+	// answering correctly shows up here and nowhere else.
+	ReasoningLoops int64
 }
 
 // repetitionKey is the (provider, model) bucket of the metric.
@@ -43,6 +48,17 @@ func NewRepetitionMetrics() *RepetitionMetrics {
 // receiver is a no-op. An empty provider or model is bucketed under "unknown"
 // so a missing value never drops the observation.
 func (m *RepetitionMetrics) Record(provider, model string) {
+	m.record(provider, model, false)
+}
+
+// RecordReasoning counts one degenerate loop detected in the reasoning
+// channel. It also increments the cell's total, so Loops stays the count of
+// every loop the guard caught and ReasoningLoops the reasoning subset.
+func (m *RepetitionMetrics) RecordReasoning(provider, model string) {
+	m.record(provider, model, true)
+}
+
+func (m *RepetitionMetrics) record(provider, model string, reasoning bool) {
 	if m == nil {
 		return
 	}
@@ -61,6 +77,9 @@ func (m *RepetitionMetrics) Record(provider, model string) {
 		m.stats[key] = stat
 	}
 	stat.Loops++
+	if reasoning {
+		stat.ReasoningLoops++
+	}
 }
 
 // Snapshot returns a copy of every per-(provider, model) stat, sorted by

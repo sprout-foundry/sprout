@@ -138,6 +138,14 @@ type Agent struct {
 	// without a query-run context. Set once per turn in prepareQueryRun
 	// (setTurnLanguageGuard).
 	turnUserQuery string
+	// reasoningLoopNudge is the steering system message armed when the
+	// reasoning-channel guard confirms a degenerate thinking loop (see
+	// reasoning_guard.go). Guarded by turnLangMu; cleared at turn start.
+	reasoningLoopNudge string
+	// reasoningLoopSteered records that this turn has already been steered
+	// for a reasoning loop, so a flagged guard re-scrubbing on every later
+	// chunk counts one detection, not one per chunk. Guarded by turnLangMu.
+	reasoningLoopSteered bool
 
 	// Configuration
 	configManager *configuration.Manager

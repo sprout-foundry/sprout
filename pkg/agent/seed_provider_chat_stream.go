@@ -86,12 +86,44 @@ func (sp *sproutProvider) attachPastedImages(messages []core.Message) []core.Mes
 
 // Chat implements core.Provider
 func (sp *sproutProvider) Chat(ctx context.Context, req *core.ChatRequest) (*core.ChatResponse, error) {
+	req = sp.withReasoningLoopNudge(req)
 	resp, err := sp.doChatWithRetry(ctx, req)
 	sp.fireSteerFlushHook()
 	return resp, err
 }
 
+// withReasoningLoopNudge appends the turn's armed reasoning-loop nudge to this
+// request's system prompt. Every request of a steered turn carries it, so the
+// iteration after a tool call is steered too; prepareQueryRun clears it at the
+// next turn's start. A request with no system message gets one — the
+// instruction must not be lost.
+func (sp *sproutProvider) withReasoningLoopNudge(req *core.ChatRequest) *core.ChatRequest {
+	if sp.agent == nil || req == nil {
+		return req
+	}
+	nudge := sp.agent.reasoningLoopNudgeForTurn()
+	if nudge == "" {
+		return req
+	}
+	messages := make([]core.Message, 0, len(req.Messages)+1)
+	appended := false
+	for _, msg := range req.Messages {
+		messages = append(messages, msg)
+		if !appended && msg.Role == "system" {
+			messages[len(messages)-1].Content = msg.Content + "\n\n" + nudge
+			appended = true
+		}
+	}
+	if !appended {
+		messages = append([]core.Message{{Role: "system", Content: nudge}}, messages...)
+	}
+	steered := *req
+	steered.Messages = messages
+	return &steered
+}
+
 func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest, handler core.StreamHandler) error {
+	req = sp.withReasoningLoopNudge(req)
 	sproutReq := seedRequestToSprout(req)
 
 	messages := sp.attachPastedImages(req.Messages)
@@ -141,8 +173,19 @@ func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest,
 		}
 	}
 	guard := NewRepetitionGuard(sp.repetitionGuardConfigFromAgent(), guardSink)
+	// The reasoning-channel guard watches reasoning_content with the same
+	// line-run detection. A confirmed reasoning loop does not cut the
+	// stream — the reply that follows is usable and the loop is already in
+	// the context the model reads next — so it steers instead: scrub the
+	// degenerated reasoning from history and arm the nudge. It only
+	// observes; reasoning chunks are delivered unchanged.
+	reasoningGuard := NewRepetitionGuard(sp.reasoningGuardConfigFromAgent(), nil)
 	callback := func(content string, contentType string) {
 		if contentType == "reasoning" {
+			reasoningGuard.Write(content)
+			if reasoningGuard.Looping() {
+				sp.steerReasoningLoop()
+			}
 			handler.OnReasoning(content)
 			sp.agent.output.GetReasoningBuffer().WriteString(content) //nolint:gosec // G104: bytes.Buffer writes cannot fail
 			if router := sp.agent.OutputRouter(); router != nil {
@@ -165,6 +208,10 @@ func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest,
 		reasoning = sproutReq.Reasoning
 	}
 	attemptFn := func(attemptCtx context.Context, msgs []api.Message, cb api.StreamCallback) (*api.ChatResponse, error) {
+		// A transport retry replays the stream from the start, so the
+		// reasoning guard starts clean too — a latched loop from the
+		// discarded attempt must not steer the retry from its first chunk.
+		reasoningGuard.Reset()
 		return sp.doChatWithRetryStreaming(attemptCtx, msgs, sproutReq.Tools, reasoning, disableThinking, cb, holdback, guard)
 	}
 	resp, err := sp.streamWithRepetitionGuard(ctx, messages, callback, holdback, guard, attemptFn)
@@ -179,6 +226,14 @@ func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest,
 	// wrong-language stream.
 	if holdback != nil {
 		sp.finalizeStreamHoldback(ctx, holdback, resp)
+	}
+	// A steered turn's response is scrubbed before seed records it: the
+	// mid-stream scrub only sees the history as it was before this reply, so
+	// without this the loop that was just detected would enter state and be
+	// replayed on the next iteration. Reasoning only — content and tool calls
+	// are untouched, so the provider's replay contract still holds.
+	if sp.agent != nil && sp.agent.reasoningLoopNudgeForTurn() != "" {
+		sp.scrubResponseReasoning(resp)
 	}
 	// Anchor future EstimateTokens calls to this response's real prompt-token count.
 	sp.tokenAnchor.update(sp.currentClient().GetModel(), req.Messages, len(req.Tools), resp.Usage.PromptTokens)

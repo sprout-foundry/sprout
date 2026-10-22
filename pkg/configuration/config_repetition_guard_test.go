@@ -174,3 +174,43 @@ func TestRepetitionGuardConfigPath(t *testing.T) {
 	assert.False(t, cfg.RepetitionGuardEnabled())
 	assert.Equal(t, 7, cfg.RepetitionGuardMinRepetitions())
 }
+
+// TestRepetitionGuardReasoningDefaults pins the reasoning-channel defaults:
+// on by default with the tighter thresholds, and a nil config resolves to the
+// same values.
+func TestRepetitionGuardReasoningDefaults(t *testing.T) {
+	cfg := NewConfig()
+	assert.True(t, cfg.RepetitionGuardReasoningEnabled(), "the reasoning guard must be on by default")
+	assert.Equal(t, DefaultRepetitionReasoningMinRepetitions, cfg.RepetitionGuardReasoningMinRepetitions())
+	assert.Equal(t, DefaultRepetitionReasoningMaxLineChars, cfg.RepetitionGuardReasoningMaxLineChars())
+	assert.Less(t, DefaultRepetitionReasoningMinRepetitions, DefaultRepetitionMinRepetitions,
+		"the reasoning channel must flag sooner than visible prose")
+
+	var nilCfg *Config
+	assert.True(t, nilCfg.RepetitionGuardReasoningEnabled())
+	assert.Equal(t, DefaultRepetitionReasoningMinRepetitions, nilCfg.RepetitionGuardReasoningMinRepetitions())
+	assert.Equal(t, DefaultRepetitionReasoningMaxLineChars, nilCfg.RepetitionGuardReasoningMaxLineChars())
+}
+
+// TestRepetitionGuardReasoningMerge proves a narrower config layer can set the
+// reasoning thresholds and disable the reasoning guard without disturbing the
+// visible-text settings.
+func TestRepetitionGuardReasoningMerge(t *testing.T) {
+	base := NewConfig()
+	base.RepetitionGuard = &RepetitionGuardConfig{MinRepetitions: 6, MaxLineChars: 120}
+
+	override := NewConfig()
+	override.RepetitionGuard = &RepetitionGuardConfig{
+		ReasoningEnabled:        boolPtr(false),
+		ReasoningMinRepetitions: 3,
+		ReasoningMaxLineChars:   50,
+	}
+
+	merged := MergeConfig(base, override)
+
+	assert.Equal(t, 6, merged.RepetitionGuardMinRepetitions(), "visible-text threshold must survive")
+	assert.Equal(t, 120, merged.RepetitionGuardMaxLineChars())
+	assert.False(t, merged.RepetitionGuardReasoningEnabled())
+	assert.Equal(t, 3, merged.RepetitionGuardReasoningMinRepetitions())
+	assert.Equal(t, 50, merged.RepetitionGuardReasoningMaxLineChars())
+}

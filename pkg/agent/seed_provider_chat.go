@@ -226,8 +226,19 @@ func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatReques
 		}
 	}
 	guard := NewRepetitionGuard(sp.repetitionGuardConfigFromAgent(), guardSink)
+	// The reasoning-channel guard watches reasoning_content with the same
+	// line-run detection. A confirmed reasoning loop does not cut the
+	// stream — the reply that follows is usable and the loop is already in
+	// the context the model reads next — so it steers instead: scrub the
+	// degenerated reasoning from history and arm the nudge. It only
+	// observes; reasoning chunks are delivered unchanged.
+	reasoningGuard := NewRepetitionGuard(sp.reasoningGuardConfigFromAgent(), nil)
 	callback := func(content string, contentType string) {
 		if contentType == "reasoning" {
+			reasoningGuard.Write(content)
+			if reasoningGuard.Looping() {
+				sp.steerReasoningLoop()
+			}
 			sp.agent.output.GetReasoningBuffer().WriteString(content)
 			if router := sp.agent.OutputRouter(); router != nil {
 				router.RouteStreamChunk(content, contentType)
@@ -295,6 +306,13 @@ func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatReques
 	// wrong-language stream.
 	if holdback != nil {
 		sp.finalizeStreamHoldback(ctx, holdback, resp)
+	}
+	// A steered turn's response is scrubbed before seed records it (see
+	// scrubResponseReasoning): the mid-stream scrub only sees history that
+	// already existed, so the reply that triggered the steering is cleaned
+	// here, on its way into state.
+	if sp.agent != nil && sp.agent.reasoningLoopNudgeForTurn() != "" {
+		sp.scrubResponseReasoning(resp)
 	}
 
 	return sproutResponseToSeed(resp), nil

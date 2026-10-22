@@ -11,8 +11,8 @@
   "defaults": {
     "max_tokens": 32768,
     "model": "deepseek-flash",
-    "temperature": 0.7,
-    "top_p": 1
+    "temperature": 0.3,
+    "top_p": 0.95
   },
   "display_name": "DeepSeek",
   "endpoint": "https://api.deepseek.com/v1/chat/completions",
@@ -62,7 +62,11 @@
           "coding",
           "tools",
           "reasoning"
-        ]
+        ],
+        "reasoning": {
+          "param": "reasoning_effort",
+          "default_effort": "medium"
+        }
       },
       {
         "cached_input_cost": 0.014,
@@ -76,7 +80,11 @@
           "coding",
           "tools",
           "reasoning"
-        ]
+        ],
+        "reasoning": {
+          "param": "reasoning_effort",
+          "default_effort": "medium"
+        }
       },
       {
         "cached_input_cost": 0.027,
@@ -100,7 +108,11 @@
         "output_cost": 1.32,
         "tags": [
           "chat"
-        ]
+        ],
+        "reasoning": {
+          "param": "reasoning_effort",
+          "default_effort": "medium"
+        }
       },
       {
         "cached_input_cost": 0.014,
@@ -112,7 +124,11 @@
         "output_cost": 1.32,
         "tags": [
           "reasoning"
-        ]
+        ],
+        "reasoning": {
+          "param": "reasoning_effort",
+          "default_effort": "medium"
+        }
       },
       {
         "cached_input_cost": 0.0028,
@@ -138,7 +154,11 @@
           "vision",
           "tools",
           "reasoning"
-        ]
+        ],
+        "reasoning": {
+          "param": "reasoning_effort",
+          "default_effort": "medium"
+        }
       },
       {
         "cached_input_cost": 0.006,
@@ -153,7 +173,11 @@
           "tools",
           "reasoning",
           "vision"
-        ]
+        ],
+        "reasoning": {
+          "param": "reasoning_effort",
+          "default_effort": "medium"
+        }
       }
     ],
     "model_overrides": {

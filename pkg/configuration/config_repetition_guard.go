@@ -23,6 +23,26 @@ type RepetitionGuardConfig struct {
 	// Longer lines are prose, not degenerate tokens. Zero means "use the
 	// default" (DefaultRepetitionMaxLineChars).
 	MaxLineChars int `json:"max_line_chars,omitempty"`
+
+	// ReasoningEnabled gates the reasoning-channel repetition guard: the
+	// same detection applied to the model's streamed reasoning_content.
+	// Some model families (DeepSeek V4, Kimi) degenerate inside their
+	// thinking — cycling "Let me run it." hundreds of times — while the
+	// visible reply stays coherent, so the assistant-text guard never sees
+	// it. On by default.
+	ReasoningEnabled *bool `json:"reasoning_enabled,omitempty"`
+
+	// ReasoningMinRepetitions is the reasoning-channel run length that
+	// triggers detection. Zero means "use the default"
+	// (DefaultRepetitionReasoningMinRepetitions), which is lower than the
+	// assistant-text default: a thinking loop compounds because the model
+	// re-reads its own degenerate reasoning on every later request.
+	ReasoningMinRepetitions int `json:"reasoning_min_repetitions,omitempty"`
+
+	// ReasoningMaxLineChars is the longest reasoning line that counts
+	// toward a run. Zero means "use the default"
+	// (DefaultRepetitionReasoningMaxLineChars).
+	ReasoningMaxLineChars int `json:"reasoning_max_line_chars,omitempty"`
 }
 
 // The default repetition-guard thresholds: a run of six identical short lines
@@ -32,6 +52,48 @@ const (
 	DefaultRepetitionMinRepetitions = 6
 	DefaultRepetitionMaxLineChars   = 120
 )
+
+// The reasoning-channel defaults. A thinking loop is detected earlier than a
+// visible one because it is invisible to the user (the reply stays coherent)
+// and self-reinforcing (the degenerate reasoning is replayed on every later
+// request of the turn, so the model keeps reading its own loop as the
+// immediate prefix). Four repeats of a short thinking line is already a
+// degenerate run; 80 characters keeps ordinary reasoning sentences — which
+// are longer than action announcements — out of the run.
+const (
+	DefaultRepetitionReasoningMinRepetitions = 4
+	DefaultRepetitionReasoningMaxLineChars   = 80
+)
+
+// RepetitionGuardReasoningEnabled reports whether the reasoning-channel
+// guard is active. On by default; only an explicit
+// repetition_guard.reasoning_enabled false turns it off.
+func (c *Config) RepetitionGuardReasoningEnabled() bool {
+	if c == nil || c.RepetitionGuard == nil || c.RepetitionGuard.ReasoningEnabled == nil {
+		return true
+	}
+	return *c.RepetitionGuard.ReasoningEnabled
+}
+
+// RepetitionGuardReasoningMinRepetitions returns the reasoning-channel run
+// length that triggers detection. Unset or below 2 falls back to
+// DefaultRepetitionReasoningMinRepetitions.
+func (c *Config) RepetitionGuardReasoningMinRepetitions() int {
+	if c == nil || c.RepetitionGuard == nil || c.RepetitionGuard.ReasoningMinRepetitions < 2 {
+		return DefaultRepetitionReasoningMinRepetitions
+	}
+	return c.RepetitionGuard.ReasoningMinRepetitions
+}
+
+// RepetitionGuardReasoningMaxLineChars returns the longest reasoning line
+// that counts toward a run. Unset or non-positive falls back to
+// DefaultRepetitionReasoningMaxLineChars.
+func (c *Config) RepetitionGuardReasoningMaxLineChars() int {
+	if c == nil || c.RepetitionGuard == nil || c.RepetitionGuard.ReasoningMaxLineChars <= 0 {
+		return DefaultRepetitionReasoningMaxLineChars
+	}
+	return c.RepetitionGuard.ReasoningMaxLineChars
+}
 
 // RepetitionGuardEnabled reports whether the streamed repetition guard is
 // active for this config. It is on by default everywhere; only an explicit

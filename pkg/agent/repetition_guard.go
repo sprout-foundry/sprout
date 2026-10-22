@@ -44,6 +44,14 @@ type RepetitionGuardConfig struct {
 	// Longer lines are prose, not degenerate tokens, and are skipped
 	// (delivered and never counted).
 	MaxLineChars int
+	// Reasoning marks a guard watching the model's reasoning channel
+	// instead of its visible text. The detection is identical; the
+	// difference is what a confirmed loop means. Visible text that
+	// degenerates is cut and the attempt retried (the reply is worthless),
+	// while reasoning that degenerates is still followed by a usable reply
+	// — the loop is already in the context the model reads, so the turn is
+	// steered (a system nudge plus a scrubbed history) rather than retried.
+	Reasoning bool
 }
 
 // The default thresholds: a run of six identical short lines is degenerate,
@@ -52,6 +60,15 @@ type RepetitionGuardConfig struct {
 const (
 	defaultRepetitionMinRepetitions = 6
 	defaultRepetitionMaxLineChars   = 120
+)
+
+// The reasoning channel loops with shorter, more uniform lines than visible
+// prose ("Run.", "Emitting now."), and a stuck model repeats them sooner, so
+// the reasoning thresholds are tighter. They mirror the configuration
+// defaults (pkg/configuration's DefaultRepetitionReasoning*).
+const (
+	defaultRepetitionReasoningMinRepetitions = 4
+	defaultRepetitionReasoningMaxLineChars   = 80
 )
 
 // A degenerate loop does not always repeat one line: models also cycle a few
@@ -67,9 +84,15 @@ const loopWindowLines = 16
 func resolveRepetitionGuardConfig(cfg RepetitionGuardConfig) RepetitionGuardConfig {
 	if cfg.MinRepetitions < 2 {
 		cfg.MinRepetitions = defaultRepetitionMinRepetitions
+		if cfg.Reasoning {
+			cfg.MinRepetitions = defaultRepetitionReasoningMinRepetitions
+		}
 	}
 	if cfg.MaxLineChars <= 0 {
 		cfg.MaxLineChars = defaultRepetitionMaxLineChars
+		if cfg.Reasoning {
+			cfg.MaxLineChars = defaultRepetitionReasoningMaxLineChars
+		}
 	}
 	return cfg
 }

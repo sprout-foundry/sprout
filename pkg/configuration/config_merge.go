@@ -380,7 +380,8 @@ func MergeConfig(base, override *Config) *Config {
 	// because the pointer is present). The thresholds follow the
 	// non-zero-wins convention.
 	if rg := override.RepetitionGuard; rg != nil &&
-		(rg.Enabled != nil || rg.MinRepetitions > 0 || rg.MaxLineChars > 0) {
+		(rg.Enabled != nil || rg.MinRepetitions > 0 || rg.MaxLineChars > 0 ||
+			rg.ReasoningEnabled != nil || rg.ReasoningMinRepetitions > 0 || rg.ReasoningMaxLineChars > 0) {
 		if result.RepetitionGuard == nil {
 			result.RepetitionGuard = &RepetitionGuardConfig{}
 		}
@@ -392,6 +393,15 @@ func MergeConfig(base, override *Config) *Config {
 		}
 		if rg.MaxLineChars > 0 {
 			result.RepetitionGuard.MaxLineChars = rg.MaxLineChars
+		}
+		if rg.ReasoningEnabled != nil {
+			result.RepetitionGuard.ReasoningEnabled = boolPtr(*rg.ReasoningEnabled)
+		}
+		if rg.ReasoningMinRepetitions > 0 {
+			result.RepetitionGuard.ReasoningMinRepetitions = rg.ReasoningMinRepetitions
+		}
+		if rg.ReasoningMaxLineChars > 0 {
+			result.RepetitionGuard.ReasoningMaxLineChars = rg.ReasoningMaxLineChars
 		}
 	}
 

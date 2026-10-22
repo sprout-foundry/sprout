@@ -236,7 +236,7 @@ type Config struct {
 	// window) rather than at the window-share fraction, whichever is lower.
 	// This keeps a 1M-token model from running to hundreds of thousands of
 	// tokens before anything is compacted. 0 (the default) means the built-in
-	// 160K ceiling applies.
+	// 300K ceiling applies.
 	CompactionCeilingTokens int `json:"compaction_ceiling_tokens,omitempty"`
 
 	// Notifications controls how the agent notifies the user when long-running turns complete.

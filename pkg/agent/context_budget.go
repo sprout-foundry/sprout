@@ -29,12 +29,20 @@ func (a *Agent) computeCompactionTriggerFraction() float64 {
 // defaultCompactionCeilingTokens is the built-in absolute ceiling on the live
 // conversation (rel.2). For a 1M-token window the window-share trigger
 // (0.70 → ~734K) would let an automate coordinator run for hundreds of
-// thousands of tokens with nothing compacted; an absolute 160K ceiling keeps
+// thousands of tokens with nothing compacted; an absolute 300K ceiling keeps
 // the working set bounded no matter how large the model's window is.
-const defaultCompactionCeilingTokens = 160 * 1024
+//
+// 300K is a continuity/quality tradeoff, not a hard limit: a large-window
+// model pays for its window, so compacting at ~16% of it discards context the
+// model could still use. The ceiling sits below the range where long-context
+// tool-call reliability degrades on the large-window families in use, while
+// leaving enough live history that turns rarely re-read what they already
+// read. A tighter value (e.g. 160K) trades continuity for a smaller working
+// set; compaction_ceiling_tokens sets either per project.
+const defaultCompactionCeilingTokens = 300 * 1024
 
 // compactionCeilingFor returns the configured absolute live-context ceiling,
-// or the built-in 160K default when unset. A value of 0 means "use the
+// or the built-in 300K default when unset. A value of 0 means "use the
 // built-in default" (the field is an optional override, not a switch).
 func (a *Agent) compactionCeilingFor() int {
 	if cfg := a.GetConfig(); cfg != nil && cfg.CompactionCeilingTokens > 0 {
@@ -44,22 +52,36 @@ func (a *Agent) compactionCeilingFor() int {
 }
 
 // compactionTriggerFractionFor is the effective compaction trigger fraction
-// for a model with the given context window (rel.2): the lower of the
-// window-share fraction and the absolute live-context ceiling expressed as a
-// share of the window. For a 1M window with the 160K ceiling this is ~0.16
-// rather than 0.70, so compaction fires at 160K of live conversation, well
-// before the quality degrades on a near-full context.
+// for a model with the given effective context window (rel.2).
+//
+// The trigger is the lower of the window-share fraction and the absolute
+// live-context ceiling. For a 1M window with the 300K ceiling this is ~0.29
+// rather than 0.70, so compaction fires at 300K of live conversation, well
+// before quality degrades on a near-full context.
+//
+// A user cap (Config.MaxContextTokens, /max-context) is an explicit statement
+// about how much context to use, so it wins over the ceiling: the trigger is
+// never later than the cap. Measuring the ceiling against the capped window
+// instead made a 300K ceiling on a 1M model become a 0.70 share of a 300K cap
+// (firing at 210K, EARLIER than the uncapped 307K), so raising the cap moved
+// the trigger the wrong way.
 func (a *Agent) compactionTriggerFractionFor(contextLimit int) float64 {
+	if contextLimit <= 0 {
+		return a.computeCompactionTriggerFraction()
+	}
 	base := a.computeCompactionTriggerFraction()
 	ceiling := a.compactionCeilingFor()
-	if contextLimit <= 0 || ceiling <= 0 {
+	if ceiling <= 0 {
 		return base
 	}
-	ceilingFraction := float64(ceiling) / float64(contextLimit)
-	// Whichever is lower binds: a small window's share is already below the
-	// ceiling; a large window's share is not, so the ceiling takes over.
-	if ceilingFraction < base {
-		return ceilingFraction
+	// Resolve both triggers as absolute token counts and take the lower: the
+	// window-share trigger, and the absolute ceiling. A user cap is already
+	// reflected in contextLimit, so a cap below the ceiling makes the cap's
+	// own share (base) the binding trigger and the ceiling simply does not
+	// bind — compaction never fires later than the cap.
+	triggerTokens := float64(contextLimit) * base
+	if float64(ceiling) < triggerTokens {
+		triggerTokens = float64(ceiling)
 	}
-	return base
+	return triggerTokens / float64(contextLimit)
 }

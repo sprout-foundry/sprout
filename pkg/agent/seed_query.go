@@ -408,9 +408,9 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 	// context window for response + thinking + tool I/O, which thinking-budget models exhaust
 	// before emitting any user-visible text. computeCompactionTriggerFraction subtracts the
 	// reservation fractions so substitution fires earlier — by default at 0.70 instead of 0.85.
-	// rel.2: for a large window an absolute live-context ceiling (default 160K) may bind
+	// rel.2: for a large window an absolute live-context ceiling (default 300K) may bind
 	// first, so compaction fires at min(window-share, ceiling) of the conversation — a 1M
-	// model is compacted at ~160K of live context, not ~734K.
+	// model is compacted at ~300K of live context, not ~734K.
 	opts.CompactionTriggerFraction = a.compactionTriggerFractionFor(a.getModelContextLimit())
 	opts.SubstitutionTargetFraction = 0.50
 

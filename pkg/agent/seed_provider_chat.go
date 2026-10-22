@@ -63,6 +63,25 @@ func (sp *sproutProvider) doChatWithRetry(ctx context.Context, req *core.ChatReq
 
 		lastErr = err
 
+		// A malformed inline image payload is a request-body problem, not a
+		// transport one: the provider rejects the same bytes every time.
+		// Strip the images that do not decode and retry once without them,
+		// instead of burning the retry budget and reporting an
+		// authentication failure. When nothing could be stripped, fail now
+		// with a message naming the real cause.
+		if isImagePayloadError(err) {
+			stripped := stripInvalidImagePayloads(req.Messages)
+			if len(stripped) != len(req.Messages) || messagesImageCount(stripped) != messagesImageCount(req.Messages) {
+				req.Messages = stripped
+				sp.clearPastedImages()
+				if sp.agent != nil && sp.agent.eventBus != nil {
+					sp.agent.publishRetryEvent(err, attempt, maxRetries, sp.agent.GetProvider(), true)
+				}
+				continue
+			}
+			return nil, classifyImagePayloadError(err)
+		}
+
 		// Record the error for observability and emit retry event.
 		sp.recordProviderError(err, attempt)
 		if sp.agent != nil && sp.agent.eventBus != nil {

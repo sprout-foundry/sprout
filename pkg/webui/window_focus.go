@@ -90,4 +90,3 @@ func isWebUIConnectionForeground(ws *ReactWebServer, clientID string) bool {
 	}
 	return strings.TrimSpace(window) == strings.TrimSpace(clientID)
 }
-

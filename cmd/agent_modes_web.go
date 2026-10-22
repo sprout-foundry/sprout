@@ -115,6 +115,7 @@ func setupWebUIServer(ctx context.Context, cancel context.CancelFunc, chatAgent 
 			if webErr != nil {
 				log.Fatalf("%v", webErr)
 			}
+			webServer.SetBasePath(webBasePath)
 
 			// SP-118 Phase 1: Route to Mode 1 (single-active-session) for the
 			// sprout agent path (interactive / direct / non-daemon). The daemon

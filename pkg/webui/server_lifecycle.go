@@ -37,7 +37,9 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	// and write the cookie on every response. The cookie is essential for
 	// cross-origin session persistence (Cloudflare Pages + tunnel) where
 	// custom headers are not preserved across page reloads.
-	var handler http.Handler = securityHeadersMiddleware(mux)
+	// The mount prefix is stripped before routing so a proxy that forwards
+	// the prefixed path and one that strips it behave identically.
+	var handler http.Handler = securityHeadersMiddleware(ws.basePathMiddleware(mux))
 	handler = ws.userActivityMiddleware(handler)
 
 	// Wrap with user ID extraction middleware for service mode

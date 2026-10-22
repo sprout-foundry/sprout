@@ -34,20 +34,23 @@ func (ws *ReactWebServer) log() *slog.Logger {
 
 // ReactWebServer provides the React web UI
 type ReactWebServer struct {
-	logger              *slog.Logger
-	agent               *agent.Agent
-	eventBus            *events.EventBus
-	daemonRoot          string
-	workspaceRoot       string
-	sshHostAlias        string
-	sshSessionKey       string
-	sshLauncherURL      string
-	sshHomePath         string
-	fileConsents        *fileConsentManager
-	clientContexts      map[string]*webClientContext
-	chatSubscribers     *chatSubscribersRegistry
-	port                int
-	bindAddr            string
+	logger          *slog.Logger
+	agent           *agent.Agent
+	eventBus        *events.EventBus
+	daemonRoot      string
+	workspaceRoot   string
+	sshHostAlias    string
+	sshSessionKey   string
+	sshLauncherURL  string
+	sshHomePath     string
+	fileConsents    *fileConsentManager
+	clientContexts  map[string]*webClientContext
+	chatSubscribers *chatSubscribersRegistry
+	port            int
+	bindAddr        string
+	// basePath is the mount prefix the UI is served under ("" for the origin
+	// root). See mount_base_path.go.
+	basePath            string
 	server              *http.Server
 	listener            net.Listener
 	upgrader            websocket.Upgrader

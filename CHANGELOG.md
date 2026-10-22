@@ -4,6 +4,15 @@ All notable changes to Sprout will be documented in this file.
 
 ## [Unreleased]
 
+## [v0.32.2] - 2026-10-22
+
+- fix(browse): the `eval` step runs ordinary JavaScript. rod wraps a script as `function() { return (<js>).apply(this, arguments) }`, so only a bare arrow function worked; a statement, an IIFE, or a plain expression failed with a `TypeError` naming `.apply`. Scripts are now evaluated as statements and return their completion value, and `wait_for_function` — which had the same constraint — accepts the same shapes.
+- fix(agent): a malformed inline image payload is no longer reported as an authentication failure. A provider 400 mentioning base64 travelled the network-error path, was retried, and ended as "Authentication failed … check your API key". Images whose payload does not decode are now stripped (with a note on the message) and the request retried once; when nothing could be stripped the turn fails immediately with a message naming the real cause.
+- fix(shell): in-memory capture of command output is bounded — the head is kept verbatim, the tail is a fixed-size ring, and dropped bytes are counted in the returned text, so a long-running command's footprint no longer grows with its output.
+- feat(shell): a command that asks a question is answered instead of hanging. Secret prompts (password/passphrase) and generic prompts ("Overwrite? [y/N]") are both detected in the CLI and the WebUI; a secret answer is masked and redacted, a non-secret answer is echoed and leaves stdin open for further questions.
+- feat(commands): `/settings set` applies mid-turn.
+- feat(webui): bang shell commands run during steer.
+
 ## [v0.32.1] - 2026-10-14
 
 - fix(harness): a shell command is no longer silently truncated. The PTY paths wrapped every command inline as `/bin/sh -c '<command>'`, and a PTY in canonical mode truncates input lines at ~4KB — so a longer chained command executed only its first statement and still reported success. Commands are now materialized as self-deleting temp scripts and the PTY receives only a short launcher line, which also makes embedded-newline commands (heredocs, multi-line scripts) work instead of being rejected. The completion sentinel is evaluated inside the script, so the exit-code guarantee holds on any login shell, and the background path shares the same machinery.

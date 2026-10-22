@@ -334,7 +334,7 @@ func browseStepWaitForFunction(page *rod.Page, step BrowseStep, timeout time.Dur
 	if strings.TrimSpace(step.Script) == "" {
 		return fmt.Errorf("browse step wait_for_function requires script")
 	}
-	if err := page.Timeout(timeout).Wait(rod.Eval(step.Script)); err != nil {
+	if err := page.Timeout(timeout).Wait(rod.Eval(scriptAsStatement(step.Script))); err != nil {
 		return fmt.Errorf("wait_for_function: %w", err)
 	}
 	record(fmt.Sprintf("wait_for_function %s", step.Script))

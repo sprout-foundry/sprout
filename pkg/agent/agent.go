@@ -178,7 +178,7 @@ type Agent struct {
 	// contextCapMu guards effectiveContextCap/nativeContextWindow and the
 	// lastResolved* user-cap snapshot. Reads happen on every seed iteration
 	// (Info/reconcile) while writes come from model switches and runtime
-	// /max-context or settings-API cap changes, so the two must not race.
+	// settings-API cap changes, so the two must not race.
 	contextCapMu sync.RWMutex
 	// lastResolvedUserCap/lastResolvedHasCap snapshot the config's
 	// MaxContextTokens at the last cap resolution so reconcileContextCap can

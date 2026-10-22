@@ -287,7 +287,7 @@ func TestRel2_ConfiguredCeilingHonorsConfig(t *testing.T) {
 }
 
 // TestRel2_CapWinsOverCeiling pins the integration between the user's context
-// cap (Config.MaxContextTokens, /max-context) and the absolute ceiling: the
+// cap (Config.MaxContextTokens) and the absolute ceiling: the
 // cap is an explicit statement about how much context to use, so the trigger
 // never fires later than the cap, and raising the cap never moves the trigger
 // earlier.

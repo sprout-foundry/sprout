@@ -319,3 +319,18 @@ func TestSettingsCommand_SetInvalidValue(t *testing.T) {
 		t.Error("expected error for invalid output_verbosity value, got nil")
 	}
 }
+
+// /settings set completion must offer the compaction ceiling key.
+func TestSettingsComplete_CompactionCeiling(t *testing.T) {
+	s := &SettingsCommand{}
+	got := s.Complete([]string{"set", "compaction"}, nil)
+	found := false
+	for _, g := range got {
+		if g == "compaction_ceiling_tokens" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("completion for %q = %v, want it to include compaction_ceiling_tokens", "compaction", got)
+	}
+}

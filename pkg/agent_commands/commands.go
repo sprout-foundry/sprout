@@ -162,9 +162,6 @@ func NewCommandRegistry() *CommandRegistry {
 	// economy mode (delegate more work to the cheaper worker model)
 	registry.Register(&EconomyCommand{})
 
-	// Cost control
-	registry.Register(&MaxContextCommand{})
-
 	// Low-Context Mode inspection and override
 	registry.Register(&ContextCommand{})
 

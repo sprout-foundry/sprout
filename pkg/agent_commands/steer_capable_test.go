@@ -21,7 +21,6 @@ func TestSteerCapable_SafeCommands(t *testing.T) {
 		"log",
 		"mcp",
 		"risk-profile",
-		"max-context",
 		"skill",
 		"search",
 		"transcript",
@@ -184,7 +183,7 @@ func TestDefaultRegistry_InitializesAllCommands(t *testing.T) {
 	expectedCommands := []string{
 		// Read-only / config commands (safe)
 		"info", "codegraph", "model", "provider", "help", "status",
-		"changes", "log", "mcp", "risk-profile", "max-context", "skill",
+		"changes", "log", "mcp", "risk-profile", "skill",
 		"search", "transcript", "verbose", "tools", "keys", "custom",
 		// Mutating commands (unsafe)
 		"setup", "settings", "compact", "sessions", "commit", "clear", "exit",

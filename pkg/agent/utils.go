@@ -102,7 +102,7 @@ func (a *Agent) setContextCapState(effectiveCap, nativeWindow int, cfg *configur
 }
 
 // RefreshContextCapFromConfig re-resolves the effective context cap from the
-// current config and client. Called by /max-context and the settings API after
+// current config and client. Called by the settings API after
 // they persist a MaxContextTokens change, so the running session picks up the
 // new cap without waiting for a model switch.
 func (a *Agent) RefreshContextCapFromConfig() {
@@ -140,7 +140,7 @@ func (a *Agent) refreshEffectiveContextCap() {
 // cap, re-resolving when the live window diverges from the one the cached cap
 // was resolved against (e.g. the creation-time lookup failed to 32K and the
 // runtime lookup now succeeds with 200K) or when the user's configured cap
-// changed since the last resolution (e.g. /max-context or the settings API
+// changed since the last resolution (e.g. a settings-API cap change)
 // mutated MaxContextTokens at runtime). Returns the effective context size.
 //
 // The config snapshot is read on every call (an in-memory clone under the

@@ -975,37 +975,6 @@ func TestRiskProfileCommand_Complete_CustomProfiles(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// MaxContextCommand.Complete
-// ---------------------------------------------------------------------------
-
-func TestMaxContextCommand_Complete_EmptyArgs(t *testing.T) {
-	cmd := &MaxContextCommand{}
-
-	// No args -> should return ["clear"]
-	results := cmd.Complete(nil, nil)
-	assert.Equal(t, []string{"clear"}, results, "empty args should return ['clear']")
-}
-
-func TestMaxContextCommand_Complete_PrefixMatch(t *testing.T) {
-	cmd := &MaxContextCommand{}
-
-	// args=["cl"] -> returns ["clear"]
-	results := cmd.Complete([]string{"cl"}, nil)
-	assert.Equal(t, []string{"clear"}, results, "prefix 'cl' should match 'clear'")
-
-	// Case insensitive: "CL" should match "clear"
-	resultsUpper := cmd.Complete([]string{"CL"}, nil)
-	assert.Equal(t, []string{"clear"}, resultsUpper, "case-insensitive prefix 'CL' should match 'clear'")
-}
-
-func TestMaxContextCommand_Complete_TooManyArgs(t *testing.T) {
-	cmd := &MaxContextCommand{}
-
-	results := cmd.Complete([]string{"clear", "extra"}, nil)
-	assert.Nil(t, results, "more than one arg should return nil")
-}
-
-// ---------------------------------------------------------------------------
 // TranscriptCommand.Complete
 // ---------------------------------------------------------------------------
 

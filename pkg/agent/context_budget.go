@@ -59,7 +59,7 @@ func (a *Agent) compactionCeilingFor() int {
 // rather than 0.70, so compaction fires at 300K of live conversation, well
 // before quality degrades on a near-full context.
 //
-// A user cap (Config.MaxContextTokens, /max-context) is an explicit statement
+// A user cap (Config.MaxContextTokens) is an explicit statement
 // about how much context to use, so it wins over the ceiling: the trigger is
 // never later than the cap. Measuring the ceiling against the capped window
 // instead made a 300K ceiling on a 1M model become a 0.70 share of a 300K cap
@@ -84,4 +84,10 @@ func (a *Agent) compactionTriggerFractionFor(contextLimit int) float64 {
 		triggerTokens = float64(ceiling)
 	}
 	return triggerTokens / float64(contextLimit)
+}
+
+// CompactionCeilingTokens returns the effective absolute live-context ceiling:
+// the configured value when set, otherwise the built-in default.
+func (a *Agent) CompactionCeilingTokens() int {
+	return a.compactionCeilingFor()
 }

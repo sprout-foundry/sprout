@@ -27,7 +27,6 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { name: 'init', description: 'Generate or improve AGENTS.md with intelligent codebase analysis' },
   { name: 'keys', description: 'Manage API credentials for providers' },
   { name: 'log', description: 'Show recent change history from all sessions' },
-  { name: 'max-context', description: 'Show or set the max context token cap for cost control (0 = no cap)' },
   { name: 'mcp', description: 'Manage MCP (Model Context Protocol) servers - add, remove, list, test' },
   { name: 'model', description: 'List available models and select which model to use' },
   { name: 'persona', description: 'List, activate, and enable/disable personas' },

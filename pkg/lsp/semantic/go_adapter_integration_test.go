@@ -25,9 +25,7 @@ func setupGoTestModule(t *testing.T, content string) (dir string, file string) {
 }
 
 func TestGoAdapterRunDefinitionWithGopls(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	dir, file := setupGoTestModule(t, "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}\n")
 
@@ -49,9 +47,7 @@ func TestGoAdapterRunDefinitionWithGopls(t *testing.T) {
 }
 
 func TestGoAdapterRunHoverWithGopls(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	dir, file := setupGoTestModule(t, "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}\n")
 
@@ -73,9 +69,7 @@ func TestGoAdapterRunHoverWithGopls(t *testing.T) {
 }
 
 func TestGoAdapterRunReferencesWithGopls(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	dir, file := setupGoTestModule(t, "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}\n")
 
@@ -97,9 +91,7 @@ func TestGoAdapterRunReferencesWithGopls(t *testing.T) {
 }
 
 func TestGoAdapterRunRenameWithGopls(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	content := "package main\n\nfunc greet() string { return \"hi\" }\n\nfunc main() {\n\tprintln(greet())\n}\n"
 	dir, file := setupGoTestModule(t, content)
@@ -182,9 +174,7 @@ func TestGoAdapterRunCodeActionsNoChanges(t *testing.T) {
 }
 
 func TestGoAdapterRunSignatureHelpWithGopls(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	content := "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\n}\n"
 	dir, file := setupGoTestModule(t, content)

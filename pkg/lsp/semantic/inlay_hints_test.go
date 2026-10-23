@@ -9,9 +9,7 @@ import (
 // Tests for inlay hints and gopls server session paths.
 
 func TestGoAdapterInlayHintsWithGopls(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	content := "package main\n\nfunc main() {\n\tx := 1\n\t_ = x\n}\n"
 	dir, file := setupGoTestModule(t, content)
@@ -33,9 +31,7 @@ func TestGoAdapterInlayHintsWithGopls(t *testing.T) {
 }
 
 func TestGoSessionAdapterDefinitionWithGopls(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	content := "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}\n"
 	dir, file := setupGoTestModule(t, content)
@@ -59,9 +55,7 @@ func TestGoSessionAdapterDefinitionWithGopls(t *testing.T) {
 }
 
 func TestGoSessionAdapterInlayHintsWithGopls(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	content := "package main\n\nfunc main() {\n\tx := 1\n\t_ = x\n}\n"
 	dir, file := setupGoTestModule(t, content)
@@ -126,9 +120,7 @@ func TestRunGoDiagnosticsDirectly(t *testing.T) {
 }
 
 func TestRunGoDefinitionDirectly(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	dir, file := setupGoTestModule(t, "package main\n\nfunc main() {}\n")
 
@@ -147,9 +139,7 @@ func TestRunGoDefinitionDirectly(t *testing.T) {
 }
 
 func TestRunGoHoverDirectly(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	dir, file := setupGoTestModule(t, "package main\n\nfunc main() {}\n")
 
@@ -172,9 +162,7 @@ func TestRunGoHoverDirectly(t *testing.T) {
 }
 
 func TestRunGoRenameDirectly(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	content := "package main\n\nfunc main() { println() }\n"
 	dir, file := setupGoTestModule(t, content)
@@ -195,9 +183,7 @@ func TestRunGoRenameDirectly(t *testing.T) {
 }
 
 func TestRunGoReferencesDirectly(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	content := "package main\n\nfunc main() { println() }\n"
 	dir, file := setupGoTestModule(t, content)
@@ -238,9 +224,7 @@ func TestRunGoCodeActionsDirectly(t *testing.T) {
 }
 
 func TestRunGoSignatureHelpDirectly(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	content := "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\n}\n"
 	dir, file := setupGoTestModule(t, content)
@@ -267,9 +251,7 @@ func TestRunGoSignatureHelpDirectly(t *testing.T) {
 // lifecycle methods directly.
 
 func TestGoSessionAdapterEnsureServer(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	a := &goSessionAdapter{}
 

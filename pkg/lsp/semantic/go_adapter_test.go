@@ -553,10 +553,7 @@ func TestGoAdapterRunDiagnosticsValidCode(t *testing.T) {
 func TestGoAdapterRunDefinitionNoGopls(t *testing.T) {
 	// This test verifies the "gopls_not_available" path
 	// It will only trigger if gopls is not installed
-	_, err := exec.LookPath("gopls")
-	if err == nil {
-		t.Skip("gopls is available; skipping not-available path test")
-	}
+	skipIfGoplsInstalled(t)
 
 	adapter := NewGoAdapter()
 	result, err := adapter.Run(ToolInput{
@@ -575,10 +572,7 @@ func TestGoAdapterRunDefinitionNoGopls(t *testing.T) {
 }
 
 func TestGoAdapterRunHoverNoGopls(t *testing.T) {
-	_, err := exec.LookPath("gopls")
-	if err == nil {
-		t.Skip("gopls is available; skipping not-available path test")
-	}
+	skipIfGoplsInstalled(t)
 
 	adapter := NewGoAdapter()
 	result, err := adapter.Run(ToolInput{
@@ -597,10 +591,7 @@ func TestGoAdapterRunHoverNoGopls(t *testing.T) {
 }
 
 func TestGoAdapterRunRenameNoGopls(t *testing.T) {
-	_, err := exec.LookPath("gopls")
-	if err == nil {
-		t.Skip("gopls is available; skipping not-available path test")
-	}
+	skipIfGoplsInstalled(t)
 
 	adapter := NewGoAdapter()
 	result, err := adapter.Run(ToolInput{
@@ -619,10 +610,7 @@ func TestGoAdapterRunRenameNoGopls(t *testing.T) {
 }
 
 func TestGoAdapterRunReferencesNoGopls(t *testing.T) {
-	_, err := exec.LookPath("gopls")
-	if err == nil {
-		t.Skip("gopls is available; skipping not-available path test")
-	}
+	skipIfGoplsInstalled(t)
 
 	adapter := NewGoAdapter()
 	result, err := adapter.Run(ToolInput{
@@ -661,10 +649,7 @@ func TestGoAdapterRunCodeActionsNoGoimports(t *testing.T) {
 }
 
 func TestGoAdapterRunInlayHintsNoGopls(t *testing.T) {
-	_, err := exec.LookPath("gopls")
-	if err == nil {
-		t.Skip("gopls is available; skipping not-available path test")
-	}
+	skipIfGoplsInstalled(t)
 
 	adapter := NewGoAdapter()
 	result, err := adapter.Run(ToolInput{
@@ -681,10 +666,7 @@ func TestGoAdapterRunInlayHintsNoGopls(t *testing.T) {
 }
 
 func TestGoAdapterRunSignatureHelpNoGopls(t *testing.T) {
-	_, err := exec.LookPath("gopls")
-	if err == nil {
-		t.Skip("gopls is available; skipping not-available path test")
-	}
+	skipIfGoplsInstalled(t)
 
 	adapter := NewGoAdapter()
 	result, err := adapter.Run(ToolInput{
@@ -1196,10 +1178,7 @@ func TestParseGoplsSignatureHelpNilPosition(t *testing.T) {
 // =============================================================================
 
 func TestGoSessionAdapterRunRenameNoGopls(t *testing.T) {
-	_, err := exec.LookPath("gopls")
-	if err == nil {
-		t.Skip("gopls is available; skipping not-available path test")
-	}
+	skipIfGoplsInstalled(t)
 
 	a := &goSessionAdapter{}
 	defer a.Close()
@@ -1220,10 +1199,7 @@ func TestGoSessionAdapterRunRenameNoGopls(t *testing.T) {
 }
 
 func TestGoSessionAdapterRunReferencesNoGopls(t *testing.T) {
-	_, err := exec.LookPath("gopls")
-	if err == nil {
-		t.Skip("gopls is available; skipping not-available path test")
-	}
+	skipIfGoplsInstalled(t)
 
 	a := &goSessionAdapter{}
 	defer a.Close()
@@ -1266,10 +1242,7 @@ func TestGoSessionAdapterRunCodeActionsNoGoimports(t *testing.T) {
 }
 
 func TestGoSessionAdapterRunSignatureHelpNoGopls(t *testing.T) {
-	_, err := exec.LookPath("gopls")
-	if err == nil {
-		t.Skip("gopls is available; skipping not-available path test")
-	}
+	skipIfGoplsInstalled(t)
 
 	a := &goSessionAdapter{}
 	defer a.Close()
@@ -1288,10 +1261,7 @@ func TestGoSessionAdapterRunSignatureHelpNoGopls(t *testing.T) {
 }
 
 func TestGoSessionAdapterRunRenameNilPosition(t *testing.T) {
-	_, err := exec.LookPath("gopls")
-	if err == nil {
-		t.Skip("gopls is available; skipping not-available path test")
-	}
+	skipIfGoplsInstalled(t)
 
 	a := &goSessionAdapter{}
 	defer a.Close()
@@ -1317,9 +1287,7 @@ func TestGoSessionAdapterRunRenameNilPosition(t *testing.T) {
 // =============================================================================
 
 func TestGoSessionAdapterEnsureServerAlreadyRunning(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	a := &goSessionAdapter{}
 	defer a.Close()
@@ -1347,9 +1315,7 @@ func TestGoSessionAdapterEnsureServerAlreadyRunning(t *testing.T) {
 }
 
 func TestGoSessionAdapterResetServerWithNonNilFields(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	a := &goSessionAdapter{}
 	defer a.Close()
@@ -1447,9 +1413,7 @@ func TestRunGoDefinitionWithRemoteNilPosition(t *testing.T) {
 // =============================================================================
 
 func TestNewGoSessionPoolWithGopls(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	pool := NewGoSessionPool(5 * time.Minute)
 	defer pool.Close()
@@ -1578,9 +1542,7 @@ func TestRunGoDiagnosticsTriggerEditSkipsVet(t *testing.T) {
 // =============================================================================
 
 func TestRunGoHoverNilPosition(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	dir, file := setupGoTestModule(t, "package main\n\nfunc main() {}\n")
 
@@ -1627,9 +1589,7 @@ func TestRunGoCodeActionsNoChanges(t *testing.T) {
 // =============================================================================
 
 func TestRunGoSignatureHelpNilPosition(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	dir, file := setupGoTestModule(t, "package main\n\nfunc main() {}\n")
 
@@ -1740,9 +1700,7 @@ func TestGoAdapterRunCodeActionsSyntaxError(t *testing.T) {
 // =============================================================================
 
 func TestRunGoReferencesWorkspaceRelativePath(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	content := "package main\n\nfunc main() { println() }\n"
 	dir, file := setupGoTestModule(t, content)
@@ -1774,9 +1732,7 @@ func TestRunGoReferencesWorkspaceRelativePath(t *testing.T) {
 // =============================================================================
 
 func TestRunGoRenameMultipleOccurrences(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	content := "package main\n\nvar x int\n\nfunc main() {\n\ty := x\n\t_ = y + x\n}\n"
 	dir, file := setupGoTestModule(t, content)
@@ -1849,9 +1805,7 @@ func TestRunGoCodeActionsEmptyBaseName(t *testing.T) {
 // =============================================================================
 
 func TestRunGoInlayHintsDirectlyWithGopls(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	content := "package main\n\nfunc main() {\n\tx := 1\n\t_ = x\n}\n"
 	dir, file := setupGoTestModule(t, content)
@@ -1874,9 +1828,7 @@ func TestRunGoInlayHintsDirectlyWithGopls(t *testing.T) {
 // =============================================================================
 
 func TestGoSessionAdapterRunDefinitionWithGopls(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	content := "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}\n"
 	dir, file := setupGoTestModule(t, content)
@@ -1904,9 +1856,7 @@ func TestGoSessionAdapterRunDefinitionWithGopls(t *testing.T) {
 // =============================================================================
 
 func TestGoSessionAdapterHealthyWithServer(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	a := &goSessionAdapter{}
 	defer a.Close()
@@ -1940,9 +1890,7 @@ func TestGoSessionAdapterHealthyAfterClose(t *testing.T) {
 // =============================================================================
 
 func TestRunGoReferencesExtractsLineText(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	// Define a variable used on multiple lines so references span different lines.
 	content := "package main\n\nvar config string\n\nfunc init() {\n\tconfig = \"default\"\n}\n\nfunc main() {\n\t_ = config\n}\n"
@@ -1976,9 +1924,7 @@ func TestRunGoReferencesExtractsLineText(t *testing.T) {
 }
 
 func TestRunGoReferencesMultiFileSymbolSorting(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	// Define a function used in two files to test current-file-first sorting.
 	mainContent := "package main\n\nfunc greet() string { return \"hi\" }\n\nfunc main() {\n\tprintln(greet())\n}\n"
@@ -2026,9 +1972,7 @@ func TestRunGoReferencesMultiFileSymbolSorting(t *testing.T) {
 // =============================================================================
 
 func TestRunGoRenameWithSameFileRefs(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	// Variable used multiple times in the same file.
 	content := "package main\n\nvar x int\n\nfunc main() {\n\ty := x\n\t_ = y + x\n}\n"
@@ -2065,9 +2009,7 @@ func TestRunGoRenameWithSameFileRefs(t *testing.T) {
 }
 
 func TestRunGoRenameFiltersOtherFiles(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	// Define a function used in two files — rename should only return locations
 	// from the current file.
@@ -2113,9 +2055,7 @@ func TestRunGoRenameFiltersOtherFiles(t *testing.T) {
 // =============================================================================
 
 func TestGoSessionAdapterRunHoverWithGopls(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	content := "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}\n"
 	dir, file := setupGoTestModule(t, content)
@@ -2139,9 +2079,7 @@ func TestGoSessionAdapterRunHoverWithGopls(t *testing.T) {
 }
 
 func TestGoSessionAdapterRunRenameWithGopls(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	content := "package main\n\nfunc greet() string { return \"hi\" }\n\nfunc main() {\n\tprintln(greet())\n}\n"
 	dir, file := setupGoTestModule(t, content)
@@ -2165,9 +2103,7 @@ func TestGoSessionAdapterRunRenameWithGopls(t *testing.T) {
 }
 
 func TestGoSessionAdapterRunReferencesWithGopls(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	content := "package main\n\nvar config string\n\nfunc main() {\n\t_ = config\n}\n"
 	dir, file := setupGoTestModule(t, content)
@@ -2215,9 +2151,7 @@ func TestGoSessionAdapterRunCodeActionsWithGoimports(t *testing.T) {
 }
 
 func TestGoSessionAdapterRunSignatureHelpWithGopls(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	content := "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\n}\n"
 	dir, file := setupGoTestModule(t, content)
@@ -2241,9 +2175,7 @@ func TestGoSessionAdapterRunSignatureHelpWithGopls(t *testing.T) {
 }
 
 func TestGoSessionAdapterRunInlayHintsWithGopls(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	content := "package main\n\nfunc main() {\n\tx := 1\n\t_ = x\n}\n"
 	dir, file := setupGoTestModule(t, content)
@@ -2270,9 +2202,7 @@ func TestGoSessionAdapterRunInlayHintsWithGopls(t *testing.T) {
 // =============================================================================
 
 func TestRunGoHoverEmptyContent(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	// Hover on an empty line — gopls returns empty stdout
 	content := "package main\n\nfunc main() {}\n"
@@ -2297,9 +2227,7 @@ func TestRunGoHoverEmptyContent(t *testing.T) {
 }
 
 func TestRunGoHoverCommentLine(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	content := "package main\n// just a comment\nfunc main() {}\n"
 	dir, file := setupGoTestModule(t, content)
@@ -2327,9 +2255,7 @@ func TestGoSessionAdapterEnsureServerStartFailure(t *testing.T) {
 	// This covers the path where gopls server fails to become ready (timeout).
 	// We can't easily simulate this, so we verify that after reset, subsequent
 	// ensureServerLocked can recover.
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	a := &goSessionAdapter{}
 	defer a.Close()
@@ -2949,10 +2875,7 @@ func TestRunTypeScriptToolWithUnknownMethod(t *testing.T) {
 // =============================================================================
 
 func TestGoSessionAdapterRunReferencesNoGoplsDispatch(t *testing.T) {
-	_, err := exec.LookPath("gopls")
-	if err == nil {
-		t.Skip("gopls is available; skipping not-available path test")
-	}
+	skipIfGoplsInstalled(t)
 
 	a := &goSessionAdapter{}
 	defer a.Close()
@@ -2977,16 +2900,13 @@ func TestGoSessionAdapterRunReferencesNoGoplsDispatch(t *testing.T) {
 // =============================================================================
 
 func TestGoSessionAdapterEnsureServerGoplsNotAvailable(t *testing.T) {
-	_, err := exec.LookPath("gopls")
-	if err == nil {
-		t.Skip("gopls is available; skipping not-available path test")
-	}
+	skipIfGoplsInstalled(t)
 
 	a := &goSessionAdapter{}
 	defer a.Close()
 
 	a.mu.Lock()
-	err = a.ensureServerLocked(t.TempDir())
+	err := a.ensureServerLocked(t.TempDir())
 	a.mu.Unlock()
 
 	if err == nil {
@@ -3392,9 +3312,7 @@ func TestRunGoDiagnosticsWithSaveTrigger(t *testing.T) {
 // =============================================================================
 
 func TestGoSessionAdapterEnsureServerAndReset(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	a := &goSessionAdapter{}
 
@@ -3433,9 +3351,7 @@ func TestGoSessionAdapterEnsureServerAndReset(t *testing.T) {
 // =============================================================================
 
 func TestRunGoRenameOnlyCurrentFile(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	// Create a multi-file Go module
 	dir := t.TempDir()
@@ -3476,9 +3392,7 @@ func TestRunGoRenameOnlyCurrentFile(t *testing.T) {
 // =============================================================================
 
 func TestRunGoReferencesSymbolName(t *testing.T) {
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	content := "package main\n\nvar myVar int\n\nfunc main() {\n\t_ = myVar\n}\n"
 	dir, file := setupGoTestModule(t, content)
@@ -3502,9 +3416,7 @@ func TestRunGoReferencesSymbolName(t *testing.T) {
 
 func TestRunGoReferencesEmptyContentAtPosition(t *testing.T) {
 	// Testing symbol name extraction when position is beyond content lines
-	if _, err := exec.LookPath("gopls"); err != nil {
-		t.Skip("gopls not available")
-	}
+	requireGopls(t)
 
 	content := "package main\n"
 	dir, file := setupGoTestModule(t, content)

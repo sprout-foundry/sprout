@@ -324,8 +324,11 @@ func (a *Agent) ShowMyChange(path string) (string, error) {
 // revert used to return {recovered, path, action, message}, which the UI
 // summary helper could not read.
 func (a *Agent) RevertMyChanges(scope, file, since string) (string, error) {
+	// The revert handlers are synchronous filesystem operations that ignore
+	// their context, so Background is the honest value — not TODO, which
+	// reads as unfinished work.
 	if file != "" {
-		out, err := handleRecoverFile(context.TODO(), a, map[string]interface{}{
+		out, err := handleRecoverFile(context.Background(), a, map[string]interface{}{
 			"path":  file,
 			"scope": "session_start",
 		})
@@ -341,7 +344,7 @@ func (a *Agent) RevertMyChanges(scope, file, since string) (string, error) {
 	if since != "" {
 		args["since"] = since
 	}
-	return handleRevertMyChanges(nil, a, args)
+	return handleRevertMyChanges(context.Background(), a, args)
 }
 
 // fileRevertEnvelope reshapes a single-path recover_file result

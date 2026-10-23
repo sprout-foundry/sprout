@@ -37,7 +37,7 @@ func (ws *ReactWebServer) handleIndex(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	w.Write(rewriteIndexForBasePath(data, ws.basePath))
+	_, _ = w.Write(rewriteIndexForBasePath(data, ws.basePath))
 }
 
 // uiBuildRequiredHTML is shown when the binary was built without the embedded

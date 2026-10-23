@@ -14,10 +14,14 @@ linters:
       # structural for a CLI agent that opens user-specified files — they
       # fire thousands of times and would never gate clean. Keep the rules
       # that catch real mistakes (G101, G204, G302, G4xx, G5xx, G6xx...).
+      # G703 is G304's taint-analysis counterpart: it fires on the same
+      # filepath.Join(base, userPath) shape, so it is excluded on the same
+      # reasoning.
       excludes:
         - G301
         - G304
         - G306
+        - G703
   exclusions:
     generated: lax
     rules:

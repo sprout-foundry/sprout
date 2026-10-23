@@ -74,7 +74,7 @@ func TestSecondRequestSucceedsAfterIdleConnClosed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first request failed: %v", err)
 	}
-	resp1.Body.Close()
+	_ = resp1.Body.Close()
 	// The connection is now in the idle pool; the server closes it after 10 ms.
 	time.Sleep(50 * time.Millisecond)
 
@@ -83,6 +83,6 @@ func TestSecondRequestSucceedsAfterIdleConnClosed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second request (after the idle connection was closed) failed: %v", err)
 	}
-	resp2.Body.Close()
+	_ = resp2.Body.Close()
 	t.Logf("request1 reused=%v, request2 reused=%v", diag1.Reused, diag2.Reused)
 }

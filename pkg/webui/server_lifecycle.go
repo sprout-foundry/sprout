@@ -39,7 +39,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	// custom headers are not preserved across page reloads.
 	// The mount prefix is stripped before routing so a proxy that forwards
 	// the prefixed path and one that strips it behave identically.
-	var handler http.Handler = securityHeadersMiddleware(ws.basePathMiddleware(mux))
+	handler := securityHeadersMiddleware(ws.basePathMiddleware(mux))
 	handler = ws.userActivityMiddleware(handler)
 
 	// Wrap with user ID extraction middleware for service mode

@@ -378,9 +378,9 @@ func writeSecurityAnalysisChainStepper(w io.Writer, a *utils.SecurityAnalysisVie
 			tone = a.ChainClassifications[i]
 		}
 		if useColor {
-			fmt.Fprintf(w, "%s    [%s●%s] %s\n", dim, toneColor(tone), reset, shown)
+			_, _ = fmt.Fprintf(w, "%s    [%s●%s] %s\n", dim, toneColor(tone), reset, shown)
 		} else {
-			fmt.Fprintf(w, "    [%s%s] %s\n", toneGlyph(tone), reset, shown)
+			_, _ = fmt.Fprintf(w, "    [%s%s] %s\n", toneGlyph(tone), reset, shown)
 		}
 		// SP-161a: spell out the full subcommand when the stepper line
 		// clipped it, wrapped to the same width so the panel stays

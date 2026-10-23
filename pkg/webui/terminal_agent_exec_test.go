@@ -3,6 +3,7 @@
 package webui
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -152,46 +153,58 @@ func TestStripANSI(t *testing.T) {
 // Integration tests (require real PTY)
 // =============================================================================
 
-// waitForShellReady subscribes to a session's output and waits until the shell
-// appears ready. It drains initial output (banner, rc files, prompt) and then
-// waits for a quiet period. After receiving any output, it waits for quietPeriod
-// of silence before considering the shell ready. This handles shells that emit
-// multi-line startup sequences.
-func waitForShellReady(t *testing.T, session *TerminalSession, quietPeriod time.Duration) {
+// waitForShellReady blocks until the shell is demonstrably accepting input,
+// by round-tripping a marker: write a command that prints a unique token and
+// wait for the token to come back. That is a direct proof of readiness, unlike
+// waiting for a quiet period — silence cannot distinguish "ready" from "slow
+// to start under load", and a shell that emits output intermittently resets a
+// quiet timer indefinitely.
+//
+// A shell that never answers is a failure, not a skip: the PTY tests exist to
+// exercise this path, and skipping on timeout is how a broken terminal layer
+// ships behind a green suite.
+func waitForShellReady(t *testing.T, session *TerminalSession, timeout time.Duration) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
 
 	sub := session.subscribe()
 	defer session.unsubscribe(sub)
 
-	// Drain all initial output and wait for quiet period.
-	quietTimer := time.NewTimer(quietPeriod)
-	defer quietTimer.Stop()
+	session.mutex.RLock()
+	pty := session.Pty
+	session.mutex.RUnlock()
+	if pty == nil {
+		t.Fatalf("session %s has no PTY", session.ID)
+	}
 
+	token := fmt.Sprintf("SPROUT-READY-%d", time.Now().UnixNano())
+	if _, err := fmt.Fprintf(pty, "printf '%s\\n'\n", token); err != nil {
+		t.Fatalf("writing readiness probe to %s: %v", session.ID, err)
+	}
+
+	deadline := time.NewTimer(timeout)
+	defer deadline.Stop()
+
+	const retainedTail = 8 * 1024
+	var seen []byte
 	for {
 		select {
-		case <-ctx.Done():
-			t.Skipf("shell did not become ready (timed out after initial output); skipping PTY test")
-			return
+		case <-deadline.C:
+			t.Fatalf("shell did not answer the readiness probe within %s; output so far: %q", timeout, seen)
 
-		case _, ok := <-sub.ch:
+		case chunk, ok := <-sub.ch:
 			if !ok {
-				t.Skipf("PTY channel closed before shell became ready; skipping PTY test")
+				t.Fatalf("PTY channel closed before the shell answered the readiness probe; output so far: %q", seen)
+			}
+			seen = append(seen, chunk...)
+			if len(seen) > retainedTail {
+				seen = seen[len(seen)-retainedTail:]
+			}
+			// The command's own echo contains the token too, so match the
+			// token on a line of its own: the echoed command line ends with
+			// the printf invocation, while the printed line is the bare token.
+			if bytes.Contains(seen, []byte("\n"+token+"\r\n")) || bytes.Contains(seen, []byte("\n"+token+"\n")) {
 				return
 			}
-			// Reset the quiet timer on each chunk of output.
-			if !quietTimer.Stop() {
-				select {
-				case <-quietTimer.C:
-				default:
-				}
-			}
-			quietTimer.Reset(quietPeriod)
-
-		case <-quietTimer.C:
-			// Quiet period elapsed — shell is ready.
-			return
 		}
 	}
 }
@@ -205,7 +218,7 @@ func createAndReadySession(t *testing.T, tm *TerminalManager, id string) *Termin
 		t.Fatalf("CreateHiddenSession failed: %v", err)
 	}
 
-	waitForShellReady(t, session, 2*time.Second)
+	waitForShellReady(t, session, 10*time.Second)
 	return session
 }
 
@@ -361,7 +374,7 @@ func TestExecuteCommandAndWait_NonHiddenSession(t *testing.T) {
 	}
 	defer tm.CloseSession("exec-visible")
 
-	waitForShellReady(t, session, 2*time.Second)
+	waitForShellReady(t, session, 10*time.Second)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -466,7 +479,7 @@ func TestExecuteCommandInHidden(t *testing.T) {
 	if !exists {
 		t.Fatal("visible session should exist")
 	}
-	waitForShellReady(t, visibleSession, 2*time.Second)
+	waitForShellReady(t, visibleSession, 10*time.Second)
 
 	_, _, err = tm.ExecuteCommandInHidden(ctx, "exec-visible-convenience", "echo test")
 	if err == nil {

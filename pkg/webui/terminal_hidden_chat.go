@@ -7,6 +7,7 @@ package webui
 // across agent execs), waitForShellReady, and sanitizeChatID. Split out of
 // terminal_types.go.
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -89,41 +90,56 @@ func (tm *TerminalManager) waitForShellReady(ctx context.Context, session *Termi
 
 	// Wait up to 15 seconds for shell readiness. Most shells source rc files
 	// in under 1 second, but complex setups (pyenv, nvm, conda, starship,
-	// tmux) can produce output in bursts separated by >500ms gaps. The larger
-	// timeout accommodates these without false-positive "ready" declarations.
+	// tmux) can produce output in bursts. A round-trip probe (below) is
+	// immune to burstiness, so the timeout only bounds a genuinely stuck
+	// shell.
 	readyCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	// The quiet period must be long enough to span the typical gap between
-	// rc-file output bursts (pyenv, nvm, conda each print asynchronously).
-	// 500ms was too short — a bursty shell would be declared ready mid-init,
-	// and the first command would interleave with pending output. 1s is still
-	// short enough that the total readiness wait stays under 2s for fast shells.
-	quietPeriod := 1 * time.Second
-	quietTimer := time.NewTimer(quietPeriod)
-	defer quietTimer.Stop()
+	session.mutex.RLock()
+	pty := session.Pty
+	session.mutex.RUnlock()
+	if pty == nil {
+		return fmt.Errorf("session %s has no PTY", session.ID)
+	}
 
+	// Probe readiness by round-tripping a unique token: write a command that
+	// prints it, and wait for the printed line. This replaces a quiet-period
+	// heuristic, which could not distinguish a shell that finished starting
+	// from one that was merely between rc-file bursts — declaring ready too
+	// early let the first command interleave with pending output, and a
+	// bursty shell could reset the quiet timer indefinitely. A round-trip is
+	// a direct proof that the shell is consuming input.
+	token := fmt.Sprintf("SPROUT-READY-%d", time.Now().UnixNano())
+	if _, err := fmt.Fprintf(pty, "printf '%s\\n'\n", token); err != nil {
+		return fmt.Errorf("writing readiness probe to session %s: %w", session.ID, err)
+	}
+
+	// The echoed command line also contains the token, so match the printed
+	// line: a newline, then the bare token, then the line ending.
+	printed := []byte("\n" + token + "\r\n")
+	printedLF := []byte("\n" + token + "\n")
+
+	// Only the tail of the startup output can hold the probe's result, and a
+	// chatty rc file could otherwise grow this buffer for the whole timeout.
+	const retainedTail = 8 * 1024
+	var seen []byte
 	for {
 		select {
 		case <-readyCtx.Done():
-			return fmt.Errorf("shell did not become ready within timeout for session %s", session.ID)
+			return fmt.Errorf("shell did not answer the readiness probe within timeout for session %s", session.ID)
 
-		case _, ok := <-sub.ch:
+		case chunk, ok := <-sub.ch:
 			if !ok {
 				return fmt.Errorf("PTY channel closed before shell became ready for session %s", session.ID)
 			}
-			// Reset quiet timer on each output chunk (shell still initializing).
-			if !quietTimer.Stop() {
-				select {
-				case <-quietTimer.C:
-				default:
-				}
+			seen = append(seen, chunk...)
+			if len(seen) > retainedTail {
+				seen = seen[len(seen)-retainedTail:]
 			}
-			quietTimer.Reset(quietPeriod)
-
-		case <-quietTimer.C:
-			// Quiet period elapsed — shell is ready.
-			return nil
+			if bytes.Contains(seen, printed) || bytes.Contains(seen, printedLF) {
+				return nil
+			}
 		}
 	}
 }

@@ -2,6 +2,10 @@
 sprout
 /sprout-*
 sprout-main
+# sprout-agent/ is its own repository (github.com/sprout-foundry/sprout-agent),
+# checked out alongside this one. The /sprout-* rule above already ignores it;
+# this names it so the directory is not mistaken for a missed commit.
+/sprout-agent/
 /llm_server
 # Provider config for the local MLX model (embedded via go:embed; must be tracked)
 !pkg/agent_providers/configs/sprout-local.json

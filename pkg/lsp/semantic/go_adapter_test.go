@@ -1478,8 +1478,10 @@ func TestTypeScriptSessionAdapterResetWorkerWithNonNilFields(t *testing.T) {
 
 func TestTypeScriptSessionAdapterHealthyNoCmd(t *testing.T) {
 	a := &typeScriptSessionAdapter{}
-	if a.Healthy() {
-		t.Error("should not be healthy with no cmd")
+	// A not-yet-started worker is healthy: Run starts it lazily, and the pool
+	// evicts unhealthy sessions, so false here would prevent it ever starting.
+	if !a.Healthy() {
+		t.Error("a session whose worker has not started yet should be healthy")
 	}
 }
 

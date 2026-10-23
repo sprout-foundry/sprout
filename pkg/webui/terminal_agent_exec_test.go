@@ -3,7 +3,6 @@
 package webui
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -199,10 +198,7 @@ func waitForShellReady(t *testing.T, session *TerminalSession, timeout time.Dura
 			if len(seen) > retainedTail {
 				seen = seen[len(seen)-retainedTail:]
 			}
-			// The command's own echo contains the token too, so match the
-			// token on a line of its own: the echoed command line ends with
-			// the printf invocation, while the printed line is the bare token.
-			if bytes.Contains(seen, []byte("\n"+token+"\r\n")) || bytes.Contains(seen, []byte("\n"+token+"\n")) {
+			if probeAnswered(seen, []byte(token)) {
 				return
 			}
 		}

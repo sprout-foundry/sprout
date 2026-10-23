@@ -115,10 +115,13 @@ func (tm *TerminalManager) waitForShellReady(ctx context.Context, session *Termi
 		return fmt.Errorf("writing readiness probe to session %s: %w", session.ID, err)
 	}
 
-	// The echoed command line also contains the token, so match the printed
-	// line: a newline, then the bare token, then the line ending.
-	printed := []byte("\n" + token + "\r\n")
-	printedLF := []byte("\n" + token + "\n")
+	// Match the token as the whole of a line's payload, ignoring any prompt
+	// prefix the shell prints before it: dash prints "$ <token>", zsh prints
+	// "% <token>", bash "$ <token>". The echoed command line contains the
+	// token too, but always as part of the printf invocation, so requiring
+	// the token to end the line (modulo trailing prompt/whitespace) excludes
+	// the echo.
+	want := []byte(token)
 
 	// Only the tail of the startup output can hold the probe's result, and a
 	// chatty rc file could otherwise grow this buffer for the whole timeout.
@@ -137,11 +140,40 @@ func (tm *TerminalManager) waitForShellReady(ctx context.Context, session *Termi
 			if len(seen) > retainedTail {
 				seen = seen[len(seen)-retainedTail:]
 			}
-			if bytes.Contains(seen, printed) || bytes.Contains(seen, printedLF) {
+			if probeAnswered(seen, want) {
 				return nil
 			}
 		}
 	}
+}
+
+// probeAnswered reports whether the readiness token appears as a line's own
+// payload. The shell echoes the command that printed it, so the token also
+// occurs inside the printf invocation; only a line whose content ends with the
+// token (after any prompt prefix) is the command's output.
+func probeAnswered(seen, token []byte) bool {
+	for i := 0; i+len(token) <= len(seen); i++ {
+		if !bytes.Equal(seen[i:i+len(token)], token) {
+			continue
+		}
+		// The token must end the line. In the echoed command line it is
+		// followed by the printf string's \n escape, so that occurrence is
+		// rejected here; the printed line ends the token with a line break
+		// (or the buffer ends mid-line while it is still arriving).
+		rest := seen[i+len(token):]
+		if len(rest) > 0 && rest[0] != '\r' && rest[0] != '\n' {
+			continue
+		}
+		// It must also start its own line, after at most a prompt: the echo
+		// has the printf string's opening quote immediately before the token.
+		// Without this, an echo truncated right after the token would look
+		// like the printed line and declare the shell ready mid-startup.
+		if i > 0 && seen[i-1] == '\'' {
+			continue
+		}
+		return true
+	}
+	return false
 }
 
 // sanitizeChatID normalizes a chat ID for use in a session identifier.

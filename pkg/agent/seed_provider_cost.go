@@ -104,15 +104,22 @@ func (sp *sproutProvider) resolveBillingType() string {
 
 // estimateCostFromPricing computes a cost estimate from token counts and per-million pricing.
 func (sp *sproutProvider) estimateCostFromPricing(promptTokens, completionTokens int) float64 {
-	if sp.agent == nil || sp.agent.client == nil {
+	if sp.agent == nil {
 		return 0
 	}
-	model := sp.agent.client.GetModel()
+	// One snapshot for both: the client and its provider type are replaced
+	// together, so reading them separately can price a stale model against
+	// the new provider after a mid-session switch.
+	client, clientType := sp.agent.clientSnapshot()
+	if client == nil {
+		return 0
+	}
+	model := client.GetModel()
 	if model == "" {
 		return 0
 	}
 
-	if models, err := api.GetModelsForProviderCtx(context.Background(), sp.agent.getClientType()); err == nil {
+	if models, err := api.GetModelsForProviderCtx(context.Background(), clientType); err == nil {
 		for _, m := range models {
 			if m.ID != model {
 				continue

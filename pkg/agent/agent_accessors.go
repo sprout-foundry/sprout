@@ -50,6 +50,17 @@ func (a *Agent) withClient(fn func(c api.ClientInterface)) {
 	fn(a.client)
 }
 
+// clientSnapshot returns the current client and its provider type under a
+// single read lock. Callers that need both must use this rather than two
+// separate accessors: setClient replaces them together, so reading them
+// independently can pair a client with the provider type it does not belong
+// to after a mid-session model switch. A nil client means none is configured.
+func (a *Agent) clientSnapshot() (api.ClientInterface, api.ClientType) {
+	a.clientMu.RLock()
+	defer a.clientMu.RUnlock()
+	return a.client, a.clientType
+}
+
 // Logger returns the agent logger, initializing it lazily if needed
 func (a *Agent) Logger() *AgentLogger {
 	if a.logger == nil {

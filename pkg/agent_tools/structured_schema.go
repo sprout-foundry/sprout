@@ -123,7 +123,7 @@ func validateDataAgainstSchema(data interface{}, schema map[string]interface{}, 
 	return errs
 }
 
-func formatStructuredValidationError(toolName string, errs []string, context string) error {
+func FormatStructuredValidationError(toolName string, errs []string, context string) error {
 	if len(errs) == 0 {
 		return agenterrors.NewInvalidInputError("schema validation failed: no error details provided", nil)
 	}

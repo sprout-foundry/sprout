@@ -45,7 +45,7 @@ func handleWriteStructuredFile(ctx context.Context, a *Agent, args map[string]in
 			return "", agenterrors.NewTool("structured", "failed to parse schema", err)
 		}
 		if errs := validateDataAgainstSchema(data, schema, "$"); len(errs) > 0 {
-			return "", formatStructuredValidationError("write_structured_file", errs, "")
+			return "", tools.FormatStructuredValidationError("write_structured_file", errs, "")
 		}
 	}
 
@@ -133,7 +133,7 @@ func handlePatchStructuredFile(ctx context.Context, a *Agent, args map[string]in
 		}
 		if errs := validateDataAgainstSchema(doc, schema, "$"); len(errs) > 0 {
 			context := fmt.Sprintf("applied=%d/%d", applied, len(ops))
-			return "", formatStructuredValidationError("patch_structured_file", errs, context)
+			return "", tools.FormatStructuredValidationError("patch_structured_file", errs, context)
 		}
 	}
 

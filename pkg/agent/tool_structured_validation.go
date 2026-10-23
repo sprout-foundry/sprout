@@ -1,17 +1,15 @@
 package agent
 
 // tool_structured_validation.go — the schema-validation layer for the
-// write_structured_file / patch_structured_file tools: validateDataAgainstSchema and its helpers (formatStructured
-// ValidationError, extractValidationPaths, limitStrings, isNumberValue,
-// isIntegerValue, the maxStructuredErrorDetails cap). Split out of
+// write_structured_file / patch_structured_file tools: validateDataAgainstSchema
+// and its helpers, plus the maxStructuredErrorDetails cap. Error formatting and
+// the shared value helpers live in pkg/agent_tools. Split out of
 // tool_handlers_structured.go.
 import (
 	"fmt"
 	"reflect"
-	"strings"
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 const maxStructuredErrorDetails = 8
@@ -142,27 +140,4 @@ func validateDataAgainstSchema(data interface{}, schema map[string]interface{}, 
 	}
 
 	return errs
-}
-
-func formatStructuredValidationError(toolName string, errs []string, context string) error {
-	if len(errs) == 0 {
-		return agenterrors.NewInvalidInputError("schema validation failed: no error details provided", nil)
-	}
-
-	paths := tools.ExtractValidationPaths(errs)
-	pathSummary := strings.Join(tools.LimitStrings(paths, maxStructuredErrorDetails), ",")
-	if pathSummary == "" {
-		pathSummary = "unknown"
-	}
-
-	details := strings.Join(tools.LimitStrings(errs, maxStructuredErrorDetails), " | ")
-	if len(errs) > maxStructuredErrorDetails {
-		details += fmt.Sprintf(" | ...(%d more)", len(errs)-maxStructuredErrorDetails)
-	}
-
-	if context == "" {
-		return agenterrors.NewValidation(fmt.Sprintf("schema validation failed: tool=%s error_count=%d failed_paths=%s details=%s", toolName, len(errs), pathSummary, details), nil)
-	}
-
-	return agenterrors.NewValidation(fmt.Sprintf("schema validation failed: tool=%s %s error_count=%d failed_paths=%s details=%s", toolName, context, len(errs), pathSummary, details), nil)
 }

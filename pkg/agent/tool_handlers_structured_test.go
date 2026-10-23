@@ -85,7 +85,7 @@ func TestInferStructuredFormat(t *testing.T) {
 }
 
 func TestFormatStructuredValidationError_IncludesPathsAndCount(t *testing.T) {
-	err := formatStructuredValidationError("write_structured_file", []string{
+	err := tools.FormatStructuredValidationError("write_structured_file", []string{
 		"$.content.name: expected string",
 		"$.content.price: expected number",
 		"$.content.price: expected number",
@@ -97,7 +97,7 @@ func TestFormatStructuredValidationError_IncludesPathsAndCount(t *testing.T) {
 	if !strings.Contains(msg, "error_count=3") {
 		t.Fatalf("expected error count in message, got: %s", msg)
 	}
-	if !strings.Contains(msg, "failed_paths=$.content.name,$.content.price") {
+	if !strings.Contains(msg, "failed_paths=$.content.name, $.content.price") {
 		t.Fatalf("expected failed paths in message, got: %s", msg)
 	}
 }

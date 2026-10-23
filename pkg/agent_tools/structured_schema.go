@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // ---------------------------------------------------------------------------
@@ -14,7 +16,7 @@ import (
 func toSchemaMap(v interface{}) (map[string]interface{}, error) {
 	schema, ok := v.(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("parameter 'schema' must be an object")
+		return nil, agenterrors.NewInvalidInputError("parameter 'schema' must be an object", nil)
 	}
 	return schema, nil
 }
@@ -123,7 +125,7 @@ func validateDataAgainstSchema(data interface{}, schema map[string]interface{}, 
 
 func formatStructuredValidationError(toolName string, errs []string, context string) error {
 	if len(errs) == 0 {
-		return fmt.Errorf("schema validation failed: no error details provided")
+		return agenterrors.NewInvalidInputError("schema validation failed: no error details provided", nil)
 	}
 
 	paths := ExtractValidationPaths(errs)
@@ -138,10 +140,10 @@ func formatStructuredValidationError(toolName string, errs []string, context str
 	}
 
 	if context == "" {
-		return fmt.Errorf("schema validation failed: tool=%s error_count=%d failed_paths=%s details=%s", toolName, len(errs), pathSummary, details)
+		return agenterrors.NewValidation(fmt.Sprintf("schema validation failed: tool=%s error_count=%d failed_paths=%s details=%s", toolName, len(errs), pathSummary, details), nil)
 	}
 
-	return fmt.Errorf("schema validation failed: tool=%s %s error_count=%d failed_paths=%s details=%s", toolName, context, len(errs), pathSummary, details)
+	return agenterrors.NewValidation(fmt.Sprintf("schema validation failed: tool=%s %s error_count=%d failed_paths=%s details=%s", toolName, context, len(errs), pathSummary, details), nil)
 }
 
 func ExtractValidationPaths(errs []string) []string {

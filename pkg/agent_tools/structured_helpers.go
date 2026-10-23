@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"gopkg.in/yaml.v3"
 )
 
@@ -54,7 +55,7 @@ func serializeStructuredContent(format string, data interface{}) (string, error)
 	}
 	var buf bytes.Buffer
 	if err := enc.Encode(&buf, data); err != nil {
-		return "", fmt.Errorf("failed to serialize %s: %w", format, err)
+		return "", agenterrors.NewTool("structured", fmt.Sprintf("failed to serialize %s", format), err)
 	}
 	out := buf.String()
 	// YAML already ends with \n; JSON via json.Encoder adds a trailing \n.
@@ -70,7 +71,7 @@ func deserializeStructuredContent(format, content string) (interface{}, error) {
 	}
 	var doc interface{}
 	if err := dec.Decode([]byte(content), &doc); err != nil {
-		return nil, fmt.Errorf("failed to deserialize %s: %w", format, err)
+		return nil, agenterrors.NewTool("structured", fmt.Sprintf("failed to deserialize %s", format), err)
 	}
 	return normalizeYAMLValue(doc), nil
 }
@@ -85,7 +86,7 @@ func newStructuredEncoder(format string) (*structuredEncoder, error) {
 	case "json", "yaml":
 		return &structuredEncoder{format: format}, nil
 	default:
-		return nil, fmt.Errorf("unsupported structured format %q: use json or yaml", format)
+		return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("unsupported structured format %q: use json or yaml", format), nil)
 	}
 }
 
@@ -102,7 +103,7 @@ func (e *structuredEncoder) Encode(buf *bytes.Buffer, data interface{}) error {
 		buf.Write(b)
 		return nil
 	default:
-		return fmt.Errorf("unsupported format: %s", e.format)
+		return agenterrors.NewInvalidInputError(fmt.Sprintf("unsupported format: %s", e.format), nil)
 	}
 }
 
@@ -116,7 +117,7 @@ func newStructuredDecoder(format string) (*structuredDecoder, error) {
 	case "json", "yaml":
 		return &structuredDecoder{format: format}, nil
 	default:
-		return nil, fmt.Errorf("unsupported structured format %q: use json or yaml", format)
+		return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("unsupported structured format %q: use json or yaml", format), nil)
 	}
 }
 
@@ -127,7 +128,7 @@ func (d *structuredDecoder) Decode(data []byte, out interface{}) error {
 	case "yaml":
 		return yaml.Unmarshal(data, out)
 	default:
-		return fmt.Errorf("unsupported format: %s", d.format)
+		return agenterrors.NewInvalidInputError(fmt.Sprintf("unsupported format: %s", d.format), nil)
 	}
 }
 

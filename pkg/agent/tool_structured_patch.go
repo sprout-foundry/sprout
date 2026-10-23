@@ -23,6 +23,14 @@ type jsonPatchOperation struct {
 	Value interface{}
 }
 
+// stringField returns obj[key] as a string, or "" when the key is absent or
+// holds a non-string. It exists because fmt.Sprint(nil) is "<nil>": a missing
+// key would otherwise read as a present, non-empty value.
+func stringField(obj map[string]interface{}, key string) string {
+	s, _ := obj[key].(string)
+	return s
+}
+
 func parsePatchOperations(v interface{}) ([]jsonPatchOperation, error) {
 	rawOps, ok := v.([]interface{})
 	if !ok {
@@ -35,12 +43,11 @@ func parsePatchOperations(v interface{}) ([]jsonPatchOperation, error) {
 		if !ok {
 			return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("patch_ops[%d] must be an object", i), nil)
 		}
-		op := strings.ToLower(strings.TrimSpace(fmt.Sprint(obj["op"])))
-		path := fmt.Sprint(obj["path"])
-		from := ""
-		if fromRaw, ok := obj["from"]; ok {
-			from = fmt.Sprint(fromRaw)
-		}
+		// Read the string fields as strings: fmt.Sprint(nil) yields "<nil>",
+		// which is non-empty and would slip past the empty-path check below.
+		op := strings.ToLower(strings.TrimSpace(stringField(obj, "op")))
+		path := stringField(obj, "path")
+		from := stringField(obj, "from")
 
 		if op == "" || path == "" {
 			return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("patch_ops[%d] requires non-empty op and path", i), nil)

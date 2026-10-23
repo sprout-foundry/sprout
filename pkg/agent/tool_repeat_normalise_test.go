@@ -224,12 +224,11 @@ func TestStallIdlePathScratchOnlyCountsAsIdle(t *testing.T) {
 	assert.Empty(t, progressPaths(a), "scratch files under the temp dir are filtered out")
 
 	var stalled bool
-	var summary *StallSummary
 	for i := 1; i <= 5; i++ {
-		_, stalled, summary = a.recordToolCall("shell_command", "same probe", "out")
+		_, stalled, _ = a.recordToolCall("shell_command", "same probe", "out")
 		assert.False(t, stalled, "call %d: under the idle threshold", i)
 	}
-	_, stalled, summary = a.recordToolCall("shell_command", "same probe", "out")
+	_, stalled, summary := a.recordToolCall("shell_command", "same probe", "out")
 	require.True(t, stalled, "scratch-only changes are no progress: the idle rule still trips")
 	require.NotNil(t, summary)
 	assert.Equal(t, "idle_calls", summary.Reason)

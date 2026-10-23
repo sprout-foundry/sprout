@@ -129,12 +129,11 @@ func TestStallIdleCallsNeedsNoFileChange(t *testing.T) {
 	a := &Agent{}
 	a.SetStallThresholds(8, 5)
 	var stalled bool
-	var summary *StallSummary
 	for i := 1; i <= 5; i++ {
-		_, stalled, summary = a.recordToolCall("shell_command", "same probe", "out")
+		_, stalled, _ = a.recordToolCall("shell_command", "same probe", "out")
 		assert.False(t, stalled, "call %d: %d redundant, under the idle threshold", i, i-1)
 	}
-	_, stalled, summary = a.recordToolCall("shell_command", "same probe", "out")
+	_, stalled, summary := a.recordToolCall("shell_command", "same probe", "out")
 	require.True(t, stalled, "6th call: 5 redundant calls crosses the idle threshold of 5")
 	require.NotNil(t, summary)
 	assert.Equal(t, "idle_calls", summary.Reason)

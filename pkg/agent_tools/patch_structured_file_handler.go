@@ -93,7 +93,7 @@ func (h *patchStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 	format, _ := extractString(args, "format")
 
 	// Infer format from file extension if not provided
-	inferredFormat := inferStructuredFormat(path, format)
+	inferredFormat := InferStructuredFormat(path, format)
 	if inferredFormat == "" {
 		return ToolResult{Output: fmt.Sprintf("Unsupported file format for %s. Use .json, .yaml, or .yml extensions, or specify 'format' parameter", path), IsError: true}, nil
 	}

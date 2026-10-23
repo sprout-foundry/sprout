@@ -3,6 +3,7 @@ package agent
 import (
 	"strings"
 
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
@@ -34,10 +35,17 @@ var settingDefs = func() []settingDef {
 	return defs
 }()
 
-// supportedSettings is built from settingDefs at init time.
-// It is used by validateSettingKey for key existence checks and
-// by SupportedSettingKeys for enumeration.
+// supportedSettings is built from settingDefs at init time. SupportedSettingKeys
+// enumerates it, and the manage_settings tool validates against that list (see
+// the SetSettingKeys wiring below).
 var supportedSettings = buildSupportedSettings()
+
+func init() {
+	// manage_settings lives in pkg/agent_tools, which cannot import this
+	// package (cycle). Hand it the authoritative key list so its validation
+	// does not fall back to the stale copy it made to avoid the cycle.
+	tools.SetSettingKeys(SupportedSettingKeys)
+}
 
 func buildSupportedSettings() map[string]string {
 	m := make(map[string]string, len(settingDefs))

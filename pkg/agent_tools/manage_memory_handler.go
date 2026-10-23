@@ -87,7 +87,7 @@ func resolveMemoryName(name string) (string, error) {
 		trimmed = trimmed[:len(trimmed)-3]
 	}
 
-	sanitized := sanitizeMemoryName(trimmed)
+	sanitized := SanitizeMemoryName(trimmed)
 	if sanitized == "untitled" && !strings.EqualFold(strings.TrimSpace(trimmed), "untitled") {
 		return "", fmt.Errorf("memory name %q is empty after sanitization; pass a short slug (letters, digits, hyphens)", name)
 	}
@@ -163,13 +163,13 @@ func saveMemoryToDisk(sanitized, content string) (string, error) {
 	return fmt.Sprintf("Memory '%s' saved to ~/.config/sprout/memories/%s.md. This memory will be loaded in all future conversations.", sanitized, sanitized), nil
 }
 
-// sanitizeMemoryName sanitizes a memory name for use as a filename:
+// SanitizeMemoryName sanitizes a memory name for use as a filename:
 // lowercase, spaces to hyphens, and only alphanumeric/hyphen/underscore
 // characters kept, mirroring the pkg/agent copy. An input that sanitizes to
 // nothing yields the historical "untitled" default; manage_memory callers
 // must go through resolveMemoryName, which rejects that case instead of
 // letting malformed calls collapse onto one shared file.
-func sanitizeMemoryName(name string) string {
+func SanitizeMemoryName(name string) string {
 	// Convert to lowercase
 	name = strings.ToLower(name)
 

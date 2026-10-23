@@ -131,7 +131,7 @@ func (h *manageSettingsHandler) handleSet(mgr *configuration.Manager, args map[s
 	key, _ := extractString(args, "key")
 	value, _ := extractString(args, "value")
 
-	if err := validateSettingKey(key); err != nil {
+	if err := ValidateSettingKey(key); err != nil {
 		return ToolResult{Output: err.Error(), IsError: true}, nil
 	}
 
@@ -232,7 +232,7 @@ func (h *manageSettingsHandler) handleDescribeAll(mgr *configuration.Manager) (T
 		return ToolResult{Output: "configuration not loaded", IsError: true}, nil
 	}
 
-	keys := settingKeys()
+	keys := validSettingKeys()
 	var sb strings.Builder
 	sb.WriteString("Settings Overview\n")
 	sb.WriteString(strings.Repeat("-", 70) + "\n")
@@ -325,28 +325,60 @@ var supportedSettings = map[string]string{
 	"review_model":             "Model for code review commands",
 }
 
-// validateSettingKey checks that a key is a recognized setting.
-func validateSettingKey(key string) error {
-	normalized := strings.ToLower(key)
-	if _, ok := supportedSettings[normalized]; ok {
-		return nil
+// settingKeysFunc, when set by the agent, returns the authoritative list of
+// valid setting keys. The agent owns the registry (its settingDefs slice);
+// this hook lets manage_settings validate against it without pkg/agent_tools
+// importing pkg/agent, which would be a cycle.
+var settingKeysFunc func() []string
+
+// SetSettingKeys installs the authoritative setting-key source. Passing nil
+// restores the fallback list.
+func SetSettingKeys(fn func() []string) { settingKeysFunc = fn }
+
+// validSettingKeys returns the authoritative key list, or the local fallback
+// when no agent has installed one.
+func validSettingKeys() []string {
+	if settingKeysFunc != nil {
+		return settingKeysFunc()
 	}
-	validKeys := make([]string, 0, len(supportedSettings))
-	for k := range supportedSettings {
-		validKeys = append(validKeys, k)
-	}
-	sort.Strings(validKeys)
-	return agenterrors.NewValidation(fmt.Sprintf("unknown setting key %q; valid keys: %s", key, strings.Join(validKeys, ", ")), nil)
+	return fallbackSettingKeys()
 }
 
-// settingKeys returns a sorted list of all supported setting keys.
-func settingKeys() []string {
+// ValidateSettingKey checks that a key is a recognized setting. The local
+// list below is only a fallback: it is a copy made to avoid the import cycle,
+// and it had already fallen behind the agent's registry — it rejected
+// max_context_tokens, risk_profile and nine other keys the agent accepts.
+func ValidateSettingKey(key string) error {
+	normalized := strings.ToLower(key)
+	keys := append([]string(nil), validSettingKeys()...)
+	for _, k := range keys {
+		if strings.ToLower(k) == normalized {
+			return nil
+		}
+	}
+	sort.Strings(keys)
+	return agenterrors.NewValidation(fmt.Sprintf("unknown setting key %q; valid keys: %s", key, strings.Join(keys, ", ")), nil)
+}
+
+// fallbackSettingKeys lists the keys known when this file's copy was made.
+// It is used only when ToolEnv.SettingKeys is nil.
+func fallbackSettingKeys() []string {
 	keys := make([]string, 0, len(supportedSettings))
 	for k := range supportedSettings {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// notMappedError reports a key that is a real setting but has no field
+// mapping in this tool. It must not read as "unknown key": the key is valid,
+// this surface just cannot read or write it.
+func notMappedError(key string) error {
+	if err := ValidateSettingKey(key); err != nil {
+		return err
+	}
+	return agenterrors.NewValidation(fmt.Sprintf("setting %q is not supported by manage_settings field mapping", key), nil)
 }
 
 // getConfigField returns the string representation of a config setting by key.
@@ -388,7 +420,9 @@ func getConfigField(cfg *configuration.Config, key string) (string, error) {
 	case "review_model":
 		return cfg.ReviewModel, nil
 	default:
-		return "", validateSettingKey(key)
+		// The key is a real setting, but this tool has no field mapping for
+		// it — say so rather than reporting it as invalid or as unset.
+		return "", notMappedError(key)
 	}
 }
 
@@ -462,7 +496,7 @@ func setConfigField(cfg *configuration.Config, key, value string) error {
 	case "review_model":
 		cfg.ReviewModel = value
 	default:
-		return validateSettingKey(key)
+		return notMappedError(key)
 	}
 	return nil
 }

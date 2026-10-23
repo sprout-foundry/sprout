@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"os"
 	"path/filepath"
 	"strings"
@@ -53,9 +54,9 @@ func TestSanitizeMemoryName(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := sanitizeMemoryName(tt.input)
+			got := tools.SanitizeMemoryName(tt.input)
 			if got != tt.expected {
-				t.Errorf("sanitizeMemoryName(%q) = %q, want %q", tt.input, got, tt.expected)
+				t.Errorf("tools.SanitizeMemoryName(%q) = %q, want %q", tt.input, got, tt.expected)
 			}
 		})
 	}

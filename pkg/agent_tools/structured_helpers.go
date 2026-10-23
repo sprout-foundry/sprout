@@ -23,9 +23,9 @@ type jsonPatchOperation struct {
 	Value interface{}
 }
 
-// inferStructuredFormat determines the format from the file extension or
+// InferStructuredFormat determines the format from the file extension or
 // the provided format string. Returns "" when the extension is not supported.
-func inferStructuredFormat(path, provided string) string {
+func InferStructuredFormat(path, provided string) string {
 	format := strings.ToLower(strings.TrimSpace(provided))
 	switch format {
 	case "json", "yaml", "yml":

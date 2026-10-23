@@ -1,6 +1,7 @@
 package agent
 
 import (
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"strings"
 	"testing"
 )
@@ -72,13 +73,13 @@ func TestApplyPatchOperations_ObjectAndArray(t *testing.T) {
 }
 
 func TestInferStructuredFormat(t *testing.T) {
-	if got := inferStructuredFormat("config.json", ""); got != "json" {
+	if got := tools.InferStructuredFormat("config.json", ""); got != "json" {
 		t.Fatalf("expected json, got %s", got)
 	}
-	if got := inferStructuredFormat("config.yaml", "yml"); got != "yaml" {
+	if got := tools.InferStructuredFormat("config.yaml", "yml"); got != "yaml" {
 		t.Fatalf("expected yaml, got %s", got)
 	}
-	if got := inferStructuredFormat("config.txt", ""); got != "" {
+	if got := tools.InferStructuredFormat("config.txt", ""); got != "" {
 		t.Fatalf("expected empty format, got %s", got)
 	}
 }
@@ -102,7 +103,7 @@ func TestFormatStructuredValidationError_IncludesPathsAndCount(t *testing.T) {
 }
 
 func TestExtractValidationPaths(t *testing.T) {
-	paths := extractValidationPaths([]string{
+	paths := tools.ExtractValidationPaths([]string{
 		"$.a.b: expected string",
 		"$.a.b: expected string",
 		"$.arr[0]: expected integer",

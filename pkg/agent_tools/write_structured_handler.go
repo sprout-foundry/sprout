@@ -114,7 +114,7 @@ func (h *writeStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 		}
 	}
 
-	format := inferStructuredFormat(path, getOptionalString(args, "format"))
+	format := InferStructuredFormat(path, getOptionalString(args, "format"))
 	if format == "" {
 		return ToolResult{Output: "unsupported structured format: use json or yaml", IsError: true},
 			agenterrors.NewValidation("unsupported structured format: use json or yaml", nil)

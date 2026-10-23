@@ -2,7 +2,7 @@ module github.com/sprout-foundry/sprout
 
 go 1.26.0
 
-toolchain go1.26.6
+toolchain go1.26.10
 
 require (
 	filippo.io/age v1.3.1
@@ -16,9 +16,9 @@ require (
 	github.com/sergi/go-diff v1.3.1
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
-	golang.org/x/net v0.58.0
+	golang.org/x/net v0.60.0
 	golang.org/x/sync v0.23.0
-	golang.org/x/term v0.45.0
+	golang.org/x/term v0.46.0
 	golang.org/x/text v0.42.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1
@@ -130,6 +130,6 @@ require (
 	github.com/ysmood/gson v0.7.3 // indirect
 	github.com/ysmood/leakless v0.9.0 // indirect
 	github.com/zalando/go-keyring v0.2.8
-	golang.org/x/crypto v0.55.0 // indirect
-	golang.org/x/sys v0.47.0
+	golang.org/x/crypto v0.57.0 // indirect
+	golang.org/x/sys v0.48.0
 )

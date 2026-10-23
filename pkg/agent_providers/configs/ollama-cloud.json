@@ -5,12 +5,12 @@
   },
   "cost": {
     "currency": "USD",
-    "input_token_cost": 0,
-    "output_token_cost": 0
+    "input_token_cost": 0.3,
+    "output_token_cost": 1.2
   },
   "defaults": {
     "max_tokens": -1,
-    "model": "deepseek-v3.1:671b",
+    "model": "deepseek-v4.1-flash",
     "temperature": 0.7,
     "top_p": 1
   },
@@ -25,7 +25,7 @@
   "models": {
     "available_models": [],
     "default_context_limit": 131072,
-    "default_model": "deepseek-v3.1:671b",
+    "default_model": "deepseek-v4.1-flash",
     "default_model_patterns": [
       "gpt-oss:20b"
     ],
@@ -57,13 +57,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.022,
+        "cached_input_cost": 0.044,
         "context_length": 1048576,
         "description": "DeepSeek V4 Pro - flagship MoE model (1.6T total, 49B active) with 1M context",
         "id": "deepseek-v4-pro",
-        "input_cost": 0.66,
+        "input_cost": 1.32,
         "name": "DeepSeek V4 Pro",
-        "output_cost": 1.98,
+        "output_cost": 3.96,
         "tags": [
           "tools",
           "reasoning"
@@ -270,26 +270,26 @@
         ]
       },
       {
-        "cached_input_cost": 0.022,
+        "cached_input_cost": 0.044,
         "context_length": 1048576,
         "description": "DeepSeek V4 Pro preview - flagship MoE model (1.6T total, 49B active) with 1M context",
         "id": "deepseek-v4-pro:preview",
-        "input_cost": 0.66,
+        "input_cost": 1.32,
         "name": "DeepSeek V4 Pro Preview",
-        "output_cost": 1.98,
+        "output_cost": 3.96,
         "tags": [
           "tools",
           "reasoning"
         ]
       },
       {
-        "cached_input_cost": 0.022,
+        "cached_input_cost": 0.044,
         "context_length": 1048576,
         "description": "DeepSeek V4 Pro 0813 - official release of DeepSeek V4 Pro with enhanced agentic capabilities",
         "id": "deepseek-v4-pro:0813",
-        "input_cost": 0.66,
+        "input_cost": 1.32,
         "name": "DeepSeek V4 Pro 0813",
-        "output_cost": 1.98,
+        "output_cost": 3.96,
         "tags": [
           "tools",
           "reasoning"
@@ -324,13 +324,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.003,
+        "cached_input_cost": 0.006,
         "context_length": 1048576,
         "description": "DeepSeek V4.1 Flash - multimodal MoE model (552B backbone) with 1M context and KV cache compression",
         "id": "deepseek-v4.1-flash",
-        "input_cost": 0.15,
+        "input_cost": 0.3,
         "name": "DeepSeek V4.1 Flash",
-        "output_cost": 0.6,
+        "output_cost": 1.2,
         "tags": [
           "tools",
           "vision",
@@ -386,13 +386,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.003,
+        "cached_input_cost": 0.006,
         "context_length": 1048576,
         "description": "DeepSeek V4.1 Flash 1017 - October 17 snapshot of DeepSeek V4.1 Flash, a multimodal MoE model (552B backbone) with 1M context and KV cache compression",
         "id": "deepseek-v4.1-flash:1017",
-        "input_cost": 0.15,
+        "input_cost": 0.3,
         "name": "DeepSeek V4.1 Flash 1017",
-        "output_cost": 0.6,
+        "output_cost": 1.2,
         "tags": [
           "tools",
           "vision",

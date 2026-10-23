@@ -5,12 +5,12 @@
   },
   "cost": {
     "currency": "USD",
-    "input_token_cost": 0,
-    "output_token_cost": 0
+    "input_token_cost": 1,
+    "output_token_cost": 1
   },
   "defaults": {
     "max_tokens": -1,
-    "model": "deepseek-ai/DeepSeek-R1-0528",
+    "model": "deepseek-ai/DeepSeek-V3.2-TEE",
     "temperature": 0.7,
     "top_p": 1
   },
@@ -49,7 +49,7 @@
       "Qwen/Qwen3.8-27B-TEE"
     ],
     "default_context_limit": 64000,
-    "default_model": "deepseek-ai/DeepSeek-R1-0528",
+    "default_model": "deepseek-ai/DeepSeek-V3.2-TEE",
     "model_info": [
       {
         "context_length": 131072,
@@ -76,7 +76,7 @@
         ]
       },
       {
-        "context_length": 41984,
+        "context_length": 40960,
         "description": "Qwen3 32B on confidential TEE compute",
         "id": "Qwen/Qwen3-32B-TEE",
         "input_cost": 0.104,
@@ -172,7 +172,7 @@
         ]
       },
       {
-        "context_length": 207872,
+        "context_length": 202752,
         "description": "Z.AI GLM-5.1 on confidential TEE compute",
         "id": "zai-org/GLM-5.1-TEE",
         "input_cost": 0.98,
@@ -196,7 +196,7 @@
         ]
       },
       {
-        "context_length": 1000000,
+        "context_length": 1048576,
         "description": "DeepSeek V4 Flash 0731 on confidential TEE compute",
         "id": "deepseek-ai/DeepSeek-V4-Flash-0731-TEE",
         "input_cost": 0.44,

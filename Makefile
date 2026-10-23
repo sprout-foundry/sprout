@@ -422,9 +422,9 @@ GOLANGCI_LINT_VERSION ?= v2.13.2
 # golangci-lint 2.13.2 bundles a go/packages that cannot decode a newer Go's
 # export data ("version 5 is greater than maximum supported version 4"), so on
 # a machine whose installed Go is newer than go.mod's toolchain every package
-# fails to typecheck. CI pins the same Go version; pinning here keeps the local
-# gate identical to CI.
-GOLANGCI_LINT_GOTOOLCHAIN ?= go1.26.6
+# fails to typecheck. Pin the run to go.mod's toolchain — read from the file
+# rather than repeated here, so a toolchain bump cannot leave lint behind.
+GOLANGCI_LINT_GOTOOLCHAIN ?= $(shell sed -n 's/^toolchain //p' go.mod)
 .PHONY: lint-go lint-go-new
 lint-go: prepare-grammars
 	@command -v golangci-lint >/dev/null 2>&1 || go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
@@ -438,9 +438,17 @@ lint-go-new: prepare-grammars
 	GOTOOLCHAIN=$(GOLANGCI_LINT_GOTOOLCHAIN) GOMAXPROCS=2 golangci-lint run --new-from-rev="$$rev" ./...
 
 # Quality gates
-.PHONY: vet fmt-check
+.PHONY: vet fmt-check vulncheck
 vet: prepare-grammars
 	go vet ./...
+
+# Reachable-vulnerability scan. Reports only advisories the code actually
+# calls, so a clean run is a real signal rather than a dependency-count
+# report. Pinned to go.mod's toolchain for the same reason as lint-go.
+GOVULNCHECK_VERSION ?= latest
+vulncheck:
+	@command -v govulncheck >/dev/null 2>&1 || go install golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
+	@GOTOOLCHAIN=$(GOLANGCI_LINT_GOTOOLCHAIN) govulncheck ./...
 
 fmt-check:
 	@gofmt_bin="$$(scripts/gofmt-toolchain.sh)"; \

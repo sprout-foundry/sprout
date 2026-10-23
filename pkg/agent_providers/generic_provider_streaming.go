@@ -121,7 +121,7 @@ func (p *GenericProvider) sendChatRequestStreamImpl(ctx context.Context, message
 			auditRespBody = captured.Bytes()
 			if err != nil {
 				logging.LogRequestPayloadOnError(requestBody, p.config.Name, currentModel, true, "streaming_response", err)
-				return nil, agenterrors.NewNetwork("chat request failed", err)
+				return nil, p.networkErrorWithConnDiag("chat request failed", err, diag)
 			}
 			api.RecoverInlineToolCalls(response, tools)
 			return response, nil
@@ -141,7 +141,11 @@ func (p *GenericProvider) sendChatRequestStreamImpl(ctx context.Context, message
 	if err != nil {
 		// Log request on streaming error — use the actual sent body (post-redaction)
 		logging.LogRequestPayloadOnError(sentBody, p.config.Name, currentModel, true, "streaming_response", err)
-		return nil, agenterrors.NewNetwork("chat request failed (streaming)", err)
+		// Carry the connection facts: a mid-stream reset on a REUSED
+		// connection is a stale-pool artifact, while the same reset on a
+		// freshly dialed one is a real network fault. Without this detail
+		// both look identical in the retry log.
+		return nil, p.networkErrorWithConnDiag("chat request failed (streaming)", err, diag)
 	}
 
 	// Success - don't log the request

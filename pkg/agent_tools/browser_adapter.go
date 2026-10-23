@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/webcontent"
 )
 
@@ -149,18 +150,18 @@ func parseBrowseSteps(rawSteps []interface{}) ([]webcontent.BrowseStep, error) {
 	for idx, rawStep := range rawSteps {
 		stepMap, ok := rawStep.(map[string]interface{})
 		if !ok {
-			return nil, fmt.Errorf("browse_url steps[%d] must be an object", idx)
+			return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("browse_url steps[%d] must be an object", idx), nil)
 		}
 		encoded, err := json.Marshal(stepMap)
 		if err != nil {
-			return nil, fmt.Errorf("browse_url steps[%d] marshal failed: %w", idx, err)
+			return nil, agenterrors.Wrapf(err, "browse_url steps[%d] marshal failed", idx)
 		}
 		var step webcontent.BrowseStep
 		if err := json.Unmarshal(encoded, &step); err != nil {
-			return nil, fmt.Errorf("browse_url steps[%d] parse failed: %w", idx, err)
+			return nil, agenterrors.Wrapf(err, "browse_url steps[%d] parse failed", idx)
 		}
 		if strings.TrimSpace(step.Action) == "" {
-			return nil, fmt.Errorf("browse_url steps[%d] requires action", idx)
+			return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("browse_url steps[%d] requires action", idx), nil)
 		}
 		steps = append(steps, step)
 	}

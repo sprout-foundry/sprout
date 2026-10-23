@@ -1,9 +1,12 @@
 package agent
 
 import (
+	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -196,10 +199,7 @@ func (a *Agent) publishRetryEvent(err error, attempt, maxRetries int, provider s
 	// for many minutes with no terminal output at all. The terminal
 	// subscriber renders non-tool_log categories mid-turn via PrintExternal
 	// (steer-panel safe); tool_log is suppressed there.
-	msg := err.Error()
-	if len(msg) > 160 {
-		msg = msg[:159] + "…"
-	}
+	msg := retryNoticeMessage(err)
 	status := "retrying"
 	if !willRetry {
 		status = "giving up"
@@ -210,6 +210,74 @@ func (a *Agent) publishRetryEvent(err error, attempt, maxRetries int, provider s
 			fmt.Sprintf("LLM request failed (%s), %s attempt %d/%d: %s", category, status, attempt+1, maxRetries+1, msg), nil),
 	)
 }
+
+// retryNoticeMessage condenses a provider error for the one-line retry notice.
+//
+// A provider failure arrives as a chain of nested TypedErrors, each repeating
+// its own "[code] message:" prefix, so the raw text spends most of a line on
+// boilerplate and the leaf cause — the part that says what actually broke —
+// falls past the truncation point. The notice keeps the deepest cause and as
+// much of the outermost message as fits, which is the pair a reader needs, and
+// drops the local address from a net.OpError since the ephemeral port
+// identifies nothing.
+func retryNoticeMessage(err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := err.Error()
+
+	// The leaf cause carries the actionable detail ("connection reset by
+	// peer", "no such host"); the outer messages only name the layer.
+	var leaf string
+	for e := errors.Unwrap(err); e != nil; e = errors.Unwrap(e) {
+		leaf = e.Error()
+	}
+	if leaf != "" && !strings.Contains(msg, leaf) {
+		msg = msg + ": " + leaf
+	}
+
+	// "read tcp 192.168.1.134:43440->104.21.37.56:443" — the local half is
+	// noise; the remote address is what identifies the peer.
+	msg = localAddrPattern.ReplaceAllString(msg, "$1 ")
+
+	return truncateKeepingCause(msg, leaf)
+}
+
+const retryNoticeMaxLen = 160
+
+// truncateKeepingCause bounds msg to retryNoticeMaxLen bytes without cutting
+// the cause out of it. The cause is the reason the notice exists, so when the
+// two cannot both fit, the leading context is shortened instead.
+func truncateKeepingCause(msg, cause string) string {
+	if len(msg) <= retryNoticeMaxLen {
+		return msg
+	}
+	if cause == "" || len(cause) >= retryNoticeMaxLen {
+		return truncateRunes(msg, retryNoticeMaxLen)
+	}
+	// Reserve room for the cause plus the "…: " joiner.
+	head := retryNoticeMaxLen - len(cause) - len("…: ")
+	if head < 0 {
+		return truncateRunes(msg, retryNoticeMaxLen)
+	}
+	prefix := truncateRunes(msg, head)
+	return prefix + "…: " + cause
+}
+
+// truncateRunes cuts s to at most n bytes without splitting a UTF-8 rune.
+func truncateRunes(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n]
+}
+
+// localAddrPattern matches the "<proto> <local>->" half of a net.OpError
+// address pair, keeping the protocol word and the remote address.
+var localAddrPattern = regexp.MustCompile(`\b(\w+) [\d.]+:\d+->`)
 
 // PublishEvent publishes an event through the agent's event bus with metadata decoration.
 func (a *Agent) PublishEvent(eventType string, data interface{}) {

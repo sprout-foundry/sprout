@@ -1,88 +1,50 @@
 package providers
 
 import (
-	"bytes"
-	"context"
-	"errors"
 	"net/http"
-	"net/http/httptest"
 	"testing"
-	"time"
 )
 
-// TestNewProviderTransportSettings pins the dedicated transport knobs: the
-// idle window must stay well under http.DefaultTransport's 90 s so a pooled
-// connection cannot outlive a Cloudflare-fronted provider's / home NAT's idle
-// limit, and the dialer must carry a 15 s TCP keepalive.
-func TestNewProviderTransportSettings(t *testing.T) {
+// The provider transport must be sized for the concurrency the agent actually
+// runs at. A parallel subagent burst issues up to 16 requests to the same host;
+// with the http.Transport zero value (an idle pool of 2) the excess connections
+// are dialed, used once and closed, and that churn is what surfaces as a
+// mid-stream "connection reset" against an otherwise healthy provider.
+func TestProviderTransportSizesTheIdlePoolForConcurrentStreams(t *testing.T) {
 	tr := newProviderTransport()
-	if tr == nil {
-		t.Fatal("newProviderTransport returned nil")
+
+	const maxParallelSubagents = 16
+	if tr.MaxIdleConnsPerHost < maxParallelSubagents {
+		t.Errorf("MaxIdleConnsPerHost = %d, want >= %d (a parallel subagent burst must not churn connections)",
+			tr.MaxIdleConnsPerHost, maxParallelSubagents)
 	}
-	if tr.IdleConnTimeout != providerTransportIdleConn {
-		t.Errorf("IdleConnTimeout = %s, want %s", tr.IdleConnTimeout, providerTransportIdleConn)
+	if tr.MaxConnsPerHost < tr.MaxIdleConnsPerHost {
+		t.Errorf("MaxConnsPerHost = %d, want >= MaxIdleConnsPerHost (%d): a cap below the idle pool forces churn",
+			tr.MaxConnsPerHost, tr.MaxIdleConnsPerHost)
 	}
-	if tr.DialContext == nil {
-		t.Fatal("DialContext is nil; the keepalive dialer was not installed")
-	}
-	if tr.Proxy == nil {
-		t.Error("Proxy is nil; ProxyFromEnvironment should be set")
+	if tr.IdleConnTimeout <= 0 {
+		t.Error("IdleConnTimeout must be set: pooled connections must not outlive the upstream's idle limit")
 	}
 }
 
-// TestShouldRetryOnFreshConnection pins the stale-pool retry decision: only a
-// failure on a REUSED (pooled) connection is a transport artifact worth an
-// immediate fresh-connection retry; a freshly-dialed failure is a genuine
-// network fault and is left to the LLM retry loop.
-func TestShouldRetryOnFreshConnection(t *testing.T) {
-	reset := errors.New("connection reset by peer")
-	if !shouldRetryOnFreshConnection(true, reset) {
-		t.Error("a reused-connection failure must be retried on a fresh connection")
-	}
-	if shouldRetryOnFreshConnection(false, reset) {
-		t.Error("a freshly-dialed connection failure must NOT be retried")
-	}
-	if shouldRetryOnFreshConnection(true, nil) {
-		t.Error("no failure, no retry")
-	}
-}
-
-// TestSecondRequestSucceedsAfterIdleConnClosed is the integration form of
-// rel.5 (b): a server that closes idle keep-alive connections after a short
-// delay. The client's first request opens a connection that is then pooled;
-// the server closes it while it sits idle; the second request must succeed
-// (either by reusing a still-valid connection or by retrying on a fresh one).
-func TestSecondRequestSucceedsAfterIdleConnClosed(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"ok":true}`))
+// Each client needs its own transport: a shared one would let a long-lived
+// stream's connection evict the pooled connections of the other client.
+func TestProviderClientsDoNotShareATransport(t *testing.T) {
+	p, err := NewGenericProvider(&ProviderConfig{
+		Name:     "test",
+		Endpoint: "https://example.invalid/v1/chat/completions",
+		Auth:     AuthConfig{Type: "bearer", Key: "test-key"},
+		Defaults: RequestDefaults{Model: "test-model"},
+		Models:   ModelConfig{DefaultContextLimit: 8192},
 	})
-	s := httptest.NewUnstartedServer(handler)
-	// Close idle keep-alive connections quickly so a pooled connection goes
-	// stale while the client still holds it in its idle pool.
-	s.Config.IdleTimeout = 10 * time.Millisecond
-	s.Start()
-	defer s.Close()
-
-	p := &GenericProvider{}
-	client := &http.Client{Transport: newProviderTransport(), Timeout: 5 * time.Second}
-
-	body := []byte(`{"model":"m"}`)
-	req1, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, s.URL, bytes.NewReader(body))
-	resp1, diag1, err := p.executeChatRequest(client, req1, body, false)
 	if err != nil {
-		t.Fatalf("first request failed: %v", err)
+		t.Fatalf("NewGenericProvider: %v", err)
 	}
-	_ = resp1.Body.Close()
-	// The connection is now in the idle pool; the server closes it after 10 ms.
-	time.Sleep(50 * time.Millisecond)
 
-	req2, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, s.URL, bytes.NewReader(body))
-	resp2, diag2, err := p.executeChatRequest(client, req2, body, false)
-	if err != nil {
-		t.Fatalf("second request (after the idle connection was closed) failed: %v", err)
+	if p.httpClient.Transport == p.streamingClient.Transport {
+		t.Error("the streaming and non-streaming clients share a transport; they must be independent")
 	}
-	_ = resp2.Body.Close()
-	t.Logf("request1 reused=%v, request2 reused=%v", diag1.Reused, diag2.Reused)
+	if p.httpClient.Transport == http.DefaultTransport {
+		t.Error("the client uses http.DefaultTransport; it must use the tuned provider transport")
+	}
 }

@@ -19,6 +19,16 @@ const providerTransportIdleConn = 30 * time.Second
 // fails fast on a genuinely-dead connection instead of hanging on a read.
 const providerTransportKeepAlive = 15 * time.Second
 
+// providerTransportMaxIdlePerHost sizes the per-host idle pool. The zero
+// value inherits http.DefaultMaxIdleConnsPerHost (2), which is below the
+// concurrency this client actually runs at: a parallel subagent burst issues
+// up to 16 concurrent requests to the same host, so the two survivors of a
+// burst are the only ones reused and the rest are dialed again next time.
+// Sizing the pool to the burst keeps post-burst requests on warm connections
+// instead of paying a TCP+TLS handshake each time. (Concurrency itself still
+// needs that many sockets — this bounds reuse, not fan-out.)
+const providerTransportMaxIdlePerHost = 32
+
 // newProviderTransport builds the dedicated http.Transport a GenericProvider's
 // streaming and non-streaming clients use instead of http.DefaultTransport.
 // Each client gets its own instance so a long-lived stream on one does not
@@ -35,5 +45,11 @@ func newProviderTransport() *http.Transport {
 		IdleConnTimeout:       providerTransportIdleConn,
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
+		MaxIdleConns:          providerTransportMaxIdlePerHost * 2,
+		MaxIdleConnsPerHost:   providerTransportMaxIdlePerHost,
+		// Cap total connections per host so a runaway fan-out queues on the
+		// transport instead of opening unbounded sockets; set above the
+		// idle pool so a burst can exceed it briefly without churn.
+		MaxConnsPerHost: providerTransportMaxIdlePerHost * 2,
 	}
 }

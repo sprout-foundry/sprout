@@ -176,9 +176,12 @@ func normalizeChangeOp(op string) string {
 	}
 }
 
+// firstNonEmpty returns the first value that is not blank. A whitespace-only
+// value is skipped: callers use this to pick a display or envelope field, and
+// returning " " there reads as a present value downstream.
 func firstNonEmpty(values ...string) string {
 	for _, v := range values {
-		if v != "" {
+		if strings.TrimSpace(v) != "" {
 			return v
 		}
 	}

@@ -15,6 +15,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/modelcontract"
+	"github.com/sprout-foundry/sprout/pkg/registrysettings"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -100,31 +101,13 @@ func init() {
 }
 
 func loadConfig() {
-	if v := strings.TrimSpace(envutil.GetEnvSimple("MODEL_REGISTRY_URL")); v != "" {
-		lower := strings.ToLower(v)
-		if lower == "off" || lower == "none" || lower == "disabled" {
-			baseURL = ""
-		} else {
-			baseURL = strings.TrimRight(v, "/")
-		}
-	} else {
-		baseURL = defaultRegistryURL
-	}
-	if v := strings.TrimSpace(envutil.GetEnvSimple("MODEL_REGISTRY_TTL")); v != "" {
-		if d, err := time.ParseDuration(v); err == nil && d > 0 {
-			ttl = d
-		}
-	}
-	if v := strings.TrimSpace(envutil.GetEnvSimple("MODEL_REGISTRY_NEGATIVE_TTL")); v != "" {
-		if d, err := time.ParseDuration(v); err == nil && d > 0 {
-			negativeTTL = d
-		}
-	}
-	if v := strings.TrimSpace(envutil.GetEnvSimple("MODEL_REGISTRY_TIMEOUT")); v != "" {
-		if d, err := time.ParseDuration(v); err == nil && d > 0 {
-			httpTimeout = d
-		}
-	}
+	s := registrysettings.Load("MODEL_REGISTRY", registrysettings.Settings{
+		BaseURL:     defaultRegistryURL,
+		TTL:         defaultTTL,
+		NegativeTTL: defaultNegativeTTL,
+		Timeout:     defaultHTTPTimeout,
+	})
+	baseURL, ttl, negativeTTL, httpTimeout = s.BaseURL, s.TTL, s.NegativeTTL, s.Timeout
 }
 
 // SetBaseURL sets the registry base URL (useful for testing).

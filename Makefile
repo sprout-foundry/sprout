@@ -419,17 +419,23 @@ lint-fix:
 # the historical backlog; CI gates on lint-go-new so it doesn't block PRs.
 # GOMAXPROCS=2 keeps the run inside ~2GB on small machines.
 GOLANGCI_LINT_VERSION ?= v2.13.2
+# golangci-lint 2.13.2 bundles a go/packages that cannot decode a newer Go's
+# export data ("version 5 is greater than maximum supported version 4"), so on
+# a machine whose installed Go is newer than go.mod's toolchain every package
+# fails to typecheck. CI pins the same Go version; pinning here keeps the local
+# gate identical to CI.
+GOLANGCI_LINT_GOTOOLCHAIN ?= go1.26.6
 .PHONY: lint-go lint-go-new
 lint-go: prepare-grammars
 	@command -v golangci-lint >/dev/null 2>&1 || go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
-	@GOMAXPROCS=2 golangci-lint run ./...
+	@GOTOOLCHAIN=$(GOLANGCI_LINT_GOTOOLCHAIN) GOMAXPROCS=2 golangci-lint run ./...
 
 # New-code gate: only issues introduced after NEW_FROM_REV (default HEAD~1).
 # CI passes the PR base ref via NEW_FROM_REV so merge commits work.
 lint-go-new: prepare-grammars
 	@command -v golangci-lint >/dev/null 2>&1 || go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 	@rev="$(NEW_FROM_REV)"; [ -z "$$rev" ] && rev="HEAD~1"; \
-	GOMAXPROCS=2 golangci-lint run --new-from-rev="$$rev" ./...
+	GOTOOLCHAIN=$(GOLANGCI_LINT_GOTOOLCHAIN) GOMAXPROCS=2 golangci-lint run --new-from-rev="$$rev" ./...
 
 # Quality gates
 .PHONY: vet fmt-check

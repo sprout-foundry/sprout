@@ -1,3 +1,7 @@
+// Command llm_prof prints Go heap and MLX memory before and after a short
+// generation from a fixed qwen3-0.6b model, to see what a single generate call
+// allocates.
+
 //go:build darwin && arm64 && cgo
 
 package main

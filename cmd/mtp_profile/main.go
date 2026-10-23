@@ -1,3 +1,6 @@
+// Command mtp_profile profiles multi-token-prediction drafting on a qwen3.5
+// model, comparing accepted drafts and tokens/sec across MTP draft counts.
+
 //go:build darwin && arm64 && cgo && mlx
 
 package main

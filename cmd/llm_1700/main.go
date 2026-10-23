@@ -1,3 +1,7 @@
+// Command llm_1700 times short and long generations from a fixed qwen3-1.7b
+// model directory, so a change in tokens/sec is attributable to the engine
+// rather than the prompt.
+
 //go:build darwin && arm64 && cgo
 
 package main

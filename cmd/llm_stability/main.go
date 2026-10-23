@@ -1,3 +1,7 @@
+// Command llm_stability runs repeated generations from a fixed qwen3-0.6b
+// model with MLX's buffer cache capped, printing heap/RSS after each to show
+// whether memory is flat or growing.
+
 //go:build darwin && arm64 && cgo
 
 package main

@@ -70,7 +70,7 @@ const stableWaitBudget = 5 * time.Second
 // failure or a bad scheme is deterministic and surfaces immediately.
 func navigateWithRetry(page *rod.Page, url string) error {
 	err := page.Timeout(getNavigationTimeout(url)).Navigate(url)
-	if err == nil || !isTransientNavigationError(err) {
+	if err == nil || !IsTransientNavigationError(err) {
 		return err
 	}
 	// Back off briefly so an overloaded or rate-limiting origin gets room,
@@ -81,44 +81,6 @@ func navigateWithRetry(page *rod.Page, url string) error {
 
 // navigationRetryBackoff is the pause before a single navigation retry.
 const navigationRetryBackoff = 500 * time.Millisecond
-
-// transientNavigationMarkers are the Chromium net errors that describe a
-// momentary condition. They are matched on the error text because rod
-// surfaces navigation failures as *proto.Error carrying the raw net error
-// string, with no typed equivalent to switch on.
-var transientNavigationMarkers = []string{
-	"ERR_CONNECTION_RESET",
-	"ERR_CONNECTION_CLOSED",
-	"ERR_CONNECTION_ABORTED",
-	"ERR_TIMEOUT",
-	"ERR_EMPTY_RESPONSE",
-	"ERR_NETWORK_CHANGED",
-	"ERR_HTTP2_PROTOCOL_ERROR",
-	"ERR_QUIC_PROTOCOL_ERROR",
-}
-
-// IsTransientNavigationError reports whether a browse failure describes a
-// momentary network condition rather than a property of the URL. Callers use
-// it to decide between retrying and reporting.
-func IsTransientNavigationError(err error) bool {
-	return isTransientNavigationError(err)
-}
-
-// isTransientNavigationError reports whether a navigation failure is worth one
-// retry. Deterministic failures (bad host, refused connection, invalid URL)
-// are excluded: retrying them only delays the error the caller needs.
-func isTransientNavigationError(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := err.Error()
-	for _, marker := range transientNavigationMarkers {
-		if strings.Contains(msg, marker) {
-			return true
-		}
-	}
-	return false
-}
 
 // localhostTimeout is the navigation timeout for localhost URLs (fast fail).
 const localhostTimeout = 10 * time.Second

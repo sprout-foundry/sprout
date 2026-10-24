@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-23T14:17:04Z",
+  "updated_at": "2026-10-24T13:22:59Z",
   "source": "refresh_provider_catalog",
   "onboarding_order": [
     "deepinfra",
@@ -2143,9 +2143,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.885312,
-          "output_cost": 1.770624,
-          "cached_input_cost": 0.073776
+          "input_cost": 0.246558,
+          "output_cost": 0.493116,
+          "cached_input_cost": 0.020546500000000002
         },
         {
           "id": "deepseek/deepseek-v4-pro-0813",
@@ -2186,9 +2186,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.3,
-          "output_cost": 1.2,
-          "cached_input_cost": 0.006
+          "input_cost": 0.02,
+          "output_cost": 1,
+          "cached_input_cost": 0.015
         },
         {
           "id": "deepseek/deepseek-v4.1-flash-1017",
@@ -2848,9 +2848,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.09,
-          "output_cost": 0.3,
-          "cached_input_cost": 0.049999999999999996
+          "input_cost": 0.0675,
+          "output_cost": 0.22499999999999998,
+          "cached_input_cost": 0.0375
         },
         {
           "id": "google/gemma-4-26b-a4b-it:free",
@@ -3622,8 +3622,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.27,
-          "output_cost": 0.95,
+          "input_cost": 0.3,
+          "output_cost": 1.2,
           "cached_input_cost": 0.03
         },
         {
@@ -4204,8 +4204,23 @@
             "structured_output"
           ],
           "input_cost": 0.23900000000000002,
-          "output_cost": 11.936,
+          "output_cost": 10.8,
           "cached_input_cost": 0.21
+        },
+        {
+          "id": "moonshotai/kimi-k3.1-pro",
+          "name": "MoonshotAI: Kimi K3.1 Pro",
+          "description": "Kimi K3.1 Pro is Moonshot AI's flagship open-weight multimodal reasoning model and a post-trained successor to Kimi K3, with a 1M-token context window. It is built for long-horizon coding, 3D...",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 2,
+          "output_cost": 10,
+          "cached_input_cost": 0.19999999999999998
         },
         {
           "id": "moonshotai/kimi-k3:batch",
@@ -8274,9 +8289,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.031,
-          "output_cost": 0.6,
-          "cached_input_cost": 0.004
+          "input_cost": 0.02,
+          "output_cost": 1,
+          "cached_input_cost": 0.015
         },
         {
           "id": "~deepseek/deepseek-pro-latest",
@@ -8288,9 +8303,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.165,
-          "output_cost": 0.49500000000000005,
-          "cached_input_cost": 0.0052499999999999995
+          "input_cost": 0.1188,
+          "output_cost": 8,
+          "cached_input_cost": 0.12
         },
         {
           "id": "~deepseek/deepseek-v4-flash-latest",
@@ -8303,8 +8318,8 @@
             "structured_output"
           ],
           "input_cost": 0.0422,
-          "output_cost": 0.16369999999999998,
-          "cached_input_cost": 0.0275
+          "output_cost": 0.1694,
+          "cached_input_cost": 0.028
         },
         {
           "id": "~google/gemini-flash-latest",
@@ -8347,9 +8362,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.238,
-          "output_cost": 16,
-          "cached_input_cost": 0.228
+          "input_cost": 0.19,
+          "output_cost": 8.940000000000001,
+          "cached_input_cost": 0.19
         },
         {
           "id": "~openai/gpt-astra-latest",
@@ -8480,9 +8495,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.005200000000000001,
-          "output_cost": 0.1985,
-          "cached_input_cost": 0.005200000000000001
+          "input_cost": 0.0502,
+          "output_cost": 0.0709,
+          "cached_input_cost": 0.03
         },
         {
           "id": "~z-ai/glm-latest",
@@ -8494,9 +8509,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.079,
-          "output_cost": 1.4,
-          "cached_input_cost": 0.078
+          "input_cost": 0.075,
+          "output_cost": 4.295000000000001,
+          "cached_input_cost": 0.075
         }
       ]
     },

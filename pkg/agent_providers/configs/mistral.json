@@ -310,7 +310,7 @@
         "id": "voxtral-small-24b-2507",
         "input_cost": 0.1,
         "name": "Mistral: Voxtral Small 24B 2507",
-        "output_cost": 0.3,
+        "output_cost": 0.4,
         "tags": [
           "tools",
           "structured_output"
@@ -414,13 +414,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.07,
+        "cached_input_cost": 0.14,
         "context_length": 1048576,
         "description": "Mistral Large 4 is Mistral's flagship open-weight multimodal model (1.05T total, 49B active) built for reasoning, coding, and agentic workloads, with a 1M-token context window.",
         "id": "mistral-large-4-0",
-        "input_cost": 0.68,
+        "input_cost": 1.36,
         "name": "Mistral: Mistral Large 4",
-        "output_cost": 2.09,
+        "output_cost": 4.18,
         "tags": [
           "tools",
           "vision",

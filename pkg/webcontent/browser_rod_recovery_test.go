@@ -75,9 +75,3 @@ func TestConnectReusesALiveBrowser(t *testing.T) {
 		t.Error("a live browser was replaced; connect must reuse a healthy handle")
 	}
 }
-
-func TestBrowserAliveRejectsNil(t *testing.T) {
-	if browserAlive(nil) {
-		t.Error("a nil handle reported alive")
-	}
-}

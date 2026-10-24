@@ -227,15 +227,14 @@ func (r *rodRenderer) connect(ctx context.Context) (*rod.Browser, error) {
 		return nil, fmt.Errorf("browser renderer has been closed")
 	}
 	if r.browser != nil {
-		// A cached handle is not proof of a live browser: Chromium can crash
-		// or be OOM-killed while the process keeps running. Returning the
-		// dead handle makes every later call fail until the process restarts,
-		// so check liveness and relaunch instead.
-		if browserAlive(r.browser) {
-			return r.browser, nil
-		}
-		_ = r.browser.Close()
-		r.browser = nil
+		// A cached handle is returned as-is. It is not proof of a live
+		// browser — Chromium can crash or be OOM-killed while the process
+		// keeps running — but no cheap probe can tell: Version() and
+		// Incognito() both answer from rod's cached connection state and
+		// report a closed browser as healthy. The reliable signal is a real
+		// operation failing, which openIncognitoPage handles by discarding
+		// the handle and retrying once on a fresh browser.
+		return r.browser, nil
 	}
 
 	browser, err := r.launch(ctx)
@@ -245,31 +244,6 @@ func (r *rodRenderer) connect(ctx context.Context) (*rod.Browser, error) {
 	r.browser = browser
 	return r.browser, nil
 }
-
-// browserAlive reports whether a cached browser handle still talks to a live
-// Chromium. Version is the cheapest round-trip that proves the connection
-// works; a crashed browser answers with a transport error.
-func browserAlive(browser *rod.Browser) bool {
-	if browser == nil {
-		return false
-	}
-	done := make(chan error, 1)
-	go func() {
-		_, err := browser.Version()
-		done <- err
-	}()
-	select {
-	case err := <-done:
-		return err == nil
-	case <-time.After(browserLivenessTimeout):
-		// A hung browser is as unusable as a dead one.
-		return false
-	}
-}
-
-// browserLivenessTimeout bounds the liveness probe. Chromium answers Version
-// in milliseconds when healthy; a longer wait means the process is wedged.
-const browserLivenessTimeout = 2 * time.Second
 
 // launch starts a browser, falling back to --disable-gpu when the GPU probe
 // shows screenshot capture is unusable in this environment.
@@ -348,22 +322,24 @@ func (r *rodRenderer) openIncognitoPage(ctx context.Context) (*rod.Browser, *rod
 	// A browser can die between the liveness probe and the first real call
 	// (crash, OOM kill, or a wedged renderer). Discard the cached handle and
 	// try once on a fresh browser rather than failing every later call.
-	if !r.discardDeadBrowser() {
+	//
+	// The discard does not ask whether the handle looks alive: Version()
+	// answers from rod's cached connection state, so it reports a closed
+	// browser as healthy. Opening a page is the operation that actually
+	// fails, which makes this error the reliable signal.
+	if !r.discardBrowser() {
 		return nil, nil, err
 	}
 	return r.tryOpenIncognitoPage(ctx)
 }
 
-// discardDeadBrowser drops the cached browser handle so the next connect
-// relaunches. It reports whether a handle was discarded; when the cached
-// browser is still alive the original error is a real one and must surface.
-func (r *rodRenderer) discardDeadBrowser() bool {
+// discardBrowser drops the cached browser handle so the next connect
+// relaunches. It reports whether a handle was discarded; a renderer that is
+// already closed has nothing to replace.
+func (r *rodRenderer) discardBrowser() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.browser == nil || r.closed {
-		return false
-	}
-	if browserAlive(r.browser) {
 		return false
 	}
 	_ = r.browser.Close()

@@ -34,6 +34,26 @@ hue when the theme flips:
 as `--brand-sprout`, so a surface that wants the sprout green binds to that
 token rather than relying on a theme-dependent meaning of `--brand-frost`.
 
+### Bright / brand-decorative family
+
+The marketing site's bright lime/sun/leaf palette, added as a decorative
+brand family. Same vivid values in **both** themes — they are decorative
+only (glows, the living-mark leaf, celebration bursts, accent
+underlines/highlights), never meaningful text or UI, so they carry no
+WCAG-AA requirement:
+
+| Token                     | Value                                                                                       |
+| ------------------------- | ------------------------------------------------------------------------------------------- |
+| `--brand-lime`            | `#b8f23d` — vivid leaf/lime.                                                                |
+| `--brand-lime-bright`     | `#d7ff6b` — lime highlight / glow tint.                                                     |
+| `--brand-sun`             | `#ffd23f` — sun yellow.                                                                      |
+| `--brand-leaf`            | `#2fc96b` — leaf green (gradient A start).                                                  |
+| `--brand-leaf-teal`       | `#0aa89e` — leaf teal (gradient A end).                                                     |
+| `--brand-leaf-gradient`   | `linear-gradient(135deg, #2fc96b 0%, #0aa89e 100%)` — green → teal.                          |
+| `--brand-leaf2-gradient`  | `linear-gradient(135deg, #b8f23d 0%, #2fc96b 100%)` — lime → green.                         |
+| `--brand-glow-lime`       | `#d7ff6b` — lime glow.                                                                       |
+| `--brand-glow-teal`       | `#7ef0e4` — teal glow.                                                                       |
+
 ## Motion tokens
 
 Easing curves and a shared duration scale (defined in the base `:root`):

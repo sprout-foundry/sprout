@@ -36,7 +36,7 @@ func browseStepClick(page *rod.Page, step BrowseStep, timeout time.Duration, rec
 	if err := el.Click(proto.InputMouseButtonLeft, 1); err != nil {
 		return fmt.Errorf("click %q: %w", step.Selector, err)
 	}
-	_ = page.WaitStable(stableDuration)
+	waitStableTolerant(page)
 	record(fmt.Sprintf("click %s", step.Selector))
 	return nil
 }
@@ -63,7 +63,7 @@ func browseStepType(page *rod.Page, step BrowseStep, timeout time.Duration, reco
 	if err := el.Input(step.Value); err != nil {
 		return fmt.Errorf("type into %q: %w", step.Selector, err)
 	}
-	_ = page.WaitStable(stableDuration)
+	waitStableTolerant(page)
 	record(fmt.Sprintf("type %s", step.Selector))
 	return nil
 }
@@ -90,7 +90,7 @@ func browseStepFill(page *rod.Page, step BrowseStep, timeout time.Duration, reco
 	}`, step.Value); err != nil {
 		return fmt.Errorf("fill %q: %w", step.Selector, err)
 	}
-	_ = page.WaitStable(stableDuration)
+	waitStableTolerant(page)
 	record(fmt.Sprintf("fill %s", step.Selector))
 	return nil
 }
@@ -112,7 +112,7 @@ func browseStepPress(page *rod.Page, step BrowseStep, timeout time.Duration, rec
 	if err := pressPageKey(page, step.Key); err != nil {
 		return fmt.Errorf("pressPageKey: %w", err)
 	}
-	_ = page.WaitStable(stableDuration)
+	waitStableTolerant(page)
 	record(fmt.Sprintf("press %s", step.Key))
 	return nil
 }
@@ -158,12 +158,10 @@ func browseStepNavigate(page *rod.Page, step BrowseStep, timeout time.Duration, 
 	if target == "" {
 		return fmt.Errorf("browse step navigate requires value URL")
 	}
-	if err := page.Timeout(getNavigationTimeout(target)).Navigate(target); err != nil {
+	if err := navigateWithRetry(page, target); err != nil {
 		return fmt.Errorf("navigate to %q: %w", target, err)
 	}
-	if err := page.WaitStable(stableDuration); err != nil {
-		return fmt.Errorf("wait stable after navigate to %q: %w", target, err)
-	}
+	waitStableTolerant(page)
 	record(fmt.Sprintf("navigate %s", target))
 	return nil
 }
@@ -173,9 +171,7 @@ func browseStepReload(page *rod.Page, step BrowseStep, timeout time.Duration, re
 	if err := page.Reload(); err != nil {
 		return fmt.Errorf("reload page: %w", err)
 	}
-	if err := page.WaitStable(stableDuration); err != nil {
-		return fmt.Errorf("wait stable after reload: %w", err)
-	}
+	waitStableTolerant(page)
 	record("reload")
 	return nil
 }
@@ -185,9 +181,7 @@ func browseStepBack(page *rod.Page, step BrowseStep, timeout time.Duration, reco
 	if err := page.NavigateBack(); err != nil {
 		return fmt.Errorf("navigate back: %w", err)
 	}
-	if err := page.WaitStable(stableDuration); err != nil {
-		return fmt.Errorf("wait stable after back: %w", err)
-	}
+	waitStableTolerant(page)
 	record("back")
 	return nil
 }
@@ -197,9 +191,7 @@ func browseStepForward(page *rod.Page, step BrowseStep, timeout time.Duration, r
 	if err := page.NavigateForward(); err != nil {
 		return fmt.Errorf("navigate forward: %w", err)
 	}
-	if err := page.WaitStable(stableDuration); err != nil {
-		return fmt.Errorf("wait stable after forward: %w", err)
-	}
+	waitStableTolerant(page)
 	record("forward")
 	return nil
 }

@@ -29,14 +29,14 @@ func (r *rodRenderer) RenderPage(ctx context.Context, url string) (string, error
 		_ = incognito.Close()
 	}()
 
-	if err := page.Timeout(getNavigationTimeout(url)).Navigate(url); err != nil {
+	if err := navigateWithRetry(page, url); err != nil {
 		return "", fmt.Errorf("navigate to %s: %w", url, err)
 	}
 
-	// WaitStable waits for load, request idle, and DOM stability.
-	if err := page.WaitStable(stableDuration); err != nil {
-		return "", fmt.Errorf("wait stable: %w", err)
-	}
+	// Wait for load, request idle, and DOM stability. A page that never goes
+	// idle still has rendered content, so proceed on timeout rather than
+	// discarding a capture that is already usable.
+	waitStableTolerant(page)
 
 	html, err := page.HTML()
 	if err != nil {
@@ -66,13 +66,11 @@ func (r *rodRenderer) Screenshot(ctx context.Context, url string, outputPath str
 		return fmt.Errorf("screenshot: apply viewport and UA: %w", err)
 	}
 
-	if err := page.Timeout(getNavigationTimeout(url)).Navigate(url); err != nil {
+	if err := navigateWithRetry(page, url); err != nil {
 		return fmt.Errorf("navigate to %s: %w", url, err)
 	}
 
-	if err := page.WaitStable(stableDuration); err != nil {
-		return fmt.Errorf("wait stable: %w", err)
-	}
+	waitStableTolerant(page)
 
 	// Capture a full-page screenshot as PNG.
 	imgData, err := page.Screenshot(true, &proto.PageCaptureScreenshot{
@@ -116,13 +114,11 @@ func (r *rodRenderer) CaptureDOM(ctx context.Context, url string, viewportWidth,
 		return "", fmt.Errorf("failed to apply viewport and user agent: %w", err)
 	}
 
-	if err := page.Timeout(getNavigationTimeout(url)).Navigate(url); err != nil {
+	if err := navigateWithRetry(page, url); err != nil {
 		return "", fmt.Errorf("navigate to %s: %w", url, err)
 	}
 
-	if err := page.WaitStable(stableDuration); err != nil {
-		return "", fmt.Errorf("wait stable: %w", err)
-	}
+	waitStableTolerant(page)
 
 	html, err := page.HTML()
 	if err != nil {

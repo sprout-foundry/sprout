@@ -112,10 +112,26 @@ func handleBrowseURL(ctx context.Context, a *Agent, args map[string]interface{})
 
 	result, err := webcontent.BrowseURL(url, opts)
 	if err != nil {
-		return "", agenterrors.Wrapf(err, "failed to browse URL %s (action=%s)", url, action)
+		return "", classifyBrowseError(err, url, action)
 	}
 
 	return result, nil
+}
+
+// classifyBrowseError maps a browse failure onto the agent's error taxonomy.
+//
+// A transient network fault (connection reset, timeout, empty response) is
+// worth another attempt — the same URL usually loads moments later, and a
+// hard failure makes the agent give up on a page that is perfectly reachable.
+// A deterministic failure (bad scheme, refused connection, no such host, a
+// missing element) is not: retrying only delays the answer, so it stays a
+// plain error the agent reports rather than retries.
+func classifyBrowseError(err error, url, action string) error {
+	msg := fmt.Sprintf("failed to browse URL %s (action=%s)", url, action)
+	if webcontent.IsTransientNavigationError(err) {
+		return agenterrors.NewNetwork(msg, err)
+	}
+	return agenterrors.Wrapf(err, "%s", msg)
 }
 
 func parseBrowseSteps(rawSteps []interface{}) ([]webcontent.BrowseStep, error) {

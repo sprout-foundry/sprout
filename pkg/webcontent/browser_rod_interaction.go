@@ -77,7 +77,7 @@ func (r *rodRenderer) Run(ctx context.Context, url string, opts BrowseOptions) (
 		return nil, fmt.Errorf("inject cookies/headers: %w", err)
 	}
 
-	if err := page.Timeout(getNavigationTimeout(url)).Navigate(url); err != nil {
+	if err := navigateWithRetry(page, url); err != nil {
 		return nil, fmt.Errorf("navigate to %s: %w", url, err)
 	}
 	if err := page.WaitStable(stableDuration); err != nil {

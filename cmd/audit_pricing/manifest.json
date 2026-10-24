@@ -1,83 +1,97 @@
 {
   "chutes": {
     "source": "https://llm.chutes.ai/v1/models",
-    "last_verified": "2026-10-23",
+    "last_verified": "2026-10-24",
     "models": [
       {
         "id": "Nemotron-3-Nano-Omni-30B-TEE",
         "input_per_mtok": 0.0245,
-        "output_per_mtok": 0.0978
+        "output_per_mtok": 0.0978,
+        "cached_per_mtok": 0.00245
       },
       {
         "id": "Qwen/Qwen3-235B-A22B-Thinking-2507-TEE",
         "input_per_mtok": 0.2989,
-        "output_per_mtok": 1.1957
+        "output_per_mtok": 1.1957,
+        "cached_per_mtok": 0.02989
       },
       {
         "id": "Qwen/Qwen3-32B-TEE",
         "input_per_mtok": 0.104,
-        "output_per_mtok": 0.416
+        "output_per_mtok": 0.416,
+        "cached_per_mtok": 0.0104
       },
       {
         "id": "Qwen/Qwen3.5-397B-A17B-TEE",
         "input_per_mtok": 0.45,
-        "output_per_mtok": 3
+        "output_per_mtok": 3,
+        "cached_per_mtok": 0.045
       },
       {
         "id": "Qwen/Qwen3.6-27B-TEE",
         "input_per_mtok": 0.25,
-        "output_per_mtok": 2
+        "output_per_mtok": 2,
+        "cached_per_mtok": 0.025
       },
       {
         "id": "deepseek-ai/DeepSeek-V3.2-TEE",
         "input_per_mtok": 1,
-        "output_per_mtok": 1
+        "output_per_mtok": 1,
+        "cached_per_mtok": 0.1
       },
       {
         "id": "google/gemma-4-31B-turbo-TEE",
         "input_per_mtok": 0.12,
-        "output_per_mtok": 0.37
+        "output_per_mtok": 0.37,
+        "cached_per_mtok": 0.012
       },
       {
         "id": "moonshotai/Kimi-K2.6-TEE",
         "input_per_mtok": 0.45,
-        "output_per_mtok": 1.95
+        "output_per_mtok": 1.95,
+        "cached_per_mtok": 0.045
       },
       {
         "id": "moonshotai/Kimi-K3-TEE",
         "input_per_mtok": 1.85,
-        "output_per_mtok": 9.5
+        "output_per_mtok": 9.5,
+        "cached_per_mtok": 0.185
       },
       {
         "id": "unsloth/Mistral-Nemo-Instruct-2407-TEE",
         "input_per_mtok": 0.0245,
-        "output_per_mtok": 0.0978
+        "output_per_mtok": 0.0978,
+        "cached_per_mtok": 0.00245
       },
       {
         "id": "zai-org/GLM-5.1-TEE",
         "input_per_mtok": 0.98,
-        "output_per_mtok": 3.08
+        "output_per_mtok": 3.08,
+        "cached_per_mtok": 0.098
       },
       {
         "id": "zai-org/GLM-5.2-TEE",
         "input_per_mtok": 1.25,
-        "output_per_mtok": 3.95
+        "output_per_mtok": 3.95,
+        "cached_per_mtok": 0.125
       },
       {
         "id": "deepseek-ai/DeepSeek-V4-Flash-0731-TEE",
         "input_per_mtok": 0.44,
-        "output_per_mtok": 1.32
+        "output_per_mtok": 1.32,
+        "cached_per_mtok": 0.044
       },
       {
         "id": "Qwen/Qwen3.8-27B-TEE",
         "input_per_mtok": 0.039,
-        "output_per_mtok": 1.25
+        "output_per_mtok": 1.25,
+        "cached_per_mtok": 0.0039
       }
     ]
   },
   "deepinfra": {
     "source": "https://api.deepinfra.com/v1/models",
-    "last_verified": "2026-10-23",
+    "last_verified": "2026-10-24",
     "models": [
       {
         "id": "ByteDance/Seed-1.8",
@@ -561,13 +575,13 @@
         "id": "XiaomiMiMo/MiMo-V2.6-Flash",
         "input_per_mtok": 0.14,
         "output_per_mtok": 0.28,
-        "cached_per_mtok": 0.003
+        "cached_per_mtok": 0.0028
       },
       {
         "id": "XiaomiMiMo/MiMo-V2.6-Pro",
         "input_per_mtok": 0.43,
         "output_per_mtok": 0.87,
-        "cached_per_mtok": 0.004
+        "cached_per_mtok": 0.0036
       },
       {
         "id": "anthropic/claude-opus-5-5",
@@ -614,7 +628,7 @@
   },
   "deepseek": {
     "source": "https://api-docs.deepseek.com/quick_start/pricing",
-    "last_verified": "2026-10-23",
+    "last_verified": "2026-10-24",
     "models": [
       {
         "id": "deepseek-v4-flash",
@@ -674,7 +688,7 @@
   },
   "minimax": {
     "source": "https://platform.minimax.io/docs/guides/pricing-paygo",
-    "last_verified": "2026-10-23",
+    "last_verified": "2026-10-24",
     "models": [
       {
         "id": "MiniMax-M2",
@@ -752,7 +766,7 @@
   },
   "mistral": {
     "source": "https://docs.mistral.ai/",
-    "last_verified": "2026-10-23",
+    "last_verified": "2026-10-24",
     "models": [
       {
         "id": "mistral-large-latest",
@@ -931,7 +945,7 @@
   },
   "ollama-cloud": {
     "source": "https://ollama.com/pricing",
-    "last_verified": "2026-10-23",
+    "last_verified": "2026-10-24",
     "models": [
       {
         "id": "deepseek-v4-flash",
@@ -1112,7 +1126,7 @@
   },
   "openai": {
     "source": "https://platform.openai.com/docs/pricing",
-    "last_verified": "2026-10-23",
+    "last_verified": "2026-10-24",
     "models": [
       {
         "id": "gpt-5",
@@ -1752,7 +1766,7 @@
   },
   "openrouter": {
     "source": "https://openrouter.ai/api/v1/models",
-    "last_verified": "2026-10-23",
+    "last_verified": "2026-10-24",
     "models": [
       {
         "id": "ai21/jamba-large-1.7",
@@ -2060,9 +2074,9 @@
       },
       {
         "id": "deepseek/deepseek-v4-pro",
-        "input_per_mtok": 0.4411,
-        "output_per_mtok": 0.8822,
-        "cached_per_mtok": 0.03654
+        "input_per_mtok": 0.2262,
+        "output_per_mtok": 0.4524,
+        "cached_per_mtok": 0.01885
       },
       {
         "id": "google/gemini-2.5-flash",
@@ -2204,9 +2218,9 @@
       },
       {
         "id": "google/gemma-4-26b-a4b-it",
-        "input_per_mtok": 0.09,
-        "output_per_mtok": 0.3,
-        "cached_per_mtok": 0.05
+        "input_per_mtok": 0.042,
+        "output_per_mtok": 0.22,
+        "cached_per_mtok": 0.021
       },
       {
         "id": "google/gemma-4-26b-a4b-it:free",
@@ -2498,8 +2512,8 @@
       },
       {
         "id": "mistralai/mistral-small-3.2-24b-instruct",
-        "input_per_mtok": 0.09375,
-        "output_per_mtok": 0.25
+        "input_per_mtok": 0.075,
+        "output_per_mtok": 0.2
       },
       {
         "id": "mistralai/mixtral-8x22b-instruct",
@@ -2545,13 +2559,13 @@
         "id": "moonshotai/kimi-k2.7-code",
         "input_per_mtok": 0.6712,
         "output_per_mtok": 3.35,
-        "cached_per_mtok": 0.18
+        "cached_per_mtok": 0.15
       },
       {
         "id": "moonshotai/kimi-k3",
-        "input_per_mtok": 0.239,
-        "output_per_mtok": 11.936,
-        "cached_per_mtok": 0.21
+        "input_per_mtok": 0.19,
+        "output_per_mtok": 8.94,
+        "cached_per_mtok": 0.19
       },
       {
         "id": "morph/morph-v3-fast",
@@ -3604,9 +3618,9 @@
       },
       {
         "id": "~moonshotai/kimi-latest",
-        "input_per_mtok": 0.238,
-        "output_per_mtok": 24,
-        "cached_per_mtok": 0.228
+        "input_per_mtok": 0.19,
+        "output_per_mtok": 8.94,
+        "cached_per_mtok": 0.19
       },
       {
         "id": "~openai/gpt-latest",
@@ -4086,9 +4100,9 @@
       },
       {
         "id": "qwen/qwen3.8-27b",
-        "input_per_mtok": 0.035,
-        "output_per_mtok": 2.2,
-        "cached_per_mtok": 0.0175
+        "input_per_mtok": 0.02,
+        "output_per_mtok": 0.5,
+        "cached_per_mtok": 0.009
       },
       {
         "id": "z-ai/glm-5.2:free",
@@ -4177,9 +4191,9 @@
       },
       {
         "id": "z-ai/glm-5.3-flash",
-        "input_per_mtok": 0.0052,
-        "output_per_mtok": 0.1985,
-        "cached_per_mtok": 0.0052
+        "input_per_mtok": 0.0502,
+        "output_per_mtok": 0.0709,
+        "cached_per_mtok": 0.03
       },
       {
         "id": "deepseek/deepseek-v4-flash-0731:batch",
@@ -4310,9 +4324,9 @@
       },
       {
         "id": "~z-ai/glm-flash-latest",
-        "input_per_mtok": 0.0052,
-        "output_per_mtok": 0.1985,
-        "cached_per_mtok": 0.0052
+        "input_per_mtok": 0.0502,
+        "output_per_mtok": 0.0709,
+        "cached_per_mtok": 0.03
       },
       {
         "id": "google/gemini-3.8-flash",
@@ -4420,9 +4434,9 @@
       },
       {
         "id": "deepseek/deepseek-v4.1-flash",
-        "input_per_mtok": 0.07,
-        "output_per_mtok": 0.5,
-        "cached_per_mtok": 0.008
+        "input_per_mtok": 0.02,
+        "output_per_mtok": 1.0,
+        "cached_per_mtok": 0.015
       },
       {
         "id": "inclusionai/ling-3.0-flash-vl",
@@ -4485,9 +4499,9 @@
       },
       {
         "id": "~deepseek/deepseek-flash-latest",
-        "input_per_mtok": 0.07,
-        "output_per_mtok": 0.5,
-        "cached_per_mtok": 0.008
+        "input_per_mtok": 0.02,
+        "output_per_mtok": 1.0,
+        "cached_per_mtok": 0.015
       },
       {
         "id": "~deepseek/deepseek-pro-latest",
@@ -4909,12 +4923,18 @@
         "id": "recursive/flint-v1.0:free",
         "input_per_mtok": 0,
         "output_per_mtok": 0
+      },
+      {
+        "id": "moonshotai/kimi-k3.1-pro",
+        "input_per_mtok": 2,
+        "output_per_mtok": 10,
+        "cached_per_mtok": 0.2
       }
     ]
   },
   "zai": {
     "source": "https://docs.z.ai/guides/overview/pricing",
-    "last_verified": "2026-10-23",
+    "last_verified": "2026-10-24",
     "models": [
       {
         "id": "glm-4.5v",
@@ -5044,7 +5064,7 @@
   },
   "zai-coding": {
     "source": "https://docs.z.ai/guides/overview/pricing",
-    "last_verified": "2026-10-23",
+    "last_verified": "2026-10-24",
     "models": [
       {
         "id": "glm-4.5",

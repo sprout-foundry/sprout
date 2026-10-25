@@ -46,7 +46,9 @@
       "zai-org/GLM-5.1-TEE",
       "zai-org/GLM-5.2-TEE",
       "deepseek-ai/DeepSeek-V4-Flash-0731-TEE",
-      "Qwen/Qwen3.8-27B-TEE"
+      "Qwen/Qwen3.8-27B-TEE",
+      "Qwen/Qwen3.8-Max-0902",
+      "deepseek-ai/DeepSeek-V4-Pro-0813"
     ],
     "default_context_limit": 64000,
     "default_model": "deepseek-ai/DeepSeek-V3.2-TEE",
@@ -230,6 +232,33 @@
         "output_cost": 1.25,
         "tags": [
           "vision",
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "cached_input_cost": 0.25,
+        "context_length": 1000000,
+        "description": "Qwen3.8 Max 0902 is Qwen's 2.4T-parameter mixture-of-experts model with text, image, and video input on Chutes public compute",
+        "id": "Qwen/Qwen3.8-Max-0902",
+        "input_cost": 2,
+        "name": "Qwen3.8 Max 0902",
+        "output_cost": 6,
+        "tags": [
+          "vision",
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "cached_input_cost": 0.15,
+        "context_length": 1048576,
+        "description": "DeepSeek V4 Pro 0813 is DeepSeek's flagship MoE for advanced reasoning, coding, and long-horizon agentic tasks on Chutes public compute",
+        "id": "deepseek-ai/DeepSeek-V4-Pro-0813",
+        "input_cost": 0.85,
+        "name": "DeepSeek V4 Pro 0813",
+        "output_cost": 2.65,
+        "tags": [
           "tools",
           "reasoning"
         ]

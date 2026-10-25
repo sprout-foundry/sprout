@@ -782,13 +782,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.01885,
+        "cached_input_cost": 0.01722,
         "context_length": 1048576,
         "description": "DeepSeek V4 Pro is a large-scale Mixture-of-Experts model from DeepSeek with 1.6T total parameters and 49B activated parameters, supporting a 1M-token context window. It is designed for advanced reasoning, coding, and long-horizon agentic tasks.",
         "id": "deepseek/deepseek-v4-pro",
-        "input_cost": 0.2262,
+        "input_cost": 0.2079,
         "name": "DeepSeek: DeepSeek V4 Pro",
-        "output_cost": 0.4524,
+        "output_cost": 0.4157,
         "tags": [
           "tools",
           "reasoning",
@@ -1418,9 +1418,9 @@
         "context_length": 131072,
         "description": "Llama 3.2 3B is a 3-billion-parameter multilingual large language model, optimized for advanced natural language processing tasks like dialogue generation, reasoning, and summarization. Designed with the latest transformer architecture, it...",
         "id": "meta-llama/llama-3.2-3b-instruct",
-        "input_cost": 0.0509,
+        "input_cost": 0.05,
         "name": "Meta: Llama 3.2 3B Instruct",
-        "output_cost": 0.335,
+        "output_cost": 0.33,
         "tags": [
           "structured_output"
         ]
@@ -1940,13 +1940,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.19,
+        "cached_input_cost": 0.17,
         "context_length": 1048576,
         "description": "Kimi K3 is a 2.8T parameter open-weight multimodal reasoning model from Moonshot AI. It is suited for complex coding, knowledge work, and long-horizon agentic workflows, with a 1M-token context window.",
         "id": "moonshotai/kimi-k3",
-        "input_cost": 0.19,
+        "input_cost": 0.171,
         "name": "MoonshotAI: Kimi K3",
-        "output_cost": 8.94,
+        "output_cost": 8.523,
         "tags": [
           "tools",
           "vision",
@@ -4391,13 +4391,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.078,
+        "cached_input_cost": 0.0703,
         "context_length": 1048576,
         "description": "GLM-5.3 is a large-scale reasoning model from Z.ai, built for complex software engineering and long-horizon agent tasks. It accepts text input and returns text output, with a 1M-token context window.",
         "id": "z-ai/glm-5.3",
-        "input_cost": 0.079,
+        "input_cost": 0.0703,
         "name": "Z.ai: GLM 5.3",
-        "output_cost": 1.4,
+        "output_cost": 4.3843,
         "tags": [
           "tools",
           "reasoning",
@@ -4510,13 +4510,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.19,
+        "cached_input_cost": 0.17,
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the MoonshotAI Kimi family.",
         "id": "~moonshotai/kimi-latest",
-        "input_cost": 0.19,
+        "input_cost": 0.171,
         "name": "MoonshotAI Kimi Latest",
-        "output_cost": 8.94,
+        "output_cost": 8.5226,
         "tags": [
           "tools",
           "vision",
@@ -4585,13 +4585,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.0275,
+        "cached_input_cost": 0.028,
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the DeepSeek V4 Flash family.",
         "id": "~deepseek/deepseek-v4-flash-latest",
         "input_cost": 0.0422,
         "name": "DeepSeek V4 Flash Latest",
-        "output_cost": 0.1729,
+        "output_cost": 0.1694,
         "tags": [
           "tools",
           "reasoning",
@@ -5892,13 +5892,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.078,
+        "cached_input_cost": 0.0703,
         "context_length": 1048576,
         "description": "This model always redirects to the latest GLM model from Z.ai.",
         "id": "~z-ai/glm-latest",
-        "input_cost": 0.079,
+        "input_cost": 0.0703,
         "name": "Z.ai: GLM Latest",
-        "output_cost": 1.4,
+        "output_cost": 4.3843,
         "tags": [
           "tools",
           "reasoning",
@@ -5937,9 +5937,9 @@
         "context_length": 1048576,
         "description": "GLM-5.3-Flash is Z.ai's first natively multimodal model, delivering frontier coding and agentic performance at flash-tier cost. With 320B total and 18B active parameters, it outperforms GLM-5.2 at one-tenth the price while approaching Claude Opus 4.8 on coding and agentic benchmarks.",
         "id": "z-ai/glm-5.3-flash",
-        "input_cost": 0.0502,
+        "input_cost": 0.0513,
         "name": "Z.ai: GLM 5.3 Flash",
-        "output_cost": 0.0709,
+        "output_cost": 0.0701,
         "tags": [
           "tools",
           "vision",
@@ -6262,9 +6262,9 @@
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the GLM Flash family.",
         "id": "~z-ai/glm-flash-latest",
-        "input_cost": 0.0502,
+        "input_cost": 0.0513,
         "name": "Z.ai: GLM Flash Latest",
-        "output_cost": 0.0709,
+        "output_cost": 0.0701,
         "tags": [
           "tools",
           "vision",
@@ -6538,7 +6538,7 @@
         "id": "deepseek/deepseek-v4.1-flash",
         "input_cost": 0.02,
         "name": "DeepSeek: DeepSeek V4.1 Flash",
-        "output_cost": 1.0,
+        "output_cost": 1,
         "tags": [
           "tools",
           "vision",
@@ -6695,7 +6695,7 @@
         "id": "~deepseek/deepseek-flash-latest",
         "input_cost": 0.02,
         "name": "DeepSeek: DeepSeek Flash Latest",
-        "output_cost": 1.0,
+        "output_cost": 1,
         "tags": [
           "tools",
           "vision",
@@ -7746,6 +7746,20 @@
         "tags": [
           "tools",
           "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.04,
+        "context_length": 128000,
+        "description": "LFM2.5-2.6B is a compact reasoning model from Liquid AI for agent workflows, data extraction, RAG, and long-context processing. Liquid advises against agentic coding or knowledge-heavy tasks.",
+        "id": "liquid/lfm-2.5-2.6b",
+        "input_cost": 0.35,
+        "name": "LiquidAI: LFM2.5-2.6B",
+        "output_cost": 0.5,
+        "tags": [
+          "tools",
           "reasoning",
           "structured_output"
         ]

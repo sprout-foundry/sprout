@@ -62,7 +62,16 @@ func riskToLLMTone(r agenttools.SecurityRisk) string {
 // the single-command prompt; chains up to MaxChainSubcommandsForBatchPrompt use
 // the chain-aware prompt with per-subcommand classifications; longer chains
 // fall back to per-subcommand analyses via AnalyzeChainFallback.
-func AnalyzeChain(ctx context.Context, client api.ClientInterface, model string, chain Chain, classifications []agenttools.ChainedClassification, cwd string) (*SecurityAnalysis, error) {
+//
+// The client is pre-configured with the session model (SetModel), so no model
+// argument is threaded through. The LLM call is sent with an empty reasoning
+// effort and thinking disabled ("" , true): since SP-168 this analysis doubles
+// as the auto risk judge under a 2 s budget (approvals/broker.go), so it must
+// stay fast. Pre-SP-141 this line passed the model name in the reasoning-
+// effort slot and false for disableThinking — on reasoning-capable providers
+// the judge then ran at the default "medium" effort with thinking on, routinely
+// blowing the 2 s budget (the judge silently never ran) or thinking at all.
+func AnalyzeChain(ctx context.Context, client api.ClientInterface, chain Chain, classifications []agenttools.ChainedClassification, cwd string) (*SecurityAnalysis, error) {
 	if len(chain.Subcommands) == 0 {
 		return nil, agenterrors.NewInvalidInputError("empty chain", nil)
 	}
@@ -71,7 +80,7 @@ func AnalyzeChain(ctx context.Context, client api.ClientInterface, model string,
 	// dispatch intentionally precedes the client check so that a long chain
 	// with no client still returns a synthesized (best-effort) entry.
 	if len(chain.Subcommands) > MaxChainSubcommandsForBatchPrompt {
-		return AnalyzeChainFallback(ctx, client, model, chain, classifications, cwd)
+		return AnalyzeChainFallback(ctx, client, chain, classifications, cwd)
 	}
 
 	if client == nil {
@@ -95,7 +104,13 @@ Focus on: data destruction, data exfiltration, privilege escalation, unrecoverab
 		{Role: "user", Content: userPrompt},
 	}
 
-	resp, err := client.SendChatRequest(ctx, msgs, nil, model, false)
+	// SP-168: this analysis doubles as the auto risk judge (the broker acts on
+	// its recommendation under a 2 s budget), so the call must be fast.
+	// reasoning="" → no effort knob; disableThinking=true → providers that
+	// think by default (qwen3.8, deepseek, ... ) run this without thinking
+	// (the provider layer maps it to e.g. enable_thinking=false for qwen3.8
+	// and skips any reasoning-effort injection when thinking is disabled).
+	resp, err := client.SendChatRequest(ctx, msgs, nil, "", true)
 	if err != nil {
 		return nil, agenterrors.NewAgent("security_analyzer", "llm call", err)
 	}
@@ -140,7 +155,8 @@ func classificationToneFor(classifications []agenttools.ChainedClassification, s
 // AnalyzeChainFallback handles chains longer than MaxChainSubcommandsForBatchPrompt.
 // It runs per-subcommand single-command analysis on each subcommand and synthesizes
 // a single SecurityAnalysis: max severity, worst recommendation, deduped modifies.
-func AnalyzeChainFallback(ctx context.Context, client api.ClientInterface, model string, chain Chain, classifications []agenttools.ChainedClassification, cwd string) (*SecurityAnalysis, error) {
+// The client is pre-configured with the session model (see AnalyzeChain).
+func AnalyzeChainFallback(ctx context.Context, client api.ClientInterface, chain Chain, classifications []agenttools.ChainedClassification, cwd string) (*SecurityAnalysis, error) {
 	if len(chain.Subcommands) == 0 {
 		return nil, agenterrors.NewInvalidInputError("empty chain", nil)
 	}
@@ -162,7 +178,7 @@ func AnalyzeChainFallback(ctx context.Context, client api.ClientInterface, model
 			}
 		}
 		// Per-subcommand chain has length 1 → uses the single-command prompt path.
-		sa, err := AnalyzeChain(ctx, client, model, Chain{Original: sub, Subcommands: []string{sub}}, subCls, cwd)
+		sa, err := AnalyzeChain(ctx, client, Chain{Original: sub, Subcommands: []string{sub}}, subCls, cwd)
 		if err == nil && sa != nil {
 			analyses = append(analyses, sa)
 		}
@@ -316,14 +332,15 @@ Respond with ONLY a JSON object matching:
 }
 
 // AnalyzeShellCommand sends a shell command to the agent's LLM for plain-language analysis.
-func AnalyzeShellCommand(ctx context.Context, client api.ClientInterface, model string, command, cwd string) (*SecurityAnalysis, error) {
+// The client is pre-configured with the session model (see AnalyzeChain).
+func AnalyzeShellCommand(ctx context.Context, client api.ClientInterface, command, cwd string) (*SecurityAnalysis, error) {
 	if command == "" {
 		return nil, agenterrors.NewInvalidInputError("empty command", nil)
 	}
 
 	chain := ParseChain(command)
 	classifications := agenttools.ClassifyChainedCommand(command)
-	return AnalyzeChain(ctx, client, model, chain, classifications, cwd)
+	return AnalyzeChain(ctx, client, chain, classifications, cwd)
 }
 
 // extractJSON returns the first balanced {...} substring in s, after

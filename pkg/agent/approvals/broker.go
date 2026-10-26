@@ -173,7 +173,10 @@ func RequestApproval(a ApprovalAgent, assessment RiskAssessment, toolName string
 				securityAnalysis = cached
 			} else {
 				ctx, cancel := context.WithTimeout(a.InterruptCtx(), 2*time.Second)
-				sa, err := AnalyzeShellCommand(ctx, a.Client(), a.GetModel(), cmd, a.EffectiveCwd())
+				// The client is pre-configured with the session model; no model
+				// string is threaded through. The call runs with thinking
+				// disabled (AnalyzeChain) so it fits the 2 s judge budget.
+				sa, err := AnalyzeShellCommand(ctx, a.Client(), cmd, a.EffectiveCwd())
 				cancel()
 				if err == nil && sa != nil {
 					securityAnalysis = sa

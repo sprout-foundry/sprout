@@ -49,35 +49,31 @@ func NormalizeChain(chain Chain) string {
 }
 
 // AnalyzeChain analyzes a command chain using the agent's LLM.
+// The client is pre-configured with the session model (a.getClient()), so no
+// model string is threaded through.
 func AnalyzeChain(ctx context.Context, a *Agent, chain Chain, classifications []agenttools.ChainedClassification, cwd string) (*SecurityAnalysis, error) {
 	var client api.ClientInterface
-	var model string
 	if a != nil {
 		client = a.getClient()
-		model = a.GetModel()
 	}
-	return approvals.AnalyzeChain(ctx, client, model, chain, classifications, cwd)
+	return approvals.AnalyzeChain(ctx, client, chain, classifications, cwd)
 }
 
 // AnalyzeChainFallback analyzes long chains per-subcommand and synthesizes.
 func AnalyzeChainFallback(ctx context.Context, a *Agent, chain Chain, classifications []agenttools.ChainedClassification, cwd string) (*SecurityAnalysis, error) {
 	var client api.ClientInterface
-	var model string
 	if a != nil {
 		client = a.getClient()
-		model = a.GetModel()
 	}
-	return approvals.AnalyzeChainFallback(ctx, client, model, chain, classifications, cwd)
+	return approvals.AnalyzeChainFallback(ctx, client, chain, classifications, cwd)
 }
 
 // AnalyzeShellCommand sends a shell command to the agent's LLM for
 // plain-language analysis.
 func AnalyzeShellCommand(ctx context.Context, a *Agent, command, cwd string) (*SecurityAnalysis, error) {
 	var client api.ClientInterface
-	var model string
 	if a != nil {
 		client = a.getClient()
-		model = a.GetModel()
 	}
-	return approvals.AnalyzeShellCommand(ctx, client, model, command, cwd)
+	return approvals.AnalyzeShellCommand(ctx, client, command, cwd)
 }

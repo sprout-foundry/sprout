@@ -350,6 +350,16 @@ func (a *Agent) SetHasActiveWebUIClients(fn func() bool) {
 	a.security.SetHasActiveWebUIClients(fn)
 }
 
+// WebUIClientCallback returns the parent's live WebUI-client presence
+// callback (nil when none registered) so a subagent can inherit it (SP-168)
+// and tell whether the parent's browser surface can answer its approvals.
+func (a *Agent) WebUIClientCallback() func() bool {
+	if a == nil || a.security == nil {
+		return nil
+	}
+	return a.security.WebUIClientCallback()
+}
+
 // HasActiveWebUIClients calls the registered callback (or returns false if
 // none is set) to check whether WebUI clients are connected. Returns false
 // when the security submanager is unset (typical for partially-constructed

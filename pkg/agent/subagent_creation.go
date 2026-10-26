@@ -152,6 +152,33 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.
 		agent.clarificationManager = r.parentAgent.clarificationManager
 	}
 
+	// Share the parent's security-approval and ask-user managers (SP-168).
+	// Without this the subagent owns a fresh ApprovalManager whose pending
+	// map the response path never resolves: the WebUI answers against the
+	// webui-owned manager, the CLI against the parent's — so a subagent's
+	// approval dialog (rendered on the shared event bus) is unanswerable and
+	// the subagent blocks until the approval timeout. Sharing the instance
+	// puts the subagent's requests in the same pending map the parent's
+	// responses resolve. A nil parent manager (bare test agents) leaves the
+	// subagent's own in place.
+	if r.parentAgent != nil {
+		if pm := r.parentAgent.GetSecurityApprovalMgr(); pm != nil {
+			agent.security.SetApprovalMgr(pm)
+		}
+		if am := r.parentAgent.security.GetAskUserMgr(); am != nil {
+			agent.security.SetAskUserMgr(am)
+		}
+		// Inherit the parent's live WebUI-client callback so the subagent's
+		// HasActiveWebUIClients() reports the parent's browser surface.
+		if fn := r.parentAgent.WebUIClientCallback(); fn != nil {
+			agent.SetHasActiveWebUIClients(fn)
+		}
+		// An automate/workflow parent has no human to answer a subagent's
+		// approval either: propagate the run flag so the subagent stays
+		// non-interactive end-to-end (fail-fast, never a multi-minute wait).
+		agent.SetWorkflowRun(r.parentAgent.IsWorkflowRun())
+	}
+
 	// Re-resolve the context profile from the subagent's OWN client and config
 	// instead of blindly copying the parent's profile. A 200K parent delegating
 	// to a 32K subagent model would otherwise run the subagent in full mode

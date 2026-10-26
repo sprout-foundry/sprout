@@ -23,21 +23,23 @@ function setAvailability(next: Availability): void {
 }
 
 /**
- * Ask the platform once whether workspaces exist here. Only the "not
- * configured" 503 counts as unavailable; a transient outage or a network
- * failure leaves the option on offer so the user can retry.
+ * Ask the platform once whether workspaces exist here, through the typed
+ * availability endpoint (`GET /workspace/availability`) rather than the
+ * legacy list route: a deployment without cloud compute answers
+ * `available: false` instead of 503-ing on the probe. Only a definitive
+ * `available: false` counts as unavailable; a missing endpoint (a local
+ * daemon without the route), a transient outage or a network failure leaves
+ * the option on offer so the user can retry.
  */
 export function probeFullWorkspaces(): Promise<void> {
   if (!probe) {
     probe = Promise.resolve()
-      .then(() => clientFetch('/workspace/fly', { credentials: 'include' }))
+      .then(() => clientFetch('/workspace/availability', { credentials: 'include' }))
       .then(async (res) => {
-        if (!res || res.status !== 503) {
-          setAvailability('available');
-          return;
-        }
-        const body = await res.text().catch(() => '');
-        setAvailability(NOT_CONFIGURED.test(body) ? 'unavailable' : 'available');
+        if (!res || !res.ok) return;
+        const data = (await res.json().catch(() => ({}))) as { available?: unknown };
+        if (typeof data.available !== 'boolean') return;
+        setAvailability(data.available ? 'available' : 'unavailable');
       })
       .catch(() => undefined);
   }

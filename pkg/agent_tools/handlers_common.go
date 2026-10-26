@@ -81,6 +81,40 @@ func extractInt(args map[string]any, key string) (int, error) {
 	}
 }
 
+// extractStringList extracts a list-of-strings value from args: a []string,
+// a []any of strings, or a comma-separated string. Returns nil when the key
+// is absent (for optional parameters); a non-list value is an error.
+func extractStringList(args map[string]any, key string) ([]string, error) {
+	val, exists := lookupKey(args, key)
+	if !exists || val == nil {
+		return nil, nil
+	}
+	switch v := val.(type) {
+	case []string:
+		return v, nil
+	case []any:
+		out := make([]string, 0, len(v))
+		for _, item := range v {
+			s, ok := item.(string)
+			if !ok {
+				return nil, fmt.Errorf("parameter '%s' must be a list of strings, got element %T", key, item)
+			}
+			out = append(out, s)
+		}
+		return out, nil
+	case string:
+		var out []string
+		for _, part := range strings.Split(v, ",") {
+			if trimmed := strings.TrimSpace(part); trimmed != "" {
+				out = append(out, trimmed)
+			}
+		}
+		return out, nil
+	default:
+		return nil, fmt.Errorf("parameter '%s' must be a list of strings, got %T", key, val)
+	}
+}
+
 // getBoolArg extracts a boolean value from args map, returning a zero value if not set.
 func getBoolArg(args map[string]any, key string) bool {
 	val, exists := lookupKey(args, key)

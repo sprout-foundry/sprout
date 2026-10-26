@@ -113,3 +113,22 @@ func TestGetSettingValue_RoleFields(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, v)
 }
+
+// TestSetSettingValue_CommitTrailers verifies the commit_trailers setting key
+// (the commit.trailers list) is settable, list-typed, and round-trips.
+func TestSetSettingValue_CommitTrailers(t *testing.T) {
+	cfg := &configuration.Config{}
+	assert.Contains(t, SupportedSettingKeys(), "commit_trailers")
+	assert.True(t, SettingIsListType("commit_trailers"), "commit_trailers must be a list-type setting")
+
+	require.NoError(t, SetSettingValue(cfg, "commit_trailers", "Assisted-by: Sprout (m),Refs: #12"))
+	assert.Equal(t, []string{"Assisted-by: Sprout (m)", "Refs: #12"}, cfg.CommitTrailers)
+
+	got, err := GetSettingValue(cfg, "commit_trailers")
+	require.NoError(t, err)
+	assert.Equal(t, "Assisted-by: Sprout (m),Refs: #12", got)
+
+	// An empty value clears the list.
+	require.NoError(t, SetSettingValue(cfg, "commit_trailers", ""))
+	assert.Empty(t, cfg.CommitTrailers)
+}

@@ -60,7 +60,13 @@ sprout commit [flags]
 ```bash
 sprout commit --dry-run
 sprout commit --skip-prompt  # Auto-review and commit
+sprout commit --trailer "Assisted-by: Sprout (anthropic/claude-opus-5-5)"  # append a git trailer
 ```
+
+`--trailer "Key: Value"` is repeatable and joins the default trailers from the
+`commit_trailers` config (the `.sprout` config) and the repo's `AGENTS.md`
+`## Commit Trailers` section. Trailers are written with `git interpret-trailers`
+semantics and appear in `--dry-run` output.
 
 ### `sprout review`
 

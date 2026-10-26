@@ -1108,7 +1108,7 @@ func TestCommitCommand_Complete_FlagPrefix(t *testing.T) {
 
 	// args=["--"] -> all flags
 	results = cmd.Complete([]string{"--"}, nil)
-	assert.ElementsMatch(t, []string{"--skip-prompt", "--dry-run", "--allow-secrets"}, results,
+	assert.ElementsMatch(t, []string{"--skip-prompt", "--dry-run", "--allow-secrets", "--trailer"}, results,
 		"prefix '--' should match all flags")
 }
 

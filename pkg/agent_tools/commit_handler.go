@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/git"
 )
@@ -53,6 +54,7 @@ func (h *commitHandler) Definition() ToolDefinition {
 		Parameters: []ParameterDef{
 			{Name: "message", Type: "string", Description: "Explicit commit message, used as-is when provided (shell-safe: backticks, $(), and other special characters are not expanded). When omitted, a Conventional Commit message is generated from the staged diff, with notes as context; if generation fails, nothing is committed."},
 			{Name: "notes", Type: "string", Description: "Context used to shape the commit message when message is omitted (e.g., 'fixes the flaky auth test'). Ignored when message is provided."},
+			{Name: "trailers", Type: "array", Description: "Git trailers (\"Key: Value\" strings, e.g. \"Assisted-by: Claude Code (anthropic/claude-opus-5-5)\") appended to the commit message. Merged with the commit.trailers defaults from the .sprout config and the repo's AGENTS.md; identical trailers are never duplicated.", Items: map[string]any{"type": "string"}},
 			{Name: "repo_dir", Type: "string", Description: "Directory to commit in: a subdirectory of the workspace, or a git worktree of the workspace repository even when checked out outside the workspace root (worktrees of the same repo share one .git dir and are allowed). Defaults to workspace root if omitted."},
 		},
 	}
@@ -69,6 +71,10 @@ func (h *commitHandler) Execute(ctx context.Context, env ToolEnv, args map[strin
 	message, _ := extractString(args, "message")
 	notes, _ := extractString(args, "notes")
 	repoDir, _ := extractString(args, "repo_dir")
+	explicitTrailers, terr := extractStringList(args, "trailers")
+	if terr != nil {
+		return ToolResult{Output: terr.Error(), IsError: true}, nil
+	}
 
 	// Determine the effective working directory.
 	effectiveDir := env.WorkspaceRoot
@@ -80,8 +86,24 @@ func (h *commitHandler) Execute(ctx context.Context, env ToolEnv, args map[strin
 		effectiveDir = resolvedDir
 	}
 
+	// Git trailers for the commit: the commit.trailers defaults (the .sprout
+	// config and the repo's AGENTS.md) plus any explicitly passed trailers.
+	var cfg *configuration.Config
+	if env.ConfigManager != nil {
+		cfg = env.ConfigManager.GetConfig()
+	}
+	trailers := git.DefaultCommitTrailers(cfg, effectiveDir)
+	trailers = append(trailers, explicitTrailers...)
+	attribute := func(message string, generated bool) string {
+		committed := attributeCommit(env, message, generated)
+		if len(trailers) > 0 {
+			committed = git.AppendTrailers(committed, trailers...)
+		}
+		return committed
+	}
+
 	if message != "" {
-		return commitMessage(ctx, attributeCommit(env, message, false), effectiveDir)
+		return commitMessage(ctx, attribute(message, false), effectiveDir)
 	}
 
 	// message omitted: generate a Conventional Commit message from the
@@ -123,7 +145,7 @@ func (h *commitHandler) Execute(ctx context.Context, env ToolEnv, args map[strin
 		}, nil
 	}
 
-	return commitMessage(ctx, attributeCommit(env, commitMsg, true), effectiveDir)
+	return commitMessage(ctx, attribute(commitMsg, true), effectiveDir)
 }
 
 // previewStagedDiff caps a staged diff for display in error results,

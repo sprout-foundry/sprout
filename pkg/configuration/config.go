@@ -209,6 +209,15 @@ type Config struct {
 	// appends "Assisted-by: sprout/<version> (<provider>/<model>)". Sprout
 	// never writes a Co-Authored-By line for a tool.
 	CommitAttribution string `json:"commit_attribution,omitempty"`
+	// CommitTrailers is the default list of git trailers ("Key: Value"
+	// lines) appended to commits sprout creates — the `commit.trailers`
+	// setting (docs: commit.trailers), e.g.
+	// ["Assisted-by: Claude Code (anthropic/claude-opus-5-5)"]. Written
+	// with git interpret-trailers semantics: a blank line before a new
+	// trailer block, identical trailers never duplicated. The repository's
+	// AGENTS.md "Commit Trailers" section contributes defaults too
+	// (git.DefaultCommitTrailers merges both sources).
+	CommitTrailers []string `json:"commit_trailers,omitempty"`
 
 	// Review Configuration
 	ReviewProvider string `json:"review_provider,omitempty"` // Provider for review commands (defaults to LastUsedProvider)

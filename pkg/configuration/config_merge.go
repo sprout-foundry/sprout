@@ -261,6 +261,10 @@ func MergeConfig(base, override *Config) *Config {
 	if override.CommitModel != "" {
 		result.CommitModel = override.CommitModel
 	}
+	// Union-merge CommitTrailers so workspace entries stack on global.
+	if len(override.CommitTrailers) > 0 {
+		result.CommitTrailers = mergeStringSlices(result.CommitTrailers, override.CommitTrailers)
+	}
 
 	// Override review provider/model
 	if override.ReviewProvider != "" {

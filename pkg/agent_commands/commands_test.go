@@ -137,6 +137,34 @@ func TestBoost_ParseFlags_AllowSecrets(t *testing.T) {
 	assert.True(t, c.allowSecrets)
 }
 
+func TestBoost_ParseFlags_TrailerSeparate(t *testing.T) {
+	c := &CommitCommand{}
+	result := c.parseFlags([]string{"--trailer", "Assisted-by: Sprout (m)", "fix", "bug"})
+	assert.Equal(t, []string{"fix", "bug"}, result)
+	assert.Equal(t, []string{"Assisted-by: Sprout (m)"}, c.trailers)
+}
+
+func TestBoost_ParseFlags_TrailerEquals(t *testing.T) {
+	c := &CommitCommand{}
+	result := c.parseFlags([]string{"--trailer=Assisted-by: Sprout (m)"})
+	assert.Equal(t, []string(nil), result)
+	assert.Equal(t, []string{"Assisted-by: Sprout (m)"}, c.trailers)
+}
+
+func TestBoost_ParseFlags_TrailerRepeatable(t *testing.T) {
+	c := &CommitCommand{}
+	result := c.parseFlags([]string{"--trailer", "A: 1", "--trailer", "B: 2", "--trailer=C: 3"})
+	assert.Equal(t, []string(nil), result)
+	assert.Equal(t, []string{"A: 1", "B: 2", "C: 3"}, c.trailers)
+}
+
+func TestBoost_ParseFlags_TrailerDangling(t *testing.T) {
+	c := &CommitCommand{}
+	result := c.parseFlags([]string{"fix", "--trailer"})
+	assert.Equal(t, []string{"fix"}, result)
+	assert.Empty(t, c.trailers)
+}
+
 func TestBoost_ParseFlags_AllFlagsCombined(t *testing.T) {
 	c := &CommitCommand{}
 	result := c.parseFlags([]string{"--skip-prompt", "--dry-run", "--allow-secrets", "user", "msg"})

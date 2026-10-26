@@ -531,3 +531,22 @@ func TestMergeConfig_DeepClone(t *testing.T) {
 	assert.Equal(t, "dark", base.Preferences["theme"].(string))
 	assert.Equal(t, "Coder", base.SubagentTypes["coder"].Name)
 }
+
+// TestMergeConfig_CommitTrailersUnion verifies the commit.trailers list
+// union-merges across layers (workspace entries stack on global) and the
+// result is a copy, not a shared slice.
+func TestMergeConfig_CommitTrailersUnion(t *testing.T) {
+	base := &Config{CommitTrailers: []string{"Assisted-by: Sprout (dev/m)"}}
+	override := &Config{CommitTrailers: []string{"Assisted-by: Sprout (dev/m)", "Signed-off-by: Dev"}}
+
+	result := MergeConfig(base, override)
+	assert.Equal(t, []string{"Assisted-by: Sprout (dev/m)", "Signed-off-by: Dev"}, result.CommitTrailers)
+
+	// Empty override keeps the base list.
+	result2 := MergeConfig(base, &Config{})
+	assert.Equal(t, []string{"Assisted-by: Sprout (dev/m)"}, result2.CommitTrailers)
+
+	// The merged slice is independent of both inputs.
+	result2.CommitTrailers = append(result2.CommitTrailers, "Refs: #1")
+	assert.Equal(t, []string{"Assisted-by: Sprout (dev/m)"}, base.CommitTrailers)
+}

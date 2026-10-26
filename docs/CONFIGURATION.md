@@ -163,6 +163,14 @@ Assisted-by: sprout/0.30.0 (deepinfra/deepseek-ai/DeepSeek-V4.1-Flash)
 
 The version is the Sprout build (`dev` for source builds). It applies to `sprout commit` and `/commit`, the agent's `commit` tool and the `git` tool's commit operation, and commits made from the web UI. A `git commit` the agent types into a shell command is not rewritten. The trailer names the agent's provider/model — in a session, the session model; for a standalone `sprout commit`, which cannot see the session that made the changes, the configured model — plus the model that generated the commit message when one did. It joins an existing trailer block (`Signed-off-by:` etc.) and is not duplicated on an amend or re-run. Sprout never writes a `Co-Authored-By` line for a tool and strips any from generated commit messages. Set it with `sprout config set commit_attribution trailer` or under Settings → Advanced → Commit & Review.
 
+#### `commit_trailers`
+
+Default git trailers — `"Key: Value"` lines — appended to every commit Sprout creates, e.g. `["Assisted-by: Sprout (anthropic/claude-opus-5-5)"]`. It applies to the same surfaces as `commit_attribution`: `sprout commit` and `/commit`, the agent's `commit` tool (including the `trailers` parameter) and the `git` tool's commit operation, and commits made from the web UI.
+
+Trailers are written with `git interpret-trailers` semantics: a new trailer block is separated from the message body by exactly one blank line, a message that already ends in a trailer block is joined rather than duplicated, and an identical trailer (case-insensitive key, trimmed value) is never added twice. `--dry-run` shows the final message with the trailers included.
+
+Sources are unioned in this order: the `commit_trailers` list from the layered config (the repo's `.sprout` workspace config over the global config), the repository's `AGENTS.md` `## Commit Trailers` section (each `Key: value` line, optionally a markdown list item), and explicit `--trailer "Key: Value"` flags (CLI and `/commit`, repeatable) or the commit tool's `trailers` parameter. Duplicates collapse across sources. With `commit_attribution: trailer`, the session's `Assisted-by: sprout/...` line and a configured `Assisted-by: ...` entry can both appear — dedup only collapses identical normalized trailers. Set the config value with `sprout config set commit_trailers "Key: Value,Other: value"`.
+
 #### `coordinator_auto_activate`
 
 Opt in to automatic activation of the `coordinator` persona when sprout starts in the user's `$HOME` directory. Default: `false` — activate explicitly with `/persona coordinator`. The legacy `disable_coordinator_auto_activate` flag is still parsed but does nothing.

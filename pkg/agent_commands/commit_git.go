@@ -20,6 +20,12 @@ func SetGitDir(dir string) {
 	currentDir = strings.TrimSpace(dir)
 }
 
+// currentGitDir reports the working directory gitCommand calls run in
+// (the last value passed to SetGitDir). Empty means the process CWD.
+func currentGitDir() string {
+	return currentDir
+}
+
 // gitCommand creates an exec.Cmd for a git command with the correct
 // working directory. Delegates to pkg/git.SafeGitCmd so the test-mode
 // mutation guard is shared with every other git invocation in the

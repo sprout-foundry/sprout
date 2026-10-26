@@ -204,7 +204,15 @@ func executeCommit(userMessage, notes string, configManager configManagerInterfa
 	}
 	executor.Dir = workDir
 	if chatAgent != nil {
-		executor.AttributeMessage = chatAgent.attributeToolCommit
+		base := chatAgent.attributeToolCommit
+		executor.AttributeMessage = base
+		// commit.trailers defaults (config + the repo's AGENTS.md) join the
+		// commit on top of the attribution trailer.
+		if trailers := git.DefaultCommitTrailers(chatAgent.GetConfig(), workDir); len(trailers) > 0 {
+			executor.AttributeMessage = func(message string, generated bool) string {
+				return git.AppendTrailers(base(message, generated), trailers...)
+			}
+		}
 	}
 
 	return executor.ExecuteCommit()

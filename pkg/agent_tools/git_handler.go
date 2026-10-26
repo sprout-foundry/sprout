@@ -9,8 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
+	"github.com/sprout-foundry/sprout/pkg/git"
 )
 
 type gitHandler struct{}
@@ -176,7 +178,18 @@ func (h *gitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]a
 	// For commit with -m message, use the temp-file approach shared with
 	// the commit tool. This prevents shell expansion of backticks, $(), etc.
 	if useCommitMessage && commitMsg != "" {
-		result, err := commitMessage(ctx, attributeCommit(env, commitMsg, false), effectiveDir, remainingCommitArgs)
+		attribute := func(message string) string {
+			committed := attributeCommit(env, message, false)
+			var cfg *configuration.Config
+			if env.ConfigManager != nil {
+				cfg = env.ConfigManager.GetConfig()
+			}
+			if trailers := git.DefaultCommitTrailers(cfg, effectiveDir); len(trailers) > 0 {
+				committed = git.AppendTrailers(committed, trailers...)
+			}
+			return committed
+		}
+		result, err := commitMessage(ctx, attribute(commitMsg), effectiveDir, remainingCommitArgs)
 		if err != nil {
 			return result, err
 		}

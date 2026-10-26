@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/factory"
 	gitops "github.com/sprout-foundry/sprout/pkg/git"
@@ -51,6 +52,13 @@ func (ws *ReactWebServer) handleAPIGitCommit(w http.ResponseWriter, r *http.Requ
 	message := req.Message
 	if agentInst, err := ws.getClientAgent(ws.resolveClientID(r)); err == nil && agentInst != nil {
 		message = agentInst.AttributeCommitMessage(message)
+		var cfg *configuration.Config
+		if cm := agentInst.GetConfigManager(); cm != nil {
+			cfg = cm.GetConfig()
+		}
+		if trailers := gitops.DefaultCommitTrailers(cfg, workspaceRoot); len(trailers) > 0 {
+			message = gitops.AppendTrailers(message, trailers...)
+		}
 	}
 
 	// Create the commit

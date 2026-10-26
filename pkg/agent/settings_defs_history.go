@@ -211,6 +211,31 @@ var settingDefsHistory = []settingDef{
 		},
 		EnumValues: []string{configuration.CommitAttributionOff, configuration.CommitAttributionTrailer},
 	},
+	{
+		Key:         "commit_trailers",
+		Description: "Default git trailers (\"Key: Value\" lines) appended to commits sprout creates",
+		ValidValues: "comma-separated list of git trailers, e.g. \"Assisted-by: sprout (anthropic/claude-opus-5-5)\"",
+		GetValue: func(cfg *configuration.Config) string {
+			return strings.Join(cfg.CommitTrailers, ",")
+		},
+		SetValue: func(cfg *configuration.Config, value string) error {
+			if value == "" {
+				cfg.CommitTrailers = nil
+				return nil
+			}
+			var trailers []string
+			for _, raw := range strings.Split(value, ",") {
+				trimmed := strings.TrimSpace(raw)
+				if trimmed == "" {
+					continue
+				}
+				trailers = append(trailers, trimmed)
+			}
+			cfg.CommitTrailers = trailers
+			return nil
+		},
+		ListType: true,
+	},
 	// --- Review ---
 	{
 		Key:         "review_provider",

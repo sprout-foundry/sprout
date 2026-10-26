@@ -21,6 +21,9 @@ type CommitCommand struct {
 	agentError       error  // Store agent creation error for better error reporting
 	review           string // Store the commit review result
 	userInstructions string // User-provided instructions for the commit message
+	// trailers are explicit git trailers (--trailer "Key: Value") appended
+	// to the commit message in addition to the commit.trailers defaults.
+	trailers []string
 }
 
 // CommitJSONResult is the JSON output structure for commit command

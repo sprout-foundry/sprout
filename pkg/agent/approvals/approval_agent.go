@@ -30,6 +30,15 @@ type ApprovalAgent interface {
 	// IsWorkflowRun reports a workflow/automate run, which is non-interactive
 	// for approval purposes even when launched from a terminal.
 	IsWorkflowRun() bool
+	// SubagentDepth returns the nesting depth (0 = primary agent). Used to
+	// label a subagent's approval prompt so the parent's surface knows whose
+	// command is being approved (SP-168).
+	SubagentDepth() int
+	// ActiveSubagentCount returns the process-wide number of subagents
+	// currently running. The CLI prompt surface is offered to a subagent
+	// only when this is <= 1 — parallel subagents would interleave prompts
+	// on one TTY (SP-168).
+	ActiveSubagentCount() int
 
 	// Interactive-approval surfaces.
 	HasActiveWebUIClients() bool

@@ -184,20 +184,97 @@ func RequestApproval(a ApprovalAgent, assessment RiskAssessment, toolName string
 		}
 	}
 
-	// --- Interactive approval surfaces ---
+	// --- Surface availability (SP-168) ---
 
 	isSubagent := a.IsSubagent()
+	cfg := a.GetConfig()
+	logger := utils.GetLogger(cfg != nil && cfg.SkipPrompt)
 
 	// WebUI path. When a browser tab is connected, the WebUI IS the
 	// interactive surface — the TTY status of os.Stdin is irrelevant. A
-	// workflow/automate run is excluded: even with a browser attached, nobody
-	// is guaranteed to be at it, so the run must not block on the dialog and
-	// instead resolves from the risk profile (non-interactive permissive).
-	webUICanAnswer := !isSubagent && a.HasActiveWebUIClients() && !a.IsWorkflowRun()
+	// subagent's dialog is answerable the same way: subagents share the
+	// parent's ApprovalManager and WebUI-client callback (SP-168,
+	// createSubagent), so the request it publishes resolves against the
+	// same pending map the parent's responses hit. A workflow/automate
+	// run is excluded: even with a browser attached, nobody is guaranteed
+	// to be at it, so the run must not block on the dialog and instead
+	// resolves from the risk profile (non-interactive permissive).
+	webUICanAnswer := a.HasActiveWebUIClients() && !a.IsWorkflowRun()
+
+	// Subagents can prompt on the parent's terminal (SP-168): the parent's
+	// turn is blocked inside run_subagent, so the TTY is free. When several
+	// subagents run in parallel (run_parallel_subagents), interleaved
+	// terminal prompts would corrupt each other — with more than one active
+	// subagent, fall through to the mode default (non-interactive) instead.
+	subagentCLISafe := !isSubagent || a.ActiveSubagentCount() <= 1
+	canPrompt := logger != nil && logger.IsInteractive() && subagentCLISafe && !a.IsWorkflowRun()
+	// surfaceAvailable (SP-168): a human can answer this request right now.
+	// The auto risk judge defers "review" verdicts to a human only when a
+	// surface is actually reachable.
+	surfaceAvailable := webUICanAnswer || canPrompt
 	if a.DebugEnabled() {
-		a.DebugLogf("[APPROVAL] webUICanAnswer=%v (isSubagent=%v, hasWebUIClients=%v, hasMgr=%v, hasEventBus=%v)\n",
-			webUICanAnswer, isSubagent, a.HasActiveWebUIClients(), a.GetSecurityApprovalMgr() != nil, a.GetEventBus() != nil)
+		a.DebugLogf("[APPROVAL] webUICanAnswer=%v canPrompt=%v (isSubagent=%v, hasWebUIClients=%v, hasMgr=%v, hasEventBus=%v)\n",
+			webUICanAnswer, canPrompt, isSubagent, a.HasActiveWebUIClients(), a.GetSecurityApprovalMgr() != nil, a.GetEventBus() != nil)
 	}
+
+	// --- Auto risk judge (SP-168) ---
+	// When enabled (the default), the LLM risk analysis computed above is
+	// the approver for Medium/High shell commands — the "auto" mode:
+	//   approve → run the command without a human prompt;
+	//   reject  → fail fast with the LLM's reasoning, so the agent takes a
+	//             different path instead of blocking on a timeout;
+	//   review  → keep the human prompt when a surface can answer, or fail
+	//             fast when it cannot (autonomous runs must not block or
+	//             auto-approve an uncertain command).
+	// Low-risk and hard-blocked commands never reach here. A nil analysis
+	// (no LLM client, timeout, or not a Medium/High shell command) skips
+	// the judge and the mode defaults apply: interactive surfaces prompt,
+	// non-interactive runs auto-approve Medium from the risk profile.
+	if toolName == "shell_command" && cfg != nil && cfg.AutoRiskJudge &&
+		securityAnalysis != nil && !assessment.IsHardBlock {
+		switch securityAnalysis.Recommendation {
+		case "approve":
+			if a.DebugEnabled() {
+				a.DebugLogf("[APPROVAL] auto risk judge approved %s — %s\n", toolName, securityAnalysis.Summary)
+			}
+			a.LogSecurityDecision(toolName, args, assessment, "approved")
+			return BrokerDecision{
+				Approved: true, Decision: security.ApprovalApproveOnce,
+				Outcome: security.ApprovalOutcomeResponded, Surface: "llm-judge",
+				Assessment: assessment, Analysis: securityAnalysis,
+			}, nil
+		case "reject":
+			a.LogSecurityDecision(toolName, args, assessment, "blocked")
+			return BrokerDecision{
+					Approved: false, Decision: security.ApprovalDeny,
+					Outcome: security.ApprovalOutcomeResponded, Surface: "llm-judge",
+					Assessment: assessment, Analysis: securityAnalysis,
+				}, agenterrors.NewSecurityErrorWithAssessment(
+					fmt.Sprintf("security rejected by risk judge: %s — %s. The risk judge judged this command too risky to run; take a different approach (a safer command, a narrower target, or confirm with the user via ask_user).",
+						toolName, securityAnalysis.Summary), assessment.Explain(), nil,
+				)
+		case "review":
+			if surfaceAvailable {
+				break // fall through to the human surface below
+			}
+			a.LogSecurityDecision(toolName, args, assessment, "blocked")
+			return BrokerDecision{
+					Approved: false, Decision: security.ApprovalDeny,
+					Outcome: security.ApprovalOutcomeNoChannel, Surface: "llm-judge",
+					Assessment: assessment, Analysis: securityAnalysis,
+				}, agenterrors.NewSecurityErrorWithAssessment(
+					fmt.Sprintf("security review required: %s — %s. The risk judge needs a human reviewer for this command and this run has no interactive surface. Use a safer approach or confirm with the user via ask_user.",
+						toolName, securityAnalysis.Summary), assessment.Explain(), nil,
+				)
+		default:
+			// Missing or unrecognized recommendation: no verdict. Keep the
+			// mode defaults (interactive surfaces prompt; non-interactive
+			// runs auto-approve Medium from the risk profile).
+		}
+	}
+
+	// --- Interactive approval surfaces ---
+
 	if mgr := a.GetSecurityApprovalMgr(); mgr != nil && a.GetEventBus() != nil && webUICanAnswer {
 		// Suspend CLI spinner before blocking on the webui response.
 		clihooks.SuspendIndicator()
@@ -288,17 +365,22 @@ func RequestApproval(a ApprovalAgent, assessment RiskAssessment, toolName string
 		}
 	}
 
-	// CLI path
-	cfg := a.GetConfig()
-	logger := utils.GetLogger(cfg != nil && cfg.SkipPrompt)
-	canPrompt := logger != nil && logger.IsInteractive() && !isSubagent && !a.IsWorkflowRun()
-
+	// CLI path. (cfg, logger, subagentCLISafe, canPrompt are computed above,
+	// before the auto risk judge, so the judge can tell whether a human can
+	// answer — SP-168.)
 	if a.DebugEnabled() {
-		a.DebugLogf("[APPROVAL] CLI path: canPrompt=%v (logger=%v, isInteractive=%v, isSubagent=%v)\n",
-			canPrompt, logger != nil, logger != nil && logger.IsInteractive(), isSubagent)
+		a.DebugLogf("[APPROVAL] CLI path: canPrompt=%v (isSubagent=%v)\n",
+			canPrompt, isSubagent)
 	}
 
 	if canPrompt {
+		// A subagent's prompt says whose command it is, so a user answering
+		// at the parent's terminal knows what is being approved (SP-168).
+		subagentLabel := ""
+		if isSubagent {
+			subagentLabel = fmt.Sprintf("Subagent (depth %d) is running: ", a.SubagentDepth())
+		}
+
 		// For shell_command: use the 4-option approval picker.
 		if toolName == "shell_command" {
 			// Per-part picker (opt-in via EditApprovalConfig.ShellCommand).
@@ -350,9 +432,9 @@ func RequestApproval(a ApprovalAgent, assessment RiskAssessment, toolName string
 			}
 
 			if cmd, ok := args["command"].(string); ok && cmd != "" {
-				prompt := "Security Warning — " + string(assessment.Level)
+				prompt := subagentLabel + "Security Warning — " + string(assessment.Level)
 				if assessment.RequiresIntentConfirmation {
-					prompt = "High-risk operation — your active risk profile gates this command."
+					prompt = subagentLabel + "High-risk operation — your active risk profile gates this command."
 				}
 				// Convert the agent-level analysis to the leaf-level utils view
 				// so the arrow-key picker can render it above the option list.
@@ -401,7 +483,7 @@ func RequestApproval(a ApprovalAgent, assessment RiskAssessment, toolName string
 		}
 
 		// For non-shell tools: simple yes/no
-		prompt := fmt.Sprintf("⚠  Security Warning — %s\n\nReasoning: %s\n\nDo you want to proceed?",
+		prompt := subagentLabel + fmt.Sprintf("⚠  Security Warning — %s\n\nReasoning: %s\n\nDo you want to proceed?",
 			strings.ToUpper(string(assessment.Level)), assessment.Reason)
 		if !logger.AskForConfirmation(prompt, false, false) {
 			a.LogSecurityDecision(toolName, args, assessment, "blocked")

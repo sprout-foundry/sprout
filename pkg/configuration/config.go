@@ -96,6 +96,19 @@ type Config struct {
 	// legacy dual-gate path. Default: true.
 	UnifiedRiskResolver bool `json:"unified_risk_resolver,omitempty"`
 
+	// AutoRiskJudge enables the auto LLM risk-judge mode (SP-168). The LLM
+	// security analysis that already runs for Medium/High shell commands
+	// (cached, 2-second budget) doubles as the approver: an "approve"
+	// recommendation runs the command without a human prompt, "reject"
+	// fails the call fast with the LLM's reasoning so the agent takes a
+	// different path, and "review" keeps the human prompt when a surface is
+	// answerable (or fails fast in autonomous runs, which must not block or
+	// auto-approve an uncertain command). When false — or when the analysis
+	// is unavailable (no LLM client, timeout, hard block) — behavior falls
+	// back to the mode defaults: interactive surfaces prompt, non-interactive
+	// runs auto-approve Medium from the risk profile. Default: true.
+	AutoRiskJudge bool `json:"auto_risk_judge,omitempty"`
+
 	// DaemonMultiSession enables concurrent browser windows in daemon mode.
 	// Each connection gets its own chat session and agent. Default: true.
 	DaemonMultiSession bool `json:"daemon_multi_session,omitempty"`
@@ -471,6 +484,7 @@ func NewConfig() *Config {
 		EnableZshCommandDetection:   true,      // Enable zsh command detection by default
 		AutoExecuteDetectedCommands: true,      // Auto-execute detected commands without prompting
 		DaemonMultiSession:          true,      // SP-118 Phase 4: daemon default-on for multi-window
+		AutoRiskJudge:               true,      // SP-168: auto LLM risk-judge mode (LLM analysis is the approver)
 		SubagentTypes:               defaultSubagentTypes(),
 		Skills:                      defaultSkills(),
 		SubagentMaxParallel:         2,                                       // Default max parallel subagents

@@ -149,14 +149,17 @@ type ToolEnv struct {
 	// handlers skip their interactive approval prompt to avoid double-prompting.
 	// Hard blocks are NEVER bypassed regardless of this flag.
 	Gate1AutoApproved bool
-	// Gate1Decided reports whether Gate 1 (the unified risk resolver) made a
-	// definitive decision on this call BEFORE the handler ran: an explicit
-	// user approval (WebUI dialog or terminal prompt) or an LLM risk-judge
-	// verdict. When true the handler must NOT run its own approval prompt —
-	// re-prompting would double-gate a call the user already answered. The
-	// handler keeps its hard-block check as defense-in-depth. When false
-	// (e.g. Gate 1 auto-approved non-interactively or never ran), the
-	// handler's own gate applies. SP-168.
+	// Gate1Decided reports whether Gate 1 (the unified risk resolver, the
+	// default) decided this call BEFORE the handler ran — an explicit user
+	// approval (WebUI dialog or terminal prompt), an LLM risk-judge verdict,
+	// or a non-interactive auto-approve (autonomous runs resolve Medium
+	// commands from the risk profile instead of prompting). When true the
+	// handler must NOT run its own approval prompt — re-prompting would
+	// double-gate a call Gate 1 already decided (that double-gate was the
+	// subagent hang: a subagent's Gate-2 prompt had no surface and blocked
+	// until timeout). The handler keeps its own hard-block check as
+	// defense-in-depth. When false (Gate 1 never ran, e.g. the legacy
+	// non-unified resolver), the handler's own gate applies. SP-168.
 	Gate1Decided bool
 	// UnsafeShellMode reports whether the session opted into --unsafe-shell,
 	// which bypasses CAUTION-tier shell_command prompts. Deliberately

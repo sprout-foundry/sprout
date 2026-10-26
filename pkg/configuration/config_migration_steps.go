@@ -89,6 +89,19 @@ func applyUnifiedRiskResolverDefault(raw map[string]interface{}) {
 	}
 }
 
+// applyAutoRiskJudgeDefault enables the auto LLM risk-judge mode (SP-168)
+// by default: for Medium/High shell commands, the LLM risk analysis that
+// already runs (cached, bounded) decides the call instead of a human
+// prompt — "approve" runs it, "reject" fails fast so the agent takes a
+// different path, "review" keeps the human prompt when a surface can
+// answer. Users who want an explicit prompt for every Medium/High command
+// can set "auto_risk_judge": false to opt out.
+func applyAutoRiskJudgeDefault(raw map[string]interface{}) {
+	if _, exists := raw["auto_risk_judge"]; !exists {
+		raw["auto_risk_judge"] = true
+	}
+}
+
 // applyDaemonMultiSessionDefault enables N parallel browser windows
 // per user on the daemon (SP-118 Phase 4) by default. The default
 // flips the rollout so newly-spawned daemons accept multiple windows
@@ -464,6 +477,7 @@ func applyV2Defaults(raw map[string]interface{}) error {
 	applyPDFOCRDefaults(raw)
 	applyZshCommandDetectionDefaults(raw)
 	applyUnifiedRiskResolverDefault(raw)
+	applyAutoRiskJudgeDefault(raw)
 	applyDaemonMultiSessionDefault(raw)
 	applyDefaultSubagentTypes(raw)
 	applyDefaultSkills(raw)

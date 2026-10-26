@@ -544,6 +544,21 @@ type Agent struct {
 	// purposes regardless of the console's TTY status. See
 	// workflow_run_approval.go for the policy and the accessors.
 	workflowRun atomic.Bool
+
+	// gate1Decided (SP-168): set to true at the end of a successful unified
+	// Gate-1 decision for the most recent tool call (explicit user approval,
+	// an LLM-judge verdict, or a non-interactive auto-approve). Handler-level
+	// gates (Gate 2, e.g. the shell/git approval prompt) consult
+	// Gate1DecidedLastCall() so they never re-prompt a call Gate 1 already
+	// decided. Reset at the start of each unifiedSecurityGate run; a failed
+	// decision (hard block / rejection) leaves it false and the handler never
+	// runs for that call, so the value is only read on the success path.
+	//
+	// Per-agent, not per-call: the seed loop can run SafeForParallel tools
+	// concurrently, but the only Gate-2-affected handlers (shell_command,
+	// git) are SafeForParallel=false, so a concurrent call can never run a
+	// gate between this flag's write and its read for the same handler.
+	gate1Decided atomic.Bool
 }
 
 // InjectWebUIManagers replaces the agent's internal approval and ask-user managers with the webui-owned instances.

@@ -1516,3 +1516,41 @@ func TestGitOperationStruct_ZC(t *testing.T) {
 		t.Errorf("expected 'main.go', got %q", op.Args)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Gate 2 bypass — Gate1Decided (SP-168)
+//
+// When Gate 1 (the unified risk resolver) decided a call, the handler must
+// not re-prompt: the destructive-git branch honors the flag like
+// Gate1AutoApproved, keeping its own hard-block semantics.
+// ---------------------------------------------------------------------------
+
+func TestGitHandler_Dangerous_Gate1Decided_SkipsPrompt(t *testing.T) {
+	ctx, ws := t.Context(), t.TempDir()
+	initGitRepo(t, ws)
+	am := &capturingApprovalManager{approved: true}
+	env := baseEnv(ws, am)
+	env.Gate1Decided = true
+	args := map[string]any{"operation": "reset", "args": "--hard HEAD~1"}
+	result, err := newGitHandler().Execute(ctx, env, args)
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("should not error when Gate 1 decided the call: %s", result.Output)
+	}
+	if got := len(am.calls); got != 0 {
+		t.Fatalf("Gate1Decided should skip the Gate 2 prompt, got %d approval calls", got)
+	}
+}
+
+func TestGitHandler_Dangerous_NotGate1Decided_Prompts(t *testing.T) {
+	ctx, ws := t.Context(), t.TempDir()
+	initGitRepo(t, ws)
+	am := &capturingApprovalManager{approved: true}
+	// Gate1Decided defaults to false — the handler's own gate applies.
+	_, _ = runGit(t, ctx, ws, am, "reset", "--hard HEAD~1")
+	if got := len(am.calls); got != 1 {
+		t.Fatalf("expected the Gate 2 prompt when Gate1Decided is false, got %d calls", got)
+	}
+}

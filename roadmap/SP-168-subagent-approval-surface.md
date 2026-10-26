@@ -1,9 +1,11 @@
 # SP-168 — Subagent Approval Surface & Auto Risk Mode
 
-Status: In progress (2026-10-25). Phase 1 (hang fix) + Phase 2 (auto LLM risk
-mode). Split from a reported defect: a subagent that attempts a
-security-gated `shell_command` sits until the approval timeout (30 min) or its
-own run budget, instead of either prompting (answerable) or failing fast.
+Status: Implemented (2026-10-25). Phase 1 (hang fix) and Phase 2 (auto LLM
+risk judge) are complete, plus the single-authoritative-gate change that
+made the judge's verdict safe to act on. Split from a reported defect: a
+subagent that attempts a security-gated `shell_command` sits until the
+approval timeout (30 min) or its own run budget, instead of either prompting
+(answerable) or failing fast.
 
 ## Problem
 
@@ -88,9 +90,10 @@ Behavior matrix (shell_command, Medium/High, not hard-blocked):
 
 | Parent mode            | Gate 1 (broker)      | Gate 2 (shell handler)                          |
 |------------------------|----------------------|-------------------------------------------------|
-| WebUI (client attached) | WebUI dialog (answerable) | answerable via shared manager; no hang        |
-| Interactive TTY        | fail-safe deny / prompt | answerable via shared manager; no hang          |
-| Autonomous (automate / one-shot, no surface) | permissive auto-approve (unchanged) | fail fast (immediate), no 30-min wait |
+| WebUI (client attached) | WebUI dialog (answerable) | skipped (Gate 1 decided); no double-prompt  |
+| Interactive TTY, single subagent | terminal prompt (labeled "Subagent (depth N)…") | skipped (Gate 1 decided) |
+| Interactive TTY, parallel subagents | no prompt (interleave guard) — "review" verdicts fail fast | skipped (Gate 1 decided) |
+| Autonomous (automate / one-shot, no surface) | judge verdict, else permissive auto-approve (unchanged when the judge is off) | skipped (Gate 1 decided), no 30-min wait |
 
 ### Phase 2 — auto LLM risk mode (default)
 
@@ -100,11 +103,16 @@ Behavior matrix (shell_command, Medium/High, not hard-blocked):
   per-subcommand for chains (already chain-aware).
 - **Where it runs:** at the gate when the static classifier says Medium/High and
   it is not a hard block. Hard blocks / Critical stay absolute.
-- **Model:** the cheap/worker model, not the session model — this is
-  classification, not task reasoning.
-- **Cost/bound:** one small call per *distinct* gated command; reuse
-  `SecurityAnalysisCache` (command-hash keyed); a 2 s budget so it cannot stall
-  a turn.
+- **Model:** the session model — the judge REUSES the security analysis that
+  already runs for Medium/High shell commands (`approvals/security_analyzer.go`,
+  the 2 s-budget, `SecurityAnalysisCache`-cached LLM call that returns
+  `recommendation: approve|review|reject`), so the auto mode adds NO extra LLM
+  call: the broker acts on the recommendation it would otherwise only display.
+  (Original design said "cheap/worker model"; reusing the existing analysis
+  keeps the same bounded cost with zero added latency, which the timing
+  constraint was after. A dedicated worker-model judge is a possible follow-up.)
+- **Cost/bound:** one analysis per *distinct* gated command (session cache);
+  the 2 s budget so it cannot stall a turn.
 - **Verdict mapping:** `approve` → run; `reject` → immediate deny with the LLM
   reason (the subagent's LLM reads it and pivots); `review` → prompt if a
   surface exists, else immediate deny.
@@ -112,12 +120,36 @@ Behavior matrix (shell_command, Medium/High, not hard-blocked):
   interactive → prompt (answerable via Phase 1); autonomous → immediate deny.
   Never silently approve on analyzer failure.
 
-## Phasing
+## Single authoritative gate (implemented alongside Phase 1)
+
+Pre-SP-168, a Medium/High `shell_command` was gated twice: Gate 1 (the seed
+pre-execute hook → `unifiedSecurityGate` → the approvals broker) AND Gate 2
+(the shell/git handler's own `env.ApprovalManager` gate). Both prompted the
+user — and for a subagent, Gate 2 had no surface at all, which is exactly the
+hang. SP-168 makes Gate 1 authoritative:
+
+- `Agent.gate1Decided` (atomic, per agent instance) is set by
+  `unifiedSecurityGate` on every success exit (explicit approval, an
+  LLM-judge verdict, or a non-interactive auto-approve) and read when the
+  `ToolEnv` is built (`buildToolEnvFromAgent` / `ExecuteTool`) →
+  `env.Gate1Decided`.
+- The shell and git handlers treat `Gate1Decided` like `Gate1AutoApproved`:
+  the handler-level prompt is skipped; the handler's own hard-block check
+  stays as defense in depth.
+- Subagents may use the parent's surfaces: the broker's WebUI dialog is
+  answerable for a subagent (shared manager, Phase 1), and the CLI prompt is
+  offered to a subagent only while a single subagent is active
+  (`ActiveSubagentCount() <= 1`), labeled "Subagent (depth N) is running:" so
+  the parent's user knows whose command it is.
+
+## Phasing (all complete)
 
 1. **Phase 1** — share the parent's managers with the subagent; fail-fast when
-   no answerable surface; propagate `workflowRun`. ~small; testable.
-2. **Phase 2** — auto LLM verdict prompt + contract, gate-1/gate-2 wiring,
-   config knob, cache reuse, timing tests.
+   no answerable surface; propagate `workflowRun`. ✅ (commit 71d62094b)
+2. **Single gate** — `Gate1Decided` wiring, subagent surfaces + label,
+   intent-confirmation lift for subagents. ✅
+3. **Phase 2** — auto LLM risk judge: `auto_risk_judge` config (default true),
+   broker verdict mapping, opt-out, regression + handler tests. ✅
 
 ## Compatibility
 
@@ -125,3 +157,11 @@ Security-gating behavior change: subagents under an interactive parent now
 surface an answerable dialog (previously: unanswerable, 30-min wait). Subagents
 under an autonomous parent now fail fast (previously: 30-min wait). No change
 to the parent's own approval flow or to the autonomous permissive default.
+
+With `auto_risk_judge` ON (the default), Medium/High shell commands the LLM
+assessed as `approve` run without a human prompt, and `reject` denies them
+with the LLM's reasoning — in every mode, including interactive ones. Users
+who want an explicit prompt for every Medium/High command set
+`"auto_risk_judge": false` (the pre-SP-168 interactive behavior is restored;
+the non-interactive permissive default is unchanged when the judge is off or
+unavailable).

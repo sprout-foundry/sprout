@@ -4,6 +4,10 @@ All notable changes to Sprout will be documented in this file.
 
 ## [Unreleased]
 
+- fix(agent): a subagent that hits a security-gated command no longer stalls until the approval timeout. Subagents now share the parent's approval surface: a WebUI dialog is answerable through the parent's approval manager, a single active subagent can prompt on the parent's terminal (labeled "Subagent (depth N) is running:" so you know whose command it is), and a workflow/automate run fails fast with actionable guidance instead of waiting 30 minutes. `git push --force`, `rm -rf`, and the rest of the hard blocks are unaffected.
+- feat(agent): a single authoritative security gate ends the double-prompt. Gate 1 (the unified risk resolver) decides a command once; when it has, the shell and git handlers no longer re-prompt — they keep only their own hard-block checks. A High-risk shell command that also requires intent confirmation is now prompted once, not twice.
+- feat(agent): auto LLM risk-judge mode (default on) for Medium/High shell commands. The LLM risk analysis that already runs for those commands now decides the call: `approve` runs it without a human prompt, `reject` denies it with the LLM's reasoning so the agent takes a different path, and `review` still prompts a human when a surface can answer (or fails fast in autonomous runs). No extra LLM call — the judge reuses the cached, time-boxed analysis. Opt out with `"auto_risk_judge": false` in your config to get an explicit prompt for every Medium/High command.
+
 ## [v0.32.7] - 2026-10-22
 
 - fix(browse): the `eval` step runs ordinary JavaScript. rod wraps a script as `function() { return (<js>).apply(this, arguments) }`, so only a bare arrow function worked; a statement, an IIFE, or a plain expression failed with a `TypeError` naming `.apply`. Scripts are now evaluated as statements and return their completion value, and `wait_for_function` — which had the same constraint — accepts the same shapes.

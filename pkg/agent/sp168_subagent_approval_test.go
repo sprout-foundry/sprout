@@ -71,10 +71,12 @@ func TestSP168_SubagentWebUIDialogAnswerable(t *testing.T) {
 	parent.security.SetApprovalMgr(mgr)
 
 	sub := makeSubagentForTests(t, parent)
-	sub.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+	if err := sub.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
 		cfg.AutoRiskJudge = true
 		return nil
-	})
+	}); err != nil {
+		t.Fatalf("config update failed: %v", err)
+	}
 
 	const command = "rm somefile.txt"
 	// A "review" verdict from the risk judge keeps the human surface — the
@@ -150,10 +152,12 @@ func TestSP168_SubagentWorkflowRunFailsFast(t *testing.T) {
 
 	sub := makeSubagentForTests(t, parent)
 	sub.SetWorkflowRun(true)
-	sub.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+	if err := sub.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
 		cfg.AutoRiskJudge = true
 		return nil
-	})
+	}); err != nil {
+		t.Fatalf("config update failed: %v", err)
+	}
 
 	const command = "rm somefile.txt"
 	// A "review" verdict is the interesting case: it WOULD prompt a human,
@@ -212,21 +216,25 @@ func TestSP168_SubagentCLI_LabeledAndSingleOnly(t *testing.T) {
 			parent.SetWorkspaceRoot(t.TempDir())
 			parent.state.SetActivePersona(personas.IDOrchestrator)
 			// An interactive terminal, no browser: the TTY is the surface.
-			parent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+			if err := parent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
 				cfg.SkipPrompt = false
 				return nil
-			})
+			}); err != nil {
+				t.Fatalf("config update failed: %v", err)
+			}
 			parent.SetHasActiveWebUIClients(func() bool { return false })
 			parent.SetEventBus(events.NewEventBus())
 			mgr := security.NewApprovalManager()
 			parent.security.SetApprovalMgr(mgr)
 
 			sub := makeSubagentForTests(t, parent)
-			sub.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+			if err := sub.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
 				cfg.SkipPrompt = false
 				cfg.AutoRiskJudge = true
 				return nil
-			})
+			}); err != nil {
+				t.Fatalf("config update failed: %v", err)
+			}
 
 			const command = "rm somefile.txt"
 			// "review" keeps the human surface, so the outcome below is

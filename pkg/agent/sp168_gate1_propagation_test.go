@@ -18,10 +18,12 @@ func TestSP168_BuildToolEnvPropagatesGate1Decided(t *testing.T) {
 	agent.SetWorkspaceRoot(t.TempDir())
 
 	setUnified := func(enabled bool) {
-		agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		if err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
 			cfg.UnifiedRiskResolver = enabled
 			return nil
-		})
+		}); err != nil {
+			t.Fatalf("config update failed: %v", err)
+		}
 	}
 
 	// Legacy resolver (the fresh-test default): the unified flag must not

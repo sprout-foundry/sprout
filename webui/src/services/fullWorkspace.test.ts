@@ -14,11 +14,7 @@
 
 import { renderHook, waitFor } from '@testing-library/react';
 
-import {
-  __resetFullWorkspaceForTests,
-  probeFullWorkspaces,
-  useFullWorkspacesAvailable,
-} from './fullWorkspace';
+import { __resetFullWorkspaceForTests, probeFullWorkspaces, useFullWorkspacesAvailable } from './fullWorkspace';
 
 const fetchMock = vi.fn();
 vi.mock('./clientSession', () => ({

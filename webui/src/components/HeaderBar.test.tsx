@@ -54,7 +54,11 @@ afterEach(() => {
 // answer rather than a legacy-list 503) fails open so the user can retry.
 // Other requests (back-link targets, …) keep answering from the legacy
 // routes so the rest of the bar renders as before.
-async function renderHeader(status: number, body: string, availability: 'available' | 'unavailable' | 'unknown' = 'unknown') {
+async function renderHeader(
+  status: number,
+  body: string,
+  availability: 'available' | 'unavailable' | 'unknown' = 'unknown',
+) {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL) => {

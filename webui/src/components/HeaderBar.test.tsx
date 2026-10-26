@@ -47,10 +47,26 @@ afterEach(() => {
   setActiveHost(headlessHost());
 });
 
-async function renderHeader(status: number, body: string) {
+// The probe fix: the workspace-compute check now asks the typed
+// `/workspace/availability` endpoint. A definitive `{ available: false }`
+// hides the Start Building button; every other answer (including the legacy
+// 503 "not configured" body, now that it is the availability endpoint's
+// answer rather than a legacy-list 503) fails open so the user can retry.
+// Other requests (back-link targets, …) keep answering from the legacy
+// routes so the rest of the bar renders as before.
+async function renderHeader(status: number, body: string, availability: 'available' | 'unavailable' | 'unknown' = 'unknown') {
   vi.stubGlobal(
     'fetch',
-    vi.fn(() => Promise.resolve(new Response(body, { status }))),
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.endsWith('/workspace/availability')) {
+        if (availability === 'unknown') {
+          return new Response(null, { status: 503 });
+        }
+        return new Response(JSON.stringify({ available: availability === 'available' }), { status: 200 });
+      }
+      return new Response(body, { status });
+    }),
   );
   // HeaderBar branches on the host's transport (authMode 'bearer' = hosted);
   // it renders inside the app's HostProvider, so the tests mount one too.
@@ -78,17 +94,19 @@ async function renderHeader(status: number, body: string) {
 
 describe('HeaderBar Start Building', () => {
   it('is hidden when the deployment has no workspace compute', async () => {
-    await renderHeader(503, '{"error":"workspaces are not available on this deployment"}');
+    // A definitive available:false from the typed endpoint hides the button.
+    await renderHeader(200, '', 'unavailable');
     expect(container.querySelector('.start-building-btn')).toBeNull();
   });
 
-  it('stays available through a transient 503', async () => {
-    await renderHeader(503, '{"error":"upstream timeout"}');
+  it('stays available through a transient availability failure', async () => {
+    // A non-200 availability answer fails open so the user can retry.
+    await renderHeader(200, '', 'unknown');
     expect(container.querySelector('.start-building-btn')).not.toBeNull();
   });
 
   it('shows when workspaces are configured', async () => {
-    await renderHeader(200, '[]');
+    await renderHeader(200, '', 'available');
     expect(container.querySelector('.start-building-btn')).not.toBeNull();
   });
 });

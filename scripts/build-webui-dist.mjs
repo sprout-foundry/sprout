@@ -16,6 +16,7 @@ import { createHash } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+import os from "node:os";
 
 // ── Content-hashed WASM asset names ────────────────────────────────
 // sprout.wasm and wasm_exec.js keep fixed names unless we rewrite them,
@@ -765,12 +766,23 @@ function cleanOutputDirectory(dir) {
       repoRoot,
     ];
 
+    // The OS-managed temp dir is a legitimate scratch location: the vendor
+    // script (platform update-sprout-webui.sh) builds the bundle into a
+    // mkdtemp dir so its only effect on the sibling sprout checkout is
+    // reading it. On macOS that is /var/folders/... (inside the /var entry
+    // above); on Linux it is /tmp/.... Everything *under* os.tmpdir() is
+    // safe to clean — nothing but temp files ever lives there. The temp
+    // dir itself stays protected.
+    const tmpBase = resolve(os.tmpdir());
+    const inOsTmp = resolvedDir.startsWith(tmpBase + "/");
+
     for (const dangerous of dangerousPaths) {
       if (!dangerous) continue;
       const resolvedDangerous = resolve(dangerous);
       if (
-        resolvedDir === resolvedDangerous ||
-        resolvedDir.startsWith(resolvedDangerous + "/")
+        !inOsTmp &&
+        (resolvedDir === resolvedDangerous ||
+          resolvedDir.startsWith(resolvedDangerous + "/"))
       ) {
         console.error(
           `Error: Refusing to delete '${dir}' — inside protected path '${dangerous}'`,

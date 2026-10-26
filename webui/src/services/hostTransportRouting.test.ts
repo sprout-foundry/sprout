@@ -83,9 +83,16 @@ describe('platform clients route through the host transport', () => {
   });
 
   it('full-workspace probe and launch hit the host backend, not the page origin', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ status: 'starting' }));
+    // A fresh body per call: the probe reads its response, then the launch
+    // POST gets its own — a single shared Response body is one-shot.
+    fetchMock.mockImplementation(() => Promise.resolve(jsonResponse({ status: 'starting' })));
     await probeFullWorkspaces();
-    expect(lastCall()[0]).toBe(`${HOST_API}/workspace/fly`);
+    // The probe asks the typed availability endpoint (200 { available }); only
+    // a definitive available:false hides the option — a non-boolean answer
+    // like this keeps failing open, so the fetch is the assertion target.
+    expect(fetchMock.mock.calls[0][0]).toBe(`${HOST_API}/workspace/availability`);
+    // Launch still POSTs the legacy start route (the /workspace/txn move is
+    // the follow-up item).
     await startFullWorkspace('https://github.com/o/r');
     const [url, init] = lastCall();
     expect(url).toBe(`${HOST_API}/workspace/fly`);

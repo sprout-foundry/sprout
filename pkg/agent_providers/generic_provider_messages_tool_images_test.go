@@ -206,6 +206,101 @@ func TestToolResultImagesOmittedForNonVisionProvider(t *testing.T) {
 	}
 }
 
+// Assistant turns may carry images in state (a screenshot-producing turn,
+// or an image attached to the assistant's own reply). On the wire they must
+// NOT become a multimodal content array: strict OpenAI-compat backends
+// (DeepInfra) reject a non-string assistant content with HTTP 422 "Input
+// should be a valid string" (param messages.<i>.assistant.content.str), and
+// because the malformed message lives in persistent history the session is
+// wedged — every request re-sends it, the 422 is non-retryable, and its body
+// carries no image keyword so the image-strip self-heal never fires. The
+// assistant keeps its (string) content; the pixels are not re-delivered —
+// the model re-reads the image file when it needs the pixels again.
+func TestAssistantMessageWithImagesKeepsStringContent(t *testing.T) {
+	cfg := &ProviderConfig{
+		Name:       "deepinfra",
+		Conversion: MessageConversion{IncludeToolCallID: true},
+		Defaults:   RequestDefaults{Model: "deepseek-ai/DeepSeek-V4.1-Flash-1017"},
+		Models:     ModelConfig{SupportsVision: true},
+	}
+	p := &GenericProvider{config: cfg}
+
+	// Non-mergeable path: assistant with tool_calls (carries a screenshot).
+	// Mirror of the DeepInfra session that wedged on HTTP 422.
+	nonMergeable := []api.Message{
+		{Role: "user", Content: "make the results page accessible"},
+		{Role: "assistant", Content: "Now the results page screenshot:",
+			ToolCalls: []api.ToolCall{{ID: "c1", Type: "function",
+				Function: api.ToolCallFunction{Name: "computer_use", Arguments: "{\"action\":\"take_screenshot\"}"}}},
+			Images: []api.ImageData{{Base64: "aGVsbG8=", Type: "image/png"}}},
+		{Role: "tool", ToolCallID: "c1", Content: "Screenshot saved"},
+	}
+	out := p.convertMessages(nonMergeable, "")
+	if len(out) != 3 {
+		t.Fatalf("expected 3 messages, got %d", len(out))
+	}
+	asst := out[1]
+	if role, _ := asst["role"].(string); role != "assistant" {
+		t.Fatalf("expected assistant role, got %v", role)
+	}
+	c, ok := asst["content"].(string)
+	if !ok {
+		t.Fatalf("assistant content must be a string on the wire, got %T: %v", asst["content"], asst["content"])
+	}
+	if c == "" {
+		t.Fatal("assistant content must be preserved as a string")
+	}
+	if _, has := asst["tool_calls"]; !has {
+		t.Fatal("assistant tool_calls must be preserved")
+	}
+
+	// Mergeable path: a bare assistant message (no tool_calls) with images.
+	mergeable := []api.Message{
+		{Role: "user", Content: "now check the QR code"},
+		{Role: "assistant", Content: "Now the QR code — generating it locally",
+			Images: []api.ImageData{{Base64: "aGVsbG8=", Type: "image/png"}}},
+	}
+	out = p.convertMessages(mergeable, "")
+	if len(out) != 2 {
+		t.Fatalf("expected 2 messages, got %d", len(out))
+	}
+	if c, ok := out[1]["content"].(string); !ok {
+		t.Fatalf("mergeable assistant content must be a string, got %T", out[1]["content"])
+	} else if c == "" {
+		t.Fatal("mergeable assistant content must be preserved")
+	}
+}
+
+// User messages are the one role allowed a multimodal content array: an
+// image-bearing user turn (pasted screenshot) still embeds its images.
+func TestUserMessageWithImagesKeepsMultimodalContent(t *testing.T) {
+	cfg := &ProviderConfig{
+		Name:       "deepinfra",
+		Conversion: MessageConversion{IncludeToolCallID: true},
+		Defaults:   RequestDefaults{Model: "deepseek-ai/DeepSeek-V4.1-Flash-1017"},
+		Models:     ModelConfig{SupportsVision: true},
+	}
+	p := &GenericProvider{config: cfg}
+
+	msgs := []api.Message{
+		{Role: "user", Content: "look at this", Images: []api.ImageData{{Base64: "aGVsbG8=", Type: "image/png"}}},
+	}
+	out := p.convertMessages(msgs, "")
+	parts, ok := out[0]["content"].([]map[string]interface{})
+	if !ok {
+		t.Fatalf("user content must be a multimodal array, got %T", out[0]["content"])
+	}
+	sawImage := false
+	for _, part := range parts {
+		if partType, _ := part["type"].(string); partType == "image_url" {
+			sawImage = true
+		}
+	}
+	if !sawImage {
+		t.Fatal("expected an image_url part in the user multimodal content")
+	}
+}
+
 // Cache stability: a delivery inserted in iteration N must not move when
 // iteration N+1 appends more history. Prefix-stable insertions keep
 // provider prompt caching (vLLM auto-prefix cache, Anthropic

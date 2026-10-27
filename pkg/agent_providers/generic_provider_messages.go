@@ -138,7 +138,20 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 				}
 				continue
 			}
-			if len(msg.Images) > 0 {
+			// Only user messages may carry a multimodal content array on the
+			// wire. Strict OpenAI-compat backends (e.g. DeepInfra) require an
+			// assistant message's content to be a plain string and reject a
+			// multimodal array with HTTP 422 "Input should be a valid string"
+			// (param messages.<i>.assistant.content.str) — a deterministic
+			// rejection that wedges a session whose history carries an
+			// image-bearing assistant turn: it is non-retryable, and its body
+			// carries no image keyword, so the image-strip self-heal
+			// (reconcileVisionCapability) never fires either.
+			// Assistant-attached images are therefore withheld from the wire:
+			// content stays a string and the model can re-read the image file
+			// to recover the pixels. Tool-result images are unaffected and
+			// still ride the tool-image delivery path.
+			if len(msg.Images) > 0 && msg.Role == "user" {
 				content = p.buildMultiModalContent(msg.Content, msg.Images)
 			}
 			convertedMsg := map[string]interface{}{
@@ -161,8 +174,11 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 
 		// Start buffering a mergeable message
 		pendingRole = msg.Role
-		if len(msg.Images) > 0 {
-			// Multi-modal content — emit immediately, don't buffer
+		if len(msg.Images) > 0 && msg.Role == "user" {
+			// Multi-modal content — emit immediately, don't buffer.
+			// User-only: an assistant turn's images are withheld from the
+			// wire (strict backends reject a non-string assistant content
+			// with HTTP 422); see the non-mergeable path above.
 			content := p.buildMultiModalContent(msg.Content, msg.Images)
 			converted = append(converted, map[string]interface{}{
 				"role":    msg.Role,

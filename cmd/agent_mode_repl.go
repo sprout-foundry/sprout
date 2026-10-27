@@ -76,6 +76,18 @@ func runInteractiveREPL(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 				// selection during recovery).
 				inputReader.SetPrompt(cliui.BuildPromptPrefix(chatAgent.GetModel()))
 
+				// Return-to-prompt re-sync: a `!` shell command (whose
+				// child can take the TTY over — alt screen, hidden
+				// cursor, raw termios — and fail to fully restore it) or
+				// a timed-out security prompt may leave the terminal
+				// desynced from the footer/input model. Re-assert cooked
+				// termios, the primary screen, the cursor, and the
+				// footer's scroll region before the user starts typing.
+				// Idempotent when nothing is wrong. Must run here (the
+				// idle-prompt seam), never mid-turn, where the steer
+				// reader and streaming writer own the TTY.
+				console.ResyncTerminal()
+
 				var err error
 				query, err = inputReader.ReadLine()
 

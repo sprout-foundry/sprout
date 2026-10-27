@@ -169,6 +169,11 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	groundTruth := console.CaptureGroundTruth()
 	inputReader.SetGroundTruth(groundTruth)
 	steerCoord.SetGroundTruth(groundTruth)
+	// Process-wide registration so console.ResyncTerminal (called at the
+	// REPL's return-to-prompt seam) can restore cooked termios from the
+	// same pristine snapshot after a `!` child or a timed-out security
+	// prompt leaves the terminal's modes desynced.
+	console.RegisterGlobalGroundTruth(groundTruth)
 
 	// SP-048-1c + 3: Subscribe to tool start/end events so the activity
 	// indicator can render a per-tool timeline AND the footer can refresh

@@ -43,7 +43,7 @@ import type {
   SessionSummaryResponse,
   TimelineItem,
 } from '../services/api/changesApi';
-import { changeOpLabel, classifyChangeOp, describeRevertOutcome } from '../utils/changes';
+import { builderChangeOpLabel, changeOpLabel, classifyChangeOp, describeRevertOutcome } from '../utils/changes';
 import { copyToClipboard } from '../utils/clipboard';
 import { formatRelativeTime } from '../utils/format';
 import { useLog } from '../utils/log';
@@ -54,6 +54,16 @@ import { showThemedConfirm } from './ThemedDialog';
 import './AgentChangesPanel.css';
 
 export interface AgentChangesPanelProps {
+  /**
+   * Presentation vocabulary. `'developer'` (the default) is the full
+   * change-tracker surface: per-file diffs, per-file and bulk revert, the
+   * recent-history tab. `'builder'` is the plain-language view a
+   * non-developer shell (a build space) wants: the same change data framed
+   * as "What changed", with the developer actions (view diff, revert) not
+   * rendered at all. Opt-in from the embedding host — a host that omits it
+   * gets exactly the developer surface it always did.
+   */
+  mode?: AgentChangesMode;
   /**
    * Optional callback for "Ask agent about this change". When provided,
    * clicking the chat icon next to a file opens the chat with a
@@ -81,6 +91,9 @@ export interface AgentChangesPanelProps {
 }
 
 type Tab = 'session' | 'timeline' | 'project';
+
+/** The panel's presentation vocabulary; see `AgentChangesPanelProps.mode`. */
+export type AgentChangesMode = 'developer' | 'builder';
 
 const opIcon = (op: string) => {
   const cls = `op-icon op-${classifyChangeOp(op)}`;
@@ -127,6 +140,7 @@ function AgentChangesPanel(props: AgentChangesPanelProps): JSX.Element {
 }
 
 function AgentChangesSession({
+  mode = 'developer',
   onAskAgent,
   onFileClick,
   timeline,
@@ -136,6 +150,12 @@ function AgentChangesSession({
 }: AgentChangesPanelProps): JSX.Element {
   const apiService = ApiService.getInstance();
   const log = useLog();
+
+  // Builder mode: the same change data, in plain language and without the
+  // developer actions (view diff, revert). Everything below keys off these
+  // two flags so the developer path is byte-for-byte what it was.
+  const builder = mode === 'builder';
+  const opLabel = builder ? builderChangeOpLabel : changeOpLabel;
 
   const [tab, setTab] = useState<Tab>('session');
 
@@ -462,7 +482,7 @@ function AgentChangesSession({
                     {opIcon(f.op)}
                     <span className="changes-file-path changes-file-path--bulk">{f.path}</span>
                     <span className="changes-file-op">
-                      {changeOpLabel(f.op)}
+                      {opLabel(f.op)}
                       {count ? ` · ${formatBulkCount(count)}` : ''}
                     </span>
                   </div>
@@ -479,39 +499,41 @@ function AgentChangesSession({
                   >
                     {f.path}
                   </button>
-                  <span className="changes-file-op">{changeOpLabel(f.op)}</span>
-                  <div className="changes-file-actions">
-                    <button
-                      type="button"
-                      className="changes-action-btn"
-                      onClick={() => openDiff(f.path)}
-                      title="View diff"
-                      aria-label="View diff"
-                    >
-                      <Eye size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      className="changes-action-btn"
-                      onClick={() => revertOne(f.path)}
-                      disabled={meta && !meta.recoverable}
-                      title={meta && !meta.recoverable ? 'Original content not captured' : 'Revert this file'}
-                      aria-label="Revert this file"
-                    >
-                      <Undo2 size={14} />
-                    </button>
-                    {onAskAgent && (
+                  <span className="changes-file-op">{opLabel(f.op)}</span>
+                  {!builder && (
+                    <div className="changes-file-actions">
                       <button
                         type="button"
                         className="changes-action-btn"
-                        onClick={() => onAskAgent(f.path)}
-                        title="Ask the agent about this change"
-                        aria-label="Ask the agent about this change"
+                        onClick={() => openDiff(f.path)}
+                        title="View diff"
+                        aria-label="View diff"
                       >
-                        <MessageSquare size={14} />
+                        <Eye size={14} />
                       </button>
-                    )}
-                  </div>
+                      <button
+                        type="button"
+                        className="changes-action-btn"
+                        onClick={() => revertOne(f.path)}
+                        disabled={meta && !meta.recoverable}
+                        title={meta && !meta.recoverable ? 'Original content not captured' : 'Revert this file'}
+                        aria-label="Revert this file"
+                      >
+                        <Undo2 size={14} />
+                      </button>
+                      {onAskAgent && (
+                        <button
+                          type="button"
+                          className="changes-action-btn"
+                          onClick={() => onAskAgent(f.path)}
+                          title="Ask the agent about this change"
+                          aria-label="Ask the agent about this change"
+                        >
+                          <MessageSquare size={14} />
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -526,7 +548,13 @@ function AgentChangesSession({
   // ── Render ─────────────────────────────────────────────────────
 
   return (
-    <div className="agent-changes-panel" data-testid="context-panel-changes">
+    <div className="agent-changes-panel" data-testid="context-panel-changes" data-mode={mode}>
+      {builder && (
+        <div className="changes-builder-header">
+          <FileText size={14} aria-hidden="true" />
+          <span>What changed</span>
+        </div>
+      )}
       <div className="changes-tabs">
         <button
           type="button"
@@ -536,13 +564,15 @@ function AgentChangesSession({
           This session
           {summary && summary.totals.changes > 0 && <span className="changes-tab-badge">{summary.totals.files}</span>}
         </button>
-        <button
-          type="button"
-          className={`changes-tab ${tab === 'timeline' ? 'active' : ''}`}
-          onClick={() => setTab('timeline')}
-        >
-          Recent history
-        </button>
+        {!builder && (
+          <button
+            type="button"
+            className={`changes-tab ${tab === 'timeline' ? 'active' : ''}`}
+            onClick={() => setTab('timeline')}
+          >
+            Recent history
+          </button>
+        )}
         {timeline && timeline.length > 0 && (
           <button
             type="button"
@@ -557,8 +587,8 @@ function AgentChangesSession({
           type="button"
           className="changes-action-btn"
           onClick={() => void loadSession()}
-          title="Refresh"
-          aria-label="Refresh"
+          title={builder ? 'Refresh what changed' : 'Refresh'}
+          aria-label={builder ? 'Refresh what changed' : 'Refresh'}
         >
           <RotateCcw size={14} />
         </button>
@@ -579,8 +609,15 @@ function AgentChangesSession({
               <Inbox size={32} />
               <p>The agent hasn&apos;t changed anything this session yet.</p>
               <p className="changes-empty-hint">
-                When the agent edits, creates, or deletes files, each entry will have a{' '}
-                <Eye size={12} aria-hidden="true" /> view-diff and <Undo2 size={12} aria-hidden="true" /> revert button.
+                {builder ? (
+                  'As the agent builds, the files it creates and updates will be listed here.'
+                ) : (
+                  <>
+                    When the agent edits, creates, or deletes files, each entry will have a{' '}
+                    <Eye size={12} aria-hidden="true" /> view-diff and <Undo2 size={12} aria-hidden="true" /> revert
+                    button.
+                  </>
+                )}
               </p>
             </div>
           )}
@@ -594,14 +631,16 @@ function AgentChangesSession({
                   {summary.blocks.length === 1 ? '' : 's'}
                 </span>
                 <div style={{ flex: 1 }} />
-                <button
-                  type="button"
-                  className="changes-revert-all-btn"
-                  onClick={() => void revertAll()}
-                  title="Revert all changes the agent made this session"
-                >
-                  <Undo2 size={14} /> Revert all
-                </button>
+                {!builder && (
+                  <button
+                    type="button"
+                    className="changes-revert-all-btn"
+                    onClick={() => void revertAll()}
+                    title="Revert all changes the agent made this session"
+                  >
+                    <Undo2 size={14} /> Revert all
+                  </button>
+                )}
               </div>
               {summary.blocks.length > 3 && (
                 <div className="changes-filter">
@@ -637,7 +676,9 @@ function AgentChangesSession({
         </div>
       )}
 
-      {tab === 'timeline' && (
+      {/* The recent-history tab is a developer surface (per-file diffs and
+          reverts); builder mode does not render it. */}
+      {!builder && tab === 'timeline' && (
         <div className="changes-timeline">
           <div className="changes-timeline-controls">
             <label htmlFor="timeline-since">Since:</label>

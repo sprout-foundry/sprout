@@ -11,6 +11,23 @@
   font-size: var(--text-sm);
 }
 
+/* ── Builder mode header ─────────────────────────────────────── */
+/* The plain-language framing a build space shows instead of the
+   developer surface's tabs/actions (see AgentChangesPanelProps.mode).
+   Rendered only when the embedding host opts in. */
+
+.changes-builder-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
 /* ── Tabs ────────────────────────────────────────────────────── */
 
 .changes-tabs {

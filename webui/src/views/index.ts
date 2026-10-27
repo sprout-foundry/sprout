@@ -94,8 +94,12 @@ export { default as ChatView } from '../components/ChatView';
 export type { ChatProps } from '../components/chat/types';
 
 // Agent changes view (composite — requires the webui context stack).
+// `mode: 'builder'` is the plain-language presentation a non-developer
+// shell opts into (see `AgentChangesPanelProps.mode`); a host passes it
+// through its arrangement's per-kind props, e.g.
+// `viewProps={{ changes: { mode: 'builder' } }}` on `SproutWorkspace`.
 export { default as AgentChangesPanel } from '../components/AgentChangesPanel';
-export type { AgentChangesPanelProps } from '../components/AgentChangesPanel';
+export type { AgentChangesPanelProps, AgentChangesMode } from '../components/AgentChangesPanel';
 
 // Files views (primitives — standalone, from @sprout/ui).
 export { Editor, FileTree } from '@sprout/ui';

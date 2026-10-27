@@ -21,7 +21,13 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('../components/ChatView', () => ({
   default: (props: { inputValue?: string }) => <div data-testid="views-test-chat">input={props.inputValue ?? ''}</div>,
 }));
-vi.mock('../components/AgentChangesPanel', () => ({ default: () => <div data-testid="views-test-changes" /> }));
+// Echoes the presentation mode so the per-kind props seam is pinned: a host
+// places the changes view in a slot and passes `{ changes: { mode: 'builder' } }`.
+vi.mock('../components/AgentChangesPanel', () => ({
+  default: (props: { mode?: string }) => (
+    <div data-testid="views-test-changes" data-mode={props.mode ?? 'developer'} />
+  ),
+}));
 vi.mock('../components/PreviewPanel', () => ({
   PreviewPanel: (props: { open?: boolean }) => (
     <div data-testid="views-test-preview-panel" data-open={String(!!props.open)} />
@@ -105,6 +111,11 @@ describe('ViewsLayout', () => {
   it('passes per-view props through to the views', () => {
     render(<ViewsLayout props={{ chat: { inputValue: 'hello from the host' } }} />);
     expect(screen.getByTestId('views-test-chat')).toHaveTextContent('input=hello from the host');
+  });
+
+  it('carries the changes view\'s builder mode through the per-kind props', () => {
+    render(<ViewsLayout props={{ changes: { mode: 'builder' } }} />);
+    expect(screen.getByTestId('views-test-changes')).toHaveAttribute('data-mode', 'builder');
   });
 
   it('honors an embedding-supplied arrangement wholesale', () => {

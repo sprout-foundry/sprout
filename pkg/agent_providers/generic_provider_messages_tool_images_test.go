@@ -2,6 +2,7 @@ package providers
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
@@ -247,11 +248,17 @@ func TestAssistantMessageWithImagesKeepsStringContent(t *testing.T) {
 	if !ok {
 		t.Fatalf("assistant content must be a string on the wire, got %T: %v", asst["content"], asst["content"])
 	}
-	if c == "" {
-		t.Fatal("assistant content must be preserved as a string")
+	if !strings.Contains(c, "image content withheld") {
+		t.Errorf("assistant content should carry a withhold note for its image, got %q", c)
 	}
 	if _, has := asst["tool_calls"]; !has {
 		t.Fatal("assistant tool_calls must be preserved")
+	}
+
+	// The note is wire-only: the caller's messages (the persisted state) must
+	// be left untouched.
+	if strings.Contains(nonMergeable[1].Content, "image content withheld") {
+		t.Fatal("the withhold note must not mutate the caller's message")
 	}
 
 	// Mergeable path: a bare assistant message (no tool_calls) with images.
@@ -266,8 +273,13 @@ func TestAssistantMessageWithImagesKeepsStringContent(t *testing.T) {
 	}
 	if c, ok := out[1]["content"].(string); !ok {
 		t.Fatalf("mergeable assistant content must be a string, got %T", out[1]["content"])
-	} else if c == "" {
-		t.Fatal("mergeable assistant content must be preserved")
+	} else {
+		if !strings.Contains(c, "image content withheld") {
+			t.Errorf("mergeable assistant content should carry a withhold note, got %q", c)
+		}
+		if strings.Contains(mergeable[1].Content, "image content withheld") {
+			t.Fatal("the withhold note must not mutate the caller's message (mergeable path)")
+		}
 	}
 }
 

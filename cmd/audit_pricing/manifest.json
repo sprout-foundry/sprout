@@ -670,7 +670,7 @@
   },
   "deepseek": {
     "source": "https://api-docs.deepseek.com/quick_start/pricing",
-    "last_verified": "2026-10-26",
+    "last_verified": "2026-10-27",
     "models": [
       {
         "id": "deepseek-v4-flash",
@@ -730,7 +730,7 @@
   },
   "minimax": {
     "source": "https://platform.minimax.io/docs/guides/pricing-paygo",
-    "last_verified": "2026-10-26",
+    "last_verified": "2026-10-27",
     "models": [
       {
         "id": "MiniMax-M2",
@@ -807,8 +807,8 @@
     ]
   },
   "mistral": {
-    "source": "https://docs.mistral.ai/",
-    "last_verified": "2026-10-24",
+    "source": "https://docs.mistral.ai/inference/pricing",
+    "last_verified": "2026-10-27",
     "models": [
       {
         "id": "mistral-large-latest",
@@ -987,7 +987,7 @@
   },
   "ollama-cloud": {
     "source": "https://ollama.com/pricing",
-    "last_verified": "2026-10-26",
+    "last_verified": "2026-10-27",
     "models": [
       {
         "id": "deepseek-v4-flash",
@@ -1168,7 +1168,7 @@
   },
   "openai": {
     "source": "https://platform.openai.com/docs/pricing",
-    "last_verified": "2026-10-26",
+    "last_verified": "2026-10-27",
     "models": [
       {
         "id": "gpt-5",
@@ -1803,12 +1803,36 @@
         "input_per_mtok": 1,
         "output_per_mtok": 5,
         "cached_per_mtok": 0.05
+      },
+      {
+        "id": "gpt-6.1-terra",
+        "input_per_mtok": 1,
+        "output_per_mtok": 5,
+        "cached_per_mtok": 0.05
+      },
+      {
+        "id": "gpt-6.1-terra-pro",
+        "input_per_mtok": 1,
+        "output_per_mtok": 5,
+        "cached_per_mtok": 0.05
+      },
+      {
+        "id": "gpt-6.1-terra-pro:batch",
+        "input_per_mtok": 0.5,
+        "output_per_mtok": 2.5,
+        "cached_per_mtok": 0.025
+      },
+      {
+        "id": "gpt-6.1-terra:batch",
+        "input_per_mtok": 0.5,
+        "output_per_mtok": 2.5,
+        "cached_per_mtok": 0.025
       }
     ]
   },
   "openrouter": {
     "source": "https://openrouter.ai/api/v1/models",
-    "last_verified": "2026-10-26",
+    "last_verified": "2026-10-27",
     "models": [
       {
         "id": "ai21/jamba-large-1.7",
@@ -4977,12 +5001,36 @@
         "input_per_mtok": 0.35,
         "output_per_mtok": 0.5,
         "cached_per_mtok": 0.04
+      },
+      {
+        "id": "openai/gpt-6.1-terra",
+        "input_per_mtok": 1,
+        "output_per_mtok": 5,
+        "cached_per_mtok": 0.05
+      },
+      {
+        "id": "openai/gpt-6.1-terra-pro",
+        "input_per_mtok": 1,
+        "output_per_mtok": 5,
+        "cached_per_mtok": 0.05
+      },
+      {
+        "id": "openai/gpt-6.1-terra-pro:batch",
+        "input_per_mtok": 0.5,
+        "output_per_mtok": 2.5,
+        "cached_per_mtok": 0.025
+      },
+      {
+        "id": "openai/gpt-6.1-terra:batch",
+        "input_per_mtok": 0.5,
+        "output_per_mtok": 2.5,
+        "cached_per_mtok": 0.025
       }
     ]
   },
   "zai": {
     "source": "https://docs.z.ai/guides/overview/pricing",
-    "last_verified": "2026-10-26",
+    "last_verified": "2026-10-27",
     "models": [
       {
         "id": "glm-4.5v",
@@ -5112,7 +5160,7 @@
   },
   "zai-coding": {
     "source": "https://docs.z.ai/guides/overview/pricing",
-    "last_verified": "2026-10-26",
+    "last_verified": "2026-10-27",
     "models": [
       {
         "id": "glm-4.5",

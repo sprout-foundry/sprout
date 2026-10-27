@@ -7763,6 +7763,66 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.05,
+        "context_length": 1050000,
+        "description": "GPT-6.1 Terra is the mid-tier model in OpenAI's GPT-6.1 series, positioned below GPT-6.1 Sol. It suits everyday agentic, coding, and writing work, is strong at understanding screenshots and on-screen content, and is efficient enough for high-volume workloads.",
+        "id": "openai/gpt-6.1-terra",
+        "input_cost": 1,
+        "name": "OpenAI: GPT-6.1 Terra",
+        "output_cost": 5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.05,
+        "context_length": 1050000,
+        "description": "GPT-6.1 Terra Pro is the same underlying model as GPT-6.1 Terra, served with reasoning.mode set to pro for higher-quality responses on complex tasks. Pro mode spends far more reasoning tokens per request, so a typical request costs several times more and takes much longer; use GPT-6.1 Terra for everyday work.",
+        "id": "openai/gpt-6.1-terra-pro",
+        "input_cost": 1,
+        "name": "OpenAI: GPT-6.1 Terra Pro",
+        "output_cost": 5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.025,
+        "context_length": 1050000,
+        "description": "GPT-6.1 Terra Pro via the Batch API at 50% of standard pricing. Terra with reasoning.mode set to pro for hard, high-stakes problems.",
+        "id": "openai/gpt-6.1-terra-pro:batch",
+        "input_cost": 0.5,
+        "name": "OpenAI: GPT-6.1 Terra Pro (batch)",
+        "output_cost": 2.5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.025,
+        "context_length": 1050000,
+        "description": "GPT-6.1 Terra via the Batch API at 50% of standard pricing. Mid-tier model for everyday agentic, coding, and writing work at high volume.",
+        "id": "openai/gpt-6.1-terra:batch",
+        "input_cost": 0.5,
+        "name": "OpenAI: GPT-6.1 Terra (batch)",
+        "output_cost": 2.5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

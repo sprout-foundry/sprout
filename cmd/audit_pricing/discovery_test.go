@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	providers "github.com/sprout-foundry/sprout/pkg/agent_providers"
@@ -96,6 +97,53 @@ func TestCanonicalToConfigEntry_NilPricing(t *testing.T) {
 	}
 	if _, has := entry["output_cost"]; has {
 		t.Error("should not include output_cost when pricing is nil")
+	}
+}
+
+func TestCanonicalToConfigEntry_RoundsPerTokenConversionNoise(t *testing.T) {
+	cached, err := strconv.ParseFloat("0.00000005", 64)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	m := modelcontract.CanonicalModel{
+		ID: "test",
+		Pricing: &modelcontract.Pricing{
+			InputPerMTok:  1.0,
+			OutputPerMTok: 5.0,
+			CachedPerMTok: cached * 1e6,
+		},
+	}
+	entry := canonicalToConfigEntry(m)
+	cachedCost, ok := entry["cached_input_cost"].(float64)
+	if !ok {
+		t.Fatalf("cached_input_cost missing or not a float64: %v", entry["cached_input_cost"])
+	}
+	if cachedCost != 0.05 {
+		t.Errorf("cached_input_cost = %v, want 0.05", cachedCost)
+	}
+	if got := entry["input_cost"].(float64); got != 1.0 {
+		t.Errorf("input_cost = %v, want 1", got)
+	}
+	if got := entry["output_cost"].(float64); got != 5.0 {
+		t.Errorf("output_cost = %v, want 5", got)
+	}
+}
+
+func TestRoundUSD(t *testing.T) {
+	cases := []struct {
+		in, want float64
+	}{
+		{0.049999999999999996, 0.05},
+		{0.024999999999999998, 0.025},
+		{0.001414, 0.001414},
+		{0.037, 0.037},
+		{0, 0},
+		{2.5, 2.5},
+	}
+	for _, c := range cases {
+		if got := roundUSD(c.in); got != c.want {
+			t.Errorf("roundUSD(%v) = %v, want %v", c.in, got, c.want)
+		}
 	}
 }
 
@@ -354,6 +402,38 @@ func TestAddModelsToManifest_AddsToExistingProvider(t *testing.T) {
 	json.Unmarshal(data, &m)
 	if len(m["p"].Models) != 2 {
 		t.Errorf("expected 2 models, got %d", len(m["p"].Models))
+	}
+}
+
+func TestAddModelsToManifest_RoundsPerTokenConversionNoise(t *testing.T) {
+	dir := t.TempDir()
+	manifestPath := filepath.Join(dir, "manifest.json")
+	existing := map[string]ProviderManifest{"p": {Source: "https://example.com"}}
+	data, _ := json.MarshalIndent(existing, "", "  ")
+	os.WriteFile(manifestPath, append(data, '\n'), 0o644)
+
+	cached, err := strconv.ParseFloat("0.00000005", 64)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	newModels := []modelcontract.CanonicalModel{
+		{ID: "m", Pricing: &modelcontract.Pricing{
+			InputPerMTok:  1.0,
+			OutputPerMTok: 5.0,
+			CachedPerMTok: cached * 1e6,
+		}},
+	}
+	if _, err := addModelsToManifest(manifestPath, "p", newModels); err != nil {
+		t.Fatalf("addModelsToManifest: %v", err)
+	}
+
+	data, _ = os.ReadFile(manifestPath)
+	var m map[string]ProviderManifest
+	json.Unmarshal(data, &m)
+	entry := m["p"].Models[0]
+	if entry.InputPerMTok != 1.0 || entry.OutputPerMTok != 5.0 || entry.CachedPerMTok != 0.05 {
+		t.Errorf("pricing = %v/%v/%v, want 1/5/0.05",
+			entry.InputPerMTok, entry.OutputPerMTok, entry.CachedPerMTok)
 	}
 }
 

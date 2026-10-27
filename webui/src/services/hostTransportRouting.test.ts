@@ -91,12 +91,16 @@ describe('platform clients route through the host transport', () => {
     // a definitive available:false hides the option — a non-boolean answer
     // like this keeps failing open, so the fetch is the assertion target.
     expect(fetchMock.mock.calls[0][0]).toBe(`${HOST_API}/workspace/availability`);
-    // Launch still POSTs the legacy start route (the /workspace/txn move is
-    // the follow-up item).
+    // Launch POSTs the host-agnostic cloud create (host=cloud), not the
+    // legacy /workspace/fly start route.
     await startFullWorkspace('https://github.com/o/r');
     const [url, init] = lastCall();
-    expect(url).toBe(`${HOST_API}/workspace/fly`);
+    expect(url).toBe(`${HOST_API}/workspace/txn`);
     expect(init.method).toBe('POST');
+    expect(JSON.parse(String(init.body))).toEqual({
+      repo_url: 'https://github.com/o/r',
+      host: 'cloud',
+    });
   });
 
   it('without a host the same calls stay same-origin', async () => {

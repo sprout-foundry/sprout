@@ -107,11 +107,7 @@ export async function startFullWorkspace(repoURL: string): Promise<StartFullWork
   // access token. Both open through the same /auth/exchange (the gateway's
   // exchange is the Fly open's), so one navigate covers either.
   const openUrl =
-    typeof data.url === 'string' && data.url
-      ? data.url
-      : typeof data.gateway_url === 'string'
-        ? data.gateway_url
-        : '';
+    typeof data.url === 'string' && data.url ? data.url : typeof data.gateway_url === 'string' ? data.gateway_url : '';
   const token =
     typeof data.session_token === 'string' && data.session_token
       ? data.session_token

@@ -184,9 +184,7 @@ describe('startFullWorkspace', () => {
   });
 
   it('a 503 "not available on this deployment" flips the option to unavailable', async () => {
-    fetchMock.mockResolvedValue(
-      createResponse({ error: 'workspaces are not available on this deployment' }, 503),
-    );
+    fetchMock.mockResolvedValue(createResponse({ error: 'workspaces are not available on this deployment' }, 503));
     const result = await startFullWorkspace('https://github.com/o/r');
     expect(result).toEqual({ kind: 'unavailable' });
     // The availability store learned it: the option is hidden without a probe.

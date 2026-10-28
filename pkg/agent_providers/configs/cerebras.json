@@ -24,6 +24,30 @@
   },
   "models": {
     "default_context_limit": 65536,
+    "model_info": [
+      {
+        "context_length": 131072,
+        "description": "GPT OSS 120B on Cerebras wafer-scale hardware, served at roughly 3000 tokens per second. Supports text input and tool calling.",
+        "id": "gpt-oss-120b",
+        "input_cost": 0.35,
+        "name": "GPT OSS 120B",
+        "output_cost": 0.75,
+        "tags": [
+          "tools"
+        ]
+      },
+      {
+        "context_length": 65536,
+        "description": "Qwen 3.8 27B on Cerebras wafer-scale hardware, served at roughly 1850 tokens per second. Supports text input and tool calling.",
+        "id": "qwen-3.8-27b",
+        "input_cost": 0.99,
+        "name": "Qwen 3.8 27B",
+        "output_cost": 1.49,
+        "tags": [
+          "tools"
+        ]
+      }
+    ],
     "model_overrides": {
       "qwen-3.8-27b": 65536
     },
@@ -45,8 +69,8 @@
     ]
   },
   "cost": {
-    "input_token_cost": 0.0,
-    "output_token_cost": 0.0,
+    "input_token_cost": 0.99,
+    "output_token_cost": 1.49,
     "currency": "USD"
   },
   "display_name": "Cerebras"

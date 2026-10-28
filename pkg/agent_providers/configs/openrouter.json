@@ -6773,7 +6773,7 @@
       {
         "cached_input_cost": 0.0375,
         "context_length": 262144,
-        "description": "Bonsai 2 27B is a 27B-parameter reasoning model from PrismML derived from Qwen3.8-27B. It supports coding, mathematics, tool calling, and image understanding with a 262K-token context window. Ternary compression shrinks...",
+        "description": "Bonsai 2 27B is a 27B-parameter reasoning model from PrismML derived from Qwen3.8-27B. It supports coding, mathematics, tool calling, and image understanding with a 262K-token context window. Ternary compression shrinks the language-model weights to roughly 8.5 GB while retaining 98.2% of the base model's average score across PrismML's thinking-mode benchmarks, and the model thinks by default at xhigh reasoning effort.",
         "id": "prism-ml/ternary-bonsai-2-27b",
         "input_cost": 0.075,
         "name": "PrismML: Ternary Bonsai 2 27B",
@@ -7817,6 +7817,21 @@
         "input_cost": 0.5,
         "name": "OpenAI: GPT-6.1 Terra (batch)",
         "output_cost": 2.5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.04,
+        "context_length": 262144,
+        "description": "Ternary Bonsai 2 9B is PrismML’s compact, open-weight language model for conversational AI, reasoning, and tool use. Built on Qwen3.5, it uses ternary weights packed into 2 bits for efficient inference. It accepts text and image input, and its 262K-token context window supports long conversations and document-heavy workflows with up to 64K output tokens per response.",
+        "id": "prism-ml/ternary-bonsai-2-9b",
+        "input_cost": 0.08,
+        "name": "PrismML: Ternary Bonsai 2 9B",
+        "output_cost": 0.13,
         "tags": [
           "tools",
           "vision",

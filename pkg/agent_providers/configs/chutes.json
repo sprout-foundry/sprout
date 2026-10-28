@@ -150,13 +150,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.045,
+        "cached_input_cost": 0.039,
         "context_length": 262144,
         "description": "Moonshot Kimi K2.6 on confidential TEE compute",
         "id": "moonshotai/Kimi-K2.6-TEE",
-        "input_cost": 0.45,
+        "input_cost": 0.39,
         "name": "Kimi K2.6 (TEE)",
-        "output_cost": 1.95,
+        "output_cost": 1.8,
         "tags": [
           "vision",
           "tools",
@@ -189,13 +189,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.098,
+        "cached_input_cost": 0.09,
         "context_length": 202752,
         "description": "Z.AI GLM-5.1 on confidential TEE compute",
         "id": "zai-org/GLM-5.1-TEE",
-        "input_cost": 0.98,
+        "input_cost": 0.9,
         "name": "GLM-5.1 (TEE)",
-        "output_cost": 3.08,
+        "output_cost": 2.9,
         "tags": [
           "tools",
           "reasoning"

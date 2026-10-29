@@ -815,7 +815,13 @@ describe('the in-browser agent provider config follows the host backend', () => 
     setActiveHost(headlessHost());
   });
 
-  it('points the provider at the daemon API base for a daemon backend', async () => {
+  it("never points the in-browser agent at the daemon's query route", async () => {
+    // A daemon backend runs its own model calls, and the daemon's
+    // `/api/proxy/chat` is a query route, not an OpenAI-shaped base URL — the
+    // agent appends `/chat/completions` to it, which the daemon does not
+    // serve. The in-browser agent should not run at all for this backend (the
+    // bootstrap installs no adapter for it); if the wasm handler is reached
+    // anyway, it must use the platform path.
     const { setActiveHost } = await import('../host/accessor');
     const { headlessHost } = await import('../host/HostProvider');
     setActiveHost({
@@ -837,7 +843,9 @@ describe('the in-browser agent provider config follows the host backend', () => 
 
     handleWasmLocal(shell, '/api/query', 'POST', '/api/query', queryBody);
     const config = written.find((w) => w.path.endsWith('/providers/platform.json'));
-    expect(JSON.parse(config!.content).endpoint).toBe('https://daemon.test/api/proxy/chat');
+    const endpoint = JSON.parse(config!.content).endpoint;
+    expect(endpoint).toBe(`${window.location.origin}/proxy/chat`);
+    expect(endpoint).not.toContain('/api/proxy/chat');
     setActiveHost(headlessHost());
   });
 

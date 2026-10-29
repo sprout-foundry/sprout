@@ -209,18 +209,16 @@ export {
 
 /**
  * The model endpoint the in-browser agent's provider config should point at,
- * given the host's backend choice. The daemon serves the same OpenAI-compatible
- * proxy at `/api/proxy/chat` (its LLM-only surface), so a daemon backend points
- * there; a wasm backend uses the host's model endpoint, which may be relative
- * (resolved in `platformProviderConfig`). Undefined means the host named no
- * endpoint and the caller falls back to the platform path.
+ * given the host's backend choice. Only the in-browser (wasm) backend has one:
+ * its `modelEndpoint` (or the transport's), which may be relative (resolved in
+ * `platformProviderConfig`). A daemon backend runs its own model calls, and the
+ * daemon's `/api/proxy/chat` is its query route, not an OpenAI-shaped base URL,
+ * so it is never used here. Undefined means the host named no endpoint and the
+ * caller falls back to the platform path.
  */
 function hostModelEndpoint(): string | undefined {
-  const agent = getActiveHost()?.transport.agent;
-  if (agent?.kind === 'daemon') {
-    return agent.apiBaseURL ? `${agent.apiBaseURL.replace(/\/+$/, '')}/api/proxy/chat` : undefined;
-  }
   const transport = getActiveHost()?.transport;
+  const agent = transport?.agent;
   const endpoint = (agent?.kind === 'wasm' ? agent.modelEndpoint : undefined) || transport?.modelEndpoint || undefined;
   return endpoint && endpoint.trim() ? endpoint.trim() : undefined;
 }

@@ -70,3 +70,25 @@ describe('fetchChatRunning with the agent in the page', () => {
     expect(agentRunsInPage()).toBe(false);
   });
 });
+
+describe('a daemon backend is authoritative over stale in-page wiring', () => {
+  it('reads the daemon status even while the in-browser wiring still reports ready', () => {
+    // An in-place wasm→daemon swap retires the adapter; the connection state
+    // the in-browser wiring set can outlive it for a tick. The daemon runs the
+    // agent, so its status endpoint is the truth.
+    WebSocketService.getInstance().setLocalAgentState('ready');
+    activeHost.mockReturnValue({
+      transport: {
+        apiBaseURL: 'https://platform.test',
+        wsURL: 'wss://platform.test/ws',
+        authMode: 'bearer',
+        agent: {
+          kind: 'daemon',
+          apiBaseURL: '/workspace/ws-1/proxy',
+          wsURL: 'wss://platform.test/workspace/ws-1/proxy/ws',
+        },
+      },
+    });
+    expect(agentRunsInPage()).toBe(false);
+  });
+});

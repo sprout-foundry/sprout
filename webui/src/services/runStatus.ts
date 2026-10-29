@@ -9,14 +9,22 @@
  */
 
 import { getActiveHost } from '../host/accessor';
+import { hostRunsInBrowserAgent } from '../host/agentBackend';
 import { clientFetch } from './clientSession';
 import { WebSocketService } from './websocket';
 
-/** Whether the agent runs in this page rather than behind the server. */
+/**
+ * Whether the agent runs in this page rather than behind the server.
+ *
+ * A daemon backend is authoritative and wins over everything else, including
+ * a connection state the in-browser wiring left behind during an in-place
+ * swap: the daemon runs the agent, so its status endpoint is the truth.
+ */
 export function agentRunsInPage(): boolean {
+  const host = getActiveHost();
+  if (host?.transport.agent?.kind === 'daemon') return false;
   if (WebSocketService.getInstance().getLocalAgentState() !== 'none') return true;
-  const transport = getActiveHost()?.transport;
-  return transport?.authMode === 'bearer' || transport?.agent?.kind === 'wasm';
+  return hostRunsInBrowserAgent(host);
 }
 
 /**

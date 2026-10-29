@@ -104,9 +104,11 @@ type HostAgentBackend =
 ```
 
 - `{ kind: 'daemon', apiBaseURL, wsURL }` — the agent runs in a daemon
-  reachable through the host. The daemon's URLs drive Sprout's calls (the same
-  `clientFetch` / WebSocket resolution described below), so no extra wiring is
-  needed beyond the transport itself.
+  reachable through the host. The daemon's own `apiBaseURL` / `wsURL` are the
+  backend: they drive Sprout's HTTP calls and the agent event stream (see "How
+  the transport fields are consumed" below), so no extra wiring is needed
+  beyond the transport itself. `''` is the same-origin sentinel for either
+  field.
 - `{ kind: 'wasm', modelEndpoint }` — the agent runs in the browser. Sprout
   installs the cloud adapter from the host, routes the in-browser agent's events
   into the same event bus WebSocket events use, and points the agent's model
@@ -126,8 +128,11 @@ type HostAgentBackend =
   hands the connection state back to the events socket, as a host that names
   no backend has it.
 
-When the in-browser agent runs against a daemon backend, its model calls go to
-the daemon's own model proxy (`<apiBaseURL>/api/proxy/chat`).
+When the in-browser agent runs against a wasm backend, its model calls go to
+`agent.modelEndpoint` (else `transport.modelEndpoint`, else the platform's own
+proxy path). A daemon backend has no in-browser model endpoint: the daemon
+makes its own model calls, and its `/api/proxy/chat` is a query route, not an
+OpenAI-shaped base URL.
 
 A host that mounts a workspace through `SproutWorkspace` gets this wiring for
 free: in own mode the composition honours `transport.agent` (a daemon backend is
@@ -138,10 +143,10 @@ A host that composes its own provider stack (ambient mode) owns the wiring.
 available. The supported switch is **in place**: the host re-reads its
 `transport` and passes the updated `host` (the new `transport.agent`) to the
 already-mounted `SproutWorkspace`. The composition re-runs its wiring against
-the new backend without a re-mount — it retires the in-browser adapter its
-wasm wiring installed (so the daemon's transport URLs drive the calls again,
-and a stale late-arriving wasm install cannot re-install it), reconnects the
-event stream to the new transport's socket, and leaves the chat and editor
+the new backend without a re-mount — it retires the in-browser adapter (so the
+daemon backend's URLs drive the calls again, and a late-arriving bootstrap or
+wasm install cannot re-install it), reconnects the event stream to the new
+backend's socket, and leaves the chat and editor
 state untouched (the units keep their state; the session list reloads once
 the stream is connected). An adapter the host installed itself (an ambient
 caller) is never retired by the composition — only the adapter its own wasm
@@ -155,16 +160,19 @@ workspace in its own provider stack (`SproutWorkspace` with the default
 module-level services while it is mounted, and restores the previous host on
 unmount. The non-React services then resolve their URLs against it:
 
-- `clientFetch` prefixes a **relative** API path with `transport.apiBaseURL`
-  when it is non-empty. Precedence, most specific first: an installed
-  adapter (which handles the request itself), then `transport.apiBaseURL`,
-  then the SSH proxy base (`window.SPROUT_PROXY_BASE`), then same-origin (no
-  prefix). An absolute URL is never prefixed, and `''` is the same-origin
-  sentinel that falls through to the proxy base.
+- `clientFetch` prefixes a **relative** API path with the active backend's
+  base: a daemon backend's own `apiBaseURL` when the host named one, else
+  `transport.apiBaseURL`. Precedence, most specific first: an installed
+  adapter (which handles the request itself), then that base, then the SSH
+  proxy base (`window.SPROUT_PROXY_BASE`), then same-origin (no prefix). An
+  absolute URL is never prefixed, and `''` is the same-origin sentinel that
+  falls through to the proxy base. A host's own chat-session store
+  (`capabilities.chatSessions`) is pinned to the host's base, not the daemon's.
 - The WebSocket URL resolves, most specific first: the build-time
-  `VITE_WS_URL`, then `transport.wsURL`, then the installed adapter's URL,
-  then the same-origin `/ws` path (through the proxy base when set). `''`
-  falls through.
+  `VITE_WS_URL`, then the active backend's socket (a daemon backend's own
+  `wsURL` when the host named one, else `transport.wsURL`), then the installed
+  adapter's URL, then the same-origin `/ws` path (through the proxy base when
+  set). `''` falls through.
 
 In `providers="ambient"` mode the caller has already registered its host and
 owns the transport, so the composition neither registers nor connects — see
@@ -788,8 +796,9 @@ go to the **page origin**, not `apiBaseURL`: `GET /api/bootstrap` (startup
 config; defaults on failure), `GET /api/query/status` (only while no client id
 is cached), `POST /api/subagent/{id}/cancel` (stopping a subagent run) and the
 session export (`/api/sessions/{id}/export`, under `capabilities.export`). The
-events WebSocket goes to `transport.wsURL` (else the page's `/ws`), and the
-in-browser agent's model calls go to `agent.modelEndpoint` (else
+events WebSocket goes to the active backend's socket (a daemon backend's
+`wsURL`, else `transport.wsURL`, else the page's `/ws`), and the in-browser
+agent's model calls go to `agent.modelEndpoint` (else
 `transport.modelEndpoint`, else the page origin's `/proxy/chat`; a relative
 endpoint resolves against `apiBaseURL`). When a
 startup repository is set and there is no git proxy or the browser clone

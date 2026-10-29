@@ -24,17 +24,16 @@
  * wasm-local handlers when they write the provider config, so it is not
  * threaded here.
  *
- * The daemon backend needs none of that wiring here: the host's transport URLs
- * already drive `clientFetch` and the WebSocket URL (the composition registers
- * the host for the module-level services), so the agent is reached through the
- * ordinary transport.
+ * The daemon backend needs none of that wiring here: its own `apiBaseURL` /
+ * `wsURL` drive `clientFetch` and the WebSocket URL (see `host/agentBackend`),
+ * so the agent is reached through the transport.
  *
  * A host may switch backends when a daemon becomes available, in place: the
  * composition re-runs its wiring on the new transport (a new `host` with a
  * different `agent`), and this module re-wires the backend against it —
  * retiring the in-browser adapter (the cloud adapter the composition's wasm
- * wiring or the page's bootstrap installed, so the daemon's transport URLs
- * drive the calls again) and handing the connection state back to the events
+ * wiring or the page's bootstrap installed, so the daemon backend's URLs drive
+ * the calls again) and handing the connection state back to the events
  * socket. Re-mounting the workspace with a new transport also works and is
  * equivalent. An adapter of any other kind (one the host installed itself) is
  * never retired — the host owns it — and a superseded async wasm install (a
@@ -52,8 +51,9 @@
 import type { WsEvent } from '@sprout/events';
 import { getBootstrapConfig } from '../bootstrapAdapter';
 import type { SproutHost } from '../host';
-import { getAdapter, installAdapter, uninstallAdapter } from '../services/apiAdapter';
+import { installAdapter } from '../services/apiAdapter';
 import type { CloudAdapter } from '../services/cloudAdapter';
+import { retireInBrowserAdapter } from '../services/inBrowserAdapter';
 import { claimHostProjectRepo, importStartupRepo, releaseHostProjectRepo } from '../services/startupRepoImport';
 import { WebSocketService } from '../services/websocket';
 
@@ -63,29 +63,6 @@ import { WebSocketService } from '../services/websocket';
  * must not touch the shared state the newer wire already set.
  */
 let wireGeneration = 0;
-
-/**
- * Retire the in-browser adapter so a switched-to daemon's transport URLs drive
- * the calls again.
- *
- * The in-browser adapter is recognised by its type (the cloud adapter), not by
- * an ownership slot: the composition's own wasm wiring and the page's
- * bootstrap host-change hook can each install one (and the bootstrap's can win
- * the race), so either may be the live singleton at the switch — both must
- * go. An adapter the host installed itself (an ambient caller's non-cloud
- * adapter) is not of that type and is left in place — the host owns it.
- */
-async function retireInBrowserAdapter(): Promise<void> {
-  const installed = getAdapter();
-  if (installed === null) return;
-  const { CloudAdapter: CloudAdapterImpl } = await import('../services/cloudAdapter');
-  // Re-read after the import yields: the bootstrap hook may have installed
-  // while this retire was waiting to import the adapter module.
-  const live = getAdapter();
-  if (live !== null && live instanceof CloudAdapterImpl) {
-    uninstallAdapter(live);
-  }
-}
 
 /**
  * Build (do not install) the cloud adapter for a host's wasm backend, with the
@@ -128,11 +105,10 @@ async function installAgentEventDispatcher(): Promise<void> {
 
 /**
  * Wire the host's agent backend. A no-op for a host that named no backend or
- * named the daemon (the transport URLs already drive the calls, and the events
+ * named the daemon (the daemon's own URLs drive the calls, and the events
  * socket's state is the connection state) — except it retires the in-browser
- * adapter this wiring installed, so a host that switches backends in place
- * (a new `host` with a new `agent` on the mounted workspace) hands its calls
- * back to the daemon's transport.
+ * adapter, so a host that switches backends in place (a new `host` with a new
+ * `agent` on the mounted workspace) hands its calls back to the daemon.
  *
  * For the wasm backend the agent is reachable once the adapter and the event
  * dispatcher are installed, not when an events socket opens (a host may serve
@@ -152,10 +128,10 @@ export async function wireHostAgentBackend(host: SproutHost, repoUrl: string | u
   const generation = ++wireGeneration;
   const events = WebSocketService.getInstance();
   if (host.transport.agent?.kind !== 'wasm') {
-    // The daemon (or no backend) reaches the agent through the transport
-    // URLs, so an in-browser adapter (the composition's wasm wiring or the
-    // page's bootstrap installed it) must go; an adapter of another kind is
-    // the host's own and stays. The retire is async (it imports the adapter
+    // The daemon (or no backend) reaches the agent through its own URLs, so
+    // an in-browser adapter (the composition's wasm wiring or the page's
+    // bootstrap installed it) must go; an adapter of another kind is the
+    // host's own and stays. The retire is async (it imports the adapter
     // module for the type check), so the reset follows it; a newer wire's
     // own state would override this one.
     await retireInBrowserAdapter();

@@ -1,6 +1,7 @@
 import type { WsEvent } from '@sprout/events';
 import { capability } from '../config/mode';
 import { getActiveHost } from '../host/accessor';
+import { backendURLs } from '../host/agentBackend';
 import { debugLog } from '../utils/log';
 import { getAdapter } from './apiAdapter';
 import { appendClientIdToUrl, getProxyBase } from './clientSession';
@@ -211,13 +212,13 @@ class WebSocketService {
     }
 
     // Resolve the WebSocket URL, most specific first: an explicit build-time
-    // VITE_WS_URL, then the active host's transport.wsURL (a host embedding
-    // the workspace points Sprout at its own event stream), then the installed
-    // adapter's URL, then the same-origin /ws path — through the SSH proxy base
-    // when the page is served behind the local reverse proxy.
+    // VITE_WS_URL, then the active backend's socket (a daemon backend's own
+    // `wsURL` when the host named one, else the host transport's), then the
+    // installed adapter's URL, then the same-origin /ws path — through the SSH
+    // proxy base when the page is served behind the local reverse proxy.
     const adapter = getAdapter();
     const adapterWsUrl = adapter?.getWebSocketURL();
-    const hostWsUrl = getActiveHost()?.transport.wsURL || '';
+    const hostWsUrl = backendURLs(getActiveHost()).wsURL || '';
     let wsUrl =
       import.meta.env.VITE_WS_URL ||
       hostWsUrl ||

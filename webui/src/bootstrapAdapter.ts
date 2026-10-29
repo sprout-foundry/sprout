@@ -11,8 +11,10 @@
  */
 
 import { getActiveHost, registerHostChangeHook } from './host/accessor';
+import { hostRunsInBrowserAgent } from './host/agentBackend';
+import { retireInBrowserAdapter } from './services/inBrowserAdapter';
 import { importStartupRepo } from './services/startupRepoImport';
-import { installAdapter } from './services/apiAdapter';
+import { getAdapter, installAdapter } from './services/apiAdapter';
 import type { PlatformNavItem } from './services/apiAdapter';
 import type { GitSyncReport, RuntimeConfig } from './types/runtimeConfig';
 
@@ -350,8 +352,16 @@ export function getBootstrapConfig(): RuntimeConfig {
 }
 
 /**
- * Install the appropriate adapter based on the ACTIVE HOST, not the resolved
- * config's mode (host.8 removed appMode).
+ * Install the adapter the ACTIVE HOST's agent backend calls for.
+ *
+ * A host that runs the agent in the browser needs the in-browser adapter (the
+ * browser-local file ops and the in-browser agent query live there). A host
+ * whose backend is a daemon must never have it installed: the daemon serves
+ * the API and runs the agent, and an in-browser adapter left over from an
+ * earlier wasm phase answers `/api/query` itself and leaves the turn silent.
+ * The check therefore runs both before and after the async adapter import: the
+ * platform swaps a running workspace's daemon backend in place, so the install
+ * can start under the wasm backend and land under the daemon.
  *
  * Cloud-adapter-only rule (Trust-Boundary Principle, see root AGENTS.md):
  * platform-auth behaviors (401 → /login?return_to=) live inside the
@@ -360,8 +370,9 @@ export function getBootstrapConfig(): RuntimeConfig {
  * local-mode build entirely.
  *
  * The hosted build's host authenticates against a platform
- * (cloudHost.transport.authMode === 'bearer'); the local host is 'none'. This
- * is exactly the split the former `config.appMode === 'cloud'` branch made.
+ * (cloudHost.transport.authMode === 'bearer'); the local host is 'none'. An
+ * explicit wasm backend installs even without the bearer transport (an
+ * embedding host's transport URLs are authoritative there).
  */
 async function installAdapterForConfig(config: RuntimeConfig): Promise<void> {
   // The host's transport carries the resolved platform base as data, so the
@@ -370,48 +381,61 @@ async function installAdapterForConfig(config: RuntimeConfig): Promise<void> {
   // module's auto-run) so the value lands on the live host.
   recordHostPlatformURL(config.platformURL);
   const host = getActiveHost();
-  // The host's explicit agent backend decides whether the in-browser agent is
-  // installed: a host that selected the wasm backend runs the agent in the
-  // browser, so the CloudAdapter (which serves the browser-local file ops and
-  // the wasm-local agent query) must be installed even when the transport is
-  // not the hosted platform's bearer transport. Absent an explicit backend, the
-  // hosted-build test stays exactly what it was (authMode === 'bearer').
-  const wasmAgent = host?.transport.agent?.kind === 'wasm';
-  if (host?.transport.authMode === 'bearer' || wasmAgent) {
-    const { CloudAdapter } = await import('./services/cloudAdapter');
-    // A wasm host that is not the platform's bearer transport is an embedding
-    // host: its transport URLs are authoritative (as in the composition's own
-    // install, views/hostAgentBackend.ts), and the bootstrap's URLs belong to
-    // the server the page came from. Both installs then route the same way,
-    // whichever of them lands last.
-    const hostURLs = wasmAgent && host?.transport.authMode !== 'bearer';
-    // eslint-disable-next-line no-console
-    const adapter = new CloudAdapter({
-      apiBase: hostURLs ? host.transport.apiBaseURL : config.apiBaseURL,
-      wsUrl: hostURLs ? host.transport.wsURL : config.wsURL,
-      navItems: config.navItems ?? getActiveHost()?.navigation.navItems ?? [],
-      egressProxy: config.egressProxy,
-      // A host that mounts a workspace already knows the project, so its repo
-      // comes from the host (the project's repoUrl) rather than the `?repo=`
-      // URL parameter. Absent a host-named repo, the adapter falls back to the
-      // query parameter (the hosted build's shareable deep link).
-      repoUrl: config.repoUrl,
-    });
-    installAdapter(adapter);
+  if (!host || !hostRunsInBrowserAgent(host)) {
+    // A daemon backend owns the calls through its own URLs. An adapter this
+    // module installed before the swap must go, whichever order the bootstrap
+    // and the swap ran in.
+    await retireInBrowserAdapter();
+    return;
+  }
+  // The adapter the page had before this install started. A mounted
+  // workspace's own backend wiring installs one for the same host (with the
+  // project's repo and git author), and its install can land while this one is
+  // waiting for the module. Whichever lands second must not replace the other:
+  // an adapter that appeared in between is the one the host's backend called
+  // for, so this install defers to it.
+  const installedBefore = getAdapter();
+  const { CloudAdapter } = await import('./services/cloudAdapter');
+  // Re-read after the import yields: the platform may have swapped the agent
+  // backend in place while it was in flight. The adapter follows the host at
+  // the moment it lands, so a stale continuation cannot re-install it over the
+  // daemon's backend.
+  const current = getActiveHost();
+  if (!current || !hostRunsInBrowserAgent(current)) {
+    await retireInBrowserAdapter();
+    return;
+  }
+  if (getAdapter() !== installedBefore) return;
+  // A wasm host that is not the platform's bearer transport is an embedding
+  // host: its transport URLs are authoritative (as in the composition's own
+  // install, views/hostAgentBackend.ts), and the bootstrap's URLs belong to
+  // the server the page came from. Both installs then route the same way,
+  // whichever of them lands last.
+  const hostURLs = current.transport.agent?.kind === 'wasm' && current.transport.authMode !== 'bearer';
+  // eslint-disable-next-line no-console
+  const adapter = new CloudAdapter({
+    apiBase: hostURLs ? current.transport.apiBaseURL : config.apiBaseURL,
+    wsUrl: hostURLs ? current.transport.wsURL : config.wsURL,
+    navItems: config.navItems ?? current.navigation.navItems ?? [],
+    egressProxy: config.egressProxy,
+    // A host that mounts a workspace already knows the project, so its repo
+    // comes from the host (the project's repoUrl) rather than the `?repo=`
+    // URL parameter. Absent a host-named repo, the adapter falls back to the
+    // query parameter (the hosted build's shareable deep link).
+    repoUrl: config.repoUrl,
+  });
+  installAdapter(adapter);
 
-    // Auto-import repo from the bootstrap's repo (or the ?repo= query param)
-    // if present. restoreRepo checks the IndexedDB import cache first (the
-    // file tree lives in the in-memory WASM VFS, so without the cache a reload
-    // loses the workspace) and only falls back to the server-side clone on a
-    // cache miss. The ?repo= param stays in the URL: it is a shareable deep
-    // link, and refreshes are served from the cache. A mounted workspace whose
-    // host names a project repo imports that one instead (startupRepoImport).
-    const repoParam = adapter.getStartupRepo();
-    if (repoParam) {
-      void importStartupRepo(adapter, repoParam, 'bootstrap');
-    }
-  } else {
-    // eslint-disable-next-line no-console
+  // Auto-import repo from the bootstrap's repo (or the ?repo= query param)
+  // if present. restoreRepo checks the IndexedDB import cache first (the
+  // file tree lives in the in-memory WASM VFS, so without the cache a reload
+  // loses the workspace) and only falls back to the server-side clone on a
+  // cache miss. The ?repo= param stays in the URL: it is a shareable deep
+  // link, and refreshes are served from the cache. A mounted workspace whose
+  // host names a project repo imports that one instead (startupRepoImport).
+  const repoParam = adapter.getStartupRepo();
+  if (repoParam) {
+    void importStartupRepo(adapter, repoParam, 'bootstrap');
   }
 }
 

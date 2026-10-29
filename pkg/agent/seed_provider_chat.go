@@ -256,7 +256,7 @@ func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatReques
 		if contentType == "reasoning" {
 			reasoningGuard.Write(content)
 			if reasoningGuard.Looping() {
-				sp.steerReasoningLoop()
+				sp.steerReasoningLoop(reasoningGuard.LoopEvidence())
 			}
 			sp.agent.output.GetReasoningBuffer().WriteString(content)
 			if router := sp.agent.OutputRouter(); router != nil {
@@ -288,7 +288,7 @@ func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatReques
 	recoveryAttemptFn := func(attemptCtx context.Context, msgs []api.Message, cb api.StreamCallback) (*api.ChatResponse, error) {
 		return sp.currentClient().SendChatRequestStream(attemptCtx, msgs, sproutReq.Tools, recoveryReasoning, disableThinking, cb)
 	}
-	resp, err := sp.streamWithRepetitionGuard(ctx, messages, callback, holdback, guard, attemptFn, recoveryAttemptFn)
+	resp, err := sp.streamWithRepetitionGuard(ctx, messages, callback, holdback, guard, reasoningGuard, attemptFn, recoveryAttemptFn)
 	if err != nil {
 		return nil, err
 	}

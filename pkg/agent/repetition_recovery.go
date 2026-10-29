@@ -42,24 +42,37 @@ import (
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
-// collapseDegenerateRunsToSingle collapses each degenerate line run in text
-// to a SINGLE surviving copy (the first occurrence). It is the recovery
-// de-loop: unlike collapseDegenerateLineRuns (which keeps MinRepetitions-1
-// copies, a conservative live-scrub amount), a recovery re-seed must remove
-// the self-reinforcing attractor, so it strips the run down to one copy.
+// collapseDegenerateRunsToSingle collapses the degenerate text in a recovery
+// re-seed: each run of identical short lines to a SINGLE surviving copy (the
+// first occurrence), and each degenerate cycling window to its distinct
+// phrases. It is the recovery de-loop: unlike collapseDegenerateLineRuns
+// (which keeps MinRepetitions-1 copies, a conservative live-scrub amount), a
+// recovery re-seed must remove the self-reinforcing attractor, so it strips
+// the repetition down to one copy.
 //
 // A run only collapses when it reaches the guard's MinRepetitions threshold
 // (the same trigger that flags a degenerate run, so legitimate lists below
 // the threshold are left intact). Runs below the threshold pass through
 // verbatim. Long, blank, and neutral lines end the current run, as in
-// collapseDegenerateLineRuns. Returns the collapsed text and the number of
-// lines removed.
+// collapseDegenerateLineRuns; fenced code blocks are skipped, as the guard
+// skips them. Returns the collapsed text and the number of lines removed.
 //
 // To keep exactly one copy of a confirmed run, the run's non-first copies are
 // buffered (bounded by MinRepetitions-2) and flushed only if the run turns out
 // to be legitimate; once the run reaches the threshold the buffer is
 // discarded and every later copy is dropped.
 func collapseDegenerateRunsToSingle(text string, cfg RepetitionGuardConfig) (string, int) {
+	collapsed, removed := collapseIdenticalRunsToSingle(text, cfg)
+	cycled, cycledRemoved := collapseCyclingLines(collapsed, cfg)
+	if cycledRemoved == 0 {
+		return collapsed, removed
+	}
+	return cycled, removed + cycledRemoved
+}
+
+// collapseIdenticalRunsToSingle collapses each run of identical short lines to
+// a SINGLE surviving copy (the first occurrence).
+func collapseIdenticalRunsToSingle(text string, cfg RepetitionGuardConfig) (string, int) {
 	lines := strings.SplitAfter(text, "\n")
 	if len(lines) < 2 {
 		return text, 0
@@ -70,6 +83,8 @@ func collapseDegenerateRunsToSingle(text string, cfg RepetitionGuardConfig) (str
 	removed := 0
 	runLine := ""
 	runCount := 0
+	inFence := false
+	fence := ""
 	// pending holds the current run's non-first copies, buffered so they can be
 	// flushed (legitimate run) or discarded (degenerate run) only once the
 	// run's fate is known. Bounded: a run stops buffering the moment it
@@ -83,6 +98,21 @@ func collapseDegenerateRunsToSingle(text string, cfg RepetitionGuardConfig) (str
 	}
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
+		if marker, ok := fenceMarker(trimmed); ok {
+			if !inFence {
+				inFence, fence = true, marker
+			} else if marker == fence {
+				inFence, fence = false, ""
+			}
+			flushPending()
+			runLine, runCount = "", 0
+			b.WriteString(line)
+			continue
+		}
+		if inFence {
+			b.WriteString(line)
+			continue
+		}
 		normalized := normalizeLoopLine(trimmed)
 		if trimmed == "" || len([]rune(trimmed)) > cfg.MaxLineChars || normalized == "" {
 			// Blank and long lines are neutral: end the current run, flushing

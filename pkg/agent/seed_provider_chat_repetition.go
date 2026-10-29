@@ -22,6 +22,18 @@ import (
 // as a normal turn error.
 var errStreamRepetitionLoop = errors.New("streamed reply degenerated into a repetition loop")
 
+// errStreamReasoningLoop is the sentinel for a reasoning-channel loop that
+// kept streaming past the grace budget and was cut. It takes the same
+// retry-once-then-recover path as the visible sentinel; it is distinct so the
+// cut is logged and counted as the reasoning loop it is (the detection itself
+// was already recorded when the guard first flagged).
+var errStreamReasoningLoop = errors.New("streamed reasoning degenerated into a repetition loop")
+
+// isRepetitionCut reports whether an attempt ended because the guard cut it.
+func isRepetitionCut(err error) bool {
+	return errors.Is(err, errStreamRepetitionLoop) || errors.Is(err, errStreamReasoningLoop)
+}
+
 // repetitionNudge is the short system message appended for the single retry.
 // It tells the model, in one line, what went wrong — act or answer — without
 // re-explaining the task.
@@ -57,11 +69,33 @@ func (sp *sproutProvider) noteRepetitionLoop() {
 		provider, model)
 }
 
+// noteCutLoop records the first cut of an attempt. A visible loop is counted
+// and logged by noteRepetitionLoop; a reasoning loop was already counted when
+// the guard first flagged (noteReasoningLoop), so only the cut is logged here.
+func (sp *sproutProvider) noteCutLoop(err error) {
+	if errors.Is(err, errStreamReasoningLoop) {
+		if sp.agent == nil {
+			return
+		}
+		provider, model := sp.repetitionIdentity()
+		sp.agent.Logger().Info(
+			"[repetition] reasoning loop for %s/%s kept streaming past the grace budget; cutting the attempt and retrying once with a nudge\n",
+			provider, model)
+		return
+	}
+	sp.noteRepetitionLoop()
+}
+
 // repetitionAttempt runs one streamed attempt under the guard: it creates a
 // cancelable child context so the guard can stop the stream the moment a
 // degenerate run is confirmed, and it returns the sentinel when the guard (not
 // the transport) ended the attempt. The hold-back and the guard are reset at
 // the start of each attempt so a cut attempt leaves no state behind.
+//
+// reasoning (nil when the reasoning guard is inactive) bounds the
+// steer-don't-cut case: a confirmed reasoning loop keeps streaming while the
+// model may still break out and act, but once it has produced
+// reasoningLoopGraceBytes more it is cut like a visible loop.
 //
 // attemptFn is the caller's transport layer: the ChatStream entry passes its
 // retry/backoff layer (doChatWithRetryStreaming), while the buffer-only path
@@ -73,6 +107,7 @@ func (sp *sproutProvider) repetitionAttempt(
 	callback api.StreamCallback,
 	holdback *StreamHoldback,
 	guard *RepetitionGuard,
+	reasoning *RepetitionGuard,
 	attemptFn func(ctx context.Context, messages []api.Message, callback api.StreamCallback) (*api.ChatResponse, error),
 ) (*api.ChatResponse, error) {
 	if holdback != nil {
@@ -81,14 +116,30 @@ func (sp *sproutProvider) repetitionAttempt(
 	if guard != nil {
 		guard.Reset()
 	}
+	if reasoning != nil {
+		// A retry replays the stream from the start: the reasoning guard must
+		// start clean or the cut it already latched would fire on its first
+		// chunk and cut the retry before it can act.
+		reasoning.Reset()
+	}
 	attemptCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	// Wrap the callback so a confirmed loop cancels the in-flight stream: the
 	// provider's SSE reader returns promptly on the canceled context, and the
-	// degenerate copies the guard held back are dropped.
+	// degenerate copies the guard held back are dropped. The cut is latched
+	// here rather than re-derived from guard state after the attempt, so a
+	// transport retry that resets the guard mid-attempt cannot turn a cut into
+	// a successful short response.
+	cutVisible, cutReasoning := false, false
 	wrapped := func(content string, contentType string) {
 		callback(content, contentType)
 		if guard != nil && guard.Looping() {
+			cutVisible = true
+			cancel()
+			return
+		}
+		if reasoning != nil && reasoning.cutReasoning() {
+			cutReasoning = true
 			cancel()
 		}
 	}
@@ -106,8 +157,11 @@ func (sp *sproutProvider) repetitionAttempt(
 		}
 		return resp, err
 	}
-	if guard != nil && guard.Looping() {
+	if cutVisible || (guard != nil && guard.Looping()) {
 		return nil, errStreamRepetitionLoop
+	}
+	if cutReasoning || (reasoning != nil && reasoning.cutReasoning()) {
+		return nil, errStreamReasoningLoop
 	}
 	return resp, err
 }
@@ -132,6 +186,11 @@ func (sp *sproutProvider) repetitionAttempt(
 // When the guard is disabled (or the loop is not detected) the behavior is
 // the existing streaming request, byte-for-byte.
 //
+// reasoning (nil when the reasoning-channel guard is inactive) is the
+// steer-don't-cut channel: a loop there is scrubbed and nudged for the next
+// request, and only cut (taking this same retry-once-then-recover path) when
+// it keeps streaming past the grace budget.
+//
 // attemptFn is the caller's transport layer for the normal and nudge-retry
 // attempts (see repetitionAttempt). recoveryAttemptFn is the transport for
 // the recovery FINAL attempt — typically the same plumbing with a capped
@@ -152,11 +211,12 @@ func (sp *sproutProvider) streamWithRepetitionGuard(
 	callback api.StreamCallback,
 	holdback *StreamHoldback,
 	guard *RepetitionGuard,
+	reasoning *RepetitionGuard,
 	attemptFn func(ctx context.Context, messages []api.Message, callback api.StreamCallback) (*api.ChatResponse, error),
 	recoveryAttemptFn func(ctx context.Context, messages []api.Message, callback api.StreamCallback) (*api.ChatResponse, error),
 ) (*api.ChatResponse, error) {
 	attempt := func(msgs []api.Message) (*api.ChatResponse, error) {
-		return sp.repetitionAttempt(ctx, msgs, callback, holdback, guard, attemptFn)
+		return sp.repetitionAttempt(ctx, msgs, callback, holdback, guard, reasoning, attemptFn)
 	}
 	// The recovery final attempt uses its own transport when one was supplied
 	// (typically a capped-effort variant); otherwise it reuses the normal
@@ -166,11 +226,11 @@ func (sp *sproutProvider) streamWithRepetitionGuard(
 		recoverTransport = attemptFn
 	}
 	recover := func(msgs []api.Message) (*api.ChatResponse, error) {
-		return sp.repetitionAttempt(ctx, msgs, callback, holdback, guard, recoverTransport)
+		return sp.repetitionAttempt(ctx, msgs, callback, holdback, guard, reasoning, recoverTransport)
 	}
 
 	resp, err := attempt(messages)
-	if !errors.Is(err, errStreamRepetitionLoop) {
+	if !isRepetitionCut(err) {
 		// The attempt finished without a loop: flush the guard's trailing
 		// partial line so the whole reply reaches the hold-back / client sink.
 		if guard != nil {
@@ -181,12 +241,12 @@ func (sp *sproutProvider) streamWithRepetitionGuard(
 
 	// First detection: record it, log one line, and retry once with the
 	// nudge appended as a system message.
-	sp.noteRepetitionLoop()
+	sp.noteCutLoop(err)
 	retryMessages := append(append([]api.Message(nil), messages...),
 		api.Message{Role: "system", Content: repetitionNudge})
 
 	resp, err = attempt(retryMessages)
-	if !errors.Is(err, errStreamRepetitionLoop) {
+	if !isRepetitionCut(err) {
 		if guard != nil {
 			guard.Finish()
 		}
@@ -205,7 +265,7 @@ func (sp *sproutProvider) streamWithRepetitionGuard(
 				"[repetition] second loop for %s/%s; recovery compaction (%s) and final attempt\n",
 				provider, model, detail)
 			resp, err = recover(finalMessages)
-			if !errors.Is(err, errStreamRepetitionLoop) {
+			if !isRepetitionCut(err) {
 				if guard != nil {
 					guard.Finish()
 				}

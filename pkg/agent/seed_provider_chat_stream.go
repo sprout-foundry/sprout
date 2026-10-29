@@ -184,7 +184,7 @@ func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest,
 		if contentType == "reasoning" {
 			reasoningGuard.Write(content)
 			if reasoningGuard.Looping() {
-				sp.steerReasoningLoop()
+				sp.steerReasoningLoop(reasoningGuard.LoopEvidence())
 			}
 			handler.OnReasoning(content)
 			sp.agent.output.GetReasoningBuffer().WriteString(content) //nolint:gosec // G104: bytes.Buffer writes cannot fail
@@ -208,11 +208,10 @@ func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest,
 		reasoning = sproutReq.Reasoning
 	}
 	attemptFn := func(attemptCtx context.Context, msgs []api.Message, cb api.StreamCallback) (*api.ChatResponse, error) {
-		// A transport retry replays the stream from the start, so the
-		// reasoning guard starts clean too — a latched loop from the
-		// discarded attempt must not steer the retry from its first chunk.
-		reasoningGuard.Reset()
-		return sp.doChatWithRetryStreaming(attemptCtx, msgs, sproutReq.Tools, reasoning, disableThinking, cb, holdback, guard)
+		// The reasoning guard is reset by repetitionAttempt (per attempt) and
+		// by doChatWithRetryStreaming (per transport retry), so a latched loop
+		// from a discarded attempt never steers the replay.
+		return sp.doChatWithRetryStreaming(attemptCtx, msgs, sproutReq.Tools, reasoning, disableThinking, cb, holdback, guard, reasoningGuard)
 	}
 	// The recovery FINAL attempt runs at a capped reasoning effort: the
 	// degeneration is effort-dose dependent (higher effort forms more loops
@@ -222,10 +221,9 @@ func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest,
 	// more likely to land. Same transport plumbing, capped reasoning only.
 	recoveryReasoning := cappedRecoveryReasoning(reasoning)
 	recoveryAttemptFn := func(attemptCtx context.Context, msgs []api.Message, cb api.StreamCallback) (*api.ChatResponse, error) {
-		reasoningGuard.Reset()
-		return sp.doChatWithRetryStreaming(attemptCtx, msgs, sproutReq.Tools, recoveryReasoning, disableThinking, cb, holdback, guard)
+		return sp.doChatWithRetryStreaming(attemptCtx, msgs, sproutReq.Tools, recoveryReasoning, disableThinking, cb, holdback, guard, reasoningGuard)
 	}
-	resp, err := sp.streamWithRepetitionGuard(ctx, messages, callback, holdback, guard, attemptFn, recoveryAttemptFn)
+	resp, err := sp.streamWithRepetitionGuard(ctx, messages, callback, holdback, guard, reasoningGuard, attemptFn, recoveryAttemptFn)
 	sp.fireSteerFlushHook()
 	if err != nil {
 		handler.OnError(err)
@@ -258,8 +256,10 @@ func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest,
 // caller finalizes it (finalizeStreamHoldback) after a successful attempt.
 // guard (nil when the repetition guard is inactive) is reset alongside it, so a
 // transport retry's replayed chunks never accumulate into a false repetition
-// run.
-func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, callback api.StreamCallback, holdback *StreamHoldback, guard *RepetitionGuard) (*api.ChatResponse, error) {
+// run. reasoning (nil when the reasoning guard is inactive) is reset for the
+// same reason, and its grace-budget cut is recognized here so it is not
+// mistaken for a provider failure and retried as one.
+func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, callback api.StreamCallback, holdback *StreamHoldback, guard *RepetitionGuard, reasoningGuard *RepetitionGuard) (*api.ChatResponse, error) {
 	const maxRetries = 3
 	var lastErr error
 
@@ -283,6 +283,12 @@ func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages
 		if guard != nil {
 			guard.Reset()
 		}
+		if reasoningGuard != nil {
+			// A transport retry replays the stream from the start: a guard
+			// left latched from the discarded attempt would flag (or cut) on
+			// the replayed chunks.
+			reasoningGuard.Reset()
+		}
 
 		resp, err := sp.currentClient().SendChatRequestStream(ctx, messages, tools, reasoning, disableThinking, callback)
 		if err == nil {
@@ -300,7 +306,7 @@ func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages
 		// degenerate stream is not a provider failure: skip the error record
 		// and retry event and surface the cancellation unchanged. A genuine
 		// user cancellation still records/publishes as before.
-		if guard != nil && guard.Looping() && ctx.Err() != nil {
+		if ctx.Err() != nil && ((guard != nil && guard.Looping()) || (reasoningGuard != nil && reasoningGuard.cutReasoning())) {
 			return nil, ctx.Err()
 		}
 

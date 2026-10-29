@@ -99,6 +99,19 @@ func (c *ScriptedClient) SendChatRequestStream(ctx context.Context, messages []a
 		totalTokens := 0
 		startTime := time.Now()
 
+		for _, chunk := range streamConfig.ReasoningChunks {
+			select {
+			case <-ctx.Done():
+				c.advanceIndex(resp)
+				return nil, ctx.Err()
+			case <-c.ctx.Done():
+				c.advanceIndex(resp)
+				return nil, c.ctx.Err()
+			default:
+			}
+			callback(chunk, "reasoning")
+		}
+
 		for i, chunk := range streamConfig.Chunks {
 			select {
 			case <-ctx.Done():

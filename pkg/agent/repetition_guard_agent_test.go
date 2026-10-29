@@ -527,3 +527,100 @@ func TestRepetitionAgentToolCallAfterSomeRepetitionKept(t *testing.T) {
 		t.Errorf("state does not carry the final answer: %q", lastMsg.Content)
 	}
 }
+
+// TestReasoningGuardCutsUnboundedLoopAndRetries pins the bound on a reasoning
+// loop that never breaks out. Steering alone cannot stop the response in
+// flight, so a model that keeps cycling its thinking phrases streams until its
+// output limit — minutes of wall clock and a huge replayed prefix. Once the
+// loop passes the grace budget the attempt is cut and retried once with the
+// nudge, exactly like a visible loop, and the turn completes on the retry.
+func TestReasoningGuardCutsUnboundedLoopAndRetries(t *testing.T) {
+	metrics := NewRepetitionMetrics()
+	cleanupMetrics := SetGlobalRepetitionMetricsForTest(metrics)
+	defer cleanupMetrics()
+
+	// A cycling loop: no line repeats past the run threshold, so only the
+	// window signal catches it. Long enough to cross the grace budget after
+	// detection.
+	var reasoning strings.Builder
+	for i := 0; i < 20; i++ {
+		for _, line := range cyclingLoop {
+			reasoning.WriteString(line + "\n")
+		}
+	}
+	chunks := strings.SplitAfter(reasoning.String(), "\n")
+	chunks = chunks[:len(chunks)-1]
+
+	ag, client := newRepetitionAgent(t, true, 0,
+		NewScriptedResponseBuilder().
+			Content("this content must never stream\n").
+			FinishReason("stop").
+			StreamConfig(&StreamConfig{
+				ReasoningChunks: chunks,
+				Chunks:          []string{"this content must never stream\n"},
+				FinishReason:    "stop",
+			}).
+			Build(),
+		NewStopResponse("Done: the reasoning loop was cut."),
+	)
+
+	if _, err := ag.ProcessQuery("Please finish the task"); err != nil {
+		t.Fatalf("ProcessQuery: %v", err)
+	}
+
+	reqs := client.GetSentRequests()
+	if len(reqs) != 2 {
+		t.Fatalf("model calls = %d, want 2 (the looping attempt cut + one retry)", len(reqs))
+	}
+	last := reqs[len(reqs)-1]
+	if len(last) == 0 || last[len(last)-1].Role != "system" || !strings.Contains(last[len(last)-1].Content, "repeated itself") {
+		t.Fatalf("the retry must carry the nudge; got %+v", last)
+	}
+	if lastMsg := lastAssistantMessage(t, ag); !strings.Contains(lastMsg.Content, "reasoning loop was cut") {
+		t.Errorf("state does not carry the retried reply: %q", lastMsg.Content)
+	}
+
+	// The reasoning loop is counted once, as a reasoning loop — the cut must
+	// not also be counted as a visible loop.
+	var loops, reasoningLoops int64
+	for _, s := range metrics.Snapshot() {
+		loops += s.Loops
+		reasoningLoops += s.ReasoningLoops
+	}
+	if reasoningLoops != 1 || loops != 1 {
+		t.Errorf("loops = %d, reasoningLoops = %d, want 1 and 1; snapshot=%+v",
+			loops, reasoningLoops, metrics.Snapshot())
+	}
+}
+
+// TestReasoningLoopShortBreakoutNotCut pins the grace side: a reasoning block
+// that trips the window signal but breaks out well before the grace budget is
+// steered, not cut — the turn proceeds on the same reply.
+func TestReasoningLoopShortBreakoutNotCut(t *testing.T) {
+	var reasoning strings.Builder
+	for _, line := range cyclingLoop {
+		reasoning.WriteString(line + "\n")
+	}
+
+	ag, client := newRepetitionAgent(t, true, 0,
+		NewScriptedResponseBuilder().
+			Content("The task is complete.").
+			FinishReason("stop").
+			StreamConfig(&StreamConfig{
+				ReasoningChunks: strings.SplitAfter(reasoning.String(), "\n")[:len(cyclingLoop)],
+				Chunks:          []string{"The task is complete."},
+				FinishReason:    "stop",
+			}).
+			Build(),
+	)
+
+	if _, err := ag.ProcessQuery("Please finish the task"); err != nil {
+		t.Fatalf("ProcessQuery: %v", err)
+	}
+	if calls := len(client.GetSentRequests()); calls != 1 {
+		t.Errorf("model calls = %d, want 1 (a short reasoning loop is steered, not cut)", calls)
+	}
+	if lastMsg := lastAssistantMessage(t, ag); !strings.Contains(lastMsg.Content, "task is complete") {
+		t.Errorf("state does not carry the reply: %q", lastMsg.Content)
+	}
+}

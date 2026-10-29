@@ -79,6 +79,13 @@ const (
 // is degenerate. Lists, progress logs and tables have mostly distinct lines.
 const loopWindowLines = 16
 
+// reasoningLoopGraceBytes bounds how much reasoning a confirmed loop may keep
+// streaming before the caller cuts the attempt. Steering (the nudge plus the
+// history scrub) only reaches the model on its NEXT request, so a response
+// that never breaks out of the loop would otherwise stream for minutes and
+// replay its own loop into every later request of the turn.
+const reasoningLoopGraceBytes = 4096
+
 // resolveRepetitionGuardConfig fills a config's zero values with the defaults
 // and clamps MinRepetitions to at least 2.
 func resolveRepetitionGuardConfig(cfg RepetitionGuardConfig) RepetitionGuardConfig {
@@ -147,6 +154,14 @@ type RepetitionGuard struct {
 	// dropped accumulates the degenerate text that never reached the sink —
 	// the held duplicates at detection plus every later chunk.
 	dropped strings.Builder
+	// postLoopBytes counts the content seen after the loop was confirmed. A
+	// caller that steers instead of cutting uses it to bound a loop that
+	// never breaks out on its own.
+	postLoopBytes int
+	// evidence is the line that completed the degenerate run (or the last
+	// line of a degenerate window). It is reported when the guard flags so a
+	// detection can be judged without replaying the stream.
+	evidence string
 	// toolCall is set when the response has emitted a tool call; a reply
 	// that acts is never a degenerate loop.
 	toolCall bool
@@ -178,6 +193,7 @@ func (g *RepetitionGuard) Write(chunk string) {
 	if g.looping {
 		// The run already degenerated: capture the rest, deliver nothing.
 		g.dropped.WriteString(chunk)
+		g.postLoopBytes += len(chunk)
 		return
 	}
 	if g.longLine {
@@ -293,6 +309,7 @@ func (g *RepetitionGuard) processLine(line string, prefixDelivered int) {
 		// (each was a new line when it arrived), so record them as the
 		// degenerate text and stop delivering.
 		g.looping = true
+		g.evidence = trimmed
 		for _, held := range g.pending {
 			g.dropped.WriteString(held)
 		}
@@ -308,6 +325,7 @@ func (g *RepetitionGuard) processLine(line string, prefixDelivered int) {
 			// them plus this occurrence as the dropped text and stop
 			// delivering.
 			g.looping = true
+			g.evidence = trimmed
 			for _, held := range g.pending {
 				g.dropped.WriteString(held)
 			}
@@ -418,6 +436,8 @@ func (g *RepetitionGuard) Reset() {
 	g.window = nil
 	g.looping = false
 	g.dropped.Reset()
+	g.postLoopBytes = 0
+	g.evidence = ""
 	g.toolCall = false
 }
 
@@ -430,6 +450,20 @@ func (g *RepetitionGuard) NoteToolCall() { g.toolCall = true }
 
 // Looping reports whether a degenerate repetition run has been confirmed.
 func (g *RepetitionGuard) Looping() bool { return g.looping && !g.toolCall }
+
+// LoopEvidence returns the line that completed the degenerate run (or the last
+// line of a degenerate window). Empty when the guard never flagged. It names
+// the stutter in the log so a detection can be judged without replaying the
+// stream.
+func (g *RepetitionGuard) LoopEvidence() string { return g.evidence }
+
+// cutReasoning reports whether a confirmed reasoning loop has kept streaming
+// past the grace budget, so the caller should cut the attempt and retry.
+// Steering alone cannot stop the response in flight; without this bound a
+// looping model streams until its output limit.
+func (g *RepetitionGuard) cutReasoning() bool {
+	return g != nil && g.cfg.Reasoning && g.Looping() && g.postLoopBytes >= reasoningLoopGraceBytes
+}
 
 // Dropped returns the degenerate text that never reached the sink (empty when
 // the guard never flagged).

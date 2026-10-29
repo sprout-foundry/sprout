@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	core "github.com/sprout-foundry/seed/core"
+
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
@@ -241,4 +243,149 @@ func TestScrubResponseReasoningNilSafe(t *testing.T) {
 	sp := &sproutProvider{agent: &Agent{}}
 	sp.scrubResponseReasoning(nil)
 	sp.scrubResponseReasoning(&api.ChatResponse{})
+}
+
+// TestReasoningGuardCutAfterGrace pins the bound on a steer-don't-cut loop:
+// detection alone never cuts (the reply may still break out and act), but once
+// the loop has streamed past the grace budget the guard reports the attempt as
+// cuttable. A visible guard never cuts this way — its cut is immediate.
+func TestReasoningGuardCutAfterGrace(t *testing.T) {
+	reasoning := NewRepetitionGuard(RepetitionGuardConfig{Enabled: true, Reasoning: true}, nil)
+	for i := 0; i < 4; i++ {
+		reasoning.Write("Run.\n")
+	}
+	if !reasoning.Looping() {
+		t.Fatalf("the run must flag")
+	}
+	if reasoning.cutReasoning() {
+		t.Fatalf("a freshly flagged reasoning loop must not be cut immediately")
+	}
+	reasoning.Write(strings.Repeat("Run.\n", reasoningLoopGraceBytes/5+2))
+	if !reasoning.cutReasoning() {
+		t.Fatalf("a reasoning loop that keeps streaming past the grace budget must be cuttable")
+	}
+
+	visible := NewRepetitionGuard(RepetitionGuardConfig{Enabled: true}, nil)
+	for i := 0; i < defaultRepetitionMinRepetitions; i++ {
+		visible.Write("Run.\n")
+	}
+	visible.Write(strings.Repeat("Run.\n", reasoningLoopGraceBytes/5+2))
+	if visible.cutReasoning() {
+		t.Fatalf("the grace-budget cut is a reasoning-channel response only")
+	}
+}
+
+// TestReasoningGuardReportsEvidence pins that the guard names the line that
+// completed the run, so the detection can be judged from the log.
+func TestReasoningGuardReportsEvidence(t *testing.T) {
+	g := NewRepetitionGuard(RepetitionGuardConfig{Enabled: true, Reasoning: true}, nil)
+	for i := 0; i < 4; i++ {
+		g.Write("Let me write.\n")
+	}
+	if got := g.LoopEvidence(); got != "Let me write." {
+		t.Errorf("evidence = %q, want the repeated line", got)
+	}
+}
+
+// TestCollapseDegenerateLineRunsCollapsesCyclingLoop pins the fix for the loop
+// shape the guard actually catches most often: a model cycling a few phrases
+// never repeats one line past the run threshold, so the run-only scrub removed
+// nothing and the loop stayed in the prefix the model re-read. The cycling pass
+// collapses it to the distinct phrases.
+func TestCollapseDegenerateLineRunsCollapsesCyclingLoop(t *testing.T) {
+	cfg := resolveRepetitionGuardConfig(RepetitionGuardConfig{Enabled: true, Reasoning: true})
+	var b strings.Builder
+	for i := 0; i < 20; i++ {
+		for _, line := range cyclingLoop {
+			b.WriteString(line + "\n")
+		}
+	}
+	text := b.String()
+
+	scrubbed, removed := collapseDegenerateLineRuns(text, cfg)
+	if removed == 0 {
+		t.Fatalf("a cycling loop must be collapsed by the scrub")
+	}
+	if lines := strings.Count(scrubbed, "\n"); lines > 2*loopWindowLines {
+		t.Errorf("cycling loop not collapsed: %d lines remain (removed %d)", lines, removed)
+	}
+	for _, want := range []string{"Let me run.", "Let me execute.", "Running."} {
+		if !strings.Contains(scrubbed, want) {
+			t.Errorf("the collapsed text lost a distinct phrase %q: %q", want, scrubbed)
+		}
+	}
+
+	// The recovery de-loop (which keeps a single copy of each run) must
+	// collapse the same shape — it is the path the second loop escalates to.
+	single, singleRemoved := collapseDegenerateRunsToSingle(text, cfg)
+	if singleRemoved == 0 {
+		t.Fatalf("the recovery de-loop must collapse a cycling loop")
+	}
+	if lines := strings.Count(single, "\n"); lines > 2*loopWindowLines {
+		t.Errorf("recovery de-loop left %d lines (removed %d)", lines, singleRemoved)
+	}
+}
+
+// TestCollapseDegenerateLineRunsLeavesShortTextAlone pins the false-positive
+// guard on the cycling pass: text that never fills a degenerate window is
+// untouched, even when a few lines repeat.
+func TestCollapseDegenerateLineRunsLeavesShortTextAlone(t *testing.T) {
+	cfg := resolveRepetitionGuardConfig(RepetitionGuardConfig{Enabled: true, Reasoning: true})
+	text := "Let me run.\nLet me run.\nLet me check the file.\nLet me run.\nThe file is missing.\n"
+	if got, removed := collapseDegenerateLineRuns(text, cfg); removed != 0 || got != text {
+		t.Errorf("short text must be untouched; removed %d, got %q", removed, got)
+	}
+}
+
+// TestSteerReasoningLoopScrubsSeedLiveState pins that the steer writes the
+// de-loop into seed's live per-query state — the history the provider replays
+// on the next iteration — not only into sprout's durable copy.
+func TestSteerReasoningLoopScrubsSeedLiveState(t *testing.T) {
+	ag := &Agent{state: NewAgentStateManager(false)}
+	ag.state.SetMessages([]api.Message{
+		{Role: "assistant", ReasoningContent: "Run.\nRun.\nRun.\nRun.\nRun.\n"},
+	})
+	seedSt := core.NewState()
+	seedSt.SetMessages([]core.Message{
+		{Role: "assistant", ReasoningContent: "Run.\nRun.\nRun.\nRun.\nRun.\n"},
+	})
+	sp := &sproutProvider{agent: ag}
+	sp.setRecoveryState(seedSt)
+
+	sp.steerReasoningLoop("Run.")
+
+	live := seedSt.Messages()
+	if len(live) != 1 {
+		t.Fatalf("seed state message count = %d, want 1", len(live))
+	}
+	if got := strings.Count(live[0].ReasoningContent, "Run."); got != 3 {
+		t.Errorf("seed live reasoning kept %d copies, want 3 (below the threshold): %q",
+			got, live[0].ReasoningContent)
+	}
+	durable := ag.state.GetMessages()
+	if got := strings.Count(durable[0].ReasoningContent, "Run."); got != 3 {
+		t.Errorf("durable reasoning kept %d copies, want 3: %q", got, durable[0].ReasoningContent)
+	}
+}
+
+// TestCollapseDegenerateLineRunsSkipsFencedCode pins that the scrub skips
+// fenced blocks, exactly as the guard does: repeated lines inside code are
+// legitimate and must survive a de-loop (including a recovery de-loop over
+// visible content, where code blocks are common).
+func TestCollapseDegenerateLineRunsSkipsFencedCode(t *testing.T) {
+	cfg := resolveRepetitionGuardConfig(RepetitionGuardConfig{Enabled: true, Reasoning: true})
+	var b strings.Builder
+	b.WriteString("```go\n")
+	for i := 0; i < 20; i++ {
+		b.WriteString("x := 1\n")
+	}
+	b.WriteString("```\n")
+	text := b.String()
+
+	if got, removed := collapseDegenerateLineRuns(text, cfg); removed != 0 || got != text {
+		t.Errorf("fenced code must not be collapsed; removed %d, got %q", removed, got)
+	}
+	if got, removed := collapseDegenerateRunsToSingle(text, cfg); removed != 0 || got != text {
+		t.Errorf("the recovery de-loop must not collapse fenced code; removed %d", removed)
+	}
 }

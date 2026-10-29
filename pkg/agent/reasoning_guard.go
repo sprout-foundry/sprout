@@ -54,8 +54,9 @@ func (sp *sproutProvider) reasoningGuardConfigFromAgent() RepetitionGuardConfig 
 }
 
 // noteReasoningLoop records one cut reasoning loop for the agent's
-// (provider, model) cell and logs exactly one line.
-func (sp *sproutProvider) noteReasoningLoop() {
+// (provider, model) cell and logs exactly one line, naming the line that
+// completed the degenerate run so the detection can be judged from the log.
+func (sp *sproutProvider) noteReasoningLoop(evidence string) {
 	if sp.agent == nil {
 		return
 	}
@@ -63,8 +64,19 @@ func (sp *sproutProvider) noteReasoningLoop() {
 	model := sp.agent.GetModel()
 	GlobalRepetitionMetrics().RecordReasoning(provider, model)
 	sp.agent.Logger().Warn(
-		"[repetition] degenerate reasoning loop detected for %s/%s; scrubbing history and steering the turn\n",
-		provider, model)
+		"[repetition] degenerate reasoning loop detected for %s/%s (repeated line %q); scrubbing history and steering the turn\n",
+		provider, model, truncateLoopEvidence(evidence))
+}
+
+// truncateLoopEvidence bounds the logged evidence line so a long line cannot
+// flood the log.
+func truncateLoopEvidence(evidence string) string {
+	const max = 80
+	trimmed := strings.TrimSpace(evidence)
+	if len([]rune(trimmed)) <= max {
+		return trimmed
+	}
+	return string([]rune(trimmed)[:max]) + "…"
 }
 
 // scrubResponseReasoning collapses degenerate line runs in the response's own
@@ -94,20 +106,73 @@ func (sp *sproutProvider) scrubResponseReasoning(resp *api.ChatResponse) {
 // prompt of every later request this turn (see withReasoningLoopNudge), so it
 // reaches the model on the very next iteration.
 //
+// The scrub must reach seed's LIVE per-query state: that is the history the
+// provider replays on the next iteration, and the durable store is synced
+// from it at query end (the recovery-compaction path writes through the same
+// handle for the same reason). Scrubbing only sprout's durable copy left the
+// loop in the prefix the model reads, so the "steering" did nothing and the
+// model kept re-reading its own loop.
+//
 // The guard calls this on every reasoning chunk once it has flagged, so the
 // whole response is gated on the turn's steered marker: the scrub walks the
 // entire history and must not run per chunk. A second loop later in the same
 // turn is already covered by the armed nudge.
-func (sp *sproutProvider) steerReasoningLoop() {
+func (sp *sproutProvider) steerReasoningLoop(evidence string) {
 	if sp.agent == nil {
 		return
 	}
 	if !sp.agent.markReasoningLoopSteered() {
 		return
 	}
-	sp.agent.scrubDegenerateReasoning(sp.reasoningGuardConfigFromAgent())
+	sp.scrubReasoningHistory()
 	sp.agent.armReasoningLoopNudge(reasoningLoopNudge)
-	sp.noteReasoningLoop()
+	sp.noteReasoningLoop(evidence)
+}
+
+// scrubReasoningHistory de-loops the degenerate reasoning in the history the
+// turn will replay: seed's live per-query state when the provider has the
+// handle (the effective copy), plus sprout's durable copy so the persisted
+// view is consistent before the query-end sync.
+func (sp *sproutProvider) scrubReasoningHistory() {
+	if sp == nil || sp.agent == nil {
+		return
+	}
+	cfg := resolveRepetitionGuardConfig(sp.reasoningGuardConfigFromAgent())
+	if st := sp.currentRecoveryState(); st != nil {
+		if scrubbed, changed := collapseDegenerateReasoningInMessages(st.Messages(), cfg); changed {
+			st.SetMessages(scrubbed)
+		}
+	}
+	sp.agent.scrubDegenerateReasoning(cfg)
+}
+
+// collapseDegenerateReasoningInMessages returns a copy of msgs with the
+// degenerate line runs collapsed out of every assistant message's
+// reasoning_content. It is index-stable: the slice keeps its length and
+// message identity, so no checkpoint rebase is needed. Visible content, tool
+// calls, and non-assistant messages are untouched.
+func collapseDegenerateReasoningInMessages(msgs []api.Message, cfg RepetitionGuardConfig) ([]api.Message, bool) {
+	if len(msgs) == 0 {
+		return msgs, false
+	}
+	out := make([]api.Message, len(msgs))
+	copy(out, msgs)
+	changed := false
+	for i := range out {
+		if out[i].Role != "assistant" || out[i].ReasoningContent == "" {
+			continue
+		}
+		scrubbed, removed := collapseDegenerateLineRuns(out[i].ReasoningContent, cfg)
+		if removed == 0 {
+			continue
+		}
+		out[i].ReasoningContent = scrubbed
+		changed = true
+	}
+	if !changed {
+		return msgs, false
+	}
+	return out, true
 }
 
 // markReasoningLoopSteered reports whether this turn has not yet been steered
@@ -164,9 +229,10 @@ func (a *Agent) clearReasoningLoopNudge() {
 }
 
 // scrubDegenerateReasoning collapses degenerate line runs inside the
-// reasoning_content of the conversation's assistant messages. It runs over
-// the agent's state (the history seed replays), so the model stops reading
-// its own loop back on the next iteration and on every later turn.
+// reasoning_content of the conversation's assistant messages in sprout's
+// durable copy. The live seed state is scrubbed by the provider through
+// scrubReasoningHistory (see reasoning_guard.go); this keeps the persisted
+// view consistent until the query-end sync.
 //
 // Only lines that are themselves part of a degenerate run are removed, and
 // one copy of each survives, so the model keeps the thought without the
@@ -175,38 +241,42 @@ func (a *Agent) scrubDegenerateReasoning(cfg RepetitionGuardConfig) {
 	if a == nil || a.state == nil {
 		return
 	}
-	messages := a.state.GetMessages()
-	if len(messages) == 0 {
-		return
-	}
-	changed := false
-	out := make([]api.Message, len(messages))
-	copy(out, messages)
-	for i := range out {
-		if out[i].Role != "assistant" || out[i].ReasoningContent == "" {
-			continue
-		}
-		scrubbed, removed := collapseDegenerateLineRuns(out[i].ReasoningContent, cfg)
-		if removed == 0 {
-			continue
-		}
-		out[i].ReasoningContent = scrubbed
-		changed = true
-	}
+	scrubbed, changed := collapseDegenerateReasoningInMessages(a.state.GetMessages(), resolveRepetitionGuardConfig(cfg))
 	if changed {
-		a.state.SetMessages(out)
+		a.state.SetMessages(scrubbed)
 	}
 }
 
-// collapseDegenerateLineRuns drops repeated occurrences of a short line once
-// the run reaches the reasoning threshold, keeping the first occurrence. It
-// returns the collapsed text and how many lines it removed.
+// collapseDegenerateLineRuns drops the degenerate text the guard flags: the
+// repeated occurrences of an identical short line (keeping the first
+// occurrence) and, when a window of short lines is cycling a few phrases, the
+// duplicate occurrences inside that window. It returns the collapsed text and
+// how many lines it removed.
+//
+// The identical-run pass is measured per contiguous block, so a loop that
+// spans several blocks (a tool call interrupting the thinking) is collapsed in
+// each block. The cycling pass is what the window signal flags: a model that
+// alternates "Let me write." / "Let me go." / "Let me emit." never repeats one
+// line past the run threshold, so a run-only scrub would remove nothing from
+// the exact loop the guard just confirmed.
+func collapseDegenerateLineRuns(text string, cfg RepetitionGuardConfig) (string, int) {
+	collapsed, removed := collapseIdenticalRuns(text, cfg)
+	cycled, cycledRemoved := collapseCyclingLines(collapsed, cfg)
+	if cycledRemoved == 0 {
+		return collapsed, removed
+	}
+	return cycled, removed + cycledRemoved
+}
+
+// collapseIdenticalRuns drops repeated occurrences of a short line once the
+// run reaches the threshold, keeping the first occurrence. It returns the
+// collapsed text and how many lines it removed.
 //
 // The run is measured per contiguous block of identical normalized lines, so
 // a loop that spans several blocks (a tool call interrupting the thinking)
 // is collapsed in each block. Lines longer than the reasoning maximum are
 // never collapsed — long repeated prose is legitimate reasoning.
-func collapseDegenerateLineRuns(text string, cfg RepetitionGuardConfig) (string, int) {
+func collapseIdenticalRuns(text string, cfg RepetitionGuardConfig) (string, int) {
 	lines := strings.SplitAfter(text, "\n")
 	if len(lines) < 2 {
 		return text, 0
@@ -217,8 +287,26 @@ func collapseDegenerateLineRuns(text string, cfg RepetitionGuardConfig) (string,
 	removed := 0
 	runLine := ""
 	runCount := 0
+	inFence := false
+	fence := ""
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
+		// Fenced blocks are skipped exactly as the guard skips them:
+		// repeated lines inside code are legitimate.
+		if marker, ok := fenceMarker(trimmed); ok {
+			if !inFence {
+				inFence, fence = true, marker
+			} else if marker == fence {
+				inFence, fence = false, ""
+			}
+			runLine, runCount = "", 0
+			b.WriteString(line)
+			continue
+		}
+		if inFence {
+			b.WriteString(line)
+			continue
+		}
 		normalized := normalizeLoopLine(trimmed)
 		if trimmed == "" || len([]rune(trimmed)) > cfg.MaxLineChars || normalized == "" {
 			// Blank and long lines are neutral: they end the current run.
@@ -242,4 +330,96 @@ func collapseDegenerateLineRuns(text string, cfg RepetitionGuardConfig) (string,
 		return text, 0
 	}
 	return b.String(), removed
+}
+
+// collapseCyclingLines drops the duplicate occurrences inside a degenerate
+// cycling window — the second signal the guard flags on. A window is the last
+// loopWindowLines short lines (blank lines are neutral, a long line ends the
+// window); once at most half of them are distinct, the region is cycling, and
+// every later short line that repeats a phrase already seen in the region is
+// dropped until a long line ends it.
+//
+// Carrying the phrase set forward (rather than only looking back one window)
+// is what makes the scrub effective: a 20-line cycle whose phrases recur more
+// than a window apart would otherwise survive pass after pass. A long cycling
+// loop collapses to the handful of distinct phrases it was cycling. Text that
+// never fills a degenerate window is untouched, and a genuinely new short line
+// in a degenerate region is kept.
+func collapseCyclingLines(text string, cfg RepetitionGuardConfig) (string, int) {
+	lines := strings.SplitAfter(text, "\n")
+	if len(lines) < loopWindowLines {
+		return text, 0
+	}
+	var b strings.Builder
+	b.Grow(len(text))
+
+	window := make([]string, 0, loopWindowLines)
+	var seen map[string]struct{}
+	removed := 0
+	inFence := false
+	fence := ""
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if marker, ok := fenceMarker(trimmed); ok {
+			if !inFence {
+				inFence, fence = true, marker
+			} else if marker == fence {
+				inFence, fence = false, ""
+			}
+			window = window[:0]
+			seen = nil
+			b.WriteString(line)
+			continue
+		}
+		if inFence {
+			b.WriteString(line)
+			continue
+		}
+		if trimmed == "" {
+			// Blank lines are neutral in the guard's window too.
+			b.WriteString(line)
+			continue
+		}
+		if len([]rune(trimmed)) > cfg.MaxLineChars {
+			window = window[:0]
+			seen = nil
+			b.WriteString(line)
+			continue
+		}
+		normalized := normalizeLoopLine(trimmed)
+		if seen == nil {
+			window = append(window, normalized)
+			if len(window) > loopWindowLines {
+				window = window[1:]
+			}
+			if len(window) == loopWindowLines && degenerateLoopWindow(window) {
+				seen = make(map[string]struct{}, len(window))
+				for _, phrase := range window {
+					seen[phrase] = struct{}{}
+				}
+			}
+			b.WriteString(line)
+			continue
+		}
+		if _, duplicate := seen[normalized]; duplicate {
+			removed++
+			continue
+		}
+		seen[normalized] = struct{}{}
+		b.WriteString(line)
+	}
+	if removed == 0 {
+		return text, 0
+	}
+	return b.String(), removed
+}
+
+// degenerateLoopWindow reports whether a full window is cycling: at most half
+// its lines are distinct.
+func degenerateLoopWindow(window []string) bool {
+	distinct := make(map[string]struct{}, len(window))
+	for _, line := range window {
+		distinct[line] = struct{}{}
+	}
+	return len(distinct)*2 <= len(window)
 }

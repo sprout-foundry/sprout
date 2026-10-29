@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"github.com/sprout-foundry/sprout/pkg/cliui"
 	"github.com/sprout-foundry/sprout/pkg/utils/shellexec"
 	"golang.org/x/term"
@@ -62,6 +63,27 @@ func ExecuteCommand(cmd string) (string, error) {
 	stderr, err := command.StderrPipe()
 	if err != nil {
 		return "", fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
+
+	// Attach the terminal to the child's stdin when there is one. Without
+	// this the child inherits /dev/null (Go's behaviour for a nil Stdin), so
+	// any command that reads input — sudo asking for a password, ssh asking
+	// for a passphrase, an interactive tool asking a question — gets EOF
+	// immediately and fails instead of prompting. Only a terminal is
+	// attached: piping a non-terminal stdin in would feed the child whatever
+	// sprout itself was fed (a heredoc, a CI job's /dev/null), which is not
+	// the user answering a prompt.
+	//
+	// The steer reader and the spinner also read the terminal, so they are
+	// suspended for the child's lifetime — the same discipline the password
+	// prompter uses. Both hooks are refcounted, so nesting inside an
+	// approval prompt is safe.
+	if StdinIsTerminal() {
+		command.Stdin = os.Stdin
+		clihooks.PauseSteer()
+		clihooks.SuspendIndicator()
+		defer clihooks.ResumeSteer()
+		defer clihooks.ResumeIndicator()
 	}
 
 	// Buffer to capture output for error messages

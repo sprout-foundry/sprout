@@ -87,6 +87,16 @@ func SetSteerHooks(pause, resume func()) {
 	steerDepth.Store(0)
 }
 
+// SteerHooks returns the currently installed steer pause/resume pair (both
+// nil when none). Callers that must install their own pair temporarily — a
+// test, or a nested prompt that needs to restore the outer owner's hooks —
+// use it to save the pair before SetSteerHooks and restore it afterwards.
+func SteerHooks() (pause, resume func()) {
+	mu.RLock()
+	defer mu.RUnlock()
+	return steerPause, steerResume
+}
+
 // PauseSteer runs the registered pause hook if one is set. Callers
 // that are about to read stdin in cooked mode (interactive prompts)
 // MUST pair this with a deferred ResumeSteer so the reader resumes

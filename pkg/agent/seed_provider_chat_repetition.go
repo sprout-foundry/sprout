@@ -294,6 +294,14 @@ func (d recoveryDetail) String() string {
 // so no checkpoint rebase is needed. syncSeedStateToSprout carries it into
 // the durable store at query end.
 //
+// The durable write happens BEFORE the final attempt runs, so it also stands
+// when that attempt loops a third time and the turn fails: the failed turn's
+// state sync then persists the de-looped history. That is intended — the
+// de-loop only removes copies of the model's own repeated text, so the stored
+// conversation keeps every distinct message and loses nothing a reader needs.
+// Leaving the loop in place would instead hand the next turn the same
+// poisoned prefix that caused this failure.
+//
 // Immediate half: the LLM summary of the middle re-seeds ONLY the final
 // attempt from a shorter context. It is not written back to state (the lossy
 // splice would need a checkpoint rebase the provider cannot safely compute).

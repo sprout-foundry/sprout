@@ -76,9 +76,9 @@ type RepetitionRecoveryConfig struct {
 	// SummarizerEffort is the reasoning effort passed to the recovery
 	// summary call. A smaller thinking surface (the default "low") is both
 	// faster and less likely to itself degenerate — the failure is most
-	// pronounced at the highest effort levels. Empty uses the provider
-	// default; this knob degrades to a no-op on models with no
-	// reasoning-effort parameter.
+	// pronounced at the highest effort levels. Unset (or an unrecognized
+	// level) resolves to "low"; low/medium/high pass through. This knob
+	// degrades to a no-op on models with no reasoning-effort parameter.
 	SummarizerEffort string `json:"summarizer_effort,omitempty"`
 }
 

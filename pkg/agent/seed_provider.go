@@ -137,6 +137,10 @@ func (sp *sproutProvider) effectiveReasoning() (reasoning string, disableThinkin
 // raised). This is a pure pre-model lever: on a model with no reasoning-effort
 // parameter the value is a no-op, so capping is safe and model-agnostic.
 // Returns the lower of (reasoning, "high").
+//
+// An unrecognized non-empty level is treated as above the cap and clamped:
+// the cap exists to bound the thinking surface, so a level this function
+// cannot rank must not be the one that slips past it.
 func cappedRecoveryReasoning(reasoning string) string {
 	order := map[string]int{"low": 1, "medium": 2, "high": 3, "xhigh": 4, "max": 5}
 	const capLevel = "high"
@@ -145,10 +149,10 @@ func cappedRecoveryReasoning(reasoning string) string {
 		// Unset: the provider applies its family default; leave it alone.
 		return reasoning
 	}
-	if order[r] > order[capLevel] {
-		return capLevel
+	if level, known := order[r]; known && level <= order[capLevel] {
+		return reasoning
 	}
-	return reasoning
+	return capLevel
 }
 
 // RegisterPastedImages associates extracted image data with file paths for multimodal attachment.

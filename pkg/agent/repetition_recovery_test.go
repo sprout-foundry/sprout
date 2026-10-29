@@ -20,14 +20,16 @@ import (
 // (the provider decides whether they are valid).
 func TestCappedRecoveryReasoning(t *testing.T) {
 	cases := map[string]string{
-		"low":     "low",     // never raised
-		"medium":  "medium",  // never raised
-		"high":    "high",    // at the cap
-		"xhigh":   "high",    // above the cap → capped
-		"max":     "high",    // above the cap → capped
-		"":        "",        // unset → provider default (unchanged)
-		"minimal": "minimal", // below the cap; pass through
-		"none":    "none",    // below the cap; pass through
+		"low":     "low",    // never raised
+		"medium":  "medium", // never raised
+		"high":    "high",   // at the cap
+		"xhigh":   "high",   // above the cap → capped
+		"max":     "high",   // above the cap → capped
+		"":        "",       // unset → provider default (unchanged)
+		"minimal": "high",   // unrecognized → clamped (fail-safe, not fail-open)
+		"none":    "high",   // unrecognized → clamped
+		"highest": "high",   // misspelled above-cap level → clamped, not passed
+		" HIGH ":  " HIGH ", // at the cap after normalization; original returned verbatim
 	}
 	for in, want := range cases {
 		if got := cappedRecoveryReasoning(in); got != want {

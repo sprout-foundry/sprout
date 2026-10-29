@@ -20,13 +20,13 @@ import (
 // needs to continue; the original setup anchors the task framing.
 const llmSummarizerMaxInputChars = 160000
 
-// CompactedSummaryHeader is the canonical wrapper that flags a message as
-// the substitute for compacted history. It is the single source for the
-// header string: seed's structural compaction emits it, isCheckpointMessage
-// matches on it, the /compact command splices it, and the repetition
-// recovery compaction wraps its summary with it — so every consumer (and
-// the next compaction pass) classifies the message as a synthetic
-// checkpoint.
+// CompactedSummaryHeader is the checkpoint wrapper that flags a message as
+// the substitute for compacted history. It is the value this package's
+// checkpoint detection and the repetition-recovery compaction share, so the
+// recovery summary is classified as a synthetic checkpoint by
+// isCheckpointMessage and the next compaction pass. Other packages carry
+// their own copy of the literal (pkg/agent_commands, pkg/agent/changes) and
+// seed emits it structurally; keep them in sync by value, not by import.
 const CompactedSummaryHeader = "Compacted earlier conversation state:"
 
 // newLLMSummarizer returns a core.LLMSummarizer bound to the supplied LLM

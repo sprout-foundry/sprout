@@ -28,6 +28,41 @@ export function agentRunsInPage(): boolean {
 }
 
 /**
+ * Whether a chat has a run in flight, for the places that adopt a chat when it
+ * comes on screen (the boot load, a session switch, a gap reload).
+ *
+ * A store answers `active_query` alongside the transcript, but that flag only
+ * describes the runs the store knows about. A host store pinned to a platform
+ * knows none of a daemon backend's runs, so adopting a chat from it would show
+ * a turn that is already running on the daemon as idle — and a turn started
+ * outside the page (the host's own first turn, another tab) would never appear
+ * as running here.
+ *
+ * {@link fetchChatRunning} asks whichever backend actually runs the agent: the
+ * daemon's `/api/query/status`, or the in-page registry when the agent is in
+ * the page. That answer wins. The store's flag is the fallback when the status
+ * call fails, so a backend without the route (an older daemon) still adopts a
+ * sane state instead of failing the switch.
+ *
+ * When the agent runs neither in the page nor behind a daemon the host named,
+ * the store answering `active_query` is the daemon's own store — it runs the
+ * agent, so its flag is already the answer and no extra call is made.
+ */
+export async function resolveChatRunning(
+  chatId: string | null | undefined,
+  storeSaysRunning: boolean | undefined,
+  fetchFn: typeof fetch = clientFetch,
+): Promise<boolean> {
+  const storeIsAgent = getActiveHost()?.transport.agent?.kind !== 'daemon' && !agentRunsInPage();
+  if (storeIsAgent) return storeSaysRunning === true;
+  try {
+    return await fetchChatRunning(chatId, fetchFn);
+  } catch {
+    return storeSaysRunning === true;
+  }
+}
+
+/**
  * Whether the chat has a run in flight. Throws when the server cannot be
  * reached so callers can retry.
  */

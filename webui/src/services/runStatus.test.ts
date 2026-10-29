@@ -12,7 +12,7 @@ vi.mock('./clientSession', () => ({
 
 import { getActiveHost } from '../host/accessor';
 import { setChatRunning } from './cloudChatSessions';
-import { agentRunsInPage, fetchChatRunning } from './runStatus';
+import { agentRunsInPage, fetchChatRunning, resolveChatRunning } from './runStatus';
 import { WebSocketService } from './websocket';
 
 const activeHost = getActiveHost as ReturnType<typeof vi.fn>;
@@ -90,5 +90,58 @@ describe('a daemon backend is authoritative over stale in-page wiring', () => {
       },
     });
     expect(agentRunsInPage()).toBe(false);
+  });
+});
+
+// Adopting a chat that comes on screen: the store's `active_query` is only
+// the answer when the store is the backend that runs the agent.
+describe('resolveChatRunning when a chat comes on screen', () => {
+  const DAEMON_HOST = {
+    transport: {
+      apiBaseURL: 'https://platform.test',
+      wsURL: 'wss://platform.test/ws',
+      authMode: 'bearer',
+      agent: { kind: 'daemon', apiBaseURL: '/workspace/ws-1/proxy', wsURL: 'wss://platform.test/ws' },
+    },
+  };
+
+  it("asks the daemon when the store serving the transcript is the host's", async () => {
+    // The host store pinned to the platform knows none of the daemon's runs:
+    // a turn the platform started (or another tab did) is invisible in its
+    // `active_query`, so opening the chat would show it idle.
+    activeHost.mockReturnValue(DAEMON_HOST);
+    const fetchFn = vi.fn().mockResolvedValue(statusResponse(true));
+    await expect(resolveChatRunning('chat-1', false, fetchFn)).resolves.toBe(true);
+    expect(fetchFn).toHaveBeenCalledWith('/api/query/status?chat_id=chat-1');
+  });
+
+  it('reports an idle daemon over a store flag that says running', async () => {
+    activeHost.mockReturnValue(DAEMON_HOST);
+    const fetchFn = vi.fn().mockResolvedValue(statusResponse(false));
+    await expect(resolveChatRunning('chat-1', true, fetchFn)).resolves.toBe(false);
+  });
+
+  it('falls back to the store flag when the daemon cannot be reached', async () => {
+    activeHost.mockReturnValue(DAEMON_HOST);
+    const fetchFn = vi.fn().mockResolvedValue(statusResponse(false, false));
+    await expect(resolveChatRunning('chat-1', true, fetchFn)).resolves.toBe(true);
+  });
+
+  it("trusts the daemon's own store, which runs the agent, without a status call", async () => {
+    // No host (the local app): the store answering `active_query` is the
+    // daemon's own, so its flag is already the truth.
+    activeHost.mockReturnValue(null);
+    const fetchFn = vi.fn().mockResolvedValue(statusResponse(true));
+    await expect(resolveChatRunning('chat-1', false, fetchFn)).resolves.toBe(false);
+    await expect(resolveChatRunning('chat-1', true, fetchFn)).resolves.toBe(true);
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it('reads the in-page registry when the agent runs in the page', async () => {
+    WebSocketService.getInstance().setLocalAgentState('ready');
+    setChatRunning('chat-1', true);
+    const fetchFn = vi.fn().mockResolvedValue(statusResponse(false));
+    await expect(resolveChatRunning('chat-1', false, fetchFn)).resolves.toBe(true);
+    expect(fetchFn).not.toHaveBeenCalled();
   });
 });

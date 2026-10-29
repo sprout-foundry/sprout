@@ -646,6 +646,22 @@ own mode makes these calls each time the workspace connects (and again after
 a reconnect), so the session list is populated at start. For an in-browser
 agent, "connected" means the adapter is installed (see "Agent backend").
 
+**The running flag.** `ChatSession.active_query` is honoured as the running
+state only when the store is the backend that runs the agent — the daemon's
+own store, or an in-page agent (which keeps its runs in the page's registry).
+When the agent runs behind a daemon the host named (`transport.agent.kind:
+'daemon'`), the store answers the transcript but not the run: a turn the
+daemon is running — one the host started itself, or one another tab started —
+is invisible in the store's `active_query`. Opening such a chat therefore
+asks the daemon's `GET /api/query/status?chat_id=<id>` and shows the turn as
+running, so a page opened into a turn already in flight attaches to it and
+streams its output. The store's flag is the fallback when that call fails.
+A host that seeds its own first turn should start it with `POST
+/api/query` on the daemon (`chat_id` naming the chat in the store) rather
+than writing a user message into the transcript alone: the turn then runs,
+appears as running to whoever opens the page, and is appended to the store
+as it completes.
+
 ### In-browser workspace files
 
 The in-browser agent's workspace is a virtual filesystem (the WASM shell's
@@ -1121,7 +1137,7 @@ branch is recoverable from the conversion commits (`git show 536a191c2`,
 | `components/HeaderBar.tsx` — platform header affordances (back-to-dashboard, Start Building, credits) vs Sprout's MenuBar | `transport.authMode === 'bearer'` |
 | `components/AppContent.tsx` — platform notification polling + phone tab bar | `transport.authMode === 'bearer'` |
 | `workspaces/CodeShell.tsx` — project named by repo slug | `transport.authMode === 'bearer'` |
-| `components/chat/EmptyChatPanel.tsx` — offer the "open a repository" panel | `transport.authMode === 'bearer'` |
+| `components/chat/EmptyChatPanel.tsx` — offer the "open a repository" panel | `transport.authMode === 'bearer'`, and not a daemon backend (a daemon has the project's checkout, so there is nothing to open) |
 | `components/chat/ChatMetricsStrip.tsx` — hide the dollar cost (credits are metered) | `transport.authMode === 'bearer'` (inverted) |
 | `components/GitSidebarPanel.tsx` — browser git, and the "unsupported in browser mode" ops | `transport.authMode === 'bearer'` |
 | `components/GitHistoryPanel.tsx` — browser git cannot revert | `transport.authMode === 'bearer'` |

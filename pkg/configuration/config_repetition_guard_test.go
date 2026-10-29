@@ -214,3 +214,86 @@ func TestRepetitionGuardReasoningMerge(t *testing.T) {
 	assert.Equal(t, 3, merged.RepetitionGuardReasoningMinRepetitions())
 	assert.Equal(t, 50, merged.RepetitionGuardReasoningMaxLineChars())
 }
+
+// TestRepetitionGuardRecoveryDefaults pins the recovery-compaction
+// escalation's defaults: on by default (a nil section or a nil config both
+// resolve to enabled), the LLM-summary half on by default, and the summarizer
+// effort defaulting to "low".
+func TestRepetitionGuardRecoveryDefaults(t *testing.T) {
+	cfg := NewConfig()
+	assert.True(t, cfg.RepetitionGuardRecoveryEnabled(), "the recovery escalation must be on by default")
+	assert.True(t, cfg.RepetitionGuardRecoverySummary(), "the recovery LLM summary must be on by default")
+	assert.Equal(t, "low", cfg.RepetitionGuardRecoverySummarizerEffort())
+
+	var nilCfg *Config
+	assert.True(t, nilCfg.RepetitionGuardRecoveryEnabled())
+	assert.True(t, nilCfg.RepetitionGuardRecoverySummary())
+	assert.Equal(t, "low", nilCfg.RepetitionGuardRecoverySummarizerEffort())
+}
+
+// TestRepetitionGuardRecoveryOverrides pins that a narrower layer can disable
+// the escalation or the summary, and can raise the summarizer effort; an
+// unrecognized effort falls back to "low".
+func TestRepetitionGuardRecoveryOverrides(t *testing.T) {
+	// Disable the whole escalation.
+	cfg := NewConfig()
+	cfg.RepetitionGuard = &RepetitionGuardConfig{Recovery: &RepetitionRecoveryConfig{Enabled: boolPtr(false)}}
+	assert.False(t, cfg.RepetitionGuardRecoveryEnabled())
+	assert.True(t, cfg.RepetitionGuardRecoverySummary(), "a silent summary key keeps its default (on)")
+
+	// Disable only the LLM-summary half (the de-loop still runs).
+	cfg = NewConfig()
+	cfg.RepetitionGuard = &RepetitionGuardConfig{Recovery: &RepetitionRecoveryConfig{Summary: boolPtr(false)}}
+	assert.True(t, cfg.RepetitionGuardRecoveryEnabled())
+	assert.False(t, cfg.RepetitionGuardRecoverySummary())
+
+	// A recognized effort passes through; an unrecognized one falls back.
+	cfg = NewConfig()
+	cfg.RepetitionGuard = &RepetitionGuardConfig{Recovery: &RepetitionRecoveryConfig{SummarizerEffort: "high"}}
+	assert.Equal(t, "high", cfg.RepetitionGuardRecoverySummarizerEffort())
+	cfg.RepetitionGuard.Recovery.SummarizerEffort = "ultra"
+	assert.Equal(t, "low", cfg.RepetitionGuardRecoverySummarizerEffort(), "an unrecognized effort must fall back to the default")
+}
+
+// TestRepetitionGuardRecoveryJSONRoundTrip proves the recovery block's JSON
+// contract: the keys are omitted when unset and read back through the
+// accessors when set.
+func TestRepetitionGuardRecoveryJSONRoundTrip(t *testing.T) {
+	// Set block: all keys present.
+	cfg := NewConfig()
+	cfg.RepetitionGuard = &RepetitionGuardConfig{
+		Recovery: &RepetitionRecoveryConfig{
+			Enabled:          boolPtr(false),
+			Summary:          boolPtr(false),
+			SummarizerEffort: "high",
+		},
+	}
+	data, err := json.Marshal(cfg)
+	require.NoError(t, err)
+	var withKey map[string]interface{}
+	require.NoError(t, json.Unmarshal(data, &withKey))
+	section := withKey["repetition_guard"].(map[string]interface{})
+	recovery := section["recovery"].(map[string]interface{})
+	assert.Equal(t, false, recovery["enabled"])
+	assert.Equal(t, false, recovery["summary"])
+	assert.Equal(t, "high", recovery["summarizer_effort"])
+
+	// Unset: a nil recovery block is omitted.
+	zero := NewConfig()
+	zero.RepetitionGuard = &RepetitionGuardConfig{Enabled: boolPtr(true)}
+	data, err = json.Marshal(zero)
+	require.NoError(t, err)
+	var out map[string]interface{}
+	require.NoError(t, json.Unmarshal(data, &out))
+	section = out["repetition_guard"].(map[string]interface{})
+	assert.NotContains(t, section, "recovery", "an unset recovery block must be omitted")
+
+	// Unmarshal: explicit values are read back through the accessors.
+	var loaded Config
+	require.NoError(t, json.Unmarshal(
+		[]byte(`{"repetition_guard":{"recovery":{"enabled":true,"summary":false,"summarizer_effort":"medium"}}}`),
+		&loaded))
+	assert.True(t, loaded.RepetitionGuardRecoveryEnabled())
+	assert.False(t, loaded.RepetitionGuardRecoverySummary())
+	assert.Equal(t, "medium", loaded.RepetitionGuardRecoverySummarizerEffort())
+}

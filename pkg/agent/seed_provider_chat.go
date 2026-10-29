@@ -279,7 +279,16 @@ func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatReques
 	attemptFn := func(attemptCtx context.Context, msgs []api.Message, cb api.StreamCallback) (*api.ChatResponse, error) {
 		return sp.currentClient().SendChatRequestStream(attemptCtx, msgs, sproutReq.Tools, reasoning, disableThinking, cb)
 	}
-	resp, err := sp.streamWithRepetitionGuard(ctx, messages, callback, holdback, guard, attemptFn)
+	// The recovery FINAL attempt runs at a capped reasoning effort (see the
+	// ChatStream counterpart): the degeneration is effort-dose dependent, so
+	// re-seeding at the recommended agentic depth — never above the configured
+	// effort, a no-op where the model has no effort knob — is the pre-model
+	// lever that makes the recovery re-seed more likely to land.
+	recoveryReasoning := cappedRecoveryReasoning(reasoning)
+	recoveryAttemptFn := func(attemptCtx context.Context, msgs []api.Message, cb api.StreamCallback) (*api.ChatResponse, error) {
+		return sp.currentClient().SendChatRequestStream(attemptCtx, msgs, sproutReq.Tools, recoveryReasoning, disableThinking, cb)
+	}
+	resp, err := sp.streamWithRepetitionGuard(ctx, messages, callback, holdback, guard, attemptFn, recoveryAttemptFn)
 	if err != nil {
 		return nil, err
 	}

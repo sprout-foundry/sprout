@@ -119,22 +119,50 @@ func TestRepetitionGuardCutsLoopAndRetriesOnce(t *testing.T) {
 	}
 }
 
-// TestRepetitionGuardSecondLoopFailsTurn pins that a persistently degenerating
-// model fails the turn: when the retry also loops, a normal turn error is
-// surfaced instead of an unbounded retry.
-func TestRepetitionGuardSecondLoopFailsTurn(t *testing.T) {
+// TestRepetitionGuardSecondLoopEscalatesAndRecovers pins the recovery
+// escalation: when the nudge retry ALSO loops, the provider runs a recovery
+// compaction and makes a final attempt instead of failing the turn. A clean
+// final reply recovers the turn. This is the default behavior (recovery is on);
+// the recovery-compaction path is what turns a "sometimes it recovers,
+// sometimes it doesn't" second loop into a re-seeded, shorter-state retry.
+func TestRepetitionGuardSecondLoopEscalatesAndRecovers(t *testing.T) {
+	metrics := NewRepetitionMetrics()
+	cleanupMetrics := SetGlobalRepetitionMetricsForTest(metrics)
+	defer cleanupMetrics()
+
 	ag, client := newRepetitionAgent(t, true, 0,
-		loopedStreamResponse("Let me run.\n", 10),
-		loopedStreamResponse("Let me do it.\n", 10), // the retry loops too
+		loopedStreamResponse("Let me run.\n", 10),           // attempt 1: degenerate loop
+		loopedStreamResponse("Let me do it.\n", 10),         // attempt 2 (nudge retry): loops too
+		NewStopResponse("Recovered: the build now passes."), // attempt 3 (recovery final): clean
 	)
 
-	_, err := ag.ProcessQuery("Please run the tests")
-	if err == nil {
-		t.Fatalf("a second repetition loop must fail the turn")
+	if _, err := ag.ProcessQuery("Please run the tests"); err != nil {
+		t.Fatalf("ProcessQuery (should recover via the escalation): %v", err)
 	}
-	// Exactly two model calls: the looping attempt + the single retry.
-	if calls := len(client.GetSentRequests()); calls != 2 {
-		t.Errorf("model calls = %d, want 2 (no unbounded retry)", calls)
+
+	// Three model calls: the looping attempt, the looping nudge retry, and the
+	// recovery final attempt.
+	if calls := len(client.GetSentRequests()); calls != 3 {
+		t.Fatalf("model calls = %d, want 3 (loop + looping retry + recovery final)", calls)
+	}
+
+	// The recovery escalation fired and succeeded.
+	stats := metrics.Snapshot()
+	var escalations, recoveries int64
+	for _, s := range stats {
+		escalations += s.RecoveryEscalations
+		recoveries += s.RecoveryRecoveries
+	}
+	if escalations != 1 {
+		t.Errorf("recovery escalations = %d, want 1; snapshot=%+v", escalations, stats)
+	}
+	if recoveries != 1 {
+		t.Errorf("recovery recoveries = %d, want 1; snapshot=%+v", recoveries, stats)
+	}
+
+	// The recovered reply reached the client.
+	if lastMsg := lastAssistantMessage(t, ag); !strings.Contains(lastMsg.Content, "Recovered") {
+		t.Errorf("state does not carry the recovered reply: %q", lastMsg.Content)
 	}
 }
 
@@ -339,6 +367,105 @@ func TestRepetitionGuardLoopThenToolCallRetryKeepsToolCall(t *testing.T) {
 	// The retried tool call was kept and the turn completed.
 	if lastMsg := lastAssistantMessage(t, ag); !strings.Contains(lastMsg.Content, "reads cleanly") {
 		t.Errorf("state does not carry the final answer: %q", lastMsg.Content)
+	}
+}
+
+// newRepetitionAgentWithGuard builds an agent backed by the scripted client
+// with streaming enabled and a fully specified repetition-guard config
+// (including the recovery gate). Use it to pin escalation behavior — the
+// plain newRepetitionAgent leaves recovery at its default (enabled).
+func newRepetitionAgentWithGuard(t *testing.T, guard *configuration.RepetitionGuardConfig, responses ...*ScriptedResponse) (*Agent, *ScriptedClient) {
+	t.Helper()
+	mgr, cleanup := configuration.NewTestManager(t)
+	t.Cleanup(cleanup)
+	if err := mgr.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		cfg.RepetitionGuard = guard
+		return nil
+	}); err != nil {
+		t.Fatalf("UpdateConfigNoSave: %v", err)
+	}
+	client := NewScriptedClient(responses...)
+	ag, err := NewAgentWithClient(client, api.TestClientType, mgr)
+	if err != nil {
+		t.Fatalf("NewAgentWithClient: %v", err)
+	}
+	t.Cleanup(func() { ag.Shutdown() })
+	ag.SetStreamingEnabled(true)
+	return ag, client
+}
+
+// recoveryDisabledGuard returns a repetition guard config with the guard on
+// and the recovery-compaction escalation explicitly disabled.
+func recoveryDisabledGuard() *configuration.RepetitionGuardConfig {
+	return &configuration.RepetitionGuardConfig{
+		Enabled:  boolPtr(true),
+		Recovery: &configuration.RepetitionRecoveryConfig{Enabled: boolPtr(false)},
+	}
+}
+
+// TestRepetitionGuardRecoveryDisabledSecondLoopFails pins the opt-out: with
+// the recovery-compaction escalation disabled, a second repetition loop fails
+// the turn (the pre-recovery behavior) — exactly two model calls, no
+// escalation recorded.
+func TestRepetitionGuardRecoveryDisabledSecondLoopFails(t *testing.T) {
+	metrics := NewRepetitionMetrics()
+	cleanupMetrics := SetGlobalRepetitionMetricsForTest(metrics)
+	defer cleanupMetrics()
+
+	ag, client := newRepetitionAgentWithGuard(t, recoveryDisabledGuard(),
+		loopedStreamResponse("Let me run.\n", 10),
+		loopedStreamResponse("Let me do it.\n", 10), // the retry loops too
+	)
+
+	_, err := ag.ProcessQuery("Please run the tests")
+	if err == nil {
+		t.Fatalf("with recovery disabled, a second loop must fail the turn")
+	}
+	if calls := len(client.GetSentRequests()); calls != 2 {
+		t.Errorf("model calls = %d, want 2 (no escalation)", calls)
+	}
+	var escalations int64
+	for _, s := range metrics.Snapshot() {
+		escalations += s.RecoveryEscalations
+	}
+	if escalations != 0 {
+		t.Errorf("recovery escalations = %d, want 0 (escalation disabled)", escalations)
+	}
+}
+
+// TestRepetitionGuardThirdLoopFailsTurn pins the bounded guarantee: even with
+// recovery enabled, a THIRD loop (the recovery final attempt also degenerating)
+// fails the turn rather than looping a fourth time. The escalation and its
+// recovery counter are both recorded (it fired but did not save the turn).
+func TestRepetitionGuardThirdLoopFailsTurn(t *testing.T) {
+	metrics := NewRepetitionMetrics()
+	cleanupMetrics := SetGlobalRepetitionMetricsForTest(metrics)
+	defer cleanupMetrics()
+
+	ag, client := newRepetitionAgent(t, true, 0,
+		loopedStreamResponse("Let me run.\n", 10),
+		loopedStreamResponse("Let me do it.\n", 10),
+		loopedStreamResponse("Running.\n", 10), // the recovery final attempt loops too
+	)
+
+	_, err := ag.ProcessQuery("Please run the tests")
+	if err == nil {
+		t.Fatalf("a third repetition loop must fail the turn")
+	}
+	// Three model calls: loop + looping retry + looping recovery final.
+	if calls := len(client.GetSentRequests()); calls != 3 {
+		t.Errorf("model calls = %d, want 3 (no unbounded retry)", calls)
+	}
+	var escalations, recoveries int64
+	for _, s := range metrics.Snapshot() {
+		escalations += s.RecoveryEscalations
+		recoveries += s.RecoveryRecoveries
+	}
+	if escalations != 1 {
+		t.Errorf("recovery escalations = %d, want 1", escalations)
+	}
+	if recoveries != 0 {
+		t.Errorf("recovery recoveries = %d, want 0 (the final attempt looped)", recoveries)
 	}
 }
 

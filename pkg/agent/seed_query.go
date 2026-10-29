@@ -568,6 +568,16 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 	// wired above before core.NewAgent consumed the options.
 	steerDeliverer.setSeedAgent(seedAgent)
 
+	// Recovery-compaction wiring: the repetition guard's escalation (when
+	// the nudge retry also loops) persists its durable de-loop into seed's
+	// LIVE per-query State, not the durable store — the running loop reads
+	// its own state on every iteration, so a de-loop that only reached the
+	// provider's local slice (or sprout's durable state) would not stop the
+	// CURRENT query from re-reading the loop. syncSeedStateToSprout carries
+	// it into the durable store at query end, as it does for every seed
+	// compaction.
+	setRecoveryState(prov, seedAgent.State())
+
 	return &queryRunContext{
 		seedAgent:       seedAgent,
 		preSeedMsgCount: preSeedMsgCount,

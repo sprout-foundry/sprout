@@ -23,6 +23,17 @@ type RepetitionLoopStat struct {
 	// are reported separately: a model that thinks in circles while still
 	// answering correctly shows up here and nowhere else.
 	ReasoningLoops int64
+	// RecoveryEscalations counts how often the nudge retry also looped and
+	// the recovery-compaction escalation ran (de-loop + optional LLM
+	// summary + final attempt). A model whose RecoveryEscalations are
+	// nearly equal to its Loops is one where the nudge never suffices —
+	// the compaction is the thing that saves those turns.
+	RecoveryEscalations int64
+	// RecoveryRecoveries counts how often the escalation's final attempt
+	// produced a non-loop reply: the escalation fired AND the model
+	// recovered. Escalations that looped a third time (terminal failure)
+	// are not counted here, so Recoveries ≤ Escalations.
+	RecoveryRecoveries int64
 }
 
 // repetitionKey is the (provider, model) bucket of the metric.
@@ -57,6 +68,48 @@ func (m *RepetitionMetrics) Record(provider, model string) {
 func (m *RepetitionMetrics) RecordReasoning(provider, model string) {
 	m.record(provider, model, true)
 }
+
+// RecordRecoveryEscalation counts one recovery-compaction escalation: the
+// nudge retry also looped, so the provider ran the de-loop + (optional) LLM
+// summary and a final attempt. It is the denominator the recovery counters
+// are read against — a model whose RecoveryEscalations track its Loops is
+// one where the nudge alone never suffices.
+func (m *RepetitionMetrics) RecordRecoveryEscalation(provider, model string) {
+	m.incrRecovery(provider, model, func(s *RepetitionLoopStat) { s.RecoveryEscalations++ })
+}
+
+// RecordRecoverySuccess counts one escalation whose final attempt produced a
+// non-loop reply: the recovery compaction saved the turn. An escalation whose
+// final attempt loops a third time (terminal failure) is NOT counted, so
+// RecoveryRecoveries ≤ RecoveryEscalations always holds.
+func (m *RepetitionMetrics) RecordRecoverySuccess(provider, model string) {
+	m.incrRecovery(provider, model, fnRecoverySuccess)
+}
+
+// incrRecovery normalizes the key, locks the cell, and applies one of the
+// recovery counters — keeping the lookup logic in one place.
+func (m *RepetitionMetrics) incrRecovery(provider, model string, apply func(*RepetitionLoopStat)) {
+	if m == nil {
+		return
+	}
+	if provider == "" {
+		provider = "unknown"
+	}
+	if model == "" {
+		model = "unknown"
+	}
+	key := repetitionKey{provider: provider, model: model}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	stat, ok := m.stats[key]
+	if !ok {
+		stat = &RepetitionLoopStat{Provider: provider, Model: model}
+		m.stats[key] = stat
+	}
+	apply(stat)
+}
+
+func fnRecoverySuccess(s *RepetitionLoopStat) { s.RecoveryRecoveries++ }
 
 func (m *RepetitionMetrics) record(provider, model string, reasoning bool) {
 	if m == nil {

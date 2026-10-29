@@ -127,8 +127,13 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 	// markerStr is constant for the entire call so we allocate once.
 	markerStr := []byte("__SPROUT_DONE__" + marker + ":")
 
-	// Subscribe to the session's output stream.
-	sub := session.subscribe()
+	// Subscribe to the session's output stream. Mandatory: this consumer must
+	// see every chunk of the command it is waiting on. A large-output command
+	// produces far more chunks than the subscriber buffer holds (a 2 MB
+	// stream is ~22k chunks against a 10k buffer), so an evictable subscriber
+	// here would be dropped as a matter of course and the command reported as
+	// failed while it was still running.
+	sub := session.subscribeMandatory()
 	defer session.unsubscribe(sub)
 
 	// Check if context is already cancelled before sending the command.
@@ -267,7 +272,13 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 
 		case chunk, ok := <-sub.ch:
 			if !ok {
-				// Channel closed — PTY session terminated unexpectedly.
+				// The channel closed because the session ended (this
+				// subscriber is mandatory, so it is never evicted for falling
+				// behind). If the sentinel made it into the capture the command
+				// did complete — report it rather than a spurious failure.
+				if output, code, found := findSentinel([]byte(buf.String()), markerStr, &buf, echoesInput); found {
+					return output, code, nil
+				}
 				return stripANSI(buf.String()), -1, fmt.Errorf("PTY session terminated while waiting for command completion")
 			}
 			// Output is flowing — extend the inactivity grace.
@@ -284,87 +295,107 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 			// far more output than a tool result can carry anyway.
 			bufBytes := []byte(buf.String())
 
-			// Use bytes.Index for fast prefix search, then validate digit.
-			idx := bytes.Index(bufBytes, markerStr)
-			for idx >= 0 {
-				afterPrefixStart := idx + len(markerStr)
-				if afterPrefixStart < len(bufBytes) {
-					nextChar := bufBytes[afterPrefixStart]
-					if nextChar >= '0' && nextChar <= '9' {
-						// Found actual sentinel output (not PTY echo). Parse exit code.
-						// Note: We do NOT require the sentinel to be at line start because
-						// shells (especially zsh) may emit OSC/title escape sequences right
-						// before the sentinel without a newline separator. The 128-bit random
-						// marker makes false positives astronomically unlikely regardless.
-						var codeStr []byte
-						for j := afterPrefixStart; j < len(bufBytes); j++ {
-							b := bufBytes[j]
-							if b >= '0' && b <= '9' {
-								codeStr = append(codeStr, b)
-							} else {
-								break
-							}
-						}
-						if len(codeStr) > 0 {
-							afterDigitsStart := afterPrefixStart + len(codeStr)
-							if afterDigitsStart < len(bufBytes) {
-								afterDigits := bufBytes[afterDigitsStart:]
-								lineEnd := bytes.IndexByte(afterDigits, '\n')
-								if lineEnd >= 0 {
-									code, err := strconv.Atoi(string(codeStr))
-									if err != nil {
-										return stripANSI(buf.String()), -1, fmt.Errorf("failed to parse exit code from sentinel: %w", err)
-									}
-
-									// The sentinel is the last thing the command
-									// writes, so it lives in the retained tail;
-									// everything before it is the command's output.
-									output := buf.String()[:idx]
-
-									// Strip the launcher-line echo from the beginning of the
-									// output. Pipe (NoPTY) sessions have no echo at all, so
-									// skip the strip entirely there: a pipe session's output
-									// may legitimately begin with "sh '".
-									if echoesInput {
-										// The PTY echoes the launcher we sent
-										// (`sh '/tmp/sprout-cmd-*.sh'`) as the FIRST line of
-										// the session transcript; the script path (via
-										// shQuote) is embedded in that echo. Anchor the match
-										// at the start of the output so a command that merely
-										// prints a "sh '...'" string is not mis-stripped; fall
-										// back to the first occurrence (covers shells that emit
-										// OSC/title sequences before the echo).
-										echoPrefix := "sh '"
-										echoIdx := strings.Index(output, echoPrefix)
-										if strings.HasPrefix(output, echoPrefix) {
-											echoIdx = 0
-										}
-										if echoIdx != -1 {
-											restAfterEcho := output[echoIdx:]
-											newlineIdx := newlineRegex.FindStringIndex(restAfterEcho)
-											if newlineIdx != nil {
-												output = output[echoIdx+newlineIdx[1]:]
-											}
-										}
-									}
-
-									return stripANSI(output), code, nil
-								}
-							}
-						}
-					}
-				}
-				// Skip past this match and look for the next occurrence.
-				remaining := bufBytes[idx+1:]
-				nextIdx := bytes.Index(remaining, markerStr)
-				if nextIdx >= 0 {
-					idx = idx + 1 + nextIdx
-				} else {
-					idx = -1
-				}
+			if output, code, found := findSentinel(bufBytes, markerStr, &buf, echoesInput); found {
+				return output, code, nil
 			}
 		}
 	}
+}
+
+// findSentinel looks for the completion sentinel in the captured output and
+// returns the command's output (with the launcher echo stripped when the
+// session echoes input) and its exit code. found is false when the sentinel is
+// not present yet — the caller keeps waiting.
+//
+// The sentinel is searched in the retained head+tail of the capture, not the
+// raw stream: the buffer is bounded, and a sentinel that scrolled out of the
+// retained window means the command produced far more output than a tool
+// result can carry anyway.
+//
+// Only a match followed by digits AND a newline counts. The PTY echo of the
+// command contains the literal "$?" in place of the code, so requiring a digit
+// rejects the echo; requiring the newline rejects a partial sentinel that a
+// chunk boundary cut in half.
+func findSentinel(bufBytes, markerStr []byte, buf *agenttools.BoundedCapture, echoesInput bool) (string, int, bool) {
+	idx := bytes.Index(bufBytes, markerStr)
+	for idx >= 0 {
+		afterPrefixStart := idx + len(markerStr)
+		if afterPrefixStart < len(bufBytes) {
+			nextChar := bufBytes[afterPrefixStart]
+			if nextChar >= '0' && nextChar <= '9' {
+				// Found actual sentinel output (not PTY echo). Parse exit code.
+				// Note: We do NOT require the sentinel to be at line start because
+				// shells (especially zsh) may emit OSC/title escape sequences right
+				// before the sentinel without a newline separator. The 128-bit random
+				// marker makes false positives astronomically unlikely regardless.
+				var codeStr []byte
+				for j := afterPrefixStart; j < len(bufBytes); j++ {
+					b := bufBytes[j]
+					if b >= '0' && b <= '9' {
+						codeStr = append(codeStr, b)
+					} else {
+						break
+					}
+				}
+				if len(codeStr) > 0 {
+					afterDigitsStart := afterPrefixStart + len(codeStr)
+					if afterDigitsStart < len(bufBytes) {
+						afterDigits := bufBytes[afterDigitsStart:]
+						lineEnd := bytes.IndexByte(afterDigits, '\n')
+						if lineEnd >= 0 {
+							code, err := strconv.Atoi(string(codeStr))
+							if err != nil {
+								return "", -1, false
+							}
+
+							// The sentinel is the last thing the command
+							// writes, so it lives in the retained tail;
+							// everything before it is the command's output.
+							output := buf.String()[:idx]
+
+							// Strip the launcher-line echo from the beginning of the
+							// output. Pipe (NoPTY) sessions have no echo at all, so
+							// skip the strip entirely there: a pipe session's output
+							// may legitimately begin with "sh '".
+							if echoesInput {
+								// The PTY echoes the launcher we sent
+								// (`sh '/tmp/sprout-cmd-*.sh'`) as the FIRST line of
+								// the session transcript; the script path (via
+								// shQuote) is embedded in that echo. Anchor the match
+								// at the start of the output so a command that merely
+								// prints a "sh '...'" string is not mis-stripped; fall
+								// back to the first occurrence (covers shells that emit
+								// OSC/title sequences before the echo).
+								echoPrefix := "sh '"
+								echoIdx := strings.Index(output, echoPrefix)
+								if strings.HasPrefix(output, echoPrefix) {
+									echoIdx = 0
+								}
+								if echoIdx != -1 {
+									restAfterEcho := output[echoIdx:]
+									newlineIdx := newlineRegex.FindStringIndex(restAfterEcho)
+									if newlineIdx != nil {
+										output = output[echoIdx+newlineIdx[1]:]
+									}
+								}
+							}
+
+							return stripANSI(output), code, true
+						}
+					}
+				}
+			}
+			// Skip past this match and look for the next occurrence.
+			remaining := bufBytes[idx+1:]
+			nextIdx := bytes.Index(remaining, markerStr)
+			if nextIdx >= 0 {
+				idx = idx + 1 + nextIdx
+			} else {
+				idx = -1
+			}
+		}
+	}
+	return "", -1, false
 }
 
 // generateMarker creates a unique hex string using crypto/rand.

@@ -480,7 +480,8 @@ The view leaves out two things the app's sidebar has: the commit box's
 that is not a repository shows "No git repository" with a Refresh button.
 
 **WASM vs daemon.** Git calls go through the workspace fetch. On a daemon host
-they reach `/api/git/*` on the daemon (or `transport.apiBaseURL`). On an
+they reach `/api/git/*` on the daemon (its `transport.agent.apiBaseURL`, else
+`transport.apiBaseURL`). On an
 in-browser-agent host (`transport.agent.kind: 'wasm'`) the in-browser adapter
 answers them with the browser's own git (isomorphic-git over the browser
 file store); nothing is forwarded. Browser git cannot unstage, discard,

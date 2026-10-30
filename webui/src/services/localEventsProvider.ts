@@ -66,4 +66,8 @@ export class LocalEventsProvider implements EventsProvider {
   flushQueuedMessages(): number {
     return this.ws().flushQueuedMessages();
   }
+
+  setActiveChatId(chatId: string | null): void {
+    this.ws().setActiveChatId(chatId);
+  }
 }

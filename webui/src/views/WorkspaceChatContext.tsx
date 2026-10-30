@@ -291,9 +291,7 @@ function WorkspaceChatRuntime({
   // The transport reattaches to the chat on screen after a reconnect and
   // deduplicates its events by seq, so it needs to know which chat that is.
   useEffect(() => {
-    (eventsProvider as EventsProvider & { setActiveChatId?: (id: string | null) => void }).setActiveChatId?.(
-      state.activeChatId,
-    );
+    eventsProvider.setActiveChatId?.(state.activeChatId);
   }, [eventsProvider, state.activeChatId]);
 
   // An in-page agent run dies with the page; one recorded as in flight when

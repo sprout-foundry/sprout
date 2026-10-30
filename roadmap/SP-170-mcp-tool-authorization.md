@@ -33,19 +33,23 @@ Two details worth borrowing:
 
 ## What we do not do in v1
 
-**Tool annotations are deferred.** The MCP spec defines `readOnlyHint`,
+**Tool annotations are not used.** The MCP spec defines `readOnlyHint`,
 `destructiveHint`, `idempotentHint` and `openWorldHint`, with pessimistic defaults
 (absent = non-read-only, destructive, non-idempotent, open-world). They are the
-natural signal for "auto-approve reads, confirm writes", but:
+natural signal for "auto-approve reads, confirm writes", but they cannot carry a
+security property:
 
-- Sprout does not capture them today — `mcp.MCPTool` has no annotations field, so
-  this would need a prerequisite change to the tool-discovery path.
+- Sprout does not capture them — `mcp.MCPTool` has no annotations field — so using
+  them would need a prerequisite change to the tool-discovery path.
 - The spec is explicit that annotations are **hints**, and clients **must** treat
   them as untrusted unless the server is trusted. A server can claim
   `readOnlyHint: true` and delete files.
 
-The allowlist alone delivers the security property. Annotations would reduce
-prompting, not add safety, so they are a follow-up rather than a blocker.
+An annotation can therefore only lower friction for a tool that is *already*
+allowlisted, where no friction remains. The allowlist already encodes the user's
+trust decision; layering a second, self-declared signal on top adds a way to get
+that decision wrong without adding safety. Dropped rather than deferred — this is
+a decision, not a backlog item.
 
 ## Design
 
@@ -99,13 +103,14 @@ This is a prerequisite for the allowlist, not an optional cleanup.
 
 ## Phasing
 
-1. **Gate and allowlist.** Config field, allowlist matching, broker path for both
-   entry points, prompt with the four choices, deny when there is no surface.
-2. **Server-aware identity.** Resolve the server by configured name; fail closed on
-   ambiguity. Wire the allowlist to the resolved identity.
-3. **Annotations.** Capture tool annotations at discovery; use `readOnlyHint` only
-   to *lower* friction for servers the user has already allowlisted. Never to
-   authorize a tool that is not allowlisted.
+1. **Gate and allowlist.** ✅ Shipped 2026-10-30 (`db7674c77`) — config field,
+   allowlist matching, both entry points plus the `fetch_url` GitHub route, the
+   four-way prompt, deny when no surface can answer.
+2. **Server-aware identity.** ✅ Shipped 2026-10-30 (`13cea775e`) — resolve by
+   registered server name, longest first; refuse to guess when nothing matches.
+
+Complete. Phase 3 (annotations) was dropped rather than deferred — see "What we do
+not do in v1" for why.
 
 ## Testing
 

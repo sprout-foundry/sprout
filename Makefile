@@ -161,6 +161,17 @@ clean:
 	find . -name "*.test" -delete
 	find . -name "test_failure_*.log" -delete
 
+# Starter templates are embedded whole into the WASM binary, so an npm
+# install inside one ends up inside the artifact: the platform-specific
+# native binaries in node_modules take the binary from ~60 MB to hundreds
+# of megabytes and add tens of minutes of brotli. They are gitignored and
+# regenerated when a starter is used, so removing them is always safe.
+clean-starters:
+	@echo "Removing node_modules from starter templates..."
+	@find pkg/starters/data -name node_modules -type d -prune -exec rm -rf {} +
+	@echo "Done."
+.PHONY: clean-starters
+
 # Quick test for development (just unit tests)
 test: test-unit
 

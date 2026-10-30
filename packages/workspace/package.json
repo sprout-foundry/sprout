@@ -1,6 +1,6 @@
 {
   "name": "@sprout-foundry/workspace",
-  "version": "1.9.5",
+  "version": "1.9.6",
   "description": "Composition API for Sprout — the workspace, its spaces and views, for hosts that embed them",
   "license": "Apache-2.0",
   "repository": {

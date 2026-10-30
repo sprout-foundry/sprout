@@ -5,12 +5,12 @@
   },
   "cost": {
     "currency": "USD",
-    "input_token_cost": 0,
-    "output_token_cost": 0
+    "input_token_cost": 1,
+    "output_token_cost": 1
   },
   "defaults": {
     "max_tokens": -1,
-    "model": "deepseek-ai/DeepSeek-R1-0528",
+    "model": "deepseek-ai/DeepSeek-V3.2-TEE",
     "temperature": 0.7,
     "top_p": 1
   },
@@ -46,12 +46,20 @@
       "zai-org/GLM-5.1-TEE",
       "zai-org/GLM-5.2-TEE",
       "deepseek-ai/DeepSeek-V4-Flash-0731-TEE",
-      "Qwen/Qwen3.8-27B-TEE"
+      "Qwen/Qwen3.8-27B-TEE",
+      "Qwen/Qwen3.8-Max-0902",
+      "deepseek-ai/DeepSeek-V4-Pro-0813",
+      "Qwen/Qwen3.8-2.4T-A95B",
+      "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+      "moonshotai/Kimi-K2.7-Code",
+      "zai-org/GLM-5.2-Fast",
+      "zai-org/GLM-5.3"
     ],
     "default_context_limit": 64000,
-    "default_model": "deepseek-ai/DeepSeek-R1-0528",
+    "default_model": "deepseek-ai/DeepSeek-V3.2-TEE",
     "model_info": [
       {
+        "cached_input_cost": 0.00245,
         "context_length": 131072,
         "description": "NVIDIA Nemotron 3 Nano Omni 30B on confidential TEE compute",
         "id": "Nemotron-3-Nano-Omni-30B-TEE",
@@ -64,6 +72,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.02989,
         "context_length": 262144,
         "description": "Qwen3 235B A22B Thinking on confidential TEE compute",
         "id": "Qwen/Qwen3-235B-A22B-Thinking-2507-TEE",
@@ -76,7 +85,8 @@
         ]
       },
       {
-        "context_length": 41984,
+        "cached_input_cost": 0.0104,
+        "context_length": 40960,
         "description": "Qwen3 32B on confidential TEE compute",
         "id": "Qwen/Qwen3-32B-TEE",
         "input_cost": 0.104,
@@ -87,6 +97,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.045,
         "context_length": 262144,
         "description": "Qwen3.5 397B A17B on confidential TEE compute",
         "id": "Qwen/Qwen3.5-397B-A17B-TEE",
@@ -100,6 +111,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.025,
         "context_length": 262144,
         "description": "Qwen3.6 27B on confidential TEE compute",
         "id": "Qwen/Qwen3.6-27B-TEE",
@@ -112,6 +124,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.1,
         "context_length": 131072,
         "description": "DeepSeek V3.2 on confidential TEE compute",
         "id": "deepseek-ai/DeepSeek-V3.2-TEE",
@@ -124,6 +137,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.012,
         "context_length": 131072,
         "description": "Google Gemma 4 31B Turbo on confidential TEE compute",
         "id": "google/gemma-4-31B-turbo-TEE",
@@ -136,12 +150,13 @@
         ]
       },
       {
+        "cached_input_cost": 0.039,
         "context_length": 262144,
         "description": "Moonshot Kimi K2.6 on confidential TEE compute",
         "id": "moonshotai/Kimi-K2.6-TEE",
-        "input_cost": 0.45,
+        "input_cost": 0.39,
         "name": "Kimi K2.6 (TEE)",
-        "output_cost": 1.95,
+        "output_cost": 1.8,
         "tags": [
           "vision",
           "tools",
@@ -149,6 +164,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.185,
         "context_length": 1048576,
         "description": "Moonshot Kimi K3 on confidential TEE compute",
         "id": "moonshotai/Kimi-K3-TEE",
@@ -161,6 +177,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.00245,
         "context_length": 131072,
         "description": "Mistral Nemo Instruct 2407 on confidential TEE compute",
         "id": "unsloth/Mistral-Nemo-Instruct-2407-TEE",
@@ -172,18 +189,20 @@
         ]
       },
       {
-        "context_length": 207872,
+        "cached_input_cost": 0.09,
+        "context_length": 202752,
         "description": "Z.AI GLM-5.1 on confidential TEE compute",
         "id": "zai-org/GLM-5.1-TEE",
-        "input_cost": 0.98,
+        "input_cost": 0.9,
         "name": "GLM-5.1 (TEE)",
-        "output_cost": 3.08,
+        "output_cost": 2.9,
         "tags": [
           "tools",
           "reasoning"
         ]
       },
       {
+        "cached_input_cost": 0.125,
         "context_length": 1048576,
         "description": "Z.AI GLM-5.2 on confidential TEE compute",
         "id": "zai-org/GLM-5.2-TEE",
@@ -196,7 +215,8 @@
         ]
       },
       {
-        "context_length": 1000000,
+        "cached_input_cost": 0.044,
+        "context_length": 1048576,
         "description": "DeepSeek V4 Flash 0731 on confidential TEE compute",
         "id": "deepseek-ai/DeepSeek-V4-Flash-0731-TEE",
         "input_cost": 0.44,
@@ -208,6 +228,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.0039,
         "context_length": 262144,
         "description": "Qwen3.8 27B on confidential TEE compute",
         "id": "Qwen/Qwen3.8-27B-TEE",
@@ -218,6 +239,104 @@
           "vision",
           "tools",
           "reasoning"
+        ]
+      },
+      {
+        "cached_input_cost": 0.25,
+        "context_length": 1000000,
+        "description": "Qwen3.8 Max 0902 is Qwen's 2.4T-parameter mixture-of-experts model with text, image, and video input on Chutes public compute",
+        "id": "Qwen/Qwen3.8-Max-0902",
+        "input_cost": 2,
+        "name": "Qwen3.8 Max 0902",
+        "output_cost": 6,
+        "tags": [
+          "vision",
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "cached_input_cost": 0.15,
+        "context_length": 1048576,
+        "description": "DeepSeek V4 Pro 0813 is DeepSeek's flagship MoE for advanced reasoning, coding, and long-horizon agentic tasks on Chutes public compute",
+        "id": "deepseek-ai/DeepSeek-V4-Pro-0813",
+        "input_cost": 0.85,
+        "name": "DeepSeek V4 Pro 0813",
+        "output_cost": 2.65,
+        "tags": [
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "cached_input_cost": 0.25,
+        "context_length": 262144,
+        "description": "Qwen3.8 2.4T A95B is Qwen's text-only 2.4T-parameter mixture-of-experts model with always-on reasoning and a 262K context window on Chutes public compute",
+        "id": "Qwen/Qwen3.8-2.4T-A95B",
+        "input_cost": 2,
+        "name": "Qwen3.8 2.4T A95B",
+        "output_cost": 6,
+        "tags": [
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "cached_input_cost": 0.03,
+        "context_length": 1048576,
+        "description": "DeepSeek V4.1 Flash 1017 is DeepSeek's fast multimodal model with vision input, thinking mode, and a 1M context window on Chutes public compute",
+        "id": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+        "input_cost": 0.3,
+        "name": "DeepSeek V4.1 Flash 1017",
+        "output_cost": 1.2,
+        "tags": [
+          "vision",
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "cached_input_cost": 0.17,
+        "context_length": 262144,
+        "description": "Kimi K2.7 Code is Moonshot's coding-focused agentic model with vision input and a 262K context window on Chutes public compute",
+        "id": "moonshotai/Kimi-K2.7-Code",
+        "input_cost": 0.83,
+        "name": "Kimi K2.7 Code",
+        "output_cost": 3.5,
+        "tags": [
+          "vision",
+          "coding",
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "cached_input_cost": 0.49,
+        "context_length": 1048576,
+        "description": "GLM-5.2 Fast is a high-throughput variant of Z.AI's GLM-5.2 reasoning model with a 1M context window on Chutes public compute",
+        "id": "zai-org/GLM-5.2-Fast",
+        "input_cost": 2.45,
+        "name": "GLM-5.2 Fast",
+        "output_cost": 7.7,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.24,
+        "context_length": 1048576,
+        "description": "GLM-5.3 is Z.AI's flagship open-weights coding and agentic reasoning model with a 1M context window on Chutes public compute",
+        "id": "zai-org/GLM-5.3",
+        "input_cost": 1.23,
+        "name": "GLM-5.3",
+        "output_cost": 3.85,
+        "tags": [
+          "coding",
+          "tools",
+          "reasoning",
+          "structured_output"
         ]
       }
     ],

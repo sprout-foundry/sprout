@@ -54,7 +54,7 @@
         ]
       },
       {
-        "cached_input_cost": 0,
+        "cached_input_cost": 0.015,
         "context_length": 32768,
         "description": "Mistral Small - Cost-effective model for simple tasks",
         "id": "mistral-small-latest",
@@ -66,7 +66,7 @@
         ]
       },
       {
-        "cached_input_cost": 0,
+        "cached_input_cost": 0.03,
         "context_length": 32768,
         "description": "Codestral - Coding specialized model",
         "id": "codestral-latest",
@@ -310,7 +310,7 @@
         "id": "voxtral-small-24b-2507",
         "input_cost": 0.1,
         "name": "Mistral: Voxtral Small 24B 2507",
-        "output_cost": 0.3,
+        "output_cost": 0.4,
         "tags": [
           "tools",
           "structured_output"
@@ -371,6 +371,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.075,
         "context_length": 262144,
         "description": "Mistral Medium 3.5 is a dense 128B instruction-following model from Mistral AI. It supports text and image inputs with text output, and is designed for agentic workflows, coding, and complex reasoning tasks.",
         "id": "mistral-medium-3-5:batch",
@@ -418,9 +419,9 @@
         "context_length": 1048576,
         "description": "Mistral Large 4 is Mistral's flagship open-weight multimodal model (1.05T total, 49B active) built for reasoning, coding, and agentic workloads, with a 1M-token context window.",
         "id": "mistral-large-4-0",
-        "input_cost": 0.68,
-        "name": "Mistral: Mistral Large 4",
-        "output_cost": 2.09,
+        "input_cost": 0.7,
+        "name": "Mistral Large 4",
+        "output_cost": 2.1,
         "tags": [
           "tools",
           "vision",
@@ -435,9 +436,10 @@
       "devstral-2512": 262144,
       "mistral-embed": 32768,
       "mistral-large-2407": 131072,
-          "mistral-large-2411": 131072,
-    "mistral-large-4-0": 1048576,
-    "mistral-large-latest": 131072,"mistral-medium-2312": 32768,
+      "mistral-large-2411": 131072,
+      "mistral-large-4-0": 1048576,
+      "mistral-large-latest": 131072,
+      "mistral-medium-2312": 32768,
       "mistral-medium-latest": 32768,
       "mistral-small-2409": 32768,
       "mistral-small-latest": 32768,

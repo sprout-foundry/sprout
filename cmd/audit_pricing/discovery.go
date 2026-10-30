@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -144,6 +145,14 @@ func discoverFromNativeAPI(ctx context.Context, providerID string) ([]modelcontr
 	return canon, ""
 }
 
+// roundUSD rounds a per-million-token price to 6 decimal places. OpenRouter
+// reports prices per token, so converting (e.g. "0.00000005" * 1e6) otherwise
+// leaks float64 representation error (0.049999999999999996) into committed
+// configs and manifests.
+func roundUSD(v float64) float64 {
+	return math.Round(v*1e6) / 1e6
+}
+
 // canonicalToConfigEntry converts a discovered canonical model into a JSON
 // map suitable for appending to a provider config's model_info array.
 func canonicalToConfigEntry(m modelcontract.CanonicalModel) map[string]interface{} {
@@ -164,10 +173,10 @@ func canonicalToConfigEntry(m modelcontract.CanonicalModel) map[string]interface
 		entry["tags"] = tags
 	}
 	if m.Pricing != nil {
-		entry["input_cost"] = m.Pricing.InputPerMTok
-		entry["output_cost"] = m.Pricing.OutputPerMTok
+		entry["input_cost"] = roundUSD(m.Pricing.InputPerMTok)
+		entry["output_cost"] = roundUSD(m.Pricing.OutputPerMTok)
 		if m.Pricing.CachedPerMTok > 0 {
-			entry["cached_input_cost"] = m.Pricing.CachedPerMTok
+			entry["cached_input_cost"] = roundUSD(m.Pricing.CachedPerMTok)
 		}
 	}
 	return entry
@@ -291,9 +300,9 @@ func addModelsToManifest(manifestPath, providerID string, newModels []modelcontr
 			OutputPerMTok: 0,
 		}
 		if m.Pricing != nil {
-			entry.InputPerMTok = m.Pricing.InputPerMTok
-			entry.OutputPerMTok = m.Pricing.OutputPerMTok
-			entry.CachedPerMTok = m.Pricing.CachedPerMTok
+			entry.InputPerMTok = roundUSD(m.Pricing.InputPerMTok)
+			entry.OutputPerMTok = roundUSD(m.Pricing.OutputPerMTok)
+			entry.CachedPerMTok = roundUSD(m.Pricing.CachedPerMTok)
 		}
 		pm.Models = append(pm.Models, entry)
 		existing[m.ID] = true

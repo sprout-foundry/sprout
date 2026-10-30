@@ -1028,4 +1028,13 @@ export interface EventsProvider {
    * omit it, and the server keeps its default (every window is a candidate).
    */
   reportFocus?(): void;
+
+  /**
+   * Tell the transport which chat is on screen (optional).
+   *
+   * A transport that reattaches to a chat after a reconnect, or attaches to
+   * it on connect where the server cannot learn it otherwise, needs to know
+   * which chat that is. Providers without per-chat delivery omit it.
+   */
+  setActiveChatId?(chatId: string | null): void;
 }

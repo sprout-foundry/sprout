@@ -6,6 +6,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/mcp"
 	"github.com/sprout-foundry/sprout/pkg/webcontent"
 )
@@ -106,7 +107,10 @@ func (f *routerFakeMCPServer) GetPrompt(_ context.Context, _ string, _ map[strin
 }
 
 // testAgent creates a minimal Agent for testing with the given MCPManager.
-func testAgent(mgr mcp.MCPManager) *Agent {
+// The `github` server is allowlisted server-wide: SP-170 gates this route too,
+// and these tests pin the URL routing rather than the authorization decision.
+func testAgent(t *testing.T, mgr mcp.MCPManager) *Agent {
+	t.Helper()
 	agent := &Agent{
 		interruptCtx: context.Background(),
 		mcpSub:       NewAgentMCPManager(),
@@ -114,6 +118,16 @@ func testAgent(mgr mcp.MCPManager) *Agent {
 	}
 	agent.mcpSub.SetManager(mgr)
 	agent.output.SetOutputMutex(&sync.Mutex{})
+
+	cfgMgr, cleanup := configuration.NewTestManager(t)
+	t.Cleanup(cleanup)
+	if err := cfgMgr.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		cfg.ApprovedMCPTools = append(cfg.ApprovedMCPTools, "github")
+		return nil
+	}); err != nil {
+		t.Fatalf("seed MCP allowlist: %v", err)
+	}
+	agent.configManager = cfgMgr
 	return agent
 }
 
@@ -135,7 +149,7 @@ func TestTryRouteGitHubToMCP_NilManager(t *testing.T) {
 
 func TestTryRouteGitHubToMCP_NonGitHubURL(t *testing.T) {
 	mgr := newGitHubRouterMCPManager()
-	a := testAgent(mgr)
+	a := testAgent(t, mgr)
 
 	content, handled, err := a.tryRouteGitHubToMCP(context.Background(), "https://example.com/page")
 	if handled {
@@ -152,7 +166,7 @@ func TestTryRouteGitHubToMCP_NonGitHubURL(t *testing.T) {
 func TestTryRouteGitHubToMCP_GitHubServerNotAvailable(t *testing.T) {
 	mgr := newGitHubRouterMCPManager()
 	// Don't add a github server
-	a := testAgent(mgr)
+	a := testAgent(t, mgr)
 
 	content, handled, err := a.tryRouteGitHubToMCP(context.Background(), "https://github.com/owner/repo/issues/42")
 	if handled {
@@ -168,7 +182,7 @@ func TestTryRouteGitHubToMCP_GitHubServerNotAvailable(t *testing.T) {
 
 func TestTryRouteGitHubToMCP_GitHubServerNotRunning(t *testing.T) {
 	mgr := newGitHubRouterMCPManager().withGitHubServer(false)
-	a := testAgent(mgr)
+	a := testAgent(t, mgr)
 
 	content, handled, err := a.tryRouteGitHubToMCP(context.Background(), "https://github.com/owner/repo/issues/42")
 	if handled {
@@ -187,7 +201,7 @@ func TestTryRouteGitHubToMCP_IssueURL(t *testing.T) {
 		Content: []mcp.MCPContent{{Type: "text", Text: "Issue #42: Fix bug"}},
 		IsError: false,
 	})
-	a := testAgent(mgr)
+	a := testAgent(t, mgr)
 
 	content, handled, err := a.tryRouteGitHubToMCP(context.Background(), "https://github.com/sprout-foundry/sprout/issues/42")
 	if !handled {
@@ -223,7 +237,7 @@ func TestTryRouteGitHubToMCP_PullRequestURL(t *testing.T) {
 		Content: []mcp.MCPContent{{Type: "text", Text: "PR #7: Add feature"}},
 		IsError: false,
 	})
-	a := testAgent(mgr)
+	a := testAgent(t, mgr)
 
 	content, handled, err := a.tryRouteGitHubToMCP(context.Background(), "https://github.com/sprout-foundry/sprout/pull/7")
 	if !handled {
@@ -249,7 +263,7 @@ func TestTryRouteGitHubToMCP_RepoURL(t *testing.T) {
 		Content: []mcp.MCPContent{{Type: "text", Text: "Repository: sprout"}},
 		IsError: false,
 	})
-	a := testAgent(mgr)
+	a := testAgent(t, mgr)
 
 	content, handled, err := a.tryRouteGitHubToMCP(context.Background(), "https://github.com/sprout-foundry/sprout")
 	if !handled {
@@ -274,7 +288,7 @@ func TestTryRouteGitHubToMCP_RepoURL(t *testing.T) {
 func TestTryRouteGitHubToMCP_FileURL_NotHandled(t *testing.T) {
 	// File URLs should not be routed to MCP — they're handled by the raw rewrite.
 	mgr := newGitHubRouterMCPManager().withGitHubServer(true)
-	a := testAgent(mgr)
+	a := testAgent(t, mgr)
 
 	_, handled, _ := a.tryRouteGitHubToMCP(context.Background(), "https://github.com/sprout-foundry/sprout/blob/main/README.md")
 	if handled {
@@ -287,7 +301,7 @@ func TestTryRouteGitHubToMCP_FileURL_NotHandled(t *testing.T) {
 
 func TestTryRouteGitHubToMCP_DirectoryURL_NotHandled(t *testing.T) {
 	mgr := newGitHubRouterMCPManager().withGitHubServer(true)
-	a := testAgent(mgr)
+	a := testAgent(t, mgr)
 
 	_, handled, _ := a.tryRouteGitHubToMCP(context.Background(), "https://github.com/sprout-foundry/sprout/tree/main/pkg")
 	if handled {
@@ -300,7 +314,7 @@ func TestTryRouteGitHubToMCP_DirectoryURL_NotHandled(t *testing.T) {
 
 func TestTryRouteGitHubToMCP_GistURL_NotHandled(t *testing.T) {
 	mgr := newGitHubRouterMCPManager().withGitHubServer(true)
-	a := testAgent(mgr)
+	a := testAgent(t, mgr)
 
 	_, handled, _ := a.tryRouteGitHubToMCP(context.Background(), "https://gist.github.com/abc123")
 	if handled {
@@ -315,7 +329,7 @@ func TestTryRouteGitHubToMCP_MCPError_FallsThrough(t *testing.T) {
 	mgr := newGitHubRouterMCPManager().
 		withGitHubServer(true).
 		withCallErr(errors.New("server unreachable"))
-	a := testAgent(mgr)
+	a := testAgent(t, mgr)
 
 	content, handled, err := a.tryRouteGitHubToMCP(context.Background(), "https://github.com/owner/repo/issues/1")
 	if handled {
@@ -334,7 +348,7 @@ func TestTryRouteGitHubToMCP_MCPResultIsError_FallsThrough(t *testing.T) {
 		Content: []mcp.MCPContent{{Type: "text", Text: "Not found"}},
 		IsError: true,
 	})
-	a := testAgent(mgr)
+	a := testAgent(t, mgr)
 
 	_, handled, err := a.tryRouteGitHubToMCP(context.Background(), "https://github.com/owner/repo/issues/99999")
 	if handled {
@@ -354,7 +368,7 @@ func TestTryRouteGitHubToMCP_MultipleContentParts(t *testing.T) {
 		},
 		IsError: false,
 	})
-	a := testAgent(mgr)
+	a := testAgent(t, mgr)
 
 	content, handled, err := a.tryRouteGitHubToMCP(context.Background(), "https://github.com/owner/repo/issues/3")
 	if !handled {
@@ -371,7 +385,7 @@ func TestTryRouteGitHubToMCP_MultipleContentParts(t *testing.T) {
 func TestTryRouteGitHubToMCP_NilResult_Handled(t *testing.T) {
 	// A nil result from CallTool (nil, nil) should still be handled with "No result".
 	mgr := newGitHubRouterMCPManager().withGitHubServer(true).withCallResult(nil)
-	a := testAgent(mgr)
+	a := testAgent(t, mgr)
 
 	content, handled, err := a.tryRouteGitHubToMCP(context.Background(), "https://github.com/owner/repo/issues/1")
 	if !handled {
@@ -512,7 +526,7 @@ func TestTryRouteGitHubToMCP_CommitURL(t *testing.T) {
 		Content: []mcp.MCPContent{{Type: "text", Text: "Commit abc123"}},
 		IsError: false,
 	})
-	a := testAgent(mgr)
+	a := testAgent(t, mgr)
 
 	content, handled, err := a.tryRouteGitHubToMCP(context.Background(), "https://github.com/owner/repo/commit/abc123")
 	if !handled {
@@ -534,7 +548,7 @@ func TestTryRouteGitHubToMCP_DiscussionURL(t *testing.T) {
 		Content: []mcp.MCPContent{{Type: "text", Text: "Discussion #42"}},
 		IsError: false,
 	})
-	a := testAgent(mgr)
+	a := testAgent(t, mgr)
 
 	content, handled, err := a.tryRouteGitHubToMCP(context.Background(), "https://github.com/owner/repo/discussions/42")
 	if !handled {
@@ -554,7 +568,7 @@ func TestTryRouteGitHubToMCP_ActionsRunURL(t *testing.T) {
 		Content: []mcp.MCPContent{{Type: "text", Text: "Run #12345 succeeded"}},
 		IsError: false,
 	})
-	a := testAgent(mgr)
+	a := testAgent(t, mgr)
 
 	content, handled, err := a.tryRouteGitHubToMCP(context.Background(), "https://github.com/owner/repo/actions/runs/12345")
 	if !handled {
@@ -576,7 +590,7 @@ func TestTryRouteGitHubToMCP_ReleaseTagURL(t *testing.T) {
 		Content: []mcp.MCPContent{{Type: "text", Text: "Release v1.0.0"}},
 		IsError: false,
 	})
-	a := testAgent(mgr)
+	a := testAgent(t, mgr)
 
 	content, handled, err := a.tryRouteGitHubToMCP(context.Background(), "https://github.com/owner/repo/releases/tag/v1.0.0")
 	if !handled {
@@ -594,7 +608,7 @@ func TestTryRouteGitHubToMCP_ReleaseTagURL(t *testing.T) {
 func TestTryRouteGitHubToMCP_ReleaseNumericID_NotRouted(t *testing.T) {
 	// /releases/123 has no tag, so get_release_by_tag can't be used — fall through.
 	mgr := newGitHubRouterMCPManager().withGitHubServer(true)
-	a := testAgent(mgr)
+	a := testAgent(t, mgr)
 
 	_, handled, _ := a.tryRouteGitHubToMCP(context.Background(), "https://github.com/owner/repo/releases/123")
 	if handled {

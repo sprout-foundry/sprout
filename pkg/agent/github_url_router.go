@@ -61,7 +61,15 @@ func (a *Agent) tryRouteGitHubToMCP(ctx context.Context, rawURL string) (string,
 		return "", false, nil
 	}
 
-	// Call the MCP tool.
+	// Call the MCP tool. SP-170: this is a third route to a server-side MCP
+	// call — `fetch_url` on a GitHub URL reaches it, and the model chooses the
+	// URL — so it is gated like the other two. A denial is returned as a
+	// denial rather than falling back to a plain fetch: silently substituting
+	// a different mechanism for a call the user just refused would defeat the
+	// gate.
+	if authzErr := a.authorizeMCPTool("github", mcpTool); authzErr != nil {
+		return "", false, authzErr
+	}
 	result, callErr := a.mcpSub.GetManager().CallTool(ctx, "github", mcpTool, args)
 	if callErr != nil {
 		a.Logger().Debug("GitHub MCP CallTool failed: %v, falling back to normal fetch\n", callErr)

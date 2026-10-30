@@ -6,12 +6,16 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/injection"
 	"github.com/sprout-foundry/sprout/pkg/mcp"
 )
+
+// mcpMaxResultChars bounds an MCP tool result before it enters the transcript.
+const mcpMaxResultChars = 100_000
 
 // initializeMCP initializes MCP configuration and starts servers if needed
 func (a *Agent) initializeMCP() error {
@@ -295,19 +299,90 @@ func (a *Agent) isValidMCPTool(toolName string) bool {
 	return false
 }
 
-// executeMCPTool executes an MCP tool
-func (a *Agent) executeMCPTool(toolName string, args map[string]interface{}) (string, error) {
-	// Remove mcp_ prefix and parse server:tool format
-	toolName = strings.TrimPrefix(toolName, "mcp_")
-	parts := strings.SplitN(toolName, "_", 2)
-	if len(parts) != 2 {
-		return "", agenterrors.NewInvalidInputError(fmt.Sprintf("invalid MCP tool name format: %s", toolName), nil)
+// mcpCallContext returns the context an MCP call runs under. The agent's
+// interrupt context is what a turn is cancelled through, so an in-flight server
+// call stops on interrupt instead of waiting out the RPC timeout (30s by
+// default). Background is the fallback for an agent that was never armed.
+func (a *Agent) mcpCallContext() context.Context {
+	a.interruptMu.Lock()
+	defer a.interruptMu.Unlock()
+	if a.interruptCtx != nil {
+		return a.interruptCtx
+	}
+	return context.Background()
+}
+
+// resolveMCPToolIdentity splits an advertised MCP tool name into the server that
+// owns it and the tool's own name.
+//
+// The advertised form is "mcp_<server>_<tool>", which is ambiguous when a server
+// name contains an underscore: splitting at the first underscore would read
+// "mcp_my_server_read" as server "my" + tool "server_read". That is not cosmetic
+// once an allowlist exists — the gate would authorize the wrong server, and the
+// denial would name an entry that permits a different one. So the split is made
+// against the configured server names, longest first, and a name that matches no
+// configured server falls back to the historical split (the server may simply
+// not be running yet, and CallTool reports that).
+func (a *Agent) resolveMCPToolIdentity(toolName string) (server, tool string, err error) {
+	rest := strings.TrimPrefix(toolName, "mcp_")
+	if rest == "" {
+		return "", "", agenterrors.NewInvalidInputError("empty MCP tool name", nil)
 	}
 
-	serverName := parts[0]
-	actualToolName := parts[1]
+	var names []string
+	if manager := a.mcpSub.GetManager(); manager != nil {
+		for _, srv := range manager.ListServers() {
+			if srv != nil {
+				names = append(names, srv.GetName())
+			}
+		}
+	}
+	if server, tool, ok := resolveMCPToolIdentityFromNames(rest, names); ok {
+		return server, tool, nil
+	}
 
-	ctx := context.Background()
+	parts := strings.SplitN(rest, "_", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", "", agenterrors.NewInvalidInputError(fmt.Sprintf("invalid MCP tool name format: %s", toolName), nil)
+	}
+	return parts[0], parts[1], nil
+}
+
+// resolveMCPToolIdentityFromNames is the pure half of the split: the longest
+// configured server name that prefixes the advertised remainder on a
+// whole-segment boundary wins, so "my_server" is preferred over "my". ok is
+// false when no configured server matches, leaving the caller to fall back.
+func resolveMCPToolIdentityFromNames(rest string, names []string) (server, tool string, ok bool) {
+	best := ""
+	for _, name := range names {
+		if name == "" || !strings.HasPrefix(rest, name+"_") {
+			continue
+		}
+		if len(name) > len(best) {
+			best = name
+		}
+	}
+	if best == "" {
+		return "", "", false
+	}
+	return best, strings.TrimPrefix(rest, best+"_"), true
+}
+
+// executeMCPTool executes an MCP tool
+func (a *Agent) executeMCPTool(toolName string, args map[string]interface{}) (string, error) {
+	serverName, actualToolName, err := a.resolveMCPToolIdentity(toolName)
+	if err != nil {
+		return "", err
+	}
+
+	// SP-170: authorize before any server-side call. The gate is the only
+	// thing standing between a steered model and a destructive third-party
+	// action, since MCP tools never reach the registry's security gate.
+	if err := a.authorizeMCPTool(serverName, actualToolName); err != nil {
+		return "", err
+	}
+
+	ctx := a.mcpCallContext()
 	result, err := a.mcpSub.GetManager().CallTool(ctx, serverName, actualToolName, args)
 	if err != nil {
 		return "", agenterrors.Wrapf(err, "failed to call MCP tool %s/%s", serverName, actualToolName)
@@ -371,7 +446,20 @@ func formatMCPResult(result *mcp.MCPToolCallResult) string {
 		}
 	}
 
-	return strings.TrimSpace(output.String())
+	out := strings.TrimSpace(output.String())
+	// A server that returns a whole file or a log dump would otherwise enter
+	// the transcript unbounded — the context blowup the built-in tools guard
+	// against with MaxResultSize. The cut is reported so the model can narrow
+	// the request instead of assuming it saw everything.
+	if len(out) > mcpMaxResultChars {
+		cut := mcpMaxResultChars
+		for cut > 0 && !utf8.RuneStart(out[cut]) {
+			cut--
+		}
+		out = out[:cut] + fmt.Sprintf("\n\n[truncated %d characters; request a narrower range or a specific field]",
+			len(out)-cut)
+	}
+	return out
 }
 
 // handleMCPToolsCommand handles the mcp_tools meta command
@@ -381,7 +469,7 @@ func (a *Agent) handleMCPToolsCommand(args map[string]interface{}) (string, erro
 		return "", agenterrors.NewInvalidInputError("mcp_tools command requires 'action' parameter", nil)
 	}
 
-	ctx := context.Background()
+	ctx := a.mcpCallContext()
 
 	switch action {
 	case "list":
@@ -412,6 +500,13 @@ func (a *Agent) handleMCPToolsCommand(args map[string]interface{}) (string, erro
 			return "", agenterrors.NewInvalidInputError("mcp_tools call requires 'server' and 'tool' parameters", nil)
 		}
 		callArgs, _ := args["arguments"].(map[string]interface{})
+		// SP-170: the meta-command's call action is the second route to the
+		// same server-side invocation, so it is gated identically. Discovery
+		// actions (list/describe/status/refresh) run no server-side tool and
+		// stay ungated.
+		if err := a.authorizeMCPTool(server, tool); err != nil {
+			return "", err
+		}
 		result, err := a.mcpSub.GetManager().CallTool(ctx, server, tool, callArgs)
 		if err != nil {
 			return "", agenterrors.Wrapf(err, "mcp_tools call %s/%s failed", server, tool)

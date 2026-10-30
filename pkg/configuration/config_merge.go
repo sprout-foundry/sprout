@@ -181,6 +181,29 @@ func MergeConfig(base, override *Config) *Config {
 		}
 		result.ApprovedShellCommandPatterns = merged
 	}
+	// Union-merge ApprovedMCPTools (SP-170) for the same reason: a
+	// workspace-layer entry must stack on the global one rather than
+	// replace it, or a layered load would silently forget an allowlist
+	// entry and start denying a tool the user already approved.
+	if len(override.ApprovedMCPTools) > 0 {
+		seen := make(map[string]struct{}, len(result.ApprovedMCPTools)+len(override.ApprovedMCPTools))
+		merged := make([]string, 0, len(result.ApprovedMCPTools)+len(override.ApprovedMCPTools))
+		for _, t := range result.ApprovedMCPTools {
+			if _, ok := seen[t]; ok {
+				continue
+			}
+			seen[t] = struct{}{}
+			merged = append(merged, t)
+		}
+		for _, t := range override.ApprovedMCPTools {
+			if _, ok := seen[t]; ok {
+				continue
+			}
+			seen[t] = struct{}{}
+			merged = append(merged, t)
+		}
+		result.ApprovedMCPTools = merged
+	}
 
 	// Merge APITimeouts
 	if override.APITimeouts != nil {

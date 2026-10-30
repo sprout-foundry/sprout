@@ -159,6 +159,14 @@ type Config struct {
 	// patterns for shell commands that auto-approve through the high-risk cascade.
 	ApprovedShellCommandPatterns []string `json:"approved_shell_command_patterns,omitempty"`
 
+	// ApprovedMCPTools is the user's persistent allowlist of MCP tools that
+	// run without an approval prompt (SP-170). Entries are either `<server>`
+	// (every tool on that server) or `<server>__<tool>` (one tool). The double
+	// underscore is the separator because server names may contain single
+	// underscores; matching is on whole segments, so `acme` never matches
+	// `acmecorp`. Case-sensitive and exact — no globs in v1.
+	ApprovedMCPTools []string `json:"approved_mcp_tools,omitempty"`
+
 	// CommandPolicies is the unified command policy layer with three actions:
 	// allow (auto-approve), ask (force prompt), deny (hard block).
 	CommandPolicies *CommandPolicies `json:"command_policies,omitempty"`

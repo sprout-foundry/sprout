@@ -11,6 +11,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/mcp"
 )
 
@@ -56,11 +57,30 @@ func callTestAgent(mgr mcp.MCPManager) *Agent {
 	return a
 }
 
+// callTestAgentAllowlisting is callTestAgent with an isolated config manager
+// whose MCP allowlist covers the given entries. SP-170 gates MCP calls
+// before they reach the server, so a test that wants the call forwarded must
+// say so — the same migration a user's config needs.
+func callTestAgentAllowlisting(t *testing.T, mgr mcp.MCPManager, entries ...string) *Agent {
+	t.Helper()
+	a := callTestAgent(mgr)
+	cfgMgr, cleanup := configuration.NewTestManager(t)
+	t.Cleanup(cleanup)
+	if err := cfgMgr.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		cfg.ApprovedMCPTools = append(cfg.ApprovedMCPTools, entries...)
+		return nil
+	}); err != nil {
+		t.Fatalf("seed MCP allowlist: %v", err)
+	}
+	a.configManager = cfgMgr
+	return a
+}
+
 func TestMCPToolsCall_ForwardsServerToolArguments(t *testing.T) {
 	mgr := &callRecordingManager{result: &mcp.MCPToolCallResult{
 		Content: []mcp.MCPContent{{Type: "text", Text: "frame imported"}},
 	}}
-	a := callTestAgent(mgr)
+	a := callTestAgentAllowlisting(t, mgr, "figma__get_file")
 
 	out, err := a.handleMCPToolsCommand(map[string]interface{}{
 		"action":    "call",
@@ -88,7 +108,7 @@ func TestMCPToolsCall_ForwardsServerToolArguments(t *testing.T) {
 }
 
 func TestMCPToolsCall_MissingServerOrTool(t *testing.T) {
-	a := callTestAgent(&callRecordingManager{})
+	a := callTestAgentAllowlisting(t, &callRecordingManager{}, "figma__get_file")
 
 	for _, args := range []map[string]interface{}{
 		{"action": "call", "tool": "get_file"},
@@ -103,7 +123,7 @@ func TestMCPToolsCall_MissingServerOrTool(t *testing.T) {
 
 func TestMCPToolsCall_ManagerErrorSurfaces(t *testing.T) {
 	mgr := &callRecordingManager{err: context.DeadlineExceeded}
-	a := callTestAgent(mgr)
+	a := callTestAgentAllowlisting(t, mgr, "figma__get_file")
 
 	if _, err := a.handleMCPToolsCommand(map[string]interface{}{
 		"action": "call", "server": "figma", "tool": "get_file",

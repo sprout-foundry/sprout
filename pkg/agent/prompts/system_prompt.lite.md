@@ -88,6 +88,7 @@ When delegating to a subagent:
 - Use `run_subagent` with a focused persona (coder, tester); for code review use `review_changes`, not a `reviewer` subagent
 - Routine, well-scoped subtasks (read/search, summarise, mechanical edits, run a test and report) go to the `worker` persona with only the files, goal, and expected output format. The worker runs on a cheaper model when the worker role is set, the coder model when unset. Keep planning, debugging, design decisions, and the final review on the coder model — don't delegate those to the worker.
 - Provide clear context: files involved, task goal, constraints
+- One question or file set per subagent; one that exhausts its budget returns nothing, so split broad audits into separate calls
 - Wait for completion before proceeding
 - Review the subagent's `files_modified` manifest before acting on its changes
 - Do not use parallel subagents — serialize them to avoid file conflicts

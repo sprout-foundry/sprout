@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
@@ -51,6 +52,50 @@ func isGitCommitSubcommand(command string) bool {
 		return subcommand == "commit"
 	}
 	return false
+}
+
+// positiveIntArgMax bounds a numeric argument so a hallucinated or hostile
+// value cannot overflow a later int or Duration conversion.
+const positiveIntArgMax = 1_000_000_000
+
+// positiveIntArg reads an optional positive integer argument, returning 0
+// when it is absent, zero, negative, non-integral, or implausibly large. JSON
+// numbers arrive as float64, so an integral float is accepted; a fractional
+// value is rejected rather than truncated, since "max_iterations": 200.5 is a
+// caller mistake.
+func positiveIntArg(args map[string]interface{}, key string) int {
+	v, ok := args[key]
+	if !ok || v == nil {
+		return 0
+	}
+	switch n := v.(type) {
+	case float64:
+		if n > 0 && n <= positiveIntArgMax && n == float64(int64(n)) {
+			return int(n)
+		}
+	case int:
+		if n > 0 && n <= positiveIntArgMax {
+			return n
+		}
+	case int64:
+		if n > 0 && n <= positiveIntArgMax {
+			return int(n)
+		}
+	}
+	return 0
+}
+
+// subagentTimeoutArg reads an optional timeout in seconds, clamped to
+// subagentTimeoutCeiling. Returns 0 when unset or invalid.
+func subagentTimeoutArg(args map[string]interface{}, key string) time.Duration {
+	n := positiveIntArg(args, key)
+	if n <= 0 {
+		return 0
+	}
+	if maxSecs := int(subagentTimeoutCeiling / time.Second); n > maxSecs {
+		n = maxSecs
+	}
+	return time.Duration(n) * time.Second
 }
 
 // convertToString safely converts a parameter to string with proper error handling

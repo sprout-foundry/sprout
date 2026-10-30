@@ -231,13 +231,15 @@ func startBackgroundSubagent(a *Agent, spec *subagentLaunchSpec, isolate bool) (
 			result = runIsolatedSubagent(bgCtx, a, spec, t.ID, true)
 		} else {
 			result = runner.runTask(bgCtx, t.ID, spec.enhancedPrompt, SubagentOptions{
-				Persona:      spec.persona,
-				Model:        spec.model,
-				Provider:     spec.provider,
-				SystemPrompt: spec.systemPromptText,
-				WorkingDir:   spec.workingDir,
-				Quiet:        true,
-				Role:         spec.role,
+				Persona:       spec.persona,
+				Model:         spec.model,
+				Provider:      spec.provider,
+				SystemPrompt:  spec.systemPromptText,
+				WorkingDir:    spec.workingDir,
+				Quiet:         true,
+				Role:          spec.role,
+				MaxIterations: spec.maxIterations,
+				Timeout:       spec.timeout,
 			}, nil, 0)
 		}
 		var verification workerVerifyResult

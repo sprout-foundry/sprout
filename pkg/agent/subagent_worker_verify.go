@@ -227,12 +227,14 @@ func escalateWorkerTask(ctx context.Context, a *Agent, spec *subagentLaunchSpec)
 		provider, model = cfg.ResolveRole(configuration.RoleCoder)
 	}
 	return a.GetSubagentRunner().Run(ctx, spec.enhancedPrompt, SubagentOptions{
-		Persona:      spec.persona,
-		Model:        model,
-		Provider:     provider,
-		SystemPrompt: spec.systemPromptText,
-		WorkingDir:   spec.workingDir,
-		Role:         configuration.RoleCoder,
+		Persona:       spec.persona,
+		Model:         model,
+		Provider:      provider,
+		SystemPrompt:  spec.systemPromptText,
+		WorkingDir:    spec.workingDir,
+		Role:          configuration.RoleCoder,
+		MaxIterations: spec.maxIterations,
+		Timeout:       spec.timeout,
 	}), nil
 }
 

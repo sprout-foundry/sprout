@@ -266,7 +266,7 @@ func (r *SubagentRunner) setupSubagentRun(
 	// Per-subagent progress monitoring: emit periodic activity events.
 	go r.monitorProgress(runCtx, subAgent, taskID, opts.Persona)
 	var wrapUpInjected atomic.Bool
-	go monitorWrapUp(runCtx, subAgent, r.personaBudget(opts.Persona), startTime, &wrapUpInjected)
+	go monitorWrapUp(runCtx, subAgent, r.effectiveBudget(opts), startTime, &wrapUpInjected)
 
 	rc := &subagentRunContext{
 		runCtx:          runCtx,

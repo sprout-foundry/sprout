@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"strings"
+	"time"
 
 	agent_api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -15,9 +16,23 @@ import (
 // defaultSubagentMaxIterations caps the number of LLM iterations a subagent
 // may run. 0 (unlimited) let a stuck subagent loop 164+ times burning tokens
 // before the user noticed. 200 is generous for real coding tasks but still
-// stops runaway loops within a reasonable window. Can be overridden per-call
-// via SubagentOptions.MaxIterations once that field exists.
+// stops runaway loops within a reasonable window. A caller may override it per
+// spawn via SubagentOptions.MaxIterations (the run_subagent `max_iterations`
+// argument) up to subagentMaxIterationsCeiling.
 const defaultSubagentMaxIterations = 200
+
+// subagentMaxIterationsCeiling bounds an explicit per-spawn override. Some
+// tasks legitimately need more turns than the default — a whole-tree audit, a
+// long research pass — so the override is allowed above 200. It is still
+// bounded, because "unlimited" is exactly what the default cap exists to
+// prevent.
+const subagentMaxIterationsCeiling = 2000
+
+// subagentTimeoutCeiling bounds a per-spawn timeout override. A day is far
+// beyond any real task; the bound exists so an absurd or hallucinated value
+// cannot overflow the Duration multiplication and silently fall back to the
+// default timeout instead of the one that was asked for.
+const subagentTimeoutCeiling = 24 * time.Hour
 
 // subagentRole returns the role a subagent's metered usage is attributed to
 // (the role its model was resolved through
@@ -122,7 +137,7 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.
 		client:              client,
 		systemPrompt:        systemPrompt,
 		baseSystemPrompt:    systemPrompt,
-		maxIterations:       r.personaBudget(opts.Persona).hardMaxIterations(), // bounded to prevent runaway loops
+		maxIterations:       r.effectiveBudget(opts).hardMaxIterations(), // bounded to prevent runaway loops
 		clientType:          clientType,
 		debug:               r.parentAgent != nil && r.parentAgent.debug,
 		configManager:       r.shared.ConfigManager,

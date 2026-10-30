@@ -160,6 +160,16 @@ func parseParallelTasks(args map[string]interface{}) ([]SubagentTask, error) {
 				task.OutputFormat = strings.TrimSpace(format)
 			}
 
+			// Per-task run-budget overrides, same arguments as run_subagent.
+			// A long task in a fleet would otherwise stop at the persona cap
+			// like any single spawn.
+			if n := positiveIntArg(taskMap, "max_iterations"); n > 0 {
+				task.MaxIterations = n
+			}
+			if d := subagentTimeoutArg(taskMap, "timeout_seconds"); d > 0 {
+				task.Timeout = d
+			}
+
 			// Note: model and provider are set from configuration, not from LLM parameters
 			// This ensures consistent subagent behavior configured by the user
 		} else {
@@ -362,14 +372,16 @@ func buildParallelSubagentTasks(tasks []SubagentTask) []SubagentTask {
 	result := make([]SubagentTask, len(tasks))
 	for i, pt := range tasks {
 		result[i] = SubagentTask{
-			ID:           pt.ID,
-			Prompt:       pt.Prompt,
-			Model:        pt.Model,
-			Provider:     pt.Provider,
-			Persona:      pt.Persona,
-			SystemPrompt: pt.SystemPrompt,
-			Role:         pt.Role,
-			OutputFormat: pt.OutputFormat,
+			ID:            pt.ID,
+			Prompt:        pt.Prompt,
+			Model:         pt.Model,
+			Provider:      pt.Provider,
+			Persona:       pt.Persona,
+			SystemPrompt:  pt.SystemPrompt,
+			Role:          pt.Role,
+			OutputFormat:  pt.OutputFormat,
+			MaxIterations: pt.MaxIterations,
+			Timeout:       pt.Timeout,
 		}
 	}
 	return result

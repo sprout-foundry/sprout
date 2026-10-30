@@ -169,6 +169,7 @@ type SubagentOptions struct {
 	Provider               string        // optional provider override
 	SystemPrompt           string        // optional system prompt override
 	MaxTokens              int           // token budget (0 = unlimited)
+	MaxIterations          int           // raise the iteration budget above the persona's (0 = persona budget; a lower value is ignored); clamped to a ceiling
 	Timeout                time.Duration // execution timeout; <=0 defaults to 30 minutes, 1 hour for the orchestrator persona (see runTask)
 	WorkingDir             string        // optional: override workspace root (must be within $HOME)
 	MaxConcurrentSubagents int           // max parallel subagents (0 = unlimited, default unlimited)
@@ -314,6 +315,11 @@ type SubagentTask struct {
 	// task's result. Empty means no format was requested; a worker task's
 	// format-conformance check is then not applicable.
 	OutputFormat string
+	// MaxIterations and Timeout override the persona's run budget for this
+	// task (the `max_iterations` and `timeout_seconds` task-object fields).
+	// Zero means "use the persona's budget".
+	MaxIterations int
+	Timeout       time.Duration
 }
 
 // SubagentMetrics tracks operational metrics for the subagent runner.

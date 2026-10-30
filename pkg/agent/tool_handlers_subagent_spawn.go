@@ -43,12 +43,14 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		result = runIsolatedSubagent(ctx, a, spec, fmt.Sprintf("subagent-%d", time.Now().UnixNano()), false)
 	} else {
 		result = a.GetSubagentRunner().Run(ctx, spec.enhancedPrompt, SubagentOptions{
-			Persona:      spec.persona,
-			Model:        spec.model,
-			Provider:     spec.provider,
-			SystemPrompt: spec.systemPromptText,
-			WorkingDir:   spec.workingDir,
-			Role:         spec.role,
+			Persona:       spec.persona,
+			Model:         spec.model,
+			Provider:      spec.provider,
+			SystemPrompt:  spec.systemPromptText,
+			WorkingDir:    spec.workingDir,
+			Role:          spec.role,
+			MaxIterations: spec.maxIterations,
+			Timeout:       spec.timeout,
 		})
 	}
 

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
@@ -408,5 +409,37 @@ func TestPrepareSubagentLaunch_ReviewerFilesBecomeFocusList(t *testing.T) {
 	}
 	if !strings.Contains(coder.enhancedPrompt, "# Relevant Files") {
 		t.Error("non-reviewer personas should still get whole files inlined")
+	}
+}
+
+// A long task in a fleet must be able to raise its own run budget, exactly as
+// a single spawn can; otherwise it stops at the persona cap mid-way.
+func TestParseParallelTasks_ReadsRunBudget(t *testing.T) {
+	tasks, err := parseParallelTasks(map[string]interface{}{
+		"subagents": []interface{}{
+			map[string]interface{}{
+				"prompt":          "long audit",
+				"max_iterations":  float64(600),
+				"timeout_seconds": float64(5400),
+			},
+			map[string]interface{}{"prompt": "short"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("parseParallelTasks: %v", err)
+	}
+	if tasks[0].MaxIterations != 600 {
+		t.Errorf("MaxIterations = %d, want 600", tasks[0].MaxIterations)
+	}
+	if tasks[0].Timeout != 90*time.Minute {
+		t.Errorf("Timeout = %s, want 90m", tasks[0].Timeout)
+	}
+	if tasks[1].MaxIterations != 0 || tasks[1].Timeout != 0 {
+		t.Errorf("unset budget leaked into a plain task: %+v", tasks[1])
+	}
+
+	built := buildParallelSubagentTasks(tasks)
+	if built[0].MaxIterations != 600 || built[0].Timeout != 90*time.Minute {
+		t.Errorf("buildParallelSubagentTasks dropped the budget: %+v", built[0])
 	}
 }

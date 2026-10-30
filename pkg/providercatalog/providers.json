@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-23T14:17:04Z",
+  "updated_at": "2026-10-30T15:59:26Z",
   "source": "refresh_provider_catalog",
   "onboarding_order": [
     "deepinfra",
@@ -853,9 +853,9 @@
         {
           "id": "minimax-m3.1-flash",
           "name": "minimax-m3.1-flash",
-          "input_cost": 0.15,
-          "output_cost": 0.6,
-          "cached_input_cost": 0.015
+          "input_cost": 0.075,
+          "output_cost": 0.3,
+          "cached_input_cost": 0.0075
         },
         {
           "id": "mistral-large-3:675b",
@@ -1713,10 +1713,11 @@
           "context_length": 262144,
           "tags": [
             "tools",
-            "reasoning"
+            "reasoning",
+            "structured_output"
           ],
           "input_cost": 0.25,
-          "output_cost": 0.7999999999999999,
+          "output_cost": 0.8,
           "cached_input_cost": 0.06
         },
         {
@@ -2033,9 +2034,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.28,
-          "output_cost": 0.42,
-          "cached_input_cost": 0.028
+          "input_cost": 0.26,
+          "output_cost": 0.38,
+          "cached_input_cost": 0.13
         },
         {
           "id": "deepseek/deepseek-v3.2-exp",
@@ -2074,9 +2075,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.04444,
-          "output_cost": 0.13332,
-          "cached_input_cost": 0.0014140000000000001
+          "input_cost": 0.119,
+          "output_cost": 0.238,
+          "cached_input_cost": 0.0238
         },
         {
           "id": "deepseek/deepseek-v4-flash-0731:batch",
@@ -2143,9 +2144,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.885312,
-          "output_cost": 1.770624,
-          "cached_input_cost": 0.073776
+          "input_cost": 0.9483,
+          "output_cost": 1.8966,
+          "cached_input_cost": 0.079025
         },
         {
           "id": "deepseek/deepseek-v4-pro-0813",
@@ -2186,8 +2187,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.3,
-          "output_cost": 1.2,
+          "input_cost": 0.045,
+          "output_cost": 0.5,
           "cached_input_cost": 0.006
         },
         {
@@ -2822,9 +2823,8 @@
             "vision",
             "structured_output"
           ],
-          "input_cost": 0.04,
-          "output_cost": 0.049999999999999996,
-          "cached_input_cost": 0.02
+          "input_cost": 0.049999999999999996,
+          "output_cost": 0.09999999999999999
         },
         {
           "id": "google/gemma-3n-e4b-it",
@@ -2970,7 +2970,7 @@
             "structured_output"
           ],
           "input_cost": 0.06,
-          "output_cost": 0.25,
+          "output_cost": 0.15,
           "cached_input_cost": 0.015
         },
         {
@@ -3166,7 +3166,7 @@
           "id": "inclusionai/ling-3.1-flash",
           "name": "inclusionAI: Ling 3.1 Flash",
           "description": "Ling 3.1 Flash is a hybrid reasoning mixture-of-experts model from inclusionAI, with 25B active parameters out of 560B total.",
-          "context_length": 262144,
+          "context_length": 1000000,
           "tags": [
             "tools",
             "reasoning",
@@ -3252,6 +3252,20 @@
           "input_cost": 0.74,
           "output_cost": 2.96,
           "cached_input_cost": 0.15
+        },
+        {
+          "id": "liquid/lfm-2.5-2.6b",
+          "name": "LiquidAI: LFM2.5-2.6B",
+          "description": "LFM2.5-2.6B is a compact reasoning model from Liquid AI. It is suited for agent workflows, data extraction, RAG, and long-context processing. Liquid advises against using it for agentic coding or...",
+          "context_length": 128000,
+          "tags": [
+            "tools",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.35,
+          "output_cost": 0.5,
+          "cached_input_cost": 0.04
         },
         {
           "id": "liquid/lfm-2.5-2.6b:free",
@@ -3343,8 +3357,8 @@
           "tags": [
             "structured_output"
           ],
-          "input_cost": 0.0509,
-          "output_cost": 0.335
+          "input_cost": 0.049999999999999996,
+          "output_cost": 0.33
         },
         {
           "id": "meta-llama/llama-3.3-70b-instruct",
@@ -3583,8 +3597,7 @@
           "context_length": 204800,
           "tags": [
             "tools",
-            "reasoning",
-            "structured_output"
+            "reasoning"
           ],
           "input_cost": 0.255,
           "output_cost": 1.02
@@ -3622,8 +3635,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.27,
-          "output_cost": 0.95,
+          "input_cost": 0.3,
+          "output_cost": 1.2,
           "cached_input_cost": 0.03
         },
         {
@@ -3677,9 +3690,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.15,
-          "output_cost": 0.6,
-          "cached_input_cost": 0.015
+          "input_cost": 0.075,
+          "output_cost": 0.3,
+          "cached_input_cost": 0.0075
         },
         {
           "id": "minimax/minimax-m3:batch",
@@ -3731,7 +3744,7 @@
             "structured_output"
           ],
           "input_cost": 0.15,
-          "output_cost": 0.44999999999999996,
+          "output_cost": 0.45,
           "cached_input_cost": 0.015
         },
         {
@@ -3866,7 +3879,7 @@
           ],
           "input_cost": 0.25,
           "output_cost": 0.75,
-          "cached_input_cost": 0.024999999999999998
+          "cached_input_cost": 0.025
         },
         {
           "id": "mistralai/mistral-large-4-0",
@@ -3879,9 +3892,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 1.3599999999999999,
-          "output_cost": 4.18,
-          "cached_input_cost": 0.14
+          "input_cost": 0.7,
+          "output_cost": 2.0999999999999996,
+          "cached_input_cost": 0.07
         },
         {
           "id": "mistralai/mistral-medium-3",
@@ -3942,14 +3955,14 @@
         {
           "id": "mistralai/mistral-medium-3.1:batch",
           "name": "Mistral: Mistral Medium 3.1 (batch)",
-          "description": "Mistral Medium 3.1 is an updated version of Mistral Medium 3, which is a high-performance enterprise-grade language model designed to deliver frontier-level capabilities at significantly reduced operational cost. It balances...",
+          "description": "Mistral Medium 3.1 is an updated version of Mistral Medium 3, which is a high-performance enterprise-grade language model designed to deliver frontier-level capabilities at significantly reduced operational cost. It balances performance and cost for enterprise workloads.",
           "context_length": 131072,
           "tags": [
             "tools",
             "vision",
             "structured_output"
           ],
-          "input_cost": 0.19999999999999998,
+          "input_cost": 0.2,
           "output_cost": 1,
           "cached_input_cost": 0.02
         },
@@ -4007,7 +4020,7 @@
         {
           "id": "mistralai/mistral-small-2603:batch",
           "name": "Mistral: Mistral Small 4 (batch)",
-          "description": "Mistral Small 4 is the next major release in the Mistral Small family, unifying the capabilities of several flagship Mistral models into a single system. It combines strong reasoning from...",
+          "description": "Mistral Small 4 is the next major release in the Mistral Small family, unifying the capabilities of several flagship Mistral models into a single system. It combines strong reasoning from larger models with low latency and cost efficiency.",
           "context_length": 262144,
           "tags": [
             "tools",
@@ -4173,8 +4186,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.6712,
-          "output_cost": 3.35,
+          "input_cost": 0.6,
+          "output_cost": 3.5,
           "cached_input_cost": 0.15
         },
         {
@@ -4203,9 +4216,24 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.23900000000000002,
-          "output_cost": 11.936,
-          "cached_input_cost": 0.21
+          "input_cost": 0.192,
+          "output_cost": 15,
+          "cached_input_cost": 0.182
+        },
+        {
+          "id": "moonshotai/kimi-k3.1-pro",
+          "name": "MoonshotAI: Kimi K3.1 Pro",
+          "description": "Kimi K3.1 Pro is Moonshot AI's flagship open-weight multimodal reasoning model and a post-trained successor to Kimi K3, with a 1M-token context window. It is built for long-horizon coding, 3D...",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 2,
+          "output_cost": 10,
+          "cached_input_cost": 0.19999999999999998
         },
         {
           "id": "moonshotai/kimi-k3:batch",
@@ -4357,7 +4385,8 @@
             "structured_output"
           ],
           "input_cost": 1,
-          "output_cost": 3
+          "output_cost": 3,
+          "cached_input_cost": 0.19999999999999998
         },
         {
           "id": "nousresearch/hermes-4-70b",
@@ -4382,7 +4411,8 @@
             "structured_output"
           ],
           "input_cost": 0.06,
-          "output_cost": 0.24
+          "output_cost": 0.24,
+          "cached_input_cost": 0.012
         },
         {
           "id": "nvidia/nemotron-3-nano-30b-a3b:free",
@@ -4409,7 +4439,7 @@
           "id": "nvidia/nemotron-3-super-120b-a12b",
           "name": "NVIDIA: Nemotron 3 Super",
           "description": "NVIDIA Nemotron 3 Super is a 120B-parameter open hybrid MoE model, activating just 12B parameters for maximum compute efficiency and accuracy in complex multi-agent applications. Built on a hybrid Mamba-Transformer...",
-          "context_length": 262144,
+          "context_length": 1048576,
           "tags": [
             "tools",
             "reasoning",
@@ -4566,7 +4596,7 @@
         {
           "id": "nvidia/switchyard",
           "name": "NVIDIA: Switchyard",
-          "description": "Switchyard is an open-source model router that switches between multiple models to optimize the cost of requests. By default it will use OpenRouter market data to select the most popular...",
+          "description": "Switchyard is an open-source model routing system that switches between multiple models to optimize the cost of requests. By default it will use OpenRouter market data to select the most...",
           "context_length": 1000000
         },
         {
@@ -4619,7 +4649,7 @@
         {
           "id": "openai/gpt-3.5-turbo:batch",
           "name": "OpenAI: GPT-3.5 Turbo (batch)",
-          "description": "GPT-3.5 Turbo is OpenAI's fastest model. It can understand and generate natural language or code, and is optimized for chat and traditional completion tasks.\n\nTraining data up to Sep 2021.",
+          "description": "GPT-3.5 Turbo via the Batch API at 50% of standard pricing.",
           "context_length": 16385,
           "tags": [
             "tools",
@@ -4732,7 +4762,7 @@
           ],
           "input_cost": 0.09999999999999999,
           "output_cost": 0.39999999999999997,
-          "cached_input_cost": 0.024999999999999998
+          "cached_input_cost": 0.03
         },
         {
           "id": "openai/gpt-4.1-nano:batch",
@@ -5836,6 +5866,66 @@
           "cached_input_cost": 0.049999999999999996
         },
         {
+          "id": "openai/gpt-6.1-terra",
+          "name": "OpenAI: GPT-6.1 Terra",
+          "description": "GPT-6.1 Terra is the mid-tier model in OpenAI's GPT-6.1 series, priced below GPT-6.1 Sol. It is suited for everyday agentic, coding, and writing work, is particularly strong at understanding screenshots...",
+          "context_length": 1050000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 1,
+          "output_cost": 5,
+          "cached_input_cost": 0.049999999999999996
+        },
+        {
+          "id": "openai/gpt-6.1-terra-pro",
+          "name": "OpenAI: GPT-6.1 Terra Pro",
+          "description": "GPT-6.1 Terra Pro is the same underlying model as [GPT-6.1 Terra](https://openrouter.ai/openai/gpt-6.1-terra), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks. **Cost note:** pro mode spends far more...",
+          "context_length": 1050000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 1,
+          "output_cost": 5,
+          "cached_input_cost": 0.049999999999999996
+        },
+        {
+          "id": "openai/gpt-6.1-terra-pro:batch",
+          "name": "OpenAI: GPT-6.1 Terra Pro (batch)",
+          "description": "GPT-6.1 Terra Pro is the same underlying model as [GPT-6.1 Terra](https://openrouter.ai/openai/gpt-6.1-terra), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks. **Cost note:** pro mode spends far more...",
+          "context_length": 1050000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.5,
+          "output_cost": 2.5,
+          "cached_input_cost": 0.024999999999999998
+        },
+        {
+          "id": "openai/gpt-6.1-terra:batch",
+          "name": "OpenAI: GPT-6.1 Terra (batch)",
+          "description": "GPT-6.1 Terra is the mid-tier model in OpenAI's GPT-6.1 series, priced below GPT-6.1 Sol. It is suited for everyday agentic, coding, and writing work, is particularly strong at understanding screenshots...",
+          "context_length": 1050000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.5,
+          "output_cost": 2.5,
+          "cached_input_cost": 0.024999999999999998
+        },
+        {
           "id": "openai/gpt-audio",
           "name": "OpenAI: GPT Audio",
           "description": "The gpt-audio model is OpenAI's first generally available audio model. The new snapshot features an upgraded decoder for more natural sounding voices and maintains better voice consistency. Audio is priced...",
@@ -6195,6 +6285,21 @@
           ]
         },
         {
+          "id": "particle-ai/particle-1",
+          "name": "Particle AI: Particle-1",
+          "description": "Particle-1 is a token-efficient agentic coding model from Particle AI, post-trained on DeepSeek V4.1 Flash. It is suited for software engineering work such as terminal workflows, codebase changes, and data...",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.049999999999999996,
+          "output_cost": 0.5,
+          "cached_input_cost": 0.003
+        },
+        {
           "id": "perceptron/perceptron-mk1",
           "name": "Perceptron: Perceptron Mk1",
           "description": "Perceptron Mk1 (Mark One) is Perceptron's highest-quality vision-language model for video and embodied reasoning.** It accepts image and video inputs paired with natural language queries, and produces detailed visual understanding...",
@@ -6339,6 +6444,21 @@
           "input_cost": 0.075,
           "output_cost": 0.5,
           "cached_input_cost": 0.0375
+        },
+        {
+          "id": "prism-ml/ternary-bonsai-2-9b",
+          "name": "PrismML: Ternary Bonsai 2 9B",
+          "description": "Ternary Bonsai 2 9B is PrismML’s compact, open-weight language model for conversational AI, reasoning, and tool use. Built on Qwen3.5, it uses ternary weights packed into 2 bits for efficient...",
+          "context_length": 262144,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.08,
+          "output_cost": 0.13,
+          "cached_input_cost": 0.04
         },
         {
           "id": "qwen/qwen-2.5-72b-instruct",
@@ -6498,8 +6618,9 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.09,
-          "output_cost": 0.3
+          "input_cost": 0.09999999999999999,
+          "output_cost": 0.3,
+          "cached_input_cost": 0.09999999999999999
         },
         {
           "id": "qwen/qwen3-30b-a3b-thinking-2507",
@@ -6762,8 +6883,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.39999999999999997,
-          "output_cost": 3.1999999999999997
+          "input_cost": 0.26,
+          "output_cost": 2.08
         },
         {
           "id": "qwen/qwen3.5-27b",
@@ -6776,9 +6897,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.27,
-          "output_cost": 2.16,
-          "cached_input_cost": 0.27
+          "input_cost": 0.26,
+          "output_cost": 2.6
         },
         {
           "id": "qwen/qwen3.5-35b-a3b",
@@ -6891,9 +7011,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.25,
-          "output_cost": 2,
-          "cached_input_cost": 0.024999999999999998
+          "input_cost": 0.32,
+          "output_cost": 3.1999999999999997,
+          "cached_input_cost": 0.025
         },
         {
           "id": "qwen/qwen3.6-35b-a3b",
@@ -6907,8 +7027,8 @@
             "structured_output"
           ],
           "input_cost": 0.09999999999999999,
-          "output_cost": 0.95,
-          "cached_input_cost": 0.049999999999999996
+          "output_cost": 0.8999999999999999,
+          "cached_input_cost": 0.024999999999999998
         },
         {
           "id": "qwen/qwen3.6-flash",
@@ -7048,9 +7168,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.19999999999999998,
-          "output_cost": 2.5,
-          "cached_input_cost": 0.09
+          "input_cost": 0.15,
+          "output_cost": 1.875,
+          "cached_input_cost": 0.0375
         },
         {
           "id": "qwen/qwen3.8-27b:free",
@@ -7688,7 +7808,7 @@
           "id": "upstage/solar-pro-3",
           "name": "Upstage: Solar Pro 3",
           "description": "Solar Pro 3 is Upstage's powerful Mixture-of-Experts (MoE) language model. With 102B total parameters and 12B active parameters per forward pass, it delivers exceptional performance while maintaining computational efficiency. Optimized...",
-          "context_length": 131072,
+          "context_length": 128000,
           "tags": [
             "tools",
             "reasoning",
@@ -7850,9 +7970,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.119,
-          "output_cost": 0.238,
-          "cached_input_cost": 0.00255
+          "input_cost": 0.39999999999999997,
+          "output_cost": 2,
+          "cached_input_cost": 0.08
         },
         {
           "id": "xiaomi/mimo-v2.5-pro",
@@ -7864,9 +7984,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.3045,
-          "output_cost": 0.609,
-          "cached_input_cost": 0.0028
+          "input_cost": 0.48,
+          "output_cost": 1.7999999999999998,
+          "cached_input_cost": 0.096
         },
         {
           "id": "xiaomi/mimo-v2.6-flash",
@@ -7976,9 +8096,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.55,
-          "output_cost": 2.2,
-          "cached_input_cost": 0.11
+          "input_cost": 0.5,
+          "output_cost": 2,
+          "cached_input_cost": 0.09999999999999999
         },
         {
           "id": "z-ai/glm-4.6v",
@@ -8074,9 +8194,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.0341,
+          "input_cost": 0.006,
           "output_cost": 7,
-          "cached_input_cost": 0.032999999999999995
+          "cached_input_cost": 0.005
         },
         {
           "id": "z-ai/glm-5.2:batch",
@@ -8111,9 +8231,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.079,
-          "output_cost": 1.4,
-          "cached_input_cost": 0.078
+          "input_cost": 0.08,
+          "output_cost": 3.5999999999999996,
+          "cached_input_cost": 0.07600000000000001
         },
         {
           "id": "z-ai/glm-5.3-flash",
@@ -8126,9 +8246,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.15,
-          "output_cost": 0.5,
-          "cached_input_cost": 0.03
+          "input_cost": 0.018,
+          "output_cost": 0.1402,
+          "cached_input_cost": 0.018
         },
         {
           "id": "z-ai/glm-5.3-flash:batch",
@@ -8274,8 +8394,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.031,
-          "output_cost": 0.6,
+          "input_cost": 0.022,
+          "output_cost": 0.192,
           "cached_input_cost": 0.004
         },
         {
@@ -8288,9 +8408,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.165,
-          "output_cost": 0.49500000000000005,
-          "cached_input_cost": 0.0052499999999999995
+          "input_cost": 0.1035,
+          "output_cost": 4,
+          "cached_input_cost": 0.09999999999999999
         },
         {
           "id": "~deepseek/deepseek-v4-flash-latest",
@@ -8302,9 +8422,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.0422,
-          "output_cost": 0.16369999999999998,
-          "cached_input_cost": 0.0275
+          "input_cost": 0.035899999999999994,
+          "output_cost": 0.3,
+          "cached_input_cost": 0.0349
         },
         {
           "id": "~google/gemini-flash-latest",
@@ -8347,9 +8467,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.238,
-          "output_cost": 16,
-          "cached_input_cost": 0.228
+          "input_cost": 0.1615,
+          "output_cost": 10.5572,
+          "cached_input_cost": 0.16
         },
         {
           "id": "~openai/gpt-astra-latest",
@@ -8437,9 +8557,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 2,
-          "output_cost": 12,
-          "cached_input_cost": 0.19999999999999998
+          "input_cost": 1,
+          "output_cost": 5,
+          "cached_input_cost": 0.049999999999999996
         },
         {
           "id": "~unbiased/pareto-latest",
@@ -8480,9 +8600,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.005200000000000001,
-          "output_cost": 0.1985,
-          "cached_input_cost": 0.005200000000000001
+          "input_cost": 0.018,
+          "output_cost": 0.1402,
+          "cached_input_cost": 0.018
         },
         {
           "id": "~z-ai/glm-latest",
@@ -8494,9 +8614,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.079,
+          "input_cost": 0.0699,
           "output_cost": 1.4,
-          "cached_input_cost": 0.078
+          "cached_input_cost": 0.0689
         }
       ]
     },
@@ -9937,7 +10057,7 @@
         },
         {
           "id": "stepfun-ai/Step-5-Preview",
-          "name": "stepfun-ai/Step-5-Preview",
+          "name": "Step 5 Preview",
           "description": "Step 5 Preview is StepFun's flagship model for agentic work. It is a sparse Mixture-of-Experts model with 600B total parameters and 27B active per token, a 1M-token context window, and text and image input. It delivers frontier-level performance in software engineering, long-horizon agentic execution with repeated tool calls, and professional knowledge work, with particular strength in finance.",
           "context_length": 1048576,
           "tags": [
@@ -10218,6 +10338,14 @@
           "output_cost": 1.32
         },
         {
+          "id": "deepseek-ai/DeepSeek-V4-Pro-0813",
+          "name": "deepseek-ai/DeepSeek-V4-Pro-0813"
+        },
+        {
+          "id": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+          "name": "deepseek-ai/DeepSeek-V4.1-Flash-1017"
+        },
+        {
           "id": "google/gemma-4-31B-turbo-TEE",
           "name": "google/gemma-4-31B-turbo-TEE",
           "description": "Google Gemma 4 31B Turbo on confidential TEE compute",
@@ -10243,6 +10371,10 @@
           "output_cost": 1.95
         },
         {
+          "id": "moonshotai/Kimi-K2.7-Code",
+          "name": "moonshotai/Kimi-K2.7-Code"
+        },
+        {
           "id": "moonshotai/Kimi-K3-TEE",
           "name": "moonshotai/Kimi-K3-TEE",
           "description": "Moonshot Kimi K3 on confidential TEE compute",
@@ -10256,7 +10388,7 @@
         },
         {
           "id": "Nemotron-3-Nano-Omni-30B-TEE",
-          "name": "Nemotron-3-Nano-Omni-30B-TEE",
+          "name": "Nemotron 3 Nano Omni 30B (TEE)",
           "description": "NVIDIA Nemotron 3 Nano Omni 30B on confidential TEE compute",
           "context_length": 131072,
           "tags": [
@@ -10268,7 +10400,7 @@
         },
         {
           "id": "Qwen/Qwen3-235B-A22B-Thinking-2507-TEE",
-          "name": "Qwen/Qwen3-235B-A22B-Thinking-2507-TEE",
+          "name": "Qwen3 235B A22B Thinking (TEE)",
           "description": "Qwen3 235B A22B Thinking on confidential TEE compute",
           "context_length": 262144,
           "tags": [
@@ -10280,7 +10412,7 @@
         },
         {
           "id": "Qwen/Qwen3-32B-TEE",
-          "name": "Qwen/Qwen3-32B-TEE",
+          "name": "Qwen3 32B (TEE)",
           "description": "Qwen3 32B on confidential TEE compute",
           "context_length": 41984,
           "tags": [
@@ -10315,6 +10447,10 @@
           "output_cost": 2
         },
         {
+          "id": "Qwen/Qwen3.8-2.4T-A95B",
+          "name": "Qwen/Qwen3.8-2.4T-A95B"
+        },
+        {
           "id": "Qwen/Qwen3.8-27B-TEE",
           "name": "Qwen/Qwen3.8-27B-TEE",
           "description": "Qwen3.8 27B on confidential TEE compute",
@@ -10328,8 +10464,12 @@
           "output_cost": 1.25
         },
         {
+          "id": "Qwen/Qwen3.8-Max-0902",
+          "name": "Qwen/Qwen3.8-Max-0902"
+        },
+        {
           "id": "unsloth/Mistral-Nemo-Instruct-2407-TEE",
-          "name": "unsloth/Mistral-Nemo-Instruct-2407-TEE",
+          "name": "Mistral Nemo Instruct (TEE)",
           "description": "Mistral Nemo Instruct 2407 on confidential TEE compute",
           "context_length": 131072,
           "tags": [
@@ -10351,6 +10491,10 @@
           "output_cost": 3.08
         },
         {
+          "id": "zai-org/GLM-5.2-Fast",
+          "name": "zai-org/GLM-5.2-Fast"
+        },
+        {
           "id": "zai-org/GLM-5.2-TEE",
           "name": "zai-org/GLM-5.2-TEE",
           "description": "Z.AI GLM-5.2 on confidential TEE compute",
@@ -10361,6 +10505,10 @@
           ],
           "input_cost": 1.25,
           "output_cost": 3.95
+        },
+        {
+          "id": "zai-org/GLM-5.3",
+          "name": "zai-org/GLM-5.3"
         }
       ]
     },

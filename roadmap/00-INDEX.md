@@ -7,7 +7,7 @@ Specs land at the root until core work ships; once shipped, the spec body
 lives in git history (no per-spec archive file). The root directory contains
 only specs still receiving active changes or retained as living reference.
 
-**Counts (as of 2026-09-15):** 100 shipped · 19 pending rows (17 with living spec bodies: 15 at root + `SP-121-7` and `SP-GIT-CLIENT` in `_active/`; plus 2 body-less historical rows `SP-121`/`SP-CLOUD`) · 2 parked in `future/`.
+**Counts (as of 2026-10-30):** 100 shipped · 21 pending rows (19 with living spec bodies: 17 at root + `SP-121-7` and `SP-GIT-CLIENT` in `_active/`; plus 2 body-less historical rows `SP-121`/`SP-CLOUD`) · 2 parked in `future/`.
 
 ## Shipped
 
@@ -178,6 +178,8 @@ treating an entry as unstarted._
 | SP-165 | [`sprout mcp add` for HTTP Servers](./SP-165-mcp-add-http-servers.md) | ✅ Implemented (2026-10-19). The "Custom MCP Server (stdio or http)" label promised HTTP but the flow only prompted for a command. Adds a type picker + URL prompt to the custom flow, validates URLs (including a URL typed where a command belongs), and makes `mcp test` report an HTTP server's URL. |
 | SP-166 | [Wheel and Scroll Routing](./SP-166-wheel-and-scroll-routing.md) | ✅ Implemented (2026-10-19). The REPL enabled VT200 mouse tracking, which captured the wheel: `handleMouseEvent` dropped wheel events (no transcript scroll) while `SelectList` mapped them to selection (picker scroll). Tracking is now SGR-only, so the terminal's own scrollback works in every mode. |
 | SP-167 | [Merge `/custom` into `/provider` as Subcommands](./SP-167-merge-custom-into-provider.md) | 📝 Proposed (2026-10-19). `/provider add\|remove\|custom` delegate to the existing `sprout custom` wizard; `/custom` stays as a deprecated alias. Makes `/provider` the single entry point for everything provider-shaped. Nit #12. |
+| SP-168 | [Subagent Approval Surface & Auto Risk Mode](./SP-168-subagent-approval-surface.md) | ✅ Implemented (2026-10-25). A subagent hitting a security-gated `shell_command` hung until the 30-min approval timeout; subagents now share the parent's answerable approval surface and fail fast in autonomous runs. Adds the auto LLM risk judge (default on) for Medium/High commands, under a single authoritative gate. |
+| SP-169 | [Prompt-Injection Defense for Ingested Untrusted Content](./SP-169-prompt-injection-defense.md) | 📝 Proposed (2026-10-30). Content we neither wrote nor can audit — web fetch results and third-party code we pulled in — currently lands in context as text indistinguishable from our own instructions. Six layers, cheapest first, applied at the two ingress points; framing (layer 5) is load-bearing and carries no false positives. Deliberately excludes the auto risk judge and compaction summaries, which read our own output and history rather than third-party content. |
 
 ## Future / On Hold
 

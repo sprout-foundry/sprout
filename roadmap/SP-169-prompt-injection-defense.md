@@ -16,7 +16,7 @@ exists. It does **not** apply to content we produced.
 
 ## Scope
 
-### In scope — the only two ingress surfaces
+### In scope — the only three ingress surfaces
 
 1. **Web fetches.** `fetch_url` and `web_search` results
    (`pkg/agent_tools/fetch_url.go`, `web_search.go`). The publisher controls
@@ -25,6 +25,11 @@ exists. It does **not** apply to content we produced.
    `node_modules`, cloned repositories we do not own, and downloaded archives.
    The author controls comments, string literals, and fixture data — all of
    which reach the model when a file is read.
+3. **MCP server output.** A tool result from an MCP server is content we did
+   not write and cannot audit: the server's author decides what it returns,
+   and it may be relaying something it fetched itself. It reaches the model
+   through the same tool-result path as our own tools, with no marker saying
+   where it came from.
 
 ### Explicitly out of scope
 
@@ -107,6 +112,65 @@ about the content:
 |---|---|---|---|
 | `fetch_url` / `web_search` output | always | host, novelty, type-vs-bytes | pre-filter on the text; canary + closed set if we classify the page |
 | Third-party code on read | always, labelled with its origin | path outside our tree, vendored/cloned origin | pre-filter on comments and strings |
+| MCP tool output | when the server's setting is on | server identity, novelty | pre-filter on the result text |
+
+## Trust decisions — which content is third-party
+
+Classifying a path is not something to infer. A cloned repository may be the
+user's own work, and mislabelling our own code as untrusted makes the model
+distrust its own output — a worse error than the one this spec fixes. So the
+ambiguous case is a user decision, asked once and remembered.
+
+**Never asked — unambiguous by construction:**
+
+- Known dependency trees: `node_modules/`, `vendor/`, `.venv/`,
+  `site-packages/`, the Go module cache, and git submodules. Content under
+  these is never ours.
+- Any root the user has already classified.
+
+**Asked once — ambiguous:**
+
+A root we have not seen before, when content under it is first read:
+
+> Is `<root>` third-party content — code you did not write?
+
+The answer is persisted **per machine and per repository**, keyed by the
+absolute workspace root, so the same question is never asked twice on that
+machine in that repo. It is inspectable and revocable — `sprout trust list`,
+`sprout trust forget <root>` — because a repository can change hands, and a
+dependency can be adopted and edited.
+
+**MCP servers — decided at setup, per server:**
+
+An MCP server is third-party by construction, so the question is not whether
+it is external but whether its output should be framed. It is asked once, when
+the server is added, alongside the other server settings:
+
+> **Treat output from `github-mcp` as untrusted content?**
+> Tools on this server return text this agent did not write. Framing marks
+> that text as data, so instructions inside it are less likely to be followed.
+> It does not block tools or change what they can do. You can change this
+> later with `sprout mcp edit`.
+
+Default on, persisted with the server's own config so it travels with the
+server definition and is edited where the user already thinks about that
+server — rather than in a separate trust file they would have to know exists.
+
+The "what does this mean" text matters as much as the setting: a toggle whose
+consequence is opaque gets turned off. It has to say plainly that framing is a
+label and not a restriction, or the user will assume it is a sandbox and
+either over-trust it or disable it to unblock work.
+
+**When there is no surface to ask** (an autonomous or workflow run), the
+content is framed. Framing is the conservative choice and costs nothing: it
+labels the content as data, it does not withhold it or block a tool. The
+decision is recorded as unconfirmed so a later interactive session can offer
+to review it, rather than the run silently making the choice permanent.
+
+The consequence of a wrong answer is therefore small in both directions — a
+first-party file read inside a data block, or a third-party file read without
+one. Neither stops work, which is what makes asking acceptable in the first
+place.
 
 ## Design
 
@@ -124,17 +188,24 @@ does not reimplement them:
 - `ValidVerdicts` — layer 4, for classifiers that emit a bare token.
 
 These exist today in `pkg/injection` and are covered by unit tests. What
-remains is wiring them at the two ingress surfaces above.
+remains is wiring them at the ingress surfaces above.
 
 ## Phasing
 
 1. **Frame web fetch output** (layer 5). Smallest change, largest coverage:
-   every fetched byte is currently unframed.
-2. **Frame third-party code on read** (layer 5), labelled with its origin so
+   every fetched byte is currently unframed, and a fetched page has no
+   classification question — it is third-party by definition.
+2. **Trust store** — the persisted per-repo classification above, with
+   `sprout trust list` / `forget`. Prerequisite for step 3, and useful on its
+   own: it is what keeps the question from being asked twice.
+3. **Frame third-party code on read** (layer 5), labelled with its origin so
    the model can tell a vendored file from one of ours.
-3. **Structural signals + pre-filter at ingress** (layers 1–2), recorded on
+4. **Frame MCP tool output**, gated by the per-server setting above. The
+   setting ships with `sprout mcp add` and `sprout mcp edit` so it is chosen
+   where the server is chosen.
+5. **Structural signals + pre-filter at ingress** (layers 1–2), recorded on
    the tool result so the agent can see why content was flagged.
-4. **Canary + closed set**, only if and where we add a classifier over
+6. **Canary + closed set**, only if and where we add a classifier over
    ingested content.
 
 ## Testing

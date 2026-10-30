@@ -40,7 +40,7 @@ func (h *runParallelSubagentsHandler) Definition() ToolDefinition {
 		Description: "Execute 2+ INDEPENDENT subagent tasks CONCURRENTLY. " +
 			"Use when tasks have no dependencies on each other (e.g. researching different code areas, code + tests, analyzing multiple files). " +
 			"Waits for ALL to complete; returns per-ID `{stdout, stderr, exit_code, completed, timed_out}`.\n\n" +
-			"Each task is either a plain string (\"task 1\") or an object {\"prompt\": \"task 1\", \"id\"?, \"persona\"?, \"output_format\"?}. " +
+			"Each task is either a plain string (\"task 1\") or an object {\"prompt\": \"task 1\", \"id\"?, \"persona\"?, \"output_format\"?, \"max_iterations\"?, \"timeout_seconds\"?}. " +
 			"IDs auto-generate as task-1, task-2, etc. when omitted.\n\n" +
 			"`persona` is optional per task (same IDs as `run_subagent`) and applies that persona's system prompt, tools, and provider/model. " +
 			"Tasks without a persona use the default subagent persona, as with `run_subagent`. " +
@@ -61,10 +61,12 @@ func (h *runParallelSubagentsHandler) Definition() ToolDefinition {
 				Items: map[string]any{
 					"type": "object",
 					"properties": map[string]any{
-						"id":            map[string]any{"type": "string", "description": "Optional task ID (auto-generated as task-N when omitted)"},
-						"prompt":        map[string]any{"type": "string", "description": "Task description for the subagent to execute"},
-						"persona":       map[string]any{"type": "string", "description": "Optional persona ID or alias (see /persona list)"},
-						"output_format": map[string]any{"type": "string", "description": "Optional: the exact output format the task's result must follow; a worker-persona result is checked against it"},
+						"id":              map[string]any{"type": "string", "description": "Optional task ID (auto-generated as task-N when omitted)"},
+						"prompt":          map[string]any{"type": "string", "description": "Task description for the subagent to execute"},
+						"persona":         map[string]any{"type": "string", "description": "Optional persona ID or alias (see /persona list)"},
+						"output_format":   map[string]any{"type": "string", "description": "Optional: the exact output format the task's result must follow; a worker-persona result is checked against it"},
+						"max_iterations":  map[string]any{"type": "integer", "description": "Optional: raise this task's iteration budget above the persona default (clamped to 2000). Use it for a long task — a whole-tree audit, a long research pass — that would otherwise hit the cap and stop mid-way"},
+						"timeout_seconds": map[string]any{"type": "integer", "description": "Optional: this task's wall-clock budget in seconds, overriding the persona's time budget and the 30-minute default"},
 					},
 					"required": []any{"prompt"},
 				},

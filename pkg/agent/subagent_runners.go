@@ -122,6 +122,12 @@ func (r *SubagentRunner) RunParallel(ctx context.Context, tasks []SubagentTask, 
 			if t.Role != "" {
 				taskOpts.Role = t.Role
 			}
+			if t.MaxIterations > 0 {
+				taskOpts.MaxIterations = t.MaxIterations
+			}
+			if t.Timeout > 0 {
+				taskOpts.Timeout = t.Timeout
+			}
 			// Note: tokens are already debited per-LLM-call by the subagent via
 			// SetFleetBudget → tracker.Add() in trackFleetBudgetForResponse.
 			// Do NOT add result.TokensUsed again here — that would double-count.

@@ -220,3 +220,45 @@ describe('SproutWorkspace in-place backend swap', () => {
     expect(daemonSocket).toBeDefined();
   });
 });
+
+describe('SproutWorkspace in-place swap to a proxied daemon', () => {
+  it("reconnects the event stream to the daemon backend's socket, not the host's", async () => {
+    // The platform's transport.wsURL is the platform's own socket; the running
+    // workspace's daemon events live behind its workspace proxy. The swap must
+    // reconnect to the daemon's socket, or the chat never receives the run.
+    const base = headlessHost();
+    const platformDaemonHost: SproutHost = {
+      ...base,
+      transport: {
+        apiBaseURL: 'https://platform.test',
+        wsURL: 'wss://platform.test/ws',
+        authMode: 'bearer',
+        agent: {
+          kind: 'daemon',
+          apiBaseURL: '/workspace/ws-1/proxy',
+          wsURL: 'wss://platform.test/workspace/ws-1/proxy/ws',
+        },
+      },
+    };
+    const seed = createEmptyChatState();
+
+    const { rerender } = render(
+      <SproutWorkspace project={PROJECT} space="code" host={wasmHost()} layout={LAYOUT} chatInitialState={seed} />,
+    );
+    await vi.waitFor(() => expect(getAdapter()).not.toBeNull());
+
+    rerender(
+      <SproutWorkspace
+        project={PROJECT}
+        space="code"
+        host={platformDaemonHost}
+        layout={LAYOUT}
+        chatInitialState={seed}
+      />,
+    );
+
+    await vi.waitFor(() => expect(getAdapter()).toBeNull());
+    expect(wsUrls.some((url) => url.startsWith('wss://platform.test/workspace/ws-1/proxy/ws'))).toBe(true);
+    expect(wsUrls.some((url) => url.startsWith('wss://platform.test/ws'))).toBe(false);
+  });
+});

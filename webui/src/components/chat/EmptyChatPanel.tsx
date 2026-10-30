@@ -24,7 +24,13 @@ export const EmptyChatPanel = forwardRef<HTMLDivElement, EmptyChatPanelProps>(fu
   // "open a repository" panel; the local build already has a filesystem.
   // host.8: the hosted transport authenticates against a platform
   // (authMode 'bearer') — the former isCloud branch.
-  const hosted = useHost().transport.authMode === 'bearer';
+  const host = useHost();
+  const hosted = host.transport.authMode === 'bearer';
+  // A daemon backend has the project's checkout already, so there is nothing
+  // for the user to open: the panel's picker would offer to clone a repository
+  // into a workspace that already has one. Only a host whose agent runs in the
+  // page has no checkout of its own, which is what the panel is for.
+  const daemonBackend = host.transport.agent?.kind === 'daemon';
   if (showOffline) {
     return (
       <div className="chat-container chat-container--empty" ref={ref}>
@@ -72,7 +78,7 @@ export const EmptyChatPanel = forwardRef<HTMLDivElement, EmptyChatPanelProps>(fu
     );
   }
 
-  if (hosted && !activeRepo) {
+  if (hosted && !daemonBackend && !activeRepo) {
     return (
       <div className="chat-container chat-container--empty" ref={ref}>
         <OpenRepositoryPanel />

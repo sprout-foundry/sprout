@@ -22,6 +22,17 @@ vi.mock('../services/chatSessions', () => ({
 vi.mock('../utils/log', () => ({ debugLog: vi.fn() }));
 vi.mock('../services/notificationBus', () => ({ notificationBus: { notify: vi.fn() } }));
 
+// The store's own flag is the default answer, so the cases below that do not
+// care about run status keep the behaviour they had.
+const runStatus = vi.hoisted(() => ({
+  resolveChatRunning: vi.fn((_chatId: string | null | undefined, storeSaysRunning: boolean | undefined) =>
+    Promise.resolve(storeSaysRunning === true),
+  ),
+  fetchChatRunning: vi.fn(() => Promise.resolve(false)),
+  agentRunsInPage: vi.fn(() => false),
+}));
+vi.mock('../services/runStatus', () => runStatus);
+
 function setup() {
   let state = {
     activeChatId: 'chat-a',
@@ -134,5 +145,49 @@ describe('chat switch', () => {
 
     expect(h.getState().messages.map((m) => m.content)).toEqual(['LEFT-ONE?', 'LEFT-ONE', 'LEFT-THREE?']);
     expect(h.getState().isProcessing).toBe(true);
+  });
+});
+
+describe('adopting a turn already running on the backend', () => {
+  it('shows a daemon run the store reports idle as running', async () => {
+    // The host store pinned to the platform answers `active_query: false` for
+    // a turn the daemon is running (the platform never sees it), so the switch
+    // asks the backend that runs the agent. Opening the page into a turn the
+    // host started must show it running rather than an idle chat.
+    sessions.switchChatSession.mockResolvedValueOnce({
+      active_chat_id: 'chat-b',
+      chat_session: { messages: [{ role: 'user', content: 'build it' }], active_query: false, run_events: [] },
+    });
+    runStatus.resolveChatRunning.mockResolvedValueOnce(true);
+    const h = setup();
+
+    await act(async () => {
+      await h.result.current.handleActiveChatChange('chat-b');
+    });
+
+    expect(runStatus.resolveChatRunning).toHaveBeenCalledWith('chat-b', false);
+    expect(h.getState().activeChatId).toBe('chat-b');
+    expect(h.getState().isProcessing).toBe(true);
+  });
+
+  it('leaves an idle chat idle when the backend agrees the run finished', async () => {
+    sessions.switchChatSession.mockResolvedValueOnce({
+      active_chat_id: 'chat-b',
+      chat_session: {
+        messages: [
+          { role: 'user', content: 'build it' },
+          { role: 'assistant', content: 'done' },
+        ],
+        active_query: false,
+      },
+    });
+    const h = setup();
+
+    await act(async () => {
+      await h.result.current.handleActiveChatChange('chat-b');
+    });
+
+    expect(h.getState().isProcessing).toBe(false);
+    expect(h.getState().messages.map((m) => m.content)).toEqual(['build it', 'done']);
   });
 });

@@ -5,6 +5,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { THEME_VARIABLE_KEYS } from '../themes/themePacks';
 import { HostProvider, registerActiveHost, useHost } from '../host';
 import type { SproutHost } from '../host';
+import { backendURLs } from '../host/agentBackend';
 import { SproutProviders } from '../providers';
 import { applyHostThemeOverrides, clearHostThemeOverrides, resolveHostThemeOverrides } from '../themes/hostTheme';
 import type { AppState } from '../types/app';
@@ -51,8 +52,9 @@ import { WorkspaceEditorProvider } from './WorkspaceEditorContext';
  *   `wasmBase`) and mounts it anywhere. This is what an external host uses.
  *   It also registers the host for the module-level services (the non-React
  *   accessor that the client-session fetch and the WebSocket URL read) and
- *   opens the events transport, so the host's `transport.apiBaseURL` /
- *   `transport.wsURL` drive Sprout's calls with no extra wiring.
+ *   opens the events transport, so the active agent backend's URLs — a
+ *   daemon's own `apiBaseURL` / `wsURL`, else the host transport's — drive
+ *   Sprout's calls with no extra wiring.
  * - `"ambient"`: the caller has already mounted `HostProvider` +
  *   `SproutProviders` above (Sprout's own app root does) and the composition
  *   must not build a second stack — a second `SproutProviders` would open a
@@ -407,7 +409,9 @@ export function SproutWorkspace({
   const agentBackendKind = host?.transport.agent?.kind;
   useEffect(() => {
     if (ambient || !host) return;
-    const target = `${agentBackendKind ?? 'none'}|${host.transport.wsURL}`;
+    // The socket target is the active backend's: a daemon backend has its own
+    // `wsURL`, and the transport's names the host around it.
+    const target = `${agentBackendKind ?? 'none'}|${backendURLs(host).wsURL}`;
     const restoreActiveHost = registerActiveHost(host);
     // Wire the backend before connecting, so a wasm backend reports "not
     // connected" until its adapter is installed, even if the socket opens first.

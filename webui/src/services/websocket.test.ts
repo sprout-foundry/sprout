@@ -1332,3 +1332,25 @@ describe('WebSocketService - in-browser agent connection state', () => {
     expect(seen).toEqual([{ connected: false }]);
   });
 });
+
+describe('WebSocketService - daemon agent backend', () => {
+  it("connects to the daemon backend's own socket, not the host transport's", () => {
+    // The platform's transport.wsURL is the platform's socket, which does not
+    // carry the workspace's agent events; the daemon backend names its own.
+    activeHostRef.value = {
+      transport: {
+        apiBaseURL: 'https://platform.test',
+        wsURL: 'wss://platform.test/ws',
+        authMode: 'bearer',
+        agent: {
+          kind: 'daemon',
+          apiBaseURL: '/workspace/ws-1/proxy',
+          wsURL: 'wss://platform.test/workspace/ws-1/proxy/ws',
+        },
+      },
+    };
+    const ws = WebSocketService.getInstance();
+    ws.connect();
+    expect(WebSocketService.instance.ws.url).toBe('wss://platform.test/workspace/ws-1/proxy/ws?client=test');
+  });
+});

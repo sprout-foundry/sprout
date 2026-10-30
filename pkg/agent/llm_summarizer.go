@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/sprout-foundry/seed/core"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // llmSummarizerMaxInputChars caps the transcript sent to the summary
@@ -19,6 +21,20 @@ import (
 // message, dropping only the middle. Recency anchors what the model
 // needs to continue; the original setup anchors the task framing.
 const llmSummarizerMaxInputChars = 160000
+
+// summarizerReasoningExcerptChars bounds how much of an assistant message's
+// ReasoningContent reaches the summarizer. Reasoning is where a reasoning
+// model puts the substance of a turn, but it is also the longest and least
+// structured part of a message; an unbounded excerpt would let one turn's
+// thinking crowd out the whole transcript. The excerpt is tagged so the model
+// can tell reasoning apart from the reply it accompanies and does not treat
+// a half-sentence of private deliberation as a stated fact.
+const summarizerReasoningExcerptChars = 500
+
+// summarizerReasoningTag prefixes a reasoning excerpt in the transcript. It is
+// a line-level tag, matching the other role tags, so an excerpt never reads as
+// a continuation of the assistant reply that follows it.
+const summarizerReasoningTag = "[reasoning] "
 
 // CompactedSummaryHeader is the checkpoint wrapper that flags a message as
 // the substitute for compacted history. It is the value this package's
@@ -38,7 +54,12 @@ const CompactedSummaryHeader = "Compacted earlier conversation state:"
 // text. Seed's structural compaction pipeline wraps that text into the
 // canonical "Compacted earlier conversation state:" header before splicing
 // it into history, so this function returns only the summary body.
-func newLLMSummarizer(client api.ClientInterface, providerName string) core.LLMSummarizer {
+//
+// onUsage, when non-nil, receives the prompt and cached token counts of the
+// summary call once it succeeds. The summary call carries the largest prompt
+// of a session, so its cache-hit rate is the number worth watching; reporting
+// it here keeps the accounting next to the call that produced it.
+func newLLMSummarizer(client api.ClientInterface, providerName string, onUsage func(promptTokens, cachedTokens int)) core.LLMSummarizer {
 	if client == nil {
 		return nil
 	}
@@ -65,8 +86,34 @@ func newLLMSummarizer(client api.ClientInterface, providerName string) core.LLMS
 		if resp == nil || len(resp.Choices) == 0 {
 			return "", nil
 		}
+		// resp.Usage is a value (core.ChatUsage), not a pointer, so "usage was
+		// reported" is expressed as a non-zero prompt count rather than a nil
+		// check. Providers that omit the usage block leave it at zero.
+		if onUsage != nil && resp.Usage.PromptTokens > 0 {
+			onUsage(resp.Usage.PromptTokens, resp.Usage.CachedTokens)
+		}
 		return strings.TrimSpace(resp.Choices[0].Message.Content), nil
 	}
+}
+
+// logCompactionSummaryUsage records the summarizer call's prompt/cached token
+// split on the run log, so the largest prompt in a session has an observable
+// cache-hit rate. Nil-safe on the run logger, which is absent outside a
+// logging run.
+func logCompactionSummaryUsage(promptTokens, cachedTokens int) {
+	logger := utils.GetRunLogger()
+	if logger == nil {
+		return
+	}
+	ratio := 0.0
+	if promptTokens > 0 {
+		ratio = float64(cachedTokens) / float64(promptTokens)
+	}
+	logger.LogEvent("compaction_summary_usage", map[string]any{
+		"prompt_tokens":   promptTokens,
+		"cached_tokens":   cachedTokens,
+		"cache_hit_ratio": ratio,
+	})
 }
 
 // CompactionArtifactBlock renders the file-change record for a summarized
@@ -116,6 +163,15 @@ func buildSummarizerSystemPrompt(hint core.SummarizerHint) string {
 // shortened via their content header. Messages carrying the synthetic
 // checkpoint marker are flagged as `[checkpoint summary]` so the model
 // can treat them as pre-compressed.
+//
+// Assistant messages contribute their reasoning as well as their reply: for a
+// reasoning model the thinking is often the only place a turn's substance
+// appears, and seed's token estimator charges the summarizer budget for it
+// regardless, so omitting it summarizes such a turn as if it were empty. The
+// excerpt is bounded (summarizerReasoningExcerptChars) and tagged
+// (summarizerReasoningTag) — bounded so one turn's deliberation cannot crowd
+// out the rest of the transcript, tagged so the model reads it as private
+// thinking rather than as a stated fact.
 func buildSummarizerTranscript(messages []core.Message, maxChars int) string {
 	var b strings.Builder
 	for _, msg := range messages {
@@ -125,6 +181,7 @@ func buildSummarizerTranscript(messages []core.Message, maxChars int) string {
 			b.WriteString(msg.Content)
 			b.WriteString("\n")
 		case "assistant":
+			writeReasoningExcerpt(&b, msg)
 			if len(msg.ToolCalls) > 0 {
 				b.WriteString("[assistant/tool_calls] ")
 				b.WriteString(joinAssistantToolNames(msg.ToolCalls))
@@ -153,6 +210,29 @@ func buildSummarizerTranscript(messages []core.Message, maxChars int) string {
 		}
 	}
 	return truncateTranscriptMiddle(b.String(), maxChars)
+}
+
+// writeReasoningExcerpt appends a bounded, tagged excerpt of an assistant
+// message's reasoning to the transcript. Only assistant messages carry
+// reasoning into the summary; other roles contribute none.
+func writeReasoningExcerpt(b *strings.Builder, msg core.Message) {
+	reasoning := strings.TrimSpace(msg.ReasoningContent)
+	if reasoning == "" {
+		return
+	}
+	if len(reasoning) > summarizerReasoningExcerptChars {
+		// Cut on a rune boundary: the cap is a byte count, and a multi-byte
+		// character straddling it would leave the transcript with an invalid
+		// UTF-8 fragment.
+		cut := summarizerReasoningExcerptChars
+		for cut > 0 && !utf8.RuneStart(reasoning[cut]) {
+			cut--
+		}
+		reasoning = reasoning[:cut]
+	}
+	b.WriteString(summarizerReasoningTag)
+	b.WriteString(reasoning)
+	b.WriteString("\n")
 }
 
 // truncateTranscriptMiddle keeps the first ~25% and last ~75% of the
@@ -243,7 +323,7 @@ func (a *Agent) SummarizeViaLLM(ctx context.Context, messages []api.Message, hin
 	if a == nil {
 		return "", agenterrors.NewAgent("llm-summarizer", "agent unavailable", nil)
 	}
-	summarizer := newLLMSummarizer(a.getClient(), a.GetProvider())
+	summarizer := newLLMSummarizer(a.getClient(), a.GetProvider(), logCompactionSummaryUsage)
 	if summarizer == nil {
 		return "", agenterrors.NewAgent("llm-summarizer", "no LLM client bound; cannot summarize via LLM", nil)
 	}

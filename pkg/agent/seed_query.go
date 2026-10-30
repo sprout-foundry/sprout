@@ -402,7 +402,7 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 	if pruner := a.state.GetConversationPruner(); pruner != nil {
 		opts.Pruner = pruner
 	}
-	opts.LLMSummarizer = wrapLLMSummarizerWithEvents(newLLMSummarizer(clientSnap, a.GetProvider()), a)
+	opts.LLMSummarizer = wrapLLMSummarizerWithEvents(newLLMSummarizer(clientSnap, a.GetProvider(), logCompactionSummaryUsage), a)
 	// The file-change record is rendered by seed after it merges the summary,
 	// so it appears once per pass even when the layered split makes three
 	// summarizer calls.

@@ -164,6 +164,12 @@ func runMCPAdd() error {
 	// Create server config from template
 	serverConfig := selectedTemplate.CreateServerConfig(serverName, envValues, customURL, customCommand, customArgs)
 
+	// SP-169: framing question, asked once after the server is otherwise
+	// configured.
+	if err := applyTrustUntrustedPrompt(&serverConfig, reader); err != nil {
+		return err
+	}
+
 	// Add server to config
 	mcpConfig.Servers[serverName] = serverConfig
 	mcpConfig.Enabled = true

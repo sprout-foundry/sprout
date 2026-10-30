@@ -222,6 +222,24 @@ func MergeConfig(base, override *Config) *Config {
 		result.HistoryIndexByPath = override.HistoryIndexByPath
 	}
 
+	// Merge TrustedContentRoots (SP-169) per root rather than replacing the
+	// store, so a layered config adds decisions instead of discarding the ones
+	// already recorded — a dropped answer means the trust question is asked
+	// again, which is exactly what the store exists to prevent.
+	if len(override.TrustedContentRoots) > 0 {
+		if result.TrustedContentRoots == nil {
+			result.TrustedContentRoots = make(map[string]map[string]bool, len(override.TrustedContentRoots))
+		}
+		for root, decisions := range override.TrustedContentRoots {
+			if result.TrustedContentRoots[root] == nil {
+				result.TrustedContentRoots[root] = make(map[string]bool, len(decisions))
+			}
+			for path, thirdParty := range decisions {
+				result.TrustedContentRoots[root][path] = thirdParty
+			}
+		}
+	}
+
 	// Override HistoryScope
 	if override.HistoryScope != "" {
 		result.HistoryScope = override.HistoryScope

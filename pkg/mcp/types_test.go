@@ -47,14 +47,14 @@ func TestMCPServerConfig_MarshalJSON_EdgeCases(t *testing.T) {
 			config: MCPServerConfig{
 				Name: "",
 			},
-			wantJSON: `{"name":"","auto_start":false,"max_restarts":0}`,
+			wantJSON: `{"name":"","auto_start":false,"max_restarts":0,"trust_untrusted_content":false}`,
 		},
 		{
 			name: "only name set",
 			config: MCPServerConfig{
 				Name: "my-server",
 			},
-			wantJSON: `{"name":"my-server","auto_start":false,"max_restarts":0}`,
+			wantJSON: `{"name":"my-server","auto_start":false,"max_restarts":0,"trust_untrusted_content":false}`,
 		},
 		{
 			name: "nil credentials marshaled as null",
@@ -62,7 +62,7 @@ func TestMCPServerConfig_MarshalJSON_EdgeCases(t *testing.T) {
 				Name:        "test",
 				Credentials: nil,
 			},
-			wantJSON: `{"name":"test","auto_start":false,"max_restarts":0}`,
+			wantJSON: `{"name":"test","auto_start":false,"max_restarts":0,"trust_untrusted_content":false}`,
 		},
 		{
 			name: "timeout zero",
@@ -70,7 +70,7 @@ func TestMCPServerConfig_MarshalJSON_EdgeCases(t *testing.T) {
 				Name:    "test",
 				Timeout: 0,
 			},
-			wantJSON: `{"name":"test","auto_start":false,"max_restarts":0}`,
+			wantJSON: `{"name":"test","auto_start":false,"max_restarts":0,"trust_untrusted_content":false}`,
 		},
 	}
 

@@ -173,6 +173,11 @@ type Config struct {
 	CommandHistoryByPath map[string][]string `json:"command_history_by_path,omitempty"`
 	HistoryIndexByPath   map[string]int      `json:"history_index_by_path,omitempty"`
 
+	// TrustedContentRoots records, per absolute workspace root, which paths the
+	// user classified as third-party content. Keyed by workspace root, then by
+	// path relative to it ("." for the root itself). true = third-party.
+	TrustedContentRoots map[string]map[string]bool `json:"trusted_content_roots,omitempty"`
+
 	// Change History Configuration
 	HistoryScope string `json:"history_scope,omitempty"` // "project" or "global"
 
@@ -480,6 +485,7 @@ func NewConfig() *Config {
 		CustomProviders:      make(map[string]CustomProviderConfig),
 		CommandHistoryByPath: make(map[string][]string),
 		HistoryIndexByPath:   make(map[string]int),
+		TrustedContentRoots:  make(map[string]map[string]bool),
 		MCP:                  mcp.DefaultMCPConfig(),
 		Preferences:          make(map[string]interface{}),
 		APITimeouts: &APITimeoutConfig{

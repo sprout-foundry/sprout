@@ -87,6 +87,11 @@ func setupPlaywrightMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) er
 		return fmt.Errorf("invalid choice: %s", installChoice)
 	}
 
+	// SP-169: framing question, asked once after the server is configured.
+	if err := applyTrustUntrustedPrompt(&serverConfig, reader); err != nil {
+		return err
+	}
+
 	// Add server to config
 	mcpConfig.Servers["playwright"] = serverConfig
 	mcpConfig.Enabled = true
@@ -168,6 +173,11 @@ func setupChromeDevToolsMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader
 			channel = "stable"
 		}
 		serverConfig.Args = append(serverConfig.Args, "--channel="+channel)
+	}
+
+	// SP-169: framing question, asked once after the server is configured.
+	if err := applyTrustUntrustedPrompt(&serverConfig, reader); err != nil {
+		return err
 	}
 
 	// Add server to config

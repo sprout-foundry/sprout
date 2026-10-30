@@ -265,7 +265,26 @@ func readMCPConfigFile(path string) (MCPConfig, bool) {
 		return MCPConfig{}, false
 	}
 	migrateSecretsOnLoad(&cfg)
+	normalizeTrustUntrusted(&cfg)
 	return cfg, true
+}
+
+// normalizeTrustUntrusted applies the SP-169 default to every server in a
+// loaded config: a server with no recorded framing setting frames its output.
+//
+// The default cannot live in the struct — a bool's zero value is false, which
+// would mean "do not frame" for every server saved before the setting existed.
+// UnmarshalJSON already resolves an absent field to true; this pass is the
+// second half of the same guarantee, covering servers that enter a config
+// without passing through JSON (auto-discovered ones, and the in-memory maps
+// the add flows mutate before saving).
+func normalizeTrustUntrusted(cfg *MCPConfig) {
+	for name, server := range cfg.Servers {
+		if !server.trustUntrustedRecorded {
+			server.TrustUntrustedContent = true
+		}
+		cfg.Servers[name] = server
+	}
 }
 
 // mergeMCPConfig folds one layer into dst. dst is the higher-precedence

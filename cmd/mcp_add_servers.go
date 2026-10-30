@@ -93,6 +93,11 @@ func setupGitMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
 		return fmt.Errorf("invalid choice: %s", installChoice)
 	}
 
+	// SP-169: framing question, asked once after the server is configured.
+	if err := applyTrustUntrustedPrompt(&serverConfig, reader); err != nil {
+		return err
+	}
+
 	// Add server to config
 	mcpConfig.Servers["git"] = serverConfig
 	mcpConfig.Enabled = true
@@ -245,6 +250,12 @@ func setupCustomMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader, regist
 		serverConfig, err = promptStdioCustomServer(serverName, reader)
 	}
 	if err != nil {
+		return err
+	}
+
+	// SP-169: the framing question is asked once, after the server is otherwise
+	// configured — the last thing the user decides about this server.
+	if err := applyTrustUntrustedPrompt(&serverConfig, reader); err != nil {
 		return err
 	}
 
@@ -430,6 +441,59 @@ func promptHTTPHeaders(reader *bufio.Reader) (map[string]string, error) {
 		}
 	}
 	return headers, nil
+}
+
+// promptTrustUntrustedContent asks the SP-169 question once, after the server
+// is otherwise configured: should this server's tool output be framed as
+// untrusted data?
+//
+// Default yes. The question is asked because the answer is a judgement about a
+// third party, and the explanatory text matters as much as the toggle — a
+// setting whose consequence is opaque gets turned off, so it says plainly that
+// framing is a label and not a restriction.
+//
+// Non-interactive runs (piped stdin, autonomous/workflow runs) do not prompt:
+// they take the default, which is the conservative choice and costs nothing.
+func promptTrustUntrustedContent(serverName string, reader *bufio.Reader) (bool, error) {
+	if !StdinIsTerminal() {
+		return true, nil
+	}
+
+	fmt.Print(trustUntrustedPromptText(serverName))
+	fmt.Print("Frame this server's output as untrusted data? (Y/n): ")
+
+	raw, err := reader.ReadString('\n')
+	if err != nil && strings.TrimSpace(raw) == "" {
+		// EOF with no answer: keep the default rather than failing the setup —
+		// the server is already configured by this point.
+		fmt.Println()
+		return true, nil
+	}
+	return strings.ToLower(strings.TrimSpace(raw)) != "n", nil
+}
+
+// trustUntrustedPromptText is the question and its explanation, kept separate
+// from the prompt call so the wording is assertable without a TTY. The text is
+// load-bearing: a toggle whose consequence is opaque gets turned off, so it says
+// plainly that framing is a label and not a restriction.
+func trustUntrustedPromptText(serverName string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Treat output from %q as untrusted content?\n", serverName)
+	b.WriteString("Tools on this server return text this agent did not write. Framing marks\n")
+	b.WriteString("that text as data, so instructions inside it are less likely to be followed.\n")
+	b.WriteString("It does not block tools or change what they can do.\n")
+	return b.String()
+}
+
+// applyTrustUntrustedPrompt asks the framing question and records the answer on
+// the server config. It is the single call site shape shared by every add flow.
+func applyTrustUntrustedPrompt(serverConfig *mcp.MCPServerConfig, reader *bufio.Reader) error {
+	trust, err := promptTrustUntrustedContent(serverConfig.Name, reader)
+	if err != nil {
+		return err
+	}
+	serverConfig.SetTrustUntrustedContent(trust)
+	return nil
 }
 
 func promptAutoStartAndTimeout(reader *bufio.Reader) (bool, time.Duration, error) {

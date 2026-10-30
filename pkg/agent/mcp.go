@@ -9,6 +9,7 @@ import (
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"github.com/sprout-foundry/sprout/pkg/injection"
 	"github.com/sprout-foundry/sprout/pkg/mcp"
 )
 
@@ -58,7 +59,18 @@ func (a *Agent) initializeMCP() error {
 					Timeout:     serverConfig.Timeout,
 					AutoStart:   serverConfig.AutoStart,
 					MaxRestarts: serverConfig.MaxRestarts,
+					// SP-169: the framing setting is carried through the
+					// legacy-config merge below via the setter, not this
+					// literal — see the comment after the closing brace.
 				}
+				// SP-169: carry the per-server framing setting through the
+				// legacy-config merge, or a server added via `mcp add` would
+				// arrive at the manager with framing silently off. The setter
+				// (not the literal) also records the value as authoritative: a
+				// bare field assignment leaves the provenance unset, and
+				// TrustUntrustedContentOrDefault then returns true even for a
+				// server the user explicitly opted out of.
+				mcpServer.SetTrustUntrustedContent(serverConfig.TrustUntrustedContentOrDefault())
 				if err := a.mcpSub.GetManager().AddServer(mcpServer); err != nil {
 					if a.debug {
 						a.Logger().Warn("Failed to add legacy MCP server %s: %v", name, err)
@@ -96,7 +108,13 @@ func (a *Agent) initializeMCP() error {
 			Timeout:     serverConfig.Timeout,
 			AutoStart:   serverConfig.AutoStart,
 			MaxRestarts: serverConfig.MaxRestarts,
+			// SP-169: the framing setting travels with the server definition.
 		}
+		// SP-169: the setter records the value as authoritative. A bare field
+		// assignment would leave the provenance unset, and
+		// TrustUntrustedContentOrDefault would then return true even for a
+		// server the user explicitly opted out of.
+		mcpServer.SetTrustUntrustedContent(serverConfig.TrustUntrustedContentOrDefault())
 
 		if err := a.mcpSub.GetManager().AddServer(mcpServer); err != nil {
 			if a.debug {
@@ -295,8 +313,43 @@ func (a *Agent) executeMCPTool(toolName string, args map[string]interface{}) (st
 		return "", agenterrors.Wrapf(err, "failed to call MCP tool %s/%s", serverName, actualToolName)
 	}
 
-	// Convert result to string
-	return formatMCPResult(result), nil
+	// SP-169 layer 5: the server's payload is third-party text, so it is framed
+	// when the server's setting says so. Errors we generated ourselves are
+	// returned above, outside the block — only the server's own content is
+	// labelled as data.
+	return a.frameMCPResult(serverName, actualToolName, formatMCPResult(result)), nil
+}
+
+// frameMCPResult wraps an MCP tool's result text in the untrusted-data block
+// (SP-169 layer 5) when the owning server's TrustUntrustedContent setting is on.
+//
+// The setting is read from the live server config rather than the static
+// config file, so a change lands without a restart. An empty result is
+// returned unchanged: there is nothing to frame, and an empty block would only
+// add noise. Content is never dropped — framing is a label, not a filter.
+func (a *Agent) frameMCPResult(serverName, toolName, text string) string {
+	if text == "" {
+		return text
+	}
+	if !a.mcpServerTrustsUntrustedContent(serverName) {
+		return text
+	}
+	return injection.WrapUntrusted("mcp: "+serverName+"/"+toolName, text)
+}
+
+// mcpServerTrustsUntrustedContent reports whether the named server's output
+// should be framed. A server we cannot resolve (manager absent, server
+// unregistered) defaults to framing: the conservative direction is to label
+// text we cannot attribute, and the label costs nothing.
+func (a *Agent) mcpServerTrustsUntrustedContent(serverName string) bool {
+	if a.mcpSub == nil || a.mcpSub.GetManager() == nil {
+		return true
+	}
+	server, exists := a.mcpSub.GetManager().GetServer(serverName)
+	if !exists {
+		return true
+	}
+	return server.GetConfig().TrustUntrustedContentOrDefault()
 }
 
 // formatMCPResult formats an MCP result for display
@@ -363,7 +416,9 @@ func (a *Agent) handleMCPToolsCommand(args map[string]interface{}) (string, erro
 		if err != nil {
 			return "", agenterrors.Wrapf(err, "mcp_tools call %s/%s failed", server, tool)
 		}
-		return formatMCPResult(result), nil
+		// Same framing as a direct mcp_<server>_<tool> call: this is the same
+		// third-party payload arriving by a second route.
+		return a.frameMCPResult(server, tool, formatMCPResult(result)), nil
 
 	case "status":
 		servers := a.mcpSub.GetManager().ListServers()

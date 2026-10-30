@@ -297,4 +297,5 @@ func init() {
 	rootCmd.AddCommand(automateCmd)
 	rootCmd.AddCommand(shellBgCmd)
 	rootCmd.AddCommand(prCmd)
+	rootCmd.AddCommand(trustCmd)
 }

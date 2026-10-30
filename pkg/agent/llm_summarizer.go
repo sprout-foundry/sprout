@@ -65,7 +65,17 @@ func newLLMSummarizer(client api.ClientInterface, providerName string) core.LLMS
 		if resp == nil || len(resp.Choices) == 0 {
 			return "", nil
 		}
-		return strings.TrimSpace(resp.Choices[0].Message.Content), nil
+		body := strings.TrimSpace(resp.Choices[0].Message.Content)
+		// Carry a deterministic file-change manifest alongside the model's
+		// prose. Artifact tracking is the dimension every summarizer degrades
+		// on, and a manifest read off the tool calls cannot be wrong about
+		// which files changed — the model only has to recall what it did with
+		// them. It also carries forward: ExtractFileChangesFromMessages reads
+		// the block back off an earlier summary.
+		if block := FormatFileChangesForSummary(ExtractFileChangesFromMessages(messages)); block != "" {
+			body += "\n\n" + block
+		}
+		return body, nil
 	}
 }
 

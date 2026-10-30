@@ -136,12 +136,10 @@ func (c *CompactCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		return emptyErr
 	}
 
-	// Preserve the head's file-change manifest by appending it to the summary body.
-	manifest := agent.ExtractFileChangesFromMessages(middle)
+	// The file-change manifest is appended by the LLM summarizer itself, so
+	// every summary carries it (automatic compaction included) and this path
+	// must not add a second copy.
 	summaryContent := compactSummaryHeader + "\n" + body
-	if block := agent.FormatFileChangesForSummary(manifest); block != "" {
-		summaryContent += "\n\n" + block
-	}
 
 	summaryMsg := api.Message{
 		Role:    "assistant",
@@ -168,7 +166,7 @@ func (c *CompactCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	fmt.Printf("  Recent preserved: %d messages (causal chain)\n", len(tail))
 	fmt.Printf("  New total: %d messages\n", len(newMessages))
 	fmt.Printf("  Summary length: %d chars\n", len(body))
-	if len(manifest) > 0 {
+	if manifest := agent.ExtractFileChangesFromMessages(middle); len(manifest) > 0 {
 		fmt.Printf("  File changes carried forward: %d entries\n", len(manifest))
 	}
 

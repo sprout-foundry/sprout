@@ -69,6 +69,19 @@ func newLLMSummarizer(client api.ClientInterface, providerName string) core.LLMS
 	}
 }
 
+// CompactionArtifactBlock renders the file-change record for a summarized
+// span. seed calls it once per structural-compaction pass and appends the
+// result to the summary, so which files changed survives compaction as
+// derived fact — read off the tool calls — rather than something the summary
+// has to recall. Artifact tracking is the dimension summarizers lose first.
+//
+// It carries forward too: ExtractFileChangesFromMessages reads the block back
+// off an earlier summary, so a file edited before and after a compaction stays
+// in the record.
+func CompactionArtifactBlock(messages []api.Message) string {
+	return FormatFileChangesForSummary(ExtractFileChangesFromMessages(messages))
+}
+
 // buildSummarizerSystemPrompt produces the system instruction shaped by the
 // hint. DetailLevel selects framing ("brief" / "summary" / "detailed");
 // MaxWords becomes a soft word cap in the prompt body.

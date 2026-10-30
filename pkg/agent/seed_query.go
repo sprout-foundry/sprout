@@ -403,6 +403,10 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 		opts.Pruner = pruner
 	}
 	opts.LLMSummarizer = wrapLLMSummarizerWithEvents(newLLMSummarizer(clientSnap, a.GetProvider()), a)
+	// The file-change record is rendered by seed after it merges the summary,
+	// so it appears once per pass even when the layered split makes three
+	// summarizer calls.
+	opts.CompactionArtifacts = CompactionArtifactBlock
 
 	// Model-aware compaction trigger fraction. seed's default (0.85) leaves only 15% of the
 	// context window for response + thinking + tool I/O, which thinking-budget models exhaust

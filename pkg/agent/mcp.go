@@ -325,9 +325,6 @@ func (a *Agent) mcpCallContext() context.Context {
 // not be running yet, and CallTool reports that).
 func (a *Agent) resolveMCPToolIdentity(toolName string) (server, tool string, err error) {
 	rest := strings.TrimPrefix(toolName, "mcp_")
-	if rest == "" {
-		return "", "", agenterrors.NewInvalidInputError("empty MCP tool name", nil)
-	}
 
 	var names []string
 	if manager := a.mcpSub.GetManager(); manager != nil {
@@ -337,15 +334,41 @@ func (a *Agent) resolveMCPToolIdentity(toolName string) (server, tool string, er
 			}
 		}
 	}
+	return splitMCPToolName(toolName, rest, names)
+}
+
+// splitMCPToolName decides which server an advertised tool name belongs to,
+// given the names of the servers that are registered. It is the pure half of
+// the identity split, so the fail-closed rule can be tested without standing up
+// a manager.
+//
+// A name that matches no registered server is refused rather than guessed: the
+// historical split at the first underscore is exactly the guess that lets a
+// call be authorized against one server while running on another. The one
+// exception is an empty server list, where nothing is running to be confused
+// with anything and the manager's own "server not found" is the better error.
+func splitMCPToolName(toolName, rest string, names []string) (server, tool string, err error) {
+	if rest == "" {
+		return "", "", agenterrors.NewInvalidInputError("empty MCP tool name", nil)
+	}
+
 	if server, tool, ok := resolveMCPToolIdentityFromNames(rest, names); ok {
 		return server, tool, nil
 	}
 
-	parts := strings.SplitN(rest, "_", 2)
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return "", "", agenterrors.NewInvalidInputError(fmt.Sprintf("invalid MCP tool name format: %s", toolName), nil)
+	if len(names) == 0 {
+		parts := strings.SplitN(rest, "_", 2)
+		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+			return "", "", agenterrors.NewInvalidInputError(fmt.Sprintf("invalid MCP tool name format: %s", toolName), nil)
+		}
+		return parts[0], parts[1], nil
 	}
-	return parts[0], parts[1], nil
+
+	return "", "", agenterrors.NewSecurityError(fmt.Sprintf(
+		"cannot resolve which MCP server %q belongs to: no registered server name is a prefix of it. "+
+			"Refusing to guess, because the allowlist entry that authorized the call may not be the server that runs it. "+
+			"Check `sprout mcp list` for the server name, and take a different approach if the tool is not listed.",
+		toolName), nil)
 }
 
 // resolveMCPToolIdentityFromNames is the pure half of the split: the longest

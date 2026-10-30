@@ -342,9 +342,9 @@
         "context_length": 1000000,
         "description": "Mistral Large 4 - Mistral's open-weight flagship multimodal model (1.05T total, 49B active) with a 1M-token context window",
         "id": "mistral-large-4",
-        "input_cost": 0.68,
+        "input_cost": 0.7,
         "name": "Mistral Large 4",
-        "output_cost": 2.09,
+        "output_cost": 2.1,
         "tags": [
           "tools",
           "vision",

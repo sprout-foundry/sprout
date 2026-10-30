@@ -768,13 +768,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.028,
+        "cached_input_cost": 0.0238,
         "context_length": 1048576,
         "description": "DeepSeek V4 Flash 0731 is a sparse mixture-of-experts model from DeepSeek, with 13B active parameters out of 284B total. This re-post-trained revision is suited for coding, reasoning, and agent workflows.",
         "id": "deepseek/deepseek-v4-flash-0731",
-        "input_cost": 0.0509,
+        "input_cost": 0.119,
         "name": "DeepSeek: DeepSeek V4 Flash 0731",
-        "output_cost": 0.1487,
+        "output_cost": 0.238,
         "tags": [
           "tools",
           "reasoning",
@@ -782,13 +782,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.073095,
+        "cached_input_cost": 0.079025,
         "context_length": 1048576,
         "description": "DeepSeek V4 Pro is a large-scale Mixture-of-Experts model from DeepSeek with 1.6T total parameters and 49B activated parameters, supporting a 1M-token context window. It is designed for advanced reasoning, coding, and long-horizon agentic tasks.",
         "id": "deepseek/deepseek-v4-pro",
-        "input_cost": 0.877134,
+        "input_cost": 0.9483,
         "name": "DeepSeek: DeepSeek V4 Pro",
-        "output_cost": 1.754268,
+        "output_cost": 1.8966,
         "tags": [
           "tools",
           "reasoning",
@@ -1929,9 +1929,9 @@
         "context_length": 262144,
         "description": "MoonshotAI: Kimi K2.7 Code is a coding-focused model in Moonshot AI's Kimi K2 family, built to complete end-to-end programming tasks reliably over long contexts. It uses a native multimodal mixture-of-experts...",
         "id": "moonshotai/kimi-k2.7-code",
-        "input_cost": 0.56,
+        "input_cost": 0.6,
         "name": "MoonshotAI: Kimi K2.7 Code",
-        "output_cost": 3.1,
+        "output_cost": 3.5,
         "tags": [
           "tools",
           "vision",
@@ -1940,13 +1940,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.18,
+        "cached_input_cost": 0.182,
         "context_length": 1048576,
         "description": "Kimi K3 is a 2.8T parameter open-weight multimodal reasoning model from Moonshot AI. It is suited for complex coding, knowledge work, and long-horizon agentic workflows, with a 1M-token context window.",
         "id": "moonshotai/kimi-k3",
-        "input_cost": 0.1824,
+        "input_cost": 0.192,
         "name": "MoonshotAI: Kimi K3",
-        "output_cost": 9.3388,
+        "output_cost": 15.0,
         "tags": [
           "tools",
           "vision",
@@ -2038,7 +2038,8 @@
         "tags": [
           "reasoning",
           "structured_output"
-        ]
+        ],
+        "cached_input_cost": 0.2
       },
       {
         "context_length": 131072,
@@ -2063,7 +2064,8 @@
           "tools",
           "reasoning",
           "structured_output"
-        ]
+        ],
+        "cached_input_cost": 0.012
       },
       {
         "context_length": 256000,
@@ -2293,7 +2295,7 @@
         ]
       },
       {
-        "cached_input_cost": 0.025,
+        "cached_input_cost": 0.03,
         "context_length": 1047576,
         "description": "For tasks that demand low latency, GPT‑4.1 nano is the fastest and cheapest model in the GPT-4.1 series. It delivers exceptional performance at a small size with its 1 million...",
         "id": "openai/gpt-4.1-nano",
@@ -4510,13 +4512,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.18,
+        "cached_input_cost": 0.17,
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the MoonshotAI Kimi family.",
         "id": "~moonshotai/kimi-latest",
-        "input_cost": 0.1824,
+        "input_cost": 0.171,
         "name": "MoonshotAI Kimi Latest",
-        "output_cost": 9.3388,
+        "output_cost": 10.5572,
         "tags": [
           "tools",
           "vision",
@@ -4589,9 +4591,9 @@
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the DeepSeek V4 Flash family.",
         "id": "~deepseek/deepseek-v4-flash-latest",
-        "input_cost": 0.0509,
+        "input_cost": 0.0341,
         "name": "DeepSeek V4 Flash Latest",
-        "output_cost": 0.1487,
+        "output_cost": 0.1887,
         "tags": [
           "tools",
           "reasoning",
@@ -5712,13 +5714,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.0175,
+        "cached_input_cost": 0.0375,
         "context_length": 1000000,
         "description": "Qwen3.8 27B is an open-weight dense vision-language model from Qwen. It is suited for coding, professional workflows, research, multimodal interaction, and long-running agent tasks, with flexible thinking that can be enabled or disabled.",
         "id": "qwen/qwen3.8-27b",
-        "input_cost": 0.035,
+        "input_cost": 0.15,
         "name": "Qwen: Qwen3.8 27B",
-        "output_cost": 2.2,
+        "output_cost": 1.875,
         "tags": [
           "tools",
           "vision",
@@ -5933,13 +5935,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.03,
+        "cached_input_cost": 0.018,
         "context_length": 1048576,
         "description": "GLM-5.3-Flash is Z.ai's first natively multimodal model, delivering frontier coding and agentic performance at flash-tier cost. With 320B total and 18B active parameters, it outperforms GLM-5.2 at one-tenth the price while approaching Claude Opus 4.8 on coding and agentic benchmarks.",
         "id": "z-ai/glm-5.3-flash",
-        "input_cost": 0.0457,
+        "input_cost": 0.018,
         "name": "Z.ai: GLM 5.3 Flash",
-        "output_cost": 0.0742,
+        "output_cost": 0.1402,
         "tags": [
           "tools",
           "vision",
@@ -6163,7 +6165,7 @@
         "id": "tencent/hy4-preview",
         "input_cost": 0.7506,
         "name": "Tencent: Hy4 preview",
-        "output_cost": 2.251,
+        "output_cost": 2.2509,
         "tags": [
           "tools",
           "reasoning",
@@ -6258,13 +6260,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.03,
+        "cached_input_cost": 0.018,
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the GLM Flash family.",
         "id": "~z-ai/glm-flash-latest",
-        "input_cost": 0.0457,
+        "input_cost": 0.018,
         "name": "Z.ai: GLM Flash Latest",
-        "output_cost": 0.0742,
+        "output_cost": 0.1402,
         "tags": [
           "tools",
           "vision",
@@ -6532,13 +6534,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.0172,
+        "cached_input_cost": 0.006,
         "context_length": 1048576,
         "description": "DeepSeek V4.1 Flash is a sparse mixture-of-experts model from DeepSeek, and the cost-efficient tier of the V4.1 family. DeepSeek reports that it exceeds V4 Pro on performance, speed, and task completion time, so it sits ahead of the previous flagship rather than beneath it.",
         "id": "deepseek/deepseek-v4.1-flash",
-        "input_cost": 0.0187,
+        "input_cost": 0.045,
         "name": "DeepSeek: DeepSeek V4.1 Flash",
-        "output_cost": 1.8,
+        "output_cost": 0.5,
         "tags": [
           "tools",
           "vision",
@@ -6689,13 +6691,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.0336,
+        "cached_input_cost": 0.004,
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the DeepSeek Flash family.",
         "id": "~deepseek/deepseek-flash-latest",
-        "input_cost": 0.0339,
+        "input_cost": 0.022,
         "name": "DeepSeek: DeepSeek Flash Latest",
-        "output_cost": 1.64,
+        "output_cost": 0.192,
         "tags": [
           "tools",
           "vision",
@@ -6710,7 +6712,7 @@
         "id": "~deepseek/deepseek-pro-latest",
         "input_cost": 0.1035,
         "name": "DeepSeek: DeepSeek Pro Latest",
-        "output_cost": 8,
+        "output_cost": 4.0,
         "tags": [
           "tools",
           "reasoning",
@@ -7248,7 +7250,7 @@
         ]
       },
       {
-        "cached_input_cost": 0.05,
+        "cached_input_cost": 0.1,
         "context_length": 1048576,
         "description": "Step 5 Preview is StepFun's flagship model for agentic work, built on a sparse Mixture-of-Experts architecture (27B active / 600B total parameters). It performs strongly in software engineering and professional...",
         "id": "stepfun/step-5-preview",
@@ -7840,13 +7842,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.03,
+        "cached_input_cost": 0.003,
         "context_length": 1048576,
         "description": "Particle-1 is a token-efficient agentic coding model from Particle AI, post-trained on DeepSeek V4.1 Flash. It is suited for software engineering work such as terminal workflows, codebase changes, and data engineering tasks, and is trained to complete them with substantially fewer reasoning and tool-call tokens while keeping accuracy close to its base model.",
         "id": "particle-ai/particle-1",
-        "input_cost": 0.25,
+        "input_cost": 0.05,
         "name": "Particle AI: Particle-1",
-        "output_cost": 1,
+        "output_cost": 0.5,
         "tags": [
           "tools",
           "vision",

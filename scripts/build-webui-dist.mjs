@@ -100,10 +100,16 @@ function printHelp() {
     "  --output <dir>         Output directory (default: dist/<mode>/)",
   );
   console.log(
-    "  --api-url <url>        Foundry API base URL (runtime-configurable)",
+    "  --api-url <url>        API base URL (runtime-configurable)",
   );
   console.log(
-    "  --ws-url <url>         Foundry WebSocket URL (runtime-configurable)",
+    "  --ws-url <url>         WebSocket URL (runtime-configurable)",
+  );
+  console.log(
+    "  --app-name <name>      Product name for the tab title and PWA manifest",
+  );
+  console.log(
+    "                         (default: Sprout; a branded dist should match its host's branding.name)",
   );
   console.log(
     "  --components           Build standalone editor + terminal entries (root base)",
@@ -371,6 +377,7 @@ export function parseArgs(argv) {
     outputDir: "",
     foundryApiUrl: undefined,
     foundryWsUrl: undefined,
+    appName: undefined,
     components: false,
     nativeFs: false,
     ratifyFs: false,
@@ -397,6 +404,12 @@ export function parseArgs(argv) {
       i++;
     } else if (arg === "--ws-url" && i + 1 < argv.length) {
       opts.foundryWsUrl = argv[i + 1];
+      i++;
+    } else if (arg === "--app-name" && i + 1 < argv.length) {
+      // The product name the bundle shows (tab title + installed-app label).
+      // Defaults to Sprout's own name; a host that vendors the bundle under
+      // its own brand passes its name here instead of editing the sources.
+      opts.appName = argv[i + 1].trim();
       i++;
     } else if (arg === "--components") {
       // E-M3: build ONLY the standalone editor + terminal entries with
@@ -1088,7 +1101,16 @@ function postProcessBrowserConfig(targetDir) {
   console.log("  ✓ browserconfig.xml updated");
 }
 
-function postProcessIndexHtml(targetDir, buildMode) {
+/** Escape a value for use as HTML text (an element body or attribute value). */
+function escapeHtmlText(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+export function postProcessIndexHtml(targetDir, buildMode, appName) {
   console.log("📝 Post-processing index.html...");
 
   const indexHtmlPath = join(targetDir, "index.html");
@@ -1100,10 +1122,49 @@ function postProcessIndexHtml(targetDir, buildMode) {
 
   let html = readFileSync(indexHtmlPath, "utf-8");
 
-  // Vite builds don't have %PUBLIC_URL% placeholders, so no processing needed
-  console.log("  ✓ index.html requires no post-processing (Vite build)");
+  // A host that ships the bundle under its own brand passes --app-name; the
+  // static title and the PWA app-name metas follow it. Without the flag the
+  // bundle keeps Sprout's own name from the source index.html.
+  if (appName) {
+    const safe = escapeHtmlText(appName);
+    html = html.replace(/<title>[^<]*<\/title>/, () => `<title>${safe}</title>`);
+    html = html.replace(
+      /(<meta name="apple-mobile-web-app-title" content=")[^"]*(")/,
+      (_match, open, close) => `${open}${safe}${close}`,
+    );
+    html = html.replace(
+      /(<meta name="application-name" content=")[^"]*(")/,
+      (_match, open, close) => `${open}${safe}${close}`,
+    );
+    console.log(`  ✓ app name: ${appName}`);
+  } else {
+    console.log("  ✓ index.html keeps Sprout's name (no --app-name)");
+  }
 
   writeFileSync(indexHtmlPath, html, "utf-8");
+}
+
+/**
+ * Apply the build-time product name to the PWA manifest. The installed app's
+ * label is static, so it cannot follow the runtime host brand the way the tab
+ * title does; a host that ships the bundle under its own brand sets it here.
+ * The short name is left alone (Sprout's short label, from the source
+ * manifest).
+ */
+export function postProcessManifest(targetDir, appName) {
+  if (!appName) return;
+
+  const manifestPath = join(targetDir, "manifest.json");
+  if (!existsSync(manifestPath)) return;
+
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf-8"));
+  manifest.name = appName;
+  writeFileSync(
+    manifestPath,
+    `${JSON.stringify(manifest, null, 2)}\n`,
+    "utf-8",
+  );
+  console.log(`  ✓ manifest.json name: ${appName}`);
 }
 
 // ── Dist Layout Verification (SP-015-R6) ───────────────────────────
@@ -1390,8 +1451,9 @@ function main(opts) {
   postProcessBrowserConfig(outputDir);
   console.log("");
 
-  // Post-process index.html
-  postProcessIndexHtml(outputDir, mode);
+  // Post-process index.html + manifest (build-time product name)
+  postProcessIndexHtml(outputDir, mode, opts.appName);
+  postProcessManifest(outputDir, opts.appName);
   console.log("");
 
   // Copy WASM files

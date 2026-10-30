@@ -6,6 +6,7 @@
 
 import { useEffect, useId, useState } from 'react';
 import type { FormEvent, ReactElement } from 'react';
+import { productName } from '../host/branding';
 import { useHost } from '../host/useHost';
 import { onPlatformLinkClick } from '../services/homeView';
 import {
@@ -19,7 +20,9 @@ import {
 import './EditorModelSection.css';
 
 export default function EditorModelSection(): ReactElement {
-  const { navigation } = useHost();
+  const host = useHost();
+  const { navigation } = host;
+  const name = productName(host);
   // Destinations come from the host's intent resolution; the paths live only
   // on the host side. The host also resolves a path to a full page URL (its
   // outward surface); Sprout only renders what the host supplies.
@@ -114,7 +117,7 @@ export default function EditorModelSection(): ReactElement {
       <label className="editor-model-option">
         <input type="radio" name="editor-model" checked={mode === 'managed'} onChange={() => setMode('managed')} />
         <span>
-          <strong>Sprout Foundry managed model</strong>
+          <strong>{name} managed model</strong>
           <span className="settings-section-desc">Picks a model for each request. Uses platform credits.</span>
         </span>
       </label>

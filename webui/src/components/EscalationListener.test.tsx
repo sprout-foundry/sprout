@@ -534,8 +534,8 @@ describe('EscalationListener — Mode A/B regressions', () => {
 
     await waitFor(() => expect(hrefSetter).toHaveBeenCalledWith('https://ws-1.fly.dev/auth/exchange?token=tok'));
     const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST') as [string, RequestInit];
-    expect(post[0]).toMatch(/\/workspace\/fly$/);
-    expect(JSON.parse(post[1].body as string)).toEqual({ repo_url: 'https://github.com/acme/app' });
+    expect(post[0]).toMatch(/\/workspace\/txn$/);
+    expect(JSON.parse(post[1].body as string)).toEqual({ repo_url: 'https://github.com/acme/app', host: 'cloud' });
   });
 
   it('explains a failed workspace start inline instead of leaving the editor', async () => {

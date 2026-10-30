@@ -39,6 +39,7 @@ export type {
   HostUsageIntent,
   HostAccountIntent,
   HostUser,
+  HostBranding,
   SproutHost,
 } from './types';
 export { HostContext, HostProvider, headlessHost };
@@ -48,6 +49,7 @@ export { useHostCapabilities } from './useHostCapabilities';
 export { getActiveHost, registerActiveHost, setActiveHost, upsertActiveHostCapabilities } from './accessor';
 export { default as HostNotificationCount } from './HostNotificationCount';
 export { localHost } from './localHost';
+export { SPROUT_PRODUCT_NAME, productName } from './branding';
 export { outwardURL } from './outwardURL';
 export { githubRepoSlug, repoName, repoSlug } from './repoName';
 

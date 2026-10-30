@@ -33,6 +33,8 @@ export const localHost: SproutHost = {
   user: null,
   // No entitlement to surface; the local build is free.
   entitlements: undefined,
+  // No brand declared: this host is showing Sprout, so `productName()` falls
+  // back to Sprout's own name (or to an embedding's `app.name` copy override).
   transport: {
     // '' = same origin (derived at runtime by the local transport).
     apiBaseURL: '',

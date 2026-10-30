@@ -16,7 +16,7 @@
  * House style: explicit vitest imports (see src/services/opfsReplica.test.ts).
  */
 
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
@@ -75,6 +75,7 @@ describe('parseArgs', () => {
     expect(o.outputDir).toBe('');
     expect(o.foundryApiUrl).toBeUndefined();
     expect(o.foundryWsUrl).toBeUndefined();
+    expect(o.appName).toBeUndefined();
     expect(o.components).toBe(false);
     expect(o.nativeFs).toBe(false);
     expect(o.help).toBe(false);
@@ -100,6 +101,14 @@ describe('parseArgs', () => {
 
   it('records --native-fs on opts.nativeFs', () => {
     expect(mod.parseArgs(['--native-fs']).nativeFs).toBe(true);
+  });
+
+  it('records --app-name on opts.appName (brand override)', () => {
+    expect(mod.parseArgs(['--app-name', 'Acme Code']).appName).toBe('Acme Code');
+  });
+
+  it('trims --app-name', () => {
+    expect(mod.parseArgs(['--app-name', '  Acme  ']).appName).toBe('Acme');
   });
 
   it('records --native-terminal on opts.nativeTerminal (R-3, validated clean)', () => {
@@ -154,6 +163,60 @@ describe('parseArgs', () => {
     expect(o.unknownArgs).toEqual(['--frobnicate']);
     // A recognized flag appearing after the unknown one is still parsed.
     expect(o.nativeFs).toBe(true);
+  });
+});
+
+// ── postProcessIndexHtml / postProcessManifest ───────────────────────────
+describe('build-time app name', () => {
+  let tmp: string;
+
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    tmp = mkdtempSync(join(tmpdir(), 'app-name-'));
+    writeFileSync(
+      join(tmp, 'index.html'),
+      [
+        '<html>',
+        '<head>',
+        '<meta name="apple-mobile-web-app-title" content="Sprout" />',
+        '<meta name="application-name" content="Sprout" />',
+        '<title>Sprout</title>',
+        '</head>',
+        '</html>',
+      ].join('\n'),
+    );
+    writeFileSync(join(tmp, 'manifest.json'), `${JSON.stringify({ name: 'Sprout', short_name: 'Sprout' }, null, 2)}\n`);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('leaves the source name when no --app-name is given', () => {
+    mod.postProcessIndexHtml(tmp, 'cloud', undefined);
+    mod.postProcessManifest(tmp, undefined);
+    expect(readFileSync(join(tmp, 'index.html'), 'utf-8')).toContain('<title>Sprout</title>');
+    expect(JSON.parse(readFileSync(join(tmp, 'manifest.json'), 'utf-8')).name).toBe('Sprout');
+  });
+
+  it('applies --app-name to the title, PWA metas and manifest name', () => {
+    mod.postProcessIndexHtml(tmp, 'cloud', 'Acme Code');
+    mod.postProcessManifest(tmp, 'Acme Code');
+    const html = readFileSync(join(tmp, 'index.html'), 'utf-8');
+    expect(html).toContain('<title>Acme Code</title>');
+    expect(html).toContain('name="apple-mobile-web-app-title" content="Acme Code"');
+    expect(html).toContain('name="application-name" content="Acme Code"');
+    const manifest = JSON.parse(readFileSync(join(tmp, 'manifest.json'), 'utf-8'));
+    expect(manifest.name).toBe('Acme Code');
+    // The short label stays Sprout (the short name from the source manifest).
+    expect(manifest.short_name).toBe('Sprout');
+  });
+
+  it('escapes HTML in the app name', () => {
+    mod.postProcessIndexHtml(tmp, 'cloud', 'A <B> & "C"');
+    const html = readFileSync(join(tmp, 'index.html'), 'utf-8');
+    expect(html).toContain('<title>A &lt;B&gt; &amp; &quot;C&quot;</title>');
   });
 });
 

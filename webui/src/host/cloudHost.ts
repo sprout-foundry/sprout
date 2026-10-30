@@ -103,6 +103,10 @@ export const cloudHost: SproutHost = {
   // The platform account, host-provided at runtime; the constant declares the
   // shape, so the value is left absent here.
   user: undefined,
+  // The hosted platform's own name. The platform brands the surfaces it hosts,
+  // so the name lives on the host side and Sprout reads it off the contract
+  // instead of hardcoding it.
+  branding: { name: 'Sprout Foundry' },
   // The platform usage summary, resolved live from the platform's billing
   // status via `platformEntitlements`; `resolve()` refreshes it in place.
   entitlements,

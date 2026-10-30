@@ -482,6 +482,17 @@ export interface HostCapabilities {
 }
 
 /**
+ * How the hosting product names itself in Sprout's own surfaces — the tab
+ * title, the install prompt, and settings copy. A host that embeds Sprout
+ * under its own brand sets this; a host that leaves it absent is showing
+ * Sprout, so Sprout's own name is used.
+ */
+export interface HostBranding {
+  /** The product name shown to the user, e.g. "Sprout". */
+  name: string;
+}
+
+/**
  * The host contract: the single channel between Sprout and whatever hosts it.
  * A host supplies this object; Sprout never infers its host from build flags
  * or URLs.
@@ -489,6 +500,12 @@ export interface HostCapabilities {
 export interface SproutHost {
   /** The host account, or null/absent for no account. */
   user?: HostUser | null;
+
+  /**
+   * How the host's product names itself in Sprout's own surfaces. Absent
+   * means Sprout's own name (see `productName()`).
+   */
+  branding?: HostBranding;
 
   /** A generic usage summary and out-of-usage behavior. */
   entitlements?: HostEntitlements;

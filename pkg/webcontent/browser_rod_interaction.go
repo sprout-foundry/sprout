@@ -200,8 +200,43 @@ func waitForSelectorIfNeeded(page *rod.Page, selector string, timeoutMs int) err
 	return nil
 }
 
+// browseStepHandler performs one browse step action. It mirrors the
+// browseStepX function signatures in browser_rod_steps.go.
+type browseStepHandler func(page *rod.Page, step BrowseStep, timeout time.Duration, record func(string), result *BrowseResult) error
+
+// browseStepHandlers maps every canonical step verb (webcontent.browseStepActions)
+// to its implementation. It is the dispatch table for executeBrowseStep, and
+// the drift guard in browse_steps_actions_browser_test.go asserts its keys are
+// exactly BrowseStepActions() — a verb must be added in both places.
+var browseStepHandlers = map[string]browseStepHandler{
+	"assert_selector":     browseStepAssertSelector,
+	"assert_text":         browseStepAssertText,
+	"assert_title":        browseStepAssertTitle,
+	"assert_url":          browseStepAssertURL,
+	"back":                browseStepBack,
+	"click":               browseStepClick,
+	"eval":                browseStepEval,
+	"fill":                browseStepFill,
+	"forward":             browseStepForward,
+	"hover":               browseStepHover,
+	"navigate":            browseStepNavigate,
+	"press":               browseStepPress,
+	"reload":              browseStepReload,
+	"screenshot_selector": browseStepScreenshotSelector,
+	"scroll_to":           browseStepScrollTo,
+	"sleep":               browseStepSleep,
+	"type":                browseStepType,
+	"wait_for":            browseStepWaitFor,
+	"wait_for_function":   browseStepWaitForFunction,
+	"wait_for_text":       browseStepWaitForText,
+}
+
 func executeBrowseStep(page *rod.Page, step BrowseStep, timeoutMs int, result *BrowseResult) error {
-	action := strings.ToLower(strings.TrimSpace(step.Action))
+	action, err := NormalizeBrowseStepAction(step.Action, step.Selector)
+	if err != nil {
+		return err
+	}
+
 	timeout := defaultWaitTimeout
 	if timeoutMs > 0 {
 		timeout = time.Duration(timeoutMs) * time.Millisecond
@@ -213,50 +248,11 @@ func executeBrowseStep(page *rod.Page, step BrowseStep, timeoutMs int, result *B
 		}
 	}
 
-	switch action {
-	case "wait_for":
-		return browseStepWaitFor(page, step, timeout, record, result)
-	case "click":
-		return browseStepClick(page, step, timeout, record, result)
-	case "hover":
-		return browseStepHover(page, step, timeout, record, result)
-	case "type":
-		return browseStepType(page, step, timeout, record, result)
-	case "fill":
-		return browseStepFill(page, step, timeout, record, result)
-	case "press":
-		return browseStepPress(page, step, timeout, record, result)
-	case "sleep":
-		return browseStepSleep(page, step, timeout, record, result)
-	case "scroll_to":
-		return browseStepScrollTo(page, step, timeout, record, result)
-	case "navigate":
-		return browseStepNavigate(page, step, timeout, record, result)
-	case "reload":
-		return browseStepReload(page, step, timeout, record, result)
-	case "back":
-		return browseStepBack(page, step, timeout, record, result)
-	case "forward":
-		return browseStepForward(page, step, timeout, record, result)
-	case "assert_selector":
-		return browseStepAssertSelector(page, step, timeout, record, result)
-	case "assert_text":
-		return browseStepAssertText(page, step, timeout, record, result)
-	case "assert_title":
-		return browseStepAssertTitle(page, step, timeout, record, result)
-	case "assert_url":
-		return browseStepAssertURL(page, step, timeout, record, result)
-	case "wait_for_text":
-		return browseStepWaitForText(page, step, timeout, record, result)
-	case "eval":
-		return browseStepEval(page, step, timeout, record, result)
-	case "wait_for_function":
-		return browseStepWaitForFunction(page, step, timeout, record, result)
-	case "screenshot_selector":
-		return browseStepScreenshotSelector(page, step, timeout, record, result)
-	default:
+	handler, ok := browseStepHandlers[action]
+	if !ok {
 		return fmt.Errorf("unknown browse step action: %s", step.Action)
 	}
+	return handler(page, step, timeout, record, result)
 }
 
 func requireElement(page *rod.Page, selector string, timeout time.Duration) (*rod.Element, error) {

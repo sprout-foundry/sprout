@@ -41,6 +41,13 @@ func BuildToolDefinitionsForAgent(_ *Agent) []api.Tool {
 }
 
 // convertHandlerToAPITool converts a ToolHandler into an api.Tool for LLM consumption.
+//
+// The api.ToolParameters wire type (seed) carries only a parameter's type and
+// description, so a closed vocabulary declared via ParameterDef.Enum cannot be
+// emitted as a JSON-schema `enum` on this path. Tools that need the model to
+// see a verb list must therefore also name it in the description; the Enum
+// field still reaches consumers that build the schema themselves (and is
+// asserted by the tool's own tests).
 func convertHandlerToAPITool(h tools.ToolHandler) api.Tool {
 	def := h.Definition()
 	properties := make(map[string]api.ToolParameter, len(def.Parameters))

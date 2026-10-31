@@ -76,6 +76,11 @@ type ParameterDef struct {
 	Required    bool   `json:"required"`
 	Description string `json:"description"`
 
+	// Enum restricts a string parameter to this closed set of values. It is
+	// serialized into the outgoing function-calling schema as the `enum` key
+	// so the model sees the vocabulary rather than guessing at it.
+	Enum []string `json:"enum,omitempty"`
+
 	// Items is the JSON schema for this parameter's elements; only used
 	// when Type is "array". It is serialized into the outgoing
 	// function-calling schema as the `items` key.

@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -143,27 +142,17 @@ func (a *browserAdapter) BrowseURL(ctx context.Context, url string, opts map[str
 	return webcontent.BrowseURL(url, browseOpts)
 }
 
-// parseBrowseSteps converts []interface{} to []webcontent.BrowseStep via JSON
-// marshal/unmarshal, mirroring the legacy handler's logic.
+// parseBrowseSteps converts []interface{} to []webcontent.BrowseStep.
+//
+// The step language has exactly one parser (webcontent.ParseBrowseSteps);
+// this is the tools-layer wrapper that maps its plain errors onto the agent
+// error taxonomy (invalid input, not retryable). It mirrors the wrapper in
+// pkg/agent/tool_handlers_browse.go so both entry points reject the same
+// steps with the same classification.
 func parseBrowseSteps(rawSteps []interface{}) ([]webcontent.BrowseStep, error) {
-	steps := make([]webcontent.BrowseStep, 0, len(rawSteps))
-	for idx, rawStep := range rawSteps {
-		stepMap, ok := rawStep.(map[string]interface{})
-		if !ok {
-			return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("browse_url steps[%d] must be an object", idx), nil)
-		}
-		encoded, err := json.Marshal(stepMap)
-		if err != nil {
-			return nil, agenterrors.Wrapf(err, "browse_url steps[%d] marshal failed", idx)
-		}
-		var step webcontent.BrowseStep
-		if err := json.Unmarshal(encoded, &step); err != nil {
-			return nil, agenterrors.Wrapf(err, "browse_url steps[%d] parse failed", idx)
-		}
-		if strings.TrimSpace(step.Action) == "" {
-			return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("browse_url steps[%d] requires action", idx), nil)
-		}
-		steps = append(steps, step)
+	steps, err := webcontent.ParseBrowseSteps(rawSteps)
+	if err != nil {
+		return nil, agenterrors.NewInvalidInputError(err.Error(), err)
 	}
 	return steps, nil
 }

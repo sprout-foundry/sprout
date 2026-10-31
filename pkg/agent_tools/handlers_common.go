@@ -37,6 +37,19 @@ func extractString(args map[string]any, key string) (string, error) {
 	return s, nil
 }
 
+// extractStringOrEmpty returns the string value under key, or "" when the
+// key is absent, nil, or not a string. Use it for optional parameters whose
+// absence has a documented default; a non-string value is treated as absent
+// rather than an error so the caller's own validation reports it.
+func extractStringOrEmpty(args map[string]any, key string) string {
+	val, exists := lookupKey(args, key)
+	if !exists || val == nil {
+		return ""
+	}
+	s, _ := val.(string)
+	return s
+}
+
 // extractStringAny returns the first non-empty string found under any of
 // keys (case-insensitively), so a caller can accept documented aliases for a
 // parameter. Falls back to the canonical error naming the first key when

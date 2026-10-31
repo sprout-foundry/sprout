@@ -87,7 +87,7 @@ func BrowseURL(url string, opts BrowseOptions) (string, error) {
 		return string(encoded), nil
 
 	default:
-		return "", fmt.Errorf("unknown action: %s (valid: screenshot, dom, text, inspect)", opts.Action)
+		return "", fmt.Errorf("unknown action: %s (valid: %s)", opts.Action, strings.Join(BrowseActions(), ", "))
 	}
 }
 

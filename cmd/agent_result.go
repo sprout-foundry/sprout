@@ -107,29 +107,21 @@ func emitJSONResult(query string, startTime time.Time, runErr error, a *agent.Ag
 	}
 
 	// Collect git diff (best-effort)
+	// The pieces are joined byte for byte: trimming a piece would drop a
+	// hunk's trailing blank context line (" "), leaving the hunk shorter
+	// than its header says and the patch unappliable.
 	var diffOutput string
 	noHEAD := false
 	if diff, err := exec.Command("git", "diff", "HEAD").Output(); err == nil {
-		trimmed := strings.TrimSpace(string(diff))
-		if trimmed != "" {
-			diffOutput = trimmed
-		}
+		diffOutput = appendDiffPiece(diffOutput, string(diff))
 	} else {
 		// No HEAD ref - try combining unstaged and staged diffs
 		noHEAD = true
-		var parts []string
 		if unstaged, err := exec.Command("git", "diff").Output(); err == nil {
-			if trimmed := strings.TrimSpace(string(unstaged)); trimmed != "" {
-				parts = append(parts, trimmed)
-			}
+			diffOutput = appendDiffPiece(diffOutput, string(unstaged))
 		}
 		if staged, err := exec.Command("git", "diff", "--cached").Output(); err == nil {
-			if trimmed := strings.TrimSpace(string(staged)); trimmed != "" {
-				parts = append(parts, trimmed)
-			}
-		}
-		if len(parts) > 0 {
-			diffOutput = strings.Join(parts, "\n")
+			diffOutput = appendDiffPiece(diffOutput, string(staged))
 		}
 	}
 
@@ -139,7 +131,6 @@ func emitJSONResult(query string, startTime time.Time, runErr error, a *agent.Ag
 	// We capture the untracked file list here to reuse later for FilesModified population.
 	var untrackedFiles []string
 	if untracked, err := exec.Command("git", "ls-files", "--others", "--exclude-standard").Output(); err == nil {
-		var untrackedParts []string
 		for _, f := range strings.Split(strings.TrimSpace(string(untracked)), "\n") {
 			if f = strings.TrimSpace(f); f != "" {
 				untrackedFiles = append(untrackedFiles, f)
@@ -152,16 +143,8 @@ func emitJSONResult(query string, startTime time.Time, runErr error, a *agent.Ag
 						continue
 					}
 				}
-				if trimmed := strings.TrimSpace(string(d)); trimmed != "" {
-					untrackedParts = append(untrackedParts, trimmed)
-				}
+				diffOutput = appendDiffPiece(diffOutput, string(d))
 			}
-		}
-		if len(untrackedParts) > 0 {
-			if diffOutput != "" {
-				diffOutput += "\n"
-			}
-			diffOutput += strings.Join(untrackedParts, "\n")
 		}
 	}
 
@@ -258,4 +241,18 @@ func lastAssistantResponse(a *agent.Agent) string {
 		}
 	}
 	return ""
+}
+
+// appendDiffPiece appends one git diff's output to a combined diff, unchanged
+// apart from ending it with a newline. An empty (or whitespace-only) piece adds
+// nothing. The piece is never trimmed: a hunk's last line can be a blank
+// context line (a single space), which a trim would remove.
+func appendDiffPiece(combined, piece string) string {
+	if strings.TrimSpace(piece) == "" {
+		return combined
+	}
+	if !strings.HasSuffix(piece, "\n") {
+		piece += "\n"
+	}
+	return combined + piece
 }

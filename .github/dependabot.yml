@@ -27,6 +27,14 @@ updates:
       web-app:
         patterns:
           - '*'
+    ignore:
+      # typescript-eslint (latest 8.x) peers typescript ">=4.8.4 <6.1.0", so
+      # TypeScript 7 makes `npm ci` fail with ERESOLVE and the starter stops
+      # installing for every new project. A grouped bump raised it to 7.0.2
+      # and left Starter CI red from 2026-10-27 until the pin was restored.
+      # Remove this once typescript-eslint ships TS 7 support.
+      - dependency-name: typescript
+        versions: [">=7.0.0"]
 
   - package-ecosystem: npm
     directory: /pkg/starters/data/web-app-data
@@ -37,3 +45,8 @@ updates:
       web-app-data:
         patterns:
           - '*'
+    ignore:
+      # Same constraint as web-app above: typescript-eslint peers
+      # typescript "<6.1.0". Remove once typescript-eslint supports TS 7.
+      - dependency-name: typescript
+        versions: [">=7.0.0"]

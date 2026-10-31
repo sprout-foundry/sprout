@@ -551,9 +551,11 @@ func TestPrintExternal_SteerActive_MessageAutoNewline(t *testing.T) {
 
 	output := buf.String()
 
-	// The message should appear with a trailing newline appended.
-	if !strings.Contains(output, "no newline here\n") {
-		t.Errorf("Output should contain message + newline, got %q", output)
+	// The message should appear with a trailing newline appended. The
+	// transcript writer hardens it to CRLF so the next line starts at
+	// column 0 even in raw mode.
+	if !strings.Contains(output, "no newline here\r\n") {
+		t.Errorf("Output should contain message + CRLF, got %q", output)
 	}
 }
 

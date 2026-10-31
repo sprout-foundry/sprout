@@ -60,7 +60,7 @@ func runInteractiveREPL(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			if len(autoQueued) > 0 {
 				query = autoQueued[0]
 				autoQueued = autoQueued[1:]
-				fmt.Fprintln(os.Stderr)
+				console.BlankLine()
 				if strings.HasPrefix(query, agent.WakeupBatchPrefix) {
 					console.GlyphPaused.Fprintf(os.Stderr, "auto-resume: background task completed — resuming")
 				} else if inputReader.IsPinned() {
@@ -112,7 +112,7 @@ func runInteractiveREPL(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 						// timing to detect the double-press.
 						now := time.Now()
 						if now.Sub(lastInterruptAt) < 2*time.Second {
-							fmt.Println()
+							console.SectionBreak()
 							console.GlyphInfo.Printf("Goodbye!")
 							printContinuationHint(chatAgent)
 							return nil
@@ -151,7 +151,7 @@ func runInteractiveREPL(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 
 			// Handle exit commands (before history — don't persist these)
 			if strings.ToLower(query) == "exit" || strings.ToLower(query) == "quit" {
-				fmt.Println()
+				console.SectionBreak()
 				console.Heading(os.Stdout, "Session summary")
 				chatAgent.PrintConversationSummary(true)
 				printContinuationHint(chatAgent)
@@ -239,7 +239,6 @@ func runInteractiveREPL(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// Paired at the bottom with the existing dim `⎯ this turn: … ⎯`
 			// summary line, which acts as the closing separator.
 			if !fastPathExecuted {
-				fmt.Println()
 				cliui.PrintAssistantHeader(chatAgent.GetModel())
 			}
 

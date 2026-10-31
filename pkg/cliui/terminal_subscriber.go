@@ -145,7 +145,7 @@ func (s *TerminalSubscriberState) MaybeDisplayEditDiff(toolName, argsJSON string
 		}
 		diff := ComputeEditDiff(oldStr, newStr, maxLines)
 		if diff != "" {
-			fmt.Fprint(os.Stderr, diff)
+			console.WriteTranscriptTo(os.Stderr, diff)
 		}
 	case "write_file":
 		content := extractStrArg(argsJSON, "content")
@@ -158,7 +158,7 @@ func (s *TerminalSubscriberState) MaybeDisplayEditDiff(toolName, argsJSON string
 		}
 		diff := ComputeWriteFileDiff(content, maxLines)
 		if diff != "" {
-			fmt.Fprint(os.Stderr, diff)
+			console.WriteTranscriptTo(os.Stderr, diff)
 		}
 	}
 }
@@ -287,7 +287,7 @@ func (s *TerminalSubscriberState) HandleToolStartEvent(data map[string]interface
 			if hasSpawnSnap {
 				ctxMax = spawnSnap.CtxMax
 			}
-			fmt.Fprintln(os.Stderr, FormatSpawnLine(chatAgent, depth, persona, ctxMax, taskDesc))
+			console.WriteTranscriptTo(os.Stderr, FormatSpawnLine(chatAgent, depth, persona, ctxMax, taskDesc)+"\n")
 		}
 	}
 	s.progressMu.Lock()
@@ -317,9 +317,7 @@ func (s *TerminalSubscriberState) HandleToolStartEvent(data map[string]interface
 // chunks were just printed), leaving a blank row above the spinner.
 func (s *TerminalSubscriberState) startToolSpinner(indicator *console.ActivityIndicator, label string) {
 	s.flushExternalWrite()
-	console.LockOutput()
-	_, _ = fmt.Fprintln(os.Stdout)
-	console.UnlockOutput()
+	console.BlankLine()
 	s.spinnerUnderEndLine = false
 	indicator.Start(label)
 }
@@ -392,6 +390,16 @@ func (s *TerminalSubscriberState) HandleToolEndEvent(data map[string]interface{}
 	persona := ReadEventPersona(data)
 	preview := FormatToolPreview(chatAgent, name, args, s.VerboseMaxArgLen())
 
+	// SP-171d: keep the result addressable via /expand. The summary line is
+	// all the transcript keeps; this is where the full text is still in
+	// hand. Recorded before the compact-mode early return so compact turns
+	// are addressable too.
+	if result, ok := data["result"].(string); ok {
+		RecordToolOutput(name, preview, status, result)
+	} else {
+		RecordToolOutput(name, preview, status, "")
+	}
+
 	// Compact mode: suppress result lines for successful tools.
 	// Errors are always shown so the user sees what went wrong.
 	// CLI-UX-3 exception: file edits still show a compact +N -M diffstat
@@ -399,7 +407,7 @@ func (s *TerminalSubscriberState) HandleToolEndEvent(data map[string]interface{}
 	if s.IsCompact() && status == "completed" {
 		if diffSuffix := ComputeDiffStat(name, args); diffSuffix != "" {
 			s.flushExternalWrite()
-			fmt.Fprintf(os.Stderr, "%s%s%s\n", console.SGR(os.Stderr, console.ColorDim), FormatCompactDiffLine(name, args, diffSuffix), console.SGR(os.Stderr, console.ColorReset))
+			console.WriteTranscriptTo(os.Stderr, fmt.Sprintf("%s%s%s\n", console.SGR(os.Stderr, console.ColorDim), FormatCompactDiffLine(name, args, diffSuffix), console.SGR(os.Stderr, console.ColorReset)))
 		}
 		s.run = nil // prevent stale state from contaminating error tool collapse
 		footer.Refresh()

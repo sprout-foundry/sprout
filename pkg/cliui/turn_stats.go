@@ -44,8 +44,10 @@ func NotifyTurnCompletion(chatAgent *agent.Agent, turnStart time.Time, skipPromp
 	if time.Since(turnStart).Seconds() < notif.MinSeconds {
 		return
 	}
-	// Emit bell to stderr
-	fmt.Fprint(os.Stderr, "\a")
+	// Emit bell to stderr. The bell is not transcript text: it must not be
+	// routed through WriteTranscript, which would park the cursor and emit
+	// CRLF handling around a zero-width control byte.
+	fmt.Fprint(os.Stderr, "\a") //nolint:transcript-guard -- bell, not text
 	// OS notification if configured
 	if notif.OSNotify {
 		_ = notify.New().Notify("Sprout", "Task complete")
@@ -57,14 +59,19 @@ func NotifyTurnCompletion(chatAgent *agent.Agent, turnStart time.Time, skipPromp
 // color preference resolver. The brand cyan `▌` aligns visually with the
 // glyph vocabulary in pkg/console; the model name sits in dim grey so the
 // eye is drawn to the bar, not the metadata.
+//
+// The separating blank line is emitted here via console.SectionBreak rather
+// than by the caller, so the pairing cannot drift and a turn that already
+// ended on a fresh row doesn't get a second empty one.
 func PrintAssistantHeader(model string) {
 	model = ShortModelName(model)
 	colorOn := envutil.ResolveColorPreference(true)
+	console.SectionBreak()
 	if !colorOn {
-		fmt.Printf("▌ assistant · %s\n", model)
+		console.WriteTranscript(fmt.Sprintf("▌ assistant · %s\n", model))
 		return
 	}
-	fmt.Printf("\033[1;96m▌\033[0m \033[2massistant · %s\033[0m\n", model)
+	console.WriteTranscript(fmt.Sprintf("\033[1;96m▌\033[0m \033[2massistant · %s\033[0m\n", model))
 }
 
 // PrintUserMessage echoes a submitted message into the conversation under a
@@ -79,22 +86,23 @@ func PrintUserMessage(text string, queued bool) {
 	if w, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil && w > 0 {
 		cols = w
 	}
+	console.SectionBreak()
 	if envutil.ResolveColorPreference(true) {
-		fmt.Printf("\n\033[1;92m▌\033[0m \033[2m%s\033[0m\n", label)
+		console.WriteTranscript(fmt.Sprintf("\033[1;92m▌\033[0m \033[2m%s\033[0m\n", label))
 	} else {
-		fmt.Printf("\n▌ %s\n", label)
+		console.WriteTranscript(fmt.Sprintf("▌ %s\n", label))
 	}
-	fmt.Print(console.WrapIndented(text, "  ", cols))
+	console.WriteTranscript(console.WrapIndented(text, "  ", cols))
 }
 
 // PrintCommandEcho echoes a submitted slash or shell command as one dim
 // line, lighter than a message since it never reaches the model.
 func PrintCommandEcho(text string) {
 	if envutil.ResolveColorPreference(true) {
-		fmt.Printf("\033[2m› %s\033[0m\n", text)
+		console.WriteTranscript(fmt.Sprintf("\033[2m› %s\033[0m\n", text))
 		return
 	}
-	fmt.Printf("› %s\n", text)
+	console.WriteTranscript(fmt.Sprintf("› %s\n", text))
 }
 
 // ShouldShowTurnStats returns true when stderr is connected to a TTY.
@@ -216,7 +224,8 @@ func SetTurnEndSinkForTest(w io.Writer) (restore func()) {
 
 // writeTurnEnd appends one turn-end line to the configured sink, or to
 // stderr when the TTY gate passes. The newline belongs to the writer, not
-// the caller.
+// the caller. Production writes go through console.WriteTranscriptTo so the
+// line lands inside the footer's scroll region instead of on a pinned row.
 func writeTurnEnd(line string) {
 	if sink := turnEndSink.Load(); sink != nil && *sink != nil {
 		_, _ = fmt.Fprintln(*sink, line)
@@ -225,7 +234,7 @@ func writeTurnEnd(line string) {
 	if !ShouldShowTurnStats() {
 		return
 	}
-	fmt.Fprintln(os.Stderr, line)
+	console.WriteTranscriptTo(os.Stderr, line+"\n")
 }
 
 // PrintPerTurnSummary emits a dim single-line summary of what just happened

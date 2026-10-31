@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
@@ -100,6 +101,15 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	// any) — it's forwarded into the input buffer below so that
 	// keystroke isn't swallowed.
 	dismissKey := maybeOfferSessionResume(chatAgent)
+
+	// SP-171g: a session resumed through --session-id / --last-session was
+	// loaded before the footer existed, so its tail has to be rendered here,
+	// at the same seam the picker uses. The picker path renders its own tail
+	// inline; this covers the flag path. Rendering only when the footer is up
+	// keeps the output inside the scroll region.
+	if agentLastSession || strings.TrimSpace(agentSessionID) != "" {
+		cliui.RenderSessionTail(chatAgent.GetMessages())
+	}
 
 	// SP-048-5b: one-shot hint about Tab autocomplete + Ctrl-D, persisted
 	// per workspace in ~/.sprout/state.json so it never repeats.

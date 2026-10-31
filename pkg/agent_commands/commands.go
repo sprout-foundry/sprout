@@ -186,6 +186,9 @@ func NewCommandRegistry() *CommandRegistry {
 	registry.Register(&TasksCommand{})
 	registry.Register(&ToolsCommand{})
 
+	// expand a collapsed tool result (SP-171d)
+	registry.Register(&ExpandCommand{})
+
 	// Credential management
 	registry.Register(&KeysCommand{})
 	registry.RegisterAlias("key", "keys")

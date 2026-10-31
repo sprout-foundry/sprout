@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/cliui"
 	"github.com/sprout-foundry/sprout/pkg/console"
 	"golang.org/x/term"
 )
@@ -193,6 +194,9 @@ func maybeOfferSessionResume(chatAgent *agent.Agent) string {
 		label = chosen.SessionID
 	}
 	console.GlyphSuccess.Fprintf(os.Stderr, "Resumed: %s", truncateLabel(label, 64))
+	// The transcript is the context: reprint the tail so the user resumes
+	// into the conversation rather than an empty screen.
+	cliui.RenderSessionTail(chatAgent.GetMessages())
 	return ""
 }
 

@@ -93,7 +93,7 @@ func (s *TerminalSubscriberState) HandleQueryCompletedEvent(data map[string]inte
 		console.SGR(os.Stderr, console.ColorDim),
 		strings.Join(parts, " · "),
 		console.SGR(os.Stderr, console.ColorReset))
-	fmt.Fprintln(os.Stderr, line)
+	console.WriteTranscriptTo(os.Stderr, line+"\n")
 }
 
 // formatCostSummary renders a cost value for the turn-end summary line.
@@ -195,7 +195,7 @@ func (s *TerminalSubscriberState) HandleSubagentActivityEvent(data map[string]in
 		indicator.Stop()
 		s.thinkingActive = false
 		s.flushExternalWrite()
-		fmt.Fprintln(os.Stderr, FormatSubagentDoneLine(persona, status, reason, tokens, cost, float64(elapsedMs)/1000.0))
+		console.WriteTranscriptTo(os.Stderr, FormatSubagentDoneLine(persona, status, reason, tokens, cost, float64(elapsedMs)/1000.0)+"\n")
 		// Drop the cached progress for this persona once
 		// it's done — the next spawn starts fresh.
 		s.progressMu.Lock()
@@ -244,14 +244,10 @@ func (s *TerminalSubscriberState) HandleTodoUpdateEvent(data map[string]interfac
 	s.thinkingActive = false
 	s.flushExternalWrite()
 	if len(todosRaw) == 0 {
-		console.LockOutput()
-		fmt.Fprintln(os.Stdout, console.GlyphInfo.Prefix()+"Todo list cleared")
-		console.UnlockOutput()
+		console.WriteTranscript(console.GlyphInfo.Prefix() + "Todo list cleared\n")
 		// Note: External callers must handle currentTurnRenderer themselves.
 	} else {
-		console.LockOutput()
-		fmt.Fprintln(os.Stdout, FormatTodoListPanel(todosRaw))
-		console.UnlockOutput()
+		console.WriteTranscript(FormatTodoListPanel(todosRaw) + "\n")
 		// Note: External callers must handle currentTurnRenderer themselves.
 	}
 	// Breaks any pending collapse run — the multi-line block

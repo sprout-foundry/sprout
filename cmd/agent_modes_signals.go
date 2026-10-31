@@ -11,7 +11,6 @@ package cmd
 // (agent_modes.go).
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/signal"
 	"sync/atomic"
@@ -46,7 +45,7 @@ func startSignalHandler(ctx context.Context, cancel context.CancelFunc, chatAgen
 				// Fall through to the shutdown path so terminal close
 				// cleans up the process.
 				if sig == syscall.SIGHUP && daemonMode {
-					fmt.Println()
+					console.SectionBreak()
 					console.GlyphAction.Printf("Received SIGHUP, reloading configuration...")
 					if chatAgent != nil {
 						if mgr := chatAgent.GetConfigManager(); mgr != nil {
@@ -65,7 +64,7 @@ func startSignalHandler(ctx context.Context, cancel context.CancelFunc, chatAgen
 					prev := atomic.LoadInt64(&lastInterruptAt)
 					if prev > 0 && time.Duration(nowUnix-prev) < 2*time.Second {
 						console.StopGlobalStatusFooter()
-						fmt.Println()
+						console.SectionBreak()
 						console.GlyphStopped.Printf("Force quitting immediately...")
 						if chatAgent != nil {
 							chatAgent.ForceSaveAndExit(exitInterrupted)
@@ -74,7 +73,7 @@ func startSignalHandler(ctx context.Context, cancel context.CancelFunc, chatAgen
 					}
 
 					atomic.StoreInt64(&lastInterruptAt, nowUnix)
-					fmt.Println()
+					console.SectionBreak()
 					console.GlyphPaused.Printf("Received signal %v, interrupting active task...", sig)
 					console.GlyphDim.Printf("  (Press Ctrl+C again quickly to force quit)")
 					if chatAgent != nil {
@@ -87,7 +86,7 @@ func startSignalHandler(ctx context.Context, cancel context.CancelFunc, chatAgen
 					continue
 				}
 
-				fmt.Println()
+				console.SectionBreak()
 				console.GlyphStopped.Printf("Received signal %v, shutting down gracefully...", sig)
 				console.GlyphDim.Printf("  (Press Ctrl+C again to force quit)")
 
@@ -104,7 +103,7 @@ func startSignalHandler(ctx context.Context, cancel context.CancelFunc, chatAgen
 				go func() {
 					time.Sleep(5 * time.Second)
 					console.StopGlobalStatusFooter()
-					fmt.Println()
+					console.SectionBreak()
 					console.GlyphStopped.Printf("Force quitting...")
 					if chatAgent != nil {
 						chatAgent.ForceSaveAndExit(exitInterrupted)
@@ -116,7 +115,7 @@ func startSignalHandler(ctx context.Context, cancel context.CancelFunc, chatAgen
 				for {
 					select {
 					case <-sigCh:
-						fmt.Println()
+						console.SectionBreak()
 						console.GlyphStopped.Printf("Force quitting immediately...")
 						if chatAgent != nil {
 							chatAgent.ForceSaveAndExit(exitInterrupted)

@@ -184,24 +184,13 @@ func (r *SteerInputReader) printExternalLocked(msg string) {
 	if !strings.HasSuffix(msg, "\n") {
 		msg += "\n"
 	}
-	// Position the cursor at the bottom of the existing scrollable
-	// area (just above the reserved rows). Do NOT reset the scroll
-	// region — the region already protects the pinned rows, and
-	// resetting it lets the message's \n scroll them away.
-	_, rows := r.footer.terminalSize()
-	reserved := r.footer.reservedRows()
-	if rows > reserved+1 {
-		fmt.Fprintf(r.footer.w, "\033[%d;1H", rows-reserved)
-	}
-	// Write the message. The trailing \n scrolls within the scroll
-	// region, pushing prior conversation content up while the pinned
-	// steer panel and footer stay fixed.
-	fmt.Fprint(r.footer.w, msg)
-	// Position the cursor at the bottom of the scrollable area again
-	// (the \n above left it on the first pinned row).
-	if rows > reserved+1 {
-		fmt.Fprintf(r.footer.w, "\033[%d;1H", rows-reserved)
-	}
+	// One writer for the conversation area, mid-turn included. The parking
+	// sequence, the region re-assert and the row clear all live in
+	// writeTranscriptLocked; duplicating them here is how the two paths
+	// drifted apart (this copy parked without clearing, so a half-written
+	// row survived under the message). writeTranscriptLocked is the
+	// lock-free body — we already hold outputMu.
+	writeTranscriptLocked(r.footer.w, msg)
 	// Re-render the footer's pinned rows so the user sees their typed
 	// buffer in the right place. Set the footer's steer state directly
 	// (the same mutation renderLine → SetSteerLineWithCursor would do)

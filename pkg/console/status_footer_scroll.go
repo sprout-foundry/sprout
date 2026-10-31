@@ -141,40 +141,31 @@ func (f *StatusFooter) applyScrollRegionLocked() {
 // current reserved-row count while a turn owns the cursor: the spinner or
 // streaming prose is mid-line somewhere in the region. applyScrollRegionLocked
 // parks the cursor on the region's last row, which strands that line
-// whenever it isn't already there. Here the content scrolls by the change in
-// height (up as the steer panel grows, down as it shrinks) and the cursor
-// follows its own line, so writing resumes where it left off. Caller must
-// hold outputMu.
+// whenever it isn't already there. The content does not scroll: the region
+// is re-applied around the cursor as it stands, so writing resumes where it
+// left off. Caller must hold outputMu.
 func (f *StatusFooter) applyScrollRegionKeepingCursorLocked() {
 	_, rows := f.terminalSize()
 	newReserved := f.reservedRows()
 	if rows < newReserved+1 {
 		return
 	}
-	f.mu.Lock()
-	oldReserved, oldRows := f.appliedReserved, f.appliedRows
-	f.mu.Unlock()
-	delta := 0
-	if oldReserved > 0 && oldRows == rows && rows > oldReserved {
-		delta = newReserved - oldReserved
-	}
 
 	// Every DECRC here restores a row inside the margins in force at that
 	// moment: some terminals clamp a restored cursor into the margins, so
 	// growing re-saves the raised position before the margins shrink.
+	//
+	// The content itself must not move. Growing the reserved block does not
+	// scroll anything: the rows the block takes were empty screen below the
+	// old region. Feeding line feeds to make room (the previous behaviour)
+	// pushed the transcript's newest rows into scrollback — losing content
+	// rather than hiding it — and shrank the visible history on every
+	// keystroke that opened the autocomplete dropdown. Shrinking likewise
+	// leaves the vacated rows to the caller (clearOrphanedSteerRows), which
+	// blanks them in place.
 	var b strings.Builder
 	b.WriteString("\0337")
-	switch {
-	case delta > 0:
-		fmt.Fprintf(&b, "\033[1;%dr\033[%d;1H%s", rows-oldReserved, rows-oldReserved, strings.Repeat("\n", delta))
-		fmt.Fprintf(&b, "\0338\033[%dA\0337", delta)
-		fmt.Fprintf(&b, "\033[1;%dr\0338", rows-newReserved)
-	case delta < 0:
-		fmt.Fprintf(&b, "\033[1;%dr\033[1;1H%s", rows-newReserved, strings.Repeat("\033M", -delta))
-		fmt.Fprintf(&b, "\0338\033[%dB", -delta)
-	default:
-		fmt.Fprintf(&b, "\033[1;%dr\0338", rows-newReserved)
-	}
+	fmt.Fprintf(&b, "\033[1;%dr\0338", rows-newReserved)
 	_, _ = fmt.Fprint(f.w, b.String())
 
 	f.mu.Lock()

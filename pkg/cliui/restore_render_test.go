@@ -1,6 +1,7 @@
 package cliui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -98,5 +99,34 @@ func TestRenderSessionTail_EmptyIsSilent(t *testing.T) {
 	RenderSessionTail(nil)
 	if buf.Len() != 0 {
 		t.Fatalf("expected no output for an empty conversation, got %q", buf.String())
+	}
+}
+
+func TestRenderSessionTail_AnchorsToRegionBottom(t *testing.T) {
+	var buf strings.Builder
+	restore := console.SetTranscriptWriterForTest(&buf)
+	defer restore()
+
+	footer := console.NewStatusFooter(nil, nil)
+	console.SetGeometryForTest(footer, 80, 24)
+	footer.SetActiveForTest()
+	console.RegisterGlobalStatusFooter(footer)
+	defer console.RegisterGlobalStatusFooter(nil)
+
+	// 60 short messages render ~120 lines: taller than the 22-row region.
+	var msgs []api.Message
+	for i := range 60 {
+		msgs = append(msgs, api.Message{Role: "user", Content: fmt.Sprintf("question %d", i)})
+	}
+	RenderSessionTail(msgs)
+
+	out := buf.String()
+	// The region's last row is 22 (24 rows − 2 reserved). Anchoring the
+	// block there is what keeps its head on screen.
+	if !strings.Contains(out, "\033[1;22r\033[22;1H") {
+		t.Fatalf("tail was not anchored to the region's last row:\n%q", out)
+	}
+	if !strings.Contains(out, "resumed conversation") {
+		t.Fatalf("header missing from the tail:\n%q", out)
 	}
 }

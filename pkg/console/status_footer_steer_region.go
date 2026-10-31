@@ -34,6 +34,13 @@ func (f *StatusFooter) applySteerRegionOrDefer(wasActive bool, prevRows, newRows
 	if wasActive && newRows < prevRows {
 		f.clearOrphanedSteerRows(prevRows, newRows)
 	}
+	// Growing takes rows that were outside the region, so nothing has to be
+	// moved — but they are not guaranteed blank either: a wrapped footer row
+	// or a stale steer frame can be sitting there. Blank the rows the block
+	// newly occupies before the margins claim them.
+	if newRows > prevRows {
+		f.blankNewSteerRows(prevRows, newRows)
+	}
 	// These setters serve the mid-turn steer panel: the spinner or
 	// streaming prose owns a live line, so the cursor must stay on it.
 	f.applyScrollRegionKeepingCursorLocked()
@@ -230,6 +237,30 @@ func (f *StatusFooter) clearOrphanedSteerRows(prevRows, newRows int) {
 	fmt.Fprint(f.w, "\033[r")
 	for i := 0; i < prevRows-newRows; i++ {
 		row := rows - 1 - hintRows - prevRows + i
+		if row < 1 {
+			continue
+		}
+		fmt.Fprintf(f.w, "\033[%d;1H\033[K", row)
+	}
+	fmt.Fprint(f.w, "\0338")
+}
+
+// blankNewSteerRows blanks the rows the block newly occupies when it grows,
+// before the scroll region claims them. The rows were outside the old
+// region, so they can still hold a wrapped footer row or a stale steer
+// frame; the region is dropped for the write and re-applied by the caller.
+func (f *StatusFooter) blankNewSteerRows(prevRows, newRows int) {
+	_, rows := f.terminalSize()
+	if rows < 3 {
+		return
+	}
+	f.mu.Lock()
+	hintRows := f.hintRowCount()
+	f.mu.Unlock()
+	fmt.Fprint(f.w, "\0337")
+	fmt.Fprint(f.w, "\033[r")
+	for i := prevRows; i < newRows; i++ {
+		row := rows - 1 - hintRows - i
 		if row < 1 {
 			continue
 		}

@@ -41,17 +41,27 @@ func RenderSessionTail(messages []api.Message) {
 		return
 	}
 
-	console.SectionBreak()
-	console.WriteTranscript(fmt.Sprintf("%s resumed conversation — last %d lines\n",
-		console.GlyphInfo.Prefix(), len(lines)))
+	// The tail is anchored to the region's last row, so the header and the
+	// newest lines are the ones left on screen. Written from wherever the
+	// cursor happens to be, a tail taller than the region scrolls its own
+	// beginning — the resumed-conversation header and the oldest lines of
+	// the tail — straight into scrollback, and the user resumes looking at
+	// the middle of the conversation.
+	header := fmt.Sprintf("%s resumed conversation — last %d lines\n",
+		console.GlyphInfo.Prefix(), len(lines))
 	if skippedTools > 0 {
-		console.WriteTranscript(fmt.Sprintf("  (%d tool result%s not shown — /transcript for the full session)\n",
-			skippedTools, plural(skippedTools)))
+		header += fmt.Sprintf("  (%d tool result%s not shown — /transcript for the full session)\n",
+			skippedTools, plural(skippedTools))
 	}
+	body := strings.Join(lines, "\n") + "\n"
+	startRow := console.TranscriptStartRow(strings.Count(header+body, "\n"))
+
+	// The whole block goes through the anchored write. Writing the body
+	// line by line would re-park the cursor on the region's last row before
+	// every line and throw the anchor away, scrolling the block's head off
+	// screen exactly as an unanchored write does.
 	console.SectionBreak()
-	for _, line := range lines {
-		console.WriteTranscript(line + "\n")
-	}
+	console.WriteTranscriptAtRow(startRow, header+body)
 	console.SectionBreak()
 }
 

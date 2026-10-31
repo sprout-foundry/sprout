@@ -89,11 +89,38 @@ func WriteTranscript(s string) {
 // writer. The footer draws to os.Stderr; callers that print to stderr pass it
 // here so the parking sequence and the text reach the same stream.
 func WriteTranscriptTo(w io.Writer, s string) {
+	WriteTranscriptAtRowTo(w, 0, s)
+}
+
+// WriteTranscriptAtRow writes s into the conversation area starting at the
+// absolute screen row `row` (1-based), or at the region's last row when row
+// is 0 or there is no pinned region. Use it for a block that must keep its
+// first line on screen: a block taller than the region anchored at the
+// bottom would otherwise scroll its own head into scrollback.
+func WriteTranscriptAtRow(row int, s string) {
+	WriteTranscriptAtRowTo(transcriptWriter, row, s)
+}
+
+// WriteTranscriptAtRowTo is WriteTranscriptAtRow for an explicit writer.
+func WriteTranscriptAtRowTo(w io.Writer, row int, s string) {
 	if s == "" {
 		return
 	}
 	LockOutput()
 	defer UnlockOutput()
+	if footer := GetGlobalStatusFooter(); footer != nil && footer.canPinInput() && row > 0 {
+		bottom := footer.TranscriptBottomRow()
+		if bottom > 0 {
+			if row > bottom {
+				row = bottom
+			}
+			_, _ = fmt.Fprintf(w, "\033[1;%dr\033[%d;1H\033[K", bottom, row)
+			_, _ = io.WriteString(w, hardenNewlines(s))
+			transcriptAtLineStart.Store(strings.HasSuffix(s, "\n"))
+			transcriptLastRowBlank.Store(strings.TrimRight(s, "\r\n") == "")
+			return
+		}
+	}
 	writeTranscriptLocked(w, s)
 }
 
@@ -169,28 +196,75 @@ func blankLineLocked(w io.Writer) {
 // other direction (re-sending margins that were already correct) is two
 // escape sequences.
 func (f *StatusFooter) parkForTranscriptLocked(w io.Writer) {
-	_, rows := f.terminalSize()
-	if rows <= 0 {
+	bottom := f.TranscriptBottomRow()
+	if bottom <= 0 {
 		return
 	}
-	f.mu.Lock()
-	reserved := f.reservedRowsLocked()
-	if reserved <= 0 {
-		reserved = 2
-	}
-	f.mu.Unlock()
-	if rows < reserved+2 {
-		// Terminal too short for a region plus content: nothing sensible to
-		// park on. Let the write go out at the cursor.
-		return
-	}
-	bottom := rows - reserved
 	// \033[K clears the row before writing. Without it, a line that was
 	// left half-written (a streaming segment cut short by an interrupt, a
 	// tool-log line truncated by a resize) survives under the new text and
 	// the two interleave. Parking is a scroll-region operation, so the
 	// clear only ever touches the region's last row.
 	_, _ = fmt.Fprintf(w, "\033[1;%dr\033[%d;1H\033[K", bottom, bottom)
+}
+
+// TranscriptBottomRow is the scroll region's last row: the row the next
+// transcript line lands on. 0 when the footer cannot pin rows (not a TTY,
+// not started, or a terminal too short for a region plus content).
+func (f *StatusFooter) TranscriptBottomRow() int {
+	if f == nil || !f.isTTY {
+		return 0
+	}
+	_, rows := f.terminalSize()
+	if rows <= 0 {
+		return 0
+	}
+	f.mu.Lock()
+	reserved := f.reservedRowsLocked()
+	f.mu.Unlock()
+	if reserved <= 0 {
+		reserved = 2
+	}
+	if rows < reserved+2 {
+		return 0
+	}
+	return rows - reserved
+}
+
+// SetGeometryForTest pins the terminal geometry and marks the footer as a
+// live TTY, so tests can exercise the region-relative layout without a pty.
+func SetGeometryForTest(f *StatusFooter, cols, rows int) {
+	if f == nil {
+		return
+	}
+	f.isTTY = true
+	f.sizeOverride = &terminalSizeOverride{cols: cols, rows: rows}
+}
+
+// SetActiveForTest marks the footer as started, so region-relative helpers
+// behave as they do in a live session.
+func (f *StatusFooter) SetActiveForTest() {
+	if f == nil {
+		return
+	}
+	f.mu.Lock()
+	f.active = true
+	f.mu.Unlock()
+}
+
+// TranscriptStartRow is the row a block of `lines` transcript lines starts
+// on so that it ends on the region's last row, keeping the block's head and
+// tail on screen instead of scrolling its beginning into scrollback. 0 when
+// there is no pinned region, so the caller writes at the cursor.
+func TranscriptStartRow(lines int) int {
+	bottom := GetGlobalStatusFooter().TranscriptBottomRow()
+	if bottom <= 0 || lines <= 0 {
+		return 0
+	}
+	if start := bottom - lines + 1; start > 1 {
+		return start
+	}
+	return 1
 }
 
 // hardenNewlines converts bare LF to CRLF so a transcript line starts at

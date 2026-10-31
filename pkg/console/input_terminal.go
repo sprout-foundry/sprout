@@ -87,6 +87,20 @@ func (ir *InputReader) applyTerminalWidthChange(oldWidth, newWidth int) bool {
 	// which would wipe the footer below), then redraw the prompt.
 	// The footer's own SIGWINCH handler (watchResize → Resize) takes
 	// care of clearing and redrawing the footer rows independently.
+	//
+	// The prompt sits in the scroll region's last rows, so a narrower
+	// terminal that reflows it onto more rows than the region has left
+	// scrolls the newest transcript rows into scrollback to make room.
+	// When a footer owns the prompt, re-anchor it at the region's bottom
+	// and clear the rows it occupied before the reflow, so no stale copy
+	// stays behind.
+	if ir.footer != nil && ir.footer.canPinInput() {
+		LockOutput()
+		ir.clearInlineInputForResizeLocked(newWidth)
+		ir.redrawAnchoredLocked(newWidth)
+		UnlockOutput()
+		return true
+	}
 	ir.Refresh()
 	return true
 }

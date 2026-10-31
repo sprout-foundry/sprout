@@ -298,6 +298,14 @@ func (f *StatusFooter) drawComposerLocked(steerLine string, steerCursor int, ste
 			prefixRow = i
 		}
 	}
+	// Blank the text rows this frame does not fill. The block's height only
+	// changes when the last line's wrap changes or the caret moves onto a
+	// new line, and in both cases the row count can stay the same while the
+	// content moves up — leaving the previous frame's last row stranded
+	// below the new text.
+	for i := len(lines); i < blockRows-1; i++ {
+		_, _ = fmt.Fprintf(f.w, "\033[%d;1H\033[K", steerRowFor(rows, blockRows, hintRows, i+1))
+	}
 	for i, lineText := range lines {
 		withCursor := false
 		col := -1

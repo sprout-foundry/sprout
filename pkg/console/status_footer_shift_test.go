@@ -41,7 +41,7 @@ func TestShiftScrollRegion_ShrinkScrollsContentBackDown(t *testing.T) {
 		"widen the margins, then reverse-index so the vacated rows fall off the bottom")
 }
 
-func TestApplyScrollRegionKeepingCursor_FollowsTheLiveLine(t *testing.T) {
+func TestApplyScrollRegionKeepingCursor_LeavesContentInPlace(t *testing.T) {
 	var buf strings.Builder
 	f := newShiftTestFooter(&buf, 24)
 	f.applyScrollRegionLocked() // margins 1..22
@@ -49,14 +49,14 @@ func TestApplyScrollRegionKeepingCursor_FollowsTheLiveLine(t *testing.T) {
 
 	f.steerActive, f.steerLine = true, "a" // steer box (row + rule) appears mid-turn
 	f.applyScrollRegionKeepingCursorLocked()
-	require.Equal(t, "\0337\033[1;22r\033[22;1H\n\n\0338\033[2A\0337\033[1;20r\0338", buf.String(),
-		"scroll up by the box height, follow the line up under the old margins, then set the new ones around a re-saved cursor")
+	require.Equal(t, "\0337\033[1;20r\0338", buf.String(),
+		"the new margins go in around the live cursor; nothing is scrolled")
 
 	buf.Reset()
 	f.steerActive, f.steerLine = false, ""
 	f.applyScrollRegionKeepingCursorLocked()
-	require.Equal(t, "\0337\033[1;22r\033[1;1H\033M\033M\0338\033[2B", buf.String(),
-		"shrinking scrolls back down and the cursor follows")
+	require.Equal(t, "\0337\033[1;22r\0338", buf.String(),
+		"shrinking widens the margins in place too — no reverse index")
 }
 
 func TestShiftScrollRegion_NoOpWithoutPriorRegionOrAfterResize(t *testing.T) {

@@ -415,6 +415,34 @@
           "vision",
           "reasoning"
         ]
+      },
+      {
+        "cached_input_cost": 0.0028,
+        "context_length": 1048576,
+        "description": "Xiaomi's efficiency-balanced MiMo-V2.6 checkpoint, with 309B total parameters, 15B active, omnimodal input, and a 1M token context.",
+        "id": "mimo-v2.6-flash",
+        "input_cost": 0.14,
+        "name": "MiMo V2.6 Flash",
+        "output_cost": 0.28,
+        "tags": [
+          "vision",
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "cached_input_cost": 0.0036,
+        "context_length": 1048576,
+        "description": "Xiaomi's flagship MiMo-V2.6 checkpoint, with 1.02T total parameters, 42B active, omnimodal input, and a 1M token context.",
+        "id": "mimo-v2.6-pro",
+        "input_cost": 0.435,
+        "name": "MiMo V2.6 Pro",
+        "output_cost": 0.87,
+        "tags": [
+          "vision",
+          "tools",
+          "reasoning"
+        ]
       }
     ]
   },

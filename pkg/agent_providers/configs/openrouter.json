@@ -3995,13 +3995,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.020625,
+        "cached_input_cost": 0.033,
         "context_length": 262144,
         "description": "Hy3 is a 295B-parameter Mixture-of-Experts model from Tencent (21B active, 192 experts with top-8 routing) built for reasoning, agentic workflows, and real-world production use. It supports a configurable reasoning effort:...",
         "id": "tencent/hy3",
-        "input_cost": 0.0825,
+        "input_cost": 0.132,
         "name": "Tencent: Hy3",
-        "output_cost": 0.33,
+        "output_cost": 0.528,
         "tags": [
           "tools",
           "reasoning",
@@ -4385,7 +4385,7 @@
         "id": "z-ai/glm-5.2",
         "input_cost": 0.006,
         "name": "Z.ai: GLM 5.2",
-        "output_cost": 7,
+        "output_cost": 6.8,
         "tags": [
           "tools",
           "reasoning",
@@ -4512,13 +4512,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.17,
+        "cached_input_cost": 0.07475,
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the MoonshotAI Kimi family.",
         "id": "~moonshotai/kimi-latest",
-        "input_cost": 0.171,
+        "input_cost": 0.1495,
         "name": "MoonshotAI Kimi Latest",
-        "output_cost": 10.5572,
+        "output_cost": 7.15,
         "tags": [
           "tools",
           "vision",
@@ -4587,13 +4587,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.028,
+        "cached_input_cost": 0.001834,
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the DeepSeek V4 Flash family.",
         "id": "~deepseek/deepseek-v4-flash-latest",
-        "input_cost": 0.0341,
+        "input_cost": 0.05764,
         "name": "DeepSeek V4 Flash Latest",
-        "output_cost": 0.1887,
+        "output_cost": 0.17292,
         "tags": [
           "tools",
           "reasoning",
@@ -5935,13 +5935,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.018,
+        "cached_input_cost": 0.0163,
         "context_length": 1048576,
         "description": "GLM-5.3-Flash is Z.ai's first natively multimodal model, delivering frontier coding and agentic performance at flash-tier cost. With 320B total and 18B active parameters, it outperforms GLM-5.2 at one-tenth the price while approaching Claude Opus 4.8 on coding and agentic benchmarks.",
         "id": "z-ai/glm-5.3-flash",
-        "input_cost": 0.018,
+        "input_cost": 0.0163,
         "name": "Z.ai: GLM 5.3 Flash",
-        "output_cost": 0.1402,
+        "output_cost": 0.1479,
         "tags": [
           "tools",
           "vision",
@@ -6159,13 +6159,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.0378,
+        "cached_input_cost": 0.042,
         "context_length": 1048576,
         "description": "Tencent: Hy4 preview is a mixture-of-experts model from Tencent, with 49B active parameters out of 770B total. It is designed for coding agents, complex tool-use workflows, and productivity tasks that demand strong reasoning and long-context understanding.",
         "id": "tencent/hy4-preview",
-        "input_cost": 0.7506,
+        "input_cost": 0.834,
         "name": "Tencent: Hy4 preview",
-        "output_cost": 2.2509,
+        "output_cost": 2.501,
         "tags": [
           "tools",
           "reasoning",
@@ -6260,13 +6260,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.018,
+        "cached_input_cost": 0.0163,
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the GLM Flash family.",
         "id": "~z-ai/glm-flash-latest",
-        "input_cost": 0.018,
+        "input_cost": 0.0163,
         "name": "Z.ai: GLM Flash Latest",
-        "output_cost": 0.1402,
+        "output_cost": 0.1479,
         "tags": [
           "tools",
           "vision",
@@ -6691,13 +6691,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.004,
+        "cached_input_cost": 0.013,
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the DeepSeek Flash family.",
         "id": "~deepseek/deepseek-flash-latest",
-        "input_cost": 0.022,
+        "input_cost": 0.0141,
         "name": "DeepSeek: DeepSeek Flash Latest",
-        "output_cost": 0.192,
+        "output_cost": 0.144,
         "tags": [
           "tools",
           "vision",
@@ -6712,7 +6712,7 @@
         "id": "~deepseek/deepseek-pro-latest",
         "input_cost": 0.1035,
         "name": "DeepSeek: DeepSeek Pro Latest",
-        "output_cost": 4.0,
+        "output_cost": 8,
         "tags": [
           "tools",
           "reasoning",

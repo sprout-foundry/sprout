@@ -257,16 +257,16 @@ func (f *StatusFooter) blankNewSteerRows(prevRows, newRows int) {
 	f.mu.Lock()
 	hintRows := f.hintRowCount()
 	f.mu.Unlock()
-	fmt.Fprint(f.w, "\0337")
-	fmt.Fprint(f.w, "\033[r")
+	_, _ = fmt.Fprint(f.w, "\0337")
+	_, _ = fmt.Fprint(f.w, "\033[r")
 	for i := prevRows; i < newRows; i++ {
 		row := rows - 1 - hintRows - i
 		if row < 1 {
 			continue
 		}
-		fmt.Fprintf(f.w, "\033[%d;1H\033[K", row)
+		_, _ = fmt.Fprintf(f.w, "\033[%d;1H\033[K", row)
 	}
-	fmt.Fprint(f.w, "\0338")
+	_, _ = fmt.Fprint(f.w, "\0338")
 }
 
 // ClearSteerLine drops the steer panel, blanks the rows it occupied,

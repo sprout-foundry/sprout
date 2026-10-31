@@ -110,7 +110,9 @@ func (h *browseURLHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 	// Check if browser is available
 	if env.WebBrowser == nil {
 		errMsg := "browser not available: WebBrowser is not configured in this environment"
-		return ToolResult{Output: errMsg, IsError: true}, nil
+		// A missing browser is a property of the build/environment, not a
+		// momentary fault: retrying cannot conjure one.
+		return ToolResult{Output: errMsg, IsError: true}, agenterrors.NewPermanentError(errMsg, nil)
 	}
 
 	// Validate action-specific requirements (mirrors legacy handler)

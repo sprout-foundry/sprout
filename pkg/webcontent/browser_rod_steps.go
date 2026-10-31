@@ -34,7 +34,12 @@ func browseStepClick(page *rod.Page, step BrowseStep, timeout time.Duration, rec
 		return fmt.Errorf("requireElement for click: %w", err)
 	}
 	if err := el.Click(proto.InputMouseButtonLeft, 1); err != nil {
-		return fmt.Errorf("click %q: %w", step.Selector, err)
+		// The element exists (requireElement found it), so a failure here is
+		// about actionability, not a bad selector: rod waits for the element
+		// to be visible, stable and unobstructed, and times out when it never
+		// becomes so. Name the likely causes so the next step is a fix rather
+		// than a blind retry.
+		return fmt.Errorf("click %q: element was found but did not become clickable within %s (%w) — it may be covered by an overlay, have zero size, or still be animating; wait_for a stabilising condition, scroll_to it first, or use eval to dispatch the click directly", step.Selector, timeout, err)
 	}
 	waitStableTolerant(page)
 	record(fmt.Sprintf("click %s", step.Selector))

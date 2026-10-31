@@ -42,41 +42,58 @@ func BuildToolDefinitionsForAgent(_ *Agent) []api.Tool {
 
 // convertHandlerToAPITool converts a ToolHandler into an api.Tool for LLM consumption.
 //
-// The api.ToolParameters wire type (seed) carries only a parameter's type and
-// description, so a closed vocabulary declared via ParameterDef.Enum cannot be
-// emitted as a JSON-schema `enum` on this path. Tools that need the model to
-// see a verb list must therefore also name it in the description; the Enum
-// field still reaches consumers that build the schema themselves (and is
-// asserted by the tool's own tests).
+// The properties map is built raw rather than through api.ToolParameters: seed's
+// typed core.ToolParameter carries only a parameter's type and description, so
+// routing through it silently dropped two things the model needs to see — a
+// closed vocabulary (ParameterDef.Enum) and an array's element schema
+// (ParameterDef.Items). core.ToolFunction.Parameters is an interface{}, so the
+// raw map marshals to the same JSON shape while keeping both. The provider-side
+// normalizer (pkg/agent_providers.fillMissingArrayItems) already accepts
+// "seed's ToolParameters struct, raw maps, or nil", so either form is safe
+// downstream.
 func convertHandlerToAPITool(h tools.ToolHandler) api.Tool {
 	def := h.Definition()
-	properties := make(map[string]api.ToolParameter, len(def.Parameters))
+	properties := make(map[string]any, len(def.Parameters))
 	required := make([]string, 0)
 	requiredSet := make(map[string]struct{}, len(def.Required))
 	for _, rn := range def.Required {
 		requiredSet[rn] = struct{}{}
 	}
 	for _, p := range def.Parameters {
-		properties[p.Name] = api.ToolParameter{
-			Type:        p.Type,
-			Description: p.Description,
+		property := map[string]any{"type": p.Type}
+		if p.Description != "" {
+			property["description"] = p.Description
 		}
+		if len(p.Enum) > 0 {
+			property["enum"] = p.Enum
+		}
+		if p.Items != nil {
+			property["items"] = p.Items
+		}
+		properties[p.Name] = property
 		if p.Required {
 			required = append(required, p.Name)
 		} else if _, ok := requiredSet[p.Name]; ok {
 			required = append(required, p.Name)
 		}
 	}
+
+	parameters := map[string]any{
+		"type":       "object",
+		"properties": properties,
+	}
+	// An empty "required" array is legal JSON Schema but some strict validators
+	// treat it as noise; omit it entirely when nothing is required.
+	if len(required) > 0 {
+		parameters["required"] = required
+	}
+
 	return api.Tool{
 		Type: "function",
 		Function: api.ToolFunction{
 			Name:        def.Name,
 			Description: def.Description,
-			Parameters: api.ToolParameters{
-				Type:       "object",
-				Properties: properties,
-				Required:   required,
-			},
+			Parameters:  parameters,
 		},
 	}
 }

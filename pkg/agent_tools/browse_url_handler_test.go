@@ -153,7 +153,11 @@ func TestBrowseURLHandler_NilBrowser(t *testing.T) {
 	args := map[string]any{"url": "https://example.com"}
 
 	result, err := h.Execute(ctx, env, args)
-	requireNoError(t, err)
+	// A missing browser is permanent: it must not be classified as retryable.
+	requireNotNil(t, err, "error")
+	if !agenterrors.IsPermanent(err) {
+		t.Errorf("expected permanent error, got %T: %v", err, err)
+	}
 	requireTrue(t, result.IsError, "IsError")
 	if !strings.Contains(result.Output, "browser not available") {
 		t.Errorf("Output should mention 'browser not available', got: %s", result.Output)

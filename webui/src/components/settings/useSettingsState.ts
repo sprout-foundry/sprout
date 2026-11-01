@@ -58,6 +58,12 @@ interface UseSettingsStateReturn {
   setEditingServer: (v: { mode: 'add' | 'edit'; originalName?: string } | null) => void;
   serverName: string;
   setServerName: (v: string) => void;
+  serverType: 'stdio' | 'http';
+  setServerType: (v: 'stdio' | 'http') => void;
+  serverURL: string;
+  setServerURL: (v: string) => void;
+  serverHeaders: Array<{ key: string; value: string }>;
+  setServerHeaders: (v: Array<{ key: string; value: string }>) => void;
   serverCommand: string;
   setServerCommand: (v: string) => void;
   serverArgs: string;
@@ -143,6 +149,9 @@ export function useSettingsState(
     originalName?: string;
   } | null>(null);
   const [serverName, setServerName] = useState('');
+  const [serverType, setServerType] = useState<'stdio' | 'http'>('stdio');
+  const [serverURL, setServerURL] = useState('');
+  const [serverHeaders, setServerHeaders] = useState<Array<{ key: string; value: string }>>([]);
   const [serverCommand, setServerCommand] = useState('');
   const [serverArgs, setServerArgs] = useState('');
   const [serverEnvVars, setServerEnvVars] = useState<Array<{ key: string; value: string }>>([]);
@@ -398,6 +407,12 @@ export function useSettingsState(
     setEditingServer,
     serverName,
     setServerName,
+    serverType,
+    setServerType,
+    serverURL,
+    setServerURL,
+    serverHeaders,
+    setServerHeaders,
     serverCommand,
     setServerCommand,
     serverArgs,

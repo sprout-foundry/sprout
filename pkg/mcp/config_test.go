@@ -225,7 +225,7 @@ func TestAddServer_DefaultTimeout(t *testing.T) {
 	require.NoError(t, err)
 
 	// Check default timeout was applied
-	assert.Equal(t, 30*time.Second, config.Servers["github"].Timeout)
+	assert.Equal(t, DefaultServerTimeout, config.Servers["github"].Timeout)
 }
 
 func TestAddServer_Success(t *testing.T) {
@@ -424,7 +424,7 @@ func TestDefaultMCPConfig(t *testing.T) {
 	assert.True(t, config.Enabled)
 	assert.False(t, config.AutoStart)
 	assert.True(t, config.AutoDiscover)
-	assert.Equal(t, 30*time.Second, config.Timeout)
+	assert.Equal(t, DefaultServerTimeout, config.Timeout)
 	assert.NotNil(t, config.Servers)
 }
 
@@ -454,7 +454,7 @@ func TestAddGitHubServer_CreatesServerEntry(t *testing.T) {
 	assert.Equal(t, []string{"-y", "@modelcontextprotocol/server-github"}, server.Args)
 	assert.True(t, server.AutoStart)
 	assert.Equal(t, 3, server.MaxRestarts)
-	assert.Equal(t, 30*time.Second, server.Timeout)
+	assert.Equal(t, DefaultServerTimeout, server.Timeout)
 
 	// Verify the token was migrated to Credentials (not left in Env)
 	assert.NotNil(t, server.Credentials, "Credentials map should be populated after migration")

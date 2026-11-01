@@ -10,7 +10,9 @@ You are Sprout's MCP integration specialist. Use this skill when the user wants 
 
 - **Hot-reload works.** Servers added via the webui settings panel or the `mcp_refresh` tool start immediately — no restart needed.
 - **Everything runs through the `mcp_refresh` tool.** Its operations: `list`, `refresh`, `add`, `remove`, `set-credential`, `remove-credential`, `login`, `logout`, `oauth-status`. Do NOT search the filesystem for MCP infrastructure — there is nothing on disk to find. Use `mcp_refresh list` to see state.
-- **Server types.** `stdio` (subprocess: `command` + `args`) and `http` (remote Streamable HTTP: `url`). Sprout speaks the Streamable HTTP transport correctly (Accept headers, SSE responses, session IDs).
+- **Server types.** `stdio` (subprocess: `command` + `args`) and `http` (remote Streamable HTTP: `url`). Sprout speaks the Streamable HTTP transport correctly (Accept headers, SSE responses, session IDs, `Last-Event-ID` resumption, one automatic re-initialize when the server ends a session).
+- **Subagents share the parent's MCP servers.** A delegated task sees the same tools the root agent does; it does not need the server re-added.
+- **The WebUI settings form can create both types.** Pick `http` in the Type dropdown and fill in the URL; the command field is stdio-only.
 - **CLI slash command** `/mcp` exists in the CLI with subcommands `add | remove | list | test` (no `tools` subcommand — use `mcp_refresh list` / the webui for tool listings).
 
 ---
@@ -38,6 +40,19 @@ mcp_refresh { "operation": "add", "name": "github", "type": "stdio",
               "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "<token>" } }
 ```
 The server starts immediately; secret env values are auto-migrated to the credential store.
+
+For an HTTP server, pass `url` and (optionally) `headers`:
+
+```
+mcp_refresh { "operation": "add", "name": "stripe", "type": "http",
+              "url": "https://mcp.stripe.com",
+              "headers": { "Authorization": "Bearer sk_live_..." } }
+```
+
+Secret-looking header values (`Authorization`, anything named like a token or
+API key) are migrated to the credential store exactly as env secrets are —
+the config keeps only a placeholder. Prefer `set-credential` when you can, so
+the value never passes through the conversation.
 
 ### Via `/mcp` slash command (CLI)
 ```

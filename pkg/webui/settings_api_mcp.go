@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -189,6 +190,11 @@ func (ws *ReactWebServer) handleAPISettingsMCPServersPost(w http.ResponseWriter,
 		if _, migrateErr := mcp.MigrateEnvSecretsFromServer(server.Name, &server); migrateErr != nil {
 			return fmt.Errorf("failed to store server credentials: %w", migrateErr)
 		}
+		// Header values get the same treatment: an inline bearer token must
+		// not reach config.json in plaintext.
+		if _, migrateErr := mcp.MigrateHeaderSecretsFromServer(server.Name, &server); migrateErr != nil {
+			return fmt.Errorf("failed to store server credentials: %w", migrateErr)
+		}
 
 		cfg.MCP.Servers[server.Name] = server
 		cfg.MCP.Enabled = true
@@ -275,6 +281,11 @@ func (ws *ReactWebServer) handleAPISettingsMCPServersPut(w http.ResponseWriter, 
 		if _, migrateErr := mcp.MigrateEnvSecretsFromServer(server.Name, &server); migrateErr != nil {
 			return fmt.Errorf("failed to store server credentials: %w", migrateErr)
 		}
+		// Header values get the same treatment: an inline bearer token must
+		// not reach config.json in plaintext.
+		if _, migrateErr := mcp.MigrateHeaderSecretsFromServer(server.Name, &server); migrateErr != nil {
+			return fmt.Errorf("failed to store server credentials: %w", migrateErr)
+		}
 
 		cfg.MCP.Servers[name] = server
 		return nil
@@ -351,8 +362,8 @@ func (ws *ReactWebServer) handleAPISettingsMCPServersDelete(w http.ResponseWrite
 }
 
 // cleanupMCPServerSecrets removes credential store entries for env vars that are
-// stored as secrets for a given MCP server. It checks both the Env and Credentials
-// maps to handle all migration states (refs may live in either or both locations).
+// stored as secrets for a given MCP server. It checks the Env, Credentials and
+// Headers maps to handle all migration states (refs may live in any of them).
 func cleanupMCPServerSecrets(serverName string, server mcp.MCPServerConfig) {
 	for envVarName, value := range server.Env {
 		if mcp.IsSecretRef(value) {
@@ -374,6 +385,22 @@ func cleanupMCPServerSecrets(serverName string, server mcp.MCPServerConfig) {
 					slog.Default().Warn("failed to delete MCP credential", slog.String("credential_key", key), slog.Any("err", err))
 				}
 			}
+		}
+	}
+	// Header secrets live under the "header/" namespace and are deleted only
+	// when the placeholder names this server: a placeholder pointing at
+	// another server's credential must not take that credential down with it.
+	for _, value := range server.Headers {
+		if !mcp.IsSecretRef(value) {
+			continue
+		}
+		refServer, credName, ok := mcp.ParseSecretRef(value)
+		if !ok || refServer != serverName {
+			continue
+		}
+		key := mcp.CredentialKey(serverName, credName)
+		if err := credentials.DeleteFromActiveBackend(key); err != nil {
+			slog.Default().Warn("failed to delete MCP credential", slog.String("credential_key", key), slog.Any("err", err))
 		}
 	}
 }
@@ -401,8 +428,15 @@ func validateMCPServer(s mcp.MCPServerConfig) error {
 	}
 	serverType := strings.TrimSpace(strings.ToLower(s.Type))
 	if serverType == "http" {
-		if strings.TrimSpace(s.URL) == "" {
+		raw := strings.TrimSpace(s.URL)
+		if raw == "" {
 			return fmt.Errorf("URL is required for HTTP servers")
+		}
+		// A bare host or a stdio command pasted into the URL field would
+		// otherwise be persisted and only fail later, at the first request.
+		parsed, err := url.Parse(raw)
+		if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+			return fmt.Errorf("URL %q is not a valid http(s) URL for an HTTP server", raw)
 		}
 	} else {
 		// stdio (default)

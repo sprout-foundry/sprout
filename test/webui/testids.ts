@@ -244,6 +244,8 @@ const TESTIDS = {
   "background-task-kill": "background-task-kill",
   "mcp-server-form": "mcp-server-form",
   "mcp-server-name-input": "mcp-server-name-input",
+  "mcp-server-type-select": "mcp-server-type-select",
+  "mcp-server-url-input": "mcp-server-url-input",
   "mcp-server-command-input": "mcp-server-command-input",
   "mcp-server-add-button": "mcp-server-add-button",
   "mcp-server-row": "mcp-server-row",

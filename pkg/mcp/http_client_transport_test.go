@@ -3,8 +3,10 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/credentials"
@@ -80,6 +82,251 @@ func TestMCPHTTPClient_401NamesAuthCauses(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "401")
 	assert.Contains(t, err.Error(), "OAuth")
+}
+
+// ---------------------------------------------------------------------------
+// Session expiry recovery
+// ---------------------------------------------------------------------------
+
+// A server that ends the session it issued (restart, idle reaping) answers
+// 404 to a request carrying Mcp-Session-Id. The client must re-initialize
+// once and replay the request instead of surfacing the 404.
+func TestMCPHTTPClient_SessionExpiryReinitializes(t *testing.T) {
+	var (
+		mu        sync.Mutex
+		sessions  = map[string]bool{} // issued session -> still valid
+		issues    int
+		initCalls int
+		replayed  bool
+	)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var reqBody struct {
+			ID     interface{} `json:"id"`
+			Method string      `json:"method"`
+		}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&reqBody))
+
+		mu.Lock()
+		defer mu.Unlock()
+
+		if reqBody.Method == "notifications/initialized" {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+
+		if reqBody.Method == "initialize" {
+			initCalls++
+			issues++
+			sid := fmt.Sprintf("session-%d", issues)
+			sessions[sid] = true
+			w.Header().Set("Mcp-Session-Id", sid)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(mustJSON(map[string]interface{}{
+				"jsonrpc": "2.0", "id": reqBody.ID, "result": map[string]interface{}{},
+			})))
+			return
+		}
+
+		// Every non-initialize request must carry a live session.
+		sid := r.Header.Get("Mcp-Session-Id")
+		if sid == "" || !sessions[sid] {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		// The first tools/list lands on a session the server just ended
+		// (restart, idle reaping): kill it and answer 404. The replay after
+		// re-initialize carries a fresh session and succeeds.
+		if reqBody.Method == "tools/list" && !replayed {
+			replayed = true
+			delete(sessions, sid)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		result := map[string]interface{}{}
+		if reqBody.Method == "tools/list" {
+			result["tools"] = []map[string]interface{}{
+				{"name": "after_reinit", "description": "listed after re-initialize", "inputSchema": map[string]interface{}{"type": "object"}},
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(mustJSON(map[string]interface{}{
+			"jsonrpc": "2.0", "id": reqBody.ID, "result": result,
+		})))
+	}))
+	defer server.Close()
+
+	client := NewMCPHTTPClient(MCPServerConfig{Name: "expiring", Type: "http", URL: server.URL}, NewTestLogger())
+	ctx := context.Background()
+	require.NoError(t, client.Start(ctx))
+
+	tools, err := client.ListTools(ctx)
+	require.NoError(t, err)
+	require.Len(t, tools, 1)
+	assert.Equal(t, "after_reinit", tools[0].Name)
+	assert.Equal(t, 2, initCalls, "the client should re-initialize exactly once")
+
+	client.mu.RLock()
+	assert.Equal(t, "session-2", client.sessionID)
+	client.mu.RUnlock()
+}
+
+// A 404 on a request that carried no session is a wrong endpoint, not an
+// expired session: it must not trigger a re-initialize loop.
+func TestMCPHTTPClient_404WithoutSessionIsNotRetried(t *testing.T) {
+	var initCalls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var reqBody struct {
+			Method string `json:"method"`
+		}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&reqBody))
+		if reqBody.Method == "initialize" {
+			initCalls++
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	client := NewMCPHTTPClient(MCPServerConfig{Name: "wrong-path", Type: "http", URL: server.URL}, NewTestLogger())
+	ctx := context.Background()
+	require.NoError(t, client.Start(ctx))
+
+	err := client.Initialize(ctx)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "404")
+	assert.Equal(t, 1, initCalls, "a 404 on initialize must not be retried")
+}
+
+// ---------------------------------------------------------------------------
+// SSE resumption
+// ---------------------------------------------------------------------------
+
+// The id of the last consumed SSE event is recorded so a broken stream can be
+// resumed, but it must not be attached to unrelated requests: Last-Event-ID
+// names a position in one logical stream.
+func TestMCPHTTPClient_SSEEventIDRecordedNotLeaked(t *testing.T) {
+	var (
+		mu       sync.Mutex
+		lastSeen []string
+	)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var reqBody struct {
+			ID     interface{} `json:"id"`
+			Method string      `json:"method"`
+		}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&reqBody))
+
+		mu.Lock()
+		lastSeen = append(lastSeen, r.Header.Get("Last-Event-ID"))
+		mu.Unlock()
+
+		if reqBody.Method == "notifications/initialized" {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("id: evt-42\n"))
+		_, _ = w.Write([]byte("data: " + mustJSON(map[string]interface{}{
+			"jsonrpc": "2.0", "id": reqBody.ID,
+			"result": map[string]interface{}{"tools": []interface{}{}},
+		}) + "\n\n"))
+	}))
+	defer server.Close()
+
+	client := NewMCPHTTPClient(MCPServerConfig{Name: "resumable", Type: "http", URL: server.URL}, NewTestLogger())
+	ctx := context.Background()
+	require.NoError(t, client.Start(ctx))
+
+	_, err := client.ListTools(ctx)
+	require.NoError(t, err)
+
+	client.mu.RLock()
+	assert.Equal(t, "evt-42", client.lastEventID, "the consumed event id is recorded for resumption")
+	client.mu.RUnlock()
+
+	// A second, unrelated request must not carry the previous stream's id.
+	_, err = client.ListTools(ctx)
+	require.NoError(t, err)
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.NotEmpty(t, lastSeen)
+	assert.Empty(t, lastSeen[len(lastSeen)-1],
+		"Last-Event-ID must not leak onto an unrelated request")
+} // A tools/call must NOT be replayed after a session expiry: the server may
+// already have executed it, and a replay would perform the side effect twice.
+func TestMCPHTTPClient_SessionExpiryDoesNotReplayToolCall(t *testing.T) {
+	var (
+		mu       sync.Mutex
+		issues   int
+		sessions = map[string]bool{}
+		calls    int
+	)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var reqBody struct {
+			ID     interface{} `json:"id"`
+			Method string      `json:"method"`
+		}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&reqBody))
+
+		mu.Lock()
+		defer mu.Unlock()
+
+		if reqBody.Method == "notifications/initialized" {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+		if reqBody.Method == "initialize" {
+			issues++
+			sid := fmt.Sprintf("session-%d", issues)
+			sessions[sid] = true
+			w.Header().Set("Mcp-Session-Id", sid)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(mustJSON(map[string]interface{}{
+				"jsonrpc": "2.0", "id": reqBody.ID, "result": map[string]interface{}{},
+			})))
+			return
+		}
+
+		if reqBody.Method == "tools/call" {
+			calls++
+			delete(sessions, r.Header.Get("Mcp-Session-Id"))
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(mustJSON(map[string]interface{}{
+			"jsonrpc": "2.0", "id": reqBody.ID, "result": map[string]interface{}{},
+		})))
+	}))
+	defer server.Close()
+
+	client := NewMCPHTTPClient(MCPServerConfig{Name: "payments", Type: "http", URL: server.URL}, NewTestLogger())
+	ctx := context.Background()
+	require.NoError(t, client.Start(ctx))
+	require.NoError(t, client.Initialize(ctx))
+
+	_, err := client.CallTool(ctx, MCPToolCallRequest{Name: "create_charge", Arguments: map[string]interface{}{}})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, errMCPSessionExpired)
+	assert.Contains(t, err.Error(), "not safe to retry")
+
+	mu.Lock()
+	defer mu.Unlock()
+	assert.Equal(t, 1, calls, "a tool call must not be replayed")
+	assert.Equal(t, 1, issues, "a non-idempotent method must not trigger a re-initialize")
+}
+
+// A zero configured timeout must not become net/http's "no timeout" — a hung
+// server would then wedge the call forever.
+func TestNewMCPHTTPClient_ZeroTimeoutFallsBackToDefault(t *testing.T) {
+	client := NewMCPHTTPClient(MCPServerConfig{Name: "svc", Type: "http", URL: "https://example.com/mcp"}, NewTestLogger())
+	assert.Equal(t, DefaultServerTimeout, client.httpClient.Timeout)
 }
 
 // ---------------------------------------------------------------------------

@@ -92,6 +92,11 @@ func (h *mcpRefreshHandler) Definition() ToolDefinition {
 				Description: "Server URL (required for HTTP servers)",
 			},
 			{
+				Name:        "headers",
+				Type:        "object",
+				Description: "HTTP headers sent on every request (optional, http servers only). Secret-looking values — Authorization, anything named like a token or API key — are migrated to the credential store and replaced with placeholders in the config.",
+			},
+			{
 				Name:        "working_dir",
 				Type:        "string",
 				Description: "Working directory (optional, for add)",

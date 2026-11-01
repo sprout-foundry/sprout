@@ -26,6 +26,12 @@ interface MutationHookParams {
   editingServer: { mode: 'add' | 'edit'; originalName?: string } | null;
   setEditingServer: (v: { mode: 'add' | 'edit'; originalName?: string } | null) => void;
   serverName: string;
+  serverType: 'stdio' | 'http';
+  setServerType: (v: 'stdio' | 'http') => void;
+  serverURL: string;
+  setServerURL: (v: string) => void;
+  serverHeaders: Array<{ key: string; value: string }>;
+  setServerHeaders: (v: Array<{ key: string; value: string }>) => void;
   setServerName: (v: string) => void;
   serverCommand: string;
   setServerCommand: (v: string) => void;
@@ -100,6 +106,12 @@ export function useSettingsMutation(params: MutationHookParams) {
     editingServer,
     setEditingServer,
     serverName,
+    serverType,
+    setServerType,
+    serverURL,
+    setServerURL,
+    serverHeaders,
+    setServerHeaders,
     setServerName,
     serverCommand,
     setServerCommand,
@@ -170,6 +182,12 @@ export function useSettingsMutation(params: MutationHookParams) {
     editingServer,
     setEditingServer,
     serverName,
+    serverType,
+    setServerType,
+    serverURL,
+    setServerURL,
+    serverHeaders,
+    setServerHeaders,
     setServerName,
     serverCommand,
     setServerCommand,

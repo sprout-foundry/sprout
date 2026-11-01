@@ -132,6 +132,19 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.
 	securityMgr := NewAgentSecurityManager()
 	mcpMgr := NewAgentMCPManager()
 
+	// Share the parent's MCP manager (servers, tool cache, init state) rather
+	// than starting a private one. A subagent with its own manager had no
+	// servers registered and never ran initializeMCP, so it saw zero MCP
+	// tools — a delegated task could not reach any of the integrations the
+	// parent had configured. The manager is process-wide state keyed by
+	// server name, so sharing the reference is correct: the subagent gets the
+	// same tools, and its shutdown must not stop servers the parent still
+	// uses (see IsInherited).
+	if r.parentAgent != nil && r.parentAgent.mcpSub != nil && r.parentAgent.mcpSub.GetManager() != nil {
+		mcpMgr.SetManager(r.parentAgent.mcpSub.GetManager())
+		mcpMgr.SetInherited(true)
+	}
+
 	// Construct the agent struct
 	agent := &Agent{
 		client:              client,

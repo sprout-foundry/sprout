@@ -60,7 +60,7 @@ The configuration uses a flat structure focused on provider and model management
     "servers": {},
     "auto_start": false,
     "auto_discover": false,
-    "timeout": 30000000000
+    "timeout": 120000000000
   },
   "file_batch_size": 10,
   "max_concurrent_requests": 5,
@@ -104,7 +104,7 @@ Model Context Protocol configuration:
 - `servers`: Map of server names to configurations
 - `auto_start`: Auto-start MCP servers on launch (default: `false`)
 - `auto_discover`: Auto-discover available MCP servers (default: `false`)
-- `timeout`: Timeout in nanoseconds for MCP requests (default: 30s)
+- `timeout`: Per-server request timeout when a server does not set its own (default: 120s)
 
 #### `last_used_provider`
 

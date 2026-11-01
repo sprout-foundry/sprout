@@ -19,6 +19,20 @@ const mcpMaxResultChars = 100_000
 
 // initializeMCP initializes MCP configuration and starts servers if needed
 func (a *Agent) initializeMCP() error {
+	// An agent that inherited its parent's manager is looking at servers the
+	// parent already registered and started. Re-running the add/start loop
+	// here would duplicate-add every server (and fail on each), so the
+	// inherited case only mirrors the parent's init state: if the parent has
+	// not initialized MCP yet (a subagent can be created before the parent's
+	// first MCP use), running the handshake here would race the parent's own
+	// init on the shared manager.
+	if a.mcpSub != nil && a.mcpSub.IsInherited() {
+		if a.debug {
+			a.Logger().Debug("MCP manager inherited from parent; skipping server initialization")
+		}
+		return nil
+	}
+
 	if a.configManager == nil {
 		if a.debug {
 			a.Logger().Debug("Config manager is nil, skipping MCP initialization")
@@ -236,8 +250,12 @@ func (a *Agent) getMCPTools() []api.Tool {
 		}
 	}
 
-	// Return nil if not initialized
-	if !a.mcpSub.IsInitialized() {
+	// An inherited manager is marked initialized by initializeMCP even when
+	// the parent has not run its own handshake yet. Reading the shared
+	// manager's tools here is still correct — it returns whatever the parent
+	// has registered so far — so the inherited path does not gate on the
+	// initialized flag.
+	if !a.mcpSub.IsInitialized() && !a.mcpSub.IsInherited() {
 		return nil
 	}
 

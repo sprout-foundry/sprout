@@ -19,16 +19,27 @@ type MCPSubManager interface {
 	SetInitError(err error)
 	LockInit()
 	UnlockInit()
+	// IsInherited reports whether this sub-manager shares another agent's
+	// MCP manager instead of owning one. An inherited sub-manager must not
+	// stop servers on shutdown: the servers belong to the parent, which is
+	// still using them.
+	IsInherited() bool
+	SetInherited(inherited bool)
 }
 
 // AgentMCPManager implements MCPSubManager.
 type AgentMCPManager struct {
+	// managerMu guards manager. An inherited sub-manager shares its pointer
+	// with the parent agent, so a read here can race with a write on another
+	// agent — the pointer decides which server set a tool call reaches.
+	managerMu    sync.RWMutex
 	manager      mcp.MCPManager
 	toolsCacheMu sync.RWMutex // protects toolsCache
 	toolsCache   []api.Tool
-	stateMu      sync.RWMutex // protects initialized + initErr
+	stateMu      sync.RWMutex // protects initialized + initErr + inherited
 	initialized  bool
 	initErr      error
+	inherited    bool
 	initMu       sync.Mutex
 }
 
@@ -41,10 +52,14 @@ func NewAgentMCPManager() *AgentMCPManager {
 }
 
 func (m *AgentMCPManager) GetManager() mcp.MCPManager {
+	m.managerMu.RLock()
+	defer m.managerMu.RUnlock()
 	return m.manager
 }
 
 func (m *AgentMCPManager) SetManager(mgr mcp.MCPManager) {
+	m.managerMu.Lock()
+	defer m.managerMu.Unlock()
 	m.manager = mgr
 }
 
@@ -90,4 +105,18 @@ func (m *AgentMCPManager) LockInit() {
 
 func (m *AgentMCPManager) UnlockInit() {
 	m.initMu.Unlock()
+}
+
+// IsInherited reports whether the manager is shared with another agent.
+func (m *AgentMCPManager) IsInherited() bool {
+	m.stateMu.RLock()
+	defer m.stateMu.RUnlock()
+	return m.inherited
+}
+
+// SetInherited records that the manager is shared with another agent.
+func (m *AgentMCPManager) SetInherited(inherited bool) {
+	m.stateMu.Lock()
+	defer m.stateMu.Unlock()
+	m.inherited = inherited
 }

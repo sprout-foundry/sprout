@@ -43,8 +43,10 @@ func (a *Agent) shutdownLocked() {
 		a.saveHistoryToConfig()
 	}
 
-	// Stop MCP servers (best-effort)
-	if a.mcpSub != nil {
+	// Stop MCP servers (best-effort). A subagent or workflow agent shares the
+	// parent's manager, so it must not stop servers the parent is still
+	// using — the parent's own shutdown does that.
+	if a.mcpSub != nil && !a.mcpSub.IsInherited() {
 		if mgr := a.mcpSub.GetManager(); mgr != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			_ = mgr.StopAll(ctx)

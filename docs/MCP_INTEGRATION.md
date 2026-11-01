@@ -83,8 +83,13 @@ Try these prompts with the agent to test GitHub functionality:
 ### 1. Configure the Server
 
 ```bash
-# Interactive setup
+# Interactive setup (stdio or http)
 ./sprout mcp add
+
+# Or from the agent
+# mcp_refresh { "operation": "add", "name": "stripe", "type": "http",
+#               "url": "https://mcp.stripe.com",
+#               "headers": { "Authorization": "Bearer sk_..." } }
 
 # Or manually edit ~/.config/sprout/config.json
 ```
@@ -104,22 +109,49 @@ Example configuration:
         "credentials": {
           "GITHUB_PERSONAL_ACCESS_TOKEN": "GITHUB_TOKEN"
         }
+      },
+      "stripe": {
+        "name": "stripe",
+        "type": "http",
+        "url": "https://mcp.stripe.com",
+        "headers": {
+          "Authorization": "{{credential:mcp/stripe/Authorization}}"
+        },
+        "timeout": "2m0s"
       }
     }
   }
 }
 ```
 
-> **Note:** `servers` is a map of server-name → server-config (not an array). Place secrets in the `credentials` field rather than `env` — `credentials` entries are stored in the credential store and never written to disk in plaintext. See `pkg/mcp/types.go` for the full `MCPServerConfig` schema.
+> **Note:** `servers` is a map of server-name → server-config (not an array). Place secrets in the `credentials` field rather than `env` — `credentials` entries are stored in the credential store and never written to disk in plaintext. Header values that look like secrets (`Authorization`, anything named like a token or API key) are migrated the same way on save. See `pkg/mcp/types.go` for the full `MCPServerConfig` schema.
 
 ### 2. Server Requirements
 
 MCP servers must:
-- Implement the MCP protocol over stdio
+- Implement the MCP protocol over stdio **or** Streamable HTTP
 - Provide tool discovery via `tools/list`
 - Handle tool execution via `tools/call`
 
-### 3. Tool Naming Convention
+The HTTP client speaks the Streamable HTTP transport: it advertises both
+`application/json` and `text/event-stream`, parses SSE replies, replays
+`Mcp-Session-Id`, resumes a broken stream with `Last-Event-ID`, and
+re-initializes once when a server ends the session (404 on a session-carrying
+request).
+
+### 3. Authentication
+
+| Server auth style | How to configure it |
+|---|---|
+| OAuth 2.1 (Figma, Linear, Notion, GitHub remote) | Add the HTTP server, then `mcp_refresh login`. Tokens refresh automatically; a hard 401 means re-login. |
+| Bearer token | `mcp_refresh set-credential` with a token-shaped env var name (`STRIPE_API_KEY`, `*_TOKEN`, `*_API_KEY`). Sent as `Authorization: Bearer <value>`. |
+| Custom header | Set it in the server's `headers` map with a `{{credential:...}}` placeholder, then `set-credential` under the same name. |
+
+Stripe's remote MCP server takes an API key as a bearer token; it does not
+offer the dynamic client registration the OAuth flow requires, so use the
+bearer path.
+
+### 4. Tool Naming Convention
 
 Tools from MCP servers are exposed to the agent with the naming pattern:
 ```

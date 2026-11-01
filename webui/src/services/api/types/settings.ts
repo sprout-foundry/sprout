@@ -83,6 +83,8 @@ export interface MCPServerConfig {
   url?: string;
   env?: Record<string, string>;
   credentials?: Record<string, string>;
+  /** HTTP headers for `type: "http"` servers; values may be credential placeholders. */
+  headers?: Record<string, string>;
   working_dir?: string;
   timeout?: string;
   auto_start?: boolean;

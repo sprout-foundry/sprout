@@ -20,6 +20,10 @@ func handleMCPRefresh(ctx context.Context, agent *Agent, args map[string]interfa
 		return "", agenterrors.NewInvalidInputError("operation is required", nil)
 	}
 
+	if err := rejectInheritedMCPMutation(agent, operation); err != nil {
+		return "", err
+	}
+
 	switch operation {
 	case "list":
 		return handleMCPList(agent)
@@ -42,6 +46,33 @@ func handleMCPRefresh(ctx context.Context, agent *Agent, args map[string]interfa
 	default:
 		return "", agenterrors.NewInvalidInputError(fmt.Sprintf("unknown operation %q: must be one of: list, refresh, add, remove, set-credential, remove-credential, login, logout, oauth-status", operation), nil)
 	}
+}
+
+// mcpMutationOperations are the mcp_refresh operations that change the server
+// set or its credentials. They are refused on an agent that inherited its
+// manager: the servers belong to the parent agent, which is using them, and a
+// subagent reconfiguring them would stop or replace the parent's live
+// connections.
+var mcpMutationOperations = map[string]bool{
+	"add":               true,
+	"remove":            true,
+	"refresh":           true,
+	"set-credential":    true,
+	"remove-credential": true,
+	"login":             true,
+	"logout":            true,
+}
+
+// rejectInheritedMCPMutation refuses a server-mutating mcp_refresh operation
+// on an agent whose MCP manager is shared with its parent.
+func rejectInheritedMCPMutation(agent *Agent, operation string) error {
+	if agent.mcpSub == nil || !agent.mcpSub.IsInherited() || !mcpMutationOperations[operation] {
+		return nil
+	}
+	return agenterrors.NewPermission(fmt.Sprintf(
+		"mcp_refresh %s is not available here: this agent shares the parent's MCP servers and must not reconfigure them. "+
+			"Use mcp_refresh list to see the available servers and tools, or make the change from the main agent.",
+		operation), nil)
 }
 
 // handleMCPLogin runs the browser OAuth flow for an HTTP MCP server and
@@ -375,6 +406,19 @@ func handleMCPAdd(ctx context.Context, agent *Agent, args map[string]interface{}
 		}
 	}
 
+	// Parse headers map (HTTP servers). Secret-looking header values are
+	// migrated to the credential store below, exactly as env secrets are, so
+	// a bearer token passed here never reaches config.json in plaintext.
+	var headerMap map[string]string
+	if headersRaw, ok := args["headers"]; ok {
+		if m, ok := headersRaw.(map[string]interface{}); ok {
+			headerMap = make(map[string]string, len(m))
+			for k, v := range m {
+				headerMap[k] = fmt.Sprintf("%v", v)
+			}
+		}
+	}
+
 	serverConfig := mcp.MCPServerConfig{
 		Name:        name,
 		Type:        serverType,
@@ -382,6 +426,7 @@ func handleMCPAdd(ctx context.Context, agent *Agent, args map[string]interface{}
 		Args:        cmdArgs,
 		URL:         url,
 		Env:         envMap,
+		Headers:     headerMap,
 		WorkingDir:  workingDir,
 		AutoStart:   true,
 		MaxRestarts: 3,
@@ -395,6 +440,14 @@ func handleMCPAdd(ctx context.Context, agent *Agent, args map[string]interface{}
 	if migErr != nil {
 		return "", errors.NewTool("mcp", "migrate plaintext env secrets to the credential backend (add the server again with a non-secret env, or set the value via set-credential)", migErr)
 	}
+
+	// Header values get the same treatment: an Authorization bearer token
+	// supplied inline is a secret and must not reach config.json.
+	migratedHeaders, headerMigErr := mcp.MigrateHeaderSecretsFromServer(name, &serverConfig)
+	if headerMigErr != nil {
+		return "", errors.NewTool("mcp", "migrate plaintext header secrets to the credential backend (add the server again with a placeholder header, or set the value via set-credential)", headerMigErr)
+	}
+	migrated += migratedHeaders
 
 	// Add to config and persist
 	if err := agent.GetConfigManager().UpdateConfig(func(cfg *configuration.Config) error {
@@ -420,7 +473,7 @@ func handleMCPAdd(ctx context.Context, agent *Agent, args map[string]interface{}
 		"message":   fmt.Sprintf("MCP server %q added and started", name),
 	}
 	if migrated > 0 {
-		result["message"] = fmt.Sprintf("MCP server %q added and started; %d secret env value(s) were migrated to the credential store (config carries placeholders only)", name, migrated)
+		result["message"] = fmt.Sprintf("MCP server %q added and started; %d secret value(s) were migrated to the credential store (config carries placeholders only)", name, migrated)
 	}
 	out, _ := json.MarshalIndent(result, "", "  ")
 	return string(out), nil

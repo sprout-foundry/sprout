@@ -109,6 +109,16 @@ func RunWorkflowLoopInProcess(ctx context.Context, parentAgent *Agent, configPat
 	securityMgr := NewAgentSecurityManager()
 	mcpMgr := NewAgentMCPManager()
 
+	// Share the parent's MCP manager with the loop agent, for the same reason
+	// subagents do: a workflow step that needs an integration (issue tracker,
+	// payments, design tool) must see the tools the parent configured.
+	// IsInherited keeps the loop agent's shutdown from stopping servers the
+	// parent is still using.
+	if parentAgent.mcpSub != nil && parentAgent.mcpSub.GetManager() != nil {
+		mcpMgr.SetManager(parentAgent.mcpSub.GetManager())
+		mcpMgr.SetInherited(true)
+	}
+
 	// Construct the fresh agent struct — mirrors createSubagent() from
 	// subagent_creation.go.
 	workflowAgent := &Agent{

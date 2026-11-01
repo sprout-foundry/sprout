@@ -10,6 +10,12 @@ interface MCPMutationParams {
   setEditingServer: (v: { mode: 'add' | 'edit'; originalName?: string } | null) => void;
   serverName: string;
   setServerName: (v: string) => void;
+  serverType: 'stdio' | 'http';
+  setServerType: (v: 'stdio' | 'http') => void;
+  serverURL: string;
+  setServerURL: (v: string) => void;
+  serverHeaders: Array<{ key: string; value: string }>;
+  setServerHeaders: (v: Array<{ key: string; value: string }>) => void;
   serverCommand: string;
   setServerCommand: (v: string) => void;
   serverArgs: string;
@@ -46,6 +52,12 @@ export function useMCPServerMutations(params: MCPMutationParams) {
     setEditingServer,
     serverName,
     setServerName,
+    serverType,
+    setServerType,
+    serverURL,
+    setServerURL,
+    serverHeaders,
+    setServerHeaders,
     serverCommand,
     setServerCommand,
     serverArgs,
@@ -72,9 +84,24 @@ export function useMCPServerMutations(params: MCPMutationParams) {
 
   /** Build the server payload object from form state. */
   const buildServerPayload = useCallback((): Record<string, unknown> => {
-    const server: Record<string, unknown> = { command: serverCommand };
-    if (serverArgs.trim()) {
-      server.args = serverArgs.split(/\s+/).filter(Boolean);
+    const server: Record<string, unknown> = { type: serverType };
+    if (serverType === 'http') {
+      // An HTTP server is addressed by URL; command/args do not apply.
+      server.url = serverURL.trim();
+      const headers: Record<string, string> = {};
+      for (const h of serverHeaders) {
+        const name = h.key.trim();
+        if (!name) continue;
+        // A stored credential round-trips as its placeholder so the backend
+        // keeps the existing entry instead of dropping the header.
+        headers[name] = h.value === '{{stored}}' ? `{{credential:mcp/${serverName}/${name}}}` : h.value;
+      }
+      if (Object.keys(headers).length > 0) server.headers = headers;
+    } else {
+      server.command = serverCommand;
+      if (serverArgs.trim()) {
+        server.args = serverArgs.split(/\s+/).filter(Boolean);
+      }
     }
     if (serverEnvVars.length > 0) {
       const env: Record<string, string> = {};
@@ -84,13 +111,16 @@ export function useMCPServerMutations(params: MCPMutationParams) {
       if (Object.keys(env).length > 0) server.env = env;
     }
     return server;
-  }, [serverCommand, serverArgs, serverEnvVars]);
+  }, [serverType, serverURL, serverHeaders, serverName, serverCommand, serverArgs, serverEnvVars]);
 
   /* ─── MCP server CRUD ──────────────────────────────────── */
 
   const resetServerForm = useCallback(() => {
     setEditingServer(null);
     setServerName('');
+    setServerType('stdio');
+    setServerURL('');
+    setServerHeaders([]);
     setServerCommand('');
     setServerArgs('');
     setServerEnvVars([]);
@@ -99,6 +129,9 @@ export function useMCPServerMutations(params: MCPMutationParams) {
   }, [
     setEditingServer,
     setServerName,
+    setServerType,
+    setServerURL,
+    setServerHeaders,
     setServerCommand,
     setServerArgs,
     setServerEnvVars,

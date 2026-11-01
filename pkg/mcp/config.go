@@ -51,20 +51,36 @@ func (c *MCPConfig) UnmarshalJSON(data []byte) error {
 				}
 				c.Timeout = duration
 			} else {
-				c.Timeout = 30 * time.Second // default
+				c.Timeout = DefaultServerTimeout // default
 			}
 		case float64:
 			// Handle JSON number (nanoseconds)
 			c.Timeout = time.Duration(v)
 		default:
-			c.Timeout = 30 * time.Second // default fallback
+			c.Timeout = DefaultServerTimeout // default fallback
 		}
 	} else {
-		c.Timeout = 30 * time.Second // default if not present
+		c.Timeout = DefaultServerTimeout // default if not present
+	}
+
+	// A zero or negative value from any branch means "unset", not "no
+	// timeout": net/http reads a zero client timeout as infinite.
+	if c.Timeout <= 0 {
+		c.Timeout = DefaultServerTimeout
 	}
 
 	return nil
 }
+
+// DefaultServerTimeout is the per-server request timeout applied when a
+// server config does not set one.
+//
+// It is deliberately generous. For HTTP servers the value lands on
+// http.Client.Timeout, which covers the whole round trip — including reading
+// an SSE body — so a 30s ceiling cut off slow but legitimate calls (a large
+// list, a report generation). 120s still bounds a hung server without
+// failing work that would have completed.
+const DefaultServerTimeout = 120 * time.Second
 
 // DefaultMCPConfig returns the default MCP configuration
 func DefaultMCPConfig() MCPConfig {
@@ -73,7 +89,7 @@ func DefaultMCPConfig() MCPConfig {
 		Servers:      make(map[string]MCPServerConfig),
 		AutoStart:    false, // Don't auto-start until user configures servers
 		AutoDiscover: true,
-		Timeout:      30 * time.Second,
+		Timeout:      DefaultServerTimeout,
 	}
 }
 
@@ -163,7 +179,7 @@ func LoadMCPConfigForWorkspace(workspaceRoot string) (MCPConfig, error) {
 				Args:        []string{"-y", "@modelcontextprotocol/server-github"},
 				AutoStart:   false, // Don't auto-start auto-discovered servers to prevent blocking
 				MaxRestarts: 3,
-				Timeout:     30 * time.Second,
+				Timeout:     DefaultServerTimeout,
 				Env: map[string]string{
 					"GITHUB_PERSONAL_ACCESS_TOKEN": githubToken,
 				},
@@ -407,7 +423,7 @@ func (c *MCPConfig) AddGitHubServer(githubToken string) {
 		Args:        []string{"-y", "@modelcontextprotocol/server-github"},
 		AutoStart:   true,
 		MaxRestarts: 3,
-		Timeout:     30 * time.Second,
+		Timeout:     DefaultServerTimeout,
 		Env: map[string]string{
 			"GITHUB_PERSONAL_ACCESS_TOKEN": githubToken,
 		},
@@ -442,7 +458,7 @@ func (c *MCPConfig) AddServer(serverConfig MCPServerConfig) error {
 		serverConfig.MaxRestarts = 3
 	}
 	if serverConfig.Timeout == 0 {
-		serverConfig.Timeout = 30 * time.Second
+		serverConfig.Timeout = DefaultServerTimeout
 	}
 
 	c.Servers[serverConfig.Name] = serverConfig

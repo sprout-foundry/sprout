@@ -66,8 +66,6 @@ type trustGitHubClient struct {
 	apiBase string
 	// token, when set, skips credential resolution.
 	token string
-	// ghRunner runs the gh CLI. Tests replace it.
-	ghRunner func(ctx context.Context, args ...string) ([]byte, error)
 	// now is the clock, for cache expiry in tests.
 	now func() time.Time
 

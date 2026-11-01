@@ -75,14 +75,14 @@ func TestHintOverride_ShrinkingReservedBlockLeavesTranscriptAlone(t *testing.T) 
 	f.SetHintOverride("")
 
 	newBottom := 24 - f.reservedRows()
-	for row := range blankedRows(buf.String()) {
+	for row := range hintRowBlankedRows(buf.String()) {
 		require.Greater(t, row, newBottom,
 			"row %d is transcript after the shrink and must not be cleared", row)
 	}
 }
 
-// blankedRows returns the absolute row numbers the output clears.
-func blankedRows(out string) map[int]bool {
+// hintRowBlankedRows returns the absolute row numbers the output clears.
+func hintRowBlankedRows(out string) map[int]bool {
 	cleared := map[int]bool{}
 	for _, line := range strings.Split(out, "\033[") {
 		if !strings.HasSuffix(line, ";1H\033[K") {

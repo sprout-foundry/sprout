@@ -73,7 +73,7 @@ func (f *StatusFooter) drawSteerRowsLocked() {
 	steerCursor := f.steerCursor
 	steerWrapped := f.steerWrappedActive
 	steerRows := f.steerBlockRows()
-	hintRows := f.hintRowCount()
+	hintRows := f.hintRowCountLocked()
 	reserved := f.reservedRowsLocked()
 	mode := f.composerMode
 	f.mu.Unlock()
@@ -144,7 +144,7 @@ func (f *StatusFooter) drawFullLocked() {
 	steerCursor := f.steerCursor
 	steerWrapped := f.steerWrappedActive
 	steerRows := f.steerBlockRows()
-	hintRows := f.hintRowCount()
+	hintRows := f.hintRowCountLocked()
 	mode := f.composerMode
 	hintLine := f.workingHintLocked(mode)
 	f.mu.Unlock()
@@ -365,19 +365,4 @@ func byteIndexAtWidth(s string, col int) int {
 		w += runewidth.RuneWidth(r)
 	}
 	return len(s)
-}
-
-// SetHintOverride shows text on the hint row in place of the composer's
-// key hints; "" restores them. Reports whether the hint row is showing,
-// i.e. whether the text is visible.
-func (f *StatusFooter) SetHintOverride(text string) bool {
-	if f == nil {
-		return false
-	}
-	f.mu.Lock()
-	f.hintOverride = text
-	shown := f.showKeymapHint && f.active
-	f.mu.Unlock()
-	f.Refresh()
-	return shown
 }

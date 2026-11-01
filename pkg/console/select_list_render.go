@@ -235,6 +235,11 @@ func (s *SelectList) clearRendered() {
 	footerDriven := s.footerDriven
 	s.mu.Unlock()
 	if f := GetGlobalStatusFooter(); footerDriven && f != nil {
+		// The footer owns the rows below the scroll region, and the picker
+		// leaves its hint there while it runs. Those rows are not part of
+		// the walk-back, so the footer repaints them; the gap the cleared
+		// frame leaves is closed from the row above them.
+		f.Refresh()
 		pullDownOverClearedRows(f, n+1)
 	}
 }

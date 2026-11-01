@@ -268,6 +268,8 @@ func (s *SelectList) runTTY(ctx context.Context) (string, bool, error) {
 
 	if f := GetGlobalStatusFooter(); f != nil && f.canPinInput() && s.opts.Footer != "" {
 		s.hintOnFooter = f.SetHintOverride(s.opts.Footer)
+		// "" restores the keymap hints — or hides the row again when they
+		// are off, which is the state the override took the row from.
 		defer f.SetHintOverride("")
 	}
 	s.render()

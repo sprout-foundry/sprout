@@ -67,7 +67,17 @@ func (f *StatusFooter) hintRowCount() int {
 	if f == nil {
 		return 0
 	}
-	if f.showKeymapHint {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.hintRowCountLocked()
+}
+
+// hintRowCountLocked is hintRowCount for callers already holding f.mu.
+// The row shows the keymap hints, or an override in their place — an
+// override counts even when the keymap hints are switched off, because it
+// is the prompt's own key legend.
+func (f *StatusFooter) hintRowCountLocked() int {
+	if f.showKeymapHint || f.hintOverride != "" {
 		return 1
 	}
 	return 0
@@ -93,7 +103,7 @@ func (f *StatusFooter) reservedRows() int {
 
 // reservedRowsLocked is reservedRows for callers already holding f.mu.
 func (f *StatusFooter) reservedRowsLocked() int {
-	return 2 + f.steerBlockRows() + f.hintRowCount()
+	return 2 + f.steerBlockRows() + f.hintRowCountLocked()
 }
 
 // canPinInput reports whether the footer can host pinned input rows

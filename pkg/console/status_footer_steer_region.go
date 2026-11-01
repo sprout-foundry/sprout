@@ -226,7 +226,7 @@ func (f *StatusFooter) clearOrphanedSteerRows(prevRows, newRows int) {
 	}
 	// SP-115: hint row pushes steer panel up by hintRows.
 	f.mu.Lock()
-	hintRows := f.hintRowCount()
+	hintRows := f.hintRowCountLocked()
 	f.mu.Unlock()
 	// Steer panel occupies rows (rows-1-hintRows-prevRows) .. (rows-2-hintRows).
 	// After shrinking, it occupies (rows-1-hintRows-newRows) .. (rows-2-hintRows).
@@ -255,7 +255,7 @@ func (f *StatusFooter) blankNewSteerRows(prevRows, newRows int) {
 		return
 	}
 	f.mu.Lock()
-	hintRows := f.hintRowCount()
+	hintRows := f.hintRowCountLocked()
 	f.mu.Unlock()
 	_, _ = fmt.Fprint(f.w, "\0337")
 	_, _ = fmt.Fprint(f.w, "\033[r")

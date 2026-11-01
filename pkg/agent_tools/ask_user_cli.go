@@ -72,6 +72,10 @@ func readFreeformInput(reader *bufio.Reader) (string, error) {
 // syscall won't return until the user types something or stdin closes),
 // but this is acceptable: the agent process owns stdin and the next
 // reader will consume the stray input.
+//
+// A cancelled read reports the cancellation as a plain error, not as the
+// timeout it came from: callers that need to tell a deadline apart from an
+// interrupt check ctx.Err() themselves.
 func readFreeformInputCtx(ctx context.Context, reader *bufio.Reader) (string, error) {
 	type result struct {
 		answer string
@@ -229,9 +233,22 @@ func runAskUserSelectList(ctx context.Context, req AskUserRequest) (string, erro
 
 	value, ok, err := sl.Run(ctx)
 	if err != nil {
+		// SelectList reports a cancelled context as an error. A deadline is
+		// the caller's own bound, so it resolves to the default rather than
+		// surfacing as a failure; a genuine interrupt still propagates.
+		if ctx != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return req.Default, nil
+		}
 		return "", err
 	}
 	if !ok {
+		// A deadline is not a cancellation: the caller asked for a bounded
+		// wait, so the bounded outcome is the request's default. Reporting
+		// the timeout as an error would make the caller treat a deliberate
+		// fallback as a failure.
+		if ctx != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return req.Default, nil
+		}
 		// Esc / Ctrl+C: treat as cancellation. Note this differs from the
 		// legacy "Enter on empty → default" behavior — the picker has no
 		// notion of "submit blank", so Esc is the only way out without

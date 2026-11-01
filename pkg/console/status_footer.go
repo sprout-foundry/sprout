@@ -447,17 +447,83 @@ func (f *StatusFooter) SetShowKeymapHint(show bool) {
 		return
 	}
 	f.mu.Lock()
-	changed := f.showKeymapHint != show
+	before := f.hintRowCountLocked()
 	f.showKeymapHint = show
-	live := f.active && f.isTTY && !f.proseStreaming
+	after := f.hintRowCountLocked()
 	f.mu.Unlock()
-	if !changed || !live {
+	f.applyHintRowChange(before, after, false)
+}
+
+// SetShowKeymapHintLocked is SetShowKeymapHint for callers that already hold
+// outputMu. The Alt+V handler runs inside InputReader.HandleEvent, which its
+// caller drives under the output lock; the unlocked variant would re-enter
+// the non-reentrant mutex and wedge the reader goroutine.
+func (f *StatusFooter) SetShowKeymapHintLocked(show bool) {
+	if f == nil {
 		return
 	}
-	// The row count changed under a live footer: re-apply the margins now
-	// rather than letting the next draw paint the hint over a transcript row.
-	LockOutput()
-	defer UnlockOutput()
+	f.mu.Lock()
+	before := f.hintRowCountLocked()
+	f.showKeymapHint = show
+	after := f.hintRowCountLocked()
+	f.mu.Unlock()
+	f.applyHintRowChange(before, after, true)
+}
+
+// SetHintOverride shows text on the hint row in place of the composer's
+// key hints; "" restores them. Reports whether the hint row is showing,
+// i.e. whether the text is visible.
+//
+// An override shows the hint row even when the keymap hints are off: a
+// picker's keys are the only thing telling the user how to answer, and
+// hiding them under compact verbosity left the prompt with no key hints at
+// all. The row therefore takes part in the reserved-row count — growing the
+// pinned block by a row the scroll region must exclude. Without that, the
+// row is painted on the region's last row and the next transcript line
+// scrolls straight over it.
+func (f *StatusFooter) SetHintOverride(text string) bool {
+	if f == nil {
+		return false
+	}
+	f.mu.Lock()
+	before := f.hintRowCountLocked()
+	f.hintOverride = text
+	after := f.hintRowCountLocked()
+	shown := after > 0 && f.active
+	f.mu.Unlock()
+	f.applyHintRowChange(before, after, false)
+	return shown
+}
+
+// applyHintRowChange re-applies the scroll region after the hint row's
+// visibility changed, and repaints. Callers pass the row count before and
+// after the change so the caller's own field writes decide visibility, and
+// whether they already hold outputMu (the InputReader render path does).
+//
+// Growing the block must shift the region's content up first: the row the
+// hint takes was transcript, and claiming it without scrolling would paint
+// the hint over the last line and then scroll that line away on the next
+// write. Shrinking leaves the vacated row to the draw, which clears every
+// row it paints.
+func (f *StatusFooter) applyHintRowChange(before, after int, locked bool) {
+	if before == after {
+		return
+	}
+	f.mu.Lock()
+	live := f.active && f.isTTY && !f.proseStreaming
+	f.mu.Unlock()
+	if !live {
+		// Between turns, or mid-stream: the next full draw reconciles the
+		// block with the region. Resize and Stop read the live row count.
+		if !locked {
+			f.Refresh()
+		}
+		return
+	}
+	if !locked {
+		LockOutput()
+		defer UnlockOutput()
+	}
 	f.shiftScrollRegionLocked()
 	f.applyScrollRegionLocked()
 	f.drawLocked()

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/injection"
@@ -33,10 +34,12 @@ const trustOursOption = "ours"
 //     path, decides without asking (ClassifyPath).
 //  2. A path outside the workspace root, or under a nested repository (a
 //     clone inside our tree), is "pulled in" code whose status is ambiguous:
-//     consult a recorded decision, else ask once and persist the answer.
-//     With no interactive channel (autonomous run) the conservative default
-//     applies — framed, since framing labels content as data and withholds
-//     nothing — and nothing is persisted.
+//     consult a recorded decision, then the repository's origin — a clone the
+//     user owns or can push to is their own work and is not framed (see
+//     trust_github.go) — else ask once and persist the answer. With no
+//     interactive channel (autonomous run) the conservative default applies —
+//     framed, since framing labels content as data and withholds nothing —
+//     and nothing is persisted.
 //  3. Otherwise the path is ours.
 func resolveReadTrust(env ToolEnv, absPath string) injection.TrustClass {
 	// Resolve symlinks before classifying: the read follows the link, so the
@@ -79,6 +82,15 @@ func resolveReadTrust(env ToolEnv, absPath string) injection.TrustClass {
 		return class
 	}
 
+	// A clone of the user's own repository is not third-party, and asking
+	// would invite the wrong answer about their own code. Ownership is
+	// established from the repository's origin, not assumed: anything the
+	// lookup cannot prove falls through to the question below.
+	if owner := trustOwnershipCheck(absPath); owner.trusted {
+		persistTrustDecision(env, workspaceRoot, askRel, injection.TrustFirstParty)
+		return injection.TrustFirstParty
+	}
+
 	if env.AskUser == nil {
 		// No surface to ask. Frame it: the label is not a restriction, so
 		// the conservative choice costs nothing and cannot block work.
@@ -93,6 +105,11 @@ func resolveReadTrust(env ToolEnv, absPath string) injection.TrustClass {
 			{Label: "ours", Value: trustOursOption, Description: "Your own code; reads are not framed."},
 		},
 		Default: trustThirdPartyOption,
+		// The conservative answer is the default, so waiting on a human has
+		// nothing to protect: a timeout resolves to third-party, which is the
+		// answer that withholds nothing. A short deadline keeps an unattended
+		// session from stalling on a question nobody is there to read.
+		Timeout: trustQuestionTimeout,
 	})
 	if err != nil {
 		// An ask that could not be delivered is not consent: fall back to the
@@ -107,6 +124,16 @@ func resolveReadTrust(env ToolEnv, absPath string) injection.TrustClass {
 	persistTrustDecision(env, workspaceRoot, askRel, class)
 	return class
 }
+
+// trustQuestionTimeout bounds the trust question. It is deliberately short:
+// the question's default is the conservative answer, so a user who is not
+// there loses nothing by the prompt resolving itself, and an unattended
+// session does not sit blocked on a prompt nobody will read.
+const trustQuestionTimeout = 2 * time.Minute
+
+// trustOwnershipCheck is the ownership lookup, indirected so tests can decide
+// the verdict without a network or a real repository.
+var trustOwnershipCheck = repoOwnedByUser
 
 // trustDecisions returns the recorded decisions for workspaceRoot, or nil when
 // no config manager is available (tests, minimal harnesses).

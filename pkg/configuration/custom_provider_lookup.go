@@ -90,10 +90,12 @@ func (c CustomProviderConfig) ToProviderConfig() (*providers.ProviderConfig, err
 		},
 		Conversion: conversion,
 		Streaming: providers.StreamingConfig{
-			Format:         "sse",
-			ChunkTimeoutMs: normalized.ChunkTimeoutMs,
-			DoneMarker:     "[DONE]",
-			IncludeUsage:   normalized.IncludeUsage,
+			Format:              "sse",
+			ChunkTimeoutMs:      normalized.ChunkTimeoutMs,
+			FirstChunkTimeoutMs: normalized.FirstChunkTimeoutMs,
+			IdleChunkTimeoutMs:  normalized.IdleChunkTimeoutMs,
+			DoneMarker:          "[DONE]",
+			IncludeUsage:        normalized.IncludeUsage,
 		},
 		Models: providers.ModelConfig{
 			DefaultContextLimit: normalized.ContextSize,

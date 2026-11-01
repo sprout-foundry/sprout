@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	providers "github.com/sprout-foundry/sprout/pkg/agent_providers"
 	"github.com/sprout-foundry/sprout/pkg/credentials"
@@ -931,4 +932,22 @@ func TestDeleteCustomProvider_CleansScopedStaleCopy(t *testing.T) {
 
 	require.NoFileExists(t, filepath.Join(globalProvidersDir, "stale-prov.json"))
 	require.NoFileExists(t, filepath.Join(scopedProvidersDir, "stale-prov.json"))
+}
+
+// A custom provider can bound a stalled stream without shortening its whole
+// request: the first-chunk and idle deadlines carry through, the request
+// timeout stays chunk_timeout_ms.
+func TestToProviderConfig_StreamDeadlines(t *testing.T) {
+	cfg := CustomProviderConfig{
+		Name:                "llm-bridge",
+		Endpoint:            "http://127.0.0.1:8080/v1",
+		ChunkTimeoutMs:      900000,
+		FirstChunkTimeoutMs: 120000,
+		IdleChunkTimeoutMs:  60000,
+	}
+	pc, err := cfg.ToProviderConfig()
+	require.NoError(t, err)
+	assert.Equal(t, 2*time.Minute, pc.GetFirstChunkTimeout())
+	assert.Equal(t, time.Minute, pc.GetIdleChunkTimeout())
+	assert.Equal(t, 15*time.Minute, pc.GetStreamingTimeout())
 }

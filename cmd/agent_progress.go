@@ -97,6 +97,8 @@ func (pe *progressEmitter) handleEvent(evt events.UIEvent) {
 		line = "progress: agent run started"
 	case events.EventTypeToolStart:
 		line = formatToolStart(data)
+	case events.EventTypeToolEnd:
+		line = formatToolEnd(data)
 	case events.EventTypeQueryCompleted:
 		pe.startedEmitted = false
 		line = "progress: agent run completed"
@@ -140,6 +142,25 @@ func formatToolStart(data map[string]interface{}) string {
 		return fmt.Sprintf("progress: tool: %s %s", name, preview)
 	}
 	return fmt.Sprintf("progress: tool: %s", name)
+}
+
+// formatToolEnd builds the progress line for a tool_end event, so a consumer
+// can tell a tool's own time from the model's time before the next step.
+func formatToolEnd(data map[string]interface{}) string {
+	name, _ := data["tool_name"].(string)
+	if name == "" {
+		return ""
+	}
+	var ms int64
+	switch v := data["duration_ms"].(type) {
+	case int64:
+		ms = v
+	case int:
+		ms = int64(v)
+	case float64:
+		ms = int64(v)
+	}
+	return fmt.Sprintf("progress: tool done: %s %dms", name, ms)
 }
 
 // extractPreview parses the arguments JSON and extracts a relevant preview

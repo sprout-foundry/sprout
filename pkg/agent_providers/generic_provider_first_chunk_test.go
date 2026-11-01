@@ -129,3 +129,48 @@ func TestFirstChunkTimeoutDefaults(t *testing.T) {
 		t.Errorf("idle-chunk override = %v, want 25s", got)
 	}
 }
+
+// A non-streaming call on a config with stall deadlines is sent as a stream,
+// so a stalled response is cut by the idle deadline instead of the
+// whole-request timeout; a healthy one returns the same assembled answer.
+func TestSendChatRequestStreamsWithStallDeadlines(t *testing.T) {
+	stall := false
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body := make([]byte, r.ContentLength)
+		_, _ = r.Body.Read(body)
+		if !strings.Contains(string(body), `"stream":true`) {
+			t.Errorf("request was not streamed: %s", body)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"Hello \"}}]}\n\n"))
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		if stall {
+			<-r.Context().Done()
+			return
+		}
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"there.\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n"))
+	})
+	p, _ := newStreamingTestProvider(t, handler, 5000, 0)
+	p.config.Streaming.IdleChunkTimeoutMs = 300
+
+	resp, err := p.SendChatRequest(context.Background(), nil, nil, "", false)
+	if err != nil {
+		t.Fatalf("healthy call: %v", err)
+	}
+	if len(resp.Choices) == 0 || resp.Choices[0].Message.Content != "Hello there." {
+		t.Fatalf("assembled response = %+v", resp)
+	}
+
+	stall = true
+	start := time.Now()
+	_, err = p.SendChatRequest(context.Background(), nil, nil, "", false)
+	if err == nil || !strings.Contains(err.Error(), "idle timeout") {
+		t.Fatalf("stalled call: err = %v, want the idle timeout", err)
+	}
+	if time.Since(start) > 5*time.Second {
+		t.Fatalf("stall cut after %v", time.Since(start))
+	}
+}

@@ -120,6 +120,14 @@ func (p *GenericProvider) warmModelsCache() {
 
 // SendChatRequest sends a non-streaming chat request
 func (p *GenericProvider) SendChatRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
+	// A config that sets stall deadlines wants them on every call. A
+	// non-streaming response arrives all at once, so a stalled call could
+	// only be cut by the whole-request timeout; streaming it (and
+	// discarding the chunks) lets the first-chunk and idle deadlines catch
+	// the stall and retry. The assembled response is the same.
+	if p.config.Streaming.FirstChunkTimeoutMs > 0 || p.config.Streaming.IdleChunkTimeoutMs > 0 {
+		return p.SendChatRequestStream(ctx, messages, tools, reasoning, disableThinking, func(string, string) {})
+	}
 	resp, err := p.sendChatRequestImpl(ctx, messages, tools, reasoning, disableThinking)
 	return p.reconcileVisionCapability(messages, resp, err, func(msgs []api.Message) (*api.ChatResponse, error) {
 		return p.sendChatRequestImpl(ctx, msgs, tools, reasoning, disableThinking)

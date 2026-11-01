@@ -5,8 +5,8 @@
   },
   "cost": {
     "currency": "USD",
-    "input_token_cost": 0.44,
-    "output_token_cost": 2.2
+    "input_token_cost": 0.4,
+    "output_token_cost": 2.0
   },
   "defaults": {
     "max_tokens": -1,
@@ -216,12 +216,13 @@
         ]
       },
       {
+        "cached_input_cost": 0.015,
         "context_length": 131072,
         "description": "A 12B parameter model with a 128k token context length built by Mistral in collaboration with NVIDIA. The model is multilingual, supporting English, French, German, Spanish, Italian, Portuguese, Chinese, Japanese,...",
         "id": "mistral-nemo",
-        "input_cost": 0.019,
+        "input_cost": 0.15,
         "name": "Mistral: Mistral Nemo",
-        "output_cost": 0.03,
+        "output_cost": 0.15,
         "tags": [
           "tools",
           "structured_output"
@@ -278,12 +279,13 @@
         ]
       },
       {
+        "cached_input_cost": 0.01,
         "context_length": 256000,
         "description": "Mistral-Small-3.2-24B-Instruct-2506 is an updated 24B parameter model from Mistral optimized for instruction following, repetition reduction, and improved function calling. Compared to the 3.1 release, version 3.2 significantly improves accuracy on...",
         "id": "mistral-small-3.2-24b-instruct",
-        "input_cost": 0.075,
+        "input_cost": 0.1,
         "name": "Mistral: Mistral Small 3.2 24B",
-        "output_cost": 0.2,
+        "output_cost": 0.3,
         "tags": [
           "tools",
           "vision",
@@ -317,13 +319,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.044,
+        "cached_input_cost": 0.04,
         "context_length": 262144,
         "description": "Devstral 2 is a state-of-the-art open-source model by Mistral AI specializing in agentic coding. It is a 123B-parameter dense transformer model supporting a 256K context window. Devstral 2 excels at using tools to explore codebases, editing multiple files, and powering software engineering agents.",
         "id": "devstral-2512",
-        "input_cost": 0.44,
+        "input_cost": 0.4,
         "name": "Mistral: Devstral 2 2512",
-        "output_cost": 2.2,
+        "output_cost": 2.0,
         "tags": [
           "tools",
           "structured_output"

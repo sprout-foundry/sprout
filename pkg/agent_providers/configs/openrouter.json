@@ -1134,13 +1134,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.021,
+        "cached_input_cost": 0.0375,
         "context_length": 262144,
         "description": "Gemma 4 26B A4B IT is an instruction-tuned Mixture-of-Experts (MoE) model from Google DeepMind. Despite 25.2B total parameters, only 3.8B activate per token during inference — delivering near-31B quality at...",
         "id": "google/gemma-4-26b-a4b-it",
-        "input_cost": 0.042,
+        "input_cost": 0.0675,
         "name": "Google: Gemma 4 26B A4B ",
-        "output_cost": 0.22,
+        "output_cost": 0.225,
         "tags": [
           "tools",
           "vision",
@@ -3995,13 +3995,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.033,
+        "cached_input_cost": 0.020625,
         "context_length": 262144,
         "description": "Hy3 is a 295B-parameter Mixture-of-Experts model from Tencent (21B active, 192 experts with top-8 routing) built for reasoning, agentic workflows, and real-world production use. It supports a configurable reasoning effort:...",
         "id": "tencent/hy3",
-        "input_cost": 0.132,
+        "input_cost": 0.0825,
         "name": "Tencent: Hy3",
-        "output_cost": 0.528,
+        "output_cost": 0.33,
         "tags": [
           "tools",
           "reasoning",
@@ -4587,13 +4587,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.001834,
+        "cached_input_cost": 0.035,
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the DeepSeek V4 Flash family.",
         "id": "~deepseek/deepseek-v4-flash-latest",
-        "input_cost": 0.05764,
+        "input_cost": 0.059,
         "name": "DeepSeek V4 Flash Latest",
-        "output_cost": 0.17292,
+        "output_cost": 0.3,
         "tags": [
           "tools",
           "reasoning",
@@ -5935,13 +5935,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.0163,
+        "cached_input_cost": 0.0285,
         "context_length": 1048576,
         "description": "GLM-5.3-Flash is Z.ai's first natively multimodal model, delivering frontier coding and agentic performance at flash-tier cost. With 320B total and 18B active parameters, it outperforms GLM-5.2 at one-tenth the price while approaching Claude Opus 4.8 on coding and agentic benchmarks.",
         "id": "z-ai/glm-5.3-flash",
-        "input_cost": 0.0163,
+        "input_cost": 0.0285,
         "name": "Z.ai: GLM 5.3 Flash",
-        "output_cost": 0.1479,
+        "output_cost": 0.0923,
         "tags": [
           "tools",
           "vision",
@@ -6260,13 +6260,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.0163,
+        "cached_input_cost": 0.0285,
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the GLM Flash family.",
         "id": "~z-ai/glm-flash-latest",
-        "input_cost": 0.0163,
+        "input_cost": 0.0285,
         "name": "Z.ai: GLM Flash Latest",
-        "output_cost": 0.1479,
+        "output_cost": 0.0923,
         "tags": [
           "tools",
           "vision",
@@ -6691,13 +6691,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.013,
+        "cached_input_cost": 0.005,
         "context_length": 1048576,
         "description": "This model always redirects to the latest model in the DeepSeek Flash family.",
         "id": "~deepseek/deepseek-flash-latest",
-        "input_cost": 0.0141,
+        "input_cost": 0.035,
         "name": "DeepSeek: DeepSeek Flash Latest",
-        "output_cost": 0.144,
+        "output_cost": 0.5,
         "tags": [
           "tools",
           "vision",

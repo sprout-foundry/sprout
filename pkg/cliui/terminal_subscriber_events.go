@@ -389,6 +389,9 @@ func (s *TerminalSubscriberState) runEventLoop(ctx context.Context, ch <-chan ev
 				return
 			}
 			data, _ := evt.Data.(map[string]interface{})
+			if isBackgroundTaskEvent(data) {
+				continue
+			}
 			switch evt.Type {
 			case events.EventTypeQueryStarted:
 				s.HandleQueryStartedEvent(indicator)

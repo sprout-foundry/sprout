@@ -134,17 +134,39 @@ func newTaskAgent(a *Agent, worktreePath, taskID string) (*Agent, error) {
 	// save, and two tasks starting in the same second would share one.
 	taskAgent.SetSessionID("task_" + taskID)
 
-	// Tag every event with the task's own id so the CLI can route a task's
-	// output to its own view instead of interleaving it with the primary's
-	// transcript.
+	// Tag every event with the task's own id so the CLI keeps a task's
+	// output out of the primary's transcript (SP-174d). task_id alone cannot
+	// mark it: subagent_activity payloads use task_id for the subagent's run
+	// id, and a payload key wins over metadata. background_task_id is
+	// unambiguous, and subagents the task spawns inherit it.
 	meta := map[string]interface{}{}
 	for k, v := range a.output.GetEventMetadata() {
 		meta[k] = v
 	}
 	meta["task_id"] = taskID
+	meta[EventMetaBackgroundTaskID] = taskID
 	taskAgent.SetEventMetadata(meta)
 
 	return taskAgent, nil
+}
+
+// EventMetaBackgroundTaskID is the event-metadata key that marks an event as
+// coming from a /task agent (or a subagent it spawned). Its value is the
+// task id.
+const EventMetaBackgroundTaskID = "background_task_id"
+
+// RunningTaskCount reports how many /task agents are running in this
+// process, for the CLI footer.
+func RunningTaskCount() int {
+	processTasks.mu.Lock()
+	defer processTasks.mu.Unlock()
+	n := 0
+	for _, t := range processTasks.byID {
+		if t.Status == "running" {
+			n++
+		}
+	}
+	return n
 }
 
 // taskCompletionSummary is the text the primary receives when a task

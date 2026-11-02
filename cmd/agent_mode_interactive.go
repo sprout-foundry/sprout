@@ -291,6 +291,13 @@ func (s *agentFooterSource) ActiveSubagents() int {
 	return agent.GetActiveSubagents()
 }
 
+// ActiveTasks satisfies the optional activeTasksSource interface in
+// pkg/console so the footer shows running /task agents, whose output stays
+// out of the transcript. SP-174d.
+func (s *agentFooterSource) ActiveTasks() int {
+	return agent.RunningTaskCount()
+}
+
 // QueuedMessages satisfies the optional queuedMessagesSource interface
 // so the footer renders a "⏸ N queued" badge when the user has
 // deferred steer messages via Tab+Enter waiting for the next turn.

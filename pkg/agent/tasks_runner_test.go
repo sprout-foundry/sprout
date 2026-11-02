@@ -20,11 +20,13 @@ func resetProcessTasks(t *testing.T) {
 	processTasks.mu.Lock()
 	processTasks.order = nil
 	processTasks.byID = map[string]*taskRecord{}
+	processTasks.pending = nil
 	processTasks.mu.Unlock()
 	t.Cleanup(func() {
 		processTasks.mu.Lock()
 		processTasks.order = nil
 		processTasks.byID = map[string]*taskRecord{}
+		processTasks.pending = nil
 		processTasks.mu.Unlock()
 	})
 }
@@ -316,14 +318,14 @@ func TestTaskRegistry_SetTerminalReleasesSlot(t *testing.T) {
 	repo := initTaskTestRepo(t)
 	processTasks.add(&taskRecord{ID: "bg-task-1", Status: "running", Workspace: repo, Started: time.Now()})
 
-	if err := processTasks.reserve(repo, 1); err == nil {
+	if _, reserveErr := processTasks.reserve(repo, 1); reserveErr == nil {
 		t.Fatal("a running task should occupy the only slot")
 	}
 
 	processTasks.setTerminal("bg-task-1", "stopped", "", "")
 
-	if err := processTasks.reserve(repo, 1); err != nil {
-		t.Errorf("a stopped task should release its slot: %v", err)
+	if _, reserveErr := processTasks.reserve(repo, 1); reserveErr != nil {
+		t.Errorf("a stopped task should release its slot: %v", reserveErr)
 	}
 	info := processTasks.snapshot()[0]
 	if info.Status != "stopped" {
@@ -338,8 +340,8 @@ func TestTaskRegistry_ReserveIsPerWorkspace(t *testing.T) {
 	resetProcessTasks(t)
 	processTasks.add(&taskRecord{ID: "bg-task-a", Status: "running", Workspace: "/ws/a", Started: time.Now()})
 
-	if err := processTasks.reserve("/ws/b", 1); err != nil {
-		t.Errorf("a task in another workspace should not consume this workspace's slot: %v", err)
+	if _, reserveErr := processTasks.reserve("/ws/b", 1); reserveErr != nil {
+		t.Errorf("a task in another workspace should not consume this workspace's slot: %v", reserveErr)
 	}
 }
 
@@ -389,8 +391,8 @@ func TestTaskRegistry_MarkStopped(t *testing.T) {
 	if rec.Finished.IsZero() {
 		t.Error("Finished was not set")
 	}
-	if err := processTasks.reserve(repo, 1); err != nil {
-		t.Errorf("a stopped task should release its slot: %v", err)
+	if _, reserveErr := processTasks.reserve(repo, 1); reserveErr != nil {
+		t.Errorf("a stopped task should release its slot: %v", reserveErr)
 	}
 }
 
@@ -402,5 +404,72 @@ func TestTaskRegistry_MarkStoppedIgnoresUnknownAndFinished(t *testing.T) {
 	processTasks.markStopped("bg-task-done")
 	if got := processTasks.get("bg-task-done").Status; got != "completed" {
 		t.Errorf("status = %q, want the completed status preserved", got)
+	}
+}
+
+// Counting running records is not enough: the slot must be held from the
+// moment it is reserved, or two concurrent /task invocations both pass the
+// check while the LLM naming call and worktree creation are in flight.
+func TestTaskRegistry_ReserveHoldsSlotBeforeAdopt(t *testing.T) {
+	resetProcessTasks(t)
+	repo := initTaskTestRepo(t)
+
+	first, reserveErr := processTasks.reserve(repo, 1)
+	if reserveErr != nil {
+		t.Fatalf("first reserve: %v", reserveErr)
+	}
+	if _, secondErr := processTasks.reserve(repo, 1); secondErr == nil {
+		t.Fatal("a reserved-but-unadopted slot must still count against the limit")
+	}
+
+	processTasks.discard(first)
+	if _, thirdErr := processTasks.reserve(repo, 1); thirdErr != nil {
+		t.Errorf("discarding a reservation should free the slot: %v", thirdErr)
+	}
+}
+
+func TestTaskRegistry_AdoptRegistersUnderID(t *testing.T) {
+	resetProcessTasks(t)
+	repo := initTaskTestRepo(t)
+
+	rec, reserveErr := processTasks.reserve(repo, 1)
+	if reserveErr != nil {
+		t.Fatalf("reserve: %v", reserveErr)
+	}
+	rec.Branch = "feat/adopted"
+	rec.Path = "/ws/.sprout/tasks/adopted"
+	processTasks.adopt(rec, "bg-task-7")
+
+	got, detailErr := processTasks.snapshot(), error(nil)
+	if detailErr != nil {
+		t.Fatal(detailErr)
+	}
+	if len(got) != 1 || got[0].ID != "bg-task-7" {
+		t.Fatalf("snapshot = %+v, want the adopted record under its ID", got)
+	}
+	if got[0].Branch != "feat/adopted" {
+		t.Errorf("branch = %q, want feat/adopted", got[0].Branch)
+	}
+	if processTasks.get("bg-task-7") == nil {
+		t.Error("adopted record is not reachable by ID")
+	}
+	if n := len(processTasks.pending); n != 0 {
+		t.Errorf("pending placeholders = %d, want 0 after adopt", n)
+	}
+}
+
+// A stop that lands while the runner goroutine is still finishing must not
+// be overwritten: the background entry reports "stopped", so the task record
+// must agree.
+func TestTaskRegistry_SetTerminalPreservesStopped(t *testing.T) {
+	resetProcessTasks(t)
+	repo := initTaskTestRepo(t)
+	processTasks.add(&taskRecord{ID: "bg-task-race", Status: "running", Workspace: repo, Started: time.Now()})
+
+	processTasks.markStopped("bg-task-race")
+	processTasks.setTerminal("bg-task-race", "completed", "output", "abc1234")
+
+	if got := processTasks.get("bg-task-race").Status; got != "stopped" {
+		t.Errorf("status = %q, want stopped preserved", got)
 	}
 }

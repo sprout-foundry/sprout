@@ -53,6 +53,9 @@ type taskRegistry struct {
 	mu    sync.Mutex
 	order []string
 	byID  map[string]*taskRecord
+	// pending holds reserved placeholders that have no ID yet: the window
+	// between claiming a concurrency slot and creating the worktree.
+	pending []*taskRecord
 }
 
 var processTasks = &taskRegistry{byID: map[string]*taskRecord{}}
@@ -85,13 +88,18 @@ func (r *taskRegistry) pruneLocked() {
 	}
 }
 
-// setTerminal records a task's final state.
+// setTerminal records a task's final state. A record a stop already closed
+// keeps its "stopped" status: the background registry entry reports
+// "stopped" for the same task, and the two must not disagree.
 func (r *taskRegistry) setTerminal(id, status, output, commit string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	rec := r.byID[id]
 	if rec == nil {
 		return
+	}
+	if rec.Status == "stopped" || rec.Status == "merged" {
+		status = rec.Status
 	}
 	rec.Status = status
 	rec.Summary = output
@@ -113,11 +121,13 @@ func (r *taskRegistry) markStopped(id string) {
 	rec.Finished = time.Now()
 }
 
-// reserve atomically claims a concurrency slot for workspace, returning an
-// error when the limit is already reached. Reserving before the LLM naming
-// call and the worktree creation is what makes the limit hold under
-// concurrent /task invocations.
-func (r *taskRegistry) reserve(workspace string, limit int) error {
+// reserve atomically claims a concurrency slot for workspace and returns the
+// placeholder record that holds it. Counting alone is not enough: the slot
+// must exist in the registry before the LLM naming call and the worktree
+// creation, or two concurrent /task invocations both observe a free slot and
+// both proceed. The caller fills the placeholder in once the worktree
+// exists, or releases it with discard on any later error.
+func (r *taskRegistry) reserve(workspace string, limit int) (*taskRecord, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	n := 0
@@ -126,11 +136,53 @@ func (r *taskRegistry) reserve(workspace string, limit int) error {
 			n++
 		}
 	}
+	// A reserved-but-unadopted placeholder holds its slot too.
+	for _, p := range r.pending {
+		if p.Status == "running" && p.Workspace == workspace {
+			n++
+		}
+	}
 	if n >= limit {
-		return agenterrors.NewValidation(
+		return nil, agenterrors.NewValidation(
 			fmt.Sprintf("%d tasks are already running for this workspace (limit %d); stop one with /tasks stop <id>", n, limit), nil)
 	}
-	return nil
+	rec := &taskRecord{Status: "running", Workspace: workspace, Started: time.Now()}
+	r.order = append(r.order, "") // placeholder position, filled by adopt
+	r.pending = append(r.pending, rec)
+	return rec, nil
+}
+
+// adopt gives a reserved placeholder its ID and registers it under that ID.
+func (r *taskRegistry) adopt(rec *taskRecord, id string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	rec.ID = id
+	r.byID[id] = rec
+	for i, p := range r.pending {
+		if p == rec {
+			r.pending = append(r.pending[:i], r.pending[i+1:]...)
+			break
+		}
+	}
+	for i, id2 := range r.order {
+		if id2 == "" {
+			r.order[i] = id
+			break
+		}
+	}
+	r.pruneLocked()
+}
+
+// discard releases a reserved placeholder that never became a task.
+func (r *taskRegistry) discard(rec *taskRecord) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i, p := range r.pending {
+		if p == rec {
+			r.pending = append(r.pending[:i], r.pending[i+1:]...)
+			break
+		}
+	}
 }
 
 func (r *taskRegistry) get(id string) *taskRecord {
@@ -140,12 +192,15 @@ func (r *taskRegistry) get(id string) *taskRecord {
 }
 
 // snapshot returns a copy of every record, newest first, safe to read
-// without the lock.
+// without the lock. Reserved placeholders are not yet tasks and are skipped.
 func (r *taskRegistry) snapshot() []TaskInfo {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	out := make([]TaskInfo, 0, len(r.order))
 	for i := len(r.order) - 1; i >= 0; i-- {
+		if r.order[i] == "" {
+			continue
+		}
 		rec := r.byID[r.order[i]]
 		if rec == nil {
 			continue
@@ -199,16 +254,19 @@ func (a *Agent) StartTask(ctx context.Context, opts StartTaskOptions) (*TaskInfo
 	if maxConcurrent <= 0 {
 		maxConcurrent = defaultTaskMaxConcurrent
 	}
-	if err := processTasks.reserve(workspace, maxConcurrent); err != nil {
+	reserved, err := processTasks.reserve(workspace, maxConcurrent)
+	if err != nil {
 		return nil, err
 	}
 
 	branch, err := suggestTaskBranch(ctx, a, description)
 	if err != nil {
+		processTasks.discard(reserved)
 		return nil, err
 	}
 	wt, err := createTaskWorktree(ctx, workspace, branch, opts.Base)
 	if err != nil {
+		processTasks.discard(reserved)
 		return nil, err
 	}
 
@@ -216,18 +274,14 @@ func (a *Agent) StartTask(ctx context.Context, opts StartTaskOptions) (*TaskInfo
 	bgCtx, cancel := context.WithCancel(context.Background())
 	t := runner.registerBackground("task", taskRole, ShortCommandLabel(description), cancel)
 
-	rec := &taskRecord{
-		ID:        t.ID,
-		Branch:    wt.Branch,
-		Path:      wt.Path,
-		Base:      wt.Base,
-		Prompt:    description,
-		Started:   time.Now(),
-		Status:    "running",
-		Workspace: workspace,
-		worktree:  wt,
-	}
-	processTasks.add(rec)
+	rec := reserved
+	rec.ID = t.ID
+	rec.Branch = wt.Branch
+	rec.Path = wt.Path
+	rec.Base = wt.Base
+	rec.Prompt = description
+	rec.worktree = wt
+	processTasks.adopt(rec, t.ID)
 
 	timeout := opts.Timeout
 	if timeout <= 0 {
@@ -243,8 +297,14 @@ func (a *Agent) StartTask(ctx context.Context, opts StartTaskOptions) (*TaskInfo
 		a.finishBackground(t, status, summary)
 	}()
 
-	info, _ := a.TaskDetail(rec.ID)
-	return &info, nil
+	return &TaskInfo{
+		ID:       rec.ID,
+		Branch:   rec.Branch,
+		Path:     rec.Path,
+		Status:   rec.Status,
+		Elapsed:  time.Since(rec.Started),
+		Worktree: rec.Path,
+	}, nil
 }
 
 // runTask runs the task agent in the worktree and commits its work. It
@@ -337,7 +397,8 @@ func (a *Agent) TaskDetail(id string) (TaskInfo, error) {
 // branch with --no-ff. A dirty workspace or a conflicting branch leaves the
 // workspace untouched.
 func (a *Agent) MergeTask(ctx context.Context, id string) (string, error) {
-	rec := processTasks.get(strings.TrimSpace(id))
+	id = strings.TrimSpace(id)
+	rec := processTasks.get(id)
 	if rec == nil {
 		return "", agenterrors.NewNotFound("task " + id)
 	}

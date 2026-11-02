@@ -269,6 +269,10 @@ func (ep *EscapeParser) Parse(b byte) *InputEvent {
 					return &InputEvent{Type: EventEnd}
 				case "3":
 					return &InputEvent{Type: EventDelete}
+				case "5":
+					return &InputEvent{Type: EventPageUp}
+				case "6":
+					return &InputEvent{Type: EventPageDown}
 				case "200":
 					return &InputEvent{Type: EventPasteStart}
 				case "201":

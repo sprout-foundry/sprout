@@ -63,9 +63,13 @@ func (r *SteerInputReader) handleEvent(event *InputEvent) {
 				}
 			}
 		}
-		r.recallHistory(-1)
+		r.moveRowsOrRecall(-1)
 	case EventDown:
-		r.recallHistory(1)
+		r.moveRowsOrRecall(1)
+	case EventPageUp:
+		r.pageRows(-1)
+	case EventPageDown:
+		r.pageRows(1)
 	case EventLeft:
 		r.moveCursorBackward()
 	case EventRight:

@@ -90,6 +90,10 @@ func (ir *InputReader) HandleEvent(event *InputEvent) {
 		} else {
 			ir.NavigateVertically(1)
 		}
+	case EventPageUp:
+		ir.pageRows(-1)
+	case EventPageDown:
+		ir.pageRows(1)
 	case EventTab:
 		// Context menu takes precedence — Tab closes it like Escape.
 		if ir.contextMenu != nil && ir.contextMenu.Visible {

@@ -54,39 +54,12 @@ func (ir *InputReader) NavigateVertically(direction int) {
 	ir.navigateInLine(direction)
 }
 
-// navigateInLine moves cursor up/down within multi-line text
+// navigateInLine moves the caret one screen row up or down within the
+// input (see moveRows). On the first or last row it stays put.
 func (ir *InputReader) navigateInLine(direction int) {
-	lines := ir.splitIntoLines()
-	if len(lines) == 1 {
-		// Single line - no vertical movement possible
-		return
+	if ir.moveRows(direction, false) {
+		ir.Refresh()
 	}
-
-	// Find current line and column
-	currentLineIdx, currentCol := ir.getLineAndColumn()
-
-	// Calculate target line
-	targetLineIdx := currentLineIdx + direction
-	if targetLineIdx < 0 || targetLineIdx >= len(lines) {
-		// Would move outside the text - stay at current position
-		return
-	}
-
-	// Calculate new cursor position
-	// Move to start of target line, then add column (clamped to line length)
-	targetLine := lines[targetLineIdx]
-	targetCol := min(currentCol, len([]rune(targetLine)))
-
-	// Calculate cursor position: sum of all previous lines + target column
-	newPos := 0
-	for i := 0; i < targetLineIdx; i++ {
-		newPos += len([]rune(lines[i])) + 1 // +1 for newline
-	}
-	newPos += targetCol
-
-	ir.cursorPos = newPos
-	ir.expandPasteAtCursor()
-	ir.Refresh()
 }
 
 // splitIntoLines splits the current line into individual lines

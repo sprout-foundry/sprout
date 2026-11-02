@@ -55,6 +55,10 @@ const (
 	EventAltLetter
 	// EventDeleteWordForward is Alt+D: kill the word after the cursor.
 	EventDeleteWordForward
+	// EventPageUp / EventPageDown (CSI 5~ / CSI 6~) move the caret a page
+	// of rows through a long input.
+	EventPageUp
+	EventPageDown
 )
 
 // InputReader handles interactive input with proper escape sequence handling

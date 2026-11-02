@@ -101,6 +101,9 @@ type StatusFooter struct {
 	steerCursorRow     int
 	steerCursorCol     int
 	steerWrappedActive bool
+	// steerViewTop is the first layout row the box showed last frame; the
+	// window onto a long input follows the caret from there.
+	steerViewTop int
 
 	winchStop chan struct{}
 	winchDone chan struct{}

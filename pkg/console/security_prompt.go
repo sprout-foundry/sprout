@@ -108,7 +108,7 @@ func askForSecurityApprovalWriter(w io.Writer, prompt, command string, analysis 
 		Title:    "High-risk operation — choose an action (Esc denies)",
 		Items:    items,
 		Footer:   approvalFooter(items),
-		ArmDelay: approvalArmDelay,
+		ArmDelay: ApprovalArmDelay,
 	})
 
 	value, ok := approvalPicker(w, sl)
@@ -177,7 +177,7 @@ func askForFilesystemSecurityApprovalWriter(w io.Writer, prompt, path, folder st
 		Title:    title,
 		Items:    items,
 		Footer:   approvalFooter(items),
-		ArmDelay: approvalArmDelay,
+		ArmDelay: ApprovalArmDelay,
 	})
 
 	value, ok := approvalPicker(w, sl)
@@ -468,9 +468,10 @@ func init() {
 	utils.FilesystemSecurityPromptHook = askForFilesystemSecurityApproval
 }
 
-// approvalArmDelay keeps keys typed into the steer box as a picker opens
-// from approving a command the user hasn't read yet.
-const approvalArmDelay = 400 * time.Millisecond
+// ApprovalArmDelay keeps keys typed into the steer box as a picker opens
+// from approving a command the user hasn't read yet. Every mid-turn approval
+// picker uses it, so they all arm on the same beat.
+const ApprovalArmDelay = 400 * time.Millisecond
 
 // approvalFooter lists the items' shortcut keys ahead of the arrow-key hint.
 func approvalFooter(items []SelectItem) string {

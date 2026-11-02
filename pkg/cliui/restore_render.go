@@ -66,7 +66,11 @@ func RenderSessionTail(messages []api.Message) {
 }
 
 // collectTailLines walks the conversation backwards, rendering each message
-// into lines, and returns the last `limit` lines in chronological order.
+// into a block of lines, and returns the last `limit` lines in chronological
+// order. Blocks are kept whole and in their own line order — only the
+// sequence of blocks is reversed — and a blank row separates them, as it
+// does between live turns. When the limit cuts into the oldest block shown,
+// that block keeps its label and says it was cut.
 func collectTailLines(messages []api.Message, limit int) ([]string, int) {
 	if limit <= 0 || len(messages) == 0 {
 		return nil, 0
@@ -76,17 +80,19 @@ func collectTailLines(messages []api.Message, limit int) ([]string, int) {
 		cols = 80
 	}
 	colorOn := envutil.ResolveColorPreference(true)
+	md := console.NewMarkdownFormatter(true, true).SetWidth(cols - len(tailIndent))
 
-	// Render newest-first, then reverse at the end.
-	var collected []string
+	var blocks [][]string // newest first
+	total := 0
 	skippedTools := 0
 	considered := 0
-	for i := len(messages) - 1; i >= 0 && len(collected) < limit; i-- {
-		if considered >= RestoreTailMessageCount && len(collected) > 0 {
+	for i := len(messages) - 1; i >= 0 && total < limit; i-- {
+		if considered >= RestoreTailMessageCount && total > 0 {
 			break
 		}
 		considered++
 		msg := messages[i]
+		var block []string
 		switch msg.Role {
 		case "tool":
 			skippedTools++
@@ -96,38 +102,58 @@ func collectTailLines(messages []api.Message, limit int) ([]string, int) {
 			if text == "" {
 				continue
 			}
-			collected = append(collected, renderTailBlock("you", text, cols, colorOn)...)
+			block = renderTailBlock(messageHeader("you", false, colorOn), text, cols)
 		case "assistant":
 			text := strings.TrimSpace(msg.Content)
 			if text == "" {
 				continue
 			}
-			collected = append(collected, renderTailBlock("assistant", text, cols, colorOn)...)
+			block = renderTailBlock(messageHeader("assistant", true, colorOn), md.Format(text), cols)
+		default:
+			continue
+		}
+		if len(blocks) > 0 {
+			block = append(block, "") // the separator above the newer block
+		}
+		blocks = append(blocks, block)
+		total += len(block)
+	}
+	if len(blocks) == 0 {
+		return nil, skippedTools
+	}
+
+	// Trim the oldest block to fit, keeping its label.
+	if over := total - limit; over > 0 {
+		oldest := blocks[len(blocks)-1]
+		// header + "…" + the kept tail lines (the last being the separator);
+		// a cut that would leave no body line drops the block instead.
+		if keep := len(oldest) - over - 2; keep >= 2 {
+			trimmed := []string{oldest[0], tailIndent + "…"}
+			trimmed = append(trimmed, oldest[len(oldest)-keep:]...)
+			blocks[len(blocks)-1] = trimmed
+		} else {
+			blocks = blocks[:len(blocks)-1]
 		}
 	}
 
-	if len(collected) > limit {
-		collected = collected[:limit]
+	var lines []string
+	for i := len(blocks) - 1; i >= 0; i-- {
+		lines = append(lines, blocks[i]...)
 	}
-	// Reverse into chronological order.
-	for i, j := 0, len(collected)-1; i < j; i, j = i+1, j-1 {
-		collected[i], collected[j] = collected[j], collected[i]
+	if len(lines) > limit { // a single newest block taller than the limit
+		lines = append([]string{lines[0], tailIndent + "…"}, lines[len(lines)-limit+2:]...)
 	}
-	return collected, skippedTools
+	return lines, skippedTools
 }
 
-// renderTailBlock renders one message as a header line plus indented,
-// width-wrapped body lines.
-func renderTailBlock(label, text string, cols int, colorOn bool) []string {
-	var out []string
-	if colorOn {
-		out = append(out, fmt.Sprintf("\033[2m▌ %s\033[0m", label))
-	} else {
-		out = append(out, "▌ "+label)
-	}
-	body := console.WrapIndented(text, "  ", cols)
-	out = append(out, strings.Split(strings.TrimRight(body, "\n"), "\n")...)
-	return out
+const tailIndent = "  "
+
+// renderTailBlock renders one message as its header line plus its body,
+// indented and width-wrapped as the live transcript renders it.
+func renderTailBlock(header, body string, cols int) []string {
+	out := []string{header}
+	wrapped := console.WrapIndented(body, tailIndent, cols)
+	return append(out, strings.Split(strings.TrimRight(wrapped, "\n"), "\n")...)
 }
 
 func plural(n int) string {

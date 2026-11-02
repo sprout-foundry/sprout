@@ -67,11 +67,22 @@ func PrintAssistantHeader(model string) {
 	model = ShortModelName(model)
 	colorOn := envutil.ResolveColorPreference(true)
 	console.SectionBreak()
+	console.WriteTranscript(messageHeader("assistant · "+model, true, colorOn) + "\n")
+}
+
+// messageHeader renders the "▌ <label>" row that opens a message in the
+// transcript: a bright cyan bar for the assistant, green for the user, the
+// label dim. Live turns and a resumed session's tail share it so a restored
+// conversation reads like the one the user left.
+func messageHeader(label string, assistant, colorOn bool) string {
 	if !colorOn {
-		console.WriteTranscript(fmt.Sprintf("▌ assistant · %s\n", model))
-		return
+		return "▌ " + label
 	}
-	console.WriteTranscript(fmt.Sprintf("\033[1;96m▌\033[0m \033[2massistant · %s\033[0m\n", model))
+	bar := "\033[1;92m▌\033[0m"
+	if assistant {
+		bar = "\033[1;96m▌\033[0m"
+	}
+	return fmt.Sprintf("%s \033[2m%s\033[0m", bar, label)
 }
 
 // PrintUserMessage echoes a submitted message into the conversation under a
@@ -87,11 +98,7 @@ func PrintUserMessage(text string, queued bool) {
 		cols = w
 	}
 	console.SectionBreak()
-	if envutil.ResolveColorPreference(true) {
-		console.WriteTranscript(fmt.Sprintf("\033[1;92m▌\033[0m \033[2m%s\033[0m\n", label))
-	} else {
-		console.WriteTranscript(fmt.Sprintf("▌ %s\n", label))
-	}
+	console.WriteTranscript(messageHeader(label, false, envutil.ResolveColorPreference(true)) + "\n")
 	console.WriteTranscript(console.WrapIndented(text, "  ", cols))
 }
 

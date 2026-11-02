@@ -7,6 +7,7 @@ import (
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCollectTailLines_ChronologicalOrder(t *testing.T) {
@@ -129,4 +130,46 @@ func TestRenderSessionTail_AnchorsToRegionBottom(t *testing.T) {
 	if !strings.Contains(out, "resumed conversation") {
 		t.Fatalf("header missing from the tail:\n%q", out)
 	}
+}
+
+// Each message keeps its own line order: label first, then its body top to
+// bottom. Reversing the collected lines (rather than the blocks) printed
+// every multi-line message upside down with its label underneath.
+func TestCollectTailLines_MultiLineMessagesReadTopDown(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	msgs := []api.Message{
+		{Role: "user", Content: "question line one\nquestion line two"},
+		{Role: "assistant", Content: "answer one\n\nanswer two"},
+	}
+	lines, _ := collectTailLines(msgs, 200)
+	require.Equal(t, []string{
+		"▌ you",
+		"  question line one",
+		"  question line two",
+		"",
+		"▌ assistant",
+		"  answer one",
+		"  ",
+		"  answer two",
+	}, lines)
+}
+
+// A cut through the oldest message shown keeps its label and marks the cut,
+// and the result never exceeds the limit.
+func TestCollectTailLines_CutBlockKeepsLabel(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	msgs := []api.Message{
+		{Role: "user", Content: "a\nb\nc\nd\ne"},
+		{Role: "assistant", Content: "done"},
+	}
+	lines, _ := collectTailLines(msgs, 7)
+	require.Len(t, lines, 7)
+	require.Equal(t, []string{"▌ you", "  …", "  d", "  e", "", "▌ assistant", "  done"}, lines)
+}
+
+func TestCollectTailLines_NewestBlockTallerThanLimit(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	msgs := []api.Message{{Role: "assistant", Content: "1\n2\n3\n4\n5\n6"}}
+	lines, _ := collectTailLines(msgs, 4)
+	require.Equal(t, []string{"▌ assistant", "  …", "  5", "  6"}, lines)
 }

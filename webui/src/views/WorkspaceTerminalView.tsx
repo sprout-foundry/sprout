@@ -13,20 +13,27 @@ import './WorkspaceTerminalView.css';
  *
  * - `wasm` — the in-browser WASM shell, the same shell the host's in-browser
  *   agent runs in.
- * - `pty` — a PTY on the host's backend: the `/terminal` WebSocket and the
- *   `/api/terminal/*` calls, through the host transport.
+ * - `pty` — a PTY on the backend: the `/terminal` WebSocket and the
+ *   `/api/terminal/*` calls, on the daemon the host names as its agent
+ *   backend, else through the host transport.
  * - `none` — the workspace has no terminal; the view says so.
  */
 export type WorkspaceTerminalBackend = 'wasm' | 'pty' | 'none';
 
 /**
  * The terminal backend a host offers. A host whose agent runs in the browser
- * (`transport.agent.kind: 'wasm'`) gets a terminal on that shell; otherwise a
- * host that declares `capabilities.localTerminal` gets the PTY terminal on its
- * backend; any other host has none.
+ * (`transport.agent.kind: 'wasm'`) gets a terminal on that shell. A host whose
+ * agent is a daemon (`transport.agent.kind: 'daemon'`) gets the PTY terminal
+ * on that daemon, which serves `/terminal` beside its agent — a hosted
+ * platform reaching a workspace's daemon through its proxy declares no local
+ * terminal, yet the workspace has one. Otherwise a host that declares
+ * `capabilities.localTerminal` gets the PTY terminal on its backend; any other
+ * host has none.
  */
 export function resolveWorkspaceTerminalBackend(host: SproutHost): WorkspaceTerminalBackend {
-  if (host.transport.agent?.kind === 'wasm') return 'wasm';
+  const agent = host.transport.agent?.kind;
+  if (agent === 'wasm') return 'wasm';
+  if (agent === 'daemon') return 'pty';
   if (host.capabilities.localTerminal) return 'pty';
   return 'none';
 }

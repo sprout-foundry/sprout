@@ -1,9 +1,10 @@
 /**
  * SproutWorkspace in own mode without `layout`: the composed space shell —
  * the app's project sidebar (Files / Search / Source control), the Code
- * shell (editor tabs with the conversation, the status bar), the docked
- * terminal — against a daemon host, an in-browser host and a host with
- * neither git nor a terminal.
+ * shell (editor tabs with the conversation, the status bar, no agent-changes
+ * context panel), the docked terminal — against a daemon host, a hosted
+ * daemon backend, an in-browser host and a host with neither git nor a
+ * terminal.
  *
  * The provider stack, the units, the sidebar, the Code shell, the editor
  * tabs, the file tree, the search panel, the git section and the docked
@@ -286,11 +287,15 @@ describe('SproutWorkspace space shell (own mode, no layout)', () => {
     expect(terminal).toHaveAttribute('data-expanded', 'true');
   });
 
-  it('docks the in-browser terminal out of sight until the sidebar Terminal entry opens it', async () => {
+  it('docks the in-browser terminal as a strip that the sidebar Terminal entry also opens', async () => {
     mount(host({ git: false }, { kind: 'wasm', modelEndpoint: '' }));
     const terminal = await screen.findByTestId('workspace-docked-terminal');
     expect(terminal).toHaveAttribute('data-backend', 'wasm');
-    expect(terminal).not.toBeVisible();
+    expect(terminal).toHaveAttribute('data-expanded', 'false');
+    expect(terminal).toBeVisible();
+    expect(within(terminal).getByTestId('terminal-toggle')).toBeInTheDocument();
+    // Collapsed, no in-browser shell session has started.
+    expect(within(terminal).getByTestId('shell-test-workbench')).toHaveAttribute('data-active', 'false');
 
     const sidebar = screen.getByTestId('workspace-sidebar');
     act(() => {
@@ -301,6 +306,32 @@ describe('SproutWorkspace space shell (own mode, no layout)', () => {
     });
     expect(terminal).toHaveAttribute('data-expanded', 'true');
     expect(terminal).toBeVisible();
+  });
+
+  it("docks the daemon's PTY terminal strip for a hosted daemon backend that declares no local terminal", async () => {
+    mount(
+      host(
+        { git: true, localTerminal: false },
+        { kind: 'daemon', apiBaseURL: '/workspace/ws-1/proxy', wsURL: 'wss://host.test/workspace/ws-1/proxy/ws' },
+      ),
+    );
+    const terminal = await screen.findByTestId('workspace-docked-terminal');
+    expect(terminal).toHaveAttribute('data-backend', 'pty');
+    expect(terminal).toHaveAttribute('data-expanded', 'false');
+    expect(within(terminal).getByTestId('shell-test-workbench')).toHaveAttribute('data-pty', 'true');
+    act(() => {
+      fireEvent.click(within(terminal).getByTestId('terminal-toggle'));
+    });
+    expect(terminal).toHaveAttribute('data-expanded', 'true');
+    expect(hasCommandHandler('toggle_terminal')).toBe(true);
+  });
+
+  it("leaves out the Code shell's agent-changes context panel and its toggle", async () => {
+    mount(host({ git: true, localTerminal: true, agentChanges: true }));
+    await screen.findByTestId('workspace-space-shell');
+    expect(screen.queryByTestId('context-panel')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Toggle context panel' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('complementary', { name: 'Context panel' })).not.toBeInTheDocument();
   });
 
   it('hides what has no backend: no Source control, terminal, preview toggle or their commands', async () => {

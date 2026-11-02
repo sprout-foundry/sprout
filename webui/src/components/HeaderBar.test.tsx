@@ -12,6 +12,7 @@ let activeRepo: string | undefined;
 vi.mock('../services/activeRepo', () => ({ useActiveRepoURL: () => activeRepo }));
 
 import { HostProvider, headlessHost } from '../host';
+import type { SproutHost } from '../host';
 import { setActiveHost } from '../host/accessor';
 import { cloudHost } from '../host/platform';
 import { __resetFullWorkspaceForTests } from '../services/fullWorkspace';
@@ -58,6 +59,7 @@ async function renderHeader(
   status: number,
   body: string,
   availability: 'available' | 'unavailable' | 'unknown' = 'unknown',
+  agent?: SproutHost['transport']['agent'],
 ) {
   vi.stubGlobal(
     'fetch',
@@ -75,7 +77,7 @@ async function renderHeader(
   // HeaderBar branches on the host's transport (authMode 'bearer' = hosted);
   // it renders inside the app's HostProvider, so the tests mount one too.
   const host = headlessHost();
-  host.transport = { ...host.transport, authMode: 'bearer' };
+  host.transport = { ...host.transport, authMode: 'bearer', ...(agent ? { agent } : {}) };
   // The hosted build's navigation (back-link targets) comes from cloudHost.
   host.navigation = cloudHost.navigation;
   await act(async () => {
@@ -112,6 +114,15 @@ describe('HeaderBar Start Building', () => {
   it('shows when workspaces are configured', async () => {
     await renderHeader(200, '', 'available');
     expect(container.querySelector('.start-building-btn')).not.toBeNull();
+  });
+
+  it("is hidden when the agent already runs on a workspace's daemon", async () => {
+    await renderHeader(200, '', 'available', {
+      kind: 'daemon',
+      apiBaseURL: '/workspace/ws-1/proxy',
+      wsURL: 'wss://platform.test/workspace/ws-1/proxy/ws',
+    });
+    expect(container.querySelector('.start-building-btn')).toBeNull();
   });
 });
 

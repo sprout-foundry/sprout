@@ -37,9 +37,10 @@ export interface WorkspaceDockedTerminalProps {
  * bottom of the workspace in flow rather than fixed to the viewport, so it
  * never covers the host page around the workspace.
  *
- * As in the app, a PTY terminal collapses to a strip that expands it, and the
- * in-browser (WASM) shell is out of the way until opened (Ctrl+`, the palette,
- * or the sidebar's Terminal entry). The workbench stays mounted while
+ * As in the app, the terminal collapses to a strip along the bottom that
+ * expands it — on either backend, so the terminal is always one click away
+ * (besides Ctrl+`, the palette and the sidebar's Terminal entry). No session
+ * starts until it is first opened, and the workbench stays mounted while
  * collapsed, so sessions survive a toggle.
  */
 export function WorkspaceDockedTerminal({
@@ -65,7 +66,6 @@ export function WorkspaceDockedTerminal({
     window.dispatchEvent(new CustomEvent('sprout-terminal-expand'));
   }, [expanded]);
 
-  const hidden = !expanded && backend === 'wasm';
   const className = [
     'sprout-workspace-shell__terminal',
     expanded ? 'sprout-workspace-shell__terminal--expanded' : '',
@@ -78,7 +78,6 @@ export function WorkspaceDockedTerminal({
     <div
       className={className}
       style={expanded ? { height: `${height}px` } : undefined}
-      hidden={hidden}
       data-testid="workspace-docked-terminal"
       data-backend={backend}
       data-expanded={String(expanded)}
@@ -104,7 +103,7 @@ export function WorkspaceDockedTerminal({
             title="Drag to resize terminal"
           />
         )}
-        {!expanded && backend === 'pty' && (
+        {!expanded && (
           <TerminalCollapsedStrip
             onExpand={() => onExpandedChange(true)}
             sessionName={workbench.focusedSession?.name}

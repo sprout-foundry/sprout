@@ -174,14 +174,24 @@ What it renders, left to right and top to bottom:
   answers `open_search` and "reveal in file list".
 - **The space** — Code renders the app's Code shell: the header (search, the
   menus, which list only commands something handles), the editor with tabs —
-  the conversation in its own tab beside open files, diffs and reviews — the
-  context panel with the agent's changes, and the status bar (the project,
+  the conversation in its own tab beside open files, diffs and reviews — and
+  the status bar (the project,
   the branch, and for the active file the cursor position, language,
   encoding, line ending and indentation). Design renders the design surface
-  with its agent chat.
+  with its agent chat. The Code shell's right-hand context panel (the
+  agent's change history) is not part of the composed space: each turn's
+  changes show under it in the conversation (review and revert per file), and
+  a host that wants the change list arranges the `changes` view.
 - **The terminal**, docked under the space: the app's terminal workbench
   (tabs, splits, shell picker) in flow inside the workspace, never over the
-  host page. Ctrl/Cmd+\` and the palette's Toggle Terminal open and close it.
+  host page. Collapsed, it is a strip along the bottom that opens it; Ctrl/Cmd+\`,
+  the palette's Toggle Terminal and the sidebar's Terminal entry open and
+  close it too.
+- **The agent's prompts** — the tool-approval dialog (with its elevation and
+  filesystem-tier choices), the file-access prompt, `ask_user` questions,
+  password prompts, edit and shell approvals, and the model picker — opened
+  over the workspace when the agent asks and answered back to it, so a turn
+  never waits on a request nothing shows.
 - **The command palette** (unless `commandPalette={false}`) and the app's
   editor, tab and view commands, registered so the scoped hotkeys, the menus
   and the palette reach them from inside the workspace.
@@ -194,11 +204,10 @@ shown inert:
 | Part | Shown when |
 | --- | --- |
 | Source control, the status bar's branch, diff and review tabs | `capabilities.git`. Worktrees also need `serverGit`; the review needs a backend (not browser git). Without a repository the section says so ("No git repository") and offers Refresh. |
-| Terminal (PTY), collapsed to a strip | `capabilities.localTerminal` on a host whose agent does not run in the browser |
-| Terminal (in-browser shell), hidden until opened; a Terminal entry in the sidebar | `transport.agent.kind: "wasm"` |
+| Terminal (PTY on the daemon), collapsed to a strip; a Terminal entry in the sidebar | `transport.agent.kind: "daemon"`, or `capabilities.localTerminal` on a host whose agent does not run in the browser |
+| Terminal (in-browser shell), collapsed to a strip; a Terminal entry in the sidebar | `transport.agent.kind: "wasm"` |
 | No terminal, no toggle | neither |
 | The preview panel and its header toggle | `capabilities.preview` |
-| The agent-changes panel | `capabilities.agentChanges` |
 
 The workspace fills its parent (`height: 100%`), so size the box you mount it
 in. Import the design tokens and reset as above — the shell's spacing,
@@ -245,6 +254,16 @@ transport and nothing else.
 The standalone app mounts the provider with its own `clientFetch` and
 `LocalEventsProvider`, so its behaviour is unchanged; a host mounts it with
 its host's transport.
+
+**Mount `WorkspaceAgentPrompts` with it.** The agent can stop mid-turn and
+wait for the user — a tool approval, a file-access prompt, an `ask_user`
+question, a password, an edit or shell approval. The reducer records each
+request in the chat state; `WorkspaceAgentPrompts` renders the dialog and
+sends the answer back. A host that mounts `WorkspaceChatProvider` itself
+renders `<WorkspaceAgentPrompts />` inside it (and inside `SproutProviders`,
+whose events transport the answers go through); without it a request leaves
+the agent waiting with nothing on screen. An own-mode `SproutWorkspace`
+mounts it already, on the layout path and the space-shell path alike.
 
 `WorkspaceChatProvider` must be mounted under a `HostProvider`: it reads the
 host to decide whether the host serves the chat session store (see

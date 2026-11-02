@@ -871,11 +871,15 @@ git host and streams the response back:
 The hosted platform serves this at `/git-proxy` on its origin, authenticated by
 the session and adding the user's connected git-host credential.
 
-**Terminal (daemon-backed hosts).** A host that declares
-`capabilities.localTerminal` (and runs no in-browser agent) gets the PTY
-terminal: the standalone app's docked terminal, and an arranged `terminal`
-view in a composed workspace. Its backend serves, under
-`transport.apiBaseURL`: the PTY WebSocket at `/terminal` (`?shell=<name>` for
+**Terminal (daemon-backed hosts).** A host whose agent is a daemon
+(`transport.agent.kind: "daemon"`), or one that declares
+`capabilities.localTerminal` and runs no in-browser agent, gets the PTY
+terminal: the standalone app's docked terminal, and in a composed workspace
+the docked terminal and an arranged `terminal` view. A hosted platform that
+reaches a workspace's daemon through a proxy keeps `localTerminal` off (it has
+no local PTY of its own) and still gets the daemon's terminal: the daemon
+serves `/terminal` beside its agent. The backend serves, under the daemon's
+own `apiBaseURL` (else `transport.apiBaseURL`): the PTY WebSocket at `/terminal` (`?shell=<name>` for
 a new session, `?reattach=<id>` to resume one; the client sends `input`,
 `resize` and `ping` frames and handles `session_created`,
 `session_restored`, `output`, `pty_exit` and `error` messages, in the
@@ -1157,8 +1161,8 @@ branch is recoverable from the conversion commits (`git show 536a191c2`,
 | `components/SidebarFilesSection.tsx` — clone-repo action | `capabilities.localTerminal` |
 | `components/Sidebar.tsx` — the Automations tab (`supportsAutomations`, i.e. `!isCloud`) | `capabilities.automations` |
 | `components/WorkspaceBar.tsx` — hidden host name | `capabilities.workspaceSwitching` |
-| `components/Terminal.tsx` — the WASM terminal notice | `capabilities.localTerminal` (inverted) |
-| `hooks/useSecurityHandlers.ts` — the ask-user POST path | `capabilities.localTerminal` (inverted) |
+| `components/TerminalWorkbench.tsx` — the WASM terminal notice | the pane transport: shown on the in-browser shell, not on a PTY |
+| `hooks/useSecurityHandlers.ts` — the ask-user POST path | `transport.agent` (`hostRunsInBrowserAgent`): the in-browser agent takes the POST, a daemon the socket event |
 | `hooks/useEscalationTriggers.ts` + `components/AgentEscalationBridge.tsx` — hosted-only escalation | `capabilities.localTerminal` (inverted) |
 | `components/locationSwitcher/SSHPanel.tsx` — the SSH panel | `capabilities.ssh` |
 | `components/locationSwitcher/WorkspacePopover.tsx` + `hooks/useInstances.ts` — the instance list | `capabilities.instances` |

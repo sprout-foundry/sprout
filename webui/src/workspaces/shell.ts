@@ -108,6 +108,15 @@ export interface WorkspaceShellProps {
   onTerminalExpandedChange: (expanded: boolean) => void;
 
   // Right-hand context panel (chat context; the Code shell renders it).
+  /**
+   * Whether the Code shell renders the right-hand context panel (the agent's
+   * change history) and its toggles. Defaults to true, and the panel still
+   * needs `capabilities.agentChanges`. The composed workspace passes false:
+   * its conversation carries each turn's changes in flow, and a host that
+   * wants the change list places the `changes` view itself. With it false the
+   * panel props below are not read.
+   */
+  contextPanel?: boolean;
   showContextSidebar: boolean;
   contextPanelRef: RefObject<ContextPanelHandle>;
   toolExecutions: ToolExecution[];

@@ -4,7 +4,6 @@ import React, { useCallback, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { usePersistedBoolean, usePersistedNumber, useOutsideClickDismiss } from '../hooks/usePersistedPref';
 import type { TerminalWorkbench as TerminalWorkbenchState } from '../hooks/useTerminalWorkbench';
-import { useHostCapabilities } from '../host';
 import BackgroundTasks from './BackgroundTasks';
 import { FONT_SIZE_DEFAULT, COPY_ON_SELECT_DEFAULT } from './terminalConstants';
 import TerminalPane from './TerminalPane';
@@ -47,7 +46,6 @@ export function TerminalWorkbench({
   isActive,
   trailingActions,
 }: TerminalWorkbenchProps): JSX.Element {
-  const { localTerminal } = useHostCapabilities();
   const {
     availableShells,
     shellsLoaded,
@@ -105,7 +103,7 @@ export function TerminalWorkbench({
 
   return (
     <div className="terminal-body">
-      {!localTerminal && isExpanded && (
+      {!isConnected && isExpanded && (
         <div
           className="terminal-cloud-notice"
           title="The browser terminal runs commands in a WASM sandbox. Process-spawning commands may not work."

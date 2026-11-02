@@ -3,7 +3,7 @@
  *
  * - A host with `capabilities.localTerminal` and no in-browser agent gets the
  *   PTY terminal docked under the shell, which Ctrl+` inside the workspace
- *   toggles.
+ *   toggles; so does a host whose agent is a daemon, whose PTY it is.
  * - A host whose agent runs in the browser gets the docked terminal on the
  *   in-browser shell, even if it also declares `localTerminal`.
  * - A host with neither gets no terminal and no toggle handler.
@@ -150,6 +150,28 @@ describe('SproutWorkspace composed shell terminal', () => {
     expect(hasCommandHandler('toggle_terminal')).toBe(true);
     // The in-browser shell has no splits or process control.
     expect(hasCommandHandler('clear_terminal')).toBe(false);
+  });
+
+  it('docks the PTY terminal on a daemon agent backend, though the host declares no local terminal', async () => {
+    const base = makeTestHost({ localTerminal: false });
+    const host: SproutHost = {
+      ...base,
+      transport: {
+        ...base.transport,
+        authMode: 'bearer',
+        agent: {
+          kind: 'daemon',
+          apiBaseURL: '/workspace/ws-1/proxy',
+          wsURL: 'wss://host.test/workspace/ws-1/proxy/ws',
+        },
+      },
+    };
+    setActiveHost(host);
+    renderWorkspace(host);
+    const shell = await screen.findByTestId('composed-code-shell');
+    expect(shell).toHaveAttribute('data-local-terminal', 'true');
+    expect(screen.getByTestId('composed-docked-terminal')).toHaveAttribute('data-backend', 'pty');
+    expect(hasCommandHandler('toggle_terminal')).toBe(true);
   });
 
   it('mounts no terminal and no toggle for a host with neither', async () => {

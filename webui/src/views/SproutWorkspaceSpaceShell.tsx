@@ -8,8 +8,8 @@
  *   Search and Source control drilled into the workspace's own views
  *   (`WorkspaceSidebar`).
  * - The registered space shell — `CodeShell` (header, editor tabs with the
- *   conversation, the context panel with the agent's changes, the status bar)
- *   or `DesignShell` — fed the props `AppContent` feeds it.
+ *   conversation, the status bar; not its agent-changes context panel, as
+ *   each turn's changes show in the conversation) or `DesignShell`.
  * - The docked terminal — the app's terminal workbench, docked under the
  *   space in flow (`WorkspaceDockedTerminal`).
  * - The app root's editor, tab and terminal commands (`useHotkeyCommandHandler`)
@@ -23,10 +23,9 @@
  */
 
 import type { ChatProps } from '@sprout/ui';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ComponentType } from 'react';
 import { closeBuffersMatching } from '../components/closeBuffers';
-import type { ContextPanelHandle } from '../components/contextPanel/types';
 import type { DesignTab } from '../components/design/DesignView';
 import { DesignWorkspaceProvider } from '../components/design/DesignWorkspaceContext';
 import { useDesignPresence } from '../components/design/useDesignPresence';
@@ -52,6 +51,9 @@ import './WorkspaceSpaceShell.css';
 
 const NO_GIT: WorkspaceShellProps['git']['gitBranches'] = { current: '', branches: [] };
 const NO_SHIP: WorkspaceShellProps['ship'] = { live: {}, availability: { canDeploy: false }, history: [] };
+/** The Code shell's context panel is left out here, so its handle stays empty. */
+const NO_CONTEXT_PANEL: WorkspaceShellProps['contextPanelRef'] = { current: null };
+const noop = (): void => undefined;
 
 /** The chat's own tab (the buffer manager opens it with the editor). */
 const CHAT_TAB = { kind: 'chat' as const, path: '__workspace/chat', title: 'Chat', ext: '.chat', isClosable: false };
@@ -147,7 +149,6 @@ function SpaceShellLayout({
   const [isTerminalExpanded, setTerminalExpanded] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [designTab, setDesignTab] = useState<DesignTab>('flows');
-  const contextPanelRef = useRef<ContextPanelHandle>(null);
 
   useOpenInEditorRequests(() => setCurrentView('editor'));
   useToggleTerminalCommand(setTerminalExpanded, terminalBackend);
@@ -322,7 +323,7 @@ function SpaceShellLayout({
             selectedFile={activeFile?.workspacePath}
             onOpenFile={handleOpenFile}
             onToggleTerminal={
-              terminalBackend === 'wasm' ? () => setTerminalExpanded((expanded) => !expanded) : undefined
+              terminalBackend !== 'none' ? () => setTerminalExpanded((expanded) => !expanded) : undefined
             }
             designTab={designTab}
             onDesignTabChange={setDesignTab}
@@ -337,7 +338,8 @@ function SpaceShellLayout({
             currentView={currentView}
             onViewChange={setCurrentView}
             onToggleSidebar={() => setSidebarCollapsed((collapsed) => !collapsed)}
-            onToggleContextPanel={() => contextPanelRef.current?.togglePanel()}
+            onToggleContextPanel={noop}
+            contextPanel={false}
             supportsLocalTerminal={terminalBackend === 'pty'}
             // The shell's own in-browser terminal is fixed to the viewport;
             // the docked one below takes its place.
@@ -345,8 +347,8 @@ function SpaceShellLayout({
             previewAvailable={host.capabilities.preview === true}
             isTerminalExpanded={isTerminalExpanded}
             onTerminalExpandedChange={setTerminalExpanded}
-            showContextSidebar={currentBuffer?.kind === 'chat'}
-            contextPanelRef={contextPanelRef}
+            showContextSidebar={false}
+            contextPanelRef={NO_CONTEXT_PANEL}
             toolExecutions={state.toolExecutions}
             logs={state.logs}
             subagentActivities={state.subagentActivities}

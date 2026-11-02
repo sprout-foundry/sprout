@@ -58,8 +58,11 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
     null;
   const backHref = backPath ? (host.navigation.platformPagePath?.(backPath) ?? backPath) : undefined;
   // Hidden on deployments without workspace compute rather than offering an
-  // action that can only fail.
-  const workspacesAvailable = useFullWorkspacesAvailable(hosted);
+  // action that can only fail, and when the agent already runs on a
+  // workspace's daemon: that workspace is the full workspace the button would
+  // start, and the host owns its lifecycle.
+  const onDaemon = host.transport.agent?.kind === 'daemon';
+  const workspacesAvailable = useFullWorkspacesAvailable(hosted && !onDaemon);
 
   const retry = () => {
     // Defer so the toast's dismiss finishes before the next request starts.
@@ -124,7 +127,7 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
       )}
       {!hosted && <MenuBar />}
       <div className="header-bar-actions">
-        {hosted && workspacesAvailable && (
+        {hosted && !onDaemon && workspacesAvailable && (
           <button
             className="btn btn-sm btn-accent start-building-btn"
             onClick={handleStartBuilding}

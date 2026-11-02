@@ -200,6 +200,15 @@ export type {
   WorkspaceChatDiffState,
 } from './WorkspaceChatContext';
 
+// The agent's blocking prompts: the tool-approval dialog (with its elevation
+// and filesystem-tier choices), the file-access prompt, `ask_user`, password
+// prompts, edit and shell approvals, and the model picker, rendered from the
+// chat unit's state and answered back to the agent. Mount it inside
+// `WorkspaceChatProvider` wherever the chat unit is mounted — without it a
+// request leaves the agent waiting with nothing on screen. An own-mode
+// `SproutWorkspace` and Sprout's app root mount it already.
+export { WorkspaceAgentPrompts } from './WorkspaceAgentPrompts';
+
 // The editor unit: the open files, the active file, and opening, closing and
 // saving them by path, over the buffer manager `SproutProviders` mounts. A
 // host reads it through `useWorkspaceEditor()`; `useWorkspaceEditorProps()`

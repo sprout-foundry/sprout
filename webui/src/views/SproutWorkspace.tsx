@@ -18,6 +18,7 @@ import { ComposedSpaceShell } from './SproutWorkspaceSpaceShell';
 import { ArrangedViews, usePreviewGatedArrangement } from './SproutWorkspaceUnits';
 import { ViewsLayout, resolveViewsArrangement } from './ViewsLayout';
 import type { ViewsArrangement, ViewKind } from './ViewsLayout';
+import { WorkspaceAgentPrompts } from './WorkspaceAgentPrompts';
 import { WorkspaceChatProvider } from './WorkspaceChatContext';
 import { WorkspaceCommandPalette } from './WorkspaceCommandPalette';
 import { WorkspaceEditorProvider } from './WorkspaceEditorContext';
@@ -470,6 +471,10 @@ export function SproutWorkspace({
               {commandPalette && <WorkspaceCommandPalette />}
             </>
           )}
+          {/* The agent's approval, question and password prompts: the chat
+              unit records them, and without this the agent waits on a
+              request nothing shows. */}
+          <WorkspaceAgentPrompts />
         </WorkspaceEditorProvider>
       </WorkspaceChatProvider>
     );

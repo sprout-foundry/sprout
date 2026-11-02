@@ -7,7 +7,8 @@
 
 import type { EventsProvider } from '@sprout/events';
 import { useCallback } from 'react';
-import { useHostCapabilities } from '../host';
+import { useHost } from '../host';
+import { hostRunsInBrowserAgent } from '../host/agentBackend';
 import type { AppStoreSetState } from '../contexts/AppStore';
 import { clientFetch } from '../services/clientSession';
 
@@ -41,7 +42,8 @@ export function useSecurityHandlers({
   provider,
   setState,
 }: UseSecurityHandlersOptions): UseSecurityHandlersReturn {
-  const { localTerminal } = useHostCapabilities();
+  // Where the agent loop runs decides how an ask_user answer reaches it.
+  const inBrowserAgent = hostRunsInBrowserAgent(useHost());
 
   const handleSecurityApprovalResponse = useCallback(
     (requestId: string, approved: boolean, action?: SecurityApprovalAction) => {
@@ -90,8 +92,9 @@ export function useSecurityHandlers({
       // The in-browser agent runs its loop in the WASM binary, so the
       // ask_user response must be delivered to the in-process
       // AskUserManager via the wasm-local endpoint (no backend is
-      // listening for the WebSocket event on a hosted shell).
-      if (!localTerminal) {
+      // listening for the WebSocket event). A daemon — local, or a hosted
+      // workspace's reached through the host — takes it over the socket.
+      if (inBrowserAgent) {
         clientFetch('/api/ask-user/response', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -152,7 +155,7 @@ export function useSecurityHandlers({
       });
       setState((_prev) => ({ askUserRequest: null }));
     },
-    [eventsProvider, setState, localTerminal],
+    [eventsProvider, setState, inBrowserAgent],
   );
 
   // handlePasswordResponse delivers the user's typed password back to the

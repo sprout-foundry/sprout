@@ -2,21 +2,13 @@ import { useEvents } from '@sprout/events';
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { AgentEscalationBridge } from './components/AgentEscalationBridge';
 import AppContent from './components/AppContent';
-import AskUserDialog from './components/AskUserDialog';
 import { DisconnectedOverlay } from './components/DisconnectedOverlay';
-import EditApprovalPanel from './components/EditApprovalPanel';
 import ErrorBoundary from './components/ErrorBoundary';
 import { EscalationListener } from './components/EscalationListener';
 import InstallPromptBanner from './components/InstallPromptBanner';
-import { ApprovalOriginNotice } from './components/ApprovalOriginNotice';
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
-import ModelSelectionModal from './components/ModelSelectionModal';
 import NotificationCenter from './components/NotificationCenter';
 import OnboardingDialog from './components/OnboardingDialog';
-import PasswordPromptDialog from './components/PasswordPromptDialog';
-import SecurityApprovalDialog from './components/SecurityApprovalDialog';
-import SecurityPromptDialog from './components/SecurityPromptDialog';
-import ShellApprovalPanel from './components/ShellApprovalPanel';
 import SyncStatusBanner from './components/SyncStatusBanner';
 import UIManager from './components/UIManager';
 import UpdateAvailableBanner from './components/UpdateAvailableBanner';
@@ -32,7 +24,6 @@ import { useGitHandlers } from './hooks/useGitHandlers';
 import { useModelProviderHandlers } from './hooks/useModelProviderHandlers';
 import useOnboarding from './hooks/useOnboarding';
 import { usePageVisibility } from './hooks/usePageVisibility';
-import { useSecurityHandlers } from './hooks/useSecurityHandlers';
 import { useSidebarState } from './hooks/useSidebarState';
 import { SproutProviders } from './providers';
 import { useActiveRepoURL } from './services/activeRepo';
@@ -42,7 +33,7 @@ import { clientFetch } from './services/clientSession';
 import { LocalEventsProvider } from './services/localEventsProvider';
 import { notificationBus } from './services/notificationBus';
 import { debugLog } from './utils/log';
-import { WorkspaceChatProvider, WorkspaceEditorProvider, useWorkspaceChat } from './views';
+import { WorkspaceAgentPrompts, WorkspaceChatProvider, WorkspaceEditorProvider, useWorkspaceChat } from './views';
 import './App.css';
 import './components/UpdateNotification.css';
 
@@ -241,52 +232,9 @@ function AppInner() {
 
   // ── Handlers ─────────────────────────────────────────────────────
 
-  const {
-    handleSecurityApprovalResponse,
-    handleSecurityPromptResponse,
-    handleAskUserResponse,
-    handlePasswordResponse,
-    handleModelSelectionResponse,
-    handleModelSelectionClose,
-  } = useSecurityHandlers({
-    eventsProvider: events,
-    provider: state.provider,
-    setState,
-  });
-
   const { handleGitCommit, handleGitAICommit, handleGitStage, handleGitUnstage, handleGitDiscard } = useGitHandlers({
     setGitRefreshToken,
   });
-
-  // Clear the edit approval request state after the panel's REST POST completes.
-  const handleEditApprovalResolved = useCallback(() => {
-    setState((_prev) => ({ editApprovalRequest: null }));
-  }, [setState]);
-
-  // POST per-part shell approval decisions to the backend, then dismiss
-  // the dialog. The backend delivers the decisions to the blocked agent
-  // goroutine via the package-level shell approval broker. On failure the
-  // error propagates to ShellApprovalPanel's error UI — the dialog stays
-  // open so the user can retry.
-  const handleShellApprovalSubmit = useCallback(
-    async (requestId: string, decisions: Record<string, boolean>) => {
-      const resp = await clientFetch(`/api/shell-approvals/${encodeURIComponent(requestId)}/decision`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ request_id: requestId, decisions }),
-      });
-      if (!resp.ok) {
-        const body = await resp.text();
-        throw new Error(`Decision POST failed: ${body || `HTTP ${resp.status}`}`);
-      }
-      const result = await resp.json();
-      if (!result.delivered) {
-        throw new Error('Decision not delivered by server (expired or unknown request)');
-      }
-      setState(() => ({ shellApprovalRequest: null }));
-    },
-    [setState],
-  );
 
   // ── Initialization ───────────────────────────────────────────────
 
@@ -437,105 +385,9 @@ function AppInner() {
         <InstallPromptBanner />
         <SyncStatusBanner />
         <DisconnectedOverlay isConnected={state.isConnected} />
-        <ApprovalOriginNotice
-          chatName={
-            state.securityApprovalRequest?.fromChat ??
-            state.securityPromptRequest?.fromChat ??
-            state.askUserRequest?.fromChat ??
-            state.editApprovalRequest?.fromChat ??
-            state.shellApprovalRequest?.fromChat
-          }
-        />
-        {state.securityApprovalRequest && (
-          <SecurityApprovalDialog
-            requestId={state.securityApprovalRequest.requestId}
-            toolName={state.securityApprovalRequest.toolName}
-            riskLevel={state.securityApprovalRequest.riskLevel as 'SAFE' | 'CAUTION' | 'DANGEROUS'}
-            reasoning={state.securityApprovalRequest.reasoning}
-            command={state.securityApprovalRequest.command}
-            riskType={state.securityApprovalRequest.riskType}
-            target={state.securityApprovalRequest.target}
-            allowOptions={state.securityApprovalRequest.allowOptions}
-            fsKind={state.securityApprovalRequest.fsKind}
-            fsFolder={state.securityApprovalRequest.fsFolder}
-            fsPath={state.securityApprovalRequest.fsPath}
-            securityAnalysis={state.securityApprovalRequest.securityAnalysis}
-            deliveryError={state.securityApprovalRequest.deliveryError}
-            onRespond={handleSecurityApprovalResponse}
-          />
-        )}
-        {state.securityPromptRequest && (
-          <SecurityPromptDialog
-            requestId={state.securityPromptRequest.requestId}
-            prompt={state.securityPromptRequest.prompt}
-            filePath={state.securityPromptRequest.filePath}
-            concern={state.securityPromptRequest.concern}
-            onRespond={handleSecurityPromptResponse}
-          />
-        )}
-        {state.askUserRequest && (
-          <AskUserDialog
-            requestId={state.askUserRequest.requestId}
-            question={state.askUserRequest.question}
-            header={state.askUserRequest.header}
-            options={state.askUserRequest.options}
-            multiSelect={state.askUserRequest.multiSelect}
-            defaultValue={state.askUserRequest.default}
-            sensitive={state.askUserRequest.sensitive}
-            credentialKey={state.askUserRequest.credentialKey}
-            deliveryError={state.askUserRequest.deliveryError}
-            onRespond={handleAskUserResponse}
-          />
-        )}
-        {state.passwordRequest && (
-          <PasswordPromptDialog
-            key={state.passwordRequest.requestId}
-            requestId={state.passwordRequest.requestId}
-            command={state.passwordRequest.command}
-            prompt={state.passwordRequest.prompt}
-            secret={state.passwordRequest.secret}
-            onRespond={handlePasswordResponse}
-          />
-        )}
-        {state.editApprovalRequest && (
-          <EditApprovalPanel
-            requestId={state.editApprovalRequest.requestId}
-            filePath={state.editApprovalRequest.filePath}
-            unifiedDiff={state.editApprovalRequest.unifiedDiff}
-            hunks={state.editApprovalRequest.hunks}
-            onRespond={handleEditApprovalResolved}
-          />
-        )}
-        {state.shellApprovalRequest && (
-          <ShellApprovalPanel
-            request={{
-              request_id: state.shellApprovalRequest.requestId,
-              command: state.shellApprovalRequest.command,
-              parts: state.shellApprovalRequest.parts,
-              unified_view: state.shellApprovalRequest.unifiedView,
-              risk_level: state.shellApprovalRequest.riskLevel,
-              security_analysis: state.shellApprovalRequest.securityAnalysis
-                ? {
-                    summary: state.shellApprovalRequest.securityAnalysis.summary,
-                    modifies: state.shellApprovalRequest.securityAnalysis.modifies,
-                    risk_assessment: state.shellApprovalRequest.securityAnalysis.riskAssessment,
-                    recommendation: state.shellApprovalRequest.securityAnalysis.recommendation,
-                  }
-                : undefined,
-            }}
-            onSubmit={async (decisions) => {
-              await handleShellApprovalSubmit(state.shellApprovalRequest!.requestId, decisions);
-            }}
-          />
-        )}
-        {state.modelSelectionRequest && (
-          <ModelSelectionModal
-            provider={state.modelSelectionRequest.provider}
-            reason={state.modelSelectionRequest.reason}
-            onClose={handleModelSelectionClose}
-            onSelectModel={handleModelSelectionResponse}
-          />
-        )}
+        {/* The agent's blocking prompts (approvals, ask_user, passwords, edit and
+            shell approvals) and the model picker, from the chat unit's state. */}
+        <WorkspaceAgentPrompts />
         <OnboardingDialog
           onboarding={onboarding}
           selectedProvider={selectedProvider}

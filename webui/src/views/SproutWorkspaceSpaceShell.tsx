@@ -383,7 +383,11 @@ function SpaceShellLayout({
           />
           {terminalBackend !== 'none' && (
             <ErrorBoundary panelName="Terminal">
+              {/* Keyed by backend: when the agent moves (the in-browser shell
+                  to a workspace daemon, in place), the terminal starts over on
+                  the new transport rather than keeping sessions on the old. */}
               <WorkspaceDockedTerminal
+                key={terminalBackend}
                 backend={terminalBackend}
                 expanded={isTerminalExpanded}
                 onExpandedChange={setTerminalExpanded}

@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -527,15 +526,67 @@ func TestTaskAskUser_FailsFastWithoutSurface(t *testing.T) {
 	if err != nil {
 		t.Fatalf("newTaskAgent: %v", err)
 	}
-	if taskAgent.HasActiveWebUIClients() {
-		t.Skip("a WebUI client is attached in this environment")
-	}
+	// Drive the branch deterministically rather than skipping when a browser
+	// happens to be attached.
+	taskAgent.SetHasActiveWebUIClients(func() bool { return false })
 
 	_, askErr := newAgentAskUserService(taskAgent).Ask(context.Background(), tools.AskUserRequest{Question: "which one?"})
 	if askErr == nil {
 		t.Fatal("expected an error when no surface can answer")
 	}
-	if !errors.Is(askErr, tools.ErrAskUserNoChannel) {
-		t.Errorf("error = %v, want ErrAskUserNoChannel", askErr)
+	if !strings.Contains(askErr.Error(), "no interactive surface") {
+		t.Errorf("error = %v, want the task no-surface message", askErr)
+	}
+}
+
+// An interrupted task's worktree may hold the only copy of work it never
+// committed. Merging its branch must not delete that.
+func TestMergeTask_InterruptedKeepsWorktree(t *testing.T) {
+	newTaskStateDir(t)
+	resetProcessTasks(t)
+	repo := initTaskTestRepo(t)
+	a := newTaskTestAgent(t, repo)
+
+	wt, err := createTaskWorktree(context.Background(), repo, "feat/interrupted", "")
+	if err != nil {
+		t.Fatalf("createTaskWorktree: %v", err)
+	}
+	t.Cleanup(func() { wt.remove(context.Background()) })
+
+	// A committed change on the branch, plus uncommitted work that exists
+	// only in the worktree.
+	if writeErr := os.WriteFile(filepath.Join(wt.Path, "committed.txt"), []byte("c"), 0o644); writeErr != nil {
+		t.Fatal(writeErr)
+	}
+	if _, commitErr := commitTaskWork(context.Background(), wt); commitErr != nil {
+		t.Fatalf("commitTaskWork: %v", commitErr)
+	}
+	uncommitted := filepath.Join(wt.Path, "uncommitted.txt")
+	if writeErr := os.WriteFile(uncommitted, []byte("only here"), 0o644); writeErr != nil {
+		t.Fatal(writeErr)
+	}
+
+	// Simulate a restart: the record comes back from disk with no worktree
+	// handle, marked interrupted.
+	processTasks.add(&taskRecord{
+		ID: "bg-task-int", Branch: wt.Branch, Path: wt.Path,
+		Status: "running", Workspace: repo, Started: time.Now(),
+	})
+	processTasks.save(repo)
+	resetProcessTasks(t)
+	processTasks.loadTasks(repo)
+
+	msg, mergeErr := a.MergeTask(context.Background(), "bg-task-int")
+	if mergeErr != nil {
+		t.Fatalf("MergeTask: %v", mergeErr)
+	}
+	if _, statErr := os.Stat(uncommitted); statErr != nil {
+		t.Errorf("merging an interrupted task deleted its uncommitted work: %v", statErr)
+	}
+	if !strings.Contains(msg, "kept") {
+		t.Errorf("merge message should say the worktree was kept: %q", msg)
+	}
+	if _, statErr := os.Stat(filepath.Join(repo, "committed.txt")); statErr != nil {
+		t.Errorf("the task's committed work was not merged: %v", statErr)
 	}
 }

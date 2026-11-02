@@ -1,12 +1,14 @@
 package agent
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/envutil"
@@ -51,13 +53,13 @@ func taskStatePath(workspaceRoot string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// One file per workspace, keyed by a stable digest of its path so a
-	// workspace under a path with separators in its name cannot escape the
-	// directory.
 	return filepath.Join(state, "tasks", workspaceKey(workspaceRoot)+".json"), nil
 }
 
-// workspaceKey derives a filesystem-safe key from a workspace path.
+// workspaceKey derives a filesystem-safe, collision-resistant key from a
+// workspace path. The readable prefix is for a human poking at the state
+// dir; the hash suffix is what makes the key injective, because the
+// sanitized prefix alone is lossy (/a/b-c and /a/b_c both become a_b_c).
 func workspaceKey(workspaceRoot string) string {
 	clean := filepath.Clean(workspaceRoot)
 	var b strings.Builder
@@ -69,20 +71,29 @@ func workspaceKey(workspaceRoot string) string {
 			b.WriteByte('_')
 		}
 	}
-	key := b.String()
-	if key == "" {
-		key = "workspace"
+	prefix := b.String()
+	// Keep the tail: the last path components identify a workspace better
+	// than its root, and the hash carries the uniqueness.
+	if len(prefix) > 80 {
+		prefix = prefix[len(prefix)-80:]
 	}
-	// A long path would exceed the filename limit; keep a stable tail.
-	if len(key) > 120 {
-		key = key[len(key)-120:]
+	if prefix == "" {
+		prefix = "workspace"
 	}
-	return key
+	sum := sha256.Sum256([]byte(clean))
+	return fmt.Sprintf("%s-%x", prefix, sum[:6])
 }
 
 // save writes every record for one workspace. Best-effort: a failed save
 // must never fail the task that triggered it.
+//
+// Saves are serialized per workspace. Two tasks finishing at once is the
+// normal case for this feature, and an unserialized read-modify-write would
+// let the later rename discard a record the other save had just finalized.
 func (r *taskRegistry) save(workspaceRoot string) {
+	unlock := r.lockSave(workspaceRoot)
+	defer unlock()
+
 	path, err := taskStatePath(workspaceRoot)
 	if err != nil {
 		return
@@ -104,6 +115,23 @@ func (r *taskRegistry) save(workspaceRoot string) {
 		return
 	}
 	_ = os.Rename(tmp, path)
+}
+
+// lockSave takes the per-workspace save lock and returns its unlock.
+func (r *taskRegistry) lockSave(workspaceRoot string) func() {
+	r.saveMu.Lock()
+	if r.saveLocks == nil {
+		r.saveLocks = map[string]*sync.Mutex{}
+	}
+	mu := r.saveLocks[workspaceRoot]
+	if mu == nil {
+		mu = &sync.Mutex{}
+		r.saveLocks[workspaceRoot] = mu
+	}
+	r.saveMu.Unlock()
+
+	mu.Lock()
+	return mu.Unlock
 }
 
 // recordsFor snapshots one workspace's records under the lock.
@@ -169,17 +197,21 @@ func (r *taskRegistry) loadTasks(workspaceRoot string) {
 			}
 		}
 		rec := &taskRecord{
-			ID:        p.ID,
-			Branch:    p.Branch,
-			Path:      p.Path,
-			Base:      p.Base,
-			Prompt:    p.Prompt,
-			Started:   p.Started,
-			Finished:  finished,
-			Status:    status,
-			Commit:    p.Commit,
-			Summary:   p.Summary,
-			Workspace: p.Workspace,
+			ID:       p.ID,
+			Branch:   p.Branch,
+			Path:     p.Path,
+			Base:     p.Base,
+			Prompt:   p.Prompt,
+			Started:  p.Started,
+			Finished: finished,
+			Status:   status,
+			Commit:   p.Commit,
+			Summary:  p.Summary,
+			// The file is already scoped to this workspace, so the record
+			// belongs to the root we were asked to load. Trusting the stored
+			// field would make a record with a stale path invisible to
+			// recordsFor, and the next save would delete the file.
+			Workspace: workspaceRoot,
 			orderIdx:  -1,
 		}
 		r.order = append(r.order, rec.ID)

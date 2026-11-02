@@ -60,6 +60,12 @@ type taskRegistry struct {
 	// pending holds reserved placeholders that have no ID yet: the window
 	// between claiming a concurrency slot and creating the worktree.
 	pending []*taskRecord
+
+	// saveMu guards saveLocks; saveLocks holds one mutex per workspace so
+	// concurrent saves of the same workspace serialize without blocking
+	// saves of other workspaces.
+	saveMu    sync.Mutex
+	saveLocks map[string]*sync.Mutex
 }
 
 var processTasks = &taskRegistry{byID: map[string]*taskRecord{}}
@@ -431,8 +437,11 @@ func (a *Agent) MergeTask(ctx context.Context, id string) (string, error) {
 	}
 	// A record restored from disk has no worktree handle, but the branch is
 	// still there: merging it is exactly how a user recovers an interrupted
-	// task's committed work.
-	if wt == nil && status == "interrupted" {
+	// task's committed work. Its worktree is NOT removed afterwards — it may
+	// hold the only copy of work the task never committed, and the
+	// interrupted-task message promises that work is still on disk.
+	restored := wt == nil && status == "interrupted"
+	if restored {
 		wt = &taskWorktree{RepoRoot: reviewRepoRoot(ctx, a.currentWorkspaceRoot()), Path: path, Branch: branch}
 	}
 
@@ -460,6 +469,12 @@ func (a *Agent) MergeTask(ctx context.Context, id string) (string, error) {
 	// run: this is the one commit in the feature a human would have made.
 	if _, err := runGitIn(ctx, repoRoot, "commit", "-q", "-m", fmt.Sprintf("merge task %s: %s", id, branch)); err != nil {
 		return "", fmt.Errorf("commit the merge: %w", err)
+	}
+
+	if restored {
+		processTasks.setTerminal(id, "merged", "", "")
+		return fmt.Sprintf("Merged %s into the workspace. The worktree at %s was kept: it may hold work the task "+
+			"never committed. Branch %s is kept.", branch, path, branch), nil
 	}
 
 	wt.remove(ctx)

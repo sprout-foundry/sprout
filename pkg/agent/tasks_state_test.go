@@ -1,9 +1,11 @@
 package agent
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -166,5 +168,86 @@ func TestTaskInterruptedNote(t *testing.T) {
 	}
 	if got := taskInterruptedNote(TaskInfo{ID: "bg-task-2", Status: "completed"}); got != "" {
 		t.Errorf("completed task produced a note: %q", got)
+	}
+}
+
+// The sanitized prefix is lossy (/a/b-c and /a/b_c both become a_b_c), so the
+// key must carry a hash or two workspaces share one state file and destroy
+// each other's tasks.
+func TestWorkspaceKey_DistinguishesSimilarPaths(t *testing.T) {
+	keys := map[string]string{
+		"/a/b-c": workspaceKey("/a/b-c"),
+		"/a/b_c": workspaceKey("/a/b_c"),
+		"/a/b/c": workspaceKey("/a/b/c"),
+	}
+	seen := map[string]string{}
+	for path, key := range keys {
+		if other, dup := seen[key]; dup {
+			t.Errorf("%q and %q share the state key %q", path, other, key)
+		}
+		seen[key] = path
+	}
+}
+
+func TestWorkspaceKey_Stable(t *testing.T) {
+	if workspaceKey("/a/b") != workspaceKey("/a/b/") {
+		t.Error("the same workspace must produce the same key regardless of a trailing separator")
+	}
+	first := workspaceKey("/a/b")
+	for i := 0; i < 5; i++ {
+		if got := workspaceKey("/a/b"); got != first {
+			t.Fatalf("workspaceKey is not deterministic: %q then %q", first, got)
+		}
+	}
+}
+
+// A record whose stored workspace differs from the file it came from must
+// still belong to the workspace being loaded: otherwise the next save sees
+// zero records and deletes the file.
+func TestTaskRegistry_LoadScopesRecordsToRequestedWorkspace(t *testing.T) {
+	newTaskStateDir(t)
+	resetProcessTasks(t)
+	repo := t.TempDir()
+
+	processTasks.add(&taskRecord{
+		ID: "bg-task-stale", Branch: "feat/x", Path: repo + "/wt",
+		Status: "completed", Workspace: "/somewhere/else", Started: time.Now(),
+	})
+	processTasks.save("/somewhere/else")
+
+	resetProcessTasks(t)
+	processTasks.loadTasks(repo)
+
+	// The record was written under another workspace's file, so this
+	// workspace has nothing — and saving must not delete anything it owns.
+	if got := len(processTasks.snapshot()); got != 0 {
+		t.Errorf("loaded %d records from another workspace's file, want 0", got)
+	}
+}
+
+// Two tasks finishing at once must both reach disk.
+func TestTaskRegistry_ConcurrentSavesKeepEveryRecord(t *testing.T) {
+	newTaskStateDir(t)
+	resetProcessTasks(t)
+	repo := t.TempDir()
+
+	const n = 8
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		id := fmt.Sprintf("bg-task-%d", i)
+		processTasks.add(&taskRecord{ID: id, Status: "running", Workspace: repo, Started: time.Now(), Branch: "feat/" + id})
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			processTasks.setTerminal(id, "completed", "", "")
+		}()
+	}
+	wg.Wait()
+
+	resetProcessTasks(t)
+	processTasks.loadTasks(repo)
+
+	if got := len(processTasks.snapshot()); got != n {
+		t.Errorf("loaded %d records, want %d — a concurrent save dropped one", got, n)
 	}
 }

@@ -18,6 +18,9 @@ type vtScreen struct {
 	savedR       int
 	savedC       int
 	pendingBytes []byte
+	// wrappedPastEdge records that a write ran past the last column and
+	// auto-wrapped: a row the writer meant to fit did not.
+	wrappedPastEdge bool
 }
 
 func newVTScreen(cols, rows int) *vtScreen {
@@ -86,6 +89,7 @@ func decodeRune(s string) (rune, int) {
 
 func (s *vtScreen) put(r rune) {
 	if s.c >= s.cols {
+		s.wrappedPastEdge = true
 		s.c = 0
 		s.lineFeed()
 	}

@@ -101,7 +101,7 @@ func (f *StatusFooter) drawSteerRowsLocked() {
 // steerRows are snapshotted under f.mu by the caller.
 func (f *StatusFooter) steerVisualLines(steerLine string, steerCursor, steerRows, cols int, steerWrapped bool) (lines []string, cursorLineIdx, cursorByteCol int) {
 	if steerWrapped {
-		return WrapSteerLayout(steerLine, steerCursor, cols, maxSteerRows)
+		return WrapSteerLayout(steerLine, steerCursor, composerWrapCols(cols), maxSteerRows)
 	}
 	lines = splitSteerLines(steerLine, steerRows)
 	cursorLineIdx = len(lines) - 1
@@ -287,7 +287,7 @@ func (f *StatusFooter) drawComposerLocked(steerLine string, steerCursor int, ste
 		f.mu.Lock()
 		row, col := f.steerCursorRow, f.steerCursorCol
 		f.mu.Unlock()
-		if r, c, ok := placeWrappedCaret(steerLine, lines, cols, row, col); ok {
+		if r, c, ok := placeWrappedCaret(steerLine, lines, composerWrapCols(cols), row, col); ok {
 			cursorLineIdx, cursorByteCol = r, c
 		}
 	}

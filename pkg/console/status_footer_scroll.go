@@ -30,7 +30,7 @@ func (f *StatusFooter) steerRowCount() int {
 		// Compute visual rows without cursor mapping: cursorByte=-1
 		// still produces a full layout, just with the cursor pinned to
 		// the end. Use 0 so WrapSteerLayout still returns all rows.
-		rows, _, _ := WrapSteerLayout(f.steerLine, 0, cols, 0)
+		rows, _, _ := WrapSteerLayout(f.steerLine, 0, composerWrapCols(cols), 0)
 		n := len(rows)
 		if n < 1 {
 			n = 1

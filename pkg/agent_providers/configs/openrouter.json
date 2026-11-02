@@ -1946,7 +1946,7 @@
         "id": "moonshotai/kimi-k3",
         "input_cost": 0.192,
         "name": "MoonshotAI: Kimi K3",
-        "output_cost": 15.0,
+        "output_cost": 15,
         "tags": [
           "tools",
           "vision",
@@ -2029,6 +2029,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.2,
         "context_length": 131072,
         "description": "Hermes 4 is a large-scale reasoning model built on Meta-Llama-3.1-405B and released by Nous Research. It introduces a hybrid reasoning mode, where the model can choose to deliberate internally with...",
         "id": "nousresearch/hermes-4-405b",
@@ -2038,8 +2039,7 @@
         "tags": [
           "reasoning",
           "structured_output"
-        ],
-        "cached_input_cost": 0.2
+        ]
       },
       {
         "context_length": 131072,
@@ -2054,6 +2054,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.012,
         "context_length": 262144,
         "description": "NVIDIA Nemotron 3 Nano 30B A3B is a small language MoE model with highest compute efficiency and accuracy for developers to build specialized agentic AI systems. The model is fully...",
         "id": "nvidia/nemotron-3-nano-30b-a3b",
@@ -2064,8 +2065,7 @@
           "tools",
           "reasoning",
           "structured_output"
-        ],
-        "cached_input_cost": 0.012
+        ]
       },
       {
         "context_length": 256000,
@@ -6788,7 +6788,7 @@
         ]
       },
       {
-        "cached_input_cost": 0.09,
+        "cached_input_cost": 0.075,
         "context_length": 1048576,
         "description": "GLM-5.3-FlashX is the high-speed variant of Z.ai's GLM-5.3-Flash, a native multimodal model delivering inference speeds of up to 200 tokens/s. Built on the same hybrid sparse and linear attention architecture...",
         "id": "z-ai/glm-5.3-flashx",
@@ -7849,6 +7849,21 @@
         "input_cost": 0.05,
         "name": "Particle AI: Particle-1",
         "output_cost": 0.5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.075,
+        "context_length": 1048576,
+        "description": "GLM-5.3-FlashX-Legal (GLM-Legal) is Z.ai's legal-domain variant of GLM-5.3-FlashX, a native multimodal model that accepts text, image, and video input and produces text. It adds legal-domain mid-training and post-training with reinforcement...",
+        "id": "z-ai/glm-5.3-flashx-legal",
+        "input_cost": 0.37,
+        "name": "Z.ai: GLM 5.3 FlashX Legal",
+        "output_cost": 1.25,
         "tags": [
           "tools",
           "vision",

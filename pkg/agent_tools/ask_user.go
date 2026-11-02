@@ -8,7 +8,6 @@ package tools
 // helpers live in ask_user_cli.go.
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -351,8 +350,6 @@ func AskUser(ctx context.Context, req AskUserRequest) (string, error) {
 		return string(secret), nil
 	}
 
-	reader := bufio.NewReader(os.Stdin)
-
 	// A bounded request gets a bounded read on every path below, not just the
 	// picker: the same deadline semantics apply to the numbered list and the
 	// freeform reader, so a caller that set Timeout is never left blocking.
@@ -364,11 +361,8 @@ func AskUser(ctx context.Context, req AskUserRequest) (string, error) {
 	}
 
 	if len(req.Options) == 0 {
-		// Freeform mode: read until a blank line (double Enter) or EOF.
-		// This allows pasting multiline text — a single newline between
-		// pasted lines is preserved; the user submits by pressing Enter
-		// on an empty line.
-		answer, err := readFreeformInputCtx(readCtx, reader)
+		// Freeform mode: Enter submits; a multi-line paste arrives whole.
+		answer, err := readAnswer(readCtx)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				return "", ErrAskUserNoChannel
@@ -385,7 +379,7 @@ func AskUser(ctx context.Context, req AskUserRequest) (string, error) {
 	}
 
 	// Option mode: single line is sufficient.
-	answer, err := readLineCtx(readCtx, reader)
+	answer, err := readAnswer(readCtx)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
 			return "", ErrAskUserNoChannel

@@ -82,8 +82,10 @@ func ExecuteCommand(cmd string) (string, error) {
 		command.Stdin = os.Stdin
 		clihooks.PauseSteer()
 		clihooks.SuspendIndicator()
+		clihooks.BeginForegroundChild()
 		defer clihooks.ResumeSteer()
 		defer clihooks.ResumeIndicator()
+		defer clihooks.EndForegroundChild()
 	}
 
 	// Buffer to capture output for error messages

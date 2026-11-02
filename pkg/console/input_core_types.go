@@ -55,6 +55,12 @@ const (
 	EventAltLetter
 	// EventDeleteWordForward is Alt+D: kill the word after the cursor.
 	EventDeleteWordForward
+	// EventPageUp / EventPageDown (CSI 5~ / CSI 6~) move the caret a page
+	// of rows through a long input.
+	EventPageUp
+	EventPageDown
+	// EventCursorReport is a cursor position report; Data is "row;col".
+	EventCursorReport
 )
 
 // InputReader handles interactive input with proper escape sequence handling
@@ -94,6 +100,9 @@ type InputReader struct {
 	// Mouse position tracking
 	mouseRow int
 	mouseCol int
+	// pendingClick is a left click waiting for the cursor position report
+	// that locates the prompt on screen (see clickAt).
+	pendingClick *screenCell
 
 	// SP-048-2a: pluggable completion provider invoked on Tab. Set by the
 	// agent shell to wire slash-command completion. nil = Tab is a no-op.

@@ -48,18 +48,11 @@ func buildDropdownBlock(prefix, text string, cursorByte, cols int, candidates []
 	rows = append(rows, inputLine)
 	full = strings.Join(rows, "\n")
 
-	// The cursor sits on the input line (last row in the combined
-	// layout). Compute the cursor's (visualRow, visualCol) relative to
-	// JUST the input line — wrappedGeometry walks byte-by-byte and
-	// would miscount if we passed the candidate rows (their ANSI
-	// bytes would inflate the row counter). Pass `text` (not
-	// prefix+text) as the content with the prefix width as the start
-	// column so the prefix isn't counted twice. Then add the number
-	// of dropdown rows that precede the input line.
-	prefixWidth := displayWidth(prefix)
-	_, cursorRowInInput, cursorCol, _, _ := wrappedGeometry(
-		cols, prefixWidth, text, cursorByte,
-	)
+	// The cursor sits on the input line (after the candidate rows).
+	// Compute its (row, column) within JUST the input line — the
+	// candidate rows carry ANSI bytes that would inflate a byte walk —
+	// then add the number of dropdown rows that precede it.
+	cursorRowInInput, cursorCol := composerCaret(inputLine, len(prefix)+cursorByte, cols)
 	cursorRow = n + cursorRowInInput
 	return full, cursorRow, cursorCol
 }
@@ -83,6 +76,7 @@ func (ir *InputReader) renderPinnedDropdownLocked() {
 	if cols <= 0 {
 		cols = 80
 	}
+	cols = composerWrapCols(cols)
 	displayLine, displayCursor := ir.renderLineWithCollapsedPastes()
 	var candidates []CompletionCandidate
 	selected := 0

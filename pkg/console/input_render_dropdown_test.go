@@ -254,13 +254,15 @@ func TestInputReader_DropdownWrapAwareCursor(t *testing.T) {
 	if !strings.HasPrefix(lines[2], "> /h") {
 		t.Errorf("last block row should be the prompt line, got %q", lines[2])
 	}
-	// The cursor sits on the LAST wrapped row of the input line:
-	// 2 candidates + (rows of "> /h"+60x at cols=30 → 3 rows) - 1.
+	// The cursor sits on the LAST wrapped row of the input line. Rows wrap
+	// at 28 — the 30 columns less the continuation marker every row after
+	// the first carries — so "> /h"+60x (64 cols, one unbroken word after
+	// the prompt) is 28 + 28 + 8: 2 candidates + 3 rows - 1.
 	if row != 4 {
 		t.Errorf("cursor row = %d, want 4 (last wrapped row of the input line)", row)
 	}
-	if col != 4 {
-		t.Errorf("cursor col = %d, want 4 (end of the wrapped line)", col)
+	if col != 8 {
+		t.Errorf("cursor col = %d, want 8 (end of the wrapped line)", col)
 	}
 }
 

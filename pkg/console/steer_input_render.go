@@ -90,6 +90,7 @@ func (r *SteerInputReader) renderLine() {
 	if cols <= 0 {
 		cols = 80
 	}
+	cols = composerWrapCols(cols)
 
 	// SP-078 Phase 3: build the combined dropdown + input line text.
 	// Each candidate row is pre-formatted and pre-truncated to `cols`
@@ -108,14 +109,9 @@ func (r *SteerInputReader) renderLine() {
 	// this equals len(prefix). Use displayWidth directly to avoid
 	// re-counting ANSI bytes (the steer buffer is plain text so the
 	// difference only matters if a future prefix includes color).
-	prefixWidth := displayWidth(prefix)
-	_, cursorRow, cursorCol, _, _ := wrappedGeometry(
-		cols, prefixWidth, full, len(prefix)+cursorByte,
-	)
-	// wrappedGeometry uses cols-promptWidth budgeting internally; we
-	// passed `prefixWidth` as the prompt width, which means cursorCol
-	// already accounts for the prefix columns. Footer takes (row, col)
-	// in the post-wrap visual-line array.
+	// The caret comes from the same word-wrapped layout the footer draws,
+	// as (row, screen column) in that layout.
+	cursorRow, cursorCol := composerCaret(full, len(prefix)+cursorByte, cols)
 	r.footer.SetSteerLineWrapped(full, cursorRow, cursorCol)
 }
 

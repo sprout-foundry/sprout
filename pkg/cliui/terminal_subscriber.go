@@ -41,9 +41,9 @@ const VerbosePreviewWidth = 200
 // startTerminalToolSubscriber so the event loop can be broken into
 // focused handler methods.
 type TerminalSubscriberState struct {
-	spawnMu          sync.Mutex
-	seenSpawn        map[string]bool
-	spawnTasks       map[string]string // persona → short task description (CLI-UX-11)
+	// fleet is the status of parallel and background subagent runs, shown
+	// on the spinner instead of printed (SP-174c).
+	fleet            subagentFleet
 	run              *ToolRunState
 	pendingArgs      map[string]string
 	progressMu       sync.Mutex
@@ -181,7 +181,6 @@ func extractStrArg(argsJSON, key string) string {
 // pre-allocated maps and the config manager for live verbosity reads.
 func NewTerminalSubscriberState(configMgr *configuration.Manager, chatAgent *agent.Agent) *TerminalSubscriberState {
 	return &TerminalSubscriberState{
-		seenSpawn:        make(map[string]bool),
 		pendingArgs:      make(map[string]string),
 		toolsInFlight:    make(map[string]string),
 		subagentProgress: make(map[string]SubagentProgressSnapshot),
@@ -203,14 +202,11 @@ func (s *TerminalSubscriberState) flushExternalWrite() {
 	}
 }
 
-// ResetSpawnTurn clears the per-turn spawn dedupe map so the next batch
-// of subagents gets fresh announcements. Called by the REPL loop at the
-// start of each user turn.
+// ResetSpawnTurn clears the per-turn subagent display state (the fleet
+// status) so a run left over from an interrupted turn is not shown in the
+// next. Called by the REPL loop at the start of each user turn.
 func (s *TerminalSubscriberState) ResetSpawnTurn() {
-	s.spawnMu.Lock()
-	s.seenSpawn = make(map[string]bool)
-	s.spawnTasks = make(map[string]string)
-	s.spawnMu.Unlock()
+	s.fleet.reset()
 }
 
 // HandleToolStartEvent processes a ToolStart event.
@@ -244,52 +240,13 @@ func (s *TerminalSubscriberState) HandleToolStartEvent(data map[string]interface
 	depth := ReadEventDepth(data)
 	persona := ReadEventPersona(data)
 
-	// CLI-UX-11: When run_subagent starts at depth 0, capture the task
-	// description from the prompt field so the spawn announcement can
-	// show "→ coder: refactoring auth.go" instead of just "→ coder".
-	if name == "run_subagent" && depth == 0 && args != "" {
-		if taskDesc, subPersona := ExtractSubagentTask(args); taskDesc != "" && subPersona != "" {
-			s.spawnMu.Lock()
-			if s.spawnTasks == nil {
-				s.spawnTasks = make(map[string]string)
-			}
-			s.spawnTasks[subPersona] = taskDesc
-			s.spawnMu.Unlock()
-		}
-	}
-
-	// Compact mode: suppress spinner start, blank line, and spawn
-	// announcements. Return early — the user only wants to see
-	// results (tool end lines) when something goes wrong.
+	// Compact mode: suppress spinner start and blank line. Return early —
+	// the user only wants to see results (tool end lines) when something
+	// goes wrong.
 	if s.IsCompact() {
 		return
 	}
 
-	// announce subagent spawn once per (depth,
-	// persona) pair per turn, with provider/model so the user
-	// can see which cheaper/faster model is doing the work.
-	if depth > 0 && persona != "" {
-		key := fmt.Sprintf("%d:%s", depth, persona)
-		s.spawnMu.Lock()
-		announce := !s.seenSpawn[key]
-		if announce {
-			s.seenSpawn[key] = true
-		}
-		taskDesc := s.spawnTasks[persona]
-		s.spawnMu.Unlock()
-		if announce {
-			s.flushExternalWrite()
-			indicator.Stop()
-			s.progressMu.Lock()
-			spawnSnap, hasSpawnSnap := s.subagentProgress[persona]
-			s.progressMu.Unlock()
-			ctxMax := 0
-			if hasSpawnSnap {
-				ctxMax = spawnSnap.CtxMax
-			}
-			console.WriteTranscriptTo(os.Stderr, FormatSpawnLine(chatAgent, depth, persona, ctxMax, taskDesc)+"\n")
-		}
-	}
 	s.progressMu.Lock()
 	snap, hasSnap := s.subagentProgress[persona]
 	s.progressMu.Unlock()

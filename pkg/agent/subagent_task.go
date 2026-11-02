@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -67,6 +66,8 @@ func (r *SubagentRunner) setupSubagentRun(
 			Elapsed: time.Since(startTime),
 		}
 	}
+
+	tagSubagentEvents(subAgent, taskID)
 
 	// Share the parent's clarification manager and assign this subagent a clarification ID.
 	if r.parentAgent != nil && r.parentAgent.clarificationManager != nil {
@@ -170,7 +171,7 @@ func (r *SubagentRunner) setupSubagentRun(
 	// call ID in this ctx; empty when invoked outside a tool call.
 	subParentCallID, _ := toolExecutionMetadataFromContext(ctx)
 	subEventBus := eventBus
-	subIsParallel := !strings.HasPrefix(taskID, "subagent-")
+	subIsParallel := isConcurrentSubagentRun(taskID)
 	subAgent.EnableStreaming(func(chunk string) {
 		var pending []string
 		var rawLines []string // mirror of pending without ANSI/prefix formatting
@@ -198,7 +199,9 @@ func (r *SubagentRunner) setupSubagentRun(
 			outputMu.Unlock()
 		}
 
-		if !opts.Quiet {
+		// A concurrent run's prose stays off the transcript: siblings would
+		// interleave line by line. Its result closes the run as one block.
+		if !opts.Quiet && !subIsParallel {
 			for _, line := range pending {
 				console.PrintLine(line)
 			}
@@ -236,7 +239,7 @@ func (r *SubagentRunner) setupSubagentRun(
 		}
 		outputMu.Unlock()
 
-		if !opts.Quiet {
+		if !opts.Quiet && !subIsParallel {
 			for _, line := range pending {
 				console.PrintLine(line)
 			}
@@ -307,8 +310,8 @@ func (r *SubagentRunner) finalizeSubagentResult(
 	if rc.outputMu.TryLock() {
 		if rc.lineBuf.Len() > 0 {
 			remaining := strings.TrimSpace(rc.lineBuf.String())
-			if remaining != "" {
-				_, _ = os.Stderr.Write([]byte(rc.dimGray + rc.prefix + rc.reset + " " + remaining + "\n"))
+			if remaining != "" && !opts.Quiet && !isConcurrentSubagentRun(taskID) {
+				console.PrintLine(rc.dimGray + rc.prefix + rc.reset + " " + remaining)
 			}
 			rc.lineBuf.Reset()
 		}
@@ -403,6 +406,8 @@ func (r *SubagentRunner) finalizeSubagentResult(
 			subAgent.state.GetLastRunTerminationReason() == RunTerminationMaxIterations,
 			rc.wrapUpInjected.Load()))
 	}
+
+	r.announceSubagentFinished(taskID, opts, result)
 
 	// Clean up tracking
 	r.active.Delete(taskID)

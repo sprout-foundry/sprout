@@ -223,7 +223,7 @@ func startBackgroundSubagent(a *Agent, spec *subagentLaunchSpec, isolate bool) (
 	bgCtx, cancel := context.WithCancel(context.Background())
 	t := runner.registerBackground("subagent", spec.persona, ShortCommandLabel(spec.prompt), cancel)
 
-	printSubagentStart(spec.persona+", background", displayOrDefault(spec.provider), displayOrDefault(spec.model))
+	printSubagentStart(spec.persona+", background", spec.prompt, displayOrDefault(spec.provider), displayOrDefault(spec.model))
 	go func() {
 		defer cancel()
 		var result *SubagentResult

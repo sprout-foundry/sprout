@@ -2,6 +2,7 @@ package subagents
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -43,4 +44,18 @@ func TestSubagentStatSuffix(t *testing.T) {
 func TestPrintSubagentDone_NilSafe(t *testing.T) {
 	PrintSubagentDone("coder", nil)                                        // must not panic
 	PrintSubagentDone("coder", &SubagentResult{Error: errors.New("boom")}) // error path
+}
+
+func TestTaskHeadline(t *testing.T) {
+	if got := TaskHeadline("  Refactor auth\nthen run the tests"); got != "Refactor auth" {
+		t.Errorf("first line = %q", got)
+	}
+	if got := TaskHeadline("   "); got != "" {
+		t.Errorf("blank task = %q", got)
+	}
+	// Cut by runes, not bytes, so multibyte text stays valid.
+	got := TaskHeadline(strings.Repeat("é", 80))
+	if n := len([]rune(got)); n != 60 || !strings.HasSuffix(got, "…") {
+		t.Errorf("long task = %q (%d runes)", got, n)
+	}
 }

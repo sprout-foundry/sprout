@@ -134,7 +134,7 @@ func (ir *InputReader) updateTerminalWidth() {
 // loop is still well-defined, just slightly less responsive).
 func (ir *InputReader) setupInputTerm() (resizeCh chan os.Signal, nonBlocking bool) {
 	fmt.Print(bracketedPasteEnable)
-	fmt.Print(MouseTrackingSGR)
+	fmt.Print(mouseInputModes())
 	// Click reporting only — deliberately NOT VT200 (?1000h), which also
 	// captures the wheel. A TUI that swallows the wheel takes the
 	// terminal's scrollback away from the user, and the transcript is

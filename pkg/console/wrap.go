@@ -8,32 +8,63 @@ import (
 )
 
 // WrapHardLine splits a single line of text into visual rows that fit within
-// `cols` terminal columns, breaking on rune boundaries and accounting for
-// wide (CJK) runes via runewidth. An empty input yields one empty row so
-// hard-line counts map cleanly to visual-line counts.
+// `cols` terminal columns, accounting for wide (CJK) runes via runewidth. An
+// empty input yields one empty row so hard-line counts map cleanly to
+// visual-line counts.
 //
-// Unlike strings.Split, this is width-aware: a rune that won't fit in the
-// remaining columns starts a new row, matching how the terminal renders it.
+// Rows break after the last space that fits, so words are not split across
+// rows; a word wider than the row is broken where it overflows. The space
+// stays at the end of its row, so concatenating the rows reproduces the
+// input byte for byte — callers map byte offsets onto rows by length.
 // Combining runes (width 0) are accumulated without breaking.
 func WrapHardLine(s string, cols int) []string {
 	if cols <= 0 {
 		return []string{s}
 	}
 	var rows []string
-	var b strings.Builder
-	w := 0
-	for _, r := range s {
+	start, w := 0, 0
+	breakAt, breakW := -1, 0 // byte just after the row's last space, and the width before it
+	for i, r := range s {
 		rw := runewidth.RuneWidth(r)
 		if w+rw > cols && w > 0 {
-			rows = append(rows, b.String())
-			b.Reset()
-			w = 0
+			end, carried := i, 0
+			// Move the overflowing word to the next row only if it fits
+			// there; a word wider than a row is broken where it is, so a
+			// long path does not leave the prompt alone on its own row.
+			if breakAt > start && runewidth.StringWidth(wordAt(s, breakAt)) <= cols {
+				end, carried = breakAt, w-breakW
+			}
+			rows = append(rows, s[start:end])
+			start, w = end, carried
+			breakAt = -1
 		}
-		b.WriteRune(r)
 		w += rw
+		if r == ' ' {
+			breakAt, breakW = i+1, w
+		}
 	}
-	rows = append(rows, b.String())
-	return rows
+	return append(rows, s[start:])
+}
+
+// wordAt returns the word starting at byte i: up to the next space.
+func wordAt(s string, i int) string {
+	if j := strings.IndexByte(s[i:], ' '); j >= 0 {
+		return s[i : i+j]
+	}
+	return s[i:]
+}
+
+// composerCaret maps a byte offset in the composer's text onto its word-
+// wrapped layout: the row, and the screen column within that row. The
+// reader computes the caret with this so it agrees with the rows the footer
+// draws (both wrap through WrapHardLine).
+func composerCaret(text string, cursorByte, cols int) (row, col int) {
+	lines, r, c := splitWrappedLines(text, cols, cursorByte)
+	if r < 0 || r >= len(lines) {
+		return 0, 0
+	}
+	c = min(max(c, 0), len(lines[r]))
+	return r, runewidth.StringWidth(lines[r][:c])
 }
 
 // WrapSteerLayout is the width-aware layout helper for the steer panel.

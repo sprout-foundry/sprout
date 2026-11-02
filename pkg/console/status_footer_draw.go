@@ -101,7 +101,7 @@ func (f *StatusFooter) drawSteerRowsLocked() {
 // steerRows are snapshotted under f.mu by the caller.
 func (f *StatusFooter) steerVisualLines(steerLine string, steerCursor, steerRows, cols int, steerWrapped bool) (lines []string, cursorLineIdx, cursorByteCol int) {
 	if steerWrapped {
-		return WrapSteerLayout(steerLine, steerCursor, cols, maxSteerRows)
+		return WrapSteerLayout(steerLine, steerCursor, composerWrapCols(cols), maxSteerRows)
 	}
 	lines = splitSteerLines(steerLine, steerRows)
 	cursorLineIdx = len(lines) - 1
@@ -282,20 +282,23 @@ func (f *StatusFooter) proseStreamingActive() bool {
 // blockRows counts the rule. Caller must hold outputMu.
 func (f *StatusFooter) drawComposerLocked(steerLine string, steerCursor int, steerWrapped bool, blockRows, hintRows, rows, cols int, mode ComposerMode) {
 	_, _ = fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s", steerRowFor(rows, blockRows, hintRows, 0), composerRule(cols), footerResetAll)
-	lines, cursorLineIdx, cursorByteCol := f.steerVisualLines(steerLine, steerCursor, blockRows-1, cols, steerWrapped)
-	if steerWrapped {
-		f.mu.Lock()
-		row, col := f.steerCursorRow, f.steerCursorCol
-		f.mu.Unlock()
-		if r, c, ok := placeWrappedCaret(steerLine, lines, cols, row, col); ok {
-			cursorLineIdx, cursorByteCol = r, c
-		}
-	}
 	prefix := ComposerPrefix(mode)
-	prefixRow := -1
-	for i, lineText := range lines {
-		if prefixRow < 0 && strings.HasPrefix(lineText, prefix) {
-			prefixRow = i
+	var win steerWindow
+	if steerWrapped {
+		win = f.steerWindowLocked(steerLine, prefix, cols)
+	} else {
+		lines, cursorLineIdx, cursorByteCol := f.steerVisualLines(steerLine, steerCursor, blockRows-1, cols, false)
+		win = steerWindow{rows: lines, labelRow: -1, caretRow: -1}
+		for i, lineText := range lines {
+			if strings.HasPrefix(lineText, prefix) {
+				win.labelRow = i
+				break
+			}
+		}
+		if steerCursor >= 0 {
+			win.caretRow, win.caretByte = cursorLineIdx, cursorByteCol
+		} else {
+			win.caretRow, win.caretByte = len(lines)-1, -1
 		}
 	}
 	// Blank the text rows this frame does not fill. The block's height only
@@ -303,56 +306,24 @@ func (f *StatusFooter) drawComposerLocked(steerLine string, steerCursor int, ste
 	// new line, and in both cases the row count can stay the same while the
 	// content moves up — leaving the previous frame's last row stranded
 	// below the new text.
-	for i := len(lines); i < blockRows-1; i++ {
+	for i := len(win.rows); i < blockRows-1; i++ {
 		_, _ = fmt.Fprintf(f.w, "\033[%d;1H\033[K", steerRowFor(rows, blockRows, hintRows, i+1))
 	}
-	for i, lineText := range lines {
-		withCursor := false
-		col := -1
-		if steerCursor >= 0 || steerWrapped {
-			if i == cursorLineIdx {
-				withCursor = true
-				col = cursorByteCol
-			}
-		} else {
-			withCursor = i == len(lines)-1
-		}
+	for i, lineText := range win.rows {
 		// SP-161d: a row past the label row is a wrapped continuation of
 		// the same input. Mark it so the wrap point is visible — without
 		// it the rows read as separate lines and typos go unnoticed. The
 		// marker takes its width out of the row's budget so the padded
-		// row still ends exactly at the terminal edge.
-		continuation := prefixRow >= 0 && i > prefixRow
-		rowCols := cols
-		if continuation {
-			rowCols = max(cols-displayWidth(composerContinuationMarker), 1)
-		}
-		rendered := steerRowTextWithCursor(lineText, rowCols, withCursor, col)
-		empty := i == prefixRow && lineText == prefix && len(lines) == prefixRow+1
-		styled := styleComposerRow(rendered, i == prefixRow, empty, mode, rowCols)
-		if continuation {
-			styled = composerContinuationMarker + styled
-		}
-		_, _ = fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s", steerRowFor(rows, blockRows, hintRows, i+1), styled, footerResetAll)
+		// row still ends exactly at the terminal edge (the layout wraps
+		// at composerWrapCols, which leaves room for it).
+		marker := win.marker(i)
+		rowCols := max(cols-displayWidth(marker), 1)
+		labelRow := win.top+i == win.labelRow
+		rendered := steerRowTextWithCursor(lineText, rowCols, i == win.caretRow, win.caretByte)
+		empty := labelRow && lineText == prefix && len(win.rows) == i+1 && !win.below
+		styled := styleComposerRow(rendered, labelRow, empty, mode, rowCols)
+		_, _ = fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s%s", steerRowFor(rows, blockRows, hintRows, i+1), marker, styled, footerResetAll)
 	}
-}
-
-// placeWrappedCaret maps the caller's caret — a row in the full wrapped
-// layout and a screen column — onto the rows actually shown (the layout
-// drops its top rows past maxSteerRows) and a byte offset in that row,
-// which is what steerRowTextWithCursor inserts the caret at. Reports false
-// when the caller gave no caret or it falls outside the shown rows, leaving
-// the caret at the end.
-func placeWrappedCaret(text string, shown []string, cols, row, col int) (int, int, bool) {
-	if row < 0 {
-		return 0, 0, false
-	}
-	all, _, _ := WrapSteerLayout(text, 0, cols, 0)
-	r := row - (len(all) - len(shown))
-	if r < 0 || r >= len(shown) {
-		return 0, 0, false
-	}
-	return r, byteIndexAtWidth(shown[r], col), true
 }
 
 // byteIndexAtWidth is the byte offset in s where screen column col begins.

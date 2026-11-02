@@ -55,6 +55,12 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	// (interactive + queue) only register once. Registered before
 	// Start so the first scroll region already reserves the hint row.
 	console.RegisterKeymapForFooter(footer, chatAgent.GetConfigManager())
+	if mgr := chatAgent.GetConfigManager(); mgr != nil {
+		console.SetMouseClickToPositionSource(func() bool {
+			cfg := mgr.GetConfig()
+			return cfg != nil && cfg.MouseClickToPosition
+		})
+	}
 	footer.Start()
 	defer footer.Stop()
 
@@ -289,6 +295,13 @@ func (s *agentFooterSource) WorkingDir() string {
 // in flight. SP-051-2d.
 func (s *agentFooterSource) ActiveSubagents() int {
 	return agent.GetActiveSubagents()
+}
+
+// ActiveTasks satisfies the optional activeTasksSource interface in
+// pkg/console so the footer shows running /task agents, whose output stays
+// out of the transcript. SP-174d.
+func (s *agentFooterSource) ActiveTasks() int {
+	return agent.RunningTaskCount()
 }
 
 // QueuedMessages satisfies the optional queuedMessagesSource interface

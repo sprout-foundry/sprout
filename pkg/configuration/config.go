@@ -317,6 +317,12 @@ type Config struct {
 	// calls are collapsed/hidden. Defaults to true.
 	ShowToolInvocations bool `json:"show_tool_invocations,omitempty"`
 
+	// MouseClickToPosition lets a click in the CLI's input place the caret.
+	// It needs the terminal's click reporting, which also captures the
+	// scroll wheel, so it is off by default: on, the plain wheel no longer
+	// scrolls the terminal's own history while sprout runs.
+	MouseClickToPosition bool `json:"mouse_click_to_position,omitempty"`
+
 	// Language is the user's preferred conversation language, used by the
 	// outbound language guard as a fallback when the user's
 	// recent messages are too short or too mixed to resolve a majority

@@ -287,6 +287,10 @@ func (r *SteerInputReader) Start() {
 	// the normal keystroke handlers. Stop() emits the matching
 	// disable sequence.
 	fmt.Fprint(os.Stderr, bracketedPasteEnable)
+	// Click-to-place-caret, when the user opted in (see mouse_click.go).
+	if mouseClickToPosition() {
+		fmt.Fprint(os.Stderr, mouseInputModes())
+	}
 	// Ask the terminal to report modified keystrokes (Shift+Enter
 	// etc.) as CSI u sequences so the steer panel can distinguish
 	// "submit" from "insert newline" instead of both arriving as
@@ -356,6 +360,9 @@ func (r *SteerInputReader) Stop() {
 	// reporting we enabled in Start.
 	fmt.Fprint(os.Stderr, bracketedPasteDisable)
 	writeModifyOtherKeysDisable(os.Stderr)
+	if mouseClickToPosition() {
+		fmt.Fprint(os.Stderr, MouseTrackingDisable)
+	}
 
 	// Restore terminal to ground-truth state if available (preferred
 	// over oldState). Ground truth is the REPL's original cooked-mode

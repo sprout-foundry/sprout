@@ -4,6 +4,7 @@ import (
 	"context"
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 // agentAskUserService implements tools.AskUserService by delegating to
@@ -38,6 +39,7 @@ func (s *agentAskUserService) Ask(ctx context.Context, req tools.AskUserRequest)
 		a.Logger().Debug("[ask_user/service] hasActiveWebUI=%v options=%d header=%q\n", hasActiveWebUI, len(req.Options), req.Header)
 	}
 	if hasActiveWebUI {
+		a.noteQuestionRoutedToBrowser()
 		return tools.AskUserWithEventBus(ctx, req, eventBus, clientID, userID, chatID, askUserMgr)
 	}
 	// A task has no terminal: without a browser there is nobody to answer,
@@ -46,4 +48,17 @@ func (s *agentAskUserService) Ask(ctx context.Context, req tools.AskUserRequest)
 		return "", taskAskUserError()
 	}
 	return tools.AskUser(ctx, req)
+}
+
+// noteQuestionRoutedToBrowser tells a terminal user that the question went
+// to a connected browser tab. The terminal deliberately does not render the
+// question itself (two surfaces racing for one answer), so without this
+// the turn just stops — for as long as the ask timeout — with no sign of
+// why. A tab left open in the background is the usual cause.
+func (a *Agent) noteQuestionRoutedToBrowser() {
+	if a.isNonInteractive() {
+		return
+	}
+	console.PrintLine(console.GlyphInfo.Prefix() +
+		"The agent asked a question in the browser tab connected to this session — answer it there.\n")
 }

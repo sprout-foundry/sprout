@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
@@ -234,22 +235,49 @@ func printBackground(line string, fallback *os.File) {
 	if !strings.HasSuffix(line, "\n") {
 		line += "\n"
 	}
-	if promptOnScreen() {
+	// Wait for the writer that holds the lock (a spinner frame, another
+	// subagent's line) rather than writing around it: a raw write skips the
+	// scroll-region parking and can land on the pinned rows. The wait is
+	// bounded because the holder may be this goroutine's own caller, and
+	// the lock is not reentrant.
+	if !tryLockOutputFor(backgroundLockWait) {
+		_, _ = fmt.Fprint(fallback, line)
+		return
+	}
+	if activeSteerReader != nil || activeInputReader != nil || activeSelectList != nil {
+		// PrintExternal suspends the spinner before taking the lock, which
+		// cannot happen under it (the spinner's render loop needs the lock
+		// to stop).
+		UnlockOutput()
 		PrintExternal(line)
 		return
 	}
-	_, _ = fmt.Fprint(fallback, line)
+	if footer := GetGlobalStatusFooter(); footer != nil && footer.canPinInput() {
+		writeTranscriptLocked(fallback, line)
+	} else {
+		// No pinned region to respect: plain bytes, so a piped or logged
+		// stream does not pick up the transcript writer's CRLFs.
+		_, _ = fmt.Fprint(fallback, line)
+	}
+	UnlockOutput()
 }
 
-// promptOnScreen reports whether an input or steer reader owns the prompt
-// row. If the output lock is held the caller is mid-redraw; report false so
-// the write goes straight out rather than deadlocking on the lock.
-func promptOnScreen() bool {
-	if !outputMu.TryLock() {
-		return false
+// backgroundLockWait bounds how long a background line waits for the
+// output lock before writing without it.
+const backgroundLockWait = 250 * time.Millisecond
+
+// tryLockOutputFor polls for the output lock until d elapses.
+func tryLockOutputFor(d time.Duration) bool {
+	deadline := time.Now().Add(d)
+	for {
+		if TryLockOutput() {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(2 * time.Millisecond)
 	}
-	defer outputMu.Unlock()
-	return activeSteerReader != nil || activeInputReader != nil || activeSelectList != nil
 }
 
 func init() {

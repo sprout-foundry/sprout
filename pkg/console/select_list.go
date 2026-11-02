@@ -396,7 +396,7 @@ func (s *SelectList) enableMouseTracking() {
 	if !s.isTTY {
 		return
 	}
-	fmt.Fprint(s.mouseOut(), MouseTrackingSGR)
+	_, _ = fmt.Fprint(s.mouseOut(), mouseInputModes())
 }
 
 // disableMouseTracking writes the disable sequence (which tears down

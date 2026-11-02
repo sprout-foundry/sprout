@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
@@ -63,6 +64,24 @@ func (c *ExecCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	// Security check: block git discard operations (reset, restore)
 	if IsGitDiscardCommand(command) {
 		return fmt.Errorf("git %s operations are not allowed via /exec. Use the git tool with operation='restore' or operation='reset' to require explicit user approval (command: '%s')", ExtractGitSubcommand(command), command)
+	}
+
+	if execOnTerminal(c.out()) {
+		// Through the transcript writer, so the cursor is parked inside the
+		// scroll region before the child starts writing at it.
+		console.WriteTranscript(console.GlyphShell.Prefix() + "Executing: " + command + "\n")
+		dir := ""
+		if chatAgent != nil {
+			dir = chatAgent.GetWorkspaceRoot()
+		}
+		code, err := runOnTerminal(command, dir)
+		switch {
+		case err != nil:
+			console.GlyphError.Fprintln(os.Stderr, err.Error())
+		case code != 0:
+			console.GlyphWarning.Fprintf(os.Stderr, "exit status %d", code)
+		}
+		return nil
 	}
 
 	// Execute the shell command using the same pattern as direct shell execution

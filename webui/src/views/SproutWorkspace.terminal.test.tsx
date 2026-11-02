@@ -58,7 +58,9 @@ vi.mock('./WorkspaceDockedTerminal', async (importOriginal) => ({
     React.useEffect(() => {
       dockedMounts.count += 1;
     }, []);
-    return <div data-testid="composed-docked-terminal" data-backend={props.backend} data-expanded={String(props.expanded)} />;
+    return (
+      <div data-testid="composed-docked-terminal" data-backend={props.backend} data-expanded={String(props.expanded)} />
+    );
   },
 }));
 vi.mock('../workspaces/CodeShell', () => ({
@@ -183,7 +185,15 @@ describe('SproutWorkspace composed shell terminal', () => {
     const wasm = wasmHost();
     const daemon: SproutHost = {
       ...wasm,
-      transport: { ...wasm.transport, authMode: 'bearer', agent: { kind: 'daemon', apiBaseURL: '/workspace/ws-1/proxy', wsURL: 'wss://host.test/workspace/ws-1/proxy/ws' } },
+      transport: {
+        ...wasm.transport,
+        authMode: 'bearer',
+        agent: {
+          kind: 'daemon',
+          apiBaseURL: '/workspace/ws-1/proxy',
+          wsURL: 'wss://host.test/workspace/ws-1/proxy/ws',
+        },
+      },
     };
     setActiveHost(wasm);
     const view = render(<SproutWorkspace project={{ id: 'acme/widgets' }} space="code" host={wasm} />);

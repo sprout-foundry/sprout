@@ -239,9 +239,30 @@ func (s *SelectList) clearRendered() {
 		// leaves its hint there while it runs. Those rows are not part of
 		// the walk-back, so the footer repaints them; the gap the cleared
 		// frame leaves is closed from the row above them.
-		f.Refresh()
+		f.repaintAfterPickerLocked()
 		pullDownOverClearedRows(f, n+1)
 	}
+}
+
+// repaintAfterPickerLocked is the footer half of the picker's teardown.
+// Caller MUST hold outputMu (clearRendered does): every call here is a
+// *Locked variant, because a plain Refresh/draw/ClearSteerLine would
+// re-enter the non-reentrant outputMu and wedge the teardown goroutine —
+// the picker never returns, the terminal is left in steer mode with no
+// prompt, and every keystroke echoes with nothing ever submitting.
+//
+// The hint override is released BEFORE the repaint: it reserves a row of
+// the pinned block, and the picker's hint must not survive on screen once
+// the picker is gone.
+func (f *StatusFooter) repaintAfterPickerLocked() {
+	f.mu.Lock()
+	before := f.hintRowCountLocked()
+	f.hintOverride = ""
+	after := f.hintRowCountLocked()
+	f.mu.Unlock()
+	f.applyHintRowChange(before, after, true)
+	f.clearSteerLineLocked()
+	f.drawLocked()
 }
 
 // pullDownOverClearedRows closes the hole a dismissed picker leaves. With a

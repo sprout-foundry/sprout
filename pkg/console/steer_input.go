@@ -378,8 +378,16 @@ func (r *SteerInputReader) Stop() {
 	setActiveSteerReader(nil)
 	UnlockOutput()
 
-	// Clear the pinned line via the footer.
+	// Clear the pinned line via the footer. The turn is over, so the footer
+	// returns to its idle composition (no steer rule above the rule row)
+	// BEFORE the steer rows are dropped: ClearSteerLine contracts the
+	// pinned block, and leaving the composer in steer mode would keep
+	// reserving a rule row for a panel that no longer exists. It never
+	// blanks rows above the contracted block — those are transcript rows
+	// holding the end of the model's reply. Idempotent when endTurn already
+	// reset the composer.
 	if r.footer != nil {
+		r.footer.SetTurnActive(false)
 		r.footer.ClearSteerLine()
 	}
 }

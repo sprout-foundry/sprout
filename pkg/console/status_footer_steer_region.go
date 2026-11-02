@@ -269,74 +269,36 @@ func (f *StatusFooter) blankNewSteerRows(prevRows, newRows int) {
 	_, _ = fmt.Fprint(f.w, "\0338")
 }
 
-// ClearSteerLine drops the steer panel, blanks the rows it occupied,
-// and contracts the scroll region back to 2 reserved rows. Called when
-// the SteerInputReader stops (e.g. ProcessQuery returned). SP-055.
+// ClearSteerLine drops the steer panel and contracts the scroll region back
+// to the idle row count. Called when the SteerInputReader stops (e.g.
+// ProcessQuery returned). SP-055.
+//
+// The pinned block is a contiguous run of rows at the bottom of the
+// terminal: the rule, then the text rows, then the hint row and the content
+// line. Dropping the text rows and the rule together contracts that run, so
+// the transcript keeps every row it had. Blanking the rows first would erase
+// the block's top rows, which after the shrink are transcript rows — the
+// ones holding the end of the model's reply.
 func (f *StatusFooter) ClearSteerLine() {
 	if f == nil || !f.isTTY {
 		return
 	}
-	f.mu.Lock()
-	wasActive := f.steerActive
-	prevRows := f.lastSteerRows
-	f.steerActive = false
-	f.steerLine = ""
-	f.steerCursor = -1
-	f.steerWrappedActive = false
-	f.steerCursorRow = -1
-	f.steerCursorCol = 0
-	f.lastSteerRows = 0
-	active := f.active
-	f.mu.Unlock()
-	if !active || !wasActive {
-		return
-	}
-	// Reset region, blank each previously-occupied steer row, then
-	// re-apply with no steer reservation. Order: reset region first so
-	// we can address the previously-reserved rows by absolute number.
-	// The whole sequence runs under outputMu so it cannot interleave
-	// with a concurrent Refresh/Resize mid-sequence.
 	LockOutput()
-	_, rows := f.terminalSize()
-	if rows > 2 && prevRows > 0 {
-		// Save before resetting the margins: DECSTBM homes the cursor.
-		_, _ = fmt.Fprint(f.w, "\0337\033[r")
-		// SP-115: hint row pushes steer panel up by hintRows.
-		f.mu.Lock()
-		hintRows := f.lastHintRows
-		f.mu.Unlock()
-		for i := 0; i < prevRows; i++ {
-			// Match steerRowFor(rows, prevRows, hintRows, i): the steer
-			// panel is drawn at `rows-1-hintRows-steerRows+i`, so we
-			// blank that same row. A prior version used `+1` here, which
-			// cleared the rule row (repainted immediately by draw())
-			// instead of the steer text row — leaving stale steer text
-			// on screen after EndTurn (visible above the next idle prompt).
-			row := rows - 1 - hintRows - prevRows + i
-			if row < 1 {
-				continue
-			}
-			fmt.Fprintf(f.w, "\033[%d;1H\033[K", row)
-		}
-		fmt.Fprint(f.w, "\0338")
-	}
-	f.applyScrollRegionKeepingCursorLocked()
-	f.drawLocked()
-	UnlockOutput()
+	defer UnlockOutput()
+	f.clearSteerLineLocked()
 }
 
-// ClearSteerLineLocked is the lock-free variant of ClearSteerLine for
-// callers that already hold outputMu. Mirrors ClearSteerLine but uses
-// applyScrollRegionLocked + drawLocked so it can run from
-// InputReader.refreshLocked without re-acquiring the non-reentrant
-// outputMu.
-func (f *StatusFooter) ClearSteerLineLocked() {
+// clearSteerLineLocked is the single clear path: ClearSteerLine,
+// ClearSteerLineLocked and the picker teardown all funnel here, so the
+// sequence runs under exactly one outputMu acquisition. Caller MUST hold
+// outputMu — every step below assumes it, and a second acquisition on this
+// goroutine would wedge on the non-reentrant mutex.
+func (f *StatusFooter) clearSteerLineLocked() {
 	if f == nil || !f.isTTY {
 		return
 	}
 	f.mu.Lock()
 	wasActive := f.steerActive
-	prevRows := f.lastSteerRows
 	f.steerActive = false
 	f.steerLine = ""
 	f.steerCursor = -1
@@ -349,28 +311,51 @@ func (f *StatusFooter) ClearSteerLineLocked() {
 	if !active || !wasActive {
 		return
 	}
-	// Reset region, blank each previously-occupied steer row, then
-	// re-apply with no steer reservation. Order: reset region first so
-	// we can address the previously-reserved rows by absolute number.
-	_, rows := f.terminalSize()
-	if rows > 2 && prevRows > 0 {
-		fmt.Fprint(f.w, "\033[r")
-		fmt.Fprint(f.w, "\0337")
-		f.mu.Lock()
-		hintRows := f.lastHintRows
-		f.mu.Unlock()
-		for i := 0; i < prevRows; i++ {
-			row := rows - 1 - hintRows - prevRows + i
-			if row < 1 {
-				continue
-			}
-			fmt.Fprintf(f.w, "\033[%d;1H\033[K", row)
-		}
-		fmt.Fprint(f.w, "\0338")
-	}
-	f.shiftScrollRegionLocked()
-	f.applyScrollRegionLocked()
+	// Re-apply the margins for the smaller block, then repaint the chrome
+	// over the rows the block vacated. The full draw clears only the rows
+	// of the block it paints now, and above the new bottom margin the
+	// vacated rows are transcript — so the pinned rows the block no longer
+	// covers are blanked explicitly, whatever the streaming state.
+	//
+	// Blank AFTER the draw: the block's top pinned row is the hint row,
+	// which the draw repaints, so blanking first would erase the hint text
+	// the draw had just put there and leave the row empty.
+	f.applyScrollRegionKeepingCursorLocked()
 	f.drawLocked()
+	f.blankVacatedSteerRows()
+}
+
+// blankVacatedSteerRows clears the pinned rows the current (smaller) block
+// does not cover. With `reserved` rows pinned, the scroll region's bottom
+// margin is row rows-reserved, so the pinned rows start there — the row the
+// block vacated is the bottom margin itself, which is why the walk starts at
+// bottom and stops before the content line, whose row the draw owns.
+// Every row it touches is at or below the bottom margin, so it can never
+// erase transcript.
+func (f *StatusFooter) blankVacatedSteerRows() {
+	_, rows := f.terminalSize()
+	if rows < 3 {
+		return
+	}
+	f.mu.Lock()
+	reserved := f.reservedRowsLocked()
+	f.mu.Unlock()
+	bottom := rows - reserved
+	_, _ = fmt.Fprint(f.w, "\0337")
+	for row := bottom; row <= rows-1; row++ {
+		_, _ = fmt.Fprintf(f.w, "\033[%d;1H\033[K", row)
+	}
+	_, _ = fmt.Fprint(f.w, "\0338")
+}
+
+// ClearSteerLineLocked is the lock-free variant of ClearSteerLine for
+// callers that already hold outputMu (InputReader.refreshLocked, the
+// picker's teardown). Both share clearSteerLineLocked, so the clear has
+// one implementation and one lock discipline: acquiring outputMu a second
+// time on a goroutine that already holds it deadlocks the REPL, which is
+// what left the terminal echoing keystrokes with a dead prompt.
+func (f *StatusFooter) ClearSteerLineLocked() {
+	f.clearSteerLineLocked()
 }
 
 // draw renders the pinned footer rows. Always: row N-1 horizontal rule,

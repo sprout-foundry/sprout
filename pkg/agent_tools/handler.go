@@ -67,6 +67,14 @@ type ToolDefinition struct {
 	// to the model. Use it for superseded tools: existing callers keep
 	// working without the schema costing context on every turn.
 	Hidden bool `json:"-"`
+
+	// Schema, when set, is the tool's complete JSON schema for its arguments
+	// (an object schema) and is advertised to the model as is, instead of the
+	// schema built from Parameters. Tools whose schema is defined elsewhere
+	// (a host page registering a tool from its own JSON schema) use it so
+	// nested properties survive; Parameters still carries the top-level
+	// names and types for argument coercion.
+	Schema map[string]any `json:"-"`
 }
 
 // ParameterDef defines a single tool parameter's schema.
@@ -292,6 +300,19 @@ type ToolFuncSet struct {
 	// tool fails closed and refuses. Set by pkg/agent (wireAgentToolFuncs);
 	// nil in standalone runs (verification disabled), where the gate is open.
 	DeployVerification func() (passed bool, haveResult bool)
+	// StreamModelText makes one plain-text model call (no tools) through
+	// the agent's own client, so it is routed and metered like every other
+	// call the agent makes, and books its usage under role. Each piece of
+	// the reply's visible text is passed to onChunk (nil to skip) as it
+	// streams; the whole text is returned. Set by pkg/agent
+	// (wireAgentToolFuncs); nil in standalone runs, where a tool that needs
+	// its own model call reports that none is available.
+	StreamModelText func(ctx context.Context, role, system, user string, onChunk func(string)) (string, error)
+	// PublishEvent publishes a UI event decorated with the agent's event
+	// metadata (chat id and the like), so a host can route it to the right
+	// conversation. Nil in standalone runs: the tool falls back to the raw
+	// event bus, or publishes nothing.
+	PublishEvent func(eventType string, data map[string]any)
 }
 
 // ResolveToolFuncs returns the tool func set to dispatch through. It prefers

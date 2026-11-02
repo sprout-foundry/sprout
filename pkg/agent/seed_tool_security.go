@@ -108,6 +108,12 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 		return nil
 	}
 	return func(name string, args map[string]interface{}) error {
+		// 0. A confined persona is held to its catalog entry: its tool list,
+		// its write paths, and read-only browsing.
+		if err := agent.checkPersonaConfinement(name, args); err != nil {
+			return err
+		}
+
 		// 1. Depth-based subagent nesting prevention
 		if agent != nil {
 			if name == "run_parallel_subagents" {

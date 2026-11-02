@@ -136,11 +136,24 @@ type SubagentType struct {
 	// (e.g. "git_write"). Replaces sniffing AutoApproveRules to infer what a
 	// persona is allowed to do. Use HasCapability to query.
 	Capabilities []string `json:"capabilities,omitempty"`
+	// WritePaths confines the persona to writing under these
+	// workspace-relative directories and enforces AllowedTools at execution.
+	// See personas.Definition.WritePaths; empty means unconfined.
+	WritePaths []string `json:"write_paths,omitempty"`
+	// HostTools names tools the host provides at run time rather than the
+	// built-in registry; see personas.Definition.HostTools.
+	HostTools []string `json:"host_tools,omitempty"`
 	// CanSpawnNonDelegatable lists otherwise-undelegatable persona IDs that
 	// this persona may spawn. Replaces the hardcoded EA-spawn-authority
 	// special-case. The coordinator carries ["orchestrator"] to enable the
 	// canonical coordinator→orchestrator→specialist chain.
 	CanSpawnNonDelegatable []string `json:"can_spawn_non_delegatable,omitempty"`
+}
+
+// IsConfined reports whether the persona declares WritePaths, which makes
+// its tool allowlist and write scope enforced at execution time.
+func (st *SubagentType) IsConfined() bool {
+	return st != nil && len(st.WritePaths) > 0
 }
 
 // HasCapability reports whether the persona declares the given capability

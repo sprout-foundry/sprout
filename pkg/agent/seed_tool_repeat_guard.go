@@ -48,9 +48,10 @@ func newRepeatGuardExecutor(inner core.ToolExecutor, agent *Agent) *repeatGuardE
 	return &repeatGuardExecutor{inner: inner, agent: agent}
 }
 
-// GetTools delegates to the inner executor.
+// GetTools delegates to the inner executor, advertising a tool's own JSON
+// schema where its handler defines one (see withHandlerSchemas).
 func (e *repeatGuardExecutor) GetTools() []core.Tool {
-	return e.inner.GetTools()
+	return withHandlerSchemas(e.inner.GetTools())
 }
 
 // Execute runs the batch, observes each call against the per-turn repeat

@@ -25,7 +25,10 @@ func isCriticalEvent(eventType string) bool {
 		EventTypeAskUserRequest,
 		EventTypeEditApprovalRequest,
 		EventTypePasswordRequest,
-		EventTypeInputRequired:
+		EventTypeInputRequired,
+		EventTypeMockupStart,
+		EventTypeMockupDone,
+		EventTypeMockupError:
 		return true
 	}
 	return false

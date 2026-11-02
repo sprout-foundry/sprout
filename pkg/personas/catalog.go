@@ -48,6 +48,18 @@ type Definition struct {
 	// purely "what auto-approves at runtime"; capabilities mean "what this
 	// persona is fundamentally allowed to do".
 	Capabilities []string `json:"capabilities,omitempty"`
+	// WritePaths confines the persona. When non-empty, the persona may write
+	// files only under these workspace-relative directories (e.g. "design/"),
+	// a tool call naming a tool outside AllowedTools is refused at execution
+	// (not only hidden from the tool list), and browse_url is limited to
+	// reading a page (no scripted steps, sessions, or file:// URLs). Tools
+	// that write to a fixed location of their own (write_plan → .sprout/)
+	// are governed by AllowedTools alone. Empty means unconfined.
+	WritePaths []string `json:"write_paths,omitempty"`
+	// HostTools names tools the host provides at run time (through the
+	// headless agent API), not Sprout's built-in registry. Each must also
+	// be in AllowedTools; without a host that registers it, it is absent.
+	HostTools []string `json:"host_tools,omitempty"`
 	// CanSpawnNonDelegatable lists otherwise-undelegatable persona IDs that
 	// this persona is explicitly permitted to spawn as a subagent. Replaces
 	// the implicit "hasEASpawnAuthority" carve-out: instead of detecting
@@ -178,6 +190,10 @@ func cloneDefinitions(src map[string]Definition) map[string]Definition {
 		defCopy := def
 		defCopy.AllowedTools = append([]string{}, def.AllowedTools...)
 		defCopy.Aliases = append([]string{}, def.Aliases...)
+		defCopy.Capabilities = append([]string{}, def.Capabilities...)
+		defCopy.WritePaths = append([]string{}, def.WritePaths...)
+		defCopy.HostTools = append([]string{}, def.HostTools...)
+		defCopy.CanSpawnNonDelegatable = append([]string{}, def.CanSpawnNonDelegatable...)
 		out[id] = defCopy
 	}
 	return out

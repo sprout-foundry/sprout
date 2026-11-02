@@ -90,6 +90,9 @@ func main() {
 	for name, fn := range shellApprovalJSFuncs() {
 		apiSurface[name] = fn
 	}
+	for name, fn := range hostToolJSFuncs() {
+		apiSurface[name] = fn
+	}
 
 	js.Global().Set("SproutWasm", js.ValueOf(apiSurface))
 

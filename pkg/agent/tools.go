@@ -66,6 +66,12 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 		return "", agenterrors.NewInvalidInputError(fmt.Sprintf("unknown tool '%s'. Valid tools are: %s", toolName, strings.Join(validTools, ", ")), nil)
 	}
 
+	// A confined persona is held to its catalog entry before anything runs,
+	// MCP tools included.
+	if err := a.checkPersonaConfinement(toolName, args); err != nil {
+		return "", err
+	}
+
 	// Execute the tool
 	// Wire workspace root, effective cwd, and session folders into context for
 	// filesystem path resolution (SafeResolvePathWithBypass).

@@ -476,6 +476,8 @@ func cloneConfig(cfg *Config) *Config {
 			copied.AllowedTools = append([]string{}, st.AllowedTools...)
 			copied.Aliases = append([]string{}, st.Aliases...)
 			copied.Capabilities = append([]string{}, st.Capabilities...)
+			copied.WritePaths = append([]string{}, st.WritePaths...)
+			copied.HostTools = append([]string{}, st.HostTools...)
 			copied.CanSpawnNonDelegatable = append([]string{}, st.CanSpawnNonDelegatable...)
 			if st.AutoApproveRules != nil {
 				rules := *st.AutoApproveRules

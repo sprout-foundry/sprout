@@ -505,6 +505,20 @@ describe("package sources", () => {
     assert.match(source, /SproutProviders/);
   });
 
+  test("the agent entry point imports no web UI or React module", () => {
+    const sources = [
+      "packages/workspace/src/agentChunk.ts",
+      ...fs
+        .readdirSync(path.join(ROOT, "packages/workspace/src/agent"))
+        .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"))
+        .map((f) => `packages/workspace/src/agent/${f}`),
+    ];
+    for (const file of sources) {
+      const source = read(file);
+      assert.doesNotMatch(source, /webui\/src|from ['"]react/, `${file} must not reach the web UI or React`);
+    }
+  });
+
   test("the host entry point re-exports the public host module", () => {
     const source = read("packages/workspace/src/host.ts");
     assert.match(source, /from '\.\.\/\.\.\/\.\.\/webui\/src\/host\/index'/);
@@ -638,6 +652,16 @@ describe(
       for (const spec of specifiers) {
         assert.ok(spec.startsWith("./"), `entry import is relative: ${spec}`);
       }
+    });
+
+    test("the agent entry is self-contained: it loads no chunk and no React", () => {
+      const agent = fs.readFileSync(path.join(DIST, "agent.js"), "utf-8");
+      assert.doesNotMatch(agent, /\bfrom\s+["']|\bimport\s*\(\s*["']/, "agent.js imports nothing");
+      assert.ok(
+        agent.length < 64 * 1024,
+        `the headless agent API must stay small, was ${agent.length} bytes`,
+      );
+      assert.ok(fs.existsSync(path.join(DIST, "agent.d.ts")), "agent.d.ts emitted");
     });
 
     test("code-splitting: the entry is small and the views are their own chunks", () => {

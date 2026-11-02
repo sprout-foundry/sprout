@@ -242,6 +242,12 @@ type ModelConfig struct {
 	CompletionPatternOverrides []PatternOverride `json:"completion_pattern_overrides,omitempty"`
 	// Config-based model definitions (fallback when endpoint fetch fails or lacks details)
 	ModelInfo []ModelInfo `json:"model_info,omitempty"`
+	// DisableDiscovery makes the configuration the only source of model
+	// metadata: no /models listing, no backend probes, no model-registry
+	// lookup. For an endpoint whose host states the model (its id and
+	// context window) and serves nothing else, so a turn goes straight to
+	// the chat request.
+	DisableDiscovery bool `json:"disable_discovery,omitempty"`
 	// Legacy fields for backward compatibility
 	ContextLimit    int      `json:"context_limit,omitempty"`
 	SupportsVision  bool     `json:"supports_vision"`

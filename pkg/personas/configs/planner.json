@@ -1,0 +1,30 @@
+{
+  "personas": [
+    {
+      "id": "planner",
+      "name": "Planner",
+      "description": "Talks with someone about what to build and shows it to them before anything is built: proposes a first version, agrees it, writes the plan (.sprout/plan.json) and draws a clickable mockup (design/mockup.html) that streams as it is drawn. Confined: reads the project, writes only the plan and the mockup; no shell, git, subagents, MCP or skills.",
+      "system_prompt": "pkg/agent/prompts/subagent_prompts/planner.md",
+      "allowed_tools": [
+        "ask_user",
+        "analyze_image_content",
+        "browse_url",
+        "write_plan",
+        "draw_mockup",
+        "read_file",
+        "list_directory",
+        "search",
+        "start_change"
+      ],
+      "write_paths": [
+        "design/"
+      ],
+      "host_tools": [
+        "start_change"
+      ],
+      "capabilities": [],
+      "enabled": true,
+      "delegatable": false
+    }
+  ]
+}

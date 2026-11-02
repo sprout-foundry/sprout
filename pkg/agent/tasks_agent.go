@@ -79,6 +79,15 @@ func newTaskAgent(a *Agent, worktreePath, taskID string) (*Agent, error) {
 		todoMgr:  tools.NewTodoManager(),
 		eventBus: a.eventBus,
 		role:     taskRole,
+		// Depth 1: the per-turn hooks that assume one turn per agent at a
+		// time are keyed on depth. A task runs concurrently with the
+		// primary's own turn, so it must not run the turn-end quality and
+		// verification hooks (they read per-agent turn state the primary is
+		// using) or publish progress-completion events under an empty run id
+		// (which a consumer reads as an extra "run finished" for the
+		// primary's run). Delegation still works: the default depth limit is
+		// 1, so a depth-1 task can spawn subagents.
+		subagentDepth: 1,
 	}
 
 	if tm := a.GetTerminalManager(); tm != nil {
@@ -97,6 +106,11 @@ func newTaskAgent(a *Agent, worktreePath, taskID string) (*Agent, error) {
 
 	taskAgent.EnableChangeTracking("task run")
 	taskAgent.toolFuncs = buildAgentToolFuncs(taskAgent)
+
+	// A stable session id keeps the task's own conversation state in its own
+	// file: autoSaveState would otherwise mint a timestamp id on the first
+	// save, and two tasks starting in the same second would share one.
+	taskAgent.SetSessionID("task_" + taskID)
 
 	// Tag every event with the task's own id so the CLI can route a task's
 	// output to its own view instead of interleaving it with the primary's

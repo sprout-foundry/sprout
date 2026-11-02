@@ -266,3 +266,50 @@ func TestTaskDetail_NotFound(t *testing.T) {
 		t.Fatal("expected a not-found error")
 	}
 }
+
+// A task runs concurrently with the primary's turn, so it must not run the
+// per-turn hooks that assume one turn per agent at a time.
+func TestNewTaskAgent_IsIsolatedFromPrimaryTurnState(t *testing.T) {
+	repo := initTaskTestRepo(t)
+	primary := newTaskTestAgent(t, repo)
+	primary.SetSessionID("primary-session")
+
+	wt, err := createTaskWorktree(context.Background(), repo, "feat/isolated", "")
+	if err != nil {
+		t.Fatalf("createTaskWorktree: %v", err)
+	}
+	t.Cleanup(func() { wt.remove(context.Background()) })
+
+	taskAgent, err := newTaskAgent(primary, wt.Path, "bg-task-9")
+	if err != nil {
+		t.Fatalf("newTaskAgent: %v", err)
+	}
+
+	if got := taskAgent.GetWorkspaceRoot(); got != wt.Path {
+		t.Errorf("workspace root = %q, want the worktree %q", got, wt.Path)
+	}
+	if got := taskAgent.GetRole(); got != taskRole {
+		t.Errorf("role = %q, want %q", got, taskRole)
+	}
+	if !taskAgent.IsWorkflowRun() {
+		t.Error("a task must run non-interactively (SetWorkflowRun) so no approval prompt can block it")
+	}
+	if !taskAgent.IsSubagent() {
+		t.Error("a task must be marked as a delegated run so the turn-end quality/verification hooks and progress events stay off")
+	}
+	if got := taskAgent.GetSessionID(); got != "task_bg-task-9" {
+		t.Errorf("session id = %q, want task_bg-task-9", got)
+	}
+	if taskAgent.state == primary.state {
+		t.Error("task shares the primary's conversation state")
+	}
+	if taskAgent.changeTracker == primary.changeTracker {
+		t.Error("task shares the primary's change tracker")
+	}
+	if taskAgent.todoMgr == primary.todoMgr {
+		t.Error("task shares the primary's todo manager")
+	}
+	if got := taskAgent.GetMaxIterations(); got != primary.GetMaxIterations() {
+		t.Errorf("max iterations = %d, want the primary's %d (not a persona budget)", got, primary.GetMaxIterations())
+	}
+}

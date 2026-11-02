@@ -80,6 +80,10 @@ func (ws *ReactWebServer) setAgentStateForClientChat(clientID, chatID string, sn
 	ctx.LastSeenAt = time.Now()
 }
 
+// buildWebUIAgent constructs a client or chat agent. A variable so tests can
+// observe (and stub) agent builds.
+var buildWebUIAgent = agent.NewAgentWithLayersInWorkspace
+
 func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) {
 	clientID = strings.TrimSpace(clientID)
 	if clientID == "" {
@@ -148,6 +152,32 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 		}
 		return agentInst, nil
 	}
+	ws.mutex.Unlock()
+
+	// Concurrent requests from one client (a page load fires several API
+	// calls at once) share one agent build. Each build runs the provider
+	// connection check — a real model round trip — so building one agent
+	// per request multiplied first-load latency and discarded all but one.
+	v, err, _ := ws.agentCreation.Do(clientID, func() (interface{}, error) {
+		return ws.createClientAgent(clientID)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return v.(*agent.Agent), nil
+}
+
+// createClientAgent builds and installs the client-level agent. Callers go
+// through getClientAgent, which deduplicates concurrent builds.
+func (ws *ReactWebServer) createClientAgent(clientID string) (*agent.Agent, error) {
+	ws.mutex.Lock()
+	ctx := ws.getOrCreateClientContextLocked(clientID)
+	if ctx.Agent != nil {
+		// A build that finished just before this one started.
+		agentInst := ctx.Agent
+		ws.mutex.Unlock()
+		return agentInst, nil
+	}
 	workspaceRoot := ctx.WorkspaceRoot
 	snapshot := append([]byte(nil), ctx.AgentState...)
 	userID := ctx.UserID // Capture before releasing lock
@@ -194,7 +224,7 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 		}
 	}
 
-	created, createErr = agent.NewAgentWithLayersInWorkspace(configBase, workspaceDir, workspaceRoot, "")
+	created, createErr = buildWebUIAgent(configBase, workspaceDir, workspaceRoot, "")
 	if createErr != nil {
 		if errors.Is(createErr, agent.ErrModelNotAvailable) || errors.Is(createErr, agent.ErrProviderNotConfigured) {
 			return nil, createErr

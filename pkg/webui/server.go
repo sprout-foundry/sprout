@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	agenttools "github.com/sprout-foundry/sprout/pkg/agent_tools"
@@ -127,6 +128,14 @@ type ReactWebServer struct {
 
 	// lifecycle tracks activity and the prepare-stop drain (workspace_lifecycle.go).
 	lifecycle lifecycleState
+
+	// agentCreation collapses concurrent getClientAgent builds for one
+	// client into a single agent build; see getClientAgent.
+	agentCreation singleflight.Group
+
+	// providerModels caches each provider's live model list so provider
+	// listings never wait on a remote catalog; see provider_models_cache.go.
+	providerModels providerModelsCache
 }
 
 // IsSharedMode reports whether the server is in "shared agent" mode —

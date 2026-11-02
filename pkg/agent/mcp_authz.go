@@ -217,6 +217,17 @@ func (a *Agent) promptMCPAuthorizationCLI(server, tool string) (string, bool) {
 		return "", false
 	}
 
+	// The picker reads stdin itself: the steer reader must release it, and
+	// the spinner and streamed prose must not draw over the question, or
+	// keystrokes split between two readers and an Enter meant for the
+	// picker is sent as a steer message instead.
+	clihooks.SuspendIndicator()
+	clihooks.PauseSteer()
+	clihooks.SuspendStreaming()
+	defer clihooks.ResumeIndicator()
+	defer clihooks.ResumeSteer()
+	defer clihooks.ResumeStreaming()
+
 	subagentLabel := ""
 	if a.IsSubagent() {
 		subagentLabel = fmt.Sprintf("Subagent (depth %d) is running: ", a.SubagentDepth())
@@ -230,6 +241,7 @@ func (a *Agent) promptMCPAuthorizationCLI(server, tool string) (string, bool) {
 		injection.MCPToolAllowlistEntry(server, tool),
 		injection.MCPToolAllowlistServerEntry(server),
 	)
+	fmt.Print("\a")
 	fmt.Println(prompt)
 
 	// The picker is the same console select list the CLI's own commands use.
@@ -244,6 +256,7 @@ func (a *Agent) promptMCPAuthorizationCLI(server, tool string) (string, bool) {
 			{Label: "Always allow this server", Detail: injection.MCPToolAllowlistServerEntry(server), Value: mcpAuthzAllowServer},
 			{Label: "Deny", Value: mcpAuthzDeny},
 		},
+		ArmDelay: console.ApprovalArmDelay,
 	})
 	choice, ok, err := sl.Run(context.Background())
 	if err != nil || !ok {

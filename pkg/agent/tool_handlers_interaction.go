@@ -52,6 +52,7 @@ func handleAskUser(ctx context.Context, a *Agent, args map[string]interface{}) (
 
 	var response string
 	if hasActiveWebUI {
+		a.noteQuestionRoutedToBrowser()
 		response, err = tools.AskUserWithEventBus(ctx, req, eventBus, clientID, userID, chatID, askUserMgr)
 	} else if a.IsTaskRun() {
 		// A task has no terminal of its own. Without a browser there is

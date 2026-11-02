@@ -37,6 +37,10 @@ type taskRecord struct {
 	Workspace string
 
 	worktree *taskWorktree
+
+	// orderIdx is the record's slot in the registry order while it is still
+	// a reserved placeholder (-1 once adopted). Guarded by the registry lock.
+	orderIdx int
 }
 
 // elapsed is called with the registry lock held.
@@ -147,7 +151,11 @@ func (r *taskRegistry) reserve(workspace string, limit int) (*taskRecord, error)
 			fmt.Sprintf("%d tasks are already running for this workspace (limit %d); stop one with /tasks stop <id>", n, limit), nil)
 	}
 	rec := &taskRecord{Status: "running", Workspace: workspace, Started: time.Now()}
-	r.order = append(r.order, "") // placeholder position, filled by adopt
+	// The placeholder's slot in order is recorded on the record itself, so
+	// adopt fills exactly this position rather than searching for the first
+	// empty entry.
+	rec.orderIdx = len(r.order)
+	r.order = append(r.order, "")
 	r.pending = append(r.pending, rec)
 	return rec, nil
 }
@@ -164,12 +172,12 @@ func (r *taskRegistry) adopt(rec *taskRecord, id string) {
 			break
 		}
 	}
-	for i, id2 := range r.order {
-		if id2 == "" {
-			r.order[i] = id
-			break
-		}
+	if rec.orderIdx >= 0 && rec.orderIdx < len(r.order) && r.order[rec.orderIdx] == "" {
+		r.order[rec.orderIdx] = id
+	} else {
+		r.order = append(r.order, id)
 	}
+	rec.orderIdx = -1
 	r.pruneLocked()
 }
 

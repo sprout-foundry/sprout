@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/webcontent"
 )
@@ -56,6 +57,13 @@ func startSignalHandler(ctx context.Context, cancel context.CancelFunc, chatAgen
 							}
 						}
 					}
+					continue
+				}
+
+				// A `!` command holding the terminal shares sprout's
+				// process group, so its Ctrl+C lands here too. It is the
+				// child's: let it cancel the prompt or the command.
+				if sig == syscall.SIGINT && clihooks.ForegroundChildActive() {
 					continue
 				}
 

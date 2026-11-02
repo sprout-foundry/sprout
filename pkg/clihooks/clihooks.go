@@ -216,3 +216,27 @@ func ResumeStreaming() {
 func IsStreamingSuspended() bool {
 	return streamingDepth.Load() > 0
 }
+
+// foregroundChildDepth counts children currently holding the terminal in
+// sprout's own process group (a `!` command). Ctrl+C at the terminal then
+// reaches both processes; it belongs to the child — answering a password
+// prompt with Ctrl+C must cancel sudo, not shut sprout down.
+var foregroundChildDepth atomic.Int32
+
+// BeginForegroundChild marks a terminal-attached child as running. Pair
+// with a deferred EndForegroundChild.
+func BeginForegroundChild() { foregroundChildDepth.Add(1) }
+
+// EndForegroundChild unwinds one BeginForegroundChild.
+func EndForegroundChild() {
+	for {
+		cur := foregroundChildDepth.Load()
+		if cur <= 0 || foregroundChildDepth.CompareAndSwap(cur, cur-1) {
+			return
+		}
+	}
+}
+
+// ForegroundChildActive reports whether a terminal-attached child is
+// running, so sprout's SIGINT handler leaves the signal to it.
+func ForegroundChildActive() bool { return foregroundChildDepth.Load() > 0 }

@@ -25,6 +25,17 @@ type providerDescriptor struct {
 	Models []string `json:"models"`
 }
 
+// providerListWait caps how long a provider listing waits on the first live
+// lookup of a custom provider (an endpoint the user configured, usually
+// local) that has no embedded catalog models to fall back on. Built-in
+// providers never wait: the listing serves their catalog models (or none)
+// and the live list replaces them once the background lookup lands.
+const providerListWait = 1500 * time.Millisecond
+
+// providerModelsPickerWait caps the model picker's wait for one provider's
+// first live lookup before it falls back to the catalog.
+const providerModelsPickerWait = 5 * time.Second
+
 func (ws *ReactWebServer) handleAPIProviders(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
@@ -32,26 +43,28 @@ func (ws *ReactWebServer) handleAPIProviders(w http.ResponseWriter, r *http.Requ
 	}
 
 	clientID := ws.resolveClientID(r)
-	// Derive a context from the request so model discovery is cancelled if
-	// the client disconnects. Add an overall cap so the parallel fetches
-	// can't run indefinitely even if the request context never fires.
-	listCtx, listCancel := context.WithTimeout(r.Context(), 15*time.Second)
-	defer listCancel()
-	providers := ws.listProvidersCtx(listCtx, clientID)
+	configManager, agentInst := ws.providerListingSource(clientID)
+	providers := ws.listProvidersWith(r.Context(), configManager, agentInst)
+
+	// The session-scoped provider/model of the active chat when it has an
+	// agent; otherwise what an agent built now would resolve to. Reading
+	// the config rather than building an agent keeps this endpoint off the
+	// provider connection check.
 	currentProvider := ""
 	currentModel := ""
-
-	// Resolve the active chat ID to get the session-scoped provider/model.
-	activeChatID := ""
-	ws.mutex.RLock()
-	if ctx := ws.clientContexts[clientID]; ctx != nil {
-		activeChatID = ctx.getActiveChatID()
-	}
-	ws.mutex.RUnlock()
-
-	if agentInst, err := ws.getChatAgent(clientID, activeChatID); err == nil && agentInst != nil {
-		currentProvider = strings.TrimSpace(agentInst.GetProvider())
-		currentModel = strings.TrimSpace(agentInst.GetModel())
+	if chatAgent := ws.peekChatAgent(clientID, ""); chatAgent != nil {
+		currentProvider = strings.TrimSpace(chatAgent.GetProvider())
+		currentModel = strings.TrimSpace(chatAgent.GetModel())
+	} else if configManager != nil {
+		if pt, model, err := configManager.ResolveProviderModel("", ""); err == nil {
+			currentProvider = strings.TrimSpace(string(pt))
+			currentModel = strings.TrimSpace(model)
+			if currentModel == "" {
+				if custom, ok := configManager.GetConfig().CustomProviders[currentProvider]; ok {
+					currentModel = strings.TrimSpace(custom.ModelName)
+				}
+			}
+		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
@@ -65,177 +78,127 @@ func (ws *ReactWebServer) listProviders(clientID string) []providerDescriptor {
 	return ws.listProvidersCtx(context.Background(), clientID)
 }
 
-// listProvidersCtx is the context-aware variant. When derived from an HTTP
-// request, model discovery is cancelled when the client disconnects so the
-// server doesn't keep making N provider API calls for a closed browser tab.
-// It also fetches models for all providers concurrently instead of
-// sequentially, turning a 12×5s worst case into a single 5s timeout.
+// listProvidersCtx lists every available provider with its models. Model
+// lists come from the process-lifetime provider model cache, so the listing
+// never waits on a remote catalog: see providerModelIDs.
 func (ws *ReactWebServer) listProvidersCtx(ctx context.Context, clientID string) []providerDescriptor {
-	var configManager *configuration.Manager
+	configManager, agentInst := ws.providerListingSource(clientID)
+	return ws.listProvidersWith(ctx, configManager, agentInst)
+}
 
-	agentInst, err := ws.getClientAgent(clientID)
-	if err == nil && agentInst != nil && agentInst.GetConfigManager() != nil {
-		configManager = agentInst.GetConfigManager()
-	} else {
-		// Fall back to a layered config manager for any error or missing
-		// config manager — covers no-provider, provider-config errors, agent
-		// creation failures, and the nil-configManager case (err == nil).
-		cm, createErr := ws.getLayeredConfigManager(clientID)
-		if createErr != nil {
-			return []providerDescriptor{}
-		}
-		configManager = cm
-		agentInst = nil
+// providerListingSource returns the config manager a provider listing reads
+// — the client's existing agent's, or a fresh layered (global + workspace)
+// manager — plus that agent when there is one. It never builds an agent.
+func (ws *ReactWebServer) providerListingSource(clientID string) (*configuration.Manager, *agentpkg.Agent) {
+	if agentInst := ws.peekClientAgent(clientID); agentInst != nil && agentInst.GetConfigManager() != nil {
+		return agentInst.GetConfigManager(), agentInst
 	}
+	// Make sure the client context exists so the layered manager includes
+	// this client's workspace layer.
+	ws.getOrCreateClientContext(clientID)
+	cm, err := ws.getLayeredConfigManager(clientID)
+	if err != nil {
+		return nil, nil
+	}
+	return cm, nil
+}
 
+func (ws *ReactWebServer) listProvidersWith(ctx context.Context, configManager *configuration.Manager, agentInst *agentpkg.Agent) []providerDescriptor {
 	if configManager == nil {
 		return []providerDescriptor{}
 	}
 
 	providerTypes := configManager.GetAvailableProviders()
+	customProviders := configManager.GetConfig().CustomProviders
 
-	// Fetch models for all providers concurrently. Each provider gets its
-	// own sub-context with a per-provider timeout, so one slow provider
-	// can't block the entire response. The parent context (derived from
-	// the HTTP request when available) cancels all fetches if the client
-	// disconnects.
-	type providerResult struct {
-		index int
-		desc  providerDescriptor
-	}
-
+	// Resolve all providers concurrently so the providers that do wait
+	// (no cached result, no catalog fallback) share one providerListWait.
 	results := make([]providerDescriptor, len(providerTypes))
 	var wg sync.WaitGroup
-
 	for i, providerType := range providerTypes {
 		wg.Add(1)
 		go func(idx int, pt api.ClientType) {
 			defer wg.Done()
-			var models []string
-			if agentInst != nil {
-				models = ws.modelsForProviderCtx(ctx, pt, agentInst)
-			} else {
-				models = ws.modelsForProviderNoAgentCtx(ctx, pt)
+			custom, isCustom := customProviders[string(pt)]
+			var customPtr *configuration.CustomProviderConfig
+			if isCustom {
+				customPtr = &custom
 			}
 			results[idx] = providerDescriptor{
 				ID:     string(pt),
 				Name:   api.GetProviderName(pt),
-				Models: models,
+				Models: ws.providerModelIDs(ctx, pt, configManager, agentInst, customPtr),
 			}
 		}(i, providerType)
 	}
 	wg.Wait()
 
-	// Filter out zero-value entries (shouldn't happen since we pre-sized,
-	// but the results slice was zero-initialized and we wrote to each index).
-	descriptors := results[:]
-
-	sort.SliceStable(descriptors, func(i, j int) bool {
-		if descriptors[i].Name == descriptors[j].Name {
-			return descriptors[i].ID < descriptors[j].ID
+	sort.SliceStable(results, func(i, j int) bool {
+		if results[i].Name == results[j].Name {
+			return results[i].ID < results[j].ID
 		}
-		return descriptors[i].Name < descriptors[j].Name
+		return results[i].Name < results[j].Name
 	})
-
-	return descriptors
+	return results
 }
 
-// modelsForProviderFromAPI looks up models from the provider API and the
-// embedded provider catalog. Returns nil when no models are found.
-func modelsForProviderFromAPI(providerType api.ClientType) []string {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	return modelsForProviderFromAPICtx(ctx, providerType)
-}
-
-// modelsForProviderFromAPICtx is the context-aware variant. The caller
-// controls the timeout/cancellation — pass a context derived from the HTTP
-// request so in-flight API calls are cancelled when the client disconnects.
-func modelsForProviderFromAPICtx(ctx context.Context, providerType api.ClientType) []string {
-	models, err := api.GetModelsForProviderCtx(ctx, providerType)
-	if err == nil && len(models) > 0 {
-		modelIDs := make([]string, 0, len(models))
-		for _, model := range models {
-			id := strings.TrimSpace(model.ID)
-			if id == "" {
-				continue
-			}
-			modelIDs = append(modelIDs, id)
-		}
-		if len(modelIDs) > 0 {
-			sort.Strings(modelIDs)
-			return modelIDs
+// providerModelIDs returns the model IDs to list for one provider, in order
+// of preference: the configured model alone when the custom provider
+// disables model discovery; the cached live list; the embedded catalog; the
+// configured model. It waits on a live lookup only for a custom provider
+// with no cached result and no catalog models, and then at most
+// providerListWait.
+func (ws *ReactWebServer) providerModelIDs(ctx context.Context, pt api.ClientType, configManager *configuration.Manager, agentInst *agentpkg.Agent, custom *configuration.CustomProviderConfig) []string {
+	if custom != nil && custom.DisableModelDiscovery {
+		if model := strings.TrimSpace(custom.ModelName); model != "" {
+			return []string{model}
 		}
 	}
 
-	if provider, ok := providercatalog.FindProvider(string(providerType)); ok && len(provider.Models) > 0 {
-		modelIDs := make([]string, 0, len(provider.Models))
-		for _, model := range provider.Models {
-			id := strings.TrimSpace(model.ID)
-			if id == "" {
-				continue
-			}
-			modelIDs = append(modelIDs, id)
-		}
-		if len(modelIDs) > 0 {
-			if err != nil {
-				// Repeated discovery failures for the same provider get
-				// rate-limited to avoid log spam — e.g. a misconfigured
-				// ollama-local pointing at an unreachable host that the
-				// WebUI polls periodically.
-				logRateLimitedWarn(
-					"model_discovery_catalog_fallback:"+string(providerType),
-					"using provider catalog fallback after model discovery failure",
-					slog.String("provider", string(providerType)),
-					slog.Any("err", err),
-				)
-			}
-			sort.Strings(modelIDs)
-			return modelIDs
+	catalogIDs := catalogModelIDs(pt)
+	var wait time.Duration
+	if custom != nil && len(catalogIDs) == 0 {
+		wait = providerListWait
+	}
+	models, err, ok := ws.providerModels.lookup(ctx, pt, wait)
+	if ok && err == nil {
+		if ids := modelInfoIDs(models); len(ids) > 0 {
+			return ids
 		}
 	}
 
-	return nil
-}
-
-func (ws *ReactWebServer) modelsForProvider(providerType api.ClientType, agentInst *agentpkg.Agent) []string {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	return ws.modelsForProviderCtx(ctx, providerType, agentInst)
-}
-
-// modelsForProviderCtx is the context-aware variant. Derives the model-list
-// timeout from the parent context so a client disconnect cancels the fetch.
-func (ws *ReactWebServer) modelsForProviderCtx(ctx context.Context, providerType api.ClientType, agentInst *agentpkg.Agent) []string {
-	if models := modelsForProviderFromAPICtx(ctx, providerType); len(models) > 0 {
-		return models
+	if len(catalogIDs) > 0 {
+		if err != nil {
+			// Rate-limited: the listing is polled, and a provider host
+			// that stays unreachable would otherwise log on every poll.
+			logRateLimitedWarn(
+				"model_discovery_catalog_fallback:"+string(pt),
+				"using provider catalog fallback after model discovery failure",
+				slog.String("provider", string(pt)),
+				slog.Any("err", err),
+			)
+		}
+		return catalogIDs
 	}
 
-	// Agent-specific fallback when no API/catalog models are available.
-	if agentInst == nil || agentInst.GetConfigManager() == nil {
-		return []string{}
+	fallback := ""
+	if configManager != nil {
+		fallback = strings.TrimSpace(configManager.GetModelForProvider(pt))
 	}
-
-	fallback := strings.TrimSpace(agentInst.GetConfigManager().GetModelForProvider(providerType))
-	if fallback == "" && agentInst.GetProviderType() == providerType {
+	if fallback == "" && agentInst != nil && agentInst.GetProviderType() == pt {
 		fallback = strings.TrimSpace(agentInst.GetModel())
 	}
+	if fallback == "" && custom != nil {
+		fallback = strings.TrimSpace(custom.ModelName)
+	}
 	if fallback == "" {
-		// Log only if the API/catalog lookup also failed with an error
-		// (modelsForProviderFromAPI handles its own catalog-fallback log).
 		return []string{}
 	}
-
-	_, err := api.GetModelsForProvider(providerType)
 	if err != nil {
-		// Rate-limited so a misconfigured-but-repeatedly-polled provider
-		// (e.g. ollama-local pointed at an unreachable host) logs once,
-		// stays quiet through routine polling, and re-surfaces every
-		// logRateMinInterval if the failure is still happening.
 		logRateLimitedWarn(
-			"model_discovery_fail_fallback:"+string(providerType),
+			"model_discovery_fail_fallback:"+string(pt),
 			"model discovery failed; using configured fallback model",
-			slog.String("provider", string(providerType)),
+			slog.String("provider", string(pt)),
 			slog.String("fallback_model", fallback),
 			slog.Any("err", err),
 		)
@@ -243,29 +206,36 @@ func (ws *ReactWebServer) modelsForProviderCtx(ctx context.Context, providerType
 	return []string{fallback}
 }
 
-// modelsForProviderNoAgent is like modelsForProvider but doesn't require an
-// agent instance. Used during onboarding when no provider is configured yet.
-func (ws *ReactWebServer) modelsForProviderNoAgent(providerType api.ClientType) []string {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	return ws.modelsForProviderNoAgentCtx(ctx, providerType)
+// modelInfoIDs returns the sorted, non-empty IDs of models.
+func modelInfoIDs(models []api.ModelInfo) []string {
+	ids := make([]string, 0, len(models))
+	for _, model := range models {
+		if id := strings.TrimSpace(model.ID); id != "" {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+	return ids
 }
 
-// modelsForProviderNoAgentCtx is the context-aware variant.
-func (ws *ReactWebServer) modelsForProviderNoAgentCtx(ctx context.Context, providerType api.ClientType) []string {
-	if models := modelsForProviderFromAPICtx(ctx, providerType); len(models) > 0 {
-		return models
+// catalogModelIDs returns the sorted model IDs the embedded provider
+// catalog lists for pt, or nil.
+func catalogModelIDs(pt api.ClientType) []string {
+	provider, ok := providercatalog.FindProvider(string(pt))
+	if !ok || len(provider.Models) == 0 {
+		return nil
 	}
-
-	if _, err := api.GetModelsForProvider(providerType); err != nil {
-		logRateLimitedWarn(
-			"model_discovery_fail:"+string(providerType),
-			"model discovery failed",
-			slog.String("provider", string(providerType)),
-			slog.Any("err", err),
-		)
+	ids := make([]string, 0, len(provider.Models))
+	for _, model := range provider.Models {
+		if id := strings.TrimSpace(model.ID); id != "" {
+			ids = append(ids, id)
+		}
 	}
-	return []string{}
+	if len(ids) == 0 {
+		return nil
+	}
+	sort.Strings(ids)
+	return ids
 }
 
 func (ws *ReactWebServer) publishProviderState(clientID string) {
@@ -333,11 +303,10 @@ func (ws *ReactWebServer) handleGetModels(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Derive a context from the request so model discovery is cancelled if
-	// the client disconnects, and cap it so the upstream API call can't run
-	// indefinitely. Mirrors handleAPIProviders' timeout.
-	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
-	defer cancel()
+	// The live lookup runs in the provider model cache, detached from this
+	// request; the request only waits up to providerModelsPickerWait (less
+	// if the client disconnects) before falling back to the catalog.
+	ctx := r.Context()
 
 	provider := strings.TrimSpace(r.URL.Query().Get("provider"))
 	if provider == "" {
@@ -375,7 +344,10 @@ func (ws *ReactWebServer) handleGetModels(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	models, err := api.GetModelsForProviderCtx(ctx, clientType)
+	models, err, ok := ws.providerModels.lookup(ctx, clientType, providerModelsPickerWait)
+	if !ok && err == nil {
+		err = fmt.Errorf("model discovery for %s is still running", clientType)
+	}
 	if err != nil {
 		// Fall back to the provider catalog if the provider is known. This
 		// keeps the model picker modal consistent with the settings dropdown

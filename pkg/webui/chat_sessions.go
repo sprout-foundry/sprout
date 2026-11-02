@@ -231,7 +231,7 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string,
 	snapshot := sessionSnapshot
 	var created *agent.Agent
 	var createErr error
-	created, createErr = agent.NewAgentWithLayersInWorkspace(configBase, workspaceDir, agentWorkspace, "")
+	created, createErr = buildWebUIAgent(configBase, workspaceDir, agentWorkspace, "")
 	if createErr != nil {
 		if errors.Is(createErr, agent.ErrModelNotAvailable) || errors.Is(createErr, agent.ErrProviderNotConfigured) {
 			return nil, createErr

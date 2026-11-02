@@ -86,10 +86,12 @@ func (ws *ReactWebServer) buildAPIStats(r *http.Request) map[string]interface{} 
 	ws.mutex.Unlock()
 
 	// If the locked function didn't find an agent (clientCtx.Agent was nil),
-	// try to get or create one outside the lock to avoid deadlock —
-	// getClientAgent acquires ws.mutex itself.
+	// use one bound to the client's default chat — outside the lock, since
+	// peekClientAgent acquires ws.mutex itself. Stats never build an agent
+	// (see gatherStatsForClientID); the config fallback below names the
+	// provider and model until one exists.
 	if stats["provider"] == "" && clientID != "" {
-		if agentInst, err := ws.getClientAgent(clientID); err == nil && agentInst != nil {
+		if agentInst := ws.peekClientAgent(clientID); agentInst != nil {
 			populateAgentStats(stats, agentInst)
 		}
 	}

@@ -34,11 +34,18 @@ func (f *StatusFooter) applySteerRegionOrDefer(wasActive bool, prevRows, newRows
 	if wasActive && newRows < prevRows {
 		f.clearOrphanedSteerRows(prevRows, newRows)
 	}
-	// Growing takes rows that were outside the region, so nothing has to be
-	// moved — but they are not guaranteed blank either: a wrapped footer row
-	// or a stale steer frame can be sitting there. Blank the rows the block
-	// newly occupies before the margins claim them.
-	if newRows > prevRows {
+	switch {
+	case !wasActive && newRows > prevRows:
+		// Opening the panel (turn start, or resuming after a prompt that
+		// closed it) claims the region's bottom rows, which hold the newest
+		// transcript — the prompt and the user's answer — and the cursor.
+		// Lift them above the panel instead of painting over them.
+		f.liftRegionContentLocked()
+	case newRows > prevRows:
+		// Growing an open panel (typing wraps, the dropdown opens) keeps the
+		// content in place so keystrokes don't push history into
+		// scrollback. The rows it takes are not guaranteed blank: a wrapped
+		// footer row or a stale steer frame can be sitting there.
 		f.blankNewSteerRows(prevRows, newRows)
 	}
 	// These setters serve the mid-turn steer panel: the spinner or
@@ -299,6 +306,7 @@ func (f *StatusFooter) clearSteerLineLocked() {
 	}
 	f.mu.Lock()
 	wasActive := f.steerActive
+	oldReserved := f.reservedRowsLocked()
 	f.steerActive = false
 	f.steerLine = ""
 	f.steerCursor = -1
@@ -316,23 +324,20 @@ func (f *StatusFooter) clearSteerLineLocked() {
 	// of the block it paints now, and above the new bottom margin the
 	// vacated rows are transcript — so the pinned rows the block no longer
 	// covers are blanked explicitly, whatever the streaming state.
-	//
-	// Blank AFTER the draw: the block's top pinned row is the hint row,
-	// which the draw repaints, so blanking first would erase the hint text
-	// the draw had just put there and leave the row empty.
 	f.applyScrollRegionKeepingCursorLocked()
 	f.drawLocked()
-	f.blankVacatedSteerRows()
+	f.blankVacatedSteerRows(oldReserved)
 }
 
-// blankVacatedSteerRows clears the pinned rows the current (smaller) block
-// does not cover. With `reserved` rows pinned, the scroll region's bottom
-// margin is row rows-reserved, so the pinned rows start there — the row the
-// block vacated is the bottom margin itself, which is why the walk starts at
-// bottom and stops before the content line, whose row the draw owns.
-// Every row it touches is at or below the bottom margin, so it can never
-// erase transcript.
-func (f *StatusFooter) blankVacatedSteerRows() {
+// blankVacatedSteerRows clears the rows the block pinned before it shrank
+// and no longer covers. With `reserved` rows pinned, the margins are
+// 1..rows-reserved — the bottom margin is the region's last scrolling row,
+// not a pinned one — so the vacated rows are rows-oldReserved+1 through
+// rows-reserved: the steer rule and text rows, now inside the region and
+// still holding chrome. The cursor sat above them in the old region and the
+// content did not move, so none of them holds transcript; the rows the
+// smaller block still pins are the draw's.
+func (f *StatusFooter) blankVacatedSteerRows(oldReserved int) {
 	_, rows := f.terminalSize()
 	if rows < 3 {
 		return
@@ -340,9 +345,12 @@ func (f *StatusFooter) blankVacatedSteerRows() {
 	f.mu.Lock()
 	reserved := f.reservedRowsLocked()
 	f.mu.Unlock()
-	bottom := rows - reserved
+	first, last := rows-oldReserved+1, rows-reserved
+	if first < 1 || first > last {
+		return
+	}
 	_, _ = fmt.Fprint(f.w, "\0337")
-	for row := bottom; row <= rows-1; row++ {
+	for row := first; row <= last; row++ {
 		_, _ = fmt.Fprintf(f.w, "\033[%d;1H\033[K", row)
 	}
 	_, _ = fmt.Fprint(f.w, "\0338")

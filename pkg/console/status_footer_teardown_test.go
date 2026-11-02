@@ -62,14 +62,13 @@ func TestClearSteerLine_KeepsTranscriptRows(t *testing.T) {
 	after := f.reservedRows()
 	require.Equal(t, 2, after, "rule + content line")
 
-	// The block contracted by two rows, so the bottom margin moved up. The
-	// margin row itself is the topmost pinned row — the footer owns it —
-	// and rows below it are pinned too. Only rows above the margin are
-	// transcript, and those must never be blanked.
-	newBottom := 24 - after
+	// The block contracted by two rows. The margins were 1..20, so rows
+	// 1..20 hold transcript and must never be blanked; only rows the old
+	// block pinned may be.
+	oldBottom := 24 - before
 	for row := range blankedRows(buf.String()) {
-		require.GreaterOrEqual(t, row, newBottom,
-			"row %d is transcript after the shrink and must not be cleared", row)
+		require.Greater(t, row, oldBottom,
+			"row %d is transcript and must not be cleared", row)
 	}
 }
 
@@ -91,28 +90,28 @@ func TestClearSteerLine_RepaintsPinnedRows(t *testing.T) {
 		"the steer text is gone from the pinned rows")
 }
 
-// TestClearSteerLine_BlanksVacatedSteerRows pins the row the steer text
-// actually occupied. The full draw only clears the rows of the block it
-// paints now (rule + content), so without an explicit blank the old steer
-// text survives on screen above the idle prompt — and a test that only
-// looks for the text anywhere in the stream still passes, because the
-// setup's own draw wrote it there. This one looks at the clear's writes.
+// TestClearSteerLine_BlanksVacatedSteerRows pins what is on screen after
+// the clear. 24 rows, steer block 4: the steer rule on 21, the steer text on
+// 22, the footer rule on 23, the content line on 24. Afterwards the margins
+// are 1..22, so 21 and 22 are scrolling rows that still hold chrome — left
+// alone, the steer rule scrolls up through the transcript as a stray
+// separator — while 23 stays the footer's rule.
 func TestClearSteerLine_BlanksVacatedSteerRows(t *testing.T) {
-	var buf strings.Builder
-	f := newTeardownTestFooter(&buf, 24)
+	scr := newVTScreen(80, 24)
+	f := &StatusFooter{
+		w: scr, isTTY: true, active: true, steerCursor: -1,
+		sizeOverride: &terminalSizeOverride{cols: 80, rows: 24},
+	}
+	f.SetTurnActive(true)
+	f.SetSteerLine("> draft")
+	require.Contains(t, scr.line(22), "draft")
 
-	buf.Reset()
 	f.ClearSteerLine()
 
-	// 24 rows, steer block 4 (rule at 21, steer text at 22, rule at 23,
-	// content at 24). After the clear the block is 2, so the bottom margin
-	// moves to row 22: the vacated rows are 22 (the steer text) and 23 (the
-	// old rule). Row 21 is transcript again and must be left alone.
-	cleared := blankedRows(buf.String())
-	require.True(t, cleared[22], "the vacated steer text row is blanked")
-	require.True(t, cleared[23], "the vacated rule row is blanked")
-	require.False(t, cleared[21],
-		"row 21 is transcript after the shrink and must not be cleared")
+	require.Empty(t, scr.line(21), "the vacated steer rule row is blanked")
+	require.Empty(t, scr.line(22), "the vacated steer text row is blanked")
+	require.Equal(t, strings.Repeat("─", 80), scr.line(23),
+		"the footer's own rule survives the clear")
 }
 
 // TestClearSteerLine_BlanksWhileStreaming covers the mid-stream teardown,

@@ -165,12 +165,13 @@ func (f *StatusFooter) applyScrollRegionKeepingCursorLocked() {
 	// moment: some terminals clamp a restored cursor into the margins, so
 	// growing re-saves the raised position before the margins shrink.
 	//
-	// The content itself must not move. Growing the reserved block does not
-	// scroll anything: the rows the block takes were empty screen below the
-	// old region. Feeding line feeds to make room (the previous behaviour)
-	// pushed the transcript's newest rows into scrollback — losing content
-	// rather than hiding it — and shrank the visible history on every
-	// keystroke that opened the autocomplete dropdown. Shrinking likewise
+	// The content itself does not move here. A caller that grows the block
+	// over live transcript lifts it first (liftRegionContentLocked); one
+	// that grows it per keystroke (the autocomplete dropdown) deliberately
+	// does not, since lifting on every keystroke would push the newest
+	// transcript rows into scrollback and shrink the visible history. If
+	// the restored cursor ends up below the new margin, it must have been
+	// lifted first, or line feeds stall on the last row. Shrinking likewise
 	// leaves the vacated rows to the caller (clearOrphanedSteerRows), which
 	// blanks them in place.
 	var b strings.Builder
@@ -181,6 +182,33 @@ func (f *StatusFooter) applyScrollRegionKeepingCursorLocked() {
 	f.mu.Lock()
 	f.appliedReserved, f.appliedRows = newReserved, rows
 	f.mu.Unlock()
+}
+
+// liftRegionContentLocked scrolls the region's content up by however much
+// the pinned block is about to grow, and moves the cursor up with it so a
+// mid-line spinner or prose line resumes on its own row. Without the lift
+// the block paints over the newest transcript rows and the DECRC in
+// applyScrollRegionKeepingCursorLocked restores a cursor that now sits
+// below the bottom margin — where a line feed cannot scroll, so every
+// following line overwrites the last screen row.
+//
+// Call it after updating the state reservedRows reads and before
+// applyScrollRegionKeepingCursorLocked. Caller must hold outputMu.
+func (f *StatusFooter) liftRegionContentLocked() {
+	_, rows := f.terminalSize()
+	newReserved := f.reservedRows()
+	f.mu.Lock()
+	oldReserved, oldRows := f.appliedReserved, f.appliedRows
+	f.mu.Unlock()
+	grow := newReserved - oldReserved
+	if oldReserved == 0 || oldRows != rows || grow <= 0 || rows <= newReserved {
+		return
+	}
+	// The old margins are still in force: line feeds on their bottom row
+	// scroll the region, and CUU from the restored cursor stops at the top
+	// margin.
+	_, _ = fmt.Fprintf(f.w, "\0337\033[%d;1H%s\0338\033[%dA",
+		rows-oldReserved, strings.Repeat("\n", grow), grow)
 }
 
 // shiftScrollRegionLocked moves the scroll region's content to follow a

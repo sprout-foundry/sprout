@@ -406,7 +406,6 @@ type Agent struct {
 	// skills activate at turn start (see workspace_mode_skills.go).
 	workspaceMode atomic.Pointer[string]
 
-
 	// SubagentRunner manages in-process subagent execution.
 	subagentRunner *SubagentRunner
 

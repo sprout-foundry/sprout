@@ -474,7 +474,8 @@ func (a *Agent) MergeTask(ctx context.Context, id string) (string, error) {
 	if restored {
 		processTasks.setTerminal(id, "merged", "", "")
 		return fmt.Sprintf("Merged %s into the workspace. The worktree at %s was kept: it may hold work the task "+
-			"never committed. Branch %s is kept.", branch, path, branch), nil
+			"never committed. Branch %s is kept — remove the worktree with `git worktree remove %s` once you have "+
+			"salvaged anything you need, or the branch stays checked out there.", branch, path, branch, path), nil
 	}
 
 	wt.remove(ctx)

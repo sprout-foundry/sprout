@@ -96,3 +96,31 @@ func TestTasksCommand_NonInteractivePrintsList(t *testing.T) {
 		t.Errorf("output = %q, want the plain list", out.String())
 	}
 }
+
+// A one-word description must never be swallowed as a detail request: only
+// the task ID shape routes to /task show.
+func TestTaskCommand_OneWordDescriptionStartsTask(t *testing.T) {
+	for _, desc := range []string{"fix", "login", "refactor"} {
+		if taskIDPattern.MatchString(desc) {
+			t.Errorf("%q was treated as a task ID; a description must start a task", desc)
+		}
+	}
+	for _, id := range []string{"bg-task-1", "bg-task-42"} {
+		if !taskIDPattern.MatchString(id) {
+			t.Errorf("%q should be recognised as a task ID", id)
+		}
+	}
+	for _, notID := range []string{"bg-task-", "bg-task-x", "task-1", "bg-subagent-1"} {
+		if taskIDPattern.MatchString(notID) {
+			t.Errorf("%q should not be recognised as a task ID", notID)
+		}
+	}
+}
+
+func TestTaskCommand_ShowRequiresID(t *testing.T) {
+	cmd := &TaskCommand{}
+	cmd.SetOutput(&bytes.Buffer{})
+	if err := cmd.Execute([]string{"show"}, &agent.Agent{}); err == nil {
+		t.Fatal("expected a usage error for /task show with no id")
+	}
+}

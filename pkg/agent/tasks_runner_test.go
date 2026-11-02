@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,14 +42,8 @@ func newTaskTestAgent(t *testing.T, repo string) *Agent {
 }
 
 func TestTaskCompletionSummary_NamesBranchAndMergeCommand(t *testing.T) {
-	rec := &taskRecord{
-		ID:      "bg-task-1",
-		Branch:  "feat/add-login",
-		Path:    "/tmp/ws/.sprout/tasks/add-login",
-		Commit:  "abc1234",
-		Started: time.Now().Add(-2 * time.Minute),
-	}
-	got := taskCompletionSummary(rec, "completed", "did the thing")
+	got := taskCompletionSummary("bg-task-1", "feat/add-login", "/tmp/ws/.sprout/tasks/add-login",
+		"abc1234", "completed", 2*time.Minute, "did the thing")
 
 	for _, want := range []string{"feat/add-login", "abc1234", "/task merge bg-task-1", "git merge --no-ff feat/add-login", "did the thing"} {
 		if !strings.Contains(got, want) {
@@ -58,8 +53,7 @@ func TestTaskCompletionSummary_NamesBranchAndMergeCommand(t *testing.T) {
 }
 
 func TestTaskCompletionSummary_FailedRunSaysUncommitted(t *testing.T) {
-	rec := &taskRecord{ID: "bg-task-2", Branch: "fix/x", Path: "/tmp/wt", Started: time.Now()}
-	got := taskCompletionSummary(rec, "failed", "")
+	got := taskCompletionSummary("bg-task-2", "fix/x", "/tmp/wt", "", "failed", time.Second, "")
 	if !strings.Contains(got, "uncommitted") {
 		t.Errorf("failed summary should say the worktree is uncommitted:\n%s", got)
 	}
@@ -311,5 +305,102 @@ func TestNewTaskAgent_IsIsolatedFromPrimaryTurnState(t *testing.T) {
 	}
 	if got := taskAgent.GetMaxIterations(); got != primary.GetMaxIterations() {
 		t.Errorf("max iterations = %d, want the primary's %d (not a persona budget)", got, primary.GetMaxIterations())
+	}
+}
+
+// The background-task ID is what /tasks stop, /task merge and the notification
+// all key on, so a stopped task must reach a terminal state the rest of the
+// feature can act on.
+func TestTaskRegistry_SetTerminalReleasesSlot(t *testing.T) {
+	resetProcessTasks(t)
+	repo := initTaskTestRepo(t)
+	processTasks.add(&taskRecord{ID: "bg-task-1", Status: "running", Workspace: repo, Started: time.Now()})
+
+	if err := processTasks.reserve(repo, 1); err == nil {
+		t.Fatal("a running task should occupy the only slot")
+	}
+
+	processTasks.setTerminal("bg-task-1", "stopped", "", "")
+
+	if err := processTasks.reserve(repo, 1); err != nil {
+		t.Errorf("a stopped task should release its slot: %v", err)
+	}
+	info := processTasks.snapshot()[0]
+	if info.Status != "stopped" {
+		t.Errorf("status = %q, want stopped", info.Status)
+	}
+	if got := processTasks.get("bg-task-1").elapsed(); got <= 0 {
+		t.Errorf("elapsed = %v, want a positive duration once finished", got)
+	}
+}
+
+func TestTaskRegistry_ReserveIsPerWorkspace(t *testing.T) {
+	resetProcessTasks(t)
+	processTasks.add(&taskRecord{ID: "bg-task-a", Status: "running", Workspace: "/ws/a", Started: time.Now()})
+
+	if err := processTasks.reserve("/ws/b", 1); err != nil {
+		t.Errorf("a task in another workspace should not consume this workspace's slot: %v", err)
+	}
+}
+
+func TestTaskRegistry_PrunesFinishedBeyondCap(t *testing.T) {
+	resetProcessTasks(t)
+	repo := initTaskTestRepo(t)
+	for i := 0; i < maxRetainedTasks+5; i++ {
+		id := fmt.Sprintf("bg-task-%d", i)
+		processTasks.add(&taskRecord{ID: id, Status: "running", Workspace: repo, Started: time.Now()})
+		processTasks.setTerminal(id, "completed", "", "")
+	}
+
+	got := len(processTasks.snapshot())
+	if got > maxRetainedTasks {
+		t.Errorf("retained %d finished tasks, want at most %d", got, maxRetainedTasks)
+	}
+}
+
+func TestTaskRegistry_NeverPrunesRunning(t *testing.T) {
+	resetProcessTasks(t)
+	repo := initTaskTestRepo(t)
+	processTasks.add(&taskRecord{ID: "bg-task-live", Status: "running", Workspace: repo, Started: time.Now()})
+	for i := 0; i < maxRetainedTasks+5; i++ {
+		id := fmt.Sprintf("bg-task-done-%d", i)
+		processTasks.add(&taskRecord{ID: id, Status: "running", Workspace: repo, Started: time.Now()})
+		processTasks.setTerminal(id, "completed", "", "")
+	}
+
+	if processTasks.get("bg-task-live") == nil {
+		t.Error("a running task was pruned")
+	}
+}
+
+// A stop request must close the task record, or /task merge refuses forever
+// and the concurrency slot is never released.
+func TestTaskRegistry_MarkStopped(t *testing.T) {
+	resetProcessTasks(t)
+	repo := initTaskTestRepo(t)
+	processTasks.add(&taskRecord{ID: "bg-task-stop", Status: "running", Workspace: repo, Started: time.Now()})
+
+	processTasks.markStopped("bg-task-stop")
+
+	rec := processTasks.get("bg-task-stop")
+	if rec.Status != "stopped" {
+		t.Errorf("status = %q, want stopped", rec.Status)
+	}
+	if rec.Finished.IsZero() {
+		t.Error("Finished was not set")
+	}
+	if err := processTasks.reserve(repo, 1); err != nil {
+		t.Errorf("a stopped task should release its slot: %v", err)
+	}
+}
+
+func TestTaskRegistry_MarkStoppedIgnoresUnknownAndFinished(t *testing.T) {
+	resetProcessTasks(t)
+	processTasks.markStopped("bg-subagent-1")
+
+	processTasks.add(&taskRecord{ID: "bg-task-done", Status: "completed", Workspace: "/ws", Started: time.Now()})
+	processTasks.markStopped("bg-task-done")
+	if got := processTasks.get("bg-task-done").Status; got != "completed" {
+		t.Errorf("status = %q, want the completed status preserved", got)
 	}
 }

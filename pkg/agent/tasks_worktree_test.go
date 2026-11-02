@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // initTaskTestRepo creates a git repository with one commit and returns its
@@ -246,5 +248,88 @@ func TestReadWorkspaceConventions_CapsSize(t *testing.T) {
 	}
 	if got := readWorkspaceConventions(dir); len(got) != taskConventionsBudget {
 		t.Errorf("conventions length = %d, want the %d cap", len(got), taskConventionsBudget)
+	}
+}
+
+// A task worktree inside .sprout/ must not read as an untracked file, or
+// /task merge (which refuses a dirty tree) could never run.
+func TestCreateTaskWorktree_LeavesWorkspaceStatusClean(t *testing.T) {
+	repo := initTaskTestRepo(t)
+	ws, err := createTaskWorktree(context.Background(), repo, "feat/clean-status", "")
+	if err != nil {
+		t.Fatalf("createTaskWorktree: %v", err)
+	}
+	t.Cleanup(func() { ws.remove(context.Background()) })
+
+	out, err := runGitIn(context.Background(), repo, "status", "--porcelain")
+	if err != nil {
+		t.Fatalf("git status: %v", err)
+	}
+	if strings.TrimSpace(out) != "" {
+		t.Errorf("workspace is dirty after creating a task worktree:\n%s", out)
+	}
+}
+
+// ensureTaskGitignore must not disturb a sprout-generated .gitignore: that
+// file is refreshed by exact content match, so appending to it would freeze
+// it at a stale version forever.
+func TestEnsureTaskGitignore_LeavesGeneratedFileAlone(t *testing.T) {
+	repo := t.TempDir()
+	if err := configuration.EnsureWorkspaceConfigDir(repo); err != nil {
+		t.Fatalf("EnsureWorkspaceConfigDir: %v", err)
+	}
+	path := filepath.Join(repo, ".sprout", ".gitignore")
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ensureTaskGitignore(repo); err != nil {
+		t.Fatalf("ensureTaskGitignore: %v", err)
+	}
+
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(before) != string(after) {
+		t.Errorf("ensureTaskGitignore modified a sprout-generated .gitignore:\nbefore:\n%s\nafter:\n%s", before, after)
+	}
+	if !strings.Contains(string(after), "tasks/") {
+		t.Error("the generated .gitignore should already cover tasks/")
+	}
+}
+
+// A user-written .gitignore gets the tasks line appended, once.
+func TestEnsureTaskGitignore_AppendsToUserFileOnce(t *testing.T) {
+	repo := t.TempDir()
+	dir := filepath.Join(repo, ".sprout")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, ".gitignore")
+	if err := os.WriteFile(path, []byte("my-notes.md\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < 3; i++ {
+		if err := ensureTaskGitignore(repo); err != nil {
+			t.Fatalf("ensureTaskGitignore (run %d): %v", i, err)
+		}
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(data)
+	if !strings.Contains(got, "my-notes.md") {
+		t.Errorf("user content was lost:\n%s", got)
+	}
+	if n := strings.Count(got, "tasks/"); n != 1 {
+		t.Errorf("tasks/ appears %d times, want once:\n%s", n, got)
+	}
+	if n := strings.Count(got, ".gitignore\n"); n != 1 {
+		t.Errorf(".gitignore appears %d times, want once:\n%s", n, got)
 	}
 }

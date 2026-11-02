@@ -128,15 +128,15 @@ func newTaskAgent(a *Agent, worktreePath, taskID string) (*Agent, error) {
 // taskCompletionSummary is the text the primary receives when a task
 // finishes. It names the branch and the merge command, because "pull it in"
 // is the next thing the primary has to do.
-func taskCompletionSummary(t *taskRecord, status, agentOutput string) string {
+func taskCompletionSummary(id, branch, path, commit, status string, elapsed time.Duration, agentOutput string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Task %s (branch %s) %s after %s.\n", t.ID, t.Branch, status, t.elapsed().Round(time.Second))
-	fmt.Fprintf(&b, "Worktree: %s\n", t.Path)
-	if t.Commit != "" {
-		fmt.Fprintf(&b, "Commit: %s\n", t.Commit)
+	fmt.Fprintf(&b, "Task %s (branch %s) %s after %s.\n", id, branch, status, elapsed.Round(time.Second))
+	fmt.Fprintf(&b, "Worktree: %s\n", path)
+	if commit != "" {
+		fmt.Fprintf(&b, "Commit: %s\n", commit)
 	}
 	if status == "completed" {
-		fmt.Fprintf(&b, "To bring the work in: `/task merge %s` (or `git merge --no-ff %s`).\n", t.ID, t.Branch)
+		fmt.Fprintf(&b, "To bring the work in: `/task merge %s` (or `git merge --no-ff %s`).\n", id, branch)
 	} else {
 		b.WriteString("The run did not finish cleanly; the worktree is kept uncommitted for inspection.\n")
 	}

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
@@ -119,9 +120,15 @@ func createTaskWorktree(ctx context.Context, workspaceRoot, branch, base string)
 }
 
 // ensureTaskGitignore makes sure the workspace's .sprout/.gitignore covers
-// the tasks directory. It never rewrites an existing file: the line is
-// appended when missing, and the file itself is self-ignored so .sprout/
-// does not read as untracked when nothing else in it is ignored yet.
+// the tasks directory, so task worktrees never read as untracked files in
+// the workspace (which would make `git status` permanently dirty and block
+// /task merge).
+//
+// It defers to EnsureWorkspaceConfigDir for a file sprout generated: that
+// function owns the generated content and refreshes it whenever it still
+// matches (or is user-written), and appending here would break its
+// exact-match refresh contract. Only a file sprout did not generate — or a
+// missing one — gets the line appended, and then only once.
 func ensureTaskGitignore(workspaceRoot string) error {
 	dir := filepath.Join(workspaceRoot, ".sprout")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -133,14 +140,24 @@ func ensureTaskGitignore(workspaceRoot string) error {
 		return fmt.Errorf("read .sprout/.gitignore: %w", err)
 	}
 
+	// A sprout-generated file already carries tasks/ (see
+	// workspaceGitignoreContent); leave it to the generator.
+	if strings.HasPrefix(string(existing), configuration.WorkspaceGitignoreHeader()) {
+		return nil
+	}
+
 	var b strings.Builder
 	b.WriteString(string(existing))
+	if b.Len() > 0 && !strings.HasSuffix(b.String(), "\n") {
+		b.WriteString("\n")
+	}
 	if !strings.Contains(string(existing), taskDirName+"/") {
-		if b.Len() > 0 && !strings.HasSuffix(b.String(), "\n") {
-			b.WriteString("\n")
-		}
+		b.WriteString("# Task worktrees (/task)\n")
 		b.WriteString(taskDirName + "/\n")
 	}
+	// Self-ignoring: without this, .sprout/ reads as untracked whenever the
+	// ignore file is the only thing in it, which is exactly the state a
+	// fresh workspace is in when its first task starts.
 	if !strings.Contains(string(existing), ".gitignore\n") {
 		b.WriteString(".gitignore\n")
 	}

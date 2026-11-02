@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -15,6 +16,11 @@ import (
 type TaskCommand struct {
 	outputSink
 }
+
+// taskIDPattern matches the background-task IDs the registry mints
+// (bg-task-<n>). /task uses it to tell "show this task" from "start a task
+// with this one-word description".
+var taskIDPattern = regexp.MustCompile(`^bg-task-\d+$`)
 
 func (c *TaskCommand) Name() string { return "task" }
 
@@ -32,7 +38,8 @@ func (c *TaskCommand) Usage() string {
 		"                      creates a worktree under .sprout/tasks/, and runs",
 		"                      a full agent there. You are notified when it ends.",
 		"/task list            List tasks (same as /tasks).",
-		"/task <id>            Show a task's state and output.",
+		"/task show <id>       Show a task's state and output.",
+		"/task <id>            Same as /task show <id>.",
 		"/task merge <id>      Merge a finished task's branch into the current",
 		"                      branch (--no-ff) and remove its worktree.",
 		"",
@@ -57,6 +64,16 @@ func (c *TaskCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	case "list":
 		c.println(chatAgent.BackgroundTasksSummary())
 		return nil
+	case "show":
+		if len(args) < 2 {
+			return errors.New("usage: /task show <id>")
+		}
+		detail, err := chatAgent.TaskDetail(args[1])
+		if err != nil {
+			return err
+		}
+		c.println(formatTaskDetail(detail))
+		return nil
 	case "merge":
 		if len(args) < 2 {
 			return errors.New("usage: /task merge <id>")
@@ -69,9 +86,10 @@ func (c *TaskCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		return nil
 	}
 
-	// A single argument that names an existing task is a detail request;
-	// anything else is a new task description.
-	if len(args) == 1 {
+	// A single argument that is a task ID shows that task. The ID shape is
+	// checked explicitly rather than "does this resolve to a task", so a
+	// one-word description can never be swallowed as a detail request.
+	if len(args) == 1 && taskIDPattern.MatchString(args[0]) {
 		if detail, err := chatAgent.TaskDetail(args[0]); err == nil {
 			c.println(formatTaskDetail(detail))
 			return nil

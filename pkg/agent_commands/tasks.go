@@ -104,23 +104,25 @@ func (c *TasksCommand) pickTask(chatAgent *agent.Agent) bool {
 
 // buildTaskPickerItems renders one row per background task, newest first.
 // Tasks started with /task carry their branch in the detail line so the
-// picker distinguishes them from subagent runs.
+// picker distinguishes them from subagent runs; both kinds are listed,
+// because /tasks is the one place a user looks for "what is running".
 func buildTaskPickerItems(chatAgent *agent.Agent) []console.SelectItem {
-	tasks := chatAgent.Tasks()
-	items := make([]console.SelectItem, 0, len(tasks))
-	for _, t := range tasks {
-		status := t.Status
-		if status == "" {
-			status = "running"
-		}
-		detail := fmt.Sprintf("%s · %s · %s", status, t.Branch, t.Elapsed.Round(time.Second))
-		if t.Commit != "" {
-			detail += " · " + t.Commit
+	branches := make(map[string]string)
+	for _, t := range chatAgent.Tasks() {
+		branches[t.ID] = t.Branch
+	}
+
+	entries := chatAgent.BackgroundTaskEntries()
+	items := make([]console.SelectItem, 0, len(entries))
+	for _, e := range entries {
+		detail := fmt.Sprintf("%s · %s · %s", e.Status, e.Elapsed.Round(time.Second), e.Label)
+		if branch := branches[e.ID]; branch != "" {
+			detail = fmt.Sprintf("%s · %s · %s", e.Status, branch, e.Elapsed.Round(time.Second))
 		}
 		items = append(items, console.SelectItem{
-			Label:  t.ID,
+			Label:  e.ID,
 			Detail: detail,
-			Value:  t.ID,
+			Value:  e.ID,
 		})
 	}
 	return items

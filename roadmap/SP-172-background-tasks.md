@@ -139,18 +139,38 @@ agent in the worktree:
 usage. It is not safe during steer (it starts long work and mutates the
 repo's worktree list).
 
+`/task show <id>` (and the bare `/task <id>` form) shows one task. The ID
+shape (`bg-task-<n>`) is matched explicitly rather than "does this resolve
+to a task", so a one-word description can never be swallowed as a detail
+request.
+
+The task record and the background-task registry entry share one ID, so
+`/tasks stop <id>` stops a task through the existing path. Because that
+path only touches the background entry, a stop also closes the task record
+(`markStopped`) — otherwise the record would stay `running` forever and
+`/task merge` would refuse it while the concurrency slot stayed occupied.
+
 ### 172d. `/tasks` picker
 
 `pkg/agent_commands/tasks.go` gains an interactive path: `/tasks` with no
 arguments and a TTY opens a `console.SelectList` of background tasks
-(subagent and task kinds alike); selecting one prints its detail. Without a
-TTY it keeps printing the plain list, so scripted and WebUI use is
+(subagent, review, and task kinds alike); selecting one prints its detail.
+Without a TTY it keeps printing the plain list, so scripted and WebUI use is
 unchanged.
 
 `describeRunningTask` already reports step/tool/token progress and the last
 lines of output for a running subagent. A task's own run is registered as a
 running subagent by the same machinery, so the detail view works without a
 second progress path.
+
+The task registry is process-wide and a record holds a full agent, so it
+prunes finished records past `maxRetainedTasks` (mirroring the background
+registry's cap) and never prunes a running one. Its lock guards the records'
+mutable fields, not just the map: the runner goroutine writes status,
+output and commit while `/tasks` reads them on another goroutine. The
+concurrency limit reserves a slot under that lock before the LLM naming
+call and the worktree creation, so the limit holds under concurrent
+`/task` invocations.
 
 ### 172e. `/task merge <id>`
 
@@ -179,8 +199,24 @@ New settings under `tasks`:
   (there is no branch to merge back into).
 - The task agent runs non-interactive (`SetWorkflowRun(true)`): no approval
   prompt can block it, and a risky operation fails instead of waiting.
+- The task agent is constructed at depth 1 (a delegated run), not depth 0.
+  A task runs concurrently with the primary's own turn, so it must not run
+  the per-turn quality and verification hooks (they read per-agent turn
+  state the primary is using) or publish progress-completion events under
+  an empty run id (which a consumer reads as an extra "run finished" for
+  the primary's run). Delegation still works: the default depth limit is 1.
+- A task gets its own session id (`task_<id>`) so its conversation state
+  saves to its own file instead of over the primary's.
 - `/task merge` is the only operation that touches the primary's tree, and
-  it aborts cleanly on conflict.
+  it aborts cleanly on conflict. It runs the repo's hooks: the merge commit
+  lands on the user's own branch, so it is the one commit in the feature a
+  human would have made. The task's own commit bypasses hooks, because the
+  worktree is unattended and a prompting hook would hang it.
+- Task worktrees live inside the workspace, so `.sprout/.gitignore` must
+  cover `tasks/` or `git status` is permanently dirty and `/task merge`
+  (which refuses a dirty tree) could never run. `ensureTaskGitignore`
+  appends to a user-written file and leaves a sprout-generated one alone,
+  because the generator refreshes by exact content match.
 - Tasks die with the process. `/tasks` reports them as failed after a
   restart rather than pretending they are running.
 

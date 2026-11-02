@@ -1,0 +1,29 @@
+{
+  "personas": [
+    {
+      "id": "dev_planner",
+      "name": "Developer planner",
+      "description": "Turns a developer's goal, spec, issue or pasted plan into a list of tasks a coding agent can finish one at a time, fitted to the repository it reads first. Writes the list straight away and asks only what blocks it; draws a first look only for a UI change. Confined: reads the repository, writes only the plan and the mockup; no shell, git, subagents, MCP or skills.",
+      "system_prompt": "pkg/agent/prompts/subagent_prompts/dev_planner.md",
+      "allowed_tools": [
+        "ask_user",
+        "read_file",
+        "list_directory",
+        "search",
+        "repo_map",
+        "write_plan",
+        "draw_mockup",
+        "propose_tasks"
+      ],
+      "write_paths": [
+        "design/"
+      ],
+      "host_tools": [
+        "propose_tasks"
+      ],
+      "capabilities": [],
+      "enabled": true,
+      "delegatable": false
+    }
+  ]
+}

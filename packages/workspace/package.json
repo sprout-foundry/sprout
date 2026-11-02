@@ -1,6 +1,6 @@
 {
   "name": "@sprout-foundry/workspace",
-  "version": "1.9.7",
+  "version": "1.10.0",
   "description": "Composition API for Sprout — the workspace, its spaces and views, for hosts that embed them",
   "license": "Apache-2.0",
   "repository": {
@@ -20,6 +20,8 @@
     "dist/providers.js",
     "dist/providers.d.ts",
     "dist/design.js",
+    "dist/agent.js",
+    "dist/agent.d.ts",
     "dist/workspace.css",
     "dist/wasm/",
     "dist/chunks/",
@@ -38,12 +40,17 @@
       "types": "./dist/providers.d.ts",
       "import": "./dist/providers.js"
     },
+    "./agent": {
+      "types": "./dist/agent.d.ts",
+      "import": "./dist/agent.js"
+    },
     "./styles.css": "./dist/workspace.css",
     "./wasm/": "./dist/wasm/"
   },
   "scripts": {
     "build": "vite build && node scripts/check-chunk-graph.mjs && node scripts/scope-stylesheet.mjs && node scripts/bundle-dts.mjs && node scripts/emit-wasm-assets.mjs && node --test scripts/emit-wasm-assets.test.mjs scripts/check-chunk-graph.test.mjs",
-    "type-check": "tsc --noEmit && tsc --noEmit -p tsconfig.build.json"
+    "type-check": "tsc --noEmit && tsc --noEmit -p tsconfig.build.json",
+    "test": "vitest run"
   },
   "devDependencies": {
     "@microsoft/api-extractor": "^7.58.7",
@@ -52,7 +59,8 @@
     "@types/react": "^18.2.0",
     "typescript": "^5.0.0",
     "vite": "^6.4.5",
-    "vite-plugin-dts": "^5.0.2"
+    "vite-plugin-dts": "^5.0.2",
+    "vitest": "^4.1.12"
   },
   "peerDependencies": {
     "react": ">=18.0.0",

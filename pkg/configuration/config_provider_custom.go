@@ -51,4 +51,8 @@ type CustomProviderConfig struct {
 	VisionFallbackProvider string                      `json:"vision_fallback_provider,omitempty"` // Optional fallback provider for vision
 	VisionFallbackModel    string                      `json:"vision_fallback_model,omitempty"`    // Optional fallback model for vision provider
 	BillingType            string                      `json:"billing_type,omitempty"`             // Billing model: pay_per_token (default), subscription, free
+	// DisableModelDiscovery takes the model's metadata from this config
+	// alone (model_name, context_size, supports_vision): the provider never
+	// lists /models, probes the backend or asks the model registry.
+	DisableModelDiscovery bool `json:"disable_model_discovery,omitempty"`
 }

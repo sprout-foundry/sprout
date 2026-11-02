@@ -146,6 +146,13 @@ var allowedOutboundMessageTypes = map[string]struct{}{
 	events.EventTypeAutomateSessionEnded:   {},
 	events.EventTypeAutomateOutputChunk:    {},
 	events.EventTypeAutomateBudgetUpdate:   {},
+
+	// Mockup drawing (draw_mockup): a host renders the page as it is
+	// written, so the chunks are forwarded like stream chunks.
+	events.EventTypeMockupStart: {},
+	events.EventTypeMockupChunk: {},
+	events.EventTypeMockupDone:  {},
+	events.EventTypeMockupError: {},
 }
 
 // devModeCached caches the SPROUT_DEV env check so we don't re-parse it

@@ -90,7 +90,7 @@ func NewGenericProvider(config *ProviderConfig) (*GenericProvider, error) {
 		model: config.Defaults.Model,
 	}
 	// Warm the models cache in the background (skip for local endpoints).
-	if p.model != "" && p.config.Endpoint != "" &&
+	if p.model != "" && p.config.Endpoint != "" && !config.Models.DisableDiscovery &&
 		!strings.Contains(p.config.Endpoint, "127.0.0.1") &&
 		!strings.Contains(p.config.Endpoint, "localhost") {
 		p.warmModelsCache()
@@ -103,7 +103,7 @@ func (p *GenericProvider) warmModelsCache() {
 	p.mu.RLock()
 	cached := p.modelsCached
 	p.mu.RUnlock()
-	if cached {
+	if cached || p.config.Models.DisableDiscovery {
 		return
 	}
 	// Deduplicate: prevent goroutine accumulation under rapid SetModel calls.
@@ -547,7 +547,7 @@ func (p *GenericProvider) GetModelContextLimit() (int, error) {
 	p.mu.RUnlock()
 
 	// 2. Consult the published model registry (best-effort; falls through on failure)
-	if modelName != "" {
+	if modelName != "" && !p.config.Models.DisableDiscovery {
 		ctx, cancel := context.WithTimeout(context.Background(), modelregistryFetchTimeout)
 		defer cancel()
 		if rawModels, err := modelregistry.FetchModels(ctx, p.config.Name); err == nil {

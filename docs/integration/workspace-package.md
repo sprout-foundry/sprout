@@ -4,7 +4,9 @@
 workspace: it mounts one project's workspace (a space such as code or
 design) inside its own product and provides a `SproutHost` (see
 [host-contract.md](host-contract.md)). It is the only hosted artifact; hosts
-do not build Sprout's web UI from source.
+do not build Sprout's web UI from source. A host that wants the agent without
+Sprout's interface uses its `./agent` entry instead (see
+[headless-agent.md](headless-agent.md)).
 
 ## Install
 

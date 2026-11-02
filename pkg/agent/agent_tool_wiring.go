@@ -126,5 +126,13 @@ func buildAgentToolFuncs(agent *Agent) *tools.ToolFuncSet {
 		// or not yet run), which the tool treats as fail-closed when
 		// verification is enabled.
 		DeployVerification: agent.lastVerificationOutcome,
+		// A tool's own model call (draw_mockup) goes through this agent's
+		// client, and its events carry this agent's metadata.
+		StreamModelText: func(ctx context.Context, role, system, user string, onChunk func(string)) (string, error) {
+			return agent.streamModelText(ctx, role, system, user, onChunk)
+		},
+		PublishEvent: func(eventType string, data map[string]any) {
+			agent.publishEvent(eventType, data)
+		},
 	}
 }

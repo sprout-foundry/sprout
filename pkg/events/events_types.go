@@ -211,6 +211,20 @@ const (
 	// WebSocket-forwarded event, so it is intentionally absent from the
 	// WS outbound registry (websocket_outbound_registry.go).
 	EventTypePreviewPortRegistered = "preview_port_registered"
+
+	// Mockup drawing (the draw_mockup tool). A host renders the mockup as it
+	// is written: mockup_start opens a draw (or, with mode "whole" after an
+	// edit-mode start, restarts it: discard what was shown and render the
+	// chunks that follow); mockup_chunk carries each piece of the document
+	// in order (seq counts from 1; chunks may be dropped under load, so the
+	// final document always arrives whole on mockup_done); mockup_done
+	// carries the cleaned document and its screen ids; mockup_error ends a
+	// draw that failed, with a plain message. Every payload carries
+	// mockup_id, the same for all events of one draw.
+	EventTypeMockupStart = "mockup_start"
+	EventTypeMockupChunk = "mockup_chunk"
+	EventTypeMockupDone  = "mockup_done"
+	EventTypeMockupError = "mockup_error"
 )
 
 // EventBus manages event distribution between CLI and Web UI.

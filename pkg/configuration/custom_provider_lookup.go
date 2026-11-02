@@ -104,6 +104,7 @@ func (c CustomProviderConfig) ToProviderConfig() (*providers.ProviderConfig, err
 			DefaultModel:        normalized.ModelName,
 			SupportsVision:      normalized.SupportsVision,
 			VisionModel:         normalized.VisionModel,
+			DisableDiscovery:    normalized.DisableModelDiscovery,
 		},
 		Retry: providers.RetryConfig{
 			MaxAttempts:       3,

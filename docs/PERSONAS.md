@@ -19,8 +19,9 @@ Personas are **catalog-fixed**. The set of personas, their tool allowlists, syst
 | `researcher` | Codebase analysis combined with external research and web extraction | Yes | Aliases: `web_scraper`, `web-scraper`, `scraper` (retired persona, consolidated 2026-09) |
 | `designer` | Open-format UX design: DTCG tokens, SVG wireframes, mermaid flows, screens, brand | Yes | Carries `git_write` capability. Aliases: `ux`, `design` |
 | `computer_user` | Desktop automation with screenshots, mouse, and keyboard | No | Carries `computer_use` capability |
+| `planner` | Turns an idea into an agreed plan (`.sprout/plan.json`) and a clickable mockup (`design/mockup.html`) in plain builder words, before anything is built | No | **Confined** (`write_paths: ["design/"]`, see §6a). No capabilities. Run by a host (e.g. a builder screen) as the conversation's persona |
 
-Source: `pkg/personas/configs/default_personas.json`, `pkg/personas/configs/coordinator.json`, `pkg/personas/configs/computer_user.json`, `pkg/personas/configs/designer.json`.
+Source: `pkg/personas/configs/default_personas.json`, `pkg/personas/configs/coordinator.json`, `pkg/personas/configs/computer_user.json`, `pkg/personas/configs/designer.json`, `pkg/personas/configs/planner.json`.
 
 > Strategic project planning lives in the `project-planning` **skill** (`pkg/skills/library/project-planning/SKILL.md`), not a persona. Activate it via `activate_skill project-planning` when starting or aligning a project.
 
@@ -214,6 +215,27 @@ if risk := a.EvaluateOperationRisk(pseudoCmd); risk == configuration.RiskLevelHi
 }
 ```
 
+### 6a. Confined personas (`write_paths`)
+
+A persona that declares `write_paths` (workspace-relative directories, e.g. `["design/"]`) is **confined**. For every persona, `allowed_tools` is the agent's whole tool set: the tool registry built for each turn holds only the tools it names, so the model is offered nothing else and a call to anything else is an unknown tool (`pkg/agent/seed_tool_roster.go`; with no active persona the agent keeps every tool). For a confined persona the agent also checks it when a tool runs (`checkPersonaConfinement`, `pkg/agent/persona_confinement.go`, called from the seed pre-execute hook and the legacy `executeTool` path, MCP tools included):
+
+1. A tool outside `allowed_tools` is refused with a permission error, even if the model names it unprompted.
+2. `write_file`, `edit_file`, `write_structured_file`, `patch_structured_file` (and a `browse_url` `screenshot_path`) must resolve, symlinks followed, strictly inside one of `write_paths`. `..` escapes, absolute paths elsewhere, and look-alike directories (`design-old/`) are refused.
+3. `browse_url` only reads a page: `steps`, `action: interact|inspect`, persistent sessions, and `allow_file_url` are refused.
+
+Tools that write to a fixed location of their own are governed by `allowed_tools` alone: the planner writes its plan only through `write_plan` (which validates against `plancontract` and writes `.sprout/plan.json` + `plan.md`) and its mockup only through `draw_mockup` (which writes `design/mockup.html`, inside its `write_paths`). It holds no file writers, so a raw write anywhere, including `.sprout/plan.json` or the mockup itself, is refused. Unconfined personas are unaffected.
+
+The `planner` is the one confined persona today. Its tools: `ask_user`, `analyze_image_content`, `browse_url`, `write_plan`, `draw_mockup`, `read_file`, `list_directory`, `search`, and the host tool `start_change`. Host-specific facts (what can be built, where it is put online) are expected as a "What is offered" section the host supplies as conversation context; without it, the prompt plans the idea in plain terms and names no starters or services. `design_critique` and `design_render` are deliberately left off: the bar is a first screen within seconds, and the person reviews the mockup themselves and asks for changes. Host-provided tools are declared in `host_tools` and also listed on `allowed_tools`: `start_change` (which hands a change to an existing project's queue) is registered by the host through the headless agent API (`docs/integration/headless-agent.md`); without a host that registers it, it is simply absent, and the prompt says what the change is instead.
+
+### 6b. The mockup tool (`draw_mockup`)
+
+The mockup is one self-contained document, `design/mockup.html`, with a `<section data-screen="id">` per screen and a small script switching screens on `data-go` clicks (the first screen shows without script). It is drawn by its own streamed model call rather than written into a tool argument, so a host can render it as it is written (`pkg/agent_tools/draw_mockup_handler.go`, `mockup_document.go`, prompts in `pkg/agent_tools/mockup_prompts/`).
+
+- No arguments: draws the document from `.sprout/plan.json`.
+- `change` (and optionally `part`, the piece of a screen it is pinned to): with an existing mockup, one model call returns find/replace edits, applied exactly first and then line by line ignoring indentation, each matching once; if they do not apply, the whole document is drawn again with the change.
+- The call goes through the agent's own client (`ToolFuncSet.StreamModelText`), with thinking off so the first bytes arrive at once, and its usage is booked under the `mockup` role.
+- Events (each payload carries `mockup_id` plus the agent's event metadata, e.g. `chat_id`): `mockup_start {mode: "whole"|"edit", path}`, `mockup_chunk {seq, chunk}` (whole mode only), `mockup_done {mode, path, html, screens}`, `mockup_error {message}`. A second `mockup_start` with `mode: "whole"` after an edit-mode start means the edits did not apply: discard and render the chunks that follow. Start, done and error are never dropped by the event bus; chunks may be under load, which is why done carries the whole document.
+
 ---
 
 ## 7. Applying a persona
@@ -292,6 +314,7 @@ If a workflow needs a different combination of tools or a tailored system prompt
 | `/persona` command | `pkg/agent_commands/persona.go` |
 | WebUI read API | `pkg/webui/settings_api_subagents.go` |
 | System prompt files | `pkg/agent/prompts/subagent_prompts/*.md` |
+| Confined-persona enforcement | `pkg/agent/persona_confinement.go` |
 
 ### ID normalization
 

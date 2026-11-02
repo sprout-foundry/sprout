@@ -15,6 +15,7 @@ import { resolve } from "path";
  *     the layout).
  *   - `providers` — the provider wrapper the views need (`SproutProviders`).
  *   - `design` — the design space's views.
+ *   - `agent` — the headless agent API (`createAgent`): no React, no web UI.
  *
  * Declared as ad-hoc entries rather than a static re-export, because a static
  * re-export chains into one 8 MB chunk — the entry chunk is a fourth of
@@ -50,6 +51,7 @@ const libraryConfig: InlineConfig = {
         views: resolve(__dirname, "src/viewsChunk.ts"),
         providers: resolve(__dirname, "src/providersChunk.ts"),
         design: resolve(__dirname, "src/designChunk.ts"),
+        agent: resolve(__dirname, "src/agentChunk.ts"),
       },
       formats: ["es"],
       fileName: (_format, entryName) => `${entryName}.js`,

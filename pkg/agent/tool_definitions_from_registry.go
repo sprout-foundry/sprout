@@ -53,6 +53,16 @@ func BuildToolDefinitionsForAgent(_ *Agent) []api.Tool {
 // downstream.
 func convertHandlerToAPITool(h tools.ToolHandler) api.Tool {
 	def := h.Definition()
+	if def.Schema != nil {
+		return api.Tool{
+			Type: "function",
+			Function: api.ToolFunction{
+				Name:        def.Name,
+				Description: def.Description,
+				Parameters:  def.Schema,
+			},
+		}
+	}
 	properties := make(map[string]any, len(def.Parameters))
 	required := make([]string, 0)
 	requiredSet := make(map[string]struct{}, len(def.Required))

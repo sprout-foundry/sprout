@@ -202,6 +202,9 @@ export const cloudHost: SproutHost = {
     folderPicker: false,
     automations: false,
     agentChanges: false,
+    // The hosted build has no shell of its own around it: the header's
+    // Start Building is how a project moves into a full workspace.
+    containerUpgrade: true,
     // The preview lifecycle (/api/preview/*) is served by a Sprout daemon:
     // a platform-registered ("hosted") preview is reported by the daemon
     // running inside a full workspace, which registers its port with the

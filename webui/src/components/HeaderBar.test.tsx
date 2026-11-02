@@ -60,6 +60,7 @@ async function renderHeader(
   body: string,
   availability: 'available' | 'unavailable' | 'unknown' = 'unknown',
   agent?: SproutHost['transport']['agent'],
+  containerUpgrade = true,
 ) {
   vi.stubGlobal(
     'fetch',
@@ -78,6 +79,7 @@ async function renderHeader(
   // it renders inside the app's HostProvider, so the tests mount one too.
   const host = headlessHost();
   host.transport = { ...host.transport, authMode: 'bearer', ...(agent ? { agent } : {}) };
+  host.capabilities = { ...host.capabilities, containerUpgrade };
   // The hosted build's navigation (back-link targets) comes from cloudHost.
   host.navigation = cloudHost.navigation;
   await act(async () => {
@@ -122,6 +124,11 @@ describe('HeaderBar Start Building', () => {
       apiBaseURL: '/workspace/ws-1/proxy',
       wsURL: 'wss://platform.test/workspace/ws-1/proxy/ws',
     });
+    expect(container.querySelector('.start-building-btn')).toBeNull();
+  });
+
+  it('is hidden when the host offers the move into a workspace itself', async () => {
+    await renderHeader(200, '', 'available', undefined, false);
     expect(container.querySelector('.start-building-btn')).toBeNull();
   });
 });

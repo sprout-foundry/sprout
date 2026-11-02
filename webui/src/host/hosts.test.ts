@@ -171,6 +171,7 @@ describe('cloudHost', () => {
       folderPicker: false,
       automations: false,
       agentChanges: false,
+      containerUpgrade: true,
       preview: false,
       mcp: false,
       localModels: false,

@@ -479,6 +479,13 @@ export interface HostCapabilities {
    * daemon serves its own files.
    */
   browserFiles?: boolean;
+  /**
+   * Sprout's own "Start Building" action in the hosted header: move the
+   * project from the in-browser agent into a full workspace. A host that
+   * offers that move in its own interface leaves this off, so the person
+   * sees one way to do it, not two. Absent or false hides the action.
+   */
+  containerUpgrade?: boolean;
 }
 
 /**

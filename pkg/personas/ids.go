@@ -17,6 +17,7 @@ const (
 	IDComputerUser = "computer_user"
 	IDDesigner     = "designer"
 	IDPlanner      = "planner"
+	IDDevPlanner   = "dev_planner"
 	IDWorker       = "worker"
 )
 

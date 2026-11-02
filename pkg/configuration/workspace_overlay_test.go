@@ -161,13 +161,5 @@ func TestWorkspaceSave_ConcurrentReadersNeverSeeTruncatedFile(t *testing.T) {
 	}
 
 	// No temp artifacts left behind.
-	entries, err := os.ReadDir(ws)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, e := range entries {
-		if filepath.Ext(e.Name()) == ".tmp" {
-			t.Errorf("temp file left behind after save: %s", e.Name())
-		}
-	}
+	assertNoTempFiles(t, ws)
 }

@@ -98,7 +98,7 @@ func writeKeyboardHelp(w io.Writer) {
 		{"  Ctrl+L", "clear the screen"},
 		{"  Ctrl+C", "clear line (press twice to exit)"},
 		{"  Ctrl+D", "exit session (or delete next char)"},
-		{"  Right-click", "context menu (cut/copy/paste)"},
+		{"  Click", "place the cursor (after /mouse on; the wheel then goes to sprout)"},
 		{"  /<cmd>", "slash command — type /help to list all"},
 		{"  !<cmd>", "run a shell command directly"},
 		{"  ?", "this help"},

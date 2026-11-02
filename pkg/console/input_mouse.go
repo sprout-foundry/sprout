@@ -1,45 +1,29 @@
 package console
 
-// handleMouseEvent processes mouse events from the terminal
+// handleMouseEvent processes mouse events from the terminal. Clicks are only
+// reported when mouse_click_to_position is on (see mouse_click.go).
 func (ir *InputReader) handleMouseEvent(data string) {
-	if ir.contextMenu == nil {
-		return
-	}
-
-	// Parse the mouse event. ParseMouseEvent can return a nil event
-	// with a nil error when the internal SGR/X10 parser fails to extract
-	// fields — guard against nil before dereferencing.
+	// ParseMouseEvent can return a nil event with a nil error when the
+	// internal SGR/X10 parser fails to extract fields.
 	mouseEvent, err := ParseMouseEvent(data)
 	if err != nil || mouseEvent == nil {
 		return
 	}
-
-	// Update mouse position
 	ir.mouseRow = mouseEvent.Row
 	ir.mouseCol = mouseEvent.Col
 
-	// Handle right-click (button 2)
-	if mouseEvent.Button == MouseButtonRight && mouseEvent.Kind == MouseEventPress {
-		// Show context menu at mouse position
-		ir.showContextMenu()
+	if mouseEvent.Button != MouseButtonLeft || mouseEvent.Kind != MouseEventPress {
+		// Right-click no longer opens the context menu: its actions were
+		// placeholders that only echoed the label (SP-166), and with click
+		// reporting on it would pop a menu that does nothing.
 		return
 	}
-
-	// Handle click elsewhere to close menu
-	if mouseEvent.Button == MouseButtonLeft && mouseEvent.Kind == MouseEventPress {
-		// Check if click is outside menu area
-		if ir.contextMenu.Visible {
-			// Close menu if click is not in menu area
-			ir.contextMenu.Hide()
-			if ir.contextMenu.OnEscape != nil {
-				ir.contextMenu.OnEscape()
-			}
+	if ir.contextMenu != nil && ir.contextMenu.Visible {
+		ir.contextMenu.Hide()
+		if ir.contextMenu.OnEscape != nil {
+			ir.contextMenu.OnEscape()
 		}
 		return
 	}
-
-	// Handle keyboard navigation when menu is visible
-	if ir.contextMenu.Visible {
-		// Keyboard navigation is handled in HandleEvent
-	}
+	ir.clickAt(mouseEvent.Row, mouseEvent.Col)
 }

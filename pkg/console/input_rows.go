@@ -6,6 +6,11 @@ package console
 // does, with collapsed pastes shown as their placeholders — so a long single
 // line can be walked row by row, not only one with hard line breaks.
 
+import (
+	"fmt"
+	"os"
+)
+
 // moveRows moves the caret delta screen rows. Reports whether it moved;
 // without clamp it stays put on the edge row in the direction of travel.
 func (ir *InputReader) moveRows(delta int, clamp bool) bool {
@@ -62,3 +67,44 @@ func (ir *InputReader) pageRows(dir int) {
 	}
 	ir.Refresh()
 }
+
+// clickAt handles a left click at the idle prompt (only reported when
+// mouse_click_to_position is on). The inline prompt's screen row is not
+// tracked — it sits wherever the transcript left off — so the click is held
+// and the terminal is asked where the cursor is (DSR 6); the report, handled
+// by cursorReport, places the caret.
+func (ir *InputReader) clickAt(row, col int) {
+	if ir.autocomplete != nil && ir.autocomplete.visible {
+		return // the pinned dropdown owns the rows; keyboard selects there
+	}
+	ir.pendingClick = &screenCell{row: row, col: col}
+	_, _ = os.Stdout.WriteString("\x1b[6n")
+}
+
+// cursorReport resolves a held click against the cursor position the
+// terminal reported ("row;col"): the cursor sits currentPhysicalLine rows
+// below the prompt's first row, which locates the click within the prompt.
+func (ir *InputReader) cursorReport(data string) {
+	click := ir.pendingClick
+	ir.pendingClick = nil
+	if click == nil {
+		return
+	}
+	var curRow, curCol int
+	if _, err := fmt.Sscanf(data, "%d;%d", &curRow, &curCol); err != nil {
+		return
+	}
+	layoutRow := click.row - (curRow - ir.currentPhysicalLine)
+	display, _ := ir.renderLineWithCollapsedPastes()
+	positions := inlineCaretPositions(display, ir.terminalWidth, visibleRuneWidth(ir.prompt))
+	b, ok := caretAt(positions, layoutRow, click.col-1)
+	if !ok {
+		return
+	}
+	ir.cursorPos = ir.rawOffsetForDisplay(b)
+	ir.expandPasteAtCursor()
+	ir.Refresh()
+}
+
+// screenCell is a 1-based terminal cell.
+type screenCell struct{ row, col int }

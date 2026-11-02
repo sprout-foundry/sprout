@@ -90,6 +90,10 @@ func (ir *InputReader) HandleEvent(event *InputEvent) {
 		} else {
 			ir.NavigateVertically(1)
 		}
+	case EventCursorReport:
+		ir.cursorReport(event.Data)
+	case EventMouse:
+		ir.handleMouseEvent(event.Data)
 	case EventPageUp:
 		ir.pageRows(-1)
 	case EventPageDown:

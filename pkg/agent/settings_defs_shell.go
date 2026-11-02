@@ -176,4 +176,23 @@ var settingDefsShell = []settingDef{
 		},
 		EnumValues: []string{"true", "false"},
 	},
+	{
+		Key:         "mouse_click_to_position",
+		Description: "Click in the CLI input to place the cursor. Captures the mouse wheel while on (plain wheel stops scrolling terminal history); /mouse toggles it",
+		ValidValues: "true, false",
+		GetValue:    func(cfg *configuration.Config) string { return fmt.Sprintf("%v", cfg.MouseClickToPosition) },
+		SetValue: func(cfg *configuration.Config, value string) error {
+			switch strings.ToLower(value) {
+			case "true":
+				cfg.MouseClickToPosition = true
+				return nil
+			case "false":
+				cfg.MouseClickToPosition = false
+				return nil
+			default:
+				return agenterrors.NewValidation(fmt.Sprintf("mouse_click_to_position must be true or false, got %q", value), nil)
+			}
+		},
+		EnumValues: []string{"true", "false"},
+	},
 }

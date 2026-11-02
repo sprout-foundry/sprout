@@ -1,7 +1,17 @@
 # SP-166 — Wheel and Scroll Routing
 
 Status: Implemented (2026-10-19). The REPL no longer captures the wheel, so
-the terminal's own scrollback works in every mode. `pkg/console` passes and
+the terminal's own scrollback works in every mode.
+
+**Follow-up (2026-11-02):** the decision below says "SGR coordinates alone (no
+VT200) report the clicks the menu needs". They do not: `?1006h` only changes
+how reports are encoded, and with no tracking mode enabled nothing is
+reported. So after this spec no clicks arrived at all, and the right-click
+menu, whose actions were placeholders anyway, could not open. Click reporting
+is now opt-in through `mouse_click_to_position` (`/mouse on`), which lets a
+click place the caret in the input. It accepts the trade-off this spec
+rejected by default: no terminal mode reports clicks without also capturing
+the wheel. The right-click menu stays closed. `pkg/console` passes and
 `make vet` / `make fmt-check` are clean. Split from a 17-item user nit list.
 Touches `pkg/console/input_terminal.go`, `pkg/console/select_list.go` and
 `pkg/console/select_list_render.go`.

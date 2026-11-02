@@ -95,7 +95,7 @@ func (r *SteerInputReader) handleEvent(event *InputEvent) {
 	case EventPasteEnd:
 		r.endPaste()
 	case EventMouse:
-		// Mouse events are not supported in steer mode — swallow.
+		r.clickAt(event.Data)
 	}
 }
 

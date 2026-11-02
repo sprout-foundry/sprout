@@ -55,6 +55,12 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	// (interactive + queue) only register once. Registered before
 	// Start so the first scroll region already reserves the hint row.
 	console.RegisterKeymapForFooter(footer, chatAgent.GetConfigManager())
+	if mgr := chatAgent.GetConfigManager(); mgr != nil {
+		console.SetMouseClickToPositionSource(func() bool {
+			cfg := mgr.GetConfig()
+			return cfg != nil && cfg.MouseClickToPosition
+		})
+	}
 	footer.Start()
 	defer footer.Stop()
 

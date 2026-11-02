@@ -56,3 +56,23 @@ func (r *SteerInputReader) pageRows(dir int) {
 		return r.moveTo(len(r.line))
 	})
 }
+
+// clickAt moves the caret to a left-click inside the box's text rows (only
+// reported when mouse_click_to_position is on).
+func (r *SteerInputReader) clickAt(data string) {
+	row, col, ok := leftClickAt(data)
+	if !ok || r.footer == nil {
+		return
+	}
+	b, ok := r.footer.SteerCaretAt(row, col)
+	if !ok {
+		return
+	}
+	r.move(func() bool {
+		prefix := SteerPromptPrefix
+		if r.submitMode == SteerSubmitModeQueue {
+			prefix = QueuePromptPrefix
+		}
+		return r.moveTo(min(max(b-len(prefix), 0), len(r.line)))
+	})
+}

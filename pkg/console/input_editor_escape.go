@@ -66,7 +66,7 @@ func (ir *InputReader) runExternalEditor(prevState *term.State, nonBlocking bool
 		_ = setNonblock(ir.termFd, true)
 	}
 	fmt.Print(bracketedPasteEnable)
-	fmt.Print(MouseTrackingSGR)
+	fmt.Print(mouseInputModes())
 	writeModifyOtherKeysEnable(os.Stdout)
 
 	if runErr != nil {

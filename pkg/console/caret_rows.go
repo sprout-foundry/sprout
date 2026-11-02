@@ -72,13 +72,8 @@ func caretRowMove(positions []caretPos, cur, delta int, clamp bool) (int, bool) 
 	if len(positions) == 0 || delta == 0 {
 		return cur, false
 	}
-	// A byte's row is its first listing: the earlier row at a soft wrap.
-	rowOf := make(map[int]int, len(positions))
 	lastRow := 0
 	for _, p := range positions {
-		if _, seen := rowOf[p.b]; !seen {
-			rowOf[p.b] = p.row
-		}
 		lastRow = max(lastRow, p.row)
 	}
 	curRow, curCol := 0, 0
@@ -99,21 +94,34 @@ func caretRowMove(positions []caretPos, cur, delta int, clamp bool) (int, bool) 
 		}
 		target = min(max(target, 0), lastRow)
 	}
+	if best, ok := caretAt(positions, target, curCol); ok {
+		return best, true
+	}
+	return cur, false
+}
+
+// caretAt returns the caret position nearest screen column col on layout row
+// row — where a click on that cell should put the caret. A soft-wrap
+// boundary belongs to the earlier row, as rendering does.
+func caretAt(positions []caretPos, row, col int) (int, bool) {
+	rowOf := make(map[int]int, len(positions))
+	for _, p := range positions {
+		if _, seen := rowOf[p.b]; !seen {
+			rowOf[p.b] = p.row
+		}
+	}
 	best, bestDist := -1, 0
 	for _, p := range positions {
-		if p.row != target || rowOf[p.b] != target {
+		if p.row != row || rowOf[p.b] != row {
 			continue
 		}
-		d := p.col - curCol
+		d := p.col - col
 		if d < 0 {
 			d = -d
 		}
-		if best < 0 || d < bestDist || (d == bestDist && p.col <= curCol) {
+		if best < 0 || d < bestDist {
 			best, bestDist = p.b, d
 		}
 	}
-	if best < 0 {
-		return cur, false
-	}
-	return best, true
+	return best, best >= 0
 }

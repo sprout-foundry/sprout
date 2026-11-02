@@ -49,6 +49,11 @@ func (f *StatusFooter) steerWindowLocked(text, prefix string, cols int) steerWin
 
 	w := steerWindow{rows: all[top : top+n], top: top, labelRow: labelRow, caretRow: -1,
 		above: top > 0, below: top+n < len(all)}
+	defer func() {
+		f.mu.Lock()
+		f.lastSteerWindow = w
+		f.mu.Unlock()
+	}()
 	switch r := caret - top; {
 	case caret < 0 || caret >= len(all):
 		// No caret given: it sits at the end of the input.
@@ -71,4 +76,33 @@ func (w steerWindow) marker(i int) string {
 		return composerMoreMarker
 	}
 	return composerContinuationMarker
+}
+
+// SteerCaretAt maps a click at screen cell (row, col), both 1-based, onto the
+// box's text: the byte offset in the steer text the caret should move to.
+// Reports false for a click outside the box's input rows (the rule, the
+// footer, completion candidates) or when no wrapped box is drawn.
+func (f *StatusFooter) SteerCaretAt(row, col int) (int, bool) {
+	if f == nil {
+		return 0, false
+	}
+	cols, rows := f.terminalSize()
+	f.mu.Lock()
+	w, text, wrapped := f.lastSteerWindow, f.steerLine, f.steerWrappedActive
+	blockRows, hintRows := f.steerBlockRows(), f.hintRowCountLocked()
+	f.mu.Unlock()
+	if !wrapped || len(w.rows) == 0 {
+		return 0, false
+	}
+	for i := range w.rows {
+		if steerRowFor(rows, blockRows, hintRows, i+1) != row {
+			continue
+		}
+		if w.labelRow < 0 || w.top+i < w.labelRow {
+			return 0, false
+		}
+		x := max(col-1-displayWidth(w.marker(i)), 0)
+		return caretAt(composerCaretPositions(text, composerWrapCols(cols)), w.top+i, x)
+	}
+	return 0, false
 }

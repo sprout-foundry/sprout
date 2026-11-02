@@ -82,6 +82,9 @@ func MergeConfig(base, override *Config) *Config {
 	if override.overrides("show_tool_invocations", override.ShowToolInvocations) {
 		result.ShowToolInvocations = override.ShowToolInvocations
 	}
+	if override.overrides("mouse_click_to_position", override.MouseClickToPosition) {
+		result.MouseClickToPosition = override.MouseClickToPosition
+	}
 	// Language is a single-value selector — a non-empty override wins.
 	if override.Language != "" {
 		result.Language = override.Language

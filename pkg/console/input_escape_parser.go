@@ -228,6 +228,17 @@ func (ep *EscapeParser) Parse(b byte) *InputEvent {
 			if (b >= '0' && b <= '9') || b == ';' {
 				return nil
 			}
+			if b == 'R' {
+				// Cursor position report (ESC [ row ; col R), the reply to
+				// the DSR a click at the idle prompt sends to learn where
+				// the prompt is on screen.
+				param := ""
+				if len(ep.buffer) >= 2 {
+					param = string(ep.buffer[1 : len(ep.buffer)-1])
+				}
+				ep.Reset()
+				return &InputEvent{Type: EventCursorReport, Data: param}
+			}
 			if b == 'u' {
 				// CSI u (fixterms / kitty keyboard / xterm modifyOtherKeys
 				// reporting). Format: ESC [ <key>;<modifiers> u — used by

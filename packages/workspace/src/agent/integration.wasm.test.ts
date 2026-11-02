@@ -327,6 +327,9 @@ describe.skipIf(!haveWasm)('headless agent on the real WASM module', () => {
       modelEndpoint: endpoint,
       runtime: bridge,
       persona: 'planner',
+      // The platform's managed model reports a 128K window: below the
+      // low-context threshold, which must not replace the planner's tools.
+      contextWindow: 128_000,
       context: 'What is offered: the Website starter.',
       requestParameters: { role: 'planner' },
       hostTools: [

@@ -329,3 +329,50 @@ func TestPlannerPrompt_NoSessionTags(t *testing.T) {
 		t.Error("planner prompt carries a date")
 	}
 }
+
+// Under a low-context model (< 132K window, e.g. a host's managed model) the
+// generic low-context tool list must not replace the planner's own: a
+// confined persona's allowed_tools are its whole tool set at any size, while
+// any other persona stays narrowed by the low-context list.
+func TestPlannerPersona_KeepsItsToolsUnderALowContextModel(t *testing.T) {
+	agent, _ := newPlannerAgent(t)
+	profile, err := configuration.ResolveContextProfile(agent.configManager.GetConfig(), 128_000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(profile.ToolAllowlist) == 0 {
+		t.Fatal("a 128K model must resolve to the low-context profile for this test to mean anything")
+	}
+	agent.contextProfile = profile
+
+	planner := agent.configManager.GetConfig().GetSubagentType(personas.IDPlanner)
+	offered := map[string]bool{}
+	for _, tool := range agent.getOptimizedToolDefinitions(nil) {
+		offered[tool.Function.Name] = true
+	}
+	for _, name := range []string{"write_plan", "draw_mockup", "ask_user"} {
+		if !offered[name] {
+			t.Errorf("planner under a low-context model is not offered %q", name)
+		}
+	}
+	for name := range offered {
+		if !containsString(planner.AllowedTools, name) {
+			t.Errorf("planner under a low-context model is offered %q, which is not on its list", name)
+		}
+	}
+	seed := seedToolNames(NewSeedToolRegistry(agent))
+	if !seed["write_plan"] || !seed["draw_mockup"] || seed["shell_command"] {
+		t.Errorf("seed registry under a low-context model = %v; want the planner's tools only", seed)
+	}
+
+	// A persona that is not confined is still narrowed by the low-context list.
+	if err := agent.ApplyPersona(personas.IDDesigner); err != nil {
+		t.Fatal(err)
+	}
+	agent.contextProfile = profile
+	for _, tool := range agent.getOptimizedToolDefinitions(nil) {
+		if !containsString(profile.ToolAllowlist, tool.Function.Name) {
+			t.Errorf("designer under a low-context model is offered %q, outside the low-context list", tool.Function.Name)
+		}
+	}
+}

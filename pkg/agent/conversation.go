@@ -79,8 +79,9 @@ func (a *Agent) ProcessQueryWithContinuityAs(source, userQuery string) (string, 
 func (a *Agent) getOptimizedToolDefinitions(messages []api.Message) []api.Tool {
 	tools := BuildToolDefinitionsForAgent(a)
 
-	// LCM allowlist: applied first as the broadest narrowing pass.
-	if allow := a.contextProfile.ToolAllowlist; len(allow) > 0 {
+	// LCM allowlist: applied first as the broadest narrowing pass. A
+	// confined persona's own list replaces it (see personaOwnsToolSet).
+	if allow := a.contextProfile.ToolAllowlist; len(allow) > 0 && !a.personaOwnsToolSet() {
 		tools = filterToolsByName(tools, makeAllowedToolSet(allow))
 	}
 
@@ -116,8 +117,9 @@ func (a *Agent) getOptimizedToolDefinitions(messages []api.Message) []api.Tool {
 
 	// The root agent's LCM allowlist is final. Subagents narrow it further by
 	// their persona so a low-context reviewer doesn't gain write/commit tools.
+	// A confined persona's list is the whole tool set at any context size.
 	if personaAllowlist := a.getActivePersonaToolAllowlist(); len(personaAllowlist) > 0 &&
-		(len(a.contextProfile.ToolAllowlist) == 0 || a.IsSubagent()) {
+		(len(a.contextProfile.ToolAllowlist) == 0 || a.IsSubagent() || a.personaOwnsToolSet()) {
 		tools = filterToolsByName(tools, makeAllowedToolSet(personaAllowlist))
 	}
 

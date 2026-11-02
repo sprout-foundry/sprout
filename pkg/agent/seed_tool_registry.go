@@ -31,7 +31,7 @@ func newSeedToolRegistryWithPublisher(agent *Agent, ep core.EventPublisher) *cor
 
 	// Build the LCM tool allowlist set (if applicable).
 	var allowSet map[string]struct{}
-	if agent != nil && len(agent.contextProfile.ToolAllowlist) > 0 {
+	if agent != nil && len(agent.contextProfile.ToolAllowlist) > 0 && !agent.personaOwnsToolSet() {
 		allowSet = make(map[string]struct{}, len(agent.contextProfile.ToolAllowlist))
 		for _, name := range agent.contextProfile.ToolAllowlist {
 			allowSet[name] = struct{}{}

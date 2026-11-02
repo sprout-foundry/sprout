@@ -5,6 +5,24 @@ import (
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 )
 
+// personaOwnsToolSet reports whether the active persona's allowed_tools are
+// the agent's whole tool set even under a low-context profile: a confined
+// persona (write_paths set) is a narrowly scoped product surface whose list
+// names exactly the tools it needs, including its own (write_plan,
+// draw_mockup) and the host's, which the generic low-context allowlist does
+// not carry. Any other persona is narrowed by that allowlist as before.
+func (a *Agent) personaOwnsToolSet() bool {
+	if a == nil || a.configManager == nil {
+		return false
+	}
+	cfg := a.configManager.GetConfig()
+	if cfg == nil {
+		return false
+	}
+	persona := cfg.GetSubagentType(normalizeAgentPersonaID(a.state.GetActivePersona()))
+	return persona != nil && persona.IsConfined()
+}
+
 // personaToolAllowSet is the set of tool names the seed registry is limited
 // to, or nil for no limit. The active persona's allowed_tools are the agent's
 // whole tool set: the registry built for each turn holds only the tools the
@@ -17,7 +35,7 @@ func personaToolAllowSet(a *Agent) map[string]struct{} {
 	if a == nil {
 		return nil
 	}
-	if len(a.contextProfile.ToolAllowlist) > 0 && !a.IsSubagent() {
+	if len(a.contextProfile.ToolAllowlist) > 0 && !a.IsSubagent() && !a.personaOwnsToolSet() {
 		return nil
 	}
 	allowlist := a.getActivePersonaToolAllowlist()

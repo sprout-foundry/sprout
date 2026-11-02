@@ -124,3 +124,20 @@ func TestTaskCommand_ShowRequiresID(t *testing.T) {
 		t.Fatal("expected a usage error for /task show with no id")
 	}
 }
+
+// A task that was running when sprout stopped must say so, and point at the
+// worktree and the merge path — not read as a task that is still going.
+func TestFormatTaskDetail_Interrupted(t *testing.T) {
+	got := formatTaskDetail(agent.TaskInfo{
+		ID:       "bg-task-3",
+		Branch:   "feat/half-done",
+		Status:   "interrupted",
+		Elapsed:  2 * time.Minute,
+		Worktree: "/ws/.sprout/tasks/half-done",
+	})
+	for _, want := range []string{"interrupted", "sprout stopped", "/ws/.sprout/tasks/half-done", "/task merge bg-task-3"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("detail missing %q:\n%s", want, got)
+		}
+	}
+}

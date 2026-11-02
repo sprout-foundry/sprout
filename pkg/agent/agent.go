@@ -412,6 +412,11 @@ type Agent struct {
 	// subagentDepth tracks the nesting depth of this agent. 0 = primary, 1 = orchestrator, 2 = coder/tester, etc.
 	subagentDepth int
 
+	// taskLoadMu guards taskLoaded: the set of workspaces whose persisted
+	// task records this process has already restored.
+	taskLoadMu sync.Mutex
+	taskLoaded map[string]bool
+
 	// rootPersonaID tracks the persona of the top-level (depth 0) agent in the spawn chain.
 	// Propagated to subagents so depth limits and spawn restrictions can be enforced based on the root persona.
 	rootPersonaID string
@@ -544,6 +549,11 @@ type Agent struct {
 	// purposes regardless of the console's TTY status. See
 	// workflow_run_approval.go for the policy and the accessors.
 	workflowRun atomic.Bool
+
+	// taskRun marks a /task background run: a workflow run for TTY purposes,
+	// but it keeps the WebUI approval surface so a long user-initiated task
+	// can still ask. See tasks_prompt.go.
+	taskRun atomic.Bool
 
 	// gate1Decided (SP-168): set to true at the end of a successful unified
 	// Gate-1 decision for the most recent tool call (explicit user approval,

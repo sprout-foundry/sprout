@@ -94,10 +94,32 @@ func newTaskAgent(a *Agent, worktreePath, taskID string) (*Agent, error) {
 		taskAgent.SetTerminalManager(tm)
 	}
 
-	// No human answers a task's approval prompt, so run it non-interactive:
-	// a risky operation fails fast instead of blocking for the approval
-	// timeout. Same flag the automate path sets.
+	// A task has no terminal of its own. It runs as a workflow run so it can
+	// never take the primary's TTY mid-turn, but it is marked as a task run
+	// so it keeps the WebUI approval surface: a long user-initiated task
+	// must be able to ask a question or request approval instead of failing
+	// outright. When no browser is attached, the broker fails fast with a
+	// clear message rather than blocking for the approval timeout.
 	taskAgent.SetWorkflowRun(true)
+	taskAgent.SetTaskRun(true)
+
+	// Share the primary's approval and ask-user managers. Both resolve by
+	// request ID against a single pending map, so a task's dialog and the
+	// primary's never collide, and an answer from the WebUI reaches the
+	// agent that asked.
+	if a.security != nil {
+		if pm := a.security.GetSecurityApprovalMgr(); pm != nil {
+			taskAgent.security.SetApprovalMgr(pm)
+		}
+		if am := a.security.GetAskUserMgr(); am != nil {
+			taskAgent.security.SetAskUserMgr(am)
+		}
+	}
+	// The WebUI-client callback is what makes HasActiveWebUIClients() true
+	// for the task, i.e. what makes the surface reachable at all.
+	if fn := a.WebUIClientCallback(); fn != nil {
+		taskAgent.SetHasActiveWebUIClients(fn)
+	}
 
 	if err := taskAgent.resolveAndApplyContextProfile(); err != nil {
 		interruptCancel()

@@ -58,6 +58,25 @@ func (a *Agent) IsWorkflowRun() bool {
 	return a.workflowRun.Load()
 }
 
+// IsTaskRun reports whether this agent is a /task background run. A task is
+// a workflow run for TTY purposes — it never takes the primary's terminal —
+// but it keeps the WebUI approval surface, so a long user-initiated task can
+// still ask a question or request approval.
+func (a *Agent) IsTaskRun() bool {
+	if a == nil {
+		return false
+	}
+	return a.taskRun.Load()
+}
+
+// SetTaskRun marks this agent as a /task background run.
+func (a *Agent) SetTaskRun(v bool) {
+	if a == nil {
+		return
+	}
+	a.taskRun.Store(v)
+}
+
 // ActiveSubagentCount reports the process-wide number of subagents currently
 // running (SP-168). The approval broker offers the CLI prompt surface to a
 // subagent only when this is <= 1, so parallel subagents never interleave

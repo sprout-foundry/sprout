@@ -97,9 +97,9 @@ func (r *taskRegistry) pruneLocked() {
 // "stopped" for the same task, and the two must not disagree.
 func (r *taskRegistry) setTerminal(id, status, output, commit string) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	rec := r.byID[id]
 	if rec == nil {
+		r.mu.Unlock()
 		return
 	}
 	if rec.Status == "stopped" || rec.Status == "merged" {
@@ -109,6 +109,11 @@ func (r *taskRegistry) setTerminal(id, status, output, commit string) {
 	rec.Summary = output
 	rec.Commit = commit
 	rec.Finished = time.Now()
+	workspace := rec.Workspace
+	r.mu.Unlock()
+
+	// Persist outside the lock: the write is I/O and must not block /tasks.
+	r.save(workspace)
 }
 
 // markStopped closes a task record that a stop request ended. It is a no-op
@@ -116,13 +121,16 @@ func (r *taskRegistry) setTerminal(id, status, output, commit string) {
 // records the runner goroutine has already finished.
 func (r *taskRegistry) markStopped(id string) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	rec := r.byID[id]
 	if rec == nil || rec.Status != "running" {
+		r.mu.Unlock()
 		return
 	}
 	rec.Status = "stopped"
 	rec.Finished = time.Now()
+	workspace := rec.Workspace
+	r.mu.Unlock()
+	r.save(workspace)
 }
 
 // reserve atomically claims a concurrency slot for workspace and returns the
@@ -290,6 +298,7 @@ func (a *Agent) StartTask(ctx context.Context, opts StartTaskOptions) (*TaskInfo
 	rec.Prompt = description
 	rec.worktree = wt
 	processTasks.adopt(rec, t.ID)
+	processTasks.save(workspace)
 
 	timeout := opts.Timeout
 	if timeout <= 0 {
@@ -387,11 +396,13 @@ type TaskInfo struct {
 
 // Tasks returns this process's tasks, newest first.
 func (a *Agent) Tasks() []TaskInfo {
+	a.loadTasksOnce()
 	return processTasks.snapshot()
 }
 
 // TaskDetail reports one task's state and output.
 func (a *Agent) TaskDetail(id string) (TaskInfo, error) {
+	a.loadTasksOnce()
 	id = strings.TrimSpace(id)
 	for _, info := range processTasks.snapshot() {
 		if info.ID == id {
@@ -405,6 +416,7 @@ func (a *Agent) TaskDetail(id string) (TaskInfo, error) {
 // branch with --no-ff. A dirty workspace or a conflicting branch leaves the
 // workspace untouched.
 func (a *Agent) MergeTask(ctx context.Context, id string) (string, error) {
+	a.loadTasksOnce()
 	id = strings.TrimSpace(id)
 	rec := processTasks.get(id)
 	if rec == nil {
@@ -416,6 +428,12 @@ func (a *Agent) MergeTask(ctx context.Context, id string) (string, error) {
 
 	if status == "running" {
 		return "", agenterrors.NewValidation(fmt.Sprintf("task %s is still running; stop it with /tasks stop %s first", id, id), nil)
+	}
+	// A record restored from disk has no worktree handle, but the branch is
+	// still there: merging it is exactly how a user recovers an interrupted
+	// task's committed work.
+	if wt == nil && status == "interrupted" {
+		wt = &taskWorktree{RepoRoot: reviewRepoRoot(ctx, a.currentWorkspaceRoot()), Path: path, Branch: branch}
 	}
 
 	workspace := a.currentWorkspaceRoot()

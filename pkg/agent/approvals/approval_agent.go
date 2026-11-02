@@ -30,6 +30,10 @@ type ApprovalAgent interface {
 	// IsWorkflowRun reports a workflow/automate run, which is non-interactive
 	// for approval purposes even when launched from a terminal.
 	IsWorkflowRun() bool
+	// IsTaskRun reports a /task background run. A task is a workflow run for
+	// TTY purposes (it must never take the primary's terminal) but keeps the
+	// WebUI approval surface, so a long user-initiated task can still ask.
+	IsTaskRun() bool
 	// SubagentDepth returns the nesting depth (0 = primary agent). Used to
 	// label a subagent's approval prompt so the parent's surface knows whose
 	// command is being approved (SP-168).

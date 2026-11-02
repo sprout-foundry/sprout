@@ -116,6 +116,12 @@ func formatTaskDetail(t agent.TaskInfo) string {
 	if t.Commit != "" {
 		fmt.Fprintf(&b, "Commit: %s\n", t.Commit)
 	}
+	if t.Status == "interrupted" {
+		b.WriteString("\nThis task was running when sprout stopped, so it did not finish.\n")
+		b.WriteString("Its worktree and any uncommitted work are still on disk. To pick it up,\n")
+		b.WriteString("start a new task from that branch, or merge what it committed:\n")
+		fmt.Fprintf(&b, "  /task merge %s\n", t.ID)
+	}
 	if out := strings.TrimSpace(t.Summary); out != "" {
 		b.WriteString("\n")
 		b.WriteString(out)

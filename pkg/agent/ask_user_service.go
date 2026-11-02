@@ -40,5 +40,10 @@ func (s *agentAskUserService) Ask(ctx context.Context, req tools.AskUserRequest)
 	if hasActiveWebUI {
 		return tools.AskUserWithEventBus(ctx, req, eventBus, clientID, userID, chatID, askUserMgr)
 	}
+	// A task has no terminal: without a browser there is nobody to answer,
+	// and blocking would stall the task for the ask timeout.
+	if a.IsTaskRun() {
+		return "", tools.ErrAskUserNoChannel
+	}
 	return tools.AskUser(ctx, req)
 }

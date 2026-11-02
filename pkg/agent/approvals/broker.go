@@ -202,8 +202,13 @@ func RequestApproval(a ApprovalAgent, assessment RiskAssessment, toolName string
 	// run is excluded: even with a browser attached, nobody is guaranteed
 	// to be at it, so the run must not block on the dialog and instead
 	// resolves from the risk profile (non-interactive permissive).
-	webUICanAnswer := a.HasActiveWebUIClients() && !a.IsWorkflowRun()
-
+	//
+	// A /task run is the exception that proves the rule: it is a workflow
+	// run for TTY purposes (it must never take the primary's terminal) but
+	// it is a long, user-initiated piece of work, so it keeps the WebUI
+	// surface. Without this a task could never ask anything, and every
+	// approval-requiring operation would fail outright.
+	webUICanAnswer := a.HasActiveWebUIClients() && (!a.IsWorkflowRun() || a.IsTaskRun())
 	// Subagents can prompt on the parent's terminal (SP-168): the parent's
 	// turn is blocked inside run_subagent, so the TTY is free. When several
 	// subagents run in parallel (run_parallel_subagents), interleaved

@@ -197,8 +197,16 @@ New settings under `tasks`:
   is the git object database (via the worktree) and the branch namespace.
 - Starting a task requires a clean-enough repo: a detached HEAD is refused
   (there is no branch to merge back into).
-- The task agent runs non-interactive (`SetWorkflowRun(true)`): no approval
-  prompt can block it, and a risky operation fails instead of waiting.
+- The task agent runs as a workflow run (`SetWorkflowRun(true)`) so it can
+  never take the primary's terminal mid-turn, plus a task-run flag
+  (`SetTaskRun(true)`) that keeps the **WebUI approval surface**. A task is
+  long, user-initiated work, so it must be able to ask a question or request
+  approval rather than failing every gated operation outright. It shares the
+  primary's approval and ask-user managers, which resolve by request ID
+  against one pending map, so a task's dialog and the primary's never
+  collide and an answer reaches the agent that asked. With no browser
+  attached the request fails fast with a message naming the surface, instead
+  of blocking for the approval timeout.
 - The task agent is constructed at depth 1 (a delegated run), not depth 0.
   A task runs concurrently with the primary's own turn, so it must not run
   the per-turn quality and verification hooks (they read per-agent turn
@@ -217,8 +225,13 @@ New settings under `tasks`:
   (which refuses a dirty tree) could never run. `ensureTaskGitignore`
   appends to a user-written file and leaves a sprout-generated one alone,
   because the generator refreshes by exact content match.
-- Tasks die with the process. `/tasks` reports them as failed after a
-  restart rather than pretending they are running.
+- Tasks die with the process, but their records do not. Each workspace's
+  task list is persisted under the state dir (`tasks/<workspace-key>.json`).
+  On load, a record saved as `running` becomes `interrupted` — never
+  `running` — because a task cannot outlive its process and the concurrency
+  limit and `/task merge` would otherwise act on a lie. An interrupted task
+  does not hold a slot, and `/task merge` still works for it: the branch and
+  worktree are on disk, so its committed work is recoverable.
 
 ## Tests
 
@@ -234,3 +247,10 @@ New settings under `tasks`:
 - Notification content names the branch and the merge command.
 - `/task merge`: clean merge succeeds; dirty tree refused; conflicting
   branch leaves the primary untouched.
+- Persistence: a saved record round-trips; a record saved as running loads as
+  interrupted with a finish time; an interrupted record holds no concurrency
+  slot; a corrupt state file is ignored rather than fatal; two workspaces do
+  not share a task list.
+- Prompts: a task keeps the WebUI approval surface and shares the primary's
+  approval manager; with no browser attached its `ask_user` fails fast
+  instead of blocking.

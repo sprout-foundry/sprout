@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 )
 
 // resetProcessTasks clears the process-wide task registry between tests. The
@@ -471,5 +473,69 @@ func TestTaskRegistry_SetTerminalPreservesStopped(t *testing.T) {
 
 	if got := processTasks.get("bg-task-race").Status; got != "stopped" {
 		t.Errorf("status = %q, want stopped preserved", got)
+	}
+}
+
+// A task must be able to ask a question when a browser is attached, and must
+// fail fast (not block) when one is not. The old blanket SetWorkflowRun(true)
+// made both cases fail outright.
+func TestNewTaskAgent_KeepsWebUIApprovalSurface(t *testing.T) {
+	repo := initTaskTestRepo(t)
+	primary := newTaskTestAgent(t, repo)
+	primary.SetEventMetadata(map[string]interface{}{"chat_id": "chat-1", "client_id": "client-1"})
+
+	wt, err := createTaskWorktree(context.Background(), repo, "feat/ask", "")
+	if err != nil {
+		t.Fatalf("createTaskWorktree: %v", err)
+	}
+	t.Cleanup(func() { wt.remove(context.Background()) })
+
+	taskAgent, err := newTaskAgent(primary, wt.Path, "bg-task-ask")
+	if err != nil {
+		t.Fatalf("newTaskAgent: %v", err)
+	}
+
+	if !taskAgent.IsTaskRun() {
+		t.Error("a task must be marked as a task run so it keeps the WebUI approval surface")
+	}
+	if !taskAgent.IsWorkflowRun() {
+		t.Error("a task must stay a workflow run so it never takes the primary's terminal")
+	}
+	if got := taskAgent.GetEventChatID(); got != "chat-1" {
+		t.Errorf("chat id = %q, want the primary's chat so the dialog routes to the right tab", got)
+	}
+	if got := taskAgent.GetEventClientID(); got != "client-1" {
+		t.Errorf("client id = %q, want the primary's client", got)
+	}
+	if taskAgent.GetSecurityApprovalMgr() != primary.GetSecurityApprovalMgr() {
+		t.Error("a task must share the primary's approval manager so an answer reaches the asker")
+	}
+}
+
+// Without a browser, a task's question fails immediately instead of blocking
+// for the ask timeout.
+func TestTaskAskUser_FailsFastWithoutSurface(t *testing.T) {
+	repo := initTaskTestRepo(t)
+	primary := newTaskTestAgent(t, repo)
+	wt, err := createTaskWorktree(context.Background(), repo, "feat/no-surface", "")
+	if err != nil {
+		t.Fatalf("createTaskWorktree: %v", err)
+	}
+	t.Cleanup(func() { wt.remove(context.Background()) })
+
+	taskAgent, err := newTaskAgent(primary, wt.Path, "bg-task-nosurface")
+	if err != nil {
+		t.Fatalf("newTaskAgent: %v", err)
+	}
+	if taskAgent.HasActiveWebUIClients() {
+		t.Skip("a WebUI client is attached in this environment")
+	}
+
+	_, askErr := newAgentAskUserService(taskAgent).Ask(context.Background(), tools.AskUserRequest{Question: "which one?"})
+	if askErr == nil {
+		t.Fatal("expected an error when no surface can answer")
+	}
+	if !errors.Is(askErr, tools.ErrAskUserNoChannel) {
+		t.Errorf("error = %v, want ErrAskUserNoChannel", askErr)
 	}
 }

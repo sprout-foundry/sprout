@@ -451,6 +451,18 @@ describe("version lockstep with the sprout release", () => {
     assert.ok(entry, "package-lock.json has a packages/workspace entry");
     assert.equal(entry.name, pkg.name);
     assert.equal(entry.version, rootPkg.version);
+    // The lockfile's own root entries drift independently of the workspace
+    // entry, so pin all three locations the release bumps together.
+    assert.equal(
+      lock.version,
+      rootPkg.version,
+      "package-lock.json version must track the root sprout version",
+    );
+    assert.equal(
+      lock.packages?.[""]?.version,
+      rootPkg.version,
+      'package-lock.json packages[""].version must track the root sprout version',
+    );
   });
 });
 

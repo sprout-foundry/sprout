@@ -97,6 +97,14 @@ func createTaskWorktree(ctx context.Context, workspaceRoot, branch, base string)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, fmt.Errorf("create task directory: %w", err)
 	}
+	// A task worktree inside .sprout/ must not read as an untracked file in
+	// the workspace: `git status` would then be permanently dirty and
+	// /task merge (which refuses a dirty tree) could never run. The
+	// workspace's shipped .sprout/.gitignore covers this; a workspace that
+	// predates it gets the line appended here.
+	if err := ensureTaskGitignore(workspaceRoot); err != nil {
+		return nil, err
+	}
 
 	if _, err := runGitIn(ctx, repoRoot, "worktree", "add", "-b", branch, path, base); err != nil {
 		return nil, fmt.Errorf("create task worktree: %w", err)
@@ -108,6 +116,41 @@ func createTaskWorktree(ctx context.Context, workspaceRoot, branch, base string)
 		Base:      base,
 		Workspace: workspaceRoot,
 	}, nil
+}
+
+// ensureTaskGitignore makes sure the workspace's .sprout/.gitignore covers
+// the tasks directory. It never rewrites an existing file: the line is
+// appended when missing, and the file itself is self-ignored so .sprout/
+// does not read as untracked when nothing else in it is ignored yet.
+func ensureTaskGitignore(workspaceRoot string) error {
+	dir := filepath.Join(workspaceRoot, ".sprout")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("create .sprout directory: %w", err)
+	}
+	path := filepath.Join(dir, ".gitignore")
+	existing, err := os.ReadFile(path) //nolint:gosec // G304: fixed filename under the workspace root
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("read .sprout/.gitignore: %w", err)
+	}
+
+	var b strings.Builder
+	b.WriteString(string(existing))
+	if !strings.Contains(string(existing), taskDirName+"/") {
+		if b.Len() > 0 && !strings.HasSuffix(b.String(), "\n") {
+			b.WriteString("\n")
+		}
+		b.WriteString(taskDirName + "/\n")
+	}
+	if !strings.Contains(string(existing), ".gitignore\n") {
+		b.WriteString(".gitignore\n")
+	}
+	if b.String() == string(existing) {
+		return nil
+	}
+	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
+		return fmt.Errorf("write .sprout/.gitignore: %w", err)
+	}
+	return nil
 }
 
 // remove deletes the worktree but keeps the branch, so committed work stays

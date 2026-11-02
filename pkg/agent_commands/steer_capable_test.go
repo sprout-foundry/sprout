@@ -76,6 +76,7 @@ func TestSteerCapable_UnsafeCommands(t *testing.T) {
 		"rollback",
 		"rewind",
 		"fork",
+		"task", // creates a worktree and a branch: repository state the in-flight turn may be reading
 	}
 
 	for _, name := range unsafeCommands {

@@ -184,6 +184,7 @@ func NewCommandRegistry() *CommandRegistry {
 	// output verbosity and tool invocation display
 	registry.Register(&VerboseCommand{})
 	registry.Register(&TasksCommand{})
+	registry.Register(&TaskCommand{})
 	registry.Register(&ToolsCommand{})
 
 	// expand a collapsed tool result (SP-171d)

@@ -35,7 +35,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		"model":       displayModel,
 		"is_parallel": false,
 	})
-	printSubagentStart(spec.persona, displayProvider, displayModel)
+	printSubagentStart(spec.persona, spec.prompt, displayProvider, displayModel)
 
 	// Phase 2: Run the subagent
 	var result *SubagentResult

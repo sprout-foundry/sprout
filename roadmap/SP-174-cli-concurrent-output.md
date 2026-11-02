@@ -1,6 +1,15 @@
 # SP-174 — CLI Concurrent Output: Subagents and Background Tasks
 
-**Status:** In progress (2026-11-02).
+**Status:** Implemented (2026-11-02). 174a–e landed. Two of the
+original assumptions were wrong, and both were corrected during
+implementation:
+
+- **174b.** The subscriber's subagent "done" line never fired, because
+  nothing published the `status: completed` activity it waited for. The
+  duplicate was the opener, not the closer.
+- **174c.** Parallel runs printed no per-run done line at all, so the
+  completion block is new output rather than a replacement for an
+  existing line.
 **Origin:** user report: *"Tasks are not handled well. Output is not
 organized, but just streamed as it comes."* The user later narrowed "tasks"
 to subagents and `/task` background tasks.
@@ -31,14 +40,19 @@ with the same persona are indistinguishable. The subscriber keys its spawn
 announcements, collapse runs and done lines by `depth:persona`
 (`pkg/cliui/terminal_subscriber.go`), so they merge.
 
-### 174b. A foreground subagent is announced twice and closed twice
+### 174b. A foreground subagent is announced three times
 
-The subagent spawner prints `subagents.PrintSubagentStart` and
-`PrintSubagentDone` (`tool_handlers_subagent_spawn.go:38,75`). The terminal
-subscriber separately prints `FormatSpawnLine` on the subagent's first tool
-event and `FormatSubagentDoneLine` on its `completed` activity event. A single
-delegation therefore produces two openers and two closers, with different
-wording and different stats.
+A single delegation produced three openers:
+
+1. the `run_subagent` tool row;
+2. the spawner's `▸ subagent [coder] starting · provider/model`
+   (`tool_handlers_subagent_spawn.go:38`);
+3. the subscriber's `↳ [coder] spawned: …` (`FormatSpawnLine`), printed
+   whenever the subagent's first tool event happened to arrive — after any
+   prose the subagent had already streamed.
+
+The subscriber's matching done line (`FormatSubagentDoneLine`) was dead
+code: nothing published the `status: completed` activity it waited for.
 
 ### 174c. Parallel subagents stream prose line by line, interleaved
 
@@ -71,15 +85,18 @@ When a subagent is created, it merges `subagent_task_id` (its run ID) and
 event it emits carries both. The subscriber keys per-run state by task ID and
 falls back to `depth:persona` only when the ID is absent.
 
-### 174b. The subscriber owns subagent openers and closers
+### 174b. The spawner owns subagent openers and closers
 
-When a terminal subscriber is active (the REPL), the spawner's
-`PrintSubagentStart` and `PrintSubagentDone` are suppressed and the
-subscriber's event-driven lines are the only ones printed. The subscriber
-already has the depth, indentation and live context needed to place them.
-The done line gains the stats only the spawner's line had (files changed,
-tool calls), carried on the `completed` activity event. Without a subscriber
-(one-shot `agent` runs, scripts), the spawner's lines stay as they are.
+The spawner prints at the right moment for every depth, so it keeps the
+opener and closer. Its opener gains the task's first line
+(`subagent [coder] starting: refactor auth · provider/model`). The
+subscriber's late spawn line, its per-turn dedupe state and the dead done
+line are removed.
+
+Each run now publishes a per-run `subagent_activity` event with
+`status: completed|cancelled` and its `task_id`. The CLI uses it to retire
+the run's live state. The WebUI's per-task resource counts
+(`useSubagentRuns`) already expected this status but never received it.
 
 ### 174c. Parallel subagents: a live status line and one block per run
 
@@ -126,11 +143,14 @@ bound, so a caller that already holds the lock cannot deadlock.
 
 ## Testing
 
-- Subscriber unit tests drive event sequences through `runEventLoop`'s
-  handlers with an emulated screen (`vtScreen`, added with the SP-171
-  follow-up fixes) and assert the transcript a user would see:
-  - one opener and one closer per foreground subagent;
-  - no `task_id` event in the transcript;
-  - parallel blocks contiguous and attributed.
-- `PrintLine` under a held lock: the line is delayed, not raw-written, and
-  the bounded fallback still fires.
+- Subscriber integration tests publish events through a live subscriber and
+  assert what reaches stdout, stderr and the indicator's writer:
+  - `task_id` events never reach the transcript;
+  - a concurrent run's tool lines stay off it, while its warnings still
+    print.
+- Fleet unit tests cover per-run labels for same-persona workers and their
+  retirement.
+- Agent tests cover the completion block (tail and earlier-lines marker)
+  and the foreground / parallel / background classification.
+- `PrintLine` under a held lock: the line waits for the holder, and the
+  bounded fallback still fires.

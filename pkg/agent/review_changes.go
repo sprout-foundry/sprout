@@ -176,7 +176,7 @@ func (a *Agent) ReviewChanges(ctx context.Context, opts ReviewChangesOptions) (*
 
 	start := time.Now()
 	if !opts.quiet {
-		printSubagentStart(personas.IDReviewer, displayOrDefault(provider), displayOrDefault(model))
+		printSubagentStart(personas.IDReviewer, "review the changes", displayOrDefault(provider), displayOrDefault(model))
 	}
 	results := a.runReviewTasks(ctx, tasks, opts.quiet)
 

@@ -8,10 +8,27 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
-// printSubagentStart announces a delegated subagent run with a consistent
-// action glyph instead of the old literal "[~] Spawning subagent" prefix.
-func PrintSubagentStart(persona, provider, model string) {
+// PrintSubagentStart announces a delegated subagent run with a consistent
+// action glyph. task is the delegated prompt; its first line is shown,
+// shortened, so the opener says what the subagent was asked to do.
+func PrintSubagentStart(persona, task, provider, model string) {
+	if t := TaskHeadline(task); t != "" {
+		console.GlyphAction.Printf("subagent [%s] starting: %s · %s/%s", persona, t, provider, model)
+		return
+	}
 	console.GlyphAction.Printf("subagent [%s] starting · %s/%s", persona, provider, model)
+}
+
+// TaskHeadline is the first line of a delegated prompt, cut to 60 runes.
+func TaskHeadline(task string) string {
+	task = strings.TrimSpace(task)
+	if i := strings.IndexByte(task, '\n'); i >= 0 {
+		task = strings.TrimSpace(task[:i])
+	}
+	if r := []rune(task); len(r) > 60 {
+		task = string(r[:59]) + "…"
+	}
+	return task
 }
 
 // printParallelSubagentStart announces a batch of parallel subagents.
@@ -19,22 +36,28 @@ func PrintParallelSubagentStart(count int, provider, model string) {
 	console.GlyphAction.Printf("%d parallel subagents starting · %s/%s", count, provider, model)
 }
 
-// printSubagentDone announces completion with a compact stat summary so the
+// PrintSubagentDone announces completion with a compact stat summary so the
 // user gets closure on a delegation (files touched, tokens, cost, tools, time)
 // rather than the run finishing silently. Severity glyph reflects outcome.
 func PrintSubagentDone(persona string, res *SubagentResult) {
 	if res == nil {
 		return
 	}
+	console.PrintLine(FormatSubagentDone(persona, res))
+}
+
+// FormatSubagentDone renders the completion line PrintSubagentDone prints.
+// label is the persona, or "persona:taskID" for a run among siblings.
+func FormatSubagentDone(label string, res *SubagentResult) string {
 	switch {
 	case res.Cancelled:
-		console.GlyphStopped.Printf("subagent [%s] cancelled%s", persona, subagentStatSuffix(res))
+		return console.GlyphStopped.Prefix() + fmt.Sprintf("subagent [%s] cancelled%s", label, subagentStatSuffix(res))
 	case res.BudgetExceeded || res.Truncated:
-		console.GlyphWarning.Printf("subagent [%s] stopped: budget exceeded%s", persona, subagentStatSuffix(res))
+		return console.GlyphWarning.Prefix() + fmt.Sprintf("subagent [%s] stopped: budget exceeded%s", label, subagentStatSuffix(res))
 	case res.Error != nil:
-		console.GlyphError.Printf("subagent [%s] failed: %s", persona, res.Error.Error())
+		return console.GlyphError.Prefix() + fmt.Sprintf("subagent [%s] failed: %s", label, res.Error.Error())
 	default:
-		console.GlyphSuccess.Printf("subagent [%s] done%s", persona, subagentStatSuffix(res))
+		return console.GlyphSuccess.Prefix() + fmt.Sprintf("subagent [%s] done%s", label, subagentStatSuffix(res))
 	}
 }
 

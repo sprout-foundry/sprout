@@ -192,3 +192,15 @@ func taskBadge(n int) string {
 	}
 	return fmt.Sprintf("%d tasks", n)
 }
+
+// IdleBetweenTurns reports whether this is a live REPL footer with no turn
+// running: the composer owns the prompt row, so nothing may start the
+// activity spinner over it. False for a nil, non-TTY or stopped footer.
+func (f *StatusFooter) IdleBetweenTurns() bool {
+	if f == nil || !f.isTTY {
+		return false
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.active && f.composerMode == ComposerIdle
+}

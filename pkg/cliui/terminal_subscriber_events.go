@@ -170,38 +170,14 @@ func (s *TerminalSubscriberState) HandleSubagentActivityEvent(data map[string]in
 		// firing (long shell_command inside the subagent).
 		footer.Refresh()
 	case "completed", "cancelled":
-		tokens := ReadEventInt(data, "tokens_used")
-		elapsedMs := ReadEventInt64(data, "elapsed_ms")
-		cost, _ := data["cost"].(float64)
-		reason, _ := data["reason"].(string)
-
-		// Compact mode: suppress the subagent done line.
-		// Still clean up progress tracking and refresh footer.
-		if s.IsCompact() {
-			s.progressMu.Lock()
-			delete(s.subagentProgress, persona)
-			s.progressMu.Unlock()
-			s.run = nil
-			footer.Refresh()
-			return
-		}
-
-		// Subagents nest under the parent that spawned them.
-		// Depth on the activity event isn't carried today, so
-		// indent at the same level as the run_subagent tool
-		// line — depth 1 — which is the common case. Deeper
-		// nests fall back to a single indent rather than
-		// guessing wrong.
-		indicator.Stop()
-		s.thinkingActive = false
-		s.flushExternalWrite()
-		console.WriteTranscriptTo(os.Stderr, FormatSubagentDoneLine(persona, status, reason, tokens, cost, float64(elapsedMs)/1000.0)+"\n")
-		// Drop the cached progress for this persona once
-		// it's done — the next spawn starts fresh.
+		// The runner prints the run's closing line (or block, for a run
+		// among siblings) itself, at the moment it finishes; this only
+		// retires the run's live state.
 		s.progressMu.Lock()
 		delete(s.subagentProgress, persona)
 		s.progressMu.Unlock()
-		s.run = nil
+		id, _ := data["task_id"].(string)
+		s.fleetRunFinished(id, indicator, footer)
 		footer.Refresh()
 	}
 }
@@ -390,6 +366,10 @@ func (s *TerminalSubscriberState) runEventLoop(ctx context.Context, ch <-chan ev
 			}
 			data, _ := evt.Data.(map[string]interface{})
 			if isBackgroundTaskEvent(data) {
+				continue
+			}
+			if isConcurrentSubagentEvent(data) {
+				s.handleConcurrentSubagentEvent(evt.Type, data, indicator, footer)
 				continue
 			}
 			switch evt.Type {

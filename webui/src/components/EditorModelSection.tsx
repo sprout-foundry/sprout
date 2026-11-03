@@ -151,7 +151,7 @@ export default function EditorModelSection(): ReactElement {
               <select className="styled-select" value={provider} onChange={(e) => setProvider(e.target.value)}>
                 {state.key_providers.map((p) => (
                   <option key={p} value={p}>
-                    {PROVIDER_LABELS[p] ?? p}
+                    {PROVIDER_LABELS[p] ?? state.provider_labels?.[p] ?? p}
                   </option>
                 ))}
               </select>

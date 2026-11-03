@@ -65,6 +65,15 @@ function setInput(el: HTMLInputElement, value: string) {
 }
 
 describe('EditorModelSection', () => {
+  it('names a custom endpoint by the name its owner gave it', async () => {
+    api.state = { ...api.state, key_providers: ['openai', 'custom:e1'], provider_labels: { 'custom:e1': 'My Llama' } };
+    await render();
+    await act(async () => radios()[1].click());
+    const names = [...container.querySelectorAll('select option')].map((o) => o.textContent);
+    expect(names).toContain('My Llama');
+    expect(names).not.toContain('custom:e1');
+  });
+
   it('switches the editor to a model from the saved key', async () => {
     await render();
     expect(radios()[0].checked).toBe(true);

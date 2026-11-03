@@ -54,14 +54,14 @@ func TestSteerBox_ClickPlacesCaret(t *testing.T) {
 	// Find the screen cell showing "zeta" and click its 'e'.
 	row, col := -1, -1
 	for y := 1; y <= 24; y++ {
-		if x := strings.Index(scr.line(y), "zeta"); x >= 0 {
-			row, col = y, len([]rune(scr.line(y)[:x]))+2 // 1-based, on the 'e'
+		if x := strings.Index(scr.Line(y), "zeta"); x >= 0 {
+			row, col = y, len([]rune(scr.Line(y)[:x]))+2 // 1-based, on the 'e'
 			break
 		}
 	}
-	require.Positive(t, row, "zeta on screen:\n%s", scr.dump())
+	require.Positive(t, row, "zeta on screen:\n%s", scr.Dump())
 	r.handleEvent(leftClick(t, row, col))
-	require.Equal(t, strings.Index(text, "zeta")+1, r.cursorPos, "\n%s", scr.dump())
+	require.Equal(t, strings.Index(text, "zeta")+1, r.cursorPos, "\n%s", scr.Dump())
 
 	// A click on the box's rule or outside the box leaves the caret alone.
 	before := r.cursorPos

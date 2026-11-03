@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sprout-foundry/sprout/pkg/testutil/vtscreen"
 	"github.com/stretchr/testify/require"
 )
 
@@ -29,10 +30,10 @@ var composerChrome = regexp.MustCompile(`^(↪ |steer › )`)
 // typedTextOnScreen reads the input box back off the emulated screen and
 // strips its chrome (label, continuation markers, caret glyph), leaving what
 // the user typed as they would read it.
-func typedTextOnScreen(scr *vtScreen, firstRow, lastRow int) string {
+func typedTextOnScreen(scr *vtscreen.Screen, firstRow, lastRow int) string {
 	var b strings.Builder
 	for r := firstRow; r <= lastRow; r++ {
-		row := strings.TrimRight(string(scr.grid[r-1]), " ")
+		row := strings.TrimRight(scr.RawLine(r), " ")
 		row = composerChrome.ReplaceAllString(row, "")
 		// Rows end where a word wrapped; the break's space is the trailing
 		// blank the trim removed.
@@ -52,7 +53,7 @@ func TestComposer_WrappedRowsKeepEveryCharacter(t *testing.T) {
 		t.Setenv("NO_COLOR", noColor)
 		for cols := 24; cols <= 60; cols += 3 {
 			for _, cursor := range []int{0, 17, 40, len(text)} {
-				scr := newVTScreen(cols, 24)
+				scr := vtscreen.New(cols, 24)
 				f := &StatusFooter{w: scr, isTTY: true, active: true, steerCursor: -1,
 					sizeOverride: &terminalSizeOverride{cols: cols, rows: 24}}
 				f.applyScrollRegionLocked()
@@ -64,8 +65,8 @@ func TestComposer_WrappedRowsKeepEveryCharacter(t *testing.T) {
 				block := f.steerBlockRows() // rule + text rows
 				first, last := 24-2-block+2, 24-2
 				got := typedTextOnScreen(scr, first, last)
-				require.Equal(t, text, got, "NO_COLOR=%q cols=%d cursor=%d\n%s", noColor, cols, cursor, scr.dump())
-				require.False(t, scr.wrappedPastEdge, "a row ran past the edge: cols=%d cursor=%d\n%s", cols, cursor, scr.dump())
+				require.Equal(t, text, got, "NO_COLOR=%q cols=%d cursor=%d\n%s", noColor, cols, cursor, scr.Dump())
+				require.False(t, scr.WrappedPastEdge(), "a row ran past the edge: cols=%d cursor=%d\n%s", cols, cursor, scr.Dump())
 			}
 		}
 	}

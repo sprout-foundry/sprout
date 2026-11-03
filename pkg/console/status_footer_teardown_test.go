@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sprout-foundry/sprout/pkg/testutil/vtscreen"
 	"github.com/stretchr/testify/require"
 )
 
@@ -97,20 +98,20 @@ func TestClearSteerLine_RepaintsPinnedRows(t *testing.T) {
 // alone, the steer rule scrolls up through the transcript as a stray
 // separator — while 23 stays the footer's rule.
 func TestClearSteerLine_BlanksVacatedSteerRows(t *testing.T) {
-	scr := newVTScreen(80, 24)
+	scr := vtscreen.New(80, 24)
 	f := &StatusFooter{
 		w: scr, isTTY: true, active: true, steerCursor: -1,
 		sizeOverride: &terminalSizeOverride{cols: 80, rows: 24},
 	}
 	f.SetTurnActive(true)
 	f.SetSteerLine("> draft")
-	require.Contains(t, scr.line(22), "draft")
+	require.Contains(t, scr.Line(22), "draft")
 
 	f.ClearSteerLine()
 
-	require.Empty(t, scr.line(21), "the vacated steer rule row is blanked")
-	require.Empty(t, scr.line(22), "the vacated steer text row is blanked")
-	require.Equal(t, strings.Repeat("─", 80), scr.line(23),
+	require.Empty(t, scr.Line(21), "the vacated steer rule row is blanked")
+	require.Empty(t, scr.Line(22), "the vacated steer text row is blanked")
+	require.Equal(t, strings.Repeat("─", 80), scr.Line(23),
 		"the footer's own rule survives the clear")
 }
 

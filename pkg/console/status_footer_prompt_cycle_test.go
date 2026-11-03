@@ -2,17 +2,19 @@ package console
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
+	"github.com/sprout-foundry/sprout/pkg/testutil/vtscreen"
 	"github.com/stretchr/testify/require"
 )
 
 // newPromptCycleFooter builds a live footer over an emulated screen with the
 // mid-turn steer panel already open, and a transcript long enough to fill the
 // scroll region — the state a turn is in when it asks the user something.
-func newPromptCycleFooter(t *testing.T, rows int) (*StatusFooter, *vtScreen) {
+func newPromptCycleFooter(t *testing.T, rows int) (*StatusFooter, *vtscreen.Screen) {
 	t.Helper()
-	scr := newVTScreen(60, rows)
+	scr := vtscreen.New(60, rows)
 	f := &StatusFooter{
 		w: scr, isTTY: true, active: true, steerCursor: -1,
 		sizeOverride: &terminalSizeOverride{cols: 60, rows: rows},
@@ -22,7 +24,7 @@ func newPromptCycleFooter(t *testing.T, rows int) (*StatusFooter, *vtScreen) {
 	for i := 1; i <= rows*2; i++ {
 		_, _ = fmt.Fprintf(scr, "t%02d\n", i)
 	}
-	require.True(t, scr.cursorInRegion())
+	require.True(t, scr.CursorInRegion())
 	return f, scr
 }
 
@@ -38,15 +40,15 @@ func TestSteerPanel_PromptCycleKeepsTranscriptScrolling(t *testing.T) {
 	_, _ = fmt.Fprint(scr, "answer\n")
 	f.SetSteerLineWithCursor("", 0) // ResumeSteer → Start → renderLine
 
-	require.True(t, scr.cursorInRegion(),
-		"resume must leave the cursor inside the scroll margins; below them every line feed overwrites the last row:\n%s", scr.dump())
+	require.True(t, scr.CursorInRegion(),
+		"resume must leave the cursor inside the scroll margins; below them every line feed overwrites the last row:\n%s", scr.Dump())
 
 	for i := 1; i <= 3; i++ {
 		_, _ = fmt.Fprintf(scr, "p%d\n", i)
 	}
-	region := scr.regionLines()
+	region := scr.RegionLines()
 	require.Equal(t, []string{"question?", "answer", "p1", "p2", "p3", ""}, region[len(region)-6:],
-		"the prompt, its answer and the prose after it all stay visible, in order:\n%s", scr.dump())
+		"the prompt, its answer and the prose after it all stay visible, in order:\n%s", scr.Dump())
 }
 
 // Repeated prompts in one turn must not compound: each cycle lifts by the
@@ -58,9 +60,9 @@ func TestSteerPanel_RepeatedPromptCyclesStayInRegion(t *testing.T) {
 		_, _ = fmt.Fprintf(scr, "q%d\n", i)
 		f.SetSteerLineWithCursor("", 0)
 		_, _ = fmt.Fprintf(scr, "a%d\n", i)
-		require.True(t, scr.cursorInRegion(), "cycle %d:\n%s", i, scr.dump())
+		require.True(t, scr.CursorInRegion(), "cycle %d:\n%s", i, scr.Dump())
 	}
-	region := scr.regionLines()
+	region := scr.RegionLines()
 	require.Equal(t, []string{"q1", "a1", "q2", "a2", "q3", "a3", ""}, region[len(region)-7:])
 }
 
@@ -68,7 +70,33 @@ func TestSteerPanel_RepeatedPromptCyclesStayInRegion(t *testing.T) {
 // keeps the cursor in place — the existing no-scroll contract for keystrokes.
 func TestSteerPanel_GrowWhileOpenDoesNotLift(t *testing.T) {
 	f, scr := newPromptCycleFooter(t, 14)
-	before := scr.r
+	before, _ := scr.Cursor()
 	f.SetSteerLineWithCursor("one\ntwo", 0)
-	require.Equal(t, before, scr.r, "keystroke growth must not move the live line")
+	after, _ := scr.Cursor()
+	require.Equal(t, before, after, "keystroke growth must not move the live line")
+}
+
+// The same cycle with the streaming flag still set when the panel reopens —
+// what a real turn does (found by the CLI end-to-end harness). Deferring the
+// margins left the panel's rows inside the scrolling area: prose overwrote
+// them, scrolled them into the transcript, and the turn-end clear blanked a
+// transcript line it took for the panel's.
+func TestSteerPanel_PromptCycleWhileStreaming(t *testing.T) {
+	f, scr := newPromptCycleFooter(t, 14)
+	f.SetProseStreaming(true)
+
+	f.ClearSteerLine()
+	_, _ = fmt.Fprint(scr, "answer\n")
+	f.SetSteerLineWithCursor("", 0)
+	for i := 1; i <= 8; i++ {
+		_, _ = fmt.Fprintf(scr, "p%d\n", i)
+	}
+	f.ClearSteerLine() // turn end
+
+	region := scr.RegionLines()
+	joined := strings.Join(region, "\n")
+	for i := 1; i <= 8; i++ {
+		require.Contains(t, joined, fmt.Sprintf("p%d", i), "line p%d lost:\n%s", i, scr.Dump())
+	}
+	require.NotContains(t, joined, "─", "no panel rule scrolled into the transcript:\n%s", scr.Dump())
 }

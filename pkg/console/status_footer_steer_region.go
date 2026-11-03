@@ -23,7 +23,15 @@ func (f *StatusFooter) applySteerRegionOrDefer(wasActive bool, prevRows, newRows
 	f.mu.Lock()
 	streaming := f.proseStreaming
 	f.mu.Unlock()
-	if streaming {
+	// Opening the panel is never deferred, even mid-stream (the flag can
+	// still be set from before a prompt that closed the panel): the panel's
+	// rows are drawn either way, and drawn inside unmoved margins they are
+	// part of the scrolling area — the next prose line overwrites them and
+	// its line feed scrolls them into the transcript, and the turn-end clear
+	// then blanks transcript rows it takes for the panel's. Lifting the
+	// content (below) keeps a streaming line on its own row, which is what
+	// deferring protected. Only growth of an already-open panel defers.
+	if streaming && wasActive {
 		f.mu.Lock()
 		f.pendingSteerRegion = true
 		f.mu.Unlock()
@@ -207,13 +215,14 @@ func (f *StatusFooter) SetSteerLineWrappedLocked(text string, cursorRow, cursorC
 		// rationale as applySteerRegionOrDefer. This Locked variant's
 		// caller already holds outputMu, so the catch-up runs via the
 		// pendingSteerRegion goroutine at SetProseStreaming(false).
+		// Opening is never deferred (see applySteerRegionOrDefer).
 		f.mu.Lock()
-		streaming := f.proseStreaming
-		if streaming {
+		deferApply := f.proseStreaming && wasActive
+		if deferApply {
 			f.pendingSteerRegion = true
 		}
 		f.mu.Unlock()
-		if !streaming {
+		if !deferApply {
 			f.shiftScrollRegionLocked()
 			f.applyScrollRegionLocked()
 		}
@@ -306,7 +315,13 @@ func (f *StatusFooter) clearSteerLineLocked() {
 	}
 	f.mu.Lock()
 	wasActive := f.steerActive
-	oldReserved := f.reservedRowsLocked()
+	// The rows the panel actually held are the ones the margins in force
+	// exclude. A deferred growth drew rows the margins never took; those
+	// are transcript, and blanking them would erase it.
+	oldReserved := f.appliedReserved
+	if oldReserved == 0 {
+		oldReserved = f.reservedRowsLocked()
+	}
 	f.steerActive = false
 	f.steerLine = ""
 	f.steerCursor = -1

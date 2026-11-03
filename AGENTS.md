@@ -10,7 +10,7 @@ Guidance for AI agents working in this repository.
 
 ## Testing
 
-- Go unit: `go test ./...`; smoke: `make test-smoke`; WebUI unit: `make test-webui-vitest`; WebUI e2e: `npx playwright test --project=webui test/webui/<spec>.spec.ts` (backend + Vite stack auto-starts).
+- Go unit: `go test ./...`; smoke: `make test-smoke`; CLI rendering end-to-end (REPL in a pty, screen asserted): `make test-cli-e2e` — run it after touching `pkg/console`, `pkg/cliui` or the REPL loop; WebUI unit: `make test-webui-vitest`; WebUI e2e: `npx playwright test --project=webui test/webui/<spec>.spec.ts` (backend + Vite stack auto-starts).
 - **New e2e specs must launch with `chromium.launch({ channel: 'chrome' })` falling back to `chromium.launch()`** — the Playwright browser download is absent on some dev machines; system Chrome works.
 - **Browser-dependent Go tests** (`pkg/agent/design_e2e_test.go` render cases) skip when no headless browser is reachable. Set `SPROUT_REQUIRE_BROWSER=1` to turn that skip into a failure — CI does this on Linux, where Chromium is installed, so "the render path ran" is asserted rather than hidden behind a green suite that skipped it.
 - **gopls-dependent Go tests** (`pkg/lsp/semantic`) skip when `gopls` is not on `PATH`. CI installs it and sets `SPROUT_REQUIRE_GOPLS=1` to turn that skip into a failure, on the same reasoning. Locally, `go install golang.org/x/tools/gopls@latest` to exercise them.

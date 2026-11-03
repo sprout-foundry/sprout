@@ -1,7 +1,7 @@
 # Ledit Testing and Build Makefile
 # Provides clear commands for different types of tests and builds
 
-.PHONY: help test test-unit test-unit-lowmem test-race test-smoke test-wasm test-desktop-smoke test-all test-ci test-coverage \
+.PHONY: help test test-unit test-unit-lowmem test-race test-smoke test-cli-e2e test-wasm test-desktop-smoke test-all test-ci test-coverage \
        clean build build-all install build-version build-ui deploy-ui build-wasm \
        verify-ui-embedded test-webui lint lint-fix lint-go lint-go-new dev build-webui-dist build-webui-dist-local \
        verify-dist verify-dist-local automate-run studio-providers build-workspace-package
@@ -14,6 +14,7 @@ help:
 	@echo "  make test-unit-lowmem - Run unit tests in ~4GB RAM (no -race, low parallelism)"
 	@echo "  make test-race        - Run unit tests with race detector (required CI check)"
 	@echo "  make test-smoke       - Run smoke tests (basic functionality)"
+	@echo "  make test-cli-e2e     - Drive the REPL in a pty and check the rendered screen"
 	@echo "  make test-wasm        - Run the browser WASM bridge tests (cmd/wasm) under Node"
 	@echo "  make test-desktop-smoke - Run desktop Electron smoke tests"
 	@echo "  make test-all         - Run unit + smoke tests"
@@ -134,6 +135,12 @@ test-race: prepare-grammars
 test-smoke:
 	@echo "Running smoke tests..."
 	cd smoke_tests && chmod +x run_api_test.sh && ./run_api_test.sh
+
+# CLI end-to-end tests: drive the built REPL (agent --mock-llm) in a pty and
+# assert the rendered screen. Opt-in because they launch the binary.
+test-cli-e2e: build
+	@echo "Running CLI end-to-end tests..."
+	SPROUT_CLI_E2E=1 SPROUT_E2E_BIN=$(CURDIR)/sprout go test ./test/clie2e/ -count=1
 
 # WASM bridge tests - cmd/wasm is js/wasm only; Go's Node runner executes it.
 test-wasm:

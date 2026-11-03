@@ -1,5 +1,25 @@
 # SP-171 — CLI Line Integrity & Transcript Ergonomics
 
+**Status update (2026-11-02):** 171c now has a harness. `test/clie2e`
+(`make test-cli-e2e`) drives the real REPL in a pty through the
+`pkg/testutil/vtscreen` emulator. The `expect` problem noted below was
+Enter arriving in the same write as the typed text, which reads as a
+paste; sending Enter as its own write fixes it.
+
+On its first run the harness found a defect the unit tests could not. The
+steer panel reopening mid-stream deferred its margins, so the panel's
+rows scrolled into the transcript and the turn-end clear erased a
+transcript line. That is fixed.
+
+Height resizes are asserted. Width resizes are not: the emulator does not
+reflow, and the footer's clear window assumes the terminal does, so a
+non-reflowing terminal (xterm) loses transcript rows on a width shrink.
+That remains open. So does a race the harness exposed: a resize that lands
+inside the turn-end redraw can strand the previous footer rows mid-screen.
+One full draw reads the old height for its rows and the new height for its
+margins. The harness resizes only once the idle box has settled, so the
+race is documented here rather than asserted.
+
 **Status:** Partially implemented (2026-10-31). 171a (transcript writer +
 guard), 171b (blank-line discipline), 171d (expandable tool output),
 171g (resume tail), and 171h (steer-during-write) have landed. 171c (resize

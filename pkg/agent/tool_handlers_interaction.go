@@ -51,7 +51,14 @@ func handleAskUser(ctx context.Context, a *Agent, args map[string]interface{}) (
 	}
 
 	var response string
-	if hasActiveWebUI {
+	if hasActiveWebUI && a.askBothSurfaces(req) {
+		// Terminal session with a tab open: ask in both, first answer wins.
+		response, err = askFirstAnswer(ctx,
+			func(ctx context.Context) (string, error) { return tools.AskUser(ctx, req) },
+			func(ctx context.Context) (string, error) {
+				return tools.AskUserWithEventBus(ctx, req, eventBus, clientID, userID, chatID, askUserMgr)
+			})
+	} else if hasActiveWebUI {
 		a.noteQuestionRoutedToBrowser()
 		response, err = tools.AskUserWithEventBus(ctx, req, eventBus, clientID, userID, chatID, askUserMgr)
 	} else if a.IsTaskRun() {

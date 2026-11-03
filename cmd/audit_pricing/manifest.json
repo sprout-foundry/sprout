@@ -1,7 +1,7 @@
 {
   "cerebras": {
     "source": "https://www.cerebras.ai/pricing",
-    "last_verified": "2026-11-02",
+    "last_verified": "2026-11-03",
     "models": [
       {
         "id": "qwen-3.8-27b",
@@ -17,7 +17,7 @@
   },
   "chutes": {
     "source": "https://llm.chutes.ai/v1/models",
-    "last_verified": "2026-11-02",
+    "last_verified": "2026-11-03",
     "models": [
       {
         "id": "Nemotron-3-Nano-Omni-30B-TEE",
@@ -149,7 +149,7 @@
   },
   "deepinfra": {
     "source": "https://api.deepinfra.com/v1/models",
-    "last_verified": "2026-11-02",
+    "last_verified": "2026-11-03",
     "models": [
       {
         "id": "ByteDance/Seed-1.8",
@@ -686,7 +686,7 @@
   },
   "deepseek": {
     "source": "https://api-docs.deepseek.com/quick_start/pricing",
-    "last_verified": "2026-11-02",
+    "last_verified": "2026-11-03",
     "models": [
       {
         "id": "deepseek-v4-flash",
@@ -746,7 +746,7 @@
   },
   "minimax": {
     "source": "https://platform.minimax.io/docs/guides/pricing-paygo",
-    "last_verified": "2026-11-02",
+    "last_verified": "2026-11-03",
     "models": [
       {
         "id": "MiniMax-M2",
@@ -824,7 +824,7 @@
   },
   "mistral": {
     "source": "https://docs.mistral.ai/inference/pricing",
-    "last_verified": "2026-11-02",
+    "last_verified": "2026-11-03",
     "models": [
       {
         "id": "mistral-large-latest",
@@ -1008,7 +1008,7 @@
   },
   "ollama-cloud": {
     "source": "https://ollama.com/pricing",
-    "last_verified": "2026-11-02",
+    "last_verified": "2026-11-03",
     "models": [
       {
         "id": "deepseek-v4-flash",
@@ -1202,7 +1202,7 @@
   },
   "openai": {
     "source": "https://platform.openai.com/docs/pricing",
-    "last_verified": "2026-11-02",
+    "last_verified": "2026-11-03",
     "models": [
       {
         "id": "gpt-5",
@@ -1866,7 +1866,7 @@
   },
   "openrouter": {
     "source": "https://openrouter.ai/api/v1/models",
-    "last_verified": "2026-11-02",
+    "last_verified": "2026-11-03",
     "models": [
       {
         "id": "ai21/jamba-large-1.7",
@@ -2174,9 +2174,9 @@
       },
       {
         "id": "deepseek/deepseek-v4-pro",
-        "input_per_mtok": 0.9483,
-        "output_per_mtok": 1.8966,
-        "cached_per_mtok": 0.079025
+        "input_per_mtok": 1.6,
+        "output_per_mtok": 3.2,
+        "cached_per_mtok": 0.135
       },
       {
         "id": "google/gemini-2.5-flash",
@@ -2318,9 +2318,9 @@
       },
       {
         "id": "google/gemma-4-26b-a4b-it",
-        "input_per_mtok": 0.0675,
-        "output_per_mtok": 0.225,
-        "cached_per_mtok": 0.0375
+        "input_per_mtok": 0.059,
+        "output_per_mtok": 0.176,
+        "cached_per_mtok": 0.029
       },
       {
         "id": "google/gemma-4-26b-a4b-it:free",
@@ -2423,8 +2423,8 @@
       },
       {
         "id": "meta-llama/llama-3.1-70b-instruct",
-        "input_per_mtok": 0.4,
-        "output_per_mtok": 0.4
+        "input_per_mtok": 0.72,
+        "output_per_mtok": 0.72
       },
       {
         "id": "meta-llama/llama-3.1-8b-instruct",
@@ -2663,9 +2663,9 @@
       },
       {
         "id": "moonshotai/kimi-k3",
-        "input_per_mtok": 0.192,
-        "output_per_mtok": 15,
-        "cached_per_mtok": 0.182
+        "input_per_mtok": 0.276,
+        "output_per_mtok": 9.6,
+        "cached_per_mtok": 0.13
       },
       {
         "id": "morph/morph-v3-fast",
@@ -3720,9 +3720,9 @@
       },
       {
         "id": "~moonshotai/kimi-latest",
-        "input_per_mtok": 0.1495,
-        "output_per_mtok": 7.15,
-        "cached_per_mtok": 0.07475
+        "input_per_mtok": 0.1852,
+        "output_per_mtok": 10.5448,
+        "cached_per_mtok": 0.18
       },
       {
         "id": "~openai/gpt-latest",
@@ -4293,9 +4293,9 @@
       },
       {
         "id": "z-ai/glm-5.3-flash",
-        "input_per_mtok": 0.0285,
-        "output_per_mtok": 0.0923,
-        "cached_per_mtok": 0.0285
+        "input_per_mtok": 0.0313,
+        "output_per_mtok": 0.0846,
+        "cached_per_mtok": 0.03
       },
       {
         "id": "deepseek/deepseek-v4-flash-0731:batch",
@@ -4426,9 +4426,9 @@
       },
       {
         "id": "~z-ai/glm-flash-latest",
-        "input_per_mtok": 0.0285,
-        "output_per_mtok": 0.0923,
-        "cached_per_mtok": 0.0285
+        "input_per_mtok": 0.0313,
+        "output_per_mtok": 0.0846,
+        "cached_per_mtok": 0.03
       },
       {
         "id": "google/gemini-3.8-flash",
@@ -4602,8 +4602,8 @@
       {
         "id": "~deepseek/deepseek-flash-latest",
         "input_per_mtok": 0.035,
-        "output_per_mtok": 0.5,
-        "cached_per_mtok": 0.005
+        "output_per_mtok": 0.315,
+        "cached_per_mtok": 0.006
       },
       {
         "id": "~deepseek/deepseek-pro-latest",
@@ -5084,7 +5084,7 @@
   },
   "zai": {
     "source": "https://docs.z.ai/guides/overview/pricing",
-    "last_verified": "2026-11-02",
+    "last_verified": "2026-11-03",
     "models": [
       {
         "id": "glm-4.5v",
@@ -5220,7 +5220,7 @@
   },
   "zai-coding": {
     "source": "https://docs.z.ai/guides/overview/pricing",
-    "last_verified": "2026-11-02",
+    "last_verified": "2026-11-03",
     "models": [
       {
         "id": "glm-4.5",

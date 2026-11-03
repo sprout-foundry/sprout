@@ -212,7 +212,7 @@ func cloneIfMissing(ctx context.Context, repo string, task WorkspaceTask) error 
 	}
 	_ = os.RemoveAll(repo)
 	clone := exec.CommandContext(ctx, "git", "clone", "--", task.RepoURL, repo) //nolint:gosec // G204: https-only URL after "--"
-	clone.Env = append(os.Environ(), gitAuthEnv(task.RepoURL, task.GitToken)...)
+	clone.Env = append(os.Environ(), gitAuthEnv(task.RepoURL, task.GitUsername, task.GitToken)...)
 	if out, err := clone.CombinedOutput(); err != nil {
 		return fmt.Errorf("cloning %s: %s", task.RepoURL, strings.TrimSpace(string(out)))
 	}

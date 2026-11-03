@@ -98,8 +98,12 @@ type WorkspaceTask struct {
 	ContainerID  string `json:"container_id"`
 	TxnSecret    string `json:"txn_secret,omitempty"`
 	GitToken     string `json:"git_token,omitempty"`
-	LLMProvider  string `json:"llm_provider,omitempty"`
-	LLMKey       string `json:"llm_key,omitempty"`
+	// GitUsername is the HTTPS username GitToken goes with on the repo's
+	// host. Empty keeps the runner's own guess (x-access-token on GitHub,
+	// oauth2 elsewhere), which not every host accepts.
+	GitUsername string `json:"git_username,omitempty"`
+	LLMProvider string `json:"llm_provider,omitempty"`
+	LLMKey      string `json:"llm_key,omitempty"`
 	// Model names the model the workspace starts on (SPROUT_MODEL), for
 	// any provider. The platform decides what to send, e.g. the user's
 	// last-used model; empty leaves the daemon's normal default for the

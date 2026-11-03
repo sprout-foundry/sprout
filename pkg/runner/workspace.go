@@ -136,16 +136,18 @@ func repoHost(repoURL string) string {
 	return u.Hostname()
 }
 
-// gitAuthEnv makes git authenticate to the repo's host with token without the
-// token appearing in any process's arguments (git reads GIT_CONFIG_* from its
-// environment).
-func gitAuthEnv(repoURL, token string) []string {
+// gitAuthEnv makes git authenticate to the repo's host as user with token
+// without the token appearing in any process's arguments (git reads
+// GIT_CONFIG_* from its environment). An empty user is guessed from the host.
+func gitAuthEnv(repoURL, user, token string) []string {
 	if token == "" {
 		return nil
 	}
-	user := "oauth2"
-	if repoHost(repoURL) == "github.com" {
-		user = "x-access-token"
+	if user == "" {
+		user = "oauth2"
+		if repoHost(repoURL) == "github.com" {
+			user = "x-access-token"
+		}
 	}
 	basic := base64.StdEncoding.EncodeToString([]byte(user + ":" + token))
 	return []string{

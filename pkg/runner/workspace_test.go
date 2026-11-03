@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"encoding/base64"
 	"strings"
 	"testing"
 
@@ -85,13 +86,30 @@ func TestWorkspaceEnvUserVarsNeverOverrideTheRunner(t *testing.T) {
 }
 
 func TestGitAuthEnvKeepsTheTokenOutOfArguments(t *testing.T) {
-	env := gitAuthEnv("https://github.com/o/r", "gh-tok")
+	env := gitAuthEnv("https://github.com/o/r", "", "gh-tok")
 	joined := strings.Join(env, "\n")
 	if !strings.Contains(joined, "GIT_CONFIG_KEY_0=http.extraHeader") || strings.Contains(joined, "gh-tok") {
 		t.Errorf("token must be base64'd into a config env var, not passed raw: %v", env)
 	}
-	if gitAuthEnv("https://github.com/o/r", "") != nil {
+	if gitAuthEnv("https://github.com/o/r", "", "") != nil {
 		t.Error("no token, no auth env")
+	}
+}
+
+func TestGitAuthEnvUser(t *testing.T) {
+	basic := func(user string) string {
+		return "GIT_CONFIG_VALUE_0=Authorization: Basic " + base64.StdEncoding.EncodeToString([]byte(user+":tok"))
+	}
+	cases := []struct{ url, user, want string }{
+		{"https://github.com/o/r", "", "x-access-token"},
+		{"https://gitlab.com/g/sub/r", "", "oauth2"},
+		{"https://bitbucket.org/w/r", "x-token-auth", "x-token-auth"},
+	}
+	for _, c := range cases {
+		env := gitAuthEnv(c.url, c.user, "tok")
+		if !strings.Contains(strings.Join(env, "\n"), basic(c.want)) {
+			t.Errorf("gitAuthEnv(%q, %q) = %v, want the %s Basic header", c.url, c.user, env, c.want)
+		}
 	}
 }
 

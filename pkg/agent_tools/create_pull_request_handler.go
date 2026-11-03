@@ -21,7 +21,8 @@ import (
 var CreatePullRequestFunc func(ctx context.Context, args map[string]any) (string, error)
 
 // createPullRequestHandler implements ToolHandler for the create_pull_request tool.
-// It creates a pull request on GitHub after a feature branch has been pushed.
+// It creates a pull request after a feature branch has been pushed: on GitHub,
+// or on any host the platform supports from a Sprout Foundry workspace.
 //
 // This is a THIN WRAPPER that delegates Execute to the function pointer
 // CreatePullRequestFunc. All metadata (Name, Definition, Validate, Aliases,
@@ -33,7 +34,8 @@ func (h *createPullRequestHandler) Name() string { return "create_pull_request" 
 func (h *createPullRequestHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name: "create_pull_request",
-		Description: "Create a pull request on GitHub after pushing a feature branch. " +
+		Description: "Create a pull request (a merge request on GitLab) after pushing a feature branch. " +
+			"Works on GitHub, and on GitLab and Gitea/Forgejo from a Sprout Foundry workspace. " +
 			"Gated as a git-write operation — requires git_write capability.",
 		Required: []string{"title"},
 		Parameters: []ParameterDef{

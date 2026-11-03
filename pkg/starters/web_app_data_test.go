@@ -20,7 +20,7 @@ import (
 // webAppDataVersion is the version the web-app-data tree declares; the
 // assertions below must agree with
 // pkg/starters/data/web-app-data/starter.json.
-const webAppDataVersion = "1.1.0"
+const webAppDataVersion = "1.2.0"
 
 // webAppDataProjectFiles are the project files (relative to the
 // destination) a web-app-data instantiation must produce: the React + Vite
@@ -44,6 +44,7 @@ var webAppDataProjectFiles = []string{
 	".gitignore",
 	".gitattributes",
 	"README.md",
+	"AGENTS.md",
 	filepath.Join("public", "favicon.svg"),
 	filepath.Join("src", "main.tsx"),
 	filepath.Join("src", "App.tsx"),

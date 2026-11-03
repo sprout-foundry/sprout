@@ -5,6 +5,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	agent_commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
@@ -18,6 +19,9 @@ func runDirectMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events
 	if configuration.GetEnvSimple("SUBAGENT") != "1" {
 		fmt.Printf("%sProcessing: %s\n", console.GlyphAction.Prefix(), query)
 	}
+	// A host that bounds the run (a task VM) passes its deadline; the agent
+	// is told to wrap up shortly before it rather than being cut off mid-work.
+	defer startDeadlineWarning(chatAgent, time.Now())()
 
 	// Slash/bang commands should bypass command-detection fast paths.
 	registry := agent_commands.DefaultRegistry()

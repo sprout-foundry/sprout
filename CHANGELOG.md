@@ -4,6 +4,7 @@ All notable changes to Sprout will be documented in this file.
 
 ## [Unreleased]
 
+- fix(git): sprout's runtime files in a workspace's `.sprout/` (its log, `workspace.log` and its rotations, and the web UI's `webui_host.json`) are added to the repository's local `.git/info/exclude` when sprout starts in it, so `git add -A` and the agent's commits leave them out. They used to be committed with the agent's work, adding a log and a pid record to the person's repository. Nothing the repository tracks changes.
 - fix(workspace): when a composed workspace's agent moves from the in-browser shell to a workspace daemon in place, the docked terminal starts over on the daemon's PTY instead of keeping its sessions on the in-browser shell until a reload.
 - fix(workspace): the header's host label ("Local") is not shown in a hosted build, which runs on the host's machines; it still names a remote host when attached to one.
 - fix(workspace): the hosted header's "Start Building" (move the project into a full workspace) is offered only when the host declares `capabilities.containerUpgrade`. A host with its own move into a workspace (the platform's "Run in a container" strip) leaves it off, so the person sees one way to do it rather than two; Sprout's own hosted build declares it.

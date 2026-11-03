@@ -44,6 +44,11 @@ type RetryOptions struct {
 	// sleep time, last error). Safe for use by callers that need per-call
 	// metrics for JSONL records.
 	Stats *RetryStats
+	// AttemptTimeout bounds one attempt and TotalTimeout the whole call,
+	// retries and backoff included (90s and 180s by default). A provider
+	// that never answers must not hold the agent's tool call open.
+	AttemptTimeout time.Duration
+	TotalTimeout   time.Duration
 }
 
 // RetryStats captures per-call retry statistics populated by DoVisionRetry.
@@ -103,6 +108,13 @@ func defaultRetryOptions(opts RetryOptions) RetryOptions {
 	}
 	if opts.JitterPct == 0 {
 		opts.JitterPct = 20
+	}
+
+	if opts.AttemptTimeout == 0 {
+		opts.AttemptTimeout = envSeconds("VISION_ATTEMPT_TIMEOUT_SECS", 90*time.Second)
+	}
+	if opts.TotalTimeout == 0 {
+		opts.TotalTimeout = envSeconds("VISION_TOTAL_TIMEOUT_SECS", 180*time.Second)
 	}
 
 	// OpName
@@ -319,6 +331,24 @@ func computeBackoff(attempt int, baseDelay, maxDelay time.Duration, jitterPct in
 // Returns nil on success, or the last error after exhausting all attempts.
 func DoVisionRetry(ctx context.Context, op func(ctx context.Context) error, opts RetryOptions) error {
 	opts = defaultRetryOptions(opts)
+	if opts.TotalTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, opts.TotalTimeout)
+		defer cancel()
+	}
+	attempt := op
+	op = func(ctx context.Context) error {
+		if opts.AttemptTimeout <= 0 {
+			return attempt(ctx)
+		}
+		actx, cancel := context.WithTimeout(ctx, opts.AttemptTimeout)
+		defer cancel()
+		err := attempt(actx)
+		if err != nil && errors.Is(actx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
+			return fmt.Errorf("%s: no answer from the vision model within %s: %w", opts.OpName, opts.AttemptTimeout, err)
+		}
+		return err
+	}
 
 	retryable := opts.IsRetryable
 	if retryable == nil {
@@ -441,4 +471,14 @@ func compactErrorMessage(err error) string {
 		msg = msg[:maxLen] + "... (truncated)"
 	}
 	return msg
+}
+
+// envSeconds reads a whole-seconds duration from SPROUT_<name>, or def.
+func envSeconds(name string, def time.Duration) time.Duration {
+	if raw := configuration.GetEnvSimple(name); raw != "" {
+		if v, err := strconv.Atoi(raw); err == nil && v > 0 {
+			return time.Duration(v) * time.Second
+		}
+	}
+	return def
 }

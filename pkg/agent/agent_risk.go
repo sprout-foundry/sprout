@@ -35,7 +35,7 @@ func (a *Agent) EvaluateOperationRisk(command string) configuration.RiskLevel {
 	return synthetic.EvaluateOperationRisk(command)
 }
 
-// activeRiskProfile returns the risk profile in effect: per-agent override → config.RiskProfile → "default".
+// activeRiskProfile returns the risk profile in effect: per-agent override → config.RiskProfile → the build's default (fallbackRiskProfile).
 func (a *Agent) activeRiskProfile() configuration.RiskProfile {
 	if a.riskProfileOverride != "" {
 		return a.riskProfileOverride
@@ -44,7 +44,7 @@ func (a *Agent) activeRiskProfile() configuration.RiskProfile {
 	if cfg != nil && cfg.RiskProfile != "" && configuration.IsValidRiskProfileWithConfig(cfg.RiskProfile, cfg) {
 		return configuration.RiskProfile(cfg.RiskProfile)
 	}
-	return configuration.RiskProfileDefault
+	return fallbackRiskProfile
 }
 
 // SetRiskProfileOverride installs a transient risk profile that overrides the config-level setting for the lifetime of this agent. Pass "" to clear.

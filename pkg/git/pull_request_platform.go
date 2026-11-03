@@ -66,7 +66,7 @@ func createPRViaPlatform(ctx context.Context, apiURL, workspaceID, token, head, 
 	if err != nil {
 		return nil, fmt.Errorf("reach the platform: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	var out platformPullResponse
 	_ = json.Unmarshal(raw, &out)

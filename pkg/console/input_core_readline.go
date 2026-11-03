@@ -159,6 +159,12 @@ func (ir *InputReader) ReadLine() (string, error) {
 		// types. When the mechanism isn't armed (default), Read blocks
 		// exactly as before — zero idle CPU, zero added latency.
 		if ir.wakeupArmed.Load() && !waitForStdinReadable(ir.termFd, wakeupPollInterval) {
+			ir.handleYield()
+			continue
+		}
+		// A question opened from another goroutine holds the terminal:
+		// leave its keystrokes on stdin for it.
+		if ir.handleYield() {
 			continue
 		}
 

@@ -43,10 +43,15 @@ func AcquireTerminalQuestion(ctx context.Context) (release func(), err error) {
 	}
 	questionHolder.Store(id)
 	questionDepth = 1
+	// Between turns the idle prompt owns stdin; it stands aside for the
+	// question (see input_yield.go). Mid-turn this is a no-op — the steer
+	// reader is paused by the question's PauseSteer instead.
+	resumePrompt := yieldIdlePrompt()
 	return func() {
 		questionDepth--
 		if questionDepth == 0 {
 			questionHolder.Store(0)
+			resumePrompt()
 			<-questionSlot
 		}
 	}, nil

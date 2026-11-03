@@ -192,6 +192,14 @@ type InputReader struct {
 	// Arming is opt-in so the default (never-armed) path stays
 	// byte-for-byte identical to the old blocking behavior.
 	wakeupArmed atomic.Bool
+
+	// yieldRequested is set while a question holds the terminal (see
+	// input_yield.go); the read loop then clears its prompt, acknowledges
+	// on yieldAck, and stops reading. yielded is the loop's own record
+	// that it has stood aside.
+	yieldRequested atomic.Bool
+	yieldAck       chan struct{}
+	yielded        bool
 }
 
 type pasteSpan struct {

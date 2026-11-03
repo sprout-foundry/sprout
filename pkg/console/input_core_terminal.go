@@ -56,6 +56,7 @@ func NewInputReader(prompt string) *InputReader {
 		historyIndex: -1,
 		contextMenu:  NewContextMenu(),
 		autocomplete: newInlineAutocomplete(),
+		yieldAck:     make(chan struct{}, 1),
 	}
 	ir.updateTerminalWidth()
 	return ir

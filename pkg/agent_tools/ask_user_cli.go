@@ -108,9 +108,9 @@ func renderCLIFraming(w io.Writer, req AskUserRequest) {
 // valid label match) so a real option can never collide with it.
 const askUserCustomAnswerSentinel = "__custom__"
 
-// errAskUserDismissed reports Esc/Ctrl+C on the picker. Worded for the LLM,
+// ErrAskUserDismissed reports Esc/Ctrl+C on the picker. Worded for the LLM,
 // which receives it as the tool result: the user chose not to answer.
-var errAskUserDismissed = errors.New("the user dismissed the question without answering")
+var ErrAskUserDismissed = errors.New("the user dismissed the question without answering")
 
 // runAskUserSelectList drives the TTY single-select picker. It prints the
 // question framing, runs console.SelectList over the options, and returns
@@ -120,7 +120,7 @@ var errAskUserDismissed = errors.New("the user dismissed the question without an
 // filter) the first nine options carry digit shortcuts and any other key
 // leaves the picker for a typed answer that starts with that key; in a long
 // list typing filters, and the trailing "Type your own answer…" item does
-// the same. Esc reports errAskUserDismissed.
+// the same. Esc reports ErrAskUserDismissed.
 //
 // This path is only used when stdin is a TTY and MultiSelect is false;
 // callers (AskUser) gate on those conditions before invoking.
@@ -181,7 +181,7 @@ func runAskUserSelectList(ctx context.Context, req AskUserRequest) (string, erro
 		if typed := sl.DismissKey(); typed != "" {
 			return readCustomAnswer(ctx, req, typed)
 		}
-		return "", errAskUserDismissed
+		return "", ErrAskUserDismissed
 	}
 	if value == askUserCustomAnswerSentinel {
 		return readCustomAnswer(ctx, req, "")

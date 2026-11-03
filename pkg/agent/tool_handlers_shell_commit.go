@@ -53,10 +53,6 @@ func (a *gitApprovalPrompterAdapter) PromptForApproval(command string) (bool, er
 		{Label: "Cancel", Value: "n"},
 	}
 
-	fmt.Printf("\n[LOCK] Git Operation Requires Approval\n")
-	fmt.Printf("Command: %s\n", command)
-	fmt.Printf("\n")
-
 	choice, err := ag.PromptChoice(prompt, choices)
 	if err != nil {
 		if err == ErrUINotAvailable {
@@ -140,8 +136,10 @@ func handleCommitTool(_ context.Context, a *Agent, args map[string]interface{}) 
 		choice, err := a.PromptChoice("Allow agent to commit staged changes?", choices)
 		if err != nil {
 			if errors.Is(err, ErrUINotAvailable) {
-				// Fall back to allowing the commit when UI is not available,
-				// since this tool is designed for autonomous agents and was explicitly called
+				// Nobody can be asked (an automate/workflow run with no
+				// terminal or browser): this tool is designed for autonomous
+				// agents and was explicitly called, so the commit proceeds. An
+				// interactive session always gets the question (PromptChoice).
 			} else {
 				return "", agenterrors.NewTransientError("approval prompt failed", err)
 			}
@@ -295,8 +293,8 @@ func handleCreatePullRequest(ctx context.Context, a *Agent, args map[string]inte
 		choice, err := a.PromptChoice("Allow agent to create a pull request?", choices)
 		if err != nil {
 			if errors.Is(err, ErrUINotAvailable) {
-				// Fall back to allowing when UI is not available,
-				// since this tool is designed for autonomous agents and was explicitly called
+				// Nobody can be asked (an autonomous run): proceed, as for
+				// commit. An interactive session always gets the question.
 			} else {
 				return "", agenterrors.NewTransientError("approval prompt failed", err)
 			}

@@ -16,14 +16,24 @@ import (
 // AgentResult is the structured output produced when --output-format=json is used.
 // It captures everything a SaaS wrapper needs from a non-interactive sprout run.
 type AgentResult struct {
-	Status         string             `json:"status"`                     // "success" or "error"
+	Status         string             `json:"status"`                     // "success", "error", or "needs_input"
 	Error          string             `json:"error,omitempty"`            // error message if status=="error"
 	Query          string             `json:"query"`                      // the original prompt
 	Response       string             `json:"response,omitempty"`         // final assistant response text (success runs with an in-process agent)
 	FilesModified  []string           `json:"files_modified,omitempty"`   // files changed during execution
 	GitDiff        string             `json:"git_diff,omitempty"`         // unified diff of all changes
 	PullRequestURL string             `json:"pull_request_url,omitempty"` // URL of PR created during execution
+	Question       *AgentQuestion     `json:"question,omitempty"`         // the question that ended a "needs_input" run
 	Metrics        AgentResultMetrics `json:"metrics"`
+}
+
+// AgentQuestion is the question a run ended on (ask_user_ends_run): the host
+// asks the person and continues the work with their answer.
+type AgentQuestion struct {
+	Question string   `json:"question"`
+	Header   string   `json:"header,omitempty"`
+	Options  []string `json:"options,omitempty"`
+	Default  string   `json:"default,omitempty"`
 }
 
 // AgentResultMetrics holds execution metrics for structured output.
@@ -93,7 +103,14 @@ func emitJSONResult(query string, startTime time.Time, runErr error, a *agent.Ag
 		result.Metrics.SecurityLoopsDetected = a.GetSecurityLoopsDetected()
 	}
 
-	if runErr != nil {
+	if q := a.PendingQuestion(); q != nil {
+		// The run stopped to ask: not a failure, and its work so far is kept.
+		result.Status = "needs_input"
+		result.Question = &AgentQuestion{Question: q.Question, Header: q.Header, Default: q.Default}
+		for _, o := range q.Options {
+			result.Question.Options = append(result.Question.Options, o.Label)
+		}
+	} else if runErr != nil {
 		result.Status = "error"
 		result.Error = runErr.Error()
 	} else {

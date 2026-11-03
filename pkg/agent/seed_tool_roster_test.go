@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -138,5 +139,56 @@ func TestWithHandlerSchemas_AdvertisesFullSchema(t *testing.T) {
 				t.Errorf("BuildToolDefinitions lost the schema: %v", def.Function.Parameters)
 			}
 		}
+	}
+}
+
+// A custom provider's tool_calls limit the registry the model is offered,
+// keeping the always-included tools.
+func TestSeedToolRoster_ProviderToolCallsLimitRegistry(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+	if err := agent.GetConfigManager().UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		if cfg.CustomProviders == nil {
+			cfg.CustomProviders = map[string]configuration.CustomProviderConfig{}
+		}
+		cfg.CustomProviders["llm-bridge"] = configuration.CustomProviderConfig{
+			Name:      "llm-bridge",
+			ToolCalls: []string{"read_file", "shell_command"},
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("configure provider: %v", err)
+	}
+	agent.clientType = "llm-bridge"
+
+	names := seedToolNames(NewSeedToolRegistry(agent))
+	if !names["read_file"] || !names["shell_command"] {
+		t.Fatalf("listed tools missing: %v", names)
+	}
+	if names["write_file"] || names["design_brief"] {
+		t.Fatalf("unlisted tools registered: %v", names)
+	}
+	if !names["list_skills"] {
+		t.Error("an always-included tool was dropped")
+	}
+}
+
+// A core prompt replaces the embedded instructions but keeps the project
+// context the prompt is composed with.
+func TestSystemPromptCoreKeepsProjectContext(t *testing.T) {
+	dir := t.TempDir()
+	profile := configuration.ContextProfile{Mode: configuration.ContextModeFull, SystemPromptCore: "CORE-PROMPT"}
+	got, err := GetEmbeddedSystemPromptForProfile(profile, "test", 100_000, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(got, "CORE-PROMPT") {
+		t.Fatalf("prompt does not start with the core: %.80q", got)
+	}
+	if !strings.Contains(got, "## Current Working Directory") || !strings.Contains(got, dir) {
+		t.Fatalf("working directory section missing: %.300q", got)
+	}
+	if strings.Contains(got, "Software Engineering Agent") {
+		t.Fatal("the embedded core prompt was kept")
 	}
 }

@@ -555,6 +555,10 @@ type Agent struct {
 	// can still ask. See tasks_prompt.go.
 	taskRun atomic.Bool
 
+	// pendingQuestion is the question that ended a run configured with
+	// ask_user_ends_run (see pending_question.go).
+	pendingQuestion atomic.Pointer[tools.AskUserRequest]
+
 	// gate1Decided (SP-168): set to true at the end of a successful unified
 	// Gate-1 decision for the most recent tool call (explicit user approval,
 	// an LLM-judge verdict, or a non-interactive auto-approve). Handler-level

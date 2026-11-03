@@ -134,6 +134,16 @@ type Config struct {
 	// Empty means use the embedded default prompt.
 	SystemPromptText string `json:"system_prompt_text,omitempty"`
 
+	// SystemPromptCore replaces only the embedded core instructions: the
+	// project's AGENTS.md, memories and working directory are still added.
+	// SystemPromptText, when set, wins and replaces everything.
+	SystemPromptCore string `json:"system_prompt_core,omitempty"`
+
+	// AskUserEndsRun makes a question from the agent in a non-interactive
+	// run end that run, with the question as its result, so the host can
+	// ask the person and continue the work with their answer.
+	AskUserEndsRun bool `json:"ask_user_ends_run,omitempty"`
+
 	// RefreshSystemPromptOnModelChange re-derives the agent's system prompt
 	// on every provider/model swap. Defaults to false.
 	RefreshSystemPromptOnModelChange bool `yaml:"refresh_system_prompt_on_model_change,omitempty" json:"refresh_system_prompt_on_model_change,omitempty"`

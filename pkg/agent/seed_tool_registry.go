@@ -41,6 +41,9 @@ func newSeedToolRegistryWithPublisher(agent *Agent, ep core.EventPublisher) *cor
 	// The persona's allowed_tools, when the agent enforces them.
 	personaSet := personaToolAllowSet(agent)
 
+	// The active custom provider's tool_calls, when it names them.
+	providerSet := providerToolAllowSet(agent)
+
 	for _, h := range tools.GetNewToolRegistry().All() {
 		if agent != nil {
 			// LCM tool allowlist: skip tools not in the curated set.
@@ -51,6 +54,11 @@ func newSeedToolRegistryWithPublisher(agent *Agent, ep core.EventPublisher) *cor
 			}
 			if personaSet != nil {
 				if _, ok := personaSet[h.Name()]; !ok {
+					continue
+				}
+			}
+			if providerSet != nil {
+				if _, ok := providerSet[h.Name()]; !ok {
 					continue
 				}
 			}

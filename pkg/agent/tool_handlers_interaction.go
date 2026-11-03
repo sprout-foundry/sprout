@@ -61,6 +61,8 @@ func handleAskUser(ctx context.Context, a *Agent, args map[string]interface{}) (
 	} else if hasActiveWebUI {
 		a.noteQuestionRoutedToBrowser()
 		response, err = tools.AskUserWithEventBus(ctx, req, eventBus, clientID, userID, chatID, askUserMgr)
+	} else if a.askUserEndsRun() && a.isNonInteractive() {
+		return "", a.endRunWithQuestion(req)
 	} else if a.IsTaskRun() {
 		// A task has no terminal of its own. Without a browser there is
 		// nobody to answer, and blocking for the ask timeout would stall the

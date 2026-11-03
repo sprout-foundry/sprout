@@ -45,6 +45,24 @@ func personaToolAllowSet(a *Agent) map[string]struct{} {
 	return makeAllowedToolSet(allowlist)
 }
 
+// providerToolAllowSet is the set of tools the active custom provider's
+// tool_calls limit the agent to (plus the tools that are always kept), or nil
+// for no limit — the same rule getOptimizedToolDefinitions applies.
+func providerToolAllowSet(a *Agent) map[string]struct{} {
+	if a == nil {
+		return nil
+	}
+	provider, ok := a.getCurrentCustomProvider()
+	if !ok || len(provider.ToolCalls) == 0 {
+		return nil
+	}
+	set := makeAllowedToolSet(provider.ToolCalls)
+	for _, t := range alwaysIncludedTools {
+		set[t] = struct{}{}
+	}
+	return set
+}
+
 // withHandlerSchemas replaces a tool's advertised parameters with its
 // handler's own JSON schema (ToolDefinition.Schema) where one is set. The
 // seed registry rebuilds each schema from the flat parameter list, which

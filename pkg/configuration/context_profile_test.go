@@ -363,3 +363,17 @@ func TestResolveEffectiveContextCap(t *testing.T) {
 func ptr[T any](v T) *T {
 	return &v
 }
+
+// The configured core prompt rides the resolved profile in every mode.
+func TestResolveContextProfileCarriesTheCorePrompt(t *testing.T) {
+	cfg := &Config{SystemPromptCore: "  core  "}
+	for _, window := range []int{0, 32_000, 200_000} {
+		p, err := ResolveContextProfile(cfg, window)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if p.SystemPromptCore != "core" {
+			t.Fatalf("window %d: core = %q", window, p.SystemPromptCore)
+		}
+	}
+}

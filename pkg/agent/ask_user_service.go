@@ -49,6 +49,10 @@ func (s *agentAskUserService) Ask(ctx context.Context, req tools.AskUserRequest)
 		a.noteQuestionRoutedToBrowser()
 		return browser(ctx)
 	}
+	// The host asks the person later: the question ends this run.
+	if a.askUserEndsRun() && a.isNonInteractive() {
+		return "", a.endRunWithQuestion(req)
+	}
 	// A task has no terminal: without a browser there is nobody to answer,
 	// and blocking would stall the task for the ask timeout.
 	if a.IsTaskRun() {

@@ -38,5 +38,12 @@ func runDirectMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events
 	}
 
 	// Proceed with normal agent flow
-	return ProcessQuery(ctx, chatAgent, eventBus, query)
+	err := ProcessQuery(ctx, chatAgent, eventBus, query)
+	if q := chatAgent.PendingQuestion(); q != nil {
+		// The run stopped to ask (ask_user_ends_run): a clean end, not a
+		// failure; the structured result carries the question.
+		fmt.Printf("%sStopped to ask: %s\n", console.GlyphInfo.Prefix(), q.Question)
+		return nil
+	}
+	return err
 }

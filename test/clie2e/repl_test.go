@@ -170,3 +170,33 @@ func TestREPL_OutputAfterAnsweringAQuestionScrolls(t *testing.T) {
 		t.Fatalf("cursor left below the scroll region:\n%s", s.scr.Dump())
 	}
 }
+
+// A resize landing right as a turn ends, inside the turn-end redraw. Two
+// defects lived here: the grow gap was closed only with a prompt up, so a
+// band of blank rows pushed the transcript into scrollback; and a full draw
+// at the new size, before the deferred Resize ran, recorded that size as
+// the old footer's, so Resize cleared the wrong rows and stranded the old
+// footer mid-transcript.
+func TestREPL_ResizeAtTurnEnd(t *testing.T) {
+	s := start(t, 100, 30, "BEFORE reply", "SHRINK reply", "GROW reply")
+	waitForPrompt(s)
+	s.typeLine("one")
+	s.waitForText("BEFORE reply", 20*time.Second)
+	for _, step := range []struct {
+		rows  int
+		reply string
+	}{{22, "SHRINK reply"}, {34, "GROW reply"}} {
+		s.resize(100, step.rows) // no settling wait
+		time.Sleep(500 * time.Millisecond)
+		s.typeLine("next")
+		s.waitForText(step.reply, 20*time.Second)
+	}
+	time.Sleep(200 * time.Millisecond)
+	screen := s.scr.Text()
+	if strings.Count(screen, "Enter send ·") != 1 {
+		t.Fatalf("a stale footer row is stranded in the transcript:\n%s", s.scr.Dump())
+	}
+	if !strings.Contains(screen, "BEFORE reply") {
+		t.Fatalf("the earliest reply was pushed off screen:\n%s", s.scr.Dump())
+	}
+}

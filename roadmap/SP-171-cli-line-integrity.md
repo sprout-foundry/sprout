@@ -14,11 +14,16 @@ transcript line. That is fixed.
 Height resizes are asserted. Width resizes are not: the emulator does not
 reflow, and the footer's clear window assumes the terminal does, so a
 non-reflowing terminal (xterm) loses transcript rows on a width shrink.
-That remains open. So does a race the harness exposed: a resize that lands
-inside the turn-end redraw can strand the previous footer rows mid-screen.
-One full draw reads the old height for its rows and the new height for its
-margins. The harness resizes only once the idle box has settled, so the
-race is documented here rather than asserted.
+That remains open.
+
+The harness also exposed two races in resizes that land as a turn ends.
+Both are fixed, and `TestREPL_ResizeAtTurnEnd` pins them:
+
+- The grow gap was closed only while a prompt was up, so a band of blank
+  rows pushed the transcript into scrollback.
+- A full draw at the new size, before the deferred Resize ran, recorded
+  that size as the old footer's, so Resize cleared the wrong rows. Full
+  draws now leave an unhandled size change to Resize.
 
 **Status:** Partially implemented (2026-10-31). 171a (transcript writer +
 guard), 171b (blank-line discipline), 171d (expandable tool output),

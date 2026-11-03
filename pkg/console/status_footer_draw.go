@@ -138,6 +138,19 @@ func (f *StatusFooter) drawFullLocked() {
 	// mutex. Reading them in a separate, earlier unlocked pass let the row
 	// budget race a concurrent ClearSteerLine.
 	f.mu.Lock()
+	lastRows, lastCols := f.lastRows, f.lastCols
+	f.mu.Unlock()
+	if lastRows > 0 && (rows != lastRows || cols != lastCols) {
+		// The terminal changed size and Resize has not handled it yet
+		// (it defers while prose streams). Drawing now would record the
+		// new size as the one the footer sits at, and Resize — which
+		// clears the old footer from that record — would clear the wrong
+		// rows, stranding the old footer mid-transcript. Leave the redraw
+		// to Resize, starting it if it is not already on its way.
+		f.scheduleResize()
+		return
+	}
+	f.mu.Lock()
 	reserved := f.reservedRowsLocked()
 	steerActive := f.steerActive
 	steerLine := f.steerLine

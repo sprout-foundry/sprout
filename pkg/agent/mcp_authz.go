@@ -221,6 +221,8 @@ func (a *Agent) promptMCPAuthorizationCLI(server, tool string) (string, bool) {
 	// the spinner and streamed prose must not draw over the question, or
 	// keystrokes split between two readers and an Enter meant for the
 	// picker is sent as a steer message instead.
+	release, _ := console.AcquireTerminalQuestion(context.Background())
+	defer release()
 	clihooks.SuspendIndicator()
 	clihooks.PauseSteer()
 	clihooks.SuspendStreaming()

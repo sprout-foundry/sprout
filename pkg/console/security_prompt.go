@@ -70,6 +70,8 @@ func askForSecurityApproval(prompt, command string, analysis *utils.SecurityAnal
 }
 
 func askForSecurityApprovalWriter(w io.Writer, prompt, command string, analysis *utils.SecurityAnalysisView) utils.ApprovalChoice {
+	release, _ := AcquireTerminalQuestion(context.Background())
+	defer release()
 	clihooks.SuspendIndicator()
 	clihooks.PauseSteer()
 	clihooks.SuspendStreaming()
@@ -141,6 +143,8 @@ func askForFilesystemSecurityApproval(prompt, path, folder string, tier utils.Fi
 }
 
 func askForFilesystemSecurityApprovalWriter(w io.Writer, prompt, path, folder string, tier utils.FilesystemPromptTier) utils.ApprovalChoice {
+	release, _ := AcquireTerminalQuestion(context.Background())
+	defer release()
 	clihooks.SuspendIndicator()
 	clihooks.PauseSteer()
 	clihooks.SuspendStreaming()

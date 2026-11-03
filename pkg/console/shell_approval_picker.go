@@ -53,6 +53,11 @@ var (
 // like CI / piped stdin. The arrow-key picker in security_prompt.go is
 // reserved for the single 4-option gate.
 func PromptShellApprovalParts(ctx context.Context, parts []ShellPartInfo) (map[string]bool, error) {
+	release, err := AcquireTerminalQuestion(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	shellPickerSuspend()
 	defer shellPickerResume()
 	return promptShellApprovalPartsIO(ctx, parts, os.Stdin, os.Stdout)

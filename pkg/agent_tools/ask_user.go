@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/sprout-foundry/sprout/pkg/events"
 
@@ -301,6 +302,13 @@ func AskUser(ctx context.Context, req AskUserRequest) (string, error) {
 	if !stdinIsTTY() {
 		return "", ErrAskUserNoChannel
 	}
+	// One question on the terminal at a time: a parallel tool's trust
+	// question or a second subagent's ask waits for this one to finish.
+	release, err := console.AcquireTerminalQuestion(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer release()
 	// SP-048 follow-up: stop any active CLI spinner so it doesn't overwrite
 	// the question text on stderr while we render it on stdout.
 	clihooks.SuspendIndicator()

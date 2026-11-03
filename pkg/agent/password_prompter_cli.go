@@ -9,6 +9,7 @@ import (
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"golang.org/x/term"
 )
@@ -41,6 +42,13 @@ func (cli *CLIPasswordPrompter) PromptInput(ctx context.Context, reason string, 
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
 		return "", tools.ErrNoInteractiveSurface
 	}
+
+	// One question on the terminal at a time (see console.AcquireTerminalQuestion).
+	release, err := console.AcquireTerminalQuestion(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer release()
 
 	// Suspend the CLI spinner, pause the steer reader, and suspend streaming so the prompt isn't clobbered.
 	clihooks.SuspendIndicator()

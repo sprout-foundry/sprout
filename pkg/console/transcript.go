@@ -108,6 +108,10 @@ func WriteTranscriptAtRowTo(w io.Writer, row int, s string) {
 	}
 	LockOutput()
 	defer UnlockOutput()
+	if activeSelectList != nil {
+		writeTranscriptLocked(w, s) // above the open picker; no anchoring
+		return
+	}
 	if footer := GetGlobalStatusFooter(); footer != nil && footer.canPinInput() && row > 0 {
 		bottom := footer.TranscriptBottomRow()
 		if bottom > 0 {
@@ -127,6 +131,16 @@ func WriteTranscriptAtRowTo(w io.Writer, row int, s string) {
 // writeTranscriptLocked is the lock-free body of WriteTranscriptTo. Caller
 // MUST hold outputMu.
 func writeTranscriptLocked(w io.Writer, s string) {
+	// A picker is on screen (a question, an approval): output arriving now
+	// — a parallel tool's line, a subagent's block — goes above it and the
+	// picker is redrawn below, as PrintExternal does. Parking at the
+	// region's last row instead would paint over the picker's rows.
+	if sl := activeSelectList; sl != nil {
+		sl.printExternalLocked(s)
+		transcriptAtLineStart.Store(true)
+		transcriptLastRowBlank.Store(strings.TrimRight(s, "\r\n") == "")
+		return
+	}
 	if footer := GetGlobalStatusFooter(); footer != nil && footer.canPinInput() {
 		footer.parkForTranscriptLocked(w)
 	}
@@ -154,8 +168,8 @@ func BlankLine() {
 func SectionBreak() {
 	LockOutput()
 	defer UnlockOutput()
-	if transcriptLastRowBlank.Load() {
-		return
+	if transcriptLastRowBlank.Load() || activeSelectList != nil {
+		return // a separator above an open picker is noise
 	}
 	if footer := GetGlobalStatusFooter(); footer != nil && footer.canPinInput() {
 		footer.parkForTranscriptLocked(transcriptWriter)
@@ -175,7 +189,7 @@ func BlankLineTo(w io.Writer) {
 // blankLineLocked is the lock-free body of BlankLine. Caller MUST hold
 // outputMu.
 func blankLineLocked(w io.Writer) {
-	if transcriptAtLineStart.Load() {
+	if transcriptAtLineStart.Load() || activeSelectList != nil {
 		return
 	}
 	if footer := GetGlobalStatusFooter(); footer != nil && footer.canPinInput() {

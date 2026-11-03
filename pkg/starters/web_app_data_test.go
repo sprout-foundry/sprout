@@ -20,7 +20,7 @@ import (
 // webAppDataVersion is the version the web-app-data tree declares; the
 // assertions below must agree with
 // pkg/starters/data/web-app-data/starter.json.
-const webAppDataVersion = "1.2.0"
+const webAppDataVersion = "1.2.1"
 
 // webAppDataProjectFiles are the project files (relative to the
 // destination) a web-app-data instantiation must produce: the React + Vite

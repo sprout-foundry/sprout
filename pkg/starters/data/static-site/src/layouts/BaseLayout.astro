@@ -23,16 +23,16 @@ const nav = [
   </head>
   <body>
     <header class="site-header">
-      <a class="brand" href="/">Static Site</a>
+      <a class="brand" href="/">
+        Static Site
+      </a>
       <nav aria-label="Primary">
         <ul>
-          {
-            nav.map((item) => (
-              <li>
-                <a href={item.href}>{item.label}</a>
-              </li>
-            ))
-          }
+          {nav.map((item) => (
+            <li>
+              <a href={item.href}>{item.label}</a>
+            </li>
+          ))}
         </ul>
       </nav>
     </header>

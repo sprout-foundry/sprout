@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -69,16 +70,46 @@ func resolveReadTrust(env ToolEnv, absPath string) injection.TrustClass {
 		return injection.TrustThirdParty
 	}
 
-	// Rule 2: pulled-in code — outside the workspace, or inside a nested repo.
-	if !isOutsideWorkspace(classRoot, absPath) && !isNestedRepo(classRoot, absPath) {
+	// Sprout's own state under the workspace (.sprout/: task worktrees,
+	// revisions, plans) is ours.
+	if relPath == ".sprout" || strings.HasPrefix(relPath, ".sprout/") {
 		return injection.TrustFirstParty
 	}
 
-	// The ambiguous case. Ask about the directory the content lives in, not
-	// the file: the answer is about a tree, and keying it on the file would
-	// ask again for the next file in the same clone.
+	// Rule 2: pulled-in code — outside the workspace, or inside a nested repo.
+	outside := isOutsideWorkspace(classRoot, absPath)
+	if !outside && !isNestedRepo(classRoot, absPath) {
+		return injection.TrustFirstParty
+	}
+	repo := repoRootOf(absPath)
+	switch {
+	case repo != "" && sameRepository(repo, classRoot):
+		// A worktree of the workspace's own repository — a /task worktree,
+		// or one checked out elsewhere — is our code under another path.
+		return injection.TrustFirstParty
+	case repo == "" && outside:
+		// Outside the workspace and in no repository: tool output in a temp
+		// dir, a module or package cache, system headers, config files.
+		// "Is this code you did not write?" has no sensible answer for
+		// those, so it is not asked; the content is framed, which labels it
+		// as data and withholds nothing.
+		return injection.TrustThirdParty
+	}
+
+	// The ambiguous case: a clone. Ask about the repository, not the
+	// directory the file is in — one answer covers the whole clone, where
+	// keying on the directory asked again for every directory read.
 	askRel := trustAskRoot(classRoot, absPath)
-	if class := injection.ClassifyPath(askRel, trustDecisions(env, workspaceRoot)); class != injection.TrustUnknown {
+	if repo != "" {
+		askRel = trustKey(classRoot, repo)
+	}
+	decisions := trustDecisions(env, workspaceRoot)
+	if class := injection.ClassifyPath(askRel, decisions); class != injection.TrustUnknown {
+		return class
+	}
+	// An answer recorded for a narrower directory (asked before questions
+	// were keyed on the repository) still decides reads beneath it.
+	if class := injection.ClassifyPath(relPath, decisions); class != injection.TrustUnknown {
 		return class
 	}
 
@@ -97,6 +128,46 @@ func resolveReadTrust(env ToolEnv, absPath string) injection.TrustClass {
 		return injection.TrustThirdParty
 	}
 
+	return askTrustOnce(env, workspaceRoot, askRel)
+}
+
+// askTrustOnce asks the trust question for one root and persists the answer.
+// Reads run in parallel — several files of the same clone at once — and each
+// would otherwise raise the same question; concurrent askers for one root
+// share a single question and its answer.
+func askTrustOnce(env ToolEnv, workspaceRoot, askRel string) injection.TrustClass {
+	key := workspaceRoot + "\x00" + askRel
+	trustAsks.mu.Lock()
+	if q, ok := trustAsks.inflight[key]; ok {
+		trustAsks.mu.Unlock()
+		<-q.done
+		return q.class
+	}
+	q := &trustQuestion{done: make(chan struct{}), class: injection.TrustThirdParty}
+	trustAsks.inflight[key] = q
+	trustAsks.mu.Unlock()
+	defer func() {
+		trustAsks.mu.Lock()
+		delete(trustAsks.inflight, key)
+		trustAsks.mu.Unlock()
+		close(q.done)
+	}()
+	q.class = askTrust(env, workspaceRoot, askRel)
+	return q.class
+}
+
+type trustQuestion struct {
+	done  chan struct{}
+	class injection.TrustClass
+}
+
+var trustAsks = struct {
+	mu       sync.Mutex
+	inflight map[string]*trustQuestion
+}{inflight: map[string]*trustQuestion{}}
+
+// askTrust puts the question to the user and persists the answer.
+func askTrust(env ToolEnv, workspaceRoot, askRel string) injection.TrustClass {
 	answer, err := env.AskUser.Ask(context.Background(), AskUserRequest{
 		Header:   "Trust",
 		Question: fmt.Sprintf("Is `%s` third-party content — code you did not write? Tools reading it will be marked as untrusted data. This does not block anything.", askRel),
@@ -177,7 +248,12 @@ func persistTrustDecision(env ToolEnv, workspaceRoot, relDir string, class injec
 // stable across reads of the same tree, and still readable by `sprout trust
 // list`.
 func trustAskRoot(workspaceRoot, absPath string) string {
-	dir := filepath.Dir(absPath)
+	return trustKey(workspaceRoot, filepath.Dir(absPath))
+}
+
+// trustKey is the stored spelling of a decision about dir: root-relative
+// inside the workspace, absolute outside it.
+func trustKey(workspaceRoot, dir string) string {
 	if workspaceRoot != "" {
 		if rel, err := filepath.Rel(workspaceRoot, dir); err == nil && !strings.HasPrefix(rel, "..") {
 			return injection.NormalizeRelPath(rel)

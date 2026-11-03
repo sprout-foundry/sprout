@@ -128,6 +128,23 @@ ambiguous case is a user decision, asked once and remembered.
   these is never ours.
 - Any root the user has already classified.
 
+**Also never asked (2026-11-02 follow-up):**
+
+- Content under the workspace's `.sprout/` directory, and any checkout of the
+  workspace's own repository (a linked worktree, such as a `/task` worktree
+  under `.sprout/tasks/` or one checked out elsewhere). This is our code
+  under another path. These used to be asked about because a worktree's
+  `.git` file looks like a nested clone.
+- A path outside the workspace that is in no repository: a temp file, a
+  module or package cache, a config file. "Code you did not write?" has no
+  sensible answer for these, so they are framed without asking.
+
+The question is now keyed on the clone's repository root, not on the
+directory of the first file read; keying on the directory asked again for
+every sibling directory. Concurrent reads of one clone share a single
+question, and all terminal questions take one slot
+(`console.AcquireTerminalQuestion`), so two pickers never share the screen.
+
 **Asked once — ambiguous:**
 
 A root we have not seen before, when content under it is first read:

@@ -100,7 +100,7 @@ type WorkspaceTask struct {
 	GitToken     string `json:"git_token,omitempty"`
 	// GitUsername is the HTTPS username GitToken goes with on the repo's
 	// host. Empty keeps the runner's own guess (x-access-token on GitHub,
-	// oauth2 elsewhere), which Bitbucket rejects.
+	// oauth2 elsewhere), which not every host accepts.
 	GitUsername string `json:"git_username,omitempty"`
 	LLMProvider string `json:"llm_provider,omitempty"`
 	LLMKey      string `json:"llm_key,omitempty"`

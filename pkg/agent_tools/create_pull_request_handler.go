@@ -35,7 +35,7 @@ func (h *createPullRequestHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name: "create_pull_request",
 		Description: "Create a pull request (a merge request on GitLab) after pushing a feature branch. " +
-			"Works on GitHub, and on GitLab, Bitbucket and Gitea/Forgejo from a Sprout Foundry workspace. " +
+			"Works on GitHub, and on GitLab and Gitea/Forgejo from a Sprout Foundry workspace. " +
 			"Gated as a git-write operation — requires git_write capability.",
 		Required: []string{"title"},
 		Parameters: []ParameterDef{

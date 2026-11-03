@@ -4,7 +4,7 @@ package git
 // Sprout Foundry platform from inside one of its workspaces. The platform
 // knows the workspace's repository and holds its owner's credential for the
 // repository's host, so this works on every host the platform supports
-// (GitHub, GitLab, Bitbucket, Gitea/Forgejo) without the host's token ever
+// (GitHub, GitLab, Gitea/Forgejo) without the host's token ever
 // being in the workspace.
 
 import (

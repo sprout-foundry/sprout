@@ -75,17 +75,58 @@ func ResumeIndicator() {
 // resume must re-enter raw mode and restart the reader. Both must be
 // idempotent.
 //
-// Installing or clearing the hooks marks a turn boundary, so the pause
-// refcount is reset here: a leaked unbalanced pause (a prompt that
-// returned without its deferred ResumeSteer) must not suppress the
-// next turn's first real pause.
+// SetSteerHooks also resets the pause refcount. That makes it a hard reset
+// for tests and teardown, not a turn boundary: production turns use
+// BeginSteerTurn / EndSteerTurn, which keep the count, because a prompt can
+// be open across a boundary (a parallel or background run's question when
+// the turn starts or ends) and its pause must still be honored.
 func SetSteerHooks(pause, resume func()) {
+	steerMu.Lock()
+	defer steerMu.Unlock()
 	mu.Lock()
 	defer mu.Unlock()
 	steerPause = pause
 	steerResume = resume
 	steerDepth.Store(0)
 }
+
+// steerMu orders the reader's start/stop transitions: the outermost pause,
+// the outermost resume, and a turn installing or removing the hooks. Without
+// it a turn could start the reader between a prompt's pause and the prompt's
+// first read, leaving two readers on stdin.
+var steerMu sync.Mutex
+
+// BeginSteerTurn installs a turn's steer hooks and starts the reader —
+// unless a prompt holds a pause, in which case the reader stays stopped and
+// the prompt's outermost ResumeSteer starts it when the prompt closes.
+func BeginSteerTurn(pause, resume func()) {
+	steerMu.Lock()
+	defer steerMu.Unlock()
+	mu.Lock()
+	steerPause, steerResume = pause, resume
+	mu.Unlock()
+	if steerDepth.Load() == 0 && resume != nil {
+		resume()
+	}
+}
+
+// EndSteerTurn removes the turn's hooks and stops the reader. When a prompt
+// holds a pause the reader is already stopped and is left alone: stopping it
+// again would restore cooked termios under a picker reading in raw mode.
+func EndSteerTurn() {
+	steerMu.Lock()
+	defer steerMu.Unlock()
+	mu.Lock()
+	pause := steerPause
+	steerPause, steerResume = nil, nil
+	mu.Unlock()
+	if steerDepth.Load() == 0 && pause != nil {
+		pause()
+	}
+}
+
+// SteerPaused reports whether a prompt currently holds a steer pause.
+func SteerPaused() bool { return steerDepth.Load() > 0 }
 
 // SteerHooks returns the currently installed steer pause/resume pair (both
 // nil when none). Callers that must install their own pair temporarily — a
@@ -114,6 +155,8 @@ func SteerHooks() (pause, resume func()) {
 // restore then wedged that loop in a blocking Read (VMIN=1) past
 // Stop()'s 2s timeout.
 func PauseSteer() {
+	steerMu.Lock()
+	defer steerMu.Unlock()
 	if steerDepth.Add(1) > 1 {
 		return
 	}
@@ -130,17 +173,13 @@ func PauseSteer() {
 // unbalanced extra resume can never go negative and suppress a later
 // legit pause.
 func ResumeSteer() {
-	for {
-		cur := steerDepth.Load()
-		if cur <= 0 {
-			return
-		}
-		if steerDepth.CompareAndSwap(cur, cur-1) {
-			if cur-1 > 0 {
-				return
-			}
-			break
-		}
+	steerMu.Lock()
+	defer steerMu.Unlock()
+	if steerDepth.Load() <= 0 {
+		return
+	}
+	if steerDepth.Add(-1) > 0 {
+		return
 	}
 	mu.RLock()
 	fn := steerResume

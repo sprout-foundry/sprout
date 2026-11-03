@@ -81,8 +81,8 @@ func TestResumeSteer_ClampedAtZero(t *testing.T) {
 	}
 }
 
-// SetSteerHooks resets the refcount at turn boundaries so a leaked
-// pause can't poison the next turn.
+// SetSteerHooks is the hard reset (tests, teardown): it clears the refcount
+// so state left by one owner cannot affect the next.
 func TestSetSteerHooks_ResetsDepth(t *testing.T) {
 	rec := &steerHookRecorder{}
 	withSteerHooks(t, rec)
@@ -121,5 +121,50 @@ func TestPauseSteer_NoHookStillCounts(t *testing.T) {
 	ResumeSteer()
 	if calls := rec.snapshot(); len(calls) != 2 {
 		t.Fatalf("resume must fire; got %v", calls)
+	}
+}
+
+// A turn that starts while a question is open (a parallel or background
+// run's) must not start the reader under the question's picker; the
+// question's own resume starts it when the question closes.
+func TestBeginSteerTurn_DuringOpenPromptDefersStart(t *testing.T) {
+	SetSteerHooks(nil, nil)
+	t.Cleanup(func() { SetSteerHooks(nil, nil) })
+
+	PauseSteer() // the question opens between turns
+	rec := &steerHookRecorder{}
+	BeginSteerTurn(rec.pause, rec.resume)
+	if calls := rec.snapshot(); len(calls) != 0 {
+		t.Fatalf("the reader must not start under an open question; got %v", calls)
+	}
+	ResumeSteer() // the question closes
+	if calls := rec.snapshot(); len(calls) != 1 || calls[0] != "resume" {
+		t.Fatalf("closing the question starts the turn's reader; got %v", calls)
+	}
+	EndSteerTurn()
+	if calls := rec.snapshot(); len(calls) != 2 || calls[1] != "pause" {
+		t.Fatalf("ending the turn stops the reader; got %v", calls)
+	}
+}
+
+// A turn that ends while a question is open leaves the reader to the
+// question (stopping it again would re-cook the terminal under the picker),
+// and the question's resume does not restart a reader whose turn is over.
+func TestEndSteerTurn_DuringOpenPromptLeavesReaderAlone(t *testing.T) {
+	SetSteerHooks(nil, nil)
+	t.Cleanup(func() { SetSteerHooks(nil, nil) })
+
+	rec := &steerHookRecorder{}
+	BeginSteerTurn(rec.pause, rec.resume) // resume: reader starts
+	PauseSteer()                          // pause: a question opens
+	EndSteerTurn()                        // nothing: the question owns stdin
+	ResumeSteer()                         // nothing: no turn to resume
+	got := rec.snapshot()
+	want := []string{"resume", "pause"}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("calls = %v, want %v", got, want)
+	}
+	if SteerPaused() {
+		t.Fatal("the count is balanced once the question closes")
 	}
 }

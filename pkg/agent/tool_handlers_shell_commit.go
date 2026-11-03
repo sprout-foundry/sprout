@@ -217,7 +217,7 @@ func executeCommit(userMessage, notes string, configManager configManagerInterfa
 }
 
 // handleCreatePullRequest handles the create_pull_request tool, creating a
-// pull request on GitHub via the git.CreatePullRequest backend. Gated as a
+// pull request via the git.CreatePullRequest backend. Gated as a
 // git-write operation — the persona must have CapabilityGitWrite (or the
 // user must approve interactively).
 func handleCreatePullRequest(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {

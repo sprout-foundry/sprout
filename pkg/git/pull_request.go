@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -135,13 +136,17 @@ func splitOwnerRepo(raw string) (string, string, error) {
 // Public API
 // ---------------------------------------------------------------------------
 
-// CreatePullRequest creates a pull request on GitHub for the given repoDir.
+// CreatePullRequest creates a pull request for the given repoDir.
 //
 // Resolution order:
 //
-//  1. GitHub REST API (credential store → GH_TOKEN env var)
-//  2. gh pr create shell-out (fallback when no token available)
-//  3. Structured error with the exact gh command the user can run manually
+//  1. In a Sprout Foundry workspace, the platform (any git host it supports)
+//  2. GitHub REST API (credential store → GH_TOKEN env var)
+//  3. gh pr create shell-out (fallback when no token available)
+//  4. Structured error with the exact gh command the user can run manually
+//
+// Outside a platform workspace, a remote on a host other than GitHub that gh
+// cannot serve either gets a plain error naming the host.
 //
 // If req.Head is empty, the current branch name is used.
 // If req.Base is empty, the repository's default branch is inferred.
@@ -175,6 +180,22 @@ func CreatePullRequest(ctx context.Context, repoDir string, req PullRequestReque
 		// If everything else fails, the final error will mention the push problem too.
 	}
 
+	// --- In a platform workspace, the platform opens it on any host ---
+	// An HTTP answer from the platform is final; only an unreachable
+	// platform falls through to the GitHub paths below.
+	var platformErr error
+	if apiURL, workspaceID, wsToken, ok := platformWorkspace(); ok {
+		result, err := createPRViaPlatform(ctx, apiURL, workspaceID, wsToken, head, base, req.Title, body, req.Draft)
+		if err == nil {
+			return result, nil
+		}
+		var answered *httpErrorStatus
+		if errors.As(err, &answered) {
+			return nil, err
+		}
+		platformErr = err
+	}
+
 	// --- Try GitHub REST API first ---
 	// Resolution order: credential store → GH_TOKEN env → gh CLI fallback.
 	var token string
@@ -206,6 +227,18 @@ func CreatePullRequest(ctx context.Context, repoDir string, req PullRequestReque
 	result, ghErr := createPRViaGH(ctx, repoDir, head, base, req.Title, body, req.Draft)
 	if ghErr == nil {
 		return result, nil
+	}
+
+	// --- Both failed. A host gh cannot serve needs the platform ---
+	if host, ok := originHost(ctx, repoDir); ok && host != "github.com" {
+		msg := fmt.Sprintf("opening a pull request on %s is supported from a Sprout Foundry workspace; push %q and open the request on %s", host, head, host)
+		if platformErr != nil {
+			msg += fmt.Sprintf(" (platform error: %s)", platformErr)
+		}
+		if pushErr != nil {
+			msg += fmt.Sprintf(" (push error: %s)", pushErr)
+		}
+		return nil, errors.New(msg)
 	}
 
 	// --- Both failed — build structured error ---
@@ -251,6 +284,34 @@ func resolveBase(ctx context.Context, repoDir string, base string) (string, erro
 		return base, nil
 	}
 	return GetDefaultBranch(ctx, repoDir)
+}
+
+// originHost returns the host name of the origin remote ("github.com",
+// "gitlab.com", ...), for HTTPS and scp-style SSH remotes.
+func originHost(ctx context.Context, repoDir string) (string, bool) {
+	cmd := exec.CommandContext(ctx, "git", "remote", "get-url", "origin")
+	cmd.Dir = repoDir
+	out, err := cmd.Output()
+	if err != nil {
+		return "", false
+	}
+	return remoteHost(strings.TrimSpace(string(out)))
+}
+
+// remoteHost parses a git remote URL's host name.
+func remoteHost(remoteURL string) (string, bool) {
+	if u, err := url.Parse(remoteURL); err == nil && u.Scheme != "" {
+		// A local path remote (file://) has no host.
+		return strings.ToLower(u.Hostname()), u.Hostname() != ""
+	}
+	// scp-style: [user@]host:path
+	if at := strings.Index(remoteURL, "@"); at >= 0 {
+		remoteURL = remoteURL[at+1:]
+	}
+	if host, _, ok := strings.Cut(remoteURL, ":"); ok && host != "" && !strings.Contains(host, "/") {
+		return strings.ToLower(host), true
+	}
+	return "", false
 }
 
 // getOwnerRepo parses the origin remote URL and returns owner/repo for GitHub

@@ -23,6 +23,7 @@
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -135,14 +136,31 @@ func findRunawayClause(args string) (string, int) {
 	return "", 0
 }
 
+// runawayScanText returns the text the runaway-clause check scans for a tool
+// call: a shell command's command string. Other tools are not scanned (ok is
+// false): their arguments carry file contents, edits and search text, where a
+// repeated clause is ordinary code, not a degenerated command.
+func runawayScanText(toolName, args string) (string, bool) {
+	if stripToolChannel(toolName) != "shell_command" {
+		return "", false
+	}
+	var a struct {
+		Command string `json:"command"`
+	}
+	if err := json.Unmarshal([]byte(args), &a); err != nil || a.Command == "" {
+		return args, true
+	}
+	return a.Command, true
+}
+
 // runawayRefusalNote builds the model-visible refusal message for a call whose
 // arguments contain a runaway clause (a clause repeated more than 5 times).
 // It names the clause and tells the model the command looks degenerated rather
 // than useful, so it stops repeating and changes approach.
 func runawayRefusalNote(clause string) string {
 	return fmt.Sprintf(
-		"[repeat guard] refusal: the clause %q is repeated in this call's arguments. "+
-			"The command looks degenerated rather than useful — stop repeating and change approach.",
+		"[repeat guard] the clause %q is repeated in this command. The command ran, but its output is withheld: "+
+			"it looks degenerated rather than useful — stop repeating and change approach.",
 		clause)
 }
 

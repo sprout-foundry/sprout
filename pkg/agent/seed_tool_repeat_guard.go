@@ -86,13 +86,18 @@ func (e *repeatGuardExecutor) Execute(ctx context.Context, calls []core.ToolCall
 		}
 		args := call.Function.Arguments
 		// Runaway refusal: the batch ran (the inner executor saw the call),
-		// but a clause repeated more than 5 times in the arguments marks
+		// but a clause repeated more than 5 times in a shell command marks
 		// the command degenerated — replace the model-visible result with
 		// the refusal and skip the repeat-guard observation for this call.
-		if clause, times := findRunawayClause(args); times > 5 {
-			msg.Content = runawayRefusalNote(clause)
-			msg.Status = core.ToolStatusError
-			continue
+		// Only a command's text is scanned: file contents and edits repeat
+		// clauses as a matter of course (code does), and refusing a write
+		// that already happened sends the model back to redo it.
+		if command, ok := runawayScanText(call.Function.Name, args); ok {
+			if clause, times := findRunawayClause(command); times > 5 {
+				msg.Content = runawayRefusalNote(clause)
+				msg.Status = core.ToolStatusError
+				continue
+			}
 		}
 		toolName := call.Function.Name
 		note, isStalled, summary := e.agent.recordToolCall(toolName, args, msg.Content)

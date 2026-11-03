@@ -7,6 +7,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -114,3 +115,32 @@ func (e *unmatchedExecutor) Execute(ctx context.Context, calls []core.ToolCall) 
 
 // agentProbe exists so the nil-agent assertion above reads clearly.
 func (e *stubExecutor) agentProbe() error { return nil }
+
+// TestRepeatGuardExecutorRunawayOnlyForCommands pins that the runaway-clause
+// refusal applies to a shell command's text only: code written or edited
+// through a file tool repeats clauses as a matter of course, and refusing a
+// write that already happened sends the model back to redo it.
+func TestRepeatGuardExecutorRunawayOnlyForCommands(t *testing.T) {
+	agent := &Agent{}
+	e := newRepeatGuardExecutor(&stubExecutor{}, agent)
+
+	code := strings.Repeat("ctx.lineTo(p.x + p.w / 2, p.y + p.h / 2);\n", 8)
+	write := seedCall("w", "write_file", `{"path":"src/game.js","content":`+repeatGuardJSON(code)+`}`)
+	edit := seedCall("e", "edit_file", `{"path":"src/game.js","old_string":"x","new_string":`+repeatGuardJSON(code)+`}`)
+	results := e.Execute(context.Background(), []core.ToolCall{write, edit})
+	for _, r := range results {
+		assert.NotContains(t, r.Content, "[repeat guard]", "a file write or edit with repeated code is not refused")
+		assert.NotEqual(t, core.ToolStatusError, r.Status)
+	}
+
+	cmd := seedCall("c", "shell_command", `{"command":"`+strings.Repeat("echo go && ", 7)+`true"}`)
+	results = e.Execute(context.Background(), []core.ToolCall{cmd})
+	require.Len(t, results, 1)
+	assert.Contains(t, results[0].Content, "[repeat guard]", "a degenerated shell command is still refused")
+	assert.Contains(t, results[0].Content, "The command ran")
+}
+
+func repeatGuardJSON(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
+}

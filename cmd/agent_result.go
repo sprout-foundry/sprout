@@ -16,7 +16,7 @@ import (
 // AgentResult is the structured output produced when --output-format=json is used.
 // It captures everything a SaaS wrapper needs from a non-interactive sprout run.
 type AgentResult struct {
-	Status         string             `json:"status"`                     // "success", "error", or "needs_input"
+	Status         string             `json:"status"`                     // "success", "error", "needs_input", or "handed_off"
 	Error          string             `json:"error,omitempty"`            // error message if status=="error"
 	Query          string             `json:"query"`                      // the original prompt
 	Response       string             `json:"response,omitempty"`         // final assistant response text (success runs with an in-process agent)
@@ -24,6 +24,7 @@ type AgentResult struct {
 	GitDiff        string             `json:"git_diff,omitempty"`         // unified diff of all changes
 	PullRequestURL string             `json:"pull_request_url,omitempty"` // URL of PR created during execution
 	Question       *AgentQuestion     `json:"question,omitempty"`         // the question that ended a "needs_input" run
+	Handoff        string             `json:"handoff,omitempty"`          // a "handed_off" run's note for the next run
 	Metrics        AgentResultMetrics `json:"metrics"`
 }
 
@@ -120,6 +121,12 @@ func emitJSONResult(query string, startTime time.Time, runErr error, a *agent.Ag
 		// query's response.
 		if a != nil {
 			result.Response = lastAssistantResponse(a)
+		}
+		// A run told it was near its deadline that left a handoff note
+		// stopped part way: the host continues it in a new run.
+		if note := handoffNote("."); note != "" {
+			result.Status = "handed_off"
+			result.Handoff = note
 		}
 	}
 

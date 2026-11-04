@@ -32,9 +32,16 @@ var GenerateCommitMessageFunc func(diff []byte, notes string) (string, error)
 // GenerateCommitMessageFunc. Guarded by ToolFuncMu.
 var AttributeCommitMessageFunc func(message string, generated bool) string
 
-// attributeCommit applies the agent's commit attribution hook, if any.
+// attributeCommit applies the agent's commit attribution hook, if any. The
+// transcript pair carried in the env (the provider/model recorded for the
+// session that did the work) takes precedence over the agent's own pair when
+// the hook supports it.
 func attributeCommit(env ToolEnv, message string, generated bool) string {
-	if attribute := env.ResolveToolFuncs().AttributeCommitMessage; attribute != nil {
+	funcs := env.ResolveToolFuncs()
+	if fromTranscript := funcs.AttributeCommitMessageFromTranscript; fromTranscript != nil {
+		return fromTranscript(env.TranscriptProvider, env.TranscriptModel, message, generated)
+	}
+	if attribute := funcs.AttributeCommitMessage; attribute != nil {
 		return attribute(message, generated)
 	}
 	return message
@@ -56,6 +63,8 @@ func (h *commitHandler) Definition() ToolDefinition {
 			{Name: "notes", Type: "string", Description: "Context used to shape the commit message when message is omitted (e.g., 'fixes the flaky auth test'). Ignored when message is provided."},
 			{Name: "trailers", Type: "array", Description: "Git trailers (\"Key: Value\" strings, e.g. \"Assisted-by: Claude Code (anthropic/claude-opus-5-5)\") appended to the commit message. Merged with the commit.trailers defaults from the .sprout config and the repo's AGENTS.md; identical trailers are never duplicated.", Items: map[string]any{"type": "string"}},
 			{Name: "repo_dir", Type: "string", Description: "Directory to commit in: a subdirectory of the workspace, or a git worktree of the workspace repository even when checked out outside the workspace root (worktrees of the same repo share one .git dir and are allowed). Defaults to workspace root if omitted."},
+			{Name: "transcript_provider", Type: "string", Description: "Provider recorded in the transcript of the session that did the work (the transcript snapshot's \"provider\" field). Names the Assisted-by trailer's model when the committing agent is not the one that made the changes — a resumed session, a subagent, or a reader working from a transcript. Omit to attribute to the current agent's provider."},
+			{Name: "transcript_model", Type: "string", Description: "Model recorded in the transcript of the session that did the work (the transcript snapshot's \"model\" field). Pairs with transcript_provider; omit to attribute to the current agent's model."},
 		},
 	}
 }
@@ -94,8 +103,17 @@ func (h *commitHandler) Execute(ctx context.Context, env ToolEnv, args map[strin
 	}
 	trailers := git.DefaultCommitTrailers(cfg, effectiveDir)
 	trailers = append(trailers, explicitTrailers...)
+	// A transcript pair names the model that did the work; the env's pair is
+	// the fallback for callers that already carry one.
+	attrEnv := env
+	if p, _ := extractString(args, "transcript_provider"); p != "" {
+		attrEnv.TranscriptProvider = p
+	}
+	if m, _ := extractString(args, "transcript_model"); m != "" {
+		attrEnv.TranscriptModel = m
+	}
 	attribute := func(message string, generated bool) string {
-		committed := attributeCommit(env, message, generated)
+		committed := attributeCommit(attrEnv, message, generated)
 		if len(trailers) > 0 {
 			committed = git.AppendTrailers(committed, trailers...)
 		}

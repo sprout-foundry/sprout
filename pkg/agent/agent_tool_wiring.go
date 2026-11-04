@@ -105,6 +105,10 @@ func buildAgentToolFuncs(agent *Agent) *tools.ToolFuncSet {
 		// naming this agent's model (and the commit-message model when
 		// the message was generated) to the commit tools' messages.
 		AttributeCommitMessage: agent.attributeToolCommit,
+		// ...and its transcript-aware form: when the tool call carries the
+		// provider/model recorded in the transcript of the session that did
+		// the work, that pair names the trailer instead.
+		AttributeCommitMessageFromTranscript: agent.attributeFromTranscript,
 		// ChangeTracker hooks: keep session file-mutation tracking working
 		// now that write/edit execution lives in pkg/agent_tools. Without
 		// these the Agent Changes panel and revert tooling see nothing.

@@ -39,6 +39,43 @@ func TestAssistantTrailer_NoVersionAndSanitized(t *testing.T) {
 	assert.Equal(t, "Assisted-by: sprout/dev (custom/my-model-beta-)", b.Trailer())
 }
 
+func TestSproutAssistantFromTrailer(t *testing.T) {
+	setBuildVersion(t, "v0.30.0")
+	cases := []struct {
+		value string
+		want  Assistant
+		ok    bool
+	}{
+		{"sprout/0.30.0 (deepinfra/deepseek-ai/DeepSeek-V4.1-Flash)",
+			Assistant{Tool: "sprout", Version: "0.30.0", Provider: "deepinfra", Model: "deepseek-ai/DeepSeek-V4.1-Flash"}, true},
+		{"sprout/dev (ollama/qwen3:8b)", Assistant{Tool: "sprout", Version: "dev", Provider: "ollama", Model: "qwen3:8b"}, true},
+		{"sprout (ollama/llama3:8b)", Assistant{Tool: "sprout", Provider: "ollama", Model: "llama3:8b"}, true},
+		{"Claude Code (anthropic/claude-opus-5-5)", Assistant{Tool: "Claude Code", Provider: "anthropic", Model: "claude-opus-5-5"}, true},
+		{"", Assistant{}, false},
+		{"sprout", Assistant{}, false},
+		{"sprout (ollama)", Assistant{}, false},
+		{"sprout (unknown/unknown)", Assistant{}, false},
+	}
+	for _, tc := range cases {
+		got, ok := SproutAssistantFromTrailer(tc.value)
+		assert.Equal(t, tc.ok, ok, "value %q", tc.value)
+		assert.Equal(t, tc.want, got, "value %q", tc.value)
+	}
+
+	// Round trip: a rendered trailer parses back to the same provider/model.
+	orig := SproutAssistant("deepinfra", "deepseek-ai/DeepSeek-V4.1-Flash")
+	parsed, ok := SproutAssistantFromTrailer(orig.Value())
+	require.True(t, ok)
+	assert.Equal(t, orig, parsed)
+}
+
+func TestAssistantHasProviderModel(t *testing.T) {
+	assert.True(t, SproutAssistant("ollama", "qwen3:8b").HasProviderModel())
+	assert.False(t, SproutAssistant("", "qwen3:8b").HasProviderModel())
+	assert.False(t, SproutAssistant("unknown", "qwen3:8b").HasProviderModel())
+	assert.False(t, SproutAssistant("ollama", "unknown").HasProviderModel())
+}
+
 func TestAppendAssistedBy(t *testing.T) {
 	setBuildVersion(t, "dev")
 	ds := SproutAssistant("deepinfra", "deepseek-ai/DeepSeek-V4.1-Flash")

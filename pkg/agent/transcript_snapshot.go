@@ -68,10 +68,18 @@ type TranscriptFileChange = changes.TranscriptFileChange
 // superset of ConversationState so a reader can diff message lists,
 // inspect checkpoint summaries, and compare snapshots across time.
 type TranscriptSnapshot struct {
-	Format             string                 `json:"format"`
-	Timestamp          time.Time              `json:"timestamp"`
-	Label              string                 `json:"label"`
-	SessionID          string                 `json:"session_id"`
+	Format    string    `json:"format"`
+	Timestamp time.Time `json:"timestamp"`
+	Label     string    `json:"label"`
+	SessionID string    `json:"session_id"`
+	// Provider and Model name the pair that served this session when the
+	// snapshot was taken (the session override when one is active, the
+	// configured pair otherwise). An agent reading a transcript back — a
+	// resumed session, a subagent, a post-mortem — uses them for git
+	// attribution instead of guessing, so the Assisted-by trailer names the
+	// model that actually did the work.
+	Provider           string                 `json:"provider,omitempty"`
+	Model              string                 `json:"model,omitempty"`
 	WorkingDirectory   string                 `json:"working_directory"`
 	State              *ConversationState     `json:"state"`
 	MessageAnnotations []MessageAnnotation    `json:"message_annotations"`
@@ -138,6 +146,8 @@ func (a *Agent) BuildTranscriptSnapshot(label string, includePreview bool) *Tran
 		Timestamp:          time.Now().UTC(),
 		Label:              label,
 		SessionID:          sessionID,
+		Provider:           a.GetProvider(),
+		Model:              a.GetModel(),
 		WorkingDirectory:   cleanWorkingDir,
 		State:              state,
 		MessageAnnotations: changes.AnnotateMessages(messages),

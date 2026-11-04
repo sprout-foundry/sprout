@@ -174,13 +174,19 @@ func (t *teeReadCloser) Close() error               { return t.c.Close() }
 // inStreamError turns an error the server sent mid-stream into the error the
 // agent would have seen had the server answered with a failing status, so a
 // rate limit is retried as one and the provider's message reaches the user.
+// A transient failure (the upstream model failed or stalled partway, shared
+// capacity is busy) is a network error, which the agent retries; anything
+// else (credits, data policy, configuration) fails the call.
 func (p *GenericProvider) inStreamError(e api.StreamError) error {
 	msg := e.Message
 	if msg == "" {
 		msg = "provider reported an error (" + e.Code + ")"
 	}
-	if e.Code == "rate_limited" || e.Code == "429" {
+	switch e.Code {
+	case "rate_limited", "429":
 		return agenterrors.NewRateLimitError(msg, nil, p.config.Name)
+	case "upstream_error", "stream_stalled", "shared_compute_busy":
+		return agenterrors.NewNetwork(msg, nil)
 	}
 	return agenterrors.NewProviderError(msg, nil, p.config.Name, "")
 }

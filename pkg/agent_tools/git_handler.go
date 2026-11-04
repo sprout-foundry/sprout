@@ -179,7 +179,7 @@ func (h *gitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]a
 	// the commit tool. This prevents shell expansion of backticks, $(), etc.
 	if useCommitMessage && commitMsg != "" {
 		attribute := func(message string) string {
-			committed := attributeCommit(env, message, false)
+			committed := attributeCommit(env, "", "", message, false)
 			var cfg *configuration.Config
 			if env.ConfigManager != nil {
 				cfg = env.ConfigManager.GetConfig()

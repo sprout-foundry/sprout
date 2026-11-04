@@ -260,6 +260,14 @@ type ToolFuncSet struct {
 	// GenerateCommitMessage wrote the message. Nil in standalone runs (no
 	// agent, no model to attribute): the message is committed unchanged.
 	AttributeCommitMessage func(message string, generated bool) string
+	// AttributeCommitMessageFromTranscript is AttributeCommitMessage for a
+	// tool call that carries a transcriptProvider/transcriptModel pair (the
+	// commit tool's transcript_provider/transcript_model parameters). The
+	// pair names the model recorded in the transcript of the session that did
+	// the work; the hook falls back to the agent's own model when the pair is
+	// empty or unknown. Nil in standalone runs, and when nil the handlers
+	// fall back to AttributeCommitMessage.
+	AttributeCommitMessageFromTranscript func(transcriptProvider, transcriptModel, message string, generated bool) string
 	// TrackFileWrite records a full-file write (write_file, and the
 	// write-through path of write_structured_file) with the agent's
 	// ChangeTracker. originalContent is the file's pre-write state

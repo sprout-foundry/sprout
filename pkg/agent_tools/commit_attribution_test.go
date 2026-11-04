@@ -70,3 +70,59 @@ func TestGitHandler_CommitAppliesAttribution(t *testing.T) {
 	assert.Equal(t, []bool{false}, generated)
 	assert.Equal(t, "fix: via git tool\n\nAssisted-by: sprout/dev (test/model)", gitInRepo(t, dir, "log", "-1", "--format=%B"))
 }
+
+// recordingTranscriptAttribution returns an
+// AttributeCommitMessageFromTranscript hook that appends the recorded pair,
+// and records the pair and generated flag it was called with.
+func recordingTranscriptAttribution(pairs *[][2]string, generated *[]bool) func(string, string, string, bool) string {
+	return func(provider, model, message string, gen bool) string {
+		*pairs = append(*pairs, [2]string{provider, model})
+		*generated = append(*generated, gen)
+		return message + "\n\nAssisted-by: sprout/dev (" + provider + "/" + model + ")"
+	}
+}
+
+// TestCommitHandler_TranscriptPairNamesTrailer verifies a commit tool call
+// that carries the transcript's provider/model attributes the commit to that
+// pair — the model recorded for the session that did the work — rather than
+// to whatever agent happens to run the tool.
+func TestCommitHandler_TranscriptPairNamesTrailer(t *testing.T) {
+	dir := newTestGitRepo(t, true)
+	var pairs [][2]string
+	var generated []bool
+	res, err := (&commitHandler{}).Execute(context.Background(), ToolEnv{
+		WorkspaceRoot: dir,
+		ToolFuncs:     &ToolFuncSet{AttributeCommitMessageFromTranscript: recordingTranscriptAttribution(&pairs, &generated)},
+	}, map[string]any{
+		"message":             "fix: transcript",
+		"transcript_provider": "deepinfra",
+		"transcript_model":    "deepseek-ai/DeepSeek-V4.1-Flash",
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError, "tool output: %s", res.Output)
+	assert.Equal(t, [][2]string{{"deepinfra", "deepseek-ai/DeepSeek-V4.1-Flash"}}, pairs)
+	assert.Equal(t, []bool{false}, generated)
+	assert.Equal(t,
+		"fix: transcript\n\nAssisted-by: sprout/dev (deepinfra/deepseek-ai/DeepSeek-V4.1-Flash)",
+		gitInRepo(t, dir, "log", "-1", "--format=%B"))
+}
+
+// TestCommitHandler_TranscriptHookFallsBackToAgent verifies a hook set that
+// lacks the transcript-aware form still attributes through the plain hook,
+// so older wiring keeps working.
+func TestCommitHandler_TranscriptHookFallsBackToAgent(t *testing.T) {
+	dir := newTestGitRepo(t, true)
+	var generated []bool
+	res, err := (&commitHandler{}).Execute(context.Background(), ToolEnv{
+		WorkspaceRoot: dir,
+		ToolFuncs:     &ToolFuncSet{AttributeCommitMessage: recordingAttribution(&generated)},
+	}, map[string]any{
+		"message":             "fix: fallback",
+		"transcript_provider": "deepinfra",
+		"transcript_model":    "deepseek-ai/DeepSeek-V4.1-Flash",
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError, "tool output: %s", res.Output)
+	assert.Equal(t, []bool{false}, generated)
+	assert.Equal(t, "fix: fallback\n\nAssisted-by: sprout/dev (test/model)", gitInRepo(t, dir, "log", "-1", "--format=%B"))
+}

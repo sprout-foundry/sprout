@@ -75,6 +75,54 @@ func TestAttributeToolCommit_GeneratedListsCommitModel(t *testing.T) {
 	assert.NotContains(t, a.attributeToolCommit("fix: x", false), "openai/gpt-5")
 }
 
+func TestAttributeFromTranscript(t *testing.T) {
+	old := buildinfo.Version
+	buildinfo.Version = "dev"
+	t.Cleanup(func() { buildinfo.Version = old })
+
+	a := newTestAgent(t)
+	setCommitAttribution(t, a, func(cfg *configuration.Config) {
+		cfg.CommitAttribution = configuration.CommitAttributionTrailer
+	})
+	own := git.SproutAssistant(a.GetProvider(), a.GetModel()).Trailer()
+	require.NotEqual(t, "unknown", a.GetProvider())
+	require.NotEqual(t, "unknown", a.GetModel())
+
+	// The recorded pair names the trailer when it differs from this agent's.
+	got := a.attributeFromTranscript("deepinfra", "deepseek-ai/DeepSeek-V4.1-Flash", "fix: x", false)
+	assert.Equal(t, "fix: x\n\nAssisted-by: sprout/dev (deepinfra/deepseek-ai/DeepSeek-V4.1-Flash)\n"+own+"\n", got)
+
+	// The same pair as this agent's collapses to one line.
+	same := a.attributeFromTranscript(a.GetProvider(), a.GetModel(), "fix: x", false)
+	assert.Equal(t, "fix: x\n\n"+own+"\n", same)
+
+	// Same provider, different model: the pair still differs, so the
+	// committing agent's own model is listed too.
+	sameProvider := a.attributeFromTranscript(a.GetProvider(), a.GetModel()+"-other", "fix: x", false)
+	assert.Contains(t, sameProvider, "("+a.GetProvider()+"/"+a.GetModel()+"-other)")
+	assert.Contains(t, sameProvider, own)
+
+	// A generated message also names the commit-message model.
+	setCommitAttribution(t, a, func(cfg *configuration.Config) {
+		cfg.CommitProvider = "openai"
+		cfg.CommitModel = "gpt-5"
+	})
+	gen := a.attributeFromTranscript("deepinfra", "deepseek-ai/DeepSeek-V4.1-Flash", "fix: x", true)
+	assert.Contains(t, gen, "Assisted-by: sprout/dev (deepinfra/deepseek-ai/DeepSeek-V4.1-Flash)")
+	assert.Contains(t, gen, "Assisted-by: sprout/dev (openai/gpt-5)")
+
+	// No usable recorded pair falls back to this agent's own model.
+	for _, pair := range [][2]string{{"", ""}, {"unknown", "unknown"}} {
+		assert.Equal(t, "fix: x\n\n"+own+"\n", a.attributeFromTranscript(pair[0], pair[1], "fix: x", false))
+	}
+
+	// Attribution off writes nothing, transcript pair or not.
+	setCommitAttribution(t, a, func(cfg *configuration.Config) {
+		cfg.CommitAttribution = configuration.CommitAttributionOff
+	})
+	assert.Equal(t, "fix: x", a.attributeFromTranscript("deepinfra", "deepseek-ai/DeepSeek-V4.1-Flash", "fix: x", false))
+}
+
 func TestCommitAttributionSetting(t *testing.T) {
 	cfg := &configuration.Config{}
 	require.NoError(t, SetSettingValue(cfg, "commit_attribution", "Trailer"))

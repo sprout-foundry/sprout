@@ -447,7 +447,7 @@ In interactive `sprout` or `sprout agent`, use `/` for commands (tab-complete).
 | Command | Description |
 |---------|-------------|
 | `/skill` | Install, update, remove, list, enable, or disable skills |
-| `/transcript [preview\|markdown\|diff]` | Snapshot the current conversation to JSON for inspection |
+| `/transcript [preview\|markdown\|diff]` | Snapshot the current conversation to JSON for inspection (includes the session's provider/model) |
 | `/custom` | Manage custom providers |
 | `/risk-profile [name\|clear]` | Show or change the shell-command risk profile mid-session. With no args, lists profiles and marks the active one. See [SECURITY.md](SECURITY.md#risk-profiles). |
 

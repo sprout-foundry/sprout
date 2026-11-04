@@ -7876,6 +7876,65 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "context_length": 1048576,
+        "description": "Crouton Alpha is a stealth preview model on OpenRouter built for scalable coding, agentic, and multimodal workflows. Suited to high-volume agentic sub-tasks, tool use, and document analysis; accepts text, image, audio, video, and file input with a 1M-token context window. Listed at $0 throughout the preview period.",
+        "id": "stealth/crouton-alpha",
+        "input_cost": 0,
+        "name": "Crouton Alpha",
+        "output_cost": 0,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.021,
+        "context_length": 1048576,
+        "description": "Tencent's Hy4 is the official release of its flagship model, improving substantially on Hy4 Preview with gains in agentic capability and long-horizon, real-world productivity tasks. Accepts text and image input with a 1M-token context window.",
+        "id": "tencent/hy4",
+        "input_cost": 0.417,
+        "name": "Tencent: Hy4",
+        "output_cost": 1.2505,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.4,
+        "context_length": 500000,
+        "description": "Grok 4.6 via the Batch API at 20% off standard pricing. SpaceXAI's frontier model for coding, knowledge work, and STEM, succeeding Grok 4.5 with a 500K-token context window.",
+        "id": "x-ai/grok-4.6:batch",
+        "input_cost": 1.6,
+        "name": "SpaceXAI: Grok 4.6 (batch)",
+        "output_cost": 4.8,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.4,
+        "context_length": 500000,
+        "description": "Grok 4.7 via the Batch API at 20% off standard pricing. SpaceXAI's flagship model for coding, agentic tasks, and knowledge work, strong at long-running software engineering and self-verification, with a 500K-token context window.",
+        "id": "x-ai/grok-4.7:batch",
+        "input_cost": 1.6,
+        "name": "SpaceXAI: Grok 4.7 (batch)",
+        "output_cost": 4.8,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

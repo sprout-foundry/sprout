@@ -868,7 +868,7 @@
         "context_length": 262144,
         "description": "NVIDIA Nemotron 3 Super is a hybrid Mixture-of-Experts (MoE) model engineered for highest compute efficiency and accuracy in multi-agent applications and specialized agentic systems. It is optimized to run many collaborating agents per application on a single GPU, delivering high accuracy for reasoning, tool use, and instruction following.",
         "id": "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B",
-        "input_cost": 0.085,
+        "input_cost": 0.075,
         "name": "Nemotron 3 Super 120B A12B",
         "output_cost": 0.4,
         "tags": [
@@ -1200,7 +1200,7 @@
         ]
       },
       {
-        "cached_input_cost": 0.014,
+        "cached_input_cost": 0.0141,
         "context_length": 1000000,
         "description": "Qwen's fast, low-cost model with a one-million-token context window, billed at a flat rate across the entire window.",
         "id": "Qwen/Qwen3.8-Flash",

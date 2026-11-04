@@ -12,6 +12,36 @@ import (
 )
 
 // ---------------------------------------------------------------------------
+// splitRetired
+// ---------------------------------------------------------------------------
+
+func TestSplitRetired_DropsRetiredKeepsRest(t *testing.T) {
+	models := []modelcontract.CanonicalModel{
+		{ID: "gpt-4.1-nano"},
+		{ID: "gpt-5.6-sol"},
+		{ID: "o3-mini:batch"},
+	}
+	kept, dropped := splitRetired(models, []string{"gpt-4.1-nano", "o3-mini:batch"})
+	if len(kept) != 1 || kept[0].ID != "gpt-5.6-sol" {
+		t.Fatalf("kept = %+v, want only gpt-5.6-sol", kept)
+	}
+	if len(dropped) != 2 || dropped[0] != "gpt-4.1-nano" || dropped[1] != "o3-mini:batch" {
+		t.Fatalf("dropped = %v, want sorted [gpt-4.1-nano o3-mini:batch]", dropped)
+	}
+}
+
+func TestSplitRetired_NoRetiredListIsPassThrough(t *testing.T) {
+	models := []modelcontract.CanonicalModel{{ID: "a"}, {ID: "b"}}
+	kept, dropped := splitRetired(models, nil)
+	if len(kept) != 2 {
+		t.Fatalf("kept = %d models, want 2", len(kept))
+	}
+	if len(dropped) != 0 {
+		t.Fatalf("dropped = %v, want none", dropped)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // canonicalToConfigEntry
 // ---------------------------------------------------------------------------
 

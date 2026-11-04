@@ -296,11 +296,11 @@
         ]
       },
       {
-        "cached_input_cost": 0.17,
+        "cached_input_cost": 0.167,
         "context_length": 262144,
         "description": "Kimi K2.7 Code is Moonshot's coding-focused agentic model with vision input and a 262K context window on Chutes public compute",
         "id": "moonshotai/Kimi-K2.7-Code",
-        "input_cost": 0.83,
+        "input_cost": 0.832,
         "name": "Kimi K2.7 Code",
         "output_cost": 3.5,
         "tags": [
@@ -325,11 +325,11 @@
         ]
       },
       {
-        "cached_input_cost": 0.24,
+        "cached_input_cost": 0.245,
         "context_length": 1048576,
         "description": "GLM-5.3 is Z.AI's flagship open-weights coding and agentic reasoning model with a 1M context window on Chutes public compute",
         "id": "zai-org/GLM-5.3",
-        "input_cost": 1.23,
+        "input_cost": 1.225,
         "name": "GLM-5.3",
         "output_cost": 3.85,
         "tags": [

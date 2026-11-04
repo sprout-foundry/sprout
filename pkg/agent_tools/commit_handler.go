@@ -33,13 +33,12 @@ var GenerateCommitMessageFunc func(diff []byte, notes string) (string, error)
 var AttributeCommitMessageFunc func(message string, generated bool) string
 
 // attributeCommit applies the agent's commit attribution hook, if any. The
-// transcript pair carried in the env (the provider/model recorded for the
-// session that did the work) takes precedence over the agent's own pair when
-// the hook supports it.
-func attributeCommit(env ToolEnv, message string, generated bool) string {
+// transcript pair recorded for the session that did the work takes precedence
+// over the agent's own pair when the hook supports it.
+func attributeCommit(env ToolEnv, transcriptProvider, transcriptModel, message string, generated bool) string {
 	funcs := env.ResolveToolFuncs()
 	if fromTranscript := funcs.AttributeCommitMessageFromTranscript; fromTranscript != nil {
-		return fromTranscript(env.TranscriptProvider, env.TranscriptModel, message, generated)
+		return fromTranscript(transcriptProvider, transcriptModel, message, generated)
 	}
 	if attribute := funcs.AttributeCommitMessage; attribute != nil {
 		return attribute(message, generated)
@@ -103,17 +102,12 @@ func (h *commitHandler) Execute(ctx context.Context, env ToolEnv, args map[strin
 	}
 	trailers := git.DefaultCommitTrailers(cfg, effectiveDir)
 	trailers = append(trailers, explicitTrailers...)
-	// A transcript pair names the model that did the work; the env's pair is
-	// the fallback for callers that already carry one.
-	attrEnv := env
-	if p, _ := extractString(args, "transcript_provider"); p != "" {
-		attrEnv.TranscriptProvider = p
-	}
-	if m, _ := extractString(args, "transcript_model"); m != "" {
-		attrEnv.TranscriptModel = m
-	}
+	// A transcript pair names the model that did the work — the transcript
+	// snapshot's provider/model fields, supplied per call.
+	transcriptProvider, _ := extractString(args, "transcript_provider")
+	transcriptModel, _ := extractString(args, "transcript_model")
 	attribute := func(message string, generated bool) string {
-		committed := attributeCommit(attrEnv, message, generated)
+		committed := attributeCommit(env, transcriptProvider, transcriptModel, message, generated)
 		if len(trailers) > 0 {
 			committed = git.AppendTrailers(committed, trailers...)
 		}

@@ -40,37 +40,6 @@ func SproutAssistant(provider, model string) Assistant {
 	}
 }
 
-// SproutAssistantFromTrailer parses a previously rendered Assisted-by trailer
-// value (the part after "Assisted-by: ") back into an Assistant. It is the
-// inverse of Assistant.Value: the tool and its optional /version precede the
-// parenthesised provider/model. ok is false when the value does not have that
-// shape, so a caller can fall back to its own provider/model instead of
-// attributing a commit to a guess.
-func SproutAssistantFromTrailer(value string) (Assistant, bool) {
-	v := strings.TrimSpace(value)
-	open := strings.LastIndex(v, " (")
-	if open <= 0 || !strings.HasSuffix(v, ")") {
-		return Assistant{}, false
-	}
-	tool := strings.TrimSpace(v[:open])
-	pair := v[open+2 : len(v)-1]
-	provider, model, found := strings.Cut(pair, "/")
-	if !found || strings.TrimSpace(provider) == "" || strings.TrimSpace(model) == "" {
-		return Assistant{}, false
-	}
-	a := Assistant{Tool: tool, Provider: strings.TrimSpace(provider), Model: strings.TrimSpace(model)}
-	// A trailing "/<version>" on the tool is the build version; the tool name
-	// itself never contains a slash (Value joins its words with spaces).
-	if name, version, hasVersion := strings.Cut(tool, "/"); hasVersion {
-		a.Tool = strings.TrimSpace(name)
-		a.Version = strings.TrimSpace(version)
-	}
-	if !a.valid() {
-		return Assistant{}, false
-	}
-	return a, true
-}
-
 // SproutVersion returns the build version used in Assisted-by trailers.
 func SproutVersion() string {
 	v := strings.TrimSpace(buildinfo.Version)

@@ -96,6 +96,12 @@ func TestAttributeFromTranscript(t *testing.T) {
 	same := a.attributeFromTranscript(a.GetProvider(), a.GetModel(), "fix: x", false)
 	assert.Equal(t, "fix: x\n\n"+own+"\n", same)
 
+	// Same provider, different model: the pair still differs, so the
+	// committing agent's own model is listed too.
+	sameProvider := a.attributeFromTranscript(a.GetProvider(), a.GetModel()+"-other", "fix: x", false)
+	assert.Contains(t, sameProvider, "("+a.GetProvider()+"/"+a.GetModel()+"-other)")
+	assert.Contains(t, sameProvider, own)
+
 	// A generated message also names the commit-message model.
 	setCommitAttribution(t, a, func(cfg *configuration.Config) {
 		cfg.CommitProvider = "openai"

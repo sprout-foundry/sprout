@@ -53,7 +53,7 @@ func (a *Agent) attributeFromTranscript(transcriptProvider, transcriptModel stri
 		return a.AttributeCommitMessage(message, extra...)
 	}
 	own := git.SproutAssistant(a.GetProvider(), a.GetModel())
-	if own.HasProviderModel() && !strings.EqualFold(own.Provider, recorded.Provider) {
+	if own.HasProviderModel() && (!strings.EqualFold(own.Provider, recorded.Provider) || !strings.EqualFold(own.Model, recorded.Model)) {
 		extra = append(extra, own)
 	}
 	return git.AppendAssistedBy(message, append([]git.Assistant{recorded}, extra...)...)

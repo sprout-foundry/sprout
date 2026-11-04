@@ -91,11 +91,13 @@ func TestCommitHandler_TranscriptPairNamesTrailer(t *testing.T) {
 	var pairs [][2]string
 	var generated []bool
 	res, err := (&commitHandler{}).Execute(context.Background(), ToolEnv{
-		WorkspaceRoot:      dir,
-		TranscriptProvider: "deepinfra",
-		TranscriptModel:    "deepseek-ai/DeepSeek-V4.1-Flash",
-		ToolFuncs:          &ToolFuncSet{AttributeCommitMessageFromTranscript: recordingTranscriptAttribution(&pairs, &generated)},
-	}, map[string]any{"message": "fix: transcript"})
+		WorkspaceRoot: dir,
+		ToolFuncs:     &ToolFuncSet{AttributeCommitMessageFromTranscript: recordingTranscriptAttribution(&pairs, &generated)},
+	}, map[string]any{
+		"message":             "fix: transcript",
+		"transcript_provider": "deepinfra",
+		"transcript_model":    "deepseek-ai/DeepSeek-V4.1-Flash",
+	})
 	require.NoError(t, err)
 	require.False(t, res.IsError, "tool output: %s", res.Output)
 	assert.Equal(t, [][2]string{{"deepinfra", "deepseek-ai/DeepSeek-V4.1-Flash"}}, pairs)
@@ -105,28 +107,6 @@ func TestCommitHandler_TranscriptPairNamesTrailer(t *testing.T) {
 		gitInRepo(t, dir, "log", "-1", "--format=%B"))
 }
 
-// TestCommitHandler_TranscriptArgsOverrideEnv verifies the tool's
-// transcript_provider/transcript_model parameters win over the env's pair,
-// so an agent working from a specific transcript can name it per call.
-func TestCommitHandler_TranscriptArgsOverrideEnv(t *testing.T) {
-	dir := newTestGitRepo(t, true)
-	var pairs [][2]string
-	var generated []bool
-	res, err := (&commitHandler{}).Execute(context.Background(), ToolEnv{
-		WorkspaceRoot:      dir,
-		TranscriptProvider: "envprovider",
-		TranscriptModel:    "envmodel",
-		ToolFuncs:          &ToolFuncSet{AttributeCommitMessageFromTranscript: recordingTranscriptAttribution(&pairs, &generated)},
-	}, map[string]any{
-		"message":             "fix: transcript",
-		"transcript_provider": "ollama",
-		"transcript_model":    "qwen3:8b",
-	})
-	require.NoError(t, err)
-	require.False(t, res.IsError, "tool output: %s", res.Output)
-	assert.Equal(t, [][2]string{{"ollama", "qwen3:8b"}}, pairs)
-}
-
 // TestCommitHandler_TranscriptHookFallsBackToAgent verifies a hook set that
 // lacks the transcript-aware form still attributes through the plain hook,
 // so older wiring keeps working.
@@ -134,11 +114,13 @@ func TestCommitHandler_TranscriptHookFallsBackToAgent(t *testing.T) {
 	dir := newTestGitRepo(t, true)
 	var generated []bool
 	res, err := (&commitHandler{}).Execute(context.Background(), ToolEnv{
-		WorkspaceRoot:      dir,
-		TranscriptProvider: "deepinfra",
-		TranscriptModel:    "deepseek-ai/DeepSeek-V4.1-Flash",
-		ToolFuncs:          &ToolFuncSet{AttributeCommitMessage: recordingAttribution(&generated)},
-	}, map[string]any{"message": "fix: fallback"})
+		WorkspaceRoot: dir,
+		ToolFuncs:     &ToolFuncSet{AttributeCommitMessage: recordingAttribution(&generated)},
+	}, map[string]any{
+		"message":             "fix: fallback",
+		"transcript_provider": "deepinfra",
+		"transcript_model":    "deepseek-ai/DeepSeek-V4.1-Flash",
+	})
 	require.NoError(t, err)
 	require.False(t, res.IsError, "tool output: %s", res.Output)
 	assert.Equal(t, []bool{false}, generated)

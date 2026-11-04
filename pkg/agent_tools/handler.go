@@ -207,15 +207,6 @@ type ToolEnv struct {
 	// Agent is the *pkg/agent.Agent instance. Only set for tools that
 	// explicitly need agent access (e.g., run_subagent). Nil for all others.
 	Agent interface{} `json:"-"`
-	// TranscriptProvider and TranscriptModel are the provider/model pair
-	// recorded in the transcript of the session that did the work (the
-	// transcript's provider/model fields). The commit tools use them for git
-	// attribution so an Assisted-by trailer names the model that made the
-	// changes even when the committing agent is a different one — a resumed
-	// session, a subagent, or a reader working from a transcript. Empty when
-	// the caller has no transcript: the agent's own pair applies.
-	TranscriptProvider string `json:"-"`
-	TranscriptModel    string `json:"-"`
 	// ReadCallGuard tracks identical read_file calls within the current
 	// turn so a repeated call can be answered with a short note instead of
 	// the same content again. Nil means no guard is available (standalone
@@ -270,11 +261,12 @@ type ToolFuncSet struct {
 	// agent, no model to attribute): the message is committed unchanged.
 	AttributeCommitMessage func(message string, generated bool) string
 	// AttributeCommitMessageFromTranscript is AttributeCommitMessage for a
-	// tool call that carries a transcriptProvider/transcriptModel pair (see
-	// ToolEnv). The pair names the model recorded in the transcript of the
-	// session that did the work; the hook falls back to the agent's own
-	// model when the pair is empty or unknown. Nil in standalone runs, and
-	// when nil the handlers fall back to AttributeCommitMessage.
+	// tool call that carries a transcriptProvider/transcriptModel pair (the
+	// commit tool's transcript_provider/transcript_model parameters). The
+	// pair names the model recorded in the transcript of the session that did
+	// the work; the hook falls back to the agent's own model when the pair is
+	// empty or unknown. Nil in standalone runs, and when nil the handlers
+	// fall back to AttributeCommitMessage.
 	AttributeCommitMessageFromTranscript func(transcriptProvider, transcriptModel, message string, generated bool) string
 	// TrackFileWrite records a full-file write (write_file, and the
 	// write-through path of write_structured_file) with the agent's

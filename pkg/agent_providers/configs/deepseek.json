@@ -34,7 +34,7 @@
       "deepseek-v4-flash-vision-exp",
       "deepseek-flash"
     ],
-    "default_context_limit": 1000000,
+    "default_context_limit": 262144,
     "default_model": "deepseek-flash",
     "model_info": [
       {

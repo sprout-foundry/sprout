@@ -23,7 +23,7 @@
     "done_marker": "[DONE]"
   },
   "models": {
-    "default_context_limit": 65536,
+    "default_context_limit": 262144,
     "model_overrides": {
       "qwen-3.8-27b": 65536
     },

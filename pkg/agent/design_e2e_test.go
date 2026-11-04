@@ -429,16 +429,16 @@ func TestDesignRenderE2E_HTMLSourceRendersViaBrowser(t *testing.T) {
 }
 
 // TestDesignRenderE2E_NonVisionPrimaryStillSeesArtifactPath pins the §2c
-// non-vision contract at the turn level: with a non-vision primary the tool
-// must still succeed and report the artifact/guidance, and seed must strip the
-// image from the provider request rather than failing the turn.
-//
-// The scripted client deliberately does NOT support vision, so this exercises
-// the stripImages path in seed's message pipeline.
+// contract at the turn level: with a non-vision *declaration* the tool must
+// still succeed and report the artifact/guidance, and the rendered image is
+// attempted on the active model rather than being withheld on the
+// declaration alone (the resolver is optimistic; a verified rejection is what
+// withholds images).
 func TestDesignRenderE2E_NonVisionPrimaryStillSeesArtifactPath(t *testing.T) {
 	root := de2eWorkspace(t)
 
-	// NewScriptedClient (no vision) — the primary model is non-visual.
+	// NewScriptedClient (no vision declared) — the primary model is
+	// optimistically tried with the rendered pixels.
 	client := NewScriptedClient(
 		NewScriptedToolCallResponse("render_nv_1", "design_render",
 			`{"source":"design/icons/login.svg"}`, "Rendering."),
@@ -468,15 +468,13 @@ func TestDesignRenderE2E_NonVisionPrimaryStillSeesArtifactPath(t *testing.T) {
 		t.Errorf("the summary must name the rendered artifact so a non-vision primary can route it onward: %s", output)
 	}
 
-	// Seed strips images for a non-vision primary; that is a delivery
-	// decision, not a tool failure — the turn must still complete.
+	// The rendered image is attempted on the active model: a declaration is
+	// not a verified rejection, so the pixels reach the request instead of
+	// being rerouted to a separate vision model.
 	reqs := client.GetSentRequests()
 	last := reqs[len(reqs)-1]
-	for _, m := range last {
-		if len(m.Images) > 0 {
-			t.Errorf("a non-vision primary must not receive images in the request; role=%s has %d",
-				m.Role, len(m.Images))
-		}
+	if !api.MessagesHaveImages(last) {
+		t.Errorf("a declared-non-vision primary must still be tried with the rendered image")
 	}
 }
 

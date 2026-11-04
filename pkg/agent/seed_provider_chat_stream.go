@@ -50,7 +50,16 @@ func (sp *sproutProvider) stampTurnTimestamp(messages []core.Message) []core.Mes
 	return messages
 }
 
-// attachPastedImages attaches previously registered image data to the first user message.
+// attachPastedImages attaches previously registered image data to the
+// current turn's user message. The target is the last user message carrying
+// the image label processImagesInQuery rewrote into the query
+// ("[image: name]" / "[image N of M: name]"); the label keeps the attachment
+// off a steer message seed may append at a later loop boundary. Falls back to
+// the last user message when no label is present.
+//
+// Attaching to the first user message instead would park the pixels on an old
+// turn in a continuing conversation, disconnect them from the question, and
+// flip the provider prompt-cache prefix on every paste.
 func (sp *sproutProvider) attachPastedImages(messages []core.Message) []core.Message {
 	sp.pastedImagesMu.RLock()
 	defer sp.pastedImagesMu.RUnlock()
@@ -66,19 +75,35 @@ func (sp *sproutProvider) attachPastedImages(messages []core.Message) []core.Mes
 	out := make([]core.Message, len(messages))
 	copy(out, messages)
 
-	for i := range out {
-		if out[i].Role == "user" {
-			// Collect all registered image data
-			var allImages []api.ImageData
-			for _, imgs := range sp.pastedImages {
-				allImages = append(allImages, imgs...)
-			}
-			if len(allImages) > 0 {
-				// Append to any existing images
-				out[i].Images = append(out[i].Images, allImages...)
-			}
-			break // Only attach to the first user message
+	target := -1
+	fallback := -1
+	for i := len(out) - 1; i >= 0; i-- {
+		if out[i].Role != "user" {
+			continue
 		}
+		if fallback < 0 {
+			fallback = i
+		}
+		if strings.Contains(out[i].Content, "[image") {
+			target = i
+			break
+		}
+	}
+	if target < 0 {
+		target = fallback
+	}
+	if target < 0 {
+		return out
+	}
+
+	// Collect all registered image data
+	var allImages []api.ImageData
+	for _, imgs := range sp.pastedImages {
+		allImages = append(allImages, imgs...)
+	}
+	if len(allImages) > 0 {
+		// Append to any existing images
+		out[target].Images = append(out[target].Images, allImages...)
 	}
 
 	return out

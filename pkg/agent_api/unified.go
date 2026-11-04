@@ -184,6 +184,25 @@ func (w *UnifiedProviderWrapper) SupportsVision() bool {
 	return w.provider.SupportsVision()
 }
 
+// CannotAcceptImages forwards the wrapped provider's structural veto, so the
+// capability resolver sees the transport fact through the wrapper.
+func (w *UnifiedProviderWrapper) CannotAcceptImages() bool {
+	if typed, ok := w.provider.(interface{ CannotAcceptImages() bool }); ok {
+		return typed.CannotAcceptImages()
+	}
+	return false
+}
+
+// RecoversFromVisionRejection forwards the wrapped provider's self-healing
+// declaration, so the resolver's optimistic attach applies through the
+// wrapper.
+func (w *UnifiedProviderWrapper) RecoversFromVisionRejection() bool {
+	if typed, ok := w.provider.(interface{ RecoversFromVisionRejection() bool }); ok {
+		return typed.RecoversFromVisionRejection()
+	}
+	return false
+}
+
 // VisionCapabilities returns the per-provider vision limits by delegating
 // to the wrapped provider. If the provider does not implement
 // VisionCapabilities() (e.g. legacy third-party providers), returns the

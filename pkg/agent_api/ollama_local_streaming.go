@@ -6,13 +6,29 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
-// SendChatRequestStream streams responses from local Ollama as they arrive
+// SendChatRequestStream streams responses from local Ollama as they arrive,
+// reconciling vision capability on the wire (see reconcileVisionCapability).
+// The retry is gated on nothing having been delivered yet: once a chunk has
+// reached the caller's callback, a second attempt would re-emit it.
 func (c *OllamaLocalClient) SendChatRequestStream(ctx context.Context, messages []Message, tools []Tool, reasoning string, disableThinking bool, callback StreamCallback) (*ChatResponse, error) {
+	var delivered atomic.Bool
+	wrapped := func(content, contentType string) {
+		delivered.Store(true)
+		callback(content, contentType)
+	}
+	resp, err := c.sendChatRequestStreamOnce(ctx, messages, tools, reasoning, disableThinking, wrapped)
+	return c.reconcileVisionCapability(messages, resp, err, !delivered.Load(), func(msgs []Message) (*ChatResponse, error) {
+		return c.sendChatRequestStreamOnce(ctx, msgs, tools, reasoning, disableThinking, wrapped)
+	})
+}
+
+func (c *OllamaLocalClient) sendChatRequestStreamOnce(ctx context.Context, messages []Message, tools []Tool, reasoning string, disableThinking bool, callback StreamCallback) (*ChatResponse, error) {
 	client, err := c.newClient()
 	if err != nil {
 		return nil, agenterrors.NewConfig("could not create ollama client", err)

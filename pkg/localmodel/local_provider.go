@@ -386,6 +386,12 @@ func (p *LocalProvider) ListModels(ctx context.Context) ([]api.ModelInfo, error)
 
 func (p *LocalProvider) SupportsVision() bool { return false }
 
+// CannotAcceptImages is the structural veto (api.StructuralVisionCapability):
+// the in-process prompt builder is text-only, so image parts are dropped
+// before they reach the model. Declared capability is optimistic elsewhere;
+// this is a hard fact about the transport.
+func (p *LocalProvider) CannotAcceptImages() bool { return true }
+
 func (p *LocalProvider) VisionCapabilities() api.VisionCapabilities {
 	return api.VisionCapabilities{}
 }

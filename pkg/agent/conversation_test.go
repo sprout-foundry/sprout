@@ -146,13 +146,26 @@ func TestShouldUseDirectMultimodalImageReasoning(t *testing.T) {
 		}
 	})
 
-	t.Run("non-vision client returns false", func(t *testing.T) {
+	t.Run("self-healing non-vision-declared client still gets the image", func(t *testing.T) {
+		// A negative declaration is a config guess, not a verified rejection:
+		// for a client that can recover from a real rejection, the image is
+		// attempted on the model.
+		a := &Agent{client: &visionSupportingClient{supportsVision: false, selfHeals: true}}
+		got := a.shouldUseDirectMultimodalImageReasoning([]api.Message{
+			{Role: "user", Content: "hello", Images: []api.ImageData{{Base64: "abc", Type: "image/png"}}},
+		})
+		if !got {
+			t.Error("expected true: a self-healing declared-non-vision model is still tried")
+		}
+	})
+
+	t.Run("non-self-healing client keeps its declared answer", func(t *testing.T) {
 		a := &Agent{client: &visionSupportingClient{supportsVision: false}}
 		got := a.shouldUseDirectMultimodalImageReasoning([]api.Message{
 			{Role: "user", Content: "hello", Images: []api.ImageData{{Base64: "abc", Type: "image/png"}}},
 		})
 		if got {
-			t.Error("expected false for non-vision client")
+			t.Error("a client with no recovery path must not be sent an image it declared it cannot take")
 		}
 	})
 

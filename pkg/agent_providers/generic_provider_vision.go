@@ -43,6 +43,11 @@ func (p *GenericProvider) reconcileVisionCapability(messages []api.Message, resp
 	return resp, nil
 }
 
+// RecoversFromVisionRejection reports that this provider strips images and
+// retries once after a capability rejection (see reconcileVisionCapability),
+// which is what makes the resolver's optimistic attach safe.
+func (p *GenericProvider) RecoversFromVisionRejection() bool { return true }
+
 // SupportsVision returns whether the current model can accept image input.
 //
 // Resolution:

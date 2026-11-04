@@ -1516,32 +1516,82 @@ type visionProbeTestClient struct {
 	api.ClientInterface
 	model          string
 	supportsVision bool
+	selfHeals      bool
 }
 
 func (c *visionProbeTestClient) GetModel() string     { return c.model }
 func (c *visionProbeTestClient) SupportsVision() bool { return c.supportsVision }
 func (c *visionProbeTestClient) GetProvider() string  { return "test" }
+func (c *visionProbeTestClient) RecoversFromVisionRejection() bool {
+	return c.selfHeals
+}
 func (c *visionProbeTestClient) VisionCapabilities() api.VisionCapabilities {
 	return api.VisionCapabilities{}
 }
 
-// TestResolveVisionCapability_ProbeOverridesDeclaration mirrors the old
-// effectiveVisionSupport semantics through the SP-140 resolver: probe
-// ground truth wins over the client's declared flag.
-func TestResolveVisionCapability_ProbeOverridesDeclaration(t *testing.T) {
-	// The "test" provider is not in the catalog, so the probe layer finds
-	// nothing and the declaration decides. AcceptsImages follows
-	// SupportsVision in both directions.
-	a := &visionProbeTestClient{model: "test-model", supportsVision: false}
-	if api.ResolveVisionCapability(a).AcceptsImages {
-		t.Error("declared=false with no probe should resolve AcceptsImages=false")
+// TestResolveVisionCapability_OptimisticDefault pins the SP-140 Phase 2
+// posture: for a client that can recover from a rejection on the wire, an
+// image is always attempted on the active model. A negative declaration is a
+// config guess, not a verified rejection, so it does not withhold images —
+// only a structural transport veto or a runtime-recorded rejection does.
+func TestResolveVisionCapability_OptimisticDefault(t *testing.T) {
+	t.Setenv("SPROUT_STATE_DIR", t.TempDir())
+
+	// Declared false, self-healing, no probe and no learned observation:
+	// optimistic.
+	a := &visionProbeTestClient{model: "test-model", supportsVision: false, selfHeals: true}
+	capability := api.ResolveVisionCapability(a)
+	if !capability.AcceptsImages {
+		t.Error("declared=false with no verified rejection should still try the image")
 	}
+	if capability.Source != "optimistic" {
+		t.Errorf("source = %q, want optimistic", capability.Source)
+	}
+
+	// Declared false with no recovery path: the declaration stands, so an
+	// image cannot hard-fail the turn.
+	c := &visionProbeTestClient{model: "test-model", supportsVision: false}
+	capability = api.ResolveVisionCapability(c)
+	if capability.AcceptsImages {
+		t.Error("a client with no recovery path must keep its declared answer")
+	}
+	if capability.Source != "declared" {
+		t.Errorf("source = %q, want declared", capability.Source)
+	}
+
+	// Declared true: try the image, record the declaration as the basis.
 	b := &visionProbeTestClient{model: "test-model", supportsVision: true}
-	if !api.ResolveVisionCapability(b).AcceptsImages {
-		t.Error("declared=true with no probe should resolve AcceptsImages=true")
+	capability = api.ResolveVisionCapability(b)
+	if !capability.AcceptsImages {
+		t.Error("declared=true should resolve AcceptsImages=true")
 	}
+	if capability.Source != "declared" {
+		t.Errorf("source = %q, want declared", capability.Source)
+	}
+
 	if api.ResolveVisionCapability(nil).AcceptsImages {
 		t.Error("nil client should resolve to zero capability")
+	}
+}
+
+// structuralVisionTestClient reports a transport that cannot carry images at
+// all — the one static way to turn them off.
+type structuralVisionTestClient struct {
+	visionProbeTestClient
+}
+
+func (c *structuralVisionTestClient) CannotAcceptImages() bool { return true }
+
+func TestResolveVisionCapability_StructuralVeto(t *testing.T) {
+	t.Setenv("SPROUT_STATE_DIR", t.TempDir())
+
+	c := &structuralVisionTestClient{visionProbeTestClient{model: "test-model", supportsVision: true}}
+	capability := api.ResolveVisionCapability(c)
+	if capability.AcceptsImages {
+		t.Error("a structural veto must withhold images even when the client declares vision")
+	}
+	if capability.Source != "structural" {
+		t.Errorf("source = %q, want structural", capability.Source)
 	}
 }
 

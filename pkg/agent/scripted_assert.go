@@ -300,6 +300,12 @@ func (c *ScriptedClient) SupportsVision() bool {
 	return c.supportsVision
 }
 
+// RecoversFromVisionRejection marks the scripted client as a self-healing
+// provider (it never reaches a real provider, so nothing can reject the
+// images), keeping the resolver's optimistic attach in force for scripted
+// turns.
+func (c *ScriptedClient) RecoversFromVisionRejection() bool { return true }
+
 // GetVisionModel returns the vision model name
 func (c *ScriptedClient) GetVisionModel() string {
 	c.mu.Lock()

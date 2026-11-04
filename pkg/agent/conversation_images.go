@@ -91,8 +91,10 @@ func (a *Agent) processImagesInQuery(query string) ([]api.ImageData, string, err
 		return nil, query, nil
 	}
 
-	// Non-vision primary: delegate to a vision model when one exists;
-	// otherwise fall back to steering the model at analyze_image_content.
+	// A model the runtime has verified cannot see (learned negative): delegate
+	// to a vision model when one exists; otherwise fall back to steering the
+	// model at analyze_image_content. The resolver is optimistic, so this is
+	// the post-rejection rung, never the first guess.
 	enhanced, delegated := a.processImagesByDelegation(query, paths)
 	if delegated {
 		a.Logger().Debug("[img] Delegated %d pasted image(s) to a vision model\n", len(paths))
@@ -105,11 +107,15 @@ func extractPastedImagePaths(query string) []string {
 }
 
 // processImagesByDelegation is the inline chat path's delegation rung
-// (SP-140 Phase 3): the primary model cannot see, so pasted images are
-// described by the best available vision model and the structured,
-// provenance-labeled descriptions are injected into the query. Falls back
-// to the analyze-tool prompt when no delegation client exists — the model
-// can still help itself via analyze_image_content.
+// (SP-140 Phase 3): the primary model has been verified on the wire as
+// unable to see, so pasted images are described by the best available vision
+// model and the structured, provenance-labeled descriptions are injected into
+// the query. It never runs as a first guess — the capability resolver is
+// optimistic, so an image is always attempted on the active model first and
+// only a runtime-recorded rejection reaches this rung (see
+// ResolveVisionCapability). Falls back to the analyze-tool prompt when no
+// delegation client exists — the model can still help itself via
+// analyze_image_content.
 func (a *Agent) processImagesByDelegation(query string, paths []string) (string, bool) {
 	if !tools.HasVisionCapability() {
 		return a.buildNonVisionImageToolPrompt(query, paths), false

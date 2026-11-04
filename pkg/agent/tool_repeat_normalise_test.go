@@ -54,6 +54,29 @@ func TestNearNormalizationCollidesWhatExactKeepsDistinct(t *testing.T) {
 		normalizeToolArgsNear("echo run-999"))
 }
 
+// TestNearKeyDoesNotMaskNonCommandToolContent pins the scope of the near
+// masks: they exist to defeat shell-command loops. Applied to edit/write
+// content they would collapse legitimately different calls (two edits that
+// differ only after "echo ", or two writes whose text differs only in a
+// tail -N value) and make the repeat guard trip on ordinary code.
+func TestNearKeyDoesNotMaskNonCommandToolContent(t *testing.T) {
+	editA := `{"path":"internal/store/dialect.go","old_str":"a","new_str":"run(\"echo alpha\")"}`
+	editB := `{"path":"internal/store/dialect.go","old_str":"a","new_str":"run(\"echo beta\")"}`
+	assert.NotEqual(t, nearToolArgKey("edit_file", editA), nearToolArgKey("edit_file", editB),
+		"different edit content must not share a near key")
+
+	writeA := `{"path":"notes.txt","content":"tail -n 5 x"}`
+	writeB := `{"path":"notes.txt","content":"tail -n 55 x"}`
+	assert.NotEqual(t, nearToolArgKey("write_file", writeA), nearToolArgKey("write_file", writeB),
+		"different write content must not share a near key")
+
+	// Command tools keep the masks: the same loop shape still collapses.
+	assert.Equal(t, nearToolArgKey("shell_command", `{"command":"tail -n 5 x"}`),
+		nearToolArgKey("shell_command", `{"command":"tail -n 55 x"}`))
+	assert.Equal(t, nearToolArgKey("exec", `{"command":"echo a"}`),
+		nearToolArgKey("exec", `{"command":"echo b"}`))
+}
+
 func TestFindRunawayClauseCountsRepeatedRuns(t *testing.T) {
 	clause, times := findRunawayClause(strings.Repeat("the quick brown fox ", 6))
 	assert.Equal(t, "the quick brown", clause)

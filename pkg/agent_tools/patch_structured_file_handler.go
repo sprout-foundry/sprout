@@ -147,6 +147,9 @@ func (h *patchStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 			}
 		}
 		original, readErr := os.ReadFile(writePath)
+		if err := checkWriteContext(ctx); err != nil {
+			return ToolResult{Output: fmt.Sprintf("Failed to write file: %v", err), IsError: true}, nil
+		}
 		if err := os.WriteFile(writePath, []byte(content), filePerm); err != nil {
 			return ToolResult{Output: fmt.Sprintf("Failed to write file: %v", err), IsError: true}, nil
 		}
@@ -207,6 +210,9 @@ func (h *patchStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 	filePerm := os.FileMode(0644)
 	if fi, statErr := os.Stat(readPath); statErr == nil {
 		filePerm = fi.Mode() & 0777
+	}
+	if err := checkWriteContext(ctx); err != nil {
+		return ToolResult{Output: fmt.Sprintf("Failed to write file: %v", err), IsError: true}, nil
 	}
 	if err := os.WriteFile(readPath, []byte(content), filePerm); err != nil {
 		return ToolResult{Output: fmt.Sprintf("Failed to write file: %v", err), IsError: true}, nil

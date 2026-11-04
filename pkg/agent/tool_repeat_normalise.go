@@ -75,10 +75,28 @@ func normalizeToolArgsNear(args string) string {
 	return s
 }
 
+// isCommandTool reports whether a tool's arguments are a shell command. The
+// near masks are command-shaped (head/tail -N, timeout jitter, echo markers);
+// applied to other tools' arguments — file contents, edit text, search
+// patterns — they collapse legitimately different calls into one near key and
+// make the repeat guard trip on ordinary code. Non-command tools therefore get
+// no masking: their near key is their exact key.
+func isCommandTool(toolName string) bool {
+	switch stripToolChannel(toolName) {
+	case "shell_command", "exec": // exec is the legacy alias (utils.go)
+		return true
+	}
+	return false
+}
+
 // nearToolArgKey is the near repeat-tracker key: the channel-stripped tool
 // name plus the near-normalised arguments (in place of the exact-normalised
-// ones used by toolArgKey).
+// ones used by toolArgKey). Non-command tools keep their exact key — masking
+// their content would merge distinct edits and writes.
 func nearToolArgKey(toolName, args string) string {
+	if !isCommandTool(toolName) {
+		return toolArgKey(toolName, args)
+	}
 	return stripToolChannel(toolName) + "\x00" + normalizeToolArgsNear(args)
 }
 

@@ -5,6 +5,9 @@ package webui
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -350,5 +353,59 @@ func TestGetAllGitFilesEmptyStatus(t *testing.T) {
 	files := getAllGitFiles(status)
 	if files == nil {
 		t.Error("expected empty slice, got nil")
+	}
+}
+
+// A branch that exists only on the remote (one a task pushed after the
+// clone) is fetched and checked out.
+func TestHandleAPIGitCheckoutFetchesRemoteBranch(t *testing.T) {
+	run := func(dir string, args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.com", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.com")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	origin := t.TempDir()
+	run(origin, "init", "-q", "-b", "main")
+	if err := os.WriteFile(filepath.Join(origin, "README.md"), []byte("hi\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run(origin, "add", ".")
+	run(origin, "commit", "-q", "-m", "init")
+	clone := filepath.Join(t.TempDir(), "clone")
+	run(filepath.Dir(clone), "clone", "-q", origin, clone)
+	// The task's branch appears on the remote after the clone.
+	run(origin, "checkout", "-q", "-b", "sprout/add-a-form-abcd1234")
+	if err := os.WriteFile(filepath.Join(origin, "form.html"), []byte("<form></form>\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run(origin, "add", ".")
+	run(origin, "commit", "-q", "-m", "form")
+	run(origin, "checkout", "-q", "main")
+
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ws.daemonRoot = clone
+	ws.workspaceRoot = clone
+	req := httptest.NewRequest(http.MethodPost, "/api/git/checkout", strings.NewReader(`{"branch":"sprout/add-a-form-abcd1234"}`))
+	rec := httptest.NewRecorder()
+	ws.handleAPIGitCheckout(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(clone, "form.html")); err != nil {
+		t.Fatalf("the task's work is not in the workspace: %v", err)
+	}
+
+	missing := httptest.NewRequest(http.MethodPost, "/api/git/checkout", strings.NewReader(`{"branch":"sprout/nope"}`))
+	rec = httptest.NewRecorder()
+	ws.handleAPIGitCheckout(rec, missing)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for a branch nowhere, got %d", rec.Code)
 	}
 }

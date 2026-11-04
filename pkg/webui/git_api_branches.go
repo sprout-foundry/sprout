@@ -127,7 +127,17 @@ func (ws *ReactWebServer) handleAPIGitCheckout(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if _, err := gitOutputStringForWorkspace(ws, ws.getWorkspaceRootForRequest(r), "checkout", req.Branch); err != nil {
+	root := ws.getWorkspaceRootForRequest(r)
+	// A branch that exists only on the remote (one a task pushed after this
+	// clone was made) is fetched first, so checkout creates the local
+	// branch tracking it.
+	if _, err := gitOutputStringForWorkspace(ws, root, "rev-parse", "--verify", "--quiet", "refs/heads/"+req.Branch); err != nil {
+		if _, ferr := gitOutputStringForWorkspace(ws, root, "fetch", "origin", req.Branch); ferr != nil {
+			writeJSONErr(w, http.StatusNotFound, "branch_not_found", fmt.Sprintf("Branch %s was not found here or on the remote: %v", req.Branch, ferr))
+			return
+		}
+	}
+	if _, err := gitOutputStringForWorkspace(ws, root, "checkout", req.Branch); err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_checkout_branch", fmt.Sprintf("Failed to checkout branch: %v", err))
 		return
 	}

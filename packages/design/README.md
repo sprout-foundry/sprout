@@ -12,6 +12,20 @@ Design tokens for the Sprout ecosystem. CSS custom properties for colors, spacin
 @import "@sprout-foundry/design/reset.css";
 ```
 
+For the Sprout Foundry product look (the app and the marketing site), add the
+brand theme after the tokens:
+
+```css
+@import "@sprout-foundry/design/tokens.css";
+@import "@sprout-foundry/design/brand.css";
+```
+
+`brand.css` re-points the semantic tokens (surfaces, text, borders, accents) at
+the brand: soil navies and frost text in the dark theme, neutral surfaces and
+near-black ink in the light theme, sprout cyan for actions and focus. It also
+sets `--font-sans` (Inter) and `--font-display` (Bricolage Grotesque); load the
+fonts in the app.
+
 Themes are controlled via `data-theme` attribute on the root element:
 
 - Dark (default): `<html>` (no attribute needed)

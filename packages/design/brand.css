@@ -1,0 +1,166 @@
+/* Sprout Foundry product theme, layered on tokens.css.
+ *
+ * tokens.css ships the editor palette (One Dark greys and blue). The Sprout
+ * Foundry product — the app, its code space and the marketing site —
+ * re-points the same semantic tokens at the brand: soil navies and frost text
+ * in the dark theme, neutral surfaces and near-black ink in the light theme,
+ * sprout cyan for actions, links and focus. Status colours (success, warning,
+ * error) keep their meaning and values.
+ *
+ * Import it right after tokens.css:
+ *
+ *   @import "@sprout-foundry/design/tokens.css";
+ *   @import "@sprout-foundry/design/brand.css";
+ *
+ * Same specificity as tokens.css's blocks, so it wins by order.
+ */
+
+:root {
+  /* Brand family */
+  --brand-navy: #10212d; /* soil-900, the logo background */
+  --brand-teal: #4cd5e1; /* sprout-500 */
+  --brand-active-cyan: #68e3ee; /* sprout-400, the logo sprout */
+  --brand-frost: #a3ecf5; /* sprout-300, accent hover */
+
+  /* Bright brand family (lime, sun, leaf, teal).
+   * Decorative only — the brand glow, the living mark's grown leaf and the
+   * first-live celebration burst. Never for meaningful text or UI controls. */
+  --brand-lime: #b8f23d;
+  --brand-lime-bright: #d7ff6b;
+  --brand-sun: #ffd23f;
+  --brand-leaf: #2fc96b;
+  --brand-leaf-teal: #0aa89e;
+  --brand-mint: #7ef0e4;
+  --brand-ink: #10212d;
+  --brand-leaf-gradient: linear-gradient(135deg, #2fc96b 0%, #0aa89e 100%);
+  --brand-leaf2-gradient: linear-gradient(135deg, #b8f23d 0%, #2fc96b 100%);
+
+  /* Surfaces: page (darkest) → panels → raised layers */
+  --bg-secondary: #0a1720; /* soil-950: page, sidebars, top bar */
+  --bg-primary: #10212d; /* soil-900: main panels */
+  --bg-tertiary: #16293a; /* soil-800 */
+  --bg-elevated: #1d3247; /* soil-700 */
+  --bg-surface: #2a4257; /* soil-600 */
+
+  /* Borders: frost at low alpha */
+  --border-subtle: rgba(244, 254, 255, 0.08);
+  --border-default: rgba(244, 254, 255, 0.13);
+  --border-strong: rgba(244, 254, 255, 0.22);
+  --border-focus: rgba(104, 227, 238, 0.75);
+  --border-color: rgba(244, 254, 255, 0.13);
+
+  /* Text: frost over the panel navy */
+  --text-primary: #e2ecee;
+  --text-secondary: #b4c0c4;
+  --text-tertiary: #99a6ab;
+  --text-muted: #77848c;
+  --text-accent: #a3ecf5;
+
+  /* Accent: sprout cyan, navy text on a filled accent */
+  --accent-primary: #68e3ee;
+  --accent-secondary: #4cd5e1;
+  --accent-cyan: #68e3ee;
+  --accent-primary-alpha: rgba(104, 227, 238, 0.2);
+  --accent-primary-rgb: 104, 227, 238;
+  --accent-bg: #68e3ee;
+  --accent-fg: #10212d;
+
+  /* Local semantic: the "private" repo tag has no status-accent counterpart,
+   * so the tag reads a dedicated hue. Violet in the dark theme (bright
+   * enough on soil-900); a deeper indigo in light (AA on the frost-tinted
+   * panels). Not a status colour — never for meaningful text beyond tags. */
+  --tag-private: #a78bfa;
+
+  /* Editor and toolbar surfaces */
+  --editor-pane-bg: #10212d;
+  --toolbar-bg: #0a1720;
+  --toolbar-fg: #b4c0c4;
+  --toolbar-hover-bg: #16293a;
+  --toolbar-hover-fg: #f4feff;
+  --input-bg: #0a1720;
+  --input-fg: #e2ecee;
+}
+
+/* Light theme: derived from the same brand family — neutral surfaces,
+ * near-black text and darker brand cyans for AA contrast on light surfaces
+ * (#0d6a84 text/fill, #0e7490 accents). The logo sprout stays the bright cyan:
+ * the mark always sits on its navy tile. */
+:root[data-theme='light'] {
+  --brand-navy: #10212d;
+  --brand-teal: #0e7490;
+  --brand-active-cyan: #0e7490;
+  --brand-frost: #0e7490;
+
+  /* Bright brand family (lime, sun, leaf, teal).
+   * Decorative only — the brand glow, the living mark's grown leaf and the
+   * first-live celebration burst. Never for meaningful text or UI controls.
+   * Theme-invariant: the values are identical in the light block. */
+  --brand-lime: #b8f23d;
+  --brand-lime-bright: #d7ff6b;
+  --brand-sun: #ffd23f;
+  --brand-leaf: #2fc96b;
+  --brand-leaf-teal: #0aa89e;
+  --brand-mint: #7ef0e4;
+  --brand-ink: #10212d;
+  --brand-leaf-gradient: linear-gradient(135deg, #2fc96b 0%, #0aa89e 100%);
+  --brand-leaf2-gradient: linear-gradient(135deg, #b8f23d 0%, #2fc96b 100%);
+
+  /* Neutral surfaces and text: cool greys with no hue of their own, so the
+   * workspace (which takes these tokens through the host theme) reads as a
+   * clean light editor; the brand cyan is kept for actions, links and focus,
+   * so it means something where it appears. */
+  --bg-secondary: #f5f7f9; /* page */
+  --bg-primary: #ffffff; /* panels */
+  --bg-tertiary: #eef1f4;
+  --bg-elevated: #e5e9ed;
+  --bg-surface: #dce2e7;
+
+  --border-subtle: rgba(15, 23, 30, 0.07);
+  --border-default: rgba(15, 23, 30, 0.12);
+  --border-strong: rgba(15, 23, 30, 0.22);
+  --border-focus: rgba(14, 116, 144, 0.6);
+  --border-color: rgba(15, 23, 30, 0.12);
+
+  --text-primary: #10212d; /* brand ink */
+  --text-secondary: #2b3f4c;
+  --text-tertiary: #4f5960;
+  --text-muted: #646e76;
+  --text-accent: #0d6a84;
+
+  --accent-primary: #0d6a84;
+  --accent-secondary: #0e7490;
+  --accent-cyan: #0e7490;
+  --accent-primary-alpha: rgba(13, 106, 132, 0.16);
+  --accent-primary-rgb: 13, 106, 132;
+  --accent-bg: #0d6a84;
+  --accent-fg: #ffffff;
+
+  /* Local semantic: the "private" repo tag hue, per theme (dark #a78bfa /
+   * light #6d28d9 — the deeper indigo clears AA on the frost-tinted panels). */
+  --tag-private: #6d28d9;
+
+  --editor-pane-bg: #ffffff;
+  --toolbar-bg: #f7f8f9;
+  --toolbar-fg: #3d464d;
+  --toolbar-hover-bg: #f1f3f5;
+  --toolbar-hover-fg: #11181c;
+  --input-bg: #ffffff;
+  --input-fg: #10212d;
+}
+
+/* Type: Inter for text and Bricolage Grotesque for display headings, so the
+ * product and the site read as one. The fonts themselves are not bundled:
+ * load them in the app (e.g. @fontsource-variable/inter and
+ * @fontsource-variable/bricolage-grotesque); the system face is the fallback
+ * while they load. */
+:root {
+  --font-sans: 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-display: 'Bricolage Grotesque Variable', 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* The logo sprout is the bright cyan in both themes (it is drawn on the
+ * navy tile). */
+:root,
+:root[data-theme='light'] {
+  --brand-sprout: #68e3ee;
+}

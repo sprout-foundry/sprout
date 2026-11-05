@@ -9,8 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
+	"github.com/sprout-foundry/sprout/pkg/git"
 )
 
 type gitHandler struct{}
@@ -176,7 +178,18 @@ func (h *gitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]a
 	// For commit with -m message, use the temp-file approach shared with
 	// the commit tool. This prevents shell expansion of backticks, $(), etc.
 	if useCommitMessage && commitMsg != "" {
-		result, err := commitMessage(ctx, attributeCommit(env, commitMsg, false), effectiveDir, remainingCommitArgs)
+		attribute := func(message string) string {
+			committed := attributeCommit(env, "", "", message, false)
+			var cfg *configuration.Config
+			if env.ConfigManager != nil {
+				cfg = env.ConfigManager.GetConfig()
+			}
+			if trailers := git.DefaultCommitTrailers(cfg, effectiveDir); len(trailers) > 0 {
+				committed = git.AppendTrailers(committed, trailers...)
+			}
+			return committed
+		}
+		result, err := commitMessage(ctx, attribute(commitMsg), effectiveDir, remainingCommitArgs)
 		if err != nil {
 			return result, err
 		}
@@ -194,8 +207,9 @@ func (h *gitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]a
 	switch secResult.Risk {
 	case SecurityDangerous:
 		// Destructive operation (e.g., reset --hard, rebase -i)
-		if env.Gate1AutoApproved && !secResult.IsHardBlock {
-			// Gate 1 already auto-approved — skip the prompt to avoid
+		if (env.Gate1AutoApproved || env.Gate1Decided) && !secResult.IsHardBlock {
+			// Gate 1 already decided this call (auto-approve, or the unified
+			// risk resolver approved it — SP-168) — skip the prompt to avoid
 			// double-prompting.
 		} else if env.ApprovalManager != nil {
 			result := env.ApprovalManager.RequestApproval(
@@ -223,8 +237,9 @@ func (h *gitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]a
 		// Caution-level operation (e.g., reset --soft, plain reset/rebase)
 		// Fall through to legacy dangerousOps map for backward compat
 		if dangerousOps[operation] {
-			if env.Gate1AutoApproved && !secResult.IsHardBlock {
-				// Gate 1 already auto-approved — skip approval.
+			if (env.Gate1AutoApproved || env.Gate1Decided) && !secResult.IsHardBlock {
+				// Gate 1 already decided this call (auto-approve, or the
+				// unified risk resolver approved it — SP-168) — skip approval.
 			} else if env.ApprovalManager != nil {
 				result := env.ApprovalManager.RequestApproval(
 					operation,

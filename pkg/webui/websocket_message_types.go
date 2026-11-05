@@ -158,6 +158,15 @@ func (m *WebSocketMessage) Validate() error {
 	return nil
 }
 
+// HeartbeatData is the optional data payload for "heartbeat" messages.
+//
+// Foreground is the window's focus: true when it is the window the user is
+// looking at, false when it is behind another. Omitted by clients that do not
+// track focus, which leaves the connection's current state untouched.
+type HeartbeatData struct {
+	Foreground *bool `json:"foreground,omitempty"`
+}
+
 // SubscribeData is the data payload for "subscribe" messages.
 //
 // Events is the historical event-type filter (kept for backward compat,
@@ -343,6 +352,11 @@ type AskUserResponseData struct {
 type PasswordResponseData struct {
 	RequestID string `json:"request_id"`
 	Password  string `json:"password"`
+	// Cancelled signals that the user dismissed the prompt rather than
+	// submitting an answer. The shell closes the child's stdin so the command
+	// stops, instead of receiving a blank line (which a non-secret prompt
+	// would accept as the default answer).
+	Cancelled bool `json:"cancelled,omitempty"`
 }
 
 // Validate performs field-level validation on PasswordResponseData.

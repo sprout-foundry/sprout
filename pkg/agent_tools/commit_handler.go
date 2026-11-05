@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/git"
 )
@@ -31,9 +32,15 @@ var GenerateCommitMessageFunc func(diff []byte, notes string) (string, error)
 // GenerateCommitMessageFunc. Guarded by ToolFuncMu.
 var AttributeCommitMessageFunc func(message string, generated bool) string
 
-// attributeCommit applies the agent's commit attribution hook, if any.
-func attributeCommit(env ToolEnv, message string, generated bool) string {
-	if attribute := env.ResolveToolFuncs().AttributeCommitMessage; attribute != nil {
+// attributeCommit applies the agent's commit attribution hook, if any. The
+// transcript pair recorded for the session that did the work takes precedence
+// over the agent's own pair when the hook supports it.
+func attributeCommit(env ToolEnv, transcriptProvider, transcriptModel, message string, generated bool) string {
+	funcs := env.ResolveToolFuncs()
+	if fromTranscript := funcs.AttributeCommitMessageFromTranscript; fromTranscript != nil {
+		return fromTranscript(transcriptProvider, transcriptModel, message, generated)
+	}
+	if attribute := funcs.AttributeCommitMessage; attribute != nil {
 		return attribute(message, generated)
 	}
 	return message
@@ -53,7 +60,10 @@ func (h *commitHandler) Definition() ToolDefinition {
 		Parameters: []ParameterDef{
 			{Name: "message", Type: "string", Description: "Explicit commit message, used as-is when provided (shell-safe: backticks, $(), and other special characters are not expanded). When omitted, a Conventional Commit message is generated from the staged diff, with notes as context; if generation fails, nothing is committed."},
 			{Name: "notes", Type: "string", Description: "Context used to shape the commit message when message is omitted (e.g., 'fixes the flaky auth test'). Ignored when message is provided."},
+			{Name: "trailers", Type: "array", Description: "Git trailers (\"Key: Value\" strings, e.g. \"Assisted-by: Claude Code (anthropic/claude-opus-5-5)\") appended to the commit message. Merged with the commit.trailers defaults from the .sprout config and the repo's AGENTS.md; identical trailers are never duplicated.", Items: map[string]any{"type": "string"}},
 			{Name: "repo_dir", Type: "string", Description: "Directory to commit in: a subdirectory of the workspace, or a git worktree of the workspace repository even when checked out outside the workspace root (worktrees of the same repo share one .git dir and are allowed). Defaults to workspace root if omitted."},
+			{Name: "transcript_provider", Type: "string", Description: "Provider recorded in the transcript of the session that did the work (the transcript snapshot's \"provider\" field). Names the Assisted-by trailer's model when the committing agent is not the one that made the changes — a resumed session, a subagent, or a reader working from a transcript. Omit to attribute to the current agent's provider."},
+			{Name: "transcript_model", Type: "string", Description: "Model recorded in the transcript of the session that did the work (the transcript snapshot's \"model\" field). Pairs with transcript_provider; omit to attribute to the current agent's model."},
 		},
 	}
 }
@@ -69,6 +79,10 @@ func (h *commitHandler) Execute(ctx context.Context, env ToolEnv, args map[strin
 	message, _ := extractString(args, "message")
 	notes, _ := extractString(args, "notes")
 	repoDir, _ := extractString(args, "repo_dir")
+	explicitTrailers, terr := extractStringList(args, "trailers")
+	if terr != nil {
+		return ToolResult{Output: terr.Error(), IsError: true}, nil
+	}
 
 	// Determine the effective working directory.
 	effectiveDir := env.WorkspaceRoot
@@ -80,8 +94,28 @@ func (h *commitHandler) Execute(ctx context.Context, env ToolEnv, args map[strin
 		effectiveDir = resolvedDir
 	}
 
+	// Git trailers for the commit: the commit.trailers defaults (the .sprout
+	// config and the repo's AGENTS.md) plus any explicitly passed trailers.
+	var cfg *configuration.Config
+	if env.ConfigManager != nil {
+		cfg = env.ConfigManager.GetConfig()
+	}
+	trailers := git.DefaultCommitTrailers(cfg, effectiveDir)
+	trailers = append(trailers, explicitTrailers...)
+	// A transcript pair names the model that did the work — the transcript
+	// snapshot's provider/model fields, supplied per call.
+	transcriptProvider, _ := extractString(args, "transcript_provider")
+	transcriptModel, _ := extractString(args, "transcript_model")
+	attribute := func(message string, generated bool) string {
+		committed := attributeCommit(env, transcriptProvider, transcriptModel, message, generated)
+		if len(trailers) > 0 {
+			committed = git.AppendTrailers(committed, trailers...)
+		}
+		return committed
+	}
+
 	if message != "" {
-		return commitMessage(ctx, attributeCommit(env, message, false), effectiveDir)
+		return commitMessage(ctx, attribute(message, false), effectiveDir)
 	}
 
 	// message omitted: generate a Conventional Commit message from the
@@ -123,7 +157,7 @@ func (h *commitHandler) Execute(ctx context.Context, env ToolEnv, args map[strin
 		}, nil
 	}
 
-	return commitMessage(ctx, attributeCommit(env, commitMsg, true), effectiveDir)
+	return commitMessage(ctx, attribute(commitMsg, true), effectiveDir)
 }
 
 // previewStagedDiff caps a staged diff for display in error results,

@@ -1,4 +1,5 @@
 import { getActiveHost } from '../host/accessor';
+import { backendURLs } from '../host/agentBackend';
 import { debugLog } from '../utils/log';
 import { getAdapter } from './apiAdapter';
 import { publishWorkspaceResponse } from './workspaceResponses';
@@ -732,12 +733,13 @@ export async function clientFetch(input: RequestInfo | URL, init?: RequestInit):
   headers.set(WEBUI_CLIENT_ID_HEADER, clientId);
   // Prefix relative API paths so they reach the right backend. Precedence,
   // most specific first: an installed adapter already handled the request
-  // above, so here the active host's transport base wins when it is set
-  // (a host embedding the workspace points Sprout at its own backend), then
-  // the SSH proxy base (window.SPROUT_PROXY_BASE, injected when the page is
-  // served through the local reverse proxy), then same-origin (no prefix).
-  // An empty apiBaseURL is the same-origin sentinel, so it falls through.
-  const hostApiBase = getActiveHost()?.transport.apiBaseURL || '';
+  // above, so here the active backend's base wins when it is set (a daemon
+  // backend's own base — the host's workspace proxy — when the host named one,
+  // else the host transport's), then the SSH proxy base
+  // (window.SPROUT_PROXY_BASE, injected when the page is served through the
+  // local reverse proxy), then same-origin (no prefix). An empty base is the
+  // same-origin sentinel, so it falls through.
+  const hostApiBase = backendURLs(getActiveHost()).apiBaseURL;
   const base = hostApiBase || getProxyBase();
   let url: RequestInfo | URL = input;
   if (base && typeof url === 'string' && url.startsWith('/')) {

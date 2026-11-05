@@ -8,6 +8,7 @@
 package agent
 
 import (
+	"strings"
 	"sync"
 
 	core "github.com/sprout-foundry/seed/core"
@@ -35,6 +36,34 @@ type sproutProvider struct {
 	// steer messages can be handed to seed before its injection checks.
 	steerFlushHookMu sync.RWMutex
 	steerFlushHook   func()
+
+	// recoveryState is a handle to seed's live per-query State, installed by
+	// the query setup (setRecoveryState) once the seed agent is built. The
+	// repetition-recovery compaction writes its durable de-loop back through
+	// this handle so the CURRENT query's later iterations (not just the
+	// in-flight retry) read a state that no longer carries the model's own
+	// degenerate loop. Nil until the seed agent exists; a nil handle means
+	// the durable write is skipped and only the in-flight re-seed runs.
+	recoveryStateMu sync.RWMutex
+	recoveryState   recoveryStateHandle
+}
+
+// setRecoveryState installs the live seed State the repetition-recovery
+// compaction persists its durable de-loop into. It is called once per query,
+// after the seed agent is constructed, and is a no-op for a nil handle (the
+// recovery then falls back to the in-flight re-seed only).
+func (sp *sproutProvider) setRecoveryState(st recoveryStateHandle) {
+	sp.recoveryStateMu.Lock()
+	sp.recoveryState = st
+	sp.recoveryStateMu.Unlock()
+}
+
+// currentRecoveryState returns the installed live seed State handle (nil
+// when none).
+func (sp *sproutProvider) currentRecoveryState() recoveryStateHandle {
+	sp.recoveryStateMu.RLock()
+	defer sp.recoveryStateMu.RUnlock()
+	return sp.recoveryState
 }
 
 // setSteerFlushHook installs (or with nil, removes) the boundary hook.
@@ -51,6 +80,17 @@ func (sp *sproutProvider) fireSteerFlushHook() {
 	sp.steerFlushHookMu.RUnlock()
 	if hook != nil {
 		hook()
+	}
+}
+
+// setRecoveryState installs the live seed State on the sproutProvider that
+// `p`, if it is one, so the repetition-recovery compaction can persist its
+// durable de-loop into seed's live per-query state. It is the provider-facing
+// counterpart of sproutProvider.setRecoveryState and is a no-op for a nil
+// state or a non-sprout provider.
+func setRecoveryState(p core.Provider, st *core.State) {
+	if sp, ok := p.(*sproutProvider); ok {
+		sp.setRecoveryState(st)
 	}
 }
 
@@ -74,6 +114,45 @@ func NewSproutProvider(agent *Agent, client api.ClientInterface) (core.Provider,
 		client:       client,
 		pastedImages: make(map[string][]api.ImageData),
 	}, nil
+}
+
+// effectiveReasoning resolves the reasoning effort and disable-thinking flag
+// the agent wants for this request (rel.1: the configured reasoning_effort
+// and the disable_thinking setting actually reach the provider). An empty
+// effort lets the provider apply the model family's default depth, so a
+// reasoning-capable model reasons by default with no configuration needed.
+func (sp *sproutProvider) effectiveReasoning() (reasoning string, disableThinking bool) {
+	if sp.agent == nil {
+		return "", false
+	}
+	return sp.agent.configuredReasoningEffort(), sp.agent.shouldDisableThinking()
+}
+
+// cappedRecoveryReasoning is the reasoning-effort cap for the recovery final
+// attempt. A model that double-loops is most degenerate at its highest
+// effort levels (the failure is effort-dose dependent: longer reasoning
+// surfaces form more loops and burn more of the budget), so the recovery
+// re-seed runs at no higher than "high" — the recommended agentic default —
+// and never ABOVE the configured effort (a user pinned to "low" is not
+// raised). This is a pure pre-model lever: on a model with no reasoning-effort
+// parameter the value is a no-op, so capping is safe and model-agnostic.
+// Returns the lower of (reasoning, "high").
+//
+// An unrecognized non-empty level is treated as above the cap and clamped:
+// the cap exists to bound the thinking surface, so a level this function
+// cannot rank must not be the one that slips past it.
+func cappedRecoveryReasoning(reasoning string) string {
+	order := map[string]int{"low": 1, "medium": 2, "high": 3, "xhigh": 4, "max": 5}
+	const capLevel = "high"
+	r := strings.ToLower(strings.TrimSpace(reasoning))
+	if r == "" {
+		// Unset: the provider applies its family default; leave it alone.
+		return reasoning
+	}
+	if level, known := order[r]; known && level <= order[capLevel] {
+		return reasoning
+	}
+	return capLevel
 }
 
 // RegisterPastedImages associates extracted image data with file paths for multimodal attachment.

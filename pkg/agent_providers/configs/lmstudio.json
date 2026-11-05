@@ -22,7 +22,7 @@
   "reasoning_content_field": "reasoning_content"
 },
   "models": {
-  "default_context_limit": 32768,
+  "default_context_limit": 262144,
   "supports_vision": true,
   "default_model_patterns": [
   ""

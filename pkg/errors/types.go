@@ -339,8 +339,28 @@ func isCategoryRetryable(category ErrorCategory) bool {
 	}
 }
 
-// GetCategory extracts the error category from an AgentError.
-// Returns the category and true if the error is an AgentError, or zero and false otherwise.
+// categoryForTypedCode maps a SP-094 typed ErrorCode onto the legacy
+// ErrorCategory taxonomy so the Is* helpers and the retry loops agree on a
+// TypedError the way they do on an AgentError. Only the retryable transient
+// failures (timeout, network) are classified: those are exactly the ones the
+// LLM retry loops must recover from. Every other typed code is left
+// unclassified (returns false) so the tool / security / retry paths keep the
+// behaviour they had before TypedError existed — a NewTool, NewValidation,
+// NewNotFound or NewPermission error is not suddenly read as a legacy
+// category (e.g. "Permanent") and changed to fail immediately.
+func categoryForTypedCode(code ErrorCode) (ErrorCategory, bool) {
+	switch code {
+	case CodeTimeout, CodeNetwork:
+		return CategoryTransient, true
+	default:
+		return 0, false
+	}
+}
+
+// GetCategory extracts the error category from an AgentError or a TypedError.
+// Returns the category and true if the error is classified, or zero and false
+// otherwise. An AgentError takes precedence over a TypedError in the same
+// chain so legacy callers see unchanged behaviour.
 func GetCategory(err error) (ErrorCategory, bool) {
 	if err == nil {
 		return 0, false
@@ -351,11 +371,18 @@ func GetCategory(err error) (ErrorCategory, bool) {
 		return agentErr.Category, true
 	}
 
+	var typedErr *TypedError
+	if errors.As(err, &typedErr) {
+		return categoryForTypedCode(typedErr.Code)
+	}
+
 	return 0, false
 }
 
 // IsRetryable checks if an error is retryable.
-// Returns true if the error is an AgentError with Retryable=true.
+// Returns true if the error is an AgentError with Retryable=true, or a
+// TypedError whose Retryable flag (set from RetryableFor at construction) is
+// true — the latter covers network and timeout TypedErrors.
 func IsRetryable(err error) bool {
 	if err == nil {
 		return false
@@ -364,6 +391,11 @@ func IsRetryable(err error) bool {
 	var agentErr *AgentError
 	if errors.As(err, &agentErr) {
 		return agentErr.Retryable
+	}
+
+	var typedErr *TypedError
+	if errors.As(err, &typedErr) {
+		return typedErr.Retryable
 	}
 
 	return false

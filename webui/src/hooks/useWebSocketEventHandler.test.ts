@@ -1480,27 +1480,39 @@ describe('file_changed stamping', () => {
 
 describe('text from consecutive model steps', () => {
   it('starts a new paragraph after each step instead of running on', () => {
-    const stateHolder = { current: { ...createDefaultState(), messages: [] as unknown[] } };
-    const setStateMock = vi.fn((updater: unknown) => {
-      const prev = stateHolder.current;
-      stateHolder.current = { ...prev, ...((updater as (p: unknown) => object)(prev) as object) };
-    });
-    const activeChatIdRef: MutableRefObject<string | null> = { current: null };
-    act(() => {
-      root.render(createElement(HookWrapper, { stateHolder, setStateMock, activeChatIdRef }));
-    });
-    const fire = (type: string, data: Record<string, unknown>) =>
+    // High-frequency events (metrics_update, query_progress) coalesce into one
+    // dispatch per ~48ms window, so the batch lands on a timer rather than
+    // synchronously. Advance past the window before asserting.
+    vi.useFakeTimers();
+    try {
+      const stateHolder = { current: { ...createDefaultState(), messages: [] as unknown[] } };
+      const setStateMock = vi.fn((updater: unknown) => {
+        const prev = stateHolder.current;
+        stateHolder.current = { ...prev, ...((updater as (p: unknown) => object)(prev) as object) };
+      });
+      const activeChatIdRef: MutableRefObject<string | null> = { current: null };
       act(() => {
-        hookHandleEvent!({ id: `e-${Math.random()}`, type, data } as never);
+        root.render(createElement(HookWrapper, { stateHolder, setStateMock, activeChatIdRef }));
+      });
+      const fire = (type: string, data: Record<string, unknown>) =>
+        act(() => {
+          hookHandleEvent!({ id: `e-${Math.random()}`, type, data } as never);
+        });
+
+      fire('query_started', { query: 'Edit the README' });
+      fire('stream_chunk', { chunk: 'DONE', content_type: 'assistant_text' });
+      fire('metrics_update', { iteration: 1, total_tokens: 10 });
+      fire('stream_chunk', { chunk: 'The edit is complete.', content_type: 'assistant_text' });
+      fire('query_progress', {});
+
+      act(() => {
+        vi.advanceTimersByTime(200);
       });
 
-    fire('query_started', { query: 'Edit the README' });
-    fire('stream_chunk', { chunk: 'DONE', content_type: 'assistant_text' });
-    fire('metrics_update', { iteration: 1, total_tokens: 10 });
-    fire('stream_chunk', { chunk: 'The edit is complete.', content_type: 'assistant_text' });
-    fire('query_progress', {});
-
-    const messages = stateHolder.current.messages as Array<{ type: string; content: string }>;
-    expect(messages[messages.length - 1].content).toBe('DONE\n\nThe edit is complete.');
+      const messages = stateHolder.current.messages as Array<{ type: string; content: string }>;
+      expect(messages[messages.length - 1].content).toBe('DONE\n\nThe edit is complete.');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

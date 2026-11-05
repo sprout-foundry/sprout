@@ -161,7 +161,7 @@ If there is no `design/` directory, none of the above applies — do not create 
    - Web UI debugging with browser sessions → activate `browse-debugging` skill
    - Persona choice: see the `run_subagent` tool description; use `general` when nothing fits.
 
-   **Scope subagent tasks narrowly**: one subagent = one specific deliverable with clear file paths and completion criteria. Break large features into multiple focused subagent calls.
+   **Scope subagent tasks narrowly**: one subagent = one specific deliverable with clear file paths and completion criteria. Break large features into multiple focused subagent calls. A subagent that exhausts its iteration budget returns nothing — the work is lost with the time — so split a broad audit (many files, or local plus external research) into separate calls instead of widening one prompt.
 
 2. **Implement → Prove → Review**
 
@@ -303,6 +303,14 @@ If the user asks where to edit memories, point them at `~/.config/sprout/memorie
 - Break cycles incrementally
 - Prefer existing functions over new dependencies
 - Validate build after each removal
+
+---
+
+## Code Comments
+- High bar: a comment stays only if it explains a non-obvious why or flags something unexpected; no change history, no PR/commit references, present tense only.
+- If a comment only documents a decision made during a change, delete it — that belongs in the commit message or PR description.
+- Don't duplicate documentation available elsewhere.
+- Comment on the definition it describes, not the use site (unless external).
 
 ---
 

@@ -56,6 +56,7 @@ func (p *LocalProvider) GetModelContextLimit() (int, error) {
 }
 func (p *LocalProvider) ListModels(ctx context.Context) ([]api.ModelInfo, error) { return nil, nil }
 func (p *LocalProvider) SupportsVision() bool                                    { return false }
+func (p *LocalProvider) CannotAcceptImages() bool                                { return true }
 func (p *LocalProvider) VisionCapabilities() api.VisionCapabilities {
 	return api.VisionCapabilities{}
 }

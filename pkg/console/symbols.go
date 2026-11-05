@@ -37,6 +37,8 @@ type Symbols struct {
 	BoxBottomLeft  string
 	BoxBottomRight string
 	BoxTeeRight    string
+	// Working marks the footer's mid-turn "work in progress" wording.
+	Working string
 }
 
 var unicodeSymbols = Symbols{
@@ -66,6 +68,7 @@ var unicodeSymbols = Symbols{
 	BoxBottomLeft:  "╰",
 	BoxBottomRight: "╯",
 	BoxTeeRight:    "├",
+	Working:        "⚙",
 }
 
 var asciiSymbols = Symbols{
@@ -95,6 +98,7 @@ var asciiSymbols = Symbols{
 	BoxBottomLeft:  "+",
 	BoxBottomRight: "+",
 	BoxTeeRight:    "+",
+	Working:        "*",
 }
 
 var activeSymbols atomic.Pointer[Symbols]

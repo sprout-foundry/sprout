@@ -63,10 +63,14 @@ type configAuth struct {
 }
 
 type customProviderFile struct {
-	Name     string `json:"name"`
-	Endpoint string `json:"endpoint"`
-	Model    string `json:"model_name,omitempty"`
-	EnvVar   string `json:"env_var,omitempty"`
+	Name        string `json:"name"`
+	Endpoint    string `json:"endpoint"`
+	Model       string `json:"model_name,omitempty"`
+	EnvVar      string `json:"env_var,omitempty"`
+	ContextSize int    `json:"context_size,omitempty"`
+	// DisableModelDiscovery: the configured model is the provider's only
+	// model; its /models endpoint is never asked.
+	DisableModelDiscovery bool `json:"disable_model_discovery,omitempty"`
 }
 
 func (w *genericConfigListModelsWrapper) ListModels(ctx context.Context) ([]ModelInfo, error) {
@@ -140,6 +144,11 @@ func (w *genericConfigListModelsWrapper) loadCustomProviderModels(ctx context.Co
 	var providerConfig customProviderFile
 	if err := json.Unmarshal(data, &providerConfig); err != nil {
 		return nil, agenterrors.NewConfig(fmt.Sprintf("failed to parse %s provider config", w.providerName), err)
+	}
+
+	if providerConfig.DisableModelDiscovery && strings.TrimSpace(providerConfig.Model) != "" {
+		model := strings.TrimSpace(providerConfig.Model)
+		return []ModelInfo{{ID: model, Name: model, Provider: w.providerName, ContextLength: providerConfig.ContextSize}}, nil
 	}
 
 	models, err := fetchOpenAICompatibleModels(ctx, w.providerName, providerConfig.Endpoint)

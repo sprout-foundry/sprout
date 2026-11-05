@@ -30,6 +30,10 @@ func (p *GenericProvider) ListModels(ctx context.Context) ([]api.ModelInfo, erro
 	}
 	p.mu.RUnlock()
 
+	if p.config.Models.DisableDiscovery {
+		return p.fallbackToConfigOrCurrent()
+	}
+
 	backend := p.effectiveBackend()
 	if backend == BackendAuto {
 		backend = p.detectAndCacheBackend(ctx)

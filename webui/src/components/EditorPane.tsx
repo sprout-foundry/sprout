@@ -1,5 +1,5 @@
 import type { EditorView as CMEditorView } from '@codemirror/view';
-import { useRef, useState, useMemo, useCallback, useEffect } from 'react';
+import { memo, useRef, useState, useMemo, useCallback, useEffect } from 'react';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -646,4 +646,10 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   );
 }
 
-export default EditorPane;
+/**
+ * Memoized on `paneId`: the pane is reached through WorkspacePane, whose props
+ * include the chat's view props — those change on every stream flush, so an
+ * open file was re-rendering ~20x/s while an agent answered. Its actual inputs
+ * are the pane id and its contexts, so the memo is exact.
+ */
+export default memo(EditorPane);

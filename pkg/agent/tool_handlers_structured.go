@@ -4,9 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
 
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
@@ -17,7 +16,7 @@ func handleWriteStructuredFile(ctx context.Context, a *Agent, args map[string]in
 		return "", agenterrors.Wrap(err, "failed to get file path")
 	}
 
-	format := inferStructuredFormat(path, getOptionalString(args, "format"))
+	format := tools.InferStructuredFormat(path, getOptionalString(args, "format"))
 	if format == "" {
 		return "", agenterrors.NewInvalidInputError("unsupported structured format: use json or yaml", nil)
 	}
@@ -46,7 +45,7 @@ func handleWriteStructuredFile(ctx context.Context, a *Agent, args map[string]in
 			return "", agenterrors.NewTool("structured", "failed to parse schema", err)
 		}
 		if errs := validateDataAgainstSchema(data, schema, "$"); len(errs) > 0 {
-			return "", formatStructuredValidationError("write_structured_file", errs, "")
+			return "", tools.FormatStructuredValidationError("write_structured_file", errs, "")
 		}
 	}
 
@@ -88,7 +87,7 @@ func handlePatchStructuredFile(ctx context.Context, a *Agent, args map[string]in
 		return "", agenterrors.NewInvalidInputError("parameter 'patch_ops' is required (or provide 'data' for full write)", nil)
 	}
 
-	format := inferStructuredFormat(path, getOptionalString(args, "format"))
+	format := tools.InferStructuredFormat(path, getOptionalString(args, "format"))
 	if format == "" {
 		return "", agenterrors.NewInvalidInputError("unsupported structured format: use json or yaml", nil)
 	}
@@ -134,7 +133,7 @@ func handlePatchStructuredFile(ctx context.Context, a *Agent, args map[string]in
 		}
 		if errs := validateDataAgainstSchema(doc, schema, "$"); len(errs) > 0 {
 			context := fmt.Sprintf("applied=%d/%d", applied, len(ops))
-			return "", formatStructuredValidationError("patch_structured_file", errs, context)
+			return "", tools.FormatStructuredValidationError("patch_structured_file", errs, context)
 		}
 	}
 
@@ -148,27 +147,6 @@ func handlePatchStructuredFile(ctx context.Context, a *Agent, args map[string]in
 		return "", agenterrors.NewTool("structured", fmt.Sprintf("failed to write patched file %s", path), err)
 	}
 	return result, nil
-}
-
-func inferStructuredFormat(path, provided string) string {
-	format := strings.ToLower(strings.TrimSpace(provided))
-	switch format {
-	case "json", "yaml", "yml":
-		if format == "yml" {
-			return "yaml"
-		}
-		return format
-	}
-
-	ext := strings.ToLower(filepath.Ext(path))
-	switch ext {
-	case ".json":
-		return "json"
-	case ".yaml", ".yml":
-		return "yaml"
-	default:
-		return ""
-	}
 }
 
 func serializeStructuredContent(format string, data interface{}) (string, error) {

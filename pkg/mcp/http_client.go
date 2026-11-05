@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -23,7 +24,12 @@ type MCPHTTPClient struct {
 	initialized bool
 	mu          sync.RWMutex
 	nextID      int64
-	sessionID   string // Track session ID for GitHub MCP server
+	sessionID   string // Mcp-Session-Id issued by the server at initialize
+	// lastEventID is the id of the last SSE event consumed. The Streamable
+	// HTTP spec allows a client to resume a broken stream by replaying it
+	// with Last-Event-ID, so a dropped connection does not lose the frames
+	// that were already sent.
+	lastEventID string
 }
 
 // NewMCPHTTPClient creates a new HTTP MCP client
@@ -31,10 +37,17 @@ func NewMCPHTTPClient(config MCPServerConfig, logger *utils.Logger) *MCPHTTPClie
 	// Use a cookie jar to maintain session state
 	jar, _ := cookiejar.New(nil)
 
+	// A zero Timeout means "no timeout" to net/http, which would let a hung
+	// server wedge a call forever. Fall back to the package default instead.
+	timeout := config.Timeout
+	if timeout <= 0 {
+		timeout = DefaultServerTimeout
+	}
+
 	return &MCPHTTPClient{
 		config: config,
 		httpClient: &http.Client{
-			Timeout: config.Timeout,
+			Timeout: timeout,
 			Jar:     jar, // Enable cookie handling for session management
 		},
 		logger:  logger,
@@ -66,7 +79,8 @@ func (c *MCPHTTPClient) Stop(ctx context.Context) error {
 
 	c.running = false
 	c.initialized = false
-	c.sessionID = "" // Clear session ID
+	c.sessionID = ""
+	c.lastEventID = ""
 	if c.logger != nil {
 		c.logger.LogProcessStep(fmt.Sprintf("[STOP] HTTP MCP client stopped for %s", c.config.URL))
 	}
@@ -93,8 +107,69 @@ func (c *MCPHTTPClient) GetConfig() MCPServerConfig {
 // sendRequest sends an HTTP request to the MCP server.
 // The Streamable HTTP transport requires Accept to list both JSON and SSE,
 // and servers may answer either way — an SSE response body is parsed down
-// to its first JSON-RPC message (the one carrying this request's ID).
+// to the first JSON-RPC message carrying this request's ID.
+//
+// A server may end the session it issued at initialize (restart, idle
+// reaping, TTL). The spec's signal for that is a 404 on a request that
+// carried Mcp-Session-Id, so the session is re-established once and the
+// request replayed rather than surfacing a bare 404 to the caller.
+//
+// The replay is limited to read-only methods. A tools/call may already have
+// run on the server before the session was lost, and replaying it would
+// perform the side effect twice (charge a card, send a message). For those
+// the 404 is surfaced with a message saying the outcome is unknown.
 func (c *MCPHTTPClient) sendRequest(ctx context.Context, method string, params interface{}) (*MCPMessage, error) {
+	response, err := c.sendRequestOnce(ctx, method, params)
+	if err == nil || method == "initialize" || !errors.Is(err, errMCPSessionExpired) {
+		return response, err
+	}
+
+	if !isIdempotentMCPMethod(method) {
+		return nil, fmt.Errorf("%w: server %s ended the MCP session during %s, which is not safe to retry — "+
+			"the call may or may not have taken effect; re-run it only if a duplicate is acceptable",
+			err, c.config.Name, method)
+	}
+
+	if c.logger != nil {
+		c.logger.LogProcessStep(fmt.Sprintf("[RECONNECT] Session for %s expired; re-initializing and retrying %s", c.config.Name, method))
+	}
+	if initErr := c.reinitialize(ctx); initErr != nil {
+		return nil, fmt.Errorf("server %s ended the MCP session and re-initializing failed: %w", c.config.Name, initErr)
+	}
+	return c.sendRequestOnce(ctx, method, params)
+}
+
+// isIdempotentMCPMethod reports whether replaying a request is harmless.
+// Everything under */list and */read is a pure read; anything else (notably
+// tools/call) may mutate state on the server.
+func isIdempotentMCPMethod(method string) bool {
+	switch method {
+	case "tools/list", "resources/list", "resources/templates/list",
+		"prompts/list", "resources/read", "prompts/get", "ping":
+		return true
+	}
+	return false
+}
+
+// errMCPSessionExpired marks a 404 on a session-carrying request. It is
+// internal: sendRequest recovers from it, and it only escapes when the
+// re-initialize itself fails.
+var errMCPSessionExpired = errors.New("MCP session expired")
+
+// reinitialize clears the dead session and runs the initialize handshake
+// again. The initialized flag is cleared first so a concurrent caller that
+// loses the race does not skip the handshake it still needs.
+func (c *MCPHTTPClient) reinitialize(ctx context.Context) error {
+	c.mu.Lock()
+	c.sessionID = ""
+	c.initialized = false
+	c.mu.Unlock()
+	return c.Initialize(ctx)
+}
+
+// sendRequestOnce performs one HTTP round trip. See sendRequest for the
+// session-recovery wrapper.
+func (c *MCPHTTPClient) sendRequestOnce(ctx context.Context, method string, params interface{}) (*MCPMessage, error) {
 	// Only lock for the ID increment, not the entire method
 	c.mu.Lock()
 	id := c.nextID
@@ -143,12 +218,17 @@ func (c *MCPHTTPClient) sendRequest(ctx context.Context, method string, params i
 		}
 	}
 
-	// Add session ID header if available (for subsequent requests after initialize)
+	// Add session ID header if available (for subsequent requests after
+	// initialize). Last-Event-ID is deliberately NOT sent here: it names a
+	// position in one logical stream, and carrying it onto an unrelated
+	// request would ask the server to replay or skip frames from a different
+	// stream. It is only set by the resumption path below.
 	c.mu.RLock()
-	if c.sessionID != "" && method != "initialize" {
-		req.Header.Set("Mcp-Session-Id", c.sessionID)
-	}
+	sessionID := c.sessionID
 	c.mu.RUnlock()
+	if sessionID != "" && method != "initialize" {
+		req.Header.Set("Mcp-Session-Id", sessionID)
+	}
 
 	if c.logger != nil {
 		c.logger.LogProcessStep(fmt.Sprintf("[~] Sending MCP HTTP request: %s to %s", method, c.config.URL))
@@ -162,12 +242,12 @@ func (c *MCPHTTPClient) sendRequest(ctx context.Context, method string, params i
 
 	// Session ID capture must happen for both response shapes.
 	if method == "initialize" {
-		if sessionID := resp.Header.Get("Mcp-Session-Id"); sessionID != "" {
+		if newSessionID := resp.Header.Get("Mcp-Session-Id"); newSessionID != "" {
 			c.mu.Lock()
-			c.sessionID = sessionID
+			c.sessionID = newSessionID
 			c.mu.Unlock()
 			if c.logger != nil {
-				c.logger.LogProcessStep(fmt.Sprintf("[key] Captured session ID: %s", sessionID))
+				c.logger.LogProcessStep(fmt.Sprintf("[key] Captured session ID: %s", newSessionID))
 			}
 		}
 	}
@@ -185,13 +265,15 @@ func (c *MCPHTTPClient) sendRequest(ctx context.Context, method string, params i
 		return nil, fmt.Errorf("server %s rejected the request with 401 Unauthorized — this server requires OAuth (use mcp_refresh login) or a credential the server accepts (check the Authorization/X-*-Token headers)", c.config.Name)
 	case resp.StatusCode == http.StatusNotFound && method == "initialize":
 		return nil, fmt.Errorf("server %s returned 404 for %s — the MCP endpoint path may be wrong (e.g. /mcp vs /sse)", c.config.Name, c.config.URL)
+	case resp.StatusCode == http.StatusNotFound && sessionID != "":
+		return nil, fmt.Errorf("%w: server %s answered 404 to %s with session %q", errMCPSessionExpired, c.config.Name, method, sessionID)
 	case resp.StatusCode != http.StatusOK:
 		return nil, fmt.Errorf("failed HTTP request with status %d: %s", resp.StatusCode, string(responseBody))
 	}
 
 	var response *MCPMessage
 	if strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") {
-		response, err = parseSSEResponse(responseBody, id)
+		response, err = c.parseSSEResponse(responseBody, id)
 	} else {
 		response, err = parseJSONResponse(responseBody)
 	}
@@ -239,10 +321,11 @@ func (c *MCPHTTPClient) sendNotification(ctx context.Context, method string) (*M
 	}
 
 	c.mu.RLock()
-	if c.sessionID != "" {
-		req.Header.Set("Mcp-Session-Id", c.sessionID)
-	}
+	sessionID := c.sessionID
 	c.mu.RUnlock()
+	if sessionID != "" {
+		req.Header.Set("Mcp-Session-Id", sessionID)
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -271,12 +354,43 @@ func parseJSONResponse(body []byte) (*MCPMessage, error) {
 // carries "data:" frames, each a JSON-RPC message; a request's response is
 // the frame whose id matches. Server-pushed requests (no id) and unrelated
 // notifications are skipped.
+//
+// The id of the last frame consumed is recorded on the client so a later
+// request can send Last-Event-ID and let a server that supports replay
+// resume the stream instead of restarting it.
+func (c *MCPHTTPClient) parseSSEResponse(body []byte, wantID int64) (*MCPMessage, error) {
+	msg, lastID, err := parseSSEStream(body, wantID)
+	if lastID != "" {
+		c.mu.Lock()
+		c.lastEventID = lastID
+		c.mu.Unlock()
+	}
+	return msg, err
+}
+
+// parseSSEResponse is the client-free form, kept for callers that only need
+// the decoded message (tests, one-shot probes).
 func parseSSEResponse(body []byte, wantID int64) (*MCPMessage, error) {
+	msg, _, err := parseSSEStream(body, wantID)
+	return msg, err
+}
+
+// parseSSEStream decodes an SSE body, returning the reply to wantID (if
+// present) and the id of the last event seen.
+func parseSSEStream(body []byte, wantID int64) (*MCPMessage, string, error) {
+	var (
+		lastEventID string
+		matched     *MCPMessage
+	)
 	for _, line := range strings.Split(string(body), "\n") {
 		line = strings.TrimRight(line, "\r")
+		if id, ok := strings.CutPrefix(line, "id:"); ok {
+			lastEventID = strings.TrimLeft(id, " ")
+			continue
+		}
 		payload, ok := strings.CutPrefix(line, "data:")
 		if !ok {
-			continue // event/id/retry fields and comments are irrelevant here
+			continue // event/retry fields and comments are irrelevant here
 		}
 		payload = strings.TrimLeft(payload, " ")
 
@@ -287,11 +401,15 @@ func parseSSEResponse(body []byte, wantID int64) (*MCPMessage, error) {
 		if msg.ID == nil {
 			continue // server-initiated request or notification
 		}
-		if idNum, ok := msg.ID.(float64); ok && int64(idNum) == wantID {
-			return &msg, nil
+		if idNum, ok := msg.ID.(float64); ok && int64(idNum) == wantID && matched == nil {
+			m := msg
+			matched = &m
 		}
 	}
-	return nil, fmt.Errorf("SSE response carried no reply for request id %d", wantID)
+	if matched == nil {
+		return nil, lastEventID, fmt.Errorf("SSE response carried no reply for request id %d", wantID)
+	}
+	return matched, lastEventID, nil
 }
 
 // Initialize sends initialize request to the server

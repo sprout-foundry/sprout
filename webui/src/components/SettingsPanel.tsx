@@ -222,6 +222,12 @@ function SettingsPanel({
     editingServer: state.editingServer,
     setEditingServer: state.setEditingServer,
     serverName: state.serverName,
+    serverType: state.serverType,
+    setServerType: state.setServerType,
+    serverURL: state.serverURL,
+    setServerURL: state.setServerURL,
+    serverHeaders: state.serverHeaders,
+    setServerHeaders: state.setServerHeaders,
     setServerName: state.setServerName,
     serverCommand: state.serverCommand,
     setServerCommand: state.setServerCommand,
@@ -376,6 +382,9 @@ function SettingsPanel({
             settings={activeSettings ?? settings}
             editingServer={state.editingServer}
             serverName={state.serverName}
+            serverType={state.serverType}
+            serverURL={state.serverURL}
+            serverHeaders={state.serverHeaders}
             serverCommand={state.serverCommand}
             serverArgs={state.serverArgs}
             serverEnvVars={state.serverEnvVars}
@@ -389,6 +398,9 @@ function SettingsPanel({
             savingKey={mutations.savingKey}
             setEditingServer={state.setEditingServer}
             setServerName={state.setServerName}
+            setServerType={state.setServerType}
+            setServerURL={state.setServerURL}
+            setServerHeaders={state.setServerHeaders}
             setServerCommand={state.setServerCommand}
             setServerArgs={state.setServerArgs}
             setServerEnvVars={state.setServerEnvVars}

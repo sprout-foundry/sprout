@@ -36,7 +36,7 @@ Do NOT assume `session_id` means "stay where you are." It means "reuse the same 
     {"action": "fill", "selector": "#email", "value": "user@test.com"},
     {"action": "fill", "selector": "#password", "value": "pass123"},
     {"action": "click", "selector": "button[type=submit]"},
-    {"action": "wait_for_text", "text": "Dashboard", "millis": 5000}
+    {"action": "wait_for_text", "expect": "Dashboard"}
   ],
   "action": "inspect",
   "capture_text": true
@@ -57,10 +57,33 @@ Do NOT assume `session_id` means "stay where you are." It means "reuse the same 
 After clicking something that triggers navigation or loads dynamic content:
 
 1. **Best**: `{"action": "wait_for", "selector": ".result-item"}` — waits for a specific element
-2. **Good**: `{"action": "wait_for_text", "text": "Results loaded"}` — waits for expected text
+2. **Good**: `{"action": "wait_for_text", "expect": "Results loaded"}` — waits for expected text
 3. **Avoid**: `{"action": "sleep", "millis": 3000}` — fixed delays are brittle and slow
 
 Never skip waits. Without them, you'll capture the page mid-transition and get stale content.
+
+## Step Vocabulary
+
+A step's `action` must be one of these 20 verbs:
+
+| Verb | Purpose |
+|------|---------|
+| `click`, `hover`, `type`, `fill`, `press` | interact with an element (`press` also takes `key`) |
+| `navigate`, `reload`, `back`, `forward` | page navigation (`navigate` takes the target in `value`) |
+| `wait_for` | wait for `selector` to appear |
+| `wait_for_text` | wait for `expect` (or `value`) text to appear |
+| `wait_for_function` | wait for the JS `script` to return truthy |
+| `assert_selector`, `assert_text`, `assert_title`, `assert_url` | assert page state; failure fails the step |
+| `scroll_to` | scroll to `selector`, or to the `millis` y-offset when no selector |
+| `eval` | evaluate `script` and capture the result |
+| `screenshot_selector` | element screenshot to `screenshot_path` |
+| `sleep` | fixed delay of `millis` |
+
+**There is no `wait` step.** Use `wait_for` (element), `wait_for_text` (text), or `sleep` (fixed delay). `wait` is accepted as an alias — `wait` + `selector` means `wait_for`, `wait` alone means `sleep` — but prefer the explicit verb.
+
+**There is no `screenshot` step.** For a whole-page screenshot use the top-level `action: "screenshot"` with `screenshot_path`; for one element use the step `screenshot_selector` (which needs both `selector` and `screenshot_path`).
+
+Text expectations go in `expect`, never `text` — there is no `text` field, and an unknown field is rejected rather than silently ignored.
 
 ## Diagnostic Capture Guide
 

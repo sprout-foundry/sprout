@@ -337,6 +337,27 @@ func SetToActiveBackend(provider, value string) error {
 	return nil
 }
 
+// SetForDir stores a credential in the file store under an explicit config
+// root, bypassing the process's resolved backend. The OS keyring is
+// process-wide and has no per-workspace notion, so an explicit scope choice
+// (user-level vs workspace) can only be honoured by the file store — which
+// is exactly the store whose root differs between the two.
+func SetForDir(configDir, provider, value string) error {
+	provider = strings.TrimSpace(provider)
+	if provider == "" {
+		return fmt.Errorf("provider name cannot be empty")
+	}
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return fmt.Errorf("credential value cannot be empty")
+	}
+
+	return AtomicModifyForDir(configDir, func(store Store) error {
+		store[provider] = value
+		return nil
+	})
+}
+
 // GetFromActiveBackend gets a credential using the active backend.
 // Returns the value, source ("keyring" or "file"), and error.
 func GetFromActiveBackend(provider string) (string, string, error) {

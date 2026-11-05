@@ -13,6 +13,8 @@ This directory contains the system prompts for each specialized subagent persona
 7. **[Computer User](computer_user.md)** - Desktop automation: screenshots, mouse, and keyboard
 8. **[General](general.md)** - General-purpose tasks that don't fit specialized categories
 9. **[Worker](worker.md)** - Routine delegated subtasks on a cheaper model (read/search, summarise, mechanical edits, running tests)
+10. **[Planner](planner.md)** - Conversation from an idea to an agreed plan and a clickable mockup, before anything is built (confined: writes only the plan and `design/mockup.html`)
+11. **[Developer Planner](dev_planner.md)** - Reads the repository and hands a developer a task list in the same turn; no interview, no code changes (confined: writes only the plan)
 
 ## Quick Reference
 
@@ -27,6 +29,8 @@ This directory contains the system prompts for each specialized subagent persona
 | Computer User | Desktop automation: mouse, keyboard, screenshots | take_screenshot, mouse_click, keyboard_type |
 | General | Anything not specialized | all defaults |
 | Worker | Routine subtasks on a cheaper model: read/search, summarise, mechanical edits, run tests | read_file, search, edit_file, shell_command |
+| Planner | Idea → agreed plan → clickable mockup, for a host's builder screen | ask_user, write_plan, draw_mockup |
+| Developer Planner | A goal or issue → a task list a coding agent can finish one at a time | repo_map, read_file, search, propose_tasks, write_plan, draw_mockup |
 
 ## Usage
 
@@ -44,6 +48,7 @@ These prompts are loaded automatically when a subagent is spawned with a specifi
 - **Delegate a routine, well-scoped subtask on a cheaper model** (read/search, summarise, mechanical edits, run a test) → `worker`
 - **Hands-on shell / sysadmin** → `coder` or `general` (use `shell_command` directly)
 - **General-purpose task** → `general`
+- **Turn an idea into an agreed plan and a mockup, in plain words** → `planner` (not delegatable: a host runs it as the conversation's persona)
 
 `refactor`, `debugger`, and `web_scraper` were consolidated into `coder` and `researcher` (2026-09); those IDs resolve as aliases.
 

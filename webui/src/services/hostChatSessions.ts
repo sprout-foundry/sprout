@@ -112,12 +112,19 @@ export function withChatSessionsProject(
  * honoured; only the URL (and the project) change, pointing at the host's
  * store. `project` omitted, the call uses the recorded active project at call
  * time.
+ *
+ * The store is the host's whatever agent backend runs the turns, so the call
+ * is pinned to the host's base: `''` (the same-origin sentinel) is resolved to
+ * the page origin here, otherwise `clientFetch` would route the relative path
+ * to a daemon backend's base and the session list would land on the wrong
+ * store.
  */
 export function hostChatSessionsFetch(apiBaseURL: string, project?: string): typeof fetch {
+  const base = apiBaseURL || (typeof window !== 'undefined' ? window.location.origin : '');
   return (input, init) => {
     if (typeof input !== 'string' || !input.startsWith('/')) return clientFetch(input, init);
     const [path, scoped] = withChatSessionsProject(input, init, project ?? activeChatSessionsProject);
-    return clientFetch(hostApiURL(apiBaseURL, path), scoped);
+    return clientFetch(hostApiURL(base, path), scoped);
   };
 }
 

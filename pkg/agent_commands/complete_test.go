@@ -147,9 +147,10 @@ func TestModelsCommand_Complete_CaseSensitivity(t *testing.T) {
 func TestProvidersCommand_Complete_EmptyArgs(t *testing.T) {
 	cmd := &ProvidersCommand{}
 
-	// No args + nil agent -> returns ["list", "select", "status"]
+	// No args + nil agent -> returns the subcommand set. SP-167 added the
+	// custom-provider subcommands (add/remove/custom) to /provider.
 	results := cmd.Complete(nil, nil)
-	assert.ElementsMatch(t, []string{"list", "select", "status"}, results)
+	assert.ElementsMatch(t, []string{"add", "custom", "list", "remove", "select", "status"}, results)
 	assert.True(t, sort.StringsAreSorted(results), "results should be sorted")
 }
 
@@ -160,7 +161,7 @@ func TestProvidersCommand_Complete_EmptyArgsWithAgent(t *testing.T) {
 	// -> returns basic subcommands only.
 	a := agent.NewTestAgent()
 	results := cmd.Complete(nil, a)
-	assert.ElementsMatch(t, []string{"list", "select", "status"}, results)
+	assert.ElementsMatch(t, []string{"add", "custom", "list", "remove", "select", "status"}, results)
 	assert.True(t, sort.StringsAreSorted(results), "results should be sorted")
 }
 
@@ -974,37 +975,6 @@ func TestRiskProfileCommand_Complete_CustomProfiles(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// MaxContextCommand.Complete
-// ---------------------------------------------------------------------------
-
-func TestMaxContextCommand_Complete_EmptyArgs(t *testing.T) {
-	cmd := &MaxContextCommand{}
-
-	// No args -> should return ["clear"]
-	results := cmd.Complete(nil, nil)
-	assert.Equal(t, []string{"clear"}, results, "empty args should return ['clear']")
-}
-
-func TestMaxContextCommand_Complete_PrefixMatch(t *testing.T) {
-	cmd := &MaxContextCommand{}
-
-	// args=["cl"] -> returns ["clear"]
-	results := cmd.Complete([]string{"cl"}, nil)
-	assert.Equal(t, []string{"clear"}, results, "prefix 'cl' should match 'clear'")
-
-	// Case insensitive: "CL" should match "clear"
-	resultsUpper := cmd.Complete([]string{"CL"}, nil)
-	assert.Equal(t, []string{"clear"}, resultsUpper, "case-insensitive prefix 'CL' should match 'clear'")
-}
-
-func TestMaxContextCommand_Complete_TooManyArgs(t *testing.T) {
-	cmd := &MaxContextCommand{}
-
-	results := cmd.Complete([]string{"clear", "extra"}, nil)
-	assert.Nil(t, results, "more than one arg should return nil")
-}
-
-// ---------------------------------------------------------------------------
 // TranscriptCommand.Complete
 // ---------------------------------------------------------------------------
 
@@ -1138,7 +1108,7 @@ func TestCommitCommand_Complete_FlagPrefix(t *testing.T) {
 
 	// args=["--"] -> all flags
 	results = cmd.Complete([]string{"--"}, nil)
-	assert.ElementsMatch(t, []string{"--skip-prompt", "--dry-run", "--allow-secrets"}, results,
+	assert.ElementsMatch(t, []string{"--skip-prompt", "--dry-run", "--allow-secrets", "--trailer"}, results,
 		"prefix '--' should match all flags")
 }
 

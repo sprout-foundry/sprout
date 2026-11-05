@@ -81,8 +81,16 @@ func handleToolError(agent *Agent, err error, toolName string) (string, error) {
 				}
 			case agenterrors.IsProviderError(err):
 				label = "Tool '" + toolName + "' failed (provider): " + safeMsg
-			default:
+			case agenterrors.IsTransient(err):
 				label = "Tool '" + toolName + "' failed (transient): " + safeMsg
+			default:
+				// ActionRetry also covers untyped errors, which are retried
+				// once on the theory that they might be transient. Saying so
+				// outright is a lie for a deterministic failure (a bad
+				// argument, a missing element): the label tells the user the
+				// fault was momentary and invites a retry that cannot work.
+				// Only claim "transient" when the error says it is.
+				label = "Tool '" + toolName + "' failed: " + safeMsg
 			}
 			agent.PublishAgentMessage("tool_error", label, nil)
 		}

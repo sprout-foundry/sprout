@@ -20,10 +20,25 @@ type PasswordPrompter interface {
 	Prompt(ctx context.Context, reason string) (string, error)
 }
 
+// InteractivePrompter is implemented by prompters that can also collect a
+// non-secret answer — a confirmation ("Overwrite? [y/N]") or a value ("Enter a
+// name:"). The shell scanner calls PromptInput when it detects such a prompt
+// and falls back to Prompt when the prompter does not implement this.
+//
+// secret tells the surface whether to mask the input and redact the answer.
+type InteractivePrompter interface {
+	PromptInput(ctx context.Context, reason string, secret bool) (string, error)
+}
+
 // ErrNoInteractiveSurface is returned when the password prompter cannot
 // present a prompt to the user (e.g., stdin is not a TTY and no WebUI is
 // connected).
 var ErrNoInteractiveSurface = errors.New("no interactive surface available for password prompt")
+
+// ErrPromptCancelled is returned when the user dismissed an interactive
+// prompt. The shell scanner closes the child's stdin so the command stops,
+// instead of writing a blank line that a prompt would accept as its default.
+var ErrPromptCancelled = errors.New("interactive prompt cancelled by user")
 
 // passwordPrompterKey is an unexported context key type.
 type passwordPrompterKey struct{}
@@ -41,4 +56,14 @@ func PasswordPrompterFromContext(ctx context.Context) PasswordPrompter {
 		return pp
 	}
 	return nil
+}
+
+// PromptForAnswer asks pp for an answer to a shell prompt. When the prompter
+// supports interactive input it is told whether the answer is secret;
+// otherwise Prompt is used, which surfaces a password-shaped request.
+func PromptForAnswer(ctx context.Context, pp PasswordPrompter, reason string, secret bool) (string, error) {
+	if ip, ok := pp.(InteractivePrompter); ok {
+		return ip.PromptInput(ctx, reason, secret)
+	}
+	return pp.Prompt(ctx, reason)
 }

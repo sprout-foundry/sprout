@@ -108,6 +108,15 @@ function scopeSelector(selector) {
     const rest = s.slice(":root".length);
     return `${WORKSPACE_ROOT_CLASS}${rest}`;
   }
+  // A bare attribute guard (`[data-theme='light'] .x`) is authored for the
+  // element that carries the attribute. The workspace root carries it, so the
+  // guard must be compounded onto the root (`.sprout-workspace[data-theme=…]`)
+  // — a descendant prefix would only match a nested element that has the
+  // attribute, which never exists.
+  const attributeGuard = s.match(/^\[[^\]]+\]/);
+  if (attributeGuard) {
+    return `${WORKSPACE_ROOT_CLASS}${attributeGuard[0]}${s.slice(attributeGuard[0].length)}`;
+  }
   if (isLeakingSelector(s)) {
     return `${WORKSPACE_ROOT_CLASS} ${s}`;
   }

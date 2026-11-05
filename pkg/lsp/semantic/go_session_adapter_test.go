@@ -71,10 +71,7 @@ func TestGoSessionAdapterRunDiagnostics(t *testing.T) {
 }
 
 func TestGoSessionAdapterRunDefinitionNoGopls(t *testing.T) {
-	_, err := exec.LookPath("gopls")
-	if err == nil {
-		t.Skip("gopls is available; skipping not-available path test")
-	}
+	skipIfGoplsInstalled(t)
 
 	a := &goSessionAdapter{}
 	defer a.Close()
@@ -95,10 +92,7 @@ func TestGoSessionAdapterRunDefinitionNoGopls(t *testing.T) {
 }
 
 func TestGoSessionAdapterRunHoverNoGopls(t *testing.T) {
-	_, err := exec.LookPath("gopls")
-	if err == nil {
-		t.Skip("gopls is available; skipping not-available path test")
-	}
+	skipIfGoplsInstalled(t)
 
 	a := &goSessionAdapter{}
 	defer a.Close()
@@ -119,10 +113,7 @@ func TestGoSessionAdapterRunHoverNoGopls(t *testing.T) {
 }
 
 func TestGoSessionAdapterRunInlayHintsNoGopls(t *testing.T) {
-	_, err := exec.LookPath("gopls")
-	if err == nil {
-		t.Skip("gopls is available; skipping not-available path test")
-	}
+	skipIfGoplsInstalled(t)
 
 	a := &goSessionAdapter{}
 	defer a.Close()

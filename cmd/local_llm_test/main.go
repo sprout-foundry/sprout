@@ -1,3 +1,7 @@
+// Command local_llm_test runs three fixed prompts through a qwen3-0.6b model
+// and prints the output with timing, as a smoke check that local inference
+// produces coherent text.
+
 //go:build darwin && arm64 && cgo
 
 package main

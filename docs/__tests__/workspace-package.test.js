@@ -342,9 +342,11 @@ describe("stylesheet scoping pass", () => {
     );
     // A bare attribute selector has no class anchor, so it too reaches
     // host-owned elements (a host root may carry `data-theme`) and is scoped.
+    // The guard compounds onto the root: the workspace root is the element
+    // that carries `data-theme`, so a descendant prefix would never match.
     assert.equal(
       scopeSelectorList(scopeStylesheet("[data-theme=dark] .x{color:red}")),
-      ".sprout-workspace [data-theme=dark] .x",
+      ".sprout-workspace[data-theme=dark] .x",
     );
   });
 
@@ -449,6 +451,18 @@ describe("version lockstep with the sprout release", () => {
     assert.ok(entry, "package-lock.json has a packages/workspace entry");
     assert.equal(entry.name, pkg.name);
     assert.equal(entry.version, rootPkg.version);
+    // The lockfile's own root entries drift independently of the workspace
+    // entry, so pin all three locations the release bumps together.
+    assert.equal(
+      lock.version,
+      rootPkg.version,
+      "package-lock.json version must track the root sprout version",
+    );
+    assert.equal(
+      lock.packages?.[""]?.version,
+      rootPkg.version,
+      'package-lock.json packages[""].version must track the root sprout version',
+    );
   });
 });
 
@@ -501,6 +515,20 @@ describe("package sources", () => {
       /from "\.\.\/\.\.\/\.\.\/webui\/src\/providers\/SproutProviders"/,
     );
     assert.match(source, /SproutProviders/);
+  });
+
+  test("the agent entry point imports no web UI or React module", () => {
+    const sources = [
+      "packages/workspace/src/agentChunk.ts",
+      ...fs
+        .readdirSync(path.join(ROOT, "packages/workspace/src/agent"))
+        .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"))
+        .map((f) => `packages/workspace/src/agent/${f}`),
+    ];
+    for (const file of sources) {
+      const source = read(file);
+      assert.doesNotMatch(source, /webui\/src|from ['"]react/, `${file} must not reach the web UI or React`);
+    }
   });
 
   test("the host entry point re-exports the public host module", () => {
@@ -636,6 +664,16 @@ describe(
       for (const spec of specifiers) {
         assert.ok(spec.startsWith("./"), `entry import is relative: ${spec}`);
       }
+    });
+
+    test("the agent entry is self-contained: it loads no chunk and no React", () => {
+      const agent = fs.readFileSync(path.join(DIST, "agent.js"), "utf-8");
+      assert.doesNotMatch(agent, /\bfrom\s+["']|\bimport\s*\(\s*["']/, "agent.js imports nothing");
+      assert.ok(
+        agent.length < 64 * 1024,
+        `the headless agent API must stay small, was ${agent.length} bytes`,
+      );
+      assert.ok(fs.existsSync(path.join(DIST, "agent.d.ts")), "agent.d.ts emitted");
     });
 
     test("code-splitting: the entry is small and the views are their own chunks", () => {

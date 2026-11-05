@@ -1,6 +1,7 @@
 package agent
 
 import (
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"strings"
 	"testing"
 )
@@ -72,19 +73,19 @@ func TestApplyPatchOperations_ObjectAndArray(t *testing.T) {
 }
 
 func TestInferStructuredFormat(t *testing.T) {
-	if got := inferStructuredFormat("config.json", ""); got != "json" {
+	if got := tools.InferStructuredFormat("config.json", ""); got != "json" {
 		t.Fatalf("expected json, got %s", got)
 	}
-	if got := inferStructuredFormat("config.yaml", "yml"); got != "yaml" {
+	if got := tools.InferStructuredFormat("config.yaml", "yml"); got != "yaml" {
 		t.Fatalf("expected yaml, got %s", got)
 	}
-	if got := inferStructuredFormat("config.txt", ""); got != "" {
+	if got := tools.InferStructuredFormat("config.txt", ""); got != "" {
 		t.Fatalf("expected empty format, got %s", got)
 	}
 }
 
 func TestFormatStructuredValidationError_IncludesPathsAndCount(t *testing.T) {
-	err := formatStructuredValidationError("write_structured_file", []string{
+	err := tools.FormatStructuredValidationError("write_structured_file", []string{
 		"$.content.name: expected string",
 		"$.content.price: expected number",
 		"$.content.price: expected number",
@@ -96,13 +97,13 @@ func TestFormatStructuredValidationError_IncludesPathsAndCount(t *testing.T) {
 	if !strings.Contains(msg, "error_count=3") {
 		t.Fatalf("expected error count in message, got: %s", msg)
 	}
-	if !strings.Contains(msg, "failed_paths=$.content.name,$.content.price") {
+	if !strings.Contains(msg, "failed_paths=$.content.name, $.content.price") {
 		t.Fatalf("expected failed paths in message, got: %s", msg)
 	}
 }
 
 func TestExtractValidationPaths(t *testing.T) {
-	paths := extractValidationPaths([]string{
+	paths := tools.ExtractValidationPaths([]string{
 		"$.a.b: expected string",
 		"$.a.b: expected string",
 		"$.arr[0]: expected integer",

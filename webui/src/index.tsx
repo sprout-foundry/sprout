@@ -10,7 +10,7 @@ import App from './App';
 import { checkContractCompat, ContractRefusal } from './config/contractCompat';
 import { applyShellAttribute, isStudioShellSync, resolveShellIdentity } from './config/shell';
 import './config/mode'; // Imported early so it regs the host-capability hook before the host is set
-import { HostProvider, localHost, setActiveHost, upsertActiveHostCapabilities } from './host';
+import { HostProvider, localHost, productName, setActiveHost, upsertActiveHostCapabilities } from './host';
 import { applyHostCapabilities } from './host/applyHostCapabilities';
 // The cloud host is a platform implementation detail (not part of the public
 // host contract), so the entry imports it from the internal platform module.
@@ -85,6 +85,10 @@ function insideAnotherEditor(): boolean {
   applyHostCapabilities(host, getAdapter());
   await resolveClientIdentity();
   setActiveHost(host);
+  // The tab title follows the host's own brand: Sprout in the open-source
+  // build, the host's product name when it embeds Sprout under its own brand.
+  // index.html carries Sprout's name as the static fallback before JS runs.
+  document.title = productName(host);
   if (host === localHost) {
     const onAdapterInstalled = () => {
       const adapter = getAdapter();

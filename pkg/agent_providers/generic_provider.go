@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptrace"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -49,6 +50,13 @@ type GenericProvider struct {
 	// maxTokensHint overrides the max_tokens computation in buildChatRequest when > 0.
 	maxTokensHint   int
 	maxTokensHintMu sync.RWMutex
+
+	// reasoningWarnMu guards reasoningNoKnobWarned so a reasoning-capable
+	// model with no host knob is warned once per provider instance (session),
+	// not on every request (rel.1: a setting that cannot be applied is
+	// reported, never dropped silently).
+	reasoningWarnMu       sync.Mutex
+	reasoningNoKnobWarned bool
 }
 
 // HTTP error formatting helpers are in generic_provider_http_errors.go.
@@ -64,17 +72,25 @@ func NewGenericProvider(config *ProviderConfig) (*GenericProvider, error) {
 
 	p := &GenericProvider{
 		config: config,
+		// Dedicated transports (see newProviderTransport): the 30 s idle
+		// window and 15 s TCP keepalive keep the pooled connections from
+		// outliving Cloudflare-fronted providers' and home NATs' idle
+		// limits, so a reused connection is not silently reset on its first
+		// read. Separate instances keep the streaming and non-streaming
+		// pools independent.
 		httpClient: &http.Client{
-			Timeout: timeout,
+			Timeout:   timeout,
+			Transport: newProviderTransport(),
 		},
 		streamingClient: &http.Client{
-			Timeout: streamingTimeout,
+			Timeout:   streamingTimeout,
+			Transport: newProviderTransport(),
 		},
 		debug: false,
 		model: config.Defaults.Model,
 	}
 	// Warm the models cache in the background (skip for local endpoints).
-	if p.model != "" && p.config.Endpoint != "" &&
+	if p.model != "" && p.config.Endpoint != "" && !config.Models.DisableDiscovery &&
 		!strings.Contains(p.config.Endpoint, "127.0.0.1") &&
 		!strings.Contains(p.config.Endpoint, "localhost") {
 		p.warmModelsCache()
@@ -87,7 +103,7 @@ func (p *GenericProvider) warmModelsCache() {
 	p.mu.RLock()
 	cached := p.modelsCached
 	p.mu.RUnlock()
-	if cached {
+	if cached || p.config.Models.DisableDiscovery {
 		return
 	}
 	// Deduplicate: prevent goroutine accumulation under rapid SetModel calls.
@@ -104,6 +120,14 @@ func (p *GenericProvider) warmModelsCache() {
 
 // SendChatRequest sends a non-streaming chat request
 func (p *GenericProvider) SendChatRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
+	// A config that sets stall deadlines wants them on every call. A
+	// non-streaming response arrives all at once, so a stalled call could
+	// only be cut by the whole-request timeout; streaming it (and
+	// discarding the chunks) lets the first-chunk and idle deadlines catch
+	// the stall and retry. The assembled response is the same.
+	if p.config.Streaming.FirstChunkTimeoutMs > 0 || p.config.Streaming.IdleChunkTimeoutMs > 0 {
+		return p.SendChatRequestStream(ctx, messages, tools, reasoning, disableThinking, func(string, string) {})
+	}
 	resp, err := p.sendChatRequestImpl(ctx, messages, tools, reasoning, disableThinking)
 	return p.reconcileVisionCapability(messages, resp, err, func(msgs []api.Message) (*api.ChatResponse, error) {
 		return p.sendChatRequestImpl(ctx, msgs, tools, reasoning, disableThinking)
@@ -149,7 +173,7 @@ func (p *GenericProvider) sendChatRequestImpl(ctx context.Context, messages []ap
 	client := p.httpClient
 	p.mu.RUnlock()
 
-	resp, err := client.Do(req)
+	resp, diag, err := p.executeChatRequest(client, req, sentBody, false)
 	if err != nil {
 		// For local providers, attempt to auto-start the server and retry once.
 		if recovered := p.tryLocalServerRecovery(); recovered {
@@ -169,7 +193,7 @@ func (p *GenericProvider) sendChatRequestImpl(ctx context.Context, messages []ap
 		if err != nil {
 			// Log request on HTTP error
 			logging.LogRequestPayloadOnError(sentBody, p.config.Name, currentModel, false, "http_request_failed", err)
-			return nil, agenterrors.NewNetwork("HTTP request failed", err)
+			return nil, p.networkErrorWithConnDiag("HTTP request failed", err, diag)
 		}
 	}
 
@@ -292,6 +316,108 @@ func decodeChatResponseWithCost(r io.Reader) (*api.ChatResponse, error) {
 }
 
 // SendChatRequestStream is defined in generic_provider_streaming.go
+
+// connDiagnostics carries the httptrace facts about how a provider request's
+// transport behaved, so the error record (rel.5 c) can tell a stale-pool
+// reset, a long silent prefill, and a mid-stream drop apart.
+type connDiagnostics struct {
+	// Reused reports whether the connection serving the request was pulled
+	// from the keep-alive pool rather than freshly dialed.
+	Reused bool
+	// RequestStartedAt is when the HTTP request began.
+	RequestStartedAt time.Time
+}
+
+// freshRetryClientFactory builds the one-shot keep-alive-disabled client a
+// stale-connection retry uses. It is a package var (not inline) so tests can
+// swap in a client with a controllable transport without dialing a real
+// connection.
+var freshRetryClientFactory = func(parent *http.Client) *http.Client {
+	return &http.Client{
+		Transport: &http.Transport{
+			Proxy:               http.ProxyFromEnvironment,
+			DisableKeepAlives:   true,
+			TLSHandshakeTimeout: 10 * time.Second,
+		},
+		Timeout: parent.Timeout,
+	}
+}
+
+// shouldRetryOnFreshConnection is the pure decision the stale-pool retry
+// makes: only a failure that happened on a REUSED (pooled) connection,
+// before any response byte, is a transport artifact worth an immediate
+// fresh-connection retry. A freshly dialed connection failing is a genuine
+// network fault and must NOT be masked — it is surfaced to the LLM retry
+// loop instead, which applies backoff.
+func shouldRetryOnFreshConnection(reused bool, err error) bool {
+	return err != nil && reused
+}
+
+// networkErrorWithConnDiag builds the network TypedError for a failed request
+// and attaches the connection-reuse diagnostics (rel.5 c) to its Details so
+// the agent's provider-error record can tell a stale-pool reset apart from a
+// fresh-dial fault and a long silent prefill.
+func (p *GenericProvider) networkErrorWithConnDiag(msg string, cause error, diag *connDiagnostics) *agenterrors.TypedError {
+	err := agenterrors.NewNetwork(msg, cause)
+	if diag != nil {
+		err = err.WithDetail("conn_reused", diag.Reused).
+			WithDetail("conn_request_started_at", diag.RequestStartedAt.UnixMilli())
+	}
+	return err
+}
+
+// executeChatRequest runs client.Do(req) with httptrace reuse tracking and a
+// single fresh-connection retry. A keep-alive connection can be silently
+// reset by a middlebox (Cloudflare-fronted provider, home NAT) after it sits
+// idle past the peer's own idle limit: the transport hands out the pooled
+// connection, the first read sees a reset, and the request fails before any
+// response byte. That is a transport artifact, not a provider response — so
+// when the failed connection was REUSED (a fresh dial failing is a real
+// network fault and must not be masked), we retry once, immediately, on a
+// connection with keep-alive disabled, without counting it as an attempt.
+//
+// The fresh retry rebuilds the request from body so the body reader is not
+// shared with (and possibly consumed by) the failed first attempt.
+func (p *GenericProvider) executeChatRequest(client *http.Client, req *http.Request, body []byte, fresh bool) (*http.Response, *connDiagnostics, error) {
+	execClient := client
+	if fresh {
+		// A one-shot keep-alive-disabled transport so the pooled (possibly
+		// stale) connection is never reused. The request is rebuilt from
+		// body so its reader is fresh.
+		cloned := req.Clone(req.Context())
+		if body != nil {
+			cloned.Body = io.NopCloser(bytes.NewReader(body))
+			cloned.ContentLength = int64(len(body))
+		}
+		req = cloned
+		execClient = freshRetryClientFactory(client)
+	}
+
+	d := &connDiagnostics{RequestStartedAt: time.Now()}
+	execReq := req
+	if !fresh {
+		trace := &httptrace.ClientTrace{}
+		trace.GotConn = func(ci httptrace.GotConnInfo) {
+			d.Reused = ci.Reused
+		}
+		execReq = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
+	}
+
+	resp, err := execClient.Do(execReq)
+	if err == nil {
+		return resp, d, nil
+	}
+	// A reused-connection failure before any response byte is a stale-pool
+	// artifact: retry once on a fresh connection (without counting it as an
+	// attempt). A non-reused (freshly dialed) failure is a genuine network
+	// fault — propagate it so the LLM retry loop handles it with backoff.
+	if shouldRetryOnFreshConnection(d.Reused, err) {
+		if freshResp, _, freshErr := p.executeChatRequest(client, req, body, true); freshErr == nil {
+			return freshResp, d, nil
+		}
+	}
+	return nil, d, err
+}
 
 // CheckConnection tests provider connection with current model
 func (p *GenericProvider) CheckConnection() error {
@@ -421,7 +547,7 @@ func (p *GenericProvider) GetModelContextLimit() (int, error) {
 	p.mu.RUnlock()
 
 	// 2. Consult the published model registry (best-effort; falls through on failure)
-	if modelName != "" {
+	if modelName != "" && !p.config.Models.DisableDiscovery {
 		ctx, cancel := context.WithTimeout(context.Background(), modelregistryFetchTimeout)
 		defer cancel()
 		if rawModels, err := modelregistry.FetchModels(ctx, p.config.Name); err == nil {

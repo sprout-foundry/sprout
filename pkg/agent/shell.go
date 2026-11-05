@@ -13,6 +13,7 @@ import (
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 var nonWhitespaceTokenRegex = regexp.MustCompile(`\S+`)
@@ -358,4 +359,34 @@ func (a *Agent) executeShellCommandBackground(ctx context.Context, command strin
 		return "", agenterrors.NewTool("shell_command", "failed to execute background shell command", err)
 	}
 	return result, nil
+}
+
+// ShellExecutionContext returns a context carrying the wiring a shell command
+// needs to reach the user and the workspace: workspace root, process manager,
+// and the password prompter.
+//
+// It deliberately does NOT install the TerminalManager. A context carrying one
+// routes ExecuteShellCommand through the chat's shared hidden PTY, which
+// (a) shares cwd/env with the agent's own shell tool, (b) promotes long
+// commands to background on timeout, and (c) has no prompt detection — so a
+// sudo prompt there would never reach the user. Callers that want the agent's
+// shell-tool routing use executeShellCommandWithTruncation instead.
+//
+// Commands must not call tools.ExecuteShellCommand with context.Background().
+// A bare context carries no prompter, so a sudo/passwd prompt has no surface
+// to reach the user and the command blocks instead of asking.
+func (a *Agent) ShellExecutionContext() context.Context {
+	ctx := a.InterruptCtx()
+
+	if root := a.GetWorkspaceRoot(); root != "" {
+		ctx = filesystem.WithWorkspaceRoot(ctx, root)
+	}
+
+	ctx = tools.WithBackgroundProcessManager(ctx, a.getOrCreateBackgroundProcessManager())
+
+	if a.passwordPrompter != nil {
+		ctx = tools.WithPasswordPrompter(ctx, a.passwordPrompter)
+	}
+
+	return ctx
 }

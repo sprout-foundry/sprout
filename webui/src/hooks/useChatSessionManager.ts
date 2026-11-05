@@ -17,7 +17,7 @@ import type { AppState, WorkspaceBusyInfo } from '../types/app';
 import { debugLog } from '../utils/log';
 import { toUserErrorMessage } from '../utils/errorMessage';
 import { notificationBus } from '../services/notificationBus';
-import { fetchChatRunning } from '../services/runStatus';
+import { fetchChatRunning, resolveChatRunning } from '../services/runStatus';
 import { generateMessageId } from '../utils/messageId';
 import { trimMessages } from '../utils/messageWindow';
 import { NATIVE_CHAT_ENABLED } from '../services/nativeChatStubs/nativeChatFlag';
@@ -199,7 +199,11 @@ export function useChatSessionManager({
         try {
           const switchResp = await chatSessions.switchChatSession(activeChatId);
           initialMessages = chatTranscriptToMessages(activeChatId, switchResp.chat_session.messages);
-          initialActive = switchResp.chat_session.active_query === true;
+          // A turn already running on the backend shows as running and keeps
+          // streaming, even when the store serving this transcript does not
+          // know about it (a host store pinned to a platform, with the agent on
+          // the project's daemon).
+          initialActive = await resolveChatRunning(activeChatId, switchResp.chat_session.active_query === true);
           initialRunEvents = switchResp.chat_session.run_events ?? [];
           if (!activeChatIdRef.current) {
             activeChatIdRef.current = activeChatId;
@@ -336,7 +340,11 @@ export function useChatSessionManager({
         // know it never landed and can fall back.
         if (activeChatIdRef.current !== switchId) return false;
         const backendMessages: Message[] = chatTranscriptToMessages(id, response.chat_session.messages);
-        const backendIsActive = response.chat_session.active_query;
+        // The backend that runs the agent decides whether a turn is in
+        // flight; the store's `active_query` alone misses a daemon run when
+        // the store is the host's (see resolveChatRunning).
+        const backendIsActive = await resolveChatRunning(id, response.chat_session.active_query);
+        if (activeChatIdRef.current !== switchId) return false;
 
         setState((prev) => {
           // Backend is authoritative when it has at least as many messages,
@@ -1031,7 +1039,8 @@ export function useChatSessionManager({
         const response = await chatSessions.switchChatSession(id);
         if (activeChatIdRef.current !== id) return; // user moved on while loading
         const backendMessages: Message[] = chatTranscriptToMessages(id, response.chat_session.messages);
-        const backendIsActive = response.chat_session.active_query;
+        const backendIsActive = await resolveChatRunning(id, response.chat_session.active_query);
+        if (activeChatIdRef.current !== id) return; // user moved on while loading
         activeRequestsRef.current = backendIsActive ? 1 : 0;
         setState(() => ({
           messages: trimMessages(backendMessages),

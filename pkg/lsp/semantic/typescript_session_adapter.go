@@ -122,7 +122,13 @@ func (a *typeScriptSessionAdapter) Healthy() bool {
 	if a.closed {
 		return false
 	}
-	if a.cmd == nil || a.cmd.Process == nil {
+	// No worker yet means it has not been started: Run starts it lazily via
+	// ensureWorkerLocked. Reporting unhealthy here would make the pool close
+	// and evict the session on every acquire, so the worker never starts.
+	if a.cmd == nil {
+		return true
+	}
+	if a.cmd.Process == nil {
 		return false
 	}
 	return a.cmd.ProcessState == nil

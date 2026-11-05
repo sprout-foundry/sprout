@@ -23,21 +23,23 @@ function setAvailability(next: Availability): void {
 }
 
 /**
- * Ask the platform once whether workspaces exist here. Only the "not
- * configured" 503 counts as unavailable; a transient outage or a network
- * failure leaves the option on offer so the user can retry.
+ * Ask the platform once whether workspaces exist here, through the typed
+ * availability endpoint (`GET /workspace/availability`) rather than the
+ * legacy list route: a deployment without cloud compute answers
+ * `available: false` instead of 503-ing on the probe. Only a definitive
+ * `available: false` counts as unavailable; a missing endpoint (a local
+ * daemon without the route), a transient outage or a network failure leaves
+ * the option on offer so the user can retry.
  */
 export function probeFullWorkspaces(): Promise<void> {
   if (!probe) {
     probe = Promise.resolve()
-      .then(() => clientFetch('/workspace/fly', { credentials: 'include' }))
+      .then(() => clientFetch('/workspace/availability', { credentials: 'include' }))
       .then(async (res) => {
-        if (!res || res.status !== 503) {
-          setAvailability('available');
-          return;
-        }
-        const body = await res.text().catch(() => '');
-        setAvailability(NOT_CONFIGURED.test(body) ? 'unavailable' : 'available');
+        if (!res || !res.ok) return;
+        const data = (await res.json().catch(() => ({}))) as { available?: unknown };
+        if (typeof data.available !== 'boolean') return;
+        setAvailability(data.available ? 'available' : 'unavailable');
       })
       .catch(() => undefined);
   }
@@ -76,10 +78,16 @@ export type StartFullWorkspaceResult =
  * workspace's auth exchange. Rejects only on network failure.
  */
 export async function startFullWorkspace(repoURL: string): Promise<StartFullWorkspaceResult> {
-  const response = await clientFetch('/workspace/fly', {
+  // The host-agnostic cloud create, not the legacy /workspace/fly start route:
+  // host=cloud places on the platform's cloud hosts (the fleet, Fly as
+  // overflow) and never the caller's runner — the full-workspace start is a
+  // cloud action, so this keeps the legacy create's semantics on the typed
+  // surface (SP-BUILDER-12). The create is idempotent: a live cloud
+  // workspace for the repo is resumed, not duplicated.
+  const response = await clientFetch('/workspace/txn', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ repo_url: repoURL }),
+    body: JSON.stringify({ repo_url: repoURL, host: 'cloud' }),
     credentials: 'include',
   });
 
@@ -94,10 +102,22 @@ export async function startFullWorkspace(repoURL: string): Promise<StartFullWork
   }
 
   const data = await response.json();
-  if (data.url && data.session_token) {
-    const wsUrl = new URL(data.url);
+  // The cloud create answers with the open fields per backend: the Fly
+  // path's url/session_token, or the Firecracker path's gateway_url + its
+  // access token. Both open through the same /auth/exchange (the gateway's
+  // exchange is the Fly open's), so one navigate covers either.
+  const openUrl =
+    typeof data.url === 'string' && data.url ? data.url : typeof data.gateway_url === 'string' ? data.gateway_url : '';
+  const token =
+    typeof data.session_token === 'string' && data.session_token
+      ? data.session_token
+      : typeof data.gateway_access_token === 'string'
+        ? data.gateway_access_token
+        : '';
+  if (openUrl && token) {
+    const wsUrl = new URL(openUrl);
     wsUrl.pathname = '/auth/exchange';
-    wsUrl.searchParams.set('token', data.session_token);
+    wsUrl.searchParams.set('token', token);
     window.location.href = wsUrl.toString();
     return { kind: 'redirecting' };
   }

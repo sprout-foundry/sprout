@@ -26,6 +26,9 @@ type CommitFlow struct {
 	dryRun           bool
 	allowSecrets     bool
 	userInstructions string
+	// trailers are the explicit git trailers (--trailer "Key: Value")
+	// appended to the commit message on top of the commit.trailers defaults.
+	trailers []string
 }
 
 // NewCommitFlow creates a new commit flow
@@ -50,6 +53,12 @@ func NewCommitFlowWithFlags(chatAgent *agent.Agent, skipPrompt, dryRun, allowSec
 // SetUserInstructions sets the user instructions for commit message generation
 func (cf *CommitFlow) SetUserInstructions(instructions string) {
 	cf.userInstructions = instructions
+}
+
+// SetTrailers sets the explicit git trailers (--trailer "Key: Value")
+// appended to the commit message on top of the commit.trailers defaults.
+func (cf *CommitFlow) SetTrailers(trailers []string) {
+	cf.trailers = trailers
 }
 
 func (cf *CommitFlow) printf(format string, args ...interface{}) {
@@ -239,6 +248,7 @@ func (cf *CommitFlow) selectFilesToCommit() error {
 		dryRun:       cf.dryRun,
 		allowSecrets: cf.allowSecrets,
 		agentError:   cf.agentError,
+		trailers:     cf.trailers,
 	}
 
 	reader := bufio.NewReader(os.Stdin)
@@ -342,6 +352,7 @@ func (cf *CommitFlow) generateCommitMessageAndCommit() error {
 		allowSecrets:     cf.allowSecrets,
 		userInstructions: cf.userInstructions,
 		agentError:       cf.agentError,
+		trailers:         cf.trailers,
 	}
 	return commitCmd.generateAndCommit(cf.agent, nil)
 }
@@ -361,6 +372,7 @@ func (cf *CommitFlow) executeNonInteractive() error {
 		allowSecrets:     cf.allowSecrets,
 		userInstructions: cf.userInstructions,
 		agentError:       cf.agentError,
+		trailers:         cf.trailers,
 	}
 	return commitCmd.executeMultiFileCommit(cf.agent)
 }
@@ -408,11 +420,20 @@ func (cf *CommitFlow) CommitStagedWithMessage() error {
 
 	// Use the shared commit executor with user instructions
 	executor := git.NewCommitExecutor(client, "", cf.userInstructions)
-	executor.AttributeMessage = func(message string, generated bool) string {
+	attribute := func(message string, generated bool) string {
 		if generated && client != nil {
 			return cf.agent.AttributeCommitMessage(message, git.SproutAssistant(client.GetProvider(), client.GetModel()))
 		}
 		return cf.agent.AttributeCommitMessage(message)
+	}
+	// The commit.trailers defaults (config + the repo's AGENTS.md) join the
+	// commit on top of the attribution trailer.
+	if trailers := git.DefaultCommitTrailers(cf.agent.GetConfig(), cf.agent.GetWorkspaceRoot()); len(trailers) > 0 {
+		executor.AttributeMessage = func(message string, generated bool) string {
+			return git.AppendTrailers(attribute(message, generated), trailers...)
+		}
+	} else {
+		executor.AttributeMessage = attribute
 	}
 	commitHash, err := executor.ExecuteCommit()
 	if err != nil {

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -127,7 +128,10 @@ func TestBrowseURLHandler_WithBrowser_EventBus_ErrorFlag(t *testing.T) {
 	args := map[string]any{"url": "http://slow.local"}
 
 	result, err := h.Execute(ctx, env, args)
-	requireNoError(t, err)
+	// The error is returned as well as flagged: the tool executor classifies
+	// the returned error, and a stringified-only failure is misread as
+	// retryable.
+	requireNotNil(t, err, "error")
 	requireTrue(t, result.IsError, "IsError")
 
 	// Handlers no longer self-publish tool_start/tool_end — the core
@@ -149,7 +153,11 @@ func TestBrowseURLHandler_NilBrowser(t *testing.T) {
 	args := map[string]any{"url": "https://example.com"}
 
 	result, err := h.Execute(ctx, env, args)
-	requireNoError(t, err)
+	// A missing browser is permanent: it must not be classified as retryable.
+	requireNotNil(t, err, "error")
+	if !agenterrors.IsPermanent(err) {
+		t.Errorf("expected permanent error, got %T: %v", err, err)
+	}
 	requireTrue(t, result.IsError, "IsError")
 	if !strings.Contains(result.Output, "browser not available") {
 		t.Errorf("Output should mention 'browser not available', got: %s", result.Output)
@@ -188,7 +196,9 @@ func TestBrowseURLHandler_InvalidURL(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			result, err := h.Execute(ctx, env, tc.args)
-			requireNoError(t, err)
+			// A missing/non-string url is invalid input: the handler returns
+			// the error alongside the flagged result.
+			requireNotNil(t, err, "error")
 			requireTrue(t, result.IsError, "IsError")
 			if !strings.Contains(result.Output, tc.wantErr) {
 				t.Errorf("Output should mention %q, got: %s", tc.wantErr, result.Output)
@@ -210,7 +220,10 @@ func TestBrowseURLHandler_BrowserError(t *testing.T) {
 	args := map[string]any{"url": "https://slow.example.com", "wait_timeout_ms": float64(500)}
 
 	result, err := h.Execute(ctx, env, args)
-	requireNoError(t, err)
+	// The handler must return the error (not just flag the result) so the
+	// executor can classify it — a stringified-only failure is misread as an
+	// untyped, retryable error.
+	requireNotNil(t, err, "error")
 	requireTrue(t, result.IsError, "IsError")
 	if !strings.Contains(result.Output, "deadline") || !strings.Contains(result.Output, "exceeded") {
 		t.Errorf("Output should contain error message, got: %s", result.Output)
@@ -617,8 +630,13 @@ func TestParseBrowseSteps_MissingAction(t *testing.T) {
 	}
 	_, err := parseBrowseSteps(raw)
 	requireNotNil(t, err, "error")
-	if !strings.Contains(err.Error(), "requires action") {
-		t.Errorf("Error should mention 'requires action', got: %v", err)
+	// The shared parser's message names the missing action and lists the
+	// valid verbs; the wrapper keeps it an invalid-input error.
+	if !strings.Contains(err.Error(), "action is required") {
+		t.Errorf("Error should mention 'action is required', got: %v", err)
+	}
+	if !agenterrors.IsInvalidInput(err) {
+		t.Errorf("Error should be InvalidInput, got %T: %v", err, err)
 	}
 }
 
@@ -631,8 +649,13 @@ func TestParseBrowseSteps_EmptyAction(t *testing.T) {
 	}
 	_, err := parseBrowseSteps(raw)
 	requireNotNil(t, err, "error")
-	if !strings.Contains(err.Error(), "requires action") {
-		t.Errorf("Error should mention 'requires action', got: %v", err)
+	// The shared parser's message names the missing action and lists the
+	// valid verbs; the wrapper keeps it an invalid-input error.
+	if !strings.Contains(err.Error(), "action is required") {
+		t.Errorf("Error should mention 'action is required', got: %v", err)
+	}
+	if !agenterrors.IsInvalidInput(err) {
+		t.Errorf("Error should be InvalidInput, got %T: %v", err, err)
 	}
 }
 
@@ -645,8 +668,13 @@ func TestParseBrowseSteps_WhitespaceOnlyAction(t *testing.T) {
 	}
 	_, err := parseBrowseSteps(raw)
 	requireNotNil(t, err, "error")
-	if !strings.Contains(err.Error(), "requires action") {
-		t.Errorf("Error should mention 'requires action', got: %v", err)
+	// The shared parser's message names the missing action and lists the
+	// valid verbs; the wrapper keeps it an invalid-input error.
+	if !strings.Contains(err.Error(), "action is required") {
+		t.Errorf("Error should mention 'action is required', got: %v", err)
+	}
+	if !agenterrors.IsInvalidInput(err) {
+		t.Errorf("Error should be InvalidInput, got %T: %v", err, err)
 	}
 }
 
@@ -696,7 +724,10 @@ func TestBrowseURLHandler_ScreenshotWithoutPath(t *testing.T) {
 		"url":    "https://example.com",
 		"action": "screenshot",
 	})
-	requireNoError(t, err)
+	requireNotNil(t, err, "error")
+	if !agenterrors.IsInvalidInput(err) {
+		t.Errorf("expected InvalidInput error, got %T: %v", err, err)
+	}
 	requireTrue(t, result.IsError, "IsError")
 	if !strings.Contains(result.Output, "screenshot_path") {
 		t.Errorf("expected screenshot_path in Output, got: %s", result.Output)

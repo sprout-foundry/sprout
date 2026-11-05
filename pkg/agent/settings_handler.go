@@ -8,6 +8,7 @@ import (
 	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
@@ -85,7 +86,7 @@ func handleSettingsSet(a *Agent, args map[string]interface{}) (string, error) {
 		return "", agenterrors.NewConfig("configuration manager not available", nil)
 	}
 
-	if err := validateSettingKey(key); err != nil {
+	if err := tools.ValidateSettingKey(key); err != nil {
 		return "", err
 	}
 
@@ -355,24 +356,11 @@ func handleSettingsPreview(a *Agent, args map[string]interface{}) (string, error
 }
 
 // validateSettingKey checks that a key is a recognized setting.
-func validateSettingKey(key string) error {
-	normalized := strings.ToLower(key)
-	if _, ok := supportedSettings[normalized]; ok {
-		return nil
-	}
-	validKeys := make([]string, 0, len(supportedSettings))
-	for k := range supportedSettings {
-		validKeys = append(validKeys, k)
-	}
-	sort.Strings(validKeys)
-	return agenterrors.NewValidation(fmt.Sprintf("unknown setting key %q; valid keys: %s", key, strings.Join(validKeys, ", ")), nil)
-}
-
 // getConfigValue returns the string representation of a config setting by key.
 func getConfigValue(cfg *configuration.Config, key string) (string, error) {
 	d := lookupSettingDef(key)
 	if d == nil {
-		return "", validateSettingKey(key)
+		return "", tools.ValidateSettingKey(key)
 	}
 	return d.GetValue(cfg), nil
 }
@@ -381,7 +369,7 @@ func getConfigValue(cfg *configuration.Config, key string) (string, error) {
 func setConfigValue(cfg *configuration.Config, key, value string) error {
 	d := lookupSettingDef(key)
 	if d == nil {
-		return validateSettingKey(key)
+		return tools.ValidateSettingKey(key)
 	}
 	return d.SetValue(cfg, value)
 }

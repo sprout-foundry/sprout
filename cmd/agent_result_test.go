@@ -1635,3 +1635,52 @@ func TestEmitJSONResult_OutputPath_CreatesNewFile(t *testing.T) {
 		t.Fatalf("expected output file to be created, but stat failed: %v", err)
 	}
 }
+
+// A hunk that ends in a blank context line keeps it: the combined diff must
+// apply as-is (git apply --check), including a new file after it.
+func TestEmitJSONResult_DiffKeepsTrailingBlankContext(t *testing.T) {
+	dir := t.TempDir()
+	runGit(t, dir, "init")
+	runGit(t, dir, "config", "user.email", "test@test.com")
+	runGit(t, dir, "config", "user.name", "Test")
+	css := ".footer {\n  border: 0;\n  color: #666;\n}\n\n"
+	if err := os.WriteFile(dir+"/s.css", []byte(css), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, dir, "add", "s.css")
+	runGit(t, dir, "commit", "-m", "init")
+	if err := os.WriteFile(dir+"/s.css", []byte(".footer {\n  border: 0;\n  font-size: 0.875rem;\n  color: #666;\n}\n\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dir+"/new.txt", []byte("hello\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(origDir)
+
+	output := testutil.CaptureStdout(t, func() {
+		emitJSONResult("blank context", time.Now(), nil, nil)
+	})
+	var result AgentResult
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("failed to parse JSON: %v\noutput: %s", err, output)
+	}
+	if !strings.Contains(result.GitDiff, "   color: #666;\n }\n \ndiff --git") {
+		t.Fatalf("the hunk's trailing blank context line was lost:\n%s", result.GitDiff)
+	}
+
+	// The combined diff applies to the original tree.
+	runGit(t, dir, "stash", "push", "--include-untracked", "-q")
+	patch := dir + "/../task.patch"
+	if err := os.WriteFile(patch, []byte(result.GitDiff), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, dir, "apply", "--check", patch)
+}

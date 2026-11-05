@@ -54,7 +54,7 @@ func init() {
 		Short: "Link this machine to your platform account",
 		RunE:  runRunnerLink,
 	}
-	linkCmd.Flags().StringVar(&runnerPlatform, "platform", "", "platform URL (default $SPROUT_PLATFORM_URL)")
+	linkCmd.Flags().StringVar(&runnerPlatform, "platform", "", "platform URL (default $SPROUT_PLATFORM_URL, else the previous link, else "+runner.DefaultPlatformURL+")")
 	linkCmd.Flags().StringVar(&runnerName, "name", "", "name shown on the platform (default: this machine's hostname)")
 	linkCmd.Flags().StringVar(&runnerPublicURL, "public-url", "", "HTTPS URL the platform reaches this runner at; omit to connect through the platform relay")
 	linkCmd.Flags().StringVar(&runnerListen, "listen", "", "address the runner listens on (default "+runner.DefaultListenAddr+")")
@@ -93,10 +93,7 @@ func runRunnerLink(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	platform := firstNonEmpty(runnerPlatform, os.Getenv("SPROUT_PLATFORM_URL"), st.PlatformURL)
-	if platform == "" {
-		return errors.New("which platform? pass --platform https://… or set SPROUT_PLATFORM_URL")
-	}
+	platform := resolveLinkPlatform(runnerPlatform, os.Getenv("SPROUT_PLATFORM_URL"), st.PlatformURL)
 	if u, err := url.Parse(platform); err != nil || (u.Scheme != "https" && u.Hostname() != "localhost" && u.Hostname() != "127.0.0.1") {
 		return fmt.Errorf("platform URL must be https (got %q)", platform)
 	}
@@ -156,6 +153,13 @@ func runRunnerLink(cmd *cobra.Command, _ []string) error {
 	}
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Linked as %q (mode: %s; key stored in the %s). Start it with `sprout runner start`, or `sprout runner install` to run at login.\n", name, st.Mode, keyStore)
 	return printLocalDirNotice(cmd, st)
+}
+
+// resolveLinkPlatform picks the platform `runner link` pairs with: the flag,
+// then SPROUT_PLATFORM_URL, then the platform an earlier link used (a
+// self-hosted backend keeps working), then the hosted default.
+func resolveLinkPlatform(flagValue, envValue, saved string) string {
+	return firstNonEmpty(flagValue, envValue, saved, runner.DefaultPlatformURL)
 }
 
 // applyImageFlag stores --image in the state. A later `link` or `start`
@@ -335,7 +339,7 @@ func runRunnerStatus(cmd *cobra.Command, _ []string) error {
 	}
 	out := cmd.OutOrStdout()
 	if !st.Linked() {
-		_, _ = fmt.Fprintln(out, "Not linked. Run `sprout runner link --platform https://…`.")
+		_, _ = fmt.Fprintf(out, "Not linked. Run `sprout runner link` to link to %s.\n", runner.DefaultPlatformURL)
 		return nil
 	}
 	c := sandbox.Detect()

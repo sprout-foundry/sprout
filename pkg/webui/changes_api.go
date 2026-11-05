@@ -15,7 +15,10 @@
 //
 // All endpoints resolve the calling client's Agent via the existing
 // client-context pattern so the panel reflects state for THAT browser
-// session's agent (multi-client / multi-workspace safe).
+// session's agent (multi-client / multi-workspace safe). They only read an
+// agent that already exists (peekClientAgent) and never build one: a new
+// agent has no session changes, so the no-agent fallbacks give the same
+// answer without waiting on an agent build.
 package webui
 
 import (
@@ -47,7 +50,7 @@ func (ws *ReactWebServer) handleAPIChangesSession(w http.ResponseWriter, r *http
 		return
 	}
 	clientID := ws.resolveClientID(r)
-	agentInst, err := ws.getClientAgent(clientID)
+	agentInst := ws.peekClientAgent(clientID)
 
 	args := map[string]interface{}{}
 	q := r.URL.Query()
@@ -61,7 +64,7 @@ func (ws *ReactWebServer) handleAPIChangesSession(w http.ResponseWriter, r *http
 		args["path_pattern"] = v
 	}
 
-	if err != nil || agentInst == nil {
+	if agentInst == nil {
 		// No live agent — fall back to persisted-only history.
 		out, perr := agent.ListChangesPersistedOnly(args)
 		if perr != nil {
@@ -99,8 +102,8 @@ func (ws *ReactWebServer) handleAPIChangesDiff(w http.ResponseWriter, r *http.Re
 		return
 	}
 	clientID := ws.resolveClientID(r)
-	agentInst, err := ws.getClientAgent(clientID)
-	if err != nil || agentInst == nil {
+	agentInst := ws.peekClientAgent(clientID)
+	if agentInst == nil {
 		// No live agent: serve the persisted-store diff directly.
 		if rec, found, histErr := history.FindPersistedOriginal(path); histErr == nil && found {
 			op := "edit"
@@ -140,8 +143,8 @@ func (ws *ReactWebServer) handleAPIChangesSummary(w http.ResponseWriter, r *http
 		return
 	}
 	clientID := ws.resolveClientID(r)
-	agentInst, err := ws.getClientAgent(clientID)
-	if err != nil || agentInst == nil {
+	agentInst := ws.peekClientAgent(clientID)
+	if agentInst == nil {
 		writeChangesJSON(w, agent.SummarizeMySessionEmpty())
 		return
 	}
@@ -164,8 +167,8 @@ func (ws *ReactWebServer) handleAPIChangesTimeline(w http.ResponseWriter, r *htt
 		return
 	}
 	clientID := ws.resolveClientID(r)
-	agentInst, err := ws.getClientAgent(clientID)
-	if err != nil || agentInst == nil {
+	agentInst := ws.peekClientAgent(clientID)
+	if agentInst == nil {
 		// No live agent — use the persisted-only path directly.
 		args := map[string]interface{}{"include_persisted": true}
 		if v := r.URL.Query().Get("since"); v != "" {
@@ -203,8 +206,8 @@ func (ws *ReactWebServer) handleAPIChangesRevert(w http.ResponseWriter, r *http.
 		return
 	}
 	clientID := ws.resolveClientID(r)
-	agentInst, err := ws.getClientAgent(clientID)
-	if err != nil || agentInst == nil {
+	agentInst := ws.peekClientAgent(clientID)
+	if agentInst == nil {
 		writeChangesError(w, http.StatusConflict, "No active agent session to revert changes from")
 		return
 	}

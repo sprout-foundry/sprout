@@ -34,7 +34,8 @@ func TestPrintLine_NoPromptWritesToStderr(t *testing.T) {
 	}
 }
 
-// Callers mid-redraw hold the output lock; PrintLine must not wait on it.
+// Callers mid-redraw hold the output lock; PrintLine must not wait on it
+// forever (it waits up to backgroundLockWait, then writes anyway).
 func TestPrintLine_DoesNotDeadlockUnderOutputLock(t *testing.T) {
 	LockOutput()
 	defer UnlockOutput()

@@ -195,6 +195,22 @@ func TestValidateTokensJSONParseErrors(t *testing.T) {
 			wantLine:        2,
 			wantMsgFragment: "invalid JSON",
 		},
+		{
+			// The decoder's InputOffset stops just past the last token it
+			// read successfully, which is still on the root's line; the
+			// finding must point at the garbage that follows, not at the
+			// valid JSON above it.
+			name:            "garbage several blank lines below a valid tree",
+			content:         "{\"color\": {\"primary\": {\"$type\": \"color\", \"$value\": \"#fff\"}}}\n\n\nnot json",
+			wantLine:        4,
+			wantMsgFragment: "invalid JSON",
+		},
+		{
+			name:            "garbage indented on a later line",
+			content:         "{\"color\": {\"primary\": {\"$type\": \"color\", \"$value\": \"#fff\"}}}\n    not json",
+			wantLine:        2,
+			wantMsgFragment: "invalid JSON",
+		},
 	}
 
 	for _, tt := range tests {

@@ -247,14 +247,16 @@ func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map
 		}, agenterrors.NewPermission(fmt.Sprintf("security block: shell_command — %s", secResult.Reasoning), nil)
 	}
 
-	// A prompt is skipped when Gate 1 already auto-approved the call
-	// (--unsafe mode or session elevation) or when the session opted into
-	// --unsafe-shell and this command is not excluded from that bypass.
-	// Hard blocks and DANGEROUS commands stay gated: --unsafe-shell matches
-	// the broker's CAUTION-tier bypass in practice (non-hard-block,
-	// non-DANGEROUS, no intent confirmation), only lifting the CAUTION-tier
-	// shell prompt.
-	shellAutoApproved := env.Gate1AutoApproved && !secResult.IsHardBlock
+	// A prompt is skipped when Gate 1 already decided the call: an
+	// auto-approve (env.Gate1AutoApproved — --unsafe mode or session
+	// elevation), Gate 1's per-call decision (env.Gate1Decided — the unified
+	// risk resolver approved this call, by explicit approval, an LLM-judge
+	// verdict, or a non-interactive auto-approve; SP-168 single gate), or a
+	// --unsafe-shell bypass. Hard blocks and DANGEROUS commands stay gated:
+	// --unsafe-shell matches the broker's CAUTION-tier bypass in practice
+	// (non-hard-block, non-DANGEROUS, no intent confirmation), only lifting
+	// the CAUTION-tier shell prompt.
+	shellAutoApproved := (env.Gate1AutoApproved || env.Gate1Decided) && !secResult.IsHardBlock
 	if !shellAutoApproved && env.UnsafeShellMode && !secResult.IsHardBlock &&
 		secResult.Risk.String() != "DANGEROUS" && !secResult.IntentConfirmation {
 		shellAutoApproved = true

@@ -5,7 +5,7 @@
  *   - Empty input → renders nothing (caller doesn't have to gate).
  *   - Running tool → spinner + tool name visible.
  *   - Completed tool → green check + final duration visible.
- *   - Error tool → red X + sticks past the 3s fade window.
+ *   - Error tool → amber warning glyph + sticks past the 3s fade window.
  *   - Mix → most-recent N visible (older tools clipped).
  *   - Persona badge appears in the expected color when persona is set.
  */
@@ -86,7 +86,10 @@ describe('ToolTimelineBar', () => {
     expect(container.querySelector('.tool-timeline-icon-ok')).not.toBeNull();
   });
 
-  it('shows a red X card for an error tool', () => {
+  // SP-161b: a failed tool call is usually expected (a grep with no
+  // matches, a test run that fails on purpose), so it is toned as a
+  // warning rather than an error that needs fixing.
+  it('shows an amber warning card for an error tool', () => {
     act(() => {
       root.render(
         createElement(ToolTimelineBar, {
@@ -95,7 +98,10 @@ describe('ToolTimelineBar', () => {
       );
     });
     expect(container.querySelector('.tool-timeline-card--error')).not.toBeNull();
-    expect(container.querySelector('.tool-timeline-icon-error')).not.toBeNull();
+    const icon = container.querySelector('.tool-timeline-icon-error');
+    expect(icon).not.toBeNull();
+    // The neutral glyph replaced the red X.
+    expect(icon?.querySelector('circle, path')).not.toBeNull();
   });
 
   it('completed tool fades out after FADE_MS', () => {

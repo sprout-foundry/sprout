@@ -81,7 +81,7 @@ session:
 | `/user/me` | GET | `{ github_connected: boolean, … }` | GitHub picker gate (`platformGitHub.ts`) |
 | `/user/me/repos?…` | GET | repo list (`{ id, name, host?, … }`) | GitHub picker (`platformGitHub.ts`) |
 | `/user/me/repos` | POST | repo create (picker "new repo") | GitHub picker |
-| `/user/me/editor-model` | GET/PUT | `{ provider, model, key_providers, recommend_byok }` | editor model (BYOK) (`editorModel.ts`) |
+| `/user/me/editor-model` | GET/PUT | `{ provider, model, key_providers, provider_labels?, recommend_byok }` | editor model (BYOK) (`editorModel.ts`) |
 | `/user/me/editor-model/models?provider=…` | GET | `{ models: [{ id, context_length? }] }` | editor model picker |
 | `/notifications` | GET | notifications payload | `platformNotifications.ts` |
 | `/?from=editor#/settings` | — | **Link target** (not fetched) | "Connect GitHub" CTA, billing links (`agentErrorMessage.ts` → `/account/billing`) |

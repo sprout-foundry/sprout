@@ -40,11 +40,14 @@ func TestStreamErrorPayloadBecomesAnError(t *testing.T) {
 	cases := []struct {
 		name     string
 		payload  string
-		category agenterrors.ErrorCategory
+		category agenterrors.ErrorCategory // an AgentError of this category
+		network  bool                      // a retryable network error instead
 	}{
-		{"rate limit", `{"error":{"code":"rate_limited","message":"The model is rate-limited right now."}}`, agenterrors.CategoryRateLimited},
-		{"numeric code", `{"error":{"code":429,"message":"The model is rate-limited right now."}}`, agenterrors.CategoryRateLimited},
-		{"other failure", `{"error":{"code":"upstream_error","message":"The model is rate-limited right now."}}`, agenterrors.CategoryProvider},
+		{"rate limit", `{"error":{"code":"rate_limited","message":"The model is rate-limited right now."}}`, agenterrors.CategoryRateLimited, false},
+		{"numeric code", `{"error":{"code":429,"message":"The model is rate-limited right now."}}`, agenterrors.CategoryRateLimited, false},
+		{"upstream failure", `{"error":{"code":"upstream_error","message":"The model provider returned an error right now."}}`, agenterrors.CategoryProvider, true},
+		{"stalled stream", `{"error":{"code":"stream_stalled","message":"The model stopped sending right now."}}`, agenterrors.CategoryProvider, true},
+		{"other failure", `{"error":{"code":"zdr_unavailable","message":"No ZDR model is available right now."}}`, agenterrors.CategoryProvider, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -55,8 +58,15 @@ func TestStreamErrorPayloadBecomesAnError(t *testing.T) {
 			if err == nil {
 				t.Fatal("expected an error, got an empty response")
 			}
-			if !strings.Contains(err.Error(), "rate-limited right now") {
+			if !strings.Contains(err.Error(), "right now") {
 				t.Errorf("error %q should carry the server's message", err)
+			}
+			if tc.network {
+				te := agenterrors.AsTypedError(err)
+				if te == nil || te.Code != agenterrors.CodeNetwork || !te.Retryable {
+					t.Errorf("error %v: want a retryable network error", err)
+				}
+				return
 			}
 			var agentErr *agenterrors.AgentError
 			if !errors.As(err, &agentErr) || agentErr.Category != tc.category {

@@ -14,7 +14,7 @@ import (
 // promotion message. ParsePromotedBackgroundSession must extract the session
 // ID so the shell handler can attach a wakeup watcher to it.
 func TestParsePromotedBackgroundSession(t *testing.T) {
-	msg := formatBackgroundPromotionMessage("bg-build-ab12", "make all", "compiling...")
+	msg := formatBackgroundPromotionMessage("bg-build-ab12", "make all", 2*time.Minute, "compiling...")
 	sid, ok := ParsePromotedBackgroundSession(msg)
 	require.True(t, ok, "promotion message should parse: %q", msg)
 	require.Equal(t, "bg-build-ab12", sid)
@@ -40,7 +40,7 @@ func TestHandleSync_AttachesWatcherOnPromotion(t *testing.T) {
 	// Seed a pending "promotion" result by running handleSync through the
 	// PTY path: simulate by calling the parser + watcher directly, since
 	// forcing a real 2-minute timeout in a unit test is impractical.
-	msg := formatBackgroundPromotionMessage("bg-promoted-1", "long-build", "partial output")
+	msg := formatBackgroundPromotionMessage("bg-promoted-1", "long-build", 2*time.Minute, "partial output")
 	sid, ok := ParsePromotedBackgroundSession(msg)
 	require.True(t, ok)
 

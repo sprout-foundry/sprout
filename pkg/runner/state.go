@@ -21,6 +21,11 @@ const credentialKey = "sprout-runner"
 // DefaultListenAddr is where the host server listens for platform calls.
 const DefaultListenAddr = "127.0.0.1:8935"
 
+// DefaultPlatformURL is the hosted platform a plain `sprout runner link`
+// links to, when neither --platform, SPROUT_PLATFORM_URL nor an earlier
+// link names another.
+const DefaultPlatformURL = "https://app.sproutfoundry.com"
+
 // WorkspaceImageRepo is the public workspace image, built from
 // docker/workspace and published for every release.
 const WorkspaceImageRepo = "ghcr.io/sprout-foundry/sprout-workspace"

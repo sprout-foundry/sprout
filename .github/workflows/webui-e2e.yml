@@ -25,11 +25,14 @@ jobs:
   e2e:
     name: E2E (shard ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
-    # Shard 1 runs the heaviest specs and has historically exceeded 10m on
-    # loaded runners (timing out at 10m17s with the rest of the shards
-    # finishing in 1.5–6.5m). 15m gives it comfortable headroom; the E2E
-    # suite is 64 tests / 27 specs and retries once on flake in CI.
-    timeout-minutes: 15
+    # Playwright's --shard splits by spec file, and with 41 specs the shards are
+    # uneven: the slow ones land in 3/4 and 4/4, which measure 14-15m on loaded
+    # runners while 1/4 finishes in 3-5m. At a 15m cap those shards get
+    # cancelled mid-run even though their tests pass, which reads as a failure
+    # and forces a re-push. 25m leaves headroom for a slow runner without
+    # hiding a genuine hang: the suite is 64 tests / 27 specs and retries once
+    # on flake in CI.
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:

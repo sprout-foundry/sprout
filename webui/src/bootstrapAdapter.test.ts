@@ -11,6 +11,8 @@
  */
 
 import type { CloudAdapter } from './services/cloudAdapter';
+import type { SproutHost } from './host';
+import { headlessHost } from './host/HostProvider';
 
 // Mock window.location used by bootstrapAdapter
 const originalLocation = window.location;
@@ -314,6 +316,131 @@ describe('bootstrapAdapter', () => {
 
       const { hasAdapter } = await import('./services/apiAdapter');
       expect(hasAdapter()).toBe(false);
+    });
+  });
+
+  describe('host whose agent backend is a daemon (the platform workspace proxy)', () => {
+    /**
+     * The platform's host: bearer auth (session cookies), the platform's own
+     * API base and socket, and — once the project's workspace is running — a
+     * daemon backend whose proxy lives under `/workspace/<id>/proxy`.
+     */
+    function platformDaemonHost(): SproutHost {
+      const base = headlessHost();
+      return {
+        ...base,
+        transport: {
+          apiBaseURL: 'https://platform.test',
+          wsURL: 'wss://platform.test/ws',
+          authMode: 'bearer',
+          agent: {
+            kind: 'daemon',
+            apiBaseURL: '/workspace/ws-1/proxy',
+            wsURL: 'wss://platform.test/workspace/ws-1/proxy/ws',
+          },
+        },
+      };
+    }
+
+    /** The same platform host before its workspace resolves (in-browser). */
+    function platformWasmHost(): SproutHost {
+      const base = headlessHost();
+      return {
+        ...base,
+        transport: {
+          apiBaseURL: 'https://platform.test',
+          wsURL: 'wss://platform.test/ws',
+          authMode: 'bearer',
+          agent: { kind: 'wasm', modelEndpoint: 'https://platform.test/proxy/chat' },
+        },
+      };
+    }
+
+    async function activateHost(host: SproutHost): Promise<void> {
+      const { setActiveHost } = await import('./host/accessor');
+      setActiveHost(host);
+    }
+
+    beforeEach(async () => {
+      vi.resetModules();
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network error')));
+      vi.unstubAllEnvs();
+      mockWindowLocation('https://platform.test', 'https:', 'platform.test');
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+      restoreWindowLocation();
+      vi.resetModules();
+    });
+
+    it('never installs the in-browser adapter for a daemon backend, bearer auth or not', async () => {
+      // The reported failure: the platform's transport authenticates with a
+      // bearer token, so the bootstrap used to install the CloudAdapter even
+      // though the running workspace's daemon runs the agent. The adapter then
+      // answered /api/query in the page and every turn stayed silent.
+      await activateHost(platformDaemonHost());
+      await importWithBootstrap();
+
+      const { hasAdapter } = await import('./services/apiAdapter');
+      expect(hasAdapter()).toBe(false);
+    });
+
+    it("routes /api/query to the daemon backend's base, with no wasm-local handling", async () => {
+      await activateHost(platformDaemonHost());
+      await importWithBootstrap();
+
+      const fetchMock = vi.fn(async () => new Response('{}', { status: 200 }));
+      vi.stubGlobal('fetch', fetchMock);
+      const { clientFetch } = await import('./services/clientSession');
+      await clientFetch('/api/query', { method: 'POST', body: '{}' });
+
+      expect(fetchMock).toHaveBeenCalledWith('/workspace/ws-1/proxy/api/query', expect.anything());
+    });
+
+    it('does not install an adapter when the daemon backend is set while the bootstrap resolves', async () => {
+      // The platform swaps a running workspace's backend in place after mount,
+      // so the bootstrap's config fetch can still be in flight when the swap
+      // lands. The install must follow the host at the moment it lands.
+      await activateHost(platformWasmHost());
+      let release: (value: unknown) => void = () => undefined;
+      const gate = new Promise((resolve) => {
+        release = resolve;
+      });
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() => gate),
+      );
+
+      const { fetchRuntimeConfig } = await import('./bootstrapAdapter');
+      const resolved = fetchRuntimeConfig();
+      await activateHost(platformDaemonHost());
+      release({
+        json: async () => ({
+          apiBaseURL: 'https://platform.test',
+          wsURL: 'wss://platform.test/ws',
+          authMode: 'bearer',
+        }),
+      });
+      await resolved;
+
+      const { hasAdapter } = await import('./services/apiAdapter');
+      expect(hasAdapter()).toBe(false);
+    });
+
+    it('retires the adapter it installed when the backend later becomes the daemon', async () => {
+      await activateHost(platformWasmHost());
+      await importWithBootstrap();
+      const { hasAdapter } = await import('./services/apiAdapter');
+      expect(hasAdapter()).toBe(true);
+
+      await activateHost(platformDaemonHost());
+      const { fetchRuntimeConfig } = await import('./bootstrapAdapter');
+      await fetchRuntimeConfig();
+
+      const { getAdapter } = await import('./services/apiAdapter');
+      expect(getAdapter()).toBeNull();
     });
   });
 

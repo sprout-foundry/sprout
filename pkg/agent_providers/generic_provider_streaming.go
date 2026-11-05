@@ -64,7 +64,7 @@ func (p *GenericProvider) sendChatRequestStreamImpl(ctx context.Context, message
 	client := p.streamingClient
 	p.mu.RUnlock()
 
-	resp, err := client.Do(req)
+	resp, diag, err := p.executeChatRequest(client, req, sentBody, false)
 	if err != nil {
 		// For local providers, attempt to auto-start the server and retry once.
 		if recovered := p.tryLocalServerRecovery(); recovered {
@@ -84,7 +84,7 @@ func (p *GenericProvider) sendChatRequestStreamImpl(ctx context.Context, message
 		if err != nil {
 			// Log request on HTTP error — use the actual sent body (post-redaction)
 			logging.LogRequestPayloadOnError(sentBody, p.config.Name, currentModel, true, "http_request_failed", err)
-			return nil, agenterrors.NewNetwork("HTTP request failed", err)
+			return nil, p.networkErrorWithConnDiag("HTTP request failed", err, diag)
 		}
 	}
 
@@ -121,7 +121,7 @@ func (p *GenericProvider) sendChatRequestStreamImpl(ctx context.Context, message
 			auditRespBody = captured.Bytes()
 			if err != nil {
 				logging.LogRequestPayloadOnError(requestBody, p.config.Name, currentModel, true, "streaming_response", err)
-				return nil, agenterrors.NewNetwork("chat request failed", err)
+				return nil, p.networkErrorWithConnDiag("chat request failed", err, diag)
 			}
 			api.RecoverInlineToolCalls(response, tools)
 			return response, nil
@@ -141,7 +141,11 @@ func (p *GenericProvider) sendChatRequestStreamImpl(ctx context.Context, message
 	if err != nil {
 		// Log request on streaming error — use the actual sent body (post-redaction)
 		logging.LogRequestPayloadOnError(sentBody, p.config.Name, currentModel, true, "streaming_response", err)
-		return nil, agenterrors.NewNetwork("chat request failed (streaming)", err)
+		// Carry the connection facts: a mid-stream reset on a REUSED
+		// connection is a stale-pool artifact, while the same reset on a
+		// freshly dialed one is a real network fault. Without this detail
+		// both look identical in the retry log.
+		return nil, p.networkErrorWithConnDiag("chat request failed (streaming)", err, diag)
 	}
 
 	// Success - don't log the request
@@ -170,13 +174,19 @@ func (t *teeReadCloser) Close() error               { return t.c.Close() }
 // inStreamError turns an error the server sent mid-stream into the error the
 // agent would have seen had the server answered with a failing status, so a
 // rate limit is retried as one and the provider's message reaches the user.
+// A transient failure (the upstream model failed or stalled partway, shared
+// capacity is busy) is a network error, which the agent retries; anything
+// else (credits, data policy, configuration) fails the call.
 func (p *GenericProvider) inStreamError(e api.StreamError) error {
 	msg := e.Message
 	if msg == "" {
 		msg = "provider reported an error (" + e.Code + ")"
 	}
-	if e.Code == "rate_limited" || e.Code == "429" {
+	switch e.Code {
+	case "rate_limited", "429":
 		return agenterrors.NewRateLimitError(msg, nil, p.config.Name)
+	case "upstream_error", "stream_stalled", "shared_compute_busy":
+		return agenterrors.NewNetwork(msg, nil)
 	}
 	return agenterrors.NewProviderError(msg, nil, p.config.Name, "")
 }

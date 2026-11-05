@@ -4,7 +4,9 @@
 workspace: it mounts one project's workspace (a space such as code or
 design) inside its own product and provides a `SproutHost` (see
 [host-contract.md](host-contract.md)). It is the only hosted artifact; hosts
-do not build Sprout's web UI from source.
+do not build Sprout's web UI from source. A host that wants the agent without
+Sprout's interface uses its `./agent` entry instead (see
+[headless-agent.md](headless-agent.md)).
 
 ## Install
 
@@ -116,8 +118,10 @@ The package exposes three entry points:
   (`WORKSPACE_MODES`, `availableModes`, `registerWorkspaceMode`,
   `resolveWorkspaceMode`, `useWorkspaceMode`), the individual views
   (`ChatView`, `AgentChangesPanel`, editor, files, preview, `ViewsLayout`),
-  the WASM asset seam, and `SproutProviders` (so a host that already
-  imports the views gets the wrapper from the same surface).
+  the in-browser workspace's read-only file API
+  (`listBrowserWorkspaceFiles`, `readBrowserWorkspaceFile`), the WASM asset
+  seam, and `SproutProviders` (so a host that already imports the views gets
+  the wrapper from the same surface).
 - `./providers` — just `SproutProviders` and its props, for a host that
   wraps the views it composes itself without importing the whole views
   graph.
@@ -170,14 +174,24 @@ What it renders, left to right and top to bottom:
   answers `open_search` and "reveal in file list".
 - **The space** — Code renders the app's Code shell: the header (search, the
   menus, which list only commands something handles), the editor with tabs —
-  the conversation in its own tab beside open files, diffs and reviews — the
-  context panel with the agent's changes, and the status bar (the project,
+  the conversation in its own tab beside open files, diffs and reviews — and
+  the status bar (the project,
   the branch, and for the active file the cursor position, language,
   encoding, line ending and indentation). Design renders the design surface
-  with its agent chat.
+  with its agent chat. The Code shell's right-hand context panel (the
+  agent's change history) is not part of the composed space: each turn's
+  changes show under it in the conversation (review and revert per file), and
+  a host that wants the change list arranges the `changes` view.
 - **The terminal**, docked under the space: the app's terminal workbench
   (tabs, splits, shell picker) in flow inside the workspace, never over the
-  host page. Ctrl/Cmd+\` and the palette's Toggle Terminal open and close it.
+  host page. Collapsed, it is a strip along the bottom that opens it; Ctrl/Cmd+\`,
+  the palette's Toggle Terminal and the sidebar's Terminal entry open and
+  close it too.
+- **The agent's prompts** — the tool-approval dialog (with its elevation and
+  filesystem-tier choices), the file-access prompt, `ask_user` questions,
+  password prompts, edit and shell approvals, and the model picker — opened
+  over the workspace when the agent asks and answered back to it, so a turn
+  never waits on a request nothing shows.
 - **The command palette** (unless `commandPalette={false}`) and the app's
   editor, tab and view commands, registered so the scoped hotkeys, the menus
   and the palette reach them from inside the workspace.
@@ -190,11 +204,10 @@ shown inert:
 | Part | Shown when |
 | --- | --- |
 | Source control, the status bar's branch, diff and review tabs | `capabilities.git`. Worktrees also need `serverGit`; the review needs a backend (not browser git). Without a repository the section says so ("No git repository") and offers Refresh. |
-| Terminal (PTY), collapsed to a strip | `capabilities.localTerminal` on a host whose agent does not run in the browser |
-| Terminal (in-browser shell), hidden until opened; a Terminal entry in the sidebar | `transport.agent.kind: "wasm"` |
+| Terminal (PTY on the daemon), collapsed to a strip; a Terminal entry in the sidebar | `transport.agent.kind: "daemon"`, or `capabilities.localTerminal` on a host whose agent does not run in the browser |
+| Terminal (in-browser shell), collapsed to a strip; a Terminal entry in the sidebar | `transport.agent.kind: "wasm"` |
 | No terminal, no toggle | neither |
 | The preview panel and its header toggle | `capabilities.preview` |
-| The agent-changes panel | `capabilities.agentChanges` |
 
 The workspace fills its parent (`height: 100%`), so size the box you mount it
 in. Import the design tokens and reset as above — the shell's spacing,
@@ -241,6 +254,16 @@ transport and nothing else.
 The standalone app mounts the provider with its own `clientFetch` and
 `LocalEventsProvider`, so its behaviour is unchanged; a host mounts it with
 its host's transport.
+
+**Mount `WorkspaceAgentPrompts` with it.** The agent can stop mid-turn and
+wait for the user — a tool approval, a file-access prompt, an `ask_user`
+question, a password, an edit or shell approval. The reducer records each
+request in the chat state; `WorkspaceAgentPrompts` renders the dialog and
+sends the answer back. A host that mounts `WorkspaceChatProvider` itself
+renders `<WorkspaceAgentPrompts />` inside it (and inside `SproutProviders`,
+whose events transport the answers go through); without it a request leaves
+the agent waiting with nothing on screen. An own-mode `SproutWorkspace`
+mounts it already, on the layout path and the space-shell path alike.
 
 `WorkspaceChatProvider` must be mounted under a `HostProvider`: it reads the
 host to decide whether the host serves the chat session store (see
@@ -478,7 +501,8 @@ The view leaves out two things the app's sidebar has: the commit box's
 that is not a repository shows "No git repository" with a Refresh button.
 
 **WASM vs daemon.** Git calls go through the workspace fetch. On a daemon host
-they reach `/api/git/*` on the daemon (or `transport.apiBaseURL`). On an
+they reach `/api/git/*` on the daemon (its `transport.agent.apiBaseURL`, else
+`transport.apiBaseURL`). On an
 in-browser-agent host (`transport.agent.kind: 'wasm'`) the in-browser adapter
 answers them with the browser's own git (isomorphic-git over the browser
 file store); nothing is forwarded. Browser git cannot unstage, discard,
@@ -717,6 +741,48 @@ transactional runs go through relative paths, so they ride the host's
 transport: a host that serves the cloud transactional surface gets working
 escalation. Without that backend the triggers still fire and the user is still
 asked; an approved run fails and the agent is told it did not run.
+
+## In-browser workspace files (move to a container)
+
+When a project's agent runs in the browser (`transport.agent.kind: 'wasm'`),
+its files live in the in-browser WASM shell's virtual filesystem, not on a
+daemon. A host that moves the project into a container (the platform's "run
+in a container" upgrade) must carry along the files the user edited in the
+browser but never pushed, so it needs read access to that in-browser
+workspace. The package exposes two read-only, capability-gated functions for
+exactly that:
+
+```tsx
+import {
+  listBrowserWorkspaceFiles,
+  readBrowserWorkspaceFile,
+} from "@sprout-foundry/workspace/views";
+
+const files = await listBrowserWorkspaceFiles();
+// files: { path, size, mode, differsFromCheckout }[]
+const bytes = await readBrowserWorkspaceFile(files[0].path);
+```
+
+Both are gated on the host's `capabilities.browserFiles` (off by default, on
+for the hosted/cloud host, and only meaningful when the agent is the
+in-browser WASM agent). When the capability is not offered — or the in-browser
+shell is not reachable — the calls reject with a `BrowserFilesUnavailableError`
+whose `code` is `'browser_files_unavailable'`. A host that runs its agent in a
+daemon (the local host) never sets the capability, so the API is unavailable
+and the host reads its files from the daemon instead.
+
+- `listBrowserWorkspaceFiles()` returns the project's own files (path, size,
+  mode) with a `differsFromCheckout` flag: `false` when the bytes already match
+  the repository's checkout (the container's clone carries them, skip the
+  upload), `true` when the file is new or modified or there is no checkout to
+  compare against (carry it). Runtime dirs and `.git` are excluded, and a
+  listing never reads file content.
+- `readBrowserWorkspaceFile(path)` returns one file's bytes. A path that
+  escapes the workspace root or names a runtime dir is refused.
+
+The platform's consumer is its own `BrowserFileCollector`; the contract only
+makes the in-browser workspace readable, so a host can seed a container from
+what the browser actually holds.
 
 ## One workspace per page
 

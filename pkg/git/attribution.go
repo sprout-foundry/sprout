@@ -61,9 +61,16 @@ func sanitizeTrailerPart(s string) string {
 // trailer: a tool, a provider and a model. An unknown model is left out
 // rather than guessed.
 func (a Assistant) valid() bool {
+	return strings.TrimSpace(a.Tool) != "" && a.HasProviderModel()
+}
+
+// HasProviderModel reports whether the assistant names a real provider and
+// model — neither empty nor the "unknown" placeholder a client reports when
+// no model is bound. Callers use it to decide whether a recorded pair can
+// back an attribution line at all.
+func (a Assistant) HasProviderModel() bool {
 	p, m := strings.TrimSpace(a.Provider), strings.TrimSpace(a.Model)
-	return strings.TrimSpace(a.Tool) != "" &&
-		p != "" && m != "" &&
+	return p != "" && m != "" &&
 		!strings.EqualFold(p, "unknown") && !strings.EqualFold(m, "unknown")
 }
 

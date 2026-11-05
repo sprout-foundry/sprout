@@ -22,6 +22,40 @@ type MCPServerConfig struct {
 	Timeout     time.Duration     `json:"timeout,omitempty"`
 	AutoStart   bool              `json:"auto_start"`
 	MaxRestarts int               `json:"max_restarts"`
+	// TrustUntrustedContent, when true (the default), marks this server's tool
+	// output as third-party data before it reaches the transcript.
+	//
+	// A Go bool's zero value is false, so the default cannot live in the
+	// struct: a server parsed from JSON that predates this field would read as
+	// "do not frame" — the opposite of the intended default. The default is
+	// applied by normalizeTrustUntrusted on load (and to servers created by
+	// the add flows), so an absent field means true and only an explicit
+	// `"trust_untrusted_content": false` turns framing off.
+	TrustUntrustedContent bool `json:"trust_untrusted_content"`
+
+	// trustUntrustedRecorded distinguishes "the user chose false" from "no
+	// value was ever recorded". It is set by UnmarshalJSON and is never
+	// serialized, so an explicit false survives a round trip while an absent
+	// field keeps taking the default on every load.
+	trustUntrustedRecorded bool
+}
+
+// TrustUntrustedContentOrDefault returns the server's framing setting, treating
+// a server that never recorded one as trusted-untrusted (framing on). Use it
+// at the ingress point rather than reading the field directly: a
+// zero-valued struct built in code has the same false as an explicit opt-out.
+func (s MCPServerConfig) TrustUntrustedContentOrDefault() bool {
+	if s.trustUntrustedRecorded {
+		return s.TrustUntrustedContent
+	}
+	return true
+}
+
+// SetTrustUntrustedContent records an explicit framing choice for this server,
+// so a deliberate false survives a save/load round trip.
+func (s *MCPServerConfig) SetTrustUntrustedContent(trust bool) {
+	s.TrustUntrustedContent = trust
+	s.trustUntrustedRecorded = true
 }
 
 // UnmarshalJSON implements custom JSON unmarshaling for MCPServerConfig to handle timeout as string or duration
@@ -32,6 +66,9 @@ func (s *MCPServerConfig) UnmarshalJSON(data []byte) error {
 	// First try to unmarshal as the normal struct
 	aux := &struct {
 		Timeout interface{} `json:"timeout"`
+		// Pointer so "absent" is distinguishable from an explicit false: the
+		// default is framing ON, and only a recorded false may turn it off.
+		TrustUntrustedContent *bool `json:"trust_untrusted_content"`
 		*MCPServerConfigAlias
 	}{
 		MCPServerConfigAlias: (*MCPServerConfigAlias)(s),
@@ -39,6 +76,16 @@ func (s *MCPServerConfig) UnmarshalJSON(data []byte) error {
 
 	if err := json.Unmarshal(data, aux); err != nil {
 		return fmt.Errorf("unmarshal MCP server config: %w", err)
+	}
+
+	// SP-169: a server whose config predates the framing setting gets the
+	// safe default (frame its output) rather than the bool zero value.
+	if aux.TrustUntrustedContent != nil {
+		s.TrustUntrustedContent = *aux.TrustUntrustedContent
+		s.trustUntrustedRecorded = true
+	} else {
+		s.TrustUntrustedContent = true
+		s.trustUntrustedRecorded = false
 	}
 
 	// Handle timeout field conversion
@@ -89,6 +136,10 @@ func (s MCPServerConfig) MarshalJSON() ([]byte, error) {
 		Timeout     time.Duration     `json:"timeout,omitempty"`
 		AutoStart   bool              `json:"auto_start"`
 		MaxRestarts int               `json:"max_restarts"`
+		// Always emitted (no omitempty): the value is the user's recorded
+		// choice, and writing it explicitly is what keeps a later read from
+		// having to guess whether false was a decision or an absent field.
+		TrustUntrustedContent bool `json:"trust_untrusted_content"`
 	}{
 		Name:        s.Name,
 		Type:        s.Type,
@@ -102,6 +153,8 @@ func (s MCPServerConfig) MarshalJSON() ([]byte, error) {
 		Timeout:     s.Timeout,
 		AutoStart:   s.AutoStart,
 		MaxRestarts: s.MaxRestarts,
+
+		TrustUntrustedContent: s.TrustUntrustedContent,
 	}
 
 	return json.Marshal(alias)

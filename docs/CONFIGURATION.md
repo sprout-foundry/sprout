@@ -60,7 +60,7 @@ The configuration uses a flat structure focused on provider and model management
     "servers": {},
     "auto_start": false,
     "auto_discover": false,
-    "timeout": 30000000000
+    "timeout": 120000000000
   },
   "file_batch_size": 10,
   "max_concurrent_requests": 5,
@@ -104,7 +104,7 @@ Model Context Protocol configuration:
 - `servers`: Map of server names to configurations
 - `auto_start`: Auto-start MCP servers on launch (default: `false`)
 - `auto_discover`: Auto-discover available MCP servers (default: `false`)
-- `timeout`: Timeout in nanoseconds for MCP requests (default: 30s)
+- `timeout`: Per-server request timeout when a server does not set its own (default: 120s)
 
 #### `last_used_provider`
 
@@ -162,6 +162,16 @@ Assisted-by: sprout/0.30.0 (deepinfra/deepseek-ai/DeepSeek-V4.1-Flash)
 ```
 
 The version is the Sprout build (`dev` for source builds). It applies to `sprout commit` and `/commit`, the agent's `commit` tool and the `git` tool's commit operation, and commits made from the web UI. A `git commit` the agent types into a shell command is not rewritten. The trailer names the agent's provider/model — in a session, the session model; for a standalone `sprout commit`, which cannot see the session that made the changes, the configured model — plus the model that generated the commit message when one did. It joins an existing trailer block (`Signed-off-by:` etc.) and is not duplicated on an amend or re-run. Sprout never writes a `Co-Authored-By` line for a tool and strips any from generated commit messages. Set it with `sprout config set commit_attribution trailer` or under Settings → Advanced → Commit & Review.
+
+Every transcript snapshot (`/transcript`, and the automatic pre/post-compaction captures) records the `provider` and `model` that served the session, so a reader of the transcript knows which model did the work. The `commit` tool accepts `transcript_provider` and `transcript_model` for exactly that case: when the committing agent is not the one that made the changes — a resumed session, a subagent, or an agent working from a transcript — the recorded pair names the trailer, and the committing agent's own pair is listed too when it differs.
+
+#### `commit_trailers`
+
+Default git trailers — `"Key: Value"` lines — appended to every commit Sprout creates, e.g. `["Assisted-by: Sprout (anthropic/claude-opus-5-5)"]`. It applies to the same surfaces as `commit_attribution`: `sprout commit` and `/commit`, the agent's `commit` tool (including the `trailers` parameter) and the `git` tool's commit operation, and commits made from the web UI.
+
+Trailers are written with `git interpret-trailers` semantics: a new trailer block is separated from the message body by exactly one blank line, a message that already ends in a trailer block is joined rather than duplicated, and an identical trailer (case-insensitive key, trimmed value) is never added twice. `--dry-run` shows the final message with the trailers included.
+
+Sources are unioned in this order: the `commit_trailers` list from the layered config (the repo's `.sprout` workspace config over the global config), the repository's `AGENTS.md` `## Commit Trailers` section (each `Key: value` line, optionally a markdown list item), and explicit `--trailer "Key: Value"` flags (CLI and `/commit`, repeatable) or the commit tool's `trailers` parameter. Duplicates collapse across sources. With `commit_attribution: trailer`, the session's `Assisted-by: sprout/...` line and a configured `Assisted-by: ...` entry can both appear — dedup only collapses identical normalized trailers. Set the config value with `sprout config set commit_trailers "Key: Value,Other: value"`.
 
 #### `coordinator_auto_activate`
 

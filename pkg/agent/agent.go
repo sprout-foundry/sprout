@@ -138,6 +138,14 @@ type Agent struct {
 	// without a query-run context. Set once per turn in prepareQueryRun
 	// (setTurnLanguageGuard).
 	turnUserQuery string
+	// reasoningLoopNudge is the steering system message armed when the
+	// reasoning-channel guard confirms a degenerate thinking loop (see
+	// reasoning_guard.go). Guarded by turnLangMu; cleared at turn start.
+	reasoningLoopNudge string
+	// reasoningLoopSteered records that this turn has already been steered
+	// for a reasoning loop, so a flagged guard re-scrubbing on every later
+	// chunk counts one detection, not one per chunk. Guarded by turnLangMu.
+	reasoningLoopSteered bool
 
 	// Configuration
 	configManager *configuration.Manager
@@ -170,7 +178,7 @@ type Agent struct {
 	// contextCapMu guards effectiveContextCap/nativeContextWindow and the
 	// lastResolved* user-cap snapshot. Reads happen on every seed iteration
 	// (Info/reconcile) while writes come from model switches and runtime
-	// /max-context or settings-API cap changes, so the two must not race.
+	// settings-API cap changes, so the two must not race.
 	contextCapMu sync.RWMutex
 	// lastResolvedUserCap/lastResolvedHasCap snapshot the config's
 	// MaxContextTokens at the last cap resolution so reconcileContextCap can
@@ -404,6 +412,11 @@ type Agent struct {
 	// subagentDepth tracks the nesting depth of this agent. 0 = primary, 1 = orchestrator, 2 = coder/tester, etc.
 	subagentDepth int
 
+	// taskLoadMu guards taskLoaded: the set of workspaces whose persisted
+	// task records this process has already restored.
+	taskLoadMu sync.Mutex
+	taskLoaded map[string]bool
+
 	// rootPersonaID tracks the persona of the top-level (depth 0) agent in the spawn chain.
 	// Propagated to subagents so depth limits and spawn restrictions can be enforced based on the root persona.
 	rootPersonaID string
@@ -430,6 +443,33 @@ type Agent struct {
 	// filesReadThisTurn tracks paths the agent called read_file on during the current turn.
 	// Used by the staleness rule in checkWriteStaleness. Reset at turn boundaries.
 	filesReadThisTurn *turnFileTracker
+
+	// toolRepeatTracker is the per-turn, every-tool repeat guard (see
+	// tool_repeat_guard.go): it counts identical tool calls (name +
+	// normalised args) so a 3rd identical call gets a model-visible nudge
+	// and a call past the stall threshold ends the turn as "stalled".
+	// Guarded by stallMu. Reset at turn boundaries (ResetToolRepeatGuardForNewTurn).
+	toolRepeatTracker *toolRepeatTracker
+
+	// lastStallSummary is the stall summary recorded for the current/last
+	// turn (nil when the turn did not stall). Read by the workflow
+	// continuation loop (via GetStallSummary) to treat a stalled turn as a
+	// no-progress turn. Guarded by stallMu.
+	lastStallSummary *StallSummary
+
+	// stallStopFn ends the in-flight turn's conversation loop when a stall
+	// is detected (by cancelling the run context). Installed by
+	// prepareQueryRun, cleared at the turn boundary. Guarded by stallMu.
+	stallStopFn func()
+
+	// Per-turn repeat-guard stall thresholds (configurable via the workflow
+	// config; zero means "use the package defaults"). Guarded by stallMu.
+	stallIdenticalCalls int
+	stallIdleCalls      int
+
+	// stallMu guards the stall-state fields above (toolRepeatTracker,
+	// lastStallSummary, stallStopFn, stallIdenticalCalls, stallIdleCalls).
+	stallMu sync.Mutex
 
 	// fileMetadata holds per-path WorkspaceFileMetadata populated by the platform-side sync layer.
 	// checkWriteStaleness consults it to refuse writes over files with pending unsynced browser edits.
@@ -477,6 +517,13 @@ type Agent struct {
 	secRetriesAfterCaution atomic.Int64
 	secLoopsDetected       atomic.Int64
 
+	// costPricingUnknown is set once per agent lifetime (rel.3) when a
+	// pay-per-token model has no usable pricing (registry or embedded
+	// catalog), so cost estimates fall to $0 and the USD budget guard is a
+	// no-op. Not reset on Reset()/Clear(); the warning names the first
+	// tripping model. Warned so the user knows cost tracking is blind.
+	costPricingUnknown atomic.Bool
+
 	// Background rollup worker. Lazily initialized via rollupOnce for test compatibility.
 	rollupOnce sync.Once
 	rollupW    *rollupWorker
@@ -502,6 +549,30 @@ type Agent struct {
 	// purposes regardless of the console's TTY status. See
 	// workflow_run_approval.go for the policy and the accessors.
 	workflowRun atomic.Bool
+
+	// taskRun marks a /task background run: a workflow run for TTY purposes,
+	// but it keeps the WebUI approval surface so a long user-initiated task
+	// can still ask. See tasks_prompt.go.
+	taskRun atomic.Bool
+
+	// pendingQuestion is the question that ended a run configured with
+	// ask_user_ends_run (see pending_question.go).
+	pendingQuestion atomic.Pointer[tools.AskUserRequest]
+
+	// gate1Decided (SP-168): set to true at the end of a successful unified
+	// Gate-1 decision for the most recent tool call (explicit user approval,
+	// an LLM-judge verdict, or a non-interactive auto-approve). Handler-level
+	// gates (Gate 2, e.g. the shell/git approval prompt) consult
+	// Gate1DecidedLastCall() so they never re-prompt a call Gate 1 already
+	// decided. Reset at the start of each unifiedSecurityGate run; a failed
+	// decision (hard block / rejection) leaves it false and the handler never
+	// runs for that call, so the value is only read on the success path.
+	//
+	// Per-agent, not per-call: the seed loop can run SafeForParallel tools
+	// concurrently, but the only Gate-2-affected handlers (shell_command,
+	// git) are SafeForParallel=false, so a concurrent call can never run a
+	// gate between this flag's write and its read for the same handler.
+	gate1Decided atomic.Bool
 }
 
 // InjectWebUIManagers replaces the agent's internal approval and ask-user managers with the webui-owned instances.

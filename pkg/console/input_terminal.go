@@ -87,6 +87,20 @@ func (ir *InputReader) applyTerminalWidthChange(oldWidth, newWidth int) bool {
 	// which would wipe the footer below), then redraw the prompt.
 	// The footer's own SIGWINCH handler (watchResize → Resize) takes
 	// care of clearing and redrawing the footer rows independently.
+	//
+	// The prompt sits in the scroll region's last rows, so a narrower
+	// terminal that reflows it onto more rows than the region has left
+	// scrolls the newest transcript rows into scrollback to make room.
+	// When a footer owns the prompt, re-anchor it at the region's bottom
+	// and clear the rows it occupied before the reflow, so no stale copy
+	// stays behind.
+	if ir.footer != nil && ir.footer.canPinInput() {
+		LockOutput()
+		ir.clearInlineInputForResizeLocked(newWidth)
+		ir.redrawAnchoredLocked(newWidth)
+		UnlockOutput()
+		return true
+	}
 	ir.Refresh()
 	return true
 }
@@ -120,7 +134,14 @@ func (ir *InputReader) updateTerminalWidth() {
 // loop is still well-defined, just slightly less responsive).
 func (ir *InputReader) setupInputTerm() (resizeCh chan os.Signal, nonBlocking bool) {
 	fmt.Print(bracketedPasteEnable)
-	fmt.Print(MouseTrackingSGR)
+	fmt.Print(mouseInputModes())
+	// Click reporting only — deliberately NOT VT200 (?1000h), which also
+	// captures the wheel. A TUI that swallows the wheel takes the
+	// terminal's scrollback away from the user, and the transcript is
+	// exactly what they need to scroll (a long security prompt, a wall of
+	// tool output). The context menu needs clicks, not motion, so the
+	// narrower mode is sufficient and the wheel keeps working.
+	//
 	// Ask the terminal to report modified keystrokes (Shift+Enter etc.)
 	// as CSI u sequences. Terminals that don't recognize this just
 	// ignore the SGR; the new parser branch is a no-op when the

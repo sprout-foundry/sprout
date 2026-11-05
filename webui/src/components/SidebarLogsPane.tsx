@@ -1,5 +1,5 @@
 import { Download } from 'lucide-react';
-import { useRef, useEffect, useCallback } from 'react';
+import { memo, useRef, useEffect, useCallback, useMemo } from 'react';
 import type { ProviderLogEntry } from '../providers/types';
 
 const MAX_LOG_ROWS = 1000;
@@ -14,7 +14,7 @@ interface SidebarLogsPaneProps {
   logs: ProviderLogEntry[];
 }
 
-export default function SidebarLogsPane({ logs }: SidebarLogsPaneProps): JSX.Element {
+function SidebarLogsPane({ logs }: SidebarLogsPaneProps): JSX.Element {
   const logsContainerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollLogsRef = useRef(true);
 
@@ -97,22 +97,6 @@ export default function SidebarLogsPane({ logs }: SidebarLogsPaneProps): JSX.Ele
     })}.${date.getMilliseconds().toString().padStart(3, '0')}`;
   }, []);
 
-  const getRenderedLogLines = useCallback(
-    (entries: typeof logs) => {
-      return entries
-        .map((logEntry) => {
-          const message = formatLogLine(logEntry);
-          if (!message) {
-            return null;
-          }
-
-          return `${buildLogTimestamp(logEntry.timestamp)} [${logEntry.type}] ${message}`;
-        })
-        .filter((line): line is string => Boolean(line));
-    },
-    [buildLogTimestamp],
-  );
-
   // Auto-scroll to bottom when logs change. Scroll the list itself:
   // scrollIntoView also scrolls every scrollable ancestor, which shifted the
   // whole page up and cut off the top bar.
@@ -123,9 +107,27 @@ export default function SidebarLogsPane({ logs }: SidebarLogsPaneProps): JSX.Ele
     }
   }, [logs.length]);
 
-  const displayLogs = logs.slice(-MAX_LOG_ROWS);
-  // eslint-disable-next-line testing-library/render-result-naming-convention
-  const formattedLines = getRenderedLogLines(displayLogs);
+  const displayLogs = useMemo(() => logs.slice(-MAX_LOG_ROWS), [logs]);
+
+  // Format once per render of this pane and render from the result. The pane
+  // used to format every line twice — once for the row count, once in the
+  // list — over up to MAX_LOG_ROWS entries, on every parent render (the app
+  // root re-renders ~20x/s while a chat streams).
+  const rows = useMemo(() => {
+    return displayLogs
+      .map((logEntry) => {
+        const message = formatLogLine(logEntry);
+        if (!message) return null;
+        return {
+          id: logEntry.id,
+          type: logEntry.type,
+          level: logEntry.level,
+          time: buildLogTimestamp(logEntry.timestamp),
+          message,
+        };
+      })
+      .filter((row): row is NonNullable<typeof row> => row !== null);
+  }, [displayLogs, buildLogTimestamp]);
 
   const handleLogsScroll = () => {
     const container = logsContainerRef.current;
@@ -137,7 +139,10 @@ export default function SidebarLogsPane({ logs }: SidebarLogsPaneProps): JSX.Ele
   };
 
   const downloadLogs = (format: 'txt' | 'json') => {
-    const content = format === 'json' ? JSON.stringify(displayLogs, null, 2) : formattedLines.join('\n');
+    const content =
+      format === 'json'
+        ? JSON.stringify(displayLogs, null, 2)
+        : rows.map((row) => `${row.time} [${row.type}] ${row.message}`).join('\n');
     const blob = new Blob([content], {
       type: format === 'json' ? 'application/json' : 'text/plain;charset=utf-8',
     });
@@ -152,7 +157,7 @@ export default function SidebarLogsPane({ logs }: SidebarLogsPaneProps): JSX.Ele
     URL.revokeObjectURL(url);
   };
 
-  if (formattedLines.length === 0) {
+  if (rows.length === 0) {
     return <div className="empty">No logs yet</div>;
   }
 
@@ -160,7 +165,7 @@ export default function SidebarLogsPane({ logs }: SidebarLogsPaneProps): JSX.Ele
     <div className="logs-pane">
       <div className="logs-toolbar">
         <div className="logs-toolbar-summary">
-          <span>{formattedLines.length} rows</span>
+          <span>{rows.length} rows</span>
           <span>showing last {MAX_LOG_ROWS}</span>
         </div>
         <div className="logs-toolbar-actions">
@@ -183,21 +188,20 @@ export default function SidebarLogsPane({ logs }: SidebarLogsPaneProps): JSX.Ele
         </div>
       </div>
       <div className="terminal-logs" ref={logsContainerRef} onScroll={handleLogsScroll}>
-        {displayLogs.map((logEntry) => {
-          const message = formatLogLine(logEntry);
-          // Skip empty log lines
-          if (!message) return null;
-
-          const timestamp = buildLogTimestamp(logEntry.timestamp);
-
-          return (
-            <div key={logEntry.id} className={`term-log-line term-log-${logEntry.level}`}>
-              <span className="term-log-time">{timestamp}</span>
-              <span className="term-log-msg">{message}</span>
-            </div>
-          );
-        })}
+        {rows.map((row) => (
+          <div key={row.id} className={`term-log-line term-log-${row.level}`}>
+            <span className="term-log-time">{row.time}</span>
+            <span className="term-log-msg">{row.message}</span>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
+
+/**
+ * Memoized on `logs`: the app root re-renders on every chat stream flush, and
+ * this pane renders up to MAX_LOG_ROWS rows. Its input only changes when a log
+ * entry is appended, so it must not re-render with the stream.
+ */
+export default memo(SidebarLogsPane);

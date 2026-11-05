@@ -85,6 +85,19 @@ jobs:
         test -x /usr/bin/google-chrome-stable || { echo "chrome not at /usr/bin/google-chrome-stable"; exit 1; }
         /usr/bin/google-chrome-stable --version
 
+    - name: Install gopls (Go language server for the semantic adapter tests)
+      # pkg/lsp/semantic's adapter tests drive a real gopls process. Without it
+      # on PATH they skip, and nothing else in the pipeline installs it — so
+      # they skipped on every runner, CI included, and the adapter's
+      # gopls-dependent behaviour (definition, hover, rename, inlay hints) was
+      # never exercised. SPROUT_REQUIRE_GOPLS below makes the skip a failure,
+      # so "the gopls path ran" is asserted rather than assumed.
+      run: |
+        go install golang.org/x/tools/gopls@latest
+        echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+        test -x "$(go env GOPATH)/bin/gopls" || { echo "gopls not installed"; exit 1; }
+        "$(go env GOPATH)/bin/gopls" version
+
     - name: Install MLX C library (macOS)
       # Runtime-only: the darwin/arm64 unit tests that load real models need
       # the MLX dylib at test time. The build itself no longer depends on it
@@ -145,6 +158,9 @@ jobs:
         # it. Unset elsewhere so a runner without a browser skips (visibility
         # is provided by the requirement on the platform we control).
         SPROUT_REQUIRE_BROWSER: ${{ runner.os == 'Linux' && '1' || '' }}
+        # gopls is installed in the step above on every OS, so require it
+        # everywhere: the semantic adapter tests then fail instead of skipping.
+        SPROUT_REQUIRE_GOPLS: "1"
       run: make test-coverage
 
     - name: Display coverage summary

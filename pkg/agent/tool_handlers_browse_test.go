@@ -68,8 +68,10 @@ func TestParseBrowseSteps_ValidSteps(t *testing.T) {
 		t.Errorf("steps[1].Value = %q, expected 'admin'", steps[1].Value)
 	}
 
-	if steps[2].Action != "wait" {
-		t.Errorf("steps[2].Action = %q, expected 'wait'", steps[2].Action)
+	if steps[2].Action != "sleep" {
+		// "wait" is accepted as an alias: with no selector it means a fixed
+		// delay, i.e. the canonical "sleep" verb.
+		t.Errorf("steps[2].Action = %q, expected 'sleep' (alias of 'wait')", steps[2].Action)
 	}
 	if steps[2].Millis != 5000 {
 		t.Errorf("steps[2].Millis = %d, expected 5000", steps[2].Millis)
@@ -207,8 +209,10 @@ func TestParseBrowseSteps_BrowseStepTypeFields(t *testing.T) {
 	if len(steps) != 1 {
 		t.Fatalf("expected 1 step, got %d", len(steps))
 	}
-	if steps[0].Action != "screenshot" {
-		t.Errorf("expected action 'screenshot', got %q", steps[0].Action)
+	// "screenshot" is accepted as an alias for the element-capture step when
+	// a selector is present; the canonical verb is stored back.
+	if steps[0].Action != "screenshot_selector" {
+		t.Errorf("expected action 'screenshot_selector', got %q", steps[0].Action)
 	}
 	if steps[0].Selector != "#image" {
 		t.Errorf("expected selector '#image', got %q", steps[0].Selector)

@@ -192,6 +192,22 @@ func KeymapHintRow(mode ComposerMode) string {
 	}
 }
 
+// WorkingHintRow renders the footer's mid-turn wording: it states that
+// work is in progress — the indication that stays for the whole turn,
+// including while tools and subagents run — and keeps the two keys that
+// still apply. The spinner label changes; this row does not.
+func WorkingHintRow(mode ComposerMode) string {
+	working := Sym().Working + " working"
+	switch mode {
+	case ComposerSteer:
+		return working + " — Enter steer · ^C stop"
+	case ComposerQueue:
+		return working + " — Enter queue · ^C stop"
+	default:
+		return working + " — ^C stop"
+	}
+}
+
 func padRight(s string, n int) string {
 	if len(s) >= n {
 		return s

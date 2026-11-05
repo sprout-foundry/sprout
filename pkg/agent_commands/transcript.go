@@ -67,7 +67,8 @@ func (c *TranscriptCommand) Usage() string {
 
 Snapshots land in ~/.sprout/transcripts/<scope>/<session>/<utc>-<label>.json.
 Each captures the live message list, current turn checkpoints, token/cost
-counters, and per-message source annotations (original / LLM-checkpoint).
+counters, the provider/model serving the session, and per-message source
+annotations (original / LLM-checkpoint).
 `)
 }
 
@@ -165,6 +166,9 @@ func renderSnapshotAsMarkdown(snap *agent.TranscriptSnapshot) string {
 	fmt.Fprintf(&b, "- **Session**: `%s`\n", snap.SessionID)
 	fmt.Fprintf(&b, "- **Working dir**: `%s`\n", snap.WorkingDirectory)
 	fmt.Fprintf(&b, "- **Captured**: %s\n", snap.Timestamp.Format(time.RFC3339))
+	if snap.Provider != "" || snap.Model != "" {
+		fmt.Fprintf(&b, "- **Provider/model**: `%s/%s`\n", snap.Provider, snap.Model)
+	}
 	fmt.Fprintf(&b, "- **Messages**: %d\n", len(snap.State.Messages))
 	fmt.Fprintf(&b, "- **Turn checkpoints**: %d\n", len(snap.State.TurnCheckpoints))
 	fmt.Fprintf(&b, "- **Total tokens**: %d\n", snap.State.TotalTokens)

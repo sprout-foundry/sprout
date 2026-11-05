@@ -70,7 +70,7 @@ export interface WorkspaceSidebarProps {
   selectedFile?: string;
   /** Open a workspace file in the editor, optionally at a line. */
   onOpenFile: (path: string, line?: number) => void;
-  /** Offered as a Terminal entry (the in-browser shell has no strip of its own). */
+  /** Offered as a Terminal entry that opens and closes the docked terminal. */
   onToggleTerminal?: () => void;
   designTab: DesignTab;
   onDesignTabChange: (tab: DesignTab) => void;

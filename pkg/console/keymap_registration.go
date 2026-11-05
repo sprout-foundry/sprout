@@ -89,8 +89,11 @@ func RegisterKeymapForFooter(footer *StatusFooter, cfg OutputVerbosityToggler) {
 				}
 				// SP-115: update hint visibility when verbosity changes.
 				// Compact hides the hint; default and verbose show it.
+				// This runs inside InputReader.HandleEvent, which its caller
+				// drives under the output lock — the locked variant avoids
+				// re-entering the non-reentrant mutex.
 				if footer != nil {
-					footer.SetShowKeymapHint(newValue != verbosityCompact)
+					footer.SetShowKeymapHintLocked(newValue != verbosityCompact)
 				}
 				label := verbosityToggleLabel(newValue)
 				fmt.Fprintln(os.Stderr, GlyphInfo.Prefix()+label)

@@ -327,8 +327,8 @@ func (keys *APIKeys) PopulateFromEnvironment() bool {
 // PopulateFromJSONEnv populates API keys from the SPROUT_API_KEYS_JSON environment
 // variable. The value must be a JSON object mapping provider names to API key strings,
 // e.g. {"openrouter":"sk-...","deepinfra":"di-..."}.
-// This is designed for containerized/SaaS environments (e.g. Sprout Foundry) where
-// keys are injected at runtime rather than stored in config files.
+// This is designed for containerized/SaaS environments where keys are injected
+// at runtime rather than stored in config files.
 func (keys *APIKeys) PopulateFromJSONEnv() bool {
 	raw := strings.TrimSpace(GetEnvSimple("API_KEYS_JSON"))
 	if raw == "" {

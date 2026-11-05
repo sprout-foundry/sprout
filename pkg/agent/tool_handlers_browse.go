@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -112,31 +111,38 @@ func handleBrowseURL(ctx context.Context, a *Agent, args map[string]interface{})
 
 	result, err := webcontent.BrowseURL(url, opts)
 	if err != nil {
-		return "", agenterrors.Wrapf(err, "failed to browse URL %s (action=%s)", url, action)
+		return "", classifyBrowseError(err, url, action)
 	}
 
 	return result, nil
 }
 
+// classifyBrowseError maps a browse failure onto the agent's error taxonomy.
+//
+// A transient network fault (connection reset, timeout, empty response) is
+// worth another attempt — the same URL usually loads moments later, and a
+// hard failure makes the agent give up on a page that is perfectly reachable.
+// A deterministic failure (bad scheme, refused connection, no such host, a
+// missing element) is not: retrying only delays the answer, so it stays a
+// plain error the agent reports rather than retries.
+func classifyBrowseError(err error, url, action string) error {
+	msg := fmt.Sprintf("failed to browse URL %s (action=%s)", url, action)
+	if webcontent.IsTransientNavigationError(err) {
+		return agenterrors.NewNetwork(msg, err)
+	}
+	return agenterrors.Wrapf(err, "%s", msg)
+}
+
+// parseBrowseSteps converts []interface{} to []webcontent.BrowseStep.
+//
+// The step language has exactly one parser (webcontent.ParseBrowseSteps);
+// this is the agent-layer wrapper that maps its plain errors onto the agent
+// error taxonomy (invalid input, not retryable) so a bad verb fails before
+// any browser work rather than being retried.
 func parseBrowseSteps(rawSteps []interface{}) ([]webcontent.BrowseStep, error) {
-	steps := make([]webcontent.BrowseStep, 0, len(rawSteps))
-	for idx, rawStep := range rawSteps {
-		stepMap, ok := rawStep.(map[string]interface{})
-		if !ok {
-			return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("browse_url steps[%d] must be an object", idx), nil)
-		}
-		encoded, err := json.Marshal(stepMap)
-		if err != nil {
-			return nil, agenterrors.Wrapf(err, "browse_url steps[%d] marshal failed", idx)
-		}
-		var step webcontent.BrowseStep
-		if err := json.Unmarshal(encoded, &step); err != nil {
-			return nil, agenterrors.Wrapf(err, "browse_url steps[%d] parse failed", idx)
-		}
-		if strings.TrimSpace(step.Action) == "" {
-			return nil, agenterrors.NewInvalidInputError(fmt.Sprintf("browse_url steps[%d] requires action", idx), nil)
-		}
-		steps = append(steps, step)
+	steps, err := webcontent.ParseBrowseSteps(rawSteps)
+	if err != nil {
+		return nil, agenterrors.NewInvalidInputError(err.Error(), err)
 	}
 	return steps, nil
 }

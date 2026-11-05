@@ -12,7 +12,14 @@ import { useChatSessionManager, type ChatApi } from './useChatSessionManager';
 vi.mock('../services/api', () => ({ ApiService: { getInstance: () => ({}) } }));
 vi.mock('../utils/log', () => ({ debugLog: vi.fn() }));
 vi.mock('../services/notificationBus', () => ({ notificationBus: { notify: vi.fn() } }));
-vi.mock('../services/runStatus', () => ({ fetchChatRunning: vi.fn() }));
+vi.mock('../services/runStatus', () => ({
+  fetchChatRunning: vi.fn(),
+  // The hook resolves a chat's running state through this; the cases here set
+  // the store's own flag, which is the answer when the store runs the agent.
+  resolveChatRunning: vi.fn((_chatId: string | null | undefined, storeSaysRunning: boolean | undefined) =>
+    Promise.resolve(storeSaysRunning === true),
+  ),
+}));
 
 const fetchRunning = fetchChatRunning as ReturnType<typeof vi.fn>;
 

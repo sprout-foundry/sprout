@@ -317,56 +317,6 @@ func TestFormatThousands(t *testing.T) {
 	}
 }
 
-// TestFormatSubagentDoneLine covers the rendering of the per-subagent
-// completion summary. Notably: zero-valued numeric fields drop out so
-// a no-cost cancellation doesn't spam "0 tok · $0.0000".
-func TestFormatSubagentDoneLine(t *testing.T) {
-	cases := []struct {
-		name        string
-		persona     string
-		status      string
-		reason      string
-		tokens      int
-		cost        float64
-		elapsedSec  float64
-		wantSubstrs []string
-	}{
-		{
-			name:    "completed with all fields",
-			persona: "coder", status: "completed", reason: "",
-			tokens: 12345, cost: 0.0234, elapsedSec: 4.2,
-			wantSubstrs: []string{"done", "12,345 tok", "$0.0234", "4.2s"},
-		},
-		{
-			name:    "cancelled with reason",
-			persona: "coder", status: "cancelled", reason: "budget_exceeded",
-			tokens: 8901, cost: 0.0102, elapsedSec: 2.1,
-			wantSubstrs: []string{"cancelled (budget_exceeded)", "8,901 tok", "$0.0102", "2.1s"},
-		},
-		{
-			name:    "completed with zero cost drops the dollar field",
-			persona: "coder", status: "completed", reason: "",
-			tokens: 100, cost: 0, elapsedSec: 1.5,
-			wantSubstrs: []string{"done", "100 tok", "1.5s"},
-		},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			got := cliui.FormatSubagentDoneLine(c.persona, c.status, c.reason, c.tokens, c.cost, c.elapsedSec)
-			for _, want := range c.wantSubstrs {
-				if !strings.Contains(got, want) {
-					t.Errorf("missing %q in %q", want, got)
-				}
-			}
-		})
-	}
-	// Cost == 0 case should not contain "$" at all.
-	got := cliui.FormatSubagentDoneLine("coder", "completed", "", 100, 0, 1.0)
-	if strings.Contains(got, "$") {
-		t.Errorf("zero cost should drop the dollar field; got %q", got)
-	}
-}
-
 // TestFormatTokensShort covers the compact token formatter used in
 // spawn / tool / progress lines where horizontal space is at a premium.
 func TestFormatTokensShort(t *testing.T) {

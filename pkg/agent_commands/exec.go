@@ -15,10 +15,20 @@ import (
 // ExecCommand handles the /exec slash command
 // Usage: /exec <shell-command-to-execute>
 // Alias: !<shell-command-to-execute> (matches other tools like Jupyter, R, etc.)
-type ExecCommand struct{}
+type ExecCommand struct {
+	outputSink
+}
 
 func (c *ExecCommand) Name() string {
 	return "exec"
+}
+
+// SafeDuringSteer returns true - /exec runs a foreground shell command and
+// touches no turn or conversation state. The CLI steer path has always run
+// bang commands mid-turn; this makes the WebUI agree. The git checkout/discard
+// guards in Execute still apply.
+func (c *ExecCommand) SafeDuringSteer() bool {
+	return true
 }
 
 func (c *ExecCommand) Description() string {
@@ -56,20 +66,45 @@ func (c *ExecCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		return fmt.Errorf("git %s operations are not allowed via /exec. Use the git tool with operation='restore' or operation='reset' to require explicit user approval (command: '%s')", ExtractGitSubcommand(command), command)
 	}
 
-	// Execute the shell command using the same pattern as direct shell execution
-	console.GlyphShell.Fprintf(os.Stdout, "Executing: %s", command)
-	result, err := tools.ExecuteShellCommand(context.Background(), command)
-	if err != nil {
-		console.GlyphError.Fprintln(os.Stderr, err.Error())
+	if execOnTerminal(c.out()) {
+		// Through the transcript writer, so the cursor is parked inside the
+		// scroll region before the child starts writing at it.
+		console.WriteTranscript(console.GlyphShell.Prefix() + "Executing: " + command + "\n")
+		dir := ""
+		if chatAgent != nil {
+			dir = chatAgent.GetWorkspaceRoot()
+		}
+		code, err := runOnTerminal(command, dir)
+		switch {
+		case err != nil:
+			console.GlyphError.Fprintln(os.Stderr, err.Error())
+		case code != 0:
+			console.GlyphWarning.Fprintf(os.Stderr, "exit status %d", code)
+		}
 		return nil
 	}
 
-	fmt.Printf("----------------------------\n")
-	fmt.Print(result)
-	if !strings.HasSuffix(result, "\n") {
-		fmt.Print("\n")
+	// Execute the shell command using the same pattern as direct shell execution
+	console.GlyphShell.Fprintf(c.out(), "Executing: %s", command)
+	// The agent's context, not context.Background(): the password prompter,
+	// workspace root, and process manager all travel in the context, so a bare
+	// one leaves sudo/passwd prompts with no surface and the command hangs.
+	ctx := context.Background()
+	if chatAgent != nil {
+		ctx = chatAgent.ShellExecutionContext()
 	}
-	fmt.Printf("----------------------------\n")
+	result, err := tools.ExecuteShellCommand(ctx, command)
+	if err != nil {
+		console.GlyphError.Fprintln(c.out(), err.Error())
+		return nil
+	}
+
+	c.println("----------------------------")
+	c.print(result)
+	if !strings.HasSuffix(result, "\n") {
+		c.println()
+	}
+	c.println("----------------------------")
 
 	return nil
 }

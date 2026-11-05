@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
@@ -54,6 +55,12 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	// (interactive + queue) only register once. Registered before
 	// Start so the first scroll region already reserves the hint row.
 	console.RegisterKeymapForFooter(footer, chatAgent.GetConfigManager())
+	if mgr := chatAgent.GetConfigManager(); mgr != nil {
+		console.SetMouseClickToPositionSource(func() bool {
+			cfg := mgr.GetConfig()
+			return cfg != nil && cfg.MouseClickToPosition
+		})
+	}
 	footer.Start()
 	defer footer.Stop()
 
@@ -100,6 +107,15 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	// any) — it's forwarded into the input buffer below so that
 	// keystroke isn't swallowed.
 	dismissKey := maybeOfferSessionResume(chatAgent)
+
+	// SP-171g: a session resumed through --session-id / --last-session was
+	// loaded before the footer existed, so its tail has to be rendered here,
+	// at the same seam the picker uses. The picker path renders its own tail
+	// inline; this covers the flag path. Rendering only when the footer is up
+	// keeps the output inside the scroll region.
+	if agentLastSession || strings.TrimSpace(agentSessionID) != "" {
+		cliui.RenderSessionTail(chatAgent.GetMessages())
+	}
 
 	// SP-048-5b: one-shot hint about Tab autocomplete + Ctrl-D, persisted
 	// per workspace in ~/.sprout/state.json so it never repeats.
@@ -169,6 +185,11 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	groundTruth := console.CaptureGroundTruth()
 	inputReader.SetGroundTruth(groundTruth)
 	steerCoord.SetGroundTruth(groundTruth)
+	// Process-wide registration so console.ResyncTerminal (called at the
+	// REPL's return-to-prompt seam) can restore cooked termios from the
+	// same pristine snapshot after a `!` child or a timed-out security
+	// prompt leaves the terminal's modes desynced.
+	console.RegisterGlobalGroundTruth(groundTruth)
 
 	// SP-048-1c + 3: Subscribe to tool start/end events so the activity
 	// indicator can render a per-tool timeline AND the footer can refresh
@@ -274,6 +295,13 @@ func (s *agentFooterSource) WorkingDir() string {
 // in flight. SP-051-2d.
 func (s *agentFooterSource) ActiveSubagents() int {
 	return agent.GetActiveSubagents()
+}
+
+// ActiveTasks satisfies the optional activeTasksSource interface in
+// pkg/console so the footer shows running /task agents, whose output stays
+// out of the transcript. SP-174d.
+func (s *agentFooterSource) ActiveTasks() int {
+	return agent.RunningTaskCount()
 }
 
 // QueuedMessages satisfies the optional queuedMessagesSource interface

@@ -124,8 +124,12 @@ func IsSecretRef(value string) bool {
 }
 
 // ParseSecretRef parses a credential placeholder and returns its components.
-// The value between "{{credential:" and "}}" is split on "/" - first part is ignored ("mcp"),
-// second is server name, third is env var name.
+// The value between "{{credential:" and "}}" is split on "/": the first part
+// is the namespace ("mcp"), the second the server name, and everything after
+// it the credential name.
+//
+// The name may itself contain a "/" — header credentials are keyed as
+// "header/{Header-Name}" — so the tail is rejoined rather than rejected.
 func ParseSecretRef(value string) (serverName, envVarName string, ok bool) {
 	value = strings.TrimSpace(value)
 	if !IsSecretRef(value) {
@@ -136,9 +140,9 @@ func ParseSecretRef(value string) (serverName, envVarName string, ok bool) {
 	inner := strings.TrimPrefix(value, "{{credential:")
 	inner = strings.TrimSuffix(inner, "}}")
 
-	// Split on "/" - expected format is "mcp/{server}/{envvar}"
-	parts := strings.Split(inner, "/")
-	if len(parts) != 3 || parts[0] != "mcp" {
+	// Expected format is "mcp/{server}/{name}", where {name} may contain "/".
+	parts := strings.SplitN(inner, "/", 3)
+	if len(parts) != 3 || parts[0] != "mcp" || parts[1] == "" || parts[2] == "" {
 		return "", "", false
 	}
 

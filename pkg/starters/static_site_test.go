@@ -18,7 +18,7 @@ import (
 // staticSiteVersion is the version the static-site tree declares; the
 // assertions below must agree with
 // pkg/starters/data/static-site/starter.json.
-const staticSiteVersion = "1.1.0"
+const staticSiteVersion = "1.2.1"
 
 // staticSiteProjectFiles are the project files (relative to the
 // destination) a static-site instantiation must produce: the Astro source
@@ -35,6 +35,7 @@ var staticSiteProjectFiles = []string{
 	".gitignore",
 	".gitattributes",
 	"README.md",
+	"AGENTS.md",
 	filepath.Join("public", "favicon.svg"),
 	filepath.Join("public", "404.html"),
 	filepath.Join("src", "config.ts"),

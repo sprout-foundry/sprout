@@ -142,6 +142,8 @@ func (c *Config) GetSubagentType(id string) *SubagentType {
 	result.AllowedTools = append([]string{}, found.AllowedTools...)
 	result.Aliases = append([]string{}, found.Aliases...)
 	result.Capabilities = append([]string{}, found.Capabilities...)
+	result.WritePaths = append([]string{}, found.WritePaths...)
+	result.HostTools = append([]string{}, found.HostTools...)
 	result.CanSpawnNonDelegatable = append([]string{}, found.CanSpawnNonDelegatable...)
 	if found.AutoApproveRules != nil {
 		rules := *found.AutoApproveRules
@@ -183,6 +185,8 @@ func defaultSubagentTypes() map[string]SubagentType {
 			TimeBudgetSeconds:      definition.TimeBudgetSeconds,
 			ReadOnly:               definition.ReadOnly,
 			Capabilities:           append([]string{}, definition.Capabilities...),
+			WritePaths:             append([]string{}, definition.WritePaths...),
+			HostTools:              append([]string{}, definition.HostTools...),
 			CanSpawnNonDelegatable: append([]string{}, definition.CanSpawnNonDelegatable...),
 		}
 	}

@@ -266,13 +266,15 @@ func runIsolatedSubagent(ctx context.Context, a *Agent, spec *subagentLaunchSpec
 	}
 
 	result := a.GetSubagentRunner().runTask(ctx, taskID, isolationPreamble(ws, originalRoot)+spec.enhancedPrompt, SubagentOptions{
-		Persona:      spec.persona,
-		Model:        spec.model,
-		Provider:     spec.provider,
-		SystemPrompt: spec.systemPromptText,
-		WorkingDir:   ws.dir(),
-		Quiet:        quiet,
-		Role:         spec.role,
+		Persona:       spec.persona,
+		Model:         spec.model,
+		Provider:      spec.provider,
+		SystemPrompt:  spec.systemPromptText,
+		WorkingDir:    ws.dir(),
+		Quiet:         quiet,
+		Role:          spec.role,
+		MaxIterations: spec.maxIterations,
+		Timeout:       spec.timeout,
 	}, nil, 0)
 	if result == nil {
 		result = &SubagentResult{ID: taskID, Error: fmt.Errorf("subagent produced no result")}

@@ -203,11 +203,17 @@ func TestProcessImagesInQuery_NilClient_ReturnsQueryUnchanged(t *testing.T) {
 type visionSupportingClient struct {
 	api.ClientInterface // embed for unused methods
 	supportsVision      bool
+	selfHeals           bool
 	currentModel        string
 	visionModel         string
 }
 
 func (v *visionSupportingClient) SupportsVision() bool { return v.supportsVision }
+
+// RecoversFromVisionRejection reports whether the mock recovers from a
+// capability rejection on the wire, which is what lets the resolver's
+// optimistic attach apply.
+func (v *visionSupportingClient) RecoversFromVisionRejection() bool { return v.selfHeals }
 
 // VisionCapabilities returns the per-provider vision limits.
 // SP-103-D3: the mock returns safe defaults for test parity.
@@ -319,37 +325,37 @@ func TestProcessImagesInQuery_VisionClient_NoPlaceholders_ReturnsQueryUnchanged(
 	}
 }
 
-func TestProcessImagesInQuery_NonVisionClient_InjectsToolPrompt(t *testing.T) {
-	// SP-103-C1: non-vision client now injects the OCR-tool prompt instead
-	// of passing the original query through unchanged. This is the entire
-	// point of the change — make the model call analyze_image_content to
-	// read pasted images.
+func TestProcessImagesInQuery_DeclaredNonVisionClient_StillAttachesInline(t *testing.T) {
+	// A negative declared capability is not a verified rejection: the image is
+	// attempted on the active model instead of being rerouted to a separate
+	// vision model. The file is missing here, so no image data survives — but
+	// the query must go down the inline path, not the analyze-tool prompt.
 	query := "[image: ./.sprout/pasted-images/test_a.png]\nPlease read this image."
-	a := &Agent{client: &visionSupportingClient{supportsVision: false}}
+	a := &Agent{client: &visionSupportingClient{supportsVision: false, selfHeals: true}}
 
 	images, cleaned, err := a.processImagesInQuery(query)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(images) != 0 {
-		t.Fatalf("expected no multimodal images for non-vision client, got %d", len(images))
+		t.Fatalf("expected no image data for a missing file, got %d", len(images))
 	}
-	if !strings.Contains(cleaned, "Image Analysis Policy") {
-		t.Fatalf("expected non-vision query to receive analysis tool prompt, got: %q", cleaned)
+	if strings.Contains(cleaned, "Image Analysis Policy") {
+		t.Fatalf("declared-non-vision client must not be steered to the analyze tool, got: %q", cleaned)
 	}
-	if !strings.Contains(cleaned, "./.sprout/pasted-images/test_a.png") {
-		t.Errorf("expected injected prompt to reference the pasted image path, got: %q", cleaned)
+	if !strings.Contains(cleaned, "[image: test_a.png]") {
+		t.Errorf("expected the placeholder to be rewritten inline, got: %q", cleaned)
 	}
 }
 
-func TestProcessImagesInQuery_VisionProviderWithNonVisionModel_LeavesQueryTextOnly(t *testing.T) {
-	// When the active model is non-vision AND the client is non-vision,
-	// the OCR-tool prompt is now injected. The test name "LeavesQueryTextOnly"
-	// reflects the pre-C1 behavior; the new behavior is documented above.
+func TestProcessImagesInQuery_VisionProviderWithNonVisionModel_StillAttachesInline(t *testing.T) {
+	// A provider that also configures a separate vision model must not fork
+	// the active model's image away from it on a declaration alone.
 	query := "[image: ./.sprout/pasted-images/test_a.png]\nPlease read this image."
 	a := &Agent{
 		client: &visionSupportingClient{
 			supportsVision: false,
+			selfHeals:      true,
 			currentModel:   "glm-5-turbo",
 			visionModel:    "glm-4.6v",
 		},
@@ -360,10 +366,13 @@ func TestProcessImagesInQuery_VisionProviderWithNonVisionModel_LeavesQueryTextOn
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(images) != 0 {
-		t.Fatalf("expected no multimodal images for non-vision model, got %d images", len(images))
+		t.Fatalf("expected no image data for a missing file, got %d images", len(images))
 	}
-	if !strings.Contains(cleaned, "Image Analysis Policy") {
-		t.Fatalf("expected analysis tool prompt when active model is non-vision, got: %q", cleaned)
+	if strings.Contains(cleaned, "Image Analysis Policy") {
+		t.Fatalf("active model must be tried before the analyze tool, got: %q", cleaned)
+	}
+	if !strings.Contains(cleaned, "[image: test_a.png]") {
+		t.Errorf("expected the placeholder to be rewritten inline, got: %q", cleaned)
 	}
 }
 

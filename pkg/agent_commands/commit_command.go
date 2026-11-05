@@ -32,7 +32,8 @@ func (c *CommitCommand) println(text string) {
 // parseFlags parses command-line flags and sets internal state
 func (c *CommitCommand) parseFlags(args []string) []string {
 	var cleanArgs []string
-	for _, arg := range args {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
 		switch arg {
 		case "--yes", "-y", "--skip-prompt":
 			c.skipPrompt = true
@@ -40,8 +41,18 @@ func (c *CommitCommand) parseFlags(args []string) []string {
 			c.dryRun = true
 		case "--allow-secrets":
 			c.allowSecrets = true
+		case "--trailer":
+			if i+1 >= len(args) {
+				return cleanArgs
+			}
+			i++
+			c.trailers = append(c.trailers, args[i]) //nolint:gosec // G602: i+1 bounds-checked above
 		default:
-			cleanArgs = append(cleanArgs, arg)
+			if value, ok := strings.CutPrefix(arg, "--trailer="); ok {
+				c.trailers = append(c.trailers, value)
+			} else {
+				cleanArgs = append(cleanArgs, arg)
+			}
 		}
 	}
 	return cleanArgs
@@ -52,7 +63,7 @@ func (c *CommitCommand) parseFlags(args []string) []string {
 // Usage returns the detailed help text shown by `/help commit`.
 func (c *CommitCommand) Usage() string {
 	return strings.Join([]string{
-		"/commit [instructions] [--skip-prompt] [--dry-run] [--allow-secrets]",
+		"/commit [instructions] [--skip-prompt] [--dry-run] [--allow-secrets] [--trailer \"Key: Value\"]…",
 		"",
 		"Interactive commit workflow: stage files, generate an AI commit",
 		"message from the staged diff, confirm, and create the commit.",
@@ -61,11 +72,15 @@ func (c *CommitCommand) Usage() string {
 		"  --skip-prompt     Auto-proceed without the confirm picker.",
 		"  --dry-run         Generate the message but do not commit.",
 		"  --allow-secrets   Bypass the secret-detection security check.",
+		"  --trailer K: V    Append a git trailer to the commit message",
+		"                    (repeatable). Defaults from the commit.trailers",
+		"                    config and the repo's AGENTS.md are always applied.",
 		"",
 		"Examples:",
 		`  /commit`,
 		`  /commit "fix auth flow in login handler"`,
 		`  /commit --dry-run`,
+		`  /commit --trailer "Assisted-by: Claude Code (anthropic/claude-opus-5-5)"`,
 	}, "\n")
 }
 
@@ -112,6 +127,7 @@ func (c *CommitCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	// Default behavior: use new interactive commit flow with flags
 	flow := NewCommitFlowWithFlags(chatAgent, c.skipPrompt, c.dryRun, c.allowSecrets)
 	flow.SetUserInstructions(c.userInstructions)
+	flow.SetTrailers(c.trailers)
 	flow.agentError = c.agentError
 	return flow.Execute()
 }
@@ -127,6 +143,7 @@ func (c *CommitCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Ag
 	// Run commit flow
 	flow := NewCommitFlowWithFlags(chatAgent, c.skipPrompt, c.dryRun, c.allowSecrets)
 	flow.SetUserInstructions(c.userInstructions)
+	flow.SetTrailers(c.trailers)
 	if err := flow.Execute(); err != nil {
 		result := CommitJSONResult{
 			Status: CommitStatusError,
@@ -385,6 +402,35 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 
 	var commitMessage string
 
+	// Resolve the commit trailers: the commit.trailers defaults (the
+	// config's list plus the repository's AGENTS.md "Commit Trailers"
+	// section, workspace-aware through the agent's layered config) with
+	// the explicit --trailer flags added on top.
+	trailerCfg := cfg
+	if chatAgent != nil {
+		if agentCfg := chatAgent.GetConfig(); agentCfg != nil {
+			trailerCfg = agentCfg
+		}
+	}
+	trailerDir := currentGitDir()
+	if trailerDir == "" {
+		// Agentless CLI path (no workspace root): the process CWD is where
+		// the user ran sprout commit — the repository.
+		if wd, err := os.Getwd(); err == nil {
+			trailerDir = wd
+		}
+	}
+	defaults := gitops.DefaultCommitTrailers(trailerCfg, trailerDir)
+	var explicitTrailers []string
+	for _, t := range c.trailers {
+		if line, ok := gitops.FormatTrailerLine(t); ok {
+			explicitTrailers = append(explicitTrailers, line)
+		} else {
+			c.printf("%sIgnoring malformed --trailer %q (expected \"Key: Value\")\n", console.GlyphWarning.Prefix(), t)
+		}
+	}
+	trailers := gitops.DedupTrailers(append(defaults, explicitTrailers...))
+
 	// Retry loop for commit message generation (LLM if available, otherwise manual input)
 	for {
 		if client == nil {
@@ -443,10 +489,19 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 
 	} // End of retry loop
 
+	// Apply commit attribution (the opt-in Assisted-by trailer) and the
+	// commit trailers. The final message is what dry-run displays and what
+	// gets committed.
+	finalMessage := attributeCommitCommand(cfg, chatAgent, clientType, model, client != nil, commitMessage)
+	finalMessage = gitops.AppendTrailers(finalMessage, trailers...)
+
 	// Handle dry-run mode
 	if c.dryRun {
 		c.println("")
-		c.println(console.GlyphInfo.Prefix() + "Dry-run mode: Commit message generated successfully!")
+		c.println(console.GlyphInfo.Prefix() + "Dry-run mode: the following message would be committed:")
+		c.println("")
+		c.println(finalMessage)
+		c.println("")
 		c.println(console.GlyphInfo.Prefix() + "The commit was not created due to --dry-run flag")
 		c.println(console.GlyphAction.Prefix() + "To create the commit, run the command again without --dry-run")
 		return nil
@@ -472,15 +527,14 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 		}
 	}
 
-	commitMessage = attributeCommitCommand(cfg, chatAgent, clientType, model, client != nil, commitMessage)
-	return c.runCommitCreation(commitMessage)
+	return c.runCommitCreation(finalMessage)
 }
 
 // Complete returns flag completions for the /commit command. The primary
 // arguments are free-text instructions, so only tokens starting with "--"
 // are completed.
 func (c *CommitCommand) Complete(args []string, chatAgent *agent.Agent) []string {
-	flags := []string{"--skip-prompt", "--dry-run", "--allow-secrets"}
+	flags := []string{"--skip-prompt", "--dry-run", "--allow-secrets", "--trailer"}
 	if len(args) == 0 {
 		return flags
 	}

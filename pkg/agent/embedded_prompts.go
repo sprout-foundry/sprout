@@ -141,6 +141,9 @@ func buildCurrentWorkingDirectorySection(workspaceRoot string) string {
 
 // extractSystemPromptForProfile selects the full or lite prompt based on SystemPromptPath. Falls back to full prompt.
 func extractSystemPromptForProfile(profile configuration.ContextProfile) (string, error) {
+	if profile.SystemPromptCore != "" {
+		return profile.SystemPromptCore + "\n", nil
+	}
 	if strings.HasSuffix(profile.SystemPromptPath, "lite.md") {
 		if content, err := extractFromContent(systemPromptLiteContent); err == nil {
 			return content, nil

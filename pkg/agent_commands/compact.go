@@ -147,6 +147,11 @@ func (c *CompactCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		Role:    "assistant",
 		Content: summaryContent,
 	}
+	// Tag the summary the way seed's own structural summaries are tagged, so
+	// the next automatic compaction carries it verbatim instead of treating it
+	// as raw history: re-summarizing it would re-narrate an already-narrated
+	// span and append a second file-change record on top of the one above.
+	summaryMsg.SetMeta(core.MetaKeyCheckpoint, "true")
 	// Anchor and recent preserved verbatim; middle replaced by summary.
 	newMessages := make([]api.Message, 0, len(anchor)+1+len(tail))
 	newMessages = append(newMessages, anchor...)

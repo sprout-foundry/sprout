@@ -31,18 +31,34 @@ func newSeedToolRegistryWithPublisher(agent *Agent, ep core.EventPublisher) *cor
 
 	// Build the LCM tool allowlist set (if applicable).
 	var allowSet map[string]struct{}
-	if agent != nil && len(agent.contextProfile.ToolAllowlist) > 0 {
+	if agent != nil && len(agent.contextProfile.ToolAllowlist) > 0 && !agent.personaOwnsToolSet() {
 		allowSet = make(map[string]struct{}, len(agent.contextProfile.ToolAllowlist))
 		for _, name := range agent.contextProfile.ToolAllowlist {
 			allowSet[name] = struct{}{}
 		}
 	}
 
+	// The persona's allowed_tools, when the agent enforces them.
+	personaSet := personaToolAllowSet(agent)
+
+	// The active custom provider's tool_calls, when it names them.
+	providerSet := providerToolAllowSet(agent)
+
 	for _, h := range tools.GetNewToolRegistry().All() {
 		if agent != nil {
 			// LCM tool allowlist: skip tools not in the curated set.
 			if allowSet != nil {
 				if _, ok := allowSet[h.Name()]; !ok {
+					continue
+				}
+			}
+			if personaSet != nil {
+				if _, ok := personaSet[h.Name()]; !ok {
+					continue
+				}
+			}
+			if providerSet != nil {
+				if _, ok := providerSet[h.Name()]; !ok {
 					continue
 				}
 			}

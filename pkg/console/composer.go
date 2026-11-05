@@ -83,6 +83,26 @@ func styleComposerRow(rendered string, firstRow, empty bool, mode ComposerMode, 
 	return head + body
 }
 
+// composerContinuationMarker prefixes a wrapped composer row, marking it
+// as a continuation of the row above rather than a new line of input.
+// SP-161d.
+const composerContinuationMarker = "↪ "
+
+// composerWrapCols is the width the pinned input box wraps its text at.
+// Every row after the label row carries composerContinuationMarker, and
+// without color the caret is a glyph inserted into the text rather than an
+// overlay; both take columns the text cannot use. Wrapping at the full
+// width and fitting those in afterwards cut the end off every wrapped row.
+// All of the box's layout — the reader's caret geometry, the footer's row
+// count and its draw — must agree on this one width.
+func composerWrapCols(cols int) int {
+	w := cols - displayWidth(composerContinuationMarker)
+	if !envutil.ResolveColorPreference(true) {
+		w-- // the inserted caret glyph
+	}
+	return max(w, 1)
+}
+
 // composerRule is the dim rule drawn above the input box, separating it
 // from the conversation scrolling above.
 func composerRule(cols int) string {

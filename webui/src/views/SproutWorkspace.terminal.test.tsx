@@ -3,7 +3,7 @@
  *
  * - A host with `capabilities.localTerminal` and no in-browser agent gets the
  *   PTY terminal docked under the shell, which Ctrl+` inside the workspace
- *   toggles.
+ *   toggles; so does a host whose agent is a daemon, whose PTY it is.
  * - A host whose agent runs in the browser gets the docked terminal on the
  *   in-browser shell, even if it also declares `localTerminal`.
  * - A host with neither gets no terminal and no toggle handler.
@@ -19,6 +19,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const hotkeysLoaded = vi.hoisted(() => ({ count: 0 }));
+const dockedMounts = vi.hoisted(() => ({ count: 0 }));
 
 vi.mock('../services/localEventsProvider', () => ({
   LocalEventsProvider: class {
@@ -52,9 +53,15 @@ vi.mock('../services/api', () => {
 });
 vi.mock('./WorkspaceDockedTerminal', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./WorkspaceDockedTerminal')>()),
-  WorkspaceDockedTerminal: (props: { backend: string; expanded: boolean }) => (
-    <div data-testid="composed-docked-terminal" data-backend={props.backend} data-expanded={String(props.expanded)} />
-  ),
+  WorkspaceDockedTerminal: function DockedStub(props: { backend: string; expanded: boolean }) {
+    const React = require('react') as typeof import('react');
+    React.useEffect(() => {
+      dockedMounts.count += 1;
+    }, []);
+    return (
+      <div data-testid="composed-docked-terminal" data-backend={props.backend} data-expanded={String(props.expanded)} />
+    );
+  },
 }));
 vi.mock('../workspaces/CodeShell', () => ({
   default: (props: { supportsLocalTerminal: boolean; inBrowserTerminal?: boolean; isTerminalExpanded: boolean }) => (
@@ -150,6 +157,53 @@ describe('SproutWorkspace composed shell terminal', () => {
     expect(hasCommandHandler('toggle_terminal')).toBe(true);
     // The in-browser shell has no splits or process control.
     expect(hasCommandHandler('clear_terminal')).toBe(false);
+  });
+
+  it('docks the PTY terminal on a daemon agent backend, though the host declares no local terminal', async () => {
+    const base = makeTestHost({ localTerminal: false });
+    const host: SproutHost = {
+      ...base,
+      transport: {
+        ...base.transport,
+        authMode: 'bearer',
+        agent: {
+          kind: 'daemon',
+          apiBaseURL: '/workspace/ws-1/proxy',
+          wsURL: 'wss://host.test/workspace/ws-1/proxy/ws',
+        },
+      },
+    };
+    setActiveHost(host);
+    renderWorkspace(host);
+    const shell = await screen.findByTestId('composed-code-shell');
+    expect(shell).toHaveAttribute('data-local-terminal', 'true');
+    expect(screen.getByTestId('composed-docked-terminal')).toHaveAttribute('data-backend', 'pty');
+    expect(hasCommandHandler('toggle_terminal')).toBe(true);
+  });
+
+  it('starts the terminal over when the agent moves from the browser to a daemon', async () => {
+    const wasm = wasmHost();
+    const daemon: SproutHost = {
+      ...wasm,
+      transport: {
+        ...wasm.transport,
+        authMode: 'bearer',
+        agent: {
+          kind: 'daemon',
+          apiBaseURL: '/workspace/ws-1/proxy',
+          wsURL: 'wss://host.test/workspace/ws-1/proxy/ws',
+        },
+      },
+    };
+    setActiveHost(wasm);
+    const view = render(<SproutWorkspace project={{ id: 'acme/widgets' }} space="code" host={wasm} />);
+    await screen.findByTestId('composed-code-shell');
+    expect(screen.getByTestId('composed-docked-terminal')).toHaveAttribute('data-backend', 'wasm');
+    const before = dockedMounts.count;
+    setActiveHost(daemon);
+    view.rerender(<SproutWorkspace project={{ id: 'acme/widgets' }} space="code" host={daemon} />);
+    await waitFor(() => expect(screen.getByTestId('composed-docked-terminal')).toHaveAttribute('data-backend', 'pty'));
+    expect(dockedMounts.count).toBe(before + 1);
   });
 
   it('mounts no terminal and no toggle for a host with neither', async () => {

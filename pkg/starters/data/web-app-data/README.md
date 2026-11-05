@@ -22,7 +22,7 @@ The Worker serves both the built app (from `dist/`) and the API under
 npm ci                # install pinned dependencies
 npm run db:migrate    # apply Drizzle migrations to local D1
 npm run dev           # wrangler dev on http://localhost:8787 (local state)
-npm run build         # type-check the app and worker, then build the app
+npm run build         # type-check, build the app, bundle the worker (dist/worker.js)
 npm run preview
 npm test              # UI tests (jsdom) then API tests (Workers runtime)
 npm run format

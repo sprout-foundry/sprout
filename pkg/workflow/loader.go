@@ -198,6 +198,18 @@ func (c *AgentWorkflowConfig) Validate() error {
 		}
 	}
 
+	// Normalise the per-turn repeat-guard stall thresholds so the runtime
+	// reads non-zero values (a present block with unset fields gets the
+	// package defaults; an absent block leaves the agent's defaults).
+	if c.Stall != nil {
+		if c.Stall.StallIdenticalCalls <= 0 {
+			c.Stall.StallIdenticalCalls = DefaultStallIdenticalCalls
+		}
+		if c.Stall.StallIdleCalls <= 0 {
+			c.Stall.StallIdleCalls = DefaultStallIdleCalls
+		}
+	}
+
 	for i := range c.Steps {
 		step := &c.Steps[i]
 		step.Name = strings.TrimSpace(step.Name)

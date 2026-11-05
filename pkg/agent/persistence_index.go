@@ -52,8 +52,9 @@ type ConversationState struct {
 	RoleUsage            []RoleUsage `json:"role_usage,omitempty"`
 	LastUpdated          time.Time   `json:"last_updated"`
 	SessionID            string      `json:"session_id"`
-	Name                 string      `json:"name"`              // Human-readable session name
-	WorkingDirectory     string      `json:"working_directory"` // Directory where session was created
+	Name                 string      `json:"name"`                    // Human-readable session name
+	TopicSummary         string      `json:"topic_summary,omitempty"` // One-line description of what the conversation was about; absent on sessions saved before it existed
+	WorkingDirectory     string      `json:"working_directory"`       // Directory where session was created
 	InterruptedAt        *time.Time  `json:"interrupted_at,omitempty"`
 	RecoveredFromJournal bool        `json:"recovered_from_journal,omitempty"`
 	// QueryDisplays: see AgentState.QueryDisplays.
@@ -79,6 +80,13 @@ type ProviderErrorInfo struct {
 	ErrorType  string `json:"error_type,omitempty"`  // e.g. "api_error_400", "streaming_response"
 	Message    string `json:"message"`               // The error message from the provider
 	Retries    int    `json:"retries,omitempty"`     // Number of retries attempted
+	// ConnReused reports whether the failed request was served by a
+	// keep-alive pooled connection (true) or a fresh dial (false). A reused
+	// connection that fails before any response byte is usually a stale-pool
+	// reset (the idle connection outlived the peer's idle limit); a fresh-dial
+	// failure is a genuine network fault. Present only when the provider
+	// attached httptrace diagnostics to the error.
+	ConnReused *bool `json:"conn_reused,omitempty"`
 }
 
 // Variable to allow overriding GetStateDir for testing

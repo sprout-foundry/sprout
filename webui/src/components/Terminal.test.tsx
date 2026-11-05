@@ -1571,9 +1571,10 @@ describe('Terminal exit-pane cleanup paths', () => {
 });
 
 // ---------------------------------------------------------------------------
-// WASM "browser terminal limited" notice — gated by the host's localTerminal
-// capability. Shown on a hosted shell (no local terminal) when expanded; hidden
-// on a local-terminal build.
+// WASM "browser terminal limited" notice — follows the pane transport. Shown
+// when the panes run on the in-browser shell (isConnected false) and the
+// terminal is expanded; hidden on a PTY, including a hosted daemon's PTY on a
+// host that declares no local terminal.
 // ---------------------------------------------------------------------------
 describe('Terminal WASM "limited command support" notice', () => {
   let container: HTMLDivElement;
@@ -1596,8 +1597,8 @@ describe('Terminal WASM "limited command support" notice', () => {
     document.body.querySelectorAll('.terminal-cloud-notice').forEach((n) => n.remove());
   });
 
-  it('shows the notice on a hosted shell (no local terminal) when expanded', () => {
-    const view = renderTerminal({ isExpanded: true }, makeTestHost({ localTerminal: false }));
+  it('shows the notice on the in-browser shell when expanded', () => {
+    const view = renderTerminal({ isExpanded: true, isConnected: false }, makeTestHost({ localTerminal: false }));
     container = view.container;
     root = view.root;
     expect(document.body.querySelector('.terminal-cloud-notice')).not.toBeNull();
@@ -1606,6 +1607,13 @@ describe('Terminal WASM "limited command support" notice', () => {
 
   it('hides the notice on a local-terminal build even when expanded', () => {
     const view = renderTerminal({ isExpanded: true }, makeTestHost({ localTerminal: true }));
+    container = view.container;
+    root = view.root;
+    expect(document.body.querySelector('.terminal-cloud-notice')).toBeNull();
+  });
+
+  it('hides the notice on a hosted daemon PTY (no local terminal declared)', () => {
+    const view = renderTerminal({ isExpanded: true, isConnected: true }, makeTestHost({ localTerminal: false }));
     container = view.container;
     root = view.root;
     expect(document.body.querySelector('.terminal-cloud-notice')).toBeNull();

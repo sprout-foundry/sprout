@@ -23,6 +23,13 @@ import (
 // blank that it could mistake for a failure.
 const emptyToolContentPlaceholder = "(no output)"
 
+// assistantImageWithholdNote is appended to an assistant message's wire
+// content when its attached images are withheld from the wire. A strict
+// backend rejects a non-string assistant content, so the pixels cannot be
+// inlined; the note tells the model the image was not sent (rather than
+// never present) so it can re-read the image file if it needs the pixels.
+const assistantImageWithholdNote = "\n\n[image content withheld: the image attached to this turn was not sent to the model; re-read the image file if its pixels are needed]"
+
 // convertMessages converts messages according to provider configuration.
 // It also merges consecutive same-role messages (e.g. two user messages in a row)
 // which can occur when an API call fails and the user retries — no assistant
@@ -41,6 +48,30 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 	// for per-batch delivery after the loop (insertToolResultImageDeliveries).
 	var toolImageBatches []toolImageBatch
 
+	// An assistant message may carry images (e.g. a turn that produced a
+	// screenshot). The pixels cannot ride in the assistant content — strict
+	// backends reject a non-string assistant content (HTTP 422) — so they are
+	// withheld and a note is appended to the content, telling the model the
+	// image was not sent so it can re-read the file if it needs the pixels.
+	// The note is wire-only: a copy is built so the caller's messages (the
+	// persisted state, the source of truth) are not mutated.
+	msgs := messages
+	for i := range messages {
+		if messages[i].Role == "assistant" && len(messages[i].Images) > 0 &&
+			messages[i].Content != "" {
+			msgs = make([]api.Message, len(messages))
+			copy(msgs, messages)
+			for j := range msgs {
+				if msgs[j].Role == "assistant" && len(msgs[j].Images) > 0 &&
+					msgs[j].Content != "" &&
+					!strings.Contains(msgs[j].Content, assistantImageWithholdNote) {
+					msgs[j].Content += assistantImageWithholdNote
+				}
+			}
+			break
+		}
+	}
+
 	flush := func() {
 		if pendingRole == "" {
 			return
@@ -57,7 +88,7 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 		pendingMeta = nil
 	}
 
-	for _, msg := range messages {
+	for _, msg := range msgs {
 		// Tool messages carry tool_call_id and must preserve individual identity.
 		// Assistant messages with tool_calls likewise must not be merged.
 		isMergeable := (msg.Role == "user") ||
@@ -138,7 +169,20 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 				}
 				continue
 			}
-			if len(msg.Images) > 0 {
+			// Only user messages may carry a multimodal content array on the
+			// wire. Strict OpenAI-compat backends (e.g. DeepInfra) require an
+			// assistant message's content to be a plain string and reject a
+			// multimodal array with HTTP 422 "Input should be a valid string"
+			// (param messages.<i>.assistant.content.str) — a deterministic
+			// rejection that wedges a session whose history carries an
+			// image-bearing assistant turn: it is non-retryable, and its body
+			// carries no image keyword, so the image-strip self-heal
+			// (reconcileVisionCapability) never fires either.
+			// Assistant-attached images are therefore withheld from the wire:
+			// content stays a string and the model can re-read the image file
+			// to recover the pixels. Tool-result images are unaffected and
+			// still ride the tool-image delivery path.
+			if len(msg.Images) > 0 && msg.Role == "user" {
 				content = p.buildMultiModalContent(msg.Content, msg.Images)
 			}
 			convertedMsg := map[string]interface{}{
@@ -161,8 +205,11 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 
 		// Start buffering a mergeable message
 		pendingRole = msg.Role
-		if len(msg.Images) > 0 {
-			// Multi-modal content — emit immediately, don't buffer
+		if len(msg.Images) > 0 && msg.Role == "user" {
+			// Multi-modal content — emit immediately, don't buffer.
+			// User-only: an assistant turn's images are withheld from the
+			// wire (strict backends reject a non-string assistant content
+			// with HTTP 422); see the non-mergeable path above.
 			content := p.buildMultiModalContent(msg.Content, msg.Images)
 			converted = append(converted, map[string]interface{}{
 				"role":    msg.Role,

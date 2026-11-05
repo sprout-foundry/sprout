@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
 import type { MutableRefObject } from 'react';
+import { getActiveHost } from '../host/accessor';
+import { productName } from '../host/branding';
 import type { EditorBuffer } from '../types/editor';
 
 interface UseUnsavedChangesWarningParams {
@@ -18,10 +20,11 @@ interface UseUnsavedChangesWarningParams {
  * layout persistence stores paths/cursor/scroll but never buffer content,
  * so a reload with modified buffers loses those edits.
  *
- * Effect 2: Updates document.title to reflect the active buffer:
- *   - Modified file: "● filename — sprout"
- *   - Clean file:    "filename — sprout"
- *   - Other / none:  "sprout"
+ * Effect 2: Updates document.title to reflect the active buffer, using the
+ * host's product name (Sprout unless the host brands itself):
+ *   - Modified file: "● filename — <product name>"
+ *   - Clean file:    "filename — <product name>"
+ *   - Other / none:  "<product name>"
  */
 export function useUnsavedChangesWarning({
   buffersRef,
@@ -49,13 +52,16 @@ export function useUnsavedChangesWarning({
   // Effect 2: Update document.title based on active buffer's modified state
   useEffect(() => {
     const activeBuffer = activeBufferId ? buffers.get(activeBufferId) : undefined;
+    // The host's own name (Sprout unless it brands itself), read through the
+    // non-React accessor so this hook does not require a provider.
+    const name = productName(getActiveHost());
 
     if (!activeBuffer || activeBuffer.kind !== 'file') {
-      document.title = 'sprout';
+      document.title = name;
       return;
     }
 
     const indicator = activeBuffer.isModified ? '● ' : '';
-    document.title = `${indicator}${activeBuffer.file.name} — sprout`;
+    document.title = `${indicator}${activeBuffer.file.name} — ${name}`;
   }, [activeBufferId, buffers]);
 }

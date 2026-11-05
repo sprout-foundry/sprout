@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // ---------------------------------------------------------------------------
@@ -14,12 +16,20 @@ import (
 func toSchemaMap(v interface{}) (map[string]interface{}, error) {
 	schema, ok := v.(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("parameter 'schema' must be an object")
+		return nil, agenterrors.NewInvalidInputError("parameter 'schema' must be an object", nil)
 	}
 	return schema, nil
 }
 
 // validateDataAgainstSchema validates data against a JSON Schema subset.
+//
+// Unlike the pkg/agent validator of the same name, this one only understands
+// map[string]interface{} objects. That is deliberate: every caller here passes
+// tool arguments decoded from JSON, which never yields an ordered map. The
+// pkg/agent version additionally handles *OrderedMap because its callers
+// deserialize file content through ParseJSONOrdered. If a caller here ever
+// starts passing an ordered map, this reports "expected object" rather than
+// validating — extend it then, rather than copying the other version wholesale.
 func validateDataAgainstSchema(data interface{}, schema map[string]interface{}, path string) []string {
 	if schema == nil {
 		return nil
@@ -76,11 +86,11 @@ func validateDataAgainstSchema(data interface{}, schema map[string]interface{}, 
 				errs = append(errs, fmt.Sprintf("%s: expected string", path))
 			}
 		case "number":
-			if !isNumberValue(data) {
+			if !IsNumberValue(data) {
 				errs = append(errs, fmt.Sprintf("%s: expected number", path))
 			}
 		case "integer":
-			if !isIntegerValue(data) {
+			if !IsIntegerValue(data) {
 				errs = append(errs, fmt.Sprintf("%s: expected integer", path))
 			}
 		case "boolean":
@@ -113,30 +123,30 @@ func validateDataAgainstSchema(data interface{}, schema map[string]interface{}, 
 	return errs
 }
 
-func formatStructuredValidationError(toolName string, errs []string, context string) error {
+func FormatStructuredValidationError(toolName string, errs []string, context string) error {
 	if len(errs) == 0 {
-		return fmt.Errorf("schema validation failed: no error details provided")
+		return agenterrors.NewInvalidInputError("schema validation failed: no error details provided", nil)
 	}
 
-	paths := extractValidationPaths(errs)
-	pathSummary := strings.Join(limitStrings(paths, maxStructuredErrorDetails), ", ")
+	paths := ExtractValidationPaths(errs)
+	pathSummary := strings.Join(LimitStrings(paths, maxStructuredErrorDetails), ", ")
 	if pathSummary == "" {
 		pathSummary = "unknown"
 	}
 
-	details := strings.Join(limitStrings(errs, maxStructuredErrorDetails), " | ")
+	details := strings.Join(LimitStrings(errs, maxStructuredErrorDetails), " | ")
 	if len(errs) > maxStructuredErrorDetails {
 		details += fmt.Sprintf(" | ...(%d more)", len(errs)-maxStructuredErrorDetails)
 	}
 
 	if context == "" {
-		return fmt.Errorf("schema validation failed: tool=%s error_count=%d failed_paths=%s details=%s", toolName, len(errs), pathSummary, details)
+		return agenterrors.NewValidation(fmt.Sprintf("schema validation failed: tool=%s error_count=%d failed_paths=%s details=%s", toolName, len(errs), pathSummary, details), nil)
 	}
 
-	return fmt.Errorf("schema validation failed: tool=%s %s error_count=%d failed_paths=%s details=%s", toolName, context, len(errs), pathSummary, details)
+	return agenterrors.NewValidation(fmt.Sprintf("schema validation failed: tool=%s %s error_count=%d failed_paths=%s details=%s", toolName, context, len(errs), pathSummary, details), nil)
 }
 
-func extractValidationPaths(errs []string) []string {
+func ExtractValidationPaths(errs []string) []string {
 	seen := make(map[string]struct{})
 	out := make([]string, 0, len(errs))
 	for _, errText := range errs {
@@ -162,14 +172,14 @@ func extractValidationPaths(errs []string) []string {
 	return out
 }
 
-func limitStrings(values []string, max int) []string {
+func LimitStrings(values []string, max int) []string {
 	if max <= 0 || len(values) <= max {
 		return values
 	}
 	return values[:max]
 }
 
-func isNumberValue(v interface{}) bool {
+func IsNumberValue(v interface{}) bool {
 	switch v.(type) {
 	case float64, float32, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
 		return true
@@ -178,7 +188,7 @@ func isNumberValue(v interface{}) bool {
 	}
 }
 
-func isIntegerValue(v interface{}) bool {
+func IsIntegerValue(v interface{}) bool {
 	switch value := v.(type) {
 	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
 		return true

@@ -2,7 +2,10 @@
 // ContextProfile is the resolved shape every downstream call site reads.
 package configuration
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // ContextMode is the user-facing context-engine selector. Empty string defaults to "full".
 type ContextMode string
@@ -27,6 +30,9 @@ type ContextProfile struct {
 	CompactionTriggerFraction float64     `json:"compaction_trigger_fraction,omitempty"`
 	RecentTurnsToPreserve     int         `json:"recent_turns_to_preserve,omitempty"`
 	RepoMapDefaultDepth       int         `json:"repo_map_default_depth,omitempty"`
+	// SystemPromptCore, from Config.SystemPromptCore, replaces the embedded
+	// core prompt the profile would load.
+	SystemPromptCore string `json:"-"`
 }
 
 // fullContextProfile is the baked full-context preset (all defaults).
@@ -95,6 +101,14 @@ const subagentContextThreshold = 132_000
 // ResolveContextProfile picks the effective profile from the user's config plus the detected model context window.
 // Precedence: hard floor > explicit ContextMode > auto-detect by window > full default.
 func ResolveContextProfile(cfg *Config, modelContextWindow int) (ContextProfile, error) {
+	p, err := resolveContextPreset(cfg, modelContextWindow)
+	if cfg != nil {
+		p.SystemPromptCore = strings.TrimSpace(cfg.SystemPromptCore)
+	}
+	return p, err
+}
+
+func resolveContextPreset(cfg *Config, modelContextWindow int) (ContextProfile, error) {
 	// Hard floor: below ContextFloor the agent is unusable.
 	if modelContextWindow > 0 && modelContextWindow < ContextFloor {
 		return fullContextProfile, fmt.Errorf(

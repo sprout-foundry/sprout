@@ -52,7 +52,7 @@ func (ws *ReactWebServer) runConnectionLiveLoop(
 	daemon bool,
 ) {
 	// Store the underlying connection with metadata
-	ws.connections.Store(conn, &ConnectionInfo{
+	connInfo := &ConnectionInfo{
 		SessionID:          sessionID,
 		ClientID:           clientID,
 		ChatID:             chatID,
@@ -62,7 +62,11 @@ func (ws *ReactWebServer) runConnectionLiveLoop(
 		Conn:               conn,
 		SafeConn:           safeConn, // shared write mutex for cross-connection notifications
 		subscribedChannels: make(map[string]bool),
-	})
+	}
+	// A window reconnecting after a freeze (tab backgrounded) is not the one
+	// on screen; one that reconnects while visible is.
+	connInfo.setForeground(isWebUIConnectionForeground(ws, clientID))
+	ws.connections.Store(conn, connInfo)
 	defer ws.connections.Delete(conn)
 
 	// A fresh connection means the client is back (e.g. a backgrounded tab

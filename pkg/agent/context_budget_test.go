@@ -221,3 +221,148 @@ func TestSP125_ExplicitLowContextConfig(t *testing.T) {
 		t.Error("explicit config_mode=low_context should activate LCM even on 128K model")
 	}
 }
+
+// TestRel2_CeilingBindsOnLargeWindow is the rel.2 core: for a large model
+// context the absolute live-context ceiling (default 300K) must bind before
+// the window-share fraction, so compaction fires at min(share, ceiling) of the
+// conversation rather than letting a 1M-token window run to ~734K of live
+// context before anything is compacted.
+func TestRel2_CeilingBindsOnLargeWindow(t *testing.T) {
+	a := &Agent{} // bare agent: default 300K ceiling, base window-share 0.70.
+	got := a.compactionTriggerFractionFor(1_000_000)
+	want := float64(defaultCompactionCeilingTokens) / 1_000_000 // 0.3072
+	if math.Abs(got-want) > 1e-9 {
+		t.Fatalf("1M window: trigger = %v, want %v (300K ceiling fraction)", got, want)
+	}
+	// The ceiling must actually bind (drive the fraction below the 0.70 share).
+	if got >= 0.70 {
+		t.Fatalf("1M window: fraction %v did not drop below the 0.70 share — ceiling not binding", got)
+	}
+}
+
+// TestRel2_SmallWindowUnaffected verifies the ceiling does not regress small
+// models: a 128K window has its share (0.70) below the 300K ceiling fraction
+// (2.34), so the window-share trigger is unchanged.
+func TestRel2_SmallWindowUnaffected(t *testing.T) {
+	a := &Agent{}
+	want := 1.0 - totalReservedFraction() // 0.70
+	if got := a.compactionTriggerFractionFor(128 * 1024); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("128K window: trigger = %v, want %v (share unchanged)", got, want)
+	}
+}
+
+// TestRel2_ZeroLimitReturnsShare guards the degenerate path: with no usable
+// context limit the ceiling is skipped and the plain share is returned.
+func TestRel2_ZeroLimitReturnsShare(t *testing.T) {
+	a := &Agent{}
+	want := 1.0 - totalReservedFraction()
+	if got := a.compactionTriggerFractionFor(0); got != want {
+		t.Fatalf("zero limit: trigger = %v, want %v (share, ceiling skipped)", got, want)
+	}
+}
+
+// TestRel2_ConfiguredCeilingHonorsConfig verifies a user-set ceiling tighter
+// than the built-in 300K is honored (e.g. 80K on a 1M window → 0.08).
+func TestRel2_ConfiguredCeilingHonorsConfig(t *testing.T) {
+	mgr, cleanup := configuration.NewTestManager(t)
+	defer cleanup()
+	if err := mgr.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		cfg.CompactionCeilingTokens = 80 * 1024
+		return nil
+	}); err != nil {
+		t.Fatalf("UpdateConfigNoSave failed: %v", err)
+	}
+	client := NewMockLLMProviderWithLimit(1_000_000)
+	agent, err := NewAgentWithClient(client, api.TestClientType, mgr)
+	if err != nil {
+		t.Fatalf("NewAgentWithClient failed: %v", err)
+	}
+	defer agent.Shutdown()
+
+	got := agent.compactionTriggerFractionFor(1_000_000)
+	want := float64(80*1024) / 1_000_000 // 0.08
+	if math.Abs(got-want) > 1e-9 {
+		t.Fatalf("configured 80K ceiling on 1M window: trigger = %v, want %v", got, want)
+	}
+}
+
+// TestRel2_CapWinsOverCeiling pins the integration between the user's context
+// cap (Config.MaxContextTokens) and the absolute ceiling: the
+// cap is an explicit statement about how much context to use, so the trigger
+// never fires later than the cap, and raising the cap never moves the trigger
+// earlier.
+//
+// Before the fix the ceiling was measured against the CAPPED window, so a
+// 300K ceiling on a 1M model became a 0.70 share of a 300K cap — firing at
+// 210K, earlier than the uncapped 307K. Raising the cap moved the trigger the
+// wrong way.
+func TestRel2_CapWinsOverCeiling(t *testing.T) {
+	ceiling := defaultCompactionCeilingTokens // 300K
+
+	for _, tc := range []struct {
+		name   string
+		cap    int
+		wantAt float64
+	}{
+		{"no cap: ceiling binds", 0, float64(ceiling)},
+		{"cap above ceiling: ceiling still binds", 500_000, float64(ceiling)},
+		{"cap at ceiling: cap binds", 300_000, 300_000 * (1.0 - totalReservedFraction())},
+		{"cap below ceiling: cap binds", 200_000, 200_000 * (1.0 - totalReservedFraction())},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a := newAgentWithContextCap(t, 1_000_000, tc.cap)
+			effective := a.getModelContextLimit()
+			frac := a.compactionTriggerFractionFor(effective)
+			gotAt := frac * float64(effective)
+
+			if math.Abs(gotAt-tc.wantAt) > 1 {
+				t.Fatalf("trigger fires at %.0f tokens, want %.0f (cap=%d, effective=%d)",
+					gotAt, tc.wantAt, tc.cap, effective)
+			}
+			// The trigger must never exceed the effective window.
+			if gotAt > float64(effective) {
+				t.Fatalf("trigger %.0f exceeds the effective window %d", gotAt, effective)
+			}
+		})
+	}
+}
+
+// TestRel2_CapIsMonotonic pins the property the fix exists to restore: a
+// larger cap never makes compaction fire earlier.
+func TestRel2_CapIsMonotonic(t *testing.T) {
+	caps := []int{0, 500_000, 400_000, 300_000, 250_000, 200_000, 150_000, 120_000}
+	prev := -1.0
+	for _, capTokens := range caps {
+		a := newAgentWithContextCap(t, 1_000_000, capTokens)
+		effective := a.getModelContextLimit()
+		firesAt := a.compactionTriggerFractionFor(effective) * float64(effective)
+		if prev >= 0 && firesAt > prev+1 {
+			t.Fatalf("cap %d fires at %.0f, later than the smaller cap's %.0f — trigger is not monotonic",
+				capTokens, firesAt, prev)
+		}
+		prev = firesAt
+	}
+}
+
+// newAgentWithContextCap builds a test agent on a native window with an
+// optional MaxContextTokens cap (0 = uncapped).
+func newAgentWithContextCap(t *testing.T, nativeWindow, capTokens int) *Agent {
+	t.Helper()
+	mgr, cleanup := configuration.NewTestManager(t)
+	t.Cleanup(cleanup)
+	if capTokens > 0 {
+		capVal := capTokens
+		if err := mgr.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+			cfg.MaxContextTokens = &capVal
+			return nil
+		}); err != nil {
+			t.Fatalf("UpdateConfigNoSave failed: %v", err)
+		}
+	}
+	agent, err := NewAgentWithClient(NewMockLLMProviderWithLimit(nativeWindow), api.TestClientType, mgr)
+	if err != nil {
+		t.Fatalf("NewAgentWithClient failed: %v", err)
+	}
+	t.Cleanup(agent.Shutdown)
+	return agent
+}

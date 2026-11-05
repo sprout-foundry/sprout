@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
@@ -115,7 +115,7 @@ func LoadMemoryContent(name string) (string, error) {
 // Keeps only alphanumeric, hyphens, and underscores
 func SaveMemory(name string, content string) error {
 	// Sanitize the name
-	sanitized := sanitizeMemoryName(name)
+	sanitized := tools.SanitizeMemoryName(name)
 
 	memoryDir := getMemoryDir()
 	if memoryDir == "" {
@@ -131,31 +131,6 @@ func SaveMemory(name string, content string) error {
 	}
 
 	return nil
-}
-
-// sanitizeMemoryName sanitizes a memory name
-// - Converts to lowercase
-// - Replaces spaces with hyphens
-// - Strips special characters (keeps only alphanumeric, hyphens, underscores)
-func sanitizeMemoryName(name string) string {
-	// Convert to lowercase
-	name = strings.ToLower(name)
-
-	// Replace spaces with hyphens
-	name = strings.ReplaceAll(name, " ", "-")
-
-	// Keep only alphanumeric, hyphens, and underscores
-	matched := regexp.MustCompile(`[^a-z0-9\-_]+`).ReplaceAllString(name, "")
-
-	// Remove leading/trailing hyphens and underscores
-	matched = strings.Trim(matched, "-_")
-
-	// Default name if empty
-	if matched == "" {
-		matched = "untitled"
-	}
-
-	return matched
 }
 
 // DeleteMemory deletes a memory file by name (with .md extension)

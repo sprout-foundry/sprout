@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"sort"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
@@ -32,12 +31,17 @@ func (c *CustomCommand) SafeDuringSteer() bool {
 
 // Description returns the command description.
 func (c *CustomCommand) Description() string {
-	return "Manage custom OpenAI-compatible providers"
+	return "Manage custom OpenAI-compatible providers (deprecated — prefer /provider)"
 }
 
 // Usage returns the detailed help text shown by `/help custom`.
 func (c *CustomCommand) Usage() string {
 	return strings.Join([]string{
+		"Deprecated: prefer the equivalent /provider subcommands.",
+		"  /custom add     →  /provider add",
+		"  /custom remove  →  /provider remove",
+		"  /custom list    →  /provider custom",
+		"",
 		"/custom              List custom providers (same as `sprout custom list`).",
 		"/custom list         List custom providers.",
 		"/custom add          Launch the interactive add wizard.",
@@ -79,16 +83,11 @@ func (c *CustomCommand) Complete(args []string, chatAgent *agent.Agent) []string
 		return []string{"list", "add", "remove"}
 	}
 	if args[0] == "remove" && len(args) == 2 {
-		cfg, err := configuration.LoadOrInitConfig(false)
-		if err != nil {
-			return nil
+		var mgr *configuration.Manager
+		if chatAgent != nil {
+			mgr = chatAgent.GetConfigManager()
 		}
-		names := make([]string, 0, len(cfg.CustomProviders))
-		for name := range cfg.CustomProviders {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		return names
+		return customProviderNames(mgr, "")
 	}
 	return nil
 }
@@ -98,6 +97,14 @@ func (c *CustomCommand) Complete(args []string, chatAgent *agent.Agent) []string
 // add wizard reads stdin directly, so attaching it lets the user answer
 // prompts naturally from inside the chat.
 func (c *CustomCommand) runSubcommand(subcommand string, rest []string) error {
+	return runCustomSubcommand(subcommand, rest)
+}
+
+// runCustomSubcommand shells out to `sprout custom <subcommand> [args...]`,
+// attaching the current terminal. Shared by /custom and by /provider's
+// add|remove|custom subcommands (SP-167) so the wizard lives in exactly one
+// place — the CLI implementation.
+func runCustomSubcommand(subcommand string, rest []string) error {
 	execPath, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("failed to resolve sprout binary: %w", err)

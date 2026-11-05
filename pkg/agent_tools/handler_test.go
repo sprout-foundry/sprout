@@ -781,8 +781,8 @@ func TestAllToolsRegistration(t *testing.T) {
 	if tools == nil {
 		t.Fatal("AllTools() returned nil")
 	}
-	if len(tools) != 57 {
-		t.Fatalf("AllTools() returned %d tools, want 57", len(tools))
+	if len(tools) != 58 {
+		t.Fatalf("AllTools() returned %d tools, want 58", len(tools))
 	}
 
 	expectedNames := map[string]string{
@@ -835,6 +835,7 @@ func TestAllToolsRegistration(t *testing.T) {
 		"design_assets":         "design_assets",
 		"write_plan":            "write_plan",     // structured plan write path
 		"plan_add_scope":        "plan_add_scope", // plan scope write-back
+		"draw_mockup":           "draw_mockup",    // streamed planner mockup
 		"design_render":         "design_render",
 		"design_import_sketch":  "design_import_sketch",
 		"design_critique":       "design_critique",

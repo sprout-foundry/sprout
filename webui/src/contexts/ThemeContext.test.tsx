@@ -2,10 +2,10 @@
  * host.7 — the theme follows `host.theme` live.
  *
  * (d) A host-provided `theme.mode` (light/dark) selects the applied mode and
- *     pack; `theme.tokens` are NOT applied to the document root (they are
- *     scoped to the workspace root — see `hostThemeScope.test.tsx`); `'system'`
- *     follows the OS media query; and a host with no theme leaves the
- *     localStorage-driven pack selection intact (regression guard).
+ *     pack; nothing is written to the document (the workspace root applies
+ *     the theme — see `hostThemeScope.test.tsx`); `'system'` follows the OS
+ *     media query; and a host with no theme leaves the localStorage-driven
+ *     pack selection intact (regression guard).
  *
  * The theme modules read the active host through a module singleton, so each
  * case re-imports them after `vi.resetModules()` for a clean slate.
@@ -56,8 +56,6 @@ describe('host theme drives the applied mode', () => {
     render(createElement(ThemeProvider as never, null, createElement(Probe)));
 
     expect(screen.getByTestId('probe')).toHaveTextContent('light:atom-one-light');
-    expect(document.documentElement.getAttribute('data-theme')).toBe('light');
-    expect(document.documentElement.style.getPropertyValue('--bg-primary')).toBe('#fafafa');
   });
 
   it('applies the dark mode pack when the host asks for dark', async () => {
@@ -68,23 +66,23 @@ describe('host theme drives the applied mode', () => {
     render(createElement(ThemeProvider as never, null, createElement(Probe)));
 
     expect(screen.getByTestId('probe')).toHaveTextContent('dark:atom-one-dark');
-    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
-    expect(document.documentElement.style.getPropertyValue('--bg-primary')).toBe('#282c34');
   });
 
-  it('does not merge host-provided tokens onto the document root (they are scoped to the workspace root)', async () => {
+  it('writes nothing to the document, so an embedding host is never restyled', async () => {
     const { ThemeProvider, accessor } = await loadTheme();
     useThemeRef = (await import('./ThemeContext')).useTheme;
     accessor.setActiveHost(hostWithTheme({ mode: 'dark', tokens: { '--bg-primary': '#123456' } }));
 
     render(createElement(ThemeProvider as never, null, createElement(Probe)));
 
-    // The host's token overrides are applied on the workspace root
-    // (SproutWorkspace), never on documentElement — a documentElement override
-    // would restyle the host page outside the mounted workspace. The root keeps
-    // the resolved pack's value.
-    expect(document.documentElement.style.getPropertyValue('--bg-primary')).toBe('#282c34');
-    expect(document.documentElement.style.getPropertyValue('--bg-primary')).not.toBe('#123456');
+    // The provider publishes the resolved theme through its context; the
+    // workspace root applies it. `documentElement` belongs to the host in an
+    // embedded page, so neither the pack nor the host's token overrides may
+    // land there — and nothing is left behind on unmount.
+    expect(document.documentElement.getAttribute('data-theme')).toBeNull();
+    expect(document.documentElement.getAttribute('data-theme-pack')).toBeNull();
+    expect(document.documentElement.style.getPropertyValue('--bg-primary')).toBe('');
+    expect(document.documentElement.style.getPropertyValue('--accent-primary')).toBe('');
   });
 
   it('follows the OS media query when the host mode is system', async () => {
@@ -120,7 +118,6 @@ describe('host theme drives the applied mode', () => {
       listeners.forEach((cb) => cb());
     });
     expect(screen.getByTestId('probe')).toHaveTextContent('dark:atom-one-dark');
-    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
   });
 
   it('re-derives when the host replaces its theme live', async () => {
@@ -136,7 +133,6 @@ describe('host theme drives the applied mode', () => {
     });
 
     expect(screen.getByTestId('probe')).toHaveTextContent('dark:atom-one-dark');
-    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
   });
 
   it('leaves the localStorage-driven theme intact when the host has none', async () => {
@@ -151,6 +147,5 @@ describe('host theme drives the applied mode', () => {
     render(createElement(ThemeProvider as never, null, createElement(Probe)));
 
     expect(screen.getByTestId('probe')).toHaveTextContent('dark:dracula');
-    expect(document.documentElement.getAttribute('data-theme-pack')).toBe('dracula');
   });
 });

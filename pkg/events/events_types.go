@@ -188,6 +188,16 @@ const (
 	EventTypeProgressQuestion     = "progress_question"
 	EventTypeProgressVerification = "progress_verification"
 	EventTypeProgressComplete     = "progress_complete"
+	// EventTypeAgentTurnStalled is published when a single turn is cut
+	// short by the per-turn repeat guard because the model kept re-issuing
+	// the same tool call (or a stretch of calls with no file change / no
+	// new command) past the stall threshold. The payload carries the
+	// repeated tool, its normalised arguments, a short excerpt of the
+	// repeated output, and the repeat count — enough for the runner UI to
+	// show a "turn stalled" notice without replaying the whole turn. It is
+	// published on the agent's event bus (decorated with chat_id etc.) so
+	// the runner/automate UI can surface it.
+	EventTypeAgentTurnStalled = "agent_turn_stalled"
 	// EventTypePreviewPortRegistered is
 	// published by the register_preview_port tool after it successfully
 	// registers a preview port with the platform. In hosted workspaces the
@@ -201,6 +211,20 @@ const (
 	// WebSocket-forwarded event, so it is intentionally absent from the
 	// WS outbound registry (websocket_outbound_registry.go).
 	EventTypePreviewPortRegistered = "preview_port_registered"
+
+	// Mockup drawing (the draw_mockup tool). A host renders the mockup as it
+	// is written: mockup_start opens a draw (or, with mode "whole" after an
+	// edit-mode start, restarts it: discard what was shown and render the
+	// chunks that follow); mockup_chunk carries each piece of the document
+	// in order (seq counts from 1; chunks may be dropped under load, so the
+	// final document always arrives whole on mockup_done); mockup_done
+	// carries the cleaned document and its screen ids; mockup_error ends a
+	// draw that failed, with a plain message. Every payload carries
+	// mockup_id, the same for all events of one draw.
+	EventTypeMockupStart = "mockup_start"
+	EventTypeMockupChunk = "mockup_chunk"
+	EventTypeMockupDone  = "mockup_done"
+	EventTypeMockupError = "mockup_error"
 )
 
 // EventBus manages event distribution between CLI and Web UI.

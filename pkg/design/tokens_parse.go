@@ -259,12 +259,30 @@ func setChild(node, child *tokenNode) {
 	node.children = append(node.children, child)
 }
 
-// jsonParseFinding builds the single finding every token-stream error
-// maps to, located at the decoder's current input offset.
+// jsonParseFinding builds the single finding every token-stream error maps
+// to, anchored at the first byte the decoder could not accept rather than
+// at its reported offset.
+//
+// InputOffset is the position just past the last token the decoder read
+// *successfully*, which is not where the error is. For a document whose
+// root object is well-formed and whose garbage follows on a later line, the
+// offset stays on the root's last line — so the finding would point at
+// valid JSON. The same holds for leading whitespace: a document that opens
+// with blank lines reports offset 0. Skipping whitespace from the offset
+// lands on the offending byte, which is the line the user needs to read.
 func jsonParseFinding(content []byte, dec *json.Decoder, err error) Finding {
+	offset := int(dec.InputOffset())
+	for offset < len(content) {
+		switch content[offset] {
+		case ' ', '\t', '\r', '\n':
+			offset++
+			continue
+		}
+		break
+	}
 	return Finding{
 		Rule:    ruleTokenJSONParse,
-		Line:    lineOfOffset(content, int(dec.InputOffset())),
+		Line:    lineOfOffset(content, offset),
 		Message: fmt.Sprintf("invalid JSON: %v", err),
 	}
 }

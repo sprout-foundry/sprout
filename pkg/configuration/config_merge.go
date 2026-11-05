@@ -82,6 +82,9 @@ func MergeConfig(base, override *Config) *Config {
 	if override.overrides("show_tool_invocations", override.ShowToolInvocations) {
 		result.ShowToolInvocations = override.ShowToolInvocations
 	}
+	if override.overrides("mouse_click_to_position", override.MouseClickToPosition) {
+		result.MouseClickToPosition = override.MouseClickToPosition
+	}
 	// Language is a single-value selector — a non-empty override wins.
 	if override.Language != "" {
 		result.Language = override.Language
@@ -181,6 +184,29 @@ func MergeConfig(base, override *Config) *Config {
 		}
 		result.ApprovedShellCommandPatterns = merged
 	}
+	// Union-merge ApprovedMCPTools (SP-170) for the same reason: a
+	// workspace-layer entry must stack on the global one rather than
+	// replace it, or a layered load would silently forget an allowlist
+	// entry and start denying a tool the user already approved.
+	if len(override.ApprovedMCPTools) > 0 {
+		seen := make(map[string]struct{}, len(result.ApprovedMCPTools)+len(override.ApprovedMCPTools))
+		merged := make([]string, 0, len(result.ApprovedMCPTools)+len(override.ApprovedMCPTools))
+		for _, t := range result.ApprovedMCPTools {
+			if _, ok := seen[t]; ok {
+				continue
+			}
+			seen[t] = struct{}{}
+			merged = append(merged, t)
+		}
+		for _, t := range override.ApprovedMCPTools {
+			if _, ok := seen[t]; ok {
+				continue
+			}
+			seen[t] = struct{}{}
+			merged = append(merged, t)
+		}
+		result.ApprovedMCPTools = merged
+	}
 
 	// Merge APITimeouts
 	if override.APITimeouts != nil {
@@ -222,6 +248,24 @@ func MergeConfig(base, override *Config) *Config {
 		result.HistoryIndexByPath = override.HistoryIndexByPath
 	}
 
+	// Merge TrustedContentRoots (SP-169) per root rather than replacing the
+	// store, so a layered config adds decisions instead of discarding the ones
+	// already recorded — a dropped answer means the trust question is asked
+	// again, which is exactly what the store exists to prevent.
+	if len(override.TrustedContentRoots) > 0 {
+		if result.TrustedContentRoots == nil {
+			result.TrustedContentRoots = make(map[string]map[string]bool, len(override.TrustedContentRoots))
+		}
+		for root, decisions := range override.TrustedContentRoots {
+			if result.TrustedContentRoots[root] == nil {
+				result.TrustedContentRoots[root] = make(map[string]bool, len(decisions))
+			}
+			for path, thirdParty := range decisions {
+				result.TrustedContentRoots[root][path] = thirdParty
+			}
+		}
+	}
+
 	// Override HistoryScope
 	if override.HistoryScope != "" {
 		result.HistoryScope = override.HistoryScope
@@ -260,6 +304,10 @@ func MergeConfig(base, override *Config) *Config {
 	}
 	if override.CommitModel != "" {
 		result.CommitModel = override.CommitModel
+	}
+	// Union-merge CommitTrailers so workspace entries stack on global.
+	if len(override.CommitTrailers) > 0 {
+		result.CommitTrailers = mergeStringSlices(result.CommitTrailers, override.CommitTrailers)
 	}
 
 	// Override review provider/model
@@ -380,7 +428,8 @@ func MergeConfig(base, override *Config) *Config {
 	// because the pointer is present). The thresholds follow the
 	// non-zero-wins convention.
 	if rg := override.RepetitionGuard; rg != nil &&
-		(rg.Enabled != nil || rg.MinRepetitions > 0 || rg.MaxLineChars > 0) {
+		(rg.Enabled != nil || rg.MinRepetitions > 0 || rg.MaxLineChars > 0 ||
+			rg.ReasoningEnabled != nil || rg.ReasoningMinRepetitions > 0 || rg.ReasoningMaxLineChars > 0) {
 		if result.RepetitionGuard == nil {
 			result.RepetitionGuard = &RepetitionGuardConfig{}
 		}
@@ -392,6 +441,15 @@ func MergeConfig(base, override *Config) *Config {
 		}
 		if rg.MaxLineChars > 0 {
 			result.RepetitionGuard.MaxLineChars = rg.MaxLineChars
+		}
+		if rg.ReasoningEnabled != nil {
+			result.RepetitionGuard.ReasoningEnabled = boolPtr(*rg.ReasoningEnabled)
+		}
+		if rg.ReasoningMinRepetitions > 0 {
+			result.RepetitionGuard.ReasoningMinRepetitions = rg.ReasoningMinRepetitions
+		}
+		if rg.ReasoningMaxLineChars > 0 {
+			result.RepetitionGuard.ReasoningMaxLineChars = rg.ReasoningMaxLineChars
 		}
 	}
 
@@ -421,6 +479,8 @@ func cloneConfig(cfg *Config) *Config {
 			copied.AllowedTools = append([]string{}, st.AllowedTools...)
 			copied.Aliases = append([]string{}, st.Aliases...)
 			copied.Capabilities = append([]string{}, st.Capabilities...)
+			copied.WritePaths = append([]string{}, st.WritePaths...)
+			copied.HostTools = append([]string{}, st.HostTools...)
 			copied.CanSpawnNonDelegatable = append([]string{}, st.CanSpawnNonDelegatable...)
 			if st.AutoApproveRules != nil {
 				rules := *st.AutoApproveRules

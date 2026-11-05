@@ -87,7 +87,21 @@ func (a *Agent) RefreshSkills() error {
 // the freshly-reloaded config. Servers that were removed from config are
 // stopped and removed; servers that were added are registered and started;
 // servers whose key config fields changed are restarted.
+//
+// An agent that inherited its manager (a subagent, a workflow loop) must not
+// reconcile: the servers belong to the parent, which is using them right now.
+// Stopping them out from under the parent — which is what a subagent's
+// mcp_refresh add/remove would do — is worse than the subagent seeing a stale
+// list. The inherited agent still gets the parent's current tool set through
+// the shared manager.
 func (a *Agent) reconcileMCPServers(ctx context.Context) error {
+	if a.mcpSub.IsInherited() {
+		if a.debug {
+			a.Logger().Info("Skipping MCP reconcile: the manager is inherited from the parent agent")
+		}
+		return nil
+	}
+
 	mgr := a.mcpSub.GetManager()
 	newConfig := a.configManager.GetConfig()
 	newServers := newConfig.MCP.Servers

@@ -2,12 +2,14 @@ package ui
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 const (
@@ -29,13 +31,11 @@ func PromptForSelection(options []string, prompt string) (int, bool) {
 		prompt = DefaultPrompt
 	}
 
-	// Release stdin from raw mode in case the caller is invoked during a
-	// turn (steer reader holds stdin in cbreak; the scanner below would
-	// otherwise see EOF immediately).
-	clihooks.SuspendIndicator()
-	clihooks.PauseSteer()
-	defer clihooks.ResumeIndicator()
-	defer clihooks.ResumeSteer()
+	// Take the terminal the way every question does: one question at a
+	// time, stdin released from the steer reader (whose cbreak mode would
+	// give the scanner below EOF), and no spinner or streamed prose drawn
+	// over the prompt.
+	defer takeTerminalForPrompt()()
 
 	fmt.Printf("\n%s ", prompt)
 	scanner := bufio.NewScanner(os.Stdin)
@@ -72,12 +72,7 @@ func PromptForConfirmation(prompt string) bool {
 		prompt = "Continue? (y/n): "
 	}
 
-	// Same release-from-raw-mode dance as PromptForSelection: defensive
-	// for tool/turn-time callers that might otherwise hit EOF.
-	clihooks.SuspendIndicator()
-	clihooks.PauseSteer()
-	defer clihooks.ResumeIndicator()
-	defer clihooks.ResumeSteer()
+	defer takeTerminalForPrompt()() // see PromptForSelection
 
 	fmt.Printf("%s ", prompt)
 	scanner := bufio.NewScanner(os.Stdin)
@@ -122,4 +117,21 @@ func PromptForSelectionWithOptions(options []NumericPromptOption, prompt string)
 		displayNames[i] = opt.DisplayName
 	}
 	return PromptForSelection(displayNames, prompt)
+}
+
+// takeTerminalForPrompt claims the terminal for a cooked-mode prompt and
+// returns the release. Streamed prose used to keep drawing over these
+// prompts: they paused the steer reader and spinner but not streaming, and
+// did not take the one-question slot.
+func takeTerminalForPrompt() (release func()) {
+	releaseQuestion, _ := console.AcquireTerminalQuestion(context.Background())
+	clihooks.SuspendIndicator()
+	clihooks.PauseSteer()
+	clihooks.SuspendStreaming()
+	return func() {
+		clihooks.ResumeStreaming()
+		clihooks.ResumeSteer()
+		clihooks.ResumeIndicator()
+		releaseQuestion()
+	}
 }

@@ -35,7 +35,7 @@ func (r *SubagentRunner) monitorBudget(ctx context.Context, agent *Agent, maxTok
 const progressTickInterval = 2 * time.Second
 
 // monitorProgress emits periodic subagent_activity events with the
-// running subagent's context-tokens / max-context / cost / iteration
+// running subagent's context-tokens / context-cap / cost / iteration
 // snapshot. The event lets the parent CLI render a live "↳ persona ·
 // 12.3k/128k ctx · $0.03" badge that updates as the subagent burns
 // context — previously the parent only learned the final numbers in the

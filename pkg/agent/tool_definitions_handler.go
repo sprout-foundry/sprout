@@ -239,6 +239,17 @@ func buildToolEnvFromAgent(agent *Agent) tools.ToolEnv {
 	// both --unsafe mode and elevated risk profiles; hard blocks are
 	// still enforced by the handlers' own IsHardBlock early-returns.
 	env.Gate1AutoApproved = agent.GetUnsafeMode() || agent.IsSessionElevated()
+	// Propagate Gate 1's per-call decision (SP-168): when the unified risk
+	// resolver ran its gate for this call and approved it — explicitly, via
+	// the LLM judge, or by a non-interactive auto-approve — handler-level
+	// gates (Gate 2) must not re-prompt. unifiedSecurityGate (the seed
+	// pre-exec hook, or ExecuteTool in the legacy path) sets the flag before
+	// the handler runs; env is built after that gate, so the read is fresh.
+	// The flag is a unified-gate concept: when the legacy dual-gate resolver
+	// is active, Gate 2 keeps its own prompts, so propagate nothing.
+	if cfg := agent.GetConfig(); cfg != nil && cfg.UnifiedRiskResolver {
+		env.Gate1Decided = agent.Gate1DecidedLastCall()
+	}
 	// Propagate --unsafe-shell so the shell handler's own gate honors it
 	// (scoped to shell_command; never widens Gate1AutoApproved).
 	env.UnsafeShellMode = agent.GetUnsafeShellMode()

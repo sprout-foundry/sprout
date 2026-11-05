@@ -1,12 +1,26 @@
 import type { WsEvent } from '@sprout/events';
 import { capability } from '../config/mode';
 import { getActiveHost } from '../host/accessor';
+import { backendURLs } from '../host/agentBackend';
 import { debugLog } from '../utils/log';
 import { getAdapter } from './apiAdapter';
 import { appendClientIdToUrl, getProxyBase } from './clientSession';
 import { notificationBus } from './notificationBus';
 
 export type { WsEvent };
+
+/**
+ * Whether the events socket attaches to the chat on screen when it connects.
+ * True when the agent runs on a daemon but the chat sessions live in the
+ * host's store: the page's session switches never reach the daemon, so the
+ * socket itself must tell it which chat to deliver. A daemon that owns its
+ * sessions (the local app) learns the chat from the switch call and is left
+ * as it was.
+ */
+export function attachesToChatOnScreen(): boolean {
+  const host = getActiveHost();
+  return Boolean(host?.capabilities.chatSessions) && host?.transport.agent?.kind === 'daemon';
+}
 
 type EventCallback = (event: WsEvent) => void;
 
@@ -93,6 +107,19 @@ class WebSocketService {
       } catch {
         // best-effort during teardown
       }
+    }
+  }
+
+  /** Report this window's focus to the server. Several windows of one client
+   *  share an event bus, and a question to the user (ask_user) is only shown
+   *  on the window that is on screen — see the server's window_focus.go. A
+   *  window that comes forward says so here and starts receiving questions. */
+  reportFocus(): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    try {
+      this.ws.send(JSON.stringify({ type: 'heartbeat', data: { foreground: document.hasFocus() } }));
+    } catch {
+      // best-effort: the next focus change or reconnect reports again
     }
   }
 
@@ -196,15 +223,25 @@ class WebSocketService {
         debugLog('[WebSocket] Reattach reconnect for chat', reattachChatId, 'after_seq', reattachAfterSeq);
       }
     }
+    // A daemon that does not own the chat store never hears which chat the
+    // page has open (the session calls go to the host's store), so it routes
+    // a run started elsewhere — by the host, or another tab — to nobody.
+    // Attaching to the chat on screen scopes the socket to it: the daemon
+    // replays the chat's retained run events, then streams its live ones.
+    if (reattachChatId === null && this.activeChatId && attachesToChatOnScreen()) {
+      reattachChatId = this.activeChatId;
+      reattachAfterSeq = this.chatSeq.get(this.activeChatId) ?? 0;
+      debugLog('[WebSocket] Attaching to chat on screen', reattachChatId, 'after_seq', reattachAfterSeq);
+    }
 
     // Resolve the WebSocket URL, most specific first: an explicit build-time
-    // VITE_WS_URL, then the active host's transport.wsURL (a host embedding
-    // the workspace points Sprout at its own event stream), then the installed
-    // adapter's URL, then the same-origin /ws path — through the SSH proxy base
-    // when the page is served behind the local reverse proxy.
+    // VITE_WS_URL, then the active backend's socket (a daemon backend's own
+    // `wsURL` when the host named one, else the host transport's), then the
+    // installed adapter's URL, then the same-origin /ws path — through the SSH
+    // proxy base when the page is served behind the local reverse proxy.
     const adapter = getAdapter();
     const adapterWsUrl = adapter?.getWebSocketURL();
-    const hostWsUrl = getActiveHost()?.transport.wsURL || '';
+    const hostWsUrl = backendURLs(getActiveHost()).wsURL || '';
     let wsUrl =
       import.meta.env.VITE_WS_URL ||
       hostWsUrl ||
@@ -263,6 +300,10 @@ class WebSocketService {
       this.lastPongTime = Date.now();
       this.startPingInterval();
       this.startPongWatchdog();
+
+      // Tell the server whether this window is the one on screen, so a
+      // question meant for the user does not surface behind another window.
+      this.reportFocus();
 
       // Replay queued messages on reconnect (but not on initial connection)
       if (isReconnect && this.pendingQueue.length > 0) {
@@ -638,7 +679,14 @@ class WebSocketService {
 
   /** Set the current active chat ID. Used for reattach tracking on reconnect. */
   setActiveChatId(chatId: string | null): void {
+    const changed = chatId !== this.activeChatId;
     this.activeChatId = chatId;
+    // Re-attach to the newly shown chat (see connect()): only where the
+    // daemon cannot learn it from a session switch, and only once a socket
+    // exists to move.
+    if (changed && chatId && this.ws && attachesToChatOnScreen()) {
+      this.resetAndReconnect();
+    }
   }
 
   /** The chat the UI is showing, as last set by {@link setActiveChatId}. */

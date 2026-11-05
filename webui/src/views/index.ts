@@ -94,8 +94,12 @@ export { default as ChatView } from '../components/ChatView';
 export type { ChatProps } from '../components/chat/types';
 
 // Agent changes view (composite — requires the webui context stack).
+// `mode: 'builder'` is the plain-language presentation a non-developer
+// shell opts into (see `AgentChangesPanelProps.mode`); a host passes it
+// through its arrangement's per-kind props, e.g.
+// `viewProps={{ changes: { mode: 'builder' } }}` on `SproutWorkspace`.
 export { default as AgentChangesPanel } from '../components/AgentChangesPanel';
-export type { AgentChangesPanelProps } from '../components/AgentChangesPanel';
+export type { AgentChangesPanelProps, AgentChangesMode } from '../components/AgentChangesPanel';
 
 // Files views (primitives — standalone, from @sprout/ui).
 export { Editor, FileTree } from '@sprout/ui';
@@ -196,6 +200,15 @@ export type {
   WorkspaceChatDiffState,
 } from './WorkspaceChatContext';
 
+// The agent's blocking prompts: the tool-approval dialog (with its elevation
+// and filesystem-tier choices), the file-access prompt, `ask_user`, password
+// prompts, edit and shell approvals, and the model picker, rendered from the
+// chat unit's state and answered back to the agent. Mount it inside
+// `WorkspaceChatProvider` wherever the chat unit is mounted — without it a
+// request leaves the agent waiting with nothing on screen. An own-mode
+// `SproutWorkspace` and Sprout's app root mount it already.
+export { WorkspaceAgentPrompts } from './WorkspaceAgentPrompts';
+
 // The editor unit: the open files, the active file, and opening, closing and
 // saving them by path, over the buffer manager `SproutProviders` mounts. A
 // host reads it through `useWorkspaceEditor()`; `useWorkspaceEditorProps()`
@@ -288,6 +301,24 @@ export type { WorkspaceSearchViewProps } from './WorkspaceSearchView';
 // neither it renders an unavailable notice.
 export { WorkspaceTerminalView, resolveWorkspaceTerminalBackend } from './WorkspaceTerminalView';
 export type { WorkspaceTerminalViewProps, WorkspaceTerminalBackend } from './WorkspaceTerminalView';
+
+// The in-browser workspace's read-only file API: the host contract's
+// move-to-container seam. A host that moves a project off the in-browser WASM
+// agent (e.g. into a container) must carry along the files the user edited in
+// the browser but never pushed; this is how it reads them. Both functions are
+// capability-gated (the host must advertise `capabilities.browserFiles` and
+// the agent must run in-browser), so a host that offers nothing gets a stable
+// gate error instead of a crash. The VFS enumeration and the checkout
+// comparison are the same ones the app's own git and file flows use, so the
+// host sees the workspace exactly as the in-browser agent does. A host that
+// never runs the in-browser agent (a daemon backend) leaves the capability off
+// and never calls these.
+export {
+  listBrowserWorkspaceFiles,
+  readBrowserWorkspaceFile,
+  BrowserFilesUnavailableError,
+} from '../services/browserWorkspaceFiles';
+export type { WorkspaceFileEntry } from '../services/browserWorkspaceFiles';
 
 // The command palette unit (composite — requires the webui context stack):
 // the app's palette as an overlay an arrangement places (the default overlay

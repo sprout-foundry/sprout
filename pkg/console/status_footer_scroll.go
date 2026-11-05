@@ -30,7 +30,7 @@ func (f *StatusFooter) steerRowCount() int {
 		// Compute visual rows without cursor mapping: cursorByte=-1
 		// still produces a full layout, just with the cursor pinned to
 		// the end. Use 0 so WrapSteerLayout still returns all rows.
-		rows, _, _ := WrapSteerLayout(f.steerLine, 0, cols, 0)
+		rows, _, _ := WrapSteerLayout(f.steerLine, 0, composerWrapCols(cols), 0)
 		n := len(rows)
 		if n < 1 {
 			n = 1
@@ -67,7 +67,17 @@ func (f *StatusFooter) hintRowCount() int {
 	if f == nil {
 		return 0
 	}
-	if f.showKeymapHint {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.hintRowCountLocked()
+}
+
+// hintRowCountLocked is hintRowCount for callers already holding f.mu.
+// The row shows the keymap hints, or an override in their place — an
+// override counts even when the keymap hints are switched off, because it
+// is the prompt's own key legend.
+func (f *StatusFooter) hintRowCountLocked() int {
+	if f.showKeymapHint || f.hintOverride != "" {
 		return 1
 	}
 	return 0
@@ -93,7 +103,7 @@ func (f *StatusFooter) reservedRows() int {
 
 // reservedRowsLocked is reservedRows for callers already holding f.mu.
 func (f *StatusFooter) reservedRowsLocked() int {
-	return 2 + f.steerBlockRows() + f.hintRowCount()
+	return 2 + f.steerBlockRows() + f.hintRowCountLocked()
 }
 
 // canPinInput reports whether the footer can host pinned input rows
@@ -141,45 +151,64 @@ func (f *StatusFooter) applyScrollRegionLocked() {
 // current reserved-row count while a turn owns the cursor: the spinner or
 // streaming prose is mid-line somewhere in the region. applyScrollRegionLocked
 // parks the cursor on the region's last row, which strands that line
-// whenever it isn't already there. Here the content scrolls by the change in
-// height (up as the steer panel grows, down as it shrinks) and the cursor
-// follows its own line, so writing resumes where it left off. Caller must
-// hold outputMu.
+// whenever it isn't already there. The content does not scroll: the region
+// is re-applied around the cursor as it stands, so writing resumes where it
+// left off. Caller must hold outputMu.
 func (f *StatusFooter) applyScrollRegionKeepingCursorLocked() {
 	_, rows := f.terminalSize()
 	newReserved := f.reservedRows()
 	if rows < newReserved+1 {
 		return
 	}
-	f.mu.Lock()
-	oldReserved, oldRows := f.appliedReserved, f.appliedRows
-	f.mu.Unlock()
-	delta := 0
-	if oldReserved > 0 && oldRows == rows && rows > oldReserved {
-		delta = newReserved - oldReserved
-	}
 
 	// Every DECRC here restores a row inside the margins in force at that
 	// moment: some terminals clamp a restored cursor into the margins, so
 	// growing re-saves the raised position before the margins shrink.
+	//
+	// The content itself does not move here. A caller that grows the block
+	// over live transcript lifts it first (liftRegionContentLocked); one
+	// that grows it per keystroke (the autocomplete dropdown) deliberately
+	// does not, since lifting on every keystroke would push the newest
+	// transcript rows into scrollback and shrink the visible history. If
+	// the restored cursor ends up below the new margin, it must have been
+	// lifted first, or line feeds stall on the last row. Shrinking likewise
+	// leaves the vacated rows to the caller (clearOrphanedSteerRows), which
+	// blanks them in place.
 	var b strings.Builder
 	b.WriteString("\0337")
-	switch {
-	case delta > 0:
-		fmt.Fprintf(&b, "\033[1;%dr\033[%d;1H%s", rows-oldReserved, rows-oldReserved, strings.Repeat("\n", delta))
-		fmt.Fprintf(&b, "\0338\033[%dA\0337", delta)
-		fmt.Fprintf(&b, "\033[1;%dr\0338", rows-newReserved)
-	case delta < 0:
-		fmt.Fprintf(&b, "\033[1;%dr\033[1;1H%s", rows-newReserved, strings.Repeat("\033M", -delta))
-		fmt.Fprintf(&b, "\0338\033[%dB", -delta)
-	default:
-		fmt.Fprintf(&b, "\033[1;%dr\0338", rows-newReserved)
-	}
+	fmt.Fprintf(&b, "\033[1;%dr\0338", rows-newReserved)
 	_, _ = fmt.Fprint(f.w, b.String())
 
 	f.mu.Lock()
 	f.appliedReserved, f.appliedRows = newReserved, rows
 	f.mu.Unlock()
+}
+
+// liftRegionContentLocked scrolls the region's content up by however much
+// the pinned block is about to grow, and moves the cursor up with it so a
+// mid-line spinner or prose line resumes on its own row. Without the lift
+// the block paints over the newest transcript rows and the DECRC in
+// applyScrollRegionKeepingCursorLocked restores a cursor that now sits
+// below the bottom margin — where a line feed cannot scroll, so every
+// following line overwrites the last screen row.
+//
+// Call it after updating the state reservedRows reads and before
+// applyScrollRegionKeepingCursorLocked. Caller must hold outputMu.
+func (f *StatusFooter) liftRegionContentLocked() {
+	_, rows := f.terminalSize()
+	newReserved := f.reservedRows()
+	f.mu.Lock()
+	oldReserved, oldRows := f.appliedReserved, f.appliedRows
+	f.mu.Unlock()
+	grow := newReserved - oldReserved
+	if oldReserved == 0 || oldRows != rows || grow <= 0 || rows <= newReserved {
+		return
+	}
+	// The old margins are still in force: line feeds on their bottom row
+	// scroll the region, and CUU from the restored cursor stops at the top
+	// margin.
+	_, _ = fmt.Fprintf(f.w, "\0337\033[%d;1H%s\0338\033[%dA",
+		rows-oldReserved, strings.Repeat("\n", grow), grow)
 }
 
 // shiftScrollRegionLocked moves the scroll region's content to follow a

@@ -23,9 +23,19 @@ func (s *SettingsCommand) Name() string {
 	return "settings"
 }
 
-// SafeDuringSteer returns false - /settings is interactive browser
+// SafeDuringSteer returns false - the no-arg form is an interactive browser
+// that blocks on user input. Use SafeDuringSteerArgs, which allows the
+// non-interactive `set` form.
 func (s *SettingsCommand) SafeDuringSteer() bool {
 	return false
+}
+
+// SafeDuringSteerArgs allows `/settings set <key> <value>` mid-turn: it is a
+// mutex-guarded config write with no turn interaction, the same shape as
+// /model and /risk-profile. Every other form (the browser, and a malformed
+// `set`) stays unsafe.
+func (s *SettingsCommand) SafeDuringSteerArgs(args []string) bool {
+	return len(args) >= 3 && args[0] == "set"
 }
 
 // Description returns the command description

@@ -81,6 +81,13 @@ type StatusFooter struct {
 	// hintOverride, when set, replaces the hint row's wording (an open
 	// picker shows its own keys there).
 	hintOverride string
+	// workingLabel, when set, replaces the hint row's keymap wording for
+	// the whole duration of a turn ("⚙ working — steer or Ctrl+C to
+	// stop"). It is the turn's stable in-progress indication: unlike the
+	// spinner it does not change or stop while tools run. hintOverride
+	// still wins (a transient picker keeps its own keys visible);
+	// cleared by SetWorkingLabel("").
+	workingLabel string
 
 	// SP-078 Phase 1: steerWrappedActive selects the width-aware
 	// WrapSteerLayout render path in drawLocked (instead of the legacy
@@ -94,6 +101,11 @@ type StatusFooter struct {
 	steerCursorRow     int
 	steerCursorCol     int
 	steerWrappedActive bool
+	// steerViewTop is the first layout row the box showed last frame; the
+	// window onto a long input follows the caret from there.
+	steerViewTop int
+	// lastSteerWindow is the window last drawn, for mapping clicks.
+	lastSteerWindow steerWindow
 
 	winchStop chan struct{}
 	winchDone chan struct{}
@@ -366,74 +378,3 @@ func (f *StatusFooter) SetProseStreaming(active bool) {
 		}()
 	}
 }
-
-// SetTurnActive switches the hint row between its mid-turn and idle
-// wording.
-func (f *StatusFooter) SetTurnActive(active bool) {
-	if f == nil {
-		return
-	}
-	mode := ComposerIdle
-	if active {
-		mode = ComposerSteer
-	}
-	if f.setComposerMode(mode) {
-		f.Refresh()
-	}
-}
-
-// SetComposerMode records what the input box does on Enter. The caller's
-// next box update redraws it.
-func (f *StatusFooter) SetComposerMode(mode ComposerMode) {
-	if f == nil {
-		return
-	}
-	f.setComposerMode(mode)
-}
-
-func (f *StatusFooter) setComposerMode(mode ComposerMode) bool {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	changed := f.composerMode != mode
-	f.composerMode = mode
-	return changed
-}
-
-// SetShowKeymapHint enables/disables the keyboard shortcut hint row
-// above the rule. When true, drawLocked reserves an extra row.
-// SP-115.
-func (f *StatusFooter) SetShowKeymapHint(show bool) {
-	if f == nil {
-		return
-	}
-	f.mu.Lock()
-	changed := f.showKeymapHint != show
-	f.showKeymapHint = show
-	live := f.active && f.isTTY && !f.proseStreaming
-	f.mu.Unlock()
-	if !changed || !live {
-		return
-	}
-	// The row count changed under a live footer: re-apply the margins now
-	// rather than letting the next draw paint the hint over a transcript row.
-	LockOutput()
-	defer UnlockOutput()
-	f.shiftScrollRegionLocked()
-	f.applyScrollRegionLocked()
-	f.drawLocked()
-}
-
-// Resize handles a terminal-size change (SIGWINCH). The OLD footer rows
-// (tracked via lastRows) are cleared first so a grow doesn't leave the
-// previous footer stranded mid-screen, then the scroll region is
-// re-applied for the new height and the footer is redrawn at the new
-// bottom.
-//
-// The entire body is wrapped in LockOutput so the scroll-region reset,
-// row clearing, and re-application can't interleave with a concurrent
-// SteerInputReader.renderLine → footer.draw or a PrintExternal call.
-// Without the lock, two SIGWINCH handlers (footer + steer reader) race:
-// the steer reader's draw renders footer rows that Resize just cleared,
-// and the scroll-region manipulation in Resize displaces content the
-// steer reader's draw just positioned — producing the stacked-duplicates
-// symptom on every resize during an active turn.

@@ -10,6 +10,12 @@ import (
 )
 
 func EditFile(ctx context.Context, filePath, oldString, newString string) (string, error) {
+	// A call already abandoned by its caller (user stop, turn stall, tool
+	// timeout) must not start work at all.
+	if err := checkWriteContext(ctx); err != nil {
+		return "", err
+	}
+
 	// Step 1: Validate inputs
 	if err := validateEditInputs(filePath, oldString, newString); err != nil {
 		return "", fmt.Errorf("validate edit inputs: %w", err)
@@ -37,8 +43,11 @@ func EditFile(ctx context.Context, filePath, oldString, newString string) (strin
 		return "", fmt.Errorf("perform replacement: %w", err)
 	}
 
-	// Step 5: Write file with preserved permissions
-	if err := writeFileWithPermissions(cleanPath, []byte(newContent), originalMode.Perm()); err != nil {
+	// Step 5: Write file with preserved permissions. The guard lives at the
+	// write itself: a cancellation can arrive at any point after the initial
+	// check, and a write that lands after the caller has been told the edit
+	// failed makes the model re-apply it and duplicate content.
+	if err := writeFileWithPermissions(ctx, cleanPath, []byte(newContent), originalMode.Perm()); err != nil {
 		return "", fmt.Errorf("write file %s: %w", cleanPath, err)
 	}
 
@@ -200,8 +209,15 @@ func determineAndPerformReplacement(content, oldString, newString, cleanPath str
 	return newContent, nil
 }
 
-// writeFileWithPermissions writes content preserving permissions
-func writeFileWithPermissions(cleanPath string, content []byte, perm os.FileMode) error {
+// writeFileWithPermissions writes content preserving permissions. The
+// context guard sits immediately before the write: the registry can return a
+// timeout/interrupt to the model at any point while this handler goroutine
+// keeps running, so a cancellation must be honoured here or the file changes
+// after the model was told the edit failed.
+func writeFileWithPermissions(ctx context.Context, cleanPath string, content []byte, perm os.FileMode) error {
+	if err := checkWriteContext(ctx); err != nil {
+		return err
+	}
 	err := os.WriteFile(cleanPath, content, perm)
 	if err != nil {
 		return fmt.Errorf("write file %s: %w", cleanPath, err)

@@ -8,7 +8,6 @@ package tools
 // helpers live in ask_user_cli.go.
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -20,6 +19,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/sprout-foundry/sprout/pkg/events"
 
@@ -52,6 +52,11 @@ type AskUserRequest struct {
 	// not a secret — the dialog shows it so the user knows where the value
 	// lands.
 	CredentialKey string `json:"credential_key,omitempty"`
+	// Timeout bounds how long the prompt waits for an answer. Zero uses the
+	// channel's default. A caller sets it when the question carries a
+	// conservative fallback worth reaching quickly — waiting on a human has
+	// nothing to protect if the default answer is the safe one.
+	Timeout time.Duration `json:"-"`
 }
 
 // ErrAskUserNoChannel is returned when no input channel is available
@@ -160,6 +165,9 @@ func (m *AskUserManager) RequestAskUser(ctx context.Context, eventBus *events.Ev
 	eventBus.Publish(events.EventTypeAskUserRequest, payload)
 
 	timeout := m.timeout
+	if req.Timeout > 0 {
+		timeout = req.Timeout
+	}
 	if timeout <= 0 {
 		timeout = DefaultAskUserTimeout
 	}
@@ -294,6 +302,13 @@ func AskUser(ctx context.Context, req AskUserRequest) (string, error) {
 	if !stdinIsTTY() {
 		return "", ErrAskUserNoChannel
 	}
+	// One question on the terminal at a time: a parallel tool's trust
+	// question or a second subagent's ask waits for this one to finish.
+	release, err := console.AcquireTerminalQuestion(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer release()
 	// SP-048 follow-up: stop any active CLI spinner so it doesn't overwrite
 	// the question text on stderr while we render it on stdout.
 	clihooks.SuspendIndicator()
@@ -314,7 +329,13 @@ func AskUser(ctx context.Context, req AskUserRequest) (string, error) {
 	// support multi-select, and the legacy "1,3" comma-list text input
 	// remains the canonical path for that case).
 	if len(req.Options) > 0 && !req.MultiSelect {
-		return runAskUserSelectList(ctx, req)
+		pickCtx := ctx
+		if req.Timeout > 0 {
+			var cancel context.CancelFunc
+			pickCtx, cancel = context.WithTimeout(ctx, req.Timeout)
+			defer cancel()
+		}
+		return runAskUserSelectList(pickCtx, req)
 	}
 
 	renderCLIPrompt(os.Stdout, req)
@@ -337,20 +358,25 @@ func AskUser(ctx context.Context, req AskUserRequest) (string, error) {
 		return string(secret), nil
 	}
 
-	reader := bufio.NewReader(os.Stdin)
+	// A bounded request gets a bounded read on every path below, not just the
+	// picker: the same deadline semantics apply to the numbered list and the
+	// freeform reader, so a caller that set Timeout is never left blocking.
+	readCtx := ctx
+	if req.Timeout > 0 {
+		var cancel context.CancelFunc
+		readCtx, cancel = context.WithTimeout(ctx, req.Timeout)
+		defer cancel()
+	}
 
 	if len(req.Options) == 0 {
-		// Freeform mode: read until a blank line (double Enter) or EOF.
-		// This allows pasting multiline text — a single newline between
-		// pasted lines is preserved; the user submits by pressing Enter
-		// on an empty line.
-		answer, err := readFreeformInputCtx(ctx, reader)
+		// Freeform mode: Enter submits; a multi-line paste arrives whole.
+		answer, err := readAnswer(readCtx)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				return "", ErrAskUserNoChannel
 			}
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-				return "", err
+				return trustDefaultOnDeadline(readCtx, req, err)
 			}
 			return "", fmt.Errorf("read user input: %w", err)
 		}
@@ -361,13 +387,13 @@ func AskUser(ctx context.Context, req AskUserRequest) (string, error) {
 	}
 
 	// Option mode: single line is sufficient.
-	answer, err := readLineCtx(ctx, reader)
+	answer, err := readAnswer(readCtx)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
 			return "", ErrAskUserNoChannel
 		}
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return "", err
+			return trustDefaultOnDeadline(readCtx, req, err)
 		}
 		return "", fmt.Errorf("read user input: %w", err)
 	}
@@ -378,6 +404,16 @@ func AskUser(ctx context.Context, req AskUserRequest) (string, error) {
 		return "", fmt.Errorf("invalid selection %q — expected a number 1-%d, an option label, or one of the option values", answer, len(req.Options))
 	}
 	return resolved, nil
+}
+
+// trustDefaultOnDeadline resolves a cancelled stdin read. A deadline the
+// caller set is a deliberate bound, so it yields the request's default; an
+// interrupt (Ctrl+C, tool timeout) keeps propagating as an error.
+func trustDefaultOnDeadline(ctx context.Context, req AskUserRequest, err error) (string, error) {
+	if ctx != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return req.Default, nil
+	}
+	return "", err
 }
 
 func toEventRequest(req AskUserRequest) events.AskUserRequest {

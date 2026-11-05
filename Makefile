@@ -1,7 +1,7 @@
 # Ledit Testing and Build Makefile
 # Provides clear commands for different types of tests and builds
 
-.PHONY: help test test-unit test-unit-lowmem test-race test-smoke test-wasm test-desktop-smoke test-all test-ci test-coverage \
+.PHONY: help test test-unit test-unit-lowmem test-race test-smoke test-cli-e2e test-wasm test-desktop-smoke test-all test-ci test-coverage \
        clean build build-all install build-version build-ui deploy-ui build-wasm \
        verify-ui-embedded test-webui lint lint-fix lint-go lint-go-new dev build-webui-dist build-webui-dist-local \
        verify-dist verify-dist-local automate-run studio-providers build-workspace-package
@@ -14,6 +14,7 @@ help:
 	@echo "  make test-unit-lowmem - Run unit tests in ~4GB RAM (no -race, low parallelism)"
 	@echo "  make test-race        - Run unit tests with race detector (required CI check)"
 	@echo "  make test-smoke       - Run smoke tests (basic functionality)"
+	@echo "  make test-cli-e2e     - Drive the REPL in a pty and check the rendered screen"
 	@echo "  make test-wasm        - Run the browser WASM bridge tests (cmd/wasm) under Node"
 	@echo "  make test-desktop-smoke - Run desktop Electron smoke tests"
 	@echo "  make test-all         - Run unit + smoke tests"
@@ -135,6 +136,12 @@ test-smoke:
 	@echo "Running smoke tests..."
 	cd smoke_tests && chmod +x run_api_test.sh && ./run_api_test.sh
 
+# CLI end-to-end tests: drive the built REPL (agent --mock-llm) in a pty and
+# assert the rendered screen. Opt-in because they launch the binary.
+test-cli-e2e: build
+	@echo "Running CLI end-to-end tests..."
+	SPROUT_CLI_E2E=1 SPROUT_E2E_BIN=$(CURDIR)/sprout go test ./test/clie2e/ -count=1
+
 # WASM bridge tests - cmd/wasm is js/wasm only; Go's Node runner executes it.
 test-wasm:
 	@echo "Running WASM bridge tests..."
@@ -160,6 +167,17 @@ clean:
 	rm -f /tmp/sprout-test-coverage.log /tmp/sprout-test-unit.log
 	find . -name "*.test" -delete
 	find . -name "test_failure_*.log" -delete
+
+# Starter templates are embedded whole into the WASM binary, so an npm
+# install inside one ends up inside the artifact: the platform-specific
+# native binaries in node_modules take the binary from ~60 MB to hundreds
+# of megabytes and add tens of minutes of brotli. They are gitignored and
+# regenerated when a starter is used, so removing them is always safe.
+clean-starters:
+	@echo "Removing node_modules from starter templates..."
+	@find pkg/starters/data -name node_modules -type d -prune -exec rm -rf {} +
+	@echo "Done."
+.PHONY: clean-starters
 
 # Quick test for development (just unit tests)
 test: test-unit
@@ -270,6 +288,16 @@ test-coverage: prepare-grammars
 # mlx-c — the binary works everywhere and the local LLM degrades gracefully
 # when the library is absent (brew install mlx-c enables it).
 BUILD_TAGS := grammar_blobs_external
+
+# Vite bundles for webui + the workspace package hold the full module graph
+# in one process and OOM at Node's default ~1.2 GB heap on low-memory
+# machines (Termux/Android), crashing `deploy-ui` with
+# "FATAL ERROR: Ineffective mark-compacts near heap limit". 8 GB matches
+# the vitest-worker precedent in webui/vite.config.ts; the ceiling is a
+# limit, not a reservation, so it is harmless on larger machines.
+# Respect a caller-provided NODE_OPTIONS (env or make command line).
+NODE_OPTIONS ?= --max-old-space-size=8192
+export NODE_OPTIONS
 
 build: prepare-grammars
 	@echo "Building sprout (tags: $(BUILD_TAGS))..."
@@ -409,22 +437,36 @@ lint-fix:
 # the historical backlog; CI gates on lint-go-new so it doesn't block PRs.
 # GOMAXPROCS=2 keeps the run inside ~2GB on small machines.
 GOLANGCI_LINT_VERSION ?= v2.13.2
+# golangci-lint 2.13.2 bundles a go/packages that cannot decode a newer Go's
+# export data ("version 5 is greater than maximum supported version 4"), so on
+# a machine whose installed Go is newer than go.mod's toolchain every package
+# fails to typecheck. Pin the run to go.mod's toolchain — read from the file
+# rather than repeated here, so a toolchain bump cannot leave lint behind.
+GOLANGCI_LINT_GOTOOLCHAIN ?= $(shell sed -n 's/^toolchain //p' go.mod)
 .PHONY: lint-go lint-go-new
 lint-go: prepare-grammars
 	@command -v golangci-lint >/dev/null 2>&1 || go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
-	@GOMAXPROCS=2 golangci-lint run ./...
+	@GOTOOLCHAIN=$(GOLANGCI_LINT_GOTOOLCHAIN) GOMAXPROCS=2 golangci-lint run ./...
 
 # New-code gate: only issues introduced after NEW_FROM_REV (default HEAD~1).
 # CI passes the PR base ref via NEW_FROM_REV so merge commits work.
 lint-go-new: prepare-grammars
 	@command -v golangci-lint >/dev/null 2>&1 || go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 	@rev="$(NEW_FROM_REV)"; [ -z "$$rev" ] && rev="HEAD~1"; \
-	GOMAXPROCS=2 golangci-lint run --new-from-rev="$$rev" ./...
+	GOTOOLCHAIN=$(GOLANGCI_LINT_GOTOOLCHAIN) GOMAXPROCS=2 golangci-lint run --new-from-rev="$$rev" ./...
 
 # Quality gates
-.PHONY: vet fmt-check
+.PHONY: vet fmt-check vulncheck
 vet: prepare-grammars
 	go vet ./...
+
+# Reachable-vulnerability scan. Reports only advisories the code actually
+# calls, so a clean run is a real signal rather than a dependency-count
+# report. Pinned to go.mod's toolchain for the same reason as lint-go.
+GOVULNCHECK_VERSION ?= latest
+vulncheck:
+	@command -v govulncheck >/dev/null 2>&1 || go install golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
+	@GOTOOLCHAIN=$(GOLANGCI_LINT_GOTOOLCHAIN) govulncheck ./...
 
 fmt-check:
 	@gofmt_bin="$$(scripts/gofmt-toolchain.sh)"; \

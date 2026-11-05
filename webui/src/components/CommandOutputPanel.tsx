@@ -155,6 +155,15 @@ export function CommandOutputPanel({ state, onDismiss }: CommandOutputPanelProps
           </span>
         </div>
       ) : null}
+      {state.truncatedChars > 0 ? (
+        <div className="command-output-panel-warning" role="alert">
+          <AlertCircle size={14} aria-hidden="true" />
+          <span>
+            Older output was trimmed here to keep the view responsive ({state.truncatedChars.toLocaleString()}{' '}
+            characters). The HTTP response contains the complete transcript.
+          </span>
+        </div>
+      ) : null}
       {hasError && errorText ? (
         <div className="command-output-panel-error" role="alert">
           <AlertCircle size={14} aria-hidden="true" />

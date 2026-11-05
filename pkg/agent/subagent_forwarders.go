@@ -75,8 +75,8 @@ func appendSubagentPreamble(prompt string) string {
 
 // printSubagentStart announces a delegated subagent run
 // (implementation in pkg/agent/subagents).
-func printSubagentStart(persona, provider, model string) {
-	subagents.PrintSubagentStart(persona, provider, model)
+func printSubagentStart(persona, task, provider, model string) {
+	subagents.PrintSubagentStart(persona, task, provider, model)
 }
 
 // printParallelSubagentStart announces a parallel subagent fan-out

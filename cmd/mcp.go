@@ -68,4 +68,5 @@ func init() {
 	mcpCmd.AddCommand(mcpRemoveCmd)
 	mcpCmd.AddCommand(mcpListCmd)
 	mcpCmd.AddCommand(mcpTestCmd)
+	mcpCmd.AddCommand(mcpEditCmd)
 }

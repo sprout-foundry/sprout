@@ -34,6 +34,54 @@ const defaultViewportHeight = 720
 
 const defaultWaitTimeout = 10 * time.Second
 
+// waitStableTolerant waits for network/DOM quiescence and reports whether it
+// settled. A page that never goes idle — an analytics beacon, a chat widget, a
+// polling loop — keeps WaitStable from converging, and treating that as fatal
+// threw away a page whose content had already rendered. The wait is bounded by
+// stableWaitBudget so a busy page costs a fixed delay instead of the whole
+// render timeout; the caller proceeds with whatever the DOM holds.
+func waitStableTolerant(page *rod.Page) bool {
+	// Cancel the wait on timeout instead of abandoning it: WaitStable blocks
+	// on CDP round-trips, and a page closed by the caller while it is still
+	// polling would otherwise race the close.
+	ctx, cancel := context.WithTimeout(context.Background(), stableWaitBudget)
+	defer cancel()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- page.Context(ctx).WaitStable(stableDuration)
+	}()
+
+	select {
+	case err := <-done:
+		return err == nil
+	case <-ctx.Done():
+		return false
+	}
+}
+
+// stableWaitBudget bounds how long a capture waits for quiescence before
+// taking the DOM as it stands.
+const stableWaitBudget = 5 * time.Second
+
+// navigateWithRetry navigates to url, retrying once on a transient network
+// failure. A connection reset, timeout, or aborted request is a property of
+// the moment, not of the URL, so a single retry recovers most of them; a DNS
+// failure or a bad scheme is deterministic and surfaces immediately.
+func navigateWithRetry(page *rod.Page, url string) error {
+	err := page.Timeout(getNavigationTimeout(url)).Navigate(url)
+	if err == nil || !IsTransientNavigationError(err) {
+		return err
+	}
+	// Back off briefly so an overloaded or rate-limiting origin gets room,
+	// then retry once on the same page.
+	time.Sleep(navigationRetryBackoff)
+	return page.Timeout(getNavigationTimeout(url)).Navigate(url)
+}
+
+// navigationRetryBackoff is the pause before a single navigation retry.
+const navigationRetryBackoff = 500 * time.Millisecond
+
 // localhostTimeout is the navigation timeout for localhost URLs (fast fail).
 const localhostTimeout = 10 * time.Second
 
@@ -179,9 +227,27 @@ func (r *rodRenderer) connect(ctx context.Context) (*rod.Browser, error) {
 		return nil, fmt.Errorf("browser renderer has been closed")
 	}
 	if r.browser != nil {
+		// A cached handle is returned as-is. It is not proof of a live
+		// browser — Chromium can crash or be OOM-killed while the process
+		// keeps running — but no cheap probe can tell: Version() and
+		// Incognito() both answer from rod's cached connection state and
+		// report a closed browser as healthy. The reliable signal is a real
+		// operation failing, which openIncognitoPage handles by discarding
+		// the handle and retrying once on a fresh browser.
 		return r.browser, nil
 	}
 
+	browser, err := r.launch(ctx)
+	if err != nil {
+		return nil, err
+	}
+	r.browser = browser
+	return r.browser, nil
+}
+
+// launch starts a browser, falling back to --disable-gpu when the GPU probe
+// shows screenshot capture is unusable in this environment.
+func (r *rodRenderer) launch(ctx context.Context) (*rod.Browser, error) {
 	// Attempt launch with retry: first try with GPU enabled; if the GPU probe
 	// (a tiny screenshot) hangs, relaunch with --disable-gpu. This way machines
 	// with a real GPU keep acceleration, while environments like WSL2 or
@@ -193,8 +259,7 @@ func (r *rodRenderer) connect(ctx context.Context) (*rod.Browser, error) {
 			return nil, err
 		}
 		if !needsFallback {
-			r.browser = browser
-			return r.browser, nil
+			return browser, nil
 		}
 		// GPU probe hung — close browser and retry with --disable-gpu.
 		_ = browser.Close()
@@ -250,6 +315,40 @@ func (r *rodRenderer) launchAndProbe(ctx context.Context, disableGPU bool) (*rod
 // openIncognitoPage creates an incognito browser context and opens a new page.
 // The caller MUST defer close on both the incognito browser and the page.
 func (r *rodRenderer) openIncognitoPage(ctx context.Context) (*rod.Browser, *rod.Page, error) {
+	incognito, page, err := r.tryOpenIncognitoPage(ctx)
+	if err == nil {
+		return incognito, page, nil
+	}
+	// A browser can die between the liveness probe and the first real call
+	// (crash, OOM kill, or a wedged renderer). Discard the cached handle and
+	// try once on a fresh browser rather than failing every later call.
+	//
+	// The discard does not ask whether the handle looks alive: Version()
+	// answers from rod's cached connection state, so it reports a closed
+	// browser as healthy. Opening a page is the operation that actually
+	// fails, which makes this error the reliable signal.
+	if !r.discardBrowser() {
+		return nil, nil, err
+	}
+	return r.tryOpenIncognitoPage(ctx)
+}
+
+// discardBrowser drops the cached browser handle so the next connect
+// relaunches. It reports whether a handle was discarded; a renderer that is
+// already closed has nothing to replace.
+func (r *rodRenderer) discardBrowser() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.browser == nil || r.closed {
+		return false
+	}
+	_ = r.browser.Close()
+	r.browser = nil
+	return true
+}
+
+// tryOpenIncognitoPage performs one attempt at opening an incognito page.
+func (r *rodRenderer) tryOpenIncognitoPage(ctx context.Context) (*rod.Browser, *rod.Page, error) {
 	browser, err := r.connect(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("browser connect: %w", err)

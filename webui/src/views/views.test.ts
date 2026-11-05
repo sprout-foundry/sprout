@@ -44,6 +44,9 @@ import {
   useWorkspaceEditor,
   useWorkspaceEditorProps,
   useWorkspaceFileTree,
+  listBrowserWorkspaceFiles,
+  readBrowserWorkspaceFile,
+  BrowserFilesUnavailableError,
 } from './index';
 import type {
   AgentChangesPanelProps,
@@ -75,6 +78,7 @@ import type {
   WorkspaceEditorProviderProps,
   WorkspaceEditorValue,
   WorkspaceEditorViewProps,
+  WorkspaceFileEntry,
 } from './index';
 
 // ── Runtime: all view exports are defined ─────────────────────────────
@@ -203,6 +207,27 @@ describe('views entry exports', () => {
   it('exports the trigger detector and the event name the listener listens for', () => {
     expect(typeof useEscalationTriggers).toBe('function');
     expect(ESCALATION_TRIGGER_EVENT).toBe('sprout:escalation-trigger');
+  });
+
+  // ── The in-browser workspace file API (the move-to-container seam) ────
+
+  it('exports the two file functions and the stable gate-error class', () => {
+    expect(typeof listBrowserWorkspaceFiles).toBe('function');
+    expect(typeof readBrowserWorkspaceFile).toBe('function');
+    expect(typeof BrowserFilesUnavailableError).toBe('function');
+    const err = new BrowserFilesUnavailableError('x');
+    expect(err).toBeInstanceOf(Error);
+    expect(err.code).toBe('browser_files_unavailable');
+  });
+
+  it('types a listing row with the fields a host needs', () => {
+    const row: WorkspaceFileEntry = {
+      path: 'src/a.ts',
+      size: 10,
+      mode: 0o644,
+      differsFromCheckout: true,
+    };
+    expect(row.path).toBe('src/a.ts');
   });
 });
 

@@ -4,6 +4,7 @@ package webui
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"os/exec"
 	"sync"
@@ -68,6 +69,23 @@ func (r *sessRing) snapshot() []byte {
 // buffer overflows (so the WebSocket goroutine can reconnect and replay the ring).
 type termSub struct {
 	ch chan []byte
+
+	// evicted is set (under the session's subsMu) when broadcast drops this
+	// subscriber because its channel was full. A consumer that finds its
+	// channel closed reads it to tell "I fell behind and was dropped" from
+	// "the session ended": the first is recoverable from the ring buffer,
+	// the second is not.
+	evicted bool
+
+	// mandatory marks a subscriber that must never be evicted for falling
+	// behind. ExecuteCommandAndWait uses it: its consumer is internal and
+	// reads the same stream the command writes, so dropping it would discard
+	// output the caller is waiting on. A large-output command produces far
+	// more chunks than the channel holds, so an evictable subscriber here
+	// would be dropped as a matter of course. broadcast blocks briefly for a
+	// mandatory subscriber instead of dropping it; the WebSocket subscribers
+	// stay evictable, which is what protects the reader from a dead socket.
+	mandatory bool
 }
 
 // ShellInfo describes an available shell on the system.
@@ -193,7 +211,18 @@ func (s *TerminalSession) hasSubscribers() bool {
 
 // subscribe adds a new WebSocket subscriber and returns its termSub.
 func (s *TerminalSession) subscribe() *termSub {
-	sub := &termSub{ch: make(chan []byte, 10000)}
+	return s.subscribeWith(false)
+}
+
+// subscribeMandatory adds a subscriber that must not be evicted for falling
+// behind (see termSub.mandatory). Used by ExecuteCommandAndWait, whose
+// consumer must see every chunk of the command it is waiting on.
+func (s *TerminalSession) subscribeMandatory() *termSub {
+	return s.subscribeWith(true)
+}
+
+func (s *TerminalSession) subscribeWith(mandatory bool) *termSub {
+	sub := &termSub{ch: make(chan []byte, 10000), mandatory: mandatory}
 	s.subsMu.Lock()
 	s.subs = append(s.subs, sub)
 	s.subsMu.Unlock()
@@ -212,26 +241,62 @@ func (s *TerminalSession) unsubscribe(sub *termSub) {
 	}
 }
 
+// mandatorySendTimeout bounds how long broadcast waits for a full mandatory
+// subscriber. A live consumer drains continuously, so the wait is normally
+// instantaneous; the bound exists so a consumer that died without
+// unsubscribing cannot wedge the PTY reader forever (which would stall the
+// session and every other subscriber). On timeout the chunk is dropped rather
+// than the session hanging.
+const mandatorySendTimeout = 5 * time.Second
+
 // broadcast writes p to the ring buffer and forwards it to all active subscribers.
 // If a subscriber's channel is full it is evicted (its channel is closed) so the
-// WebSocket goroutine can reconnect and replay the ring.
+// WebSocket goroutine can reconnect and replay the ring. A mandatory subscriber
+// is waited for instead (see termSub.mandatory).
 func (s *TerminalSession) broadcast(p []byte) {
 	s.ring.write(p)
 
 	s.subsMu.Lock()
-	defer s.subsMu.Unlock()
-
 	live := s.subs[:0]
+	// Mandatory subscribers that were full: sent after the lock is released,
+	// so a slow internal consumer never holds up the reader or the other
+	// subscribers.
+	var blocked []*termSub
 	for _, sub := range s.subs {
 		select {
 		case sub.ch <- p:
 			live = append(live, sub)
 		default:
+			if sub.mandatory {
+				live = append(live, sub)
+				blocked = append(blocked, sub)
+				continue
+			}
 			// Subscriber channel full — evict and close so the goroutine stops.
+			// Mark it first: a consumer that sees its channel closed uses this
+			// to tell "dropped for falling behind" from "session ended".
+			sub.evicted = true
 			close(sub.ch)
 		}
 	}
 	s.subs = live
+	s.subsMu.Unlock()
+
+	// A mandatory subscriber is an internal consumer that must see every
+	// chunk (ExecuteCommandAndWait); dropping output it is waiting on would
+	// stall the command it started. Wait for it rather than evicting, but
+	// bounded: a consumer that died without unsubscribing must not be able to
+	// wedge the reader.
+	for _, sub := range blocked {
+		timer := time.NewTimer(mandatorySendTimeout)
+		select {
+		case sub.ch <- p:
+			timer.Stop()
+		case <-timer.C:
+			webuiLogger.Warn("mandatory PTY subscriber did not drain; dropping chunk",
+				slog.String("session_id", s.ID), slog.Int("bytes", len(p)))
+		}
+	}
 }
 
 // closeAllSubs closes every active subscriber channel (signals PTY exit) and

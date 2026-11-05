@@ -24,7 +24,7 @@
   },
   "models": {
     "available_models": [],
-    "default_context_limit": 131072,
+    "default_context_limit": 262144,
     "default_model": "deepseek-v4.1-flash",
     "default_model_patterns": [
       "gpt-oss:20b"

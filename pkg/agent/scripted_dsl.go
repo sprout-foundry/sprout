@@ -66,6 +66,10 @@ type StreamConfig struct {
 	// Chunks to stream (content pieces)
 	Chunks []string
 
+	// ReasoningChunks are streamed as reasoning_content before the content
+	// chunks. They drive the reasoning-channel repetition guard.
+	ReasoningChunks []string
+
 	// Delay between chunks
 	ChunkDelay time.Duration
 

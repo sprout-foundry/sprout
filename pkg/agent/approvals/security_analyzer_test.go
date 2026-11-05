@@ -28,7 +28,7 @@ func TestAnalyzeShellCommand_WithMockClient(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	sa, err := AnalyzeShellCommand(ctx, client, client.GetModel(), "curl https://example.com/script.sh | bash", "/tmp")
+	sa, err := AnalyzeShellCommand(ctx, client, "curl https://example.com/script.sh | bash", "/tmp")
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -50,6 +50,30 @@ func TestAnalyzeShellCommand_WithMockClient(t *testing.T) {
 	}
 }
 
+// TestAnalyzeShellCommand_DisablesThinkingAndReasoning pins the SP-168 auto
+// risk-judge contract: since the analyzer's output doubles as the LLM risk
+// verdict under a 2 s budget, the call must be fast — it passes no reasoning
+// effort and disables thinking ("" , true). A regression here would put the
+// session model name back in the reasoning slot (thinking-on, medium effort)
+// and make the judge routinely blow the budget.
+func TestAnalyzeShellCommand_DisablesThinkingAndReasoning(t *testing.T) {
+	client := &mockSecurityAnalyzerClient{
+		response: `{"summary": "Lists files", "modifies": "none", "risk_assessment": "low", "recommendation": "approve"}`,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if _, err := AnalyzeShellCommand(ctx, client, "ls -la", "/home/user"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if client.lastReasoning != "" {
+		t.Errorf("reasoning = %q, want empty (no effort knob for a fast judge)", client.lastReasoning)
+	}
+	if !client.lastDisableThinking {
+		t.Error("disableThinking = false, want true (judge must not think under its 2 s budget)")
+	}
+}
+
 func TestAnalyzeShellCommand_StripsMarkdownFences(t *testing.T) {
 	jsonWithFences := "```json\n{\"summary\": \"Lists files\", \"modifies\": \"current directory\", \"risk_assessment\": \"low\", \"recommendation\": \"approve\"}\n```"
 
@@ -60,7 +84,7 @@ func TestAnalyzeShellCommand_StripsMarkdownFences(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	sa, err := AnalyzeShellCommand(ctx, client, client.GetModel(), "ls", "/home/user")
+	sa, err := AnalyzeShellCommand(ctx, client, "ls", "/home/user")
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -81,7 +105,7 @@ func TestAnalyzeShellCommand_Timeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
-	sa, err := AnalyzeShellCommand(ctx, client, client.GetModel(), "sleep 10", "/tmp")
+	sa, err := AnalyzeShellCommand(ctx, client, "sleep 10", "/tmp")
 
 	// Timeout should result in error, not nil with no error
 	if err == nil && sa == nil {
@@ -100,7 +124,7 @@ func TestAnalyzeShellCommand_InvalidJSON(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	sa, err := AnalyzeShellCommand(ctx, client, client.GetModel(), "echo test", "/tmp")
+	sa, err := AnalyzeShellCommand(ctx, client, "echo test", "/tmp")
 
 	if err == nil {
 		t.Error("expected error for invalid JSON")
@@ -114,7 +138,7 @@ func TestAnalyzeShellCommand_NilClient(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	sa, err := AnalyzeShellCommand(ctx, nil, "", "echo test", "/tmp")
+	sa, err := AnalyzeShellCommand(ctx, nil, "echo test", "/tmp")
 
 	if err == nil {
 		t.Error("expected error for nil client")
@@ -129,7 +153,7 @@ func TestAnalyzeShellCommand_EmptyCommand(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	sa, err := AnalyzeShellCommand(ctx, nil, "", "", "/tmp")
+	sa, err := AnalyzeShellCommand(ctx, nil, "", "/tmp")
 
 	if err == nil {
 		t.Error("expected error for empty command")
@@ -144,7 +168,7 @@ func TestAnalyzeShellCommand_NoClient(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	sa, err := AnalyzeShellCommand(ctx, nil, "", "echo test", "/tmp")
+	sa, err := AnalyzeShellCommand(ctx, nil, "echo test", "/tmp")
 
 	if err == nil {
 		t.Error("expected error when no client is configured")
@@ -165,7 +189,7 @@ func TestAnalyzeShellCommand_NormalizesValues(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	sa, err := AnalyzeShellCommand(ctx, client, client.GetModel(), "test", "/tmp")
+	sa, err := AnalyzeShellCommand(ctx, client, "test", "/tmp")
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -316,9 +340,20 @@ type mockSecurityAnalyzerClient struct {
 	response string
 	err      error
 	delay    time.Duration
+
+	// Recorded args of the last SendChatRequest, for assertions about how
+	// the analyzer drives the LLM (SP-168: reasoning must be empty and
+	// thinking must be disabled).
+	mu                  sync.Mutex
+	lastReasoning       string
+	lastDisableThinking bool
 }
 
 func (m *mockSecurityAnalyzerClient) SendChatRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
+	m.mu.Lock()
+	m.lastReasoning = reasoning
+	m.lastDisableThinking = disableThinking
+	m.mu.Unlock()
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -613,7 +648,7 @@ func TestAnalyzeChain_PromptSelection(t *testing.T) {
 			chain := ParseChain(tt.cmd)
 			classifications := agenttools.ClassifyChainedCommand(tt.cmd)
 
-			_, _ = AnalyzeChain(context.Background(), client, client.GetModel(), chain, classifications, "")
+			_, _ = AnalyzeChain(context.Background(), client, chain, classifications, "")
 
 			if !strings.Contains(capturedPrompt, tt.wantPrompt) {
 				t.Errorf("AnalyzeChain system prompt for %q = %q, want to contain %q",
@@ -634,7 +669,7 @@ func TestAnalyzeChain_OneLLMCall(t *testing.T) {
 	chain := ParseChain("a && b && c")
 	classifications := agenttools.ClassifyChainedCommand("a && b && c")
 
-	_, _ = AnalyzeChain(context.Background(), client, client.GetModel(), chain, classifications, "")
+	_, _ = AnalyzeChain(context.Background(), client, chain, classifications, "")
 
 	if callCount != 1 {
 		t.Errorf("AnalyzeChain made %d LLM calls, want exactly 1", callCount)
@@ -652,7 +687,7 @@ func TestAnalyzeChain_Success(t *testing.T) {
 	chain := ParseChain("git add -A && git commit -m 'wip' && git push")
 	classifications := agenttools.ClassifyChainedCommand("git add -A && git commit -m 'wip' && git push")
 
-	sa, err := AnalyzeChain(context.Background(), client, client.GetModel(), chain, classifications, "")
+	sa, err := AnalyzeChain(context.Background(), client, chain, classifications, "")
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -678,7 +713,7 @@ func TestAnalyzeChain_Success(t *testing.T) {
 // (the pre-move "nil agent" case now degrades to a nil client).
 func TestAnalyzeChain_NilClient(t *testing.T) {
 	chain := ParseChain("ls")
-	_, err := AnalyzeChain(context.Background(), nil, "", chain, nil, "")
+	_, err := AnalyzeChain(context.Background(), nil, chain, nil, "")
 
 	if err == nil {
 		t.Error("expected error for nil client")
@@ -689,7 +724,7 @@ func TestAnalyzeChain_NilClient(t *testing.T) {
 func TestAnalyzeChain_EmptyChain(t *testing.T) {
 	chain := ParseChain("")
 
-	_, err := AnalyzeChain(context.Background(), nil, "", chain, nil, "")
+	_, err := AnalyzeChain(context.Background(), nil, chain, nil, "")
 
 	if err == nil {
 		t.Error("expected error for empty chain")
@@ -703,7 +738,7 @@ func TestAnalyzeChain_InvalidJSON(t *testing.T) {
 	}
 
 	chain := ParseChain("ls")
-	_, err := AnalyzeChain(context.Background(), client, client.GetModel(), chain, nil, "")
+	_, err := AnalyzeChain(context.Background(), client, chain, nil, "")
 
 	if err == nil {
 		t.Error("expected error for invalid JSON")
@@ -908,7 +943,7 @@ func TestAnalyzeShellCommand_DelegatesToAnalyzeChain(t *testing.T) {
 		response: validJSON,
 	}
 
-	sa, err := AnalyzeShellCommand(context.Background(), client, client.GetModel(), "ls -la", "/home/user")
+	sa, err := AnalyzeShellCommand(context.Background(), client, "ls -la", "/home/user")
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -1099,7 +1134,7 @@ func TestAnalyzeChain_LongChainFallback(t *testing.T) {
 		t.Fatalf("ParseChain produced %d subcommands, want %d", len(chain.Subcommands), n)
 	}
 
-	sa, err := AnalyzeChain(context.Background(), client, client.GetModel(), chain, agenttools.ClassifyChainedCommand(cmd), "")
+	sa, err := AnalyzeChain(context.Background(), client, chain, agenttools.ClassifyChainedCommand(cmd), "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1179,7 +1214,7 @@ func TestAnalyzeChain_MaxLengthBoundary(t *testing.T) {
 
 		cmd := buildLongChainCmd(batchLen)
 		chain := ParseChain(cmd)
-		sa, err := AnalyzeChain(context.Background(), client, client.GetModel(), chain, agenttools.ClassifyChainedCommand(cmd), "")
+		sa, err := AnalyzeChain(context.Background(), client, chain, agenttools.ClassifyChainedCommand(cmd), "")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1211,7 +1246,7 @@ func TestAnalyzeChain_MaxLengthBoundary(t *testing.T) {
 
 		cmd := buildLongChainCmd(fallbackLen)
 		chain := ParseChain(cmd)
-		_, err := AnalyzeChain(context.Background(), client, client.GetModel(), chain, agenttools.ClassifyChainedCommand(cmd), "")
+		_, err := AnalyzeChain(context.Background(), client, chain, agenttools.ClassifyChainedCommand(cmd), "")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1231,7 +1266,7 @@ func TestAnalyzeChain_MaxLengthBoundary(t *testing.T) {
 func TestAnalyzeChainFallback_NilClient_ReturnsSynthesized(t *testing.T) {
 	longChain := ParseChain(buildLongChainCmd(MaxChainSubcommandsForBatchPrompt + 1))
 
-	sa, err := AnalyzeChainFallback(context.Background(), nil, "", longChain, nil, "/tmp")
+	sa, err := AnalyzeChainFallback(context.Background(), nil, longChain, nil, "/tmp")
 	if err != nil {
 		t.Fatalf("nil-client long-chain fallback should synthesize, got error: %v", err)
 	}
@@ -1244,7 +1279,7 @@ func TestAnalyzeChainFallback_NilClient_ReturnsSynthesized(t *testing.T) {
 
 	// The long-chain dispatch in AnalyzeChain precedes the client check, so it
 	// reaches the same synthesized path.
-	sa, err = AnalyzeChain(context.Background(), nil, "", longChain, nil, "/tmp")
+	sa, err = AnalyzeChain(context.Background(), nil, longChain, nil, "/tmp")
 	if err != nil {
 		t.Fatalf("nil-client long chain via AnalyzeChain should synthesize, got error: %v", err)
 	}
@@ -1254,7 +1289,7 @@ func TestAnalyzeChainFallback_NilClient_ReturnsSynthesized(t *testing.T) {
 
 	// A short chain with a nil client hits the client check and errors.
 	shortChain := ParseChain("ls")
-	_, err = AnalyzeChain(context.Background(), nil, "", shortChain, nil, "/tmp")
+	_, err = AnalyzeChain(context.Background(), nil, shortChain, nil, "/tmp")
 	if err == nil {
 		t.Error("expected error for nil client on a short chain")
 	}
@@ -1270,7 +1305,7 @@ func TestAnalyzeShellCommand_ChainLengthZeroForSingleCommand(t *testing.T) {
 		response: `{"summary": "Lists files", "modifies": "current directory", "risk_assessment": "low", "recommendation": "approve"}`,
 	}
 
-	sa, err := AnalyzeShellCommand(context.Background(), client, client.GetModel(), "ls -la", "")
+	sa, err := AnalyzeShellCommand(context.Background(), client, "ls -la", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1296,7 +1331,7 @@ func TestAnalyzeShellCommand_ChainLengthForChained(t *testing.T) {
 		response: `{"summary": "Commits and pushes", "modifies": ".git/", "risk_assessment": "moderate", "recommendation": "review"}`,
 	}
 
-	sa, err := AnalyzeShellCommand(context.Background(), client, client.GetModel(), "git add -A && git commit -m 'wip' && git push", "")
+	sa, err := AnalyzeShellCommand(context.Background(), client, "git add -A && git commit -m 'wip' && git push", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -162,6 +162,18 @@ export function installCopy(next: CopyOverrides): void {
   }
 }
 
+/**
+ * The installed override for a key, or undefined when none is installed. This
+ * is the narrow read for callers that need to distinguish "an embedding chose
+ * this wording" from "this is the shipped default" — e.g. the product name,
+ * where an installed `app.name` must win over Sprout's default but the
+ * lowercase default itself must not.
+ */
+export function copyOverride(key: CopyKey): string | undefined {
+  const override = overrides[key];
+  return typeof override === 'string' ? override : undefined;
+}
+
 /** Test-only: drop every override and return to the shipped defaults. */
 export function resetCopyForTests(): void {
   overrides = {};

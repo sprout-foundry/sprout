@@ -127,6 +127,9 @@ func (s *SelectList) frameLines(termWidth int) []string {
 	}
 	hint := footer
 	if hint == "" {
+		// The scroll keys are named because the wheel is deliberately left
+		// to the terminal: the picker owns the keyboard, not the mouse, and
+		// the hint has to say so or the keys look absent.
 		if searchable {
 			hint = "↑↓ select · enter confirm · type to filter · esc cancel"
 		} else if dismissOnAnyKey {
@@ -232,8 +235,34 @@ func (s *SelectList) clearRendered() {
 	footerDriven := s.footerDriven
 	s.mu.Unlock()
 	if f := GetGlobalStatusFooter(); footerDriven && f != nil {
+		// The footer owns the rows below the scroll region, and the picker
+		// leaves its hint there while it runs. Those rows are not part of
+		// the walk-back, so the footer repaints them; the gap the cleared
+		// frame leaves is closed from the row above them.
+		f.repaintAfterPickerLocked()
 		pullDownOverClearedRows(f, n+1)
 	}
+}
+
+// repaintAfterPickerLocked is the footer half of the picker's teardown.
+// Caller MUST hold outputMu (clearRendered does): every call here is a
+// *Locked variant, because a plain Refresh/draw/ClearSteerLine would
+// re-enter the non-reentrant outputMu and wedge the teardown goroutine —
+// the picker never returns, the terminal is left in steer mode with no
+// prompt, and every keystroke echoes with nothing ever submitting.
+//
+// The hint override is released BEFORE the repaint: it reserves a row of
+// the pinned block, and the picker's hint must not survive on screen once
+// the picker is gone.
+func (f *StatusFooter) repaintAfterPickerLocked() {
+	f.mu.Lock()
+	before := f.hintRowCountLocked()
+	f.hintOverride = ""
+	after := f.hintRowCountLocked()
+	f.mu.Unlock()
+	f.applyHintRowChange(before, after, true)
+	f.clearSteerLineLocked()
+	f.drawLocked()
 }
 
 // pullDownOverClearedRows closes the hole a dismissed picker leaves. With a

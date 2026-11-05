@@ -37,6 +37,19 @@ func extractString(args map[string]any, key string) (string, error) {
 	return s, nil
 }
 
+// extractStringOrEmpty returns the string value under key, or "" when the
+// key is absent, nil, or not a string. Use it for optional parameters whose
+// absence has a documented default; a non-string value is treated as absent
+// rather than an error so the caller's own validation reports it.
+func extractStringOrEmpty(args map[string]any, key string) string {
+	val, exists := lookupKey(args, key)
+	if !exists || val == nil {
+		return ""
+	}
+	s, _ := val.(string)
+	return s
+}
+
 // extractStringAny returns the first non-empty string found under any of
 // keys (case-insensitively), so a caller can accept documented aliases for a
 // parameter. Falls back to the canonical error naming the first key when
@@ -78,6 +91,40 @@ func extractInt(args map[string]any, key string) (int, error) {
 		return int(v), nil
 	default:
 		return 0, fmt.Errorf("parameter '%s' must be an integer, got %T", key, val)
+	}
+}
+
+// extractStringList extracts a list-of-strings value from args: a []string,
+// a []any of strings, or a comma-separated string. Returns nil when the key
+// is absent (for optional parameters); a non-list value is an error.
+func extractStringList(args map[string]any, key string) ([]string, error) {
+	val, exists := lookupKey(args, key)
+	if !exists || val == nil {
+		return nil, nil
+	}
+	switch v := val.(type) {
+	case []string:
+		return v, nil
+	case []any:
+		out := make([]string, 0, len(v))
+		for _, item := range v {
+			s, ok := item.(string)
+			if !ok {
+				return nil, fmt.Errorf("parameter '%s' must be a list of strings, got element %T", key, item)
+			}
+			out = append(out, s)
+		}
+		return out, nil
+	case string:
+		var out []string
+		for _, part := range strings.Split(v, ",") {
+			if trimmed := strings.TrimSpace(part); trimmed != "" {
+				out = append(out, trimmed)
+			}
+		}
+		return out, nil
+	default:
+		return nil, fmt.Errorf("parameter '%s' must be a list of strings, got %T", key, val)
 	}
 }
 

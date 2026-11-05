@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"strings"
+	"time"
 
 	agent_api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -15,9 +16,23 @@ import (
 // defaultSubagentMaxIterations caps the number of LLM iterations a subagent
 // may run. 0 (unlimited) let a stuck subagent loop 164+ times burning tokens
 // before the user noticed. 200 is generous for real coding tasks but still
-// stops runaway loops within a reasonable window. Can be overridden per-call
-// via SubagentOptions.MaxIterations once that field exists.
+// stops runaway loops within a reasonable window. A caller may override it per
+// spawn via SubagentOptions.MaxIterations (the run_subagent `max_iterations`
+// argument) up to subagentMaxIterationsCeiling.
 const defaultSubagentMaxIterations = 200
+
+// subagentMaxIterationsCeiling bounds an explicit per-spawn override. Some
+// tasks legitimately need more turns than the default — a whole-tree audit, a
+// long research pass — so the override is allowed above 200. It is still
+// bounded, because "unlimited" is exactly what the default cap exists to
+// prevent.
+const subagentMaxIterationsCeiling = 2000
+
+// subagentTimeoutCeiling bounds a per-spawn timeout override. A day is far
+// beyond any real task; the bound exists so an absurd or hallucinated value
+// cannot overflow the Duration multiplication and silently fall back to the
+// default timeout instead of the one that was asked for.
+const subagentTimeoutCeiling = 24 * time.Hour
 
 // subagentRole returns the role a subagent's metered usage is attributed to
 // (the role its model was resolved through
@@ -117,12 +132,25 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.
 	securityMgr := NewAgentSecurityManager()
 	mcpMgr := NewAgentMCPManager()
 
+	// Share the parent's MCP manager (servers, tool cache, init state) rather
+	// than starting a private one. A subagent with its own manager had no
+	// servers registered and never ran initializeMCP, so it saw zero MCP
+	// tools — a delegated task could not reach any of the integrations the
+	// parent had configured. The manager is process-wide state keyed by
+	// server name, so sharing the reference is correct: the subagent gets the
+	// same tools, and its shutdown must not stop servers the parent still
+	// uses (see IsInherited).
+	if r.parentAgent != nil && r.parentAgent.mcpSub != nil && r.parentAgent.mcpSub.GetManager() != nil {
+		mcpMgr.SetManager(r.parentAgent.mcpSub.GetManager())
+		mcpMgr.SetInherited(true)
+	}
+
 	// Construct the agent struct
 	agent := &Agent{
 		client:              client,
 		systemPrompt:        systemPrompt,
 		baseSystemPrompt:    systemPrompt,
-		maxIterations:       r.personaBudget(opts.Persona).hardMaxIterations(), // bounded to prevent runaway loops
+		maxIterations:       r.effectiveBudget(opts).hardMaxIterations(), // bounded to prevent runaway loops
 		clientType:          clientType,
 		debug:               r.parentAgent != nil && r.parentAgent.debug,
 		configManager:       r.shared.ConfigManager,
@@ -150,6 +178,33 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.
 	// request_clarification through the same manager instance.
 	if r.parentAgent != nil && r.parentAgent.clarificationManager != nil {
 		agent.clarificationManager = r.parentAgent.clarificationManager
+	}
+
+	// Share the parent's security-approval and ask-user managers (SP-168).
+	// Without this the subagent owns a fresh ApprovalManager whose pending
+	// map the response path never resolves: the WebUI answers against the
+	// webui-owned manager, the CLI against the parent's — so a subagent's
+	// approval dialog (rendered on the shared event bus) is unanswerable and
+	// the subagent blocks until the approval timeout. Sharing the instance
+	// puts the subagent's requests in the same pending map the parent's
+	// responses resolve. A nil parent manager (bare test agents) leaves the
+	// subagent's own in place.
+	if r.parentAgent != nil {
+		if pm := r.parentAgent.GetSecurityApprovalMgr(); pm != nil {
+			agent.security.SetApprovalMgr(pm)
+		}
+		if am := r.parentAgent.security.GetAskUserMgr(); am != nil {
+			agent.security.SetAskUserMgr(am)
+		}
+		// Inherit the parent's live WebUI-client callback so the subagent's
+		// HasActiveWebUIClients() reports the parent's browser surface.
+		if fn := r.parentAgent.WebUIClientCallback(); fn != nil {
+			agent.SetHasActiveWebUIClients(fn)
+		}
+		// An automate/workflow parent has no human to answer a subagent's
+		// approval either: propagate the run flag so the subagent stays
+		// non-interactive end-to-end (fail-fast, never a multi-minute wait).
+		agent.SetWorkflowRun(r.parentAgent.IsWorkflowRun())
 	}
 
 	// Re-resolve the context profile from the subagent's OWN client and config

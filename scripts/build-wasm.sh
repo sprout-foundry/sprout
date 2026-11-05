@@ -21,6 +21,21 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 WEBUI_DIR="$PROJECT_ROOT/webui"
 
+# The starter templates are embedded whole into the WASM binary
+# (//go:embed all:data in pkg/starters). A node_modules directory inside one
+# is a local `npm install`, never part of the template — and embedding it
+# turns a ~60 MB binary into hundreds of megabytes, because it carries
+# platform-specific native binaries (esbuild, workerd, sharp, rolldown).
+# The resulting brotli pass alone costs tens of minutes, so refuse to build
+# rather than produce a silently bloated artifact.
+stray_node_modules="$(find "$PROJECT_ROOT/pkg/starters/data" -name node_modules -type d -prune 2>/dev/null | head -3 || true)"
+if [ -n "$stray_node_modules" ]; then
+    echo "Error: starter templates contain node_modules, which would be embedded into the WASM binary:" >&2
+    echo "$stray_node_modules" | sed 's/^/  /' >&2
+    echo "Remove them with: make clean-starters" >&2
+    exit 1
+fi
+
 # Parse command line arguments
 DIST_MODE=false
 OUTPUT_DIR="$PROJECT_ROOT/webui/public/wasm"

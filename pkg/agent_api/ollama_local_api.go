@@ -13,8 +13,50 @@ import (
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
-// SendChatRequest sends a chat request to local Ollama
+// reconcileVisionCapability is the local-Ollama counterpart of the generic
+// provider's verify-and-remember hook (SP-140 Phase 2). The resolver is
+// optimistic, so an image can reach a model that turns out to be text-only:
+// a capability-shaped 4xx records a known-false observation and retries once
+// with the images stripped and a note, so the turn completes instead of
+// failing. An image-bearing success records known-true. Recording is
+// best-effort and never changes the response contract beyond the retry.
+//
+// retryOK gates the retry. A streaming caller passes false once any chunk has
+// been delivered to the caller's callback — a second attempt would re-emit
+// what the caller already saw.
+func (c *OllamaLocalClient) reconcileVisionCapability(messages []Message, resp *ChatResponse, err error, retryOK bool, retry func([]Message) (*ChatResponse, error)) (*ChatResponse, error) {
+	if !MessagesHaveImages(messages) {
+		return resp, err
+	}
+	if err != nil {
+		if !IsVisionCapabilityRejection(err) || !retryOK {
+			return resp, err
+		}
+		RecordVisionAcceptance(c.GetProvider(), c.GetModel(), false)
+		if resp2, err2 := retry(StripImagesWithNote(messages)); err2 == nil {
+			return resp2, nil
+		}
+		return resp, err
+	}
+	RecordVisionAcceptance(c.GetProvider(), c.GetModel(), true)
+	return resp, nil
+}
+
+// RecoversFromVisionRejection reports that this client strips images and
+// retries once after a capability rejection (see reconcileVisionCapability),
+// which is what makes the resolver's optimistic attach safe.
+func (c *OllamaLocalClient) RecoversFromVisionRejection() bool { return true }
+
+// SendChatRequest sends a chat request to local Ollama, reconciling vision
+// capability on the wire (see reconcileVisionCapability).
 func (c *OllamaLocalClient) SendChatRequest(ctx context.Context, messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error) {
+	resp, err := c.sendChatRequestOnce(ctx, messages, tools, reasoning, disableThinking)
+	return c.reconcileVisionCapability(messages, resp, err, true, func(msgs []Message) (*ChatResponse, error) {
+		return c.sendChatRequestOnce(ctx, msgs, tools, reasoning, disableThinking)
+	})
+}
+
+func (c *OllamaLocalClient) sendChatRequestOnce(ctx context.Context, messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error) {
 	client, err := c.newClient()
 	if err != nil {
 		return nil, agenterrors.NewConfig("could not create ollama client", err)
@@ -253,6 +295,7 @@ func (c *OllamaLocalClient) ListModels(ctx context.Context) ([]ModelInfo, error)
 	}
 
 	models := make([]ModelInfo, 0, len(listResp.Models))
+	caps := make(map[string][]string, len(listResp.Models))
 	for _, m := range listResp.Models {
 		modelInfo := ModelInfo{
 			ID:       m.Name,
@@ -267,12 +310,16 @@ func (c *OllamaLocalClient) ListModels(ctx context.Context) ([]ModelInfo, error)
 			fmt.Fprintf(os.Stderr, "[~] Failed to fetch Ollama model details for %s: %v\n", m.Name, showErr)
 		} else if showResp != nil {
 			modelInfo.ContextLength = showResp.ModelInfo.ContextLength
+			if len(showResp.Capabilities) > 0 {
+				caps[m.Name] = append([]string(nil), showResp.Capabilities...)
+			}
 		}
 		models = append(models, modelInfo)
 	}
 
 	c.cacheMu.Lock()
 	c.cachedModels = append([]ModelInfo(nil), models...)
+	c.cachedCaps = caps
 	c.cachedAt = time.Now()
 	c.cacheMu.Unlock()
 
@@ -288,12 +335,49 @@ func (c *OllamaLocalClient) getCachedModels() ([]ModelInfo, bool) {
 	return append([]ModelInfo(nil), c.cachedModels...), true
 }
 
-// SupportsVision returns true for OCR-capable models
+// SupportsVision reports whether the active Ollama model can take image
+// input.
+//
+// Ollama reports the loaded model's capabilities from /api/show; ListModels
+// caches them per model, so a model the server has described is answered
+// from ground truth. When the model has not been inspected (no ListModels
+// call yet, or an older Ollama that omits capabilities) the name heuristic is
+// the only local signal — it recognizes a few families and misses most
+// current multimodal models. A false answer here does not withhold images
+// from the model: the capability resolver is optimistic and verifies on the
+// wire (see api.ResolveVisionCapability). It only keeps this client out of
+// the delegation candidate list, which requires a positive assertion.
 func (c *OllamaLocalClient) SupportsVision() bool {
+	if caps, ok := c.cachedCapabilities(c.model); ok {
+		for _, capability := range caps {
+			if strings.EqualFold(capability, "vision") {
+				return true
+			}
+		}
+		return false
+	}
 	modelLower := strings.ToLower(c.model)
 	return strings.Contains(modelLower, "ocr") ||
 		strings.Contains(modelLower, "vision") ||
 		strings.Contains(modelLower, "llama3.2")
+}
+
+// cachedCapabilities returns the capability list Ollama reported for a model,
+// when a fresh ListModels run captured it.
+func (c *OllamaLocalClient) cachedCapabilities(name string) ([]string, bool) {
+	if name == "" {
+		return nil, false
+	}
+	c.cacheMu.RLock()
+	defer c.cacheMu.RUnlock()
+	if c.cachedAt.IsZero() || time.Since(c.cachedAt) >= ollamaModelsCacheTTL {
+		return nil, false
+	}
+	caps, ok := c.cachedCaps[name]
+	if !ok || len(caps) == 0 {
+		return nil, false
+	}
+	return append([]string(nil), caps...), true
 }
 
 // VisionCapabilities returns the local-Ollama vision limits used by

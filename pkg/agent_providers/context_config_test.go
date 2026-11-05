@@ -69,8 +69,8 @@ func TestLMStudioEmbeddedConfigUsesRuntimeModelMetadata(t *testing.T) {
 		"qwen3-coder:30b",
 		"yi-34b-chat",
 	} {
-		if got := config.GetContextLimit(model); got != 32768 {
-			t.Errorf("GetContextLimit(%q) = %d, want fallback 32768", model, got)
+		if got := config.GetContextLimit(model); got != 262144 {
+			t.Errorf("GetContextLimit(%q) = %d, want fallback 262144", model, got)
 		}
 	}
 }

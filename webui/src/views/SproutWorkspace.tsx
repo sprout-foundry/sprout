@@ -2,8 +2,10 @@ import type { ChatProps } from '@sprout/ui';
 import { useEffect, useMemo, useRef } from 'react';
 import type { ComponentType, ReactNode } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
+import { THEME_VARIABLE_KEYS } from '../themes/themePacks';
 import { HostProvider, registerActiveHost, useHost } from '../host';
 import type { SproutHost } from '../host';
+import { backendURLs } from '../host/agentBackend';
 import { SproutProviders } from '../providers';
 import { applyHostThemeOverrides, clearHostThemeOverrides, resolveHostThemeOverrides } from '../themes/hostTheme';
 import type { AppState } from '../types/app';
@@ -16,6 +18,7 @@ import { ComposedSpaceShell } from './SproutWorkspaceSpaceShell';
 import { ArrangedViews, usePreviewGatedArrangement } from './SproutWorkspaceUnits';
 import { ViewsLayout, resolveViewsArrangement } from './ViewsLayout';
 import type { ViewsArrangement, ViewKind } from './ViewsLayout';
+import { WorkspaceAgentPrompts } from './WorkspaceAgentPrompts';
 import { WorkspaceChatProvider } from './WorkspaceChatContext';
 import { WorkspaceCommandPalette } from './WorkspaceCommandPalette';
 import { WorkspaceEditorProvider } from './WorkspaceEditorContext';
@@ -50,8 +53,9 @@ import { WorkspaceEditorProvider } from './WorkspaceEditorContext';
  *   `wasmBase`) and mounts it anywhere. This is what an external host uses.
  *   It also registers the host for the module-level services (the non-React
  *   accessor that the client-session fetch and the WebSocket URL read) and
- *   opens the events transport, so the host's `transport.apiBaseURL` /
- *   `transport.wsURL` drive Sprout's calls with no extra wiring.
+ *   opens the events transport, so the active agent backend's URLs — a
+ *   daemon's own `apiBaseURL` / `wsURL`, else the host transport's — drive
+ *   Sprout's calls with no extra wiring.
  * - `"ambient"`: the caller has already mounted `HostProvider` +
  *   `SproutProviders` above (Sprout's own app root does) and the composition
  *   must not build a second stack — a second `SproutProviders` would open a
@@ -232,6 +236,21 @@ export interface SproutWorkspaceProps {
   children?: ReactNode;
 }
 
+/**
+ * The transport target the events socket was last connected under:
+ * `<agent kind>|<wsURL>` from the wiring that opened it. Module-level because
+ * the socket is — a mount that names a different target takes
+ * `resetAndReconnect` rather than a `connect()` that would no-op on the
+ * still-open socket, so a re-mount that swaps backends reconnects exactly as
+ * an in-place swap does. Null before this page ever wired a workspace.
+ */
+let lastConnectedTarget: string | null = null;
+
+/** Clear the remembered socket target (tests only). */
+export function __resetSproutWorkspaceTransportForTests(): void {
+  lastConnectedTarget = null;
+}
+
 const EMPTY_SHELL_PROPS: WorkspaceShellProps = {
   isMobile: false,
   isTablet: false,
@@ -370,26 +389,42 @@ export function SproutWorkspace({
   // transport, so doing it here would fight the caller's registration and
   // double-connect the stream.
   //
-  // The agent-backend wiring runs in the same effect, after the registration,
-  // so the host is the active one and the adapter install is ordered after the
-  // registration's own host-change hooks rather than racing them.
+  // The effect re-runs when the host changes (it is a dep), so a host that
+  // re-reads its transport in place — a new `agent` backend, a new socket URL
+  // — re-wires the backend and reconnects the stream without a re-mount: the
+  // chat and editor units keep their state (their tree shape is unchanged),
+  // and only the transport is swapped under them.
   //
-  // The connection is deliberately not closed on unmount: the events
-  // transport is a process-lifetime singleton, and disconnecting it marks the
-  // close intentional and exhausts its reconnect attempts, permanently killing
-  // the stream for anything that mounts next (the same reason the app's own
-  // initialization leaves it open across remounts).
+  // The host re-reading its transport is also what the socket needs a nudge
+  // for: `connect()` no-ops on an already-open socket, so a still-connected
+  // stream on the old URL would keep feeding the chat. The transport the last
+  // wire connected to (the backend kind plus the socket URL) is remembered,
+  // and a changed target takes `resetAndReconnect` instead — it closes the
+  // socket without marking the close intentional and reconnects immediately,
+  // resolving the URL fresh against the new host (so its `transport.wsURL`
+  // wins). The first wire has no prior socket, so it keeps the plain
+  // `connect()`. The memory is module-level, like the socket it tracks: the
+  // events transport is a process-lifetime singleton, so a re-mount with a
+  // changed transport is the same swap an in-place re-render is — a fresh
+  // instance must still see the old socket's target to reconnect it.
   const agentBackendKind = host?.transport.agent?.kind;
   useEffect(() => {
     if (ambient || !host) return;
+    // The socket target is the active backend's: a daemon backend has its own
+    // `wsURL`, and the transport's names the host around it.
+    const target = `${agentBackendKind ?? 'none'}|${backendURLs(host).wsURL}`;
     const restoreActiveHost = registerActiveHost(host);
     // Wire the backend before connecting, so a wasm backend reports "not
     // connected" until its adapter is installed, even if the socket opens first.
     // A host that names no backend starts from the socket's connection
     // state, not whatever an earlier wasm mount left behind.
-    if (agentBackendKind) void wireHostAgentBackend(host, project.repoUrl);
-    else resetHostAgentBackend();
-    chatTransport.eventsProvider.connect();
+    void wireHostAgentBackend(host, project.repoUrl);
+    if (lastConnectedTarget === null || lastConnectedTarget === target) {
+      chatTransport.eventsProvider.connect();
+    } else {
+      chatTransport.eventsProvider.resetAndReconnect();
+    }
+    lastConnectedTarget = target;
     return () => {
       restoreActiveHost();
       if (agentBackendKind === 'wasm') resetHostAgentBackend();
@@ -436,13 +471,17 @@ export function SproutWorkspace({
               {commandPalette && <WorkspaceCommandPalette />}
             </>
           )}
+          {/* The agent's approval, question and password prompts: the chat
+              unit records them, and without this the agent waits on a
+              request nothing shows. */}
+          <WorkspaceAgentPrompts />
         </WorkspaceEditorProvider>
       </WorkspaceChatProvider>
     );
   }
 
   const root = (
-    <WorkspaceRoot rootClass={rootClass} projectId={project.id} spaceId={resolved.id}>
+    <WorkspaceRoot rootClass={rootClass} projectId={project.id} spaceId={resolved.id} documentScope={!ambient}>
       {content}
       {children}
     </WorkspaceRoot>
@@ -481,23 +520,66 @@ function WorkspaceRoot({
   rootClass,
   projectId,
   spaceId,
+  documentScope,
   children,
 }: {
   rootClass: string;
   projectId: string;
   spaceId: WorkspaceModeId;
+  /**
+   * Whether the workspace owns the document it is mounted in. Own mode does
+   * (it mounts its own `SproutProviders`, so nothing else in the page is
+   * Sprout's), and the app's ambient mode does. A host page's ambient mount
+   * does not: its `documentElement` is the host's, so the theme stops at the
+   * workspace root.
+   */
+  documentScope: boolean;
   children: ReactNode;
 }): JSX.Element {
-  const { theme } = useTheme();
+  const { theme, themePack } = useTheme();
   const host = useHost();
   const rootRef = useRef<HTMLDivElement>(null);
 
+  // The workspace root is the theme's scope: `ThemeContext` publishes the
+  // resolved pack but writes nothing to the DOM, because in a host page
+  // `documentElement` belongs to the host. The pack's variables land here and
+  // inherit to everything inside the workspace; the host's own token
+  // overrides (`host.theme.tokens`) are layered on top in the same pass, so
+  // they always win regardless of which provider re-rendered.
   useEffect(() => {
     const element = rootRef.current;
     if (!element) return;
+    Object.entries(themePack.variables).forEach(([key, value]) => {
+      element.style.setProperty(key, value);
+    });
+    element.setAttribute('data-theme', theme);
+    element.setAttribute('data-theme-pack', themePack.id);
     applyHostThemeOverrides(element, resolveHostThemeOverrides(host));
-    return () => clearHostThemeOverrides(element);
-  }, [theme, host]);
+    return () => {
+      clearHostThemeOverrides(element);
+      THEME_VARIABLE_KEYS.forEach((key) => element.style.removeProperty(key));
+      element.removeAttribute('data-theme-pack');
+    };
+  }, [theme, themePack, host]);
+
+  // The app's own chrome (sidebar, terminal, dialogs) is outside the
+  // workspace root and reads the pack through `documentElement`, so the app
+  // marks that element. A host page does not set this: its document is the
+  // host's, and only the workspace is Sprout's.
+  useEffect(() => {
+    if (!documentScope) return;
+    const root = document.documentElement;
+    Object.entries(themePack.variables).forEach(([key, value]) => {
+      root.style.setProperty(key, value);
+    });
+    root.setAttribute('data-theme', theme);
+    root.setAttribute('data-theme-pack', themePack.id);
+    return () => {
+      THEME_VARIABLE_KEYS.forEach((key) => root.style.removeProperty(key));
+      root.removeAttribute('data-theme');
+      root.removeAttribute('data-theme-pack');
+    };
+  }, [theme, themePack, documentScope]);
 
   return (
     <div
@@ -506,7 +588,6 @@ function WorkspaceRoot({
       data-testid="sprout-workspace"
       data-project={projectId}
       data-space={spaceId}
-      data-theme={theme}
     >
       {children}
     </div>

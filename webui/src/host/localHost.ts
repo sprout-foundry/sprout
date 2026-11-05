@@ -33,6 +33,8 @@ export const localHost: SproutHost = {
   user: null,
   // No entitlement to surface; the local build is free.
   entitlements: undefined,
+  // No brand declared: this host is showing Sprout, so `productName()` falls
+  // back to Sprout's own name (or to an embedding's `app.name` copy override).
   transport: {
     // '' = same origin (derived at runtime by the local transport).
     apiBaseURL: '',
@@ -116,5 +118,9 @@ export const localHost: SproutHost = {
     // The local build keeps its own chat session store (the local daemon's
     // /api/chat-sessions*), so it does not advertise a host session store.
     chatSessions: false,
+    // The local agent is the local daemon, which serves its own files; the
+    // in-browser file API is offered only when the agent runs in-browser, so
+    // it is off here.
+    browserFiles: false,
   },
 };

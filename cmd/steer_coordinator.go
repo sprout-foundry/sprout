@@ -87,8 +87,9 @@ func (c *SteerCoordinator) StartTurn() {
 	// here from Start() so that PauseSteer/ResumeSteer cycles (used by
 	// interactive prompts mid-turn) preserve the in-progress text.
 	c.reader.ResetBuffer()
-	c.reader.Start()
-	clihooks.SetSteerHooks(c.reader.Stop, c.reader.Start)
+	// Starts the reader unless a prompt is open (a parallel or background
+	// run's question); that prompt's resume starts it instead.
+	clihooks.BeginSteerTurn(c.reader.Stop, c.reader.Start)
 }
 
 // EndTurn deactivates the steer reader and tears down the pinned line.
@@ -97,8 +98,8 @@ func (c *SteerCoordinator) EndTurn() {
 	if c == nil || c.reader == nil {
 		return
 	}
-	clihooks.SetSteerHooks(nil, nil)
-	c.reader.Stop()
+	// Stops the reader unless a prompt already did (and is still reading).
+	clihooks.EndSteerTurn()
 }
 
 // PendingInput captures all text that should carry over from one turn
@@ -381,8 +382,7 @@ func (c *SteerCoordinator) executeSteerCommand(text string) bool {
 		return false
 	}
 
-	sc, ok := cmd.(agent_commands.SteerCapable)
-	if !ok || !sc.SafeDuringSteer() {
+	if !agent_commands.IsSafeDuringSteer(cmd, parts[1:]) {
 		return false // will fall through to rejectCommandIntent
 	}
 	// Execute in a goroutine to avoid blocking the steer reader goroutine.

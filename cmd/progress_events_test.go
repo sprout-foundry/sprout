@@ -596,3 +596,18 @@ func readLinesFromData(data []byte) []string {
 	}
 	return lines
 }
+
+func TestProgressEmitter_ToolEnd(t *testing.T) {
+	bus := events.NewEventBus()
+	var buf safeBuffer
+	pe := startProgressEmitterDirect(context.Background(), bus, &buf)
+	defer pe.stop()
+
+	bus.Publish(events.EventTypeToolEnd, events.ToolEndEvent(
+		"call1", "shell_command", "completed", "ok", "", 1500*time.Millisecond))
+	time.Sleep(200 * time.Millisecond)
+
+	lines := readLines(&buf)
+	require.Len(t, lines, 1)
+	require.Equal(t, "progress: tool done: shell_command 1500ms", lines[0])
+}

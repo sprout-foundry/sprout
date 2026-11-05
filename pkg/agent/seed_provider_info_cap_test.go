@@ -181,7 +181,7 @@ func TestInfoKeepsUserCapAcrossReconcile(t *testing.T) {
 }
 
 // TestInfoAppliesRuntimeCapChange verifies that a MaxContextTokens change
-// made at runtime (via /max-context or the settings API) is picked up by the
+// made at runtime (via the settings API) is picked up by the
 // very next Info() call — no provider/model switch required.
 func TestInfoAppliesRuntimeCapChange(t *testing.T) {
 	configManager, err := configuration.NewManagerSilent()
@@ -255,7 +255,7 @@ func TestInfoClearsRuntimeCap(t *testing.T) {
 
 // TestContextCapConcurrentAccess is a smoke test for the contextCapMu guard.
 // reconcileContextCap (per-iteration path, Info) and refreshEffectiveContextCap
-// (model-switch / /max-context path) must be safe to run concurrently. No
+// (model-switch / settings-API cap path) must be safe to run concurrently. No
 // assertions beyond no-panic: -race is unavailable on this platform, but the
 // test documents the intended concurrency contract for the two writers.
 func TestContextCapConcurrentAccess(t *testing.T) {

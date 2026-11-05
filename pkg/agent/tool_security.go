@@ -277,6 +277,16 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 		env.SubagentDepth = agent.subagentDepth
 		// Propagate Gate 1's auto-approve decision so handler-level gates skip their interactive prompt.
 		env.Gate1AutoApproved = agent.GetUnsafeMode() || agent.IsSessionElevated()
+		// Propagate Gate 1's per-call decision (SP-168): when the unified
+		// resolver decided this call (explicit approval, LLM judge, or
+		// non-interactive auto-approve), handler-level gates skip their
+		// prompt. Set by unifiedSecurityGate above, before env is built.
+		// Only propagate when the unified gate actually ran for this call;
+		// under the legacy dual-gate resolver, Gate 2 keeps its own
+		// prompts.
+		if usedUnifiedGate {
+			env.Gate1Decided = agent.Gate1DecidedLastCall()
+		}
 		// Propagate --unsafe-shell so the shell handler's own gate honors it
 		// (scoped to shell_command; never widens Gate1AutoApproved).
 		env.UnsafeShellMode = agent.GetUnsafeShellMode()
@@ -375,6 +385,11 @@ func (a *Agent) staticGateAutoApprove(secResult tools.SecurityResult, filePath, 
 // unifiedSecurityGate is the unified security gate. When UnifiedRiskResolver is ON
 // it replaces the split Gate 1 / Gate 2 call-site path with a single ResolveToolRisk assessment.
 func (a *Agent) unifiedSecurityGate(name string, args map[string]interface{}) error {
+	// Per-call Gate-1 decision flag (SP-168): handler-level gates (Gate 2)
+	// read Gate1DecidedLastCall() to skip re-prompting a call Gate 1 already
+	// decided. Reset up front so a failure below never leaves a stale true.
+	a.resetGate1Decided()
+
 	assessment := a.ResolveToolRisk(name, args)
 
 	if a.debug {
@@ -400,8 +415,24 @@ func (a *Agent) unifiedSecurityGate(name string, args map[string]interface{}) er
 			}
 		} else {
 			// Non-shell tool at High risk — go through the interactive prompt
-			return a.unifiedSecurityPrompt(name, args, assessment)
+			if err := a.unifiedSecurityPrompt(name, args, assessment); err != nil {
+				return err
+			}
+			a.markGate1Decided()
+			return nil
 		}
+	}
+
+	// High-risk shell commands were already decided by the
+	// highRiskApprovedForCommand cascade above — it is the authoritative
+	// gate for that call (its prompt carries the full assessment, including
+	// intent confirmation). Re-running the intent block would double-prompt
+	// the same command, so mark it decided and continue. Non-shell High
+	// tools (handled by the cascade's else-branch prompt) and Lower levels
+	// still flow through the intent block below.
+	if name == "shell_command" && assessment.Level == configuration.RiskLevelHigh {
+		a.markGate1Decided()
+		return nil
 	}
 
 	// Workflow-declared auto-approval and in-session re-authorization for run_automate.
@@ -411,37 +442,46 @@ func (a *Agent) unifiedSecurityGate(name string, args map[string]interface{}) er
 				if a.debug {
 					a.debugLog("[UNLOCK] run_automate %q has requires_approval=false — skipping intent prompt\n", wf)
 				}
+				a.markGate1Decided()
 				return nil
 			}
 			if a.IsWorkflowApprovedInSession(wf) {
 				if a.debug {
 					a.debugLog("[UNLOCK] run_automate %q already approved in this session — skipping intent prompt\n", wf)
 				}
+				a.markGate1Decided()
 				return nil
 			}
 		}
 	}
 
 	// Intent confirmation is orthogonal to risk level — safe-but-consequential
-	// ops still need explicit user intent
+	// ops still need explicit user intent. Subagents use the same prompt path
+	// as the parent (SP-168): the broker surfaces the request on the
+	// parent's answerable surface (webui dialog, or the parent's terminal
+	// when a single subagent is active), and resolves from the mode default
+	// (permissive auto-approve) when the run is non-interactive.
 	if assessment.RequiresIntentConfirmation {
-		if a.IsSubagent() {
-			a.logSecurityDecision(name, args, assessment, "blocked")
-			return agenterrors.NewSecurityErrorWithAssessment(
-				fmt.Sprintf("security confirmation required: %s — %s. Re-run interactively, use --risk-profile=permissive, or use ask_user to confirm.", name, assessment.Reason), assessment.Explain(), nil,
-			)
-		}
 		// For intent confirmation, go through the approval prompt
-		return a.unifiedSecurityPrompt(name, args, assessment)
+		if err := a.unifiedSecurityPrompt(name, args, assessment); err != nil {
+			return err
+		}
+		a.markGate1Decided()
+		return nil
 	}
 
 	// Medium risk: needs interactive approval
 	if assessment.Level == configuration.RiskLevelMedium {
-		return a.unifiedSecurityPrompt(name, args, assessment)
+		if err := a.unifiedSecurityPrompt(name, args, assessment); err != nil {
+			return err
+		}
+		a.markGate1Decided()
+		return nil
 	}
 
 	// Low risk: allow. Skip audit logging here — Low-risk allows are noisy
 	// (the vast majority of tool calls) and provide little audit value.
+	a.markGate1Decided()
 	return nil
 }
 

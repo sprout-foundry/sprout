@@ -165,6 +165,10 @@ func (a *Agent) processQueryWithSeed(source, userQuery string) (string, error) {
 	defer func() {
 		a.endTurnJournal()
 		qc.runCancel()
+		// Clear the repeat guard's stall-stop callback now that the turn's
+		// run context is done; the next turn installs its own. The stall
+		// summary itself is retained for the continuation loop to read.
+		a.setStallStop(nil)
 	}()
 
 	result, err := qc.seedAgent.Run(qc.runCtx, qc.processedQuery)
@@ -228,6 +232,14 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 
 	// Enable change tracking
 	a.EnableChangeTracking(userQuery)
+
+	// Per-turn repeat guard (every tool): clear the previous turn's stall
+	// summary and reset the call counters so a repeat in this turn is a
+	// fresh call. The continuation loop has already consumed the prior
+	// turn's summary (it reads it after the turn ends), so clearing it here
+	// cannot lose it.
+	a.ClearStallSummary()
+	a.ResetToolRepeatGuardForNewTurn()
 
 	// Reset the per-turn verification state at the
 	// same per-turn point change tracking opens its window: a previous
@@ -305,6 +317,10 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 	// language is undetermined.
 	a.resolveTurnLanguageGuard(processedQuery)
 
+	// A reasoning-loop nudge armed by a previous turn never carries over:
+	// the loop it steered was that turn's.
+	a.clearReasoningLoopNudge()
+
 	// Group extracted images for provider registration. All images from this
 	// query are attached to the first user message by attachPastedImages.
 	pastedImageMap := make(map[string][]api.ImageData)
@@ -359,10 +375,17 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 	steerDeliverer := &steerBoundaryDeliverer{agent: a}
 	setProviderSteerHook(prov, func() { steerDeliverer.deliverOne() })
 
+	// Wrap the steer-flush executor with the per-turn repeat guard so every
+	// tool call is observed (repeat note + stall detection). The guard's
+	// stall-stop callback (which cancels the run context) is installed once
+	// runCtx/runCancel exist below (a.setStallStop).
+	turnExecutor := newRepeatGuardExecutor(
+		&steerFlushExecutor{inner: seedRegistry, deliverer: steerDeliverer}, a)
+
 	// Build seed Agent options
 	opts := core.Options{
 		Provider:       prov,
-		Executor:       &steerFlushExecutor{inner: seedRegistry, deliverer: steerDeliverer},
+		Executor:       turnExecutor,
 		MaxIterations:  a.maxIterations,
 		Debug:          a.debug,
 		EventPublisher: seedPublisher,
@@ -379,13 +402,20 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 	if pruner := a.state.GetConversationPruner(); pruner != nil {
 		opts.Pruner = pruner
 	}
-	opts.LLMSummarizer = wrapLLMSummarizerWithEvents(newLLMSummarizer(clientSnap, a.GetProvider()), a)
+	opts.LLMSummarizer = wrapLLMSummarizerWithEvents(newLLMSummarizer(clientSnap, a.GetProvider(), logCompactionSummaryUsage), a)
+	// The file-change record is rendered by seed after it merges the summary,
+	// so it appears once per pass even when the layered split makes three
+	// summarizer calls.
+	opts.CompactionArtifacts = CompactionArtifactBlock
 
 	// Model-aware compaction trigger fraction. seed's default (0.85) leaves only 15% of the
 	// context window for response + thinking + tool I/O, which thinking-budget models exhaust
 	// before emitting any user-visible text. computeCompactionTriggerFraction subtracts the
 	// reservation fractions so substitution fires earlier — by default at 0.70 instead of 0.85.
-	opts.CompactionTriggerFraction = a.computeCompactionTriggerFraction()
+	// rel.2: for a large window an absolute live-context ceiling (default 300K) may bind
+	// first, so compaction fires at min(window-share, ceiling) of the conversation — a 1M
+	// model is compacted at ~300K of live context, not ~734K.
+	opts.CompactionTriggerFraction = a.compactionTriggerFractionFor(a.getModelContextLimit())
 	opts.SubstitutionTargetFraction = 0.50
 
 	// Folded here, after every prompt rebuild and before the prompt is
@@ -519,6 +549,14 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 	}
 	runCtx, runCancel := context.WithCancel(ctx)
 
+	// Install the repeat guard's stall-stop callback: when a call crosses a
+	// stall threshold, the executor wrapper ends this turn by cancelling the
+	// run context (seed's loop then returns ErrInterrupted at the next
+	// iteration boundary, classified as a stall because a stall summary is
+	// set). processQueryWithSeed clears the callback when the run ends (the
+	// deferred runCancel), so a later turn installs its own.
+	a.setStallStop(runCancel)
+
 	// Attach the per-call audit context to the run context: the provider reads
 	// it to stamp model-call events with this chat's identity and whether the
 	// call came from a subagent. It rides the context (not the process-wide
@@ -533,6 +571,16 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 	// seed agent. Everything else (provider hook, executor wrapper) was
 	// wired above before core.NewAgent consumed the options.
 	steerDeliverer.setSeedAgent(seedAgent)
+
+	// Recovery-compaction wiring: the repetition guard's escalation (when
+	// the nudge retry also loops) persists its durable de-loop into seed's
+	// LIVE per-query State, not the durable store — the running loop reads
+	// its own state on every iteration, so a de-loop that only reached the
+	// provider's local slice (or sprout's durable state) would not stop the
+	// CURRENT query from re-reading the loop. syncSeedStateToSprout carries
+	// it into the durable store at query end, as it does for every seed
+	// compaction.
+	setRecoveryState(prov, seedAgent.State())
 
 	return &queryRunContext{
 		seedAgent:       seedAgent,

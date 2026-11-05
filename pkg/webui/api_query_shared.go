@@ -341,9 +341,7 @@ func (ws *ReactWebServer) runChatQuery(
 			}
 			if headCmd != "" {
 				if cmd, ok := slashRegistry.GetCommand(headCmd); ok {
-					if sc, ok := cmd.(agent_commands.SteerCapable); ok && sc.SafeDuringSteer() {
-						slashCmdSafe = true
-					}
+					slashCmdSafe = agent_commands.IsSafeDuringSteer(cmd, parts[1:])
 				}
 			}
 			if !slashCmdSafe {

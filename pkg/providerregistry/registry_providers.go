@@ -210,6 +210,8 @@ func isValidProviderID(id string) bool {
 // Caching behavior:
 //   - Successful responses are cached for the configured TTL (default 5 minutes)
 //   - 404 responses are cached in a negative cache for negativeTTL (default 30 seconds)
+//   - Transport failures and other non-200 responses are negative-cached the
+//     same way, so an unreachable registry costs one timeout per TTL
 //   - Singleflight deduplicates concurrent requests for the same provider
 //   - Use ClearCache() to manually invalidate all cached entries
 func FetchProviderConfig(ctx context.Context, providerID string) (*RemoteProviderConfig, error) {
@@ -263,6 +265,16 @@ func FetchProviderConfig(ctx context.Context, providerID string) (*RemoteProvide
 		client := &http.Client{Timeout: httpTimeoutCopy(), Transport: sharedTransport}
 		resp, fetchErr := client.Do(req)
 		if fetchErr != nil {
+			// An unreachable registry (no egress, a proxy that never
+			// answers) fails the same way on every call: remember it for
+			// the negative TTL so callers fall back at once instead of
+			// each waiting out the HTTP timeout. A cancelled caller says
+			// nothing about the registry and is not remembered.
+			if ctx.Err() == nil {
+				mu.Lock()
+				negativeCache[providerID] = time.Now()
+				mu.Unlock()
+			}
 			return nil, fmt.Errorf("providerregistry: fetch %s: %w", providerID, fetchErr)
 		}
 		defer resp.Body.Close()
@@ -278,6 +290,9 @@ func FetchProviderConfig(ctx context.Context, providerID string) (*RemoteProvide
 		}
 
 		if resp.StatusCode != http.StatusOK {
+			mu.Lock()
+			negativeCache[providerID] = time.Now()
+			mu.Unlock()
 			return nil, fmt.Errorf("providerregistry: fetch %s: HTTP %d", providerID, resp.StatusCode)
 		}
 

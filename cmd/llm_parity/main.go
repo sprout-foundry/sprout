@@ -1,3 +1,7 @@
+// Command llm_parity dumps the hidden state after each layer for a fixed
+// prompt so scripts/llm_parity.py can compare layer-by-layer with mlx-lm,
+// isolating whether linear (DeltaNet) or full-attention layers diverge.
+
 //go:build darwin && arm64 && cgo
 
 package main

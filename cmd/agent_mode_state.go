@@ -52,6 +52,11 @@ func beginTurn(chatAgent *agent.Agent) *console.AssistantTurnRenderer {
 	if footer := console.GetGlobalStatusFooter(); footer != nil {
 		r.SetFooter(footer)
 		footer.SetTurnActive(true)
+		// State "work in progress" on the hint row for the whole turn.
+		// Unlike the spinner this row never changes or stops while tools
+		// and subagents run, so the running indication is stable from
+		// submit to the closing marker.
+		footer.SetWorkingLabel(console.WorkingHintRow(console.ComposerSteer))
 	}
 	currentTurnRenderer.Store(r)
 	firstProseChunk.Store(false)
@@ -80,6 +85,7 @@ func beginTurn(chatAgent *agent.Agent) *console.AssistantTurnRenderer {
 // to avoid forgetting hook cleanup.
 func endTurn(chatAgent *agent.Agent, r *console.AssistantTurnRenderer) {
 	if footer := console.GetGlobalStatusFooter(); footer != nil {
+		footer.SetWorkingLabel("")
 		defer footer.SetTurnActive(false)
 	}
 	if r == nil {

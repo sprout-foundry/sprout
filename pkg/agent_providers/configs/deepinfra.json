@@ -24,7 +24,7 @@
   },
   "models": {
     "available_models": [],
-    "default_context_limit": 131072,
+    "default_context_limit": 262144,
     "default_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
     "default_model_patterns": [
       "deepseek*instruct",
@@ -1192,6 +1192,10 @@
         "input_cost": 0.2,
         "name": "DeepSeek V4.1 Flash",
         "output_cost": 0.6,
+        "reasoning": {
+          "param": "reasoning_effort",
+          "default_effort": "medium"
+        },
         "tags": [
           "tools",
           "vision",
@@ -1337,6 +1341,10 @@
         "input_cost": 0.2,
         "name": "DeepSeek V4.1 Flash 1017",
         "output_cost": 0.6,
+        "reasoning": {
+          "param": "reasoning_effort",
+          "default_effort": "medium"
+        },
         "tags": [
           "tools",
           "vision",

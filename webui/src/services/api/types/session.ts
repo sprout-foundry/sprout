@@ -33,6 +33,8 @@ export interface WorkspaceResponse {
 export interface SessionEntry {
   session_id: string;
   name: string;
+  /** One-line description of what the conversation was about (may be lazily derived server-side). */
+  topic_summary?: string;
   working_directory: string;
   last_updated: string;
   message_count: number;

@@ -23,6 +23,10 @@ var subagentBudgetPollInterval = time.Second
 type subagentBudget struct {
 	iterations int
 	duration   time.Duration
+	// explicit marks an iteration budget that came from a per-call override
+	// rather than the persona catalog. An override may exceed the default cap
+	// (up to subagentMaxIterationsCeiling); a catalog budget may not.
+	explicit bool
 }
 
 func (b subagentBudget) isZero() bool { return b.iterations <= 0 && b.duration <= 0 }
@@ -43,10 +47,46 @@ func (r *SubagentRunner) personaBudget(persona string) subagentBudget {
 	}
 }
 
+// effectiveBudget returns the soft run budget for a spawn: the per-call
+// overrides when set, otherwise the persona's declared budget.
+//
+// An iteration override only ever raises the budget — a value below the
+// persona's is ignored, matching the argument's "raise this spawn's budget"
+// contract. It also raises the wrap-up threshold, not just the hard cap;
+// otherwise a caller asking for 500 iterations still gets told to stop at the
+// persona's 15. An explicit timeout raises the soft duration to one grace
+// period before the hard deadline, so the wrap-up fires instead of the run
+// being cut off silently.
+func (r *SubagentRunner) effectiveBudget(opts SubagentOptions) subagentBudget {
+	b := r.personaBudget(opts.Persona)
+	if opts.MaxIterations > 0 {
+		if raised := min(opts.MaxIterations, subagentMaxIterationsCeiling); raised > b.iterations {
+			b.iterations = raised
+			b.explicit = true
+		}
+	}
+	if opts.Timeout > 0 {
+		// An explicit timeout binds the hard deadline even when it is smaller
+		// than the persona's time budget, so the soft budget follows it rather
+		// than staying at the larger persona value — which would place the
+		// wrap-up after the deadline and mean it never fires.
+		if soft := opts.Timeout - subagentWrapUpGrace; soft > 0 {
+			b.duration = soft
+		}
+	}
+	return b
+}
+
 // hardMaxIterations returns the iteration cap for a subagent with budget b.
 func (b subagentBudget) hardMaxIterations() int {
 	if b.iterations <= 0 {
 		return defaultSubagentMaxIterations
+	}
+	if b.explicit {
+		// An explicit override may exceed the default cap. The wrap-up margin
+		// rides on top of it rather than being clamped away, so even the
+		// largest permitted budget still gets a final turn to report.
+		return b.iterations + subagentWrapUpIterations
 	}
 	return min(b.iterations+subagentWrapUpIterations, defaultSubagentMaxIterations)
 }

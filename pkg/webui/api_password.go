@@ -21,6 +21,8 @@ func (ws *ReactWebServer) handleAPIPasswordRoutes(w http.ResponseWriter, r *http
 // passwordRespondRequest is the JSON body for POST /api/password/{id}/respond.
 type passwordRespondRequest struct {
 	Password string `json:"password"`
+	// Cancelled stops the command instead of answering it.
+	Cancelled bool `json:"cancelled,omitempty"`
 }
 
 // handleAPIPasswordRespond handles POST /api/password/{id}/respond — the
@@ -52,7 +54,7 @@ func (ws *ReactWebServer) handleAPIPasswordRespond(w http.ResponseWriter, r *htt
 	ag := ws.resolveEditAgent()
 	delivered := false
 	if ag != nil {
-		delivered = ag.RespondToPasswordRequest(requestID, req.Password)
+		delivered = ag.RespondToPromptRequest(requestID, req.Password, req.Cancelled)
 	}
 
 	if !delivered {

@@ -38,6 +38,23 @@ type AutomateSessionInfo struct {
 	// RunnableItemsRemaining is the number of runnable `[ ]` items left
 	// when the run stopped (0 for a clean finish).
 	RunnableItemsRemaining int `json:"runnable_items_remaining,omitempty"`
+	// StalledTurns is the number of continuation turns that ended on the
+	// repeat guard's stall stop (a turn that kept re-issuing the same tool
+	// call or made no progress). Each counts as a no-progress turn.
+	StalledTurns int `json:"stalled_turns,omitempty"`
+	// SkippedItems are the TODO items the coordinator was stuck on when two
+	// consecutive stalled turns both failed to advance them. A post-mortem
+	// can show which items the run gave up on.
+	SkippedItems []string `json:"skipped_items,omitempty"`
+	// LastStallTool / LastStallArgs / LastStallOutput / LastStallReason
+	// carry a short summary of the most recent stalled turn's repeated call
+	// (tool, normalised args, an output excerpt, and the stall
+	// classification) so the run record explains WHY the run stopped when it
+	// did.
+	LastStallTool   string `json:"last_stall_tool,omitempty"`
+	LastStallArgs   string `json:"last_stall_args,omitempty"`
+	LastStallOutput string `json:"last_stall_output,omitempty"`
+	LastStallReason string `json:"last_stall_reason,omitempty"`
 }
 
 // GetAutomateSessionDir returns the .sprout/automate/ directory path.
@@ -194,6 +211,37 @@ func RecordSessionStopReason(path, stopReason string, turns, runnableRemaining i
 	info.StopReason = strings.TrimSpace(stopReason)
 	info.ContinuationTurns = turns
 	info.RunnableItemsRemaining = runnableRemaining
+	return writeSessionFileAt(path, info)
+}
+
+// RecordSessionStall annotates an existing session record with the
+// continuation loop's stall metadata: how many turns stalled, the items the
+// run marked skipped, and a short summary of the most recent stalled turn's
+// repeated call. Like RecordSessionStopReason it is best-effort — a missing
+// or unreadable record is not an error. It is a no-op (nil) when there is
+// nothing to record (stalledTurns == 0 and no skipped items).
+func RecordSessionStall(path string, stalledTurns int, skippedItems []string, tool, args, output, reason string) error {
+	if strings.TrimSpace(path) == "" {
+		return nil
+	}
+	if stalledTurns == 0 && len(skippedItems) == 0 {
+		return nil
+	}
+	info, err := readSessionFileAt(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("record stall metadata %s: %w", filepath.Base(path), err)
+	}
+	info.StalledTurns = stalledTurns
+	if len(skippedItems) > 0 {
+		info.SkippedItems = append([]string(nil), skippedItems...)
+	}
+	info.LastStallTool = tool
+	info.LastStallArgs = args
+	info.LastStallOutput = output
+	info.LastStallReason = reason
 	return writeSessionFileAt(path, info)
 }
 

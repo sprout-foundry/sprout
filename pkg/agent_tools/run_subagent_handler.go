@@ -115,6 +115,16 @@ func (h *runSubagentHandler) Definition() ToolDefinition {
 				Type:        "string",
 				Description: "Optional: the exact output format the task's result must follow (e.g. 'a single JSON object with keys x and y', 'a one-line summary'). A worker-role subagent's result is checked against it before you rely on it; if the format does not match, the task is retried once on the coder model. Omit when no specific format is required.",
 			},
+			{
+				Name:        "max_iterations",
+				Type:        "integer",
+				Description: "Optional: raise this spawn's iteration budget above the persona's default (which is 200 at most). Use it for a task that legitimately needs many turns — a whole-tree audit, a long research pass — instead of watching it hit the cap and stop mid-way. Clamped to 2000; the wrap-up instruction scales with it. Omit to use the persona's budget.",
+			},
+			{
+				Name:        "timeout_seconds",
+				Type:        "integer",
+				Description: "Optional: this spawn's wall-clock budget in seconds, overriding the persona's time budget and the 30-minute default. Use it for a long task that would otherwise be cut off before it reports. When the value exceeds the 3-minute wrap-up grace, the subagent is told to wrap up that long before the deadline. Omit to use the persona's budget.",
+			},
 		},
 	}
 }

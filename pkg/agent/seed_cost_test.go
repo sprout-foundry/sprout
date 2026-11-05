@@ -6,6 +6,68 @@ import (
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
+// TestAccumulateResponseCost_UncataloguedModelWarn (rel.3) verifies that a
+// pay-per-token response with no provider-reported cost AND no catalog/registry
+// pricing trips the once-only warn: the agent's cost tracking is blind for the
+// model (cost estimates are $0 and the USD budget guard is a no-op), so the
+// user is told. A response that DOES carry a provider-reported cost must NOT
+// set the flag (that model is priced; no warning).
+func TestAccumulateResponseCost_UncataloguedModelWarn(t *testing.T) {
+	a := newIsolatedTestAgent(t)
+	defer a.Shutdown()
+	sp := &sproutProvider{agent: a}
+
+	// Precondition: the test model "test:test" is not in the embedded catalog,
+	// so an uncatalogued response starts the flag false.
+	if a.costPricingUnknown.Load() {
+		t.Fatal("flag should start false")
+	}
+
+	// Pay-per-token model, no cost fields, no catalog pricing → chargedCost 0 →
+	// the warn fires and latches the flag.
+	sp.accumulateResponseCost(&api.ChatResponse{Usage: api.ChatUsage{
+		PromptTokens:     10,
+		CompletionTokens: 5,
+		TotalTokens:      15,
+	}})
+	if !a.costPricingUnknown.Load() {
+		t.Fatalf("expected costPricingUnknown to latch true after an uncatalogued pay-per-token response")
+	}
+
+	// Idempotent: a second uncatalogued response keeps it true (no error, no
+	// toggle back).
+	sp.accumulateResponseCost(&api.ChatResponse{Usage: api.ChatUsage{TotalTokens: 15}})
+	if !a.costPricingUnknown.Load() {
+		t.Fatal("flag must stay true")
+	}
+
+	// The Agent runtime path must share the same once-flag (no double warn).
+	a.accumulateResponseCost(&api.ChatResponse{Usage: api.ChatUsage{TotalTokens: 15}})
+	if !a.costPricingUnknown.Load() {
+		t.Fatal("agent path must share the latched flag")
+	}
+}
+
+// TestAccumulateResponseCost_PricedNoWarn verifies the warn is scoped to
+// UNCATALOGUED pay-per-token models: a response that carries a provider-
+// reported cost (a priced model) must NOT set the flag — cost tracking is
+// working, nothing to warn about.
+func TestAccumulateResponseCost_PricedNoWarn(t *testing.T) {
+	a := newIsolatedTestAgent(t)
+	defer a.Shutdown()
+	sp := &sproutProvider{agent: a}
+
+	// A provider-reported cost means the model is priced → no uncatalogued warn.
+	sp.accumulateResponseCost(&api.ChatResponse{Usage: api.ChatUsage{
+		EstimatedCost: 0.01,
+		PromptTokens:  100,
+		TotalTokens:   150,
+	}})
+	if a.costPricingUnknown.Load() {
+		t.Fatal("a priced (cost-bearing) response must not set the uncatalogued flag")
+	}
+}
+
 // TestAccumulateResponseCost guards the footer-cost fix: provider-reported
 // cost (e.g. DeepInfra's estimated_cost, OpenRouter's cost) must flow into the
 // lifetime cost counter the footer reads. seed's loop tracks tokens but never

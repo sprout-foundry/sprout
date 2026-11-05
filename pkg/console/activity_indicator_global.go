@@ -76,10 +76,10 @@ func SuspendIndicator() {
 // RegisterGlobalIndicator; prompt sites that own the whole prompt lifetime
 // pair it with a deferred clihooks.ResumeIndicator.
 //
-// Restoring by unconditionally restarting the spinner would resurrect a
-// dead spinner after prompt completion even when the terminal subscriber
-// already restarted it mid-tool-execution — so the restore closure checks
-// whether the spinner is already active before starting it.
+// While suspended the indicator is held (see ActivityIndicator.hold): a
+// Start from a tool or subagent still running under the prompt is recorded
+// rather than drawn over the question, and the restore shows the latest one
+// — or nothing, if a Stop followed it.
 func SuspendIndicatorResumable() {
 	globalIndicatorMu.Lock()
 	a := globalIndicator
@@ -89,30 +89,26 @@ func SuspendIndicatorResumable() {
 	}
 	indicatorSuspendDepth++
 	depth := indicatorSuspendDepth
-	// Only the outermost suspend snapshots and stops; nested suspends
-	// just refcount so the restore fires exactly when the last one
-	// unwinds.
+	// Only the outermost suspend holds the spinner; nested suspends just
+	// refcount so the restore fires exactly when the last one unwinds.
 	if depth == 1 {
-		msg, wasActive := a.ActiveMessage()
-		a.Stop()
-		if wasActive {
-			// Restore closure captures the suspended indicator instance
-			// and its message.
-			indicatorResume = func() {
-				if _, active := a.ActiveMessage(); active {
-					return
-				}
-				// Skip the restart when assistant prose is actively
-				// streaming: resurrecting the spinner mid-stream would
-				// clobber the prose line (the streaming callback only
-				// re-stops it on the next chunk, up to 80ms later).
-				if footer := GetGlobalStatusFooter(); footer != nil && footer.proseStreamingActive() {
-					return
-				}
-				a.Start(msg)
+		a.hold()
+		indicatorResume = func() {
+			msg, want := a.release()
+			if !want {
+				return
 			}
-		} else {
-			indicatorResume = nil
+			if _, active := a.ActiveMessage(); active {
+				return
+			}
+			// Skip the restart when assistant prose is actively
+			// streaming: resurrecting the spinner mid-stream would
+			// clobber the prose line (the streaming callback only
+			// re-stops it on the next chunk, up to 80ms later).
+			if footer := GetGlobalStatusFooter(); footer != nil && footer.proseStreamingActive() {
+				return
+			}
+			a.Start(msg)
 		}
 	}
 	globalIndicatorMu.Unlock()

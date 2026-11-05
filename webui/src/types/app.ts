@@ -205,6 +205,8 @@ export interface AppState {
     requestId: string;
     command: string;
     prompt: string;
+    /** True when the answer is a credential (masked input, redacted value). */
+    secret: boolean;
   } | null;
   shellApprovalRequest: {
     /** Set when another chat (not the one on screen) is asking. */

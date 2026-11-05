@@ -236,10 +236,17 @@ export const handlePasswordRequest = (ctx: EventHandlerContext): void => {
       requestId: String(data.request_id),
       command: String(data.command || ''),
       prompt: String(data.prompt || ''),
+      // Absent means a legacy backend that only ever sent passwords.
+      secret: data.secret !== false,
     },
     logs: appendCappedLog(prev.logs, logEntry),
   }));
-  notifyIfHidden('Sprout', `Password required: ${data.command || 'shell command'}`);
+  notifyIfHidden(
+    'Sprout',
+    data.secret === false
+      ? `Input required: ${data.command || 'shell command'}`
+      : `Password required: ${data.command || 'shell command'}`,
+  );
   debugLog('[password] Prompt request:', data.command);
 };
 

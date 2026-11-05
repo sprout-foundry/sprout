@@ -149,7 +149,8 @@
   }
 }
 
-/* Dark mode adjustments */
+/* Dark mode adjustments. Attribute-only, so it also matches where the theme
+ * attribute sits on the workspace root (a host page) rather than `:root`. */
 [data-theme='dark'] .resize-handle:hover {
   background-color: var(--accent-primary-alpha);
 }

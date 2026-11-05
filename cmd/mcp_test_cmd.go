@@ -81,7 +81,11 @@ func runMCPTest(serverName string) error {
 	}
 
 	console.Heading(os.Stdout, "Testing MCP server: "+serverName)
-	fmt.Printf("Command: %s %v\n", serverConfig.Command, secretdetect.RedactOpaque(fmt.Sprintf("%v", serverConfig.Args)))
+	if serverConfig.Type == "http" {
+		fmt.Printf("URL: %s\n", serverConfig.URL)
+	} else {
+		fmt.Printf("Command: %s %v\n", serverConfig.Command, secretdetect.RedactOpaque(fmt.Sprintf("%v", serverConfig.Args)))
+	}
 	fmt.Println()
 
 	// Create manager and client

@@ -38,6 +38,7 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
   onViewChange,
   onToggleSidebar,
   onToggleContextPanel,
+  contextPanel = true,
   supportsLocalTerminal,
   inBrowserTerminal = true,
   previewAvailable = true,
@@ -77,8 +78,9 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
     diffState,
   } = chat;
 
-  // On a local daemon the panel holds the agent's change history.
-  const hasContextPanel = supportsAgentChanges;
+  // On a local daemon the panel holds the agent's change history; a
+  // composition that leaves it out gets no column and no toggles.
+  const hasContextPanel = contextPanel && supportsAgentChanges;
   // The Code-mode preview panel (the running-app dev server),
   // collapsed by default so it never steals editor space or polls.
   const [previewPanelOpen, setPreviewPanelOpen] = useState(false);
@@ -181,21 +183,23 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
           </ErrorBoundary>
         </div>
         {showPreview && <PreviewPanel open={previewPanelOpen} onClose={() => setPreviewPanelOpen(false)} />}
-        <div className="context-panel-container">
-          <ContextSidebar
-            isMobile={isMobile}
-            isTablet={isTablet}
-            showContextSidebar={showContextSidebar}
-            contextPanelRef={contextPanelRef}
-            toolExecutions={toolExecutions}
-            logs={logs}
-            subagentActivities={subagentActivities}
-            messages={messages}
-            isProcessing={isProcessing}
-            lastError={lastError}
-            queryProgress={queryProgress}
-          />
-        </div>
+        {hasContextPanel && (
+          <div className="context-panel-container">
+            <ContextSidebar
+              isMobile={isMobile}
+              isTablet={isTablet}
+              showContextSidebar={showContextSidebar}
+              contextPanelRef={contextPanelRef}
+              toolExecutions={toolExecutions}
+              logs={logs}
+              subagentActivities={subagentActivities}
+              messages={messages}
+              isProcessing={isProcessing}
+              lastError={lastError}
+              queryProgress={queryProgress}
+            />
+          </div>
+        )}
       </div>
       <StatusBar
         branch={git.gitBranches.current || git.gitStatus?.branch}

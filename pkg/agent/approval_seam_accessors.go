@@ -58,6 +58,57 @@ func (a *Agent) IsWorkflowRun() bool {
 	return a.workflowRun.Load()
 }
 
+// IsTaskRun reports whether this agent is a /task background run. A task is
+// a workflow run for TTY purposes — it never takes the primary's terminal —
+// but it keeps the WebUI approval surface, so a long user-initiated task can
+// still ask a question or request approval.
+func (a *Agent) IsTaskRun() bool {
+	if a == nil {
+		return false
+	}
+	return a.taskRun.Load()
+}
+
+// SetTaskRun marks this agent as a /task background run.
+func (a *Agent) SetTaskRun(v bool) {
+	if a == nil {
+		return
+	}
+	a.taskRun.Store(v)
+}
+
+// ActiveSubagentCount reports the process-wide number of subagents currently
+// running (SP-168). The approval broker offers the CLI prompt surface to a
+// subagent only when this is <= 1, so parallel subagents never interleave
+// prompts on one terminal. Delegates to the package-level GetActiveSubagents
+// forwarder (subagent_forwarders.go).
+func (a *Agent) ActiveSubagentCount() int {
+	return GetActiveSubagents()
+}
+
+// Gate1DecidedLastCall reports whether the most recent unified Gate-1
+// security decision approved the call (SP-168). Handler-level gates read it
+// to skip their own approval prompt when Gate 1 already decided the call.
+// Safe on a nil agent (returns false).
+func (a *Agent) Gate1DecidedLastCall() bool {
+	if a == nil {
+		return false
+	}
+	return a.gate1Decided.Load()
+}
+
+// markGate1Decided records that the unified Gate-1 decision approved the
+// current tool call (used by unifiedSecurityGate before returning nil).
+func (a *Agent) markGate1Decided() {
+	a.gate1Decided.Store(true)
+}
+
+// resetGate1Decided clears the per-call Gate-1 decision flag at the start of
+// a unifiedSecurityGate run so a later call never sees a stale approval.
+func (a *Agent) resetGate1Decided() {
+	a.gate1Decided.Store(false)
+}
+
 // GetSecurityAnalysisCache returns the lazily-created LLM security-analysis
 // cache (the nil-agent guard is preserved by the underlying getter).
 func (a *Agent) GetSecurityAnalysisCache() *SecurityAnalysisCache {

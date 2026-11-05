@@ -1,10 +1,14 @@
 package console
 
 import (
+	"bytes"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
@@ -66,23 +70,80 @@ var activeSelectList *SelectList
 var activeSteerReader *SteerInputReader
 
 // LockOutput acquires the console output mutex.
-func LockOutput() { outputMu.Lock() }
+//
+// It panics on a re-entrant acquisition from the goroutine that already
+// holds it. sync.Mutex is non-reentrant, so that call can never succeed: it
+// blocks forever, and when the blocked goroutine is the REPL's read loop or
+// a picker's teardown the CLI dies silently — no prompt is ever redrawn,
+// keystrokes echo from the tty's line discipline, and Enter only moves to a
+// new line. Panicking at the call site names the offender instead. Callers
+// under the lock must use the *Locked variants (drawLocked,
+// ClearSteerLineLocked, renderLocked, ...).
+func LockOutput() {
+	if id := currentGoroutineID(); outputHolder.Load() == id {
+		panic("console: re-entrant LockOutput — outputMu is not reentrant, call the *Locked variant")
+	}
+	outputMu.Lock()
+	outputHolder.Store(currentGoroutineID())
+}
 
 // UnlockOutput releases the console output mutex.
-func UnlockOutput() { outputMu.Unlock() }
+func UnlockOutput() {
+	outputHolder.Store(0)
+	outputMu.Unlock()
+}
 
 // TryLockOutput attempts to acquire the console output mutex without blocking.
 // Returns true if the lock was acquired, false if it is held by another goroutine.
 // Callers MUST check the return value and only call UnlockOutput on true.
 func TryLockOutput() bool {
-	return outputMu.TryLock()
+	if !outputMu.TryLock() {
+		return false
+	}
+	outputHolder.Store(currentGoroutineID())
+	return true
 }
+
+// outputHolder identifies the goroutine holding outputMu, so a re-entrant
+// LockOutput is reported instead of wedging the process. Written while the
+// lock is held and read only by a goroutine about to take it.
+var outputHolder atomic.Uint64
+
+// currentGoroutineID returns the calling goroutine's id, used solely to
+// attribute outputMu ownership. The value is opaque. It never returns 0:
+// ownership tracking is only as good as this parser, so a format it cannot
+// read falls back to a per-call unique sentinel, which can never match a
+// stored holder. That keeps the re-entrancy detector on — a parser that
+// quietly returned 0 would make every check pass and hide the very
+// deadlock it exists to catch.
+func currentGoroutineID() uint64 {
+	var buf [64]byte
+	n := runtime.Stack(buf[:], false)
+	s := buf[:n]
+	const prefix = "goroutine "
+	if bytes.HasPrefix(s, []byte(prefix)) {
+		var id uint64
+		for _, c := range s[len(prefix):] {
+			if c < '0' || c > '9' {
+				break
+			}
+			id = id*10 + uint64(c-'0')
+		}
+		if id != 0 {
+			return id
+		}
+	}
+	return unparsedGoroutineID.Add(1)
+}
+
+// unparsedGoroutineID hands out the unique sentinels described above.
+var unparsedGoroutineID atomic.Uint64
 
 // WithOutput runs fn while holding the console output mutex. Use this
 // wrapper for short, self-contained ANSI render sequences.
 func WithOutput(fn func()) {
-	outputMu.Lock()
-	defer outputMu.Unlock()
+	LockOutput()
+	defer UnlockOutput()
 	fn()
 }
 
@@ -174,22 +235,49 @@ func printBackground(line string, fallback *os.File) {
 	if !strings.HasSuffix(line, "\n") {
 		line += "\n"
 	}
-	if promptOnScreen() {
+	// Wait for the writer that holds the lock (a spinner frame, another
+	// subagent's line) rather than writing around it: a raw write skips the
+	// scroll-region parking and can land on the pinned rows. The wait is
+	// bounded because the holder may be this goroutine's own caller, and
+	// the lock is not reentrant.
+	if !tryLockOutputFor(backgroundLockWait) {
+		_, _ = fmt.Fprint(fallback, line)
+		return
+	}
+	if activeSteerReader != nil || activeInputReader != nil || activeSelectList != nil {
+		// PrintExternal suspends the spinner before taking the lock, which
+		// cannot happen under it (the spinner's render loop needs the lock
+		// to stop).
+		UnlockOutput()
 		PrintExternal(line)
 		return
 	}
-	_, _ = fmt.Fprint(fallback, line)
+	if footer := GetGlobalStatusFooter(); footer != nil && footer.canPinInput() {
+		writeTranscriptLocked(fallback, line)
+	} else {
+		// No pinned region to respect: plain bytes, so a piped or logged
+		// stream does not pick up the transcript writer's CRLFs.
+		_, _ = fmt.Fprint(fallback, line)
+	}
+	UnlockOutput()
 }
 
-// promptOnScreen reports whether an input or steer reader owns the prompt
-// row. If the output lock is held the caller is mid-redraw; report false so
-// the write goes straight out rather than deadlocking on the lock.
-func promptOnScreen() bool {
-	if !outputMu.TryLock() {
-		return false
+// backgroundLockWait bounds how long a background line waits for the
+// output lock before writing without it.
+const backgroundLockWait = 250 * time.Millisecond
+
+// tryLockOutputFor polls for the output lock until d elapses.
+func tryLockOutputFor(d time.Duration) bool {
+	deadline := time.Now().Add(d)
+	for {
+		if TryLockOutput() {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(2 * time.Millisecond)
 	}
-	defer outputMu.Unlock()
-	return activeSteerReader != nil || activeInputReader != nil || activeSelectList != nil
 }
 
 func init() {

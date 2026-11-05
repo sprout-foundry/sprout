@@ -1,6 +1,6 @@
 import { Monitor, Server } from 'lucide-react';
 import React, { useEffect, useMemo } from 'react';
-import { useHostCapabilities } from '../host';
+import { useHost, useHostCapabilities } from '../host';
 import { getSSHProxyContext } from '../services/clientSession';
 import { refreshWorkspace, useWorkspaceState } from '../services/workspaceStore';
 import { debugLog } from '../utils/log';
@@ -19,6 +19,9 @@ interface BarState {
 
 const WorkspaceBar: React.FC<WorkspaceBarProps> = ({ isConnected, isMobileMenuOpen = false, isMobile = false }) => {
   const { workspaceSwitching } = useHostCapabilities();
+  // A hosted build (bearer auth) runs on the host's machines, so "Local" would
+  // be wrong; it names a host only when attached to a remote one.
+  const hosted = useHost().transport.authMode === 'bearer';
   const { workspace } = useWorkspaceState();
 
   useEffect(() => {
@@ -42,7 +45,7 @@ const WorkspaceBar: React.FC<WorkspaceBarProps> = ({ isConnected, isMobileMenuOp
   // Hide on mobile when the sidebar menu is covering the content
   if (isMobile && isMobileMenuOpen) return null;
   // The hosted editor has no host to name unless it is attached to a remote one.
-  if (!workspaceSwitching && !bar.isRemote) return null;
+  if ((!workspaceSwitching || hosted) && !bar.isRemote) return null;
 
   return (
     <div className={`workspace-bar${bar.isRemote ? ' workspace-bar--remote' : ''}`}>

@@ -215,7 +215,7 @@ func createChatAgent() (*agent.Agent, error) {
 	// web UI without an agent — rather than failing on the missing provider.
 	if onboardingDeclined && !daemonMode {
 		daemonMode = true
-		fmt.Println()
+		console.SectionBreak()
 		console.GlyphInfo.Printf("Starting in editor-only mode: browse and edit your files in the web UI.")
 		fmt.Println("Add an AI provider any time in the web UI's settings, or run 'sprout keys set <provider>' and start sprout again.")
 		return nil, nil

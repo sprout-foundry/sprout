@@ -60,6 +60,14 @@ type SteerCapable interface {
 	SafeDuringSteer() bool
 }
 
+// ArgAwareSteerCapable is implemented by commands whose steer safety depends on
+// the invocation, not just the command. The steer gates consult it before
+// falling back to SteerCapable.SafeDuringSteer, so a command with a safe
+// non-interactive form and an unsafe interactive form can opt in per call.
+type ArgAwareSteerCapable interface {
+	SafeDuringSteerArgs(args []string) bool
+}
+
 // OutputCommand is implemented by commands that accept an output writer.
 type OutputCommand interface {
 	SetOutput(io.Writer)
@@ -162,9 +170,6 @@ func NewCommandRegistry() *CommandRegistry {
 	// economy mode (delegate more work to the cheaper worker model)
 	registry.Register(&EconomyCommand{})
 
-	// Cost control
-	registry.Register(&MaxContextCommand{})
-
 	// Low-Context Mode inspection and override
 	registry.Register(&ContextCommand{})
 
@@ -178,8 +183,13 @@ func NewCommandRegistry() *CommandRegistry {
 
 	// output verbosity and tool invocation display
 	registry.Register(&VerboseCommand{})
+	registry.Register(&MouseCommand{})
 	registry.Register(&TasksCommand{})
+	registry.Register(&TaskCommand{})
 	registry.Register(&ToolsCommand{})
+
+	// expand a collapsed tool result (SP-171d)
+	registry.Register(&ExpandCommand{})
 
 	// Credential management
 	registry.Register(&KeysCommand{})
@@ -491,4 +501,18 @@ func WriteJSON(w io.Writer, value interface{}) error {
 // WriteJSONToOutput writes a JSON representation of value to stdout
 func WriteJSONToOutput(value interface{}) error {
 	return WriteJSON(os.Stdout, value)
+}
+
+// IsSafeDuringSteer reports whether cmd may run mid-turn for this invocation.
+// A command that implements ArgAwareSteerCapable decides per call; otherwise
+// SteerCapable.SafeDuringSteer applies. Commands implementing neither are
+// unsafe. All steer gates must go through this so they cannot disagree.
+func IsSafeDuringSteer(cmd Command, args []string) bool {
+	if a, ok := cmd.(ArgAwareSteerCapable); ok {
+		return a.SafeDuringSteerArgs(args)
+	}
+	if sc, ok := cmd.(SteerCapable); ok {
+		return sc.SafeDuringSteer()
+	}
+	return false
 }

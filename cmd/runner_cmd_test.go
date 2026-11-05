@@ -97,6 +97,29 @@ func TestRunnerImageFlagIsValidatedAndSaved(t *testing.T) {
 	}
 }
 
+func TestRunnerLinkDefaultsToTheHostedPlatform(t *testing.T) {
+	if got := resolveLinkPlatform("", "", ""); got != runner.DefaultPlatformURL {
+		t.Errorf("plain link = %q, want %q", got, runner.DefaultPlatformURL)
+	}
+	if runner.DefaultPlatformURL != "https://app.sproutfoundry.com" {
+		t.Errorf("hosted default moved: %q", runner.DefaultPlatformURL)
+	}
+}
+
+func TestRunnerLinkPlatformPrecedence(t *testing.T) {
+	cases := []struct{ flag, env, saved, want string }{
+		{"https://flag.example", "https://env.example", "https://saved.example", "https://flag.example"},
+		{"", "https://env.example", "https://saved.example", "https://env.example"},
+		{"", "", "https://saved.example", "https://saved.example"},
+		{"", "", "", runner.DefaultPlatformURL},
+	}
+	for _, c := range cases {
+		if got := resolveLinkPlatform(c.flag, c.env, c.saved); got != c.want {
+			t.Errorf("resolveLinkPlatform(%q, %q, %q) = %q, want %q", c.flag, c.env, c.saved, got, c.want)
+		}
+	}
+}
+
 func TestRunnerUnlinkMessageDescribesBackendRevoke(t *testing.T) {
 	for _, want := range []string{"Runners page", "self-hosted backend", "no runner-side revoke"} {
 		if !strings.Contains(unlinkMessage, want) {

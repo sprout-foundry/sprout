@@ -21,7 +21,6 @@ func TestSteerCapable_SafeCommands(t *testing.T) {
 		"log",
 		"mcp",
 		"risk-profile",
-		"max-context",
 		"skill",
 		"search",
 		"transcript",
@@ -34,6 +33,7 @@ func TestSteerCapable_SafeCommands(t *testing.T) {
 		"subagent-personas", // alias for /persona - safe
 		"clear",             // rotates to a new session; prior session stays in /sessions (WebUI "New Session" depends on this)
 		"context",           // config change, no turn interaction
+		"exec",              // foreground shell run; the CLI steer path already runs bang commands
 	}
 
 	for _, name := range safeCommands {
@@ -76,6 +76,7 @@ func TestSteerCapable_UnsafeCommands(t *testing.T) {
 		"rollback",
 		"rewind",
 		"fork",
+		"task", // creates a worktree and a branch: repository state the in-flight turn may be reading
 	}
 
 	for _, name := range unsafeCommands {
@@ -104,7 +105,6 @@ func TestSteerCapable_CommandsWithoutInterfaceAreUnsafe(t *testing.T) {
 
 	// These commands don't implement SteerCapable and should be treated as unsafe
 	commandsWithoutInterface := []string{
-		"exec",  // shell execution - unsafe
 		"edit",  // opens editor - unsafe
 		"usage", // uses agent state - treat as unsafe for now
 	}
@@ -138,7 +138,6 @@ func TestSteerCapable_AllRegisteredCommandsHaveInterface(t *testing.T) {
 
 	// Commands that intentionally don't implement SteerCapable
 	knownMissing := map[string]bool{
-		"exec":  true,
 		"edit":  true,
 		"usage": true,
 	}
@@ -184,11 +183,11 @@ func TestDefaultRegistry_InitializesAllCommands(t *testing.T) {
 	expectedCommands := []string{
 		// Read-only / config commands (safe)
 		"info", "codegraph", "model", "provider", "help", "status",
-		"changes", "log", "mcp", "risk-profile", "max-context", "skill",
+		"changes", "log", "mcp", "risk-profile", "skill",
 		"search", "transcript", "verbose", "tools", "keys", "custom",
 		// Mutating commands (unsafe)
 		"setup", "settings", "compact", "sessions", "commit", "clear", "exit",
-		"init", "shell", "exec", "edit", "review", "review-deep", "rollback",
+		"init", "shell", "edit", "review", "review-deep", "rollback",
 		"rewind", "fork",
 		// Subagent commands
 		"persona", "subagent-provider", "subagent-model",
@@ -268,4 +267,64 @@ func TestSteerCapable_ConcurrentAccess(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+// TestSettingsCommand_SafeDuringSteerArgs pins the split between /settings'
+// two forms: `set` is a mutex-guarded config write with no turn interaction,
+// while the no-arg browser blocks on user input and must stay unsafe mid-turn.
+func TestSettingsCommand_SafeDuringSteerArgs(t *testing.T) {
+	cmd := &SettingsCommand{}
+
+	if cmd.SafeDuringSteer() {
+		t.Fatal("no-arg /settings must not be safe during steer (it blocks on input)")
+	}
+
+	cases := []struct {
+		name string
+		args []string
+		want bool
+	}{
+		{name: "set with key and value", args: []string{"set", "max_context_tokens", "300000"}, want: true},
+		{name: "set with multi-word value", args: []string{"set", "system_prompt_text", "a", "b"}, want: true},
+		{name: "set without value", args: []string{"set", "max_context_tokens"}, want: false},
+		{name: "bare set", args: []string{"set"}, want: false},
+		{name: "interactive browser", args: nil, want: false},
+		{name: "unknown subcommand", args: []string{"browse", "x", "y"}, want: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := cmd.SafeDuringSteerArgs(tc.args); got != tc.want {
+				t.Fatalf("SafeDuringSteerArgs(%v) = %v, want %v", tc.args, got, tc.want)
+			}
+			// The shared gate must agree with the command's own answer.
+			if got := IsSafeDuringSteer(cmd, tc.args); got != tc.want {
+				t.Fatalf("IsSafeDuringSteer(%v) = %v, want %v", tc.args, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestIsSafeDuringSteer_FallsBackToSteerCapable verifies the gate still honors
+// plain SteerCapable commands that don't implement the arg-aware interface.
+func TestIsSafeDuringSteer_FallsBackToSteerCapable(t *testing.T) {
+	registry := DefaultRegistry()
+
+	// /status is a plain SteerCapable read-only command.
+	status, ok := registry.GetCommand("status")
+	if !ok {
+		t.Fatal("status command not found")
+	}
+	if !IsSafeDuringSteer(status, nil) {
+		t.Fatal("IsSafeDuringSteer(status) = false, want true")
+	}
+
+	// /commit is unsafe regardless of args.
+	commit, ok := registry.GetCommand("commit")
+	if !ok {
+		t.Fatal("commit command not found")
+	}
+	if IsSafeDuringSteer(commit, nil) {
+		t.Fatal("IsSafeDuringSteer(commit) = true, want false")
+	}
 }

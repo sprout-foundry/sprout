@@ -4,10 +4,9 @@ import React, { useCallback, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { usePersistedBoolean, usePersistedNumber, useOutsideClickDismiss } from '../hooks/usePersistedPref';
 import type { TerminalWorkbench as TerminalWorkbenchState } from '../hooks/useTerminalWorkbench';
-import { useHostCapabilities } from '../host';
 import BackgroundTasks from './BackgroundTasks';
 import { FONT_SIZE_DEFAULT, COPY_ON_SELECT_DEFAULT } from './terminalConstants';
-import TerminalPane from './TerminalPane';
+import TerminalPane, { type TerminalPaneHandle } from './TerminalPane';
 import {
   FONT_SIZE_MIN,
   FONT_SIZE_MAX,
@@ -34,6 +33,102 @@ export interface TerminalWorkbenchProps {
   trailingActions?: ReactNode;
 }
 
+interface TerminalSessionHostProps {
+  paneId: string;
+  sessionId: string;
+  /** Whether this session is the pane's visible tab. */
+  visible: boolean;
+  isActive: boolean;
+  shouldFocus: boolean;
+  isConnected: boolean;
+  preferredShell: string | null;
+  reattachSessionId: string | null;
+  fontSize: number;
+  copyOnSelect: boolean;
+  paneHandlesRef: React.MutableRefObject<Map<string, TerminalPaneHandle | null>>;
+  onProcessExit: (paneId: string, sessionId: string) => void;
+  onTitleChange: (paneId: string, sessionId: string, title: string) => void;
+  onActivity: (paneId: string, sessionId: string) => void;
+}
+
+/**
+ * One session's xterm surface, memoized on the values it renders from.
+ *
+ * `TerminalPane` is memoized too, but it took its handlers as inline arrows
+ * (fresh identity per parent render), so every parent re-render — including
+ * the ~20/s the chat stream produces through AppContent — re-rendered every
+ * pane and its hooks. This host builds the callbacks once per session id and
+ * hands the pane stable props, so an unrelated re-render bails here.
+ */
+const TerminalSessionHost = React.memo(function TerminalSessionHost({
+  paneId,
+  sessionId,
+  visible,
+  isActive,
+  shouldFocus,
+  isConnected,
+  preferredShell,
+  reattachSessionId,
+  fontSize,
+  copyOnSelect,
+  paneHandlesRef,
+  onProcessExit,
+  onTitleChange,
+  onActivity,
+}: TerminalSessionHostProps): JSX.Element {
+  const setHandle = useCallback(
+    (handle: TerminalPaneHandle | null) => {
+      if (handle) {
+        paneHandlesRef.current.set(sessionId, handle);
+      } else {
+        paneHandlesRef.current.delete(sessionId);
+      }
+    },
+    [paneHandlesRef, sessionId],
+  );
+
+  const handleProcessExit = useCallback(() => {
+    onProcessExit(paneId, sessionId);
+  }, [onProcessExit, paneId, sessionId]);
+
+  const handleTitleChange = useCallback(
+    (title: string) => {
+      onTitleChange(paneId, sessionId, title);
+    },
+    [onTitleChange, paneId, sessionId],
+  );
+
+  const handleActivity = useCallback(() => {
+    onActivity(paneId, sessionId);
+  }, [onActivity, paneId, sessionId]);
+
+  return (
+    <div
+      style={{
+        display: visible ? 'flex' : 'none',
+        flex: '1 1 0%',
+        minWidth: 0,
+        minHeight: 0,
+        flexDirection: 'column',
+      }}
+    >
+      <TerminalPane
+        ref={setHandle}
+        isActive={isActive}
+        shouldFocus={shouldFocus}
+        isConnected={isConnected}
+        preferredShell={preferredShell}
+        reattachSessionId={reattachSessionId}
+        fontSize={fontSize}
+        copyOnSelect={copyOnSelect}
+        onProcessExit={handleProcessExit}
+        onTitleChange={handleTitleChange}
+        onActivity={handleActivity}
+      />
+    </div>
+  );
+});
+
 /**
  * The terminal's working surface: the pane tabs, shell picker, split and
  * clear actions, the font and copy-on-select menu, and the panes themselves.
@@ -47,7 +142,6 @@ export function TerminalWorkbench({
   isActive,
   trailingActions,
 }: TerminalWorkbenchProps): JSX.Element {
-  const { localTerminal } = useHostCapabilities();
   const {
     availableShells,
     shellsLoaded,
@@ -105,7 +199,7 @@ export function TerminalWorkbench({
 
   return (
     <div className="terminal-body">
-      {!localTerminal && isExpanded && (
+      {!isConnected && isExpanded && (
         <div
           className="terminal-cloud-notice"
           title="The browser terminal runs commands in a WASM sandbox. Process-spawning commands may not work."
@@ -314,36 +408,23 @@ export function TerminalWorkbench({
                   {pane.sessions.map((session) => {
                     const isActiveSession = session.id === pane.activeSessionId;
                     return (
-                      <div
+                      <TerminalSessionHost
                         key={session.id}
-                        style={{
-                          display: isActiveSession ? 'flex' : 'none',
-                          flex: '1 1 0%',
-                          minWidth: 0,
-                          minHeight: 0,
-                          flexDirection: 'column',
-                        }}
-                      >
-                        <TerminalPane
-                          ref={(handle) => {
-                            if (handle) {
-                              paneHandlesRef.current.set(session.id, handle);
-                            } else {
-                              paneHandlesRef.current.delete(session.id);
-                            }
-                          }}
-                          isActive={isActive}
-                          shouldFocus={pane.id === focusedPaneId && isActiveSession}
-                          isConnected={isConnected}
-                          preferredShell={sessionShellsRef.current.get(session.id) ?? null}
-                          reattachSessionId={sessionReattachIdsRef.current.get(session.id) ?? null}
-                          fontSize={fontSize}
-                          copyOnSelect={copyOnSelect}
-                          onProcessExit={() => handleProcessExit(pane.id, session.id)}
-                          onTitleChange={(title) => handleSessionTitleChange(pane.id, session.id, title)}
-                          onActivity={() => handleSessionActivity(pane.id, session.id)}
-                        />
-                      </div>
+                        paneId={pane.id}
+                        sessionId={session.id}
+                        visible={isActiveSession}
+                        isActive={isActive}
+                        shouldFocus={pane.id === focusedPaneId && isActiveSession}
+                        isConnected={isConnected}
+                        preferredShell={sessionShellsRef.current.get(session.id) ?? null}
+                        reattachSessionId={sessionReattachIdsRef.current.get(session.id) ?? null}
+                        fontSize={fontSize}
+                        copyOnSelect={copyOnSelect}
+                        paneHandlesRef={paneHandlesRef}
+                        onProcessExit={handleProcessExit}
+                        onTitleChange={handleSessionTitleChange}
+                        onActivity={handleSessionActivity}
+                      />
                     );
                   })}
                 </div>

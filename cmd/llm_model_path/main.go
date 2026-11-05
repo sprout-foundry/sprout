@@ -1,3 +1,7 @@
+// Command llm_model_path loads the model directory given on the command line
+// and prints one short generation, to check that a path loads and the
+// architecture is detected.
+
 //go:build darwin && arm64 && cgo
 
 package main

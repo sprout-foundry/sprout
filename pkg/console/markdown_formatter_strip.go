@@ -147,7 +147,9 @@ func (f *MarkdownFormatter) stripTableBlock(rows []string) string {
 	if available < colCount {
 		available = colCount
 	}
-	clampColumnWidths(colWidths, available)
+	if !clampColumnWidths(colWidths, colWidths, available) {
+		return renderStackedTablePlain(allCells, sepIdx, colCount)
+	}
 
 	// Build output.
 	var sb strings.Builder
@@ -229,4 +231,56 @@ func padCellPlain(cell string, width int) string {
 	}
 	padding := width - runeCount
 	return cell + strings.Repeat(" ", padding)
+}
+
+// renderStackedTablePlain is renderStackedTable for the no-color path:
+// one block per record, each header/value pair on its own line, so no
+// value is truncated when the columns cannot fit. SP-161c.
+func renderStackedTablePlain(allCells [][]string, sepIndex, colCount int) string {
+	headers := make([]string, colCount)
+	if len(allCells) > 0 {
+		for i := 0; i < colCount; i++ {
+			if i < len(allCells[0]) {
+				headers[i] = strings.TrimSpace(allCells[0][i])
+			}
+		}
+	}
+
+	labelWidth := 0
+	for _, h := range headers {
+		if w := len([]rune(h)); w > labelWidth {
+			labelWidth = w
+		}
+	}
+
+	var sb strings.Builder
+	first := true
+	for ri, row := range allCells {
+		if ri == sepIndex || ri == 0 {
+			continue
+		}
+		if !first {
+			sb.WriteString("\n")
+		}
+		first = false
+		for i := 0; i < colCount; i++ {
+			cell := ""
+			if i < len(row) {
+				cell = strings.TrimSpace(row[i])
+			}
+			if cell == "" {
+				continue
+			}
+			label := headers[i]
+			pad := strings.Repeat(" ", max(labelWidth-len([]rune(label)), 0))
+			sb.WriteString("  ")
+			sb.WriteString(label)
+			sb.WriteString(pad)
+			sb.WriteString("  ")
+			sb.WriteString(cell)
+			sb.WriteString("\n")
+		}
+	}
+
+	return strings.TrimSuffix(sb.String(), "\n")
 }

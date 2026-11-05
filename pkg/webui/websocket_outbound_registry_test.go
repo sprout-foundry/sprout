@@ -138,6 +138,10 @@ func TestOutboundRegistryCoversAllEventTypes(t *testing.T) {
 		events.EventTypeProgressQuestion,
 		events.EventTypeProgressVerification,
 		events.EventTypeProgressComplete,
+		events.EventTypeMockupStart,
+		events.EventTypeMockupChunk,
+		events.EventTypeMockupDone,
+		events.EventTypeMockupError,
 	} {
 		if _, ok := allowedOutboundMessageTypes[eventType]; !ok {
 			// Build the test name from the constant so the failure tells you

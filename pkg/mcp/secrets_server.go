@@ -149,6 +149,119 @@ func MigrateSecretsToCredentialsField(serverName string, config *MCPServerConfig
 	return len(pending), nil
 }
 
+// secretHeaderNames are the request headers whose value is a credential
+// regardless of its shape. Matching is by whole name (case-insensitive):
+// IsSecretEnvVar's substring rules are for env var names and would treat a
+// benign "X-Trace-Key" as a secret while missing "Cookie" entirely.
+var secretHeaderNames = map[string]bool{
+	"authorization":       true,
+	"proxy-authorization": true,
+	"cookie":              true,
+	"x-api-key":           true,
+	"api-key":             true,
+}
+
+// IsSecretHeader reports whether a header's value should be treated as a
+// credential. A name ending in -token, -api-key or -secret counts too, so a
+// vendor header like X-Stripe-Token is covered without listing every vendor.
+func IsSecretHeader(name string) bool {
+	lower := strings.ToLower(strings.TrimSpace(name))
+	if lower == "" {
+		return false
+	}
+	if secretHeaderNames[lower] {
+		return true
+	}
+	return strings.HasSuffix(lower, "-token") ||
+		strings.HasSuffix(lower, "-api-key") ||
+		strings.HasSuffix(lower, "-secret") ||
+		strings.HasSuffix(lower, "-key")
+}
+
+// HeaderCredentialKey returns the credential store key for a secret header
+// value: "mcp/{server}/header/{name}".
+//
+// The extra segment matters. Header names and env var names share a
+// vocabulary — "Authorization" is a plausible name for both — so keying a
+// header under the plain name would let an env credential and a header
+// credential collide, with whichever path ran last winning and both config
+// fields pointing at one value.
+func HeaderCredentialKey(serverName, headerName string) string {
+	return CredentialKey(serverName, "header/"+headerName)
+}
+
+// HeaderSecretRef returns the placeholder for a header credential.
+func HeaderSecretRef(serverName, headerName string) string {
+	return "{{credential:" + HeaderCredentialKey(serverName, headerName) + "}}"
+}
+
+// MigrateHeaderSecretsFromServer migrates plaintext secret-looking values in
+// an MCPServerConfig's Headers map to the credential store, replacing each
+// with a placeholder. It mirrors MigrateEnvSecretsFromServer for the header
+// path: a bearer token passed as `Authorization: Bearer sk_...` must not land
+// in config.json in plaintext.
+//
+// A value that already names a credential ({{credential:...}}) or is an
+// empty/display sentinel is left alone. Like the env migration, all writes
+// happen before any mutation, so a failure leaves the config untouched.
+//
+// An existing store entry is never silently overwritten by a different
+// value: the credential key is derived from the header name, so an edit that
+// renames a header must not clobber an unrelated credential. The caller is
+// told which header was skipped and can rotate it deliberately via
+// set-credential.
+func MigrateHeaderSecretsFromServer(serverName string, config *MCPServerConfig) (int, error) {
+	if len(config.Headers) == 0 {
+		return 0, nil
+	}
+
+	// Phase 1: collect header values that look like secrets.
+	pending := make(map[string]string, len(config.Headers))
+	skipped := make([]string, 0, len(config.Headers))
+	for name, value := range config.Headers {
+		if value == "" || value == "{{stored}}" || IsSecretRef(value) {
+			continue
+		}
+		if !IsSecretHeader(name) {
+			continue
+		}
+		key := HeaderCredentialKey(serverName, name)
+		if existing, _, err := credentials.GetFromActiveBackend(key); err == nil && existing != "" && existing != value {
+			// A different secret already lives under this key. Replacing it
+			// here would be an unannounced rotation of a credential the user
+			// set elsewhere; leave it and report.
+			skipped = append(skipped, name)
+			config.Headers[name] = HeaderSecretRef(serverName, name)
+			continue
+		}
+		pending[name] = value
+	}
+	if len(skipped) > 0 {
+		log.Printf("[mcp-secrets] kept existing credential(s) for header(s) on server %s: %s (rotate with set-credential)",
+			serverName, strings.Join(skipped, ", "))
+	}
+	if len(pending) == 0 {
+		return 0, nil
+	}
+
+	// Phase 2: store every secret before mutating the config.
+	for name, value := range pending {
+		key := HeaderCredentialKey(serverName, name)
+		if err := credentials.SetToActiveBackend(key, value); err != nil {
+			log.Printf("[mcp-secrets] Failed to store header credential %s: %v", key, err)
+			return 0, err
+		}
+	}
+
+	// Phase 3: replace the plaintext with placeholders.
+	for name := range pending {
+		config.Headers[name] = HeaderSecretRef(serverName, name)
+		log.Printf("[mcp-secrets] Migrated secret header %s for server %s to credential store", name, serverName)
+	}
+
+	return len(pending), nil
+}
+
 // ResolveCredentialsForServer resolves all credential placeholders for a server
 // and returns a map of env var name -> actual value.
 // This is used when starting an MCP server to build the full environment.
@@ -274,14 +387,16 @@ func buildRequestHeaders(serverName string, config *MCPServerConfig) (map[string
 			continue
 		}
 		if IsSecretRef(value) {
-			_, envVarName, ok := ParseSecretRef(value)
+			refServer, credName, ok := ParseSecretRef(value)
 			if !ok {
 				continue
 			}
-			key := CredentialKey(serverName, envVarName)
+			// The key is taken from the placeholder itself so a header can
+			// reference a credential stored under either namespace.
+			key := CredentialKey(refServer, credName)
 			stored, _, getErr := credentials.GetFromActiveBackend(key)
 			if getErr != nil || stored == "" {
-				stored = os.Getenv(envVarName)
+				stored = os.Getenv(credName)
 			}
 			if stored == "" {
 				log.Printf("[mcp] header %s for %s references credential %s which is not set", name, serverName, key)

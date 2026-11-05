@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
@@ -16,8 +17,9 @@ import (
 type SessionInfo struct {
 	SessionID        string    `json:"session_id"`
 	LastUpdated      time.Time `json:"last_updated"`
-	Name             string    `json:"name"`              // Human-readable session name
-	WorkingDirectory string    `json:"working_directory"` // Directory where session was created
+	Name             string    `json:"name"`                    // Human-readable session name
+	TopicSummary     string    `json:"topic_summary,omitempty"` // One-line topic summary; readers fall back to the deterministic template when absent
+	WorkingDirectory string    `json:"working_directory"`       // Directory where session was created
 	StoragePath      string    `json:"storage_path,omitempty"`
 	Interrupted      bool      `json:"interrupted,omitempty"` // Turn journal survived — session ended mid-turn
 }
@@ -37,6 +39,7 @@ func readSessionInfo(path string, d os.DirEntry) (SessionInfo, bool) {
 
 	lastUpdated := fileInfo.ModTime()
 	name := ""
+	topicSummary := ""
 	workingDir := ""
 	sessionID := strings.TrimSuffix(d.Name(), ".json")
 	if strings.HasPrefix(sessionID, legacySessionPrefix) {
@@ -49,6 +52,7 @@ func readSessionInfo(path string, d os.DirEntry) (SessionInfo, bool) {
 				lastUpdated = state.LastUpdated
 			}
 			name = state.Name
+			topicSummary = state.TopicSummary
 			if strings.TrimSpace(state.WorkingDirectory) != "" {
 				normalizedWorkingDir, normErr := normalizeWorkingDirectory(state.WorkingDirectory)
 				if normErr == nil {
@@ -65,6 +69,7 @@ func readSessionInfo(path string, d os.DirEntry) (SessionInfo, bool) {
 		SessionID:        sessionID,
 		LastUpdated:      lastUpdated,
 		Name:             name,
+		TopicSummary:     topicSummary,
 		WorkingDirectory: workingDir,
 		StoragePath:      path,
 		Interrupted:      journalSurvives(path),
@@ -200,46 +205,58 @@ func GetSessionPreview(sessionID string) string {
 	return GetSessionPreviewScoped(sessionID, workingDir)
 }
 
+// sessionPreviewFromMessages returns the first non-empty user message as a
+// one-line preview capped at maxRunes. It is the display fallback for
+// sessions with no topic summary.
+func sessionPreviewFromMessages(messages []api.Message, maxRunes int) string {
+	for _, msg := range messages {
+		if msg.Role != "user" {
+			continue
+		}
+		content := strings.TrimSpace(StripUserMessageTimestamp(msg.Content))
+		if content == "" {
+			continue
+		}
+		content = strings.Join(strings.Fields(content), " ")
+		runes := []rune(content)
+		if len(runes) > maxRunes {
+			content = string(runes[:maxRunes]) + "..."
+		}
+		return content
+	}
+	return ""
+}
+
+// GetSessionPreviewScoped returns the session's first user message, capped
+// at 50 runes. It remains the preview fallback; the topic summary is the
+// primary disambiguating line where it is rendered.
 func GetSessionPreviewScoped(sessionID, workingDir string) string {
+	state, ok := loadSessionStateForSession(sessionID, workingDir)
+	if !ok {
+		return ""
+	}
+	return sessionPreviewFromMessages(state.Messages, 50)
+}
+
+// loadSessionStateForSession loads and decodes the session's state file.
+func loadSessionStateForSession(sessionID, workingDir string) (*ConversationState, bool) {
 	stateDir, err := GetStateDir()
 	if err != nil {
-		return ""
+		return nil, false
 	}
 	stateFile, err := resolveSessionStateFile(stateDir, sessionID, workingDir)
 	if err != nil {
-		return ""
+		return nil, false
 	}
 	data, err := os.ReadFile(stateFile)
 	if err != nil {
-		return ""
+		return nil, false
 	}
-
 	var state ConversationState
 	if err := json.Unmarshal(data, &state); err != nil {
-		return ""
+		return nil, false
 	}
-
-	// Find the first user message
-	for _, msg := range state.Messages {
-		if msg.Role == "user" {
-			content := strings.TrimSpace(StripUserMessageTimestamp(msg.Content))
-			if content == "" {
-				continue
-			}
-			// Get first 50 characters, clean up whitespace. Truncate at a
-			// rune boundary so multi-byte UTF-8 prompts aren't split
-			// mid-codepoint.
-			runes := []rune(content)
-			if len(runes) > 50 {
-				content = string(runes[:50]) + "..."
-			}
-			// Replace newlines with spaces to keep it on one line
-			content = strings.ReplaceAll(content, "\n", " ")
-			return content
-		}
-	}
-
-	return ""
+	return &state, true
 }
 
 // GetSessionName returns the name of a session

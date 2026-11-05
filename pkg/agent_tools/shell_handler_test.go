@@ -470,3 +470,50 @@ func TestShellHandler_HardBlock_Still_Blocked_Under_Gate1AutoApproved(t *testing
 	require.Contains(t, res.Output, "security block")
 	require.Equal(t, 0, len(am.calls), "hard block early-returns before any approval request")
 }
+
+// Gate 2 bypass — Gate1Decided (SP-168)
+//
+// When Gate 1 (the unified risk resolver) decided a call — explicit
+// approval, an LLM-judge verdict, or a non-interactive auto-approve — the
+// handler must not re-prompt. These mirror the Gate1AutoApproved pair
+// above with the new ToolEnv flag.
+
+// TestShellHandler_PromptOp_Gate1Decided_SkipsPrompt verifies that a
+// Caution-tier command skips the Gate 2 prompt when Gate 1 already decided
+// the call (SP-168 single authoritative gate).
+func TestShellHandler_PromptOp_Gate1Decided_SkipsPrompt(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	createTestFile(dir, "test.txt", "data")
+
+	h := &shellCommandHandler{}
+	ctx := newTestCtx(dir)
+	am := &capturingApprovalManager{approved: true}
+	env := newShellEnv(t, dir, am)
+	env.Gate1Decided = true
+
+	_, err := h.Execute(ctx, env, map[string]any{"command": "rm test.txt"})
+	if err != nil {
+		require.NotContains(t, err.Error(), "rejected")
+	}
+	require.Equal(t, 0, len(am.calls), "Gate1Decided should skip the Gate 2 prompt (no double-gate)")
+}
+
+// TestShellHandler_HardBlock_Still_Blocked_Under_Gate1Decided verifies the
+// defense-in-depth invariant: even with Gate1Decided=true the handler's own
+// IsHardBlock check still blocks a destructive command.
+func TestShellHandler_HardBlock_Still_Blocked_Under_Gate1Decided(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &shellCommandHandler{}
+	ctx := newTestCtx(dir)
+	am := &capturingApprovalManager{approved: true}
+	env := newShellEnv(t, dir, am)
+	env.Gate1Decided = true
+
+	res, err := h.Execute(ctx, env, map[string]any{"command": "rm -rf /"})
+	require.Error(t, err)
+	require.True(t, res.IsError, "hard block should return IsError")
+	require.Contains(t, res.Output, "security block")
+	require.Equal(t, 0, len(am.calls), "hard block early-returns before any approval request")
+}

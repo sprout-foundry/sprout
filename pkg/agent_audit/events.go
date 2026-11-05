@@ -57,10 +57,15 @@ type CallEvent struct {
 	ResponseBytes    int       `json:"response_bytes"`
 	PromptTokens     int       `json:"prompt_tokens"`
 	CompletionTokens int       `json:"completion_tokens"`
-	Outcome          string    `json:"outcome"`
-	Trigger          string    `json:"trigger"`
-	Streaming        bool      `json:"streaming,omitempty"`
-	Failover         bool      `json:"failover,omitempty"`
+	// ReasoningTokens is the estimated reasoning-token count returned by the
+	// model on this call (rel.1). It is a rough estimate from the captured
+	// reasoning_content, so "0 reasoning tokens" is visible in the run log
+	// even for a model that is supposed to be reasoning.
+	ReasoningTokens int    `json:"reasoning_tokens,omitempty"`
+	Outcome         string `json:"outcome"`
+	Trigger         string `json:"trigger"`
+	Streaming       bool   `json:"streaming,omitempty"`
+	Failover        bool   `json:"failover,omitempty"`
 }
 
 // ToolEvent is one tool execution. It records the tool name, a digest of the

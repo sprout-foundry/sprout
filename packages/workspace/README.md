@@ -16,9 +16,10 @@ Two parts are exported:
 
 ## Status
 
-Published and in use. Three entry points: `.` (the host contract),
+Published and in use. Four entry points: `.` (the host contract),
 `./views` (`SproutWorkspace`, the space registry, the individual views, the
-chat and editor units) and `./providers` (`SproutProviders`). The minimal
+chat and editor units), `./providers` (`SproutProviders`) and `./agent` (the
+headless agent, below). The minimal
 mount is `SproutWorkspace` with a `project`, a `space` and a `host`; in its
 default own mode it builds the provider stack itself, so the host does not
 wrap it:
@@ -38,6 +39,27 @@ The integration guide (`docs/integration/workspace-package.md` in the Sprout
 repository) covers layouts, the chat and editor units, escalation, styles and
 the WASM assets; `docs/integration/host-contract.md` covers the `SproutHost`
 a host provides.
+
+## Headless agent
+
+`@sprout-foundry/workspace/agent` runs the in-browser agent without Sprout's
+interface, for a host that renders its own: `createAgent({ wasmBase,
+modelEndpoint, persona, hostTools, files, context })` returns an agent with
+`send`, `cancel`, `answer`, typed events (text, tool steps, `ask_user`, file
+writes, mockup progress, `done`) and the agent's files. It imports no React
+and no web UI module. See `docs/integration/headless-agent.md`.
+
+```ts
+import { createAgent } from "@sprout-foundry/workspace/agent";
+
+const agent = await createAgent({
+  wasmBase: "/assets/sprout-wasm",
+  modelEndpoint: "/proxy/chat",
+  persona: "designer",
+});
+agent.on("text", (e) => render(e.text));
+await agent.send("Sketch a landing page");
+```
 
 ## Styles
 
@@ -81,9 +103,11 @@ A host serves that directory at a URL it owns and tells Sprout where it is:
 
 ```bash
 npm run build -w @sprout-foundry/workspace
+npm test -w @sprout-foundry/workspace   # the headless agent's tests
 ```
 
-The build emits `dist/index.js` plus its lazily loaded chunks,
+The build emits `dist/index.js` plus its lazily loaded chunks, `dist/agent.js`
+(self-contained),
 `dist/workspace.css`, `dist/index.d.ts` and `dist/wasm/` (the content-hashed
 WASM assets and their manifest). The `files` and `exports` fields in
 `package.json` are the publish allowlist: `dist/` (entry, chunks, stylesheet,

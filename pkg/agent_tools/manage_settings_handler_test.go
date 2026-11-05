@@ -364,12 +364,12 @@ func TestManageSettingsDefinition(t *testing.T) {
 func TestValidateSettingKey(t *testing.T) {
 	validKeys := []string{"provider", "model", "reasoning_effort", "disable_thinking", "subagent_provider"}
 	for _, key := range validKeys {
-		if err := validateSettingKey(key); err != nil {
+		if err := ValidateSettingKey(key); err != nil {
 			t.Errorf("expected %q to be valid, got error: %v", key, err)
 		}
 	}
 
-	if err := validateSettingKey("invalid_key"); err == nil {
+	if err := ValidateSettingKey("invalid_key"); err == nil {
 		t.Error("expected error for invalid key")
 	}
 }

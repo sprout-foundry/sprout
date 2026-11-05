@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"strings"
+
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/git"
 )
@@ -28,6 +30,33 @@ func (a *Agent) attributeToolCommit(message string, generated bool) string {
 	}
 	provider, model := commitMessageModel(a)
 	return a.AttributeCommitMessage(message, git.SproutAssistant(provider, model))
+}
+
+// attributeFromTranscript is the commit tools' attribution hook when the tool
+// call carries a transcript provider/model — the pair recorded in the
+// transcript of the session that did the work, which may not be this agent's
+// own (a resumed session, a subagent, a post-mortem reader). The recorded
+// pair names the agent's line; this agent's own pair is listed too when it
+// differs, so a commit never loses the model that actually made the changes.
+// When the transcript carries no usable pair, this agent's own applies.
+func (a *Agent) attributeFromTranscript(transcriptProvider, transcriptModel string, message string, generated bool) string {
+	if a == nil || !a.GetConfig().CommitAttributionEnabled() {
+		return message
+	}
+	var extra []git.Assistant
+	if generated {
+		provider, model := commitMessageModel(a)
+		extra = append(extra, git.SproutAssistant(provider, model))
+	}
+	recorded := git.SproutAssistant(transcriptProvider, transcriptModel)
+	if !recorded.HasProviderModel() {
+		return a.AttributeCommitMessage(message, extra...)
+	}
+	own := git.SproutAssistant(a.GetProvider(), a.GetModel())
+	if own.HasProviderModel() && (!strings.EqualFold(own.Provider, recorded.Provider) || !strings.EqualFold(own.Model, recorded.Model)) {
+		extra = append(extra, own)
+	}
+	return git.AppendAssistedBy(message, append([]git.Assistant{recorded}, extra...)...)
 }
 
 // commitMessageModel reports the provider/model commit message generation

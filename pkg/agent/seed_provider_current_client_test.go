@@ -167,6 +167,11 @@ func (m *MockClient) SupportsVision() bool {
 	return false
 }
 
+// RecoversFromVisionRejection marks the mock as a self-healing provider, so
+// the capability resolver's optimistic attach applies (the mock never puts a
+// request on the wire, so there is nothing to reject).
+func (m *MockClient) RecoversFromVisionRejection() bool { return true }
+
 func (m *MockClient) GetVisionModel() string {
 	return ""
 }

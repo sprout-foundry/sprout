@@ -11,9 +11,12 @@ import (
 
 func TestTypeScriptSessionAdapterHealthyWhenFresh(t *testing.T) {
 	a := &typeScriptSessionAdapter{}
-	// No process started, so Healthy should be false
-	if a.Healthy() {
-		t.Error("fresh adapter with no process should not be healthy (no cmd)")
+	// No worker started yet. This must report healthy: Run starts the worker
+	// lazily (ensureWorkerLocked), and the pool closes and evicts any session
+	// that reports unhealthy, so a false here would discard the adapter on
+	// every acquire and the worker would never get started.
+	if !a.Healthy() {
+		t.Error("fresh adapter with no process should be healthy so the pool keeps it until Run starts the worker")
 	}
 }
 

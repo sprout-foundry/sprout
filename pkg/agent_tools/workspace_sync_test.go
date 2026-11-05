@@ -2,6 +2,7 @@ package tools
 
 import (
 	"os"
+	"strconv"
 	"sync"
 	"testing"
 
@@ -99,7 +100,7 @@ func TestWorkspace_UpdateContainerPatch_MultipleSeqs(t *testing.T) {
 		event := &PatchEvent{
 			Path:         "pkg/foo/bar.go",
 			ContainerSeq: seq,
-			Content:      "v" + itoa(seq),
+			Content:      "v" + strconv.FormatInt(seq, 10),
 		}
 		meta, err := ss.UpdateContainerPatch("pkg/foo/bar.go", event)
 		if err != nil {
@@ -366,7 +367,7 @@ func TestWorkspace_UpdateContainerPatch_Concurrent_NoRace(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			path := "concurrent/file" + itoa(int64(idx)) + ".go"
+			path := "concurrent/file" + strconv.FormatInt(int64(idx), 10) + ".go"
 			event := &PatchEvent{
 				Path:         path,
 				ContainerSeq: int64(idx) + 1,
@@ -395,7 +396,7 @@ func TestWorkspace_ApplyBrowserOp_Concurrent_NoRace(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			path := "concurrent/op" + itoa(int64(idx)) + ".go"
+			path := "concurrent/op" + strconv.FormatInt(int64(idx), 10) + ".go"
 			_, err := ss.ApplyBrowserOp(path, "content")
 			if err != nil {
 				t.Errorf("goroutine %d: unexpected error: %v", idx, err)
@@ -417,7 +418,7 @@ func TestWorkspace_MixedOperations_Concurrent_NoRace(t *testing.T) {
 	// Interleave UpdateContainerPatch and ApplyBrowserOp across shared paths.
 	for i := 0; i < 5; i++ {
 		wg.Add(2)
-		path := "mixed/shared" + itoa(int64(i)) + ".go"
+		path := "mixed/shared" + strconv.FormatInt(int64(i), 10) + ".go"
 		go func() {
 			defer wg.Done()
 			event := &PatchEvent{
@@ -512,25 +513,6 @@ func findSubstr(s, substr string) bool {
 		}
 	}
 	return false
-}
-
-func itoa(n int64) string {
-	if n == 0 {
-		return "0"
-	}
-	neg := n < 0
-	if neg {
-		n = -n
-	}
-	var digits []byte
-	for n > 0 {
-		digits = append([]byte{byte('0' + n%10)}, digits...)
-		n /= 10
-	}
-	if neg {
-		digits = append([]byte{'-'}, digits...)
-	}
-	return string(digits)
 }
 
 // --- HandleContainerPatchWithConflictDetection ---

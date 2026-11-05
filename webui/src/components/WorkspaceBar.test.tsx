@@ -36,6 +36,19 @@ afterEach(() => {
 // keyed on workspaceSwitching. isConnected: false keeps the fetch path out of
 // scope for this early-return flip.
 describe('WorkspaceBar host-name early return', () => {
+  it('renders nothing in a hosted build, even with workspace switching', () => {
+    const host = makeTestHost({ workspaceSwitching: true });
+    host.transport = { ...host.transport, authMode: 'bearer' };
+    act(() => {
+      root.render(
+        <HostProvider host={host}>
+          <WorkspaceBar isConnected={false} />
+        </HostProvider>,
+      );
+    });
+    expect(container.querySelector('.workspace-bar')).toBeNull();
+  });
+
   it('renders nothing on a shell with no workspace switching', () => {
     act(() => {
       root.render(

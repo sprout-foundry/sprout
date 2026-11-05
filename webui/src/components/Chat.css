@@ -318,7 +318,7 @@
 }
 
 .tool-detail-inline--error {
-  border-color: color-mix(in srgb, var(--accent-error) 45%, var(--border-subtle));
+  border-color: color-mix(in srgb, var(--accent-warning) 45%, var(--border-subtle));
 }
 
 .tool-detail-inline-header {
@@ -357,7 +357,7 @@
 }
 
 .tool-detail-inline--error .tool-status {
-  color: var(--accent-error);
+  color: var(--accent-warning);
 }
 
 .tool-detail-inline .tool-duration {
@@ -417,7 +417,7 @@
 }
 
 .tool-detail-inline--error .tool-detail-output pre {
-  color: var(--accent-error);
+  color: var(--accent-warning);
   white-space: pre-wrap;
 }
 

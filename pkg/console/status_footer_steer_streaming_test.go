@@ -57,16 +57,25 @@ func TestSetSteerLineWrapped_DefersRegionChangeDuringStreaming(t *testing.T) {
 	f.isTTY = true
 	f.active = true
 
+	// Opening the panel applies at once, even mid-stream: drawn inside
+	// unmoved margins its rows would scroll into the transcript (see
+	// applySteerRegionOrDefer).
 	f.SetProseStreaming(true)
-
-	// Row-count change: 0 rows → 1 row while streaming.
 	f.SetSteerLineWrapped("» one row", 0, 9)
-
 	f.mu.Lock()
 	pended := f.pendingSteerRegion
 	f.mu.Unlock()
+	if pended {
+		t.Fatal("opening the panel must not be deferred")
+	}
+
+	// Growing an open panel while prose streams is what defers.
+	f.SetSteerLineWrapped("» one row\n» two rows", 1, 10)
+	f.mu.Lock()
+	pended = f.pendingSteerRegion
+	f.mu.Unlock()
 	if !pended {
-		t.Fatal("SetSteerLineWrapped during streaming should pend the scroll-region change, not apply it")
+		t.Fatal("growth during streaming should pend the scroll-region change, not apply it")
 	}
 
 	// Segment end consumes the flag.

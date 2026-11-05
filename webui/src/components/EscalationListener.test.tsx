@@ -534,8 +534,8 @@ describe('EscalationListener — Mode A/B regressions', () => {
 
     await waitFor(() => expect(hrefSetter).toHaveBeenCalledWith('https://ws-1.fly.dev/auth/exchange?token=tok'));
     const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST') as [string, RequestInit];
-    expect(post[0]).toMatch(/\/workspace\/fly$/);
-    expect(JSON.parse(post[1].body as string)).toEqual({ repo_url: 'https://github.com/acme/app' });
+    expect(post[0]).toMatch(/\/workspace\/txn$/);
+    expect(JSON.parse(post[1].body as string)).toEqual({ repo_url: 'https://github.com/acme/app', host: 'cloud' });
   });
 
   it('explains a failed workspace start inline instead of leaving the editor', async () => {
@@ -558,7 +558,14 @@ describe('EscalationListener — Mode A/B regressions', () => {
   it('hides Start Full Workspace when the deployment has no workspace compute', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => jsonResponse({ error: 'workspaces are not available on this deployment' }, { status: 503 })),
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === 'string' ? input : input.toString();
+        // The typed probe: only a definitive available:false hides the CTA.
+        if (url.endsWith('/workspace/availability')) {
+          return jsonResponse({ available: false });
+        }
+        return jsonResponse({ error: 'workspaces are not available on this deployment' }, { status: 503 });
+      }),
     );
     renderListener();
     fireTrigger({ command: undefined });

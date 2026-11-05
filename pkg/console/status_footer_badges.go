@@ -96,6 +96,13 @@ func (f *StatusFooter) composeLine(cols int) string {
 			parts = append(parts, styleSegment(badgeColorSubagent, fmt.Sprintf("%d sub", n)))
 		}
 	}
+	// SP-174d: background /task agents never print to the transcript, so
+	// the footer is where the user sees that they are still running.
+	if ats, ok := f.source.(activeTasksSource); ok {
+		if n := ats.ActiveTasks(); n > 0 {
+			parts = append(parts, styleSegment(badgeColorSubagent, taskBadge(n)))
+		}
+	}
 	// SP-055 Phase 3b: append "⏸ N queued" when deferred steer messages
 	// are waiting for the next user turn. Tells the user at a glance
 	// that they'll see queued-from-prior-turn content on their next
@@ -171,4 +178,29 @@ func (f *StatusFooter) styleCost(cost float64, text string) string {
 	default:
 		return text
 	}
+}
+
+// activeTasksSource is an optional addition to ContentSource for sources
+// that can report how many /task background agents are running. SP-174d.
+type activeTasksSource interface {
+	ActiveTasks() int
+}
+
+func taskBadge(n int) string {
+	if n == 1 {
+		return "1 task"
+	}
+	return fmt.Sprintf("%d tasks", n)
+}
+
+// IdleBetweenTurns reports whether this is a live REPL footer with no turn
+// running: the composer owns the prompt row, so nothing may start the
+// activity spinner over it. False for a nil, non-TTY or stopped footer.
+func (f *StatusFooter) IdleBetweenTurns() bool {
+	if f == nil || !f.isTTY {
+		return false
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.active && f.composerMode == ComposerIdle
 }

@@ -42,6 +42,26 @@ export function changeOpLabel(op: string): string {
   }
 }
 
+/**
+ * Plain-language op label for builder mode: someone who builds with the
+ * agent, not a developer reading a diff. Same four canonical classes as
+ * `changeOpLabel` (which stays the developer vocabulary — "Created" /
+ * "Modified" / "Deleted" / "Build output" — untouched for every existing
+ * consumer).
+ */
+export function builderChangeOpLabel(op: string): string {
+  switch (classifyChangeOp(op)) {
+    case 'create':
+      return 'New file';
+    case 'delete':
+      return 'Removed';
+    case 'bulk':
+      return 'Build output';
+    default:
+      return 'Updated';
+  }
+}
+
 /** True when the op is the shell-churn rollup (no per-file actions). */
 export function isBulkOp(op: string): boolean {
   return classifyChangeOp(op) === 'bulk';

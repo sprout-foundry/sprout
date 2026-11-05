@@ -16,12 +16,14 @@ type visionMockClient struct {
 
 func (v *visionMockClient) SupportsVision() bool { return true }
 
-// TestAttachPastedImages_AttachesToFirstUserMessage is the core regression
-// test for the webui image-paste bug. The sproutProvider must attach images
-// registered via RegisterPastedImages to the first user message in every
-// Chat request. Before the fix, RegisterPastedImages was never called by
-// seed_query.go, so pasted images silently never reached the model.
-func TestAttachPastedImages_AttachesToFirstUserMessage(t *testing.T) {
+// TestAttachPastedImages_AttachesToCurrentTurnUserMessage is the core
+// regression test for the webui image-paste bug. The sproutProvider must
+// attach images registered via RegisterPastedImages to the CURRENT turn's
+// user message (the last user message in the request) — attaching them to an
+// old turn disconnects the pixels from the question and flips the provider
+// prompt-cache prefix. Before the fix, RegisterPastedImages was never called
+// by seed_query.go, so pasted images silently never reached the model.
+func TestAttachPastedImages_AttachesToCurrentTurnUserMessage(t *testing.T) {
 	provider, err := NewSproutProvider(nil, &visionMockClient{
 		MockClient{model: "vision-model"},
 	})
@@ -56,13 +58,13 @@ func TestAttachPastedImages_AttachesToFirstUserMessage(t *testing.T) {
 		t.Fatalf("expected 3 messages, got %d", len(out))
 	}
 
-	// Images must be attached to the FIRST user message (index 1), not the
-	// system message or assistant message.
+	// Images must be attached to the user message (index 1), not the system
+	// message or assistant message.
 	if len(out[0].Images) != 0 {
 		t.Errorf("system message should have no images, got %d", len(out[0].Images))
 	}
 	if len(out[1].Images) != 1 {
-		t.Fatalf("expected first user message to have 1 image, got %d", len(out[1].Images))
+		t.Fatalf("expected the user message to have 1 image, got %d", len(out[1].Images))
 	}
 	if out[1].Images[0].Base64 != testImage.Base64 {
 		t.Errorf("expected image base64 %q, got %q", testImage.Base64, out[1].Images[0].Base64)
@@ -72,10 +74,51 @@ func TestAttachPastedImages_AttachesToFirstUserMessage(t *testing.T) {
 	}
 }
 
-// TestAttachPastedImages_SkipsNonVisionClient verifies that images are NOT
-// attached when the model does not support vision — the non-vision path
-// relies on OCR tool calls instead.
-func TestAttachPastedImages_SkipsNonVisionClient(t *testing.T) {
+// TestAttachPastedImages_MultiTurn_AttachesToLatestUserMessage pins that a
+// paste in a continuing conversation lands on the turn being answered, not on
+// the historical first user message — and not on a steer message seed may
+// append at a later loop boundary.
+func TestAttachPastedImages_MultiTurn_AttachesToLatestUserMessage(t *testing.T) {
+	provider, err := NewSproutProvider(nil, &visionMockClient{
+		MockClient{model: "vision-model"},
+	})
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+	sp := provider.(*sproutProvider)
+
+	sp.RegisterPastedImages(map[string][]api.ImageData{
+		"_current": {{Base64: "dGVzdA==", Type: "image/png"}},
+	})
+
+	messages := []core.Message{
+		{Role: "system", Content: "sys"},
+		{Role: "user", Content: "first question"},
+		{Role: "assistant", Content: "first answer"},
+		{Role: "user", Content: "what is in [image: bar.png]?"},
+		// A steer injected at a loop boundary after the turn's query.
+		{Role: "user", Content: "also check the footer"},
+	}
+
+	out := sp.attachPastedImages(messages)
+	if len(out[1].Images) != 0 {
+		t.Errorf("the historical first user message must not receive the new image, got %d", len(out[1].Images))
+	}
+	if len(out[3].Images) != 1 {
+		t.Fatalf("the turn's user message should carry the image, got %d", len(out[3].Images))
+	}
+	if len(out[4].Images) != 0 {
+		t.Errorf("a steer message must not steal the image, got %d", len(out[4].Images))
+	}
+}
+
+// TestAttachPastedImages_AttachesForDeclaredNonVisionClient pins the
+// optimistic posture: a negative declaration is a config guess, not a verified
+// rejection, so the image is attached and attempted on the active model. The
+// send path verifies the real answer and remembers it (see
+// api.ResolveVisionCapability).
+func TestAttachPastedImages_AttachesForDeclaredNonVisionClient(t *testing.T) {
+	t.Setenv("SPROUT_STATE_DIR", t.TempDir())
 	provider, err := NewSproutProvider(nil, &MockClient{model: "text-model"})
 	if err != nil {
 		t.Fatalf("failed to create provider: %v", err)
@@ -89,8 +132,34 @@ func TestAttachPastedImages_SkipsNonVisionClient(t *testing.T) {
 	messages := []core.Message{{Role: "user", Content: "describe image"}}
 	out := sp.attachPastedImages(messages)
 
+	if len(out[0].Images) != 1 {
+		t.Errorf("a declared-non-vision model must still be tried with the image, got %d", len(out[0].Images))
+	}
+}
+
+// TestAttachPastedImages_SkipsAfterVerifiedRejection verifies that a
+// runtime-recorded capability rejection withholds images — the only negative
+// answer that suppresses them.
+func TestAttachPastedImages_SkipsAfterVerifiedRejection(t *testing.T) {
+	t.Setenv("SPROUT_STATE_DIR", t.TempDir())
+	provider, err := NewSproutProvider(nil, &MockClient{model: "rejects-images"})
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+	sp := provider.(*sproutProvider)
+
+	client := sp.currentClient()
+	api.RecordVisionAcceptance(client.GetProvider(), client.GetModel(), false)
+
+	sp.RegisterPastedImages(map[string][]api.ImageData{
+		"_current": {{Base64: "dGVzdA==", Type: "image/png"}},
+	})
+
+	messages := []core.Message{{Role: "user", Content: "describe image"}}
+	out := sp.attachPastedImages(messages)
+
 	if len(out[0].Images) != 0 {
-		t.Errorf("non-vision client should not receive images, got %d", len(out[0].Images))
+		t.Errorf("a verified rejection must withhold images, got %d", len(out[0].Images))
 	}
 }
 

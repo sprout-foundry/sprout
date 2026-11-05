@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -37,6 +38,29 @@ type ConnectionInfo struct {
 	// message) and read from the write goroutine (event fan-out).
 	subscribedChannels map[string]bool
 	channelsMu         sync.RWMutex
+
+	// foreground marks the window the user is actually looking at. Several
+	// windows of one client share an event bus, so a question fanned out to
+	// all of them pops up on every window — including the ones behind the
+	// active one. Events that need a human (ask_user) are only written to
+	// the foreground connection; a window that comes forward says so on its
+	// heartbeat and picks up whatever it missed.
+	//
+	// backgroundFocus is set only when a window reports itself behind
+	// another. The zero value therefore means "foreground", which keeps
+	// single-window clients (and clients that never report focus) receiving
+	// every question.
+	backgroundFocus atomic.Bool
+}
+
+// isForeground reports whether this connection belongs to the window on
+// screen. A connection is foreground until its window reports otherwise.
+func (ci *ConnectionInfo) isForeground() bool {
+	return !ci.backgroundFocus.Load()
+}
+
+func (ci *ConnectionInfo) setForeground(v bool) {
+	ci.backgroundFocus.Store(!v)
 }
 
 // subscribeToChannel marks a channel as subscribed, safe for concurrent use.

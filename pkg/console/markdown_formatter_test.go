@@ -152,6 +152,58 @@ func TestMarkdownFormatter_TableWidthClamping(t *testing.T) {
 	}
 }
 
+// SP-161c: a table too wide for the terminal must not render columns as a
+// character or two plus an ellipsis — the reader cannot tell what the
+// values are. Columns stay at or above the legibility floor, and a table
+// that cannot fit at all degrades to a stacked layout where every value
+// survives intact.
+func TestMarkdownFormatter_TableColumnLegibilityFloor(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("CLICOLOR_FORCE", "1")
+
+	// Three wide columns in a narrow terminal: at 1 char per column this
+	// used to render as "a… b… c…".
+	formatter := NewMarkdownFormatter(true, true).SetWidth(24)
+	input := "| alpha | bravo | charlie |\n" +
+		"|-------|-------|---------|\n" +
+		"| aaaaaaaa | bbbbbbbb | cccccccc |"
+	result := formatter.Format(input)
+	plain := stripANSIEscapeCodes(result)
+
+	// Every value must be readable in full somewhere in the output.
+	for _, want := range []string{"aaaaaaaa", "bbbbbbbb", "cccccccc"} {
+		if !strings.Contains(plain, want) {
+			t.Errorf("value %q was truncated away; output:\n%s", want, plain)
+		}
+	}
+	// The stacked layout labels each value with its column header.
+	for _, header := range []string{"alpha", "bravo", "charlie"} {
+		if !strings.Contains(plain, header) {
+			t.Errorf("stacked layout lost header %q; output:\n%s", header, plain)
+		}
+	}
+}
+
+// SP-161c: a table that fits at the legibility floor still renders as a
+// table — the stacked fallback must not trigger early.
+func TestMarkdownFormatter_TableStaysTabularWhenItFits(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("CLICOLOR_FORCE", "1")
+
+	formatter := NewMarkdownFormatter(true, true).SetWidth(80)
+	input := "| name | value |\n|------|-------|\n| foo | bar |"
+	result := formatter.Format(input)
+	plain := stripANSIEscapeCodes(result)
+
+	lines := strings.Split(strings.TrimRight(plain, "\n"), "\n")
+	if len(lines) != 3 {
+		t.Fatalf("expected a 3-line table (header, rule, row), got %d lines:\n%s", len(lines), plain)
+	}
+	if !strings.Contains(lines[2], "foo") || !strings.Contains(lines[2], "bar") {
+		t.Errorf("row did not render on one line: %q", lines[2])
+	}
+}
+
 // TestMarkdownFormatter_NestedListIndentation verifies that nested lists
 // render with proper visual indentation based on leading whitespace.
 func TestMarkdownFormatter_NestedListIndentation(t *testing.T) {

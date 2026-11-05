@@ -513,6 +513,12 @@ jobs:
       # before chmod+x'ing it. Format matches `sha256sum -c` (and `shasum -a 256 -c`)
       # so anyone can re-verify by hand:
       #   curl -sL .../SHA256SUMS | sha256sum -c --ignore-missing
+      #
+      # The cloud webui bundle is listed too: platforms vendor it into their
+      # own images (sprout-foundry's platform downloads it and verifies it
+      # against this file), and an unlisted asset cannot be verified at all.
+      # A consumer that greps for its own entry must get a hit — a missing
+      # line means the check silently passes on empty input.
       run: |
         sha256sum \
           sprout-linux-amd64.tar.gz \
@@ -521,6 +527,7 @@ jobs:
           sprout-darwin-amd64.tar.gz \
           sprout-darwin-arm64.tar.gz \
           sprout-mlx-runtime-darwin-arm64.tar.gz \
+          sprout-webui-cloud.tar.gz \
           > SHA256SUMS
         cat SHA256SUMS
 

@@ -146,6 +146,26 @@ const atomOneLight: ThemePack = {
     '--accent-cyan': '#0184bc',
     '--accent-primary-alpha': 'rgba(64, 120, 242, 0.16)',
 
+    // The composer (`@sprout/ui` CommandInput) and the change list
+    // (AgentChangesPanel) consume these. The packs are the override layer on
+    // top of the package's `:root` tokens, which are DARK by default: a token
+    // a light pack omits is not set inline on the workspace root, so it
+    // inherits the dark `:root` value and the surface renders dark inside a
+    // light workspace. Every token these two components read is therefore
+    // declared here, not just the ones the dark pack happens to carry.
+    '--bg-hover': '#e6e8eb',
+    '--accent-primary-hover': '#2f66e0',
+    '--accent-primary-dim': 'rgba(64, 120, 242, 0.35)',
+    '--accent-primary-bg': 'rgba(64, 120, 242, 0.1)',
+    '--accent-primary-bg-hover': 'rgba(64, 120, 242, 0.16)',
+    '--accent-info': '#4078f2',
+    '--color-danger': '#e45649',
+
+    '--color-success-bg': 'rgba(80, 161, 79, 0.12)',
+    '--color-warning-bg': 'rgba(193, 132, 1, 0.12)',
+    '--color-error-bg': 'rgba(228, 86, 73, 0.12)',
+    '--color-info-bg': 'rgba(64, 120, 242, 0.12)',
+
     '--editor-pane-bg': 'linear-gradient(135deg, #fafafa 0%, #f3f4f6 100%)',
     '--editor-pane-footer-bg': 'rgba(56, 58, 66, 0.05)',
     '--editor-pane-footer-fg': 'rgba(56, 58, 66, 0.72)',

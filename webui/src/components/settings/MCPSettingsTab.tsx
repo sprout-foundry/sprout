@@ -16,6 +16,9 @@ interface MCPSettingsTabProps {
   settings: SproutSettings;
   editingServer: { mode: 'add' | 'edit'; originalName?: string } | null;
   serverName: string;
+  serverType: 'stdio' | 'http';
+  serverURL: string;
+  serverHeaders: Array<{ key: string; value: string }>;
   serverCommand: string;
   serverArgs: string;
   serverEnvVars: Array<{ key: string; value: string }>;
@@ -29,6 +32,9 @@ interface MCPSettingsTabProps {
   savingKey: string | null;
   setEditingServer: (v: { mode: 'add' | 'edit'; originalName?: string } | null) => void;
   setServerName: (v: string) => void;
+  setServerType: (v: 'stdio' | 'http') => void;
+  setServerURL: (v: string) => void;
+  setServerHeaders: (v: Array<{ key: string; value: string }>) => void;
   setServerCommand: (v: string) => void;
   setServerArgs: (v: string) => void;
   setServerEnvVars: (v: Array<{ key: string; value: string }>) => void;
@@ -54,6 +60,9 @@ export default function MCPSettingsTab({
   settings,
   editingServer,
   serverName,
+  serverType,
+  serverURL,
+  serverHeaders,
   serverCommand,
   serverArgs,
   serverEnvVars,
@@ -67,6 +76,9 @@ export default function MCPSettingsTab({
   savingKey,
   setEditingServer,
   setServerName,
+  setServerType,
+  setServerURL,
+  setServerHeaders,
   setServerCommand,
   setServerArgs,
   setServerEnvVars,
@@ -174,7 +186,7 @@ export default function MCPSettingsTab({
               <Fragment key={name}>
                 <div className="crud-item" data-testid="mcp-server-row">
                   <span className="crud-item-name">{name}</span>
-                  <span className="crud-item-detail">{cfg.command || ''}</span>
+                  <span className="crud-item-detail">{cfg.type === 'http' ? cfg.url || '' : cfg.command || ''}</span>
                   <button
                     type="button"
                     className="crud-btn"
@@ -208,6 +220,9 @@ export default function MCPSettingsTab({
                     onClick={() => {
                       setEditingServer({ mode: 'edit', originalName: name });
                       setServerName(name);
+                      setServerType(cfg.type === 'http' ? 'http' : 'stdio');
+                      setServerURL(cfg.url || '');
+                      setServerHeaders(Object.entries(cfg.headers || {}).map(([key, value]) => ({ key, value })));
                       setServerCommand(cfg.command || '');
                       setServerArgs(cfg.args ? cfg.args.join(' ') : '');
                       const existingEnv = cfg.env || {};
@@ -259,12 +274,18 @@ export default function MCPSettingsTab({
           <MCPServerForm
             editingServer={editingServer}
             serverName={serverName}
+            serverType={serverType}
+            serverURL={serverURL}
+            serverHeaders={serverHeaders}
             serverCommand={serverCommand}
             serverArgs={serverArgs}
             serverEnvVars={serverEnvVars}
             newEnvKey={newEnvKey}
             newEnvValue={newEnvValue}
             setServerName={setServerName}
+            setServerType={setServerType}
+            setServerURL={setServerURL}
+            setServerHeaders={setServerHeaders}
             setServerCommand={setServerCommand}
             setServerArgs={setServerArgs}
             setServerEnvVars={setServerEnvVars}

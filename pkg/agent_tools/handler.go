@@ -67,6 +67,14 @@ type ToolDefinition struct {
 	// to the model. Use it for superseded tools: existing callers keep
 	// working without the schema costing context on every turn.
 	Hidden bool `json:"-"`
+
+	// Schema, when set, is the tool's complete JSON schema for its arguments
+	// (an object schema) and is advertised to the model as is, instead of the
+	// schema built from Parameters. Tools whose schema is defined elsewhere
+	// (a host page registering a tool from its own JSON schema) use it so
+	// nested properties survive; Parameters still carries the top-level
+	// names and types for argument coercion.
+	Schema map[string]any `json:"-"`
 }
 
 // ParameterDef defines a single tool parameter's schema.
@@ -75,6 +83,11 @@ type ParameterDef struct {
 	Type        string `json:"type"`
 	Required    bool   `json:"required"`
 	Description string `json:"description"`
+
+	// Enum restricts a string parameter to this closed set of values. It is
+	// serialized into the outgoing function-calling schema as the `enum` key
+	// so the model sees the vocabulary rather than guessing at it.
+	Enum []string `json:"enum,omitempty"`
 
 	// Items is the JSON schema for this parameter's elements; only used
 	// when Type is "array". It is serialized into the outgoing
@@ -149,6 +162,18 @@ type ToolEnv struct {
 	// handlers skip their interactive approval prompt to avoid double-prompting.
 	// Hard blocks are NEVER bypassed regardless of this flag.
 	Gate1AutoApproved bool
+	// Gate1Decided reports whether Gate 1 (the unified risk resolver, the
+	// default) decided this call BEFORE the handler ran — an explicit user
+	// approval (WebUI dialog or terminal prompt), an LLM risk-judge verdict,
+	// or a non-interactive auto-approve (autonomous runs resolve Medium
+	// commands from the risk profile instead of prompting). When true the
+	// handler must NOT run its own approval prompt — re-prompting would
+	// double-gate a call Gate 1 already decided (that double-gate was the
+	// subagent hang: a subagent's Gate-2 prompt had no surface and blocked
+	// until timeout). The handler keeps its own hard-block check as
+	// defense-in-depth. When false (Gate 1 never ran, e.g. the legacy
+	// non-unified resolver), the handler's own gate applies. SP-168.
+	Gate1Decided bool
 	// UnsafeShellMode reports whether the session opted into --unsafe-shell,
 	// which bypasses CAUTION-tier shell_command prompts. Deliberately
 	// separate from Gate1AutoApproved: --unsafe-shell is scoped to
@@ -235,6 +260,14 @@ type ToolFuncSet struct {
 	// GenerateCommitMessage wrote the message. Nil in standalone runs (no
 	// agent, no model to attribute): the message is committed unchanged.
 	AttributeCommitMessage func(message string, generated bool) string
+	// AttributeCommitMessageFromTranscript is AttributeCommitMessage for a
+	// tool call that carries a transcriptProvider/transcriptModel pair (the
+	// commit tool's transcript_provider/transcript_model parameters). The
+	// pair names the model recorded in the transcript of the session that did
+	// the work; the hook falls back to the agent's own model when the pair is
+	// empty or unknown. Nil in standalone runs, and when nil the handlers
+	// fall back to AttributeCommitMessage.
+	AttributeCommitMessageFromTranscript func(transcriptProvider, transcriptModel, message string, generated bool) string
 	// TrackFileWrite records a full-file write (write_file, and the
 	// write-through path of write_structured_file) with the agent's
 	// ChangeTracker. originalContent is the file's pre-write state
@@ -275,6 +308,19 @@ type ToolFuncSet struct {
 	// tool fails closed and refuses. Set by pkg/agent (wireAgentToolFuncs);
 	// nil in standalone runs (verification disabled), where the gate is open.
 	DeployVerification func() (passed bool, haveResult bool)
+	// StreamModelText makes one plain-text model call (no tools) through
+	// the agent's own client, so it is routed and metered like every other
+	// call the agent makes, and books its usage under role. Each piece of
+	// the reply's visible text is passed to onChunk (nil to skip) as it
+	// streams; the whole text is returned. Set by pkg/agent
+	// (wireAgentToolFuncs); nil in standalone runs, where a tool that needs
+	// its own model call reports that none is available.
+	StreamModelText func(ctx context.Context, role, system, user string, onChunk func(string)) (string, error)
+	// PublishEvent publishes a UI event decorated with the agent's event
+	// metadata (chat id and the like), so a host can route it to the right
+	// conversation. Nil in standalone runs: the tool falls back to the raw
+	// event bus, or publishes nothing.
+	PublishEvent func(eventType string, data map[string]any)
 }
 
 // ResolveToolFuncs returns the tool func set to dispatch through. It prefers

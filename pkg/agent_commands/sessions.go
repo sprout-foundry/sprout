@@ -81,28 +81,37 @@ func (c *SessionsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	return c.selectSessionWithPicker(sessions, chatAgent)
 }
 
-// selectSessionWithPicker drives the unified SelectList picker for /sessions.
-// Sessions are presented newest-first; selection routes through
-// LoadStateScoped + ApplyState exactly like the legacy numeric flow.
-func (c *SessionsCommand) selectSessionWithPicker(sessions []agent.SessionInfo, chatAgent *agent.Agent) error {
+// buildSessionPickerItems renders sessions into picker rows: the name (or
+// first-message fallback) as the label, the topic summary and timestamp as
+// the detail line. Reversed so the most recent session is at the top.
+func buildSessionPickerItems(sessions []agent.SessionInfo) []console.SelectItem {
 	items := make([]console.SelectItem, 0, len(sessions))
-	// Sessions list is oldest-first from the storage layer; reverse so the
-	// most recent session is at the top of the picker.
 	for i := len(sessions) - 1; i >= 0; i-- {
 		session := sessions[i]
 		name := session.Name
 		if name == "" {
-			name = agent.GetSessionPreviewScoped(session.SessionID, session.WorkingDirectory)
+			name = agent.GetSessionLabelScoped(session.SessionID, session.WorkingDirectory)
 		}
 		if name == "" {
 			name = session.SessionID
 		}
 		items = append(items, console.SelectItem{
 			Label:  name,
-			Detail: session.LastUpdated.Format("2006-01-02 15:04"),
+			Detail: strings.TrimSpace(strings.Join([]string{agent.SessionTopicSummaryForDisplay(session), session.LastUpdated.Format("2006-01-02 15:04")}, " · ")),
 			Value:  session.SessionID,
 		})
 	}
+	return items
+}
+
+// selectSessionWithPicker drives the unified SelectList picker for /sessions.
+// Sessions are presented newest-first; selection routes through
+// LoadStateScoped + ApplyState exactly like the legacy numeric flow.
+// Each row is name (label) + topic summary and timestamp (detail); the
+// summary is the disambiguating line, so the label no longer carries the
+// 50-rune first-message cap.
+func (c *SessionsCommand) selectSessionWithPicker(sessions []agent.SessionInfo, chatAgent *agent.Agent) error {
+	items := buildSessionPickerItems(sessions)
 
 	picker := console.NewSelectList(console.SelectListOptions{
 		Title:      "Available Sessions",

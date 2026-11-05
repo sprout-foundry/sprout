@@ -9,7 +9,13 @@ import (
 	"time"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"github.com/sprout-foundry/sprout/pkg/injection"
 )
+
+// fetchUntrustedLabel names the source of fetched content in the data block it
+// is delivered in. A fetched page is third-party by definition — the publisher
+// controls every byte — so it is framed before it reaches the transcript.
+const fetchUntrustedLabel = "web page"
 
 // fetchURLHandler implements ToolHandler for the fetch_url tool.
 type fetchURLHandler struct{}
@@ -73,9 +79,14 @@ func (h *fetchURLHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 
 	// For small content, return inline as before.
 	if len(content) <= fetchContentThreshold {
+		// SP-169 layer 5: the page is data, not instructions. Wrapping here —
+		// at ingress, before the content can influence a later turn — is what
+		// keeps "ignore the previous instructions" in a page from reading as
+		// a directive from the user.
+		output := injection.WrapUntrusted(fetchUntrustedLabel+" — "+urlVal, content)
 		result := ToolResult{
-			Output:     content,
-			TokenUsage: int64(estimateTokenUsage(content)),
+			Output:     output,
+			TokenUsage: int64(estimateTokenUsage(output)),
 		}
 		if imageData := classifyURL(urlVal); imageData != nil {
 			result.Images = []ImageData{*imageData}
@@ -90,7 +101,10 @@ func (h *fetchURLHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 	}
 
 	toc := buildSectionTOC(content)
-	output := toc + "\nFile path: " + filePath + "\n"
+	// The table of contents is derived from the page, so it is framed like the
+	// page itself. The temp-file path is ours, so it stays outside the block.
+	output := injection.WrapUntrusted(fetchUntrustedLabel+" — "+urlVal, toc) +
+		"\nFile path: " + filePath + "\n"
 
 	result := ToolResult{
 		Output:     output,

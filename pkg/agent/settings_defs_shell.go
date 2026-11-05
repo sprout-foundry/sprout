@@ -10,7 +10,7 @@ import (
 )
 
 // settings_defs_shell.go — the zsh, shell-command-allowlist, risk-profile,
-// max-context, and tool-invocation-display sections of the settingDefs
+// context-cap, and tool-invocation-display sections of the settingDefs
 // registry. Split out of settings_defs.go.
 var settingDefsShell = []settingDef{
 	// --- Zsh ---
@@ -133,6 +133,29 @@ var settingDefsShell = []settingDef{
 			return nil
 		},
 	},
+	// --- Compaction Ceiling ---
+	{
+		Key:         "compaction_ceiling_tokens",
+		Description: "Live-context size at which compaction fires (0 = built-in default)",
+		ValidValues: "0 or integer >= 16384",
+		GetValue: func(cfg *configuration.Config) string {
+			return strconv.Itoa(cfg.CompactionCeilingTokens)
+		},
+		SetValue: func(cfg *configuration.Config, value string) error {
+			val, err := strconv.Atoi(value)
+			if err != nil {
+				return agenterrors.NewValidation(fmt.Sprintf("compaction_ceiling_tokens must be an integer, got %q", value), nil)
+			}
+			if val < 0 {
+				return agenterrors.NewValidation(fmt.Sprintf("compaction_ceiling_tokens must be >= 0, got %d", val), nil)
+			}
+			if val > 0 && val < 16384 {
+				return agenterrors.NewValidation(fmt.Sprintf("compaction_ceiling_tokens must be at least 16384 when set, got %d", val), nil)
+			}
+			cfg.CompactionCeilingTokens = val
+			return nil
+		},
+	},
 	// --- Tool Invocation Display ---
 	{
 		Key:         "show_tool_invocations",
@@ -149,6 +172,25 @@ var settingDefsShell = []settingDef{
 				return nil
 			default:
 				return agenterrors.NewValidation(fmt.Sprintf("show_tool_invocations must be true or false, got %q", value), nil)
+			}
+		},
+		EnumValues: []string{"true", "false"},
+	},
+	{
+		Key:         "mouse_click_to_position",
+		Description: "Click in the CLI input to place the cursor. Captures the mouse wheel while on (plain wheel stops scrolling terminal history); /mouse toggles it",
+		ValidValues: "true, false",
+		GetValue:    func(cfg *configuration.Config) string { return fmt.Sprintf("%v", cfg.MouseClickToPosition) },
+		SetValue: func(cfg *configuration.Config, value string) error {
+			switch strings.ToLower(value) {
+			case "true":
+				cfg.MouseClickToPosition = true
+				return nil
+			case "false":
+				cfg.MouseClickToPosition = false
+				return nil
+			default:
+				return agenterrors.NewValidation(fmt.Sprintf("mouse_click_to_position must be true or false, got %q", value), nil)
 			}
 		},
 		EnumValues: []string{"true", "false"},

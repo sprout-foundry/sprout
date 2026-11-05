@@ -38,7 +38,7 @@
         "pattern": "openai/gpt-5.*"
       }
     ],
-    "default_context_limit": 128000,
+    "default_context_limit": 262144,
     "default_max_completion_tokens": 128000,
     "default_model": "openai/gpt-5",
     "default_model_patterns": [

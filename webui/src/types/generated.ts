@@ -96,6 +96,12 @@ export type ServerEventType =
   | 'progress_question'
   | 'progress_verification'
   | 'progress_complete'
+  // The draw_mockup tool: a mockup drawn as it is written (start, each
+  // chunk of the document, done with the whole document, or error).
+  | 'mockup_start'
+  | 'mockup_chunk'
+  | 'mockup_done'
+  | 'mockup_error'
   // The agent's register_preview_port tool
   // publishes this on the shared event bus after a successful platform
   // registration. In hosted workspaces the agent runs in-process in the

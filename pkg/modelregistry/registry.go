@@ -15,6 +15,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/modelcontract"
+	"github.com/sprout-foundry/sprout/pkg/registrysettings"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -100,31 +101,13 @@ func init() {
 }
 
 func loadConfig() {
-	if v := strings.TrimSpace(envutil.GetEnvSimple("MODEL_REGISTRY_URL")); v != "" {
-		lower := strings.ToLower(v)
-		if lower == "off" || lower == "none" || lower == "disabled" {
-			baseURL = ""
-		} else {
-			baseURL = strings.TrimRight(v, "/")
-		}
-	} else {
-		baseURL = defaultRegistryURL
-	}
-	if v := strings.TrimSpace(envutil.GetEnvSimple("MODEL_REGISTRY_TTL")); v != "" {
-		if d, err := time.ParseDuration(v); err == nil && d > 0 {
-			ttl = d
-		}
-	}
-	if v := strings.TrimSpace(envutil.GetEnvSimple("MODEL_REGISTRY_NEGATIVE_TTL")); v != "" {
-		if d, err := time.ParseDuration(v); err == nil && d > 0 {
-			negativeTTL = d
-		}
-	}
-	if v := strings.TrimSpace(envutil.GetEnvSimple("MODEL_REGISTRY_TIMEOUT")); v != "" {
-		if d, err := time.ParseDuration(v); err == nil && d > 0 {
-			httpTimeout = d
-		}
-	}
+	s := registrysettings.Load("MODEL_REGISTRY", registrysettings.Settings{
+		BaseURL:     defaultRegistryURL,
+		TTL:         defaultTTL,
+		NegativeTTL: defaultNegativeTTL,
+		Timeout:     defaultHTTPTimeout,
+	})
+	baseURL, ttl, negativeTTL, httpTimeout = s.BaseURL, s.TTL, s.NegativeTTL, s.Timeout
 }
 
 // SetBaseURL sets the registry base URL (useful for testing).
@@ -219,6 +202,9 @@ func isValidProviderID(id string) bool {
 // Caching behavior:
 //   - Successful responses are cached for the configured TTL (default 5 minutes)
 //   - 404 responses are cached in a negative cache for negativeTTL (default 30 seconds) to avoid repeated requests
+//   - Transport failures and other non-200 responses are negative-cached the
+//     same way: the failing call returns its error, later calls inside the
+//     negative TTL return (nil, nil) without a request
 //   - Singleflight deduplicates concurrent requests for the same provider
 //   - Use ClearCache() to manually invalidate all cached entries
 func FetchModels(ctx context.Context, providerID string) ([]RawModel, error) {
@@ -272,6 +258,16 @@ func FetchModels(ctx context.Context, providerID string) ([]RawModel, error) {
 		client := &http.Client{Timeout: httpTimeoutCopy()}
 		resp, fetchErr := client.Do(req)
 		if fetchErr != nil {
+			// An unreachable registry (no egress, a proxy that never
+			// answers) fails the same way on every call: remember it for
+			// the negative TTL so callers fall back at once instead of
+			// each waiting out the HTTP timeout. A cancelled caller says
+			// nothing about the registry and is not remembered.
+			if ctx.Err() == nil {
+				mu.Lock()
+				negativeCache[providerID] = time.Now()
+				mu.Unlock()
+			}
 			return nil, fmt.Errorf("modelregistry: fetch %s: %w", providerID, fetchErr)
 		}
 		defer resp.Body.Close()
@@ -288,6 +284,9 @@ func FetchModels(ctx context.Context, providerID string) ([]RawModel, error) {
 		}
 
 		if resp.StatusCode != http.StatusOK {
+			mu.Lock()
+			negativeCache[providerID] = time.Now()
+			mu.Unlock()
 			return nil, fmt.Errorf("modelregistry: fetch %s: HTTP %d", providerID, resp.StatusCode)
 		}
 

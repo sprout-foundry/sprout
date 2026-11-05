@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
@@ -40,6 +41,11 @@ type subagentLaunchSpec struct {
 	systemPromptText      string
 	enhancedPrompt        string
 	subagentWorkspaceRoot string
+	// maxIterations and timeout override the persona's run budget for this
+	// spawn (the `max_iterations` and `timeout_seconds` arguments). Zero
+	// means "use the persona's budget".
+	maxIterations int
+	timeout       time.Duration
 }
 
 // prepareSubagentLaunch parses the raw args map, validates paths and
@@ -96,6 +102,21 @@ func prepareSubagentLaunch(ctx context.Context, a *Agent, args map[string]interf
 			spec.outputFormat = strings.TrimSpace(fmtStr)
 			a.Logger().Debug("Subagent output_format specified: %s\n", spec.outputFormat)
 		}
+	}
+
+	// --- Parse optional run-budget overrides ---
+	// A task that legitimately needs more turns or wall-clock time than the
+	// persona's budget allows (a whole-tree audit, a long research pass) can
+	// raise it for this spawn. An invalid value is ignored rather than failing
+	// the spawn: the budget is advisory, and losing the task over a malformed
+	// argument is the worse outcome.
+	if n := positiveIntArg(args, "max_iterations"); n > 0 {
+		spec.maxIterations = n
+		a.Logger().Debug("Subagent max_iterations specified: %d\n", n)
+	}
+	if d := subagentTimeoutArg(args, "timeout_seconds"); d > 0 {
+		spec.timeout = d
+		a.Logger().Debug("Subagent timeout specified: %s\n", d)
 	}
 
 	// --- Validate working_dir ---

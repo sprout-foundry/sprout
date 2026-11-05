@@ -109,7 +109,7 @@ export interface TxnWorkspace {
   workspace_id?: string;
   repo_url?: string;
   status?: string;
-  /** "fly" | "runner" | "docker" (legacy). */
+  /** "fly" | "runner" | "firecracker" | "docker" (legacy). */
   backend?: string;
   /** Set on runner-hosted rows; only GET /workspace/{id} returns it. */
   runner_id?: string;
@@ -144,8 +144,11 @@ async function toTxnError(res: Response, action: string): Promise<Error> {
 
 /**
  * Where the workspace should live (SP-159 §159d): "auto" lets the platform
- * pick (the user's runner when one is available, else Fly), "fly" is the
- * cloud, "runner" pins one of the user's runners by id.
+ * pick (the user's runner when one is available, else the cloud hosts),
+ * "fly" is Fly specifically, "runner" pins one of the user's runners by id.
+ * "cloud" (create only) is the cloud-only create the full-workspace start
+ * uses: the platform's cloud hosts, never the caller's runner — see
+ * fullWorkspace.ts, which posts it directly rather than through here.
  */
 export type TxnHostChoice = { host: 'auto' } | { host: 'fly' } | { host: 'runner'; runnerId: string };
 

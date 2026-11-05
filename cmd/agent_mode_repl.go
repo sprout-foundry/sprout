@@ -60,7 +60,7 @@ func runInteractiveREPL(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			if len(autoQueued) > 0 {
 				query = autoQueued[0]
 				autoQueued = autoQueued[1:]
-				fmt.Fprintln(os.Stderr)
+				console.BlankLine()
 				if strings.HasPrefix(query, agent.WakeupBatchPrefix) {
 					console.GlyphPaused.Fprintf(os.Stderr, "auto-resume: background task completed — resuming")
 				} else if inputReader.IsPinned() {
@@ -75,6 +75,18 @@ func runInteractiveREPL(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 				// from inside a previous turn, or interactive provider/model
 				// selection during recovery).
 				inputReader.SetPrompt(cliui.BuildPromptPrefix(chatAgent.GetModel()))
+
+				// Return-to-prompt re-sync: a `!` shell command (whose
+				// child can take the TTY over — alt screen, hidden
+				// cursor, raw termios — and fail to fully restore it) or
+				// a timed-out security prompt may leave the terminal
+				// desynced from the footer/input model. Re-assert cooked
+				// termios, the primary screen, the cursor, and the
+				// footer's scroll region before the user starts typing.
+				// Idempotent when nothing is wrong. Must run here (the
+				// idle-prompt seam), never mid-turn, where the steer
+				// reader and streaming writer own the TTY.
+				console.ResyncTerminal()
 
 				var err error
 				query, err = inputReader.ReadLine()
@@ -100,7 +112,7 @@ func runInteractiveREPL(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 						// timing to detect the double-press.
 						now := time.Now()
 						if now.Sub(lastInterruptAt) < 2*time.Second {
-							fmt.Println()
+							console.SectionBreak()
 							console.GlyphInfo.Printf("Goodbye!")
 							printContinuationHint(chatAgent)
 							return nil
@@ -139,7 +151,7 @@ func runInteractiveREPL(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 
 			// Handle exit commands (before history — don't persist these)
 			if strings.ToLower(query) == "exit" || strings.ToLower(query) == "quit" {
-				fmt.Println()
+				console.SectionBreak()
 				console.Heading(os.Stdout, "Session summary")
 				chatAgent.PrintConversationSummary(true)
 				printContinuationHint(chatAgent)
@@ -175,6 +187,10 @@ func runInteractiveREPL(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 				// rebuild the prompt prefix so the next prompt reflects it.
 				inputReader.SetPrompt(cliui.BuildPromptPrefix(chatAgent.GetModel()))
 				footer.Refresh()
+				// A slash command is a turn too: close it with the same
+				// unconditional marker an LLM turn gets, so the user is
+				// never left guessing whether the command finished.
+				cliui.PrintTurnEndMarker()
 				continue
 			}
 
@@ -223,7 +239,6 @@ func runInteractiveREPL(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// Paired at the bottom with the existing dim `⎯ this turn: … ⎯`
 			// summary line, which acts as the closing separator.
 			if !fastPathExecuted {
-				fmt.Println()
 				cliui.PrintAssistantHeader(chatAgent.GetModel())
 			}
 
@@ -252,6 +267,7 @@ func runInteractiveREPL(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 
 			// Only start the spinner (and the full agent turn) when no fast
 			// path handled the query.
+			var turnErr error
 			if !fastPathExecuted {
 				indicator.Start(fmt.Sprintf("Thinking · %s", chatAgent.GetModel()))
 
@@ -269,6 +285,7 @@ func runInteractiveREPL(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 
 					// No fast path triggered, process normally via LLM
 					if err := ProcessQuery(ctx, chatAgent, eventBus, query); err != nil {
+						turnErr = err
 						indicator.Stop()
 						if !isReported(err) {
 							fmt.Fprint(os.Stderr, console.FormatErrorBlock(console.GlyphError.Prefix()+"Error", err))
@@ -309,6 +326,22 @@ func runInteractiveREPL(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// SP-048-3: refresh the footer at turn-end so cost / context /
 			// model changes (e.g. /model switch) land immediately.
 			footer.Refresh()
+			// State the outcome in plain language before the closing
+			// marker: succeeded, failed (with the classified cause, not a
+			// raw exception), or stopped partway. A fast-path turn needs no
+			// outcome line — its own output already is the outcome — but an
+			// LLM turn always gets one, because the REPL's own completion
+			// lines are suppressed while the terminal subscriber is active.
+			if !fastPathExecuted {
+				cliui.PrintTurnOutcome(cliui.TurnOutcomeFacts{
+					Err:               turnErr,
+					TerminationReason: chatAgent.GetLastRunTerminationReason(),
+					Verification:      chatAgent.LastVerificationResult(),
+					ChangedPaths:      chatAgent.TurnChangedPaths(),
+					Duration:          time.Since(turnStart),
+					MaxIterations:     chatAgent.GetMaxIterations(),
+				})
+			}
 			// SP-048-5c: print the per-turn summary line if any LLM tokens
 			// were actually consumed. Suppressed for zero-cost turns (slash
 			// commands, zsh fast paths, empty responses).

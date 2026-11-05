@@ -131,13 +131,23 @@ func (f *StatusFooter) Resize() {
 	}
 
 	f.applyScrollRegionLocked()
+	// Record the new geometry before redrawing: drawFullLocked declines to
+	// draw at a size Resize has not handled yet.
+	f.mu.Lock()
+	f.lastRows, f.lastCols = rows, cols
+	f.mu.Unlock()
 	f.drawLocked()
+	// Close the gap whoever owns the screen. It used to run only with an
+	// idle prompt or a picker up; a resize landing in between — the
+	// moment a turn ends, before the prompt is back — left the region's
+	// content at the top with the cursor parked on its new last row, so
+	// the next output started below a band of blank rows and the band
+	// pushed the latest transcript into scrollback.
+	f.closeGrowGapLocked(oldRows, overflow)
 	if idle != nil {
-		f.closeGrowGapLocked(oldRows, overflow)
 		idle.redrawAnchoredLocked(cols)
 	}
 	if picker != nil {
-		f.closeGrowGapLocked(oldRows, overflow)
 		picker.renderAnchoredLocked(rows-f.reservedRows(), cols)
 	}
 }
@@ -355,3 +365,14 @@ func (f *StatusFooter) watchResize(stopCh, doneCh chan struct{}) {
 // row). Picked to leave enough scroll region for the conversation even
 // on small terminals while comfortably handling typical multi-line
 // pastes / messages.
+
+// scheduleResize runs Resize on its own goroutine unless one is already in
+// flight. Callers hold outputMu, which Resize takes, hence the goroutine.
+func (f *StatusFooter) scheduleResize() {
+	if f.resizeInFlight.CompareAndSwap(false, true) {
+		go func() {
+			defer f.resizeInFlight.Store(false)
+			f.Resize()
+		}()
+	}
+}

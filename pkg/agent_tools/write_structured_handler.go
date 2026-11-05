@@ -114,7 +114,7 @@ func (h *writeStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 		}
 	}
 
-	format := inferStructuredFormat(path, getOptionalString(args, "format"))
+	format := InferStructuredFormat(path, getOptionalString(args, "format"))
 	if format == "" {
 		return ToolResult{Output: "unsupported structured format: use json or yaml", IsError: true},
 			agenterrors.NewValidation("unsupported structured format: use json or yaml", nil)
@@ -133,8 +133,8 @@ func (h *writeStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 			return ToolResult{Output: fmt.Sprintf("failed to parse schema: %v", err), IsError: true}, err
 		}
 		if errs := validateDataAgainstSchema(data, schema, "$"); len(errs) > 0 {
-			return ToolResult{Output: formatStructuredValidationError("write_structured_file", errs, "").Error(), IsError: true},
-				formatStructuredValidationError("write_structured_file", errs, "")
+			return ToolResult{Output: FormatStructuredValidationError("write_structured_file", errs, "").Error(), IsError: true},
+				FormatStructuredValidationError("write_structured_file", errs, "")
 		}
 	}
 

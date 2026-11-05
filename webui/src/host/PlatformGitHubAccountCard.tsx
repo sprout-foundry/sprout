@@ -1,8 +1,8 @@
 /**
  * GitHub account card for the hosted editor. GitHub is connected once, on
- * the Foundry account, and the platform supplies it to git — so this card
- * shows that connection and links to where it is managed instead of asking
- * for a token.
+ * the host's account, and the host supplies it to git — so this card shows
+ * that connection and links to where it is managed instead of asking for a
+ * token.
  */
 
 import { ExternalLink, Loader2 } from 'lucide-react';
@@ -11,6 +11,7 @@ import type { ReactElement } from 'react';
 import '../components/GitHubAccountPanel.css';
 import { isLayeredLayout } from '../config/layout';
 import { onPlatformLinkClick } from '../services/homeView';
+import { productName } from './branding';
 import { fetchPlatformGitHubConnected, platformGitHubSettingsHref } from './platformGitHub';
 import { useHost } from './useHost';
 
@@ -30,6 +31,7 @@ export default function PlatformGitHubAccountCard({
   // surface, matching the former isCloud branch (host.8). The host is read
   // unconditionally at the top so the hook order is stable.
   const host = useHost();
+  const name = productName(host);
   const [fetched, setFetched] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -73,8 +75,8 @@ export default function PlatformGitHubAccountCard({
     <div className={cardClass} data-testid="platform-gh-card">
       <span className="gh-account-name">
         {connected
-          ? 'GitHub is connected through your Sprout Foundry account.'
-          : 'Connect GitHub on your Sprout Foundry account to list and clone your repositories, including private ones.'}
+          ? `GitHub is connected through your ${name} account.`
+          : `Connect GitHub on your ${name} account to list and clone your repositories, including private ones.`}
       </span>
       <a
         className="gh-account-signout"

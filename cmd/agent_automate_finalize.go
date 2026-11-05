@@ -31,9 +31,9 @@ func finalizeAutomateSession(sessionFilePath string, runErr error) {
 }
 
 // recordContinuationStopReason annotates the current run's session record
-// with the continuation loop's stop reason. It is best-effort: a foreground
-// run has no session file, and the stop reason is metadata for post-mortems,
-// not a reason to fail the run.
+// with the continuation loop's stop reason and stall metadata. It is
+// best-effort: a foreground run has no session file, and the stop reason is
+// metadata for post-mortems, not a reason to fail the run.
 func recordContinuationStopReason(result workflow.ContinuationResult) {
 	path := strings.TrimSpace(agentAutomateRecordFile)
 	if path == "" {
@@ -47,6 +47,21 @@ func recordContinuationStopReason(result workflow.ContinuationResult) {
 		string(result.StopReason),
 		result.Continuations,
 		result.RunnableItems,
+	); err != nil {
+		fmt.Fprintf(os.Stderr, "warn: %v\n", err)
+	}
+	// Record the stall metadata (stalled-turn count, skipped items, and a
+	// short summary of the most recent stalled call) so a post-mortem can
+	// tell a clean finish from a run that stalled out.
+	var tool, args, output, reason string
+	if s := result.LastStallSummary; s != nil {
+		tool, args, output, reason = s.Tool, s.Args, s.Output, s.Reason
+	}
+	if err := automate.RecordSessionStall(
+		path,
+		result.StalledTurns,
+		result.SkippedItems,
+		tool, args, output, reason,
 	); err != nil {
 		fmt.Fprintf(os.Stderr, "warn: %v\n", err)
 	}

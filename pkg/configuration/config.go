@@ -96,6 +96,19 @@ type Config struct {
 	// legacy dual-gate path. Default: true.
 	UnifiedRiskResolver bool `json:"unified_risk_resolver,omitempty"`
 
+	// AutoRiskJudge enables the auto LLM risk-judge mode (SP-168). The LLM
+	// security analysis that already runs for Medium/High shell commands
+	// (cached, 2-second budget) doubles as the approver: an "approve"
+	// recommendation runs the command without a human prompt, "reject"
+	// fails the call fast with the LLM's reasoning so the agent takes a
+	// different path, and "review" keeps the human prompt when a surface is
+	// answerable (or fails fast in autonomous runs, which must not block or
+	// auto-approve an uncertain command). When false — or when the analysis
+	// is unavailable (no LLM client, timeout, hard block) — behavior falls
+	// back to the mode defaults: interactive surfaces prompt, non-interactive
+	// runs auto-approve Medium from the risk profile. Default: true.
+	AutoRiskJudge bool `json:"auto_risk_judge,omitempty"`
+
 	// DaemonMultiSession enables concurrent browser windows in daemon mode.
 	// Each connection gets its own chat session and agent. Default: true.
 	DaemonMultiSession bool `json:"daemon_multi_session,omitempty"`
@@ -120,6 +133,16 @@ type Config struct {
 	// SystemPromptText overrides the main agent system prompt inline.
 	// Empty means use the embedded default prompt.
 	SystemPromptText string `json:"system_prompt_text,omitempty"`
+
+	// SystemPromptCore replaces only the embedded core instructions: the
+	// project's AGENTS.md, memories and working directory are still added.
+	// SystemPromptText, when set, wins and replaces everything.
+	SystemPromptCore string `json:"system_prompt_core,omitempty"`
+
+	// AskUserEndsRun makes a question from the agent in a non-interactive
+	// run end that run, with the question as its result, so the host can
+	// ask the person and continue the work with their answer.
+	AskUserEndsRun bool `json:"ask_user_ends_run,omitempty"`
 
 	// RefreshSystemPromptOnModelChange re-derives the agent's system prompt
 	// on every provider/model swap. Defaults to false.
@@ -146,6 +169,14 @@ type Config struct {
 	// patterns for shell commands that auto-approve through the high-risk cascade.
 	ApprovedShellCommandPatterns []string `json:"approved_shell_command_patterns,omitempty"`
 
+	// ApprovedMCPTools is the user's persistent allowlist of MCP tools that
+	// run without an approval prompt (SP-170). Entries are either `<server>`
+	// (every tool on that server) or `<server>__<tool>` (one tool). The double
+	// underscore is the separator because server names may contain single
+	// underscores; matching is on whole segments, so `acme` never matches
+	// `acmecorp`. Case-sensitive and exact — no globs in v1.
+	ApprovedMCPTools []string `json:"approved_mcp_tools,omitempty"`
+
 	// CommandPolicies is the unified command policy layer with three actions:
 	// allow (auto-approve), ask (force prompt), deny (hard block).
 	CommandPolicies *CommandPolicies `json:"command_policies,omitempty"`
@@ -159,6 +190,11 @@ type Config struct {
 	// Command History Configuration
 	CommandHistoryByPath map[string][]string `json:"command_history_by_path,omitempty"`
 	HistoryIndexByPath   map[string]int      `json:"history_index_by_path,omitempty"`
+
+	// TrustedContentRoots records, per absolute workspace root, which paths the
+	// user classified as third-party content. Keyed by workspace root, then by
+	// path relative to it ("." for the root itself). true = third-party.
+	TrustedContentRoots map[string]map[string]bool `json:"trusted_content_roots,omitempty"`
 
 	// Change History Configuration
 	HistoryScope string `json:"history_scope,omitempty"` // "project" or "global"
@@ -196,6 +232,15 @@ type Config struct {
 	// appends "Assisted-by: sprout/<version> (<provider>/<model>)". Sprout
 	// never writes a Co-Authored-By line for a tool.
 	CommitAttribution string `json:"commit_attribution,omitempty"`
+	// CommitTrailers is the default list of git trailers ("Key: Value"
+	// lines) appended to commits sprout creates — the `commit.trailers`
+	// setting (docs: commit.trailers), e.g.
+	// ["Assisted-by: Claude Code (anthropic/claude-opus-5-5)"]. Written
+	// with git interpret-trailers semantics: a blank line before a new
+	// trailer block, identical trailers never duplicated. The repository's
+	// AGENTS.md "Commit Trailers" section contributes defaults too
+	// (git.DefaultCommitTrailers merges both sources).
+	CommitTrailers []string `json:"commit_trailers,omitempty"`
 
 	// Review Configuration
 	ReviewProvider string `json:"review_provider,omitempty"` // Provider for review commands (defaults to LastUsedProvider)
@@ -229,6 +274,15 @@ type Config struct {
 
 	// MaxContextTokens caps the effective context window. Nil or 0 means no cap.
 	MaxContextTokens *int `json:"max_context_tokens,omitempty"`
+
+	// CompactionCeilingTokens is an absolute ceiling on the live conversation
+	// (rel.2): when the effective context window exceeds this value, compaction
+	// is triggered at this absolute size (converted to a fraction of the
+	// window) rather than at the window-share fraction, whichever is lower.
+	// This keeps a 1M-token model from running to hundreds of thousands of
+	// tokens before anything is compacted. 0 (the default) means the built-in
+	// 300K ceiling applies.
+	CompactionCeilingTokens int `json:"compaction_ceiling_tokens,omitempty"`
 
 	// Notifications controls how the agent notifies the user when long-running turns complete.
 	Notifications *NotificationsConfig `json:"notifications,omitempty"`
@@ -272,6 +326,12 @@ type Config struct {
 	// invocation details in the conversation output. When false, tool
 	// calls are collapsed/hidden. Defaults to true.
 	ShowToolInvocations bool `json:"show_tool_invocations,omitempty"`
+
+	// MouseClickToPosition lets a click in the CLI's input place the caret.
+	// It needs the terminal's click reporting, which also captures the
+	// scroll wheel, so it is off by default: on, the plain wheel no longer
+	// scrolls the terminal's own history while sprout runs.
+	MouseClickToPosition bool `json:"mouse_click_to_position,omitempty"`
 
 	// Language is the user's preferred conversation language, used by the
 	// outbound language guard as a fallback when the user's
@@ -403,7 +463,7 @@ type APIKeys map[string]string
 var defaultProviderModels = map[string]string{
 	"openai":       "gpt-5-mini",
 	"zai":          "GLM-4.6",
-	"deepinfra":    "deepseek-ai/DeepSeek-V4-Flash-0731",
+	"deepinfra":    "deepseek-ai/DeepSeek-V4.1-Flash-1017",
 	"openrouter":   "openai/gpt-5",
 	"ollama-local": "qwen3-coder:30b",
 	"ollama-cloud": "deepseek-v4-flash",
@@ -449,6 +509,7 @@ func NewConfig() *Config {
 		CustomProviders:      make(map[string]CustomProviderConfig),
 		CommandHistoryByPath: make(map[string][]string),
 		HistoryIndexByPath:   make(map[string]int),
+		TrustedContentRoots:  make(map[string]map[string]bool),
 		MCP:                  mcp.DefaultMCPConfig(),
 		Preferences:          make(map[string]interface{}),
 		APITimeouts: &APITimeoutConfig{
@@ -462,6 +523,7 @@ func NewConfig() *Config {
 		EnableZshCommandDetection:   true,      // Enable zsh command detection by default
 		AutoExecuteDetectedCommands: true,      // Auto-execute detected commands without prompting
 		DaemonMultiSession:          true,      // SP-118 Phase 4: daemon default-on for multi-window
+		AutoRiskJudge:               true,      // SP-168: auto LLM risk-judge mode (LLM analysis is the approver)
 		SubagentTypes:               defaultSubagentTypes(),
 		Skills:                      defaultSkills(),
 		SubagentMaxParallel:         2,                                       // Default max parallel subagents

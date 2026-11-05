@@ -166,7 +166,7 @@ to compute the cap.
 ```
 1. cfg.MaxContextTokens is nil or 0 → return native (no cap)
 2. cfg.MaxContextTokens < EffectiveContextCapMinimum (1024) → error
-   (matches the /max-context and settings_defs validators)
+   (matches the settings_defs validator)
 3. Otherwise → min(native, cfg.MaxContextTokens)
 ```
 
@@ -198,7 +198,7 @@ one-time stderr notice fires at agent creation:
 ```
 ⚡ Context cap active: 300.0K (native: 1.00M)
   All requests will use at most 300.0K of context.
-  /max-context clear to remove, /max-context <N> to change.
+  /settings set max_context_tokens 0 to remove, /settings set max_context_tokens <N> to change.
 ```
 
 Skip when the cap equals the native window (no-op) and skip when no

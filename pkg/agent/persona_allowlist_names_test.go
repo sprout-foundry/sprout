@@ -98,9 +98,15 @@ func TestEveryPersonaAllowlistEntryNamesARegisteredTool(t *testing.T) {
 	type miss struct{ persona, tool string }
 	var misses []miss
 	for id, def := range defs {
+		// A host tool is registered by the host at run time (the headless
+		// agent API), so it is never in the built-in registry.
+		hostTools := map[string]bool{}
+		for _, name := range def.HostTools {
+			hostTools[strings.TrimSpace(name)] = true
+		}
 		for _, name := range def.AllowedTools {
 			name = strings.TrimSpace(name)
-			if name == "" || registered[name] || dynamicallyRegisteredTools[name] || pendingRegistrationTools[name] {
+			if name == "" || registered[name] || dynamicallyRegisteredTools[name] || pendingRegistrationTools[name] || hostTools[name] {
 				continue
 			}
 			misses = append(misses, miss{id, name})

@@ -34,7 +34,7 @@ func (c *ContextCommand) out() io.Writer {
 func (c *ContextCommand) Name() string { return "context" }
 
 // SafeDuringSteer returns true — /context is a config change with no turn
-// interaction, same shape as /max-context and /risk-profile.
+// interaction, same shape as /risk-profile.
 func (c *ContextCommand) SafeDuringSteer() bool { return true }
 
 func (c *ContextCommand) Description() string {

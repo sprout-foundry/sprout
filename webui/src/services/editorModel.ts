@@ -25,6 +25,8 @@ export interface EditorModelState {
   model: string;
   /** Providers with a saved key the editor can use. */
   key_providers: string[];
+  /** Display names for providers without a fixed one (a custom endpoint). */
+  provider_labels?: Record<string, string>;
   /** Whether to suggest an own key when managed credits run out. */
   recommend_byok: boolean;
 }

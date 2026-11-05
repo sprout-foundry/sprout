@@ -154,7 +154,7 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 			_, _ = fmt.Fprintf(os.Stderr,
 				"⚡ Context cap active: %s (native: %s)\n"+
 					"  All requests will use at most %s of context.\n"+
-					"  /max-context clear to remove, /max-context <N> to change.\n",
+					"  /settings set max_context_tokens 0 to remove, /settings set max_context_tokens <N> to change.\n",
 				agent.formatTokenCount(effectiveCap),
 				agent.formatTokenCount(nativeWindow),
 				agent.formatTokenCount(effectiveCap),

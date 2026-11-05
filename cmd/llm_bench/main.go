@@ -1,3 +1,7 @@
+// Command llm_bench benchmarks tokens/sec across several models and generation
+// settings (temperature, repetition penalty, MTP draft count), printing one
+// row per configuration.
+
 //go:build darwin && arm64 && cgo
 
 package main

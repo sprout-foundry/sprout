@@ -1924,10 +1924,10 @@ select option {
 }
 
 .onboarding-success {
-  color: #34d399;
+  color: var(--accent-success);
   font-size: 13px;
-  background: #0d3320;
-  border: 1px solid #166534;
+  background: var(--color-success-bg);
+  border: 1px solid color-mix(in srgb, var(--accent-success) 40%, transparent);
   border-radius: var(--radius-md);
   padding: 8px 10px;
   @media (prefers-reduced-motion: no-preference) {

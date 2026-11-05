@@ -103,6 +103,10 @@ export const cloudHost: SproutHost = {
   // The platform account, host-provided at runtime; the constant declares the
   // shape, so the value is left absent here.
   user: undefined,
+  // The hosted platform's own name. The platform brands the surfaces it hosts,
+  // so the name lives on the host side and Sprout reads it off the contract
+  // instead of hardcoding it.
+  branding: { name: 'Sprout Foundry' },
   // The platform usage summary, resolved live from the platform's billing
   // status via `platformEntitlements`; `resolve()` refreshes it in place.
   entitlements,
@@ -198,6 +202,9 @@ export const cloudHost: SproutHost = {
     folderPicker: false,
     automations: false,
     agentChanges: false,
+    // The hosted build has no shell of its own around it: the header's
+    // Start Building is how a project moves into a full workspace.
+    containerUpgrade: true,
     // The preview lifecycle (/api/preview/*) is served by a Sprout daemon:
     // a platform-registered ("hosted") preview is reported by the daemon
     // running inside a full workspace, which registers its port with the
@@ -214,5 +221,9 @@ export const cloudHost: SproutHost = {
     // The hosted platform keeps no chat session store of its own; the chat
     // list lives in the browser (the in-browser agent), so this stays off.
     chatSessions: false,
+    // The hosted agent runs in the browser, so the host may read the
+    // in-browser workspace's files (to carry them into a container when the
+    // project moves off the in-browser agent).
+    browserFiles: true,
   },
 };

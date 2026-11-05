@@ -382,6 +382,10 @@
         "request_id": {
           "type": "string"
         },
+        "secret": {
+          "type": "boolean",
+          "description": "True when the answer is a credential (masked input, redacted value); false for an ordinary confirmation or value."
+        },
         "status": {
           "type": "string"
         },
@@ -614,7 +618,7 @@
       "type": "object"
     },
     "PasswordRequestData": {
-      "description": "Payload for a password_request event. Password responses are never included.",
+      "description": "Payload for a password_request event. Covers any interactive prompt a running shell command is blocked on. Password responses are never included.",
       "properties": {
         "chat_id": {
           "type": "string"

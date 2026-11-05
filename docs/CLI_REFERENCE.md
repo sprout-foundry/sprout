@@ -60,7 +60,13 @@ sprout commit [flags]
 ```bash
 sprout commit --dry-run
 sprout commit --skip-prompt  # Auto-review and commit
+sprout commit --trailer "Assisted-by: Sprout (anthropic/claude-opus-5-5)"  # append a git trailer
 ```
+
+`--trailer "Key: Value"` is repeatable and joins the default trailers from the
+`commit_trailers` config (the `.sprout` config) and the repo's `AGENTS.md`
+`## Commit Trailers` section. Trailers are written with `git interpret-trailers`
+semantics and appear in `--dry-run` output.
 
 ### `sprout review`
 
@@ -441,7 +447,7 @@ In interactive `sprout` or `sprout agent`, use `/` for commands (tab-complete).
 | Command | Description |
 |---------|-------------|
 | `/skill` | Install, update, remove, list, enable, or disable skills |
-| `/transcript [preview\|markdown\|diff]` | Snapshot the current conversation to JSON for inspection |
+| `/transcript [preview\|markdown\|diff]` | Snapshot the current conversation to JSON for inspection (includes the session's provider/model) |
 | `/custom` | Manage custom providers |
 | `/risk-profile [name\|clear]` | Show or change the shell-command risk profile mid-session. With no args, lists profiles and marks the active one. See [SECURITY.md](SECURITY.md#risk-profiles). |
 

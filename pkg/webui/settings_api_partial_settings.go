@@ -103,6 +103,21 @@ func applyPathsAndContextSettings(cfg *configuration.Config, patch map[string]in
 			}
 		}
 	}
+	if v, ok := patch["compaction_ceiling_tokens"]; ok {
+		knownKeys["compaction_ceiling_tokens"] = true
+		if v == nil {
+			cfg.CompactionCeilingTokens = 0
+		} else {
+			n, ok2 := asInt(v)
+			if !ok2 || n < 0 {
+				return fmt.Errorf("compaction_ceiling_tokens must be a non-negative integer (0 = built-in default)")
+			}
+			if n > 0 && n < compactionCeilingMinimum {
+				return fmt.Errorf("compaction_ceiling_tokens must be at least %d when set (got %d)", compactionCeilingMinimum, n)
+			}
+			cfg.CompactionCeilingTokens = n
+		}
+	}
 	// ea_mode was the coordinator's startup-mode flag (interactive|queue).
 	// Queue mode was disabled; the config field was removed in this build. We
 	// accept-and-ignore the key so GET→PUT round-trips of older configs

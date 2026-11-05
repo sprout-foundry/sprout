@@ -14,17 +14,27 @@ import (
 )
 
 // AgentResult is the structured output produced when --output-format=json is used.
-// It captures everything a SaaS wrapper (e.g. Sprout Foundry) needs from a
-// non-interactive sprout run.
+// It captures everything a SaaS wrapper needs from a non-interactive sprout run.
 type AgentResult struct {
-	Status         string             `json:"status"`                     // "success" or "error"
+	Status         string             `json:"status"`                     // "success", "error", "needs_input", or "handed_off"
 	Error          string             `json:"error,omitempty"`            // error message if status=="error"
 	Query          string             `json:"query"`                      // the original prompt
 	Response       string             `json:"response,omitempty"`         // final assistant response text (success runs with an in-process agent)
 	FilesModified  []string           `json:"files_modified,omitempty"`   // files changed during execution
 	GitDiff        string             `json:"git_diff,omitempty"`         // unified diff of all changes
 	PullRequestURL string             `json:"pull_request_url,omitempty"` // URL of PR created during execution
+	Question       *AgentQuestion     `json:"question,omitempty"`         // the question that ended a "needs_input" run
+	Handoff        string             `json:"handoff,omitempty"`          // a "handed_off" run's note for the next run
 	Metrics        AgentResultMetrics `json:"metrics"`
+}
+
+// AgentQuestion is the question a run ended on (ask_user_ends_run): the host
+// asks the person and continues the work with their answer.
+type AgentQuestion struct {
+	Question string   `json:"question"`
+	Header   string   `json:"header,omitempty"`
+	Options  []string `json:"options,omitempty"`
+	Default  string   `json:"default,omitempty"`
 }
 
 // AgentResultMetrics holds execution metrics for structured output.
@@ -94,7 +104,14 @@ func emitJSONResult(query string, startTime time.Time, runErr error, a *agent.Ag
 		result.Metrics.SecurityLoopsDetected = a.GetSecurityLoopsDetected()
 	}
 
-	if runErr != nil {
+	if q := a.PendingQuestion(); q != nil {
+		// The run stopped to ask: not a failure, and its work so far is kept.
+		result.Status = "needs_input"
+		result.Question = &AgentQuestion{Question: q.Question, Header: q.Header, Default: q.Default}
+		for _, o := range q.Options {
+			result.Question.Options = append(result.Question.Options, o.Label)
+		}
+	} else if runErr != nil {
 		result.Status = "error"
 		result.Error = runErr.Error()
 	} else {
@@ -105,32 +122,30 @@ func emitJSONResult(query string, startTime time.Time, runErr error, a *agent.Ag
 		if a != nil {
 			result.Response = lastAssistantResponse(a)
 		}
+		// A run told it was near its deadline that left a handoff note
+		// stopped part way: the host continues it in a new run.
+		if note := handoffNote("."); note != "" {
+			result.Status = "handed_off"
+			result.Handoff = note
+		}
 	}
 
 	// Collect git diff (best-effort)
+	// The pieces are joined byte for byte: trimming a piece would drop a
+	// hunk's trailing blank context line (" "), leaving the hunk shorter
+	// than its header says and the patch unappliable.
 	var diffOutput string
 	noHEAD := false
 	if diff, err := exec.Command("git", "diff", "HEAD").Output(); err == nil {
-		trimmed := strings.TrimSpace(string(diff))
-		if trimmed != "" {
-			diffOutput = trimmed
-		}
+		diffOutput = appendDiffPiece(diffOutput, string(diff))
 	} else {
 		// No HEAD ref - try combining unstaged and staged diffs
 		noHEAD = true
-		var parts []string
 		if unstaged, err := exec.Command("git", "diff").Output(); err == nil {
-			if trimmed := strings.TrimSpace(string(unstaged)); trimmed != "" {
-				parts = append(parts, trimmed)
-			}
+			diffOutput = appendDiffPiece(diffOutput, string(unstaged))
 		}
 		if staged, err := exec.Command("git", "diff", "--cached").Output(); err == nil {
-			if trimmed := strings.TrimSpace(string(staged)); trimmed != "" {
-				parts = append(parts, trimmed)
-			}
-		}
-		if len(parts) > 0 {
-			diffOutput = strings.Join(parts, "\n")
+			diffOutput = appendDiffPiece(diffOutput, string(staged))
 		}
 	}
 
@@ -140,7 +155,6 @@ func emitJSONResult(query string, startTime time.Time, runErr error, a *agent.Ag
 	// We capture the untracked file list here to reuse later for FilesModified population.
 	var untrackedFiles []string
 	if untracked, err := exec.Command("git", "ls-files", "--others", "--exclude-standard").Output(); err == nil {
-		var untrackedParts []string
 		for _, f := range strings.Split(strings.TrimSpace(string(untracked)), "\n") {
 			if f = strings.TrimSpace(f); f != "" {
 				untrackedFiles = append(untrackedFiles, f)
@@ -153,16 +167,8 @@ func emitJSONResult(query string, startTime time.Time, runErr error, a *agent.Ag
 						continue
 					}
 				}
-				if trimmed := strings.TrimSpace(string(d)); trimmed != "" {
-					untrackedParts = append(untrackedParts, trimmed)
-				}
+				diffOutput = appendDiffPiece(diffOutput, string(d))
 			}
-		}
-		if len(untrackedParts) > 0 {
-			if diffOutput != "" {
-				diffOutput += "\n"
-			}
-			diffOutput += strings.Join(untrackedParts, "\n")
 		}
 	}
 
@@ -259,4 +265,18 @@ func lastAssistantResponse(a *agent.Agent) string {
 		}
 	}
 	return ""
+}
+
+// appendDiffPiece appends one git diff's output to a combined diff, unchanged
+// apart from ending it with a newline. An empty (or whitespace-only) piece adds
+// nothing. The piece is never trimmed: a hunk's last line can be a blank
+// context line (a single space), which a trim would remove.
+func appendDiffPiece(combined, piece string) string {
+	if strings.TrimSpace(piece) == "" {
+		return combined
+	}
+	if !strings.HasSuffix(piece, "\n") {
+		piece += "\n"
+	}
+	return combined + piece
 }

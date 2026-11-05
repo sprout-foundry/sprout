@@ -572,6 +572,34 @@ describe('password_request', () => {
       requestId: 'pw-123',
       command: 'sudo apt install',
       prompt: '[sudo] password for dev:',
+      // Absent in the payload means a legacy backend that only sent
+      // passwords, so the dialog masks.
+      secret: true,
+    });
+  });
+
+  it('marks a non-secret prompt so the dialog renders a plain field', () => {
+    const { stateHolder } = setup();
+
+    act(() => {
+      hookHandleEvent!({
+        id: 'evt-pw-2',
+        type: 'password_request',
+        data: {
+          request_id: 'pw-456',
+          command: 'rm -i build.log',
+          prompt: 'Overwrite existing file? [y/N]',
+          secret: false,
+          timestamp: '2026-09-11T18:00:01Z',
+        },
+      });
+    });
+
+    expect(stateHolder.current.passwordRequest).toEqual({
+      requestId: 'pw-456',
+      command: 'rm -i build.log',
+      prompt: 'Overwrite existing file? [y/N]',
+      secret: false,
     });
   });
 

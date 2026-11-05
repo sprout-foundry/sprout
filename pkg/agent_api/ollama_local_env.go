@@ -43,6 +43,7 @@ type OllamaLocalClient struct {
 	config        ollamaLocalConfig
 	cacheMu       sync.RWMutex
 	cachedModels  []ModelInfo
+	cachedCaps    map[string][]string
 	cachedAt      time.Time
 }
 

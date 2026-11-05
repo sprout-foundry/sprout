@@ -1,4 +1,6 @@
 dist
 node_modules
+.sprout/
 .astro
+design/
 *.log

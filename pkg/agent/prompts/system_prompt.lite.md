@@ -63,6 +63,12 @@ These touch only files YOU edited. `git checkout` / `git reset` discard EVERYTHI
 - **Build failures**: STOP → ANALYZE the compile error → TARGET only that error → VALIDATE rebuild
 - **Import cycles**: break incrementally; prefer existing functions; validate build after each removal
 
+## Code Comments
+- High bar: a comment stays only if it explains a non-obvious why or flags something unexpected; no change history, no PR/commit references, present tense only.
+- If a comment only documents a decision made during a change, delete it — that belongs in the commit message or PR description.
+- Don't duplicate documentation available elsewhere.
+- Comment on the definition it describes, not the use site (unless external).
+
 ## Completion Criteria
 End with a clear completion summary only after:
 - All requested work completed and verified
@@ -82,6 +88,7 @@ When delegating to a subagent:
 - Use `run_subagent` with a focused persona (coder, tester); for code review use `review_changes`, not a `reviewer` subagent
 - Routine, well-scoped subtasks (read/search, summarise, mechanical edits, run a test and report) go to the `worker` persona with only the files, goal, and expected output format. The worker runs on a cheaper model when the worker role is set, the coder model when unset. Keep planning, debugging, design decisions, and the final review on the coder model — don't delegate those to the worker.
 - Provide clear context: files involved, task goal, constraints
+- One question or file set per subagent; one that exhausts its budget returns nothing, so split broad audits into separate calls
 - Wait for completion before proceeding
 - Review the subagent's `files_modified` manifest before acting on its changes
 - Do not use parallel subagents — serialize them to avoid file conflicts

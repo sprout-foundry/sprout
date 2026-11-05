@@ -63,6 +63,25 @@ func (sp *sproutProvider) doChatWithRetry(ctx context.Context, req *core.ChatReq
 
 		lastErr = err
 
+		// A malformed inline image payload is a request-body problem, not a
+		// transport one: the provider rejects the same bytes every time.
+		// Strip the images that do not decode and retry once without them,
+		// instead of burning the retry budget and reporting an
+		// authentication failure. When nothing could be stripped, fail now
+		// with a message naming the real cause.
+		if isImagePayloadError(err) {
+			stripped := stripInvalidImagePayloads(req.Messages)
+			if len(stripped) != len(req.Messages) || messagesImageCount(stripped) != messagesImageCount(req.Messages) {
+				req.Messages = stripped
+				sp.clearPastedImages()
+				if sp.agent != nil && sp.agent.eventBus != nil {
+					sp.agent.publishRetryEvent(err, attempt, maxRetries, sp.agent.GetProvider(), true)
+				}
+				continue
+			}
+			return nil, classifyImagePayloadError(err)
+		}
+
 		// Record the error for observability and emit retry event.
 		sp.recordProviderError(err, attempt)
 		if sp.agent != nil && sp.agent.eventBus != nil {
@@ -162,7 +181,12 @@ func (sp *sproutProvider) doChatNonStream(ctx context.Context, req *core.ChatReq
 		h.SetMaxTokensHint(sp.getMaxTokensHint())
 	}
 
-	resp, err := sp.currentClient().SendChatRequest(ctx, messages, sproutReq.Tools, sproutReq.Reasoning, false)
+	reasoning, disableThinking := sp.effectiveReasoning()
+	if sproutReq.Reasoning != "" {
+		reasoning = sproutReq.Reasoning
+	}
+
+	resp, err := sp.currentClient().SendChatRequest(ctx, messages, sproutReq.Tools, reasoning, disableThinking)
 	if err != nil {
 		return nil, err
 	}
@@ -221,8 +245,19 @@ func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatReques
 		}
 	}
 	guard := NewRepetitionGuard(sp.repetitionGuardConfigFromAgent(), guardSink)
+	// The reasoning-channel guard watches reasoning_content with the same
+	// line-run detection. A confirmed reasoning loop does not cut the
+	// stream — the reply that follows is usable and the loop is already in
+	// the context the model reads next — so it steers instead: scrub the
+	// degenerated reasoning from history and arm the nudge. It only
+	// observes; reasoning chunks are delivered unchanged.
+	reasoningGuard := NewRepetitionGuard(sp.reasoningGuardConfigFromAgent(), nil)
 	callback := func(content string, contentType string) {
 		if contentType == "reasoning" {
+			reasoningGuard.Write(content)
+			if reasoningGuard.Looping() {
+				sp.steerReasoningLoop(reasoningGuard.LoopEvidence())
+			}
 			sp.agent.output.GetReasoningBuffer().WriteString(content)
 			if router := sp.agent.OutputRouter(); router != nil {
 				router.RouteStreamChunk(content, contentType)
@@ -237,10 +272,23 @@ func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatReques
 	// The buffer-only path keeps its single-attempt transport (it had no
 	// backoff retries before the guard existed); the repetition guard adds
 	// only the cut-and-retry-once handling on top.
-	attemptFn := func(attemptCtx context.Context, msgs []api.Message, cb api.StreamCallback) (*api.ChatResponse, error) {
-		return sp.currentClient().SendChatRequestStream(attemptCtx, msgs, sproutReq.Tools, sproutReq.Reasoning, false, cb)
+	reasoning, disableThinking := sp.effectiveReasoning()
+	if sproutReq.Reasoning != "" {
+		reasoning = sproutReq.Reasoning
 	}
-	resp, err := sp.streamWithRepetitionGuard(ctx, messages, callback, holdback, guard, attemptFn)
+	attemptFn := func(attemptCtx context.Context, msgs []api.Message, cb api.StreamCallback) (*api.ChatResponse, error) {
+		return sp.currentClient().SendChatRequestStream(attemptCtx, msgs, sproutReq.Tools, reasoning, disableThinking, cb)
+	}
+	// The recovery FINAL attempt runs at a capped reasoning effort (see the
+	// ChatStream counterpart): the degeneration is effort-dose dependent, so
+	// re-seeding at the recommended agentic depth — never above the configured
+	// effort, a no-op where the model has no effort knob — is the pre-model
+	// lever that makes the recovery re-seed more likely to land.
+	recoveryReasoning := cappedRecoveryReasoning(reasoning)
+	recoveryAttemptFn := func(attemptCtx context.Context, msgs []api.Message, cb api.StreamCallback) (*api.ChatResponse, error) {
+		return sp.currentClient().SendChatRequestStream(attemptCtx, msgs, sproutReq.Tools, recoveryReasoning, disableThinking, cb)
+	}
+	resp, err := sp.streamWithRepetitionGuard(ctx, messages, callback, holdback, guard, reasoningGuard, attemptFn, recoveryAttemptFn)
 	if err != nil {
 		return nil, err
 	}
@@ -286,6 +334,13 @@ func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatReques
 	// wrong-language stream.
 	if holdback != nil {
 		sp.finalizeStreamHoldback(ctx, holdback, resp)
+	}
+	// A steered turn's response is scrubbed before seed records it (see
+	// scrubResponseReasoning): the mid-stream scrub only sees history that
+	// already existed, so the reply that triggered the steering is cleaned
+	// here, on its way into state.
+	if sp.agent != nil && sp.agent.reasoningLoopNudgeForTurn() != "" {
+		sp.scrubResponseReasoning(resp)
 	}
 
 	return sproutResponseToSeed(resp), nil

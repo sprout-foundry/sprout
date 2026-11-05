@@ -7,7 +7,8 @@
 
 import type { EventsProvider } from '@sprout/events';
 import { useCallback } from 'react';
-import { useHostCapabilities } from '../host';
+import { useHost } from '../host';
+import { hostRunsInBrowserAgent } from '../host/agentBackend';
 import type { AppStoreSetState } from '../contexts/AppStore';
 import { clientFetch } from '../services/clientSession';
 
@@ -31,7 +32,7 @@ export interface UseSecurityHandlersReturn {
   handleSecurityApprovalResponse: (requestId: string, approved: boolean, action?: SecurityApprovalAction) => void;
   handleSecurityPromptResponse: (requestId: string, response: boolean) => void;
   handleAskUserResponse: (requestId: string, response: string) => void;
-  handlePasswordResponse: (requestId: string, password: string) => void;
+  handlePasswordResponse: (requestId: string, password: string, cancelled?: boolean) => void;
   handleModelSelectionResponse: (model: string) => void;
   handleModelSelectionClose: () => void;
 }
@@ -41,7 +42,8 @@ export function useSecurityHandlers({
   provider,
   setState,
 }: UseSecurityHandlersOptions): UseSecurityHandlersReturn {
-  const { localTerminal } = useHostCapabilities();
+  // Where the agent loop runs decides how an ask_user answer reaches it.
+  const inBrowserAgent = hostRunsInBrowserAgent(useHost());
 
   const handleSecurityApprovalResponse = useCallback(
     (requestId: string, approved: boolean, action?: SecurityApprovalAction) => {
@@ -90,8 +92,9 @@ export function useSecurityHandlers({
       // The in-browser agent runs its loop in the WASM binary, so the
       // ask_user response must be delivered to the in-process
       // AskUserManager via the wasm-local endpoint (no backend is
-      // listening for the WebSocket event on a hosted shell).
-      if (!localTerminal) {
+      // listening for the WebSocket event). A daemon — local, or a hosted
+      // workspace's reached through the host — takes it over the socket.
+      if (inBrowserAgent) {
         clientFetch('/api/ask-user/response', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -152,20 +155,29 @@ export function useSecurityHandlers({
       });
       setState((_prev) => ({ askUserRequest: null }));
     },
-    [eventsProvider, setState, localTerminal],
+    [eventsProvider, setState, inBrowserAgent],
   );
 
   // handlePasswordResponse delivers the user's typed password back to the
-  // agent's broker. Empty password = cancel (shell sees EOF on stdin).
+  // agent's broker. An empty password is a legitimate answer for a
+  // non-secret prompt (accept the default), so cancellation is signalled
+  // explicitly: the shell then closes the child's stdin and the command
+  // stops instead of receiving a blank line.
   // CRITICAL: this hook never logs the password value — the dialog's
   // state lives in React (not the store) so nothing in the persistence
   // path captures it either.
   const handlePasswordResponse = useCallback(
-    (requestId: string, password: string) => {
+    (requestId: string, password: string, cancelled = false) => {
       if (!eventsProvider.isConnected()) return;
       eventsProvider.sendEvent({
         type: 'password_response',
-        data: { request_id: requestId, password },
+        data: {
+          request_id: requestId,
+          password,
+          // An empty submission is a real answer; only an explicit dismiss
+          // cancels.
+          cancelled: password === '' && cancelled === true,
+        },
       });
       setState((_prev) => ({ passwordRequest: null }));
     },

@@ -1,5 +1,7 @@
 import { X, Download } from 'lucide-react';
 import React, { useState, useEffect, useCallback } from 'react';
+import { productName } from '../host/branding';
+import { useHost } from '../host/useHost';
 import './InstallPromptBanner.css';
 
 interface BeforeInstallPromptEvent extends Event {
@@ -13,13 +15,16 @@ const DISMISSAL_KEY = 'sprout:install-prompt-dismissed';
  * PWA install prompt banner for the editor.
  *
  * Listens for the browser's `beforeinstallprompt` event and shows a
- * dismissible banner prompting the user to install the app. Only active
- * in cloud mode (the banner is rendered conditionally by the parent).
+ * dismissible banner prompting the user to install the app. The app root
+ * renders it in every mode; the browser decides whether to offer an install
+ * (it fires the event only where the page is installable).
  *
  * The banner is shown at most once per session after dismissal (persisted
  * in localStorage).
  */
 const InstallPromptBanner: React.FC = () => {
+  const host = useHost();
+  const name = productName(host);
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [visible, setVisible] = useState(false);
 
@@ -58,9 +63,7 @@ const InstallPromptBanner: React.FC = () => {
   return (
     <div className="install-prompt-banner" role="banner">
       <Download size={16} className="install-prompt-icon" />
-      <span className="install-prompt-text">
-        Install Sprout Foundry for offline access and a native app experience.
-      </span>
+      <span className="install-prompt-text">Install {name} for offline access and a native app experience.</span>
       <button className="install-prompt-btn install-prompt-btn-primary" onClick={handleInstall}>
         Install
       </button>

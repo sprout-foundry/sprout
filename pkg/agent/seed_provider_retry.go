@@ -59,6 +59,9 @@ func exponentialBackoffDelay(attempt int) time.Duration {
 // Retries are performed on:
 //   - RateLimitError (always retryable)
 //   - ProviderError with a retryable cause (server errors, overload)
+//   - retryable network/timeout TypedErrors — a mid-stream connection reset
+//     or the streaming first-token/idle timeout (agenterrors.NewNetwork),
+//     which the legacy category helpers no longer misread as permanent
 func isRetryableProviderError(err error) bool {
 	if err == nil {
 		return false
@@ -69,6 +72,14 @@ func isRetryableProviderError(err error) bool {
 	if agenterrors.IsProviderError(err) && agenterrors.IsRetryable(err) {
 		return true
 	}
+	// Typed network/timeout failures carry their retryability on the
+	// TypedError itself (set from RetryableFor at construction). Only
+	// network and timeout are retryable in the LLM retry loops; a
+	// non-retryable typed error (validation, not_found, ...) still fails at
+	// once, as a 401 does.
+	if te := agenterrors.AsTypedError(err); te != nil {
+		return te.Retryable && (te.Code == agenterrors.CodeNetwork || te.Code == agenterrors.CodeTimeout)
+	}
 	return false
 }
 
@@ -78,14 +89,23 @@ func (sp *sproutProvider) recordProviderError(err error, retries int) {
 		return
 	}
 	msg := err.Error()
-	sp.agent.state.SetLastProviderError(&ProviderErrorInfo{
+	info := &ProviderErrorInfo{
 		Timestamp:  time.Now().Format(time.RFC3339),
 		Provider:   sp.agent.GetProvider(),
 		Model:      sp.agent.GetModel(),
 		StatusCode: extractHTTPStatusCode(msg),
 		Message:    msg,
 		Retries:    retries,
-	})
+	}
+	// Surface the connection-reuse diagnostic (rel.5 c) so a stale-pool reset
+	// can be told apart from a fresh-dial fault. Only present when the
+	// provider attached httptrace diagnostics to the network TypedError.
+	if te := agenterrors.AsTypedError(err); te != nil {
+		if reused, ok := te.Details["conn_reused"].(bool); ok {
+			info.ConnReused = &reused
+		}
+	}
+	sp.agent.state.SetLastProviderError(info)
 }
 
 // clearProviderError clears the last provider error (on success).

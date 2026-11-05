@@ -117,7 +117,7 @@ func (c *httpOllamaClient) Chat(ctx context.Context, req *localOllamaChatRequest
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("ollama chat status %d: %s", resp.StatusCode, string(respBody))
+		return fmt.Errorf("ollama chat failed: HTTP %d: %s", resp.StatusCode, string(respBody))
 	}
 
 	streaming := req.Stream != nil && *req.Stream

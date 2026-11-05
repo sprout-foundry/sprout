@@ -11,7 +11,28 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
+// checkWriteContext guards a mutation. A tool call whose context was
+// cancelled (user stop, turn stall, per-call timeout) has already been
+// reported to the model as a failure, but the handler goroutine keeps
+// running: without this check the write lands anyway and the model, told the
+// edit failed, applies it again — duplicating content. Refusing the write
+// keeps the failure honest ("the file is unchanged").
+func checkWriteContext(ctx context.Context) error {
+	if ctx == nil {
+		return nil
+	}
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("write cancelled before it ran; the file is unchanged: %w", err)
+	}
+	return nil
+}
+
 func WriteFile(ctx context.Context, filePath, content string) (string, error) {
+	// A call already abandoned by its caller must not start work at all.
+	if err := checkWriteContext(ctx); err != nil {
+		return "", err
+	}
+
 	// SECURITY: Validate parent directory is safe to access (handles new files)
 	// PrecheckFileAccess should have already set up the bypass context for
 	// "allow" paths. For "prompt" paths, this will fail with a filesystem error
@@ -34,6 +55,9 @@ func WriteFile(ctx context.Context, filePath, content string) (string, error) {
 	}
 
 	// Write the file
+	if err := checkWriteContext(ctx); err != nil {
+		return "", err
+	}
 	err = os.WriteFile(cleanPath, []byte(content), filePerm)
 	if err != nil {
 		return "", fmt.Errorf("write file %s: %w", cleanPath, err)

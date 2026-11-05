@@ -1,0 +1,218 @@
+# The headless agent (`@sprout-foundry/workspace/agent`)
+
+`@sprout-foundry/workspace/agent` runs Sprout's in-browser agent — the Go→WASM
+module the workspace runs when a host serves no daemon — as an engine for a
+host's own interface. It loads the module, selects a persona, registers the
+host's own tools, sends model calls to the host's chat endpoint, and streams
+typed events: text, tool steps, `ask_user` questions, file writes, mockup
+progress, the end of a turn. The host renders all of it; none of Sprout's
+views or providers are involved.
+
+The entry point imports nothing from React or Sprout's web UI. It is one small
+self-contained module (`dist/agent.js`); the WASM binary is fetched at runtime
+from the host's `wasmBase`.
+
+```ts
+import { createAgent } from "@sprout-foundry/workspace/agent";
+
+const agent = await createAgent({
+  wasmBase: "/assets/sprout-wasm",   // where the host serves dist/wasm/
+  modelEndpoint: "/proxy/chat",      // OpenAI-compatible, same origin
+  persona: "planner",
+  context: capabilityManifestText,
+  hostTools: [
+    {
+      name: "start_change",
+      description: "Hand a change to the project's task queue.",
+      parameters: {
+        type: "object",
+        properties: { title: { type: "string" }, summary: { type: "string" } },
+        required: ["title"],
+      },
+      handler: async (args, { chatId }) => {
+        const task = await queue.create(args);
+        return `Queued as task ${task.id}.`;
+      },
+    },
+  ],
+});
+
+agent.on("text", (e) => appendWords(e.text));
+agent.on("tool_start", (e) => showStep(e.tool, e.argsSummary));
+agent.on("ask_user", (q) => showButtons(q, (value) => agent.answer(q.id, value)));
+agent.on("file_written", (f) => {
+  if (f.path.startsWith("design/screens/")) showScreen(f.path, f.content);
+  if (f.path === ".sprout/plan.json") showPlan(JSON.parse(f.content ?? "{}"));
+});
+agent.on("mockup", (m) => (m.phase === "chunk" ? appendMockup(m.chunk) : null));
+agent.on("done", (d) => endTurn(d.status));
+
+await agent.send("A booking page for my yoga studio");
+```
+
+## API
+
+```ts
+createAgent(options: CreateAgentOptions): Promise<HeadlessAgent>
+
+interface CreateAgentOptions {
+  wasmBase: string;            // URL of the served dist/wasm/ directory
+  modelEndpoint: string;       // chat endpoint base; the agent posts to {base}/chat/completions
+  model?: string;              // model id sent to the endpoint (default "managed")
+  contextWindow?: number;      // default 200,000
+  supportsVision?: boolean;    // default true
+  reasoningEffort?: string;    // "low" | "medium" | "high"; omit for the model's default
+  persona?: string;            // persona id or alias; omit for the default agent
+  hostTools?: HostTool[];
+  files?: { store?: AgentFileStore; initial?: Record<string, string> };
+  context?: string;            // appended to the system prompt
+  chatId?: string;             // default: generated
+  history?: { role: "user" | "assistant"; content: string }[]; // resume a conversation
+  allowedOrigins?: string[];   // restrict the agent's outbound HTTP
+  remoteRegistries?: boolean;  // let the module fetch Sprout's model/provider catalogs (default false)
+  runtime?: SproutWasmBridge | Promise<SproutWasmBridge>; // a module the host loaded itself
+}
+
+interface HeadlessAgent {
+  readonly chatId: string;
+  readonly busy: boolean;
+  send(message: string): Promise<TurnResult>;      // resolves when the turn ends
+  cancel(): void;                                    // the turn ends "interrupted"
+  answer(questionId: string, value: string | string[]): boolean;
+  on(type, handler): () => void;                     // one event type; returns unsubscribe
+  subscribe(handler): () => void;                    // every event
+  files: AgentFiles;
+  reset(): void;                                     // forget the conversation
+  dispose(): void;                                   // stop, remove host tools, forget
+}
+
+interface TurnResult { status: "completed" | "interrupted" | "failed"; response: string; error?: string }
+```
+
+Also exported: `loadSproutWasm({ wasmBase, store?, fetch?, remoteRegistries?, env? })` (load the module
+ahead of the first agent — prefetch it on a landing page), `memoryFileStore()`,
+`providerConfig`, `resolveModelEndpoint`, and every type.
+
+## Events
+
+Every `send` emits `turn_start` first and exactly one `done` last.
+
+| `type` | Fields | Source |
+|---|---|---|
+| `turn_start` | `message` | `send` |
+| `text` | `text` | streamed reply text |
+| `reasoning` | `text` | streamed reasoning, when the model sends it |
+| `tool_start` | `toolCallId`, `tool`, `displayName?`, `args?` (parsed; absent when cut for size), `argsSummary` | a tool call begins |
+| `tool_end` | `toolCallId`, `tool`, `status` (`completed`/`failed`), `result?` (≤2,000 chars), `error?`, `durationMs?` | a tool call ends |
+| `ask_user` | `id`, `question`, `header?`, `options` (`{label, value, description?}`), `multiSelect`, `default?` | the `ask_user` tool; answer with `answer(id, value)` (an array for multi-select) |
+| `ask_user_cancelled` | `id` | the question timed out or the turn was stopped |
+| `file_written` | `path` (workspace-relative), `action`, `content` (after the change; `null` when deleted) | a file tool call (`write_file`, `edit_file`, the structured-file tools, the plan tools) succeeded |
+| `mockup` | `phase` (`start`/`chunk`/`done`/`error`), `path?`, `chunk?`, `html?`, `error?`, `data` | a tool streaming a mockup (`mockup_start`/`_chunk`/`_done`/`_error`) |
+| `error` | `message`, `fatal` | a reported error; `fatal: true` is the turn failing (then `done` with `failed`) |
+| `done` | `status`, `response`, `error?` | the turn ended |
+| `raw` | `name`, `data` | any other agent event, untranslated (other tools' progress, metrics, todo updates) |
+
+`file_written` is reported when the call completes, with the file's content
+read back. A screen appears whole, not while the model writes it: the model's
+tool arguments arrive complete. `tool_start` for `write_file` carries the
+content in `args` a moment earlier (unless it is over 8 KB). For a mockup that
+renders as it is generated, the tool streams `mockup` chunks; treat the `done`
+document as authoritative (a chunk can be lost under heavy load).
+
+## Personas
+
+`persona` selects a persona from Sprout's catalog by id or alias (`designer`,
+`general`, the planner when it ships). The agent then runs with the persona's
+prompt, and its `allowed_tools` become the whole tool set: the model is
+offered only those tools, and a call to anything else is an unknown tool.
+An unknown persona fails the first turn (`done` with `failed`, the error
+lists the available personas).
+
+**Host tools follow the same rule:** with a persona, a host tool is offered
+only when the persona's `allowed_tools` names it (the planner lists
+`start_change`). Without a persona, the default agent is offered every tool,
+host tools included.
+
+## Host tools
+
+A host tool is registered with the module's tool registry for as long as the
+agent lives (`dispose` removes it). Its `parameters` JSON schema is offered to
+the model as written (nested objects, enums, array items included). A call
+runs `handler(args, { chatId, toolName })`; a string return is the result the
+model reads, any other value is sent as JSON, and a thrown error is a failed
+call whose message the model sees. `timeoutMs` bounds a call (default five
+minutes). A name a built-in tool uses is refused (`createAgent` throws).
+
+The agent's risk classifier treats a host tool as safe, so a call is not put
+to an approval prompt: the handler is the host's own code and decides what
+to do.
+
+## Model calls and authentication
+
+The agent's provider is an OpenAI-compatible endpoint at `modelEndpoint`
+(`{modelEndpoint}/chat/completions`, streamed with SSE, with
+`stream_options.include_usage`). No `Authorization` header is sent. The call
+is a plain `fetch` from the page, so a same-origin endpoint receives the
+page's cookies — the platform's metered chat proxy
+authenticates the person and meters the call exactly as it does for the
+workspace's in-browser agent. The agent adds no key of its own
+(`requires_api_key: false`). A cross-origin endpoint receives no cookies;
+serve the proxy on the page's origin.
+
+**One request per model call.** The host states the model — `model`,
+`contextWindow`, `supportsVision`, `reasoningEffort` — so the agent asks the
+endpoint for nothing else: the provider is configured with
+`disable_model_discovery` (no `/models` listing, no backend probes, no
+model-registry lookup), and the loader starts the module with Sprout's
+published model and provider catalogs switched off
+(`SPROUT_MODEL_REGISTRY_URL=off`, `SPROUT_PROVIDER_REGISTRY_URL=off`; pass
+`remoteRegistries: true` to keep them). A turn's first request is the chat
+completion.
+
+## Files
+
+The agent works in an in-memory filesystem; the workspace is `/workspace`
+and `files` paths are relative to it:
+
+- `files.read(path)`, `files.list(dir?)`, `files.walk()` — render design
+  screens and the plan;
+- `files.write(path, content)`, or `files.initial` — seed an existing
+  project's files before a turn;
+- `files.snapshot()` — every workspace file with its content (`.git` and
+  `node_modules` left out).
+
+Before a project exists the files live only in the browser. Give
+`files.store` an `AgentFileStore` (`load`, `save`, `delete` — IndexedDB, for
+example) to keep them across reloads; it is mirrored on every write and read
+once at startup. The store receives the runtime's own files too (its
+configuration under `/home/user`), not only the workspace. At the handoff the
+host commits `files.snapshot()` into the new repository — through its git
+proxy, or by writing the files into a checkout — and the plan
+(`.sprout/plan.json`) and screens (`design/screens/*.html`) the planner wrote
+become the project's first commit.
+
+## One runtime per page
+
+The WASM module registers one global; its filesystem, configuration and tool
+registry are shared by every agent on the page. Several agents are separate
+conversations (`chatId`) over the same files; events and host tool calls are
+routed to the agent that owns them. The first load decides the file store. A
+page that also mounts the workspace views shares the module with them.
+
+## Serving the assets
+
+Serve the package's `dist/wasm/` (see [workspace-package.md](workspace-package.md#wasm-assets))
+and pass its URL as `wasmBase`. The binary is large (tens of MB, much smaller
+compressed): serve it with `Content-Type: application/wasm` (streaming
+compilation) and long-lived caching, and call `loadSproutWasm({ wasmBase })`
+early to fetch and compile it before the first message.
+
+## Testing
+
+`npm test -w @sprout-foundry/workspace` runs the API's unit tests against a
+mocked module and, when a built binary exists (`make build-wasm`, or
+`SPROUT_WASM=<path>`), an integration test that drives the real module in
+Node against a stub model endpoint: a streamed reply, an `ask_user` round
+trip, a host tool round trip, a file write, persona tool limits, and that each
+turn makes exactly one request (the chat completion) and no metadata
+requests.

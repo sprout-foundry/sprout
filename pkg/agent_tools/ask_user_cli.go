@@ -8,7 +8,6 @@ package tools
 // (resolveCLIOptionAnswer, matchSingleOption). Split out of ask_user.go.
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -35,80 +34,11 @@ func stdinIsTTY() bool {
 	return term.IsTerminal(int(os.Stdin.Fd()))
 }
 
-// readFreeformInput reads lines from the reader until a blank line is
-// encountered (the user pressed Enter on an empty line) or EOF is reached.
-// Consecutive newlines within pasted content are preserved — only a blank
-// line at the *end* terminates input. The returned string is trimmed of
-// trailing whitespace but internal newlines are kept intact.
-func readFreeformInput(reader *bufio.Reader) (string, error) {
-	var lines []string
-	for {
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				// EOF counts as the terminator — return whatever we have.
-				trimmed := strings.TrimRight(line, "\n\r")
-				if trimmed != "" {
-					lines = append(lines, trimmed)
-				}
-				return strings.Join(lines, "\n"), nil
-			}
-			return "", err
-		}
-		trimmed := strings.TrimRight(line, "\n\r")
-		if trimmed == "" && len(lines) > 0 {
-			// Blank line signals end of input (but only if we already
-			// have content — an immediate blank returns empty string).
-			return strings.Join(lines, "\n"), nil
-		}
-		lines = append(lines, trimmed)
-	}
-}
-
-// readFreeformInputCtx is the context-aware variant of readFreeformInput.
-// It spawns a goroutine to perform the blocking stdin read and selects
-// on ctx.Done() so a tool-execution timeout or interrupt cancels the
-// read cleanly. The goroutine leaks on ctx cancellation (the blocked
-// syscall won't return until the user types something or stdin closes),
-// but this is acceptable: the agent process owns stdin and the next
-// reader will consume the stray input.
-func readFreeformInputCtx(ctx context.Context, reader *bufio.Reader) (string, error) {
-	type result struct {
-		answer string
-		err    error
-	}
-	resultCh := make(chan result, 1)
-	go func() {
-		answer, err := readFreeformInput(reader)
-		resultCh <- result{answer, err}
-	}()
-	select {
-	case r := <-resultCh:
-		return r.answer, r.err
-	case <-ctx.Done():
-		return "", ctx.Err()
-	}
-}
-
-// readLineCtx reads a single line from reader, cancelling on ctx.Done().
-// Same goroutine-leak tradeoff as readFreeformInputCtx.
-func readLineCtx(ctx context.Context, reader *bufio.Reader) (string, error) {
-	type result struct {
-		line string
-		err  error
-	}
-	resultCh := make(chan result, 1)
-	go func() {
-		line, err := reader.ReadString('\n')
-		resultCh <- result{line, err}
-	}()
-	select {
-	case r := <-resultCh:
-		return r.line, r.err
-	case <-ctx.Done():
-		return "", ctx.Err()
-	}
-}
+// readAnswer reads the user's typed answer: one Enter submits, a multi-line
+// paste arrives whole, and a cancelled read leaves nothing parked on stdin
+// to swallow the keystrokes that follow. A variable so tests can drive the
+// prompt paths without a terminal.
+var readAnswer = console.ReadLineCtx
 
 // renderCLIPrompt writes the question and (optionally) the numbered
 // option list to w. Kept on a separate function so the tests can call
@@ -144,13 +74,7 @@ func renderCLIPrompt(w io.Writer, req AskUserRequest) {
 		}
 	}
 	fmt.Fprintln(w, bar)
-	if len(req.Options) == 0 {
-		if req.Default != "" {
-			fmt.Fprintf(w, "> [default: %s] (Enter blank line to submit)\n", req.Default)
-		} else {
-			fmt.Fprintln(w, "> (Enter blank line to submit)")
-		}
-	} else if req.Default != "" {
+	if req.Default != "" {
 		fmt.Fprintf(w, "> [default: %s] ", req.Default)
 	} else {
 		fmt.Fprint(w, "> ")
@@ -184,31 +108,36 @@ func renderCLIFraming(w io.Writer, req AskUserRequest) {
 // valid label match) so a real option can never collide with it.
 const askUserCustomAnswerSentinel = "__custom__"
 
-// runAskUserSelectList drives the TTY single-select picker. It prints
-// the question framing, runs console.SelectList over the options, and
-// returns the selected option's Value on confirm. On Esc/Ctrl+C it
-// returns a "user cancelled selection" error matching the spirit of
-// the legacy prompt (Esc cancels; the default is not auto-applied).
+// ErrAskUserDismissed reports Esc/Ctrl+C on the picker. Worded for the LLM,
+// which receives it as the tool result: the user chose not to answer.
+var ErrAskUserDismissed = errors.New("the user dismissed the question without answering")
+
+// runAskUserSelectList drives the TTY single-select picker. It prints the
+// question framing, runs console.SelectList over the options, and returns
+// the selected option's Value on confirm.
 //
-// Free-text fallback: the picker gets a trailing "Type your own
-// answer…" item. Picking it falls through to the legacy bufio reader
-// so the user can still write arbitrary text — the LLM might have
-// given options but the human wants to answer differently.
+// Answering in your own words never needs a detour: in a short list (no
+// filter) the first nine options carry digit shortcuts and any other key
+// leaves the picker for a typed answer that starts with that key; in a long
+// list typing filters, and the trailing "Type your own answer…" item does
+// the same. Esc reports ErrAskUserDismissed.
 //
 // This path is only used when stdin is a TTY and MultiSelect is false;
 // callers (AskUser) gate on those conditions before invoking.
 func runAskUserSelectList(ctx context.Context, req AskUserRequest) (string, error) {
+	searchable := len(req.Options)+1 > 5
 	items := make([]console.SelectItem, 0, len(req.Options)+1)
-	for _, opt := range req.Options {
-		items = append(items, console.SelectItem{
+	for i, opt := range req.Options {
+		item := console.SelectItem{
 			Label:  opt.Label,
 			Detail: opt.Description,
 			Value:  optionValue(opt),
-		})
+		}
+		if !searchable && i < 9 {
+			item.Key = rune('1' + i)
+		}
+		items = append(items, item)
 	}
-	// Always offer a free-text escape hatch. The item isn't a real
-	// option, so we detect it via the sentinel value below and route
-	// the user to the legacy freeform input path.
 	items = append(items, console.SelectItem{
 		Label:  "Type your own answer…",
 		Detail: "write a custom response",
@@ -217,52 +146,71 @@ func runAskUserSelectList(ctx context.Context, req AskUserRequest) (string, erro
 
 	renderCLIFraming(os.Stdout, req)
 
+	footer := "↑↓ move · Enter select · type to filter · Esc dismiss"
+	if !searchable {
+		footer = fmt.Sprintf("1-%d pick · type to answer in your own words · Esc dismiss", len(req.Options))
+	}
 	sl := console.NewSelectList(console.SelectListOptions{
 		// Title is intentionally empty — renderCLIFraming already shows
-		// the question/header above the picker, and SelectList would just
-		// duplicate it.
-		Title:      "",
-		Items:      items,
-		Searchable: len(items) > 5,
-		PageSize:   10,
+		// the question/header above the picker.
+		Title:           "",
+		Items:           items,
+		Searchable:      searchable,
+		DismissOnAnyKey: !searchable,
+		// An Enter typed into the steer box as the question appears must not
+		// pick an option the user never saw.
+		ArmDelay: console.ApprovalArmDelay,
+		Footer:   footer,
+		PageSize: 10,
 	})
 
 	value, ok, err := sl.Run(ctx)
 	if err != nil {
+		// SelectList reports a cancelled context as an error. A deadline is
+		// the caller's own bound, so it resolves to the default rather than
+		// surfacing as a failure; a genuine interrupt still propagates.
+		if ctx != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return req.Default, nil
+		}
 		return "", err
 	}
 	if !ok {
-		// Esc / Ctrl+C: treat as cancellation. Note this differs from the
-		// legacy "Enter on empty → default" behavior — the picker has no
-		// notion of "submit blank", so Esc is the only way out without
-		// picking. Returning an error surfaces the cancel to the caller
-		// (the LLM), which is the right semantic.
-		return "", fmt.Errorf("user cancelled selection")
-	}
-
-	// Free-text fallback: drop into the legacy reader so the user can
-	// write whatever they want. The framing is already on screen; we
-	// just append a "> " prompt below the (now-cleared) picker rows.
-	if value == askUserCustomAnswerSentinel {
-		fmt.Fprint(os.Stdout, "> ")
-		reader := bufio.NewReader(os.Stdin)
-		answer, err := readFreeformInputCtx(ctx, reader)
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				return "", ErrAskUserNoChannel
-			}
-			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-				return "", err
-			}
-			return "", fmt.Errorf("read user input: %w", err)
-		}
-		if answer == "" && req.Default != "" {
+		if ctx != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			return req.Default, nil
 		}
-		return answer, nil
+		if typed := sl.DismissKey(); typed != "" {
+			return readCustomAnswer(ctx, req, typed)
+		}
+		return "", ErrAskUserDismissed
 	}
-
+	if value == askUserCustomAnswerSentinel {
+		return readCustomAnswer(ctx, req, "")
+	}
 	return value, nil
+}
+
+// readCustomAnswer reads a free-text answer under the picker. typed is what
+// the user had already typed when they left the picker; it is echoed and
+// kept as the answer's start. (The line is read in cooked mode, so the
+// echoed prefix can't be backspaced over — the cost of not running a second
+// line editor for one prompt.)
+func readCustomAnswer(ctx context.Context, req AskUserRequest, typed string) (string, error) {
+	_, _ = fmt.Fprint(os.Stdout, "> "+typed)
+	answer, err := readAnswer(ctx)
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return "", ErrAskUserNoChannel
+		}
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return trustDefaultOnDeadline(ctx, req, err)
+		}
+		return "", fmt.Errorf("read user input: %w", err)
+	}
+	answer = typed + answer
+	if strings.TrimSpace(answer) == "" && req.Default != "" {
+		return req.Default, nil
+	}
+	return answer, nil
 }
 
 // resolveCLIOptionAnswer maps the raw user input to an option value (or

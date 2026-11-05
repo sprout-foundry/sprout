@@ -48,7 +48,6 @@ describe('slashCommands', () => {
         'init',
         'keys',
         'log',
-        'max-context',
         'mcp',
         'model',
         'persona',

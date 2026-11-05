@@ -33,6 +33,7 @@ type SecurityManager interface {
 	SetHasActiveWebUIClients(fn func() bool)
 	HasActiveWebUIClients() bool
 	WebUIAttached() bool
+	WebUIClientCallback() func() bool
 }
 
 // AgentSecurityManager implements SecurityManager, holding all security-related state.
@@ -275,6 +276,16 @@ func (m *AgentSecurityManager) SetHasActiveWebUIClients(fn func() bool) {
 	m.webuiClientsMu.Lock()
 	defer m.webuiClientsMu.Unlock()
 	m.hasActiveWebUIClients = fn
+}
+
+// WebUIClientCallback returns the live WebUI-client presence callback, or
+// nil when no callback is registered. Subagents inherit the parent's
+// callback (SP-168) so they can tell whether the parent's browser surface
+// can answer their approval requests.
+func (m *AgentSecurityManager) WebUIClientCallback() func() bool {
+	m.webuiClientsMu.RLock()
+	defer m.webuiClientsMu.RUnlock()
+	return m.hasActiveWebUIClients
 }
 
 // WebUIAttached reports whether a web UI server is attached that could

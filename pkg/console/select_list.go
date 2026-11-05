@@ -58,6 +58,12 @@ type SelectListOptions struct {
 	// long after the list appears, so keys typed ahead for something else
 	// can't pick an option the user never saw. Cancelling works at once.
 	ArmDelay time.Duration
+	// FallbackReader overrides the input source for the non-TTY numbered
+	// list (os.Stdin by default). Inject the caller's own bufio.Reader
+	// when the code after the picker keeps reading the same stream —
+	// otherwise the picker's private buffering can swallow input the
+	// next reader never sees.
+	FallbackReader io.Reader
 }
 
 // SelectList drives a single-column picker UI. The zero value is
@@ -101,6 +107,10 @@ type SelectList struct {
 	// fallback. os.Stdin by default; tests inject a pipe so they can
 	// drive the fallback path hermetically.
 	fallbackReader io.Reader
+	// fallbackBufio wraps fallbackReader. Created once so a caller
+	// that shares its own bufio.Reader (see Options.FallbackReader)
+	// keeps one buffer across the picker and its follow-up reads.
+	fallbackBufio *bufio.Reader
 
 	// resized is set by the resize subscriber (handleResize) so the
 	// read loop repaints the frame after a SIGWINCH. The footer's own
@@ -131,6 +141,12 @@ func NewSelectList(opts SelectListOptions) *SelectList {
 		fd:             fd,
 		isTTY:          term.IsTerminal(fd),
 		fallbackReader: os.Stdin,
+	}
+	if opts.FallbackReader != nil {
+		s.fallbackReader = opts.FallbackReader
+		if shared, ok := opts.FallbackReader.(*bufio.Reader); ok {
+			s.fallbackBufio = shared
+		}
 	}
 	s.applyFilter("")
 	return s
@@ -169,7 +185,10 @@ func (s *SelectList) runFallback(ctx context.Context) (string, bool, error) {
 	}
 	fmt.Printf("  Enter choice [1-%d, blank to cancel]: ", len(s.opts.Items))
 
-	reader := bufio.NewReader(s.fallbackReader)
+	reader := s.fallbackBufio
+	if reader == nil {
+		reader = bufio.NewReader(s.fallbackReader)
+	}
 	// Race the blocking read against ctx so a cancelled context
 	// (timeout / user interrupt) doesn't hang the fallback forever on
 	// an idle piped stdin. A single goroutine owns the reader for the
@@ -249,6 +268,8 @@ func (s *SelectList) runTTY(ctx context.Context) (string, bool, error) {
 
 	if f := GetGlobalStatusFooter(); f != nil && f.canPinInput() && s.opts.Footer != "" {
 		s.hintOnFooter = f.SetHintOverride(s.opts.Footer)
+		// "" restores the keymap hints — or hides the row again when they
+		// are off, which is the state the override took the row from.
 		defer f.SetHintOverride("")
 	}
 	s.render()
@@ -361,15 +382,21 @@ func (s *SelectList) mouseOut() io.Writer {
 	return os.Stderr
 }
 
-// enableMouseTracking writes the SGR + VT200 mouse-tracking enable
-// sequences. It is a no-op when stdin isn't a TTY, matching the
-// requirement that non-interactive runs never emit mouse escapes.
+// enableMouseTracking writes the SGR mouse-tracking enable sequence. It is
+// a no-op when stdin isn't a TTY, matching the requirement that
+// non-interactive runs never emit mouse escapes.
+//
+// SGR alone (no VT200) reports clicks without capturing the wheel, so the
+// terminal's own scrollback keeps working while a picker is open. The
+// picker is fully keyboard-navigable (arrows, Home/End, type-to-filter), so
+// it loses nothing by not owning the wheel — and the user keeps the ability
+// to scroll the transcript behind the prompt, which is the whole point of
+// the narrower mode.
 func (s *SelectList) enableMouseTracking() {
 	if !s.isTTY {
 		return
 	}
-	fmt.Fprint(s.mouseOut(), MouseTrackingSGR)
-	fmt.Fprint(s.mouseOut(), MouseTrackingVT200)
+	_, _ = fmt.Fprint(s.mouseOut(), mouseInputModes())
 }
 
 // disableMouseTracking writes the disable sequence (which tears down

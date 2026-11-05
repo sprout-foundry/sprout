@@ -202,7 +202,7 @@ func TestMCPConfig_UnmarshalJSON_TimeoutEmptyString(t *testing.T) {
 	var config MCPConfig
 	err := json.Unmarshal(data, &config)
 	require.NoError(t, err)
-	assert.Equal(t, 30*time.Second, config.Timeout)
+	assert.Equal(t, DefaultServerTimeout, config.Timeout)
 }
 
 func TestMCPConfig_UnmarshalJSON_TimeoutMissing(t *testing.T) {
@@ -214,7 +214,7 @@ func TestMCPConfig_UnmarshalJSON_TimeoutMissing(t *testing.T) {
 	var config MCPConfig
 	err := json.Unmarshal(data, &config)
 	require.NoError(t, err)
-	assert.Equal(t, 30*time.Second, config.Timeout)
+	assert.Equal(t, DefaultServerTimeout, config.Timeout)
 }
 
 func TestMCPConfig_UnmarshalJSON_TimeoutInvalidString(t *testing.T) {

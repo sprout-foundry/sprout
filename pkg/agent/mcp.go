@@ -6,14 +6,33 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"github.com/sprout-foundry/sprout/pkg/injection"
 	"github.com/sprout-foundry/sprout/pkg/mcp"
 )
 
+// mcpMaxResultChars bounds an MCP tool result before it enters the transcript.
+const mcpMaxResultChars = 100_000
+
 // initializeMCP initializes MCP configuration and starts servers if needed
 func (a *Agent) initializeMCP() error {
+	// An agent that inherited its parent's manager is looking at servers the
+	// parent already registered and started. Re-running the add/start loop
+	// here would duplicate-add every server (and fail on each), so the
+	// inherited case only mirrors the parent's init state: if the parent has
+	// not initialized MCP yet (a subagent can be created before the parent's
+	// first MCP use), running the handshake here would race the parent's own
+	// init on the shared manager.
+	if a.mcpSub != nil && a.mcpSub.IsInherited() {
+		if a.debug {
+			a.Logger().Debug("MCP manager inherited from parent; skipping server initialization")
+		}
+		return nil
+	}
+
 	if a.configManager == nil {
 		if a.debug {
 			a.Logger().Debug("Config manager is nil, skipping MCP initialization")
@@ -31,11 +50,17 @@ func (a *Agent) initializeMCP() error {
 
 	ctx := context.Background()
 
-	// First, load servers from the legacy mcp_config.json file (if it exists)
-	// This ensures servers added via CLI commands are available
-	// Load BEFORE checking if MCP is enabled - legacy config may have servers
+	// First, load servers from the standalone mcp_config.json file (if it
+	// exists). This ensures servers added via CLI commands are available.
+	// Load BEFORE checking if MCP is enabled - the file may have servers.
+	//
+	// The load is scoped to the workspace this agent serves, not to the
+	// process's ambient config root: a daemon's config root was fixed when
+	// the daemon started, so reading it would hide a repo-local config
+	// written afterwards. The workspace layer wins over the global one.
+	workspaceRoot := a.GetWorkspaceRoot()
 	var legacyEnabled bool
-	if legacyMCPConfig, err := mcp.LoadMCPConfig(); err == nil {
+	if legacyMCPConfig, err := mcp.LoadMCPConfigForWorkspace(workspaceRoot); err == nil {
 		legacyEnabled = len(legacyMCPConfig.Servers) > 0 && legacyMCPConfig.Enabled
 		for name, serverConfig := range legacyMCPConfig.Servers {
 			// Only add if not already in main config
@@ -52,7 +77,18 @@ func (a *Agent) initializeMCP() error {
 					Timeout:     serverConfig.Timeout,
 					AutoStart:   serverConfig.AutoStart,
 					MaxRestarts: serverConfig.MaxRestarts,
+					// SP-169: the framing setting is carried through the
+					// legacy-config merge below via the setter, not this
+					// literal — see the comment after the closing brace.
 				}
+				// SP-169: carry the per-server framing setting through the
+				// legacy-config merge, or a server added via `mcp add` would
+				// arrive at the manager with framing silently off. The setter
+				// (not the literal) also records the value as authoritative: a
+				// bare field assignment leaves the provenance unset, and
+				// TrustUntrustedContentOrDefault then returns true even for a
+				// server the user explicitly opted out of.
+				mcpServer.SetTrustUntrustedContent(serverConfig.TrustUntrustedContentOrDefault())
 				if err := a.mcpSub.GetManager().AddServer(mcpServer); err != nil {
 					if a.debug {
 						a.Logger().Warn("Failed to add legacy MCP server %s: %v", name, err)
@@ -68,7 +104,10 @@ func (a *Agent) initializeMCP() error {
 	mcpEnabled := config.MCP.Enabled || legacyEnabled
 	if !mcpEnabled {
 		if a.debug {
-			a.Logger().Debug("MCP is disabled in configuration")
+			// Name the config consulted: "no MCP servers" is otherwise
+			// indistinguishable from "read the wrong config root".
+			a.Logger().Debug("MCP is disabled in configuration (config: %s)",
+				mcp.MCPConfigSourcePath(workspaceRoot))
 		}
 		return nil
 	}
@@ -87,7 +126,13 @@ func (a *Agent) initializeMCP() error {
 			Timeout:     serverConfig.Timeout,
 			AutoStart:   serverConfig.AutoStart,
 			MaxRestarts: serverConfig.MaxRestarts,
+			// SP-169: the framing setting travels with the server definition.
 		}
+		// SP-169: the setter records the value as authoritative. A bare field
+		// assignment would leave the provenance unset, and
+		// TrustUntrustedContentOrDefault would then return true even for a
+		// server the user explicitly opted out of.
+		mcpServer.SetTrustUntrustedContent(serverConfig.TrustUntrustedContentOrDefault())
 
 		if err := a.mcpSub.GetManager().AddServer(mcpServer); err != nil {
 			if a.debug {
@@ -205,8 +250,12 @@ func (a *Agent) getMCPTools() []api.Tool {
 		}
 	}
 
-	// Return nil if not initialized
-	if !a.mcpSub.IsInitialized() {
+	// An inherited manager is marked initialized by initializeMCP even when
+	// the parent has not run its own handshake yet. Reading the shared
+	// manager's tools here is still correct — it returns whatever the parent
+	// has registered so far — so the inherited path does not gate on the
+	// initialized flag.
+	if !a.mcpSub.IsInitialized() && !a.mcpSub.IsInherited() {
 		return nil
 	}
 
@@ -268,26 +317,155 @@ func (a *Agent) isValidMCPTool(toolName string) bool {
 	return false
 }
 
-// executeMCPTool executes an MCP tool
-func (a *Agent) executeMCPTool(toolName string, args map[string]interface{}) (string, error) {
-	// Remove mcp_ prefix and parse server:tool format
-	toolName = strings.TrimPrefix(toolName, "mcp_")
-	parts := strings.SplitN(toolName, "_", 2)
-	if len(parts) != 2 {
-		return "", agenterrors.NewInvalidInputError(fmt.Sprintf("invalid MCP tool name format: %s", toolName), nil)
+// mcpCallContext returns the context an MCP call runs under. The agent's
+// interrupt context is what a turn is cancelled through, so an in-flight server
+// call stops on interrupt instead of waiting out the RPC timeout (30s by
+// default). Background is the fallback for an agent that was never armed.
+func (a *Agent) mcpCallContext() context.Context {
+	a.interruptMu.Lock()
+	defer a.interruptMu.Unlock()
+	if a.interruptCtx != nil {
+		return a.interruptCtx
+	}
+	return context.Background()
+}
+
+// resolveMCPToolIdentity splits an advertised MCP tool name into the server that
+// owns it and the tool's own name.
+//
+// The advertised form is "mcp_<server>_<tool>", which is ambiguous when a server
+// name contains an underscore: splitting at the first underscore would read
+// "mcp_my_server_read" as server "my" + tool "server_read". That is not cosmetic
+// once an allowlist exists — the gate would authorize the wrong server, and the
+// denial would name an entry that permits a different one. So the split is made
+// against the configured server names, longest first, and a name that matches no
+// configured server falls back to the historical split (the server may simply
+// not be running yet, and CallTool reports that).
+func (a *Agent) resolveMCPToolIdentity(toolName string) (server, tool string, err error) {
+	rest := strings.TrimPrefix(toolName, "mcp_")
+
+	var names []string
+	if manager := a.mcpSub.GetManager(); manager != nil {
+		for _, srv := range manager.ListServers() {
+			if srv != nil {
+				names = append(names, srv.GetName())
+			}
+		}
+	}
+	return splitMCPToolName(toolName, rest, names)
+}
+
+// splitMCPToolName decides which server an advertised tool name belongs to,
+// given the names of the servers that are registered. It is the pure half of
+// the identity split, so the fail-closed rule can be tested without standing up
+// a manager.
+//
+// A name that matches no registered server is refused rather than guessed: the
+// historical split at the first underscore is exactly the guess that lets a
+// call be authorized against one server while running on another. The one
+// exception is an empty server list, where nothing is running to be confused
+// with anything and the manager's own "server not found" is the better error.
+func splitMCPToolName(toolName, rest string, names []string) (server, tool string, err error) {
+	if rest == "" {
+		return "", "", agenterrors.NewInvalidInputError("empty MCP tool name", nil)
 	}
 
-	serverName := parts[0]
-	actualToolName := parts[1]
+	if server, tool, ok := resolveMCPToolIdentityFromNames(rest, names); ok {
+		return server, tool, nil
+	}
 
-	ctx := context.Background()
+	if len(names) == 0 {
+		parts := strings.SplitN(rest, "_", 2)
+		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+			return "", "", agenterrors.NewInvalidInputError(fmt.Sprintf("invalid MCP tool name format: %s", toolName), nil)
+		}
+		return parts[0], parts[1], nil
+	}
+
+	return "", "", agenterrors.NewSecurityError(fmt.Sprintf(
+		"cannot resolve which MCP server %q belongs to: no registered server name is a prefix of it. "+
+			"Refusing to guess, because the allowlist entry that authorized the call may not be the server that runs it. "+
+			"Check `sprout mcp list` for the server name, and take a different approach if the tool is not listed.",
+		toolName), nil)
+}
+
+// resolveMCPToolIdentityFromNames is the pure half of the split: the longest
+// configured server name that prefixes the advertised remainder on a
+// whole-segment boundary wins, so "my_server" is preferred over "my". ok is
+// false when no configured server matches, leaving the caller to fall back.
+func resolveMCPToolIdentityFromNames(rest string, names []string) (server, tool string, ok bool) {
+	best := ""
+	for _, name := range names {
+		if name == "" || !strings.HasPrefix(rest, name+"_") {
+			continue
+		}
+		if len(name) > len(best) {
+			best = name
+		}
+	}
+	if best == "" {
+		return "", "", false
+	}
+	return best, strings.TrimPrefix(rest, best+"_"), true
+}
+
+// executeMCPTool executes an MCP tool
+func (a *Agent) executeMCPTool(toolName string, args map[string]interface{}) (string, error) {
+	serverName, actualToolName, err := a.resolveMCPToolIdentity(toolName)
+	if err != nil {
+		return "", err
+	}
+
+	// SP-170: authorize before any server-side call. The gate is the only
+	// thing standing between a steered model and a destructive third-party
+	// action, since MCP tools never reach the registry's security gate.
+	if err := a.authorizeMCPTool(serverName, actualToolName); err != nil {
+		return "", err
+	}
+
+	ctx := a.mcpCallContext()
 	result, err := a.mcpSub.GetManager().CallTool(ctx, serverName, actualToolName, args)
 	if err != nil {
 		return "", agenterrors.Wrapf(err, "failed to call MCP tool %s/%s", serverName, actualToolName)
 	}
 
-	// Convert result to string
-	return formatMCPResult(result), nil
+	// SP-169 layer 5: the server's payload is third-party text, so it is framed
+	// when the server's setting says so. Errors we generated ourselves are
+	// returned above, outside the block — only the server's own content is
+	// labelled as data.
+	return a.frameMCPResult(serverName, actualToolName, formatMCPResult(result)), nil
+}
+
+// frameMCPResult wraps an MCP tool's result text in the untrusted-data block
+// (SP-169 layer 5) when the owning server's TrustUntrustedContent setting is on.
+//
+// The setting is read from the live server config rather than the static
+// config file, so a change lands without a restart. An empty result is
+// returned unchanged: there is nothing to frame, and an empty block would only
+// add noise. Content is never dropped — framing is a label, not a filter.
+func (a *Agent) frameMCPResult(serverName, toolName, text string) string {
+	if text == "" {
+		return text
+	}
+	if !a.mcpServerTrustsUntrustedContent(serverName) {
+		return text
+	}
+	return injection.WrapUntrusted("mcp: "+serverName+"/"+toolName, text)
+}
+
+// mcpServerTrustsUntrustedContent reports whether the named server's output
+// should be framed. A server we cannot resolve (manager absent, server
+// unregistered) defaults to framing: the conservative direction is to label
+// text we cannot attribute, and the label costs nothing.
+func (a *Agent) mcpServerTrustsUntrustedContent(serverName string) bool {
+	if a.mcpSub == nil || a.mcpSub.GetManager() == nil {
+		return true
+	}
+	server, exists := a.mcpSub.GetManager().GetServer(serverName)
+	if !exists {
+		return true
+	}
+	return server.GetConfig().TrustUntrustedContentOrDefault()
 }
 
 // formatMCPResult formats an MCP result for display
@@ -309,7 +487,20 @@ func formatMCPResult(result *mcp.MCPToolCallResult) string {
 		}
 	}
 
-	return strings.TrimSpace(output.String())
+	out := strings.TrimSpace(output.String())
+	// A server that returns a whole file or a log dump would otherwise enter
+	// the transcript unbounded — the context blowup the built-in tools guard
+	// against with MaxResultSize. The cut is reported so the model can narrow
+	// the request instead of assuming it saw everything.
+	if len(out) > mcpMaxResultChars {
+		cut := mcpMaxResultChars
+		for cut > 0 && !utf8.RuneStart(out[cut]) {
+			cut--
+		}
+		out = out[:cut] + fmt.Sprintf("\n\n[truncated %d characters; request a narrower range or a specific field]",
+			len(out)-cut)
+	}
+	return out
 }
 
 // handleMCPToolsCommand handles the mcp_tools meta command
@@ -319,7 +510,7 @@ func (a *Agent) handleMCPToolsCommand(args map[string]interface{}) (string, erro
 		return "", agenterrors.NewInvalidInputError("mcp_tools command requires 'action' parameter", nil)
 	}
 
-	ctx := context.Background()
+	ctx := a.mcpCallContext()
 
 	switch action {
 	case "list":
@@ -350,11 +541,20 @@ func (a *Agent) handleMCPToolsCommand(args map[string]interface{}) (string, erro
 			return "", agenterrors.NewInvalidInputError("mcp_tools call requires 'server' and 'tool' parameters", nil)
 		}
 		callArgs, _ := args["arguments"].(map[string]interface{})
+		// SP-170: the meta-command's call action is the second route to the
+		// same server-side invocation, so it is gated identically. Discovery
+		// actions (list/describe/status/refresh) run no server-side tool and
+		// stay ungated.
+		if err := a.authorizeMCPTool(server, tool); err != nil {
+			return "", err
+		}
 		result, err := a.mcpSub.GetManager().CallTool(ctx, server, tool, callArgs)
 		if err != nil {
 			return "", agenterrors.Wrapf(err, "mcp_tools call %s/%s failed", server, tool)
 		}
-		return formatMCPResult(result), nil
+		// Same framing as a direct mcp_<server>_<tool> call: this is the same
+		// third-party payload arriving by a second route.
+		return a.frameMCPResult(server, tool, formatMCPResult(result)), nil
 
 	case "status":
 		servers := a.mcpSub.GetManager().ListServers()

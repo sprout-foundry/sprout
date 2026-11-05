@@ -375,11 +375,21 @@ function readJSON<T>(key: string): T | null {
   }
 }
 
-/** The saved pane list, or null when none (or not a usable split). */
+/**
+ * The saved pane list, or null when none is usable.
+ *
+ * A single pane is a legitimate saved state (the user closed the other one),
+ * and the surviving pane need not be `pane-1`: closing the primary pane and
+ * keeping a split-created pane leaves a list without it. Requiring `pane-1`
+ * and >= 2 panes made restore skip the pane block while `paneSizes` and
+ * `paneLayout` were still read from disk, so the size map described a pane
+ * that no longer existed and the geometry stayed broken across reloads.
+ */
 export function loadSavedPanes(): SavedPane[] | null {
   const panes = readJSON<SavedPane[]>(getPanesStorageKey());
-  if (!Array.isArray(panes) || panes.length < 2 || !panes.some((p) => p.id === 'pane-1')) return null;
-  return panes.filter((p) => typeof p?.id === 'string');
+  if (!Array.isArray(panes) || panes.length === 0) return null;
+  const valid = panes.filter((p) => typeof p?.id === 'string' && p.id.length > 0);
+  return valid.length > 0 ? valid : null;
 }
 
 export function loadSavedPaneLayout(): PaneLayout | null {
@@ -388,6 +398,58 @@ export function loadSavedPaneLayout(): PaneLayout | null {
 
 export function loadSavedPaneSizes(): PaneSize | null {
   return readJSON<PaneSize>(getPaneSizesStorageKey());
+}
+
+/**
+ * Reconcile a saved size map against the panes that actually exist.
+ *
+ * The size map is written by its own effect, independently of the pane list,
+ * so a closed pane's entry can outlive the pane. Restoring that map verbatim
+ * leaves the layout describing a pane that is gone — the geometry then has no
+ * valid interpretation and stays broken until the window is restarted.
+ *
+ * Returns sizes covering exactly `paneIds`, renormalised to sum to 100. Panes
+ * missing from `saved` share the leftover space evenly; unknown keys are
+ * dropped. Returns null when `saved` is unusable, so the caller can fall back
+ * to an even split.
+ */
+export function reconcilePaneSizes(saved: PaneSize | null, paneIds: string[]): PaneSize | null {
+  if (!saved || paneIds.length === 0) return null;
+
+  const present = paneIds.filter((id) => typeof saved[id] === 'number' && Number.isFinite(saved[id]));
+  const missing = paneIds.filter((id) => !present.includes(id));
+
+  if (present.length === 0) return null;
+
+  const result: PaneSize = {};
+  if (missing.length === 0) {
+    // Every pane has a saved size: keep the proportions, renormalised.
+    const total = present.reduce((sum, id) => sum + saved[id], 0);
+    if (total <= 0) return null;
+    for (const id of paneIds) {
+      result[id] = (saved[id] / total) * 100;
+    }
+    return result;
+  }
+
+  // Some panes are new: give them an even share of the space and scale the
+  // known panes into the remainder, preserving their relative proportions.
+  const newPaneShare = 100 / paneIds.length;
+  const knownTotal = present.reduce((sum, id) => sum + saved[id], 0);
+  const remaining = 100 - newPaneShare * missing.length;
+  for (const id of missing) {
+    result[id] = newPaneShare;
+  }
+  for (const id of present) {
+    result[id] = knownTotal > 0 ? (saved[id] / knownTotal) * remaining : remaining / present.length;
+  }
+  return result;
+}
+
+/** Even split across the given panes — the fallback when no sizes are usable. */
+export function evenPaneSizes(paneIds: string[]): PaneSize {
+  const size = paneIds.length > 0 ? 100 / paneIds.length : 100;
+  return Object.fromEntries(paneIds.map((id) => [id, size]));
 }
 
 /** Which pane each chat's tab was in: chatId → paneId. */

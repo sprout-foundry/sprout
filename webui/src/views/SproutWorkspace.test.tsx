@@ -14,7 +14,7 @@
  * is what makes the host-supply and resolution cases meaningful.
  */
 
-import { act, render, screen, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import { useState } from 'react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -349,12 +349,17 @@ describe('SproutWorkspace', () => {
     expect(wireHostAgentBackend).toHaveBeenCalledWith(host, undefined);
   });
 
-  it('resets the agent backend state for a host that names no backend', async () => {
+  it('wires the backend for a host that names no backend too (it retires any in-browser adapter)', async () => {
     render(<SproutWorkspace project={PROJECT} space="code" host={makeHost()} layout={DEFAULT_VIEWS_ARRANGEMENT} />);
     await screen.findByTestId('sprout-workspace');
 
-    expect(wireHostAgentBackend).not.toHaveBeenCalled();
-    expect(resetHostAgentBackend).toHaveBeenCalledTimes(1);
+    // A host that names no backend goes through the same wiring call as any
+    // other: its non-wasm branch retires an in-browser adapter an earlier
+    // wasm mount (or in-place swap) left installed, and hands the connection
+    // state back to the socket. The wiring is a no-op only when the host has
+    // nothing to re-wire.
+    expect(wireHostAgentBackend).toHaveBeenCalledTimes(1);
+    expect(resetHostAgentBackend).not.toHaveBeenCalled();
   });
 
   it('resets the agent backend state when a wasm-backed workspace unmounts', async () => {
@@ -412,6 +417,30 @@ describe('SproutWorkspace', () => {
     );
     await screen.findByTestId('sprout-workspace');
     expect(wireHostAgentBackend).not.toHaveBeenCalled();
+  });
+
+  it('themes an ambient mount in a host page without touching the host document', async () => {
+    const ambientHost = makeHost({
+      transport: {
+        apiBaseURL: 'https://ambient.test',
+        wsURL: '',
+        authMode: 'none',
+        agent: { kind: 'wasm', modelEndpoint: 'https://models.host.test/v1/chat' },
+      },
+    });
+    render(
+      <HostProvider host={ambientHost}>
+        <SproutProviders>
+          <SproutWorkspace providers="ambient" project={PROJECT} space="code" />
+        </SproutProviders>
+      </HostProvider>,
+    );
+    const workspace = await screen.findByTestId('sprout-workspace');
+    // The workspace carries its own theme; the host's document is untouched.
+    await waitFor(() => expect(workspace.getAttribute('data-theme')).toBeTruthy());
+    expect(workspace.style.getPropertyValue('--bg-primary')).not.toBe('');
+    expect(document.documentElement.getAttribute('data-theme')).toBeNull();
+    expect(document.documentElement.style.getPropertyValue('--bg-primary')).toBe('');
   });
 
   it('lets a host override the assembled chat props per kind (the host wins for that kind)', async () => {

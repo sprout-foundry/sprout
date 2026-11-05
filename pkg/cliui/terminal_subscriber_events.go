@@ -93,7 +93,7 @@ func (s *TerminalSubscriberState) HandleQueryCompletedEvent(data map[string]inte
 		console.SGR(os.Stderr, console.ColorDim),
 		strings.Join(parts, " · "),
 		console.SGR(os.Stderr, console.ColorReset))
-	fmt.Fprintln(os.Stderr, line)
+	console.WriteTranscriptTo(os.Stderr, line+"\n")
 }
 
 // formatCostSummary renders a cost value for the turn-end summary line.
@@ -170,38 +170,14 @@ func (s *TerminalSubscriberState) HandleSubagentActivityEvent(data map[string]in
 		// firing (long shell_command inside the subagent).
 		footer.Refresh()
 	case "completed", "cancelled":
-		tokens := ReadEventInt(data, "tokens_used")
-		elapsedMs := ReadEventInt64(data, "elapsed_ms")
-		cost, _ := data["cost"].(float64)
-		reason, _ := data["reason"].(string)
-
-		// Compact mode: suppress the subagent done line.
-		// Still clean up progress tracking and refresh footer.
-		if s.IsCompact() {
-			s.progressMu.Lock()
-			delete(s.subagentProgress, persona)
-			s.progressMu.Unlock()
-			s.run = nil
-			footer.Refresh()
-			return
-		}
-
-		// Subagents nest under the parent that spawned them.
-		// Depth on the activity event isn't carried today, so
-		// indent at the same level as the run_subagent tool
-		// line — depth 1 — which is the common case. Deeper
-		// nests fall back to a single indent rather than
-		// guessing wrong.
-		indicator.Stop()
-		s.thinkingActive = false
-		s.flushExternalWrite()
-		fmt.Fprintln(os.Stderr, FormatSubagentDoneLine(persona, status, reason, tokens, cost, float64(elapsedMs)/1000.0))
-		// Drop the cached progress for this persona once
-		// it's done — the next spawn starts fresh.
+		// The runner prints the run's closing line (or block, for a run
+		// among siblings) itself, at the moment it finishes; this only
+		// retires the run's live state.
 		s.progressMu.Lock()
 		delete(s.subagentProgress, persona)
 		s.progressMu.Unlock()
-		s.run = nil
+		id, _ := data["task_id"].(string)
+		s.fleetRunFinished(id, indicator, footer)
 		footer.Refresh()
 	}
 }
@@ -244,14 +220,10 @@ func (s *TerminalSubscriberState) HandleTodoUpdateEvent(data map[string]interfac
 	s.thinkingActive = false
 	s.flushExternalWrite()
 	if len(todosRaw) == 0 {
-		console.LockOutput()
-		fmt.Fprintln(os.Stdout, console.GlyphInfo.Prefix()+"Todo list cleared")
-		console.UnlockOutput()
+		console.WriteTranscript(console.GlyphInfo.Prefix() + "Todo list cleared\n")
 		// Note: External callers must handle currentTurnRenderer themselves.
 	} else {
-		console.LockOutput()
-		fmt.Fprintln(os.Stdout, FormatTodoListPanel(todosRaw))
-		console.UnlockOutput()
+		console.WriteTranscript(FormatTodoListPanel(todosRaw) + "\n")
 		// Note: External callers must handle currentTurnRenderer themselves.
 	}
 	// Breaks any pending collapse run — the multi-line block
@@ -393,6 +365,13 @@ func (s *TerminalSubscriberState) runEventLoop(ctx context.Context, ch <-chan ev
 				return
 			}
 			data, _ := evt.Data.(map[string]interface{})
+			if isBackgroundTaskEvent(data) {
+				continue
+			}
+			if isConcurrentSubagentEvent(data) {
+				s.handleConcurrentSubagentEvent(evt.Type, data, indicator, footer)
+				continue
+			}
 			switch evt.Type {
 			case events.EventTypeQueryStarted:
 				s.HandleQueryStartedEvent(indicator)

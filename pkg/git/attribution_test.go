@@ -39,6 +39,13 @@ func TestAssistantTrailer_NoVersionAndSanitized(t *testing.T) {
 	assert.Equal(t, "Assisted-by: sprout/dev (custom/my-model-beta-)", b.Trailer())
 }
 
+func TestAssistantHasProviderModel(t *testing.T) {
+	assert.True(t, SproutAssistant("ollama", "qwen3:8b").HasProviderModel())
+	assert.False(t, SproutAssistant("", "qwen3:8b").HasProviderModel())
+	assert.False(t, SproutAssistant("unknown", "qwen3:8b").HasProviderModel())
+	assert.False(t, SproutAssistant("ollama", "unknown").HasProviderModel())
+}
+
 func TestAppendAssistedBy(t *testing.T) {
 	setBuildVersion(t, "dev")
 	ds := SproutAssistant("deepinfra", "deepseek-ai/DeepSeek-V4.1-Flash")

@@ -19,6 +19,10 @@ type localOllamaListModel struct {
 // localOllamaShowResponse is the JSON shape returned by Ollama's POST /api/show.
 type localOllamaShowResponse struct {
 	ModelInfo localOllamaModelInfo `json:"model_info"`
+	// Capabilities is Ollama's own capability list for the loaded model
+	// ("completion", "tools", "vision", "thinking"). Newer Ollama releases
+	// report it; older ones omit it, in which case vision is unknown.
+	Capabilities []string `json:"capabilities,omitempty"`
 }
 
 // localOllamaModelInfo carries model metadata reported by Ollama.

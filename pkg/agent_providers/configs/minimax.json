@@ -46,7 +46,7 @@
         "pattern": "MiniMax-.*"
       }
     ],
-    "default_context_limit": 204800,
+    "default_context_limit": 262144,
     "default_max_completion_tokens": 196608,
     "default_model": "MiniMax-M2.5",
     "max_completion_overrides": {

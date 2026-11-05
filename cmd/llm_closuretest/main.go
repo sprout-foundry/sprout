@@ -1,3 +1,7 @@
+// Command llm_closuretest quantizes a fixed 4x128 weight and prints the packed
+// weight, scales and biases, to check the MLX quantization closure against
+// expected values.
+
 //go:build darwin && arm64 && cgo
 
 package main

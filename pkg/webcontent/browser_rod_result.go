@@ -9,6 +9,7 @@ package webcontent
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/go-rod/rod"
@@ -104,11 +105,33 @@ func markCORSBlockedRequests(values []NetworkRequest) []NetworkRequest {
 }
 
 func evalToJSONString(page *rod.Page, script string) (string, error) {
-	res, err := page.Eval(script)
+	res, err := page.Eval(scriptAsStatement(script))
 	if err != nil {
 		return "", fmt.Errorf("failed to eval script: %w", err)
 	}
 	return res.Value.JSON("", "  "), nil
+}
+
+// scriptAsStatement rewrites a user script into the function form rod
+// expects.
+//
+// rod does not evaluate a script as a statement: EvalOptions.formatToJSFunc
+// wraps whatever it is given as `function() { return (<js>).apply(this,
+// arguments) }`, so the script must be a callable expression. A statement
+// (`document.title = 'x'`), an IIFE, or a plain expression all fail inside
+// that wrapper with a TypeError naming `.apply` — an error about rod's
+// wrapping that reads like a bug in the caller's JavaScript.
+//
+// Wrapping the script so it is evaluated as a statement makes all three
+// shapes behave as a developer expects: a statement runs and returns its
+// completion value, an expression returns its value, and an arrow function
+// is returned as-is (calling it would silently change the meaning of a
+// script that is itself the value).
+func scriptAsStatement(script string) string {
+	trimmed := strings.TrimSpace(script)
+	// `eval` is called indirectly so the script runs in global scope, where
+	// page scripts expect `document`, `window` and friends to live.
+	return fmt.Sprintf("() => (0, eval)(%s)", strconv.Quote(trimmed))
 }
 
 func truncateForBrowseResult(value string, limit int) string {

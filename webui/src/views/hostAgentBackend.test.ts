@@ -9,13 +9,13 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { SproutHost } from '../host';
+import { headlessHost } from '../host/HostProvider';
 import { getAdapter, installAdapter } from '../services/apiAdapter';
 import type { APIAdapter } from '../services/apiAdapter';
-import { headlessHost } from '../host/HostProvider';
-import type { SproutHost } from '../host';
-import { WebSocketService } from '../services/websocket';
 import { __resetStartupRepoImportForTests, importStartupRepo } from '../services/startupRepoImport';
-import { resetHostAgentBackend, wireHostAgentBackend } from './hostAgentBackend';
+import { WebSocketService } from '../services/websocket';
+import { __resetHostAgentBackendForTests, resetHostAgentBackend, wireHostAgentBackend } from './hostAgentBackend';
 
 const setAgentEventDispatcher = vi.fn();
 vi.mock('../services/cloudWasmHandlers', () => ({
@@ -75,6 +75,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   resetHostAgentBackend();
   __resetStartupRepoImportForTests();
+  __resetHostAgentBackendForTests();
 });
 
 describe('wireHostAgentBackend', () => {
@@ -214,5 +215,70 @@ describe('wireHostAgentBackend', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     await importStartupRepo(bootstrapAdapter, 'https://github.com/other/deep-link', 'bootstrap');
     expect(bootstrapAdapter.restoreRepo).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('switching the backend in place', () => {
+  it('retires the in-browser adapter on a wasm→daemon switch (the transport drives the calls)', async () => {
+    const events = WebSocketService.getInstance();
+    // The wasm wiring installs the composition's adapter.
+    await wireHostAgentBackend(wasmHost(), undefined);
+    expect(getAdapter()).not.toBeNull();
+    // Switching to the daemon retires that adapter so the transport's URLs
+    // drive the calls again, and hands the connection state to the socket.
+    await wireHostAgentBackend(daemonHost(), undefined);
+    expect(getAdapter()).toBeNull();
+    expect(events.getLocalAgentState()).toBe('none');
+  });
+
+  it('leaves a host-installed non-cloud adapter in place (only the cloud adapter retires)', async () => {
+    // The host installed its own (non-cloud) adapter before mounting; a
+    // daemon switch must not uninstall it — the retire is keyed on the
+    // adapter's type (the in-browser cloud adapter), not on who installed it.
+    installAdapter(NOOP_ADAPTER);
+    await wireHostAgentBackend(daemonHost(), undefined);
+    expect(getAdapter()).toBe(NOOP_ADAPTER);
+  });
+
+  it("retires a cloud adapter the bootstrap installed, not just the wiring's own", async () => {
+    const { CloudAdapter } = await import('../services/cloudAdapter');
+    // The page's bootstrap (its host-change hook) installed the cloud
+    // adapter for the wasm host, racing the composition's wiring. Whichever
+    // is the live singleton, a daemon switch must retire it — the type is
+    // what marks it as the in-browser adapter, not an ownership slot.
+    const bootstrapAdapter = new CloudAdapter({
+      apiBase: '',
+      wsUrl: '',
+      navItems: [],
+    });
+    installAdapter(bootstrapAdapter);
+    await wireHostAgentBackend(daemonHost(), undefined);
+    expect(getAdapter()).toBeNull();
+  });
+
+  it('keeps the in-browser adapter across a wasm→wasm re-wire (the reinstall replaces it)', async () => {
+    const { CloudAdapter } = await import('../services/cloudAdapter');
+    await wireHostAgentBackend(wasmHost(), undefined);
+    await vi.waitFor(() => expect(getAdapter()).toBeInstanceOf(CloudAdapter));
+    // Re-wiring the same backend replaces the adapter (still the composition's).
+    await wireHostAgentBackend(wasmHost(), undefined);
+    await vi.waitFor(() => expect(getAdapter()).toBeInstanceOf(CloudAdapter));
+    // A later daemon switch retires it.
+    await wireHostAgentBackend(daemonHost(), undefined);
+    expect(getAdapter()).toBeNull();
+  });
+
+  it('discards a superseded wasm install (a daemon switch while the import is in flight)', async () => {
+    const events = WebSocketService.getInstance();
+    const wasmWired = wireHostAgentBackend(wasmHost(), undefined);
+    // The daemon switch (synchronous, no in-flight install of its own) runs
+    // before the wasm import's continuation, so it owns the state now.
+    await wireHostAgentBackend(daemonHost(), undefined);
+    // Let the stale wasm continuation run; it must not flip the state the
+    // daemon wiring already set.
+    await wasmWired;
+    expect(events.getLocalAgentState()).toBe('none');
+    // The superseded install never landed.
+    expect(getAdapter()).toBe(NOOP_ADAPTER);
   });
 });

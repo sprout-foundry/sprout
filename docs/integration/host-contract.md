@@ -104,9 +104,11 @@ type HostAgentBackend =
 ```
 
 - `{ kind: 'daemon', apiBaseURL, wsURL }` — the agent runs in a daemon
-  reachable through the host. The daemon's URLs drive Sprout's calls (the same
-  `clientFetch` / WebSocket resolution described below), so no extra wiring is
-  needed beyond the transport itself.
+  reachable through the host. The daemon's own `apiBaseURL` / `wsURL` are the
+  backend: they drive Sprout's HTTP calls and the agent event stream (see "How
+  the transport fields are consumed" below), so no extra wiring is needed
+  beyond the transport itself. `''` is the same-origin sentinel for either
+  field.
 - `{ kind: 'wasm', modelEndpoint }` — the agent runs in the browser. Sprout
   installs the cloud adapter from the host, routes the in-browser agent's events
   into the same event bus WebSocket events use, and points the agent's model
@@ -126,8 +128,11 @@ type HostAgentBackend =
   hands the connection state back to the events socket, as a host that names
   no backend has it.
 
-When the in-browser agent runs against a daemon backend, its model calls go to
-the daemon's own model proxy (`<apiBaseURL>/api/proxy/chat`).
+When the in-browser agent runs against a wasm backend, its model calls go to
+`agent.modelEndpoint` (else `transport.modelEndpoint`, else the platform's own
+proxy path). A daemon backend has no in-browser model endpoint: the daemon
+makes its own model calls, and its `/api/proxy/chat` is a query route, not an
+OpenAI-shaped base URL.
 
 A host that mounts a workspace through `SproutWorkspace` gets this wiring for
 free: in own mode the composition honours `transport.agent` (a daemon backend is
@@ -135,10 +140,19 @@ the no-wiring default; a wasm backend installs the adapter and the dispatcher).
 A host that composes its own provider stack (ambient mode) owns the wiring.
 
 **Switching backends.** A host may switch backends when a daemon becomes
-available. The supported switch is a **re-mount** with a new transport: the
-composition keys its wiring on the backend, so re-mounting `SproutWorkspace`
-with a transport whose `agent` differs re-runs the wiring against the new
-backend. In-place switching without a re-mount is not supported.
+available. The supported switch is **in place**: the host re-reads its
+`transport` and passes the updated `host` (the new `transport.agent`) to the
+already-mounted `SproutWorkspace`. The composition re-runs its wiring against
+the new backend without a re-mount — it retires the in-browser adapter (so the
+daemon backend's URLs drive the calls again, and a late-arriving bootstrap or
+wasm install cannot re-install it), reconnects the event stream to the new
+backend's socket, and leaves the chat and editor
+state untouched (the units keep their state; the session list reloads once
+the stream is connected). An adapter the host installed itself (an ambient
+caller) is never retired by the composition — only the adapter its own wasm
+wiring installed is. Re-mounting the workspace with a new transport also
+works and is equivalent; the in-place swap is the one that keeps the open
+editor tabs.
 
 **How the transport fields are consumed.** A component that mounts a
 workspace in its own provider stack (`SproutWorkspace` with the default
@@ -146,16 +160,19 @@ workspace in its own provider stack (`SproutWorkspace` with the default
 module-level services while it is mounted, and restores the previous host on
 unmount. The non-React services then resolve their URLs against it:
 
-- `clientFetch` prefixes a **relative** API path with `transport.apiBaseURL`
-  when it is non-empty. Precedence, most specific first: an installed
-  adapter (which handles the request itself), then `transport.apiBaseURL`,
-  then the SSH proxy base (`window.SPROUT_PROXY_BASE`), then same-origin (no
-  prefix). An absolute URL is never prefixed, and `''` is the same-origin
-  sentinel that falls through to the proxy base.
+- `clientFetch` prefixes a **relative** API path with the active backend's
+  base: a daemon backend's own `apiBaseURL` when the host named one, else
+  `transport.apiBaseURL`. Precedence, most specific first: an installed
+  adapter (which handles the request itself), then that base, then the SSH
+  proxy base (`window.SPROUT_PROXY_BASE`), then same-origin (no prefix). An
+  absolute URL is never prefixed, and `''` is the same-origin sentinel that
+  falls through to the proxy base. A host's own chat-session store
+  (`capabilities.chatSessions`) is pinned to the host's base, not the daemon's.
 - The WebSocket URL resolves, most specific first: the build-time
-  `VITE_WS_URL`, then `transport.wsURL`, then the installed adapter's URL,
-  then the same-origin `/ws` path (through the proxy base when set). `''`
-  falls through.
+  `VITE_WS_URL`, then the active backend's socket (a daemon backend's own
+  `wsURL` when the host named one, else `transport.wsURL`), then the installed
+  adapter's URL, then the same-origin `/ws` path (through the proxy base when
+  set). `''` falls through.
 
 In `providers="ambient"` mode the caller has already registered its host and
 owns the transport, so the composition neither registers nor connects — see
@@ -295,6 +312,7 @@ helpers).
 | `verification` | Reserved: verification flows and their results UI. No surface reads it yet |
 | `serverGit` | Server-side git, distinct from in-browser git (the Git sidebar's Worktrees tab) |
 | `chatSessions` | The host serves the chat session store (see "Chat session store" below) |
+| `browserFiles` | Optional (absent means `false`). Read-only access to the in-browser workspace's files, offered only when the agent runs in-browser — see "In-browser workspace files" below |
 
 ## The hosts Sprout ships
 
@@ -339,8 +357,9 @@ transport records the same-origin sentinel `''` rather than a fixed host.
 - Capabilities: `ssh`, `git`, `chat`, `workspaceSwitching`, `export`,
   `localTerminal`, `settings`, `automations`, `agentChanges`, `preview`,
   `mcp`, `localModels`, `verification`, `serverGit` are **on**; `folderPicker`,
-  `instances` and `chatSessions` are **off** (the local build keeps its own
-  daemon chat session store).
+  `instances`, `chatSessions` and `browserFiles` are **off** (the local build
+  keeps its own daemon chat session store, and its agent is a local daemon
+  that serves its own files, so the in-browser file API has nothing to add).
 
 ### `cloudHost`
 
@@ -362,7 +381,9 @@ bootstrap adapter.
 - `notifications.post` still forwards to the in-app bus until the platform's
   own sink lands.
 - Capabilities mirror what a hosted build actually exposes:
-  `git`, `chat`, `instances`, `settings` are **on**; `ssh`,
+  `git`, `chat`, `instances`, `settings` and `browserFiles` are **on** (the
+  in-browser agent means the host may read the in-browser workspace's files —
+  see "In-browser workspace files" — to carry them into a container); `ssh`,
   `workspaceSwitching`, `folderPicker`, `export`, `localTerminal`,
   `automations`, `agentChanges`, `preview`, `mcp`, `localModels`,
   `verification`, `serverGit`, `chatSessions` are **off** (the hosted
@@ -483,6 +504,7 @@ const host: SproutHost = {
     verification: false,
     serverGit: false,
     chatSessions: false,
+    browserFiles: false, // optional; true only when the agent runs in-browser
   },
 };
 ```
@@ -624,6 +646,101 @@ own mode makes these calls each time the workspace connects (and again after
 a reconnect), so the session list is populated at start. For an in-browser
 agent, "connected" means the adapter is installed (see "Agent backend").
 
+**The running flag.** `ChatSession.active_query` is honoured as the running
+state only when the store is the backend that runs the agent — the daemon's
+own store, or an in-page agent (which keeps its runs in the page's registry).
+When the agent runs behind a daemon the host named (`transport.agent.kind:
+'daemon'`), the store answers the transcript but not the run: a turn the
+daemon is running — one the host started itself, or one another tab started —
+is invisible in the store's `active_query`. Opening such a chat therefore
+asks the daemon's `GET /api/query/status?chat_id=<id>` and shows the turn as
+running, so a page opened into a turn already in flight attaches to it and
+streams its output. The store's flag is the fallback when that call fails.
+A host that seeds its own first turn should start it with `POST
+/api/query` on the daemon (`chat_id` naming the chat in the store) rather
+than writing a user message into the transcript alone: the turn then runs,
+appears as running to whoever opens the page, and is appended to the store
+as it completes.
+
+### In-browser workspace files
+
+The in-browser agent's workspace is a virtual filesystem (the WASM shell's
+VFS) plus a browser-side git checkout. A host that moves a project off the
+in-browser agent — the platform's "run in a container" upgrade — must carry
+along the files the user edited in the browser but never pushed. The host
+contract offers that as a capability-gated, read-only file API: when the
+host advertises `capabilities.browserFiles: true` and the agent runs
+in-browser (`transport.agent.kind: 'wasm'`), the host may list the
+project's files and read a file's bytes, so it can seed the container from
+what the browser actually holds rather than from a remote the user has not
+pushed to.
+
+A host whose agent runs in a daemon leaves the capability off (the default):
+the daemon serves its own files, so the browser-side API has nothing to add,
+and the calls below reject.
+
+**The functions** (exported from the views entry, with the types a host
+needs alongside):
+
+```ts
+listBrowserWorkspaceFiles(): Promise<WorkspaceFileEntry[]>;
+readBrowserWorkspaceFile(path: string): Promise<Uint8Array>;
+```
+
+`WorkspaceFileEntry` is one row of the listing:
+
+```ts
+interface WorkspaceFileEntry {
+  path: string;    // workspace-relative slash path, e.g. 'src/a.ts'
+  size: number;    // bytes, or 0 when the listing carried no size
+  mode: number;    // POSIX mode bits, or 0 when the listing carried no mode
+  differsFromCheckout: boolean; // new or modified relative to the browser repo's checkout
+}
+```
+
+`differsFromCheckout` tells a container seed what to skip: `false` means the
+bytes already match the repository's checkout, so the container's own clone
+carries them and the host need not upload them. `true` means the file is new
+or modified relative to the checkout and must be carried. When the browser
+repository has no checkout to compare against (browser git was never wired,
+or the repo has no commits), every file is reported `true` — nothing can be
+proven to match, so the honest default is to carry them all.
+
+The listing enumerates the VFS's own directory (a recursive listing that
+reads no file content) and excludes the runtime dirs (the agent home, the
+scratch space) and `.git`, so a host sees only the project's files. `size`
+and `mode` come from the binary's listing; when the binary's listing is
+broken and the walk falls back to the write manifest (which records paths
+only), both are `0` — a consumer treats `0` as "unknown", not as an empty
+file.
+
+**Reading.** `readBrowserWorkspaceFile` takes the same path spellings the
+file API does elsewhere (workspace-relative or absolute, resolved against the
+workspace root) and returns the file's bytes. A path that resolves outside
+the workspace root or into a runtime dir is refused with an error naming the
+path; an unknown or unreadable file rejects with an error naming the path.
+The read prefers the byte-exact reader and falls back to the text reader
+(re-encoded) when the running binary has no byte reader.
+
+**Gate errors.** When the API is unavailable — the capability is off, the
+agent is not the in-browser agent, or the browser's shell is not reachable —
+both functions reject with a `BrowserFilesUnavailableError` whose `code` is
+`'browser_files_unavailable'`. A host branches on that code (the way it
+branches on the host's other stable error codes); the message is
+human-facing and may change.
+
+**One workspace per page.** The VFS and the browser repository are page-
+scoped module singletons: the listing and the reads describe the one
+in-browser workspace this page holds, and a host that moves it to a
+container reads it while that page (and its shell) is still alive. A
+second `SproutWorkspace` on the page does not get a second file set.
+
+**The platform flow.** The platform's move-to-container upgrade collects the
+files (list, then read the ones that differ from the checkout), uploads
+them, and runs the project in a container seeded from the upload. The
+collector is the platform's own code; the contract's job is only to make
+the in-browser workspace readable by a host that offers the capability.
+
 ## Backend paths for an in-browser-agent host
 
 A host whose agent runs in the browser (`transport.agent.kind: 'wasm'`) has
@@ -695,8 +812,9 @@ go to the **page origin**, not `apiBaseURL`: `GET /api/bootstrap` (startup
 config; defaults on failure), `GET /api/query/status` (only while no client id
 is cached), `POST /api/subagent/{id}/cancel` (stopping a subagent run) and the
 session export (`/api/sessions/{id}/export`, under `capabilities.export`). The
-events WebSocket goes to `transport.wsURL` (else the page's `/ws`), and the
-in-browser agent's model calls go to `agent.modelEndpoint` (else
+events WebSocket goes to the active backend's socket (a daemon backend's
+`wsURL`, else `transport.wsURL`, else the page's `/ws`), and the in-browser
+agent's model calls go to `agent.modelEndpoint` (else
 `transport.modelEndpoint`, else the page origin's `/proxy/chat`; a relative
 endpoint resolves against `apiBaseURL`). When a
 startup repository is set and there is no git proxy or the browser clone
@@ -753,11 +871,15 @@ git host and streams the response back:
 The hosted platform serves this at `/git-proxy` on its origin, authenticated by
 the session and adding the user's connected git-host credential.
 
-**Terminal (daemon-backed hosts).** A host that declares
-`capabilities.localTerminal` (and runs no in-browser agent) gets the PTY
-terminal: the standalone app's docked terminal, and an arranged `terminal`
-view in a composed workspace. Its backend serves, under
-`transport.apiBaseURL`: the PTY WebSocket at `/terminal` (`?shell=<name>` for
+**Terminal (daemon-backed hosts).** A host whose agent is a daemon
+(`transport.agent.kind: "daemon"`), or one that declares
+`capabilities.localTerminal` and runs no in-browser agent, gets the PTY
+terminal: the standalone app's docked terminal, and in a composed workspace
+the docked terminal and an arranged `terminal` view. A hosted platform that
+reaches a workspace's daemon through a proxy keeps `localTerminal` off (it has
+no local PTY of its own) and still gets the daemon's terminal: the daemon
+serves `/terminal` beside its agent. The backend serves, under the daemon's
+own `apiBaseURL` (else `transport.apiBaseURL`): the PTY WebSocket at `/terminal` (`?shell=<name>` for
 a new session, `?reattach=<id>` to resume one; the client sends `input`,
 `resize` and `ping` frames and handles `session_created`,
 `session_restored`, `output`, `pty_exit` and `error` messages, in the
@@ -1019,7 +1141,7 @@ branch is recoverable from the conversion commits (`git show 536a191c2`,
 | `components/HeaderBar.tsx` — platform header affordances (back-to-dashboard, Start Building, credits) vs Sprout's MenuBar | `transport.authMode === 'bearer'` |
 | `components/AppContent.tsx` — platform notification polling + phone tab bar | `transport.authMode === 'bearer'` |
 | `workspaces/CodeShell.tsx` — project named by repo slug | `transport.authMode === 'bearer'` |
-| `components/chat/EmptyChatPanel.tsx` — offer the "open a repository" panel | `transport.authMode === 'bearer'` |
+| `components/chat/EmptyChatPanel.tsx` — offer the "open a repository" panel | `transport.authMode === 'bearer'`, and not a daemon backend (a daemon has the project's checkout, so there is nothing to open) |
 | `components/chat/ChatMetricsStrip.tsx` — hide the dollar cost (credits are metered) | `transport.authMode === 'bearer'` (inverted) |
 | `components/GitSidebarPanel.tsx` — browser git, and the "unsupported in browser mode" ops | `transport.authMode === 'bearer'` |
 | `components/GitHistoryPanel.tsx` — browser git cannot revert | `transport.authMode === 'bearer'` |
@@ -1039,8 +1161,8 @@ branch is recoverable from the conversion commits (`git show 536a191c2`,
 | `components/SidebarFilesSection.tsx` — clone-repo action | `capabilities.localTerminal` |
 | `components/Sidebar.tsx` — the Automations tab (`supportsAutomations`, i.e. `!isCloud`) | `capabilities.automations` |
 | `components/WorkspaceBar.tsx` — hidden host name | `capabilities.workspaceSwitching` |
-| `components/Terminal.tsx` — the WASM terminal notice | `capabilities.localTerminal` (inverted) |
-| `hooks/useSecurityHandlers.ts` — the ask-user POST path | `capabilities.localTerminal` (inverted) |
+| `components/TerminalWorkbench.tsx` — the WASM terminal notice | the pane transport: shown on the in-browser shell, not on a PTY |
+| `hooks/useSecurityHandlers.ts` — the ask-user POST path | `transport.agent` (`hostRunsInBrowserAgent`): the in-browser agent takes the POST, a daemon the socket event |
 | `hooks/useEscalationTriggers.ts` + `components/AgentEscalationBridge.tsx` — hosted-only escalation | `capabilities.localTerminal` (inverted) |
 | `components/locationSwitcher/SSHPanel.tsx` — the SSH panel | `capabilities.ssh` |
 | `components/locationSwitcher/WorkspacePopover.tsx` + `hooks/useInstances.ts` — the instance list | `capabilities.instances` |

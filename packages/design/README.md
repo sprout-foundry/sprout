@@ -12,6 +12,20 @@ Design tokens for the Sprout ecosystem. CSS custom properties for colors, spacin
 @import "@sprout-foundry/design/reset.css";
 ```
 
+For the Sprout Foundry product look (the app and the marketing site), add the
+brand theme after the tokens:
+
+```css
+@import "@sprout-foundry/design/tokens.css";
+@import "@sprout-foundry/design/brand.css";
+```
+
+`brand.css` re-points the semantic tokens (surfaces, text, borders, accents) at
+the brand: soil navies and frost text in the dark theme, neutral surfaces and
+near-black ink in the light theme, sprout cyan for actions and focus. It also
+sets `--font-sans` (Inter) and `--font-display` (Bricolage Grotesque); load the
+fonts in the app.
+
 Themes are controlled via `data-theme` attribute on the root element:
 
 - Dark (default): `<html>` (no attribute needed)
@@ -33,6 +47,26 @@ hue when the theme flips:
 `--brand-frost` is the frost accent in both themes; the green is addressable
 as `--brand-sprout`, so a surface that wants the sprout green binds to that
 token rather than relying on a theme-dependent meaning of `--brand-frost`.
+
+### Bright / brand-decorative family
+
+The marketing site's bright lime/sun/leaf palette, added as a decorative
+brand family. Same vivid values in **both** themes — they are decorative
+only (glows, the living-mark leaf, celebration bursts, accent
+underlines/highlights), never meaningful text or UI, so they carry no
+WCAG-AA requirement:
+
+| Token                     | Value                                                                                       |
+| ------------------------- | ------------------------------------------------------------------------------------------- |
+| `--brand-lime`            | `#b8f23d` — vivid leaf/lime.                                                                |
+| `--brand-lime-bright`     | `#d7ff6b` — lime highlight / glow tint.                                                     |
+| `--brand-sun`             | `#ffd23f` — sun yellow.                                                                      |
+| `--brand-leaf`            | `#2fc96b` — leaf green (gradient A start).                                                  |
+| `--brand-leaf-teal`       | `#0aa89e` — leaf teal (gradient A end).                                                     |
+| `--brand-leaf-gradient`   | `linear-gradient(135deg, #2fc96b 0%, #0aa89e 100%)` — green → teal.                          |
+| `--brand-leaf2-gradient`  | `linear-gradient(135deg, #b8f23d 0%, #2fc96b 100%)` — lime → green.                         |
+| `--brand-glow-lime`       | `#d7ff6b` — lime glow.                                                                       |
+| `--brand-glow-teal`       | `#7ef0e4` — teal glow.                                                                       |
 
 ## Motion tokens
 

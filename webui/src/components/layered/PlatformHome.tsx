@@ -146,12 +146,7 @@ export default function PlatformHome({ isMobile, onOpenMenu }: PlatformHomeProps
           </span>
         </div>
       )}
-      <iframe
-        ref={frameRef}
-        title="Sprout Foundry"
-        src={embedSrc(initialPath ?? path)}
-        className="platform-home-frame"
-      />
+      <iframe ref={frameRef} title="Project home" src={embedSrc(initialPath ?? path)} className="platform-home-frame" />
     </div>
   );
 }

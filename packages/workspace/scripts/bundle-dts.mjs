@@ -1,6 +1,6 @@
 // Roll the package's public types up into self-contained declaration files.
 //
-// The package publishes three entries, each its own subpath and chunk:
+// The package publishes four typed entries, each its own subpath and chunk:
 //
 //   - `.`        — `src/index.ts`, the host contract (the `exports.types`
 //                  `dist/index.d.ts`).
@@ -8,6 +8,8 @@
 //                  provider wrapper (`dist/views.d.ts`).
 //   - `./providers` — `src/providersChunk.ts`, the provider wrapper on its own
 //                  (`dist/providers.d.ts`).
+//   - `./agent`  — `src/agentChunk.ts`, the headless agent API
+//                  (`dist/agent.d.ts`); its graph is the package's own source.
 //
 // Each source re-exports a graph that lives in the web UI tree
 // (`webui/src/...`), so emitted naively its declarations keep
@@ -197,6 +199,10 @@ const ENTRIES = [
       "CommandDef",
       "OPEN_COMMAND_PALETTE_EVENT",
       "registerCommandHandler",
+      "listBrowserWorkspaceFiles",
+      "readBrowserWorkspaceFile",
+      "BrowserFilesUnavailableError",
+      "WorkspaceFileEntry",
     ],
   },
   {
@@ -205,6 +211,24 @@ const ENTRIES = [
     declaration: "packages/workspace/src/providersChunk.d.ts",
     outFile: "providers.d.ts",
     required: ["SproutProviders", "SproutProvidersProps"],
+  },
+  {
+    subpath: "./agent",
+    source: "src/agentChunk.ts",
+    declaration: "packages/workspace/src/agentChunk.d.ts",
+    outFile: "agent.d.ts",
+    required: [
+      "createAgent",
+      "loadSproutWasm",
+      "memoryFileStore",
+      "CreateAgentOptions",
+      "HeadlessAgent",
+      "AgentEvent",
+      "HostTool",
+      "AgentFiles",
+      "AgentFileStore",
+      "SproutWasmBridge",
+    ],
   },
 ];
 

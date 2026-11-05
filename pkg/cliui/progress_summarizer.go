@@ -25,11 +25,10 @@ import (
 	"strings"
 	"time"
 
-	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
-	"github.com/sprout-foundry/sprout/pkg/factory"
 	"github.com/sprout-foundry/sprout/pkg/providercatalog"
+	"github.com/sprout-foundry/sprout/pkg/summarizerclient"
 )
 
 // progressSummaryTimeout bounds the optional model-written summary call.
@@ -43,13 +42,8 @@ import (
 // timeout-fallback path in milliseconds instead of seconds.
 var progressSummaryTimeout = 5 * time.Second
 
-// ModelClient is the minimal model interface the progress summarizer
-// needs: one system+user prompt to one completion. Callers adapt a
-// concrete client (apiModelClient below); a fake keeps the summarizer
-// testable without a real provider.
-type ModelClient interface {
-	Complete(ctx context.Context, systemPrompt, userPrompt string) (string, error)
-}
+// ModelClient is the summarizer's model seam; see summarizerclient.Client.
+type ModelClient = summarizerclient.Client
 
 // SummarizeProgress returns a short summary of a progress event. It
 // prefers the model-written summary when client
@@ -170,8 +164,8 @@ func estimateSummaryUsage(provider, model string, client ModelClient, data map[s
 	// token.
 	promptChars := len(summarySystemPrompt) + len(summaryEventFields(data)) + 64
 	completionChars := 64
-	if truer, ok := client.(interface{ LastOutput() string }); ok {
-		if out := truer.LastOutput(); out != "" {
+	if out := summarizerclient.LastOutputOf(client); out != "" {
+		{
 			completionChars = len(out)
 		}
 	}
@@ -268,57 +262,7 @@ func progressSummaryPrompt(eventTypeName string, data map[string]interface{}) (s
 	return system, user
 }
 
-// NewSummarizerModelClient builds the optional model client for
-// progress summaries. It makes the model
-// summary OPTIONAL: it returns nil when the `summarizer` role
-// is not configured or when no client can be created for the resolved
-// (provider, model) — in either case the caller uses the deterministic
-// template.
+// NewSummarizerModelClient builds the optional model client for these summaries.
 func NewSummarizerModelClient(cfg *configuration.Config) ModelClient {
-	if cfg == nil {
-		return nil
-	}
-	role := cfg.GetRole(configuration.RoleSummarizer)
-	if role.Provider == "" && role.Model == "" {
-		return nil
-	}
-	provider, model := cfg.ResolveRole(configuration.RoleSummarizer)
-	if provider == "" {
-		return nil
-	}
-	client, err := factory.CreateProviderClient(api.ClientType(provider), model)
-	if client == nil || err != nil {
-		return nil
-	}
-	return &apiModelClient{c: client}
-}
-
-// apiModelClient adapts an api.ClientInterface to the summarizer's
-// ModelClient: a single system+user chat request, trimmed text out. It
-// records the last completion text so the metering seam can size the
-// completion for its usage estimate.
-type apiModelClient struct {
-	c          api.ClientInterface
-	lastOutput string
-}
-
-// LastOutput returns the text of the most recent completion, for the
-// usage estimate. Empty before the first call.
-func (m *apiModelClient) LastOutput() string { return m.lastOutput }
-
-func (m *apiModelClient) Complete(ctx context.Context, systemPrompt, userPrompt string) (string, error) {
-	messages := []api.Message{
-		{Role: "system", Content: systemPrompt},
-		{Role: "user", Content: userPrompt},
-	}
-	resp, err := m.c.SendChatRequest(ctx, messages, nil, "", false)
-	if err != nil {
-		return "", fmt.Errorf("progress summary model call: %w", err)
-	}
-	if resp == nil || len(resp.Choices) == 0 {
-		return "", fmt.Errorf("progress summary model call: no choices in response")
-	}
-	out := strings.TrimSpace(resp.Choices[0].Message.Content)
-	m.lastOutput = out
-	return out, nil
+	return summarizerclient.New(cfg)
 }

@@ -13,6 +13,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
+	"github.com/sprout-foundry/sprout/pkg/injection"
 )
 
 // readFileHandler implements ToolHandler for the read_file tool.
@@ -167,6 +168,20 @@ func (h *readFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 			Output:  "",
 			IsError: true,
 		}, fmt.Errorf("read file %q: %w", path, err)
+	}
+
+	// SP-169 layer 5 (phasing step 3): content we did not write is data, not
+	// instructions. The class is decided once per read, from a structural
+	// marker or a recorded decision, and only the ambiguous case (a path
+	// outside our tree, or a nested clone) asks the user — once, remembered
+	// through the trust store. Framing is a label, not a restriction: the
+	// content is delivered in full inside the block. Image and binary reads
+	// are handled above and are never framed.
+	trustPath := trustPathForRead(env, path, resolvedPath)
+	if resolveReadTrust(env, trustPath) == injection.TrustThirdParty {
+		// The label carries the origin so the model can tell a vendored file
+		// from one of ours, which is the point of framing at ingress.
+		content = injection.WrapUntrusted("file: "+relToWorkspace(env.WorkspaceRoot, trustPath)+" (third-party)", content)
 	}
 
 	// Repeat guard: once the read succeeded, an identical call (same path +

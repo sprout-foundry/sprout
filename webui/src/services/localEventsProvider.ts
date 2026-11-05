@@ -51,6 +51,10 @@ export class LocalEventsProvider implements EventsProvider {
     this.ws().resume();
   }
 
+  reportFocus(): void {
+    this.ws().reportFocus();
+  }
+
   resetAndReconnect(): void {
     this.ws().resetAndReconnect();
   }
@@ -61,5 +65,9 @@ export class LocalEventsProvider implements EventsProvider {
 
   flushQueuedMessages(): number {
     return this.ws().flushQueuedMessages();
+  }
+
+  setActiveChatId(chatId: string | null): void {
+    this.ws().setActiveChatId(chatId);
   }
 }

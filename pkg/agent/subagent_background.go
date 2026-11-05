@@ -223,7 +223,7 @@ func startBackgroundSubagent(a *Agent, spec *subagentLaunchSpec, isolate bool) (
 	bgCtx, cancel := context.WithCancel(context.Background())
 	t := runner.registerBackground("subagent", spec.persona, ShortCommandLabel(spec.prompt), cancel)
 
-	printSubagentStart(spec.persona+", background", displayOrDefault(spec.provider), displayOrDefault(spec.model))
+	printSubagentStart(spec.persona+", background", spec.prompt, displayOrDefault(spec.provider), displayOrDefault(spec.model))
 	go func() {
 		defer cancel()
 		var result *SubagentResult
@@ -231,13 +231,15 @@ func startBackgroundSubagent(a *Agent, spec *subagentLaunchSpec, isolate bool) (
 			result = runIsolatedSubagent(bgCtx, a, spec, t.ID, true)
 		} else {
 			result = runner.runTask(bgCtx, t.ID, spec.enhancedPrompt, SubagentOptions{
-				Persona:      spec.persona,
-				Model:        spec.model,
-				Provider:     spec.provider,
-				SystemPrompt: spec.systemPromptText,
-				WorkingDir:   spec.workingDir,
-				Quiet:        true,
-				Role:         spec.role,
+				Persona:       spec.persona,
+				Model:         spec.model,
+				Provider:      spec.provider,
+				SystemPrompt:  spec.systemPromptText,
+				WorkingDir:    spec.workingDir,
+				Quiet:         true,
+				Role:          spec.role,
+				MaxIterations: spec.maxIterations,
+				Timeout:       spec.timeout,
 			}, nil, 0)
 		}
 		var verification workerVerifyResult
@@ -439,12 +441,52 @@ func handleStopSubagent(_ context.Context, a *Agent, args map[string]any) (strin
 	case <-t.done:
 	case <-time.After(10 * time.Second):
 	}
+	// A /task worktree task keeps its own record alongside this one, and
+	// /task merge and the concurrency limit read that record's status. If
+	// the run goroutine has not reached its terminal write yet, close the
+	// record here so a stop is never invisible to the rest of the feature.
+	processTasks.markStopped(t.ID)
 	return fmt.Sprintf("Stopped task %s.", t.ID), nil
 }
 
 // BackgroundTasksSummary lists background subagent tasks for display.
 func (a *Agent) BackgroundTasksSummary() string {
 	return listBackgroundTasks(a.GetSubagentRunner())
+}
+
+// BackgroundTaskEntries returns every background task this agent started —
+// subagent runs, reviews, and /task worktree tasks — newest first, for
+// display surfaces that need one row per task.
+func (a *Agent) BackgroundTaskEntries() []BackgroundTaskEntry {
+	tasks := a.GetSubagentRunner().backgroundTasks()
+	out := make([]BackgroundTaskEntry, 0, len(tasks))
+	for i := len(tasks) - 1; i >= 0; i-- {
+		t := tasks[i]
+		status := "running"
+		elapsed := time.Since(t.Started)
+		if t.isDone() {
+			status, elapsed = t.status, t.finished.Sub(t.Started)
+		}
+		out = append(out, BackgroundTaskEntry{
+			ID:      t.ID,
+			Kind:    t.Kind,
+			Persona: t.Persona,
+			Label:   t.Label,
+			Status:  status,
+			Elapsed: elapsed,
+		})
+	}
+	return out
+}
+
+// BackgroundTaskEntry is one row of the background-task list.
+type BackgroundTaskEntry struct {
+	ID      string
+	Kind    string // "subagent" | "review" | "task"
+	Persona string
+	Label   string
+	Status  string
+	Elapsed time.Duration
 }
 
 // BackgroundTaskDetail reports one task's progress or result for display.

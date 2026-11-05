@@ -120,3 +120,9 @@ func WithBackgroundProcessManager(ctx context.Context, bpm *BackgroundProcessMan
 func BackgroundProcessManagerFromContext(ctx context.Context) *BackgroundProcessManager {
 	return nil
 }
+
+// RunningSessionMatching reports no session: WASM builds run no background
+// sessions.
+func (m *BackgroundProcessManager) RunningSessionMatching(_, _ string) (string, time.Duration, bool) {
+	return "", 0, false
+}

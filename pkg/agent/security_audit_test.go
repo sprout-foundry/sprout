@@ -4,7 +4,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,28 +15,6 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 	"github.com/sprout-foundry/sprout/pkg/personas"
 )
-
-// readAuditEntries reads a JSONL audit log file and returns parsed entries.
-func readAuditEntries(t *testing.T, logPath string) []tools.AuditEntry {
-	t.Helper()
-	data, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("read audit log: %v", err)
-	}
-	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	var entries []tools.AuditEntry
-	for _, line := range lines {
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		var entry tools.AuditEntry
-		if err := json.Unmarshal([]byte(line), &entry); err != nil {
-			t.Fatalf("parse audit entry: %v\nLine: %s", err, line)
-		}
-		entries = append(entries, entry)
-	}
-	return entries
-}
 
 // ---------------------------------------------------------------------------
 // GetAuditLogger / SetAuditLogger

@@ -48,8 +48,25 @@ func (p *GenericProvider) emitCallAudit(ctx context.Context, messages []api.Mess
 	if resp != nil {
 		ev.PromptTokens = resp.Usage.PromptTokens
 		ev.CompletionTokens = resp.Usage.CompletionTokens
+		ev.ReasoningTokens = reasoningTokensForResponse(resp)
 	}
 	agent_audit.EmitCall(ctx, ev)
+}
+
+// reasoningTokensForResponse estimates the reasoning-token count returned by a
+// model call from the captured reasoning_content (rel.1). It is a rough
+// estimate — the wire does not always report a reasoning-token usage field —
+// but it makes "0 reasoning tokens" visible in the run log so a model that is
+// supposed to be reasoning can be told from one that is not.
+func reasoningTokensForResponse(resp *api.ChatResponse) int {
+	if resp == nil || len(resp.Choices) == 0 {
+		return 0
+	}
+	rc := resp.Choices[0].Message.ReasoningContent
+	if rc == "" {
+		return 0
+	}
+	return api.EstimateTokens(rc)
 }
 
 // lastMessageRole returns the role of the final message in the request, which

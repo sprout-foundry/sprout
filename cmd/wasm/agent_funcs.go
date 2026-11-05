@@ -75,7 +75,8 @@ func seedWasmCredentialPlaceholders() {
 type chatAgent struct {
 	ag       *agent.Agent
 	provider string // provider name the agent was built for
-	errCnt   int    // consecutive ProcessQuery errors; reset on success
+	options  agentRunOptions
+	errCnt   int // consecutive ProcessQuery errors; reset on success
 	lastUsed time.Time
 }
 
@@ -116,10 +117,10 @@ func lookupChatAgent(chatID string) *agent.Agent {
 
 // storeChatAgent caches a freshly built agent and evicts the least recently
 // used one past the bound. Caller must not hold chatAgentsMu.
-func storeChatAgent(chatID string, ag *agent.Agent, provider string) {
+func storeChatAgent(chatID string, ag *agent.Agent, provider string, options agentRunOptions) {
 	chatAgentsMu.Lock()
 	defer chatAgentsMu.Unlock()
-	chatAgents[chatID] = &chatAgent{ag: ag, provider: provider, lastUsed: time.Now()}
+	chatAgents[chatID] = &chatAgent{ag: ag, provider: provider, options: options, lastUsed: time.Now()}
 	for len(chatAgents) > maxChatAgents {
 		oldestID, oldest := "", time.Time{}
 		for id, entry := range chatAgents {
@@ -228,6 +229,9 @@ func steerAgentFunc(_ js.Value, args []js.Value) interface{} {
 //	                    reload) so the conversation continues where it was
 //	args[6] (string?) — workspace mode the query was sent from ("design",
 //	                    "code", …); selects the agent's mode skills
+//	args[7] (string?) — JSON agent options, {persona?, context?} (see
+//	                    agentRunOptions); applied when the chat's agent is
+//	                    built, and a change rebuilds it
 //
 // Returns a Promise resolving to:
 //
@@ -256,6 +260,7 @@ func runAgentFunc(_ js.Value, args []js.Value) interface{} {
 	}
 	historyJSON := argString(args, 5, "")
 	mode := argString(args, 6, "")
+	optionsJSON := argString(args, 7, "")
 
 	var onEvent js.Value
 	if len(args) > 3 && args[3].Type() == js.TypeFunction {
@@ -269,6 +274,10 @@ func runAgentFunc(_ js.Value, args []js.Value) interface{} {
 		if query == "" {
 			return nil, fmt.Errorf("query is required (third arg)")
 		}
+		options, err := parseAgentRunOptions(optionsJSON)
+		if err != nil {
+			return nil, err
+		}
 
 		// Reuse the chat's cached agent when the provider matches, so the
 		// conversation history carries over turn-to-turn. A provider
@@ -276,7 +285,7 @@ func runAgentFunc(_ js.Value, args []js.Value) interface{} {
 		chatAgentsMu.Lock()
 		lastChatID = chatID
 		var ag *agent.Agent
-		if entry := chatAgents[chatID]; entry != nil && entry.provider == provider {
+		if entry := chatAgents[chatID]; entry != nil && entry.provider == provider && entry.options == options {
 			ag = entry.ag
 			entry.lastUsed = time.Now()
 		}
@@ -323,11 +332,20 @@ func runAgentFunc(_ js.Value, args []js.Value) interface{} {
 			// own package broker with the cloud response route.
 			ag.SetHasActiveWebUIClients(func() bool { return true })
 
+			if err := applyAgentRunOptions(ag, options); err != nil {
+				return nil, err
+			}
+			// Stamp the chat on the agent's events and tool env, so a host
+			// running several chats can route events and host tool calls.
+			if chatID != "" {
+				ag.MergeEventMetadata(map[string]interface{}{"chat_id": chatID})
+			}
+
 			if history := parseSeedHistory(historyJSON); len(history) > 0 {
 				ag.SetMessages(history)
 			}
 
-			storeChatAgent(chatID, ag, provider)
+			storeChatAgent(chatID, ag, provider, options)
 		}
 
 		// Wire the event bus only when JS provided a sink — saves the
@@ -415,90 +433,6 @@ func parseSeedHistory(raw string) []api.Message {
 		}
 	}
 	return history
-}
-
-// runPlanFunc is runAgent with the planning-specific system prompt
-// installed. Inputs mirror runAgent's. Returns the same Promise shape.
-//
-//	args[0] (string)  — provider name
-//	args[1] (string)  — model id (or "" for default)
-//	args[2] (string)  — initial planning query
-//	args[3] (func?)   — onEvent callback
-//
-// Matches the behavior of the native `sprout plan` command's
-// createPlanningAgent → ProcessQuery flow, minus the interactive readline
-// loop (which doesn't apply in a browser). Host pages drive the
-// multi-turn flow by calling runPlan again with the user's follow-up
-// response, treating it like a chat thread.
-//
-// The planning prompt embeds the "create todos as you plan" behavior;
-// disabling that knob isn't exposed here yet (always enabled to match
-// the native default).
-func runPlanFunc(_ js.Value, args []js.Value) interface{} {
-	provider := argString(args, 0, "")
-	model := argString(args, 1, "")
-	query := argString(args, 2, "")
-
-	var onEvent js.Value
-	if len(args) > 3 && args[3].Type() == js.TypeFunction {
-		onEvent = args[3]
-	}
-
-	return asPromiseWithTimeout(agentTimeout, func(ctx context.Context) (interface{}, error) {
-		if provider == "" {
-			return nil, fmt.Errorf("provider is required (first arg)")
-		}
-		if query == "" {
-			return nil, fmt.Errorf("query is required (third arg)")
-		}
-
-		client, err := factory.CreateProviderClient(api.ClientType(provider), model)
-		if err != nil {
-			return nil, fmt.Errorf("create client: %w", err)
-		}
-		injectWasmStreamingClient(client)
-
-		configMgr, err := configuration.NewManagerSilent()
-		if err != nil {
-			return nil, fmt.Errorf("init configuration: %w", err)
-		}
-
-		ag, err := agent.NewAgentWithClient(client, api.ClientType(provider), configMgr)
-		if err != nil {
-			return nil, fmt.Errorf("init agent: %w", err)
-		}
-
-		// Enable streaming so tokens appear in real-time (same as runAgentFunc).
-		ag.SetStreamingEnabled(true)
-
-		// Same ask_user wiring as runAgentFunc (see that function's comment).
-		ag.InjectWebUIManagers(nil, wasmAskUserMgr)
-		ag.SetHasActiveWebUIClients(func() bool { return true })
-
-		planningPrompt, err := agent.GetEmbeddedPlanningPrompt(true)
-		if err != nil {
-			return nil, fmt.Errorf("load planning prompt: %w", err)
-		}
-		ag.SetSystemPrompt(planningPrompt)
-
-		var unsubscribe func()
-		if !onEvent.IsUndefined() && !onEvent.IsNull() {
-			unsubscribe = wireAgentEventForwarding(ag, onEvent)
-			defer unsubscribe()
-		}
-
-		response, err := ag.ProcessQuery(query)
-		if err != nil {
-			return nil, fmt.Errorf("process query: %w", err)
-		}
-
-		return map[string]interface{}{
-			"response": response,
-			"provider": provider,
-			"model":    ag.GetModel(),
-			"mode":     "plan",
-		}, nil
-	})
 }
 
 // wireAgentEventForwarding attaches an EventBus to the agent and starts

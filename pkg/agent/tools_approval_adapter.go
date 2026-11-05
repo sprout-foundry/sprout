@@ -88,16 +88,29 @@ func (a *toolsApprovalAdapter) RequestApproval(requestID, toolName, riskLevel, p
 	// already tried above — re-publishing would block a second full
 	// timeout window for the same unanswered question.
 	if !triedBus && a.eventBus != nil {
+		// Subagents (SP-168): never wait on a surface the parent cannot
+		// answer. A workflow/automate run and a one-shot/daemon run with no
+		// WebUI client have no answerer — waiting blocks the subagent for
+		// the full approval timeout and usually its run budget. Deny now
+		// with actionable guidance so the subagent's model can adapt. When
+		// a WebUI client IS attached the request is answerable: the
+		// subagent shares the parent's ApprovalManager (shared in
+		// createSubagent), so the browser dialog resolves this request.
+		if a.agent != nil && a.agent.IsSubagent() {
+			if a.agent.IsWorkflowRun() || !a.agent.HasActiveWebUIClients() {
+				return tools.ApprovalResult{Approved: false, Reason: subagentNoApprovalSurfaceReason}
+			}
+			decision, outcome := a.approvalMgr.RequestApprovalDecisionWithOutcome(a.eventBus, a.newRequest(toolName, riskLevel, prompt, extras))
+			return approvalResultFrom(decision, outcome)
+		}
 		// With no surface that could ever answer — prompts off (--yes or
 		// headless) and no web UI attached — waiting would stall the turn
 		// for the full approval timeout with nothing on screen. Deny now
-		// and say how to allow it. Subagents still wait: their requests
-		// are answered through the parent's interface. A workflow/automate
-		// run also never waits.
-		if a.agent != nil && !a.agent.IsSubagent() && (!a.agent.WebUIAttached() || a.agent.IsWorkflowRun()) {
+		// and say how to allow it. A workflow/automate run also never waits.
+		if a.agent != nil && (!a.agent.WebUIAttached() || a.agent.IsWorkflowRun()) {
 			return tools.ApprovalResult{Approved: false, Reason: noApprovalSurfaceReason}
 		}
-		if a.agent != nil && !a.agent.IsSubagent() {
+		if a.agent != nil {
 			console.GlyphPaused.Printf("Waiting for approval of %s in the web UI", toolName)
 		}
 		decision, outcome := a.approvalMgr.RequestApprovalDecisionWithOutcome(a.eventBus, a.newRequest(toolName, riskLevel, prompt, extras))
@@ -113,6 +126,15 @@ func (a *toolsApprovalAdapter) RequestApproval(requestID, toolName, riskLevel, p
 // nothing can ask for it.
 const noApprovalSurfaceReason = "needs approval, but prompts are off (--yes or a non-interactive run) and no web UI is attached to ask; " +
 	"run interactively to approve it, or allow it up front with --unsafe-shell or /risk-profile permissive"
+
+// subagentNoApprovalSurfaceReason is the fail-fast denial for a subagent
+// whose parent run has no surface that can answer (SP-168): an
+// automate/workflow run, or a one-shot/daemon run with no web UI attached.
+// It is immediate by design — the subagent's model reads the guidance and
+// adapts instead of the run stalling on an approval timeout.
+const subagentNoApprovalSurfaceReason = "subagent approval required, but this run has no surface that can answer (automate/workflow run, " +
+	"or no web UI attached); the operation was rejected immediately. Pre-allow the command with /risk-profile permissive or --unsafe-shell, " +
+	"or run the task interactively so the user can approve it."
 
 // preferWebUI reports whether the event-bus dialog should be tried first:
 // a bus exists, this is not a subagent, a WebUI client is connected, and

@@ -271,10 +271,10 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, _ *events.EventBu
 
 			switch chatAgent.GetLastRunTerminationReason() {
 			case agent.RunTerminationMaxIterations:
-				fmt.Println()
+				console.SectionBreak()
 				console.GlyphWarning.Printf("Reached max iterations (%d) in %s", chatAgent.GetMaxIterations(), FormatDuration(duration))
 			case agent.RunTerminationInterrupted:
-				fmt.Println()
+				console.SectionBreak()
 				console.GlyphStopped.Printf("Stopped in %s", FormatDuration(duration))
 			default:
 				// The terminal subscriber (interactive + queue modes) prints its
@@ -291,7 +291,7 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, _ *events.EventBu
 				// interactive path didn't). Skip the inline summary when the
 				// agent didn't actually run (no tokens accumulated) so the
 				// slash-command / direct-execution paths stay quiet.
-				fmt.Println()
+				console.SectionBreak()
 				if summary := formatCompletionSummary(chatAgent); summary != "" {
 					console.GlyphSuccess.Printf("Completed in %s · %s", FormatDuration(duration), summary)
 				} else {

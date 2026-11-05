@@ -51,8 +51,23 @@ func handleAskUser(ctx context.Context, a *Agent, args map[string]interface{}) (
 	}
 
 	var response string
-	if hasActiveWebUI {
+	if hasActiveWebUI && a.askBothSurfaces(req) {
+		// Terminal session with a tab open: ask in both, first answer wins.
+		response, err = askFirstAnswer(ctx,
+			func(ctx context.Context) (string, error) { return tools.AskUser(ctx, req) },
+			func(ctx context.Context) (string, error) {
+				return tools.AskUserWithEventBus(ctx, req, eventBus, clientID, userID, chatID, askUserMgr)
+			})
+	} else if hasActiveWebUI {
+		a.noteQuestionRoutedToBrowser()
 		response, err = tools.AskUserWithEventBus(ctx, req, eventBus, clientID, userID, chatID, askUserMgr)
+	} else if a.askUserEndsRun() && a.isNonInteractive() {
+		return "", a.endRunWithQuestion(req)
+	} else if a.IsTaskRun() {
+		// A task has no terminal of its own. Without a browser there is
+		// nobody to answer, and blocking for the ask timeout would stall the
+		// task for no reason — fail with a message that says what to do.
+		return "", taskAskUserError()
 	} else if a.isNonInteractive() {
 		// No active browser tab AND no interactive terminal (daemon mode,
 		// --skip-prompt, piped stdin). Short-circuit before calling AskUser
@@ -151,4 +166,12 @@ func mapAskUserError(err error) error {
 		return agenterrors.NewTool("ask_user", "ask_user: no interactive input channel is available (no WebUI client connected and stdin is not a TTY). Make a best-effort decision based on the existing context, or report that you cannot proceed without user input", nil)
 	}
 	return agenterrors.Wrap(err, "ask_user failed")
+}
+
+// taskAskUserError is the no-channel error a task sees. It names the surface
+// the user can open, because "no interactive input channel" is unactionable
+// for a run the user started and walked away from.
+func taskAskUserError() error {
+	return agenterrors.NewTool("ask_user", "ask_user: "+taskNoSurfaceMessage+
+		" Make a best-effort decision from the context you have, or stop and report what you need.", nil)
 }

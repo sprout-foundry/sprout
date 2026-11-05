@@ -1,5 +1,5 @@
 {
-  "name": "Sprout Foundry",
+  "name": "Sprout",
   "short_name": "Sprout",
   "description": "AI agents that write, test, and ship code",
   "start_url": "/webui/",

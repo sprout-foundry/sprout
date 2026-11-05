@@ -25,6 +25,21 @@
   --brand-active-cyan: #22d3ee;
   --brand-navy: #10212d;
 
+  /* Bright/brand-decorative family — the marketing site's lime/sun/leaf
+   * hues. Decorative-only: glows, the living-mark leaf, celebration
+   * bursts, accent underlines/highlights. NOT for meaningful text or UI
+   * (no WCAG-AA requirement), so they keep the same vivid values in both
+   * themes. */
+  --brand-lime: #b8f23d;
+  --brand-lime-bright: #d7ff6b;
+  --brand-sun: #ffd23f;
+  --brand-leaf: #2fc96b;
+  --brand-leaf-teal: #0aa89e;
+  --brand-leaf-gradient: linear-gradient(135deg, #2fc96b 0%, #0aa89e 100%);
+  --brand-leaf2-gradient: linear-gradient(135deg, #b8f23d 0%, #2fc96b 100%);
+  --brand-glow-lime: #d7ff6b;
+  --brand-glow-teal: #7ef0e4;
+
   --bg-primary: #282c34;
   --bg-secondary: #21252b;
   --bg-tertiary: #2c313a;
@@ -253,6 +268,19 @@
   --brand-sprout: #1ba03d;
   --brand-active-cyan: #0891b2;
   --brand-navy: #10212d;
+
+  /* Bright/brand-decorative family — identical vivid values in both
+   * themes (see the :root block above). Decorative-only: glows, the
+   * living-mark leaf, celebration bursts, accent underlines/highlights. */
+  --brand-lime: #b8f23d;
+  --brand-lime-bright: #d7ff6b;
+  --brand-sun: #ffd23f;
+  --brand-leaf: #2fc96b;
+  --brand-leaf-teal: #0aa89e;
+  --brand-leaf-gradient: linear-gradient(135deg, #2fc96b 0%, #0aa89e 100%);
+  --brand-leaf2-gradient: linear-gradient(135deg, #b8f23d 0%, #2fc96b 100%);
+  --brand-glow-lime: #d7ff6b;
+  --brand-glow-teal: #7ef0e4;
 
   --bg-primary: #f4f7fb;
   --bg-secondary: #eef3f9;

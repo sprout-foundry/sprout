@@ -39,6 +39,12 @@ type ActivityIndicator struct {
 	isStatic  bool
 	staticMsg string
 
+	// Hold state (see hold): while a prompt owns the terminal, Start only
+	// records what it would have shown, and Stop cancels that record.
+	held     bool
+	heldMsg  string
+	heldWant bool
+
 	// widthOverride forces a terminal width for testing (0 = auto-detect via
 	// term.GetSize on the underlying *os.File, falling back to 80).
 	widthOverride int
@@ -70,6 +76,11 @@ func (a *ActivityIndicator) Start(msg string) {
 	}
 	a.mu.Lock()
 	msg = sanitizeLine(msg)
+	if a.held {
+		a.heldMsg, a.heldWant = msg, true
+		a.mu.Unlock()
+		return
+	}
 	if a.active {
 		a.msg = msg
 		a.startedAt = time.Now()
@@ -117,6 +128,7 @@ func (a *ActivityIndicator) Stop() {
 		return
 	}
 	a.mu.Lock()
+	a.heldWant = false
 	hadStatic := a.isStatic
 	if a.isStatic {
 		a.isStatic = false

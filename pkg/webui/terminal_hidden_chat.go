@@ -7,6 +7,7 @@ package webui
 // across agent execs), waitForShellReady, and sanitizeChatID. Split out of
 // terminal_types.go.
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -89,43 +90,90 @@ func (tm *TerminalManager) waitForShellReady(ctx context.Context, session *Termi
 
 	// Wait up to 15 seconds for shell readiness. Most shells source rc files
 	// in under 1 second, but complex setups (pyenv, nvm, conda, starship,
-	// tmux) can produce output in bursts separated by >500ms gaps. The larger
-	// timeout accommodates these without false-positive "ready" declarations.
+	// tmux) can produce output in bursts. A round-trip probe (below) is
+	// immune to burstiness, so the timeout only bounds a genuinely stuck
+	// shell.
 	readyCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	// The quiet period must be long enough to span the typical gap between
-	// rc-file output bursts (pyenv, nvm, conda each print asynchronously).
-	// 500ms was too short — a bursty shell would be declared ready mid-init,
-	// and the first command would interleave with pending output. 1s is still
-	// short enough that the total readiness wait stays under 2s for fast shells.
-	quietPeriod := 1 * time.Second
-	quietTimer := time.NewTimer(quietPeriod)
-	defer quietTimer.Stop()
+	session.mutex.RLock()
+	pty := session.Pty
+	session.mutex.RUnlock()
+	if pty == nil {
+		return fmt.Errorf("session %s has no PTY", session.ID)
+	}
 
+	// Probe readiness by round-tripping a unique token: write a command that
+	// prints it, and wait for the printed line. This replaces a quiet-period
+	// heuristic, which could not distinguish a shell that finished starting
+	// from one that was merely between rc-file bursts — declaring ready too
+	// early let the first command interleave with pending output, and a
+	// bursty shell could reset the quiet timer indefinitely. A round-trip is
+	// a direct proof that the shell is consuming input.
+	token := fmt.Sprintf("SPROUT-READY-%d", time.Now().UnixNano())
+	if _, err := fmt.Fprintf(pty, "printf '%s\\n'\n", token); err != nil {
+		return fmt.Errorf("writing readiness probe to session %s: %w", session.ID, err)
+	}
+
+	// Match the token as the whole of a line's payload, ignoring any prompt
+	// prefix the shell prints before it: dash prints "$ <token>", zsh prints
+	// "% <token>", bash "$ <token>". The echoed command line contains the
+	// token too, but always as part of the printf invocation, so requiring
+	// the token to end the line (modulo trailing prompt/whitespace) excludes
+	// the echo.
+	want := []byte(token)
+
+	// Only the tail of the startup output can hold the probe's result, and a
+	// chatty rc file could otherwise grow this buffer for the whole timeout.
+	const retainedTail = 8 * 1024
+	var seen []byte
 	for {
 		select {
 		case <-readyCtx.Done():
-			return fmt.Errorf("shell did not become ready within timeout for session %s", session.ID)
+			return fmt.Errorf("shell did not answer the readiness probe within timeout for session %s", session.ID)
 
-		case _, ok := <-sub.ch:
+		case chunk, ok := <-sub.ch:
 			if !ok {
 				return fmt.Errorf("PTY channel closed before shell became ready for session %s", session.ID)
 			}
-			// Reset quiet timer on each output chunk (shell still initializing).
-			if !quietTimer.Stop() {
-				select {
-				case <-quietTimer.C:
-				default:
-				}
+			seen = append(seen, chunk...)
+			if len(seen) > retainedTail {
+				seen = seen[len(seen)-retainedTail:]
 			}
-			quietTimer.Reset(quietPeriod)
-
-		case <-quietTimer.C:
-			// Quiet period elapsed — shell is ready.
-			return nil
+			if probeAnswered(seen, want) {
+				return nil
+			}
 		}
 	}
+}
+
+// probeAnswered reports whether the readiness token appears as a line's own
+// payload. The shell echoes the command that printed it, so the token also
+// occurs inside the printf invocation; only a line whose content ends with the
+// token (after any prompt prefix) is the command's output.
+func probeAnswered(seen, token []byte) bool {
+	for i := 0; i+len(token) <= len(seen); i++ {
+		if !bytes.Equal(seen[i:i+len(token)], token) {
+			continue
+		}
+		// The token must end the line. In the echoed command line it is
+		// followed by the printf string's \n escape, so that occurrence is
+		// rejected here; the printed line ends the token with a line break
+		// (or the buffer ends mid-line while it is still arriving).
+		rest := seen[i+len(token):]
+		if len(rest) > 0 && rest[0] != '\r' && rest[0] != '\n' {
+			continue
+		}
+		// It must also start its own line, after at most a prompt: the echo
+		// has the printf string's opening quote immediately before the token.
+		// Without this, an echo truncated right after the token would look
+		// like the printed line and declare the shell ready mid-startup.
+		if i > 0 && seen[i-1] == '\'' {
+			continue
+		}
+		return true
+	}
+	return false
 }
 
 // sanitizeChatID normalizes a chat ID for use in a session identifier.

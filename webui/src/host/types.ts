@@ -87,8 +87,9 @@ export interface HostTransport {
    * The agent backend this transport selects, when the host chooses one
    * explicitly. Absent means the host did not choose, and Sprout keeps its own
    * default for the build. A host may switch backends when a daemon becomes
-   * available by re-mounting the workspace with a new transport (a re-mount is
-   * the supported switch — see the contract doc).
+   * available by passing the updated transport (a new `agent`) to the mounted
+   * workspace — the composition re-wires the backend in place, and a re-mount
+   * with a new transport is equivalent (see the contract doc).
    */
   agent?: HostAgentBackend;
   /**
@@ -467,6 +468,35 @@ export interface HostCapabilities {
    * agent).
    */
   chatSessions: boolean;
+  /**
+   * Read-only access to the in-browser workspace's files: the host may list
+   * the project's files and read a file's bytes, so it can carry them along
+   * when the project moves off the in-browser agent (e.g. into a container).
+   * Offered only when the agent runs in-browser (the transport's agent
+   * backend is the in-browser agent, kind "wasm") and the browser's WASM
+   * shell is reachable; absent or false means the API is unavailable and its
+   * calls reject. A host whose agent runs in a daemon leaves it off — the
+   * daemon serves its own files.
+   */
+  browserFiles?: boolean;
+  /**
+   * Sprout's own "Start Building" action in the hosted header: move the
+   * project from the in-browser agent into a full workspace. A host that
+   * offers that move in its own interface leaves this off, so the person
+   * sees one way to do it, not two. Absent or false hides the action.
+   */
+  containerUpgrade?: boolean;
+}
+
+/**
+ * How the hosting product names itself in Sprout's own surfaces — the tab
+ * title, the install prompt, and settings copy. A host that embeds Sprout
+ * under its own brand sets this; a host that leaves it absent is showing
+ * Sprout, so Sprout's own name is used.
+ */
+export interface HostBranding {
+  /** The product name shown to the user, e.g. "Sprout". */
+  name: string;
 }
 
 /**
@@ -477,6 +507,12 @@ export interface HostCapabilities {
 export interface SproutHost {
   /** The host account, or null/absent for no account. */
   user?: HostUser | null;
+
+  /**
+   * How the host's product names itself in Sprout's own surfaces. Absent
+   * means Sprout's own name (see `productName()`).
+   */
+  branding?: HostBranding;
 
   /** A generic usage summary and out-of-usage behavior. */
   entitlements?: HostEntitlements;

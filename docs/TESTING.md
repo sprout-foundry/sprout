@@ -76,6 +76,31 @@ We use a layered testing approach that balances speed, coverage, and cost:
 
 **Command**: `make test-smoke`
 
+### CLI End-to-End Tests (`test/clie2e/`)
+
+**Purpose**: The interactive REPL as a user sees it. Each test runs the built
+`sprout agent --mock-llm` in a pseudo-terminal, feeds its output through a VT
+emulator (`pkg/testutil/vtscreen`, which answers cursor-position and
+device-attribute queries the way a terminal does), and asserts the screen:
+turns render once and in order, output after a mid-turn question scrolls,
+height resizes keep the transcript, and `!` commands get the terminal.
+**Dependencies**: None (the mock LLM; replies are scripted with
+`SPROUT_MOCK_LLM_QUEUE`, including fenced JSON tool calls)
+**Speed**: Seconds after the build
+**When to run**: After changing anything under `pkg/console`, `pkg/cliui` or the
+REPL loop
+
+**Command**: `make test-cli-e2e` (opt-in: `SPROUT_CLI_E2E=1`; set
+`SPROUT_E2E_RAW_DIR` to keep the raw output of a failing test for replay)
+
+Two notes:
+
+- **Enter must be its own write.** Typed text and Enter sent in one write
+  read as a paste, and the newline is inserted instead of submitted.
+- **The emulator does not reflow on a width change**, like xterm. Most
+  terminals do, and the footer's resize handling assumes they do, so only
+  height changes are asserted.
+
 ## 🚀 Developer Workflow
 
 ### Daily Development
@@ -148,6 +173,7 @@ sprout agent "test command" --model test:test
 |---------|---------|-------|------|--------------|
 | `make test-unit` | Unit tests | Very Fast | Free | None |
 | `make test-smoke` | Smoke tests | Fast | Free | Optional |
+| `make test-cli-e2e` | REPL in a pty, screen asserted | Fast | Free | None |
 | `make test-all` | Unit + Smoke | Fast | Free | None |
 | `make test-ci` | CI-friendly tests | Fast | Free | None |
 

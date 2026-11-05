@@ -35,6 +35,11 @@ var (
 // This value can be overridden on subsequent calls to GetLogger.
 func GetLogger(skipPrompts bool) *Logger {
 	once.Do(func() {
+		// The log lives in the workspace's .sprout; keep it (and the other
+		// runtime files there) out of the repository's commits.
+		if wd, err := os.Getwd(); err == nil {
+			EnsureRuntimeStateExcluded(wd)
+		}
 		logFile := &lumberjack.Logger{
 			Filename:   ".sprout/workspace.log",
 			MaxSize:    15, // megabytes

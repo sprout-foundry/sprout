@@ -22,6 +22,7 @@ const mockInstance = {
   resetAndReconnect: vi.fn(),
   getQueuedMessageCount: vi.fn().mockReturnValue(0),
   flushQueuedMessages: vi.fn().mockReturnValue(0),
+  setActiveChatId: vi.fn(),
 };
 
 vi.mock('./websocket', () => ({
@@ -46,6 +47,15 @@ beforeEach(() => {
 });
 
 describe('LocalEventsProvider', () => {
+  it('delegates setActiveChatId() to WebSocketService', () => {
+    // The chat on screen must reach the socket: it reattaches to that chat
+    // after a reconnect, and attaches to it on connect where the server
+    // cannot learn it from a session switch.
+    const provider = new LocalEventsProvider();
+    provider.setActiveChatId('chat-a');
+    expect(mockInstance.setActiveChatId).toHaveBeenCalledWith('chat-a');
+  });
+
   it('delegates connect() to WebSocketService', () => {
     const provider = new LocalEventsProvider();
     provider.connect();

@@ -15,6 +15,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/sprout-foundry/sprout/pkg/mockupkit"
 )
 
 //go:embed mockup_prompts/mockup-charter.md
@@ -32,9 +34,13 @@ var (
 )
 
 // mockupCharter and mockupEditCharter are the prompts without their version
-// line.
-func mockupCharter() string     { return stripCharterVersion(mockupCharterFile) }
-func mockupEditCharter() string { return stripCharterVersion(mockupEditFile) }
+// line, followed by the design kit's catalogue.
+func mockupCharter() string     { return withKitCatalog(mockupCharterFile) }
+func mockupEditCharter() string { return withKitCatalog(mockupEditFile) }
+
+func withKitCatalog(charter string) string {
+	return stripCharterVersion(charter) + "\n\n## The kit's catalogue\n\n" + mockupkit.Catalog()
+}
 
 func stripCharterVersion(text string) string {
 	if i := strings.Index(text, "\n"); i >= 0 && strings.HasPrefix(text, "charter-version:") {

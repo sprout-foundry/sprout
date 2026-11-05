@@ -231,6 +231,8 @@ The `planner` is the one confined persona today. Its tools: `ask_user`, `analyze
 
 The mockup is one self-contained document, `design/mockup.html`, with a `<section data-screen="id">` per screen and a small script switching screens on `data-go` clicks (the first screen shows without script). It is drawn by its own streamed model call rather than written into a tool argument, so a host can render it as it is written (`pkg/agent_tools/draw_mockup_handler.go`, `mockup_document.go`, prompts in `pkg/agent_tools/mockup_prompts/`).
 
+The model builds it with the design kit (`pkg/mockupkit`): it names a kit (a look with its own design brief) and a contrast-checked palette on `<html>`, writes markup with the kit's classes and references icons by name, and never writes the kit itself. The kit is added to the stream as soon as `<body>` has passed, so the first screen paints designed; a change is made to the document with the kit stripped; and the saved file is the assembled document, which opens on its own. Writing markup rather than CSS also makes a draw about twice as fast.
+
 - No arguments: draws the document from `.sprout/plan.json`.
 - `change` (and optionally `part`, the piece of a screen it is pinned to): with an existing mockup, one model call returns find/replace edits, applied exactly first and then line by line ignoring indentation, each matching once; if they do not apply, the whole document is drawn again with the change.
 - The call goes through the agent's own client (`ToolFuncSet.StreamModelText`), with thinking off so the first bytes arrive at once, and its usage is booked under the `mockup` role.

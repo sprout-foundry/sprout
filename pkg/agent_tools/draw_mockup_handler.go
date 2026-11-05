@@ -13,6 +13,7 @@ import (
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/mockupkit"
 	"github.com/sprout-foundry/sprout/pkg/planstore"
 )
 
@@ -29,6 +30,11 @@ import (
 // drawing the whole document with the change when the edits do not apply.
 // The model call goes through the agent's own client (ToolFuncSet
 // StreamModelText), so it is routed and metered like the agent's turns.
+//
+// The model writes markup against the design kit (pkg/mockupkit) and never
+// sees the kit itself: a change is made to the document with the kit
+// stripped, the kit is added to the stream as soon as <body> has passed, and
+// the saved document is the assembled one, which opens on its own.
 type drawMockupHandler struct{}
 
 const (
@@ -102,9 +108,10 @@ func (h *drawMockupHandler) Execute(ctx context.Context, env ToolEnv, args map[s
 	if err != nil {
 		return mockupFailure(err.Error()), nil
 	}
-	current := ""
+	saved, current := "", ""
 	if data, readErr := os.ReadFile(filepath.Join(root, mockupRelPath)); readErr == nil {
-		current = string(data)
+		saved = string(data)
+		current = mockupkit.Strip(saved)
 	}
 	note := mockupChangeNote(extractStringOrEmpty(args, "change"), extractStringOrEmpty(args, "part"))
 	if planJSON == nil && (current == "" || note == "") {
@@ -122,13 +129,13 @@ func (h *drawMockupHandler) Execute(ctx context.Context, env ToolEnv, args map[s
 
 	if current != "" && note != "" {
 		if html, ok := d.edit(ctx, current, note); ok {
-			return d.finish(html, "edit", current), nil
+			return d.finish(html, "edit", saved), nil
 		}
 		if ctx.Err() != nil {
 			return d.fail("the change took too long; try again"), nil
 		}
 	}
-	return d.drawWhole(ctx, planJSON, current, note), nil
+	return d.drawWhole(ctx, planJSON, current, note, saved), nil
 }
 
 // currentPlanJSON returns the stored plan as compact JSON, nil when there is
@@ -189,13 +196,14 @@ func (d *mockupDraw) edit(ctx context.Context, current, note string) (string, bo
 }
 
 // drawWhole streams a whole document: from the plan, or from the current
-// mockup with the change.
-func (d *mockupDraw) drawWhole(ctx context.Context, planJSON []byte, current, note string) ToolResult {
+// mockup with the change. saved is the file as it was, for the change record.
+func (d *mockupDraw) drawWhole(ctx context.Context, planJSON []byte, current, note, saved string) ToolResult {
 	d.start("whole")
 	var seq int
+	var kit mockupkit.Streamer
 	text, err := d.funcs.StreamModelText(ctx, mockupRole, mockupCharter(), mockupWholeRequest(planJSON, current, note), func(chunk string) {
 		seq++
-		d.publish(events.EventTypeMockupChunk, map[string]any{"seq": seq, "chunk": chunk})
+		d.publish(events.EventTypeMockupChunk, map[string]any{"seq": seq, "chunk": kit.Feed(chunk)})
 	})
 	if err != nil && strings.TrimSpace(text) == "" {
 		if ctx.Err() != nil {
@@ -207,11 +215,13 @@ func (d *mockupDraw) drawWhole(ctx context.Context, planJSON []byte, current, no
 	if !ok {
 		return d.fail("the mockup did not come out as a page; try again")
 	}
-	return d.finish(html, "whole", current)
+	return d.finish(html, "whole", saved)
 }
 
-// finish writes the document, tells the host, and reports the screens.
-func (d *mockupDraw) finish(html, mode, previous string) ToolResult {
+// finish writes the document with the kit added, tells the host, and reports
+// the screens.
+func (d *mockupDraw) finish(source, mode, previous string) ToolResult {
+	html := mockupkit.Assemble(source)
 	path := filepath.Join(d.root, mockupRelPath)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return d.fail(fmt.Sprintf("the mockup could not be saved (%v)", err))

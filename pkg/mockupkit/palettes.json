@@ -1,0 +1,2450 @@
+[
+{
+"id": "sage-linen",
+"mood": "calm natural organic wellness",
+"colors": {
+"bg": "#fdfaf1",
+"surface": "#fffdf8",
+"soft": "#e4f3e6",
+"border": "#e2dccc",
+"text": "#393221",
+"muted": "#726b58",
+"primary": "#537d5c",
+"on_primary": "#ffffff",
+"accent": "#c87e64",
+"on_accent": "#111111"
+}
+},
+{
+"id": "sage-linen-soft",
+"mood": "calm natural organic wellness",
+"colors": {
+"bg": "#f8f0da",
+"surface": "#f9f4e7",
+"soft": "#dae9dc",
+"border": "#ddd2b5",
+"text": "#342d1c",
+"muted": "#6d6653",
+"primary": "#4d7756",
+"on_primary": "#ffffff",
+"accent": "#c1785e",
+"on_accent": "#111111"
+}
+},
+{
+"id": "sage-linen-dark",
+"mood": "calm natural organic wellness dark",
+"colors": {
+"bg": "#16140e",
+"surface": "#221f17",
+"soft": "#1d2a1f",
+"border": "#39352b",
+"text": "#f4f2ea",
+"muted": "#837e72",
+"primary": "#5d8866",
+"on_primary": "#111111",
+"accent": "#944f36",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "terracotta",
+"mood": "warm earthy artisan food",
+"colors": {
+"bg": "#fff8f2",
+"surface": "#fffcf9",
+"soft": "#ffe8e0",
+"border": "#e8d9ce",
+"text": "#3e2f23",
+"muted": "#79685b",
+"primary": "#b45735",
+"on_primary": "#ffffff",
+"accent": "#4a9ca1",
+"on_accent": "#111111"
+}
+},
+{
+"id": "terracotta-soft",
+"mood": "warm earthy artisan food",
+"colors": {
+"bg": "#ffecdd",
+"surface": "#fef2e8",
+"soft": "#f7ded6",
+"border": "#e7cdb9",
+"text": "#392a1e",
+"muted": "#736255",
+"primary": "#ad512f",
+"on_primary": "#ffffff",
+"accent": "#44969b",
+"on_accent": "#111111"
+}
+},
+{
+"id": "terracotta-dark",
+"mood": "warm earthy artisan food dark",
+"colors": {
+"bg": "#18130e",
+"surface": "#251e18",
+"soft": "#352119",
+"border": "#3d332c",
+"text": "#f7f0eb",
+"muted": "#887c73",
+"primary": "#c16341",
+"on_primary": "#111111",
+"accent": "#0e6e72",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "ocean-mist",
+"mood": "fresh coastal travel calm",
+"colors": {
+"bg": "#f2fcff",
+"surface": "#f8ffff",
+"soft": "#d9f4fd",
+"border": "#cde0e7",
+"text": "#21373d",
+"muted": "#597078",
+"primary": "#007e9c",
+"on_primary": "#ffffff",
+"accent": "#d57768",
+"on_accent": "#111111"
+}
+},
+{
+"id": "ocean-mist-soft",
+"mood": "fresh coastal travel calm",
+"colors": {
+"bg": "#dbf5fe",
+"surface": "#e8f7fd",
+"soft": "#d0eaf3",
+"border": "#b7d9e5",
+"text": "#1b3037",
+"muted": "#536a72",
+"primary": "#007694",
+"on_primary": "#ffffff",
+"accent": "#ce7162",
+"on_accent": "#111111"
+}
+},
+{
+"id": "ocean-mist-dark",
+"mood": "fresh coastal travel calm dark",
+"colors": {
+"bg": "#0e1518",
+"surface": "#172124",
+"soft": "#102a32",
+"border": "#2b383c",
+"text": "#ebf3f6",
+"muted": "#718086",
+"primary": "#0089a7",
+"on_primary": "#111111",
+"accent": "#9f473b",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "midnight-gold",
+"mood": "luxury elegant premium events",
+"colors": {
+"bg": "#f6faff",
+"surface": "#fbfdff",
+"soft": "#e5efff",
+"border": "#d5ddec",
+"text": "#2b3342",
+"muted": "#636c7e",
+"primary": "#5671ae",
+"on_primary": "#ffffff",
+"accent": "#b58913",
+"on_accent": "#111111"
+}
+},
+{
+"id": "midnight-gold-soft",
+"mood": "luxury elegant premium events",
+"colors": {
+"bg": "#e6f0ff",
+"surface": "#eef4ff",
+"soft": "#dbe5f9",
+"border": "#c6d3ee",
+"text": "#252c3c",
+"muted": "#5e6678",
+"primary": "#506ba7",
+"on_primary": "#ffffff",
+"accent": "#af8301",
+"on_accent": "#111111"
+}
+},
+{
+"id": "midnight-gold-dark",
+"mood": "luxury elegant premium events dark",
+"colors": {
+"bg": "#111419",
+"surface": "#1c1f27",
+"soft": "#1e2638",
+"border": "#31353f",
+"text": "#eef2f9",
+"muted": "#797f8b",
+"primary": "#617dbb",
+"on_primary": "#111111",
+"accent": "#855b00",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "berry-cream",
+"mood": "playful sweet bakery",
+"colors": {
+"bg": "#fff7f7",
+"surface": "#fffcfb",
+"soft": "#ffe7f1",
+"border": "#ebd7d6",
+"text": "#412d2c",
+"muted": "#7c6565",
+"primary": "#b74d85",
+"on_primary": "#ffffff",
+"accent": "#749a6b",
+"on_accent": "#111111"
+}
+},
+{
+"id": "berry-cream-soft",
+"mood": "playful sweet bakery",
+"colors": {
+"bg": "#ffe9e8",
+"surface": "#fff0ef",
+"soft": "#f5dde7",
+"border": "#ecc9c8",
+"text": "#3a2726",
+"muted": "#755e5e",
+"primary": "#af467e",
+"on_primary": "#ffffff",
+"accent": "#6c9264",
+"on_accent": "#111111"
+}
+},
+{
+"id": "berry-cream-dark",
+"mood": "playful sweet bakery dark",
+"colors": {
+"bg": "#191212",
+"surface": "#261d1c",
+"soft": "#341f29",
+"border": "#3e3231",
+"text": "#f8efef",
+"muted": "#8a7a7a",
+"primary": "#c35890",
+"on_primary": "#111111",
+"accent": "#476c3f",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "forest-trail",
+"mood": "outdoors adventure natural",
+"colors": {
+"bg": "#f9fbf3",
+"surface": "#fdfef9",
+"soft": "#e3f4e2",
+"border": "#dadfcf",
+"text": "#313524",
+"muted": "#686d5a",
+"primary": "#487f4a",
+"on_primary": "#ffffff",
+"accent": "#c28536",
+"on_accent": "#111111"
+}
+},
+{
+"id": "forest-trail-soft",
+"mood": "outdoors adventure natural",
+"colors": {
+"bg": "#edf4dd",
+"surface": "#f2f6e9",
+"soft": "#d9ead9",
+"border": "#cfd7ba",
+"text": "#2a2f1e",
+"muted": "#646956",
+"primary": "#427945",
+"on_primary": "#ffffff",
+"accent": "#ba7e2d",
+"on_accent": "#111111"
+}
+},
+{
+"id": "forest-trail-dark",
+"mood": "outdoors adventure natural dark",
+"colors": {
+"bg": "#13150f",
+"surface": "#1e2018",
+"soft": "#1b2b1c",
+"border": "#34372d",
+"text": "#f1f3eb",
+"muted": "#7d8174",
+"primary": "#548b56",
+"on_primary": "#111111",
+"accent": "#8f5600",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "citrus-pop",
+"mood": "energetic playful kids",
+"colors": {
+"bg": "#fef9f1",
+"surface": "#fffdf8",
+"soft": "#fbecd9",
+"border": "#e4dbcd",
+"text": "#3b3121",
+"muted": "#756a58",
+"primary": "#a96200",
+"on_primary": "#ffffff",
+"accent": "#a37fde",
+"on_accent": "#111111"
+}
+},
+{
+"id": "citrus-pop-soft",
+"mood": "energetic playful kids",
+"colors": {
+"bg": "#fbeeda",
+"surface": "#fbf3e7",
+"soft": "#f1e2cf",
+"border": "#e1d0b6",
+"text": "#342b1b",
+"muted": "#6f6453",
+"primary": "#a15a00",
+"on_primary": "#ffffff",
+"accent": "#9b78d5",
+"on_accent": "#111111"
+}
+},
+{
+"id": "citrus-pop-dark",
+"mood": "energetic playful kids dark",
+"colors": {
+"bg": "#17130e",
+"surface": "#231f17",
+"soft": "#302412",
+"border": "#3a352b",
+"text": "#f5f1ea",
+"muted": "#857e72",
+"primary": "#b66e00",
+"on_primary": "#111111",
+"accent": "#734fa9",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "slate-blue",
+"mood": "professional business tech",
+"colors": {
+"bg": "#f4fbff",
+"surface": "#fafeff",
+"soft": "#e0f1ff",
+"border": "#d2deeb",
+"text": "#273442",
+"muted": "#5f6d7d",
+"primary": "#4675a4",
+"on_primary": "#ffffff",
+"accent": "#3e9f9a",
+"on_accent": "#111111"
+}
+},
+{
+"id": "slate-blue-soft",
+"mood": "professional business tech",
+"colors": {
+"bg": "#e2f2ff",
+"surface": "#ebf5ff",
+"soft": "#d6e7f8",
+"border": "#bfd5ed",
+"text": "#212e3b",
+"muted": "#596877",
+"primary": "#416f9e",
+"on_primary": "#ffffff",
+"accent": "#359792",
+"on_accent": "#111111"
+}
+},
+{
+"id": "slate-blue-dark",
+"mood": "professional business tech dark",
+"colors": {
+"bg": "#101419",
+"surface": "#1a2026",
+"soft": "#192837",
+"border": "#2f363e",
+"text": "#edf2f8",
+"muted": "#76808b",
+"primary": "#5281b1",
+"on_primary": "#111111",
+"accent": "#006f6a",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "rose-gold",
+"mood": "elegant wedding beauty",
+"colors": {
+"bg": "#fff7f5",
+"surface": "#fffcfb",
+"soft": "#ffe7e8",
+"border": "#ebd7d4",
+"text": "#412d2a",
+"muted": "#7c6662",
+"primary": "#a45f65",
+"on_primary": "#ffffff",
+"accent": "#bf8350",
+"on_accent": "#111111"
+}
+},
+{
+"id": "rose-gold-soft",
+"mood": "elegant wedding beauty",
+"colors": {
+"bg": "#ffe9e4",
+"surface": "#fff0ed",
+"soft": "#f8ddde",
+"border": "#eccac3",
+"text": "#3a2724",
+"muted": "#76605c",
+"primary": "#9c585e",
+"on_primary": "#ffffff",
+"accent": "#b77b49",
+"on_accent": "#111111"
+}
+},
+{
+"id": "rose-gold-dark",
+"mood": "elegant wedding beauty dark",
+"colors": {
+"bg": "#191211",
+"surface": "#261d1b",
+"soft": "#361f21",
+"border": "#3e3230",
+"text": "#f8efee",
+"muted": "#8a7b78",
+"primary": "#b16b70",
+"on_primary": "#111111",
+"accent": "#8e5520",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "lavender-fields",
+"mood": "calm gentle wellness",
+"colors": {
+"bg": "#fbf8ff",
+"surface": "#fefcff",
+"soft": "#efebff",
+"border": "#ded9e9",
+"text": "#352f40",
+"muted": "#6e687b",
+"primary": "#7a69aa",
+"on_primary": "#ffffff",
+"accent": "#749a6b",
+"on_accent": "#111111"
+}
+},
+{
+"id": "lavender-fields-soft",
+"mood": "calm gentle wellness",
+"colors": {
+"bg": "#f3ecff",
+"surface": "#f6f2ff",
+"soft": "#e5e1f7",
+"border": "#d6cdea",
+"text": "#302a3b",
+"muted": "#686275",
+"primary": "#7362a3",
+"on_primary": "#ffffff",
+"accent": "#6c9264",
+"on_accent": "#111111"
+}
+},
+{
+"id": "lavender-fields-dark",
+"mood": "calm gentle wellness dark",
+"colors": {
+"bg": "#151318",
+"surface": "#201e25",
+"soft": "#282336",
+"border": "#37333d",
+"text": "#f3f0f8",
+"muted": "#807c89",
+"primary": "#8574b6",
+"on_primary": "#111111",
+"accent": "#476c3f",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "espresso",
+"mood": "coffee cozy cafe warm",
+"colors": {
+"bg": "#fff8f3",
+"surface": "#fffcf9",
+"soft": "#fdeae0",
+"border": "#e9d9cf",
+"text": "#3f2f24",
+"muted": "#7a685c",
+"primary": "#96684f",
+"on_primary": "#ffffff",
+"accent": "#d37667",
+"on_accent": "#111111"
+}
+},
+{
+"id": "espresso-soft",
+"mood": "coffee cozy cafe warm",
+"colors": {
+"bg": "#ffebde",
+"surface": "#fef1e9",
+"soft": "#f3e0d6",
+"border": "#e8ccba",
+"text": "#38291e",
+"muted": "#746256",
+"primary": "#8e6148",
+"on_primary": "#ffffff",
+"accent": "#cc6f61",
+"on_accent": "#111111"
+}
+},
+{
+"id": "espresso-dark",
+"mood": "coffee cozy cafe warm dark",
+"colors": {
+"bg": "#18120f",
+"surface": "#251d19",
+"soft": "#32221a",
+"border": "#3d332d",
+"text": "#f7f0ec",
+"muted": "#897c74",
+"primary": "#a17359",
+"on_primary": "#111111",
+"accent": "#9f473b",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "teal-coral",
+"mood": "fresh modern friendly",
+"colors": {
+"bg": "#f2fdfc",
+"surface": "#f8fffe",
+"soft": "#d9f5f3",
+"border": "#cde1df",
+"text": "#203836",
+"muted": "#57706e",
+"primary": "#00827d",
+"on_primary": "#ffffff",
+"accent": "#e0716a",
+"on_accent": "#111111"
+}
+},
+{
+"id": "teal-coral-soft",
+"mood": "fresh modern friendly",
+"colors": {
+"bg": "#daf7f4",
+"surface": "#e7f8f7",
+"soft": "#cfebe9",
+"border": "#b6dcd8",
+"text": "#1a3130",
+"muted": "#516a68",
+"primary": "#007b76",
+"on_primary": "#ffffff",
+"accent": "#d96a64",
+"on_accent": "#111111"
+}
+},
+{
+"id": "teal-coral-dark",
+"mood": "fresh modern friendly dark",
+"colors": {
+"bg": "#0e1615",
+"surface": "#172221",
+"soft": "#0f2c2a",
+"border": "#2b3837",
+"text": "#ebf4f3",
+"muted": "#728381",
+"primary": "#018d87",
+"on_primary": "#111111",
+"accent": "#a93f3c",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "royal-plum",
+"mood": "rich luxury creative",
+"colors": {
+"bg": "#fef8ff",
+"surface": "#fffcff",
+"soft": "#f8e8fb",
+"border": "#e3d8e6",
+"text": "#3b2f3e",
+"muted": "#756878",
+"primary": "#965ea3",
+"on_primary": "#ffffff",
+"accent": "#b8892d",
+"on_accent": "#111111"
+}
+},
+{
+"id": "royal-plum-soft",
+"mood": "rich luxury creative",
+"colors": {
+"bg": "#faeafd",
+"surface": "#faf0fc",
+"soft": "#eedff1",
+"border": "#dfcbe3",
+"text": "#332836",
+"muted": "#6e6171",
+"primary": "#8e579b",
+"on_primary": "#ffffff",
+"accent": "#b08122",
+"on_accent": "#111111"
+}
+},
+{
+"id": "royal-plum-dark",
+"mood": "rich luxury creative dark",
+"colors": {
+"bg": "#161217",
+"surface": "#231d24",
+"soft": "#2e2131",
+"border": "#3a323b",
+"text": "#f5f0f6",
+"muted": "#847b86",
+"primary": "#a168ae",
+"on_primary": "#111111",
+"accent": "#865900",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "mint-chip",
+"mood": "fresh light playful",
+"colors": {
+"bg": "#f3fdf8",
+"surface": "#f9fffc",
+"soft": "#ddf5e9",
+"border": "#d0e1d9",
+"text": "#24382f",
+"muted": "#5b7066",
+"primary": "#338163",
+"on_primary": "#ffffff",
+"accent": "#ca7b87",
+"on_accent": "#111111"
+}
+},
+{
+"id": "mint-chip-soft",
+"mood": "fresh light playful",
+"colors": {
+"bg": "#dff7eb",
+"surface": "#eaf8f1",
+"soft": "#d3ebe0",
+"border": "#bbdbcc",
+"text": "#1e3129",
+"muted": "#566c62",
+"primary": "#2c7b5d",
+"on_primary": "#ffffff",
+"accent": "#c47581",
+"on_accent": "#111111"
+}
+},
+{
+"id": "mint-chip-dark",
+"mood": "fresh light playful dark",
+"colors": {
+"bg": "#0f1612",
+"surface": "#19221d",
+"soft": "#152c22",
+"border": "#2d3833",
+"text": "#ecf4f0",
+"muted": "#73817a",
+"primary": "#408d6e",
+"on_primary": "#111111",
+"accent": "#964c59",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "graphite-lime",
+"mood": "bold tech modern",
+"colors": {
+"bg": "#f5faff",
+"surface": "#fbfeff",
+"soft": "#eaeff6",
+"border": "#d4ddeb",
+"text": "#2a3342",
+"muted": "#626c7e",
+"primary": "#697485",
+"on_primary": "#ffffff",
+"accent": "#769e00",
+"on_accent": "#111111"
+}
+},
+{
+"id": "graphite-lime-soft",
+"mood": "bold tech modern",
+"colors": {
+"bg": "#e5f1ff",
+"surface": "#edf5ff",
+"soft": "#e0e5ec",
+"border": "#c4d4ee",
+"text": "#242d3c",
+"muted": "#5c6778",
+"primary": "#636e7f",
+"on_primary": "#ffffff",
+"accent": "#6f9600",
+"on_accent": "#111111"
+}
+},
+{
+"id": "graphite-lime-dark",
+"mood": "bold tech modern dark",
+"colors": {
+"bg": "#111419",
+"surface": "#1b1f27",
+"soft": "#23272c",
+"border": "#30363f",
+"text": "#eef2f9",
+"muted": "#767e8a",
+"primary": "#747f91",
+"on_primary": "#111111",
+"accent": "#496d00",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "sunset-dune",
+"mood": "warm travel desert",
+"colors": {
+"bg": "#fff8f2",
+"surface": "#fffcf9",
+"soft": "#ffeadc",
+"border": "#e8d9ce",
+"text": "#3e2f23",
+"muted": "#79685b",
+"primary": "#ab6025",
+"on_primary": "#ffffff",
+"accent": "#dd6d79",
+"on_accent": "#111111"
+}
+},
+{
+"id": "sunset-dune-soft",
+"mood": "warm travel desert",
+"colors": {
+"bg": "#ffecdd",
+"surface": "#fef2e8",
+"soft": "#f5e0d2",
+"border": "#e7cdb9",
+"text": "#392a1e",
+"muted": "#736255",
+"primary": "#a45a1e",
+"on_primary": "#ffffff",
+"accent": "#d66773",
+"on_accent": "#111111"
+}
+},
+{
+"id": "sunset-dune-dark",
+"mood": "warm travel desert dark",
+"colors": {
+"bg": "#18130e",
+"surface": "#251e18",
+"soft": "#342215",
+"border": "#3d332c",
+"text": "#f7f0eb",
+"muted": "#887c73",
+"primary": "#b66b31",
+"on_primary": "#111111",
+"accent": "#a83e4d",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "nordic-frost",
+"mood": "minimal clean calm",
+"colors": {
+"bg": "#f2fcff",
+"surface": "#f9feff",
+"soft": "#e1f2fa",
+"border": "#cedfe8",
+"text": "#23363f",
+"muted": "#5a6f7a",
+"primary": "#4b788e",
+"on_primary": "#ffffff",
+"accent": "#579ca0",
+"on_accent": "#111111"
+}
+},
+{
+"id": "nordic-frost-soft",
+"mood": "minimal clean calm",
+"colors": {
+"bg": "#ddf5ff",
+"surface": "#e9f7fe",
+"soft": "#d7e8f0",
+"border": "#b9d8e8",
+"text": "#1c2f39",
+"muted": "#556a74",
+"primary": "#457388",
+"on_primary": "#ffffff",
+"accent": "#51969a",
+"on_accent": "#111111"
+}
+},
+{
+"id": "nordic-frost-dark",
+"mood": "minimal clean calm dark",
+"colors": {
+"bg": "#0e1518",
+"surface": "#182125",
+"soft": "#1a2930",
+"border": "#2c373d",
+"text": "#ebf3f7",
+"muted": "#728087",
+"primary": "#57849a",
+"on_primary": "#111111",
+"accent": "#246c70",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "cherry-blossom",
+"mood": "soft spring beauty",
+"colors": {
+"bg": "#fff7fb",
+"surface": "#fffcfe",
+"soft": "#ffe7ef",
+"border": "#e9d7de",
+"text": "#402e36",
+"muted": "#7b6670",
+"primary": "#a35c79",
+"on_primary": "#ffffff",
+"accent": "#6f9a77",
+"on_accent": "#111111"
+}
+},
+{
+"id": "cherry-blossom-soft",
+"mood": "soft spring beauty",
+"colors": {
+"bg": "#ffe8f3",
+"surface": "#feeff6",
+"soft": "#f6dde5",
+"border": "#e8c8d6",
+"text": "#38262f",
+"muted": "#745f68",
+"primary": "#9d5673",
+"on_primary": "#ffffff",
+"accent": "#679270",
+"on_accent": "#111111"
+}
+},
+{
+"id": "cherry-blossom-dark",
+"mood": "soft spring beauty dark",
+"colors": {
+"bg": "#181215",
+"surface": "#251c20",
+"soft": "#341f27",
+"border": "#3d3237",
+"text": "#f7eff3",
+"muted": "#897a80",
+"primary": "#b06785",
+"on_primary": "#111111",
+"accent": "#426c4b",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "olive-grove",
+"mood": "mediterranean food earthy",
+"colors": {
+"bg": "#fcfaf1",
+"surface": "#fefef8",
+"soft": "#eff1db",
+"border": "#dfddcd",
+"text": "#363321",
+"muted": "#706c59",
+"primary": "#74763c",
+"on_primary": "#ffffff",
+"accent": "#cd7b5f",
+"on_accent": "#111111"
+}
+},
+{
+"id": "olive-grove-soft",
+"mood": "mediterranean food earthy",
+"colors": {
+"bg": "#f4f1da",
+"surface": "#f7f5e7",
+"soft": "#e5e7d2",
+"border": "#d8d4b6",
+"text": "#302d1b",
+"muted": "#6a6753",
+"primary": "#6f7036",
+"on_primary": "#ffffff",
+"accent": "#c67559",
+"on_accent": "#111111"
+}
+},
+{
+"id": "olive-grove-dark",
+"mood": "mediterranean food earthy dark",
+"colors": {
+"bg": "#15140e",
+"surface": "#212017",
+"soft": "#272815",
+"border": "#37362b",
+"text": "#f3f2eb",
+"muted": "#807e70",
+"primary": "#808247",
+"on_primary": "#111111",
+"accent": "#9a4d32",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "electric-indigo",
+"mood": "bold startup energetic",
+"colors": {
+"bg": "#f7faff",
+"surface": "#fcfdff",
+"soft": "#e8edff",
+"border": "#d8dceb",
+"text": "#2e3242",
+"muted": "#666b7e",
+"primary": "#5c68d8",
+"on_primary": "#ffffff",
+"accent": "#00a38f",
+"on_accent": "#111111"
+}
+},
+{
+"id": "electric-indigo-soft",
+"mood": "bold startup energetic",
+"colors": {
+"bg": "#eaefff",
+"surface": "#f0f3ff",
+"soft": "#dee4f9",
+"border": "#cad1ee",
+"text": "#282b3c",
+"muted": "#616578",
+"primary": "#5661d1",
+"on_primary": "#ffffff",
+"accent": "#009b87",
+"on_accent": "#111111"
+}
+},
+{
+"id": "electric-indigo-dark",
+"mood": "bold startup energetic dark",
+"colors": {
+"bg": "#121319",
+"surface": "#1d1f27",
+"soft": "#212538",
+"border": "#32353f",
+"text": "#f0f1f9",
+"muted": "#797d8a",
+"primary": "#6674e5",
+"on_primary": "#111111",
+"accent": "#006f5d",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "harbor-navy",
+"mood": "classic trustworthy finance",
+"colors": {
+"bg": "#f4fbff",
+"surface": "#fafeff",
+"soft": "#dff1ff",
+"border": "#d1deea",
+"text": "#263541",
+"muted": "#5e6e7c",
+"primary": "#3a78aa",
+"on_primary": "#ffffff",
+"accent": "#d47932",
+"on_accent": "#111111"
+}
+},
+{
+"id": "harbor-navy-soft",
+"mood": "classic trustworthy finance",
+"colors": {
+"bg": "#e0f3ff",
+"surface": "#ebf6ff",
+"soft": "#d5e7f8",
+"border": "#bed6ec",
+"text": "#202e3b",
+"muted": "#586876",
+"primary": "#3472a3",
+"on_primary": "#ffffff",
+"accent": "#cd732b",
+"on_accent": "#111111"
+}
+},
+{
+"id": "harbor-navy-dark",
+"mood": "classic trustworthy finance dark",
+"colors": {
+"bg": "#0f1419",
+"surface": "#192026",
+"soft": "#172836",
+"border": "#2e373e",
+"text": "#ecf3f8",
+"muted": "#747f89",
+"primary": "#4583b5",
+"on_primary": "#111111",
+"accent": "#9f4900",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "peach-sorbet",
+"mood": "sweet friendly playful",
+"colors": {
+"bg": "#fff8f3",
+"surface": "#fffcf9",
+"soft": "#ffe9de",
+"border": "#e9d9d0",
+"text": "#402e25",
+"muted": "#7b675d",
+"primary": "#aa5f3b",
+"on_primary": "#ffffff",
+"accent": "#b77db1",
+"on_accent": "#111111"
+}
+},
+{
+"id": "peach-sorbet-soft",
+"mood": "sweet friendly playful",
+"colors": {
+"bg": "#ffebdf",
+"surface": "#fff1ea",
+"soft": "#f7dfd5",
+"border": "#e9ccbc",
+"text": "#39281f",
+"muted": "#756157",
+"primary": "#a25834",
+"on_primary": "#ffffff",
+"accent": "#af75a9",
+"on_accent": "#111111"
+}
+},
+{
+"id": "peach-sorbet-dark",
+"mood": "sweet friendly playful dark",
+"colors": {
+"bg": "#18120f",
+"surface": "#251d19",
+"soft": "#352118",
+"border": "#3d332d",
+"text": "#f8f0ec",
+"muted": "#897c74",
+"primary": "#b66946",
+"on_primary": "#111111",
+"accent": "#865081",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "emerald-ivory",
+"mood": "elegant fresh premium",
+"colors": {
+"bg": "#fcfaf1",
+"surface": "#fffdf8",
+"soft": "#def5e8",
+"border": "#e1ddcc",
+"text": "#383321",
+"muted": "#716c58",
+"primary": "#098356",
+"on_primary": "#ffffff",
+"accent": "#b18c39",
+"on_accent": "#111111"
+}
+},
+{
+"id": "emerald-ivory-soft",
+"mood": "elegant fresh premium",
+"colors": {
+"bg": "#f6f0da",
+"surface": "#f8f4e7",
+"soft": "#d4ebde",
+"border": "#dbd3b6",
+"text": "#312d1b",
+"muted": "#6b6653",
+"primary": "#007d50",
+"on_primary": "#ffffff",
+"accent": "#a98530",
+"on_accent": "#111111"
+}
+},
+{
+"id": "emerald-ivory-dark",
+"mood": "elegant fresh premium dark",
+"colors": {
+"bg": "#15140e",
+"surface": "#211f17",
+"soft": "#162c20",
+"border": "#38352b",
+"text": "#f4f2ea",
+"muted": "#827f72",
+"primary": "#228f61",
+"on_primary": "#111111",
+"accent": "#805d00",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "ink-paper",
+"mood": "editorial classic writing",
+"colors": {
+"bg": "#fef9f1",
+"surface": "#fffdf8",
+"soft": "#e9eff8",
+"border": "#e4dbcd",
+"text": "#3b3121",
+"muted": "#756a58",
+"primary": "#65748b",
+"on_primary": "#ffffff",
+"accent": "#e46d66",
+"on_accent": "#111111"
+}
+},
+{
+"id": "ink-paper-soft",
+"mood": "editorial classic writing",
+"colors": {
+"bg": "#fbeeda",
+"surface": "#fbf3e7",
+"soft": "#dfe5ee",
+"border": "#e1d0b6",
+"text": "#342b1b",
+"muted": "#6f6453",
+"primary": "#606e85",
+"on_primary": "#ffffff",
+"accent": "#dc655f",
+"on_accent": "#111111"
+}
+},
+{
+"id": "ink-paper-dark",
+"mood": "editorial classic writing dark",
+"colors": {
+"bg": "#17130e",
+"surface": "#231f17",
+"soft": "#22272e",
+"border": "#3a352b",
+"text": "#f5f1ea",
+"muted": "#857e72",
+"primary": "#707e96",
+"on_primary": "#111111",
+"accent": "#ad3b39",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "canyon-clay",
+"mood": "rustic earthy outdoors",
+"colors": {
+"bg": "#fff8f4",
+"surface": "#fffcf9",
+"soft": "#ffe8e1",
+"border": "#ead8d1",
+"text": "#412f27",
+"muted": "#7b675e",
+"primary": "#ad5c48",
+"on_primary": "#ffffff",
+"accent": "#6198b2",
+"on_accent": "#111111"
+}
+},
+{
+"id": "canyon-clay-soft",
+"mood": "rustic earthy outdoors",
+"colors": {
+"bg": "#ffeae0",
+"surface": "#fff1ea",
+"soft": "#f8ded7",
+"border": "#eacbbd",
+"text": "#392820",
+"muted": "#756158",
+"primary": "#a45541",
+"on_primary": "#ffffff",
+"accent": "#5990aa",
+"on_accent": "#111111"
+}
+},
+{
+"id": "canyon-clay-dark",
+"mood": "rustic earthy outdoors dark",
+"colors": {
+"bg": "#19120f",
+"surface": "#261d19",
+"soft": "#36201b",
+"border": "#3e332e",
+"text": "#f8f0ec",
+"muted": "#8a7b75",
+"primary": "#ba6853",
+"on_primary": "#111111",
+"accent": "#316881",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "arctic-teal",
+"mood": "clean medical calm",
+"colors": {
+"bg": "#f1fdff",
+"surface": "#f8ffff",
+"soft": "#d8f5f6",
+"border": "#cde1e4",
+"text": "#20373b",
+"muted": "#587175",
+"primary": "#0e8085",
+"on_primary": "#ffffff",
+"accent": "#7293ca",
+"on_accent": "#111111"
+}
+},
+{
+"id": "arctic-teal-soft",
+"mood": "clean medical calm",
+"colors": {
+"bg": "#daf6fb",
+"surface": "#e7f8fb",
+"soft": "#cfebec",
+"border": "#b5dae1",
+"text": "#1a3135",
+"muted": "#526b70",
+"primary": "#007a7f",
+"on_primary": "#ffffff",
+"accent": "#6a8bc1",
+"on_accent": "#111111"
+}
+},
+{
+"id": "arctic-teal-dark",
+"mood": "clean medical calm dark",
+"colors": {
+"bg": "#0e1517",
+"surface": "#172123",
+"soft": "#0e2c2d",
+"border": "#2b383a",
+"text": "#ebf4f5",
+"muted": "#708184",
+"primary": "#248c91",
+"on_primary": "#111111",
+"accent": "#436295",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "marigold",
+"mood": "cheerful warm community",
+"colors": {
+"bg": "#fefaf1",
+"surface": "#fffdf8",
+"soft": "#f8edd8",
+"border": "#e3dccc",
+"text": "#3a3221",
+"muted": "#746b58",
+"primary": "#9a6b00",
+"on_primary": "#ffffff",
+"accent": "#6891d4",
+"on_accent": "#111111"
+}
+},
+{
+"id": "marigold-soft",
+"mood": "cheerful warm community",
+"colors": {
+"bg": "#f9efda",
+"surface": "#faf3e7",
+"soft": "#eee4cf",
+"border": "#dfd1b5",
+"text": "#332c1b",
+"muted": "#6e6553",
+"primary": "#926400",
+"on_primary": "#ffffff",
+"accent": "#638bcd",
+"on_accent": "#111111"
+}
+},
+{
+"id": "marigold-dark",
+"mood": "cheerful warm community dark",
+"colors": {
+"bg": "#16130e",
+"surface": "#231f17",
+"soft": "#2e2511",
+"border": "#3a352b",
+"text": "#f5f1ea",
+"muted": "#837d70",
+"primary": "#a57600",
+"on_primary": "#111111",
+"accent": "#3b61a0",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "vineyard",
+"mood": "wine rich elegant",
+"colors": {
+"bg": "#fff7f7",
+"surface": "#fffcfc",
+"soft": "#ffe7ea",
+"border": "#ebd7d8",
+"text": "#412d2e",
+"muted": "#7c6566",
+"primary": "#b25667",
+"on_primary": "#ffffff",
+"accent": "#87955d",
+"on_accent": "#111111"
+}
+},
+{
+"id": "vineyard-soft",
+"mood": "wine rich elegant",
+"colors": {
+"bg": "#ffe9ea",
+"surface": "#fff0f0",
+"soft": "#f8dde0",
+"border": "#ecc9ca",
+"text": "#3a2628",
+"muted": "#765f60",
+"primary": "#a94f60",
+"on_primary": "#ffffff",
+"accent": "#818f57",
+"on_accent": "#111111"
+}
+},
+{
+"id": "vineyard-dark",
+"mood": "wine rich elegant dark",
+"colors": {
+"bg": "#191212",
+"surface": "#261c1d",
+"soft": "#351f22",
+"border": "#3e3232",
+"text": "#f8efef",
+"muted": "#8a7a7b",
+"primary": "#bf6273",
+"on_primary": "#111111",
+"accent": "#5b6730",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "cobalt-sand",
+"mood": "modern coastal crisp",
+"colors": {
+"bg": "#fff9f1",
+"surface": "#fffdf8",
+"soft": "#e1f0ff",
+"border": "#e5dbcd",
+"text": "#3c3122",
+"muted": "#766a59",
+"primary": "#3273c3",
+"on_primary": "#ffffff",
+"accent": "#b68852",
+"on_accent": "#111111"
+}
+},
+{
+"id": "cobalt-sand-soft",
+"mood": "modern coastal crisp",
+"colors": {
+"bg": "#fceedb",
+"surface": "#fbf3e7",
+"soft": "#d8e6f9",
+"border": "#e2cfb6",
+"text": "#352b1b",
+"muted": "#706453",
+"primary": "#2c6dbc",
+"on_primary": "#ffffff",
+"accent": "#af824c",
+"on_accent": "#111111"
+}
+},
+{
+"id": "cobalt-sand-dark",
+"mood": "modern coastal crisp dark",
+"colors": {
+"bg": "#17130e",
+"surface": "#241e17",
+"soft": "#1b2737",
+"border": "#3b342b",
+"text": "#f6f1eb",
+"muted": "#867d72",
+"primary": "#3e80d0",
+"on_primary": "#111111",
+"accent": "#845922",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "matcha",
+"mood": "calm tea natural",
+"colors": {
+"bg": "#fafbf2",
+"surface": "#fefef8",
+"soft": "#e8f3df",
+"border": "#dddece",
+"text": "#343422",
+"muted": "#6c6e5a",
+"primary": "#627b48",
+"on_primary": "#ffffff",
+"accent": "#c18361",
+"on_accent": "#111111"
+}
+},
+{
+"id": "matcha-soft",
+"mood": "calm tea natural",
+"colors": {
+"bg": "#f1f2dc",
+"surface": "#f4f5e8",
+"soft": "#dee9d5",
+"border": "#d4d5b8",
+"text": "#2d2e1c",
+"muted": "#676854",
+"primary": "#5c7542",
+"on_primary": "#ffffff",
+"accent": "#b87c59",
+"on_accent": "#111111"
+}
+},
+{
+"id": "matcha-dark",
+"mood": "calm tea natural dark",
+"colors": {
+"bg": "#14140e",
+"surface": "#202018",
+"soft": "#212a19",
+"border": "#36362c",
+"text": "#f2f2eb",
+"muted": "#7f8072",
+"primary": "#6c8552",
+"on_primary": "#111111",
+"accent": "#8d5433",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "flamingo",
+"mood": "fun bold playful",
+"colors": {
+"bg": "#fff7fa",
+"surface": "#fffbfd",
+"soft": "#ffe7ed",
+"border": "#ead7dc",
+"text": "#402d32",
+"muted": "#7b656b",
+"primary": "#bc4c75",
+"on_primary": "#ffffff",
+"accent": "#3c9ea3",
+"on_accent": "#111111"
+}
+},
+{
+"id": "flamingo-soft",
+"mood": "fun bold playful",
+"colors": {
+"bg": "#ffe8ef",
+"surface": "#ffeff3",
+"soft": "#f7dde4",
+"border": "#eac8d1",
+"text": "#39262c",
+"muted": "#755f65",
+"primary": "#b4446e",
+"on_primary": "#ffffff",
+"accent": "#33969b",
+"on_accent": "#111111"
+}
+},
+{
+"id": "flamingo-dark",
+"mood": "fun bold playful dark",
+"colors": {
+"bg": "#191214",
+"surface": "#261c1f",
+"soft": "#351f26",
+"border": "#3e3235",
+"text": "#f8eff1",
+"muted": "#8a7a7e",
+"primary": "#c8577f",
+"on_primary": "#111111",
+"accent": "#006e73",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "storm-grey",
+"mood": "serious modern minimal",
+"colors": {
+"bg": "#f3fbff",
+"surface": "#f9feff",
+"soft": "#e6f0f7",
+"border": "#d0dfea",
+"text": "#253541",
+"muted": "#5c6e7c",
+"primary": "#5d7587",
+"on_primary": "#ffffff",
+"accent": "#d97464",
+"on_accent": "#111111"
+}
+},
+{
+"id": "storm-grey-soft",
+"mood": "serious modern minimal",
+"colors": {
+"bg": "#dff3ff",
+"surface": "#eaf6ff",
+"soft": "#dde6ed",
+"border": "#bcd7eb",
+"text": "#1f2f3a",
+"muted": "#556774",
+"primary": "#576f81",
+"on_primary": "#ffffff",
+"accent": "#d26e5e",
+"on_accent": "#111111"
+}
+},
+{
+"id": "storm-grey-dark",
+"mood": "serious modern minimal dark",
+"colors": {
+"bg": "#0f1519",
+"surface": "#192026",
+"soft": "#1f282e",
+"border": "#2d373e",
+"text": "#ecf3f8",
+"muted": "#74818a",
+"primary": "#688193",
+"on_primary": "#111111",
+"accent": "#a54538",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "honey-bee",
+"mood": "warm sweet farm",
+"colors": {
+"bg": "#fefaf1",
+"surface": "#fffdf8",
+"soft": "#f9edd9",
+"border": "#e3dccc",
+"text": "#3a3221",
+"muted": "#746b58",
+"primary": "#9c6a00",
+"on_primary": "#ffffff",
+"accent": "#d77755",
+"on_accent": "#111111"
+}
+},
+{
+"id": "honey-bee-soft",
+"mood": "warm sweet farm",
+"colors": {
+"bg": "#f9efda",
+"surface": "#faf3e7",
+"soft": "#efe3cf",
+"border": "#dfd1b5",
+"text": "#332c1b",
+"muted": "#6e6553",
+"primary": "#946200",
+"on_primary": "#ffffff",
+"accent": "#cf6f4d",
+"on_accent": "#111111"
+}
+},
+{
+"id": "honey-bee-dark",
+"mood": "warm sweet farm dark",
+"colors": {
+"bg": "#16130e",
+"surface": "#231f17",
+"soft": "#2f2512",
+"border": "#3a352b",
+"text": "#f5f1ea",
+"muted": "#837d70",
+"primary": "#a77400",
+"on_primary": "#111111",
+"accent": "#a24725",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "deep-sea",
+"mood": "deep calm tech",
+"colors": {
+"bg": "#f2fcff",
+"surface": "#f9ffff",
+"soft": "#daf3fe",
+"border": "#cee0e7",
+"text": "#22363e",
+"muted": "#5a7079",
+"primary": "#007da4",
+"on_primary": "#ffffff",
+"accent": "#05a388",
+"on_accent": "#111111"
+}
+},
+{
+"id": "deep-sea-soft",
+"mood": "deep calm tech",
+"colors": {
+"bg": "#dcf5ff",
+"surface": "#e8f7fd",
+"soft": "#d0e9f4",
+"border": "#b8d9e7",
+"text": "#1b3038",
+"muted": "#546a73",
+"primary": "#00769c",
+"on_primary": "#ffffff",
+"accent": "#009d82",
+"on_accent": "#111111"
+}
+},
+{
+"id": "deep-sea-dark",
+"mood": "deep calm tech dark",
+"colors": {
+"bg": "#0e1518",
+"surface": "#182125",
+"soft": "#112a33",
+"border": "#2c383c",
+"text": "#ebf3f7",
+"muted": "#718086",
+"primary": "#0088af",
+"on_primary": "#111111",
+"accent": "#007158",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "autumn-maple",
+"mood": "cozy warm seasonal",
+"colors": {
+"bg": "#fff8f4",
+"surface": "#fffcfa",
+"soft": "#ffe8e3",
+"border": "#ead8d2",
+"text": "#402e27",
+"muted": "#7c665f",
+"primary": "#bc5243",
+"on_primary": "#ffffff",
+"accent": "#749a6b",
+"on_accent": "#111111"
+}
+},
+{
+"id": "autumn-maple-soft",
+"mood": "cozy warm seasonal",
+"colors": {
+"bg": "#ffeae1",
+"surface": "#fff0eb",
+"soft": "#f8ded9",
+"border": "#ebcabf",
+"text": "#3a2821",
+"muted": "#745f58",
+"primary": "#b34a3c",
+"on_primary": "#ffffff",
+"accent": "#6c9264",
+"on_accent": "#111111"
+}
+},
+{
+"id": "autumn-maple-dark",
+"mood": "cozy warm seasonal dark",
+"colors": {
+"bg": "#191210",
+"surface": "#261d1a",
+"soft": "#36201c",
+"border": "#3e322e",
+"text": "#f8f0ed",
+"muted": "#8a7b76",
+"primary": "#c95e4e",
+"on_primary": "#111111",
+"accent": "#476c3f",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "pistachio",
+"mood": "fresh playful light",
+"colors": {
+"bg": "#fafbf2",
+"surface": "#fdfef9",
+"soft": "#eaf2dd",
+"border": "#dbdece",
+"text": "#323523",
+"muted": "#6b6e5a",
+"primary": "#637a34",
+"on_primary": "#ffffff",
+"accent": "#b37fae",
+"on_accent": "#111111"
+}
+},
+{
+"id": "pistachio-soft",
+"mood": "fresh playful light",
+"colors": {
+"bg": "#eff3dc",
+"surface": "#f3f6e8",
+"soft": "#e0e8d3",
+"border": "#d1d6b9",
+"text": "#2c2e1d",
+"muted": "#656855",
+"primary": "#5d742e",
+"on_primary": "#ffffff",
+"accent": "#ad79a8",
+"on_accent": "#111111"
+}
+},
+{
+"id": "pistachio-dark",
+"mood": "fresh playful light dark",
+"colors": {
+"bg": "#13140e",
+"surface": "#1f2018",
+"soft": "#222916",
+"border": "#35372c",
+"text": "#f1f3eb",
+"muted": "#7d7f72",
+"primary": "#6e8640",
+"on_primary": "#111111",
+"accent": "#81517d",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "orchid",
+"mood": "creative beauty bold",
+"colors": {
+"bg": "#fdf8ff",
+"surface": "#fffcff",
+"soft": "#f6e9fd",
+"border": "#e1d9e8",
+"text": "#382f3e",
+"muted": "#716779",
+"primary": "#945dab",
+"on_primary": "#ffffff",
+"accent": "#49a08a",
+"on_accent": "#111111"
+}
+},
+{
+"id": "orchid-soft",
+"mood": "creative beauty bold",
+"colors": {
+"bg": "#f6ebff",
+"surface": "#f8f1fd",
+"soft": "#ecdff3",
+"border": "#dbcce7",
+"text": "#312838",
+"muted": "#6b6273",
+"primary": "#8c56a3",
+"on_primary": "#ffffff",
+"accent": "#419883",
+"on_accent": "#111111"
+}
+},
+{
+"id": "orchid-dark",
+"mood": "creative beauty bold dark",
+"colors": {
+"bg": "#151218",
+"surface": "#211d25",
+"soft": "#2d2132",
+"border": "#38333c",
+"text": "#f4f0f7",
+"muted": "#827c88",
+"primary": "#9f68b7",
+"on_primary": "#111111",
+"accent": "#066f5c",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "charcoal-ember",
+"mood": "bold dramatic modern",
+"colors": {
+"bg": "#fff7f5",
+"surface": "#fffcfb",
+"soft": "#f3edec",
+"border": "#ebd7d4",
+"text": "#412d2a",
+"muted": "#7c6662",
+"primary": "#7e6f6c",
+"on_primary": "#ffffff",
+"accent": "#eb6553",
+"on_accent": "#111111"
+}
+},
+{
+"id": "charcoal-ember-soft",
+"mood": "bold dramatic modern",
+"colors": {
+"bg": "#ffe9e4",
+"surface": "#fff0ed",
+"soft": "#e9e3e2",
+"border": "#eccac3",
+"text": "#3a2724",
+"muted": "#76605c",
+"primary": "#776865",
+"on_primary": "#ffffff",
+"accent": "#e45e4d",
+"on_accent": "#111111"
+}
+},
+{
+"id": "charcoal-ember-dark",
+"mood": "bold dramatic modern dark",
+"colors": {
+"bg": "#191211",
+"surface": "#261d1b",
+"soft": "#2a2524",
+"border": "#3e3230",
+"text": "#f8efee",
+"muted": "#8a7b78",
+"primary": "#8a7b78",
+"on_primary": "#111111",
+"accent": "#b53223",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "glacier",
+"mood": "cool minimal clean",
+"colors": {
+"bg": "#f2fcff",
+"surface": "#f8ffff",
+"soft": "#ddf3f9",
+"border": "#cde0e5",
+"text": "#20373c",
+"muted": "#576f75",
+"primary": "#3b7c8b",
+"on_primary": "#ffffff",
+"accent": "#6b9d75",
+"on_accent": "#111111"
+}
+},
+{
+"id": "glacier-soft",
+"mood": "cool minimal clean",
+"colors": {
+"bg": "#dbf6fd",
+"surface": "#e7f8fc",
+"soft": "#d3e9ef",
+"border": "#b6dae3",
+"text": "#1a3036",
+"muted": "#536b71",
+"primary": "#357685",
+"on_primary": "#ffffff",
+"accent": "#64966e",
+"on_accent": "#111111"
+}
+},
+{
+"id": "glacier-dark",
+"mood": "cool minimal clean dark",
+"colors": {
+"bg": "#0e1517",
+"surface": "#172124",
+"soft": "#152a2f",
+"border": "#2b383b",
+"text": "#ebf4f6",
+"muted": "#708185",
+"primary": "#468796",
+"on_primary": "#111111",
+"accent": "#3b6c46",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "spice-market",
+"mood": "vibrant food culture",
+"colors": {
+"bg": "#fff8f3",
+"surface": "#fffcf9",
+"soft": "#ffe9de",
+"border": "#e9d9cf",
+"text": "#3f2f24",
+"muted": "#7a685c",
+"primary": "#b3592d",
+"on_primary": "#ffffff",
+"accent": "#9d85c8",
+"on_accent": "#111111"
+}
+},
+{
+"id": "spice-market-soft",
+"mood": "vibrant food culture",
+"colors": {
+"bg": "#ffebde",
+"surface": "#fef1e9",
+"soft": "#f7dfd5",
+"border": "#e8ccba",
+"text": "#38291e",
+"muted": "#746256",
+"primary": "#ac5326",
+"on_primary": "#ffffff",
+"accent": "#957ec0",
+"on_accent": "#111111"
+}
+},
+{
+"id": "spice-market-dark",
+"mood": "vibrant food culture dark",
+"colors": {
+"bg": "#18120f",
+"surface": "#251d19",
+"soft": "#352118",
+"border": "#3d332d",
+"text": "#f7f0ec",
+"muted": "#897c74",
+"primary": "#c06539",
+"on_primary": "#111111",
+"accent": "#6e5695",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "evergreen",
+"mood": "classic natural trust",
+"colors": {
+"bg": "#f5fdf6",
+"surface": "#fafffb",
+"soft": "#e0f5e6",
+"border": "#d3e1d5",
+"text": "#28372b",
+"muted": "#607163",
+"primary": "#2f8353",
+"on_primary": "#ffffff",
+"accent": "#d5766f",
+"on_accent": "#111111"
+}
+},
+{
+"id": "evergreen-soft",
+"mood": "classic natural trust",
+"colors": {
+"bg": "#e3f6e6",
+"surface": "#ecf8ee",
+"soft": "#d6ebdc",
+"border": "#c1dac5",
+"text": "#223125",
+"muted": "#5a6b5d",
+"primary": "#287d4d",
+"on_primary": "#ffffff",
+"accent": "#ce7069",
+"on_accent": "#111111"
+}
+},
+{
+"id": "evergreen-dark",
+"mood": "classic natural trust dark",
+"colors": {
+"bg": "#101511",
+"surface": "#1a211c",
+"soft": "#182c1f",
+"border": "#2f3831",
+"text": "#edf4ee",
+"muted": "#758177",
+"primary": "#3b8d5d",
+"on_primary": "#111111",
+"accent": "#9f4642",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "blueprint",
+"mood": "technical building architecture",
+"colors": {
+"bg": "#f4fbff",
+"surface": "#fafeff",
+"soft": "#e0f1ff",
+"border": "#d1deea",
+"text": "#263541",
+"muted": "#5e6e7c",
+"primary": "#2b76bb",
+"on_primary": "#ffffff",
+"accent": "#cd7e35",
+"on_accent": "#111111"
+}
+},
+{
+"id": "blueprint-soft",
+"mood": "technical building architecture",
+"colors": {
+"bg": "#e0f3ff",
+"surface": "#ebf6ff",
+"soft": "#d6e7f8",
+"border": "#bed6ec",
+"text": "#202e3b",
+"muted": "#586876",
+"primary": "#2470b5",
+"on_primary": "#ffffff",
+"accent": "#c6782e",
+"on_accent": "#111111"
+}
+},
+{
+"id": "blueprint-dark",
+"mood": "technical building architecture dark",
+"colors": {
+"bg": "#0f1419",
+"surface": "#192026",
+"soft": "#192837",
+"border": "#2e373e",
+"text": "#ecf3f8",
+"muted": "#747f89",
+"primary": "#3781c7",
+"on_primary": "#111111",
+"accent": "#984e00",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "cotton-candy",
+"mood": "playful sweet kids",
+"colors": {
+"bg": "#fff7fe",
+"surface": "#fffcff",
+"soft": "#fbe8f8",
+"border": "#e5d7e3",
+"text": "#3c2d3a",
+"muted": "#766674",
+"primary": "#9b5e96",
+"on_primary": "#ffffff",
+"accent": "#369cb8",
+"on_accent": "#111111"
+}
+},
+{
+"id": "cotton-candy-soft",
+"mood": "playful sweet kids",
+"colors": {
+"bg": "#fce9fa",
+"surface": "#fcf0fa",
+"soft": "#f1deee",
+"border": "#e2cadf",
+"text": "#352734",
+"muted": "#70606e",
+"primary": "#93578e",
+"on_primary": "#ffffff",
+"accent": "#2e95b1",
+"on_accent": "#111111"
+}
+},
+{
+"id": "cotton-candy-dark",
+"mood": "playful sweet kids dark",
+"colors": {
+"bg": "#171216",
+"surface": "#231d23",
+"soft": "#30202f",
+"border": "#3b323a",
+"text": "#f6eff5",
+"muted": "#867b84",
+"primary": "#a668a1",
+"on_primary": "#111111",
+"accent": "#006b86",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "bronze-age",
+"mood": "heritage craft premium",
+"colors": {
+"bg": "#fff9f2",
+"surface": "#fffdf8",
+"soft": "#fdebda",
+"border": "#e7dace",
+"text": "#3e3023",
+"muted": "#78695a",
+"primary": "#996937",
+"on_primary": "#ffffff",
+"accent": "#529bb1",
+"on_accent": "#111111"
+}
+},
+{
+"id": "bronze-age-soft",
+"mood": "heritage craft premium",
+"colors": {
+"bg": "#ffeddc",
+"surface": "#fdf2e8",
+"soft": "#f3e1d0",
+"border": "#e6ceb8",
+"text": "#382b1e",
+"muted": "#736354",
+"primary": "#926331",
+"on_primary": "#ffffff",
+"accent": "#4a93a9",
+"on_accent": "#111111"
+}
+},
+{
+"id": "bronze-age-dark",
+"mood": "heritage craft premium dark",
+"colors": {
+"bg": "#18130e",
+"surface": "#241e18",
+"soft": "#322314",
+"border": "#3c342c",
+"text": "#f7f1eb",
+"muted": "#877d73",
+"primary": "#a57543",
+"on_primary": "#111111",
+"accent": "#1b6b80",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "lagoon",
+"mood": "tropical fresh fun",
+"colors": {
+"bg": "#f2fdfb",
+"surface": "#f8fffe",
+"soft": "#d9f6f1",
+"border": "#cde1de",
+"text": "#213835",
+"muted": "#57706d",
+"primary": "#008175",
+"on_primary": "#ffffff",
+"accent": "#c778ae",
+"on_accent": "#111111"
+}
+},
+{
+"id": "lagoon-soft",
+"mood": "tropical fresh fun",
+"colors": {
+"bg": "#dbf7f3",
+"surface": "#e8f8f6",
+"soft": "#d0ece7",
+"border": "#b6dcd6",
+"text": "#1a322e",
+"muted": "#536c68",
+"primary": "#007b6f",
+"on_primary": "#ffffff",
+"accent": "#bf71a6",
+"on_accent": "#111111"
+}
+},
+{
+"id": "lagoon-dark",
+"mood": "tropical fresh fun dark",
+"colors": {
+"bg": "#0e1614",
+"surface": "#172220",
+"soft": "#102c29",
+"border": "#2b3936",
+"text": "#ebf4f3",
+"muted": "#71817f",
+"primary": "#008f82",
+"on_primary": "#111111",
+"accent": "#93497d",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "heather",
+"mood": "soft calm elegant",
+"colors": {
+"bg": "#fbf8ff",
+"surface": "#fefcff",
+"soft": "#f1ebfd",
+"border": "#ded9e9",
+"text": "#352f40",
+"muted": "#6e687b",
+"primary": "#7b6b98",
+"on_primary": "#ffffff",
+"accent": "#bf8350",
+"on_accent": "#111111"
+}
+},
+{
+"id": "heather-soft",
+"mood": "soft calm elegant",
+"colors": {
+"bg": "#f3ecff",
+"surface": "#f6f2ff",
+"soft": "#e7e1f3",
+"border": "#d6cdea",
+"text": "#302a3b",
+"muted": "#686275",
+"primary": "#756592",
+"on_primary": "#ffffff",
+"accent": "#b77b49",
+"on_accent": "#111111"
+}
+},
+{
+"id": "heather-dark",
+"mood": "soft calm elegant dark",
+"colors": {
+"bg": "#151318",
+"surface": "#201e25",
+"soft": "#282332",
+"border": "#37333d",
+"text": "#f3f0f8",
+"muted": "#807c89",
+"primary": "#8677a4",
+"on_primary": "#111111",
+"accent": "#8e5520",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "brick-lane",
+"mood": "urban bold bistro",
+"colors": {
+"bg": "#fff7f5",
+"surface": "#fffcfb",
+"soft": "#ffe7e4",
+"border": "#ebd7d4",
+"text": "#412d2a",
+"muted": "#7c6662",
+"primary": "#b25651",
+"on_primary": "#ffffff",
+"accent": "#6493c4",
+"on_accent": "#111111"
+}
+},
+{
+"id": "brick-lane-soft",
+"mood": "urban bold bistro",
+"colors": {
+"bg": "#ffe9e4",
+"surface": "#fff0ed",
+"soft": "#f8dddb",
+"border": "#eccac3",
+"text": "#3a2724",
+"muted": "#76605c",
+"primary": "#ab504b",
+"on_primary": "#ffffff",
+"accent": "#5c8cbc",
+"on_accent": "#111111"
+}
+},
+{
+"id": "brick-lane-dark",
+"mood": "urban bold bistro dark",
+"colors": {
+"bg": "#191211",
+"surface": "#261d1b",
+"soft": "#36201e",
+"border": "#3e3230",
+"text": "#f8efee",
+"muted": "#8a7b78",
+"primary": "#bf625c",
+"on_primary": "#111111",
+"accent": "#376593",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "chamomile",
+"mood": "gentle calm wellness",
+"colors": {
+"bg": "#fcfaf1",
+"surface": "#fffdf8",
+"soft": "#f4efda",
+"border": "#e1ddcc",
+"text": "#383321",
+"muted": "#716c58",
+"primary": "#827338",
+"on_primary": "#ffffff",
+"accent": "#878cc9",
+"on_accent": "#111111"
+}
+},
+{
+"id": "chamomile-soft",
+"mood": "gentle calm wellness",
+"colors": {
+"bg": "#f6f0da",
+"surface": "#f8f4e7",
+"soft": "#eae5d0",
+"border": "#dbd3b6",
+"text": "#312d1b",
+"muted": "#6b6653",
+"primary": "#7a6b31",
+"on_primary": "#ffffff",
+"accent": "#8186c2",
+"on_accent": "#111111"
+}
+},
+{
+"id": "chamomile-dark",
+"mood": "gentle calm wellness dark",
+"colors": {
+"bg": "#15140e",
+"surface": "#211f17",
+"soft": "#2b2614",
+"border": "#38352b",
+"text": "#f4f2ea",
+"muted": "#827f72",
+"primary": "#8c7d43",
+"on_primary": "#111111",
+"accent": "#595d96",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "aurora",
+"mood": "vibrant modern creative",
+"colors": {
+"bg": "#f1fdfd",
+"surface": "#f8ffff",
+"soft": "#dcf5eb",
+"border": "#cce1e2",
+"text": "#1e3638",
+"muted": "#587173",
+"primary": "#008464",
+"on_primary": "#ffffff",
+"accent": "#9584e5",
+"on_accent": "#111111"
+}
+},
+{
+"id": "aurora-soft",
+"mood": "vibrant modern creative",
+"colors": {
+"bg": "#daf7f8",
+"surface": "#e7f8f9",
+"soft": "#d2ebe1",
+"border": "#b5dbdd",
+"text": "#1b3234",
+"muted": "#526c6d",
+"primary": "#007d5d",
+"on_primary": "#ffffff",
+"accent": "#8f7ede",
+"on_accent": "#111111"
+}
+},
+{
+"id": "aurora-dark",
+"mood": "vibrant modern creative dark",
+"colors": {
+"bg": "#0d1516",
+"surface": "#172122",
+"soft": "#132c24",
+"border": "#2b3839",
+"text": "#ebf4f4",
+"muted": "#708182",
+"primary": "#008f6e",
+"on_primary": "#111111",
+"accent": "#6754af",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "onyx-pearl",
+"mood": "minimal luxury monochrome",
+"colors": {
+"bg": "#f5faff",
+"surface": "#fbfeff",
+"soft": "#eceff3",
+"border": "#d4ddeb",
+"text": "#2a3342",
+"muted": "#626c7e",
+"primary": "#6c737f",
+"on_primary": "#ffffff",
+"accent": "#7f92b0",
+"on_accent": "#111111"
+}
+},
+{
+"id": "onyx-pearl-soft",
+"mood": "minimal luxury monochrome",
+"colors": {
+"bg": "#e5f1ff",
+"surface": "#edf5ff",
+"soft": "#e2e5e9",
+"border": "#c4d4ee",
+"text": "#242d3c",
+"muted": "#5c6778",
+"primary": "#656c78",
+"on_primary": "#ffffff",
+"accent": "#788aa8",
+"on_accent": "#111111"
+}
+},
+{
+"id": "onyx-pearl-dark",
+"mood": "minimal luxury monochrome dark",
+"colors": {
+"bg": "#111419",
+"surface": "#1b1f27",
+"soft": "#24272a",
+"border": "#30363f",
+"text": "#eef2f9",
+"muted": "#767e8a",
+"primary": "#767e8a",
+"on_primary": "#111111",
+"accent": "#51637f",
+"on_accent": "#ffffff"
+}
+},
+{
+"id": "sandstone-sky",
+"mood": "warm coastal relaxed",
+"colors": {
+"bg": "#fff9f2",
+"surface": "#fffdf8",
+"soft": "#daf3fe",
+"border": "#e6dacd",
+"text": "#3d3022",
+"muted": "#776959",
+"primary": "#127d9d",
+"on_primary": "#ffffff",
+"accent": "#c18452",
+"on_accent": "#111111"
+}
+},
+{
+"id": "sandstone-sky-soft",
+"mood": "warm coastal relaxed",
+"colors": {
+"bg": "#feeddb",
+"surface": "#fcf2e7",
+"soft": "#d0e9f4",
+"border": "#e4cfb7",
+"text": "#362a1c",
+"muted": "#726354",
+"primary": "#007696",
+"on_primary": "#ffffff",
+"accent": "#b97d4a",
+"on_accent": "#111111"
+}
+},
+{
+"id": "sandstone-sky-dark",
+"mood": "warm coastal relaxed dark",
+"colors": {
+"bg": "#17130e",
+"surface": "#241e18",
+"soft": "#112a33",
+"border": "#3c342b",
+"text": "#f6f1eb",
+"muted": "#877d72",
+"primary": "#2488a8",
+"on_primary": "#111111",
+"accent": "#8e5520",
+"on_accent": "#ffffff"
+}
+}
+]

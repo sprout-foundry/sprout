@@ -45,7 +45,7 @@ func TestIntegration_TimeoutPromotionViaRunShellCommand(t *testing.T) {
 	require.NoError(t, err, "runShellCommand should return no error on timeout promotion")
 
 	// The promotion message should contain expected phrases.
-	assert.Contains(t, output, "exceeded the 2-minute tool deadline")
+	assert.Contains(t, output, "ran past its tool deadline (1 second)")
 	assert.Contains(t, output, "still running in background session")
 
 	// Extract the session ID and verify the session is tracked in BPM.

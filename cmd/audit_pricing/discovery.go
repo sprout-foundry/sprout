@@ -377,7 +377,7 @@ func formatDiscoverReport(results []DiscoverResult) string {
 			totalStale++
 		}
 		for _, id := range dr.RetiredModels {
-			sb.WriteString(fmt.Sprintf("  ~ %s    (retired by provider, not re-added)\n", id))
+			fmt.Fprintf(&sb, "  ~ %s    (retired by provider, not re-added)\n", id)
 		}
 	}
 	sb.WriteString(fmt.Sprintf("\nDiscovery: %d new, %d stale, %d errors\n",

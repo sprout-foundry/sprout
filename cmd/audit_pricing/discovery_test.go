@@ -373,7 +373,9 @@ func TestAddModelsToManifest_AddsNewProvider(t *testing.T) {
 	dir := t.TempDir()
 	manifestPath := filepath.Join(dir, "manifest.json")
 	// Start with an empty manifest.
-	os.WriteFile(manifestPath, []byte("{}"), 0o644)
+	if err := os.WriteFile(manifestPath, []byte("{}"), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
 
 	newModels := []modelcontract.CanonicalModel{
 		{ID: "m1", Pricing: &modelcontract.Pricing{InputPerMTok: 1.0, OutputPerMTok: 2.0}},
@@ -388,7 +390,9 @@ func TestAddModelsToManifest_AddsNewProvider(t *testing.T) {
 
 	data, _ := os.ReadFile(manifestPath)
 	var m map[string]ProviderManifest
-	json.Unmarshal(data, &m)
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("unmarshal manifest: %v", err)
+	}
 	pm, ok := m["newprovider"]
 	if !ok {
 		t.Fatal("newprovider not in manifest")
@@ -414,7 +418,9 @@ func TestAddModelsToManifest_AddsToExistingProvider(t *testing.T) {
 		},
 	}
 	data, _ := json.MarshalIndent(existing, "", "  ")
-	os.WriteFile(manifestPath, append(data, '\n'), 0o644)
+	if err := os.WriteFile(manifestPath, append(data, '\n'), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
 
 	newModels := []modelcontract.CanonicalModel{
 		{ID: "new", Pricing: &modelcontract.Pricing{InputPerMTok: 3.0, OutputPerMTok: 6.0}},
@@ -429,7 +435,9 @@ func TestAddModelsToManifest_AddsToExistingProvider(t *testing.T) {
 
 	data, _ = os.ReadFile(manifestPath)
 	var m map[string]ProviderManifest
-	json.Unmarshal(data, &m)
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("unmarshal manifest: %v", err)
+	}
 	if len(m["p"].Models) != 2 {
 		t.Errorf("expected 2 models, got %d", len(m["p"].Models))
 	}
@@ -440,7 +448,9 @@ func TestAddModelsToManifest_RoundsPerTokenConversionNoise(t *testing.T) {
 	manifestPath := filepath.Join(dir, "manifest.json")
 	existing := map[string]ProviderManifest{"p": {Source: "https://example.com"}}
 	data, _ := json.MarshalIndent(existing, "", "  ")
-	os.WriteFile(manifestPath, append(data, '\n'), 0o644)
+	if err := os.WriteFile(manifestPath, append(data, '\n'), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
 
 	cached, err := strconv.ParseFloat("0.00000005", 64)
 	if err != nil {
@@ -459,7 +469,9 @@ func TestAddModelsToManifest_RoundsPerTokenConversionNoise(t *testing.T) {
 
 	data, _ = os.ReadFile(manifestPath)
 	var m map[string]ProviderManifest
-	json.Unmarshal(data, &m)
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("unmarshal manifest: %v", err)
+	}
 	entry := m["p"].Models[0]
 	if entry.InputPerMTok != 1.0 || entry.OutputPerMTok != 5.0 || entry.CachedPerMTok != 0.05 {
 		t.Errorf("pricing = %v/%v/%v, want 1/5/0.05",
@@ -474,7 +486,9 @@ func TestAddModelsToManifest_DoesNotDuplicate(t *testing.T) {
 		"p": {Models: []PricingEntry{{ID: "m1", InputPerMTok: 1.0}}},
 	}
 	data, _ := json.MarshalIndent(existing, "", "  ")
-	os.WriteFile(manifestPath, append(data, '\n'), 0o644)
+	if err := os.WriteFile(manifestPath, append(data, '\n'), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
 
 	newModels := []modelcontract.CanonicalModel{
 		{ID: "m1", Pricing: &modelcontract.Pricing{InputPerMTok: 99.0}},
@@ -501,7 +515,9 @@ func TestAddModelsToManifest_EmptyInput(t *testing.T) {
 func TestAddModelsToManifest_NilPricing(t *testing.T) {
 	dir := t.TempDir()
 	manifestPath := filepath.Join(dir, "manifest.json")
-	os.WriteFile(manifestPath, []byte("{}"), 0o644)
+	if err := os.WriteFile(manifestPath, []byte("{}"), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
 
 	newModels := []modelcontract.CanonicalModel{
 		{ID: "m1"}, // no pricing
@@ -516,7 +532,9 @@ func TestAddModelsToManifest_NilPricing(t *testing.T) {
 
 	data, _ := os.ReadFile(manifestPath)
 	var m map[string]ProviderManifest
-	json.Unmarshal(data, &m)
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("unmarshal manifest: %v", err)
+	}
 	if pm := m["p"]; len(pm.Models) != 1 || pm.Models[0].InputPerMTok != 0 {
 		t.Errorf("expected 0 pricing for nil-pricing model, got %v", pm.Models[0])
 	}

@@ -1,11 +1,11 @@
 {
   "name": "web-app-data",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && vite build && vite build -c vite.worker.config.ts",
     "preview": "vite preview",
     "test": "vitest run -c vitest.config.ts && vitest run -c vitest.workers.config.ts",
     "db:migrate": "wrangler d1 migrations apply web-app-data-db --local",

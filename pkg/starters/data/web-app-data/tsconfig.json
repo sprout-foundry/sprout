@@ -27,6 +27,13 @@
       "@cloudflare/vitest-plugin/types"
     ]
   },
-  "include": ["src", "test", "vite.config.ts", "vitest.config.ts", "vitest.workers.config.ts"],
+  "include": [
+    "src",
+    "test",
+    "vite.config.ts",
+    "vite.worker.config.ts",
+    "vitest.config.ts",
+    "vitest.workers.config.ts"
+  ],
   "exclude": ["dist", "node_modules"]
 }

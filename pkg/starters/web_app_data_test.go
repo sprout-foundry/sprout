@@ -20,7 +20,7 @@ import (
 // webAppDataVersion is the version the web-app-data tree declares; the
 // assertions below must agree with
 // pkg/starters/data/web-app-data/starter.json.
-const webAppDataVersion = "1.2.1"
+const webAppDataVersion = "1.2.2"
 
 // webAppDataProjectFiles are the project files (relative to the
 // destination) a web-app-data instantiation must produce: the React + Vite
@@ -34,6 +34,7 @@ var webAppDataProjectFiles = []string{
 	"package-lock.json",
 	"wrangler.toml",
 	"vite.config.ts",
+	"vite.worker.config.ts",
 	"vitest.config.ts",
 	"vitest.workers.config.ts",
 	"drizzle.config.ts",
@@ -46,6 +47,7 @@ var webAppDataProjectFiles = []string{
 	"README.md",
 	"AGENTS.md",
 	filepath.Join("public", "favicon.svg"),
+	filepath.Join("public", ".assetsignore"),
 	filepath.Join("src", "main.tsx"),
 	filepath.Join("src", "App.tsx"),
 	filepath.Join("src", "layouts", "Layout.tsx"),

@@ -182,10 +182,64 @@ check_starter() {
   return "$status"
 }
 
+# check_hosted serves a starter's BUILD OUTPUT the way the hosted platform
+# does, not its sources: the files of the build output with the Worker the
+# build bundled (worker.js) as the main module, the project's [assets]
+# settings, its data bindings, and the platform's compatibility date and
+# flags (HOSTED_COMPAT_DATE follows the platform's upload contract). A
+# starter whose Worker never reaches the build output, or whose client routes
+# or API do not answer once uploaded, fails here even when `wrangler dev` on
+# its sources works. A starter without a Worker (no `main` in wrangler.toml)
+# has nothing to check beyond its dev server.
+check_hosted() {
+  local id="$1" dir="$work_root/$1" manifest="$work_root/$1/.sprout/starter.json"
+  local out hosted="$work_root/$1.hosted" log="$work_root/$1.hosted.log"
+  [ -f "$dir/wrangler.toml" ] && grep -Eq '^main *=' "$dir/wrangler.toml" || return 0
+  out="$(manifest_string "$manifest" build_output)"
+  echo "--- hosted: $out/ served as the platform uploads it"
+  if [ ! -s "$dir/$out/worker.js" ]; then
+    echo "the build did not produce $out/worker.js, so a hosted app would have no API" >&2
+    return 1
+  fi
+  rm -rf "$hosted" && mkdir -p "$hosted/site"
+  cp -R "$dir/$out/." "$hosted/site/"
+  mv "$hosted/site/worker.js" "$hosted/worker.js"
+  rm -f "$hosted/site/.assetsignore"
+  [ -d "$dir/drizzle" ] && cp -R "$dir/drizzle" "$hosted/"
+  python3 - "$dir/wrangler.toml" "$hosted/wrangler.toml" "${HOSTED_COMPAT_DATE:-2025-01-01}" <<'PY'
+import re, sys
+src, dst, date = sys.argv[1:4]
+text = open(src).read()
+text = re.sub(r'(?m)^main *=.*$', 'main = "worker.js"', text)
+text = re.sub(r'(?m)^compatibility_date *=.*$', 'compatibility_date = "%s"' % date, text)
+text = re.sub(r'(?m)^directory *=.*$', 'directory = "./site"', text)
+# The platform uploads with no compatibility flags, so neither does this.
+text = re.sub(r'(?m)^compatibility_flags *=.*$', '', text)
+open(dst, "w").write(text)
+PY
+  local wrangler="$dir/node_modules/.bin/wrangler" db
+  db="$(sed -n 's/^database_name *= *"\(.*\)"/\1/p' "$hosted/wrangler.toml" | head -1)"
+  if [ -n "$db" ]; then
+    ( cd "$hosted" && "$wrangler" d1 migrations apply "$db" --local ) >> "$log" 2>&1
+  fi
+  local port
+  port="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')"
+  ( cd "$hosted" && exec "$wrangler" dev --local --port "$port" ) >> "$log" 2>&1 &
+  dev_pid=$!
+  local routes_json status=0
+  routes_json="$(python3 -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1])).get("routes", [])))' "$manifest")"
+  check_routes "http://127.0.0.1:$port" "$routes_json" "$log" || status=1
+  kill "$dev_pid" 2>/dev/null || true
+  pkill -P "$dev_pid" 2>/dev/null || true
+  wait "$dev_pid" 2>/dev/null || true
+  return "$status"
+}
+
 trap 'jobs -pr | xargs -r kill 2>/dev/null || true' EXIT
 
 for starter in "${starters[@]}"; do
   check_starter "$starter"
+  check_hosted "$starter"
 done
 
 echo "All starters passed: ${starters[*]}"

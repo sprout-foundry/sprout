@@ -41,21 +41,38 @@
  */
 
 import type { SproutEvent } from '@sprout/events';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { WebSocketService } from '../services/websocket';
 
 export interface CommandOutputState {
   output: string;
   isRunning: boolean;
   droppedBytes: number;
+  /** Characters trimmed from the head because the output exceeded the cap. */
+  truncatedChars: number;
   command: string | null;
   error: Error | null;
 }
+
+/**
+ * Chunks are batched into one state update per window (leading edge: the
+ * first chunk of a burst applies immediately). Every update copies the
+ * retained string and re-renders the chat, so per-chunk updates made long
+ * command output quadratic.
+ */
+export const COMMAND_OUTPUT_FLUSH_MS = 100;
+
+/**
+ * Retained-output cap. A command can stream megabytes; the panel only needs a
+ * readable tail, and the cost of each flush scales with what is retained.
+ */
+export const MAX_COMMAND_OUTPUT_CHARS = 200_000;
 
 const INITIAL_STATE: CommandOutputState = {
   output: '',
   isRunning: false,
   droppedBytes: 0,
+  truncatedChars: 0,
   command: null,
   error: null,
 };
@@ -75,6 +92,55 @@ function eventChatId(event: SproutEvent): string | undefined {
 
 export function useCommandOutput(chatId: string | undefined): CommandOutputState {
   const [state, setState] = useState<CommandOutputState>(INITIAL_STATE);
+
+  // Chunks wait here between flushes. An array of chunks joined once per
+  // flush avoids re-copying the whole output for every chunk.
+  const pendingChunksRef = useRef<string[]>([]);
+  const pendingCommandRef = useRef<string | null>(null);
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastFlushRef = useRef(0);
+
+  /** Apply the buffered chunks. `isRunning` undefined leaves it unchanged. */
+  const flush = useCallback((isRunning?: boolean) => {
+    if (flushTimerRef.current !== null) {
+      clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
+    }
+    const chunks = pendingChunksRef.current;
+    const commandName = pendingCommandRef.current;
+    pendingChunksRef.current = [];
+    pendingCommandRef.current = null;
+    lastFlushRef.current = Date.now();
+    if (chunks.length === 0 && commandName === null && isRunning === undefined) return;
+    const appended = chunks.join('');
+
+    setState((prev) => {
+      // Is this chunk the start of a NEW command (compared with the command
+      // we're currently tracking)? `null` command names mean "missing", which
+      // we treat as "same as whatever we had".
+      const switchingCommand = commandName !== null && prev.command !== null && commandName !== prev.command;
+      const isFirstChunk = prev.command === null && commandName !== null;
+      const resets = switchingCommand || isFirstChunk;
+
+      let output = resets ? appended : prev.output + appended;
+      // The trim counter belongs to the retained output: a new command starts
+      // clean, otherwise one trimmed command would keep warning about the
+      // text of every command after it.
+      let truncatedChars = resets ? 0 : prev.truncatedChars;
+      if (output.length > MAX_COMMAND_OUTPUT_CHARS) {
+        truncatedChars += output.length - MAX_COMMAND_OUTPUT_CHARS;
+        output = output.slice(-MAX_COMMAND_OUTPUT_CHARS);
+      }
+
+      return {
+        ...prev,
+        command: commandName ?? prev.command,
+        output,
+        truncatedChars,
+        ...(isRunning === undefined ? {} : { isRunning }),
+      };
+    });
+  }, []);
 
   useEffect(() => {
     const ws = WebSocketService.getInstance();
@@ -96,6 +162,9 @@ export function useCommandOutput(chatId: string | undefined): CommandOutputState
       const data = (event.data ?? {}) as Record<string, unknown>;
 
       if (event.type === 'command_output_dropped') {
+        // Land the buffered text first so the warning appears after the
+        // output it describes.
+        flush();
         const dropped = typeof data.dropped_bytes === 'number' ? data.dropped_bytes : 0;
         setState((prev) => ({ ...prev, droppedBytes: prev.droppedBytes + dropped }));
         return;
@@ -105,28 +174,50 @@ export function useCommandOutput(chatId: string | undefined): CommandOutputState
       const isFinal = data.is_final === true;
       const chunk = typeof data.chunk === 'string' ? data.chunk : '';
       const commandName = typeof data.command === 'string' ? data.command : null;
+      // A command switch inside a batch would be collapsed by the join below
+      // (the whole batch would be attributed to the new command). Flush the
+      // previous command's tail first so each batch carries one command.
+      if (pendingCommandRef.current !== null && commandName !== null && commandName !== pendingCommandRef.current) {
+        flush(true);
+      }
+      const startsBatch = pendingChunksRef.current.length === 0;
+      pendingChunksRef.current.push(chunk);
+      if (commandName !== null) pendingCommandRef.current = commandName;
 
-      setState((prev) => {
-        // Is this chunk the start of a NEW command (compared with the
-        // command we're currently tracking)? `null` command names mean
-        // "missing", which we treat as "same as whatever we had".
-        const switchingCommand = commandName !== null && prev.command !== null && commandName !== prev.command;
-        const isFirstChunk = prev.command === null && commandName !== null;
-        return {
-          command: switchingCommand || isFirstChunk ? commandName : (prev.command ?? commandName),
-          output: switchingCommand || isFirstChunk ? chunk : prev.output + chunk,
-          isRunning: isFinal ? false : true,
-          droppedBytes: prev.droppedBytes,
-          error: prev.error,
-        };
-      });
+      // The terminator is never delayed: the panel's final state must land
+      // with the last chunk.
+      if (isFinal) {
+        flush(false);
+        return;
+      }
+
+      const now = Date.now();
+      if (startsBatch && now - lastFlushRef.current >= COMMAND_OUTPUT_FLUSH_MS) {
+        flush(true);
+        return;
+      }
+      if (flushTimerRef.current === null) {
+        const delay = Math.max(0, COMMAND_OUTPUT_FLUSH_MS - (now - lastFlushRef.current));
+        flushTimerRef.current = setTimeout(() => {
+          flushTimerRef.current = null;
+          flush(true);
+        }, delay);
+      }
     };
 
     ws.onEvent(handle);
     return () => {
       ws.removeEvent(handle);
+      if (flushTimerRef.current !== null) {
+        clearTimeout(flushTimerRef.current);
+        flushTimerRef.current = null;
+      }
+      // A chat switch or unmount drops the tail; the command's HTTP response
+      // carries the complete transcript.
+      pendingChunksRef.current = [];
+      pendingCommandRef.current = null;
     };
-  }, [chatId]);
+  }, [chatId, flush]);
 
   // Reset state when the chat changes so a /info from chat-A doesn't
   // bleed into chat-B's first render.

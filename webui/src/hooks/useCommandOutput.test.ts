@@ -57,7 +57,7 @@ vi.mock('../services/websocket', () => ({
   WebSocketService: { getInstance: vi.fn(() => wsServiceDouble) },
 }));
 
-import { useCommandOutput } from './useCommandOutput';
+import { useCommandOutput, COMMAND_OUTPUT_FLUSH_MS, MAX_COMMAND_OUTPUT_CHARS } from './useCommandOutput';
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -77,11 +77,22 @@ function dispatch(event: { type: string; data?: unknown }) {
 describe('useCommandOutput', () => {
   beforeEach(() => {
     wsServiceDouble._reset();
+    // Chunks batch inside a window (see COMMAND_OUTPUT_FLUSH_MS); faking time
+    // lets a test close the window deterministically.
+    vi.useFakeTimers();
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     listeners.length = 0;
   });
+
+  /** Close the current batch window and let the flush land. */
+  function flushWindow() {
+    act(() => {
+      vi.advanceTimersByTime(COMMAND_OUTPUT_FLUSH_MS + 1);
+    });
+  }
 
   it('subscribes via WebSocketService.onEvent on mount', () => {
     renderHook(() => useCommandOutput('chat-1'));
@@ -104,6 +115,7 @@ describe('useCommandOutput', () => {
         data: { command: 'info', chunk: 'world', is_final: false, chat_id: 'chat-1' },
       });
     });
+    flushWindow();
 
     expect(result.current.output).toBe('Hello world');
     expect(result.current.isRunning).toBe(true);
@@ -256,9 +268,78 @@ describe('useCommandOutput', () => {
         data: { command: 'help', chunk: 'second run', is_final: false, chat_id: 'chat-1' },
       });
     });
+    flushWindow();
     // Old output dropped (v1 simplification: latest-command-only).
     expect(result.current.output).toBe('second run');
     expect(result.current.command).toBe('help');
+  });
+
+  it('holds later chunks until the window closes, then applies them in order', () => {
+    const { result } = renderHook(() => useCommandOutput('chat-1'));
+
+    act(() => {
+      dispatch({
+        type: 'command_output',
+        data: { command: 'info', chunk: 'a', is_final: false, chat_id: 'chat-1' },
+      });
+      dispatch({
+        type: 'command_output',
+        data: { command: 'info', chunk: 'b', is_final: false, chat_id: 'chat-1' },
+      });
+      dispatch({
+        type: 'command_output',
+        data: { command: 'info', chunk: 'c', is_final: false, chat_id: 'chat-1' },
+      });
+    });
+    // The first chunk of the burst lands immediately; the rest wait.
+    expect(result.current.output).toBe('a');
+
+    flushWindow();
+    expect(result.current.output).toBe('abc');
+  });
+
+  it('trims the retained output to the cap and counts what it dropped', () => {
+    const { result } = renderHook(() => useCommandOutput('chat-1'));
+    const overflow = 1000;
+    const chunk = 'x'.repeat(MAX_COMMAND_OUTPUT_CHARS + overflow);
+
+    act(() => {
+      dispatch({
+        type: 'command_output',
+        data: { command: 'info', chunk, is_final: true, chat_id: 'chat-1' },
+      });
+    });
+
+    expect(result.current.output).toHaveLength(MAX_COMMAND_OUTPUT_CHARS);
+    expect(result.current.truncatedChars).toBe(overflow);
+  });
+
+  it('clears the trim counter when a new command starts', () => {
+    const { result } = renderHook(() => useCommandOutput('chat-1'));
+
+    act(() => {
+      dispatch({
+        type: 'command_output',
+        data: {
+          command: 'info',
+          chunk: 'x'.repeat(MAX_COMMAND_OUTPUT_CHARS + 500),
+          is_final: true,
+          chat_id: 'chat-1',
+        },
+      });
+    });
+    expect(result.current.truncatedChars).toBe(500);
+
+    act(() => {
+      dispatch({
+        type: 'command_output',
+        data: { command: 'help', chunk: 'short', is_final: true, chat_id: 'chat-1' },
+      });
+    });
+    // The warning describes the retained output, so it must not outlive it.
+    expect(result.current.command).toBe('help');
+    expect(result.current.output).toBe('short');
+    expect(result.current.truncatedChars).toBe(0);
   });
 
   it('handles missing fields gracefully (no chunk → empty string, no command → no crash)', () => {

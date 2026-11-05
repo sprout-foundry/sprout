@@ -57,7 +57,7 @@ func TestAdoptable_TimeoutPromotion(t *testing.T) {
 	require.NoError(t, err)
 
 	// The output should contain the background promotion message
-	assert.Contains(t, output, "exceeded the 1 second tool deadline")
+	assert.Contains(t, output, "ran past its tool deadline (1 second)")
 	assert.Contains(t, output, "still running in background session")
 
 	// Extract the session ID from the output message
@@ -173,7 +173,7 @@ func TestAdoptable_TimeoutPromotion_OutputAccumulated(t *testing.T) {
 	output, err := runShellCommandAdoptable(ctx, "echo before-sleep && sleep 30", bpm)
 	require.NoError(t, err)
 
-	assert.Contains(t, output, "exceeded the 1 second tool deadline")
+	assert.Contains(t, output, "ran past its tool deadline (1 second)")
 	assert.Contains(t, output, "before-sleep")
 }
 

@@ -31,16 +31,6 @@ const deadlineWarning = "Time check: about three minutes remain before this run 
 // deadlineWarned records that this process's run was told to wrap up.
 var deadlineWarned atomic.Bool
 
-// stopBackgroundProcesses stops the run's background sessions. runDirectMode
-// sets it from the agent's background process manager; tests replace it. It is
-// nil when the run has no manager, and nil or a no-op on builds without
-// background processes.
-//
-// A run that ends on a quiet machine leaves nothing for the next run to fight
-// with: the sessions a deadline run started (builds, servers) are killed as
-// whole process groups when it hands off and when it finishes.
-var stopBackgroundProcesses func()
-
 // steerer is the part of the agent the deadline warning needs.
 type steerer interface {
 	InjectInputContext(input string) error
@@ -58,10 +48,23 @@ func hasTaskDeadline() bool {
 	return err == nil && secs > 0
 }
 
-// stopBackgroundSessionsIfSet calls the run's stop hook, if any.
-func stopBackgroundSessionsIfSet() {
-	if stopBackgroundProcesses != nil {
-		stopBackgroundProcesses()
+// startTaskRun prepares a run for the host's deadline, when it set one: the
+// agent is warned to wrap up before it (startDeadlineWarning), and the run
+// leaves a quiet machine for the next one. stopBackground stops the run's
+// background sessions (builds, servers), killing them as whole process
+// groups; it runs when the agent is warned and again from the returned
+// function, which ends the run's preparations and is called when the run
+// returns. A run without a deadline keeps its background sessions.
+func startTaskRun(a steerer, stopBackground func(), now time.Time) func() {
+	if !hasTaskDeadline() {
+		stopBackground = nil
+	}
+	cancelWarning := startDeadlineWarning(a, now, stopBackground)
+	return func() {
+		cancelWarning()
+		if stopBackground != nil {
+			stopBackground()
+		}
 	}
 }
 
@@ -70,8 +73,9 @@ func stopBackgroundSessionsIfSet() {
 // (SPROUT_TASK_DEADLINE, Unix seconds). A run with no deadline, or one too
 // close to warn usefully, gets no warning. A handoff note left in the
 // workspace by an earlier run is removed, so only this run's note counts.
-// The returned function cancels the warning.
-func startDeadlineWarning(a steerer, now time.Time) func() {
+// stopBackground, when set, stops the run's background sessions once the
+// agent is warned. The returned function cancels the warning.
+func startDeadlineWarning(a steerer, now time.Time, stopBackground func()) func() {
 	raw := strings.TrimSpace(configuration.GetEnvSimple("TASK_DEADLINE"))
 	if raw == "" || a == nil {
 		return func() {}
@@ -90,7 +94,9 @@ func startDeadlineWarning(a steerer, now time.Time) func() {
 		_ = a.InjectInputContext(deadlineWarning)
 		// The agent is wrapping up: a build it left running is noise now,
 		// and the next run must start on an idle machine.
-		stopBackgroundSessionsIfSet()
+		if stopBackground != nil {
+			stopBackground()
+		}
 	})
 	return func() { t.Stop() }
 }

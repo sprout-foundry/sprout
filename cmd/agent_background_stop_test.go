@@ -11,27 +11,22 @@ import (
 
 // A run with a task deadline must leave a quiet machine: its background
 // sessions are stopped when the agent is told to hand off, and again when the
-// run ends. A run without a deadline keeps its background sessions.
+// run ends. A run without a deadline keeps its background sessions. The tests
+// go through startTaskRun, which is what runDirectMode defers.
 
-// withStopHook records calls to the run's stop hook and restores the previous
-// hook afterwards.
-func withStopHook(t *testing.T) *atomic.Int32 {
-	t.Helper()
-	previous := stopBackgroundProcesses
+// countingStop is a background stop that counts its calls.
+func countingStop() (func(), *atomic.Int32) {
 	calls := &atomic.Int32{}
-	stopBackgroundProcesses = func() { calls.Add(1) }
-	t.Cleanup(func() { stopBackgroundProcesses = previous })
-	return calls
+	return func() { calls.Add(1) }, calls
 }
 
 func TestDeadlineWarningStopsBackgroundSessions(t *testing.T) {
 	now := time.Now()
 	t.Setenv("SPROUT_TASK_DEADLINE", strconv.FormatInt(now.Add(deadlineWarnBefore+50*time.Millisecond).Unix()+1, 10))
-	calls := withStopHook(t)
+	stop, calls := countingStop()
 	r := &recordingSteerer{}
 
-	stop := startDeadlineWarning(r, now)
-	defer stop()
+	end := startTaskRun(r, stop, now)
 	deadline := time.Now().Add(3 * time.Second)
 	for (r.count() == 0 || calls.Load() == 0) && time.Now().Before(deadline) {
 		time.Sleep(20 * time.Millisecond)
@@ -40,64 +35,56 @@ func TestDeadlineWarningStopsBackgroundSessions(t *testing.T) {
 		t.Fatalf("warnings = %v, want one wrap-up warning", r.msgs)
 	}
 	if got := calls.Load(); got != 1 {
-		t.Fatalf("stop hook calls at handoff = %d, want 1", got)
+		t.Fatalf("background stops at handoff = %d, want 1", got)
+	}
+	end()
+	if got := calls.Load(); got != 2 {
+		t.Fatalf("background stops after the run ends = %d, want 2 (handoff and run end)", got)
 	}
 }
 
-// No deadline, or one too close to warn: the run is not told to hand off, so
-// nothing is stopped on its behalf.
-func TestDeadlineWarningWithoutDeadlineStopsNothing(t *testing.T) {
-	calls := withStopHook(t)
-	for _, v := range []string{"", "soon", strconv.FormatInt(time.Now().Add(time.Minute).Unix(), 10)} {
-		t.Setenv("SPROUT_TASK_DEADLINE", v)
-		startDeadlineWarning(&recordingSteerer{}, time.Now())()
+// The run's end stops background sessions even when the run finished before
+// it was warned.
+func TestTaskRunEndStopsBackgroundSessions(t *testing.T) {
+	t.Setenv("SPROUT_TASK_DEADLINE", strconv.FormatInt(time.Now().Add(time.Hour).Unix(), 10))
+	stop, calls := countingStop()
+	r := &recordingSteerer{}
+
+	run := func() {
+		defer startTaskRun(r, stop, time.Now())()
+		if got := calls.Load(); got != 0 {
+			t.Fatalf("background stops during the run = %d, want 0", got)
+		}
 	}
+	run()
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("background stops at the run's end = %d, want 1", got)
+	}
+	if r.count() != 0 {
+		t.Fatalf("warnings = %v, want none an hour before the deadline", r.msgs)
+	}
+}
+
+// No deadline, or one too close to warn: the run is not told to hand off, and
+// a run without a deadline keeps its background sessions when it ends.
+func TestTaskRunWithoutDeadlineStopsNothing(t *testing.T) {
+	stop, calls := countingStop()
+	for _, v := range []string{"", "soon", "-5"} {
+		t.Setenv("SPROUT_TASK_DEADLINE", v)
+		startTaskRun(&recordingSteerer{}, stop, time.Now())()
+	}
+	t.Setenv("SPROUT_TASK_DEADLINE", strconv.FormatInt(time.Now().Add(time.Minute).Unix(), 10))
+	startDeadlineWarning(&recordingSteerer{}, time.Now(), stop)()
 	time.Sleep(50 * time.Millisecond)
 	if got := calls.Load(); got != 0 {
-		t.Fatalf("stop hook calls = %d, want 0 without a deadline", got)
+		t.Fatalf("background stops = %d, want 0", got)
 	}
 }
 
-// The end-of-run hook is what runDirectMode defers: armed by
-// stopBackgroundSessionsAtRunEnd for a deadline run, called on the way out,
-// and disarmed afterwards.
-func TestStopBackgroundSessionsAtRunEnd(t *testing.T) {
-	previous := stopBackgroundProcesses
-	t.Cleanup(func() { stopBackgroundProcesses = previous })
-
-	t.Run("deadline run", func(t *testing.T) {
-		var calls atomic.Int32
-		before := func() { calls.Add(100) }
-		stopBackgroundProcesses = before
-		t.Setenv("SPROUT_TASK_DEADLINE", strconv.FormatInt(time.Now().Add(time.Hour).Unix(), 10))
-
-		// While the run is armed, its stop hook replaces the previous one.
-		runBody := func() {
-			defer stopBackgroundSessionsAtRunEnd(nil)()
-			if stopBackgroundProcesses == nil {
-				t.Fatal("a deadline run must arm a stop hook")
-			}
-			stopBackgroundSessionsIfSet() // the end-of-run stop
-		}
-		runBody()
-		// The run's stop fired once on the way out, and the hook that was
-		// there before is restored rather than left armed.
-		stopBackgroundProcesses()
-		if got := calls.Load(); got != 100 {
-			t.Fatalf("hook calls = %d; want the pre-run hook restored and the run's own hook not called after the run", got)
-		}
-	})
-
-	t.Run("no deadline", func(t *testing.T) {
-		stopBackgroundProcesses = nil
-		t.Setenv("SPROUT_TASK_DEADLINE", "")
-
-		undo := stopBackgroundSessionsAtRunEnd(nil)
-		if stopBackgroundProcesses != nil {
-			t.Fatalf("a run without a deadline must not stop background sessions")
-		}
-		undo()
-	})
+// A run without a background process manager has nothing to stop.
+func TestTaskRunWithoutStopper(t *testing.T) {
+	t.Setenv("SPROUT_TASK_DEADLINE", strconv.FormatInt(time.Now().Add(time.Hour).Unix(), 10))
+	startTaskRun(&recordingSteerer{}, backgroundStopper(nil), time.Now())()
 }
 
 func TestHasTaskDeadline(t *testing.T) {
@@ -119,32 +106,32 @@ func TestHasTaskDeadline(t *testing.T) {
 	}
 }
 
-// A handoff run's note and its background cleanup happen together: the hook
-// fires while the note is already on disk, so the next run finds both.
+// Stopping background sessions at the run's end leaves the handoff note in
+// place, so the next run finds it.
 func TestHandoffNoteSurvivesBackgroundStop(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	if err := os.MkdirAll(filepath.Join(dir, ".sprout"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	t.Setenv("SPROUT_TASK_DEADLINE", strconv.FormatInt(time.Now().Add(time.Hour).Unix(), 10))
 	notePath := filepath.Join(dir, handoffNotePath)
-	if err := os.WriteFile(notePath, []byte("Left: build.\nNext: run it.\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
 
 	deadlineWarned.Store(true)
 	t.Cleanup(func() { deadlineWarned.Store(false) })
 
-	previous := stopBackgroundProcesses
 	var noteAtStop string
-	stopBackgroundProcesses = func() {
+	stop := func() {
 		if b, err := os.ReadFile(notePath); err == nil {
 			noteAtStop = string(b)
 		}
 	}
-	t.Cleanup(func() { stopBackgroundProcesses = previous })
-
-	stopBackgroundSessionsIfSet()
+	end := startTaskRun(&recordingSteerer{}, stop, time.Now())
+	// The agent writes its note before the run ends.
+	if err := os.WriteFile(notePath, []byte("Left: build.\nNext: run it.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	end()
 	if noteAtStop == "" {
 		t.Fatal("background stop ran while the handoff note was missing")
 	}

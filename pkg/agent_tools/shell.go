@@ -68,13 +68,15 @@ func ExecuteShellCommandWithSafety(ctx context.Context, command string, interact
 			// Fall through to os/exec on failure — don't break agent execution
 			log.Printf("debug: PTY session creation failed for chat %q, falling back to os/exec: %v", chatID, err)
 		} else {
-			// Execute via hidden PTY
+			// Execute via hidden PTY. The deadline is read before the
+			// command runs: once it has passed, none is left to report.
+			deadline := shellToolDeadline(ctx)
 			output, exitCode, err := tm.ExecuteCommandInHidden(ctx, hiddenSessionID, command)
 			if err != nil {
 				// Check if the command was promoted to background due to timeout
 				if strings.HasPrefix(err.Error(), "COMMAND_PROMOTED_TO_BACKGROUND:") {
 					bgSessionID := strings.TrimPrefix(err.Error(), "COMMAND_PROMOTED_TO_BACKGROUND:")
-					msg := formatBackgroundPromotionMessage(bgSessionID, command, shellToolDeadline(ctx), output)
+					msg := formatBackgroundPromotionMessage(bgSessionID, command, deadline, output)
 					return msg, nil
 				}
 				// Fall through to os/exec on other PTY errors
@@ -373,9 +375,10 @@ func ParsePromotedBackgroundSession(output string) (string, bool) {
 	return m[1], true
 }
 
-// shellToolDeadline returns the deadline length that applies to a foreground
-// shell command, for a message that has to state it. A context without a
-// deadline (the run is bounded by the user, not a timer) reports 0.
+// shellToolDeadline returns how long a foreground shell command may run
+// before it is moved to the background, for a message that states it. Call
+// it before the command runs. A context without a deadline (the run is
+// bounded by the user, not a timer) reports 0.
 func shellToolDeadline(ctx context.Context) time.Duration {
 	deadline, ok := ctx.Deadline()
 	if !ok {
@@ -384,22 +387,21 @@ func shellToolDeadline(ctx context.Context) time.Duration {
 	return time.Until(deadline)
 }
 
-// formatDeadline renders a tool deadline for a message: a whole number of
-// seconds with its unit, or "no fixed deadline" when there is none.
-func formatDeadline(d time.Duration) string {
+// deadlineClause is a tool deadline as a parenthetical for a message
+// (" (5 minutes)"), or "" when there is none to state.
+func deadlineClause(d time.Duration) string {
 	if d <= 0 {
-		return "no fixed deadline"
+		return ""
 	}
-	return formatSessionElapsed(d)
+	return " (" + formatSessionElapsed(d) + ")"
 }
 
 // formatBackgroundPromotionMessage creates the message for a command that hit
 // its tool deadline and was promoted to a background session. deadline is the
 // tool deadline that applied (0 when the context carried none), stated as it
-// really was rather than assumed. The message tells the agent to wait for
-// the session instead of running the command again: the region of the machine
-// this tool runs on is small, and a second copy is what makes it stop
-// answering.
+// was rather than assumed. The message tells the agent to wait for the
+// session instead of running the command again: on a small machine, a second
+// copy of a heavy command can starve it until nothing else runs.
 func formatBackgroundPromotionMessage(sessionID, command string, deadline time.Duration, accumulatedOutput string) string {
 	// Truncate accumulated output preview. Note: this is a SUBSET of the
 	// command's full output. Output past this point lives only in the
@@ -412,23 +414,21 @@ func formatBackgroundPromotionMessage(sessionID, command string, deadline time.D
 		previewTruncated = true
 	}
 
-	deadlineText := formatDeadline(deadline)
-	caveat := fmt.Sprintf("IMPORTANT: the output above is partial — only what arrived before the %s tool deadline. The command kept running.", deadlineText)
+	caveat := "IMPORTANT: the output above is partial — only what arrived before the deadline. The command kept running."
 	if previewTruncated {
-		caveat = fmt.Sprintf("IMPORTANT: the output above is doubly partial — only what arrived before the %s tool deadline, AND only the first ~2KB of that. The command kept running.", deadlineText)
+		caveat = "IMPORTANT: the output above is doubly partial — only what arrived before the deadline, AND only the first ~2KB of that. The command kept running."
 	}
 
 	return fmt.Sprintf(
-		"Command exceeded the %s tool deadline. It is still running in background session %s.\n\n"+
+		"Command ran past its tool deadline%s and is still running in background session %s.\n\n"+
 			"Command: %s\n\n"+
 			"Output so far (partial):\n%s\n\n"+
 			"%s\n\n"+
-			"Do NOT run this command again — it is still running, and a second copy competes with it for the machine. Wait for it:\n"+
-			"- Wait for it (blocks up to 10 minutes, returns as soon as it finishes): shell_command check_background=\"%s\" wait_seconds=600\n"+
+			"Do not run this command again: it is still running, and a second copy would compete with it for the machine.\n"+
+			"- Wait for it to finish (blocks up to 10 minutes, returns as soon as it ends): shell_command check_background=\"%s\" wait_seconds=600\n"+
 			"- Read its output so far: shell_command check_background=\"%s\"\n"+
-			"- Stop it first if you want to change approach: shell_command stop_background=\"%s\"\n"+
-			"Background sessions are kept for up to 2 hours of inactivity. Wait and poll, "+
-			"or stop the command if you want to try a different approach.",
-		deadlineText, sessionID, command, preview, caveat, sessionID, sessionID, sessionID,
+			"- Stop it, to try a different approach: shell_command stop_background=\"%s\"\n"+
+			"Background sessions are kept for up to 2 hours of inactivity.",
+		deadlineClause(deadline), sessionID, command, preview, caveat, sessionID, sessionID, sessionID,
 	)
 }

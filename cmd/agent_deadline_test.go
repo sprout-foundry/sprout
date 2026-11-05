@@ -32,7 +32,7 @@ func TestDeadlineWarningFiresBeforeTheDeadline(t *testing.T) {
 	// A deadline 2m+50ms away: the warning is due in 50ms.
 	t.Setenv("SPROUT_TASK_DEADLINE", strconv.FormatInt(now.Add(deadlineWarnBefore+50*time.Millisecond).Unix()+1, 10))
 	r := &recordingSteerer{}
-	stop := startDeadlineWarning(r, now)
+	stop := startDeadlineWarning(r, now, nil)
 	defer stop()
 	deadline := time.Now().Add(3 * time.Second)
 	for r.count() == 0 && time.Now().Before(deadline) {
@@ -47,7 +47,7 @@ func TestDeadlineWarningNeedsADeadline(t *testing.T) {
 	r := &recordingSteerer{}
 	for _, v := range []string{"", "soon", strconv.FormatInt(time.Now().Add(time.Minute).Unix(), 10)} {
 		t.Setenv("SPROUT_TASK_DEADLINE", v)
-		stop := startDeadlineWarning(r, time.Now())
+		stop := startDeadlineWarning(r, time.Now(), nil)
 		stop()
 	}
 	time.Sleep(50 * time.Millisecond)
@@ -75,7 +75,7 @@ func TestHandoffNote(t *testing.T) {
 
 	write("stale note from an earlier run")
 	t.Setenv("SPROUT_TASK_DEADLINE", strconv.FormatInt(time.Now().Add(time.Hour).Unix(), 10))
-	stop := startDeadlineWarning(&recordingSteerer{}, time.Now())
+	stop := startDeadlineWarning(&recordingSteerer{}, time.Now(), nil)
 	stop()
 	if _, err := os.Stat(filepath.Join(dir, handoffNotePath)); !os.IsNotExist(err) {
 		t.Fatalf("an earlier run's note must be removed: %v", err)

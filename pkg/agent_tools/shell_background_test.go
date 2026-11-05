@@ -16,34 +16,34 @@ import (
 func TestFormatBackgroundPromotionMessage_Basic(t *testing.T) {
 	result := formatBackgroundPromotionMessage("session-123", "make build", 2*time.Minute, "Building...")
 
-	assert.Contains(t, result, "exceeded the 2 minutes tool deadline")
+	assert.Contains(t, result, "ran past its tool deadline (2 minutes)")
 	assert.Contains(t, result, "still running in background session session-123")
 	assert.Contains(t, result, "Command: make build")
 	assert.Contains(t, result, "Output so far (partial):")
 	assert.Contains(t, result, "Building...")
 	assert.Contains(t, result, "IMPORTANT: the output above is partial")
-	assert.Contains(t, result, "Do NOT run this command again")
+	assert.Contains(t, result, "Do not run this command again")
 	assert.Contains(t, result, "check_background=\"session-123\"")
 	assert.Contains(t, result, "stop_background=\"session-123\"")
 }
 
-// formatDeadline states the deadline as it applied, with singular units.
-func TestFormatDeadline(t *testing.T) {
+// deadlineClause states the deadline as it applied, with singular units, and
+// nothing when there was none.
+func TestDeadlineClause(t *testing.T) {
 	tests := []struct {
 		name     string
 		deadline time.Duration
 		want     string
 	}{
-		{"no deadline", 0, "no fixed deadline"},
-		{"negative", -time.Second, "no fixed deadline"},
-		{"one second", time.Second, "1 second"},
-		{"two minutes", 2 * time.Minute, "2 minutes"},
-		{"five minutes", 5 * time.Minute, "5 minutes"},
-		{"three hundred seconds", 300 * time.Second, "5 minutes"},
+		{"no deadline", 0, ""},
+		{"negative", -time.Second, ""},
+		{"one second", time.Second, " (1 second)"},
+		{"two minutes", 2 * time.Minute, " (2 minutes)"},
+		{"three hundred seconds", 300 * time.Second, " (5 minutes)"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, formatDeadline(tt.deadline))
+			assert.Equal(t, tt.want, deadlineClause(tt.deadline))
 		})
 	}
 }
@@ -58,13 +58,13 @@ func TestShellToolDeadline(t *testing.T) {
 		got := shellToolDeadline(ctx)
 		assert.Greater(t, got, 4*time.Minute)
 		assert.LessOrEqual(t, got, 5*time.Minute)
-		assert.Equal(t, "5 minutes", formatDeadline(got.Round(time.Minute)))
+		assert.Equal(t, " (5 minutes)", deadlineClause(got.Round(time.Minute)))
 	})
 
 	t.Run("without deadline", func(t *testing.T) {
 		assert.Equal(t, time.Duration(0), shellToolDeadline(context.Background()))
 		assert.Contains(t, formatBackgroundPromotionMessage("s1", "make", shellToolDeadline(context.Background()), "out"),
-			"no fixed deadline tool deadline")
+			"Command ran past its tool deadline and is still running in background session s1.")
 	})
 }
 

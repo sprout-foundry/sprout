@@ -17,7 +17,7 @@
   },
   "chutes": {
     "source": "https://llm.chutes.ai/v1/models",
-    "last_verified": "2026-11-04",
+    "last_verified": "2026-11-05",
     "models": [
       {
         "id": "Nemotron-3-Nano-Omni-30B-TEE",
@@ -144,12 +144,18 @@
         "input_per_mtok": 1.225,
         "output_per_mtok": 3.85,
         "cached_per_mtok": 0.245
+      },
+      {
+        "id": "tencent/Hy4",
+        "input_per_mtok": 0.525,
+        "output_per_mtok": 1.5625,
+        "cached_per_mtok": 0.025
       }
     ]
   },
   "deepinfra": {
     "source": "https://api.deepinfra.com/v1/models",
-    "last_verified": "2026-11-04",
+    "last_verified": "2026-11-05",
     "models": [
       {
         "id": "ByteDance/Seed-1.8",
@@ -681,12 +687,18 @@
         "input_per_mtok": 0.2,
         "output_per_mtok": 0.6,
         "cached_per_mtok": 0.006
+      },
+      {
+        "id": "moonshotai/Kimi-K3.1-Pro",
+        "input_per_mtok": 2,
+        "output_per_mtok": 10,
+        "cached_per_mtok": 0.2
       }
     ]
   },
   "deepseek": {
     "source": "https://api-docs.deepseek.com/quick_start/pricing",
-    "last_verified": "2026-11-04",
+    "last_verified": "2026-11-05",
     "models": [
       {
         "id": "deepseek-v4-flash",
@@ -746,7 +758,7 @@
   },
   "minimax": {
     "source": "https://platform.minimax.io/docs/guides/pricing-paygo",
-    "last_verified": "2026-11-04",
+    "last_verified": "2026-11-05",
     "models": [
       {
         "id": "MiniMax-M2",
@@ -824,7 +836,7 @@
   },
   "mistral": {
     "source": "https://docs.mistral.ai/inference/pricing",
-    "last_verified": "2026-11-04",
+    "last_verified": "2026-11-05",
     "models": [
       {
         "id": "mistral-large-latest",
@@ -1008,7 +1020,7 @@
   },
   "ollama-cloud": {
     "source": "https://ollama.com/pricing",
-    "last_verified": "2026-11-04",
+    "last_verified": "2026-11-05",
     "models": [
       {
         "id": "deepseek-v4-flash",
@@ -1197,6 +1209,12 @@
         "input_per_mtok": 0.435,
         "output_per_mtok": 0.87,
         "cached_per_mtok": 0.0036
+      },
+      {
+        "id": "kimi-k3.1-pro",
+        "input_per_mtok": 2,
+        "output_per_mtok": 10,
+        "cached_per_mtok": 0.2
       }
     ]
   },
@@ -1766,7 +1784,7 @@
   },
   "openrouter": {
     "source": "https://openrouter.ai/api/v1/models",
-    "last_verified": "2026-11-04",
+    "last_verified": "2026-11-05",
     "models": [
       {
         "id": "ai21/jamba-large-1.7",
@@ -5002,12 +5020,39 @@
         "input_per_mtok": 1.6,
         "output_per_mtok": 4.8,
         "cached_per_mtok": 0.4
+      },
+      {
+        "id": "google/gemini-omni-1.1-flash",
+        "input_per_mtok": 1.5,
+        "output_per_mtok": 9
+      },
+      {
+        "id": "google/gemini-omni-1.2-flash",
+        "input_per_mtok": 1.5,
+        "output_per_mtok": 9
+      },
+      {
+        "id": "inclusionai/ling-3.0-tiny",
+        "input_per_mtok": 0.015,
+        "output_per_mtok": 0.045,
+        "cached_per_mtok": 0.003
+      },
+      {
+        "id": "openrouter/auto-code",
+        "input_per_mtok": 0,
+        "output_per_mtok": 0
+      },
+      {
+        "id": "ricursiveai/ripple-65b-preview",
+        "input_per_mtok": 0.2,
+        "output_per_mtok": 0.6,
+        "cached_per_mtok": 0.05
       }
     ]
   },
   "zai": {
     "source": "https://docs.z.ai/guides/overview/pricing",
-    "last_verified": "2026-11-04",
+    "last_verified": "2026-11-05",
     "models": [
       {
         "id": "glm-4.5v",
@@ -5143,7 +5188,7 @@
   },
   "zai-coding": {
     "source": "https://docs.z.ai/guides/overview/pricing",
-    "last_verified": "2026-11-04",
+    "last_verified": "2026-11-05",
     "models": [
       {
         "id": "glm-4.5",

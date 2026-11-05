@@ -7935,6 +7935,69 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "context_length": 131072,
+        "description": "Gemini Omni 1.1 Flash is Google's native multimodal video generation and editing model, the generally available successor to Gemini Omni Flash Preview. It is suited for text-to-video, image-to-video, first and...",
+        "id": "google/gemini-omni-1.1-flash",
+        "input_cost": 1.5,
+        "name": "Google: Gemini Omni 1.1 Flash",
+        "output_cost": 9,
+        "tags": [
+          "vision",
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 131072,
+        "description": "Gemini Omni 1.2 Flash is Google's native multimodal video generation and editing model, the successor to Gemini Omni 1.1 Flash. It generates clips up to 15 seconds long with native...",
+        "id": "google/gemini-omni-1.2-flash",
+        "input_cost": 1.5,
+        "name": "Google: Gemini Omni 1.2 Flash",
+        "output_cost": 9,
+        "tags": [
+          "vision",
+          "reasoning"
+        ]
+      },
+      {
+        "cached_input_cost": 0.003,
+        "context_length": 262144,
+        "description": "Ling 3.0 Tiny is a mixture-of-experts model from InclusionAI, with 1.3B active parameters out of 7.9B total. It is designed for responsive agents, instruction following, and multi-turn conversations, with switchable...",
+        "id": "inclusionai/ling-3.0-tiny",
+        "input_cost": 0.015,
+        "name": "inclusionAI: Ling 3.0 Tiny",
+        "output_cost": 0.045,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 2000000,
+        "description": "Auto Code is OpenRouter’s router built specifically for coding agents and harnesses. It uses the same routing engine as the [Auto Router](https://openrouter.ai/openrouter/auto), with every request treated as part of an...",
+        "id": "openrouter/auto-code",
+        "name": "Auto Code",
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.05,
+        "context_length": 1048576,
+        "description": "Ripple-65B-Preview by ricursiveAI, a 65B model with native tool calling, served in BF16.",
+        "id": "ricursiveai/ripple-65b-preview",
+        "input_cost": 0.2,
+        "name": "ricursiveAI/Ripple-65B-Preview",
+        "output_cost": 0.6,
+        "tags": [
+          "tools",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

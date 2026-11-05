@@ -8,6 +8,15 @@ import { notificationBus } from './notificationBus';
 type TerminalEventCallback = (event: WsEvent) => void;
 
 /**
+ * Frame types excluded from the `sprout:wsevent` DOM bridge. `output` frames
+ * arrive once per PTY chunk — hundreds a second during a build — and every
+ * DOM-bridge consumer filters down to lifecycle frames, so dispatching them
+ * was one CustomEvent allocation + dispatch per chunk on the main thread.
+ * Same policy as the events socket's DOM_BRIDGE_SUPPRESSED_TYPES.
+ */
+const DOM_BRIDGE_SUPPRESSED_TYPES: ReadonlySet<string> = new Set(['output', 'error_output']);
+
+/**
  * The PTY WebSocket URL, most specific first: an explicit build-time
  * VITE_TERMINAL_WS_URL; then `/terminal` under the active backend's base (a
  * daemon backend's own base when the host named one, else the host transport's
@@ -338,9 +347,11 @@ class TerminalWebSocketService {
     if (this.eventHandler) {
       this.eventHandler(event);
     }
-    // Bridge terminal-WS frames (output, pty_exit, session_created, ...) onto
+    // Bridge terminal-WS frames (pty_exit, session_created, ...) onto
     // the DOM so decoupled components (BackgroundTasks badge,
-    // attachable-session lists) can refresh without polling.
+    // attachable-session lists) can refresh without polling. Output frames
+    // are suppressed — see DOM_BRIDGE_SUPPRESSED_TYPES.
+    if (DOM_BRIDGE_SUPPRESSED_TYPES.has(event.type)) return;
     try {
       window.dispatchEvent(new CustomEvent('sprout:wsevent', { detail: event }));
     } catch {

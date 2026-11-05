@@ -90,12 +90,22 @@ const toolPillAria = (
 };
 
 const MessageSegments: React.FC<MessageSegmentsProps> = ({ content, toolRefs = [], onToolClick, onToolRefClick, getToolStatus, activeToolDetailId }) => {
-  let segments: MessageSegment[];
-  try {
-    segments = parseMessageSegments(stripAnsiCodes(content));
-  } catch {
+  // Parsing is a full-text pass over the message. The streaming message's
+  // content changes on every flush (~20/s), so without the memo the same text
+  // was scanned again on every render — and MessageContent then parses the
+  // text segments it produces.
+  const parsed = React.useMemo(() => {
+    try {
+      return { ok: true as const, segments: parseMessageSegments(stripAnsiCodes(content)) };
+    } catch {
+      return { ok: false as const };
+    }
+  }, [content]);
+
+  if (!parsed.ok) {
     return <MessageContent content={content} />;
   }
+  const segments: MessageSegment[] = parsed.segments;
 
   const unclaimedRefs = [...toolRefs];
 

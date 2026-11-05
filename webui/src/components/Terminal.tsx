@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import './Terminal.css';
 import { createPortal } from 'react-dom';
 import { usePersistedNumber } from '../hooks/usePersistedPref';
@@ -201,4 +201,4 @@ function Terminal({
   );
 }
 
-export default Terminal;
+export default memo(Terminal);

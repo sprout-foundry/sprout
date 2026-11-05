@@ -66,6 +66,30 @@ import { chatTranscriptToMessages } from '../utils/chatTranscript';
 const RECONNECT_STATUS_ATTEMPTS = 5;
 const RECONNECT_STATUS_BASE_DELAY_MS = 500;
 
+/**
+ * Event types safe to coalesce into one dispatch per window.
+ *
+ * `subagent_activity` arrives once per line of subagent output (the server
+ * publishes per line — see pkg/agent/subagent_task.go), so routing each one
+ * individually meant a whole-app render per line while a subagent worked.
+ * `query_progress` and `metrics_update` replace a single field (last wins);
+ * `agent_message` only appends. None of them feed a decision another event
+ * makes within the window, so batching them changes no outcome.
+ *
+ * Deliberately NOT coalesced: `stream_chunk` (already buffered, and the
+ * completion heuristics compare against it) and `tool_start`/`tool_end`
+ * (their marker insertion depends on how much text has streamed so far).
+ */
+const COALESCED_EVENT_TYPES: ReadonlySet<string> = new Set([
+  'subagent_activity',
+  'query_progress',
+  'agent_message',
+  'metrics_update',
+]);
+
+/** Coalescing window — matches the stream-chunk flush cadence (~20/s). */
+const COALESCE_WINDOW_MS = 48;
+
 // ── Hook Interface ───────────────────────────────────────────────────────
 
 export interface UseWebSocketEventHandlerRefs {
@@ -143,8 +167,62 @@ export function useWebSocketEventHandler({
     return () => streamFlusher.discard();
   }, [streamFlusher]);
 
+  // Coalescing state for high-frequency event types (see
+  // COALESCED_EVENT_TYPES). A burst is dispatched in one synchronous loop, so
+  // React batches it into a single render.
+  const coalesceQueueRef = useRef<WsEvent[]>([]);
+  const coalesceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastCoalescedFlushRef = useRef(0);
+  /** Chat the pending batch arrived for; undefined when the queue is empty. */
+  const coalesceBatchChatIdRef = useRef<string | null | undefined>(undefined);
+  /** Cleared on unmount so a timer that already fired cannot write state. */
+  const disposedRef = useRef(false);
+  // The latest handleEvent, so the flush timer (created once) routes through
+  // the current closure instead of a stale one.
+  const handleEventRef = useRef<(event: WsEvent, immediate?: boolean) => void>(() => undefined);
+
+  const flushCoalesced = useCallback(() => {
+    if (disposedRef.current) return;
+    if (coalesceTimerRef.current !== null) {
+      clearTimeout(coalesceTimerRef.current);
+      coalesceTimerRef.current = null;
+    }
+    const queued = coalesceQueueRef.current;
+    coalesceQueueRef.current = [];
+    const batchChatId = coalesceBatchChatIdRef.current;
+    coalesceBatchChatIdRef.current = undefined;
+    lastCoalescedFlushRef.current = Date.now();
+    // The user switched chats while this batch waited. Events for a chat that
+    // was already in the background never reach this queue (the per-chat
+    // filter routes them into its cache first), so this covers the narrow
+    // mid-window switch only: routing the batch now would apply the previous
+    // chat's events to whatever is on screen. Drop it — the switch path
+    // fetches that chat's authoritative transcript, the same recovery the
+    // stream-chunk buffer relies on.
+    if (batchChatId !== undefined && activeChatIdRef.current !== batchChatId) return;
+    for (const queuedEvent of queued) {
+      handleEventRef.current(queuedEvent, true);
+    }
+  }, [activeChatIdRef]);
+
+  useEffect(() => {
+    disposedRef.current = false;
+    return () => {
+      // Same policy as the stream buffer: a batch still in flight is dropped
+      // rather than flushed into an unmounted tree (the write would be lost,
+      // and the transcript fetch on remount is authoritative).
+      disposedRef.current = true;
+      if (coalesceTimerRef.current !== null) {
+        clearTimeout(coalesceTimerRef.current);
+        coalesceTimerRef.current = null;
+      }
+      coalesceQueueRef.current = [];
+      coalesceBatchChatIdRef.current = undefined;
+    };
+  }, []);
+
   const handleEvent = useCallback(
-    (event: WsEvent) => {
+    (event: WsEvent, immediate = false) => {
       const filteredEvents = ['liveReload', 'reconnect', 'overlay', 'hash', 'ok', 'hot', 'ping'];
       if (filteredEvents.includes(event.type)) return;
 
@@ -335,6 +413,35 @@ export function useWebSocketEventHandler({
         setState((prev) => (prev.isProcessing ? {} : { isProcessing: true }));
       }
 
+      // Coalesce the firehose types (see COALESCED_EVENT_TYPES). The first
+      // event of a window routes immediately — the UI never waits to start
+      // showing output — and everything arriving inside the window rides one
+      // dispatch when it closes. A non-coalesced event drains the backlog
+      // first so nothing is reordered behind it.
+      if (!immediate) {
+        if (COALESCED_EVENT_TYPES.has(event.type)) {
+          const now = Date.now();
+          const windowElapsed = now - lastCoalescedFlushRef.current >= COALESCE_WINDOW_MS;
+          if (coalesceQueueRef.current.length > 0 || !windowElapsed) {
+            if (coalesceQueueRef.current.length === 0) {
+              coalesceBatchChatIdRef.current = activeChatIdRef.current;
+            }
+            coalesceQueueRef.current.push(event);
+            if (coalesceTimerRef.current === null) {
+              const delay = Math.max(0, COALESCE_WINDOW_MS - (now - lastCoalescedFlushRef.current));
+              coalesceTimerRef.current = setTimeout(() => {
+                coalesceTimerRef.current = null;
+                flushCoalesced();
+              }, delay);
+            }
+            return;
+          }
+          lastCoalescedFlushRef.current = now;
+        } else if (coalesceQueueRef.current.length > 0) {
+          flushCoalesced();
+        }
+      }
+
       // Flush buffered stream chunks BEFORE any other event routes. The
       // completion heuristics in query_completed compare streamed text
       // against the server's final response — they only work if the
@@ -453,8 +560,10 @@ export function useWebSocketEventHandler({
       pendingProviderRef,
       streamFlusher,
       isProcessingNow,
+      flushCoalesced,
     ],
   );
+  handleEventRef.current = handleEvent;
 
   // Reconnect sync. The running flag comes from the per-chat query status
   // (or, for an in-page agent, the page's own run registry), retried with

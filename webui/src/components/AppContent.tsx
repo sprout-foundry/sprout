@@ -13,6 +13,7 @@ import { useFileHandler } from '../hooks/useFileHandler';
 import { useGitWorkspace } from '../hooks/useGitWorkspace';
 import { buildGitPanelProps } from './git/gitPanelProps';
 import { useHotkeysConfig } from '../hooks/useHotkeysConfig';
+import { useShallowStable } from '../hooks/useShallowStable';
 import { useInstances } from '../hooks/useInstances';
 import { type SectionTab } from '../hooks/useSidebarState';
 import { useSwipeGesture } from '../hooks/useSwipeGesture';
@@ -906,6 +907,83 @@ const AppContent: React.FC<AppContentProps> = ({
     [workspaceRoot, workspaceInfo.workspace_root],
   );
 
+  // ── Sidebar props ────────────────────────────────────────────────
+  // The Sidebar (and the file tree inside it) is memoized, but it was being
+  // handed freshly-built object literals and closures on every render, so the
+  // memo never matched. The app root re-renders on every chat stream flush
+  // (~20/s), which dragged the whole sidebar — and the file tree — along with
+  // it. Stable callbacks + a shallow-stable object keep that subtree out of
+  // the streaming path.
+  const chatSessionList = useMemo(() => chatSessions ?? [], [chatSessions]);
+
+  const isChatWorking = useCallback(
+    (id: string) => (id === activeChatId ? state.isProcessing : !!perChatCache?.[id]?.isProcessing),
+    [activeChatId, state.isProcessing, perChatCache],
+  );
+  const handleConversationSelect = useCallback((id: string) => openConversation(id), [openConversation]);
+  const handleConversationDelete = useMemo(
+    () => (onDeleteChat ? (id: string) => void onDeleteChat(id) : undefined),
+    [onDeleteChat],
+  );
+  const canDeleteConversation = useCallback((id: string) => id !== 'default', []);
+  const handleConversationClear = useCallback((id: string) => void clearConversation(id), [clearConversation]);
+  const handleConversationOpen = useCallback(
+    () => (activeChatId ? openConversation(activeChatId) : handlePrimaryViewChange('chat')),
+    [activeChatId, openConversation, handlePrimaryViewChange],
+  );
+  const handleConversationCreate = useMemo(
+    () =>
+      onCreateChat
+        ? () => {
+            void (async () => {
+              const id = await onCreateChat('code');
+              if (id) openConversation(id, 'New Chat');
+            })();
+          }
+        : undefined,
+    [onCreateChat, openConversation],
+  );
+  const conversationHistory = useMemo(
+    () =>
+      isLayeredLayout ? (
+        <ChatHistorySwitcher
+          chatId={activeChatId ?? undefined}
+          onRestoreSession={handleSessionSearchRestore}
+          iconOnly
+        />
+      ) : undefined,
+    [activeChatId, handleSessionSearchRestore],
+  );
+  const conversations = useShallowStable({
+    // The mode's own lane, like its chat tabs (SP-142).
+    sessions: chatSessionList,
+    activeId: activeChatId,
+    // The chat list is only refetched on switch, so its
+    // active_query goes stale; the per-chat UI state is live.
+    isWorking: isChatWorking,
+    inMain: showContextSidebar,
+    onSelect: handleConversationSelect,
+    onRename: onRenameChat,
+    onDelete: handleConversationDelete,
+    // The daemon keeps its built-in chat; hosted chats can all go.
+    canDelete: canDeleteConversation,
+    // The kept chat can still be emptied.
+    onClear: handleConversationClear,
+    history: conversationHistory,
+    onOpen: handleConversationOpen,
+    onCreate: handleConversationCreate,
+  });
+
+  // `useGitWorkspace` returns a fresh object each render, so mapping it inline
+  // rebuilt the panel props every time. The values inside are what matter —
+  // rebuild them each render (no stale closures) and keep the identity only
+  // when they are unchanged.
+  const gitPanel = useShallowStable(
+    buildGitPanelProps(gitWorkspace, { openWorkspaceBuffer, onOpenFile: handleFileClick }),
+  );
+
+  const handleModeSectionChange = useCallback((id: string) => setDesignSection(id as DesignTab), [setDesignSection]);
+
   return (
     <div className="app">
       {/* SP-130: blocking home-workspace gate. Renders as a full-screen
@@ -942,44 +1020,13 @@ const AppContent: React.FC<AppContentProps> = ({
             isMobile={isMobile}
             sidebarCollapsed={sidebarCollapsed}
             onSidebarToggle={onSidebarToggle}
-            conversations={{
-              // The mode's own lane, like its chat tabs (SP-142).
-              sessions: chatSessions ?? [],
-              activeId: activeChatId,
-              // The chat list is only refetched on switch, so its
-              // active_query goes stale; the per-chat UI state is live.
-              isWorking: (id) => (id === activeChatId ? state.isProcessing : !!perChatCache?.[id]?.isProcessing),
-              inMain: showContextSidebar,
-              onSelect: (id) => openConversation(id),
-              onRename: onRenameChat,
-              onDelete: onDeleteChat ? (id) => void onDeleteChat(id) : undefined,
-              // The daemon keeps its built-in chat; hosted chats can all go.
-              canDelete: (id) => id !== 'default',
-              // The kept chat can still be emptied.
-              onClear: (id) => void clearConversation(id),
-              history: isLayeredLayout ? (
-                <ChatHistorySwitcher
-                  chatId={activeChatId ?? undefined}
-                  onRestoreSession={handleSessionSearchRestore}
-                  iconOnly
-                />
-              ) : undefined,
-              onOpen: () => (activeChatId ? openConversation(activeChatId) : handlePrimaryViewChange('chat')),
-              onCreate: onCreateChat
-                ? () => {
-                    void (async () => {
-                      const id = await onCreateChat('code');
-                      if (id) openConversation(id, 'New Chat');
-                    })();
-                  }
-                : undefined,
-            }}
+            conversations={conversations}
             modes={workspaceModes}
             activeModeId={workspaceMode.id}
             onSelectMode={handleSelectMode}
             modeRail={workspaceMode.id === 'design' ? DesignRail : undefined}
             modeSection={designSection}
-            onModeSectionChange={(id) => setDesignSection(id as DesignTab)}
+            onModeSectionChange={handleModeSectionChange}
             selectedSection={selectedSection}
             onSectionChange={onSectionChange}
             sidebarWidth={sidebarWidth}
@@ -988,7 +1035,7 @@ const AppContent: React.FC<AppContentProps> = ({
             onSidebarWidthPersist={onSidebarWidthPersist}
             onSidebarWidthReset={onSidebarWidthReset}
             onProviderChange={onProviderChange}
-            gitPanel={buildGitPanelProps(gitWorkspace, { openWorkspaceBuffer, onOpenFile: handleFileClick })}
+            gitPanel={gitPanel}
           />
         </ErrorBoundary>
         <SproutWorkspace

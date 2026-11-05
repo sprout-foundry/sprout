@@ -22,6 +22,11 @@ func runDirectMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events
 	// A host that bounds the run (a task VM) passes its deadline; the agent
 	// is told to wrap up shortly before it rather than being cut off mid-work.
 	defer startDeadlineWarning(chatAgent, time.Now())()
+	// On such a run, background sessions are stopped at the handoff and again
+	// here when the run ends, so the machine is quiet for the next run.
+	// Deferred in this order so the stop runs before the hook is disarmed.
+	defer stopBackgroundSessionsIfSet()
+	defer stopBackgroundSessionsAtRunEnd(chatAgent)()
 
 	// Slash/bang commands should bypass command-detection fast paths.
 	registry := agent_commands.DefaultRegistry()

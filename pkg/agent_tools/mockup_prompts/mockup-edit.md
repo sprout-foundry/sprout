@@ -1,4 +1,4 @@
-charter-version: mockup-edit/v1
+charter-version: mockup-edit/v2
 
 # Mockup edit charter
 
@@ -21,4 +21,8 @@ the text that replaces it
   unique. Never repeat the whole document.
 - To add something, FIND the text just before where it goes and replace it
   with that same text followed by the new part.
-- Load nothing from anywhere; keep the change in the mockup's own style.
+- The mockup is built with the design kit (its catalogue is below), which
+  is added to the document for you: use the kit's classes for anything you
+  add, keep the kit and palette named on `<html>` unless the change is to
+  them, and load nothing from anywhere. Keep the change in the mockup's own
+  style.

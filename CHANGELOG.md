@@ -4,6 +4,7 @@ All notable changes to Sprout will be documented in this file.
 
 ## [Unreleased]
 
+- fix(runner): `sprout runner link` with no `--platform` now defaults to the hosted platform at https://app.sproutfoundry.com instead of refusing with "which platform?". The flag still wins, then `SPROUT_PLATFORM_URL`, then the platform an earlier link used — so a self-hosted backend keeps working after the first link. `runner status` names the default when the machine is not linked.
 - fix(agent): the repeat guard's runaway-clause refusal now checks only a shell command's text. It scanned every tool call's arguments, so code written or edited through a file tool (which repeats clauses like `p.w / 2` as a matter of course) was "refused" after the write had already happened; the model, told its write failed, rewrote and restructured working code to get past the guard. The refusal also says the command ran.
 - fix(git): sprout's runtime files in a workspace's `.sprout/` (its log, `workspace.log` and its rotations, and the web UI's `webui_host.json`) are added to the repository's local `.git/info/exclude` when sprout starts in it, so `git add -A` and the agent's commits leave them out. They used to be committed with the agent's work, adding a log and a pid record to the person's repository. Nothing the repository tracks changes.
 - fix(workspace): when a composed workspace's agent moves from the in-browser shell to a workspace daemon in place, the docked terminal starts over on the daemon's PTY instead of keeping its sessions on the in-browser shell until a reload.

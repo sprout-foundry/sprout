@@ -196,6 +196,17 @@ func runShellCommandAdoptable(ctx context.Context, command string, bpm *Backgrou
 		cmd.Dir = wd
 	}
 
+	deadline := shellToolDeadline(ctx)
+
+	// Refuse a second copy of a command that is still running here (usually
+	// the first copy of this very command, promoted when it hit its
+	// deadline and still building). Starting it again is what turns a busy
+	// machine into an unresponsive one. The tool result is the message, not
+	// an error: nothing failed, and the agent has a running session to wait on.
+	if sessionID, elapsed, busy := bpm.RunningSessionMatching(command, cmd.Dir); busy {
+		return duplicateCommandMessage(sessionID, elapsed), nil
+	}
+
 	// Set process group so we can kill the entire group on stop
 	setProcessGroup(cmd)
 
@@ -291,7 +302,7 @@ func runShellCommandAdoptable(ctx context.Context, command string, bpm *Backgrou
 				// They'll exit eventually when the BPM terminates the
 				// process. The outputBuf snapshot we have is sufficient
 				// for the promotion message.
-				return formatBackgroundPromotionMessage(sessionID, command, outputBuf.String()), nil
+				return formatBackgroundPromotionMessage(sessionID, command, deadline, outputBuf.String()), nil
 			}
 			// Adoption failed — close our handle and clean up
 			_ = cmd.Process.Kill()

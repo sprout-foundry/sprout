@@ -28,6 +28,7 @@ Guidance for AI agents working in this repository.
 - Pre-push: `git fetch origin` → `git log HEAD..FETCH_HEAD` → merge if non-empty → `make build-all` → push.
 - Commit messages are shell-safe (temp file, not `-m`).
 - **AI assistance is a trailer, never a co-author**: an AI-assisted commit carries exactly one `Assisted-by: <tool>[/<version>] (<provider>/<model>)` trailer per tool+model, and never a `Co-Authored-By` naming a tool or a "Generated with …" footer. Agents committing with their own tooling add it themselves, e.g. `Assisted-by: Claude Code (anthropic/claude-opus-5-5)` (omit the version when the tool doesn't expose one); sprout's own commits get it from `commit_attribution: "trailer"`. Enforced by `scripts/check-commit-attribution.sh` (commit-msg hook via `make hooks`, and CI).
+- **Squash merges must set the message explicitly**: the repo's `squash_merge_commit_message` is `COMMIT_MESSAGES`, so GitHub concatenates every branch commit's trailer into the squash commit and the gate rejects the duplicates. Pass an explicit `commit_message` (merge API) or edit the message in the UI so the squashed commit carries one trailer.
 
 ## Test Isolation
 

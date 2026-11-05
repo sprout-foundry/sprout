@@ -5,8 +5,8 @@
   },
   "cost": {
     "currency": "USD",
-    "input_token_cost": 0.44,
-    "output_token_cost": 2.2
+    "input_token_cost": 0.4,
+    "output_token_cost": 2.0
   },
   "defaults": {
     "max_tokens": -1,
@@ -54,7 +54,7 @@
         ]
       },
       {
-        "cached_input_cost": 0,
+        "cached_input_cost": 0.015,
         "context_length": 32768,
         "description": "Mistral Small - Cost-effective model for simple tasks",
         "id": "mistral-small-latest",
@@ -66,7 +66,7 @@
         ]
       },
       {
-        "cached_input_cost": 0,
+        "cached_input_cost": 0.03,
         "context_length": 32768,
         "description": "Codestral - Coding specialized model",
         "id": "codestral-latest",
@@ -216,12 +216,13 @@
         ]
       },
       {
+        "cached_input_cost": 0.015,
         "context_length": 131072,
         "description": "A 12B parameter model with a 128k token context length built by Mistral in collaboration with NVIDIA. The model is multilingual, supporting English, French, German, Spanish, Italian, Portuguese, Chinese, Japanese,...",
         "id": "mistral-nemo",
-        "input_cost": 0.019,
+        "input_cost": 0.15,
         "name": "Mistral: Mistral Nemo",
-        "output_cost": 0.03,
+        "output_cost": 0.15,
         "tags": [
           "tools",
           "structured_output"
@@ -278,12 +279,13 @@
         ]
       },
       {
+        "cached_input_cost": 0.01,
         "context_length": 256000,
         "description": "Mistral-Small-3.2-24B-Instruct-2506 is an updated 24B parameter model from Mistral optimized for instruction following, repetition reduction, and improved function calling. Compared to the 3.1 release, version 3.2 significantly improves accuracy on...",
         "id": "mistral-small-3.2-24b-instruct",
-        "input_cost": 0.075,
+        "input_cost": 0.1,
         "name": "Mistral: Mistral Small 3.2 24B",
-        "output_cost": 0.2,
+        "output_cost": 0.3,
         "tags": [
           "tools",
           "vision",
@@ -310,20 +312,20 @@
         "id": "voxtral-small-24b-2507",
         "input_cost": 0.1,
         "name": "Mistral: Voxtral Small 24B 2507",
-        "output_cost": 0.3,
+        "output_cost": 0.4,
         "tags": [
           "tools",
           "structured_output"
         ]
       },
       {
-        "cached_input_cost": 0.044,
+        "cached_input_cost": 0.04,
         "context_length": 262144,
         "description": "Devstral 2 is a state-of-the-art open-source model by Mistral AI specializing in agentic coding. It is a 123B-parameter dense transformer model supporting a 256K context window. Devstral 2 excels at using tools to explore codebases, editing multiple files, and powering software engineering agents.",
         "id": "devstral-2512",
-        "input_cost": 0.44,
+        "input_cost": 0.4,
         "name": "Mistral: Devstral 2 2512",
-        "output_cost": 2.2,
+        "output_cost": 2.0,
         "tags": [
           "tools",
           "structured_output"
@@ -371,6 +373,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.075,
         "context_length": 262144,
         "description": "Mistral Medium 3.5 is a dense 128B instruction-following model from Mistral AI. It supports text and image inputs with text output, and is designed for agentic workflows, coding, and complex reasoning tasks.",
         "id": "mistral-medium-3-5:batch",
@@ -418,9 +421,9 @@
         "context_length": 1048576,
         "description": "Mistral Large 4 is Mistral's flagship open-weight multimodal model (1.05T total, 49B active) built for reasoning, coding, and agentic workloads, with a 1M-token context window.",
         "id": "mistral-large-4-0",
-        "input_cost": 0.68,
-        "name": "Mistral: Mistral Large 4",
-        "output_cost": 2.09,
+        "input_cost": 0.7,
+        "name": "Mistral Large 4",
+        "output_cost": 2.1,
         "tags": [
           "tools",
           "vision",
@@ -435,9 +438,10 @@
       "devstral-2512": 262144,
       "mistral-embed": 32768,
       "mistral-large-2407": 131072,
-          "mistral-large-2411": 131072,
-    "mistral-large-4-0": 1048576,
-    "mistral-large-latest": 131072,"mistral-medium-2312": 32768,
+      "mistral-large-2411": 131072,
+      "mistral-large-4-0": 1048576,
+      "mistral-large-latest": 131072,
+      "mistral-medium-2312": 32768,
       "mistral-medium-latest": 32768,
       "mistral-small-2409": 32768,
       "mistral-small-latest": 32768,

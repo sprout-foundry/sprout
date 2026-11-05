@@ -22,6 +22,12 @@ type ProviderManifest struct {
 	// LastVerified is when a human or agent last checked the source.
 	LastVerified string         `json:"last_verified"`
 	Models       []PricingEntry `json:"models"`
+	// Retired lists model IDs the provider has confirmed removed from its API.
+	// Discovery must not re-add them: OpenRouter's mirror still lists some
+	// retired models under the original org prefix because other hosts (e.g.
+	// Azure) continue to serve them, which would restore dead entries with
+	// the wrong provider's prices.
+	Retired []string `json:"retired,omitempty"`
 }
 
 //go:embed manifest.json

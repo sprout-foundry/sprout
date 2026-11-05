@@ -37,7 +37,8 @@
       "MiniMax-M2.1-highspeed",
       "MiniMax-M2.5-highspeed",
       "MiniMax-M2.7-highspeed",
-      "MiniMax-M3"
+      "MiniMax-M3",
+      "MiniMax-M3.1-Flash"
     ],
     "completion_pattern_overrides": [
       {
@@ -202,6 +203,21 @@
           "tools",
           "reasoning"
         ]
+      },
+      {
+        "cached_input_cost": 0.015,
+        "context_length": 1000000,
+        "description": "MiniMax-M3.1-Flash - frontier multimodal coding model with 1M context and tunable thinking depth",
+        "id": "MiniMax-M3.1-Flash",
+        "input_cost": 0.15,
+        "name": "MiniMax M3.1 Flash",
+        "output_cost": 0.6,
+        "tags": [
+          "coding",
+          "tools",
+          "reasoning",
+          "vision"
+        ]
       }
     ],
     "model_overrides": {
@@ -210,7 +226,9 @@
       "MiniMax-M2.1": 204800,
       "MiniMax-M2.5": 204800,
       "MiniMax-M2.5-Lightning": 1000000,
-      "MiniMax-M2.7": 204800
+      "MiniMax-M2.7": 204800,
+      "MiniMax-M3": 1048576,
+      "MiniMax-M3.1-Flash": 1000000
     },
     "pattern_overrides": [
       {

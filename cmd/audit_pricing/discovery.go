@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -18,11 +19,12 @@ import (
 // DiscoverResult holds the comparison between live API models and the
 // provider's config file. It drives both the report and the auto-update logic.
 type DiscoverResult struct {
-	ProviderID  string
-	Source      string                         // "native", "openrouter-fallback" (empty = native)
-	APIError    string                         // non-empty if both native and fallback failed
-	NewModels   []modelcontract.CanonicalModel // in live API but NOT in config
-	StaleModels []string                       // in config but NOT in live API
+	ProviderID    string
+	Source        string                         // "native", "openrouter-fallback" (empty = native)
+	APIError      string                         // non-empty if both native and fallback failed
+	NewModels     []modelcontract.CanonicalModel // in live API but NOT in config
+	StaleModels   []string                       // in config but NOT in live API
+	RetiredModels []string                       // in live API, but confirmed retired upstream
 }
 
 // providerToOpenRouterOrg maps sprout provider IDs to OpenRouter's org prefix
@@ -144,6 +146,37 @@ func discoverFromNativeAPI(ctx context.Context, providerID string) ([]modelcontr
 	return canon, ""
 }
 
+// splitRetired partitions discovered models into those still eligible to be
+// added and those the manifest marks as retired by the provider. A retired
+// model is dropped from discovery even when the live source still lists it,
+// because cross-provider mirrors keep serving retired models via other hosts.
+func splitRetired(models []modelcontract.CanonicalModel, retired []string) (kept []modelcontract.CanonicalModel, dropped []string) {
+	if len(retired) == 0 {
+		return models, nil
+	}
+	retiredSet := make(map[string]bool, len(retired))
+	for _, id := range retired {
+		retiredSet[id] = true
+	}
+	for _, m := range models {
+		if retiredSet[m.ID] {
+			dropped = append(dropped, m.ID)
+			continue
+		}
+		kept = append(kept, m)
+	}
+	sort.Strings(dropped)
+	return kept, dropped
+}
+
+// roundUSD rounds a per-million-token price to 6 decimal places. OpenRouter
+// reports prices per token, so converting (e.g. "0.00000005" * 1e6) otherwise
+// leaks float64 representation error (0.049999999999999996) into committed
+// configs and manifests.
+func roundUSD(v float64) float64 {
+	return math.Round(v*1e6) / 1e6
+}
+
 // canonicalToConfigEntry converts a discovered canonical model into a JSON
 // map suitable for appending to a provider config's model_info array.
 func canonicalToConfigEntry(m modelcontract.CanonicalModel) map[string]interface{} {
@@ -164,10 +197,10 @@ func canonicalToConfigEntry(m modelcontract.CanonicalModel) map[string]interface
 		entry["tags"] = tags
 	}
 	if m.Pricing != nil {
-		entry["input_cost"] = m.Pricing.InputPerMTok
-		entry["output_cost"] = m.Pricing.OutputPerMTok
+		entry["input_cost"] = roundUSD(m.Pricing.InputPerMTok)
+		entry["output_cost"] = roundUSD(m.Pricing.OutputPerMTok)
 		if m.Pricing.CachedPerMTok > 0 {
-			entry["cached_input_cost"] = m.Pricing.CachedPerMTok
+			entry["cached_input_cost"] = roundUSD(m.Pricing.CachedPerMTok)
 		}
 	}
 	return entry
@@ -291,9 +324,9 @@ func addModelsToManifest(manifestPath, providerID string, newModels []modelcontr
 			OutputPerMTok: 0,
 		}
 		if m.Pricing != nil {
-			entry.InputPerMTok = m.Pricing.InputPerMTok
-			entry.OutputPerMTok = m.Pricing.OutputPerMTok
-			entry.CachedPerMTok = m.Pricing.CachedPerMTok
+			entry.InputPerMTok = roundUSD(m.Pricing.InputPerMTok)
+			entry.OutputPerMTok = roundUSD(m.Pricing.OutputPerMTok)
+			entry.CachedPerMTok = roundUSD(m.Pricing.CachedPerMTok)
 		}
 		pm.Models = append(pm.Models, entry)
 		existing[m.ID] = true
@@ -318,7 +351,7 @@ func formatDiscoverReport(results []DiscoverResult) string {
 			totalErr++
 			continue
 		}
-		if len(dr.NewModels) == 0 && len(dr.StaleModels) == 0 {
+		if len(dr.NewModels) == 0 && len(dr.StaleModels) == 0 && len(dr.RetiredModels) == 0 {
 			continue
 		}
 		sourceTag := ""
@@ -342,6 +375,9 @@ func formatDiscoverReport(results []DiscoverResult) string {
 		for _, id := range dr.StaleModels {
 			sb.WriteString(fmt.Sprintf("  - %s    (in config, not in live API)\n", id))
 			totalStale++
+		}
+		for _, id := range dr.RetiredModels {
+			fmt.Fprintf(&sb, "  ~ %s    (retired by provider, not re-added)\n", id)
 		}
 	}
 	sb.WriteString(fmt.Sprintf("\nDiscovery: %d new, %d stale, %d errors\n",
@@ -377,6 +413,9 @@ func discoverAndAuditAll(ctx context.Context, configsDir, manifestPath string, d
 		}
 
 		dr := discoverProvider(ctx, providerID, cfgPath)
+		if pm, ok := manifests[providerID]; ok {
+			dr.NewModels, dr.RetiredModels = splitRetired(dr.NewModels, pm.Retired)
+		}
 		allResults = append(allResults, dr)
 
 		if doUpdate && dr.APIError == "" && len(dr.NewModels) > 0 {

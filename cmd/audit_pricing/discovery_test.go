@@ -4,11 +4,42 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	providers "github.com/sprout-foundry/sprout/pkg/agent_providers"
 	"github.com/sprout-foundry/sprout/pkg/modelcontract"
 )
+
+// ---------------------------------------------------------------------------
+// splitRetired
+// ---------------------------------------------------------------------------
+
+func TestSplitRetired_DropsRetiredKeepsRest(t *testing.T) {
+	models := []modelcontract.CanonicalModel{
+		{ID: "gpt-4.1-nano"},
+		{ID: "gpt-5.6-sol"},
+		{ID: "o3-mini:batch"},
+	}
+	kept, dropped := splitRetired(models, []string{"gpt-4.1-nano", "o3-mini:batch"})
+	if len(kept) != 1 || kept[0].ID != "gpt-5.6-sol" {
+		t.Fatalf("kept = %+v, want only gpt-5.6-sol", kept)
+	}
+	if len(dropped) != 2 || dropped[0] != "gpt-4.1-nano" || dropped[1] != "o3-mini:batch" {
+		t.Fatalf("dropped = %v, want sorted [gpt-4.1-nano o3-mini:batch]", dropped)
+	}
+}
+
+func TestSplitRetired_NoRetiredListIsPassThrough(t *testing.T) {
+	models := []modelcontract.CanonicalModel{{ID: "a"}, {ID: "b"}}
+	kept, dropped := splitRetired(models, nil)
+	if len(kept) != 2 {
+		t.Fatalf("kept = %d models, want 2", len(kept))
+	}
+	if len(dropped) != 0 {
+		t.Fatalf("dropped = %v, want none", dropped)
+	}
+}
 
 // ---------------------------------------------------------------------------
 // canonicalToConfigEntry
@@ -96,6 +127,53 @@ func TestCanonicalToConfigEntry_NilPricing(t *testing.T) {
 	}
 	if _, has := entry["output_cost"]; has {
 		t.Error("should not include output_cost when pricing is nil")
+	}
+}
+
+func TestCanonicalToConfigEntry_RoundsPerTokenConversionNoise(t *testing.T) {
+	cached, err := strconv.ParseFloat("0.00000005", 64)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	m := modelcontract.CanonicalModel{
+		ID: "test",
+		Pricing: &modelcontract.Pricing{
+			InputPerMTok:  1.0,
+			OutputPerMTok: 5.0,
+			CachedPerMTok: cached * 1e6,
+		},
+	}
+	entry := canonicalToConfigEntry(m)
+	cachedCost, ok := entry["cached_input_cost"].(float64)
+	if !ok {
+		t.Fatalf("cached_input_cost missing or not a float64: %v", entry["cached_input_cost"])
+	}
+	if cachedCost != 0.05 {
+		t.Errorf("cached_input_cost = %v, want 0.05", cachedCost)
+	}
+	if got := entry["input_cost"].(float64); got != 1.0 {
+		t.Errorf("input_cost = %v, want 1", got)
+	}
+	if got := entry["output_cost"].(float64); got != 5.0 {
+		t.Errorf("output_cost = %v, want 5", got)
+	}
+}
+
+func TestRoundUSD(t *testing.T) {
+	cases := []struct {
+		in, want float64
+	}{
+		{0.049999999999999996, 0.05},
+		{0.024999999999999998, 0.025},
+		{0.001414, 0.001414},
+		{0.037, 0.037},
+		{0, 0},
+		{2.5, 2.5},
+	}
+	for _, c := range cases {
+		if got := roundUSD(c.in); got != c.want {
+			t.Errorf("roundUSD(%v) = %v, want %v", c.in, got, c.want)
+		}
 	}
 }
 
@@ -295,7 +373,9 @@ func TestAddModelsToManifest_AddsNewProvider(t *testing.T) {
 	dir := t.TempDir()
 	manifestPath := filepath.Join(dir, "manifest.json")
 	// Start with an empty manifest.
-	os.WriteFile(manifestPath, []byte("{}"), 0o644)
+	if err := os.WriteFile(manifestPath, []byte("{}"), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
 
 	newModels := []modelcontract.CanonicalModel{
 		{ID: "m1", Pricing: &modelcontract.Pricing{InputPerMTok: 1.0, OutputPerMTok: 2.0}},
@@ -310,7 +390,9 @@ func TestAddModelsToManifest_AddsNewProvider(t *testing.T) {
 
 	data, _ := os.ReadFile(manifestPath)
 	var m map[string]ProviderManifest
-	json.Unmarshal(data, &m)
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("unmarshal manifest: %v", err)
+	}
 	pm, ok := m["newprovider"]
 	if !ok {
 		t.Fatal("newprovider not in manifest")
@@ -336,7 +418,9 @@ func TestAddModelsToManifest_AddsToExistingProvider(t *testing.T) {
 		},
 	}
 	data, _ := json.MarshalIndent(existing, "", "  ")
-	os.WriteFile(manifestPath, append(data, '\n'), 0o644)
+	if err := os.WriteFile(manifestPath, append(data, '\n'), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
 
 	newModels := []modelcontract.CanonicalModel{
 		{ID: "new", Pricing: &modelcontract.Pricing{InputPerMTok: 3.0, OutputPerMTok: 6.0}},
@@ -351,9 +435,47 @@ func TestAddModelsToManifest_AddsToExistingProvider(t *testing.T) {
 
 	data, _ = os.ReadFile(manifestPath)
 	var m map[string]ProviderManifest
-	json.Unmarshal(data, &m)
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("unmarshal manifest: %v", err)
+	}
 	if len(m["p"].Models) != 2 {
 		t.Errorf("expected 2 models, got %d", len(m["p"].Models))
+	}
+}
+
+func TestAddModelsToManifest_RoundsPerTokenConversionNoise(t *testing.T) {
+	dir := t.TempDir()
+	manifestPath := filepath.Join(dir, "manifest.json")
+	existing := map[string]ProviderManifest{"p": {Source: "https://example.com"}}
+	data, _ := json.MarshalIndent(existing, "", "  ")
+	if err := os.WriteFile(manifestPath, append(data, '\n'), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	cached, err := strconv.ParseFloat("0.00000005", 64)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	newModels := []modelcontract.CanonicalModel{
+		{ID: "m", Pricing: &modelcontract.Pricing{
+			InputPerMTok:  1.0,
+			OutputPerMTok: 5.0,
+			CachedPerMTok: cached * 1e6,
+		}},
+	}
+	if _, err := addModelsToManifest(manifestPath, "p", newModels); err != nil {
+		t.Fatalf("addModelsToManifest: %v", err)
+	}
+
+	data, _ = os.ReadFile(manifestPath)
+	var m map[string]ProviderManifest
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("unmarshal manifest: %v", err)
+	}
+	entry := m["p"].Models[0]
+	if entry.InputPerMTok != 1.0 || entry.OutputPerMTok != 5.0 || entry.CachedPerMTok != 0.05 {
+		t.Errorf("pricing = %v/%v/%v, want 1/5/0.05",
+			entry.InputPerMTok, entry.OutputPerMTok, entry.CachedPerMTok)
 	}
 }
 
@@ -364,7 +486,9 @@ func TestAddModelsToManifest_DoesNotDuplicate(t *testing.T) {
 		"p": {Models: []PricingEntry{{ID: "m1", InputPerMTok: 1.0}}},
 	}
 	data, _ := json.MarshalIndent(existing, "", "  ")
-	os.WriteFile(manifestPath, append(data, '\n'), 0o644)
+	if err := os.WriteFile(manifestPath, append(data, '\n'), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
 
 	newModels := []modelcontract.CanonicalModel{
 		{ID: "m1", Pricing: &modelcontract.Pricing{InputPerMTok: 99.0}},
@@ -391,7 +515,9 @@ func TestAddModelsToManifest_EmptyInput(t *testing.T) {
 func TestAddModelsToManifest_NilPricing(t *testing.T) {
 	dir := t.TempDir()
 	manifestPath := filepath.Join(dir, "manifest.json")
-	os.WriteFile(manifestPath, []byte("{}"), 0o644)
+	if err := os.WriteFile(manifestPath, []byte("{}"), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
 
 	newModels := []modelcontract.CanonicalModel{
 		{ID: "m1"}, // no pricing
@@ -406,7 +532,9 @@ func TestAddModelsToManifest_NilPricing(t *testing.T) {
 
 	data, _ := os.ReadFile(manifestPath)
 	var m map[string]ProviderManifest
-	json.Unmarshal(data, &m)
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("unmarshal manifest: %v", err)
+	}
 	if pm := m["p"]; len(pm.Models) != 1 || pm.Models[0].InputPerMTok != 0 {
 		t.Errorf("expected 0 pricing for nil-pricing model, got %v", pm.Models[0])
 	}

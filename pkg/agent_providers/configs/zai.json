@@ -42,7 +42,8 @@
       "glm-5.3-flash:batch",
       "glm-5.3:batch",
       "glm-5.3-flashx",
-      "glm-5.3-prime"
+      "glm-5.3-prime",
+      "glm-5.3-flashx-legal"
     ],
     "default_context_limit": 262144,
     "default_model": "glm-5",
@@ -331,6 +332,21 @@
         "output_cost": 8.8,
         "tags": [
           "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.075,
+        "context_length": 1048576,
+        "description": "GLM-5.3-FlashX-Legal (GLM-Legal) is Z.ai's legal-domain variant of GLM-5.3-FlashX, a native multimodal model that accepts text, image, and video input and produces text. It adds legal-domain mid-training and post-training with reinforcement learning on tasks modeled on real legal workflows, targeting document understanding, legal reasoning, and multi-step task execution such as legal research, contract review, and drafting legal documents.",
+        "id": "glm-5.3-flashx-legal",
+        "input_cost": 0.37,
+        "name": "GLM-5.3 FlashX Legal",
+        "output_cost": 1.25,
+        "tags": [
+          "tools",
+          "vision",
           "reasoning",
           "structured_output"
         ]

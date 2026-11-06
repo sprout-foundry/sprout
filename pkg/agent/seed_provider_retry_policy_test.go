@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"net/url"
 	"strconv"
 	"syscall"
 	"testing"
@@ -68,9 +69,11 @@ func (s *scriptedAttempts) attempt(int) (error, bool) {
 }
 
 var (
-	zeroChoicesErr  = core.ErrZeroChoices
-	connResetErr    = errors.New("Post \"https://model.example/v1/chat/completions\": read tcp 10.0.0.1:443: connection reset by peer")
-	unauthorizedErr = errors.New("HTTP 401: invalid API key")
+	errZeroChoices = core.ErrZeroChoices
+	// errConnReset is a connection reset as the HTTP client reports it.
+	errConnReset = &url.Error{Op: "Post", URL: "https://model.example/v1/chat/completions",
+		Err: errors.New("read tcp 10.0.0.1:443: connection reset by peer")}
+	errUnauthorized = errors.New("HTTP 401: invalid API key")
 )
 
 // TestRunWithProviderRetryRidesOutOutage: an empty completion, then a
@@ -79,7 +82,7 @@ func TestRunWithProviderRetryRidesOutOutage(t *testing.T) {
 	isolateTaskDeadline(t)
 	clock := newFakeProviderRetryClock()
 	attempts := &scriptedAttempts{
-		errs: []error{zeroChoicesErr, connResetErr},
+		errs: []error{errZeroChoices, errConnReset},
 	}
 	var waits []string
 	hooks := providerRetryHooks{wait: func(msg string) { waits = append(waits, msg) }}
@@ -106,12 +109,12 @@ func TestRunWithProviderRetryRidesOutOutage(t *testing.T) {
 func TestRunWithProviderRetryPermanentErrorFailsAtOnce(t *testing.T) {
 	isolateTaskDeadline(t)
 	clock := newFakeProviderRetryClock()
-	attempts := &scriptedAttempts{repeat: unauthorizedErr}
+	attempts := &scriptedAttempts{repeat: errUnauthorized}
 	var willRetry []bool
 	hooks := providerRetryHooks{failed: func(_ error, _ int, retry bool) { willRetry = append(willRetry, retry) }}
 
 	err := runWithProviderRetry(context.Background(), clock.clock(), attempts.attempt, hooks)
-	if !errors.Is(err, unauthorizedErr) {
+	if !errors.Is(err, errUnauthorized) {
 		t.Fatalf("err = %v, want the 401 itself", err)
 	}
 	if attempts.seen != 1 {
@@ -131,7 +134,7 @@ func TestRunWithProviderRetryPermanentErrorFailsAtOnce(t *testing.T) {
 func TestRunWithProviderRetryStopsAtBudget(t *testing.T) {
 	isolateTaskDeadline(t)
 	clock := newFakeProviderRetryClock()
-	attempts := &scriptedAttempts{repeat: zeroChoicesErr}
+	attempts := &scriptedAttempts{repeat: errZeroChoices}
 	start := clock.now
 	var stopped string
 	hooks := providerRetryHooks{stopped: func(reason string) { stopped = reason }}
@@ -175,7 +178,7 @@ func TestRunWithProviderRetryStopsAtContextDeadline(t *testing.T) {
 		return nil
 	}
 
-	attempts := &scriptedAttempts{repeat: zeroChoicesErr}
+	attempts := &scriptedAttempts{repeat: errZeroChoices}
 	err := runWithProviderRetry(ctx, clock.clock(), attempts.attempt, providerRetryHooks{})
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("err = %v, want context.DeadlineExceeded", err)
@@ -214,7 +217,7 @@ func TestRunWithProviderRetryReturnsContextDeadlineAfterWait(t *testing.T) {
 		return context.Canceled
 	}
 
-	attempts := &scriptedAttempts{repeat: zeroChoicesErr}
+	attempts := &scriptedAttempts{repeat: errZeroChoices}
 	err := runWithProviderRetry(ctx, clock.clock(), attempts.attempt, providerRetryHooks{})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("err = %v, want context.Canceled", err)
@@ -258,7 +261,7 @@ func TestIsRetryableProviderErrorOutageTable(t *testing.T) {
 	}{
 		{"zero choices", core.ErrZeroChoices, true},
 		{"wrapped zero choices", &zeroChoicesWrap{core.ErrZeroChoices}, true},
-		{"connection reset", connResetErr, true},
+		{"connection reset", errConnReset, true},
 		{"connection refused", &net.OpError{Op: "dial", Net: "tcp", Err: syscall.ECONNREFUSED}, true},
 		{"unexpected EOF", io.ErrUnexpectedEOF, true},
 		{"connection reset, wrapped", &net.OpError{Op: "read", Net: "tcp", Err: syscall.ECONNRESET}, true},
@@ -267,7 +270,7 @@ func TestIsRetryableProviderErrorOutageTable(t *testing.T) {
 		{"503", errors.New("HTTP 503: unavailable"), true},
 		{"504", errors.New("HTTP 504: gateway timeout"), true},
 		{"rate limited", agenterrors.NewRateLimitError("slow down", nil, "test"), true},
-		{"401", unauthorizedErr, false},
+		{"401", errUnauthorized, false},
 		{"400", errors.New("HTTP 400: bad request"), false},
 		{"403", errors.New("HTTP 403: forbidden"), false},
 		{"404", errors.New("HTTP 404: not found"), false},
@@ -324,7 +327,7 @@ func TestRunWithProviderRetryStopsBeforeTaskDeadline(t *testing.T) {
 	// minute before it, which is already past.
 	t.Setenv("SPROUT_TASK_DEADLINE", strconv.FormatInt(clock.now.Add(20*time.Second).Unix(), 10))
 
-	attempts := &scriptedAttempts{repeat: zeroChoicesErr}
+	attempts := &scriptedAttempts{repeat: errZeroChoices}
 	var stopped string
 	hooks := providerRetryHooks{stopped: func(reason string) { stopped = reason }}
 
@@ -347,7 +350,7 @@ func TestRunWithProviderRetryKeepsRetryingWhileTaskDeadlineIsFar(t *testing.T) {
 	clock := newFakeProviderRetryClock()
 	t.Setenv("SPROUT_TASK_DEADLINE", strconv.FormatInt(clock.now.Add(2*time.Hour).Unix(), 10))
 
-	attempts := &scriptedAttempts{errs: []error{zeroChoicesErr}}
+	attempts := &scriptedAttempts{errs: []error{errZeroChoices}}
 	if err := runWithProviderRetry(context.Background(), clock.clock(), attempts.attempt, providerRetryHooks{}); err != nil {
 		t.Fatalf("expected the single failure to be retried, got: %v", err)
 	}

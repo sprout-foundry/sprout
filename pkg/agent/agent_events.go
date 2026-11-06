@@ -211,6 +211,50 @@ func (a *Agent) publishRetryEvent(err error, attempt, maxRetries int, provider s
 	)
 }
 
+// providerRetryHooks wires the retry policy's notices to this provider's
+// agent: the per-attempt provider notice (publishRetryEvent) and the
+// plain-words wait notices. All are no-ops on a provider without an agent or
+// event bus (bare providers in tests, headless paths).
+func (sp *sproutProvider) providerRetryHooks() providerRetryHooks {
+	if sp.agent == nil || sp.agent.eventBus == nil {
+		return providerRetryHooks{}
+	}
+	a := sp.agent
+	return providerRetryHooks{
+		failed: func(err error, attempt int, willRetry bool) {
+			maxRetries := attempt + 1
+			if willRetry {
+				// Say there is at least one more attempt to come.
+				maxRetries = attempt + 2
+			}
+			a.publishRetryEvent(err, attempt, maxRetries, a.GetProvider(), willRetry)
+		},
+		wait:    a.publishProviderRetryWait,
+		stopped: a.publishProviderRetryStopped,
+	}
+}
+
+// publishProviderRetryWait emits the plain-words wait notice once per retry,
+// so a person and the platform can see the run is alive and waiting on the
+// model service rather than stalled.
+func (a *Agent) publishProviderRetryWait(message string) {
+	if a == nil || message == "" {
+		return
+	}
+	a.publishEvent(events.EventTypeAgentMessage, events.AgentMessageEvent("provider_retry_wait", message, nil))
+}
+
+// publishProviderRetryStopped says why a retryable failure got no further
+// attempt (the retry budget or a deadline), so the reason is visible rather
+// than a bare "giving up".
+func (a *Agent) publishProviderRetryStopped(reason string) {
+	if a == nil || reason == "" {
+		return
+	}
+	a.publishEvent(events.EventTypeAgentMessage, events.AgentMessageEvent("provider_retry_wait",
+		"The model service is still not answering and "+reason+"; giving up on this call.", nil))
+}
+
 // retryNoticeMessage condenses a provider error for the one-line retry notice.
 //
 // A provider failure arrives as a chain of nested TypedErrors, each repeating

@@ -137,6 +137,9 @@ func (p *GenericProvider) listModelsOpenAI(ctx context.Context) ([]api.ModelInfo
 				Prompt     string `json:"prompt,omitempty"`
 				Completion string `json:"completion,omitempty"`
 			} `json:"pricing,omitempty"`
+			// Metadata is where some providers (DeepInfra) put a model's
+			// context length and its prices in USD per million tokens.
+			Metadata *providerModelMetadata `json:"metadata,omitempty"`
 		} `json:"data"`
 	}
 
@@ -156,6 +159,12 @@ func (p *GenericProvider) listModelsOpenAI(ctx context.Context) ([]api.ModelInfo
 			modelInfo.ContextLength = model.ContextLength
 		} else if model.MaxModelLen > 0 {
 			modelInfo.ContextLength = model.MaxModelLen
+		} else if model.Metadata != nil && model.Metadata.ContextLength > 0 {
+			modelInfo.ContextLength = model.Metadata.ContextLength
+		}
+		if md := model.Metadata; md != nil && md.Pricing != nil && model.Pricing == nil {
+			modelInfo.InputCost = md.Pricing.InputTokens
+			modelInfo.OutputCost = md.Pricing.OutputTokens
 		}
 
 		if model.Pricing != nil {
@@ -387,3 +396,14 @@ func (p *GenericProvider) fallbackToConfigOrCurrent() ([]api.ModelInfo, error) {
 }
 
 // SupportsVision is defined in generic_provider_vision.go
+
+// providerModelMetadata is a model entry's metadata object, as DeepInfra's
+// OpenAI-compatible model list sends it: the context length, and prices in
+// USD per million tokens (the unit ModelInfo's costs use).
+type providerModelMetadata struct {
+	ContextLength int `json:"context_length,omitempty"`
+	Pricing       *struct {
+		InputTokens  float64 `json:"input_tokens,omitempty"`
+		OutputTokens float64 `json:"output_tokens,omitempty"`
+	} `json:"pricing,omitempty"`
+}

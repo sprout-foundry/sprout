@@ -127,6 +127,9 @@ func fetchRawModelList(ctx context.Context, client *http.Client, endpoint, authT
 			ID            string `json:"id"`
 			ContextLength int    `json:"context_length,omitempty"`
 			MaxModelLen   int    `json:"max_model_len,omitempty"`
+			Metadata      *struct {
+				ContextLength int `json:"context_length,omitempty"`
+			} `json:"metadata,omitempty"`
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&modelsResponse); err != nil {
@@ -135,9 +138,14 @@ func fetchRawModelList(ctx context.Context, client *http.Client, endpoint, authT
 
 	entries := make([]rawModelEntry, 0, len(modelsResponse.Data))
 	for _, m := range modelsResponse.Data {
+		ctx := m.ContextLength
+		// DeepInfra reports the context length inside the entry's metadata.
+		if ctx <= 0 && m.Metadata != nil {
+			ctx = m.Metadata.ContextLength
+		}
 		entries = append(entries, rawModelEntry{
 			ID:            m.ID,
-			ContextLength: m.ContextLength,
+			ContextLength: ctx,
 			MaxModelLen:   m.MaxModelLen,
 		})
 	}

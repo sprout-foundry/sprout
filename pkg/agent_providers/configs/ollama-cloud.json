@@ -352,13 +352,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.05,
+        "cached_input_cost": 0.015,
         "context_length": 1048576,
         "description": "Beam is an open model by Reflection designed to deliver strong performance for areas such as agentic tool use, coding and general reasoning with an emphasis on token efficient usage.",
         "id": "beam",
-        "input_cost": 0.25,
+        "input_cost": 0.125,
         "name": "Beam",
-        "output_cost": 1,
+        "output_cost": 0.4,
         "tags": [
           "tools",
           "reasoning"

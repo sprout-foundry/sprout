@@ -1,7 +1,7 @@
-// seed_provider_retry.go — the sproutProvider retry / backoff layer: the
-// HTTP-status extraction, exponential-backoff delay, retryable-error
-// classification, and the provider-error record / clear. Split out of
-// seed_provider.go.
+// seed_provider_retry.go — the sproutProvider retry layer's bookkeeping: the
+// HTTP-status extraction and the provider-error record / clear. The retry
+// policy (backoff, budget, what is retryable) is in
+// seed_provider_retry_policy.go and seed_provider_retry_classify.go.
 
 package agent
 
@@ -33,54 +33,6 @@ func extractHTTPStatusCode(msg string) int {
 		}
 	}
 	return 0
-}
-
-// exponentialBackoffDelay calculates the delay for a given retry attempt.
-// Formula: 2^attempt * baseDelay, capped at maxDelay.
-// Base delay is 100ms, max delay is 10s.
-func exponentialBackoffDelay(attempt int) time.Duration {
-	const baseDelay = 100 * time.Millisecond
-	const maxDelay = 10 * time.Second
-
-	delay := baseDelay
-	for i := 0; i < attempt; i++ {
-		delay *= 2
-		if delay >= maxDelay {
-			return maxDelay
-		}
-	}
-	if delay > maxDelay {
-		return maxDelay
-	}
-	return delay
-}
-
-// isRetryableProviderError returns true if the error should trigger a provider retry.
-// Retries are performed on:
-//   - RateLimitError (always retryable)
-//   - ProviderError with a retryable cause (server errors, overload)
-//   - retryable network/timeout TypedErrors — a mid-stream connection reset
-//     or the streaming first-token/idle timeout (agenterrors.NewNetwork),
-//     which the legacy category helpers no longer misread as permanent
-func isRetryableProviderError(err error) bool {
-	if err == nil {
-		return false
-	}
-	if agenterrors.IsRateLimited(err) {
-		return true
-	}
-	if agenterrors.IsProviderError(err) && agenterrors.IsRetryable(err) {
-		return true
-	}
-	// Typed network/timeout failures carry their retryability on the
-	// TypedError itself (set from RetryableFor at construction). Only
-	// network and timeout are retryable in the LLM retry loops; a
-	// non-retryable typed error (validation, not_found, ...) still fails at
-	// once, as a 401 does.
-	if te := agenterrors.AsTypedError(err); te != nil {
-		return te.Retryable && (te.Code == agenterrors.CodeNetwork || te.Code == agenterrors.CodeTimeout)
-	}
-	return false
 }
 
 // recordProviderError stores error info in the agent's state for observability.

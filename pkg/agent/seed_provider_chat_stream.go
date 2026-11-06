@@ -9,7 +9,6 @@ package agent
 import (
 	"context"
 	"strings"
-	"time"
 
 	core "github.com/sprout-foundry/seed/core"
 
@@ -275,33 +274,30 @@ func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest,
 	return nil
 }
 
-// doChatWithRetryStreaming performs a streaming chat request with exponential backoff retry (max 3).
+// doChatWithRetryStreaming performs a streaming chat request under the same
+// time-budget retry policy as doChatWithRetry (see runWithProviderRetry). The
+// loop lives in doChatStreamingRetrying; this wrapper supplies the real clock.
+//
 // holdback (nil when the hold-back is inactive) is reset at the start of each
 // attempt so a failed or wrong-language attempt never leaks into the next; the
 // caller finalizes it (finalizeStreamHoldback) after a successful attempt.
 // guard (nil when the repetition guard is inactive) is reset alongside it, so a
 // transport retry's replayed chunks never accumulate into a false repetition
-// run. reasoning (nil when the reasoning guard is inactive) is reset for the
-// same reason, and its grace-budget cut is recognized here so it is not
-// mistaken for a provider failure and retried as one.
+// run. reasoningGuard is reset for the same reason, and its grace-budget cut is
+// recognized here so it is not mistaken for a provider failure and retried as
+// one.
 func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, callback api.StreamCallback, holdback *StreamHoldback, guard *RepetitionGuard, reasoningGuard *RepetitionGuard) (*api.ChatResponse, error) {
-	const maxRetries = 3
-	var lastErr error
+	return sp.doChatStreamingRetrying(ctx, defaultProviderRetryClock(), messages, tools, reasoning, disableThinking, callback, holdback, guard, reasoningGuard)
+}
 
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		// On retry attempts, wait for the backoff delay before retrying.
-		if attempt > 0 {
-			delay := exponentialBackoffDelay(attempt)
-			select {
-			case <-time.After(delay):
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			}
-		}
+// doChatStreamingRetrying is the streaming attempt body of the retry policy.
+func (sp *sproutProvider) doChatStreamingRetrying(ctx context.Context, clock providerRetryClock, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, callback api.StreamCallback, holdback *StreamHoldback, guard *RepetitionGuard, reasoningGuard *RepetitionGuard) (*api.ChatResponse, error) {
+	var resp *api.ChatResponse
+	attempt := func(n int) (error, bool) {
 		// Each attempt is a separate streamed response — start
 		// its hold-back fresh (discard the previous attempt's buffered/held
 		// content) so a failed or wrong-language attempt never leaks into the
-		// next one. The repetition guard is reset for the same reason.
+		// next one. The guards are reset for the same reasons.
 		if holdback != nil {
 			holdback.Reset()
 		}
@@ -315,36 +311,23 @@ func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages
 			reasoningGuard.Reset()
 		}
 
-		resp, err := sp.currentClient().SendChatRequestStream(ctx, messages, tools, reasoning, disableThinking, callback)
+		r, err := sp.currentClient().SendChatRequestStream(ctx, messages, tools, reasoning, disableThinking, callback)
 		if err == nil {
 			sp.clearProviderError()
 			// Fleet budget tracking: debit tokens after each LLM call
-			if budgetErr := sp.trackFleetBudgetForResponse(resp); budgetErr != nil {
-				return nil, budgetErr
+			if budgetErr := sp.trackFleetBudgetForResponse(r); budgetErr != nil {
+				return budgetErr, false
 			}
-			return resp, nil
+			resp = r
+			return nil, false
 		}
-
-		lastErr = err
 
 		// A cancelled context caused by the repetition guard cutting a
 		// degenerate stream is not a provider failure: skip the error record
-		// and retry event and surface the cancellation unchanged. A genuine
+		// and retry notices and surface the cancellation unchanged. A genuine
 		// user cancellation still records/publishes as before.
 		if ctx.Err() != nil && ((guard != nil && guard.Looping()) || (reasoningGuard != nil && reasoningGuard.cutReasoning())) {
-			return nil, ctx.Err()
-		}
-
-		// Record the error for observability and emit retry event.
-		sp.recordProviderError(err, attempt)
-		if sp.agent != nil && sp.agent.eventBus != nil {
-			retryable := attempt < maxRetries && isRetryableProviderError(err)
-			if isBodyTooLargeError(err) {
-				// A 413 is always worth another attempt while retries remain:
-				// images can be shed, then the text history can be trimmed.
-				retryable = attempt < maxRetries
-			}
-			sp.agent.publishRetryEvent(err, attempt, maxRetries, sp.agent.GetProvider(), retryable)
+			return ctx.Err(), false
 		}
 
 		// HTTP 413 (body too large): the payload, not the endpoint, is the
@@ -355,30 +338,26 @@ func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages
 		// long session whose text alone exceeds the server limit 413s
 		// forever, since image shedding can never make it fit.
 		if isBodyTooLargeError(err) {
-			if attempt >= maxRetries {
-				return nil, err
-			}
 			if n := api.CountImages(messages); n > 0 {
 				messages = api.TrimImagesBeyondLatest(messages, n/2)
 			} else {
 				// Images exhausted: shrink the text history. Each retry
 				// keeps a smaller tail so repeated 413s converge.
-				keep := bodyBudgetKeepTail >> uint(attempt)
-				if keep < 1 {
-					keep = 1
-				}
+				keep := max(bodyBudgetKeepTail>>uint(n), 1)
 				messages = api.TrimMessagesForBodyBudget(messages, keep)
 			}
-		} else if !isRetryableProviderError(err) {
-			// Check if this error is retryable. If not, fail immediately.
-			return nil, err
+			if n >= maxInPlaceRetries {
+				return err, false
+			}
+			return err, true
 		}
 
-		// If we've exhausted retries, return the last error.
-		if attempt >= maxRetries {
-			return nil, err
-		}
+		sp.recordProviderError(err, n)
+		return err, false
 	}
 
-	return nil, lastErr
+	if err := runWithProviderRetry(ctx, clock, attempt, sp.providerRetryHooks()); err != nil {
+		return nil, err
+	}
+	return resp, nil
 }

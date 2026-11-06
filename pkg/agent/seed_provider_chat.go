@@ -10,7 +10,6 @@ package agent
 import (
 	"context"
 	"strings"
-	"time"
 
 	core "github.com/sprout-foundry/seed/core"
 
@@ -35,33 +34,38 @@ const maxLiveRequestImages = 3
 // of failing the whole turn.
 const bodyBudgetKeepTail = 16
 
-// doChatWithRetry performs a chat request with exponential backoff retry (max 3).
+// maxInPlaceRetries bounds the in-place retries of one model call: the
+// attempts a path makes without backoff because the request itself was
+// repaired (a shed 413 body, stripped malformed images). A repair either
+// shrinks the request towards fitting or runs out of payload to drop, so a
+// few attempts are enough; the bound keeps an always-413 endpoint from
+// looping forever. Outage retries are bounded by time instead
+// (providerRetryBudget).
+const maxInPlaceRetries = 4
+
+// doChatWithRetry performs a chat request, retrying transient failures for up
+// to providerRetryBudget (see runWithProviderRetry). The loop lives in
+// doChatRetrying; this wrapper supplies the real clock.
 func (sp *sproutProvider) doChatWithRetry(ctx context.Context, req *core.ChatRequest) (*core.ChatResponse, error) {
-	const maxRetries = 3
-	var lastErr error
+	return sp.doChatRetrying(ctx, defaultProviderRetryClock(), req)
+}
 
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		// On retry attempts, wait for the backoff delay before retrying.
-		if attempt > 0 {
-			delay := exponentialBackoffDelay(attempt)
-			select {
-			case <-time.After(delay):
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			}
-		}
-
-		resp, err := sp.doChatOnce(ctx, req)
+// doChatRetrying performs a chat request with the time-budget retry policy of
+// runWithProviderRetry: each attempt goes through doChatOnce; a transient
+// failure is retried after an exponential backoff until the budget, the
+// context's deadline or the run's task deadline ends it. A malformed image
+// payload and an HTTP 413 are handled in place (strip, shed) and retried at
+// once, without counting against the backoff.
+func (sp *sproutProvider) doChatRetrying(ctx context.Context, clock providerRetryClock, req *core.ChatRequest) (*core.ChatResponse, error) {
+	var resp *core.ChatResponse
+	attempt := func(attempt int) (error, bool) {
+		r, err := sp.doChatOnce(ctx, req)
 		if err == nil {
+			resp = r
 			sp.clearProviderError()
 			// Fleet budget tracking: debit tokens after each LLM call.
-			if budgetErr := sp.trackFleetBudgetForResponse(resp); budgetErr != nil {
-				return nil, budgetErr
-			}
-			return resp, nil
+			return sp.trackFleetBudgetForResponse(r), false
 		}
-
-		lastErr = err
 
 		// A malformed inline image payload is a request-body problem, not a
 		// transport one: the provider rejects the same bytes every time.
@@ -74,24 +78,9 @@ func (sp *sproutProvider) doChatWithRetry(ctx context.Context, req *core.ChatReq
 			if len(stripped) != len(req.Messages) || messagesImageCount(stripped) != messagesImageCount(req.Messages) {
 				req.Messages = stripped
 				sp.clearPastedImages()
-				if sp.agent != nil && sp.agent.eventBus != nil {
-					sp.agent.publishRetryEvent(err, attempt, maxRetries, sp.agent.GetProvider(), true)
-				}
-				continue
+				return err, true
 			}
-			return nil, classifyImagePayloadError(err)
-		}
-
-		// Record the error for observability and emit retry event.
-		sp.recordProviderError(err, attempt)
-		if sp.agent != nil && sp.agent.eventBus != nil {
-			retryable := attempt < maxRetries && isRetryableProviderError(err)
-			if isBodyTooLargeError(err) {
-				// A 413 is always worth another attempt while retries remain:
-				// images can be shed, then the text history can be trimmed.
-				retryable = attempt < maxRetries
-			}
-			sp.agent.publishRetryEvent(err, attempt, maxRetries, sp.agent.GetProvider(), retryable)
+			return classifyImagePayloadError(err), false
 		}
 
 		// HTTP 413 (body too large): the payload, not the endpoint, is the
@@ -102,41 +91,34 @@ func (sp *sproutProvider) doChatWithRetry(ctx context.Context, req *core.ChatReq
 		// long session whose text alone exceeds the server limit 413s
 		// forever, since image shedding can never make it fit.
 		if isBodyTooLargeError(err) {
-			if attempt >= maxRetries {
-				return nil, err
-			}
 			if n := api.CountImages(req.Messages); n > 0 {
 				// Shed against the WIRE view: doChatOnce live-trims each
 				// attempt to maxLiveRequestImages, so counting req.Messages
 				// raw would let a large n keep shrinking to a value the
 				// live trim re-inflates the wire back up (wasted retry).
-				wire := n
-				if wire > maxLiveRequestImages {
-					wire = maxLiveRequestImages
-				}
+				wire := min(n, maxLiveRequestImages)
 				req.Messages = api.TrimImagesBeyondLatest(req.Messages, wire/2)
 				sp.clearPastedImages()
 			} else {
 				// Images exhausted: shrink the text history. Each retry
 				// keeps a smaller tail so repeated 413s converge.
-				keep := bodyBudgetKeepTail >> uint(attempt)
-				if keep < 1 {
-					keep = 1
-				}
+				keep := max(bodyBudgetKeepTail>>uint(attempt), 1)
 				req.Messages = api.TrimMessagesForBodyBudget(req.Messages, keep)
 			}
-		} else if !isRetryableProviderError(err) {
-			// Check if this error is retryable. If not, fail immediately.
-			return nil, err
+			if attempt >= maxInPlaceRetries {
+				return err, false
+			}
+			return err, true
 		}
 
-		// If we've exhausted retries, return the last error.
-		if attempt >= maxRetries {
-			return nil, err
-		}
+		sp.recordProviderError(err, attempt)
+		return err, false
 	}
 
-	return nil, lastErr
+	if err := runWithProviderRetry(ctx, clock, attempt, sp.providerRetryHooks()); err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
 
 // doChatOnce performs a single chat request, attaching pasted images if supported.

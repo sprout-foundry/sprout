@@ -207,6 +207,32 @@ func TestChat413TrimsTextHistoryWhenImagesExhausted(t *testing.T) {
 	}
 }
 
+// TestChat413AlwaysFailingTerminates: an endpoint that answers 413 to every
+// request, including the smallest one the cascade can build, must end the
+// call with the 413 instead of trimming forever.
+func TestChat413AlwaysFailingTerminates(t *testing.T) {
+	client := &textTrimmingClient{MockClient: &MockClient{model: "m"}}
+	testAgent := newBudgetTestAgent(t)
+	provider, err := NewSproutProvider(testAgent, client)
+	if err != nil {
+		t.Fatalf("NewSproutProvider: %v", err)
+	}
+	sp := provider.(*sproutProvider)
+
+	msgs := []core.Message{{Role: "system", Content: "system prompt"}}
+	for i := 0; i < 40; i++ {
+		msgs = append(msgs, core.Message{Role: "user", Content: fmt.Sprintf("turn %d", i)})
+	}
+
+	_, err = sp.doChatWithRetry(context.Background(), &core.ChatRequest{Messages: msgs})
+	if !isBodyTooLargeError(err) {
+		t.Fatalf("err = %v, want the 413 to surface", err)
+	}
+	if len(client.seenCounts) > maxInPlaceRetries+2 {
+		t.Errorf("attempts = %d, want the in-place budget to bound them", len(client.seenCounts))
+	}
+}
+
 // TestTrimMessagesForBodyBudget pins the helper directly: system messages
 // are always kept, the tail is kept, the cut lands on a user boundary so a
 // tool sequence is never split, and the input is not mutated.

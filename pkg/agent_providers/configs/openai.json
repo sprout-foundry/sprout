@@ -153,30 +153,6 @@
         ]
       },
       {
-        "context_length": 4095,
-        "description": "GPT-3.5 Turbo is OpenAI's fastest model. It can understand and generate natural language or code, and is optimized for chat and traditional completion tasks.\n\nTraining data up to Sep 2021.",
-        "id": "gpt-3.5-turbo-0613",
-        "input_cost": 1,
-        "name": "OpenAI: GPT-3.5 Turbo (older v0613)",
-        "output_cost": 2,
-        "tags": [
-          "tools",
-          "structured_output"
-        ]
-      },
-      {
-        "context_length": 16385,
-        "description": "This model offers four times the context length of gpt-3.5-turbo, allowing it to support approximately 20 pages of text in a single request at a higher cost. Training data: up...",
-        "id": "gpt-3.5-turbo-16k",
-        "input_cost": 3,
-        "name": "OpenAI: GPT-3.5 Turbo 16k",
-        "output_cost": 4,
-        "tags": [
-          "tools",
-          "structured_output"
-        ]
-      },
-      {
         "cached_input_cost": 1.25,
         "context_length": 128000,
         "description": "The 2024-08-06 version of GPT-4o offers improved performance in structured outputs, with the ability to supply a JSON schema in the respone_format. Read more [here](https://openai.com/index/introducing-structured-outputs-in-the-api/). GPT-4o (\"o\" for \"omni\") is...",
@@ -193,7 +169,7 @@
       {
         "cached_input_cost": 1.25,
         "context_length": 128000,
-        "description": "The 2024-11-20 version of GPT-4o offers a leveled-up creative writing ability with more natural, engaging, and tailored writing to improve relevance \u0026 readability. It’s also better at working with uploaded...",
+        "description": "The 2024-11-20 version of GPT-4o offers a leveled-up creative writing ability with more natural, engaging, and tailored writing to improve relevance & readability. It’s also better at working with uploaded...",
         "id": "gpt-4o-2024-11-20",
         "input_cost": 2.5,
         "name": "OpenAI: GPT-4o (2024-11-20)",
@@ -262,51 +238,6 @@
         ]
       },
       {
-        "cached_input_cost": 0.13,
-        "context_length": 400000,
-        "description": "GPT-5.1-Codex is a specialized version of GPT-5.1 optimized for software engineering and coding workflows. It is designed for both interactive development sessions and long, independent execution of complex engineering tasks....",
-        "id": "gpt-5.1-codex",
-        "input_cost": 1.25,
-        "name": "GPT-5.1 Codex",
-        "output_cost": 10,
-        "tags": [
-          "tools",
-          "vision",
-          "reasoning",
-          "structured_output"
-        ]
-      },
-      {
-        "cached_input_cost": 0.125,
-        "context_length": 400000,
-        "description": "GPT-5.1-Codex-Max is OpenAI’s latest agentic coding model, designed for long-running, high-context software development tasks. It is based on an updated version of the 5.1 reasoning stack and trained on agentic...",
-        "id": "gpt-5.1-codex-max",
-        "input_cost": 1.25,
-        "name": "GPT-5.1 Codex Max",
-        "output_cost": 10,
-        "tags": [
-          "tools",
-          "vision",
-          "reasoning",
-          "structured_output"
-        ]
-      },
-      {
-        "cached_input_cost": 0.03,
-        "context_length": 400000,
-        "description": "GPT-5.1-Codex-Mini is a smaller and faster version of GPT-5.1-Codex",
-        "id": "gpt-5.1-codex-mini",
-        "input_cost": 0.25,
-        "name": "GPT-5.1 Codex Mini",
-        "output_cost": 2,
-        "tags": [
-          "tools",
-          "vision",
-          "reasoning",
-          "structured_output"
-        ]
-      },
-      {
         "cached_input_cost": 0.175,
         "context_length": 400000,
         "description": "GPT-5.2 is the latest frontier-grade model in the GPT-5 series, offering stronger agentic and long context perfomance compared to GPT-5.1. It uses adaptive reasoning to allocate computation dynamically, responding quickly...",
@@ -332,21 +263,6 @@
         "tags": [
           "tools",
           "vision",
-          "structured_output"
-        ]
-      },
-      {
-        "cached_input_cost": 0.175,
-        "context_length": 400000,
-        "description": "GPT-5.2-Codex is an upgraded version of GPT-5.1-Codex optimized for software engineering and coding workflows. It is designed for both interactive development sessions and long, independent execution of complex engineering tasks....",
-        "id": "gpt-5.2-codex",
-        "input_cost": 1.75,
-        "name": "GPT-5.2 Codex",
-        "output_cost": 14,
-        "tags": [
-          "tools",
-          "vision",
-          "reasoning",
           "structured_output"
         ]
       },

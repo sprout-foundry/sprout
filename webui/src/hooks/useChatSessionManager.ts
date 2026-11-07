@@ -748,7 +748,9 @@ export function useChatSessionManager({
             const steerMsg = steerErr instanceof Error ? steerErr.message : String(steerErr);
             setState((prev) => ({
               isProcessing: false,
-              lastError: `Failed to steer active query: ${steerMsg}`,
+              // The inline entry carries the same text, so the footer
+              // card does not repeat it.
+              lastError: steerMsg,
               messages: trimMessages([
                 ...prev.messages,
                 {
@@ -777,7 +779,8 @@ export function useChatSessionManager({
         const errorMsg = error instanceof Error ? error.message : 'Failed to send message';
         setState((prev) => ({
           isProcessing: activeRequestsRef.current > 0,
-          lastError: `Failed to send message: ${errorMsg}`,
+          // Matches the inline entry, so the footer card does not repeat it.
+          lastError: errorMsg,
           messages: trimMessages([
             ...prev.messages,
             {

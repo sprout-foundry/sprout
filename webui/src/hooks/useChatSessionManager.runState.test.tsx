@@ -1,6 +1,7 @@
 import type { WsEvent } from '@sprout/events';
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { chatErrorText } from '../components/chat/chatError';
 import type { AppStoreSetState } from '../contexts/AppStore';
 import type { ChatSessionsApi } from '../services/chatSessions';
 import { fetchChatRunning } from '../services/runStatus';
@@ -174,5 +175,20 @@ describe('send while the workspace is stopping', () => {
     });
     expect(h.getState().isProcessing).toBe(false);
     expect(h.getState().messages.filter((m) => m.content.startsWith('[FAIL]'))).toEqual([]);
+  });
+});
+
+describe('send that fails', () => {
+  it('records the error once: the footer text matches the inline entry', async () => {
+    const h = setup({
+      state: { activeChatId: 'chat-a' } as Partial<AppState>,
+      api: { sendQuery: vi.fn().mockRejectedValue(new Error('The model provider could not be reached')) },
+    });
+    await act(async () => {
+      await h.result.current.handleSendMessage('hello');
+    });
+    const failures = h.getState().messages.filter((m) => m.content.startsWith('[FAIL]'));
+    expect(failures).toHaveLength(1);
+    expect(chatErrorText(failures[0].content)).toBe(h.getState().lastError);
   });
 });

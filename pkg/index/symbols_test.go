@@ -836,3 +836,34 @@ func TestBuildSymbols_NonHomeDirAllowed(t *testing.T) {
 		t.Fatal("expected symbols for main.go in non-home dir")
 	}
 }
+
+// Dependency, build and hidden directories are not indexed.
+func TestBuildSymbols_SkipsDependencyAndHiddenDirs(t *testing.T) {
+	dir := t.TempDir()
+	write := func(rel string) {
+		t.Helper()
+		path := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("function kept() {}\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("src/app.js")
+	write("node_modules/lib/index.js")
+	write("dist/bundle.js")
+	write(".hidden/tool.js")
+
+	idx, err := BuildSymbols(dir)
+	if err != nil {
+		t.Fatalf("BuildSymbols: %v", err)
+	}
+	var files []string
+	for _, f := range idx.Files {
+		files = append(files, f.File)
+	}
+	if len(files) != 1 || files[0] != "src/app.js" {
+		t.Fatalf("indexed %v, want only src/app.js", files)
+	}
+}

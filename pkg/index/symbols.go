@@ -74,11 +74,19 @@ func BuildSymbols(root string) (*SymbolIndex, error) {
 		if err != nil {
 			return nil
 		}
-		if info == nil || info.IsDir() {
+		if info == nil {
 			return nil
 		}
-		// Skip hidden directories and files
 		base := filepath.Base(path)
+		if info.IsDir() {
+			// Skip hidden, dependency and build directories: walking into
+			// node_modules or .git is what makes a cold build slow.
+			if path != root && (strings.HasPrefix(base, ".") || filesystem.IsSkipDir(base)) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		// Skip hidden files
 		if strings.HasPrefix(base, ".") {
 			return nil
 		}

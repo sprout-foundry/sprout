@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useSyncExternalStore } from 'react';
-
+import { getActiveHost } from '../host/accessor';
 import { clientFetch } from './clientSession';
 
 /** The platform's 503 wording when no workspace compute is configured. */
@@ -30,11 +30,17 @@ function setAvailability(next: Availability): void {
  * `available: false` counts as unavailable; a missing endpoint (a local
  * daemon without the route), a transient outage or a network failure leaves
  * the option on offer so the user can retry.
+ *
+ * The probe is a platform call, so it goes to the host transport's own API
+ * base rather than through clientFetch, which sends paths to the agent's
+ * backend — inside an embedded workspace, that workspace's daemon.
  */
 export function probeFullWorkspaces(): Promise<void> {
   if (!probe) {
     probe = Promise.resolve()
-      .then(() => clientFetch('/workspace/availability', { credentials: 'include' }))
+      .then(() =>
+        fetch(`${getActiveHost()?.transport.apiBaseURL ?? ''}/workspace/availability`, { credentials: 'include' }),
+      )
       .then(async (res) => {
         if (!res || !res.ok) return;
         const data = (await res.json().catch(() => ({}))) as { available?: unknown };

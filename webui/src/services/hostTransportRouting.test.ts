@@ -103,6 +103,20 @@ describe('platform clients route through the host transport', () => {
     });
   });
 
+  it('the full-workspace probe stays on the platform when the agent runs on a daemon', async () => {
+    activeHostRef.value = {
+      transport: {
+        apiBaseURL: HOST_API,
+        wsURL: '',
+        authMode: 'none',
+        agent: { kind: 'daemon', apiBaseURL: '/workspace/ws-1/proxy', wsURL: '' },
+      },
+    };
+    fetchMock.mockImplementation(() => Promise.resolve(jsonResponse({ available: true })));
+    await probeFullWorkspaces();
+    expect(fetchMock.mock.calls[0][0]).toBe(`${HOST_API}/workspace/availability`);
+  });
+
   it('without a host the same calls stay same-origin', async () => {
     activeHostRef.value = null;
     fetchMock.mockResolvedValue(jsonResponse([]));

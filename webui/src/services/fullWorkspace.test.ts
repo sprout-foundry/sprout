@@ -14,7 +14,8 @@
  * backend answered (the Fly url/session_token pair or the Firecracker
  * gateway_url/gateway_access_token pair) through <url>/auth/exchange.
  *
- * Network calls are stubbed on clientFetch, same interception style as
+ * The probe goes straight to the platform with fetch; the launch goes through
+ * clientFetch. Both are stubbed onto one mock, same interception style as
  * cloudTxn.test.ts.
  */
 
@@ -45,6 +46,11 @@ describe('probeFullWorkspaces', () => {
   beforeEach(() => {
     __resetFullWorkspaceForTests();
     fetchMock.mockReset();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('probes the typed availability endpoint, not the legacy list route', async () => {

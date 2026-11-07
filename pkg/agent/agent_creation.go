@@ -563,6 +563,14 @@ func newAgentWithConfigManagerInner(configManager *configuration.Manager, worksp
 			clientType == api.ZAICodingClientType
 		if !skipConnectionCheck {
 			if err := client.CheckConnection(); err != nil {
+				// A daemon cannot ask which provider to use instead, and the
+				// provider is configured: report that it could not be reached,
+				// with the cause, rather than that it is not configured.
+				if isNonInteractive() && isSSHDaemon() {
+					providerName := api.GetProviderName(clientType)
+					console.GlyphWarning.Fprintf(os.Stderr, "%s failed its connection check: %v", providerName, err)
+					return nil, NewProviderUnreachableError(providerName, err)
+				}
 				nextClientType, nextModel, recoverErr := recoverProviderStartup(configManager, clientType, model, err)
 				if recoverErr != nil {
 					return nil, agenterrors.NewProviderError("provider recovery failed after connection check", recoverErr, "", "")

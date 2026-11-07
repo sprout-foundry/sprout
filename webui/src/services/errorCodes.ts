@@ -23,6 +23,7 @@
 export type ServerErrorCode =
   | 'config_conflict' // SP-034-4: config file changed on disk under us
   | 'no_provider' // no LLM provider configured — trigger onboarding
+  | 'provider_unreachable' // the configured provider failed its connection check; the message carries the cause
   | 'model_not_available' // configured model is gone — show model selector
   | 'invalid_request' // generic validation failure on inbound message
   | 'unauthorized' // service-mode auth failure
@@ -60,6 +61,7 @@ export function getServerErrorCode(payload: unknown): string {
 const KNOWN_CODES: ReadonlySet<string> = new Set<ServerErrorCode>([
   'config_conflict',
   'no_provider',
+  'provider_unreachable',
   'model_not_available',
   'invalid_request',
   'unauthorized',

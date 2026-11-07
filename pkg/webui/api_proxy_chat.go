@@ -109,7 +109,7 @@ func (ws *ReactWebServer) handleAPIProxyChatSteer(w http.ResponseWriter, r *http
 	clientAgent, err := ws.getChatAgent(clientID, chatID)
 	if err != nil {
 		if isProviderConfigError(err) {
-			writeJSONErr(w, http.StatusServiceUnavailable, "no_provider", "AI features require a provider. Please configure one in settings.")
+			writeProviderErr(w, err)
 		} else {
 			writeJSONErr(w, http.StatusInternalServerError, "agent_access_failed", fmt.Sprintf("Failed to access chat agent: %v", err))
 		}

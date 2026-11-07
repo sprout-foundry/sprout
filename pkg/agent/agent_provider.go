@@ -29,6 +29,47 @@ var ErrModelNotAvailable = errors.New("configured model is not available for thi
 // of crashing the daemon.
 var ErrProviderNotConfigured = errors.New("provider is not configured — configure via webui settings")
 
+// ErrProviderUnreachable is matched by the error a daemon gets when its
+// configured provider fails the startup connection check: the provider is set
+// up, but the test request did not get through. The error also matches
+// ErrProviderNotConfigured, so the daemon still starts and the web UI can
+// switch providers, and it carries the cause so the user sees why.
+var ErrProviderUnreachable = errors.New("the model provider could not be reached")
+
+// NewProviderUnreachableError reports that provider failed its connection
+// check with cause.
+func NewProviderUnreachableError(provider string, cause error) error {
+	return &providerUnreachableError{provider: provider, cause: cause}
+}
+
+type providerUnreachableError struct {
+	provider string
+	cause    error
+}
+
+func (e *providerUnreachableError) Error() string {
+	return fmt.Sprintf("%s could not be reached: %v", e.provider, e.cause)
+}
+
+func (e *providerUnreachableError) Unwrap() error { return e.cause }
+
+func (e *providerUnreachableError) Is(target error) bool {
+	return target == ErrProviderUnreachable || target == ErrProviderNotConfigured
+}
+
+// ProviderUnreachableCause returns the cause carried by an
+// ErrProviderUnreachable error, and whether err is one.
+func ProviderUnreachableCause(err error) (string, bool) {
+	var unreachable *providerUnreachableError
+	if !errors.As(err, &unreachable) {
+		return "", false
+	}
+	if unreachable.cause == nil {
+		return "", true
+	}
+	return unreachable.cause.Error(), true
+}
+
 // ErrQueryInProgress is returned when ProcessQuery is called while another
 // query is already running on the same Agent instance. This happens when two
 // frontends (CLI REPL and WebUI) share the same Agent — only one query can

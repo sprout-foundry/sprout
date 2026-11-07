@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -37,7 +38,7 @@ func isProviderConfigError(err error) bool {
 	if err == nil {
 		return false
 	}
-	if errors.Is(err, ErrNoProviderConfigured) {
+	if errors.Is(err, ErrNoProviderConfigured) || errors.Is(err, agent.ErrProviderNotConfigured) {
 		return true
 	}
 	s := err.Error()
@@ -47,6 +48,17 @@ func isProviderConfigError(err error) bool {
 		strings.Contains(s, "provider_not_configured") ||
 		strings.Contains(s, "no provider configured") ||
 		strings.Contains(s, "editor mode is active")
+}
+
+// writeProviderErr answers a request whose agent could not start for a
+// provider reason: a configured provider that could not be reached gets its
+// cause, anything else the not-configured answer.
+func writeProviderErr(w http.ResponseWriter, err error) {
+	if cause, ok := agent.ProviderUnreachableCause(err); ok {
+		writeJSONErr(w, http.StatusServiceUnavailable, "provider_unreachable", "The model provider could not be reached: "+cause)
+		return
+	}
+	writeJSONErr(w, http.StatusServiceUnavailable, "no_provider", "AI features require a provider. Please configure one in settings.")
 }
 
 func (ws *ReactWebServer) incrementActiveQueries(clientID string) {

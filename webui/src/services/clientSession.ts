@@ -666,8 +666,11 @@ export function resolveWebUIClientId(): Promise<string> {
     // sends automatically with credentials: 'include') and echo the resolved
     // client ID in the X-Sprout-Client-ID response header.
     try {
-      const proxyBase = getProxyBase();
-      const url = `${proxyBase}/api/query/status`;
+      // The daemon route, so the same base clientFetch uses: the agent
+      // backend's when the host names one (an embedded workspace's proxy),
+      // else the SSH proxy base, else same-origin.
+      const base = backendURLs(getActiveHost()).apiBaseURL || getProxyBase();
+      const url = `${base}/api/query/status`;
       const resp = await fetch(url, {
         method: 'GET',
         credentials: 'include',

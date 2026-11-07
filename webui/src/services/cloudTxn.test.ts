@@ -329,6 +329,25 @@ describe('resolveTxnWorkspace', () => {
     expect((openMock.mock.calls[0][0] as string).startsWith('/workspace/txn/')).toBe(true);
   });
 
+  it('addresses a firecracker workspace through the host-agnostic lifecycle', async () => {
+    vi.stubGlobal(
+      'fetch',
+      routeFetch({
+        'GET /workspace/txn/resolve?repo_url=https%3A%2F%2Fgithub.com%2Facme%2Fapp': () =>
+          jsonResponse({ workspace_id: 'ws-fc', status: 'running', backend: 'firecracker' }),
+      }),
+    );
+    await resolveTxnWorkspace('https://github.com/acme/app');
+
+    const openMock = routeFetch({
+      'POST /workspace/txn/ws-fc/txn': () =>
+        jsonResponse({ txn_id: 'txn-1', status: 'push', workspace_id: 'ws-fc' }, { status: 201 }),
+    });
+    vi.stubGlobal('fetch', openMock);
+    await createTxn('ws-fc');
+    expect(openMock.mock.calls[0][0]).toBe('/workspace/txn/ws-fc/txn');
+  });
+
   it('creates a workspace when resolve finds no match', async () => {
     const fetchMock = routeFetch({
       'GET /workspace/txn/resolve?repo_url=https%3A%2F%2Fgithub.com%2Facme%2Fapp': () =>
@@ -395,9 +414,10 @@ describe('resolveTxnWorkspace with a chosen host', () => {
     expect(await resolveTxnWorkspace(REPO, { host: 'fly' })).toEqual({ workspaceId: 'ws-fly', created: false });
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    // The txn lifecycle for a Fly workspace stays on the Fly path.
+    // A resolved Fly workspace uses the host-agnostic lifecycle too; the
+    // platform hands it to the Fly handlers.
     const openMock = routeFetch({
-      'POST /workspace/fly/ws-fly/txn': () => jsonResponse({ txn_id: 't', status: 'push' }, { status: 201 }),
+      'POST /workspace/txn/ws-fly/txn': () => jsonResponse({ txn_id: 't', status: 'push' }, { status: 201 }),
     });
     vi.stubGlobal('fetch', openMock);
     await createTxn('ws-fly');

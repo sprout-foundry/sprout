@@ -43,12 +43,12 @@ function routeFetch(routes: Record<string, () => Response>) {
 const OK_ROUTES: Record<string, () => Response> = {
   'GET /workspace/txn/resolve': () => jsonResponse({ workspace_id: WS, backend: 'fly' }),
   'POST /workspace/txn': () => jsonResponse({ workspace_id: WS, backend: 'fly' }),
-  [`POST /workspace/fly/${WS}/txn`]: () => jsonResponse({ txn_id: TXN, status: 'push' }),
-  [`POST /workspace/fly/${WS}/txn/${TXN}/push`]: () => jsonResponse({ files: [], bytes: 0 }),
-  [`POST /workspace/fly/${WS}/txn/${TXN}/run`]: () =>
+  [`POST /workspace/txn/${WS}/txn`]: () => jsonResponse({ txn_id: TXN, status: 'push' }),
+  [`POST /workspace/txn/${WS}/txn/${TXN}/push`]: () => jsonResponse({ files: [], bytes: 0 }),
+  [`POST /workspace/txn/${WS}/txn/${TXN}/run`]: () =>
     jsonResponse({ stdout: 'ok\n', stderr: '', exit_code: 0, duration_ms: 1, timed_out: false, truncated: false }),
-  [`POST /workspace/fly/${WS}/txn/${TXN}/pull`]: () => jsonResponse({ base: { git_sha: '', client: 'c' }, files: [] }),
-  [`POST /workspace/fly/${WS}/txn/${TXN}/finish`]: () => jsonResponse({ status: 'done' }),
+  [`POST /workspace/txn/${WS}/txn/${TXN}/pull`]: () => jsonResponse({ base: { git_sha: '', client: 'c' }, files: [] }),
+  [`POST /workspace/txn/${WS}/txn/${TXN}/finish`]: () => jsonResponse({ status: 'done' }),
 };
 
 afterEach(() => {
@@ -72,7 +72,7 @@ describe('runTxnCommand phase stream', () => {
       'fetch',
       routeFetch({
         ...OK_ROUTES,
-        [`POST /workspace/fly/${WS}/txn/${TXN}/run`]: () => jsonResponse({ error: 'boom' }, { status: 500 }),
+        [`POST /workspace/txn/${WS}/txn/${TXN}/run`]: () => jsonResponse({ error: 'boom' }, { status: 500 }),
       }),
     );
     const phases: string[] = [];

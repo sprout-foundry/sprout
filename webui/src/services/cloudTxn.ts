@@ -238,13 +238,13 @@ export async function resolveTxnWorkspace(
   // resumes the existing Fly workspace for the cloud.
   const existing = await resolveWorkspace(repoURL, choice);
   if (typeof existing?.workspace_id === 'string' && existing.workspace_id !== '') {
-    noteWorkspaceBackend(existing.workspace_id, typeof existing.backend === 'string' ? existing.backend : 'fly');
+    noteWorkspaceResolved(existing.workspace_id);
     return { workspaceId: existing.workspace_id, created: false };
   }
 
   const created = await createWorkspace(repoURL, choice);
   const workspaceId = created.workspace_id as string;
-  noteWorkspaceBackend(workspaceId, typeof created.backend === 'string' ? created.backend : 'fly');
+  noteWorkspaceResolved(workspaceId);
   return { workspaceId, created: true };
 }
 
@@ -252,19 +252,19 @@ export async function resolveTxnWorkspace(
 //
 // The txn lifecycle lives at /workspace/txn/{ws}/txn/... for every backend —
 // the platform dispatches per workspace (runner-hosted workspaces get the
-// bearer-proxied path, Fly keeps its billing semantics). These helpers only
-// exist so in-flight escalations that resolved a workspace under the old
-// /workspace/fly contract keep working: anything without a recorded backend
-// still addresses /workspace/fly.
+// bearer-proxied path, Firecracker ones the fleet's, Fly keeps its billing
+// semantics). These helpers only exist so in-flight escalations that resolved
+// a workspace under the old /workspace/fly contract keep working: anything
+// without a recorded backend still addresses /workspace/fly.
 
-const txnBackends = new Map<string, string>();
+const resolvedWorkspaces = new Set<string>();
 
-function noteWorkspaceBackend(workspaceId: string, backend: string): void {
-  txnBackends.set(workspaceId, backend === 'runner' ? 'txn' : 'fly');
+function noteWorkspaceResolved(workspaceId: string): void {
+  resolvedWorkspaces.add(workspaceId);
 }
 
 function txnBase(workspaceId: string): string {
-  return txnBackends.get(workspaceId) ?? 'fly';
+  return resolvedWorkspaces.has(workspaceId) ? 'txn' : 'fly';
 }
 
 // ── Txn lifecycle ───────────────────────────────────────────────────────────

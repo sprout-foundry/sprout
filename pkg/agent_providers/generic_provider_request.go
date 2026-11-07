@@ -67,10 +67,11 @@ func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.T
 		"stream":   stream,
 	}
 
-	// Ask strict-OpenAI backends for the usage block on streams. Without
-	// this flag they stream no token counts at all, and every response
-	// tracks as zero tokens / zero cost / zero cache for the session.
-	if stream && p.config.Streaming.IncludeUsage {
+	// Ask for the usage block on streams. Strict-OpenAI backends stream no
+	// token counts without it, and every response would track as zero
+	// tokens / zero cost / zero cache for the session. Left out when the
+	// config opts out, or once the server rejected it.
+	if stream && p.config.Streaming.WantsUsage() && !p.streamUsageRefused.Load() {
 		request["stream_options"] = map[string]interface{}{"include_usage": true}
 	}
 

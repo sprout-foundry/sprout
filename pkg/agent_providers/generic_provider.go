@@ -57,6 +57,13 @@ type GenericProvider struct {
 	// reported, never dropped silently).
 	reasoningWarnMu       sync.Mutex
 	reasoningNoKnobWarned bool
+
+	// streamUsageRefused is set once the server rejected stream_options:
+	// later streaming requests leave it out (generic_provider_usage.go).
+	streamUsageRefused atomic.Bool
+	// usageEstimateWarned reports estimated token counts once per provider
+	// instance (session), not on every response.
+	usageEstimateWarned atomic.Bool
 }
 
 // HTTP error formatting helpers are in generic_provider_http_errors.go.
@@ -129,9 +136,13 @@ func (p *GenericProvider) SendChatRequest(ctx context.Context, messages []api.Me
 		return p.SendChatRequestStream(ctx, messages, tools, reasoning, disableThinking, func(string, string) {})
 	}
 	resp, err := p.sendChatRequestImpl(ctx, messages, tools, reasoning, disableThinking)
-	return p.reconcileVisionCapability(messages, resp, err, func(msgs []api.Message) (*api.ChatResponse, error) {
+	resp, err = p.reconcileVisionCapability(messages, resp, err, func(msgs []api.Message) (*api.ChatResponse, error) {
 		return p.sendChatRequestImpl(ctx, msgs, tools, reasoning, disableThinking)
 	})
+	if err == nil {
+		p.fillMissingUsage(messages, tools, resp)
+	}
+	return resp, err
 }
 
 // sendChatRequestImpl is the plain chat path; SendChatRequest wraps it with

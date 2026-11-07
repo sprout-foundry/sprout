@@ -97,7 +97,12 @@ func (p *GenericProvider) sendChatRequestStreamImpl(ctx context.Context, message
 		// provider-specific errors (e.g. ZAI returning empty-body 400s).
 		_ = body // already logged by formatProviderHTTPError below
 
-		retryBody, retryResp, retried, retryErr := p.tryMaxCompletionTokensRetry(sentBody, true, body)
+		// A server that refuses stream_options is asked again without it;
+		// one that refuses max_tokens, with max_completion_tokens.
+		retryBody, retryResp, retried, retryErr := p.tryWithoutStreamOptionsRetry(sentBody, true, resp.StatusCode, body)
+		if !retried {
+			retryBody, retryResp, retried, retryErr = p.tryMaxCompletionTokensRetry(sentBody, true, body)
+		}
 		if retried {
 			auditFailover = true
 			requestBody = retryBody
@@ -124,6 +129,7 @@ func (p *GenericProvider) sendChatRequestStreamImpl(ctx context.Context, message
 				return nil, p.networkErrorWithConnDiag("chat request failed", err, diag)
 			}
 			api.RecoverInlineToolCalls(response, tools)
+			p.fillMissingUsage(messages, tools, response)
 			return response, nil
 		}
 
@@ -150,6 +156,7 @@ func (p *GenericProvider) sendChatRequestStreamImpl(ctx context.Context, message
 
 	// Success - don't log the request
 	api.RecoverInlineToolCalls(response, tools)
+	p.fillMissingUsage(messages, tools, response)
 	return response, nil
 }
 

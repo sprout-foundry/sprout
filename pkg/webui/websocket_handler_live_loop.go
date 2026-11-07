@@ -20,6 +20,14 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
+// wsPingInterval is how often the server pings a live connection, and
+// wsInactivityLimit how long it waits for any message before closing it.
+// Swapped in tests.
+var (
+	wsPingInterval    = 60 * time.Second
+	wsInactivityLimit = 180 * time.Second
+)
+
 // runConnectionLiveLoop is the shared post-upgrade body of both
 // handleWebSocket_Agent (Mode 1) and handleWebSocket_Daemon (Mode 2).
 // It is responsible for:
@@ -200,13 +208,46 @@ func (ws *ReactWebServer) runConnectionLiveLoop(
 		}()
 
 		conn.SetReadLimit(512 * 1024) // 512KB max message size
+
+		// Pings go out on their own ticker. A read deadline cannot double as
+		// the ping timer: once a read times out the connection is failed for
+		// good, every later read returns the same error at once, and the
+		// websocket library panics after a thousand of them.
+		pingDone := make(chan struct{})
+		defer close(pingDone)
+		go func() {
+			ticker := time.NewTicker(wsPingInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-pingDone:
+					return
+				case <-ticker.C:
+					if err := safeConn.WriteJSON(map[string]interface{}{
+						"type": "ping",
+						"data": map[string]interface{}{"timestamp": time.Now().Unix()},
+					}); err != nil {
+						ws.log().Error("WebSocket ping failed", slog.String("session_id", sessionID), slog.Any("err", err))
+						cancel()
+						return
+					}
+				}
+			}
+		}()
+
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			default:
-				// Set read deadline for heartbeat (60 seconds)
-				conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+				// A connection that has sent nothing (not even a pong) for
+				// wsInactivityLimit is dead. Chrome pauses background tabs
+				// aggressively, freezing timers and throttling network; the
+				// limit gives the client's pong watchdog time to notice and
+				// reconnect before the server gives up.
+				conn.SetReadDeadline(lastMessage.Add(wsInactivityLimit))
 
 				// Read raw message bytes for validation
 				_, rawMsg, err := conn.ReadMessage()
@@ -215,24 +256,7 @@ func (ws *ReactWebServer) runConnectionLiveLoop(
 						websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 						ws.log().Info("WebSocket closed", slog.String("session_id", sessionID), slog.Any("err", err))
 					} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-						// If no message received in 180 seconds (3 minutes), connection is dead.
-						// Chrome pauses background tabs aggressively, freezing timers and
-						// throttling network. 3 minutes gives enough time for the pong
-						// watchdog on the client side to detect the issue and proactively
-						// reconnect before the server kills the connection.
-						if time.Since(lastMessage) > 180*time.Second {
-							ws.log().Warn("WebSocket inactive; closing", slog.String("session_id", sessionID), slog.Duration("inactivity", 180*time.Second))
-							return
-						}
-						// Heartbeat timeout, send ping
-						if err := safeConn.WriteJSON(map[string]interface{}{
-							"type": "ping",
-							"data": map[string]interface{}{"timestamp": time.Now().Unix()},
-						}); err != nil {
-							ws.log().Error("WebSocket ping failed", slog.String("session_id", sessionID), slog.Any("err", err))
-							return
-						}
-						continue
+						ws.log().Warn("WebSocket inactive; closing", slog.String("session_id", sessionID), slog.Duration("inactivity", wsInactivityLimit))
 					} else {
 						ws.log().Error("WebSocket read failed", slog.String("session_id", sessionID), slog.Any("err", err))
 					}

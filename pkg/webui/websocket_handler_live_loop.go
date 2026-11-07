@@ -247,7 +247,10 @@ func (ws *ReactWebServer) runConnectionLiveLoop(
 				// aggressively, freezing timers and throttling network; the
 				// limit gives the client's pong watchdog time to notice and
 				// reconnect before the server gives up.
-				conn.SetReadDeadline(lastMessage.Add(wsInactivityLimit))
+				if err := conn.SetReadDeadline(lastMessage.Add(wsInactivityLimit)); err != nil {
+					ws.log().Error("WebSocket read deadline failed", slog.String("session_id", sessionID), slog.Any("err", err))
+					return
+				}
 
 				// Read raw message bytes for validation
 				_, rawMsg, err := conn.ReadMessage()

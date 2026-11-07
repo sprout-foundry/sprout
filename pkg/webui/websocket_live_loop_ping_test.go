@@ -47,7 +47,9 @@ func TestLiveLoopPingsAQuietClientThenClosesIt(t *testing.T) {
 	defer client.Close()
 
 	pings := 0
-	client.SetReadDeadline(time.Now().Add(3 * time.Second))
+	if err := client.SetReadDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		t.Fatalf("read deadline: %v", err)
+	}
 	for {
 		_, msg, err := client.ReadMessage()
 		if err != nil {

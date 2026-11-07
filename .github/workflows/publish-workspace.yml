@@ -16,7 +16,8 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      # contents: write attaches the package to the tag's GitHub release.
+      contents: write
       packages: write
 
     steps:
@@ -75,8 +76,35 @@ jobs:
         # dynamic import loses its exports in that second bundle.
         run: node packages/workspace/scripts/check-consumer-rebundle.mjs
 
+      - name: Pack the package
+        # One tarball is both what the registry publishes and what the
+        # release carries, so a host fetching it from either gets the same
+        # bytes (and the same hash).
+        id: pack
+        working-directory: packages/workspace
+        run: |
+          tgz="$(npm pack --silent | tail -n 1)"
+          sha256sum "$tgz" > SHA256SUMS
+          echo "tgz=$tgz" >> "$GITHUB_OUTPUT"
+
       - name: Publish to GitHub Packages
         working-directory: packages/workspace
-        run: npm publish
+        run: npm publish "${{ steps.pack.outputs.tgz }}"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Attach the package to the tag's GitHub release
+        # Hosts that choose the runtime version at run time (the Sprout
+        # Foundry platform) fetch it from the public release instead of the
+        # registry, which needs a token even for a public package. Not the
+        # repository's latest release: that stays the CLI's.
+        if: startsWith(github.ref, 'refs/tags/workspace-v')
+        working-directory: packages/workspace
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${GITHUB_REF_NAME#workspace-v}"
+          gh release create "$GITHUB_REF_NAME" "${{ steps.pack.outputs.tgz }}" SHA256SUMS \
+            --title "@sprout-foundry/workspace $version" \
+            --notes "The @sprout-foundry/workspace $version package as published to GitHub Packages, and its SHA-256 (SHA256SUMS)." \
+            --latest=false

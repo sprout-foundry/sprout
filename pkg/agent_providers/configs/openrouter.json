@@ -7998,6 +7998,48 @@
           "tools",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.02,
+        "context_length": 262144,
+        "description": "A compact 1.7B-parameter text model with a 256K-token context, post-trained for agents, tool calling, and structured outputs. It reasons before it answers.",
+        "id": "liquid/lfm-3-1.7b",
+        "input_cost": 0.08,
+        "name": "LiquidAI: LFM3-1.7B",
+        "output_cost": 0.2,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 262144,
+        "description": "A compact 1.7B-parameter text model with a 256K-token context, post-trained for agents, tool calling, and structured outputs. It reasons before it answers.",
+        "id": "liquid/lfm-3-1.7b:free",
+        "input_cost": 0,
+        "name": "LiquidAI: LFM3-1.7B (free)",
+        "output_cost": 0,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.04,
+        "context_length": 262144,
+        "description": "Qwen3.8 27B via the Batch API. Open-weight dense vision-language model from Qwen for coding, professional workflows, research, multimodal interaction, and long-running agent tasks, with flexible thinking that can be enabled or disabled.",
+        "id": "qwen/qwen3.8-27b:batch",
+        "input_cost": 0.16,
+        "name": "Qwen: Qwen3.8 27B (batch)",
+        "output_cost": 2,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

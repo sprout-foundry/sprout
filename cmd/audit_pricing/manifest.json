@@ -1,7 +1,7 @@
 {
   "cerebras": {
     "source": "https://www.cerebras.ai/pricing",
-    "last_verified": "2026-11-06",
+    "last_verified": "2026-11-07",
     "models": [
       {
         "id": "qwen-3.8-27b",
@@ -17,7 +17,7 @@
   },
   "chutes": {
     "source": "https://llm.chutes.ai/v1/models",
-    "last_verified": "2026-11-06",
+    "last_verified": "2026-11-07",
     "models": [
       {
         "id": "Nemotron-3-Nano-Omni-30B-TEE",
@@ -155,7 +155,7 @@
   },
   "deepinfra": {
     "source": "https://api.deepinfra.com/v1/models",
-    "last_verified": "2026-11-06",
+    "last_verified": "2026-11-07",
     "models": [
       {
         "id": "ByteDance/Seed-1.8",
@@ -698,7 +698,7 @@
   },
   "deepseek": {
     "source": "https://api-docs.deepseek.com/quick_start/pricing",
-    "last_verified": "2026-11-06",
+    "last_verified": "2026-11-07",
     "models": [
       {
         "id": "deepseek-v4-flash",
@@ -758,7 +758,7 @@
   },
   "minimax": {
     "source": "https://platform.minimax.io/docs/guides/pricing-paygo",
-    "last_verified": "2026-11-06",
+    "last_verified": "2026-11-07",
     "models": [
       {
         "id": "MiniMax-M2",
@@ -836,7 +836,7 @@
   },
   "mistral": {
     "source": "https://docs.mistral.ai/inference/pricing",
-    "last_verified": "2026-11-06",
+    "last_verified": "2026-11-07",
     "models": [
       {
         "id": "mistral-large-latest",
@@ -969,7 +969,7 @@
   },
   "ollama-cloud": {
     "source": "https://ollama.com/pricing",
-    "last_verified": "2026-11-06",
+    "last_verified": "2026-11-07",
     "models": [
       {
         "id": "deepseek-v4-flash",
@@ -1169,7 +1169,7 @@
   },
   "openai": {
     "source": "https://platform.openai.com/docs/pricing",
-    "last_verified": "2026-11-06",
+    "last_verified": "2026-11-07",
     "models": [
       {
         "id": "gpt-5",
@@ -1705,7 +1705,7 @@
   },
   "openrouter": {
     "source": "https://openrouter.ai/api/v1/models",
-    "last_verified": "2026-11-06",
+    "last_verified": "2026-11-07",
     "models": [
       {
         "id": "ai21/jamba-large-1.7",
@@ -4968,12 +4968,29 @@
         "input_per_mtok": 0.2,
         "output_per_mtok": 0.6,
         "cached_per_mtok": 0.05
+      },
+      {
+        "id": "liquid/lfm-3-1.7b",
+        "input_per_mtok": 0.08,
+        "output_per_mtok": 0.2,
+        "cached_per_mtok": 0.02
+      },
+      {
+        "id": "liquid/lfm-3-1.7b:free",
+        "input_per_mtok": 0,
+        "output_per_mtok": 0
+      },
+      {
+        "id": "qwen/qwen3.8-27b:batch",
+        "input_per_mtok": 0.16,
+        "output_per_mtok": 2,
+        "cached_per_mtok": 0.04
       }
     ]
   },
   "zai": {
     "source": "https://docs.z.ai/guides/overview/pricing",
-    "last_verified": "2026-11-06",
+    "last_verified": "2026-11-07",
     "models": [
       {
         "id": "glm-4.5v",
@@ -5109,7 +5126,7 @@
   },
   "zai-coding": {
     "source": "https://docs.z.ai/guides/overview/pricing",
-    "last_verified": "2026-11-06",
+    "last_verified": "2026-11-07",
     "models": [
       {
         "id": "glm-4.5",

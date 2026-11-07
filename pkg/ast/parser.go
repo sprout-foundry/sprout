@@ -19,10 +19,12 @@
 package ast
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	gotreesitter "github.com/odvcencio/gotreesitter"
 	"github.com/odvcencio/gotreesitter/grammars"
@@ -238,7 +240,26 @@ func ParseFile(filePath string, content []byte) (*ASTResult, error) {
 		return nil, fmt.Errorf("ast: detect language: %w", err)
 	}
 
-	return parse(langName, filePath, content)
+	return parse(langName, filePath, content, 0)
+}
+
+// ErrParseTimeout is returned by ParseFileWithin when the parse does not
+// finish within its budget.
+var ErrParseTimeout = errors.New("ast: parse did not finish within its time budget")
+
+// ParseFileWithin is ParseFile with a time budget. Parse time is not bounded
+// by file size: a few files take minutes, holding the parse lock every other
+// parse waits on. A parse that runs out of budget returns ErrParseTimeout
+// instead of a partial tree, so the caller can fall back.
+func ParseFileWithin(filePath string, content []byte, budget time.Duration) (*ASTResult, error) {
+	if filePath == "" {
+		return nil, fmt.Errorf("ast: filePath must not be empty")
+	}
+	langName, err := detectLangFromFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("ast: detect language: %w", err)
+	}
+	return parse(langName, filePath, content, budget)
 }
 
 // ParseContent parses source content with an explicit language name.  Use this
@@ -247,11 +268,12 @@ func ParseContent(language string, content []byte) (*ASTResult, error) {
 	if language == "" {
 		return nil, fmt.Errorf("ast: language must not be empty")
 	}
-	return parse(language, "", content)
+	return parse(language, "", content, 0)
 }
 
 // parse is the shared implementation for ParseFile and ParseContent.
-func parse(langName, filePath string, content []byte) (*ASTResult, error) {
+// A zero budget leaves the parse unbounded.
+func parse(langName, filePath string, content []byte, budget time.Duration) (*ASTResult, error) {
 	entry, err := getLanguage(langName)
 	if err != nil {
 		return nil, err
@@ -266,12 +288,19 @@ func parse(langName, filePath string, content []byte) (*ASTResult, error) {
 		return nil, fmt.Errorf("ast: failed to create parser for language %s", langName)
 	}
 
+	if budget > 0 {
+		parser.SetTimeoutMicros(uint64(budget.Microseconds()))
+	}
 	tree, parseErr := parser.Parse(content)
 	if parseErr != nil {
 		return nil, fmt.Errorf("ast: parse failed for %s (language %s): %w", filePath, langName, parseErr)
 	}
 	if tree == nil {
 		return nil, fmt.Errorf("ast: parse returned nil tree for %s (language %s)", filePath, langName)
+	}
+	if budget > 0 && tree.ParseStoppedEarly() {
+		tree.Release()
+		return nil, fmt.Errorf("%w: %s (language %s)", ErrParseTimeout, filePath, langName)
 	}
 
 	root := tree.RootNode()

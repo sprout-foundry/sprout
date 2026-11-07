@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/ast"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
@@ -174,10 +175,17 @@ func extractSymbols(path string, content []byte) []Symbol {
 	return deduplicateSymbols(extractSymbolsByRegex(ext, content))
 }
 
+// symbolParseBudget bounds one file's tree-sitter parse while indexing. Most
+// files parse in milliseconds, but some large components take seconds to
+// minutes, and parses cannot run in parallel (the ast package holds one lock
+// for them). Past the budget the file's symbols come from the regex extractor
+// instead, so a cold index of a big repo stays well under a request timeout.
+var symbolParseBudget = 250 * time.Millisecond
+
 // extractSymbolsViaAST uses the tree-sitter-based AST parser to extract symbols.
 // It filters out non-indexable kinds and maps AST kind names to index kind names.
 func extractSymbolsViaAST(path string, content []byte) []Symbol {
-	result, err := ast.ParseFile(path, content)
+	result, err := ast.ParseFileWithin(path, content, symbolParseBudget)
 	if err != nil {
 		log.Printf("[debug] AST parse failed for %s: %v (falling back to regex)", path, err)
 		return nil

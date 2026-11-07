@@ -10,6 +10,8 @@
  */
 
 export { createAgent, providerConfig, resolveModelEndpoint, HEADLESS_PROVIDER } from './agent/createAgent';
+export { definePersona, undefinePersona, listDefinedPersonas, PersonaDefinitionError } from './agent/persona';
+export type { DefinedPersona } from './agent/persona';
 export { loadSproutWasm, resolveWasmAssetUrls, WASM_MANIFEST_FILE } from './agent/runtime';
 export type { LoadSproutWasmOptions } from './agent/runtime';
 export { memoryFileStore } from './agent/files';
@@ -30,6 +32,7 @@ export type {
   HostToolCallContext,
   JsonSchemaObject,
   MockupEvent,
+  PersonaDefinition,
   SproutWasmBridge,
   StoredFile,
   TurnResult,

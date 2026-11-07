@@ -110,7 +110,8 @@ export default function SubagentSettingsTab({
       <div className="settings-section-spaced">
         <h4>Personas</h4>
         <div className="config-help settings-help-spaced">
-          Personas are catalog-fixed. To customize behavior, create a skill in <code>~/.config/sprout/skills/</code>.
+          Sprout&apos;s personas are immutable. Create your own in <code>~/.config/sprout/personas/</code>, or accept a
+          repository&apos;s from <code>.sprout/personas/</code>. Each row shows where its persona came from.
         </div>
 
         {personaEntries.length === 0 && <div className="settings-empty">No personas available</div>}
@@ -124,6 +125,7 @@ export default function SubagentSettingsTab({
                 <span className="persona-mapping-name" title={persona.description}>
                   {persona.name}
                 </span>
+                <span className="persona-mapping-source">{persona.source || 'core'}</span>
                 <span className="persona-mapping-value">
                   {personaProvider ? personaProvider : <em>default provider</em>}
                 </span>

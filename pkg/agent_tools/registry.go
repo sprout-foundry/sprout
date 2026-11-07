@@ -62,6 +62,41 @@ func (r *ToolRegistry) Lookup(name string) (ToolHandler, bool) {
 	return h, ok
 }
 
+// HostProvided is implemented by a ToolHandler a host registered at run time
+// (the headless agent API's registerHostTool) rather than one of Sprout's
+// built-in handlers. It lets the roster tell a host's tools from the
+// built-ins without the agent importing the host's code.
+type HostProvided interface {
+	// HostProvidedTool marks the handler as host-registered.
+	HostProvidedTool() bool
+}
+
+// RegisteredHostToolNames returns the names of the registered host-provided
+// tools, sorted. Resolving this at roster-build time is what lets a persona
+// whose host_tools contains "*" be offered a tool the host registers after
+// the agent was created (SP-175).
+func RegisteredHostToolNames() []string {
+	var names []string
+	for name, handler := range GetNewToolRegistry().All() {
+		if hp, ok := handler.(HostProvided); ok && hp.HostProvidedTool() {
+			names = append(names, name)
+		}
+	}
+	slices.Sort(names)
+	return names
+}
+
+// IsHostProvidedTool reports whether the named registered tool came from the
+// host rather than Sprout's built-ins.
+func IsHostProvidedTool(name string) bool {
+	handler, ok := GetNewToolRegistry().Lookup(name)
+	if !ok {
+		return false
+	}
+	hp, ok := handler.(HostProvided)
+	return ok && hp.HostProvidedTool()
+}
+
 // All returns a copy of all registered tools.
 func (r *ToolRegistry) All() map[string]ToolHandler {
 	r.mu.RLock()

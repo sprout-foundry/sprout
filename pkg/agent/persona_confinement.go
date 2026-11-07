@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
@@ -41,22 +42,54 @@ var confinedBrowseDeniedArgs = []string{"steps", "persist_session", "session_id"
 
 // activeConfinedPersona returns the active persona when it is confined, or nil.
 func (a *Agent) activeConfinedPersona() *configuration.SubagentType {
-	if a == nil || a.state == nil || a.configManager == nil {
+	if a == nil {
 		return nil
 	}
-	active := normalizeAgentPersonaID(a.state.GetActivePersona())
-	if active == "" {
-		return nil
-	}
-	cfg := a.configManager.GetConfig()
-	if cfg == nil {
-		return nil
-	}
-	persona := cfg.GetSubagentType(active)
+	persona := a.activePersonaConfig()
 	if !persona.IsConfined() {
 		return nil
 	}
 	return persona
+}
+
+// personaAllowsTool reports whether a confined persona may call the named
+// tool. It is the execution-time counterpart of the roster: `allowed_tools`
+// plus, for a custom persona, the host tools its `host_tools` selects, the two
+// skill tools when `skills` is set, and the MCP tools its `mcp` selectors name
+// (SP-175). mcpResolver splits an advertised MCP tool name into its server and
+// tool; nil disables the MCP check (no server is registered).
+func personaAllowsTool(persona *configuration.SubagentType, toolName string, mcpResolver func(toolName string) (server, tool string, err error)) bool {
+	if persona == nil {
+		return false
+	}
+	if containsTrimmed(persona.AllowedTools, toolName) {
+		return true
+	}
+	if !isCustomPersonaSource(persona.Source) {
+		return false
+	}
+	for _, name := range persona.HostTools {
+		trimmed := strings.TrimSpace(name)
+		if trimmed == "" {
+			continue
+		}
+		if trimmed == toolName {
+			return true
+		}
+		if trimmed == "*" && tools.IsHostProvidedTool(toolName) {
+			return true
+		}
+	}
+	if len(persona.Skills) > 0 && (toolName == "activate_skill" || toolName == "list_skills") {
+		return true
+	}
+	if mcpResolver != nil && strings.HasPrefix(toolName, "mcp_") && len(persona.MCP) > 0 {
+		server, tool, err := mcpResolver(toolName)
+		if err == nil && mcpSelectorAllows(persona.MCP, server, tool) {
+			return true
+		}
+	}
+	return false
 }
 
 // checkPersonaConfinement refuses a tool call that a confined active persona
@@ -66,12 +99,12 @@ func (a *Agent) checkPersonaConfinement(toolName string, args map[string]interfa
 	if persona == nil {
 		return nil
 	}
-	return confinementViolation(persona, a.currentWorkspaceRoot(), toolName, args)
+	return confinementViolation(persona, a.currentWorkspaceRoot(), toolName, args, a.resolveMCPToolIdentity)
 }
 
 // confinementViolation applies the three confinement rules for one call.
-func confinementViolation(persona *configuration.SubagentType, workspaceRoot, toolName string, args map[string]interface{}) error {
-	if !containsTrimmed(persona.AllowedTools, toolName) {
+func confinementViolation(persona *configuration.SubagentType, workspaceRoot, toolName string, args map[string]interface{}, mcpResolver func(toolName string) (server, tool string, err error)) error {
+	if !personaAllowsTool(persona, toolName, mcpResolver) {
 		return agenterrors.NewPermission(
 			fmt.Sprintf("tool %s is not available to the %s persona", toolName, persona.ID),
 			map[string]any{"tool": toolName, "persona": persona.ID})

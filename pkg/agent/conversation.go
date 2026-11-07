@@ -100,7 +100,18 @@ func (a *Agent) getOptimizedToolDefinitions(messages []api.Message) []api.Tool {
 	}
 	tools = filtered
 
+	// MCP tools never enter the registry, so they carry their own persona
+	// filter: a custom persona is limited to the servers and tools its `mcp`
+	// selectors name, and "absent: none" means no MCP tool at all (SP-175).
+	// Core personas keep today's behaviour, where allowed_tools decides.
+	personaMCPTools := make(map[string]struct{})
 	if mcpTools := a.getMCPTools(); mcpTools != nil {
+		if a.customPersonaActive() {
+			mcpTools = a.filterPersonaMCPTools(mcpTools)
+			for _, tool := range mcpTools {
+				personaMCPTools[tool.Function.Name] = struct{}{}
+			}
+		}
 		tools = append(tools, mcpTools...)
 	}
 
@@ -120,10 +131,57 @@ func (a *Agent) getOptimizedToolDefinitions(messages []api.Message) []api.Tool {
 	// A confined persona's list is the whole tool set at any context size.
 	if personaAllowlist := a.getActivePersonaToolAllowlist(); len(personaAllowlist) > 0 &&
 		(len(a.contextProfile.ToolAllowlist) == 0 || a.IsSubagent() || a.personaOwnsToolSet()) {
-		tools = filterToolsByName(tools, makeAllowedToolSet(personaAllowlist))
+		allowed := makeAllowedToolSet(personaAllowlist)
+		// A custom persona's MCP tools were already vetted by
+		// filterPersonaMCPTools, and its mcp selectors mean allowed_tools
+		// does not have to name them a second time.
+		for name := range personaMCPTools {
+			allowed[name] = struct{}{}
+		}
+		tools = filterToolsByName(tools, allowed)
 	}
 
 	return tools
+}
+
+// activePersonaSkills returns the skills the active persona may see and
+// activate, or nil for no restriction. Only a custom persona restricts them:
+// a core persona's `skills` field is not part of its shipped definition, so
+// its behaviour is unchanged (SP-175). A custom persona that declares no
+// `skills` gets an empty (deny-all) list, not nil: "absent means none".
+func (a *Agent) activePersonaSkills() []string {
+	persona := a.activePersonaConfig()
+	if persona == nil || !isCustomPersonaSource(persona.Source) {
+		return nil
+	}
+	return trimmedNonEmpty(persona.Skills)
+}
+
+// customPersonaActive reports whether the active persona is a custom one.
+func (a *Agent) customPersonaActive() bool {
+	persona := a.activePersonaConfig()
+	return persona != nil && isCustomPersonaSource(persona.Source)
+}
+
+// filterPersonaMCPTools keeps the MCP tools the active persona's `mcp`
+// selectors permit.
+func (a *Agent) filterPersonaMCPTools(mcpTools []api.Tool) []api.Tool {
+	if a == nil {
+		return mcpTools
+	}
+	kept := make([]api.Tool, 0, len(mcpTools))
+	for _, tool := range mcpTools {
+		server, actualTool, err := a.resolveMCPToolIdentity(tool.Function.Name)
+		if err != nil {
+			// An unattributable name cannot be matched by any selector, so
+			// the fail-closed direction is to drop it.
+			continue
+		}
+		if a.personaMCPAllows(server, actualTool) {
+			kept = append(kept, tool)
+		}
+	}
+	return kept
 }
 
 func (a *Agent) getCurrentCustomProvider() (*configuration.CustomProviderConfig, bool) {

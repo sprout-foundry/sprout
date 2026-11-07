@@ -102,7 +102,12 @@ func Load() (*Config, error) {
 	// Personas are catalog-fixed and never loaded from user config — hydrate
 	// the in-memory map fresh from the embedded catalog every time so any
 	// stale `subagent_types` data from a pre-removal config gets discarded.
+	// Custom personas (SP-175) are then merged in from the user-scope files;
+	// this path has no workspace layer, so project-scope personas wait for a
+	// workspace-scoped manager.
 	config.SubagentTypes = defaultSubagentTypes()
+	HydrateCustomPersonas(config, "")
+	noticeLegacySubagentTypes(rawConfig)
 	if config.Skills == nil {
 		config.Skills = make(map[string]Skill)
 	}

@@ -212,6 +212,7 @@ func buildToolEnvFromAgent(agent *Agent) tools.ToolEnv {
 		return c != nil && api.ResolveVisionCapability(c).AcceptsImages
 	}
 	env.SkillLoader = newSkillLoaderAdapter(agent)
+	env.AllowedSkills = agent.activePersonaSkills()
 	env.SearchEngine = newSearchEngineAdapter(agent)
 	env.RepoMapDefaultDepth = agent.contextProfile.RepoMapDefaultDepth
 	env.RawArgsJSON = "" // seed registry doesn't have raw JSON args

@@ -43,6 +43,11 @@ func (h *activateSkillHandler) Execute(ctx context.Context, env ToolEnv, args ma
 		}
 	}
 
+	// A persona that names its skills may activate only those (SP-175).
+	if !skillAllowed(env.AllowedSkills, skillID) {
+		return ToolResult{Output: fmt.Sprintf("skill '%s' is not available to this persona", skillID), IsError: true}, nil
+	}
+
 	// Check if SkillLoader is available
 	if env.SkillLoader == nil {
 		return ToolResult{Output: "skill loading not available: SkillLoader is not configured", IsError: true}, nil

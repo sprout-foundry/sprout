@@ -3,10 +3,13 @@
 package webui
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 func TestHandleAPISettingsSubagentTypesMethodNotAllowed(t *testing.T) {
@@ -74,5 +77,29 @@ func TestExtractPathSegmentSubagents(t *testing.T) {
 				t.Errorf("extractPathSegment(%q, %q) = %q, want %q", tt.path, tt.prefix, got, tt.want)
 			}
 		})
+	}
+}
+
+// TestSubagentTypeSourceSerializes pins that the settings API exposes a
+// persona's source (SP-175), so the WebUI picker can label a custom persona
+// without a second endpoint.
+func TestSubagentTypeSourceSerializes(t *testing.T) {
+	data, err := json.Marshal(configuration.SubagentType{
+		ID: "foundry_planner", Name: "Foundry Planner", Source: "user",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"source":"user"`) {
+		t.Errorf("source missing from the serialized persona: %s", data)
+	}
+
+	// A core entry built before sources were tracked omits the key.
+	core, err := json.Marshal(configuration.SubagentType{ID: "designer"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(core), `"source"`) {
+		t.Errorf("empty source should be omitted: %s", core)
 	}
 }

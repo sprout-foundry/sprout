@@ -12,14 +12,10 @@ import (
 // draw_mockup) and the host's, which the generic low-context allowlist does
 // not carry. Any other persona is narrowed by that allowlist as before.
 func (a *Agent) personaOwnsToolSet() bool {
-	if a == nil || a.configManager == nil {
+	if a == nil {
 		return false
 	}
-	cfg := a.configManager.GetConfig()
-	if cfg == nil {
-		return false
-	}
-	persona := cfg.GetSubagentType(normalizeAgentPersonaID(a.state.GetActivePersona()))
+	persona := a.activePersonaConfig()
 	return persona != nil && persona.IsConfined()
 }
 

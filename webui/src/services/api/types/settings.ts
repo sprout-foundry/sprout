@@ -175,6 +175,11 @@ export interface SubagentTypeInfo {
   allowed_tools: string[];
   aliases: string[];
   enabled: boolean;
+  /**
+   * Where the definition came from: `core`, `host`, `user` or `project`
+   * (SP-175). Absent on older payloads and read as core.
+   */
+  source?: string;
 }
 
 export interface SubagentTypesResponse {

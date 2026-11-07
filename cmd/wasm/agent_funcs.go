@@ -76,8 +76,12 @@ type chatAgent struct {
 	ag       *agent.Agent
 	provider string // provider name the agent was built for
 	options  agentRunOptions
-	errCnt   int // consecutive ProcessQuery errors; reset on success
-	lastUsed time.Time
+	// personaGeneration is the runtime's host-persona generation the agent
+	// was built with. A persona defined (or removed) after that invalidates
+	// the cached agent, so the next run picks the change up (SP-175).
+	personaGeneration uint64
+	errCnt            int // consecutive ProcessQuery errors; reset on success
+	lastUsed          time.Time
 }
 
 var (
@@ -120,7 +124,13 @@ func lookupChatAgent(chatID string) *agent.Agent {
 func storeChatAgent(chatID string, ag *agent.Agent, provider string, options agentRunOptions) {
 	chatAgentsMu.Lock()
 	defer chatAgentsMu.Unlock()
-	chatAgents[chatID] = &chatAgent{ag: ag, provider: provider, options: options, lastUsed: time.Now()}
+	chatAgents[chatID] = &chatAgent{
+		ag:                ag,
+		provider:          provider,
+		options:           options,
+		personaGeneration: hostPersonaGeneration(),
+		lastUsed:          time.Now(),
+	}
 	for len(chatAgents) > maxChatAgents {
 		oldestID, oldest := "", time.Time{}
 		for id, entry := range chatAgents {
@@ -285,7 +295,8 @@ func runAgentFunc(_ js.Value, args []js.Value) interface{} {
 		chatAgentsMu.Lock()
 		lastChatID = chatID
 		var ag *agent.Agent
-		if entry := chatAgents[chatID]; entry != nil && entry.provider == provider && entry.options == options {
+		if entry := chatAgents[chatID]; entry != nil && entry.provider == provider &&
+			entry.options.equal(options) && entry.personaGeneration == hostPersonaGeneration() {
 			ag = entry.ag
 			entry.lastUsed = time.Now()
 		}
@@ -332,6 +343,13 @@ func runAgentFunc(_ js.Value, args []js.Value) interface{} {
 			// own package broker with the cloud response route.
 			ag.SetHasActiveWebUIClients(func() bool { return true })
 
+			// Host personas defined with definePersona belong to every
+			// agent the runtime builds (SP-175).
+			for _, def := range definedHostPersonas() {
+				if err := ag.DefinePersona(def); err != nil {
+					return nil, err
+				}
+			}
 			if err := applyAgentRunOptions(ag, options); err != nil {
 				return nil, err
 			}

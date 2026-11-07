@@ -175,7 +175,9 @@ func effectiveDifferences(globalFile, globalDir string, before, after map[string
 		if err := f.Close(); err != nil {
 			return nil, fmt.Errorf("stage workspace config: %w", err)
 		}
-		cfg, err := LoadConfigWithLayers(globalFile, f.Name(), "", globalDir)
+		// The staged layer lives in a temp file: no workspace directory, so
+		// no project persona I/O during a prune.
+		cfg, err := loadConfigWithLayers(globalFile, f.Name(), "", globalDir, "")
 		if err != nil {
 			return nil, fmt.Errorf("load layered config: %w", err)
 		}

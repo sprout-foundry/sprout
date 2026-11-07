@@ -68,6 +68,10 @@ func (h *hostTool) SafeForParallel() bool              { return false }
 func (h *hostTool) Interactive() bool                  { return false }
 func (h *hostTool) Validate(args map[string]any) error { return validateRequired(h.def, args) }
 
+// HostProvidedTool marks the handler as host-registered, so a persona's
+// host_tools: ["*"] offers exactly the host's tools (SP-175).
+func (h *hostTool) HostProvidedTool() bool { return true }
+
 func (h *hostTool) Execute(ctx context.Context, env tools.ToolEnv, args map[string]any) (tools.ToolResult, error) {
 	if args == nil {
 		args = map[string]any{}

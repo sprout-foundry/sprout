@@ -1117,6 +1117,13 @@
   text-overflow: ellipsis;
 }
 
+.sidebar .persona-mapping-source {
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--text-tertiary);
+  text-transform: lowercase;
+}
+
 /* ── Sub-tab row layout ────────────────────────────────────── */
 .sidebar .config-item {
   display: flex;

@@ -179,7 +179,7 @@ func TestPersonaConfinement_WritePaths(t *testing.T) {
 		WritePaths:   []string{"design/"},
 	}
 	check := func(tool string, args map[string]interface{}) error {
-		return confinementViolation(persona, root, tool, args)
+		return confinementViolation(persona, root, tool, args, nil)
 	}
 
 	for name, args := range map[string]map[string]interface{}{

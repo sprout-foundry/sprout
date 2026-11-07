@@ -48,6 +48,10 @@ func (h *listSkillsHandler) Execute(ctx context.Context, env ToolEnv, args map[s
 	skillMap := config.GetAllEnabledSkills()
 	skills := make([]configuration.Skill, 0, len(skillMap))
 	for _, skill := range skillMap {
+		// A persona that names its skills sees only those (SP-175).
+		if !skillAllowed(env.AllowedSkills, skill.ID) {
+			continue
+		}
 		skills = append(skills, skill)
 	}
 
@@ -55,6 +59,31 @@ func (h *listSkillsHandler) Execute(ctx context.Context, env ToolEnv, args map[s
 		Output:  formatSkillList(skills),
 		IsError: false,
 	}, nil
+}
+
+// skillAllowed reports whether the active persona's skills list permits the
+// named skill. A nil list means no restriction (a core persona, which never
+// sees the skill tools through its own roster); an empty list denies every
+// skill (a custom persona that declared no `skills` — "absent means none");
+// "*" permits everything.
+func skillAllowed(allowed []string, skillID string) bool {
+	if allowed == nil {
+		return true
+	}
+	if len(allowed) == 0 {
+		return false
+	}
+	needle := strings.ToLower(strings.TrimSpace(skillID))
+	for _, entry := range allowed {
+		value := strings.ToLower(strings.TrimSpace(entry))
+		if value == "" {
+			continue
+		}
+		if value == "*" || value == needle {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *listSkillsHandler) Aliases() []string      { return nil }

@@ -312,12 +312,91 @@ describe.skipIf(!haveWasm)('headless agent on the real WASM module', () => {
     expect(general.has('design_render')).toBe(false);
   }, 60_000);
 
+
   it('fails the turn for an unknown persona', async () => {
     const agent = await createAgent({ wasmBase: '/wasm', modelEndpoint: endpoint, runtime: bridge, persona: 'nope' });
     const result = await agent.send('hi');
     expect(result.status).toBe('failed');
     expect(result.error).toMatch(/persona/);
     agent.dispose();
+  }, 60_000);
+
+  it('runs as a host-minted persona, with exactly the tools it declares', async () => {
+    const agent = await createAgent({
+      wasmBase: '/wasm',
+      modelEndpoint: endpoint,
+      runtime: bridge,
+      persona: {
+        id: 'foundry_planner',
+        name: 'Foundry Planner',
+        description: 'Plans platform work',
+        system_prompt_text: 'You plan platform work.',
+        allowed_tools: ['read_file'],
+        host_tools: ['*'],
+      },
+      hostTools: [{ name: 'account_lookup', description: 'Look up an account.', handler: () => 'ok' }],
+    });
+    const before = requests.length;
+    const result = await agent.send('hello as foundry');
+    agent.dispose();
+
+    expect(result.status).toBe('completed');
+    const offered = new Set(requests.slice(before)[0]?.tools?.map((t) => t.function.name));
+    // The declared built-in tool and the host's tool (via host_tools: ["*"]).
+    expect(offered.has('read_file')).toBe(true);
+    expect(offered.has('account_lookup')).toBe(true);
+    // Nothing the persona did not declare.
+    expect(offered.has('write_file')).toBe(false);
+    expect(offered.has('ask_user')).toBe(false);
+  }, 60_000);
+
+
+  it('picks up a persona redefined after the chat agent was built', async () => {
+    const chatId = `redefine-${Date.now()}`;
+    const definition = (tools: string[]) => ({
+      id: 'redefinable',
+      name: 'Redefinable',
+      description: 'Changes between turns',
+      system_prompt_text: 'hi',
+      allowed_tools: tools,
+    });
+    const offerFor = async (tools: string[]) => {
+      const agent = await createAgent({
+        wasmBase: '/wasm',
+        modelEndpoint: endpoint,
+        runtime: bridge,
+        chatId,
+        persona: definition(tools),
+      });
+      const before = requests.length;
+      const result = await agent.send(`redefine ${tools.join('-')}`);
+      agent.dispose();
+      expect(result.status).toBe('completed');
+      return new Set(requests.slice(before)[0]?.tools?.map((t) => t.function.name));
+    };
+
+    const first = await offerFor(['read_file']);
+    expect(first.has('read_file')).toBe(true);
+    expect(first.has('write_file')).toBe(false);
+
+    // The same chat, same persona id, a different tool set: the cached agent
+    // must be rebuilt so the new definition is what runs.
+    const second = await offerFor(['write_file']);
+    expect(second.has('write_file')).toBe(true);
+    expect(second.has('read_file')).toBe(false);
+  }, 60_000);
+
+  it('rejects an invalid host persona definition at creation', async () => {
+    // A core persona's id is immutable, so reusing it is an error the host
+    // sees when it calls createAgent — not a turn that fails later.
+    await expect(
+      createAgent({
+        wasmBase: '/wasm',
+        modelEndpoint: endpoint,
+        runtime: bridge,
+        persona: { id: 'designer', name: 'Fake Designer', description: 'x', system_prompt_text: 'mine' },
+      }),
+    ).rejects.toThrow(/immutable|core persona/);
   }, 60_000);
 
   it('runs the planner: plan, then a mockup streamed by its own model call', async () => {

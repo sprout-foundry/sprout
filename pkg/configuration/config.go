@@ -216,6 +216,15 @@ type Config struct {
 	// `/persona <id> disable`. The catalog entries themselves are never
 	// mutated; resolution checks this list and treats disabled IDs as absent.
 	DisabledPersonas []string `json:"disabled_personas,omitempty"`
+	// AcceptedPersonas records, per absolute workspace root, the content hash
+	// of each project-scope persona file the person accepted (SP-175). A
+	// project persona is unusable until its current file hash matches its
+	// accepted hash; editing the file withdraws the acceptance.
+	AcceptedPersonas map[string]map[string]string `json:"accepted_personas,omitempty"`
+	// PersonaIssues reports custom personas that did not load, or loaded but
+	// are shadowed by a higher-precedence scope. Derived from disk at load
+	// time, never persisted.
+	PersonaIssues PersonaIssues `json:"-"`
 	// DefaultSubagentPersona is the persona ID used when run_subagent is called
 	// without a persona argument. Defaults to "general" if unset. Setting this
 	// lets users redirect default spawns without editing the catalog.

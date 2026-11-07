@@ -81,6 +81,85 @@ export interface AgentHistoryTurn {
   content: string;
 }
 
+/**
+ * A persona a host mints and owns (SP-175). Everything is the host's to set;
+ * nothing is inherited from a Sprout persona at run time. The definition
+ * mirrors the JSON schema of a persona file (`<config dir>/personas/*.json`),
+ * so the same definition works in either place.
+ *
+ * A host persona may not reuse a Sprout persona's id or alias — those are
+ * immutable — and an invalid definition is rejected with every reason.
+ */
+export interface PersonaDefinition {
+  /** Unique id. Cannot collide with a Sprout persona id or alias. */
+  id: string;
+  /** Human-readable name. */
+  name: string;
+  /** What the persona specializes in. */
+  description: string;
+  /** Provider for this persona; omit to inherit the agent's. */
+  provider?: string;
+  /** Model for this persona; omit to inherit the agent's. */
+  model?: string;
+  /** The prompt, inline. */
+  system_prompt_text?: string;
+  /**
+   * A prompt file. Relative to the persona file (file scopes), or the path of
+   * a Sprout prompt (`subagent_prompts/planner.md`) to start from a shipped
+   * one. Text only: it carries none of that persona's tools or rules.
+   */
+  system_prompt?: string;
+  /** Text appended after the prompt. */
+  system_prompt_append?: string;
+  /**
+   * The whole tool set: built-in tool names, host tool names, and MCP
+   * selectors. Empty means the default agent's tools.
+   */
+  allowed_tools?: string[];
+  /**
+   * Host tool names this persona is offered, or `["*"]` for every tool the
+   * host registers. A name here is offered without also appearing in
+   * `allowed_tools`.
+   */
+  host_tools?: string[];
+  /**
+   * Skill names the persona may see and activate, or `["*"]`. Omit for none.
+   * Listing any skill offers `activate_skill`/`list_skills` without naming
+   * them in `allowed_tools`.
+   */
+  skills?: string[];
+  /**
+   * MCP servers or tools the persona may use: `"<server>"` or
+   * `"<server>__<tool>"`, or `["*"]`. Omit for none. The person's MCP
+   * allowlist still decides whether each call runs without asking.
+   */
+  mcp?: string[];
+  /** Workspace-relative directories this persona may write under. */
+  write_paths?: string[];
+  /** Agency grants, e.g. `git_write`. */
+  capabilities?: string[];
+  /** What auto-approves at run time. Cannot exceed what the safety gate allows. */
+  auto_approve_rules?: {
+    low_risk?: string[];
+    medium_risk?: string[];
+    high_risk_never?: string[];
+  };
+  /** Never modifies files; subagent runs default to the background. */
+  read_only?: boolean;
+  /** May be spawned as a subagent. */
+  delegatable?: boolean;
+  /** Otherwise-undelegatable persona ids this persona may spawn. */
+  can_spawn_non_delegatable?: string[];
+  /** Soft iteration budget as a subagent. */
+  iteration_budget?: number;
+  /** Soft wall-clock budget as a subagent, in seconds. */
+  time_budget_seconds?: number;
+  /** Only available in local mode. */
+  local_only?: boolean;
+  /** Enabled. Defaults to true for a host definition. */
+  enabled?: boolean;
+}
+
 /** Options of `createAgent`. */
 export interface CreateAgentOptions {
   /**
@@ -114,11 +193,12 @@ export interface CreateAgentOptions {
    */
   requestParameters?: Record<string, unknown>;
   /**
-   * Persona id (or alias) the agent runs as — its prompt and its
-   * `allowed_tools`, which become the agent's whole tool set. Omit for
-   * Sprout's default agent.
+   * Persona the agent runs as — its prompt and its tool set. A string is a
+   * persona id or alias (a Sprout persona, or one defined with
+   * `definePersona`); a `PersonaDefinition` object mints a persona owned
+   * entirely by this host (SP-175). Omit for Sprout's default agent.
    */
-  persona?: string;
+  persona?: string | PersonaDefinition;
   /** Tools the host implements (see `HostTool`). */
   hostTools?: HostTool[];
   /** The agent's files before a project exists. */
@@ -325,5 +405,21 @@ export interface SproutWasmBridge {
     handler: (argsJSON: string, context: HostToolCallContext) => unknown,
   ): { ok: boolean; name?: string; error?: string };
   unregisterHostTool(name: string): { removed: boolean };
+  /**
+   * Check a persona definition without registering it (SP-175). `createAgent`
+   * uses it so an invalid definition rejects at creation, not at the first
+   * turn.
+   */
+  validatePersona?(definitionJSON: string): { ok: boolean; id?: string; errors?: string[]; warnings?: string[] };
+  /**
+   * Define a host-scope persona for every agent this runtime builds from now
+   * on (SP-175). Returns the validation errors when the definition is
+   * unusable; `warnings` names a tool the current build does not register.
+   */
+  definePersona?(definitionJSON: string): { ok: boolean; id?: string; errors?: string[]; warnings?: string[] };
+  /** Remove a persona defined with `definePersona`. */
+  undefinePersona?(name: string): { removed: boolean };
+  /** The ids of the personas defined with `definePersona`, sorted. */
+  listDefinedPersonas?(): string[];
   setAllowedOrigins?(origins: string[]): unknown;
 }

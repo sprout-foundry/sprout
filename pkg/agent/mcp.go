@@ -416,6 +416,23 @@ func (a *Agent) executeMCPTool(toolName string, args map[string]interface{}) (st
 		return "", err
 	}
 
+	// SP-175: a custom persona is limited to the MCP servers and tools its
+	// `mcp` selectors name. This runs before the SP-170 authorization gate:
+	// the persona cannot reach a server its creator did not grant it, no
+	// matter what the person's allowlist says.
+	if !a.personaMCPAllows(serverName, actualToolName) {
+		persona := a.activePersonaConfig()
+		personaID := "active"
+		if persona != nil {
+			personaID = persona.ID
+		}
+		return "", agenterrors.NewPermission(fmt.Sprintf(
+			"MCP tool call denied: %s/%s is not available to the %s persona. "+
+				"Add %q to the persona's \"mcp\" list to grant it.",
+			serverName, actualToolName, personaID,
+			injection.MCPToolAllowlistEntry(serverName, actualToolName)), nil)
+	}
+
 	// SP-170: authorize before any server-side call. The gate is the only
 	// thing standing between a steered model and a destructive third-party
 	// action, since MCP tools never reach the registry's security gate.

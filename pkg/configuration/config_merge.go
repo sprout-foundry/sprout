@@ -266,6 +266,24 @@ func MergeConfig(base, override *Config) *Config {
 		}
 	}
 
+	// Merge AcceptedPersonas (SP-175) per workspace root for the same reason:
+	// a layered config adds acceptances instead of discarding them, or an
+	// accepted project persona would ask to be accepted again on every
+	// workspace-layer write.
+	if len(override.AcceptedPersonas) > 0 {
+		if result.AcceptedPersonas == nil {
+			result.AcceptedPersonas = make(map[string]map[string]string, len(override.AcceptedPersonas))
+		}
+		for root, accepted := range override.AcceptedPersonas {
+			if result.AcceptedPersonas[root] == nil {
+				result.AcceptedPersonas[root] = make(map[string]string, len(accepted))
+			}
+			for id, hash := range accepted {
+				result.AcceptedPersonas[root][id] = hash
+			}
+		}
+	}
+
 	// Override HistoryScope
 	if override.HistoryScope != "" {
 		result.HistoryScope = override.HistoryScope
@@ -481,6 +499,8 @@ func cloneConfig(cfg *Config) *Config {
 			copied.Capabilities = append([]string{}, st.Capabilities...)
 			copied.WritePaths = append([]string{}, st.WritePaths...)
 			copied.HostTools = append([]string{}, st.HostTools...)
+			copied.Skills = append([]string{}, st.Skills...)
+			copied.MCP = append([]string{}, st.MCP...)
 			copied.CanSpawnNonDelegatable = append([]string{}, st.CanSpawnNonDelegatable...)
 			if st.AutoApproveRules != nil {
 				rules := *st.AutoApproveRules
@@ -494,6 +514,9 @@ func cloneConfig(cfg *Config) *Config {
 	} else {
 		out.SubagentTypes = defaultSubagentTypes()
 	}
+	// PersonaIssues is json:"-" too; copy it so a clone reports the same
+	// custom-persona findings.
+	out.PersonaIssues = append(PersonaIssues(nil), cfg.PersonaIssues...)
 	return &out
 }
 

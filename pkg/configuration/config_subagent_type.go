@@ -143,6 +143,17 @@ type SubagentType struct {
 	// HostTools names tools the host provides at run time rather than the
 	// built-in registry; see personas.Definition.HostTools.
 	HostTools []string `json:"host_tools,omitempty"`
+	// Skills names the skills this persona may see and activate, or ["*"];
+	// see personas.Definition.Skills.
+	Skills []string `json:"skills,omitempty"`
+	// MCP names the MCP servers or tools this persona may use, in the SP-170
+	// key form, or ["*"]; see personas.Definition.MCP.
+	MCP []string `json:"mcp,omitempty"`
+	// Source records where the definition came from: "core", "host", "user"
+	// or "project". Empty on entries built before sources were tracked and
+	// is read as core. Exposed to the settings API so the persona picker can
+	// show a custom persona's origin (SP-175).
+	Source string `json:"source,omitempty"`
 	// CanSpawnNonDelegatable lists otherwise-undelegatable persona IDs that
 	// this persona may spawn. Replaces the hardcoded EA-spawn-authority
 	// special-case. The coordinator carries ["orchestrator"] to enable the

@@ -217,7 +217,7 @@ func NewManagerWithLayers(globalDir, workspaceDir string) (*Manager, error) {
 	}
 
 	// Load merged config (global + workspace, no session layer)
-	config, err := LoadConfigWithLayers(globalPath, workspacePath, "", globalDir)
+	config, err := loadConfigWithLayers(globalPath, workspacePath, "", globalDir, workspaceDir)
 	if err != nil {
 		return nil, fmt.Errorf("load layered config: %w", err)
 	}

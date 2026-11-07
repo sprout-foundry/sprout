@@ -38,14 +38,17 @@ func (p *PersonaCommand) SafeDuringSteer() bool {
 // Usage returns the detailed help text shown by `/help persona`.
 func (p *PersonaCommand) Usage() string {
 	return strings.Join([]string{
-		"/persona [list]              List all personas with active/disabled status.",
+		"/persona [list]              List all personas with source and status.",
 		"/persona <name>              Activate <name> for the current session.",
-		"/persona <name> show         Show persona details (provider, model, tools).",
+		"/persona <name> show         Show persona details (source, prompt, tools).",
 		"/persona <name> enable       Re-enable a disabled persona.",
 		"/persona <name> disable      Disable a persona (it can't be spawned).",
+		"/persona new <id> [--from <core-id>]  Create a user-scope persona file.",
+		"/persona accept <id>         Accept a project-scope persona.",
 		"/persona clear               Clear the active persona.",
 		"",
-		"Personas are catalog-fixed; only enable/disable is mutable at runtime.",
+		"Core personas are immutable; create your own with `/persona new`.",
+		"Custom personas live in <config dir>/personas/ and .sprout/personas/.",
 		"Aliases: /subagent-persona",
 	}, "\n")
 }
@@ -95,6 +98,17 @@ func (p *PersonaCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 	if len(args) == 0 || strings.EqualFold(args[0], "list") {
 		return p.listPersonas(config, chatAgent)
+	}
+
+	if strings.EqualFold(args[0], "new") {
+		return p.personaNew(args[1:], chatAgent)
+	}
+
+	if strings.EqualFold(args[0], "accept") {
+		if len(args) < 2 {
+			return fmt.Errorf("usage: /persona accept <id>")
+		}
+		return p.personaAccept(args[1], chatAgent)
 	}
 
 	if strings.EqualFold(args[0], "none") || strings.EqualFold(args[0], "clear") {
@@ -164,13 +178,17 @@ func (p *PersonaCommand) listPersonas(config *configuration.Config, chatAgent *a
 				modifier = " (local only — unavailable in cloud)"
 			}
 		}
-		p.printf("- %s (%s): %s%s\n", id, persona.Name, status, modifier)
+		p.printf("- %s (%s): %s, %s%s\n", id, persona.Name, personaSourceLabel(persona), status, modifier)
 	}
+
+	p.printPersonaSources(config, chatAgent)
 
 	p.println("\nUsage:")
 	p.println("  /persona <name>                 - Activate persona now")
 	p.println("  /persona <name> show            - Show persona details")
 	p.println("  /persona <name> enable|disable  - Toggle availability")
+	p.println("  /persona new <id> [--from <id>] - Create a user-scope persona file")
+	p.println("  /persona accept <id>            - Accept a project persona")
 	p.println("  /persona clear                  - Clear active persona")
 	return nil
 }
@@ -183,13 +201,23 @@ func (p *PersonaCommand) showPersona(personaID string, persona configuration.Sub
 	p.println()
 	console.GlyphInfo.Fprintf(p.out(), "%s (%s)", persona.Name, personaID)
 	p.printf("Description: %s\n", persona.Description)
+	p.printf("Source: %s\n", personaSourceLabel(persona))
 	p.printf("Enabled: %t\n", enabled)
 	p.printf("Provider: %s\n", provider)
 	p.printf("Model: %s\n", model)
-	if len(persona.AllowedTools) > 0 {
-		p.printf("Allowed tools: %s\n", strings.Join(persona.AllowedTools, ", "))
+	if tools := effectiveToolSet(persona); len(tools) > 0 {
+		p.printf("Allowed tools: %s\n", strings.Join(tools, ", "))
 	}
-	if strings.TrimSpace(persona.SystemPrompt) != "" {
+	if len(persona.Skills) > 0 {
+		p.printf("Skills: %s\n", strings.Join(persona.Skills, ", "))
+	}
+	if len(persona.MCP) > 0 {
+		p.printf("MCP: %s\n", strings.Join(persona.MCP, ", "))
+	}
+	switch {
+	case strings.TrimSpace(persona.SystemPromptText) != "":
+		p.println("System prompt: inline (system_prompt_text)")
+	case strings.TrimSpace(persona.SystemPrompt) != "":
 		p.printf("System prompt: %s\n", persona.SystemPrompt)
 	}
 	return nil

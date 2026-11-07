@@ -421,6 +421,13 @@ type Agent struct {
 	// Propagated to subagents so depth limits and spawn restrictions can be enforced based on the root persona.
 	rootPersonaID string
 
+	// hostPersonas holds persona definitions the embedding host minted
+	// through the headless agent API (SP-175). They live only in memory, are
+	// owned entirely by the host that created them, and take precedence over
+	// the user and project scopes when ids collide. Keyed by normalized id.
+	hostPersonasMu sync.RWMutex
+	hostPersonas   map[string]configuration.SubagentType
+
 	// allowedTools restricts which tools this agent may use. When non-nil, only tools whose names (lowercased) are keys can be invoked.
 	allowedTools map[string]bool
 

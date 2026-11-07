@@ -262,6 +262,7 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 		env.VisionProcessor = agent.GetVisionProcessor()
 		env.WebBrowser = tools.NewBrowserAdapter()
 		env.SkillLoader = newSkillLoaderAdapter(agent)
+		env.AllowedSkills = agent.activePersonaSkills()
 		env.SearchEngine = newSearchEngineAdapter(agent)
 		// Pass the raw JSON args so handlers can recover key insertion order.
 		env.RawArgsJSON = rawArgsJSON

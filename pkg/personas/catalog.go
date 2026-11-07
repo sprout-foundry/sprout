@@ -60,6 +60,15 @@ type Definition struct {
 	// headless agent API), not Sprout's built-in registry. Each must also
 	// be in AllowedTools; without a host that registers it, it is absent.
 	HostTools []string `json:"host_tools,omitempty"`
+	// Skills names the skills the persona may see and activate, or ["*"].
+	// Absent means none. Listing any skill offers activate_skill/list_skills
+	// without naming them in AllowedTools (SP-175).
+	Skills []string `json:"skills,omitempty"`
+	// MCP names the MCP servers or tools the persona may use: "<server>" or
+	// "<server>__<tool>" (the SP-170 keys), or ["*"]. Absent means none. The
+	// person's approved_mcp_tools still decides whether each call runs
+	// without asking (SP-175).
+	MCP []string `json:"mcp,omitempty"`
 	// CanSpawnNonDelegatable lists otherwise-undelegatable persona IDs that
 	// this persona is explicitly permitted to spawn as a subagent. Replaces
 	// the implicit "hasEASpawnAuthority" carve-out: instead of detecting
@@ -193,6 +202,8 @@ func cloneDefinitions(src map[string]Definition) map[string]Definition {
 		defCopy.Capabilities = append([]string{}, def.Capabilities...)
 		defCopy.WritePaths = append([]string{}, def.WritePaths...)
 		defCopy.HostTools = append([]string{}, def.HostTools...)
+		defCopy.Skills = append([]string{}, def.Skills...)
+		defCopy.MCP = append([]string{}, def.MCP...)
 		defCopy.CanSpawnNonDelegatable = append([]string{}, def.CanSpawnNonDelegatable...)
 		out[id] = defCopy
 	}

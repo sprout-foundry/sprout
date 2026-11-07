@@ -144,6 +144,8 @@ func (c *Config) GetSubagentType(id string) *SubagentType {
 	result.Capabilities = append([]string{}, found.Capabilities...)
 	result.WritePaths = append([]string{}, found.WritePaths...)
 	result.HostTools = append([]string{}, found.HostTools...)
+	result.Skills = append([]string{}, found.Skills...)
+	result.MCP = append([]string{}, found.MCP...)
 	result.CanSpawnNonDelegatable = append([]string{}, found.CanSpawnNonDelegatable...)
 	if found.AutoApproveRules != nil {
 		rules := *found.AutoApproveRules
@@ -165,30 +167,7 @@ func defaultSubagentTypes() map[string]SubagentType {
 
 	types := make(map[string]SubagentType, len(definitions))
 	for id, definition := range definitions {
-		autoApprove := convertAutoApproveRules(definition.AutoApproveRules)
-		types[normalizePersonaID(id)] = SubagentType{
-			ID:                     normalizePersonaID(definition.ID),
-			Name:                   definition.Name,
-			Description:            definition.Description,
-			Provider:               definition.Provider,
-			Model:                  definition.Model,
-			SystemPrompt:           definition.SystemPrompt,
-			SystemPromptText:       definition.SystemPromptText,
-			SystemPromptAppend:     definition.SystemPromptAppend,
-			AllowedTools:           append([]string{}, definition.AllowedTools...),
-			Aliases:                append([]string{}, definition.Aliases...),
-			Enabled:                definition.Enabled,
-			LocalOnly:              definition.LocalOnly,
-			Delegatable:            definition.Delegatable,
-			AutoApproveRules:       autoApprove,
-			IterationBudget:        definition.IterationBudget,
-			TimeBudgetSeconds:      definition.TimeBudgetSeconds,
-			ReadOnly:               definition.ReadOnly,
-			Capabilities:           append([]string{}, definition.Capabilities...),
-			WritePaths:             append([]string{}, definition.WritePaths...),
-			HostTools:              append([]string{}, definition.HostTools...),
-			CanSpawnNonDelegatable: append([]string{}, definition.CanSpawnNonDelegatable...),
-		}
+		types[normalizePersonaID(id)] = SubagentTypeFromDefinition(definition, personas.SourceCore)
 	}
 
 	return types

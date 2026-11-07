@@ -62,7 +62,7 @@ interface CreateAgentOptions {
   contextWindow?: number;      // default 200,000
   supportsVision?: boolean;    // default true
   reasoningEffort?: string;    // "low" | "medium" | "high"; omit for the model's default
-  persona?: string;            // persona id or alias; omit for the default agent
+  persona?: string | PersonaDefinition; // id/alias, or a persona you own (SP-175)
   hostTools?: HostTool[];
   files?: { store?: AgentFileStore; initial?: Record<string, string> };
   context?: string;            // appended to the system prompt
@@ -91,7 +91,8 @@ interface TurnResult { status: "completed" | "interrupted" | "failed"; response:
 
 Also exported: `loadSproutWasm({ wasmBase, store?, fetch?, remoteRegistries?, env? })` (load the module
 ahead of the first agent — prefetch it on a landing page), `memoryFileStore()`,
-`providerConfig`, `resolveModelEndpoint`, and every type.
+`providerConfig`, `resolveModelEndpoint`, `definePersona` / `undefinePersona` /
+`listDefinedPersonas`, and every type (including `PersonaDefinition`).
 
 ## Events
 
@@ -121,17 +122,68 @@ document as authoritative (a chunk can be lost under heavy load).
 
 ## Personas
 
-`persona` selects a persona from Sprout's catalog by id or alias (`designer`,
-`general`, the planner when it ships). The agent then runs with the persona's
-prompt, and its `allowed_tools` become the whole tool set: the model is
-offered only those tools, and a call to anything else is an unknown tool.
-An unknown persona fails the first turn (`done` with `failed`, the error
-lists the available personas).
+`persona` takes a persona id or alias, or a definition object.
 
-**Host tools follow the same rule:** with a persona, a host tool is offered
-only when the persona's `allowed_tools` names it (the planner lists
-`start_change`). Without a persona, the default agent is offered every tool,
-host tools included.
+A **string** selects a persona from Sprout's catalog by id or alias (`designer`,
+`general`, the planner when it ships), or one the host defined with
+`definePersona`. The agent then runs with the persona's prompt, and its
+`allowed_tools` become the whole tool set: the model is offered only those
+tools, and a call to anything else is an unknown tool. An unknown persona fails
+the first turn (`done` with `failed`, the error lists the available personas).
+
+A **definition object** mints a persona owned entirely by this host (SP-175).
+Nothing is inherited from a Sprout persona at run time, and no Sprout release
+changes what it can do. The schema mirrors a persona file; the fields a host
+usually sets:
+
+```ts
+const agent = await createAgent({
+  wasmBase,
+  modelEndpoint,
+  persona: {
+    id: 'foundry_planner',
+    name: 'Foundry Planner',
+    description: 'Plans platform work',
+    system_prompt_text: 'You plan platform work.',   // or system_prompt: 'subagent_prompts/planner.md'
+    allowed_tools: ['read_file', 'search_files'],
+    host_tools: ['*'],        // every tool this host registers
+    skills: ['project-planning'],
+    mcp: ['github__read'],
+    write_paths: ['docs/'],
+  },
+  hostTools: [
+    { name: 'account_lookup', description: 'Look up an account.', handler: lookup },
+  ],
+});
+```
+
+- `host_tools: ["*"]` is resolved when the turn's roster is built, so a tool
+  registered after `createAgent` is still offered.
+- `skills` and `mcp` are selectors: listing skills offers `activate_skill` /
+  `list_skills` without naming them in `allowed_tools`, and `mcp` entries are
+  the SP-170 keys (`"<server>"`, `"<server>__<tool>"`, or `"*"`).
+- An invalid definition makes `createAgent` **reject** with every validation
+  reason (a core persona's id or alias is immutable, so reusing it is one).
+- A definition never widens a safety gate: the global classifier, the
+  prompt-injection defence, the MCP authorization gate, and the computer-use
+  activation gates apply to every persona.
+
+To give several agents the same persona, define it once on the runtime:
+
+```ts
+import { definePersona } from '@sprout-foundry/workspace/agent';
+
+const { id, warnings } = await definePersona(runtime, foundryPlannerDefinition);
+// then: createAgent({ ..., persona: id })
+```
+
+`definePersona` rejects with a `PersonaDefinitionError` carrying `.errors`
+when the definition is unusable. Definitions live only in memory — never on
+disk — and `undefinePersona(id)` / `listDefinedPersonas(runtime)` manage them.
+
+**Host tools and the persona's tool set:** a name in `host_tools` is offered
+without also appearing in `allowed_tools`. Without a persona, the default agent
+is offered every tool, host tools included.
 
 ## Host tools
 

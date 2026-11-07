@@ -41,6 +41,22 @@ func (m *Manager) GetConfigDir() string {
 // workspace workspace.json by workspace.local.json. The session layer
 // (highest) remains unchanged.
 func LoadConfigWithLayers(globalPath, workspacePath, sessionPath, globalDir string) (*Config, error) {
+	// The project persona scope is <workspace>/.sprout/personas. Callers that
+	// know the workspace directory pass it explicitly (loadConfigWithLayers);
+	// this entry point infers it from the workspace config file, which is only
+	// correct when workspacePath really is <workspace>/.sprout/<file>.
+	workspaceDir := ""
+	if workspacePath != "" {
+		workspaceDir = filepath.Dir(workspacePath)
+	}
+	return loadConfigWithLayers(globalPath, workspacePath, sessionPath, globalDir, workspaceDir)
+}
+
+// loadConfigWithLayers is LoadConfigWithLayers with the workspace config
+// directory named explicitly. A caller that stages a workspace layer in a
+// temporary file (workspace pruning, the conflict-merge reload) passes "" so
+// no project persona I/O happens at all.
+func loadConfigWithLayers(globalPath, workspacePath, sessionPath, globalDir, workspaceDir string) (*Config, error) {
 	var result *Config
 
 	// 1. Load global config (base)
@@ -168,7 +184,10 @@ func LoadConfigWithLayers(globalPath, workspacePath, sessionPath, globalDir stri
 
 	// Personas are catalog-fixed and never read from disk; hydrate from the
 	// embedded catalog so every layered-load path matches the regular Load().
+	// Custom personas (SP-175) are merged in after core from the user scope
+	// and, when a workspace layer is present, the project scope.
 	result.SubagentTypes = defaultSubagentTypes()
+	HydrateCustomPersonas(result, workspaceDir)
 
 	// Merge missing default (built-in) skills so that a hot-reload via
 	// Manager.Reload() picks up new builtins added to the embedded library

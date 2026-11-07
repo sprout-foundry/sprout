@@ -150,6 +150,11 @@ type ToolEnv struct {
 	// SkillLoader resolves skill IDs to their on-disk instructions.
 	// Nil means skill loading is not available.
 	SkillLoader SkillLoader
+	// AllowedSkills limits which skills the skill tools may see and
+	// activate: the active persona's `skills` list (SP-175). Nil means no
+	// limit; a list containing "*" also means no limit. Entries are matched
+	// case-insensitively against a skill's ID.
+	AllowedSkills []string
 	// SearchEngine performs Google Custom Search API queries.
 	// Nil means web search is not available.
 	SearchEngine SearchEngine

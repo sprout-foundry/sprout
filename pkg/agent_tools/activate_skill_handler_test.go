@@ -291,3 +291,25 @@ func TestActivateSkillHandler_OutputFormatMatchesLegacy(t *testing.T) {
 		t.Errorf("Output format does not match legacy handler.\nGot:\n%q\n\nWant:\n%q", result.Output, expected)
 	}
 }
+
+// TestSkillAllowed pins the nil-vs-empty distinction (SP-175): a nil list
+// means no restriction (a core persona), an empty list denies every skill (a
+// custom persona that declared no `skills`), and a named list permits only
+// its entries.
+func TestSkillAllowed(t *testing.T) {
+	if !skillAllowed(nil, "anything") {
+		t.Error("nil must mean no restriction")
+	}
+	if skillAllowed([]string{}, "anything") {
+		t.Error("empty must deny every skill")
+	}
+	if !skillAllowed([]string{"project-planning"}, "project-planning") {
+		t.Error("a named skill must be allowed")
+	}
+	if skillAllowed([]string{"project-planning"}, "other") {
+		t.Error("an unnamed skill must be denied")
+	}
+	if !skillAllowed([]string{"*"}, "anything") {
+		t.Error("a wildcard must allow everything")
+	}
+}

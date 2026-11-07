@@ -2,7 +2,9 @@
 
 A **persona** is a named specialization that configures how the agent behaves: system prompt, tool allowlist, optional provider/model, capability grants (e.g. git-write), and which other personas it may spawn as subagents.
 
-Personas are **catalog-fixed**. The set of personas, their tool allowlists, system prompts, providers, and models ship in `pkg/personas/configs/*.json` and are not user-customizable at runtime. The only mutable knobs are: hide a persona, change the default spawn target, and toggle orchestrator git-write. To extend agent behavior beyond what the catalog ships, use **skills** (`~/.config/sprout/skills/<name>/SKILL.md`).
+Personas come in two kinds. **Core personas** are immutable: the set, their tool allowlists, system prompts, providers, and models ship in `pkg/personas/configs/*.json` and cannot be changed by a file, a config key, or an API call. **Custom personas** are owned entirely by their creator — the person, or the embedding host — and decide everything: prompt, tools (built-in, host, MCP), skills, write paths, what auto-approves, provider and model. See §10.
+
+The runtime knobs for core personas are: hide one, change the default spawn target, and toggle orchestrator git-write. To extend agent behavior beyond what the catalog ships without minting a persona, use **skills** (`~/.config/sprout/skills/<name>/SKILL.md`).
 
 ---
 
@@ -77,7 +79,7 @@ Implementation: `pkg/agent/agent_getters.go:503-516` (`MaxSubagentDepth`).
 
 ## 3. Architecture
 
-Two layers, not three. There is no user-override merge.
+Three layers: the embedded catalog, the custom-persona files, and the in-memory `SubagentTypes` they both hydrate. There is still no user-override merge — a custom persona can never replace a core one.
 
 ### Layer 1: Catalog (embedded JSON)
 
@@ -90,9 +92,13 @@ Two layers, not three. There is no user-override merge.
 
 See `loadDefinitionsFromFS` in `pkg/personas/catalog.go:87`. On load failure, a minimal fallback (orchestrator + general) keeps the binary functional.
 
-### Layer 2: Config (in-memory `SubagentTypes`)
+### Layer 2: Custom personas (files, §10)
 
-`defaultSubagentTypes()` (`pkg/configuration/config.go:2237`) converts every `Definition` into a `SubagentType` and stores them in `Config.SubagentTypes`. This map is **always** repopulated from the catalog at config load; `SubagentTypes` is tagged `json:"-"` so it never round-trips to disk.
+`personas.LoadCustomPersonas` reads `<config dir>/personas/*.json` and `<workspace>/.sprout/personas/*.json` and returns the definitions that may be used, plus every problem found. A custom persona that reuses a core id or alias is skipped and reported — core is immutable.
+
+### Layer 3: Config (in-memory `SubagentTypes`)
+
+`defaultSubagentTypes()` converts every `Definition` into a `SubagentType` and stores them in `Config.SubagentTypes`. `HydrateCustomPersonas` then merges the custom definitions in, after core, tagging each with its `Source`. This map is **always** repopulated at config load; `SubagentTypes` is tagged `json:"-"` so it never round-trips to disk.
 
 The `SubagentType` struct mirrors `Definition`:
 
@@ -103,10 +109,14 @@ type SubagentType struct {
     SystemPrompt, SystemPromptText  string
     SystemPromptAppend              string
     AllowedTools, Aliases           []string
+    HostTools                       []string // tools the host registers at run time
+    Skills                          []string // skills this persona may see and activate
+    MCP                             []string // "<server>" | "<server>__<tool>" | "*"
     Enabled, LocalOnly, Delegatable bool
     AutoApproveRules                *AutoApproveRules
     Capabilities                    []string // e.g. "git_write"
     CanSpawnNonDelegatable          []string // persona IDs the spawner may target despite Delegatable=false
+    Source                          string   // "core" | "host" | "user" | "project"
 }
 ```
 
@@ -264,20 +274,24 @@ The model builds it with the design kit (`pkg/mockupkit`): it names a kit (a loo
 ### CLI: `/persona`
 
 ```
-/persona                          # list personas, show active
+/persona                          # list personas, show active + source
 /persona list                     # same
 /persona <name>                   # activate the persona
 /persona <name> apply             # same as bare activate
-/persona <name> show              # show details (provider, model, tools, prompt path)
+/persona <name> show              # show details (source, provider, model, tools, prompt)
 /persona <name> enable|disable    # toggle DisabledPersonas
+/persona new <id> [--from <core>] # create a user-scope persona file (§10)
+/persona accept <id>              # accept a project-scope persona (§10)
 /persona clear                    # clear active persona, restore base prompt
 ```
 
-Implementation: `pkg/agent_commands/persona.go`.
+Implementation: `pkg/agent_commands/persona.go` (core surface) and `pkg/agent_commands/persona_custom.go` (custom personas).
+
+`sprout persona validate [path]` checks persona definitions without starting an agent; `sprout persona dirs` prints the directories in use. Implementation: `cmd/persona.go`.
 
 ### WebUI: `GET /api/settings/subagent-types`
 
-Read-only. Returns the catalog map, `disabled_personas`, available providers, and the user's current subagent provider/model. `PUT` and `DELETE` return `405 Method Not Allowed` — persona customization is intentionally not supported (`pkg/webui/settings_api_subagents.go`).
+Read-only. Returns the hydrated persona map (core plus custom, each with its `source`), `disabled_personas`, available providers, and the user's current subagent provider/model. `PUT` and `DELETE` return `405 Method Not Allowed` — creating or editing personas in the WebUI is out of scope (`pkg/webui/settings_api_subagents.go`).
 
 `disabled_personas` and `default_subagent_persona` are exposed via the broader settings endpoint (`pkg/webui/settings_api_put.go`).
 
@@ -285,7 +299,11 @@ Read-only. Returns the catalog map, `disabled_personas`, available providers, an
 
 ## 9. Extending behavior
 
-Personas are catalog-fixed. To add behavior, use **skills**:
+There are two ways to add behavior beyond what the catalog ships.
+
+**Custom personas** (§10) when you need a different *tool set*, *prompt*, *skills*, *MCP servers*, or *write scope* — the persona owns all of it, and no Sprout release changes it.
+
+**Skills** when you need reusable instructions the existing personas can load:
 
 | Scope | Path |
 |-------|------|
@@ -294,7 +312,61 @@ Personas are catalog-fixed. To add behavior, use **skills**:
 
 Each skill is a directory with a `SKILL.md` frontmatter manifest plus optional supporting files. Skills are loaded on demand via the `activate_skill` tool; the in-tree library lives at `pkg/skills/library/`. The `self-help` skill in that library documents the format end-to-end.
 
-If a workflow needs a different combination of tools or a tailored system prompt, write a skill — don't fork the catalog.
+---
+
+## 10. Custom personas
+
+A custom persona is a definition its creator owns entirely. Nothing is inherited from a core persona at run time, and no Sprout release changes what it can do. Core personas stay immutable: a custom persona may not reuse a core id or alias, and attempting to is a load error naming the file — never an override.
+
+### The definition
+
+The schema is the same `Definition` a core persona uses (`pkg/personas/catalog.go`), with these differences:
+
+| Field | For a custom persona |
+|---|---|
+| `id`, `name`, `description`, `aliases` | Required id; no collision with core ids or aliases. |
+| `system_prompt_text` | The prompt, inline. |
+| `system_prompt` | A prompt file: relative to the persona file (user and project scope), or the path of a **core** prompt (`subagent_prompts/planner.md`), so a creator can start from a shipped prompt. This is the one thing that can point at core content, and it is only text; it carries none of the core persona's tools or rules. |
+| `system_prompt_append` | As for core personas. |
+| `allowed_tools` | The whole tool set: built-in tool names, host tool names, and MCP selectors. Empty means the default agent's tools. |
+| `host_tools` | Tool names the host provides, or `["*"]`: any tool the host registers is offered. A name here is offered without also being listed in `allowed_tools`. |
+| `skills` | Skill names the persona may see and activate, or `["*"]`. Absent: none. Listing any skill offers `activate_skill`/`list_skills` without naming them in `allowed_tools`. |
+| `mcp` | MCP servers or tools the persona may use: `"<server>"` or `"<server>__<tool>"` (the SP-170 keys), or `["*"]`. Absent: none. The person's `approved_mcp_tools` still decides whether each call runs without asking. |
+| `write_paths`, `capabilities`, `auto_approve_rules`, `read_only`, `delegatable`, `can_spawn_non_delegatable`, budgets, `provider`, `model`, `local_only` | As for core personas. |
+| `enabled` | Defaults to true. |
+
+Unknown tool names are a warning when the persona loads — it may name a host tool the current host does not register — and are reported by `sprout persona validate`. Malformed JSON, a missing required field, or a collision is an error that skips that one persona; it never stops the others from loading or Sprout from starting.
+
+### Scopes and trust
+
+| Scope | Source | Trust |
+|---|---|---|
+| **Host** | The headless agent API: `createAgent({ persona: <definition> })`, and `definePersona(def)` on the runtime for a host that runs several agents. In memory; never written to disk. | Trusted: the host is the creator. |
+| **User** | `<config dir>/personas/*.json` (`~/.config/sprout/personas/`, under `SPROUT_CONFIG` when set). One persona or a `{"personas": [...]}` catalog per file. | Trusted: the person is the creator. |
+| **Project** | `<workspace>/.sprout/personas/*.json`. | Listed, but not usable until the person accepts it. Accepting is recorded against the file's content hash; a changed file needs accepting again. In headless and non-interactive runs, an unaccepted project persona is unavailable. |
+
+Precedence among custom personas with the same id: host, then user, then project. A shadowed custom persona is reported in `/persona list`, never silently dropped.
+
+### The limits — what "complete control" does not mean
+
+A custom persona chooses what it can do *within what the person or host running it allows*. These gates apply to every persona, core or custom, and a persona cannot grant itself past them:
+
+- The global classifier (gate 1, §6). `auto_approve_rules` can reduce asking only up to what gate 1 permits; critical operations stay blocked.
+- The SP-169 prompt-injection defence for ingested content.
+- The SP-170 MCP authorization gate. A persona's `mcp` list decides *which* MCP tools it may call; `approved_mcp_tools` still decides whether a call runs without asking.
+- The sandbox and the computer-use activation gates. A persona holding `computer_use` is still held to `computer_use.enabled`, the top-level rule, and interactive consent.
+
+### Surfaces
+
+- **Headless agent API** (`@sprout-foundry/workspace/agent`): `CreateAgentOptions.persona` is `string | PersonaDefinition`. An invalid definition makes `createAgent` reject with the validation errors. `definePersona(def)` registers a persona on the runtime for every agent it builds from then on.
+- **CLI:** `/persona new <id> [--from <core-id>]`, `/persona list` (with source), `/persona show <id>` (effective prompt source and tool set), `/persona accept <id>`, and `sprout persona validate [path]`.
+- **Web UI:** the persona picker lists custom personas with their source. Creating and editing them in the Web UI is out of scope.
+- **Subagents:** a custom persona with `delegatable: true` can be spawned like any worker, governed by the existing `delegatable` / `can_spawn_non_delegatable` rules.
+- **Events:** the `active_persona` metadata gains `persona_source`. A custom persona's prompt and definition are never sent anywhere Sprout does not already send the active prompt.
+
+### The retired `subagent_types` key
+
+A `subagent_types` block left in an old `config.json` is ignored, as it has been since personas became catalog-fixed. Sprout prints a one-time notice pointing at `<config dir>/personas/`.
 
 ---
 
@@ -313,7 +385,10 @@ If a workflow needs a different combination of tools or a tailored system prompt
 | Subagent spawn gate | `pkg/agent/tool_handlers_subagent.go::handleRunSubagent` |
 | Depth limits | `pkg/agent/agent_getters.go::MaxSubagentDepth` |
 | Git-write gating | `pkg/agent/tool_handlers_shell.go` |
-| `/persona` command | `pkg/agent_commands/persona.go` |
+| `/persona` command | `pkg/agent_commands/persona.go`, `pkg/agent_commands/persona_custom.go` |
+| Custom persona loader | `pkg/personas/custom.go` |
+| Custom persona hydration | `pkg/configuration/config_personas.go` |
+| `sprout persona` command | `cmd/persona.go` |
 | WebUI read API | `pkg/webui/settings_api_subagents.go` |
 | System prompt files | `pkg/agent/prompts/subagent_prompts/*.md` |
 | Confined-persona enforcement | `pkg/agent/persona_confinement.go` |

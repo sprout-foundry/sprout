@@ -10,6 +10,7 @@
 import { FileWriteTracker, mapAgentEvent, type RawAgentEvent } from './events';
 import { createAgentFiles, readWorkspaceFile, workspaceRootOf } from './files';
 import { registerHostTools, unregisterHostTools } from './hostTools';
+import { PersonaDefinitionError } from './persona';
 import { loadSproutWasm } from './runtime';
 import type {
   AgentEvent,
@@ -92,7 +93,31 @@ export async function createAgent(options: CreateAgentOptions): Promise<Headless
       remoteRegistries: options.remoteRegistries,
     }));
   const chatId = options.chatId || newChatId();
-  const runOptions = JSON.stringify({ persona: options.persona ?? '', context: options.context ?? '' });
+
+  // A host-minted persona is validated now, so an unusable definition rejects
+  // createAgent with every reason instead of failing the first turn (SP-175).
+  if (typeof options.persona === 'object' && options.persona !== null) {
+    if (!bridge.validatePersona) {
+      // A module built before SP-175 cannot validate a definition, so the
+      // turn would fail later with a vaguer message. Say what is wrong.
+      throw new Error(
+        'Sprout agent: this WASM module cannot validate persona definitions — ' +
+          'rebuild it (make build-wasm) or pass a persona id instead of a definition',
+      );
+    }
+    const check = bridge.validatePersona(JSON.stringify(options.persona));
+    if (!check?.ok) {
+      throw new PersonaDefinitionError(check?.errors ?? ['invalid persona definition']);
+    }
+  }
+
+  // A string persona resolves a Sprout persona or one the host defined with
+  // definePersona; an object mints a persona owned by this host. Either way the
+  // module receives the same option and decides which it is.
+  const runOptions = JSON.stringify({
+    persona: options.persona ?? '',
+    context: options.context ?? '',
+  });
   const providerPath = `${homeDirOf(bridge)}/.config/sprout/providers/${HEADLESS_PROVIDER}.json`;
   const files = createAgentFiles(bridge);
 

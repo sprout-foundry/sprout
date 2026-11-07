@@ -166,7 +166,7 @@ func (m *Manager) Reload() error {
 		if globalDir, globalErr := getDefaultConfigDir(); globalErr == nil {
 			globalPath = filepath.Join(globalDir, ConfigFileName)
 		}
-		cfg, err = LoadConfigWithLayers(globalPath, workspacePath, "", globalDirFor(workspaceDir))
+		cfg, err = loadConfigWithLayers(globalPath, workspacePath, "", globalDirFor(workspaceDir), workspaceDir)
 	default:
 		if m.configDir != "" {
 			fileName := m.configFileName

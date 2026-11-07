@@ -84,11 +84,11 @@ func runPersonaDirs(w io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("resolve user persona directory: %w", err)
 	}
-	fmt.Fprintf(w, "User scope:    %s\n", dirState(userDir))
+	_, _ = fmt.Fprintf(w, "User scope:    %s\n", dirState(userDir))
 	if workspaceDir, ok := currentWorkspaceConfigDir(); ok {
-		fmt.Fprintf(w, "Project scope: %s\n", dirState(configuration.ProjectPersonasDir(workspaceDir)))
+		_, _ = fmt.Fprintf(w, "Project scope: %s\n", dirState(configuration.ProjectPersonasDir(workspaceDir)))
 	} else {
-		fmt.Fprintln(w, "Project scope: (no workspace here)")
+		_, _ = fmt.Fprintln(w, "Project scope: (no workspace here)")
 	}
 	return nil
 }

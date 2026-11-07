@@ -183,10 +183,10 @@ func (a *Agent) activePersonaRoster() *personaRoster {
 	extra := make([]string, 0, 4)
 	for _, name := range persona.HostTools {
 		trimmed := strings.TrimSpace(name)
-		switch {
-		case trimmed == "":
+		switch trimmed {
+		case "":
 			continue
-		case trimmed == "*":
+		case "*":
 			extra = append(extra, tools.RegisteredHostToolNames()...)
 		default:
 			extra = append(extra, trimmed)

@@ -180,6 +180,14 @@ func (a *Agent) publishTurnMetrics() {
 // budget exceeded, general errors, and the success path. It syncs state back
 // to sprout, commits tracked changes, and runs post-loop hooks.
 func (a *Agent) handleQueryResult(qc *queryRunContext, result string, err error) (string, error) {
+	// A run can end before seed's loop consumed a steer it took into its
+	// per-run injection buffer (which holds one message), and that buffer dies
+	// with this turn's seed agent. Put any such message back on the staging
+	// queue so a later turn delivers it, instead of the user's steer vanishing
+	// between turns. Keyed off the conversation, not off err — see
+	// releaseUnlandedSteer.
+	a.recoverUnlandedSteer(landedObserver(qc.seedAgent))
+
 	if err != nil {
 		// Check if the fleet budget was exceeded mid-run
 		if errors.Is(err, FleetBudgetExceededError) {

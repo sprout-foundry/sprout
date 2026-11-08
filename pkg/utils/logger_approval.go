@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -113,7 +113,7 @@ func (w *Logger) AskForApprovalWithOptions(prompt, command string, analysis *Sec
 	defer clihooks.ResumeIndicator()
 	defer clihooks.ResumeSteer()
 
-	reader := bufio.NewReader(os.Stdin)
+	reader := NewLineReader(int(os.Stdin.Fd()), os.Stdin)
 	consecutiveErrors := 0
 	const maxConsecutiveErrors = 3
 
@@ -144,7 +144,7 @@ func (w *Logger) AskForApprovalWithOptions(prompt, command string, analysis *Sec
 
 	for {
 		w.LogUserInteraction("Choose [y/n/a/s/e]: ")
-		response, err := ReadLineWithTimeout(reader, ApprovalPromptTimeout)
+		response, err := reader.ReadLine(context.Background(), ApprovalPromptTimeout)
 		if errors.Is(err, ErrPromptTimeout) {
 			w.LogUserInteraction(fmt.Sprintf(" timed out after %s waiting for input - denying for safety.", ApprovalPromptTimeout))
 			return ApprovalChoiceDeny
@@ -214,7 +214,7 @@ func (w *Logger) AskForFilesystemApproval(prompt, path, folder string, tier File
 	defer clihooks.ResumeIndicator()
 	defer clihooks.ResumeSteer()
 
-	reader := bufio.NewReader(os.Stdin)
+	reader := NewLineReader(int(os.Stdin.Fd()), os.Stdin)
 	consecutiveErrors := 0
 	const maxConsecutiveErrors = 3
 
@@ -243,7 +243,7 @@ func (w *Logger) AskForFilesystemApproval(prompt, path, folder string, tier File
 
 	for {
 		w.LogUserInteraction(choiceHint)
-		response, err := ReadLineWithTimeout(reader, ApprovalPromptTimeout)
+		response, err := reader.ReadLine(context.Background(), ApprovalPromptTimeout)
 		if errors.Is(err, ErrPromptTimeout) {
 			w.LogUserInteraction(fmt.Sprintf(" timed out after %s waiting for input - denying for safety.", ApprovalPromptTimeout))
 			return ApprovalChoiceDeny

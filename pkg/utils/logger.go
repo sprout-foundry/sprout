@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -168,14 +168,14 @@ func (w *Logger) AskForConfirmation(prompt string, default_response bool, requir
 	// overwritten by spinner frames on stderr.
 	clihooks.SuspendIndicator()
 	// SP-057 follow-up: pause the SP-055 SteerInputReader so it releases
-	// stdin back to cooked mode. Without this, the bufio.Reader below
+	// stdin back to cooked mode. Without this, the LineReader below
 	// hits EOF immediately (the steer reader is holding raw-mode stdin),
 	// trips the consecutive-error guard, and auto-rejects the prompt
 	// with "stdin unavailable - rejecting for safety". No-op when no
 	// turn is in flight.
 	clihooks.PauseSteer()
 	defer clihooks.ResumeSteer()
-	reader := bufio.NewReader(os.Stdin)
+	reader := NewLineReader(int(os.Stdin.Fd()), os.Stdin)
 	consecutiveErrors := 0
 	const maxConsecutiveErrors = 3
 
@@ -186,7 +186,7 @@ func (w *Logger) AskForConfirmation(prompt string, default_response bool, requir
 
 	for {
 		w.LogUserInteraction(fmt.Sprintf("%s %s: ", prompt, hint))
-		response, err := ReadLineWithTimeout(reader, ApprovalPromptTimeout)
+		response, err := reader.ReadLine(context.Background(), ApprovalPromptTimeout)
 
 		// An idle (open but silent) stdin means the user walked away or the
 		// harness isn't forwarding keystrokes. Deny rather than block the

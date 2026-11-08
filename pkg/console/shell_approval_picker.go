@@ -1,7 +1,6 @@
 package console
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -10,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // ShellPartInfo is a projection of agent.ShellPart that carries only the
@@ -72,41 +72,24 @@ func promptShellApprovalPartsIO(ctx context.Context, parts []ShellPartInfo, in i
 	fmt.Fprintf(out, "\n  Shell command has %d part(s). Approve each:\n", len(parts))
 	fmt.Fprintf(out, "    (y=approve · n=reject · a=approve all remaining · r=reject all remaining · q=quit)\n\n")
 
-	scanner := bufio.NewScanner(in)
-	// A single persistent reader goroutine owns the scanner for the whole
-	// prompt instead of spawning a goroutine per line (the per-line variant
-	// left a zombie goroutine blocked in Scan() after ctx cancel, which
-	// later raced the steer reader for stdin). If the prompt returns early,
-	// close(done) unblocks the goroutine's next send; an in-flight Read
-	// resolves at its own EOF and the scanner is never reused afterwards.
-	type lineMsg struct {
-		line string
-		err  error
+	// A poll-gated LineReader owns stdin for the whole prompt: reads are
+	// synchronous and leave nothing parked on the descriptor when the
+	// prompt returns (a timeout, Ctrl+C, EOF), so the steer reader or the
+	// REPL prompt that takes over next sees every byte the user typed.
+	// The previous scanner-goroutine reader stayed blocked in Scan() after
+	// a timeout and swallowed the next line with its read-ahead buffer.
+	fd := -1
+	if f, ok := in.(*os.File); ok {
+		fd = int(f.Fd())
 	}
-	lines := make(chan lineMsg)
-	done := make(chan struct{})
-	defer close(done)
-	go func() {
-		for scanner.Scan() {
-			select {
-			case lines <- lineMsg{line: scanner.Text()}:
-			case <-done:
-				return
-			}
-		}
-		// Explicit io.EOF (when scanner.Err() is nil) so the prompt
-		// loop's "treat as deny for safety" EOF path still fires.
-		err := scanner.Err()
-		if err == nil {
-			err = io.EOF
-		}
-		select {
-		case lines <- lineMsg{err: err}:
-		case <-done:
-		}
-	}()
+	lines := utils.NewLineReader(fd, in)
+
 	bulkAccept := false
 	bulkReject := false
+
+	readLine := func() (string, error) {
+		return lines.ReadLine(ctx, 0)
+	}
 
 	for i, part := range parts {
 		if err := ctx.Err(); err != nil {
@@ -126,18 +109,7 @@ func promptShellApprovalPartsIO(ctx context.Context, parts []ShellPartInfo, in i
 		fmt.Fprintf(out, "        %s\n", part.Semantic)
 		for {
 			fmt.Fprintf(out, "    approve? [y/n/a/r/q]: ")
-			var choice string
-			var readErr error
-			select {
-			case <-ctx.Done():
-				readErr = ctx.Err()
-			case msg := <-lines:
-				if msg.err != nil {
-					readErr = msg.err
-				} else {
-					choice = msg.line
-				}
-			}
+			choice, readErr := readLine()
 			if readErr != nil {
 				if errors.Is(readErr, io.EOF) {
 					// EOF — treat as deny for safety on remaining parts.

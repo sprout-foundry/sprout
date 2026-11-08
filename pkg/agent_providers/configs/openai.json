@@ -42,7 +42,7 @@
     },
     "model_info": [
       {
-        "cached_input_cost": 0,
+        "cached_input_cost": 0.125,
         "context_length": 400000,
         "description": "GPT-5 is OpenAI's reasoning model with a 400K context window. It accepts text input and supports tool calling.",
         "id": "gpt-5",
@@ -55,7 +55,7 @@
         ]
       },
       {
-        "cached_input_cost": 0,
+        "cached_input_cost": 0.025,
         "context_length": 400000,
         "description": "GPT-5 Mini - Smaller GPT-5 variant",
         "id": "gpt-5-mini",
@@ -67,7 +67,7 @@
         ]
       },
       {
-        "cached_input_cost": 0,
+        "cached_input_cost": 0.005,
         "context_length": 400000,
         "description": "GPT-5 Nano - Smallest GPT-5 variant",
         "id": "gpt-5-nano",
@@ -91,7 +91,7 @@
         ]
       },
       {
-        "cached_input_cost": 0,
+        "cached_input_cost": 1.25,
         "context_length": 128000,
         "description": "GPT-4o is OpenAI's omni model with a 128K context window. It accepts text and image inputs and supports tool calling.",
         "id": "gpt-4o",
@@ -104,7 +104,7 @@
         ]
       },
       {
-        "cached_input_cost": 0,
+        "cached_input_cost": 0.075,
         "context_length": 128000,
         "description": "GPT-4o Mini - Smaller omni model",
         "id": "gpt-4o-mini",
@@ -117,7 +117,7 @@
         ]
       },
       {
-        "cached_input_cost": 0,
+        "cached_input_cost": 0.5,
         "context_length": 200000,
         "description": "GPT-4.1 - Latest GPT-4 model",
         "id": "gpt-4.1",
@@ -129,7 +129,7 @@
         ]
       },
       {
-        "cached_input_cost": 0,
+        "cached_input_cost": 0.1,
         "context_length": 200000,
         "description": "GPT-4.1 Mini - Smaller GPT-4.1",
         "id": "gpt-4.1-mini",
@@ -141,7 +141,7 @@
         ]
       },
       {
-        "cached_input_cost": 0,
+        "cached_input_cost": 0.5,
         "context_length": 200000,
         "description": "o3 is OpenAI's reasoning model with a 200K context window, designed for complex multi-step tasks.",
         "id": "o3",

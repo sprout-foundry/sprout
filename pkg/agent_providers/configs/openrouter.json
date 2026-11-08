@@ -1956,19 +1956,18 @@
       },
       {
         "context_length": 262144,
-        "description": "Morph's fastest apply model for code edits. ~10,500 tokens/sec with 96% accuracy for rapid code transformations. The model requires the prompt to be in the following format: \u003cinstruction\u003e{instruction}\u003c/instruction\u003e \u003ccode\u003e{initial_code}\u003c/code\u003e \u003cupdate\u003e{edit_snippet}\u003c/update\u003e...",
+        "description": "Morph's fastest apply model for code edits. ~10,500 tokens/sec with 96% accuracy for rapid code transformations.\n\nThe model requires the prompt to be in the following format: \n\u003cinstruction\u003e{instruction}\u003c/instruction\u003e\n\u003ccode\u003e{initial_code}\u003c/code\u003e\n\u003cupdate\u003e{edit_snippet}\u003c/update\u003e\n\nZero Data Retention is enabled for Morph. Learn more about this model in their [documentation](https://docs.morphllm.com/quickstart)",
         "id": "morph/morph-v3-fast",
         "input_cost": 0.8,
         "name": "Morph: Morph V3 Fast",
         "output_cost": 1.2,
         "tags": [
-          "tools",
-          "reasoning"
+          "structured_output"
         ]
       },
       {
         "context_length": 262144,
-        "description": "Morph's high-accuracy apply model for complex code edits. ~4,500 tokens/sec with 98% accuracy for precise code transformations. The model requires the prompt to be in the following format: \u003cinstruction\u003e{instruction}\u003c/instruction\u003e \u003ccode\u003e{initial_code}\u003c/code\u003e...",
+        "description": "Morph's high-accuracy apply model for complex code edits. ~4,500 tokens/sec with 98% accuracy for precise code transformations.\n\nThe model requires the prompt to be in the following format: \n\u003cinstruction\u003e{instruction}\u003c/instruction\u003e\n\u003ccode\u003e{initial_code}\u003c/code\u003e\n\u003cupdate\u003e{edit_snippet}\u003c/update\u003e\n\nZero Data Retention is enabled for Morph. Learn more about this model in their [documentation](https://docs.morphllm.com/quickstart)",
         "id": "morph/morph-v3-large",
         "input_cost": 0.9,
         "name": "Morph: Morph V3 Large",
@@ -8038,6 +8037,40 @@
           "tools",
           "vision",
           "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.002,
+        "context_length": 1048576,
+        "description": "DeepSeek V4.1 Flash 1017 via the Batch API. The October 17, 2026 snapshot of DeepSeek V4.1 Flash, served by DeepSeek under the `deepseek-flash` API model name. V4.1 Flash is a sparse mixture-of-experts model from DeepSeek, and the first built on the company's Causal Encoder-Decoder (CED) architecture. It activates 8B parameters on input and 16B on output from a 552B-parameter backbone, an asymmetric split that keeps per-token compute low relative to the model's total size. Image understanding is native to the architecture, with visual and text embeddings trained jointly from the start of pre-training rather than added afterward as in the earlier experimental [V4 Flash Vision Exp](https://openrouter.ai/deepseek/deepseek-v4-flash-vision-exp).\n\nIt is suited for coding, terminal, and computer-use agents, along with long-horizon tasks that must run to completion across many steps and long-context analysis. Compressed KV caching cuts cache memory to roughly a quarter of the previous Flash generation, significantly reducing costs on agentic workloads. DeepSeek positions it as the cost-efficient tier of the V4.1 family and reports that it exceeds [V4 Pro](https://openrouter.ai/deepseek/deepseek-v4-pro-0813) on performance, speed, and task completion time.",
+        "id": "deepseek/deepseek-v4.1-flash-1017:batch",
+        "input_cost": 0.011,
+        "name": "DeepSeek: DeepSeek V4.1 Flash 1017 (batch)",
+        "output_cost": 0.2,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 81920,
+        "description": "Morph's fastest apply model for code edits. ~10,500 tokens/sec with 96% accuracy for rapid code transformations.\n\nThe model requires the prompt to be in the following format: \n\u003cinstruction\u003e{instruction}\u003c/instruction\u003e\n\u003ccode\u003e{initial_code}\u003c/code\u003e\n\u003cupdate\u003e{edit_snippet}\u003c/update\u003e\n\nZero Data Retention is enabled for Morph. Learn more about this model in their [documentation](https://docs.morphllm.com/quickstart)",
+        "id": "morph/morph-v3-fast:batch",
+        "input_cost": 0.4,
+        "name": "Morph: Morph V3 Fast (batch)",
+        "output_cost": 0.6
+      },
+      {
+        "context_length": 262144,
+        "description": "Morph's high-accuracy apply model for complex code edits. ~4,500 tokens/sec with 98% accuracy for precise code transformations.\n\nThe model requires the prompt to be in the following format: \n\u003cinstruction\u003e{instruction}\u003c/instruction\u003e\n\u003ccode\u003e{initial_code}\u003c/code\u003e\n\u003cupdate\u003e{edit_snippet}\u003c/update\u003e\n\nZero Data Retention is enabled for Morph. Learn more about this model in their [documentation](https://docs.morphllm.com/quickstart)",
+        "id": "morph/morph-v3-large:batch",
+        "input_cost": 0.45,
+        "name": "Morph: Morph V3 Large (batch)",
+        "output_cost": 0.95,
+        "tags": [
           "structured_output"
         ]
       }

@@ -623,6 +623,22 @@ function adoptedDuringRecovery(): string | null {
   return id && id !== 'default' ? id : null;
 }
 
+/**
+ * The daemon status URL the client-ID recovery asks, or null when that server
+ * shares this page's origin. The base is the one clientFetch uses: the agent
+ * backend's when the host names one, else the SSH proxy base, else none.
+ */
+function recoveryProbeURL(): string | null {
+  const base = backendURLs(getActiveHost()).apiBaseURL || getProxyBase();
+  if (!base || typeof window === 'undefined') return null;
+  try {
+    const url = new URL(`${base}/api/query/status`, window.location.href);
+    return url.origin === window.location.origin ? null : url.toString();
+  } catch {
+    return null;
+  }
+}
+
 let _resolvedClientId: Promise<string> | null = null;
 export function resolveWebUIClientId(): Promise<string> {
   if (_resolvedClientId) return _resolvedClientId;
@@ -664,33 +680,35 @@ export function resolveWebUIClientId(): Promise<string> {
     // Cross-origin recovery: make a lightweight request to the server.
     // The server will read the sprout_client_id cookie (which the browser
     // sends automatically with credentials: 'include') and echo the resolved
-    // client ID in the X-Sprout-Client-ID response header.
-    try {
-      // The daemon route, so the same base clientFetch uses: the agent
-      // backend's when the host names one (an embedded workspace's proxy),
-      // else the SSH proxy base, else same-origin.
-      const base = backendURLs(getActiveHost()).apiBaseURL || getProxyBase();
-      const url = `${base}/api/query/status`;
-      const resp = await fetch(url, {
-        method: 'GET',
-        credentials: 'include',
-        headers: { 'Cache-Control': 'no-store' },
-      });
-      const adoptedMeanwhile = adoptedDuringRecovery();
-      if (adoptedMeanwhile) return adoptedMeanwhile;
-      const echoedId = resp.headers.get(WEBUI_CLIENT_ID_HEADER);
-      if (echoedId && echoedId !== 'default') {
-        const candidate = await sharedClientIdCandidate(echoedId);
-        const adoptedWhileProbing = adoptedDuringRecovery();
-        if (adoptedWhileProbing) return adoptedWhileProbing;
-        const claimed = claimOrGenerateClientId(candidate);
-        window.sessionStorage.setItem(WEBUI_CLIENT_ID_STORAGE_KEY, claimed);
-        writeClientIdToWindowName(claimed);
-        return claimed;
+    // client ID in the X-Sprout-Client-ID response header. Only a server on
+    // another origin can know a cookie this page cannot read: a same-origin
+    // one (the page's own server, a workspace or SSH proxy path) would echo
+    // the cookie already checked above, and the page's own server need not
+    // serve the daemon route at all.
+    const probeURL = recoveryProbeURL();
+    if (probeURL) {
+      try {
+        const resp = await fetch(probeURL, {
+          method: 'GET',
+          credentials: 'include',
+          headers: { 'Cache-Control': 'no-store' },
+        });
+        const adoptedMeanwhile = adoptedDuringRecovery();
+        if (adoptedMeanwhile) return adoptedMeanwhile;
+        const echoedId = resp.headers.get(WEBUI_CLIENT_ID_HEADER);
+        if (echoedId && echoedId !== 'default') {
+          const candidate = await sharedClientIdCandidate(echoedId);
+          const adoptedWhileProbing = adoptedDuringRecovery();
+          if (adoptedWhileProbing) return adoptedWhileProbing;
+          const claimed = claimOrGenerateClientId(candidate);
+          window.sessionStorage.setItem(WEBUI_CLIENT_ID_STORAGE_KEY, claimed);
+          writeClientIdToWindowName(claimed);
+          return claimed;
+        }
+      } catch {
+        // Network error — fall through to generate a new ID below.
+        debugLog('[resolveWebUIClientId] cross-origin recovery fetch failed');
       }
-    } catch {
-      // Network error — fall through to generate a new ID below.
-      debugLog('[resolveWebUIClientId] cross-origin recovery fetch failed');
     }
 
     const adoptedMeanwhile = adoptedDuringRecovery();

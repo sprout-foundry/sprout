@@ -4,7 +4,7 @@
 // build output the way the platform hosts it, uses the app in a headless
 // browser the way a visitor would, and reports what a person would run into.
 // The report is .sprout/app-check.json plus screenshots in
-// .sprout/app-check/ (or --out); the platform parses the JSON, so its shape is
+// .sprout/app-check/ (or --output); the platform parses the JSON, so its shape is
 // a contract (see pkg/appcheck.Report).
 //
 // The browser is the same Chromium browse_url drives (pkg/webcontent's Rod
@@ -58,14 +58,14 @@ values or send nothing, failed requests, console errors, and entries gone after
 a fresh load.
 
 Writes .sprout/app-check.json and screenshots in .sprout/app-check/ (or in the
---out folder) and prints the findings. Exits 1 when it found problems, 0 when
+--output folder) and prints the findings. Exits 1 when it found problems, 0 when
 it found none or could not run (no browser): the check never stands in the way
 of work.
 
 Examples:
   sprout check app
   sprout check app --no-build --budget 60
-  sprout check app --out /tmp/app-check`,
+  sprout check app --output /tmp/app-check`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		return runAppCheck(cmd, appCheckFlagState, cmd.OutOrStdout())
@@ -75,7 +75,11 @@ Examples:
 func init() {
 	checkAppCmd.Flags().BoolVar(&appCheckFlagState.noBuild, "no-build", false, "Skip the build when dist/ already exists")
 	checkAppCmd.Flags().IntVar(&appCheckFlagState.budget, "budget", 0, "Seconds to spend using the app (default 120)")
-	checkAppCmd.Flags().StringVar(&appCheckFlagState.out, "out", "", "Write the report and screenshots here instead of .sprout/")
+	checkAppCmd.Flags().StringVar(&appCheckFlagState.out, "output", "", "Write the report and screenshots here instead of .sprout/")
+	// --out is the platform scaffold's spelling (app-check.mjs); kept as a
+	// hidden alias.
+	checkAppCmd.Flags().StringVar(&appCheckFlagState.out, "out", "", "Alias for --output")
+	_ = checkAppCmd.Flags().MarkHidden("out")
 	checkCmd.AddCommand(checkAppCmd)
 	rootCmd.AddCommand(checkCmd)
 }

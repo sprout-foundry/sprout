@@ -70,6 +70,7 @@ func AllTools() []ToolHandler {
 	}
 	// Platform-specific tools (nil on WASM via build-tagged stubs).
 	tools = append(tools, registerBrowseURLTool()...)
+	tools = append(tools, registerCheckAppTool()...)
 	tools = append(tools, registerVisionTools()...)
 	tools = append(tools, registerRunAutomateTool()...)
 	tools = append(tools, registerCodegraphTools()...)

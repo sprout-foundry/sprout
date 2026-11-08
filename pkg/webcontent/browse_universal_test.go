@@ -138,6 +138,12 @@ func (f *fakeBrowserRenderer) Run(_ context.Context, url string, opts BrowseOpti
 
 func (f *fakeBrowserRenderer) Close() {}
 
+// OpenRodSession mirrors the production renderer: a fake cannot hand out a
+// live page, so it reports the browser as unavailable.
+func (f *fakeBrowserRenderer) OpenRodSession(context.Context) (*RodSession, error) {
+	return nil, ErrBrowserUnavailable
+}
+
 func withFakeGlobalBrowser(t *testing.T, renderer BrowserRenderer) {
 	t.Helper()
 	previousBrowser := globalBrowser

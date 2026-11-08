@@ -57,7 +57,7 @@ var plumbingPrefixes = []string{
 // renders as a single "✗ <message>" line with internal plumbing prefixes
 // stripped.
 func renderExecuteError(err error) {
-	if err == nil || errors.Is(err, errReported) {
+	if err == nil || errors.Is(err, errReported) || errors.Is(err, errAppCheckProblems) {
 		return
 	}
 	if exitCodeFor(err) == exitUsage {

@@ -24,7 +24,7 @@ func waitForReadable(fd int, timeout time.Duration) bool {
 		timeout = time.Millisecond
 	}
 	fds := []unix.PollFd{{
-		Fd:     int32(fd),
+		Fd:     int32(fd), //nolint:gosec // G115: a descriptor fits in int32
 		Events: unix.POLLIN,
 	}}
 	for {

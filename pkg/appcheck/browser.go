@@ -185,15 +185,6 @@ func (b *probeBrowser) evalValue(script string) (value gson.JSON, err error) {
 	return res.Value, nil
 }
 
-// evalBool runs a script and reads its result as a boolean.
-func (b *probeBrowser) evalBool(script string, args any) bool {
-	var ok bool
-	if err := b.evalRaw(script, args, &ok); err != nil {
-		return false
-	}
-	return ok
-}
-
 // evalString runs a script and reads its result as a string.
 func (b *probeBrowser) evalString(script string, args any) (string, error) {
 	var s string
@@ -368,25 +359,6 @@ func (r *recorder) writesSince(mark int) []string {
 		return nil
 	}
 	return append([]string{}, r.writes[mark:]...)
-}
-
-// recorded is a copy of everything the recorder holds.
-type recorded struct {
-	failed        []string
-	submitErrors  []string
-	consoleErrors []string
-}
-
-// snapshot copies the recorder's findings (concurrent event delivery may
-// still be appending, so the copy is taken under the lock).
-func (r *recorder) snapshot() recorded {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return recorded{
-		failed:        append([]string{}, r.failed...),
-		submitErrors:  append([]string{}, r.submitErrors...),
-		consoleErrors: append([]string{}, r.consoleErrors...),
-	}
 }
 
 // pathOf returns the path (with query) of a URL, as requests read in the

@@ -75,7 +75,6 @@ func (s siteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	status := http.StatusOK
 	if hit == "" {
-		status = http.StatusNotFound
 		hit, status = s.notFoundPage(path)
 	}
 	contentType := "text/plain"

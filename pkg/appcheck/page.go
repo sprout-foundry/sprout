@@ -21,6 +21,8 @@ type pageOps interface {
 	eval(script string, args any, out any) error
 	// evalText runs a page script and returns its result as text.
 	evalText(script string, args any) (string, error)
+	// pressEnter presses Enter on the focused element, as a real key.
+	pressEnter() error
 	// screenshot writes a full-page screenshot.
 	screenshot(path string) error
 	// setPhase switches the pass failing requests are classified for (1 =

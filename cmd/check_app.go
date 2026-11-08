@@ -126,18 +126,18 @@ func runAppCheck(cmd *cobra.Command, flags appCheckFlags, out io.Writer) error {
 // summary line, each finding, and where the details are.
 func renderAppCheck(report *appcheck.Report, root, outDir string, out io.Writer) {
 	if report.Status != appcheck.StatusRan {
-		fmt.Fprintf(out, "App check could not run: %s\n", report.Reason)
+		_, _ = fmt.Fprintf(out, "App check could not run: %s\n", report.Reason)
 		return
 	}
 	problems := report.Problems()
 	notes := report.Notes()
-	fmt.Fprintf(out, "App check: %d page(s), %d form(s) or action(s) used; %d problem(s), %d note(s).\n",
+	_, _ = fmt.Fprintf(out, "App check: %d page(s), %d form(s) or action(s) used; %d problem(s), %d note(s).\n",
 		len(report.Pages), len(report.Forms), len(problems), len(notes))
 	for _, f := range problems {
-		fmt.Fprintf(out, " problem: %s\n", f.Text)
+		_, _ = fmt.Fprintf(out, " problem: %s\n", f.Text)
 	}
 	for _, f := range notes {
-		fmt.Fprintf(out, " note: %s\n", f.Text)
+		_, _ = fmt.Fprintf(out, " note: %s\n", f.Text)
 	}
 	reportPath := filepath.Join(root, ".sprout", "app-check.json")
 	if outDir != "" {
@@ -145,5 +145,5 @@ func renderAppCheck(report *appcheck.Report, root, outDir string, out io.Writer)
 	} else if rel, err := filepath.Rel(root, reportPath); err == nil {
 		reportPath = rel
 	}
-	fmt.Fprintf(out, "Details: %s\n", reportPath)
+	_, _ = fmt.Fprintf(out, "Details: %s\n", reportPath)
 }

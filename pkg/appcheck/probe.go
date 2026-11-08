@@ -30,8 +30,6 @@ const (
 	maxFormsPerRoute = 4
 	// maxFormSteps bounds how many Next steps a multi-step form is walked.
 	maxFormSteps = 5
-	// maxActionButtons bounds how many buttons outside forms are pressed.
-	maxActionButtons = 4
 	// navigationTimeout bounds one page load.
 	navigationTimeout = 20 * time.Second
 	// settleDelay is the pause after a click that changes the page, so the
@@ -317,6 +315,9 @@ func (p *prober) fillByHand(index int) {
 		var filled bool
 		script := handScriptsPrefix(multiValuePattern) + typeMultiValueBody + fmt.Sprintf(typeMultiValueScript, index, "Probe "+p.word(), "lookupHandField")
 		if err := p.page.eval(script, nil, &filled); err == nil && filled {
+			// A real key press: many tag inputs ignore a key event a script
+			// dispatches.
+			_ = p.page.pressEnter()
 			sleepUntil(p, handStepDelay)
 		}
 	}

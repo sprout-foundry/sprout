@@ -122,8 +122,9 @@ const handFieldsScript = `(() => {
 })()`
 
 // typeMultiValueScript types a value into the form's next unused multi-value
-// field and presses Enter, adding it as a chip or tag. It reports whether it
-// found a field. It takes the handFieldScript lookup as its argument.
+// field and leaves it focused; the prober then presses Enter as a real key,
+// adding it as a chip or tag. It reports whether it found a field. It takes
+// the handFieldScript lookup as its argument.
 const typeMultiValueScript = `lookupTypeMultiValue(%d, %q, %s)()`
 const typeMultiValueBody = `const lookupTypeMultiValue = (index, word, lookup) => () => {
   const f = document.querySelectorAll('form')[index] || null;
@@ -134,9 +135,6 @@ const typeMultiValueBody = `const lookupTypeMultiValue = (index, word, lookup) =
   el.focus();
   el.value = word;
   el.dispatchEvent(new Event('input', { bubbles: true }));
-  for (const type of ['keydown', 'keypress', 'keyup']) {
-    el.dispatchEvent(new KeyboardEvent(type, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
-  }
   return true;
 };
 `

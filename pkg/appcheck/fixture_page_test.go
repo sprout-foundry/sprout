@@ -11,6 +11,7 @@ package appcheck
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -179,8 +180,7 @@ func (p *fixturePageOps) submitForm(index int) fixtureSubmit {
 	p.submitted[key] = true
 	if result.sent != "" {
 		parts := strings.SplitN(result.sent, " ", 3)
-		status := 0
-		fmt.Sscanf(parts[0], "%d", &status)
+		status, _ := strconv.Atoi(parts[0])
 		p.recordRequest(parts[1], parts[2], status)
 	}
 	return result
@@ -197,8 +197,7 @@ func formIndexArgs(script string) int {
 	if end < 0 {
 		return 0
 	}
-	n := 0
-	fmt.Sscanf(rest[:end], "%d", &n)
+	n, _ := strconv.Atoi(rest[:end])
 	return n
 }
 
@@ -215,6 +214,8 @@ func (p *fixturePageOps) evalText(script string, args any) (string, error) {
 }
 
 // screenshot implements pageOps.
+func (p *fixturePageOps) pressEnter() error { return nil }
+
 func (p *fixturePageOps) screenshot(path string) error {
 	p.shots++
 	return writeEmptyFile(path)

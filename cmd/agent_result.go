@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 	"time"
 
@@ -22,6 +23,7 @@ type AgentResult struct {
 	Response       string             `json:"response,omitempty"`         // final assistant response text (success runs with an in-process agent)
 	FilesModified  []string           `json:"files_modified,omitempty"`   // files changed during execution
 	GitDiff        string             `json:"git_diff,omitempty"`         // unified diff of all changes
+	DiffOmitted    []string           `json:"diff_omitted,omitempty"`     // files left out of GitDiff to keep it under maxDiffBytes
 	PullRequestURL string             `json:"pull_request_url,omitempty"` // URL of PR created during execution
 	Question       *AgentQuestion     `json:"question,omitempty"`         // the question that ended a "needs_input" run
 	Handoff        string             `json:"handoff,omitempty"`          // a "handed_off" run's note for the next run
@@ -172,10 +174,10 @@ func emitJSONResult(query string, startTime time.Time, runErr error, a *agent.Ag
 		}
 	}
 
-	// Truncate diff output if it exceeds maxDiffBytes
-	if len(diffOutput) > maxDiffBytes {
-		diffOutput = diffOutput[:maxDiffBytes] + "\n\n... [diff truncated at 1MB]"
-	}
+	// Keep the diff under maxDiffBytes by leaving out whole files, never
+	// part of one: a cut file cannot be applied, and everything after the
+	// cut used to be lost. The files left out are named in the result.
+	diffOutput, result.DiffOmitted = capDiff(diffOutput, maxDiffBytes)
 
 	if diffOutput != "" {
 		result.GitDiff = diffOutput
@@ -279,4 +281,74 @@ func appendDiffPiece(combined, piece string) string {
 		piece += "\n"
 	}
 	return combined + piece
+}
+
+// capDiff keeps diff within max bytes by leaving out whole file sections.
+// When the diff fits it is returned as it is. Otherwise the smallest files
+// are kept first (a source change is small; a rebuilt bundle, vendored code
+// or a large deletion is what pushes a diff over), in their original order,
+// and the paths of the files left out are returned. A section is never cut.
+func capDiff(diff string, max int) (string, []string) {
+	if len(diff) <= max {
+		return diff, nil
+	}
+	sections := splitDiffSections(diff)
+	order := make([]int, len(sections))
+	for i := range order {
+		order[i] = i
+	}
+	sort.SliceStable(order, func(a, b int) bool { return len(sections[order[a]]) < len(sections[order[b]]) })
+	keep := make([]bool, len(sections))
+	total := 0
+	for _, i := range order {
+		if total+len(sections[i]) <= max {
+			keep[i] = true
+			total += len(sections[i])
+		}
+	}
+	var b strings.Builder
+	var omitted []string
+	for i, sec := range sections {
+		if keep[i] {
+			b.WriteString(sec)
+		} else {
+			omitted = append(omitted, diffSectionPath(sec))
+		}
+	}
+	return b.String(), omitted
+}
+
+// splitDiffSections splits a unified diff into one section per file, each
+// starting at its "diff --git " line. Text before the first header (there
+// is none in git's output) stays with the first section.
+func splitDiffSections(diff string) []string {
+	var sections []string
+	start := 0
+	for i := 0; i < len(diff); {
+		next := strings.Index(diff[i:], "\ndiff --git ")
+		if next < 0 {
+			break
+		}
+		cut := i + next + 1
+		if cut > start {
+			sections = append(sections, diff[start:cut])
+		}
+		start = cut
+		i = cut
+	}
+	return append(sections, diff[start:])
+}
+
+// diffSectionPath is the path a file section changes: the "b/" side of its
+// header, or the "a/" side for a deletion.
+func diffSectionPath(section string) string {
+	line := section
+	if i := strings.IndexByte(section, '\n'); i >= 0 {
+		line = section[:i]
+	}
+	line = strings.TrimPrefix(line, "diff --git ")
+	if i := strings.LastIndex(line, " b/"); i >= 0 {
+		return line[i+3:]
+	}
+	return strings.TrimPrefix(line, "a/")
 }

@@ -246,6 +246,9 @@ func (f *StatusFooter) shiftScrollRegionLocked() {
 // again from the top. Caller must hold outputMu.
 func (f *StatusFooter) clearScreenLocked() {
 	_, _ = fmt.Fprint(f.w, "\033[r\033[H\033[2J")
+	// The lines on screen are gone, so the mirror has nothing a resize should
+	// put back.
+	resetTranscriptMirrorLocked()
 	f.applyScrollRegionLocked()
 	f.drawFullLocked()
 	_, _ = fmt.Fprint(f.w, "\033[1;1H")

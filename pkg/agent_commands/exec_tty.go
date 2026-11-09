@@ -46,6 +46,9 @@ func runOnTerminal(command, dir string) (exitCode int, err error) {
 		clihooks.BeginForegroundChild()
 		defer clihooks.EndForegroundChild()
 		err := cmd.Run()
+		// Whatever the child printed is on the screen but not in the
+		// transcript mirror, so a resize cannot replay it.
+		console.MarkTranscriptUnmirrored()
 		console.ResyncTerminal()
 		return err
 	})

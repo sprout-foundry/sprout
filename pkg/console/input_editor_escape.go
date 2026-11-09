@@ -58,6 +58,9 @@ func (ir *InputReader) runExternalEditor(prevState *term.State, nonBlocking bool
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	runErr := cmd.Run()
+	// An editor that stays on the primary screen leaves rows the transcript
+	// mirror never saw, so a resize cannot replay them.
+	markTranscriptUnmirrored()
 
 	// Re-enter raw mode + restore our terminal modes regardless of editor
 	// exit status, so the caller can keep reading input.

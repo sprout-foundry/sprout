@@ -189,7 +189,11 @@ func TestFooterStartProbeFailureLeavesTopAnchoredDefault(t *testing.T) {
 	}
 
 	// Union behavior retained on grow: clear starts at the OLD top (22).
-	// reserved=3 (rule+content+hint).
+	// reserved=3 (rule+content+hint). The grow at an unchanged width is the one
+	// resize the transcript mirror can redraw instead, so empty it: this
+	// asserts the fallback's clear window, not the replay.
+	ResetTranscriptMirror()
+	defer ResetTranscriptMirror()
 	f.mu.Lock()
 	f.sizeOverride = &terminalSizeOverride{cols: 80, rows: 40}
 	f.mu.Unlock()

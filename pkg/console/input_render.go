@@ -309,6 +309,7 @@ func (ir *InputReader) ClearScreen() {
 		ir.footer.clearScreenLocked()
 	} else {
 		fmt.Print("\033[H\033[2J")
+		resetTranscriptMirrorLocked()
 		ir.lastVisualRows, ir.currentPhysicalLine, ir.lastWrapPending = 0, 0, false
 	}
 	ir.refreshLocked()

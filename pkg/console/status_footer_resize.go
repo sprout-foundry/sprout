@@ -46,6 +46,11 @@ func (f *StatusFooter) Resize() {
 	cols, rows := f.terminalSize()
 	f.resizeSnapshot.Store(&terminalSizeOverride{cols: cols, rows: rows})
 	defer f.resizeSnapshot.Store(nil)
+	// Rows crossed the boundary between the screen and the terminal's scrollback
+	// without a transcript write to account for them: a shrink pushes the oldest
+	// rows off the top. Sync the mirror now so a later replay cannot re-emit what
+	// scrollback is already holding.
+	trimTranscriptMirrorToAreaLocked()
 
 	idle := activeInputReader
 	picker := activeSelectList
@@ -60,19 +65,38 @@ func (f *StatusFooter) Resize() {
 		idle, picker = nil, nil
 	}
 
-	// Reset the scroll region, clear stale footer content, then
-	// re-apply the scroll region and redraw.
-	//
-	// Footer content is padded to the terminal width at draw time. When
-	// the terminal shrinks, those padded rows wrap across multiple
-	// physical rows. The stale footer block is exactly reserved+overflow
-	// rows tall, so the clear starts at its computed top (see the
-	// oldTop/newTop derivation below) — no slack row, so no live
-	// content row is ever erased.
+	// Reset the scroll region so both paths below can address every row.
+	replay := false
 	overflow := 0
+	// clearedFrom is the first row this pass erased, 0 when it erased nothing.
+	// The gap-close below needs it: only rows at or below it are known to be
+	// blank, and those are the only rows a scroll may push out of the region.
+	clearedFrom := 0
+	f.mu.Lock()
+	lastCols := f.lastCols
+	f.mu.Unlock()
 	if oldRows > 1 {
-		// Reset the scroll region first so we can address the full screen.
 		fmt.Fprint(f.w, "\033[r")
+		// Redraw the conversation area from the transcript mirror instead of
+		// guessing where the terminal's reflow left the stale footer rows.
+		//
+		// Only a GROW qualifies. A SHRINK pushes the rows it cannot show off the
+		// top into scrollback, so re-emitting the mirrored lines would print them
+		// under the copy the terminal filed away. A bottom-anchored terminal
+		// (Termux) is excluded even on a grow: it pulls rows DOWN out of its
+		// scrollback to fill the new space, and those rows were never the
+		// console's to write — clearing the area would destroy output it cannot
+		// put back. There the old-geometry clear below stays, narrower and
+		// therefore better than a certain loss.
+		//
+		// A picker is excluded because its frame lives inside the region and
+		// renderAnchoredLocked redraws it; a replay would write the transcript
+		// through it.
+		if picker == nil && !bottomAnchoredResize() && rows > oldRows {
+			replay = f.replayTranscriptLocked(oldRows, lastCols, cols)
+		}
+	}
+	if !replay && oldRows > 1 {
 		f.mu.Lock()
 		lastHint := f.lastHintRows
 		lastSteer := f.lastSteerRows
@@ -118,7 +142,12 @@ func (f *StatusFooter) Resize() {
 		// the new-geometry window, so clear only newTop. The DA2 probe
 		// fingerprints Termux natively and through ssh.
 		clearTop := newTop
-		if !bottomAnchoredResize() {
+		if !bottomAnchoredResize() && rows > oldRows {
+			// Only on a GROW does the old absolute position still describe
+			// where the stale footer sits: rows keep their screen positions,
+			// so the block the old geometry drew is stranded at oldTop. On a
+			// SHRINK the terminal reflowed or dropped rows above, and the old
+			// position points at live conversation.
 			oldTop := oldRows - reserved + 1
 			if oldTop < clearTop {
 				clearTop = oldTop
@@ -127,6 +156,7 @@ func (f *StatusFooter) Resize() {
 		if clearTop < 1 {
 			clearTop = 1
 		}
+		clearedFrom = clearTop
 		fmt.Fprintf(f.w, "\033[%d;1H\033[J", clearTop)
 	}
 
@@ -143,13 +173,131 @@ func (f *StatusFooter) Resize() {
 	// content at the top with the cursor parked on its new last row, so
 	// the next output started below a band of blank rows and the band
 	// pushed the latest transcript into scrollback.
-	f.closeGrowGapLocked(oldRows, overflow)
+	if !replay {
+		f.closeGrowGapLocked(oldRows, overflow, clearedFrom)
+	}
 	if idle != nil {
 		idle.redrawAnchoredLocked(cols)
 	}
 	if picker != nil {
 		picker.renderAnchoredLocked(rows-f.reservedRows(), cols)
 	}
+}
+
+// replayTranscriptLocked redraws the conversation area from the transcript
+// mirror: wipe the rows the transcript is known to occupy, then re-emit them
+// ending just above the pinned composer box. Caller MUST hold outputMu and MUST
+// have reset the scroll region.
+//
+// This replaces the geometry arithmetic the fallback path uses to locate the
+// stale footer rows. That arithmetic predicts what the terminal's own reflow did
+// to rows it already drew, and a wrong prediction erases conversation lines.
+// Here the rows come from the lines themselves: the block's OLD top is where the
+// clear begins, and everything below it — the stale footer rows a grow strands
+// mid-screen included — is rewritten.
+//
+// The clear deliberately stops there. Rows above the block were not written by
+// the transcript writer, and a terminal that anchors content to the bottom
+// repopulates exactly those rows from its scrollback on a grow.
+//
+// Returns false when the lines cannot be replayed, leaving the caller's fallback
+// to run without anything having been erased.
+func (f *StatusFooter) replayTranscriptLocked(oldRows, oldCols, newCols int) bool {
+	lines, partial, rows, ok := TranscriptRepaint()
+	if !ok {
+		return false
+	}
+	bottom := f.TranscriptBottomRow()
+	limit := bottom - pinnedComposerRows(newCols)
+	if limit < 1 || rows > limit {
+		return false
+	}
+	oldRowRows, known := TranscriptRowsAt(oldCols)
+	newRowRows, knownNew := TranscriptRowsAt(newCols)
+	if !known || !knownNew {
+		return false
+	}
+	// The row count at the NARROWER width is both the one the old screen can
+	// have shown (a narrower reflow split lines onto rows the old height had
+	// no room for, and the terminal scrolled those up out of the old viewport)
+	// and the one the block needs now.
+	rowRows := oldRowRows
+	if newRowRows > rowRows {
+		rowRows = newRowRows
+	}
+	f.mu.Lock()
+	oldReserved := 2 + f.lastSteerRows + f.lastHintRows
+	f.mu.Unlock()
+	if rowRows+oldReserved > oldRows {
+		// The reflow spilled rows out of the old viewport's top; the block's
+		// old position is no longer derivable from the old geometry alone,
+		// and a clear computed from it would strand or double rows.
+		return false
+	}
+	oldBottom := oldRows - oldReserved
+
+	// Where the block sat before the resize, in the document the reflow
+	// produced: a newline-terminated write ended it one row above the area's
+	// last row, which is the blank the writer parks on.
+	top := oldBottom - rowRows + 1
+	if partial == "" {
+		top--
+	}
+	if top < 1 {
+		top = 1
+	}
+	if top > limit {
+		return false
+	}
+	_, _ = fmt.Fprintf(f.w, "\033[%d;1H\033[J", top)
+
+	// And where it goes now: the same lines, ending above the composer box at
+	// the new height.
+	start := limit - rows + 1
+	if partial == "" {
+		start--
+	}
+	if start < 1 {
+		start = 1
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "\033[%d;1H", start)
+	for _, line := range lines {
+		b.WriteString(strings.TrimRight(line, "\r\n"))
+		b.WriteString("\r\n")
+	}
+	if partial != "" {
+		// The line in progress keeps its row, unterminated: the cursor belongs
+		// inside it, where the writer left it.
+		b.WriteString(partial)
+	}
+	_, _ = f.w.Write([]byte(b.String()))
+	return true
+}
+
+// pinnedComposerRows is how many of the region's last rows the idle input
+// reader's composer box occupies at cols, or 0 while a turn owns the screen
+// (no idle reader) or the input is not pinned.
+//
+// It measures the line at the given width rather than trusting lastVisualRows:
+// Resize clears the inline prompt before calling this, and the clear zeroes the
+// row count the box had at the old width. A box shorter than it thinks leaves
+// the replay one row too low, and the box redrawn at the region bottom then
+// overwrites the transcript's last row.
+func pinnedComposerRows(cols int) int {
+	ir := activeInputReader
+	if ir == nil || !ir.IsPinned() {
+		return 0
+	}
+	if cols <= 0 {
+		return max(ir.lastVisualRows, 1)
+	}
+	displayLine, _ := ir.renderLineWithCollapsedPastes()
+	totalRows, _, _, _, _ := wrappedGeometry(cols, visibleRuneWidth(ir.prompt), displayLine, ir.cursorPos)
+	if totalRows < 1 {
+		return 1
+	}
+	return totalRows
 }
 
 // closeGrowGapLocked keeps the conversation against the input box after a
@@ -162,10 +310,16 @@ func (f *StatusFooter) Resize() {
 //     rows, pushing the content up, and the clear above that erases them
 //     leaves exactly that many blank rows behind.
 //
-// The rows that fall off the bottom are the ones the resize just cleared.
-// Bottom-anchored terminals (Termux) pull content down themselves. Caller
-// must hold outputMu.
-func (f *StatusFooter) closeGrowGapLocked(oldRows, overflow int) {
+// The scroll is capped at the rows this pass actually erased (clearedFrom). That
+// is the whole of what the scroll is allowed to consume: everything from
+// clearedFrom down is blank by construction, and the worst case above it is
+// content ending on the row directly over the erased window. Scroll past that
+// and the bottom-most conversation row is pushed out of the region's bottom edge
+// and overwritten by the footer — which is how growing the terminal deleted
+// output. An underestimate leaves a band of blank rows, which is the older,
+// survivable failure. Bottom-anchored terminals (Termux) pull content down
+// themselves. Caller must hold outputMu.
+func (f *StatusFooter) closeGrowGapLocked(oldRows, overflow, clearedFrom int) {
 	if bottomAnchoredResize() {
 		return
 	}
@@ -175,6 +329,12 @@ func (f *StatusFooter) closeGrowGapLocked(oldRows, overflow int) {
 		shift += max(rows-oldRows, 0)
 	}
 	bottom := rows - f.reservedRows()
+	if clearedFrom < 1 {
+		// Nothing was erased, so nothing below the content is known to be blank.
+		shift = 0
+	} else if room := bottom - clearedFrom + 1; shift > room {
+		shift = max(room, 0)
+	}
 	if shift == 0 || bottom <= shift {
 		return
 	}
@@ -330,6 +490,12 @@ func (f *StatusFooter) Stop() {
 	f.mu.Unlock()
 }
 
+// resizeSettle is how long the watcher waits after a SIGWINCH before repainting.
+// A drag-resize fires one signal per step; each repaint rewrites the whole
+// conversation area, so the burst is collapsed to its final size instead of
+// strobing through every intermediate one.
+const resizeSettle = 60 * time.Millisecond
+
 // watchResize listens for SIGWINCH (or the platform equivalent) and
 // re-applies the scroll region + redraws the footer. Exits when stopCh
 // is closed. On platforms without SIGWINCH (Windows, js/wasm) the goroutine
@@ -348,11 +514,33 @@ func (f *StatusFooter) watchResize(stopCh, doneCh chan struct{}) {
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, sig)
 	defer signal.Stop(ch)
+	settle := time.NewTimer(time.Hour)
+	if !settle.Stop() {
+		<-settle.C
+	}
+	defer settle.Stop()
+	pending := false
 	for {
+		// No timer armed while a signal is outstanding: arming one per signal
+		// would push the repaint back forever during a long drag.
+		var after <-chan time.Time
+		if pending {
+			after = settle.C
+		}
 		select {
 		case <-stopCh:
 			return
 		case <-ch:
+			pending = true
+			if !settle.Stop() {
+				select {
+				case <-settle.C:
+				default:
+				}
+			}
+			settle.Reset(resizeSettle)
+		case <-after:
+			pending = false
 			f.Resize()
 			notifyResizeSubscribers()
 		}

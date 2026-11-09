@@ -28,7 +28,38 @@ type Screen struct {
 	// auto-wrapped: a row the writer meant to fit did not.
 	wrappedPastEdge bool
 	rawNewlines     bool
+	// wrapped marks the rows whose content continued onto the row below via
+	// auto-wrap, so a reflowing Resize can rejoin them into logical lines.
+	wrapped []bool
+	// scrollback holds the rows that left the top of the screen. It is only
+	// a test fixture's memory of what a real terminal's scrollback would
+	// hold: nothing on screen can reach it, and rows scrolled out INSIDE a
+	// DECSTBM region are lost rather than stored here, which is what xterm
+	// does when the region excludes row 1.
+	scrollback []string
+	resizeMode ResizeMode
 }
+
+// ResizeMode picks how a Resize repositions the content already on screen.
+// Terminal emulators disagree here, and sprout's footer has to cope with the
+// disagreement, so a test has to be able to ask for each family.
+type ResizeMode int
+
+const (
+	// ResizeNonReflow is xterm and its descendants (VTE, Windows Terminal):
+	// a grow adds blank rows at the bottom and leaves the content where it
+	// was; a shrink drops rows off the top into scrollback. A width change
+	// truncates or pads rows without rewrapping them.
+	ResizeNonReflow ResizeMode = iota
+	// ResizeBottomAnchored is Termux (TerminalBuffer.resize): the bottom row
+	// stays glued to the bottom edge, so a grow shifts content DOWN and pulls
+	// rows back in from scrollback, and a shrink pushes them up into it.
+	ResizeBottomAnchored
+	// ResizeReflow is iTerm2, Terminal.app and kitty: a width change rewraps
+	// the soft-wrapped rows at the new width, and a height change keeps the
+	// bottom of the content in view by pushing rows off the top.
+	ResizeReflow
+)
 
 // TranslateNewlines sets whether LF also returns the carriage (the default,
 // standing in for the kernel's ONLCR when a test writes straight to the
@@ -42,8 +73,9 @@ func (s *Screen) TranslateNewlines(on bool) {
 
 // New returns a blank cols×rows screen with the cursor at the top left.
 func New(cols, rows int) *Screen {
-	s := &Screen{rows: rows, cols: cols, bot: rows - 1}
+	s := &Screen{rows: rows, cols: cols, bot: rows - 1, resizeMode: ResizeNonReflow}
 	s.grid = make([][]rune, rows)
+	s.wrapped = make([]bool, rows)
 	for i := range s.grid {
 		s.grid[i] = blankRow(cols)
 	}
@@ -119,6 +151,9 @@ func decodeRune(s string) (rune, int) {
 func (s *Screen) put(r rune) {
 	if s.c >= s.cols {
 		s.wrappedPastEdge = true
+		// The row's content continues onto the row below: a reflowing
+		// Resize has to join them back into one logical line.
+		s.wrapped[s.r] = true
 		s.c = 0
 		s.lineFeed()
 	}
@@ -139,13 +174,29 @@ func (s *Screen) lineFeed() {
 }
 
 func (s *Screen) scrollUp() {
+	s.lineFeedScrollback()
 	copy(s.grid[s.top:s.bot], s.grid[s.top+1:s.bot+1])
+	copy(s.wrapped[s.top:s.bot], s.wrapped[s.top+1:s.bot+1])
 	s.grid[s.bot] = blankRow(s.cols)
+	s.wrapped[s.bot] = false
+}
+
+// lineFeedScrollback records the row about to be discarded from the top of
+// the region, into scrollback when the region starts at row 1. A region that
+// excludes row 1 discards the line outright — the terminal has nowhere to put
+// it — so content scrolled inside such a region is genuinely lost, which is
+// one of the things a test may need to prove.
+func (s *Screen) lineFeedScrollback() {
+	if s.top == 0 {
+		s.scrollback = append(s.scrollback, strings.TrimRight(string(s.grid[s.top]), " "))
+	}
 }
 
 func (s *Screen) scrollDown() {
 	copy(s.grid[s.top+1:s.bot+1], s.grid[s.top:s.bot])
+	copy(s.wrapped[s.top+1:s.bot+1], s.wrapped[s.top:s.bot])
 	s.grid[s.top] = blankRow(s.cols)
+	s.wrapped[s.top] = false
 }
 
 // escape consumes one escape sequence and reports its length; ok is false
@@ -296,9 +347,13 @@ func (s *Screen) RawLine(n int) string {
 func (s *Screen) Lines() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.linesLocked()
+}
+
+func (s *Screen) linesLocked() []string {
 	out := make([]string, s.rows)
 	for i := range out {
-		out[i] = s.lineLocked(i + 1)
+		out[i] = strings.TrimRight(string(s.grid[i]), " ")
 	}
 	return out
 }
@@ -355,27 +410,239 @@ func (s *Screen) WrappedPastEdge() bool {
 	return s.wrappedPastEdge
 }
 
-// Resize changes the screen size the way xterm-like terminals do, without
-// reflow: a shrink drops rows from the top (into scrollback) so the bottom
-// rows and the cursor stay in view; a grow adds blank rows at the bottom and
-// leaves the content where it was. Columns are truncated or padded, and the
-// margins reset to the full screen. (Termux instead anchors growth to the
-// bottom; sprout detects it separately.)
+// SetResizeMode picks the resize semantics the screen models. See ResizeMode.
+func (s *Screen) SetResizeMode(m ResizeMode) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.resizeMode = m
+}
+
+// ResizeMode returns the modelled resize semantics.
+func (s *Screen) ResizeMode() ResizeMode {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.resizeMode
+}
+
+// Scrollback returns the trimmed rows that left the top of the screen, oldest
+// first: what a real terminal's scrollback would hold. It is a fixture's
+// memory, not part of what a program under test can address — nothing written
+// to the screen can reach it, which is exactly why losing a row into it is a
+// bug worth asserting on.
+func (s *Screen) Scrollback() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]string, len(s.scrollback))
+	copy(out, s.scrollback)
+	return out
+}
+
+// AllText is scrollback plus the visible rows, oldest first: the whole
+// transcript as the user could read it by scrolling up. Asserting a row
+// appears here (rather than in Text) separates "scrolled out of view" from
+// "erased".
+func (s *Screen) AllText() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	all := append(append([]string{}, s.scrollback...), s.linesLocked()...)
+	return strings.Join(all, "\n")
+}
+
+// Resize changes the screen size, modelling the emulator family selected by
+// SetResizeMode. Every mode resets the scroll margins to the full screen, as
+// a resize does in reality.
 func (s *Screen) Resize(cols, rows int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	grid := make([][]rune, rows)
+	switch s.resizeMode {
+	case ResizeBottomAnchored:
+		s.resizeBottomAnchored(cols, rows)
+	case ResizeReflow:
+		s.resizeReflow(cols, rows)
+	default:
+		s.resizeNonReflow(cols, rows)
+	}
+}
+
+// resizeNonReflow models xterm and its descendants: rows keep their absolute
+// screen positions on a grow (new blank rows appear at the bottom) and are
+// dropped off the top on a shrink; columns truncate or pad without rewrapping.
+func (s *Screen) resizeNonReflow(cols, rows int) {
 	shift := max(s.rows-rows, 0)
-	for i := range grid {
-		grid[i] = blankRow(cols)
-		if src := i + shift; src >= 0 && src < s.rows {
-			copy(grid[i], s.grid[src])
+	if shift > 0 {
+		s.dropTopToScrollback(shift)
+	}
+	text := make([]string, rows)
+	cont := make([]bool, rows)
+	for i := range text {
+		if src := i + shift; src < s.rows {
+			text[i] = strings.TrimRight(string(s.grid[src]), " ")
+			cont[i] = s.wrapped[src]
 		}
 	}
-	s.grid, s.r = grid, clampInt(s.r-shift, 0, rows-1)
-	s.cols, s.rows = cols, rows
+	s.install(rows, cols, text, cont)
+	s.r = clampInt(s.r-shift, 0, rows-1)
+}
+
+// resizeBottomAnchored models Termux's TerminalBuffer.resize: the content
+// stays glued to the bottom edge, so a grow shifts it DOWN and pulls the
+// matching rows back in from scrollback, and a shrink pushes them up into it.
+func (s *Screen) resizeBottomAnchored(cols, rows int) {
+	text := make([]string, rows)
+	cont := make([]bool, rows)
+	shift := max(s.rows-rows, 0)
+	grow := max(rows-s.rows, 0)
+	if shift > 0 {
+		s.dropTopToScrollback(shift)
+		for i := range text {
+			if src := i + shift; src < s.rows {
+				text[i] = strings.TrimRight(string(s.grid[src]), " ")
+				cont[i] = s.wrapped[src]
+			}
+		}
+	} else {
+		// Rows the earlier scroll-up pushed out of view come back at the
+		// top. Scrollback may hold fewer than `grow` of them early in a
+		// session; the gap then stays blank, as it does on the device.
+		head := s.takeScrollback(grow)
+		copy(text, head)
+		for i := 0; i < s.rows && i+grow < rows; i++ {
+			text[i+grow] = strings.TrimRight(string(s.grid[i]), " ")
+			cont[i+grow] = s.wrapped[i]
+		}
+	}
+	s.install(rows, cols, text, cont)
+	s.r = clampInt(s.r+grow-shift, 0, rows-1)
+}
+
+// resizeReflow models iTerm2, Terminal.app and kitty: soft-wrapped rows are
+// rejoined into logical lines and rewrapped at the new width, and the viewport
+// keeps the BOTTOM of the content in view.
+//
+// Bottom anchoring is a fixture simplification: a cursor parked mid-screen by
+// a pinned footer makes "keep the cursor visible" ambiguous, and in every case
+// asserted here the newest content sits at the bottom edge.
+func (s *Screen) resizeReflow(cols, rows int) {
+	logical, cursorLine := s.logicalLines()
+	phys, cont, start := rewrap(logical, cols)
+	// The cursor's physical row: its logical line's first row, plus however
+	// many columns into that line it sits.
+	cursorRow := 0
+	if cursorLine >= 0 && cursorLine < len(start) {
+		cursorRow = start[cursorLine] + s.c/cols
+	}
+	// Rows below the buffer's content are the unused part of the old screen,
+	// not content, and leaving them in would push real content up when the
+	// viewport is bottom-aligned. Only BLANK rows may go: a pinned footer
+	// parks its cursor mid-screen, and cutting at the cursor there would drop
+	// every conversation row beneath it.
+	end := len(phys)
+	for end > cursorRow+1 && phys[end-1] == "" && !cont[end-1] {
+		end--
+	}
+	phys, cont = phys[:end], cont[:end]
+	// The visible screen is the tail of the buffer: a grow reveals hidden
+	// lines, an overflow of the rewrapped text hides the oldest ones.
+	if head := rows - len(phys); head > 0 {
+		text := make([]string, 0, rows)
+		text = append(text, s.takeScrollback(head)...)
+		for len(text) < head {
+			text = append(text, "")
+		}
+		s.install(rows, cols, append(text, phys...),
+			append(make([]bool, head), cont...))
+		s.r = clampInt(cursorRow+head, 0, rows-1)
+	} else {
+		off := len(phys) - rows
+		s.scrollback = append(s.scrollback, phys[:off]...)
+		s.install(rows, cols, phys[off:], cont[off:])
+		s.r = clampInt(cursorRow-off, 0, rows-1)
+	}
+}
+
+// logicalLines joins soft-wrapped rows back into logical lines and reports the
+// logical line the cursor sits on (-1 when it is past the end).
+func (s *Screen) logicalLines() ([]string, int) {
+	var logical []string
+	cursorLine := -1
+	for i := 0; i < s.rows; i++ {
+		text := strings.TrimRight(string(s.grid[i]), " ")
+		if i > 0 && s.wrapped[i-1] && len(logical) > 0 {
+			logical[len(logical)-1] += text
+		} else {
+			logical = append(logical, text)
+		}
+		if i == s.r {
+			cursorLine = len(logical) - 1
+		}
+	}
+	return logical, cursorLine
+}
+
+// rewrap re-wraps logical lines to width cols. It returns the physical rows,
+// each row's "continues onto the next row" flag, and the index of the first
+// physical row of every logical line. Long lines split at the column edge on
+// rune boundaries, as a terminal's autowrap does.
+func rewrap(logical []string, cols int) (text []string, cont []bool, start []int) {
+	if cols < 1 {
+		cols = 1
+	}
+	for _, line := range logical {
+		runes := []rune(line)
+		start = append(start, len(text))
+		for {
+			n := min(cols, len(runes))
+			text = append(text, string(runes[:n]))
+			runes = runes[n:]
+			if len(runes) == 0 {
+				cont = append(cont, false)
+				break
+			}
+			cont = append(cont, true)
+		}
+	}
+	return text, cont, start
+}
+
+// install replaces the grid with the given trimmed rows and continue-flags,
+// truncating or padding to cols and padding blank to rows.
+func (s *Screen) install(rows, cols int, text []string, cont []bool) {
+	grid := make([][]rune, rows)
+	wrapped := make([]bool, rows)
+	for i := range grid {
+		grid[i] = blankRow(cols)
+		if i < len(text) {
+			copy(grid[i], []rune(text[i]))
+		}
+		if i < len(cont) {
+			wrapped[i] = cont[i]
+		}
+	}
+	s.grid, s.wrapped, s.rows, s.cols = grid, wrapped, rows, cols
 	s.c = min(s.c, cols-1)
 	s.top, s.bot = 0, rows-1
+}
+
+// dropTopToScrollback moves the top n visible rows into scrollback.
+func (s *Screen) dropTopToScrollback(n int) {
+	for i := 0; i < n && i < s.rows; i++ {
+		s.scrollback = append(s.scrollback, strings.TrimRight(string(s.grid[i]), " "))
+	}
+}
+
+// takeScrollback removes up to n rows from the tail of scrollback, oldest
+// first, as a terminal pulling hidden lines back into view.
+func (s *Screen) takeScrollback(n int) []string {
+	if n <= 0 || len(s.scrollback) == 0 {
+		return nil
+	}
+	if n > len(s.scrollback) {
+		n = len(s.scrollback)
+	}
+	out := make([]string, n)
+	copy(out, s.scrollback[len(s.scrollback)-n:])
+	s.scrollback = s.scrollback[:len(s.scrollback)-n]
+	return out
 }
 
 // Dump renders the screen for failure messages: ">" marks the cursor row,

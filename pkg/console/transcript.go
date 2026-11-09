@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 )
 
@@ -34,6 +35,247 @@ var transcriptAtLineStart atomic.Bool
 // is empty, i.e. the previous write ended with a blank line. SectionBreak uses
 // it to collapse runs of separators.
 var transcriptLastRowBlank atomic.Bool
+
+// Transcript lines are mirrored for Resize. A pinned footer forces resize
+// handling to guess where the terminal's own reflow left the stale footer
+// rows; a wrong guess erases conversation lines, which is what SP-171c is
+// about. Re-emitting the transcript from a mirror of the conversation area
+// removes the guess.
+//
+// The mirror holds the transcript's lines, oldest first, trimmed to what the
+// conversation area can show: a line that no longer fits is a line the terminal
+// just scrolled out. Content the console did not write (`!` output, a child
+// that took the TTY) enters it as an unknown row, which blocks repainting while
+// it is still on screen — see transcriptEntry.
+//
+// Locking: outputMu is held for the whole write, so the mirror's line breaks
+// match the order the bytes reached the terminal; transcriptRingMu nests inside
+// it and nothing takes it alone.
+type transcriptEntry struct {
+	line string
+	// unknown marks a row the console cannot reproduce. One is counted even
+	// when the child printed more: the mirror then holds MORE rows than the
+	// screen does, which only ever defers a repaint, never claims a row the
+	// terminal has already scrolled away.
+	unknown bool
+}
+
+var (
+	transcriptRingMu sync.Mutex
+	transcriptRing   []transcriptEntry
+	// transcriptPartial is the line in progress: bytes written since the last
+	// newline (streaming prose, an interrupted line). It joins the ring only
+	// when the newline arrives, but it does occupy a row until then.
+	transcriptPartial string
+	// transcriptFallbackCapacity stands in when no footer reports a
+	// conversation area: a generous screen, not a real cap.
+	transcriptFallbackCapacity = 200
+)
+
+// appendTranscriptLines records s in the mirror. Caller MUST hold outputMu.
+//
+// It owns transcriptAtLineStart: the mirror's capacity depends on whether the
+// cursor sits on a fresh row, and the transcript has several writers (the turn
+// renderer prints its rows directly rather than through WriteTranscript), so
+// deriving the flag from the bytes here keeps every writer honest.
+func appendTranscriptLines(s string) {
+	if s == "" {
+		return
+	}
+	transcriptAtLineStart.Store(strings.HasSuffix(s, "\n"))
+	// Geometry first: transcriptCapacity reads the footer's mutex, and the
+	// mirror's lock stays the innermost one in the package.
+	cols, capacity := transcriptCapacity()
+	transcriptRingMu.Lock()
+	defer transcriptRingMu.Unlock()
+	for len(s) > 0 {
+		i := strings.IndexByte(s, '\n')
+		if i < 0 {
+			transcriptPartial += strings.TrimSuffix(s, "\r")
+			break
+		}
+		transcriptPartial += strings.TrimSuffix(s[:i], "\r")
+		transcriptRing = append(transcriptRing, transcriptEntry{line: transcriptPartial})
+		transcriptPartial = ""
+		s = s[i+1:]
+	}
+	trimTranscriptMirrorLocked(cols, capacity)
+}
+
+// markTranscriptUnmirrored records that something outside the console wrote at
+// least one row into the conversation area. Those rows cannot be re-emitted, so
+// a resize repaint that would cover them is refused while any of them is still
+// on screen.
+func markTranscriptUnmirrored() {
+	cols, capacity := transcriptCapacity()
+	transcriptRingMu.Lock()
+	defer transcriptRingMu.Unlock()
+	transcriptRing = append(transcriptRing, transcriptEntry{unknown: true})
+	transcriptPartial = ""
+	trimTranscriptMirrorLocked(cols, capacity)
+}
+
+// MarkTranscriptUnmirrored is the exported form, for the seams where a child
+// process is handed the terminal — a `!` command, an editor escape.
+//
+// It takes no lock: those seams straddle outputMu (an editor escape runs with
+// it, a shell command without it). A mark that lands out of order with a
+// concurrent transcript write only adds an unknown row, which defers a repaint;
+// it can never claim a row the terminal has already scrolled away.
+func MarkTranscriptUnmirrored() { markTranscriptUnmirrored() }
+
+// trimTranscriptMirrorToAreaLocked drops the lines the conversation area can no
+// longer show after the terminal changed size. Caller MUST hold outputMu.
+//
+// A resize moves rows across the boundary between the screen and scrollback that
+// no transcript write tells the mirror about: a shrink pushes the oldest rows off
+// the top. If the mirror kept them, a later grow would re-emit them under the
+// copy the terminal filed in scrollback — the same text twice. This is the same
+// rule appendTranscriptLines applies after every write, applied to a geometry
+// change instead of to new bytes.
+func trimTranscriptMirrorToAreaLocked() {
+	cols, capacity := transcriptCapacity()
+	transcriptRingMu.Lock()
+	defer transcriptRingMu.Unlock()
+	trimTranscriptMirrorLocked(cols, capacity)
+}
+
+// trimTranscriptMirrorLocked drops the oldest rows that no longer fit in the
+// conversation area. Caller MUST hold transcriptRingMu.
+func trimTranscriptMirrorLocked(cols, capacity int) {
+	rows := mirrorRowsLocked(cols)
+	for len(transcriptRing) > 0 && rows > capacity {
+		rows -= mirrorEntryRowsLocked(transcriptRing[0], cols)
+		transcriptRing = transcriptRing[1:]
+	}
+}
+
+func mirrorEntryRowsLocked(e transcriptEntry, cols int) int {
+	if e.unknown {
+		return 1
+	}
+	return physicalRowsForLine(e.line, cols)
+}
+
+func mirrorRowsLocked(cols int) int {
+	rows := 0
+	if transcriptPartial != "" {
+		rows = physicalRowsForLine(transcriptPartial, cols)
+	}
+	for _, e := range transcriptRing {
+		rows += mirrorEntryRowsLocked(e, cols)
+	}
+	return rows
+}
+
+// TranscriptRepaint returns the lines a resize should re-emit into the
+// conversation area, oldest first, plus the line in progress and the number of
+// physical rows they occupy at the terminal's CURRENT width. ok is false when
+// nothing is mirrored, the area holds a row the console never wrote, or the
+// lines no longer fit the area.
+//
+// The caller adds the condition that actually makes a repaint safe: that the
+// mirror covered the WHOLE area before the resize. See
+// StatusFooter.replayTranscriptLocked.
+func TranscriptRepaint() (lines []string, partial string, contentRows int, ok bool) {
+	cols, capacity := transcriptCapacity()
+	transcriptRingMu.Lock()
+	defer transcriptRingMu.Unlock()
+	for _, e := range transcriptRing {
+		if e.unknown {
+			return nil, "", 0, false
+		}
+	}
+	rows := mirrorRowsLocked(cols)
+	if rows > capacity {
+		// Lines have scrolled off the top. Re-emitting them would print them a
+		// second time under the copy scrollback kept.
+		return nil, "", 0, false
+	}
+	if len(transcriptRing) == 0 {
+		return nil, "", 0, false
+	}
+	lines = make([]string, 0, len(transcriptRing))
+	for _, e := range transcriptRing {
+		lines = append(lines, e.line)
+	}
+	return lines, transcriptPartial, rows, true
+}
+
+// TranscriptRowsAt is how many physical rows the mirrored conversation occupies
+// at a given width. Resize needs it at the OLD width to know how far down the
+// block it is about to replace actually reached; counting the same lines at the
+// NEW width would place the clear's top inside the old block on a narrowing, or
+// above it on a widening.
+func TranscriptRowsAt(cols int) (rows int, known bool) {
+	transcriptRingMu.Lock()
+	defer transcriptRingMu.Unlock()
+	for _, e := range transcriptRing {
+		if e.unknown {
+			return 0, false
+		}
+	}
+	return mirrorRowsLocked(cols), true
+}
+
+// TranscriptContentRows is how many physical rows of conversation the mirror
+// believes the area is holding, and whether that is known at all (false when the
+// area contains a row the console did not write, or nothing is mirrored).
+func TranscriptContentRows() (rows int, known bool) {
+	cols, _ := transcriptCapacity()
+	return TranscriptRowsAt(cols)
+}
+
+// ResetTranscriptMirror forgets the conversation area. Use it when the screen
+// is handed over wholesale — a pager, a full-screen editor — or cleared
+// outright, so a later resize does not replay lines the user can no longer
+// reach.
+func ResetTranscriptMirror() {
+	LockOutput()
+	defer UnlockOutput()
+	resetTranscriptMirrorLocked()
+}
+
+// resetTranscriptMirrorLocked is ResetTranscriptMirror for callers holding
+// outputMu.
+func resetTranscriptMirrorLocked() {
+	transcriptRingMu.Lock()
+	defer transcriptRingMu.Unlock()
+	transcriptRing = nil
+	transcriptPartial = ""
+	transcriptAtLineStart.Store(true)
+}
+
+// transcriptCapacity is the conversation area's capacity in physical rows, and
+// the width its lines wrap at. The row the cursor is parked on counts only when
+// it carries content: a newline-terminated write leaves it blank, so the area
+// shows one row fewer.
+//
+// The capacity must not be generous. A mirror holding lines the terminal has
+// already scrolled off re-emits them on a later grow, under the copy scrollback
+// kept — the same text twice on screen.
+func transcriptCapacity() (cols, rows int) {
+	footer := GetGlobalStatusFooter()
+	if footer == nil {
+		return liveTerminalWidth(), transcriptFallbackCapacity
+	}
+	cols, _ = footer.terminalSize()
+	bottom := footer.TranscriptBottomRow()
+	if bottom <= 1 {
+		return cols, transcriptFallbackCapacity
+	}
+	if transcriptAtLineStart.Load() {
+		return cols, bottom - 1
+	}
+	return cols, bottom
+}
+
+// physicalRowsForLine is how many screen rows a transcript line occupies at
+// cols: a line wider than the terminal wraps at the column edge, and an empty
+// line still takes one row.
+func physicalRowsForLine(line string, cols int) int {
+	return physicalRows(displayWidth(line), cols)
+}
 
 func init() {
 	// A fresh session starts at the top of the screen: the cursor is on a
@@ -120,8 +362,8 @@ func WriteTranscriptAtRowTo(w io.Writer, row int, s string) {
 			}
 			_, _ = fmt.Fprintf(w, "\033[1;%dr\033[%d;1H\033[K", bottom, row)
 			_, _ = io.WriteString(w, hardenNewlines(s))
-			transcriptAtLineStart.Store(strings.HasSuffix(s, "\n"))
 			transcriptLastRowBlank.Store(strings.TrimRight(s, "\r\n") == "")
+			appendTranscriptLines(s)
 			return
 		}
 	}
@@ -137,18 +379,20 @@ func writeTranscriptLocked(w io.Writer, s string) {
 	// region's last row instead would paint over the picker's rows.
 	if sl := activeSelectList; sl != nil {
 		sl.printExternalLocked(s)
+		// Not mirrored: the line sits above a picker frame that owns the rows
+		// below it, and the frame is redrawn rather than replayed. The mirror
+		// records the row as unknown so a resize will not erase it.
 		transcriptAtLineStart.Store(true)
 		transcriptLastRowBlank.Store(strings.TrimRight(s, "\r\n") == "")
+		markTranscriptUnmirrored()
 		return
 	}
 	if footer := GetGlobalStatusFooter(); footer != nil && footer.canPinInput() {
 		footer.parkForTranscriptLocked(w)
 	}
 	_, _ = io.WriteString(w, hardenNewlines(s))
-	transcriptAtLineStart.Store(strings.HasSuffix(s, "\n"))
-	// A write that is itself just a newline leaves the cursor on an empty
-	// row; anything with content leaves the cursor on a row that is not.
 	transcriptLastRowBlank.Store(strings.TrimRight(s, "\r\n") == "")
+	appendTranscriptLines(s)
 }
 
 // BlankLine emits one newline, but only when the transcript is not already
@@ -176,7 +420,7 @@ func SectionBreak() {
 	}
 	_, _ = io.WriteString(transcriptWriter, "\n")
 	transcriptLastRowBlank.Store(true)
-	transcriptAtLineStart.Store(true)
+	appendTranscriptLines("\n")
 }
 
 // BlankLineTo is BlankLine for an explicit terminal writer.
@@ -196,8 +440,8 @@ func blankLineLocked(w io.Writer) {
 		footer.parkForTranscriptLocked(w)
 	}
 	_, _ = io.WriteString(w, "\n")
-	transcriptAtLineStart.Store(true)
 	transcriptLastRowBlank.Store(true)
+	appendTranscriptLines("\n")
 }
 
 // parkForTranscriptLocked moves the cursor to the last row of the scroll

@@ -27,25 +27,32 @@ func (r *AssistantTurnRenderer) writeWrappedLine(line string) int {
 	indentWidth := displayWidth(r.indent)
 	if r.terminalWidth <= 0 || ansi.StringWidth(body) <= r.terminalWidth-indentWidth {
 		fmt.Print(r.indent, line)
+		appendTranscriptLines(r.indent + line)
 		return 1
 	}
 	hang := hangingIndent(body)
 	limit := r.terminalWidth - indentWidth - len(hang)
 	if limit < minWrapColumns {
 		fmt.Print(r.indent, line)
+		appendTranscriptLines(r.indent + line)
 		return physicalRows(indentWidth+ansi.StringWidth(body), r.terminalWidth)
 	}
 	rows := strings.Split(ansi.Wrap(body, limit, ""), "\n")
+	mirrored := make([]string, 0, len(rows))
 	for i, row := range rows {
 		if i == 0 {
 			fmt.Print(r.indent, row)
+			mirrored = append(mirrored, r.indent+row)
 			continue
 		}
 		fmt.Print("\n", r.indent, hang, row)
+		mirrored = append(mirrored, r.indent+hang+row)
 	}
 	if newline {
 		fmt.Print("\n")
+		mirrored = append(mirrored, "")
 	}
+	appendTranscriptLines(strings.Join(mirrored, "\n"))
 	return len(rows)
 }
 

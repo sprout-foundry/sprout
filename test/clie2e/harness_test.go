@@ -70,6 +70,12 @@ type session struct {
 	cmd  *exec.Cmd
 	scr  *vtscreen.Screen
 
+	// resizeMode is the resize semantics this session's terminal models. The
+	// DA2 answer must agree with it: that reply is how the console learns the
+	// difference, and a fixture that answers with the wrong flavor tests a
+	// code path the terminal it models never reaches.
+	resizeMode vtscreen.ResizeMode
+
 	mu   sync.Mutex
 	raw  bytes.Buffer // everything the process wrote, for failure messages
 	done chan struct{}
@@ -82,6 +88,15 @@ var terminalQuery = regexp.MustCompile(`\x1b\[(6n|>0?c|0?c)`)
 // start launches the REPL at cols×rows with an isolated home and config.
 // replies are the mock LLM's answers, one per turn.
 func start(t *testing.T, cols, rows int, replies ...string) *session {
+	t.Helper()
+	return startWithResizeMode(t, cols, rows, vtscreen.ResizeNonReflow, replies...)
+}
+
+// startWithResizeMode is start on a terminal that resizes like mode. The flavor
+// is fixed before the process starts because the console identifies the
+// terminal with a DA2 round trip while its footer first draws; answering
+// afterwards would test the wrong path at random.
+func startWithResizeMode(t *testing.T, cols, rows int, mode vtscreen.ResizeMode, replies ...string) *session {
 	t.Helper()
 	bin := sproutBinary(t)
 	home := t.TempDir()
@@ -104,8 +119,10 @@ func start(t *testing.T, cols, rows int, replies ...string) *session {
 	if err != nil {
 		t.Fatalf("start sprout in a pty: %v", err)
 	}
-	s := &session{t: t, ptmx: ptmx, cmd: cmd, scr: vtscreen.New(cols, rows), done: make(chan struct{})}
+	s := &session{t: t, ptmx: ptmx, cmd: cmd, scr: vtscreen.New(cols, rows),
+		resizeMode: mode, done: make(chan struct{})}
 	s.scr.TranslateNewlines(false) // the pty already applied ONLCR
+	s.scr.SetResizeMode(mode)
 	go s.pump()
 	t.Cleanup(func() {
 		if t.Failed() {
@@ -159,6 +176,12 @@ func (s *session) answer(query string) {
 		row, col := s.scr.Cursor()
 		_, _ = fmt.Fprintf(s.ptmx, "\x1b[%d;%dR", row, col)
 	case strings.Contains(query, ">"):
+		if s.resizeMode == vtscreen.ResizeBottomAnchored {
+			// Termux's real reply: the 320 in the version field is what the
+			// console fingerprints.
+			_, _ = s.ptmx.WriteString("\x1b[>41;320;0c")
+			return
+		}
 		_, _ = s.ptmx.WriteString("\x1b[>41;380;0c")
 	default:
 		_, _ = s.ptmx.WriteString("\x1b[?62;22c")
@@ -206,7 +229,8 @@ func (s *session) waitFor(what string, d time.Duration, cond func(screen string)
 			raw := s.raw.String()
 			s.mu.Unlock()
 			s.saveRaw()
-			s.t.Fatalf("timed out waiting for %s.\nscreen:\n%s\nraw tail: %q", what, s.scr.Dump(), raw[max(0, len(raw)-1500):])
+			s.t.Fatalf("timed out waiting for %s.\nscreen:\n%s\nscrollback:\n%s\nraw tail: %q",
+				what, s.scr.Dump(), strings.Join(s.scr.Scrollback(), "\n"), raw[max(0, len(raw)-1500):])
 		}
 		time.Sleep(25 * time.Millisecond)
 	}
@@ -239,3 +263,7 @@ func (s *session) resize(cols, rows int) {
 		s.t.Fatalf("resize: %v", err)
 	}
 }
+
+// allText is the scrollback plus the visible rows: everything the user could
+// read by scrolling up. A row missing from THIS is a row that was destroyed.
+func (s *session) allText() string { return s.scr.AllText() }

@@ -59,6 +59,9 @@ func (r *SteerInputReader) runExternalEditor() {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	runErr := cmd.Run()
+	// An editor that stays on the primary screen leaves rows the transcript
+	// mirror never saw, so a resize cannot replay them.
+	markTranscriptUnmirrored()
 
 	// Re-enter steer mode regardless of the editor's exit status so
 	// the readLoop can resume reading keystrokes.

@@ -198,6 +198,10 @@ func PrintExternal(msg string) {
 		sl.printExternalLocked(msg)
 		return
 	}
+	// No ReadLine loop owns these rows, so nothing below redraws them. Record
+	// the write as unmirrored: a grow replay that would clear these rows must
+	// refuse, because the console cannot reproduce them.
+	markTranscriptUnmirrored()
 	fmt.Print(msg)
 }
 
@@ -212,6 +216,7 @@ func (ir *InputReader) printExternalLocked(msg string) {
 		msg += "\n"
 	}
 	fmt.Print(msg)
+	appendTranscriptLines(msg)
 	// Reset geometry tracking: the cursor is now on a fresh line below
 	// the message, and the previous input rendering is gone. Telling
 	// refreshLocked that we're at the top of a new render (0 previous
@@ -241,6 +246,11 @@ func printBackground(line string, fallback *os.File) {
 	// bounded because the holder may be this goroutine's own caller, and
 	// the lock is not reentrant.
 	if !tryLockOutputFor(backgroundLockWait) {
+		if fallback == os.Stdout {
+			// The degraded write below lands where the transcript lives, on a
+			// row the console cannot reproduce.
+			markTranscriptUnmirrored()
+		}
 		_, _ = fmt.Fprint(fallback, line)
 		return
 	}
@@ -256,7 +266,9 @@ func printBackground(line string, fallback *os.File) {
 		writeTranscriptLocked(fallback, line)
 	} else {
 		// No pinned region to respect: plain bytes, so a piped or logged
-		// stream does not pick up the transcript writer's CRLFs.
+		// stream does not pick up the transcript writer's CRLFs. The rows
+		// the console cannot reproduce are recorded as unmirrored.
+		markTranscriptUnmirrored()
 		_, _ = fmt.Fprint(fallback, line)
 	}
 	UnlockOutput()

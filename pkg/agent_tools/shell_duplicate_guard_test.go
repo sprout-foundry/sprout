@@ -250,3 +250,32 @@ func TestDuplicateGuard_PromiseMapIsBounded(t *testing.T) {
 	bpm.mu.RUnlock()
 	assert.LessOrEqual(t, held, bgPromiseMax, "the reservation map must stay bounded")
 }
+
+// TestDuplicateGuard_ForegroundInFlightRefusesBackgroundStart: while a
+// foreground run holds its reservation, a background=true call for the same
+// command must be refused with the generic already-starting message — never
+// naming the reservation's pending- id, which no session answers to.
+func TestDuplicateGuard_ForegroundInFlightRefusesBackgroundStart(t *testing.T) {
+	bpm := newTestBPM(t)
+	dir := t.TempDir()
+
+	// Stand in for a foreground run holding its reservation for the whole
+	// command (what runShellCommandAdoptable does).
+	promise, busyID, _, busy := bpm.CommandPromise("npm run build", dir)
+	require.False(t, busy, busyID)
+	t.Cleanup(func() { bpm.ReleaseCommandPromise(promise) })
+
+	msg := duplicateCommandMessage(pendingBusyID(t, bpm, "npm run build", dir), 3*time.Second)
+	assert.Contains(t, msg, "already starting", "the refusal must say the command is starting")
+	assert.NotContains(t, msg, "check_background=", "no pending id may be offered to check_background")
+	assert.NotContains(t, msg, "stop_background=", "no pending id may be offered to stop_background")
+	assert.NotContains(t, msg, PendingSessionIDPrefix, "the pending id must not be named")
+}
+
+// pendingBusyID returns the id a second identical reservation is refused with.
+func pendingBusyID(t *testing.T, bpm *BackgroundProcessManager, command, dir string) string {
+	t.Helper()
+	_, id, _, busy := bpm.CommandPromise(command, dir)
+	require.True(t, busy, "the second identical reservation must be refused")
+	return id
+}

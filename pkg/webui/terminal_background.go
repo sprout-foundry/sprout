@@ -71,6 +71,18 @@ func (tm *TerminalManager) ExecuteCommandInBackground(ctx context.Context, chatI
 		return "", tm.errBackgroundCapReached(chatID)
 	}
 
+	// Refuse a second copy of a command that is still running as a
+	// background session in this chat (started here, or promoted from the
+	// foreground when it hit the tool deadline). Reserving under the
+	// manager lock makes the check and the start one step, so two identical
+	// concurrent calls start one session. See
+	// agent_tools.RunningBackgroundCommand.
+	promise, busyID, elapsed, busy := tm.reserveDuplicateCommand(chatID, command)
+	if busy {
+		return "", fmt.Errorf("%s%s", agenttools.DuplicateCommandPrefix, agenttools.RunningBackgroundCommand(busyID, elapsed))
+	}
+	defer promise.release()
+
 	// Generate a session ID: "bg-" + sanitized command prefix (first word) + "-" + random hex (8 chars)
 	prefix := extractCommandPrefix(command)
 	if prefix == "" {
@@ -95,6 +107,21 @@ func (tm *TerminalManager) ExecuteCommandInBackground(ctx context.Context, chatI
 		return "", fmt.Errorf("failed to create hidden session: %w", err)
 	}
 
+	// Mark the session as a running background command for this chat
+	// immediately: the duplicate guard treats an active background session
+	// with an open bgDone as a running copy, so a concurrent identical
+	// start is refused from this point on, not only once the command has
+	// been written. bgDone is allocated once here and never reassigned;
+	// CloseSession closes it, which is what marks the command finished.
+	session.mutex.Lock()
+	session.IsBackground = true
+	session.bgCommand = command
+	session.bgChatID = chatID
+	session.bgExitCode = BgExitNone
+	session.bgDone = make(chan struct{})
+	session.mutex.Unlock()
+	promise.publish(sessionID)
+
 	// Wait for the login shell to finish initializing (rc files, banners)
 	// before writing the command — same gate GetOrCreateHiddenSessionForChat
 	// applies on the foreground path. Without it the command write races
@@ -114,11 +141,11 @@ func (tm *TerminalManager) ExecuteCommandInBackground(ctx context.Context, chatI
 		return "", fmt.Errorf("failed to generate sentinel marker: %w", err)
 	}
 
+	// Only the marker is installed here: bgDone, bgCommand and bgChatID
+	// were set when the session was created, so nothing that observes the
+	// session sees it without them.
 	session.mutex.Lock()
-	session.IsBackground = true
 	session.bgMarker = marker
-	session.bgDone = make(chan struct{})
-	session.bgExitCode = BgExitNone
 	session.mutex.Unlock()
 
 	session.mutex.Lock()
@@ -127,6 +154,9 @@ func (tm *TerminalManager) ExecuteCommandInBackground(ctx context.Context, chatI
 	session.mutex.Unlock()
 
 	if pty == nil || !active {
+		// CloseSession closes bgDone, so the guard stops seeing this as a
+		// running copy.
+		_ = tm.CloseSession(sessionID)
 		return "", fmt.Errorf("session became inactive before command could be sent")
 	}
 

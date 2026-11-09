@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strings"
 	"time"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
@@ -154,6 +155,14 @@ func (h *shellCommandHandler) handleStopBackground(ctx context.Context, env Tool
 func (h *shellCommandHandler) handleBackground(ctx context.Context, env ToolEnv, command string) (ToolResult, error) {
 	result, err := ExecuteShellCommandBackground(ctx, command, "")
 	if err != nil {
+		// A duplicate refusal is not a failure: the same command is already
+		// running, and the message says which session to wait on.
+		if msg, ok := strings.CutPrefix(err.Error(), DuplicateCommandPrefix); ok {
+			if env.OutputWriter != nil {
+				_, _ = io.WriteString(env.OutputWriter, msg)
+			}
+			return ToolResult{Output: msg, TokenUsage: int64(estimateTokenUsage(msg))}, nil
+		}
 		return ToolResult{
 			Output:  fmt.Sprintf("execute background command: %v", err),
 			IsError: true,

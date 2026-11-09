@@ -126,3 +126,18 @@ func BackgroundProcessManagerFromContext(ctx context.Context) *BackgroundProcess
 func (m *BackgroundProcessManager) RunningSessionMatching(_, _ string) (string, time.Duration, bool) {
 	return "", 0, false
 }
+
+// CommandPromise is a stub for WASM builds; see background_process_duplicate.go.
+type CommandPromise struct{ ID string }
+
+// CommandPromise admits every command: WASM builds run no background
+// sessions, so nothing can be duplicated.
+func (m *BackgroundProcessManager) CommandPromise(_, _ string) (*CommandPromise, string, time.Duration, bool) {
+	return nil, "", 0, false
+}
+
+// ClaimCommandPromise is a no-op in WASM builds.
+func (m *BackgroundProcessManager) ClaimCommandPromise(_ *CommandPromise, _ string) {}
+
+// ReleaseCommandPromise is a no-op in WASM builds.
+func (m *BackgroundProcessManager) ReleaseCommandPromise(_ *CommandPromise) {}

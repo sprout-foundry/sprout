@@ -56,6 +56,11 @@ type BrowserRenderer interface {
 	// a structured result suitable for debugging, testing, and JS-rendered scraping.
 	Run(ctx context.Context, url string, opts BrowseOptions) (*BrowseResult, error)
 
+	// OpenRodSession opens one interactive Rod page the caller keeps across a
+	// whole workflow (the app check drives pages, forms and reloads itself).
+	// An implementation without a browser returns ErrBrowserUnavailable.
+	OpenRodSession(ctx context.Context) (*RodSession, error)
+
 	// Close releases any resources held by the renderer (browsers, pages, etc.)
 	Close()
 }
@@ -207,6 +212,10 @@ func (n *nopRenderer) CaptureDOM(_ context.Context, _ string, _, _ int, _ string
 }
 
 func (n *nopRenderer) Run(_ context.Context, _ string, _ BrowseOptions) (*BrowseResult, error) {
+	return nil, ErrBrowserUnavailable
+}
+
+func (n *nopRenderer) OpenRodSession(_ context.Context) (*RodSession, error) {
 	return nil, ErrBrowserUnavailable
 }
 

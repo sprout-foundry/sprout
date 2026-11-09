@@ -781,8 +781,8 @@ func TestAllToolsRegistration(t *testing.T) {
 	if tools == nil {
 		t.Fatal("AllTools() returned nil")
 	}
-	if len(tools) != 58 {
-		t.Fatalf("AllTools() returned %d tools, want 58", len(tools))
+	if len(tools) != 59 {
+		t.Fatalf("AllTools() returned %d tools, want 59", len(tools))
 	}
 
 	expectedNames := map[string]string{
@@ -810,6 +810,7 @@ func TestAllToolsRegistration(t *testing.T) {
 		"git":                     "git",
 		"activate_skill":          "activate_skill",
 		"browse_url":              "browse_url",
+		"check_app":               "check_app",
 		"web_search":              "web_search",
 		"analyze_image_content":   "analyze_image_content",
 		"analyze_ui_screenshot":   "analyze_ui_screenshot", // SP-109 Phase 3 Batch A2

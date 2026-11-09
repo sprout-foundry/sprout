@@ -5,6 +5,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -227,4 +228,25 @@ func TestDuplicateGuard_FailedStartReleasesReservation(t *testing.T) {
 
 	_, _, _, busy = bpm.CommandPromise("sleep 30", dir)
 	assert.False(t, busy, "a released reservation must not block")
+}
+
+// TestDuplicateGuard_PromiseMapIsBounded: a leaked reservation must not let
+// the map grow without limit. The oldest is dropped once it passes
+// bgPromiseMax, so a command is never blocked forever by a leak.
+func TestDuplicateGuard_PromiseMapIsBounded(t *testing.T) {
+	bpm := newTestBPM(t)
+	dir := t.TempDir()
+
+	for i := 0; i < bgPromiseMax+10; i++ {
+		// Distinct commands, so each is admitted rather than refused.
+		promise, busyID, _, busy := bpm.CommandPromise(fmt.Sprintf("sleep %d", i+1), dir)
+		require.False(t, busy, "command %d: %s", i, busyID)
+		require.NotNil(t, promise)
+		// Deliberately never released: this is the leak the bound covers.
+	}
+
+	bpm.mu.RLock()
+	held := len(bpm.promises)
+	bpm.mu.RUnlock()
+	assert.LessOrEqual(t, held, bgPromiseMax, "the reservation map must stay bounded")
 }

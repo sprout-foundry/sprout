@@ -107,15 +107,39 @@ func (m *BackgroundProcessManager) CommandPromise(command, dir string) (promise 
 		m.promises = make(map[string]*CommandPromise)
 	}
 	promise = &CommandPromise{
-		ID:        fmt.Sprintf("pending-%d", m.nextPromiseSeq),
+		ID:        fmt.Sprintf("%s%d", PendingSessionIDPrefix, m.nextPromiseSeq),
 		command:   want,
 		dir:       wantDir,
 		startedAt: now,
 	}
 	m.nextPromiseSeq++
 	m.promises[promise.ID] = promise
+	if len(m.promises) > bgPromiseMax {
+		// A promise is held only for one start. A leak here is a bug, not a
+		// state to honour: drop the oldest rather than block a command
+		// forever.
+		m.dropOldestPromiseLocked()
+	}
 	return promise, "", 0, false
 }
+
+// dropOldestPromiseLocked evicts the longest-held reservation, so a leaked
+// one cannot accumulate. Caller holds m.mu.
+func (m *BackgroundProcessManager) dropOldestPromiseLocked() {
+	var oldestID string
+	var oldestAt time.Time
+	for id, p := range m.promises {
+		if oldestID == "" || p.startedAt.Before(oldestAt) {
+			oldestID, oldestAt = id, p.startedAt
+		}
+	}
+	if oldestID != "" {
+		delete(m.promises, oldestID)
+	}
+}
+
+// bgPromiseMax bounds the reservation map; see CommandPromise.
+const bgPromiseMax = 64
 
 // ClaimCommandPromise turns a reservation into the started session, so later
 // identical calls find it as a running session. sessionID "" keeps the

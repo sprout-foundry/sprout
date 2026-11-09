@@ -60,7 +60,7 @@ type BackgroundProcessManager struct {
 
 	// promises holds commands that an admitted caller is about to start
 	// (see CommandPromise). Guarded by mu; always empty once callers have
-	// claimed or released, and cleared wholesale if it ever grows past
+	// claimed or released, and the oldest is dropped if it ever grows past
 	// bgPromiseMax (a leaked reservation must not block a command forever).
 	promises       map[string]*CommandPromise
 	nextPromiseSeq uint64

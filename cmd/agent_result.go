@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -288,6 +289,10 @@ func appendDiffPiece(combined, piece string) string {
 // are kept first (a source change is small; a rebuilt bundle, vendored code
 // or a large deletion is what pushes a diff over), in their original order,
 // and the paths of the files left out are returned. A section is never cut.
+//
+// At least one file section is always kept, even when it alone is over max:
+// a diff with no file in it reads as "nothing changed", which is worse than
+// one oversized file the caller can see and handle.
 func capDiff(diff string, max int) (string, []string) {
 	if len(diff) <= max {
 		return diff, nil
@@ -306,6 +311,9 @@ func capDiff(diff string, max int) (string, []string) {
 			total += len(sections[i])
 		}
 	}
+	if total == 0 {
+		keep[order[0]] = true
+	}
 	var b strings.Builder
 	var omitted []string
 	for i, sec := range sections {
@@ -319,36 +327,76 @@ func capDiff(diff string, max int) (string, []string) {
 }
 
 // splitDiffSections splits a unified diff into one section per file, each
-// starting at its "diff --git " line. Text before the first header (there
-// is none in git's output) stays with the first section.
+// starting at its "diff --git " line. Text before the first header is kept as
+// its own section so it is never silently dropped or merged into a file it
+// does not belong to.
 func splitDiffSections(diff string) []string {
 	var sections []string
 	start := 0
-	for i := 0; i < len(diff); {
-		next := strings.Index(diff[i:], "\ndiff --git ")
+	if !strings.HasPrefix(diff, "diff --git ") {
+		next := strings.Index(diff, "\ndiff --git ")
+		if next < 0 {
+			return []string{diff}
+		}
+		sections = append(sections, diff[:next+1])
+		start = next + 1
+	}
+	for start < len(diff) {
+		next := strings.Index(diff[start+len("diff --git "):], "\ndiff --git ")
 		if next < 0 {
 			break
 		}
-		cut := i + next + 1
-		if cut > start {
-			sections = append(sections, diff[start:cut])
-		}
+		cut := start + len("diff --git ") + next + 1
+		sections = append(sections, diff[start:cut])
 		start = cut
-		i = cut
 	}
 	return append(sections, diff[start:])
 }
 
-// diffSectionPath is the path a file section changes: the "b/" side of its
-// header, or the "a/" side for a deletion.
+// diffSectionPath is the path a file section changes.
+//
+// The "diff --git" header is ambiguous for a path holding a space: git emits
+// "diff --git a/x b/f.txt b/x b/f.txt" with no quoting, so neither side can
+// be told from the text alone. The "+++"/"---" lines carry the path
+// unambiguously (quoted only when it holds a space, a quote or a non-ASCII
+// byte), so they are the source: "+++ b/<path>" names the file, and for a
+// deletion ("+++ /dev/null") "--- a/<path>" does.
 func diffSectionPath(section string) string {
-	line := section
-	if i := strings.IndexByte(section, '\n'); i >= 0 {
-		line = section[:i]
+	var fromMinus, fromPlus string
+	for _, line := range strings.Split(section, "\n") {
+		if strings.HasPrefix(line, "@@") {
+			// The hunk body has started; the header lines are behind us.
+			break
+		}
+		if strings.HasPrefix(line, "+++ ") {
+			fromPlus = headerLinePath(line[len("+++ "):])
+		} else if strings.HasPrefix(line, "--- ") {
+			fromMinus = headerLinePath(line[len("--- "):])
+		}
 	}
-	line = strings.TrimPrefix(line, "diff --git ")
-	if i := strings.LastIndex(line, " b/"); i >= 0 {
-		return line[i+3:]
+	if fromPlus != "" {
+		return fromPlus
 	}
-	return strings.TrimPrefix(line, "a/")
+	return fromMinus
+}
+
+// headerLinePath is the path on a "---"/"+++" line: unquoted when git quoted
+// it, without the a/ or b/ prefix, and without the tab git appends when the
+// path holds a space. /dev/null (a creation or a deletion) is not a path.
+func headerLinePath(s string) string {
+	if i := strings.IndexByte(s, '\t'); i >= 0 {
+		s = s[:i]
+	}
+	if strings.HasPrefix(s, `"`) {
+		if p, err := strconv.Unquote(s); err == nil {
+			s = p
+		} else {
+			s = strings.Trim(s, `"`)
+		}
+	}
+	if s == "/dev/null" || s == "" {
+		return ""
+	}
+	s = strings.TrimPrefix(s, "a/")
+	return strings.TrimPrefix(s, "b/")
 }

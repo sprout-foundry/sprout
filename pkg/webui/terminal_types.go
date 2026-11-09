@@ -161,6 +161,14 @@ type TerminalSession struct {
 	// (interactive terminals, foreground hidden sessions).
 	bgMarker string
 
+	// bgCommand is the command text this background session is running, and
+	// bgChatID the chat that started it. Set both when a command is started
+	// with background=true and when a foreground command is promoted at its
+	// tool deadline, so the duplicate-command guard can see a promoted
+	// session as a running copy. Guarded by mutex.
+	bgCommand string
+	bgChatID  string
+
 	// bgScriptPath is the temp script the background command was
 	// materialized into. The script removes itself via its EXIT trap once
 	// it runs; this path lets CloseSession remove it when the session dies
@@ -329,6 +337,11 @@ type TerminalManager struct {
 	// the answer readable. Bounded by bgTombstoneMax.
 	bgExitTombstones map[string]int
 	bgTombstoneOrder []string
+
+	// pendingCommands holds background commands this manager has admitted
+	// but not yet registered as sessions, so two identical concurrent
+	// starts admit one (see terminal_background_duplicate.go).
+	pendingCommands []*bgReservation
 }
 
 // bgTombstoneMax bounds the tombstone set. Watchers read within moments of

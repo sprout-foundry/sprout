@@ -18,6 +18,14 @@ func duplicateCommandMessage(sessionID string, elapsed time.Duration) string {
 	if elapsed < 0 {
 		elapsed = 0
 	}
+	if sessionID == "" {
+		// A concurrent start was admitted and its session is not visible
+		// yet. There is no ID to name, so say that instead of printing an
+		// empty one the agent would pass to check_background.
+		return "Not started: this command is already starting in this chat or directory. " +
+			"Wait for that copy to appear in the background tasks and use shell_command check_background on it " +
+			"rather than starting another."
+	}
 	return fmt.Sprintf(
 		"Not started: this command is already running in this directory, in background session %s (started %s ago).\n\n"+
 			"Do not run it again: a second copy would compete with the first for the machine.\n"+
@@ -26,6 +34,20 @@ func duplicateCommandMessage(sessionID string, elapsed time.Duration) string {
 			"- Stop it, to try a different approach: shell_command stop_background=\"%s\"",
 		sessionID, formatSessionElapsed(elapsed), sessionID, sessionID, sessionID,
 	)
+}
+
+// DuplicateCommandPrefix marks an error whose text is not a failure but a
+// refusal to start a second copy of a command that is already running (see
+// RunningBackgroundCommand). The shell tool turns it into a normal tool
+// result naming the running session. It follows the
+// COMMAND_PROMOTED_TO_BACKGROUND convention for errors carrying a session.
+const DuplicateCommandPrefix = "COMMAND_ALREADY_RUNNING:"
+
+// RunningBackgroundCommand is the exported form of duplicateCommandMessage,
+// for start paths outside this package (the WebUI terminal manager) that
+// refuse a duplicate before any process is created.
+func RunningBackgroundCommand(sessionID string, elapsed time.Duration) string {
+	return duplicateCommandMessage(sessionID, elapsed)
 }
 
 // formatSessionElapsed renders a session age for an agent-facing message:

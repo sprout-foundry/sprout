@@ -169,14 +169,19 @@ func ExecuteShellCommandBackground(ctx context.Context, command string, sessionI
 
 		// Refuse a second copy of a command that is still running here: on a
 		// small machine the copies starve each other (and everything else).
-		if sessionID, elapsed, busy := bpm.RunningSessionMatching(command, dir); busy {
-			return duplicateCommandMessage(sessionID, elapsed), nil
+		// The reservation makes the check and the start one step, so two
+		// identical calls at the same moment start one session.
+		promise, busyID, elapsed, busy := bpm.CommandPromise(command, dir)
+		if busy {
+			return duplicateCommandMessage(busyID, elapsed), nil
 		}
 
 		bspSessionID, err := bpm.StartWithOptions(ctx, command, dir, "shell", &StartOptions{TTL: backgroundSessionTTL})
 		if err != nil {
+			bpm.ReleaseCommandPromise(promise)
 			return "", fmt.Errorf("execute background command: %w", err)
 		}
+		bpm.ClaimCommandPromise(promise, bspSessionID)
 		resultBytes, err := json.Marshal(map[string]string{
 			"session_id": bspSessionID,
 			"status":     "running",

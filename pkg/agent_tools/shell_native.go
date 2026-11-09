@@ -203,9 +203,22 @@ func runShellCommandAdoptable(ctx context.Context, command string, bpm *Backgrou
 	// deadline and still building). Starting it again is what turns a busy
 	// machine into an unresponsive one. The tool result is the message, not
 	// an error: nothing failed, and the agent has a running session to wait on.
-	if sessionID, elapsed, busy := bpm.RunningSessionMatching(command, cmd.Dir); busy {
-		return duplicateCommandMessage(sessionID, elapsed), nil
+	//
+	// The reservation also covers the command from here until it exits or is
+	// promoted, so a background=true call for the same command issued while
+	// this run is in flight is refused instead of doubling the load.
+	promise, busyID, elapsed, busy := bpm.CommandPromise(command, cmd.Dir)
+	if busy {
+		return duplicateCommandMessage(busyID, elapsed), nil
 	}
+	// The reservation is released on every return below except promotion,
+	// which claims it as the session that continues the same command.
+	claimed := false
+	defer func() {
+		if !claimed {
+			bpm.ReleaseCommandPromise(promise)
+		}
+	}()
 
 	// Set process group so we can kill the entire group on stop
 	setProcessGroup(cmd)
@@ -296,6 +309,9 @@ func runShellCommandAdoptable(ctx context.Context, command string, bpm *Backgrou
 			// Tool deadline hit — promote to background instead of killing.
 			sessionID, adoptErr := bpm.AdoptProcess(cmd, outputPath, command, cmd.Dir, waitCh)
 			if adoptErr == nil {
+				// The same command is now a running background session.
+				bpm.ClaimCommandPromise(promise, sessionID)
+				claimed = true
 				// Do NOT wait for scannerDone here. The process keeps
 				// running after adoption — its pipes stay open and the
 				// scanner goroutines remain blocked on reader.Read().

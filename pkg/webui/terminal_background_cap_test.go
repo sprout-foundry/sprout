@@ -8,6 +8,14 @@ import (
 	"testing"
 )
 
+// commandSequence supplies one distinct long-running command per background
+// session, so cap tests never trip the duplicate-command guard.
+var commandSequence = []string{
+	"sleep 30", "sleep 31", "sleep 32", "sleep 33", "sleep 34",
+	"sleep 35", "sleep 36", "sleep 37", "sleep 38", "sleep 39",
+	"sleep 40", "sleep 41",
+}
+
 // TestBackgroundCap_RejectsAtLimit verifies that ExecuteCommandInBackground
 // refuses to create a new background session once a chat already owns
 // maxBackgroundSessionsPerChat of them. Without this cap a runaway agent
@@ -28,10 +36,12 @@ func TestBackgroundCap_RejectsAtLimit(t *testing.T) {
 
 	chat := "cap-chat"
 
-	// Fill the cap.
+	// Fill the cap. Each session runs a distinct command: these tests are
+	// about the cap, and the duplicate-command guard would (correctly)
+	// refuse the same command repeatedly.
 	var created []string
 	for i := 0; i < maxBackgroundSessionsPerChat; i++ {
-		sid, err := tm.ExecuteCommandInBackground(context.Background(), chat, "sleep 30")
+		sid, err := tm.ExecuteCommandInBackground(context.Background(), chat, commandSequence[i])
 		if err != nil {
 			t.Fatalf("ExecuteCommandInBackground #%d unexpectedly failed: %v", i, err)
 		}
@@ -43,7 +53,7 @@ func TestBackgroundCap_RejectsAtLimit(t *testing.T) {
 	}
 
 	// One more should be rejected.
-	_, err := tm.ExecuteCommandInBackground(context.Background(), chat, "sleep 30")
+	_, err := tm.ExecuteCommandInBackground(context.Background(), chat, "sleep 130")
 	if err == nil {
 		t.Fatal("expected cap rejection, got nil error")
 	}
@@ -82,7 +92,7 @@ func TestBackgroundCap_OtherChatNotAffected(t *testing.T) {
 
 	// Fill chat A's cap.
 	for i := 0; i < maxBackgroundSessionsPerChat; i++ {
-		if _, err := tm.ExecuteCommandInBackground(context.Background(), "chat-A", "sleep 30"); err != nil {
+		if _, err := tm.ExecuteCommandInBackground(context.Background(), "chat-A", commandSequence[i]); err != nil {
 			t.Fatalf("chat-A create #%d failed: %v", i, err)
 		}
 	}
@@ -112,7 +122,7 @@ func TestBackgroundCap_FreedAfterClose(t *testing.T) {
 
 	var created []string
 	for i := 0; i < maxBackgroundSessionsPerChat; i++ {
-		sid, err := tm.ExecuteCommandInBackground(context.Background(), chat, "sleep 30")
+		sid, err := tm.ExecuteCommandInBackground(context.Background(), chat, commandSequence[i])
 		if err != nil {
 			t.Fatalf("create #%d failed: %v", i, err)
 		}
@@ -128,7 +138,7 @@ func TestBackgroundCap_FreedAfterClose(t *testing.T) {
 	}
 
 	// New create should succeed.
-	if _, err := tm.ExecuteCommandInBackground(context.Background(), chat, "sleep 30"); err != nil {
+	if _, err := tm.ExecuteCommandInBackground(context.Background(), chat, "sleep 130"); err != nil {
 		t.Fatalf("after freeing a slot, create should succeed; got error: %v", err)
 	}
 }

@@ -57,6 +57,13 @@ type BackgroundProcessManager struct {
 	baseDir     string        // directory for output files
 	done        chan struct{} // for stopping cleanup goroutine
 	cleanupWg   sync.WaitGroup
+
+	// promises holds commands that an admitted caller is about to start
+	// (see CommandPromise). Guarded by mu; always empty once callers have
+	// claimed or released, and cleared wholesale if it ever grows past
+	// bgPromiseMax (a leaked reservation must not block a command forever).
+	promises       map[string]*CommandPromise
+	nextPromiseSeq uint64
 }
 
 // bpmContextKey is the context key for BackgroundProcessManager.
@@ -76,6 +83,7 @@ func NewBackgroundProcessManager() *BackgroundProcessManager {
 
 	m := &BackgroundProcessManager{
 		processes:   make(map[string]*BackgroundProcess),
+		promises:    make(map[string]*CommandPromise),
 		expiry:      2 * time.Hour,
 		maxSessions: 5, // per-chat cap matching WebUI's maxBackgroundSessionsPerChat
 		baseDir:     baseDir,

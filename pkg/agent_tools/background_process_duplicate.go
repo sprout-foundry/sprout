@@ -3,57 +3,154 @@
 package tools
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
 )
 
-// RunningSessionMatching returns the still-running background session whose
-// command and working directory match command in dir exactly (after trimming
-// the command text). It exists to stop an agent from starting a second copy
-// of a heavy command — a build, a test suite — while the first is still
-// running: on a small machine two or three copies starve it, and even
-// `echo hi` stops answering.
+// This file stops an agent from starting a second copy of a command that is
+// already running as a background session. Both kinds of session are found:
+// one started with background=true and one promoted from the foreground when
+// it hit the tool deadline.
 //
-// Matching is deliberately literal: any difference in the command text or
-// the directory means the command runs. A command that was promoted from
-// the foreground and one started with background=true match each other,
-// because both are sessions here.
+// Two properties matter besides matching:
+//
+//   - Only a session that is still running blocks a start. Once it has
+//     exited, or was stopped (which drops it from the manager), the same
+//     command starts normally.
+//   - Checking and starting are one step. A plain check followed by a start
+//     lets two identical concurrent tool calls both pass the check before
+//     either registers its session. CommandPromise closes that window: the
+//     admitted caller reserves the command under the manager lock, and a
+//     concurrent identical caller sees either the reservation or the
+//     session it became.
+
+// normalizeCommandText is the "same command" comparison: surrounding
+// whitespace trimmed and every run of whitespace collapsed to one space.
+// Nothing else is normalized — an extra argument, flag or quote is a
+// different command and still runs.
+func normalizeCommandText(command string) string {
+	return strings.Join(strings.Fields(command), " ")
+}
+
+// RunningSessionMatching returns the still-running background session whose
+// command and working directory match command in dir exactly (after
+// normalizeCommandText). It is the read-only query; paths that then start a
+// process must use CommandPromise / ClaimCommandPromise /
+// ReleaseCommandPromise instead, so concurrent identical calls cannot both
+// be admitted.
 func (m *BackgroundProcessManager) RunningSessionMatching(command, dir string) (string, time.Duration, bool) {
-	want := strings.TrimSpace(command)
+	want := normalizeCommandText(command)
 	if want == "" {
 		return "", 0, false
 	}
-	wantDir := normalizeSessionDir(dir)
 
 	m.mu.RLock()
-	procs := make([]*BackgroundProcess, 0, len(m.processes))
-	for _, proc := range m.processes {
-		procs = append(procs, proc)
-	}
-	m.mu.RUnlock()
+	defer m.mu.RUnlock()
+	return m.findRunningMatchingLocked(want, normalizeSessionDir(dir), time.Now())
+}
 
-	now := time.Now()
-	for _, proc := range procs {
+// findRunningMatchingLocked scans running sessions and pending
+// reservations for want in wantDir. The caller holds m.mu.
+func (m *BackgroundProcessManager) findRunningMatchingLocked(want, wantDir string, now time.Time) (string, time.Duration, bool) {
+	for _, proc := range m.processes {
 		proc.mu.Lock()
 		running := proc.Process != nil
-		procCommand := proc.Command
-		procDir := proc.Dir
+		procCommand := normalizeCommandText(proc.Command)
+		procDir := normalizeSessionDir(proc.Dir)
 		startedAt := proc.StartedAt
 		id := proc.ID
 		proc.mu.Unlock()
-		if !running {
-			continue
-		}
-		if strings.TrimSpace(procCommand) != want {
-			continue
-		}
-		if normalizeSessionDir(procDir) != wantDir {
+		if !running || procCommand != want || procDir != wantDir {
 			continue
 		}
 		return id, now.Sub(startedAt), true
 	}
+	for _, promise := range m.promises {
+		if promise.command == want && promise.dir == wantDir {
+			return promise.ID, now.Sub(promise.startedAt), true
+		}
+	}
 	return "", 0, false
+}
+
+// CommandPromise reserves a command for a caller that is about to start it:
+//
+//  1. CommandPromise(command, dir) — admitted, and the command is reserved
+//     so an identical concurrent call is refused;
+//  2. start the process;
+//  3. ClaimCommandPromise(promise, sessionID) — the reservation becomes the
+//     session, which a later identical call sees as running.
+//
+// A caller whose start failed calls ReleaseCommandPromise instead. Every
+// admitted caller must do exactly one of the two, so a reservation never
+// outlives the attempt it guards.
+//
+// busy reports an existing session (busySessionID) for the same command.
+func (m *BackgroundProcessManager) CommandPromise(command, dir string) (promise *CommandPromise, busySessionID string, elapsed time.Duration, busy bool) {
+	want := normalizeCommandText(command)
+	if want == "" {
+		// Empty commands are rejected by the start paths; nothing to guard.
+		return nil, "", 0, false
+	}
+	wantDir := normalizeSessionDir(dir)
+	now := time.Now()
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if id, age, found := m.findRunningMatchingLocked(want, wantDir, now); found {
+		return nil, id, age, true
+	}
+	if m.promises == nil {
+		// Managers built without the constructor (tests) have no map yet.
+		m.promises = make(map[string]*CommandPromise)
+	}
+	promise = &CommandPromise{
+		ID:        fmt.Sprintf("pending-%d", m.nextPromiseSeq),
+		command:   want,
+		dir:       wantDir,
+		startedAt: now,
+	}
+	m.nextPromiseSeq++
+	m.promises[promise.ID] = promise
+	return promise, "", 0, false
+}
+
+// ClaimCommandPromise turns a reservation into the started session, so later
+// identical calls find it as a running session. sessionID "" keeps the
+// reservation id, which is what the caller reports.
+func (m *BackgroundProcessManager) ClaimCommandPromise(promise *CommandPromise, sessionID string) {
+	if promise == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.promises, promise.ID)
+	if sessionID != "" {
+		promise.ID = sessionID
+	}
+}
+
+// ReleaseCommandPromise abandons a reservation whose start failed.
+func (m *BackgroundProcessManager) ReleaseCommandPromise(promise *CommandPromise) {
+	if promise == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.promises, promise.ID)
+}
+
+// CommandPromise is a reserved slot for a command that is being started.
+// Its ID is the session ID to name in a refusal until the reservation is
+// claimed.
+type CommandPromise struct {
+	ID string
+
+	command   string
+	dir       string
+	startedAt time.Time
 }
 
 // normalizeSessionDir reduces a working directory to the form sessions store,

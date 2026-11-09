@@ -229,6 +229,8 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 					return stripANSI(buf.String()), -1, tm.errBackgroundCapReached(chatID)
 				}
 
+				// Record the command and chat so the duplicate-command guard
+				// sees this promoted copy as a running background session.
 				// Mark the session IsBackground BEFORE returning so the
 				// cleanup worker uses the 2-hour background timeout (not
 				// the 30-min hidden one) — otherwise a long-running
@@ -236,6 +238,8 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 				// within 30 minutes.
 				session.mutex.Lock()
 				session.IsBackground = true
+				session.bgCommand = command
+				session.bgChatID = chatID
 				session.LastUsed = time.Now()
 				session.mutex.Unlock()
 

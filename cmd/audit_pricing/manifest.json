@@ -17,7 +17,7 @@
   },
   "chutes": {
     "source": "https://llm.chutes.ai/v1/models",
-    "last_verified": "2026-11-08",
+    "last_verified": "2026-11-09",
     "models": [
       {
         "id": "Nemotron-3-Nano-Omni-30B-TEE",
@@ -150,6 +150,12 @@
         "input_per_mtok": 0.525,
         "output_per_mtok": 1.5625,
         "cached_per_mtok": 0.025
+      },
+      {
+        "id": "Qwen/Qwen3.5-27B-TEE",
+        "input_per_mtok": 0.2,
+        "output_per_mtok": 1.75,
+        "cached_per_mtok": 0.02
       }
     ]
   },
@@ -1713,7 +1719,7 @@
   },
   "openrouter": {
     "source": "https://openrouter.ai/api/v1/models",
-    "last_verified": "2026-11-08",
+    "last_verified": "2026-11-09",
     "models": [
       {
         "id": "ai21/jamba-large-1.7",
@@ -5009,6 +5015,23 @@
         "id": "morph/morph-v3-large:batch",
         "input_per_mtok": 0.45,
         "output_per_mtok": 0.95
+      },
+      {
+        "id": "anthropic/claude-fable-5.2",
+        "input_per_mtok": 8,
+        "output_per_mtok": 40,
+        "cached_per_mtok": 0.2
+      },
+      {
+        "id": "meta/muse-ember",
+        "input_per_mtok": 0.1,
+        "output_per_mtok": 0.5,
+        "cached_per_mtok": 0.004
+      },
+      {
+        "id": "qwen/qwen3.8-max-0902:batch",
+        "input_per_mtok": 1.15,
+        "output_per_mtok": 3.45
       }
     ]
   },

@@ -8073,6 +8073,50 @@
         "tags": [
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.2,
+        "context_length": 1000000,
+        "description": "Claude Fable 5.2 is Anthropic's most capable model for the most demanding technical work, with gains over Fable 5.1 in coding, reasoning, and vision. It accepts text, image, and file input with a 1M-token context window.",
+        "id": "anthropic/claude-fable-5.2",
+        "input_cost": 8,
+        "name": "Anthropic: Claude Fable 5.2",
+        "output_cost": 40,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.004,
+        "context_length": 1048576,
+        "description": "Muse Ember is the smallest and most efficient model from Meta, built for the complex reasoning work agents repeat all day: tool calls, coding-agent subtasks, and routing. It accepts text, image, video, audio, and file input with a 1M-token context window.",
+        "id": "meta/muse-ember",
+        "input_cost": 0.1,
+        "name": "Meta: Muse Ember",
+        "output_cost": 0.5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Qwen3.8 Max 0902 (batch) is the asynchronous batch variant of Qwen3.8 Max from Alibaba's Qwen team: a 2.4-trillion-parameter mixture-of-experts model that accepts text, image, and video input and returns text. Batch requests are priced per token at a discount to the standard endpoint.",
+        "id": "qwen/qwen3.8-max-0902:batch",
+        "input_cost": 1.15,
+        "name": "Qwen: Qwen3.8 Max (0902) (batch)",
+        "output_cost": 3.45,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

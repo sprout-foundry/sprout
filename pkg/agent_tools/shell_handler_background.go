@@ -159,7 +159,7 @@ func (h *shellCommandHandler) handleBackground(ctx context.Context, env ToolEnv,
 		// running, and the message says which session to wait on.
 		if msg, ok := strings.CutPrefix(err.Error(), DuplicateCommandPrefix); ok {
 			if env.OutputWriter != nil {
-				io.WriteString(env.OutputWriter, msg)
+				_, _ = io.WriteString(env.OutputWriter, msg)
 			}
 			return ToolResult{Output: msg, TokenUsage: int64(estimateTokenUsage(msg))}, nil
 		}

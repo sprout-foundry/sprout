@@ -342,6 +342,9 @@ type TerminalManager struct {
 	// but not yet registered as sessions, so two identical concurrent
 	// starts admit one (see terminal_background_duplicate.go).
 	pendingCommands []*bgReservation
+	// nextPendingCommandSeq numbers those reservations, so a refusal during
+	// a start in flight names one (pending-1, pending-2, …).
+	nextPendingCommandSeq uint64
 }
 
 // bgTombstoneMax bounds the tombstone set. Watchers read within moments of

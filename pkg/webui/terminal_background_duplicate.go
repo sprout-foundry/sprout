@@ -3,8 +3,11 @@
 package webui
 
 import (
+	"fmt"
 	"strings"
 	"time"
+
+	agenttools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 )
 
 // Duplicate background-command guard for hidden PTY sessions.
@@ -44,7 +47,18 @@ func (tm *TerminalManager) reserveDuplicateCommand(chatID, command string) (prom
 		tm.mutex.Unlock()
 		return nil, id, age, true
 	}
-	promise = &bgReservation{tm: tm, chatID: chatID, command: want, startedAt: now}
+	// A real id from the start: a refusal that lands between this
+	// reservation and the session's creation names this, so the agent is
+	// never told about a command running under an empty id. The session's
+	// own id replaces it once it exists (publish).
+	tm.nextPendingCommandSeq++
+	promise = &bgReservation{
+		tm:        tm,
+		chatID:    chatID,
+		command:   want,
+		startedAt: now,
+		sessionID: fmt.Sprintf("%s%d", pendingCommandIDPrefix, tm.nextPendingCommandSeq),
+	}
 	tm.pendingCommands = append(tm.pendingCommands, promise)
 	if len(tm.pendingCommands) > maxPendingCommandReservations {
 		// A reservation is held only for one start. A leak here is a bug,
@@ -58,10 +72,10 @@ func (tm *TerminalManager) reserveDuplicateCommand(chatID, command string) (prom
 
 // publish records the session the reserved start created, so a concurrent
 // identical start refused while it is in flight names a real session instead
-// of an empty one. Takes the manager lock because the guard reads it under
-// that lock.
+// of the reservation's placeholder id. Takes the manager lock because the
+// guard reads it under that lock.
 func (r *bgReservation) publish(sessionID string) {
-	if r == nil {
+	if r == nil || sessionID == "" {
 		return
 	}
 	r.tm.mutex.Lock()
@@ -130,6 +144,13 @@ func (tm *TerminalManager) findRunningBackgroundLocked(chatID, want string, now 
 // maxPendingCommandReservations bounds the reservation list; see
 // reserveDuplicateCommand.
 const maxPendingCommandReservations = 64
+
+// pendingCommandIDPrefix names a reservation that has no session yet, so a
+// refusal during a start in flight still names the command it collided with.
+// The session's own id replaces it once the session exists. It is
+// agent_tools' prefix, so the refusal message knows the id is not yet
+// addressable and does not invite check_background or stop_background on it.
+const pendingCommandIDPrefix = agenttools.PendingSessionIDPrefix
 
 // bgReservation is a command this manager has admitted but not yet
 // registered as a session. Compared by pointer identity, never by value.

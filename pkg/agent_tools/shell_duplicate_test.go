@@ -120,6 +120,28 @@ func TestDuplicateCommandMessage(t *testing.T) {
 	assert.Contains(t, msg, "Do not run it again")
 }
 
+// A start still in flight has no addressable session, so the message must not
+// name its pending id: check_background and stop_background would find
+// nothing. It says the command is starting instead.
+func TestDuplicateCommandMessage_PendingStartNamesNoSession(t *testing.T) {
+	for _, id := range []string{"", PendingSessionIDPrefix + "1", PendingSessionIDPrefix + "42"} {
+		msg := duplicateCommandMessage(id, 5*time.Second)
+
+		assert.Contains(t, msg, "already starting", "id %q", id)
+		assert.NotContains(t, msg, "check_background=", "id %q must not invite check_background", id)
+		assert.NotContains(t, msg, "stop_background=", "id %q must not invite stop_background", id)
+		if id != "" {
+			assert.NotContains(t, msg, id, "the pending id must not be named")
+		}
+	}
+}
+
+func TestIsPendingSessionID(t *testing.T) {
+	assert.True(t, IsPendingSessionID(PendingSessionIDPrefix+"7"))
+	assert.False(t, IsPendingSessionID("bg-shell-1234abcd"))
+	assert.False(t, IsPendingSessionID(""))
+}
+
 func TestFormatSessionElapsed(t *testing.T) {
 	tests := []struct {
 		d    time.Duration

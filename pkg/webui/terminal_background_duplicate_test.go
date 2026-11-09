@@ -110,42 +110,98 @@ func TestExecuteCommandInBackground_StartsAfterFinished(t *testing.T) {
 	}
 }
 
-// A promoted foreground command counts as a running copy of the command.
+// A foreground command promoted at its tool deadline counts as a running copy
+// of the command. Drives the real promotion path: a command outliving its
+// context is promoted by ExecuteCommandAndWait, and the guard must then refuse
+// an identical background start. The promotion state is never hand-built here
+// — a fixture that sets bgDone itself would pass even if the promotion path
+// forgot to allocate it, which is the bug this covers.
 func TestExecuteCommandInBackground_PromotedSessionCountsAsRunning(t *testing.T) {
 	requirePTY(t)
 	tm := newTestTerminalManager(t, t.TempDir())
 
-	// Simulate the state left by a foreground command promoted at its tool
-	// deadline: the hidden session is now background, holds the command,
-	// and its completion sentinel has not fired.
-	session, err := tm.CreateHiddenSession("bg-promoted-test", "agent", "chat-1")
+	sessionID, err := tm.GetOrCreateHiddenSessionForChat(context.Background(), "chat-1")
 	if err != nil {
-		t.Fatalf("create session: %v", err)
+		t.Fatalf("hidden session: %v", err)
 	}
-	done := make(chan struct{})
-	t.Cleanup(func() { _ = tm.CloseSession(session.ID) })
-	session.mutex.Lock()
-	session.IsBackground = true
-	session.bgCommand = "sleep 30"
-	session.bgChatID = "chat-1"
-	session.bgDone = done
-	session.mutex.Unlock()
+	t.Cleanup(func() { _ = tm.CloseSession(sessionID) })
+	tm.mutex.Lock()
+	session := tm.sessions[sessionID]
+	tm.mutex.Unlock()
+	if session == nil {
+		t.Fatalf("hidden session %q is not registered", sessionID)
+	}
+
+	// The tool deadline expires while the command is still running, so the
+	// executor promotes it rather than killing it.
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	_, _, err = tm.ExecuteCommandAndWait(ctx, session, "sleep 30")
+	if err == nil {
+		t.Fatalf("a command outliving its deadline must be promoted, got no error")
+	}
+	if !strings.Contains(err.Error(), "COMMAND_PROMOTED_TO_BACKGROUND") {
+		t.Fatalf("want a promotion, got %v", err)
+	}
+
+	// The promotion left a running background copy the guard can see.
+	session.mutex.RLock()
+	isBackground, active, command, done := session.IsBackground, session.Active, session.bgCommand, session.bgDone
+	session.mutex.RUnlock()
+	if !isBackground || !active {
+		t.Fatalf("promoted session: IsBackground=%v Active=%v, want both true", isBackground, active)
+	}
+	if command != "sleep 30" {
+		t.Fatalf("promoted session recorded command %q, want %q", command, "sleep 30")
+	}
+	if done == nil {
+		t.Fatalf("the promotion did not allocate bgDone, so the duplicate guard cannot see it")
+	}
 
 	_, err = tm.ExecuteCommandInBackground(context.Background(), "chat-1", "sleep 30")
 	gotID, refused := duplicateRefusalSessionID(err)
 	if !refused {
 		t.Fatalf("a promoted session must count as running, got %v", err)
 	}
-	if gotID != session.ID {
-		t.Fatalf("refusal named %q, want the promoted session %q", gotID, session.ID)
+	if gotID != sessionID {
+		t.Fatalf("refusal named %q, want the promoted session %q", gotID, sessionID)
 	}
 
-	// Once its command completes, the same command starts.
-	session.mutex.Lock()
-	close(done)
-	session.mutex.Unlock()
+	// Once the promoted command is closed, the same command starts.
+	if err := tm.CloseSession(sessionID); err != nil {
+		t.Fatalf("close promoted session: %v", err)
+	}
 	if _, err := tm.ExecuteCommandInBackground(context.Background(), "chat-1", "sleep 30"); err != nil {
-		t.Fatalf("after completion the command must start: %v", err)
+		t.Fatalf("after the promoted command ends the command must start: %v", err)
+	}
+}
+
+// A refusal that lands while a start is still in flight names the reservation,
+// never an empty id: the agent is always told what it collided with.
+func TestExecuteCommandInBackground_RefusalDuringReservationNamesIt(t *testing.T) {
+	tm := newTestTerminalManager(t, t.TempDir())
+
+	promise, firstBusyID, _, busy := tm.reserveDuplicateCommand("chat-1", "sleep 30")
+	if busy {
+		t.Fatalf("the first reservation must be admitted")
+	}
+	t.Cleanup(promise.release)
+	if firstBusyID != "" {
+		t.Fatalf("an admitted reservation reports no busy id, got %q", firstBusyID)
+	}
+	if promise.sessionID == "" {
+		t.Fatalf("a reservation must carry an id before its session exists")
+	}
+
+	_, secondID, _, secondBusy := tm.reserveDuplicateCommand("chat-1", "sleep 30")
+	if !secondBusy {
+		t.Fatalf("an identical reservation must be refused")
+	}
+	if secondID == "" {
+		t.Fatalf("the refusal named an empty id; it must name the in-flight reservation")
+	}
+	if secondID != promise.sessionID {
+		t.Fatalf("refusal named %q, want the reservation %q", secondID, promise.sessionID)
 	}
 }
 

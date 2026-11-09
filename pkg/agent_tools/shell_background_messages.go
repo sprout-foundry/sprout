@@ -6,8 +6,20 @@ package tools
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
+
+// PendingSessionIDPrefix marks a session id that names a start still in
+// flight rather than a registered session: nothing answers check_background
+// or stop_background for it yet.
+const PendingSessionIDPrefix = "pending-"
+
+// IsPendingSessionID reports whether id names a start still in flight rather
+// than a session an agent can address.
+func IsPendingSessionID(id string) bool {
+	return strings.HasPrefix(id, PendingSessionIDPrefix)
+}
 
 // duplicateCommandMessage is what an agent sees instead of a second copy of
 // a command that is already running. It names the session, says how long it
@@ -18,10 +30,10 @@ func duplicateCommandMessage(sessionID string, elapsed time.Duration) string {
 	if elapsed < 0 {
 		elapsed = 0
 	}
-	if sessionID == "" {
-		// A concurrent start was admitted and its session is not visible
-		// yet. There is no ID to name, so say that instead of printing an
-		// empty one the agent would pass to check_background.
+	// A start in flight has no addressable session yet: naming a
+	// pending- id would invite check_background or stop_background on
+	// something that does not exist.
+	if sessionID == "" || IsPendingSessionID(sessionID) {
 		return "Not started: this command is already starting in this chat or directory. " +
 			"Wait for that copy to appear in the background tasks and use shell_command check_background on it " +
 			"rather than starting another."

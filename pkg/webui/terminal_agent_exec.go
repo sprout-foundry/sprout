@@ -236,10 +236,20 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 				// the 30-min hidden one) — otherwise a long-running
 				// promoted command would be silently killed by cleanup
 				// within 30 minutes.
+				//
+				// bgDone is allocated here for the same reason the
+				// background path allocates it: the guard reads an unclosed
+				// bgDone as "still running", so a promotion without one is
+				// invisible to it. CloseSession closes it (the session has
+				// no bgMarker, so the sentinel scan never does), which is
+				// what marks the promoted command finished.
 				session.mutex.Lock()
 				session.IsBackground = true
 				session.bgCommand = command
 				session.bgChatID = chatID
+				if session.bgDone == nil {
+					session.bgDone = make(chan struct{})
+				}
 				session.LastUsed = time.Now()
 				session.mutex.Unlock()
 

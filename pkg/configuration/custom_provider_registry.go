@@ -2,6 +2,7 @@ package configuration
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -138,7 +139,57 @@ func LoadCustomProviders() (map[string]CustomProviderConfig, error) {
 		}
 	}
 
+	// A provider may also be defined inline in the global config.json
+	// (custom_providers). Sprout never writes that key itself — Save strips
+	// it — but a seeded or hand-written config carries it, and a run whose
+	// active config directory is elsewhere (an isolated workspace layer)
+	// has no other way to see the definition: the provider files live under
+	// the global dir, and the isolated config never holds the key. Lowest
+	// priority, so a provider file still wins on a name conflict.
+	if inline, inlineErr := loadInlineCustomProviders(globalDir); inlineErr != nil {
+		log.Printf("[config] warning: failed to read inline custom providers from %s: %v", globalDir, inlineErr)
+	} else {
+		for name, provider := range inline {
+			if _, exists := merged[name]; !exists {
+				merged[name] = provider
+			}
+		}
+	}
+
 	return merged, nil
+}
+
+// loadInlineCustomProviders reads the custom_providers block out of
+// <dir>/config.json. A missing file or a config without the key is an empty
+// set, not an error — the common case for a config sprout wrote itself.
+func loadInlineCustomProviders(dir string) (map[string]CustomProviderConfig, error) {
+	data, err := os.ReadFile(filepath.Join(dir, ConfigFileName))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var raw struct {
+		CustomProviders map[string]CustomProviderConfig `json:"custom_providers"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, err
+	}
+	inline := make(map[string]CustomProviderConfig, len(raw.CustomProviders))
+	for name, provider := range raw.CustomProviders {
+		if strings.TrimSpace(provider.Name) == "" {
+			provider.Name = name
+		}
+		normalized, err := NormalizeCustomProviderConfig(provider)
+		if err != nil {
+			// A malformed inline entry must not hide the provider files.
+			log.Printf("[config] warning: invalid inline custom provider %q in %s: %v", name, dir, err)
+			continue
+		}
+		inline[normalized.Name] = normalized
+	}
+	return inline, nil
 }
 
 // LoadCustomProvidersFromDir loads all custom provider JSON files from the

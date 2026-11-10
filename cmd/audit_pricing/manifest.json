@@ -1,7 +1,7 @@
 {
   "cerebras": {
     "source": "https://www.cerebras.ai/pricing",
-    "last_verified": "2026-11-07",
+    "last_verified": "2026-11-10",
     "models": [
       {
         "id": "qwen-3.8-27b",
@@ -17,7 +17,7 @@
   },
   "chutes": {
     "source": "https://llm.chutes.ai/v1/models",
-    "last_verified": "2026-11-09",
+    "last_verified": "2026-11-10",
     "models": [
       {
         "id": "Nemotron-3-Nano-Omni-30B-TEE",
@@ -161,7 +161,7 @@
   },
   "deepinfra": {
     "source": "https://api.deepinfra.com/v1/models",
-    "last_verified": "2026-11-08",
+    "last_verified": "2026-11-10",
     "models": [
       {
         "id": "ByteDance/Seed-1.8",
@@ -704,7 +704,7 @@
   },
   "deepseek": {
     "source": "https://api-docs.deepseek.com/quick_start/pricing",
-    "last_verified": "2026-11-08",
+    "last_verified": "2026-11-10",
     "models": [
       {
         "id": "deepseek-v4-flash",
@@ -764,7 +764,7 @@
   },
   "minimax": {
     "source": "https://platform.minimax.io/docs/guides/pricing-paygo",
-    "last_verified": "2026-11-08",
+    "last_verified": "2026-11-10",
     "models": [
       {
         "id": "MiniMax-M2",
@@ -842,7 +842,7 @@
   },
   "mistral": {
     "source": "https://docs.mistral.ai/inference/pricing",
-    "last_verified": "2026-11-08",
+    "last_verified": "2026-11-10",
     "models": [
       {
         "id": "mistral-large-latest",
@@ -975,7 +975,7 @@
   },
   "ollama-cloud": {
     "source": "https://ollama.com/pricing",
-    "last_verified": "2026-11-08",
+    "last_verified": "2026-11-10",
     "models": [
       {
         "id": "deepseek-v4-flash",
@@ -1175,7 +1175,7 @@
   },
   "openai": {
     "source": "https://platform.openai.com/docs/pricing",
-    "last_verified": "2026-11-08",
+    "last_verified": "2026-11-10",
     "models": [
       {
         "id": "gpt-5",
@@ -1719,7 +1719,7 @@
   },
   "openrouter": {
     "source": "https://openrouter.ai/api/v1/models",
-    "last_verified": "2026-11-09",
+    "last_verified": "2026-11-10",
     "models": [
       {
         "id": "ai21/jamba-large-1.7",
@@ -5032,12 +5032,41 @@
         "id": "qwen/qwen3.8-max-0902:batch",
         "input_per_mtok": 1.15,
         "output_per_mtok": 3.45
+      },
+      {
+        "id": "anthropic/claude-fable-5.2:batch",
+        "input_per_mtok": 4,
+        "output_per_mtok": 20,
+        "cached_per_mtok": 0.1
+      },
+      {
+        "id": "google/gemini-4-carbon",
+        "input_per_mtok": 2,
+        "output_per_mtok": 10,
+        "cached_per_mtok": 0.1
+      },
+      {
+        "id": "google/gemini-4-carbon:batch",
+        "input_per_mtok": 1,
+        "output_per_mtok": 5,
+        "cached_per_mtok": 0.05
+      },
+      {
+        "id": "nex-agi/nex-n2.6",
+        "input_per_mtok": 0.12,
+        "output_per_mtok": 0.4,
+        "cached_per_mtok": 0.024
+      },
+      {
+        "id": "thinkingmachines/inkling-2-small:free",
+        "input_per_mtok": 0,
+        "output_per_mtok": 0
       }
     ]
   },
   "zai": {
     "source": "https://docs.z.ai/guides/overview/pricing",
-    "last_verified": "2026-11-08",
+    "last_verified": "2026-11-10",
     "models": [
       {
         "id": "glm-4.5v",
@@ -5173,7 +5202,7 @@
   },
   "zai-coding": {
     "source": "https://docs.z.ai/guides/overview/pricing",
-    "last_verified": "2026-11-08",
+    "last_verified": "2026-11-10",
     "models": [
       {
         "id": "glm-4.5",

@@ -365,7 +365,7 @@
         ]
       },
       {
-        "context_length": 262144,
+        "context_length": 65536,
         "description": "Clef is a 27B multimodal model created by Cloudflare that turns a state and a schema of typed questions into decisions.",
         "id": "clef:27b",
         "input_cost": 0.24,

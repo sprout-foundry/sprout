@@ -8117,6 +8117,79 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.1,
+        "context_length": 1000000,
+        "description": "Claude Fable 5.2 via the Batch API at 50% of standard pricing. Anthropic's most capable model for the most demanding technical work, with gains over Fable 5.1 in coding, reasoning, and vision.",
+        "id": "anthropic/claude-fable-5.2:batch",
+        "input_cost": 4,
+        "name": "Anthropic: Claude Fable 5.2 (batch)",
+        "output_cost": 20,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.1,
+        "context_length": 1048576,
+        "description": "Gemini 4 Carbon is a frontier Gemini 4 model from Google for coding, agentic and complex reasoning work. It takes text, image, audio, video and file input, supports long decode of up to 1M output tokens through continuation, and controls thinking depth with low, medium and high reasoning effort.",
+        "id": "google/gemini-4-carbon",
+        "input_cost": 2,
+        "name": "Google: Gemini 4 Carbon",
+        "output_cost": 10,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.05,
+        "context_length": 1048576,
+        "description": "Gemini 4 Carbon via the Batch API at 50% of standard pricing. Frontier Gemini 4 model for coding, agentic and complex reasoning work.",
+        "id": "google/gemini-4-carbon:batch",
+        "input_cost": 1,
+        "name": "Google: Gemini 4 Carbon (batch)",
+        "output_cost": 5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.024,
+        "context_length": 262144,
+        "description": "Nex-N2.6 is an agentic model from Nex AGI, built on [GLM-5.3-Flash](https://huggingface.co/zai-org/GLM-5.3-Flash-BF16) with about 321B parameters. It is suited for computer use, coding, and long-horizon tasks that involve tools. Compared with Nex-N2.5-Pro, it reduces repetitive reasoning and follows the tools available in the current environment more closely.",
+        "id": "nex-agi/nex-n2.6",
+        "input_cost": 0.12,
+        "name": "Nex AGI: Nex-N2.6",
+        "output_cost": 0.4,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 1048576,
+        "description": "Inkling 2 Small is a multimodal mixture-of-experts reasoning model from Thinking Machines Lab, with 17B active parameters out of 594B total. It is the first model in the second Inkling generation. It was trained with reinforcement learning on long-horizon coding tasks across many agent harnesses, and is suited for agentic coding, autonomous research, agentic knowledge work and retrieval-augmented generation, with English and general multilingual support. It accepts text and image input (no audio), supports tool calling and variable reasoning effort, and has a 1M-token context window.",
+        "id": "thinkingmachines/inkling-2-small:free",
+        "input_cost": 0,
+        "name": "Thinking Machines: Inkling 2 Small (free)",
+        "output_cost": 0,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning"
+        ]
       }
     ],
     "model_overrides": {

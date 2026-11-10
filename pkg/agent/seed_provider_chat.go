@@ -17,14 +17,15 @@ import (
 	providers "github.com/sprout-foundry/sprout/pkg/agent_providers"
 )
 
-// maxLiveRequestImages caps the inline image parts a single provider
-// request may carry. Each image is at most ~2.7MB base64 (the per-image
-// inline cap in pkg/agent_tools), so three keep the worst-case image mass
-// at ~8MB of body — under a conservative 10MB server body limit — while
-// typical screenshots (200-500KB) let the bound rarely bind. Older images
-// are withheld with a note; a 413 from a tighter limit triggers the
-// shrink-and-retry cascade in the retry loops below.
-const maxLiveRequestImages = 3
+// bodyBudgetImageBytes is the pre-flight image budget, in base64 payload
+// bytes, for a single provider request. It is a BYTES budget, not a count:
+// a fixed part count either shed a vision model's images to make room for
+// long history (the failure this replaces) or let a bulk-screenshot turn
+// blow the provider's body limit. The budget covers the image parts only;
+// the request's text gets the rest of the conservative 10MB server limit,
+// and a 413 from a tighter limit triggers the shrink-and-retry cascade in
+// the retry loops below, which sheds old history text before images.
+const bodyBudgetImageBytes = 8 << 20
 
 // bodyBudgetKeepTail is the number of most-recent non-system messages kept
 // when a 413 persists after every inline image has been shed — the point at
@@ -84,26 +85,28 @@ func (sp *sproutProvider) doChatRetrying(ctx context.Context, clock providerRetr
 		}
 
 		// HTTP 413 (body too large): the payload, not the endpoint, is the
-		// problem. Shed inline images first (most recent kept); once the
-		// images are gone and the request still overflows, the text body
-		// (system prompt + accumulated history) is the cause — drop the
-		// oldest non-system history and retry. Without this second stage a
-		// long session whose text alone exceeds the server limit 413s
-		// forever, since image shedding can never make it fit.
+		// problem. A vision model's 413 in a long session is almost always
+		// the TEXT history overflowing, not a handful of images — so shed
+		// text first: trim the oldest non-system history (a tail that halves
+		// each retry) and leave the current turn's attached images alone,
+		// since those are the user's explicit intent for this turn and
+		// losing them is the failure this cascade must avoid. Only when the
+		// text is already at its floor is the image mass the overflow —
+		// then shed image bytes (most recent kept) and stop re-attaching the
+		// current paste, since the images themselves now exceed the limit.
+		// Without the text stage a long session whose text alone exceeds the
+		// server limit 413s forever; without the image stage a bulk
+		// screenshot turn does the same.
 		if isBodyTooLargeError(err) {
-			if n := api.CountImages(req.Messages); n > 0 {
-				// Shed against the WIRE view: doChatOnce live-trims each
-				// attempt to maxLiveRequestImages, so counting req.Messages
-				// raw would let a large n keep shrinking to a value the
-				// live trim re-inflates the wire back up (wasted retry).
-				wire := min(n, maxLiveRequestImages)
-				req.Messages = api.TrimImagesBeyondLatest(req.Messages, wire/2)
-				sp.clearPastedImages()
-			} else {
-				// Images exhausted: shrink the text history. Each retry
-				// keeps a smaller tail so repeated 413s converge.
-				keep := max(bodyBudgetKeepTail>>uint(attempt), 1)
-				req.Messages = api.TrimMessagesForBodyBudget(req.Messages, keep)
+			before := len(req.Messages)
+			keep := max(bodyBudgetKeepTail>>uint(attempt), 1)
+			req.Messages = api.TrimMessagesForBodyBudget(req.Messages, keep)
+			if len(req.Messages) == before {
+				// Text is at the floor: the image mass is the overflow.
+				if n := api.MessagesBodyImageBytes(req.Messages); n > 0 {
+					req.Messages = api.TrimImageBudget(req.Messages, n/2)
+					sp.clearPastedImages()
+				}
 			}
 			if attempt >= maxInPlaceRetries {
 				return err, false
@@ -149,9 +152,10 @@ func (sp *sproutProvider) doChatNonStream(ctx context.Context, req *core.ChatReq
 	// user's real message, not on the appended hint.
 	messages = sp.observeAndHint(messages)
 	sp.recordContinuationNudges(messages)
-	// Body budget: cap the inline image parts (older images withheld with
-	// a note) so the request stays under a conservative server body limit.
-	messages = api.TrimImagesBeyondLatest(messages, maxLiveRequestImages)
+	// Body budget: keep the inline image parts whose base64 mass fits the
+	// budget (older images withheld with a note) so the request stays
+	// under the provider's body limit.
+	messages = api.TrimImageBudget(messages, bodyBudgetImageBytes)
 
 	sproutReq := seedRequestToSprout(req)
 
@@ -184,9 +188,10 @@ func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatReques
 	// Special-token truncation guard (see doChatNonStream).
 	messages = sp.observeAndHint(messages)
 	sp.recordContinuationNudges(messages)
-	// Body budget: cap the inline image parts (older images withheld with
-	// a note) so the request stays under a conservative server body limit.
-	messages = api.TrimImagesBeyondLatest(messages, maxLiveRequestImages)
+	// Body budget: keep the inline image parts whose base64 mass fits the
+	// budget (older images withheld with a note) so the request stays
+	// under the provider's body limit.
+	messages = api.TrimImageBudget(messages, bodyBudgetImageBytes)
 
 	sproutReq := seedRequestToSprout(req)
 

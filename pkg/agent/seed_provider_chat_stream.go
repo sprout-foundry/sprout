@@ -154,9 +154,9 @@ func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest,
 	messages = sp.stampTurnTimestamp(messages)
 	messages = sp.observeAndHint(messages)
 	sp.recordContinuationNudges(messages)
-	// Body budget: cap the inline image parts so the request stays under
-	// a conservative server body limit (older images withheld with a note).
-	messages = api.TrimImagesBeyondLatest(messages, maxLiveRequestImages)
+	// Body budget: keep the inline image parts whose base64 mass fits the
+	// budget (older images withheld with a note), below the server body limit.
+	messages = api.TrimImageBudget(messages, bodyBudgetImageBytes)
 
 	sp.computeMaxTokensHint(req)
 
@@ -331,20 +331,20 @@ func (sp *sproutProvider) doChatStreamingRetrying(ctx context.Context, clock pro
 		}
 
 		// HTTP 413 (body too large): the payload, not the endpoint, is the
-		// problem. Shed inline images first (most recent kept); once the
-		// images are gone and the request still overflows, the text body
-		// (system prompt + accumulated history) is the cause — drop the
-		// oldest non-system history and retry. Without this second stage a
-		// long session whose text alone exceeds the server limit 413s
-		// forever, since image shedding can never make it fit.
+		// problem. Shed text first — the oldest non-system history, a tail
+		// that halves each retry — leaving the current turn's attached
+		// images alone, since in a long session the text is the overflow and
+		// the images are the user's explicit intent for this turn. Only when
+		// the text is at its floor is the image mass the overflow: shed
+		// image bytes (most recent kept).
 		if isBodyTooLargeError(err) {
-			if n := api.CountImages(messages); n > 0 {
-				messages = api.TrimImagesBeyondLatest(messages, n/2)
-			} else {
-				// Images exhausted: shrink the text history. Each retry
-				// keeps a smaller tail so repeated 413s converge.
-				keep := max(bodyBudgetKeepTail>>uint(n), 1)
-				messages = api.TrimMessagesForBodyBudget(messages, keep)
+			before := len(messages)
+			keep := max(bodyBudgetKeepTail>>uint(n), 1)
+			messages = api.TrimMessagesForBodyBudget(messages, keep)
+			if len(messages) == before {
+				if imgBytes := api.MessagesBodyImageBytes(messages); imgBytes > 0 {
+					messages = api.TrimImageBudget(messages, imgBytes/2)
+				}
 			}
 			if n >= maxInPlaceRetries {
 				return err, false

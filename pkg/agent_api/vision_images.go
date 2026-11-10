@@ -69,3 +69,103 @@ func TrimImagesBeyondLatest(messages []Message, maxImages int) []Message {
 	}
 	return out
 }
+
+// MessageBodyImageBytes is the request-body cost of one message's image
+// parts, in base64 payload bytes — what actually crosses the wire (the
+// per-image inline cap keeps each part's base64 within a known size;
+// URL-carrying parts cost nothing on the body budget, the URL is short
+// and the fetch is client-side). A bytes estimate, not a part count: the
+// same three-image turn can be 600KB (screenshots) or 8MB (full-res
+// attachments), and a count cap can only guess at the mass.
+func MessageBodyImageBytes(m Message) int {
+	n := 0
+	for i := range m.Images {
+		n += imagePartBodyBytes(m.Images[i])
+	}
+	return n
+}
+
+// imagePartBodyBytes is the body cost of a single image part: its base64
+// payload (a URL part costs nothing here — the fetch is client-side).
+func imagePartBodyBytes(part ImageData) int {
+	return len(part.Base64)
+}
+
+// MessagesBodyImageBytes is the request-body cost of every image part in
+// the message slice (base64 payload bytes).
+func MessagesBodyImageBytes(messages []Message) int {
+	total := 0
+	for i := range messages {
+		total += MessageBodyImageBytes(messages[i])
+	}
+	return total
+}
+
+// TrimImageBudget keeps the newest image parts whose combined base64
+// payload fits maxImageBytes, most-recent first, and withholds the older
+// ones with a bracketed note so the model knows pixels are withheld rather
+// than absent. The budget is in wire BODY bytes, not a part count: a
+// vision model with a large but sub-limit image set keeps every image
+// (the count cap of one generation shed the most recent attachment to
+// make room for long history — the failure this budget replaces), while a
+// bulk-screenshot turn still sheds old images before it can blow the
+// provider's body limit (413).
+//
+// The input slice and its messages are not modified (kept image parts are
+// copied, never aliased). When the budget is not binding the input is
+// returned unchanged — a stable wire prefix keeps the provider's prompt
+// cache and sprout's token anchor valid. maxImageBytes <= 0 strips every
+// image.
+func TrimImageBudget(messages []Message, maxImageBytes int) []Message {
+	budget := maxImageBytes
+	if budget < 0 {
+		budget = 0
+	}
+	if MessagesBodyImageBytes(messages) <= budget {
+		return messages
+	}
+
+	out := make([]Message, len(messages))
+	copy(out, messages)
+
+	for i := len(out) - 1; i >= 0; i-- {
+		msgBytes := MessageBodyImageBytes(out[i])
+		switch {
+		case budget <= 0:
+			// Budget spent by newer messages: shed this one too.
+			if msgBytes > 0 {
+				out[i].Images = nil
+				if !strings.Contains(out[i].Content, imageWithholdNote) {
+					out[i].Content += imageWithholdNote
+				}
+			}
+		case msgBytes <= budget:
+			budget -= msgBytes
+		default:
+			// The message overflows the remaining budget: keep the newest
+			// parts that still fit. Parts are shed oldest-first within the
+			// message, so the latest pixels (usually the current turn's
+			// attached image) survive.
+			kept := make([]ImageData, 0, len(out[i].Images))
+			for j := len(out[i].Images) - 1; j >= 0; j-- {
+				part := imagePartBodyBytes(out[i].Images[j])
+				if part > budget {
+					continue
+				}
+				budget -= part
+				kept = append(kept, out[i].Images[j])
+			}
+			if len(kept) < len(out[i].Images) {
+				reversed := make([]ImageData, len(kept))
+				for k := range kept {
+					reversed[k] = kept[len(kept)-1-k]
+				}
+				out[i].Images = reversed
+				if !strings.Contains(out[i].Content, imageWithholdNote) {
+					out[i].Content += imageWithholdNote
+				}
+			}
+		}
+	}
+	return out
+}

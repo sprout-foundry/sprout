@@ -274,13 +274,19 @@ func TestTrimMessagesForBodyBudget(t *testing.T) {
 }
 
 // TestChat413ShedsImagesAndClearsPasted pins the Chat (non-streaming) path:
-// after a 413 the retry sheds images AND clears registered pasted images —
-// otherwise doChatOnce's prep pipeline re-attaches them on the next
-// attempt and the shed is undone.
+// when the request's text body is already at its floor, a 413 sheds image
+// bytes (most recent kept) and clears the registered pasted image —
+// otherwise doChatOnce's prep pipeline re-attaches it on the next attempt
+// and the shed is undone.
 //
 // The client must be vision-capable: attachPastedImages early-returns for
 // non-vision clients, which would make the paste never attach and the test
 // pass with or without clearPastedImages.
+//
+// Here the history is short (4 request messages), so the 413 cascade's text
+// stage is a no-op and it falls through to the image stage. Each 413 halves
+// the image bytes (most recent kept): 5 → 2 → 1, with the pasted image
+// cleared on the first image shed.
 func TestChat413ShedsImagesAndClearsPasted(t *testing.T) {
 	client := &bodyLimitClient{MockClient: &MockClient{model: "m"}, fail413: 2}
 	agent := newBudgetTestAgent(t)
@@ -303,13 +309,12 @@ func TestChat413ShedsImagesAndClearsPasted(t *testing.T) {
 		t.Fatalf("doChatWithRetry: %v", err)
 	}
 
-	// Attempt 0: 4 request images + 1 pasted = 5, live-trimmed to the
-	// budget of 3 -> 413. Shed against the wire view: min(4,3)/2 = 1, and
-	// the paste is cleared. Attempt 1 carries 1 image -> 413. Shed:
-	// min(1,3)/2 = 0. Attempt 2 is text-only and succeeds.
-	// Without clearPastedImages the sequences would read [3, 2, 1] — the
-	// paste re-attaching one image per attempt.
-	want := []int{3, 1, 0}
+	// Attempt 0: 4 request images + 1 pasted = 5, all under the 8MB budget.
+	// 413 (call 1): text stage is a no-op (4 messages < floor), so the image
+	// stage halves the 20 bytes of image mass to 10 → 2 images kept, and the
+	// paste is cleared. Attempt 1 carries 2 images → 413 (call 2): halves to
+	// 5 → 1 image kept. Attempt 2 carries 1 image → success (call 3).
+	want := []int{5, 2, 1}
 	if len(client.seenImages) != len(want) {
 		t.Fatalf("client saw %d requests (%v), want %d (%v)", len(client.seenImages), client.seenImages, len(want), want)
 	}
@@ -320,6 +325,48 @@ func TestChat413ShedsImagesAndClearsPasted(t *testing.T) {
 	}
 	if n := len(sp.pastedImages); n != 0 {
 		t.Errorf("pasted images not cleared after 413: %d remain", n)
+	}
+}
+
+// TestChat413ShedsTextFirstKeepsCurrentImage pins the fix for a vision model
+// in a long session: the 413 is the TEXT history's fault, not a handful of
+// images, so the cascade sheds old history text first and leaves the current
+// turn's attached image intact. The pre-fix behavior shed the current
+// image (the user's explicit intent) to make room for the old text — exactly
+// backwards.
+func TestChat413ShedsTextFirstKeepsCurrentImage(t *testing.T) {
+	client := &bodyLimitClient{MockClient: &MockClient{model: "m"}, fail413: 99}
+	agent := newBudgetTestAgent(t)
+	provider, err := NewSproutProvider(agent, client)
+	if err != nil {
+		t.Fatalf("NewSproutProvider: %v", err)
+	}
+	sp := provider.(*sproutProvider)
+
+	// A current-turn user message carrying the attached image, buried under a
+	// long text history: the 413 is the text's fault.
+	long := make([]core.Message, 0, 40)
+	for i := 0; i < 38; i++ {
+		long = append(long, core.Message{Role: "user", Content: "history " + strings.Repeat("x", 400)})
+	}
+	long = append(long, core.Message{Role: "user", Content: "here is the screenshot",
+		Images: []api.ImageData{{Base64: "CURRENT", Type: "image/png"}}})
+
+	req := &core.ChatRequest{Messages: long}
+	// A long-session 413 is not fixable by shedding (the text alone keeps
+	// overflowing until the tail floor), so the retry budget exhausts and the
+	// 413 surfaces — the point is what the cascade did to the image before.
+	if _, err := sp.doChatWithRetry(context.Background(), req); err == nil {
+		t.Fatalf("expected the unfixable 413 to surface, got success")
+	}
+
+	// Every 413 attempt shrank the text tail and re-sent the request with the
+	// current image still attached: the last request still carries it.
+	if n := api.CountImages(req.Messages); n != 1 {
+		t.Fatalf("current-turn image lost to the 413 cascade: %d images remain, want 1", n)
+	}
+	if api.MessagesBodyImageBytes(req.Messages) <= 0 {
+		t.Errorf("current-turn image payload empty: the cascade shed the very image it should keep")
 	}
 }
 

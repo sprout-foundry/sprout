@@ -16,9 +16,9 @@ const (
 	// it would only spike memory.
 	inlineImageMaxReadBytes = 100 << 20
 	// inlineImagePayloadCapBytes: hard post-optimization cap for one inline
-	// image (raw bytes; ~1.33x in base64). Sized with maxLiveRequestImages
-	// (pkg/agent) so N images plus prompt text stay under a conservative
-	// 10MB server body limit.
+	// image (raw bytes; ~1.33x in base64). Sized with bodyBudgetImageBytes
+	// (pkg/agent) so the image mass plus prompt text stays under a
+	// conservative 10MB server body limit.
 	inlineImagePayloadCapBytes = 2 << 20
 )
 

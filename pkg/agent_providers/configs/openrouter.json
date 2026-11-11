@@ -8190,6 +8190,59 @@
           "vision",
           "reasoning"
         ]
+      },
+      {
+        "context_length": 1024000,
+        "description": "ERNIE 5.5 Flash Preview is the latest foundation model in the ERNIE family, with comprehensive improvements in coding, agentic capabilities, knowledge work, and deep research. It has 280 billion total parameters, activates 14 billion parameters per token, and supports a context window of 1 million tokens. Its new architecture combines strong model capabilities with efficient inference, delivering generation speeds of more than 200 tokens per second.",
+        "id": "baidu/ernie-5.5-flash-preview:free",
+        "input_cost": 0,
+        "name": "Baidu: ERNIE-5.5-Flash-Preview (free)",
+        "output_cost": 0,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.113,
+        "context_length": 1024000,
+        "description": "ERNIE-Light-DT-1.0 is based on open-source GLM models and includes research findings from Baidu Search's Lightning large model. It features Baidu Sparse Attention (BSA), a unique sparse attention mechanism developed by Baidu ERNIE. By using feedback-driven history compression, it improves the storage and indexing of historical information. This significantly reduces KV cache storage and computational costs while maintaining model performance. As a result, it allows for longer context windows at a lower cost.",
+        "id": "baidu/ernie-light-dt-1.0-intl",
+        "input_cost": 1.13,
+        "name": "Baidu: ERNIE-Light-DT-1.0",
+        "output_cost": 3.94,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.04,
+        "context_length": 261795,
+        "description": "Mi:dm K 3.0 Pro is a Mixture-of-Experts reasoning model from KT, with 120B total and 12B active parameters. It uses a hybrid architecture that mixes Mamba, MoE and attention layers.",
+        "id": "kt/midm-k-3.0-pro",
+        "input_cost": 0.2,
+        "name": "KT: Mi:dm K 3.0 Pro",
+        "output_cost": 0.8,
+        "tags": [
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.06,
+        "context_length": 262144,
+        "description": "Motif 3 is a Mixture-of-Experts language model from Motif Technologies, with 314B total and 13.2B active parameters. It is a general-purpose multilingual model for English and Korean, particularly strong at long-horizon agentic tool use and terminal-based problem solving, with additional training emphasis on Korean, reasoning-intensive, legal, and financial data.",
+        "id": "motif-technologies/motif-3",
+        "input_cost": 0.3,
+        "name": "Motif Technologies: Motif 3",
+        "output_cost": 1.2,
+        "tags": [
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

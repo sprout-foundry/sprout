@@ -132,6 +132,12 @@ export function DesignWorkspaceProvider({ tab, active, children }: DesignWorkspa
       window.removeEventListener('focus', refetch);
       document.removeEventListener('visibilitychange', visibility);
       window.clearInterval(timer);
+      // Invalidate any request still in flight. The seq guard above only
+      // rejects responses superseded by a NEWER request; on unmount nothing
+      // supersedes them, so a late rejection would still call setInventory
+      // and React would touch window after the test environment is gone
+      // (ReferenceError: window is not defined).
+      fetchSeq.current += 1;
     };
   }, [active, fetchInventory]);
 

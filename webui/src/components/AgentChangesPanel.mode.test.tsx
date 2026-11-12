@@ -89,7 +89,12 @@ describe('AgentChangesPanel presentation modes', () => {
 
     // "What changed" framing, over the tracker's own change data.
     expect(await screen.findByText('What changed')).toBeInTheDocument();
-    expect(screen.getByText('src/hero.tsx')).toBeInTheDocument();
+    // The header and the file rows come from two separate API calls
+    // (getAgentSessionSummary and getAgentSessionChanges), so awaiting the
+    // header does not mean the rows have arrived. Await a row instead, or
+    // the synchronous lookups below race the second request and fail under
+    // a loaded runner.
+    expect(await screen.findByText('src/hero.tsx')).toBeInTheDocument();
     expect(screen.getByText('src/App.tsx')).toBeInTheDocument();
     expect(screen.getByText('New file')).toBeInTheDocument();
     expect(screen.getByText('Updated')).toBeInTheDocument();

@@ -31,6 +31,11 @@ class FakeBridge implements SproutWasmBridge {
     this.files.set(path, content);
     return '';
   }
+  bytes = new Map<string, Uint8Array>();
+  writeFileBytes(path: string, content: Uint8Array) {
+    this.bytes.set(path, content);
+    return '';
+  }
   readFile(path: string) {
     const content = this.files.get(path);
     return JSON.stringify(content === undefined ? { error: 'not found' } : { content });
@@ -147,6 +152,34 @@ describe('createAgent', () => {
       { role: 'user', content: 'one' },
       { role: 'assistant', content: 'first answer' },
     ]);
+  });
+
+  it('sends images with a message: written as they are, named as the agent reads a paste', async () => {
+    const { bridge, agent } = await setup();
+    bridge.script = async () => 'Nice header.';
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+    await agent.send('Make it look like this', { images: [{ data: png, name: 'mock up.png' }] });
+
+    const [path, data] = [...bridge.bytes.entries()][0];
+    expect(path).toMatch(/^\.sprout\/pasted-images\/chat-a-\d+-\d+-mock-up\.png$/);
+    expect(data).toEqual(png);
+    expect(bridge.runs[0][2]).toBe(`Make it look like this\n[image: ${path}]`);
+  });
+
+  it('sends an image with no words', async () => {
+    const { bridge, agent } = await setup();
+    const jpg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0]);
+    await agent.send('  ', { images: [{ data: jpg }] });
+    expect(bridge.runs[0][2]).toMatch(/^\[image: \.sprout\/pasted-images\/.+-image\.jpg\]$/);
+  });
+
+  it('refuses an attachment that is not an image, before the turn starts', async () => {
+    const { bridge, agent } = await setup();
+    await expect(agent.send('look', { images: [{ data: new Uint8Array([1, 2, 3, 4]), name: 'notes.txt' }] })).rejects.toThrow(
+      /notes\.txt is not a PNG, JPEG, GIF or WebP image/,
+    );
+    expect(bridge.runs).toHaveLength(0);
+    expect(agent.busy).toBe(false);
   });
 
   it('round-trips an ask_user question through answer()', async () => {

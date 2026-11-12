@@ -19,6 +19,8 @@ import type {
   AgentHistoryTurn,
   CreateAgentOptions,
   HeadlessAgent,
+  MessageImage,
+  SendOptions,
   SproutWasmBridge,
   TurnResult,
 } from './types';
@@ -175,10 +177,14 @@ export async function createAgent(options: CreateAgentOptions): Promise<Headless
       return running;
     },
 
-    async send(message: string): Promise<TurnResult> {
+    async send(input: string, options?: SendOptions): Promise<TurnResult> {
       if (disposed) throw new Error('Sprout agent: disposed');
       if (running) throw new Error('Sprout agent: a turn is already running');
-      if (!message.trim()) throw new Error('Sprout agent: empty message');
+      if (!input.trim() && !options?.images?.length) throw new Error('Sprout agent: empty message');
+      // Images go into the workspace's pasted-images folder, named in the
+      // message the way a paste is; the agent sends them to a model that
+      // takes images, and has another read them with its image tool.
+      const message = options?.images?.length ? withImages(bridge, chatId, input, options.images) : input;
       running = true;
       stopRequested = false;
       writes = null;
@@ -249,4 +255,39 @@ export async function createAgent(options: CreateAgentOptions): Promise<Headless
     },
   };
   return agent;
+}
+
+/** Where the agent looks for images named in a message (pkg/console). */
+export const PASTED_IMAGE_DIR = '.sprout/pasted-images';
+
+/** The extension an image's bytes say it is, or '' when they are not an image. */
+export function imageExtension(data: Uint8Array): string {
+  const at = (i: number) => data[i] ?? -1;
+  if (at(0) === 0x89 && at(1) === 0x50 && at(2) === 0x4e && at(3) === 0x47) return '.png';
+  if (at(0) === 0xff && at(1) === 0xd8 && at(2) === 0xff) return '.jpg';
+  if (at(0) === 0x47 && at(1) === 0x49 && at(2) === 0x46) return '.gif';
+  if (at(0) === 0x52 && at(1) === 0x49 && at(2) === 0x46 && at(3) === 0x46 && at(8) === 0x57 && at(9) === 0x45 && at(10) === 0x42 && at(11) === 0x50) return '.webp';
+  return '';
+}
+
+let imageCounter = 0;
+
+/**
+ * Writes a message's images into the workspace and names them in the
+ * message as the agent reads a pasted image (`[image: <path>]`).
+ */
+export function withImages(bridge: SproutWasmBridge, chatId: string, message: string, images: MessageImage[]): string {
+  if (!bridge.writeFileBytes) throw new Error('Sprout agent: this runtime cannot take images (it has no writeFileBytes)');
+  const named: string[] = [];
+  for (const image of images) {
+    const ext = imageExtension(image.data);
+    if (!ext) throw new Error(`Sprout agent: ${image.name || 'an attachment'} is not a PNG, JPEG, GIF or WebP image`);
+    const base = (image.name ?? 'image').replace(/\.[^.]*$/, '').replace(/[^A-Za-z0-9_-]+/g, '-').slice(0, 40) || 'image';
+    imageCounter += 1;
+    const path = `${PASTED_IMAGE_DIR}/${chatId.slice(0, 12) || 'chat'}-${Date.now()}-${imageCounter}-${base}${ext}`;
+    const err = bridge.writeFileBytes(path, image.data);
+    if (err) throw new Error(`Sprout agent: could not keep ${image.name || 'an image'}: ${err}`);
+    named.push(`[image: ${path}]`);
+  }
+  return [message.trim(), ...named].filter(Boolean).join('\n');
 }

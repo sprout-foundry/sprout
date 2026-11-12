@@ -76,7 +76,7 @@ interface CreateAgentOptions {
 interface HeadlessAgent {
   readonly chatId: string;
   readonly busy: boolean;
-  send(message: string): Promise<TurnResult>;      // resolves when the turn ends
+  send(message: string, options?: SendOptions): Promise<TurnResult>; // resolves when the turn ends
   cancel(): void;                                    // the turn ends "interrupted"
   answer(questionId: string, value: string | string[]): boolean;
   on(type, handler): () => void;                     // one event type; returns unsubscribe
@@ -87,7 +87,18 @@ interface HeadlessAgent {
 }
 
 interface TurnResult { status: "completed" | "interrupted" | "failed"; response: string; error?: string }
+
+// Images the model sees with the message (PNG, JPEG, GIF or WebP bytes).
+interface SendOptions { images?: { data: Uint8Array; name?: string }[] }
 ```
+
+An image sent with a message is written, as it is, into the workspace's
+`.sprout/pasted-images/` and named in the message the way a pasted image is
+(`[image: <path>]`). A model that takes images (`supportsVision`, the
+default) receives it with the message; one that does not reads it with its
+image tool. A message may be only images. Anything that is not a PNG, JPEG,
+GIF or WebP is refused before the turn starts. This needs a runtime with
+`writeFileBytes` (workspace 1.12.0 and later).
 
 Also exported: `loadSproutWasm({ wasmBase, store?, fetch?, remoteRegistries?, env? })` (load the module
 ahead of the first agent — prefetch it on a landing page), `memoryFileStore()`,

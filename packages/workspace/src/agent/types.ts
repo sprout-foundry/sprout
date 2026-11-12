@@ -353,11 +353,29 @@ export interface TurnResult {
   error?: string;
 }
 
+/** An image sent with a message: the model sees it with the words. */
+export interface MessageImage {
+  /** The image's bytes (PNG, JPEG, GIF or WebP). */
+  data: Uint8Array;
+  /** Its file name, for the model's reference to it (`screenshot.png`). */
+  name?: string;
+}
+
+/** What goes with a message besides its words. */
+export interface SendOptions {
+  /**
+   * Images for the model to see with the message. A model that takes images
+   * gets them as part of the message; one that does not reads them with its
+   * image tool.
+   */
+  images?: MessageImage[];
+}
+
 /** A running headless agent. */
 export interface HeadlessAgent {
   readonly chatId: string;
   /** Start a turn. Resolves when the turn ends (also signalled by a `done` event). */
-  send(message: string): Promise<TurnResult>;
+  send(message: string, options?: SendOptions): Promise<TurnResult>;
   /** Stop the running turn; it ends with status `interrupted`. */
   cancel(): void;
   /** Answer an `ask_user` question. False when the question is unknown or expired. */
@@ -384,6 +402,8 @@ export interface SproutWasmBridge {
   getEnv?(): string;
   getWorkspaceRoot?(): string;
   writeFile(path: string, content: string): string;
+  /** Writes binary content as it is (images sent with a message). */
+  writeFileBytes?(path: string, content: Uint8Array): string;
   readFile(path: string): string;
   listDir(path: string): string;
   walkFiles?(path?: string): string;

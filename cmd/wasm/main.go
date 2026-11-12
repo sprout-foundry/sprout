@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"syscall/js"
 
 	"github.com/sprout-foundry/sprout/pkg/buildinfo"
@@ -40,6 +41,7 @@ func main() {
 		"getWorkspaceRoot":    js.FuncOf(getWorkspaceRootFunc),
 		"changeDir":           js.FuncOf(changeDirFunc),
 		"writeFile":           js.FuncOf(writeFileFunc),
+		"writeFileBytes":      js.FuncOf(writeFileBytesFunc),
 		"readFile":            js.FuncOf(readFileFunc),
 		"listDir":             js.FuncOf(listDirFunc),
 		"walkFiles":           js.FuncOf(walkFilesFunc),
@@ -229,6 +231,28 @@ func writeFileFunc(this js.Value, args []js.Value) interface{} {
 	content := args[1].String()
 
 	if err := wasmshell.SyncWriteFile(workspacePath(path), content); err != nil {
+		return err.Error()
+	}
+	return ""
+}
+
+// writeFileBytesFunc writes binary content (a Uint8Array) to a file, as it
+// is: an image a host attaches to a message, which writeFile's string would
+// corrupt. The file lives in the in-memory filesystem only; it is not synced
+// to the host's file store, which keeps text.
+func writeFileBytesFunc(this js.Value, args []js.Value) interface{} {
+	if len(args) < 2 || args[1].Type() != js.TypeObject {
+		return "writeFileBytes: requires a path and a Uint8Array"
+	}
+	data := make([]byte, args[1].Get("length").Int())
+	js.CopyBytesToGo(data, args[1])
+	path := workspacePath(args[0].String())
+	if dir := filepath.Dir(path); dir != "" && dir != "." && dir != "/" {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return err.Error()
+		}
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
 		return err.Error()
 	}
 	return ""

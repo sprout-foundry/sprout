@@ -707,8 +707,7 @@ func TestCLIPath_LCM_AutoActivatesAt32K(t *testing.T) {
 		"web_search": true, "fetch_url": true,
 		"commit": true, "list_changes": true, "recover_file": true,
 		"run_subagent": true, "review_changes": true, "ask_user": true,
-		"design_assets": true, "design_validate": true, "design_brief": true,
-		"design_export_tokens": true, "design_sync": true,
+		"draw_mockup": true,
 		"list_skills": true, "activate_skill": true,
 		"mcp_tools": true, "mcp_refresh": true,
 	}
@@ -717,7 +716,7 @@ func TestCLIPath_LCM_AutoActivatesAt32K(t *testing.T) {
 		for _, tool := range tools {
 			names = append(names, tool.Function.Name)
 		}
-		t.Errorf("CLI path should produce LCM 23-tool allowlist at 32K; got %d tools: %v", len(tools), names)
+		t.Errorf("CLI path should produce the LCM allowlist at 32K; got %d tools: %v", len(tools), names)
 	}
 }
 

@@ -251,20 +251,6 @@ export function useAppInitialization({
                   });
               }
             }
-            // The design tools' screenshots render in this page (SP-158).
-            if (hosted) {
-              const shell = (getAdapter() as CloudAdapter | null)?.getWasmShell?.();
-              if (shell) {
-                import('../services/pageRenderer')
-                  .then(({ registerPageRenderer }) => {
-                    registerPageRenderer(shell);
-                    debugLog('[startup] Page renderer installed (__sproutRender)');
-                  })
-                  .catch((err) => {
-                    debugLog('[startup] pageRenderer import failed:', err);
-                  });
-              }
-            }
           } else if (hosted) {
             console.warn('[startup] WASM shell preload failed — falling through to server safety-net');
             setState((prev) => ({ ...prev, wasmLoading: false, wasmError: 'Failed to load browser runtime' }));

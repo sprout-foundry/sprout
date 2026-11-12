@@ -45,10 +45,9 @@ export type WorkspaceModeId = 'code' | 'design' | (string & {}); // eslint-disab
 
 export interface WorkspaceModeContext {
   /**
-   * Whether the workspace root contains a `design/` directory. No longer
-   * gates availability (Design is always offered; its surface owns the
-   * empty state), but kept so the switcher and surface can still observe
-   * tree presence.
+   * Whether the workspace root has a mockup (`design/mockup.html`). Kept so
+   * the switcher and the Design surface can observe it; it does not gate
+   * availability — Design is always offered and owns its empty state.
    */
   hasDesignTree: boolean;
 }
@@ -223,7 +222,7 @@ registerMode({
   id: 'design',
   label: 'Design',
   icon: Palette,
-  hint: 'Flows, screens, tokens',
+  hint: 'Mockups and visual ideas',
   available: () => true,
   Shell: DesignShell,
 });

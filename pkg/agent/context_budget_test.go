@@ -84,8 +84,8 @@ func TestSP125_LowContextMode_32K(t *testing.T) {
 	}
 
 	// (b) Exactly the LCM allowlist registered (core edit + navigation + web
-	// + delegation + ask_user; design loop tools and MCP meta-tools added
-	// in 2e6239417 / 5546f6dff — the single source of truth is
+	// + delegation + ask_user; draw_mockup and the MCP meta-tools added later
+	// — the single source of truth is
 	// configuration.lowContextProfile.ToolAllowlist).
 	tools := agent.getOptimizedToolDefinitions(nil)
 	expectedTools := map[string]bool{
@@ -94,9 +94,8 @@ func TestSP125_LowContextMode_32K(t *testing.T) {
 		"web_search": true, "fetch_url": true,
 		"commit": true, "list_changes": true, "recover_file": true,
 		"run_subagent": true, "review_changes": true, "ask_user": true,
-		// SP-140 design loop (pure Go, valid in every tier).
-		"design_assets": true, "design_validate": true,
-		"design_brief": true, "design_export_tokens": true, "design_sync": true,
+		// SP-140: the mockup tool both prompts direct the agent to use.
+		"draw_mockup": true,
 		// MCP setup/discovery meta-tools.
 		"mcp_tools": true, "mcp_refresh": true,
 		// Skill activation, which both prompts direct the agent to use.

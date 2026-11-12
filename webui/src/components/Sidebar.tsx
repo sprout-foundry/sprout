@@ -57,7 +57,7 @@ import SidebarGitSection from './SidebarGitSection';
 import SidebarLogsPane from './SidebarLogsPane';
 import SidebarSettingsSection from './SidebarSettingsSection';
 import SproutLogo from './SproutLogo';
-import DesignAssetsPane from './design/DesignAssetsPane';
+import { MockupSection } from '../views/MockupSection';
 import { isLayeredLayout, LEFT_INSET_VAR } from '../config/layout';
 import LayeredSidebar from './layered/LayeredSidebar';
 import type { ProjectNavConversations } from './layered/ProjectNav';
@@ -438,14 +438,8 @@ function Sidebar({
         );
       case 'search':
         return renderSearchSection();
-      case 'flows':
-      case 'screens':
-      case 'tokens':
-      case 'feedback':
-        // Design mode's sections: the assets browser for the active section,
-        // rendered from the shared DesignWorkspaceContext. Outside a provider
-        // (hosts without the workspace shell) the pane renders nothing.
-        return <DesignAssetsPane />;
+      case 'mockup':
+        return <MockupSection workspaceRoot={gitPanel?.workspaceRoot} onOpenFile={handleFileClick} />;
       case 'automations':
         return (
           <AutomationsPanel

@@ -9,7 +9,6 @@
 
 export * from './common';
 export * from './credentials';
-export * from './design';
 export * from './editor';
 export * from './git';
 export * from './misc';

@@ -52,9 +52,12 @@ func TestDesignerPersona_CatalogContract(t *testing.T) {
 	if !designer.HasCapability(personas.CapabilityGitWrite) {
 		t.Error("designer must carry the git_write capability")
 	}
-	for _, tool := range []string{"design_validate", "design_assets", "design_render", "design_import_sketch"} {
-		if !containsString(designer.AllowedTools, tool) {
-			t.Errorf("designer allowed_tools must include %q", tool)
+	if !containsString(designer.AllowedTools, "draw_mockup") {
+		t.Error("designer allowed_tools must include draw_mockup")
+	}
+	for _, tool := range []string{"design_validate", "design_assets", "design_render", "design_sync"} {
+		if containsString(designer.AllowedTools, tool) {
+			t.Errorf("designer allowed_tools must not include the withdrawn %q", tool)
 		}
 	}
 }

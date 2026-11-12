@@ -37,8 +37,8 @@ func TestSeedToolRoster_PersonaLimitsRegistry(t *testing.T) {
 			t.Errorf("tool %q is registered but not in the designer's allowed_tools", name)
 		}
 	}
-	if !names["design_render"] {
-		t.Error("design_render (on the designer's list) is missing")
+	if !names["draw_mockup"] {
+		t.Error("draw_mockup (on the designer's list) is missing")
 	}
 }
 
@@ -165,7 +165,7 @@ func TestSeedToolRoster_ProviderToolCallsLimitRegistry(t *testing.T) {
 	if !names["read_file"] || !names["shell_command"] {
 		t.Fatalf("listed tools missing: %v", names)
 	}
-	if names["write_file"] || names["design_brief"] {
+	if names["write_file"] || names["draw_mockup"] {
 		t.Fatalf("unlisted tools registered: %v", names)
 	}
 	if !names["list_skills"] {

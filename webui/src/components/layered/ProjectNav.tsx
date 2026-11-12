@@ -9,10 +9,8 @@
 import {
   ChevronLeft,
   PanelLeftClose,
-  FileCode2,
   FolderTree,
   GitBranch,
-  Layers,
   MessageSquare,
   Palette,
   PenSquare,
@@ -20,7 +18,6 @@ import {
   Search,
   Settings,
   SquareTerminal,
-  SwatchBook,
   Zap,
   type LucideIcon,
 } from 'lucide-react';
@@ -293,10 +290,7 @@ export const NAV_ICONS = {
   automations: Zap,
   settings: Settings,
   logs: ScrollText,
-  screens: FileCode2,
-  tokens: SwatchBook,
-  flows: Layers,
-  feedback: MessageSquare,
+  mockup: Palette,
   design: Palette,
   terminal: SquareTerminal,
 };

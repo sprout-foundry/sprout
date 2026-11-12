@@ -375,15 +375,13 @@ describe('SproutWorkspace space shell (own mode, no layout)', () => {
     expect(screen.getByTestId('workspace-sidebar')).toBeInTheDocument();
   });
 
-  it("lists the design space's sections for the design space", async () => {
+  it("lists the design space's one section for the design space", async () => {
     mount(daemonHost(), 'design');
     const shell = await screen.findByTestId('workspace-space-shell');
     expect(shell).toHaveAttribute('data-lane', 'design');
     const sidebar = screen.getByTestId('workspace-sidebar');
-    expect(
-      within(sidebar)
-        .getAllByRole('tab')
-        .map((tab) => tab.getAttribute('aria-label')),
-    ).toEqual(['Screens', 'Flows', 'Tokens', 'Feedback']);
+    // One section, so the drill shows its title rather than a one-entry tab
+    // strip.
+    expect(within(sidebar).getByText('Mockup')).toBeInTheDocument();
   });
 });

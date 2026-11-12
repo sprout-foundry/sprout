@@ -1,6 +1,5 @@
 import { Code2, Eye, Columns2 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { injectPreviewMarker, rewriteScreenRefs } from '../design/screenRefs';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import './LivePreview.css';
 
 interface LivePreviewProps {
@@ -8,30 +7,9 @@ interface LivePreviewProps {
   language: 'svg' | 'html';
   fileName: string;
   onContentChange?: (newContent: string) => void;
-  /**
-   * The document's workspace-relative path, for design screens (SP-143
-   * §143.4). When present, only the iframe's srcDoc is rewritten through the
-   * `/api/file` proxy and stamped `data-sprout-preview` (the screen runtime's
-   * switcher gate); the edited content — the textarea and every
-   * `onContentChange` payload — is always the untouched original.
-   */
-  previewPath?: string;
-  /**
-   * Workspace-relative asset bytes inlined into the preview copy as data:
-   * URLs (the hosted half of §143.4: the iframe's fetches bypass the page's
-   * fetch interceptor, so referenced CSS/SVG must ride in the document).
-   */
-  inlineAssets?: Record<string, string>;
 }
 
-function LivePreview({
-  content,
-  language,
-  fileName,
-  onContentChange,
-  previewPath,
-  inlineAssets,
-}: LivePreviewProps): JSX.Element {
+function LivePreview({ content, language, fileName, onContentChange }: LivePreviewProps): JSX.Element {
   const [editorContent, setEditorContent] = useState(content);
   const [viewMode, setViewMode] = useState<'split' | 'preview'>('split');
   const [splitPercent, setSplitPercent] = useState<number>(50);
@@ -112,18 +90,6 @@ function LivePreview({
     <span className={`live-preview-badge live-preview-badge-${language}`}>{language.toUpperCase()}</span>
   );
 
-  // The iframe's document: for design screens, a preview-only copy whose
-  // refs resolve through the file proxy and which carries the runtime's
-  // preview marker. The editor state is never transformed — srcDoc has no
-  // base URL, so this copy is the only way relative refs can resolve here.
-  const previewDoc = useMemo(
-    () =>
-      previewPath && language === 'html'
-        ? injectPreviewMarker(rewriteScreenRefs(editorContent, { previewPath, inline: inlineAssets }))
-        : editorContent,
-    [editorContent, previewPath, language, inlineAssets],
-  );
-
   // Build preview pane content
   const renderPreview = () => {
     if (language === 'svg') {
@@ -143,7 +109,7 @@ function LivePreview({
           title="HTML preview"
           className="live-preview-iframe"
           sandbox="allow-scripts allow-same-origin"
-          srcDoc={previewDoc}
+          srcDoc={editorContent}
         />
       </div>
     );

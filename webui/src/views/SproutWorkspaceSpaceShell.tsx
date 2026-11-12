@@ -26,8 +26,6 @@ import type { ChatProps } from '@sprout/ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ComponentType } from 'react';
 import { closeBuffersMatching } from '../components/closeBuffers';
-import type { DesignTab } from '../components/design/DesignView';
-import { DesignWorkspaceProvider } from '../components/design/DesignWorkspaceContext';
 import { useDesignPresence } from '../components/design/useDesignPresence';
 import ErrorBoundary from '../components/ErrorBoundary';
 import type { ProjectNavConversations } from '../components/layered/ProjectNav';
@@ -148,7 +146,6 @@ function SpaceShellLayout({
   const [currentView, setCurrentView] = useState<ViewType>('chat');
   const [isTerminalExpanded, setTerminalExpanded] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [designTab, setDesignTab] = useState<DesignTab>('flows');
 
   useOpenInEditorRequests(() => setCurrentView('editor'));
   useToggleTerminalCommand(setTerminalExpanded, terminalBackend);
@@ -309,7 +306,7 @@ function SpaceShellLayout({
   const resolvedRoot = git?.workspace.workspaceRoot || workspaceRoot || '';
 
   return (
-    <DesignWorkspaceProvider tab={designTab} active={lane === 'design'}>
+    <>
       <div className="sprout-workspace-shell" data-testid="workspace-space-shell" data-lane={lane}>
         <ErrorBoundary panelName="Sidebar">
           <WorkspaceSidebar
@@ -325,8 +322,6 @@ function SpaceShellLayout({
             onToggleTerminal={
               terminalBackend !== 'none' ? () => setTerminalExpanded((expanded) => !expanded) : undefined
             }
-            designTab={designTab}
-            onDesignTabChange={setDesignTab}
           />
         </ErrorBoundary>
         <div className="sprout-workspace-shell__main">
@@ -364,12 +359,6 @@ function SpaceShellLayout({
             design={{
               loading: designPresence.loading,
               present: designPresence.present || !!hasDesignTree,
-              treeState: designPresence.treeState === 'none' && hasDesignTree ? 'recognized' : designPresence.treeState,
-              frontendLike: designPresence.frontendLike,
-              recheck: designPresence.recheck,
-              tab: designTab,
-              onTabChange: setDesignTab,
-              onOpenFile: handleOpenFile,
               agentChatName: lane === 'design' ? activeChatName : null,
               onAgentCreateChat: () => void handleCreateChat('design'),
             }}
@@ -397,7 +386,7 @@ function SpaceShellLayout({
         </div>
       </div>
       <EditorCommands onNewFile={newFile} />
-    </DesignWorkspaceProvider>
+    </>
   );
 }
 

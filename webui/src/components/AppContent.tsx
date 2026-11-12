@@ -29,17 +29,13 @@ import type { AppState, PerChatState, ViewType } from '../types/app';
 import { useLog } from '../utils/log';
 import type { WorkspaceModeId, WorkspaceShellProps } from '../views';
 import { SproutWorkspace, useWorkspaceMode, useWorkspaceChatProps, useWorkspaceEditor } from '../views';
-import { useDesignSectionPersistence } from '../workspaces/useDesignSectionPersistence';
 import { closeBuffersMatching } from './closeBuffers';
 import CommandPalette, { type PaletteMode } from './CommandPalette';
 import { useCommandPaletteSources } from './CommandPalette/useCommandPaletteSources';
 import type { ContextPanelHandle } from './contextPanel/types';
-import DesignRail from './design/DesignRail';
-import { DesignWorkspaceProvider } from './design/DesignWorkspaceContext';
-import type { DesignTab } from './design/DesignView';
-import { useDesignPresence } from './design/useDesignPresence';
 import ErrorBoundary from './ErrorBoundary';
 import Sidebar from './Sidebar';
+import { useDesignPresence } from './design/useDesignPresence';
 import Terminal from './Terminal';
 import WorkspaceGateModal from './WorkspaceGateModal';
 import { WorktreeChatDialog } from './WorktreeChatDialog';
@@ -378,13 +374,7 @@ const AppContent: React.FC<AppContentProps> = ({
   // the switcher and the surface agree on what exists. Declared before the
   // chat-tab wiring below: the tab-driven switch handler must record the mode
   // pin, which needs the pinning hook's callbacks in scope.
-  const {
-    present: hasDesignTree,
-    loading: designPresenceLoading,
-    treeState: designTreeState,
-    frontendLike: frontendCodePresent,
-    recheck: recheckDesignPresence,
-  } = useDesignPresence();
+  const { present: hasDesignTree, loading: designPresenceLoading } = useDesignPresence();
   const {
     mode: workspaceMode,
     modes: workspaceModes,
@@ -471,12 +461,6 @@ const AppContent: React.FC<AppContentProps> = ({
     [chatSessions, isMobile, onActiveChatChange, onViewChange, openWorkspaceBuffer, switchToBuffer],
   );
 
-  // SP-140-5: the Design mode's active section (its rail entries). Owned here
-  // because the rail (Sidebar) and the surface are siblings and must agree on
-  // it: the rail drives it, the surface renders it. Persisted per instance
-  // (SP-140-8 item 8.5) so a reload returns to the section the user left.
-  const { section: designSection, setSection: setDesignSection } = useDesignSectionPersistence();
-
   /**
    * Selecting a mode moves the view. The workspace-mode state is the source of
    * truth for "which surface am I in"; `currentView` remains the intra-mode
@@ -498,21 +482,6 @@ const AppContent: React.FC<AppContentProps> = ({
       }
     },
     [selectWorkspaceMode, onViewChange, state.currentView],
-  );
-
-  /**
-   * A file picked from the Design surface (a flow-edge hand-off) opens in the
-   * real editor: the mode moves to Code first so CodeShell mounts the pane the
-   * buffer lands in; handleFileClick then sets the view to the editor and
-   * opens the file. Plain handleFileClick would leave the Design surface
-   * mounted over the opened buffer.
-   */
-  const handleDesignFileOpen = useCallback(
-    (filePath: string, lineNumber?: number) => {
-      selectWorkspaceMode('code');
-      handleFileClick(filePath, lineNumber);
-    },
-    [selectWorkspaceMode, handleFileClick],
   );
 
   /**
@@ -859,12 +828,6 @@ const AppContent: React.FC<AppContentProps> = ({
     design: {
       loading: designPresenceLoading,
       present: hasDesignTree,
-      treeState: designTreeState,
-      frontendLike: frontendCodePresent,
-      recheck: recheckDesignPresence,
-      tab: designSection,
-      onTabChange: setDesignSection,
-      onOpenFile: handleDesignFileOpen,
       // SP-142 142.5: the agent panel header names the design-lane chat and
       // offers New Chat scoped to the lane (create stamps 'design').
       agentChatName:
@@ -982,8 +945,6 @@ const AppContent: React.FC<AppContentProps> = ({
     buildGitPanelProps(gitWorkspace, { openWorkspaceBuffer, onOpenFile: handleFileClick }),
   );
 
-  const handleModeSectionChange = useCallback((id: string) => setDesignSection(id as DesignTab), [setDesignSection]);
-
   return (
     <div className="app">
       {/* SP-130: blocking home-workspace gate. Renders as a full-screen
@@ -998,7 +959,7 @@ const AppContent: React.FC<AppContentProps> = ({
         />
       )}
       {isMobile && isSidebarOpen && <div className="mobile-overlay" onClick={onCloseSidebar} />}
-      <DesignWorkspaceProvider tab={designSection} active={workspaceMode.id === 'design'}>
+      <>
         <ErrorBoundary panelName="Sidebar">
           <Sidebar
             isConnected={state.isConnected}
@@ -1024,9 +985,6 @@ const AppContent: React.FC<AppContentProps> = ({
             modes={workspaceModes}
             activeModeId={workspaceMode.id}
             onSelectMode={handleSelectMode}
-            modeRail={workspaceMode.id === 'design' ? DesignRail : undefined}
-            modeSection={designSection}
-            onModeSectionChange={handleModeSectionChange}
             selectedSection={selectedSection}
             onSectionChange={onSectionChange}
             sidebarWidth={sidebarWidth}
@@ -1047,7 +1005,7 @@ const AppContent: React.FC<AppContentProps> = ({
           onSpaceChange={selectWorkspaceMode}
           className="app-workspace"
         />
-      </DesignWorkspaceProvider>
+      </>
       {supportsLocalTerminal ? (
         <ErrorBoundary panelName="Terminal">
           <Terminal isExpanded={isTerminalExpanded} onToggleExpand={onTerminalExpandedChange} />

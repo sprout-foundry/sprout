@@ -361,226 +361,23 @@ const TESTIDS = {
   "mobile-chat-surface": "mobile-chat-surface",
   "mobile-editor-surface": "mobile-editor-surface",
 
-  // Design (SP-140-3 DesignView / design workspace surface). Static testids
-  // from webui/src/components/design/* plus representative values for the
-  // dynamic `${...}` row/node/anchor patterns so the coverage gate passes.
-  "design-view": "design-view",
-  // Mode shell (SP-140-5 step 3): the Design mode's content column
-  // (workspaces/DesignShell → design/DesignSurface).
+  // Design mode (SP-140): the mockup and the chat.
   "design-surface": "design-surface",
   "design-surface-fallback": "design-surface-fallback",
-  "design-tabpanel": "design-tabpanel",
-  "design-assets-rail": "design-assets-rail",
-  "design-rail-stub-row": "design-rail-stub-row",
-  // Mode rail (SP-140-5): the Design mode's section rail in the sidebar
-  // (workspaces/rail.ts contract). Entries follow the pattern
-  // design-rail-${id} (DesignRail.tsx).
-  "design-rail": "design-rail",
-  "design-rail-flows": "design-rail-flows",
-  "design-rail-screens": "design-rail-screens",
-  "design-rail-screens-section": "design-rail-screens-section",
-  "design-rail-screens-empty": "design-rail-screens-empty", // §8d: tokens-only tree, the Screens group's empty marker
-  "design-rail-tokens": "design-rail-tokens",
-  "design-rail-library": "design-rail-library",
-  "design-rail-screen-login": "design-rail-screen-login", // pattern design-rail-screen-${stem} (DesignRail.tsx)
-  "feedback-library-row-login": "feedback-library-row-login", // pattern feedback-library-row-${name} (FeedbackLibrary.tsx)
-  "design-detail-pane": "design-detail-pane",
-  "design-detail-content": "design-detail-content",
-  // Flows canvas
-  "design-flows-canvas": "design-flows-canvas",
-  "design-flows-status": "design-flows-status",
-  "design-flow-graph": "design-flow-graph",
-  "design-flow-node-login": "design-flow-node-login", // pattern design-flow-node-${data.flowNodeId}
-  "design-flow-node-image-login": "design-flow-node-image-login", // pattern design-flow-node-image-${data.flowNodeId}
-  "design-rail-row-design-wireframes-login-svg":
-    "design-rail-row-design-wireframes-login-svg", // pattern design-rail-row-${asset.path}
-  // Screens tab
-  "design-screens-grid": "design-screens-grid",
-  "design-screens-cards": "design-screens-cards",
-  "design-screen-detail": "design-screen-detail",
-  "design-screen-error": "design-screen-error",
-  "design-screen-placeholder": "design-screen-placeholder",
-  "design-screen-card-login": "design-screen-card-login", // pattern design-screen-card-${card.name}
-  "design-screen-frame-login": "design-screen-frame-login", // pattern design-screen-frame-${card.name}
-  "design-screen-status-login": "design-screen-status-login", // pattern design-screen-status-${card.name}
-  "design-screen-thumb-login": "design-screen-thumb-login", // pattern design-screen-thumb-${card.name}
-  "design-screen-thumb-box-login": "design-screen-thumb-box-login", // pattern design-screen-thumb-box-${card.name}
-  "design-screen-move-up-login": "design-screen-move-up-login", // pattern design-screen-move-up-${card.name}
-  "design-screen-move-down-login": "design-screen-move-down-login", // pattern design-screen-move-down-${card.name}
-  // Feedback write path (SP-140-4d)
-  // Annotation resolution flow (SP-140-4 §4d, DesignFeedbackResolution.tsx)
-  "design-feedback-annotations": "design-feedback-annotations",
-  "design-feedback-count": "design-feedback-count",
-  "design-feedback-empty": "design-feedback-empty",
-  "design-feedback-loading": "design-feedback-loading",
-  "design-feedback-resolution": "design-feedback-resolution",
-  "design-feedback-resolution-error": "design-feedback-resolution-error",
-  "design-feedback-resolution-note": "design-feedback-resolution-note",
-  "design-feedback-resolution-save": "design-feedback-resolution-save",
-  "design-feedback-resolution-written": "design-feedback-resolution-written",
-  "design-feedback-status": "design-feedback-status",
-  // Dynamic row testid patterns `design-feedback-{annotation,area,toggle}-${annotation.id}`.
-  // Representative registered values (match the template literals).
-  "design-feedback-annotation-abc123": "design-feedback-annotation-abc123",
-  "design-feedback-area-abc123": "design-feedback-area-abc123",
-  "design-feedback-toggle-abc123": "design-feedback-toggle-abc123",
-  // Representative seeded-feedback fixture ids used by
-  // DesignFeedbackResolution.test.tsx (annotation a1, area hierarchy).
-  "design-feedback-annotation-a1": "design-feedback-annotation-a1",
-  "design-feedback-toggle-a1": "design-feedback-toggle-a1",
-  "design-feedback-area-hierarchy": "design-feedback-area-hierarchy",
-  "design-feedback-affordance": "design-feedback-affordance",
-  "design-feedback-form": "design-feedback-form",
-  "design-feedback-add": "design-feedback-add",
-  "design-feedback-area": "design-feedback-area",
-  "design-feedback-note": "design-feedback-note",
-  "design-feedback-submit": "design-feedback-submit",
-  "design-feedback-target": "design-feedback-target",
-  "design-feedback-written": "design-feedback-written",
-  "design-feedback-error": "design-feedback-error",
-  // Tokens tab (DTCG tree)
-  "design-tokens-tree": "design-tokens-tree",
-  "design-tokens-count": "design-tokens-count",
-  "design-tokens-empty": "design-tokens-empty",
-  "design-token-reload": "design-token-reload",
-  "design-tokens-search": "design-tokens-search",
-  "design-tokens-hint": "design-tokens-hint",
-  "design-tokens-token-detail": "design-tokens-token-detail",
-  "design-token-open": "design-token-open",
-  "design-token-schema-hint": "design-token-schema-hint",
-  "design-token-detail-swatch": "design-token-detail-swatch",
-  "design-token-detail-value": "design-token-detail-value",
-  "design-token-detail-resolved": "design-token-detail-resolved",
-  "design-token-detail-alias": "design-token-detail-alias",
-  "design-token-file-colors": "design-token-file-colors", // pattern design-token-file-${grouping.file.name}
-  "design-token-file-count-colors": "design-token-file-count-colors", // pattern design-token-file-count-${grouping.file.name}
-  "design-token-section-color": "design-token-section-color", // pattern design-token-section-${section}
-  "design-token-group-buttons": "design-token-group-buttons", // pattern design-token-group-${group}
-  "design-token-row-colors-color-brand-primary":
-    "design-token-row-colors-color-brand-primary", // pattern design-token-row-${token.fileName}-${token.path}
-  "design-token-type-colors-color-brand-primary":
-    "design-token-type-colors-color-brand-primary", // pattern design-token-type-${token.fileName}-${token.path}
-  // TokenSpecimens.tsx specimen surfaces (read-only DTCG value display)
-  "token-swatch": "token-swatch",
-  "token-specimen-color": "token-specimen-color",
-  "token-specimen-typography": "token-specimen-typography",
-  "token-specimen-spacing": "token-specimen-spacing",
-  "token-specimen-value": "token-specimen-value",
-  "token-font-line": "token-font-line",
-  "token-font-meta": "token-font-meta",
-  "token-space-bar": "token-space-bar",
-  // SP-140-6 loop surface: health strip (§6c, HealthStrip.tsx)
-  "design-health-strip": "design-health-strip",
-  "design-health-errors": "design-health-errors",
-  "design-health-warnings": "design-health-warnings",
-  "design-health-infos": "design-health-infos",
-  "design-health-clean": "design-health-clean",
-  "design-health-design-ahead": "design-health-design-ahead",
-  "design-health-code-ahead": "design-health-code-ahead",
-  "design-health-in-sync": "design-health-in-sync",
-  "design-health-feedback": "design-health-feedback",
-  "design-health-refresh": "design-health-refresh",
-  // SP-140-6 annotation pins (§6e, AnnotationPins.tsx + pinPlacement.ts)
-  "design-pins": "design-pins",
-  "design-pin-a1": "design-pin-a1", // pattern design-pin-${annotation.id}
-  "design-feedback-place": "design-feedback-place",
-  "design-screen-pending-login": "design-screen-pending-login", // pattern design-screen-pending-${card.name}
-  // SP-140-6 agent side column (§6f, DesignSideColumn.tsx + DesignAgentPanel.tsx)
-  "design-side-column": "design-side-column",
-  "design-side-close": "design-side-close",
-  "design-side-reopen": "design-side-reopen",
-  "design-side-tab-details": "design-side-tab-details",
-  "design-side-tab-agent": "design-side-tab-agent",
-  "design-side-panel-details": "design-side-panel-details",
-  "design-side-panel-agent": "design-side-panel-agent",
+  "design-agent-column": "design-agent-column",
   "design-agent-panel": "design-agent-panel",
-  "design-agent-chat": "design-agent-chat",
-  "workspace-busy-notice": "workspace-busy-notice",
-  "workspace-busy-send-anyway": "workspace-busy-send-anyway",
-  "workspace-busy-dismiss": "workspace-busy-dismiss",
-  "feedback-library": "feedback-library",
-  "feedback-library-empty": "feedback-library-empty",
-  "feedback-library-allclear": "feedback-library-allclear",
   "design-agent-head": "design-agent-head",
   "design-agent-chat-name": "design-agent-chat-name",
   "design-agent-new-chat": "design-agent-new-chat",
-  // Design empty state (no recognized design/ tree onboarding, DesignEmptyState.tsx)
-  "design-surface-empty": "design-surface-empty",
-  "design-empty-state": "design-empty-state",
-  "design-empty-card-discover-code": "design-empty-card-discover-code",
-  "design-empty-card-running-app": "design-empty-card-running-app",
-  "design-empty-card-images": "design-empty-card-images",
-  "design-empty-card-figma": "design-empty-card-figma",
-  "design-empty-card-draft": "design-empty-card-draft",
-  "design-empty-foreign": "design-empty-foreign",
-  "design-empty-recheck": "design-empty-recheck",
-  "design-empty-agent": "design-empty-agent",
-  // SP-140-6 loop results (§6g, LoopResults.tsx)
-  "design-loop-results": "design-loop-results",
-  "design-loop-critique": "design-loop-critique",
-  "design-loop-critique-meta": "design-loop-critique-meta",
-  "design-loop-stale": "design-loop-stale",
-  "design-loop-no-critique": "design-loop-no-critique",
-  "design-loop-run-critique": "design-loop-run-critique",
-  "design-loop-clean": "design-loop-clean",
-  "design-loop-finding-0": "design-loop-finding-0", // pattern design-loop-finding-${index}
-  "design-loop-drift": "design-loop-drift",
-  "design-loop-adopt": "design-loop-adopt",
-  // SP-140-7 co-editing conflict banner (§7b, ConflictBanner.tsx)
-  "design-conflict": "design-conflict",
-  "design-conflict-text": "design-conflict-text",
-  "design-conflict-review": "design-conflict-review",
-  "design-conflict-review-pane": "design-conflict-review-pane",
-  "design-conflict-keep": "design-conflict-keep",
-  "design-conflict-take": "design-conflict-take",
-  "design-conflict-restore": "design-conflict-restore",
-  "design-conflict-side-text": "design-conflict-side-text", // repeated node
-  "design-conflict-base-toggle": "design-conflict-base-toggle",
-  // SP-140-7 token value editor (§7c, TokenValueEditor.tsx)
-  "design-token-editor": "design-token-editor",
-  "design-token-color-well": "design-token-color-well",
-  "design-token-input": "design-token-input",
-  "design-token-warn": "design-token-warn",
-  "design-token-refs": "design-token-refs",
-  "design-token-save": "design-token-save",
-  "design-token-saved": "design-token-saved",
-  "design-token-conflict": "design-token-conflict",
-  "design-token-error": "design-token-error",
-  // SP-140-8 §8b screen workbench (ScreenWorkbench.tsx / ScreenWorkbenchContainer.tsx)
-  "design-workbench": "design-workbench",
-  "design-workbench-header": "design-workbench-header",
-  "design-workbench-not-found": "design-workbench-not-found",
-  "design-workbench-loading": "design-workbench-loading",
-  "design-workbench-error": "design-workbench-error",
-  "design-workbench-render": "design-workbench-render",
-  "design-workbench-status": "design-workbench-status",
-  "design-workbench-status-chip": "design-workbench-status-chip",
-  "design-workbench-feedback": "design-workbench-feedback",
-  "design-workbench-feedback-empty": "design-workbench-feedback-empty",
-  "design-workbench-feedback-resolve": "design-workbench-feedback-resolve",
-  "design-workbench-resolution": "design-workbench-resolution",
-  "design-workbench-open-count": "design-workbench-open-count",
-  "design-workbench-flows": "design-workbench-flows",
-  "design-workbench-flows-empty": "design-workbench-flows-empty",
-  "design-workbench-tokens": "design-workbench-tokens",
-  "design-workbench-tokens-empty": "design-workbench-tokens-empty",
-  "design-workbench-token-link": "design-workbench-token-link",
-  "design-workbench-agent": "design-workbench-agent",
-  "design-workbench-agent-file": "design-workbench-agent-file", // pattern design-workbench-agent-file-${index}
-  "design-workbench-agent-ask": "design-workbench-agent-ask",
-  "design-workbench-annotation-a1": "design-workbench-annotation-a1", // pattern design-workbench-annotation-${annotation.id}
-  "design-workbench-annotation-ask-a1": "design-workbench-annotation-ask-a1", // pattern design-workbench-annotation-ask-${annotation.id}
-  "design-workbench-flow-in-sign-up-open":
-    "design-workbench-flow-in-sign-up-open", // patterns design-workbench-flow-in-${flowName} + ${testid}-open
-  "design-workbench-flow-out-sign-up-open":
-    "design-workbench-flow-out-sign-up-open", // pattern design-workbench-flow-out-${flowName}
-  "design-workbench-token-ref-color.primary":
-    "design-workbench-token-ref-color.primary", // pattern design-workbench-token-ref-${ref.path}
-  // SP-140-7 status menu (§7d, ScreenStatusMenu.tsx)
-  "design-status-menu-login": "design-status-menu-login", // pattern design-status-menu-${stem}
-  "design-status-set-login-ready": "design-status-set-login-ready", // pattern design-status-set-${stem}-${status}
-  "design-status-set-login-clear": "design-status-set-login-clear", // pattern design-status-set-${stem}-clear
-  "design-status-error-login": "design-status-error-login", // pattern design-status-error-${stem}
+  "design-agent-chat": "design-agent-chat",
+  "design-mockup-frame": "design-mockup-frame",
+  "design-mockup-empty": "design-mockup-empty",
+  "design-mockup-missing": "design-mockup-missing",
+  "workspace-mockup-section": "workspace-mockup-section",
+
+  "workspace-busy-notice": "workspace-busy-notice",
+  "workspace-busy-send-anyway": "workspace-busy-send-anyway",
+  "workspace-busy-dismiss": "workspace-busy-dismiss",
 
   // Preview (the preview pane's dev-server lifecycle surface,
   // packages/ui/src/components/PreviewPane.tsx)

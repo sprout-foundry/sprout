@@ -2,10 +2,7 @@
  * The Design mode's shell.
  *
  * Owns the same `<main>` column the Code shell owns, but composes only what
- * Design needs: its surface (DesignSurface). The surface itself carries the
- * right column (§6f rework: one Details | Agent column instead of a docked
- * detail pane plus a docked chat panel), fed by the same chat payload this
- * shell already receives.
+ * Design needs: its surface (DesignSurface) — the mockup and the chat.
  *
  * No menubar, no status bar, no context panel — those are the Code surface's
  * chrome and belong to CodeShell.
@@ -49,12 +46,6 @@ const DesignShell: React.FC<WorkspaceShellProps> = ({
         <DesignSurface
           loading={design.loading}
           present={design.present}
-          treeState={design.treeState}
-          frontendLike={design.frontendLike}
-          onRecheck={design.recheck}
-          tab={design.tab}
-          onTabChange={design.onTabChange}
-          onOpenFile={design.onOpenFile}
           agentChatName={design.agentChatName}
           onAgentCreateChat={design.onAgentCreateChat}
           chatProps={chat.chatProps}

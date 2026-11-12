@@ -282,11 +282,6 @@ const EMPTY_SHELL_PROPS: WorkspaceShellProps = {
   design: {
     loading: false,
     present: false,
-    treeState: 'none',
-    frontendLike: false,
-    recheck: () => undefined,
-    tab: 'flows',
-    onTabChange: () => undefined,
   },
   git: {
     gitBranches: { current: '', branches: [] },

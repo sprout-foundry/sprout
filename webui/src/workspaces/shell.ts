@@ -15,7 +15,6 @@
 import type { EditorBuffer, LogEntry, SubagentActivity, ToolExecution } from '@sprout/ui';
 import type { ComponentProps, RefObject } from 'react';
 import type { ContextPanelHandle } from '../components/contextPanel/types';
-import type { DesignTab } from '../components/design/DesignView';
 import type { default as WorkspacePane } from '../components/WorkspacePane';
 import type { ChatSession } from '../services/chatSessions';
 import type { PerChatState, QueryProgress, ViewType } from '../types/app';
@@ -41,20 +40,10 @@ export interface WorkspaceShellChat {
 
 /** Design surface payload, consumed by the Design shell. */
 export interface WorkspaceShellDesign {
-  /** True while the design-presence probe is in flight. */
+  /** True while the mockup-presence probe is in flight. */
   loading: boolean;
-  /** True when the workspace has a design/ tree Sprout recognizes. */
+  /** True when the workspace has a mockup to show. */
   present: boolean;
-  /** How design/ relates to Sprout's idiom: none, foreign, or recognized. */
-  treeState: 'none' | 'foreign' | 'recognized';
-  /** True when the workspace shows frontend code (empty-state position signal). */
-  frontendLike: boolean;
-  /** Re-run the design-presence probe (the empty state's "Check again"). */
-  recheck: () => void;
-  /** The active section, driven by the mode's rail. */
-  tab: DesignTab;
-  onTabChange: (tab: DesignTab) => void;
-  onOpenFile?: (path: string, lineNumber?: number) => void;
 
   /** SP-142 142.5: the design chat's display name (the agent header). */
   agentChatName?: string | null;

@@ -441,18 +441,18 @@ func TestMockLLMProvider_ResponseQueue(t *testing.T) {
 	m := NewMockLLMProvider()
 	m.mu.Lock()
 	m.responseQueue = []string{
-		"First turn: running the check.\n```json\n{\"tool_calls\":[{\"type\":\"function\",\"function\":{\"name\":\"design_validate\",\"arguments\":\"{}\"}}]}\n```",
+		"First turn: running the check.\n```json\n{\"tool_calls\":[{\"type\":\"function\",\"function\":{\"name\":\"draw_mockup\",\"arguments\":\"{}\"}}]}\n```",
 		"Second turn: the tree is clean.",
 	}
 	m.mu.Unlock()
 	ctx := context.Background()
 
 	// Turn 1 — consumes the queue head (a fenced tool call).
-	resp1, err := m.SendChatRequest(ctx, []api.Message{{Role: "user", Content: "check the design tree"}}, nil, "", false)
+	resp1, err := m.SendChatRequest(ctx, []api.Message{{Role: "user", Content: "draw the mockup"}}, nil, "", false)
 	if err != nil {
 		t.Fatalf("turn 1: %v", err)
 	}
-	if !strings.Contains(resp1.Choices[0].Message.Content, "design_validate") {
+	if !strings.Contains(resp1.Choices[0].Message.Content, "draw_mockup") {
 		t.Errorf("turn 1: expected queued tool-call response, got: %s", resp1.Choices[0].Message.Content)
 	}
 

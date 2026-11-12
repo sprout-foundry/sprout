@@ -157,10 +157,10 @@ func TestCoderSubagentDoesNotActivateDesignSkill(t *testing.T) {
 	}
 }
 
-// TestRootAgentHasDesignAndSkillTools pins the toolset the design workflow
+// TestRootAgentHasDesignAndSkillTools pins the toolset the mockup workflow
 // depends on. The prompts and the design-system skill direct the root agent
-// to these tools; a persona or low-context allowlist that drops any of them
-// leaves the agent instructed to use tools it cannot call.
+// to draw_mockup; a persona or low-context allowlist that drops it leaves the
+// agent instructed to use a tool it cannot call.
 func TestRootAgentHasDesignAndSkillTools(t *testing.T) {
 	a := newIsolatedTestAgent(t)
 	defer a.Shutdown()
@@ -172,10 +172,10 @@ func TestRootAgentHasDesignAndSkillTools(t *testing.T) {
 		}
 		return names
 	}
-	core := []string{"activate_skill", "list_skills", "design_assets", "design_validate", "design_brief", "design_export_tokens", "design_sync"}
+	core := []string{"activate_skill", "list_skills", "draw_mockup"}
 
 	full := toolNames()
-	for _, name := range append(core, "design_render", "design_critique", "design_import_sketch") {
+	for _, name := range core {
 		if !full[name] {
 			t.Errorf("full-context root agent is missing %s", name)
 		}

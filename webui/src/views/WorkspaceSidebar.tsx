@@ -20,8 +20,6 @@ import type { FileInfo, FileTreeHandle } from '@sprout/ui';
 import { PanelLeftOpen } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import DesignAssetsPane from '../components/design/DesignAssetsPane';
-import type { DesignTab } from '../components/design/DesignView';
 import ProjectNav, { NAV_ICONS } from '../components/layered/ProjectNav';
 import type { ProjectNavConversations, ProjectNavTarget } from '../components/layered/ProjectNav';
 import ResizeHandle from '../components/ResizeHandle';
@@ -33,6 +31,7 @@ import type { WorkspaceGitState } from './useWorkspaceGitState';
 import { WorkspaceFileTreeView } from './WorkspaceFileTreeView';
 import { WorkspaceGitStatusPanel } from './WorkspaceGitView';
 import { WorkspaceSearchView } from './WorkspaceSearchView';
+import { MockupSection } from './MockupSection';
 import '../components/Sidebar.css';
 
 const CODE_SIDEBAR_COMMANDS: readonly string[] = ['open_search', 'toggle_sidebar', 'toggle_explorer'];
@@ -42,18 +41,8 @@ const SECTION_TITLES: Record<string, string> = {
   files: 'Files',
   search: 'Search',
   git: 'Source control',
-  screens: 'Design',
-  flows: 'Design',
-  tokens: 'Design',
-  feedback: 'Design',
+  mockup: 'Mockup',
 };
-
-const DESIGN_SECTIONS: ReadonlyArray<{ id: DesignTab; label: string }> = [
-  { id: 'screens', label: 'Screens' },
-  { id: 'flows', label: 'Flows' },
-  { id: 'tokens', label: 'Tokens' },
-  { id: 'feedback', label: 'Feedback' },
-];
 
 export interface WorkspaceSidebarProps {
   lane: 'code' | 'design';
@@ -72,8 +61,6 @@ export interface WorkspaceSidebarProps {
   onOpenFile: (path: string, line?: number) => void;
   /** Offered as a Terminal entry that opens and closes the docked terminal. */
   onToggleTerminal?: () => void;
-  designTab: DesignTab;
-  onDesignTabChange: (tab: DesignTab) => void;
 }
 
 export function WorkspaceSidebar({
@@ -87,11 +74,9 @@ export function WorkspaceSidebar({
   selectedFile,
   onOpenFile,
   onToggleTerminal,
-  designTab,
-  onDesignTabChange,
 }: WorkspaceSidebarProps): JSX.Element {
   const [open, setOpen] = useState<ProjectNavTarget | null>(() =>
-    lane === 'design' ? { kind: 'design', id: designTab } : { kind: 'section', id: 'files' },
+    lane === 'design' ? { kind: 'design', id: 'mockup' } : { kind: 'section', id: 'files' },
   );
   const [width, setWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
   const [isResizing, setIsResizing] = useState(false);
@@ -103,8 +88,8 @@ export function WorkspaceSidebar({
   useEffect(() => {
     if (previousLane.current === lane) return;
     previousLane.current = lane;
-    setOpen(lane === 'design' ? { kind: 'design', id: designTab } : { kind: 'section', id: 'files' });
-  }, [lane, designTab]);
+    setOpen(lane === 'design' ? { kind: 'design', id: 'mockup' } : { kind: 'section', id: 'files' });
+  }, [lane]);
 
   const show = useCallback(
     (target: ProjectNavTarget) => {
@@ -160,7 +145,6 @@ export function WorkspaceSidebar({
       onToggleTerminal?.();
       return;
     }
-    if (target.kind === 'design') onDesignTabChange(target.id as DesignTab);
     setOpen(target);
   };
 
@@ -178,7 +162,7 @@ export function WorkspaceSidebar({
           ...(onToggleTerminal ? [entry('section', 'terminal', 'Terminal')] : []),
         ]
       : [];
-  const designEntries = lane === 'design' ? DESIGN_SECTIONS.map((s) => entry('design', s.id, s.label)) : [];
+  const designEntries = lane === 'design' ? [entry('design', 'mockup', 'Mockup')] : [];
 
   if (collapsed) {
     return (
@@ -273,8 +257,8 @@ function SidebarSection({
     content = <WorkspaceSearchView onFileClick={onOpenFile} autoFocus />;
   } else if (id === 'git' && git) {
     content = <WorkspaceGitStatusPanel workspace={git.workspace} panel={git.panel} />;
-  } else if (DESIGN_SECTIONS.some((section) => section.id === id)) {
-    content = <DesignAssetsPane />;
+  } else if (id === 'mockup') {
+    content = <MockupSection workspaceRoot={workspaceRoot} onOpenFile={onOpenFile} />;
   }
   return <>{content}</>;
 }

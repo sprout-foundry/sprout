@@ -217,14 +217,7 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
     // Hosted: the in-browser terminal stays hidden until asked for.
     ...(hosted ? [entry('section', 'terminal', 'Terminal')] : []),
   ];
-  const designEntries = props.modes.some((m) => m.id === 'design')
-    ? [
-        entry('design', 'screens', 'Screens'),
-        entry('design', 'flows', 'Flows'),
-        entry('design', 'tokens', 'Tokens'),
-        entry('design', 'feedback', 'Feedback'),
-      ]
-    : [];
+  const designEntries = props.modes.some((m) => m.id === 'design') ? [entry('design', 'mockup', 'Mockup')] : [];
   const automationEntries = supportsAutomations ? [entry('section', 'automations', 'Workflows')] : [];
   const footerEntries = [
     ...(supportsSettings ? [entry('section', 'settings', 'Settings')] : []),

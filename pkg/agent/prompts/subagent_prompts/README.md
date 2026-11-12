@@ -24,7 +24,7 @@ This directory contains the system prompts for each specialized subagent persona
 | Tester | Writing unit tests | read_file, write_file, edit_file |
 | Reviewer | Diff review: security, correctness, quality | read_file, search, shell_command |
 | Researcher | Local + web research, content extraction | read_file, search, web_search, fetch_url, browse_url |
-| Designer | Design assets: tokens, screens, flows | read_file, write_file, edit_file, shell_command, design_validate, design_render, design_assets |
+| Designer | Mockups and visual ideas: a streamed, kit-composed mockup from a prompt | read_file, edit_file, shell_command, draw_mockup |
 | Coordinator | Cross-project coordination | run_subagent |
 | Computer User | Desktop automation: mouse, keyboard, screenshots | take_screenshot, mouse_click, keyboard_type |
 | General | Anything not specialized | all defaults |

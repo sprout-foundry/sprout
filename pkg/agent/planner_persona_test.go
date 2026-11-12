@@ -134,7 +134,6 @@ func TestPlannerPersona_ConfinementRules(t *testing.T) {
 	}{
 		{"mockup by hand", "write_file", map[string]interface{}{"path": "design/mockup.html", "content": "x"}},
 		{"mockup edit by hand", "edit_file", map[string]interface{}{"path": "design/mockup.html", "old_str": "a", "new_str": "b"}},
-		{"render", "design_render", map[string]interface{}{"source": "design/mockup.html"}},
 		{"shell", "shell_command", map[string]interface{}{"command": "ls"}},
 		{"git", "git", map[string]interface{}{"args": "status"}},
 		{"subagent", "run_subagent", map[string]interface{}{"prompt": "build it"}},
@@ -183,7 +182,7 @@ func TestPersonaConfinement_WritePaths(t *testing.T) {
 	}
 
 	for name, args := range map[string]map[string]interface{}{
-		"new file":          {"path": "design/screens/home.html"},
+		"new file":          {"path": "design/mockup.html"},
 		"nested new dir":    {"path": "design/new/deeper/x.html"},
 		"absolute inside":   {"path": filepath.Join(root, "design", "mockup.html")},
 		"cleaned inside":    {"path": "design/screens/../mockup.html"},

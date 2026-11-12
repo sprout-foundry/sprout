@@ -88,7 +88,7 @@ describe('LayeredSidebar', () => {
   it('lists conversations and the project tools', () => {
     renderSidebar();
     expect(container.querySelector('.project-nav-title')?.textContent).toBe('my-app');
-    for (const label of ['Add checkout', 'Fix CI', 'Files', 'Source control', 'Screens', 'Workflows', 'Settings']) {
+    for (const label of ['Add checkout', 'Fix CI', 'Files', 'Source control', 'Mockup', 'Workflows', 'Settings']) {
       expect(itemByText(label)).toBeTruthy();
     }
     expect(itemByText('Fix CI')?.querySelector('.project-nav-running')).toBeTruthy();
@@ -140,9 +140,9 @@ describe('LayeredSidebar', () => {
 
   it('switches to design mode for design entries', () => {
     const props = renderSidebar();
-    click(itemByText('Tokens'));
+    click(itemByText('Mockup'));
     expect(props.onSelectMode).toHaveBeenCalledWith('design');
-    expect(props.onModeSectionChange).toHaveBeenCalledWith('tokens');
+    expect(props.onModeSectionChange).toHaveBeenCalledWith('mockup');
   });
 
   it('closes the phone drawer when a project is picked on the rail', () => {

@@ -41,9 +41,7 @@ var dynamicallyRegisteredTools = map[string]bool{
 // TestPendingRegistrationToolsNamesEveryForwardReference keeps this list
 // honest: an entry here that IS registered, or that no persona names, fails.
 //
-// Currently empty: the last forward reference, design_import_sketch
-// (SP-140-2 item 2.6), registered with its handler in
-// pkg/agent_tools/design_import_sketch_handler.go.
+// Currently empty: every tool a persona names is registered.
 var pendingRegistrationTools = map[string]bool{}
 
 // A persona allowlist entry that matches no registered tool is a silently

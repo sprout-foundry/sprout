@@ -104,6 +104,8 @@ test-unit: prepare-grammars
 		grep -naE "^(FAIL|--- FAIL:|panic:)" /tmp/sprout-test-unit.log || true; \
 		exit $$status; \
 	fi'
+	@echo "Running the mockup module's tests (its own module, ./mockup)..."
+	@cd mockup && go test $(TEST_RACE) ./... -timeout=120s
 
 # Unit Tests, minimal memory footprint - drops the race detector (its ~5-10x
 # shadow memory is the single biggest multiplier) and tightens parallelism so
@@ -459,6 +461,7 @@ lint-go-new: prepare-grammars
 .PHONY: vet fmt-check vulncheck
 vet: prepare-grammars
 	go vet ./...
+	cd mockup && go vet ./...
 
 # Reachable-vulnerability scan. Reports only advisories the code actually
 # calls, so a clean run is a real signal rather than a dependency-count

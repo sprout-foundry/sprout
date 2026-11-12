@@ -11,9 +11,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/sprout-foundry/sprout/mockup"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
-	"github.com/sprout-foundry/sprout/pkg/events"
-	"github.com/sprout-foundry/sprout/pkg/mockupkit"
 	"github.com/sprout-foundry/sprout/pkg/planstore"
 )
 
@@ -26,15 +25,12 @@ import (
 //
 // With no change it draws the document from the current plan
 // (.sprout/plan.json). With a change and an existing mockup it asks for
-// find/replace edits and applies them (mockup_document.go), falling back to
-// drawing the whole document with the change when the edits do not apply.
-// The model call goes through the agent's own client (ToolFuncSet
-// StreamModelText), so it is routed and metered like the agent's turns.
-//
-// The model writes markup against the design kit (pkg/mockupkit) and never
-// sees the kit itself: a change is made to the document with the kit
-// stripped, the kit is added to the stream as soon as <body> has passed, and
-// the saved document is the assembled one, which opens on its own.
+// find/replace edits, falling back to drawing the whole document with the
+// change when the edits do not apply. The drawing itself is the mockup
+// module's (mockup.Draw), which the platform draws with too; this tool reads
+// the plan and the saved mockup and writes the result. The model call goes
+// through the agent's own client (ToolFuncSet StreamModelText), so it is
+// routed and metered like the agent's turns.
 type drawMockupHandler struct{}
 
 const (
@@ -43,7 +39,7 @@ const (
 	// mockupRole books the mockup's model use in the session's cost totals.
 	mockupRole = "mockup"
 	// mockupTimeout bounds one draw.
-	mockupTimeout = 4 * time.Minute
+	mockupTimeout = mockup.Timeout
 	// maxMockupChange and maxMockupPart bound what a change may say.
 	maxMockupChange = 2000
 	maxMockupPart   = 500
@@ -108,34 +104,29 @@ func (h *drawMockupHandler) Execute(ctx context.Context, env ToolEnv, args map[s
 	if err != nil {
 		return mockupFailure(err.Error()), nil
 	}
-	saved, current := "", ""
+	saved := ""
 	if data, readErr := os.ReadFile(filepath.Join(root, mockupRelPath)); readErr == nil {
 		saved = string(data)
-		current = mockupkit.Strip(saved)
-	}
-	note := mockupChangeNote(extractStringOrEmpty(args, "change"), extractStringOrEmpty(args, "part"))
-	if planJSON == nil && (current == "" || note == "") {
-		return mockupFailure("there is no plan yet: write the plan first, the mockup is drawn from it"), nil
 	}
 
 	d := &mockupDraw{
 		env:   env,
 		funcs: funcs,
-		root:  root,
 		id:    fmt.Sprintf("mockup-%d-%d", time.Now().UnixNano(), mockupDrawSeq.Add(1)),
 	}
-	ctx, cancel := context.WithTimeout(ctx, mockupTimeout)
-	defer cancel()
-
-	if current != "" && note != "" {
-		if html, ok := d.edit(ctx, current, note); ok {
-			return d.finish(html, "edit", saved), nil
-		}
-		if ctx.Err() != nil {
-			return d.fail("the change took too long; try again"), nil
-		}
+	stream := func(ctx context.Context, system, user string, onChunk func(string)) (string, error) {
+		return funcs.StreamModelText(ctx, mockupRole, system, user, onChunk)
 	}
-	return d.drawWhole(ctx, planJSON, current, note, saved), nil
+	res, err := mockup.Draw(ctx, stream, mockup.Request{
+		Plan:   planJSON,
+		Saved:  saved,
+		Change: extractStringOrEmpty(args, "change"),
+		Part:   extractStringOrEmpty(args, "part"),
+	}, d.publish)
+	if err != nil {
+		return mockupFailure(err.Error()), nil
+	}
+	return d.save(root, res, saved), nil
 }
 
 // currentPlanJSON returns the stored plan as compact JSON, nil when there is
@@ -155,17 +146,19 @@ func currentPlanJSON(root string) ([]byte, error) {
 	return data, nil
 }
 
-// mockupDraw is one draw: its id, and whether a host has been told it began.
+// mockupDraw is one draw, as the host sees it: its events carry its id and
+// the mockup's place in the project.
 type mockupDraw struct {
-	env     ToolEnv
-	funcs   *ToolFuncSet
-	root    string
-	id      string
-	started bool
+	env   ToolEnv
+	funcs *ToolFuncSet
+	id    string
 }
 
 func (d *mockupDraw) publish(eventType string, data map[string]any) {
 	data["mockup_id"] = d.id
+	if eventType == mockup.EventStart || eventType == mockup.EventDone {
+		data["path"] = mockupRelPath
+	}
 	if d.funcs != nil && d.funcs.PublishEvent != nil {
 		d.funcs.PublishEvent(eventType, data)
 		return
@@ -175,97 +168,34 @@ func (d *mockupDraw) publish(eventType string, data map[string]any) {
 	}
 }
 
-func (d *mockupDraw) start(mode string) {
-	d.publish(events.EventTypeMockupStart, map[string]any{"mode": mode, "path": mockupRelPath})
-	d.started = true
-}
-
-// edit asks for the change as edits to current and applies them. It reports
-// false when the change could not be made that way.
-func (d *mockupDraw) edit(ctx context.Context, current, note string) (string, bool) {
-	d.start("edit")
-	reply, err := d.funcs.StreamModelText(ctx, mockupRole, mockupEditCharter(), mockupEditRequest(current, note), nil)
-	if err != nil {
-		return "", false
-	}
-	edited, err := applyMockupEdits(current, reply)
-	if err != nil {
-		return "", false
-	}
-	return cleanMockupHTML(edited)
-}
-
-// drawWhole streams a whole document: from the plan, or from the current
-// mockup with the change. saved is the file as it was, for the change record.
-func (d *mockupDraw) drawWhole(ctx context.Context, planJSON []byte, current, note, saved string) ToolResult {
-	d.start("whole")
-	var seq int
-	var kit mockupkit.Streamer
-	text, err := d.funcs.StreamModelText(ctx, mockupRole, mockupCharter(), mockupWholeRequest(planJSON, current, note), func(chunk string) {
-		seq++
-		d.publish(events.EventTypeMockupChunk, map[string]any{"seq": seq, "chunk": kit.Feed(chunk)})
-	})
-	if err != nil && strings.TrimSpace(text) == "" {
-		if ctx.Err() != nil {
-			return d.fail("drawing the mockup took too long; try again")
-		}
-		return d.fail(fmt.Sprintf("the mockup could not be drawn right now (%v); try again in a moment", err))
-	}
-	html, ok := cleanMockupHTML(text)
-	if !ok {
-		return d.fail("the mockup did not come out as a page; try again")
-	}
-	return d.finish(html, "whole", saved)
-}
-
-// finish writes the document with the kit added, tells the host, and reports
-// the screens.
-func (d *mockupDraw) finish(source, mode, previous string) ToolResult {
-	html := mockupkit.Assemble(source)
-	path := filepath.Join(d.root, mockupRelPath)
+// save writes the drawn document into the project and reports its screens.
+// previous is the file as it was, for the change record.
+func (d *mockupDraw) save(root string, res mockup.Result, previous string) ToolResult {
+	path := filepath.Join(root, mockupRelPath)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return d.fail(fmt.Sprintf("the mockup could not be saved (%v)", err))
+		return mockupFailure(fmt.Sprintf("the mockup could not be saved (%v)", err))
 	}
-	if err := os.WriteFile(path, []byte(html), 0o644); err != nil {
-		return d.fail(fmt.Sprintf("the mockup could not be saved (%v)", err))
+	if err := os.WriteFile(path, []byte(res.HTML), 0o644); err != nil {
+		return mockupFailure(fmt.Sprintf("the mockup could not be saved (%v)", err))
 	}
-	_ = d.funcs.TrackWrite(path, previous, html, previous != "")
+	_ = d.funcs.TrackWrite(path, previous, res.HTML, previous != "")
 
-	screens := mockupScreenIDs(html)
-	d.publish(events.EventTypeMockupDone, map[string]any{
-		"mode":    mode,
-		"path":    mockupRelPath,
-		"html":    html,
-		"screens": screens,
-	})
 	out := "Mockup drawn: " + mockupRelPath + "."
-	if len(screens) > 0 {
-		out += " Screens: " + strings.Join(screens, ", ") + "."
-	}
-	if mode == "edit" {
+	if res.Mode == "edit" {
 		out = "Mockup changed: " + mockupRelPath + "."
-		if len(screens) > 0 {
-			out += " Screens: " + strings.Join(screens, ", ") + "."
-		}
+	}
+	if len(res.Screens) > 0 {
+		out += " Screens: " + strings.Join(res.Screens, ", ") + "."
 	}
 	return ToolResult{
 		Output: out,
 		StructuredOut: map[string]any{
 			"done":    true,
-			"mode":    mode,
+			"mode":    res.Mode,
 			"path":    mockupRelPath,
-			"screens": screens,
+			"screens": res.Screens,
 		},
 	}
-}
-
-// fail ends a draw that could not be made, telling the host when it had
-// been told the draw began.
-func (d *mockupDraw) fail(reason string) ToolResult {
-	if d.started {
-		d.publish(events.EventTypeMockupError, map[string]any{"message": reason})
-	}
-	return mockupFailure(reason)
 }
 
 func mockupFailure(reason string) ToolResult {

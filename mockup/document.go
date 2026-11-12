@@ -1,4 +1,8 @@
-package tools
+// Package mockup draws and changes mockups: one self-contained HTML document
+// of screens, drawn by a model against the design kit (package kit). Sprout's
+// draw_mockup tool and the platform's server-side Sprout both draw with it,
+// so a mockup looks and changes the same wherever it is made.
+package mockup
 
 // The mockup document: one self-contained HTML file, design/mockup.html, with
 // a <section data-screen="id"> per screen. A change is made by edits rather
@@ -16,30 +20,30 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/sprout-foundry/sprout/pkg/mockupkit"
+	"github.com/sprout-foundry/sprout/mockup/kit"
 )
 
-//go:embed mockup_prompts/mockup-charter.md
-var mockupCharterFile string
+//go:embed prompts/mockup-charter.md
+var charterFile string
 
-//go:embed mockup_prompts/mockup-edit.md
-var mockupEditFile string
+//go:embed prompts/mockup-edit.md
+var editFile string
 
-// maxMockupBytes bounds a mockup document.
-const maxMockupBytes = 400 << 10
+// MaxBytes bounds a mockup document.
+const MaxBytes = 400 << 10
 
 var (
-	mockupEditRe   = regexp.MustCompile(`(?s)<<<FIND\n(.*?)\n===\n(.*?)\n?>>>`)
-	mockupScreenRe = regexp.MustCompile(`data-screen\s*=\s*["']([^"']+)["']`)
+	editRe   = regexp.MustCompile(`(?s)<<<FIND\n(.*?)\n===\n(.*?)\n?>>>`)
+	screenRe = regexp.MustCompile(`data-screen\s*=\s*["']([^"']+)["']`)
 )
 
-// mockupCharter and mockupEditCharter are the prompts without their version
+// charter and editCharter are the prompts without their version
 // line, followed by the design kit's catalogue.
-func mockupCharter() string     { return withKitCatalog(mockupCharterFile) }
-func mockupEditCharter() string { return withKitCatalog(mockupEditFile) }
+func charter() string     { return withKitCatalog(charterFile) }
+func editCharter() string { return withKitCatalog(editFile) }
 
-func withKitCatalog(charter string) string {
-	return stripCharterVersion(charter) + "\n\n## The kit's catalogue\n\n" + mockupkit.Catalog()
+func withKitCatalog(text string) string {
+	return stripCharterVersion(text) + "\n\n## The kit's catalogue\n\n" + kit.Catalog()
 }
 
 func stripCharterVersion(text string) string {
@@ -49,9 +53,9 @@ func stripCharterVersion(text string) string {
 	return strings.TrimSpace(text)
 }
 
-// applyMockupEdits applies the model's edits to doc in order.
-func applyMockupEdits(doc, reply string) (string, error) {
-	edits := mockupEditRe.FindAllStringSubmatch(reply, -1)
+// ApplyEdits applies the model's edits to doc in order.
+func ApplyEdits(doc, reply string) (string, error) {
+	edits := editRe.FindAllStringSubmatch(reply, -1)
 	if len(edits) == 0 {
 		return "", errors.New("no edits")
 	}
@@ -91,11 +95,11 @@ func findIgnoringIndent(doc, find string) (int, int, bool) {
 	return found[0][0], found[0][1], true
 }
 
-// cleanMockupHTML trims what a model may put around the document (code
+// Clean trims what a model may put around the document (code
 // fences, a sentence before or after) and reports whether a document is
 // left: it must start at <!doctype or <html, carry a <body, and fit the size
 // bound.
-func cleanMockupHTML(raw string) (string, bool) {
+func Clean(raw string) (string, bool) {
 	text := strings.TrimSpace(raw)
 	lower := strings.ToLower(text)
 	start := strings.Index(lower, "<!doctype")
@@ -110,17 +114,17 @@ func cleanMockupHTML(raw string) (string, bool) {
 	if end := strings.LastIndex(lower, "</html>"); end >= 0 {
 		text = text[:end+len("</html>")]
 	}
-	if len(text) > maxMockupBytes || !strings.Contains(strings.ToLower(text), "<body") {
+	if len(text) > MaxBytes || !strings.Contains(strings.ToLower(text), "<body") {
 		return "", false
 	}
 	return text, true
 }
 
-// mockupScreenIDs lists the document's data-screen ids in order, once each.
-func mockupScreenIDs(doc string) []string {
+// ScreenIDs lists the document's data-screen ids in order, once each.
+func ScreenIDs(doc string) []string {
 	seen := map[string]bool{}
 	ids := []string{}
-	for _, m := range mockupScreenRe.FindAllStringSubmatch(doc, -1) {
+	for _, m := range screenRe.FindAllStringSubmatch(doc, -1) {
 		id := strings.TrimSpace(m[1])
 		if id == "" || seen[id] {
 			continue
@@ -131,10 +135,10 @@ func mockupScreenIDs(doc string) []string {
 	return ids
 }
 
-// mockupChangeNote is the change as the model reads it: pinned to a part
+// ChangeNote is the change as the model reads it: pinned to a part
 // when one is named ("On the button “Order a cake” on the home screen: make
 // it bigger").
-func mockupChangeNote(change, part string) string {
+func ChangeNote(change, part string) string {
 	change = strings.TrimSpace(change)
 	part = strings.TrimSpace(part)
 	if part == "" {
@@ -143,9 +147,9 @@ func mockupChangeNote(change, part string) string {
 	return "On " + part + ": " + change
 }
 
-// mockupWholeRequest is the request for a whole document: the plan (when
+// wholeRequest is the request for a whole document: the plan (when
 // there is one) and, for a change, the current mockup and the change.
-func mockupWholeRequest(planJSON []byte, current, note string) string {
+func wholeRequest(planJSON []byte, current, note string) string {
 	var b strings.Builder
 	if len(planJSON) > 0 {
 		b.WriteString("The agreed plan:\n")
@@ -169,7 +173,7 @@ func mockupWholeRequest(planJSON []byte, current, note string) string {
 	return b.String()
 }
 
-// mockupEditRequest is the request for edits to the current mockup.
-func mockupEditRequest(current, note string) string {
+// editRequest is the request for edits to the current mockup.
+func editRequest(current, note string) string {
 	return "The current mockup:\n" + current + "\n\nThe change they asked for: " + note
 }

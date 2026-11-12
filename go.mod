@@ -5,6 +5,7 @@ go 1.26.0
 toolchain go1.26.10
 
 require (
+	github.com/sprout-foundry/sprout/mockup v0.1.0
 	filippo.io/age v1.3.1
 	github.com/creack/pty v1.1.24
 	github.com/fsnotify/fsnotify v1.9.0
@@ -133,3 +134,7 @@ require (
 	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/sys v0.48.0
 )
+
+// The mockup module lives in this repository (./mockup) and is released
+// on its own as mockup/v*, for the platform to draw with the same engine.
+replace github.com/sprout-foundry/sprout/mockup => ./mockup

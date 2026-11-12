@@ -62,7 +62,7 @@ func TestFilterFilesByQueryContentRanksDeclarations(t *testing.T) {
 	for _, rel := range []string{"a/uses.go", "b/declare.go"} {
 		entries = append(entries, fileEntry{absPath: dir + "/" + rel, relPath: rel, ext: ".go"})
 	}
-	got := filterFilesByQueryContent(entries, "mark done")
+	got := filterFilesByQueryContent(entries, "mark done", nil)
 	if len(got) != 2 || got[0].relPath != "b/declare.go" {
 		t.Fatalf("got %v, want the declaring file first", got)
 	}
@@ -94,5 +94,24 @@ func TestBuildInclusionOrderGroupsLargeDirs(t *testing.T) {
 	}
 	if !first["internal/api"] || !first["cmd"] {
 		t.Fatalf("first three files did not cover every group: %v", ordered[:3])
+	}
+}
+
+// Matches of one rank are shown one package at a time, so a package with
+// many matching files does not push out another package's match.
+func TestGenerateRepoMapQuerySpansPackages(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{"web/pages/Admin.tsx": "export function AdminPage() {}\n"}
+	for i := 0; i < 30; i++ {
+		files[fmt.Sprintf("api/admin_%02d.go", i)] = fmt.Sprintf("package api\n\nfunc AdminHandler%d() {}\n", i)
+	}
+	createTestFiles(t, dir, files)
+	var entries []fileEntry
+	for rel := range files {
+		entries = append(entries, fileEntry{absPath: dir + "/" + rel, relPath: rel, ext: ".go"})
+	}
+	got := filterFilesByQueryContent(entries, "admin", nil)
+	if len(got) < 2 || (got[0].relPath != "web/pages/Admin.tsx" && got[1].relPath != "web/pages/Admin.tsx") {
+		t.Fatalf("the other package's match is not among the first two: %v", got[:2])
 	}
 }

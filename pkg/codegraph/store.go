@@ -6,6 +6,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -111,18 +113,56 @@ type SQLiteStore struct {
 	mu      sync.RWMutex
 }
 
-// DefaultDBPath returns the default database path resolved from git root.
+// DefaultDBPath returns the database path for the repository holding the
+// current directory (DBPathFor).
 func DefaultDBPath() (string, error) {
-	gitRoot, err := git.GetGitRootDir()
-	if err != nil {
-		return "", fmt.Errorf("failed to resolve git root for default DB path: %w", err)
-	}
-	return filepath.Join(gitRoot, ".sprout", "codegraph.db"), nil
+	_, dbPath, err := DBPathFor(".")
+	return dbPath, err
 }
 
-// NewStore opens a SQLite-backed code graph store at the given path.
-// If dbPath is empty, the database is placed at `.sprout/codegraph.db`
-// relative to the git root.
+// DBPathFor returns the root of the git checkout holding dir and where its
+// code graph lives: in the checkout's git directory (.git/sprout/codegraph.db,
+// or the worktree's own directory under .git/worktrees/), which git never
+// tracks, so no commit can pick the database up.
+func DBPathFor(dir string) (root, dbPath string, err error) {
+	out, err := exec.Command("git", "-C", dir, "rev-parse", "--show-toplevel", "--absolute-git-dir").Output() //nolint:gosec // G204: fixed git subcommand; dir is one argument, never a shell string
+	if err != nil {
+		return "", "", fmt.Errorf("resolve the git checkout of %s: %w", dir, err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	if len(lines) != 2 {
+		return "", "", fmt.Errorf("resolve the git checkout of %s: unexpected output %q", dir, out)
+	}
+	return lines[0], filepath.Join(lines[1], "sprout", "codegraph.db"), nil
+}
+
+// OpenForDir opens the code graph of the git checkout holding dir, with
+// paths relative to the checkout's root. It returns (nil, nil) when the
+// checkout has no code graph yet.
+func OpenForDir(dir string) (*SQLiteStore, error) {
+	root, dbPath, err := DBPathFor(dir)
+	if err != nil {
+		return nil, nil
+	}
+	if _, err := os.Stat(dbPath); err != nil {
+		return nil, nil
+	}
+	return openStore(dbPath, root)
+}
+
+// CreateForDir opens the code graph of the git checkout holding dir,
+// creating an empty one when there is none.
+func CreateForDir(dir string) (*SQLiteStore, error) {
+	root, dbPath, err := DBPathFor(dir)
+	if err != nil {
+		return nil, err
+	}
+	return openStore(dbPath, root)
+}
+
+// NewStore opens a SQLite-backed code graph store at the given path, with
+// paths relative to the git root of the current directory. If dbPath is
+// empty, the database is the current checkout's (DBPathFor).
 func NewStore(dbPath string) (*SQLiteStore, error) {
 	if dbPath == "" {
 		var err error
@@ -131,7 +171,14 @@ func NewStore(dbPath string) (*SQLiteStore, error) {
 			return nil, err
 		}
 	}
+	baseDir, err := git.GetGitRootDir()
+	if err != nil {
+		baseDir = filepath.Dir(dbPath)
+	}
+	return openStore(dbPath, baseDir)
+}
 
+func openStore(dbPath, baseDir string) (*SQLiteStore, error) {
 	// Ensure the parent directory exists.
 	dir := filepath.Dir(dbPath)
 	if err := filesystem.EnsureDir(dir); err != nil {
@@ -173,12 +220,6 @@ func NewStore(dbPath string) (*SQLiteStore, error) {
 			db.Close()
 			return nil, fmt.Errorf("failed to migrate schema: %w", err)
 		}
-	}
-
-	// Resolve the git root (base directory) for resolving relative file paths.
-	baseDir, err := git.GetGitRootDir()
-	if err != nil {
-		baseDir = filepath.Dir(dbPath)
 	}
 
 	return &SQLiteStore{

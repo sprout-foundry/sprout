@@ -3,10 +3,13 @@ package tools
 // Package tools: tree-sitter based symbol extraction for repo_map (split from repo_map.go).
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
+	"time"
 
 	astp "github.com/sprout-foundry/sprout/pkg/ast"
 	codegraph "github.com/sprout-foundry/sprout/pkg/codegraph"
@@ -18,10 +21,17 @@ var treeSitterExtensions = map[string]bool{
 	".ts": true, ".tsx": true, ".js": true, ".jsx": true, ".py": true,
 }
 
+// treeSitterParseBudget bounds one file's tree-sitter parse. Most files parse
+// in milliseconds, but a few large components take seconds to minutes, and
+// parses cannot run in parallel (the ast package holds one lock for them), so
+// one such file stalled every repo_map call and the code index build behind
+// it. Past the budget the file's symbols come from the regex extractor.
+var treeSitterParseBudget = time.Second
+
 // extractSymbolsViaTreeSitter uses the pkg/ast tree-sitter parser to extract
 // symbols from TS/JS/Python files.
 func extractSymbolsViaTreeSitter(path string, ext string, content []byte) ([]SymbolEntry, error) {
-	result, err := astp.ParseFile(path, content)
+	result, err := astp.ParseFileWithin(path, content, treeSitterParseBudget)
 	if err != nil {
 		return nil, err
 	}
@@ -267,7 +277,11 @@ func extractSymbolsForFile(path string, ext string, content []byte) ([]SymbolEnt
 // extractSymbolsAndEdgesViaTreeSitter uses the pkg/ast tree-sitter parser to
 // extract both symbols and call edges from TS/JS/Python files.
 func extractSymbolsAndEdgesViaTreeSitter(path string, ext string, content []byte) (*SymbolWithEdges, error) {
-	result, err := astp.ParseFile(path, content)
+	result, err := astp.ParseFileWithin(path, content, treeSitterParseBudget)
+	if errors.Is(err, astp.ErrParseTimeout) {
+		// The file keeps its declarations, without call edges.
+		return &SymbolWithEdges{Symbols: extractSymbolsViaRegex(content, ext)}, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -276,6 +290,12 @@ func extractSymbolsAndEdgesViaTreeSitter(path string, ext string, content []byte
 	// Same scoped extractor as the symbol-only path above, so the two never
 	// disagree about what a file contains.
 	entries := scopedSymbolEntries(result, ext)
+	if len(entries) == 0 {
+		// As extractSymbolsForFile does: a tree the grammar could not make
+		// sense of yields no symbols, and the regex extractor still finds
+		// the declarations.
+		entries = extractSymbolsViaRegex(content, ext)
+	}
 
 	// Resolve call edges using the import map built from source content.
 	// This handles cross-file module resolution for TS/JS/Python so that
@@ -375,7 +395,7 @@ func regexRubySymbols(text string) []SymbolEntry {
 
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		if m := matchKotlinDecl(trimmed, `^class\s+(\w+)`); m != "" {
+		if m := matchKotlinDecl(trimmed, `^(?:export\s+)?(?:default\s+)?(?:abstract\s+)?class\s+(\w+)`); m != "" {
 			entries = append(entries, SymbolEntry{Name: "class " + m, Line: i + 1})
 		}
 		if m := matchKotlinDecl(trimmed, `^module\s+(\w+)`); m != "" {
@@ -420,12 +440,24 @@ func regexGenericSymbols(text string) []SymbolEntry {
 			entries = append(entries, SymbolEntry{Name: "def " + m, Line: i + 1})
 		}
 		// class
-		if m := matchKotlinDecl(trimmed, `^class\s+(\w+)`); m != "" {
+		if m := matchKotlinDecl(trimmed, `^(?:export\s+)?(?:default\s+)?(?:abstract\s+)?class\s+(\w+)`); m != "" {
 			entries = append(entries, SymbolEntry{Name: "class " + m, Line: i + 1})
 		}
 		// JS/TS function
-		if m := matchKotlinDecl(trimmed, `^(?:export\s+)?(?:async\s+)?function\s+(\w+)`); m != "" {
+		if m := matchKotlinDecl(trimmed, `^(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s*\*?\s*(\w+)`); m != "" {
 			entries = append(entries, SymbolEntry{Name: "function " + m, Line: i + 1})
+		}
+		// JS/TS top-level binding, interface and type alias
+		if line == trimmed {
+			if m := matchKotlinDecl(trimmed, `^(?:export\s+)?(?:const|let|var)\s+(\w+)\s*[:=]`); m != "" {
+				entries = append(entries, SymbolEntry{Name: "const " + m, Line: i + 1})
+			}
+			if m := matchKotlinDecl(trimmed, `^(?:export\s+)?interface\s+(\w+)`); m != "" {
+				entries = append(entries, SymbolEntry{Name: "interface " + m, Line: i + 1})
+			}
+			if m := matchKotlinDecl(trimmed, `^(?:export\s+)?type\s+(\w+)\s*[<=]`); m != "" {
+				entries = append(entries, SymbolEntry{Name: "type " + m, Line: i + 1})
+			}
 		}
 	}
 
@@ -434,10 +466,17 @@ func regexGenericSymbols(text string) []SymbolEntry {
 
 // matchKotlinDecl runs a regex against a line and returns the first capture group.
 func matchKotlinDecl(line, pattern string) string {
-	re := regexp.MustCompile(pattern)
-	matches := re.FindStringSubmatch(line)
+	re, ok := declPatterns.Load(pattern)
+	if !ok {
+		re, _ = declPatterns.LoadOrStore(pattern, regexp.MustCompile(pattern))
+	}
+	matches := re.(*regexp.Regexp).FindStringSubmatch(line)
 	if len(matches) >= 2 {
 		return matches[1]
 	}
 	return ""
 }
+
+// declPatterns caches matchKotlinDecl's compiled patterns: it runs every
+// pattern on every line of a file.
+var declPatterns sync.Map

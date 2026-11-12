@@ -87,6 +87,7 @@ func (a *Agent) SetWorkspaceRoot(workspaceRoot string) {
 	a.workspaceRootMu.Lock()
 	defer a.workspaceRootMu.Unlock()
 	a.workspaceRoot = strings.TrimSpace(workspaceRoot)
+	tools.StartCodeIndex(a.workspaceRoot)
 }
 
 // GetWorkspaceRoot returns the logical workspace root for this agent instance.

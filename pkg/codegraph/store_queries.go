@@ -396,6 +396,34 @@ func (s *SQLiteStore) GetStaleFiles(ctx context.Context) ([]string, error) {
 	return staleFiles, nil
 }
 
+// FileIndexTimes returns when each indexed file was last indexed, by path. A
+// file changed on disk since then has stale entries.
+func (s *SQLiteStore) FileIndexTimes(ctx context.Context) (map[string]time.Time, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	rows, err := s.db.QueryContext(ctx, `SELECT path, last_indexed FROM files`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query files: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	times := make(map[string]time.Time)
+	for rows.Next() {
+		var path, lastIndexed string
+		if err := rows.Scan(&path, &lastIndexed); err != nil {
+			return nil, fmt.Errorf("failed to scan file row: %w", err)
+		}
+		if t, err := time.Parse(time.RFC3339, lastIndexed); err == nil {
+			times[path] = t
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("row iteration error: %w", err)
+	}
+	return times, nil
+}
+
 // QueryAllNodes returns all nodes from the graph store.
 func (s *SQLiteStore) QueryAllNodes(ctx context.Context) ([]Symbol, error) {
 	s.mu.RLock()

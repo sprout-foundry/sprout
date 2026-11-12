@@ -80,11 +80,13 @@ func isIgnoredDir(name string) bool {
 //   - 2: directory tree + symbols in root-level and top-level files only (max 15 symbols per file)
 //   - 3 (default): full symbol listing
 //
-// query, when non-empty, filters files to only those whose path or symbol
-// names contain the query string (case-insensitive).
+// query, when non-empty, keeps the files whose path or declared names hold
+// every query word (case-insensitive, across _ - . /), then, when those are
+// few, the files that mention them (filterFilesByQueryContent).
 //
-// When the codegraph store is available and populated, it reads from the store
-// for near-instant results on warm cache, falling back to the filesystem walk.
+// The file list always comes from walking the tree. A file's symbols come
+// from the code index when it is current for that file (repoMapIndex), and
+// are parsed from disk otherwise.
 func GenerateRepoMap(ctx context.Context, rootDir string, depth int, query string) (string, error) {
 	if depth <= 0 {
 		depth = depthFullSymbols
@@ -110,35 +112,10 @@ func GenerateRepoMap(ctx context.Context, rootDir string, depth int, query strin
 		return "", fmt.Errorf("resolve root directory: %w", err)
 	}
 
-	// Try to use the codegraph store for instant results on warm cache.
-	// Only use the store when the requested rootDir is the git root
-	// (store.baseDir); otherwise fall through to filesystem walk.
-	// The store path does not support depth filtering, so it is only used
-	// for depth=3 with no query filter.
-	if depth == depthFullSymbols && query == "" {
-		store, storeErr := openGraphStore()
-		if storeErr == nil && store != nil {
-			defer store.Close()
+	// Keep the code index current for the next call: a session normally
+	// starts it already (StartCodeIndex), and it runs once per checkout.
+	StartCodeIndex(absRoot)
 
-			// Check that absRoot matches the store's baseDir so we don't
-			// return project-wide data for a subdirectory query.
-			storeAbsBase, err := filepath.Abs(store.BaseDir())
-			if err == nil && storeAbsBase == absRoot {
-				stats := store.Stats()
-				if stats.FileCount > 0 {
-					nodes, queryErr := store.QueryAllNodes(ctx)
-					if queryErr == nil {
-						result := formatRepoMapFromNodes(absRoot, nodes)
-						if result != "" {
-							return result, nil
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// Fall through to filesystem walk.
 	return generateRepoMapFromFS(ctx, absRoot, depth, query)
 }
 
@@ -245,6 +222,10 @@ func generateRepoMapFromFS(ctx context.Context, absRoot string, depth int, query
 		return sb.String(), nil
 	}
 
+	// Symbols come from the code index for files unchanged since it was
+	// built, and are parsed from disk for the rest.
+	index := loadRepoMapIndex(ctx, absRoot)
+
 	// Build the inclusion order: root, then round-robin across L1 dirs, then
 	// round-robin across deeper levels with caps applied per-directory.
 	// A query keeps its matching files in best-first order (path, then a
@@ -254,7 +235,7 @@ func generateRepoMapFromFS(ctx context.Context, absRoot string, depth int, query
 	var dirsCovered, dirsOmitted int
 	candidates := allFiles
 	if query != "" {
-		candidates = filterFilesByQueryContent(allFiles, query)
+		candidates = filterFilesByQueryContent(allFiles, query, index)
 		ordered = candidates
 		dirsCovered = len(groupsOf(candidates))
 	} else {
@@ -338,20 +319,12 @@ func generateRepoMapFromFS(ctx context.Context, absRoot string, depth int, query
 			continue
 		}
 
-		content, readErr := os.ReadFile(f.absPath)
-		if readErr != nil {
-			continue
-		}
-		if len(content) > repoMapMaxFullFileSize {
-			continue
-		}
-		if isBinaryContent(content) {
-			continue
-		}
-
-		symbols, err := extractSymbolsForFile(f.absPath, f.ext, content)
-		if err != nil {
-			continue
+		symbols, ok := index.symbolsFor(f)
+		if !ok {
+			var err error
+			if symbols, err = parseFileSymbols(f); err != nil {
+				continue
+			}
 		}
 
 		// Depth-2: cap symbols per file.
@@ -439,4 +412,20 @@ func generateRepoMapFromFS(ctx context.Context, absRoot string, depth int, query
 		sb.WriteString("\n*No source files with symbols found.*\n")
 	}
 	return sb.String(), nil
+}
+
+// parseFileSymbols reads a source file and extracts its symbols, skipping a
+// file too large for the map or a binary one.
+func parseFileSymbols(f fileEntry) ([]SymbolEntry, error) {
+	content, err := os.ReadFile(f.absPath)
+	if err != nil {
+		return nil, err
+	}
+	if len(content) > repoMapMaxFullFileSize {
+		return nil, fmt.Errorf("%s is too large to map", f.relPath)
+	}
+	if isBinaryContent(content) {
+		return nil, fmt.Errorf("%s is binary", f.relPath)
+	}
+	return extractSymbolsForFile(f.absPath, f.ext, content)
 }

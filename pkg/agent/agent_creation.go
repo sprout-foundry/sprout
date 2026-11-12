@@ -240,6 +240,12 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 	// startup. The agent owns the handle; Shutdown closes it.
 	agent.initAuditLogger()
 
+	// Index the workspace's code in the background, so repo_map and the code
+	// graph tools answer from the index rather than parsing files.
+	if params.isProduction {
+		tools.StartCodeIndex(params.workspaceRoot)
+	}
+
 	return agent, nil
 }
 

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -13,7 +12,6 @@ import (
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/codegraph"
 	"github.com/sprout-foundry/sprout/pkg/console"
-	"github.com/sprout-foundry/sprout/pkg/git"
 )
 
 // CodegraphCommand implements the /codegraph slash command for managing
@@ -96,11 +94,10 @@ func fileParser(path string, content []byte) ([]codegraph.Symbol, []codegraph.Ed
 // openStore opens the codegraph store at the default path.
 // Returns (nil, nil) if the database file does not exist (not indexed yet).
 func openStore() (*codegraph.SQLiteStore, error) {
-	gitRoot, err := git.GetGitRootDir()
+	dbPath, err := codegraph.DefaultDBPath()
 	if err != nil {
 		return nil, nil
 	}
-	dbPath := filepath.Join(gitRoot, ".sprout", "codegraph.db")
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		return nil, nil
 	}

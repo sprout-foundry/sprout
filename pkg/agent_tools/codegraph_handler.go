@@ -6,127 +6,13 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/codegraph"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
-	"github.com/sprout-foundry/sprout/pkg/git"
 )
-
-// codegraphBuildMu guards codegraphBuildAttempted to ensure only one
-// background build runs at a time while still allowing retry on failure.
-var (
-	codegraphBuildMu        sync.Mutex
-	codegraphBuildAttempted bool
-)
-
-// triggerCodegraphBuild kicks off a background goroutine that populates
-// the codegraph database. Already-populated DBs are skipped.
-// A failed build clears the attempted flag so the next call retries.
-func triggerCodegraphBuild() {
-	codegraphBuildMu.Lock()
-	if codegraphBuildAttempted {
-		codegraphBuildMu.Unlock()
-		return
-	}
-	codegraphBuildAttempted = true
-	codegraphBuildMu.Unlock()
-
-	go func() {
-		store, err := codegraph.NewStore("")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "codegraph auto-build: failed to open store: %v\n", err)
-			allowCodegraphRetry()
-			return
-		}
-		defer store.Close()
-
-		// Skip if already populated (another process/goroutine may have built it).
-		if store.Stats().FileCount > 0 {
-			return
-		}
-
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-		defer cancel()
-
-		if err := store.IndexAll(ctx, codegraphFileParser); err != nil {
-			fmt.Fprintf(os.Stderr, "codegraph auto-build failed: %v (will retry on next query tool use)\n", err)
-			if dbPath, pathErr := codegraph.DefaultDBPath(); pathErr == nil {
-				_ = os.Remove(dbPath)
-			}
-			allowCodegraphRetry()
-			return
-		}
-
-		stats := store.Stats()
-		fmt.Fprintf(os.Stderr, "codegraph auto-build complete: %d nodes, %d edges, %d files\n",
-			stats.NodeCount, stats.EdgeCount, stats.FileCount)
-	}()
-}
-
-// codegraphRefreshMu guards a single in-flight incremental refresh.
-// codegraphRefreshAt rate-limits how often one is started.
-var (
-	codegraphRefreshMu      sync.Mutex
-	codegraphRefreshRunning bool
-	codegraphRefreshAt      time.Time
-)
-
-// codegraphRefreshInterval is how long a refresh is considered fresh enough.
-const codegraphRefreshInterval = 30 * time.Second
-
-// triggerCodegraphRefresh re-indexes files whose mtime is newer than their
-// last_indexed timestamp, in the background. Failures are logged but never
-// block the query the caller asked for.
-func triggerCodegraphRefresh() {
-	// Same test-mode gate as openCodegraphStoreHandler: the refresh
-	// goroutine parses through the same gotreesitter tree pool and must
-	// not outlive a test binary that's racing other tests' Release calls.
-	if testing.Testing() {
-		return
-	}
-	codegraphRefreshMu.Lock()
-	if codegraphRefreshRunning || time.Since(codegraphRefreshAt) < codegraphRefreshInterval {
-		codegraphRefreshMu.Unlock()
-		return
-	}
-	codegraphRefreshRunning = true
-	codegraphRefreshAt = time.Now()
-	codegraphRefreshMu.Unlock()
-
-	go func() {
-		defer func() {
-			codegraphRefreshMu.Lock()
-			codegraphRefreshRunning = false
-			codegraphRefreshMu.Unlock()
-		}()
-
-		store, err := codegraph.NewStore("")
-		if err != nil {
-			return
-		}
-		defer store.Close()
-
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cancel()
-
-		if err := store.IndexChangedFiles(ctx, codegraphFileParser); err != nil {
-			fmt.Fprintf(os.Stderr, "codegraph refresh failed: %v (queries will use the previous graph)\n", err)
-		}
-	}()
-}
-
-// allowCodegraphRetry clears the attempted flag so the next query tool call
-// can trigger a fresh background build.
-func allowCodegraphRetry() {
-	codegraphBuildMu.Lock()
-	codegraphBuildAttempted = false
-	codegraphBuildMu.Unlock()
-}
 
 // --- get_callers ---
 
@@ -307,7 +193,7 @@ func (h *findDeadCodeHandler) Interactive() bool      { return false }
 func openCodegraphStoreHandler() (*codegraph.SQLiteStore, error) {
 	// Test binaries must never spawn the background indexer: under `go
 	// test` the git root resolves to the developer's (or CI's) real
-	// checkout, so a missing .sprout/codegraph.db makes the goroutine
+	// checkout, so a missing code graph makes the goroutine
 	// walk the real repo in-process for up to 10 minutes. Beyond wasting
 	// the run, its gotreesitter parses race Tree.Release() from other
 	// tests through the package-level tree pool — an unrelated test's
@@ -316,18 +202,16 @@ func openCodegraphStoreHandler() (*codegraph.SQLiteStore, error) {
 	if testing.Testing() {
 		return nil, nil
 	}
-	gitRoot, err := git.GetGitRootDir()
+	dbPath, err := codegraph.DefaultDBPath()
 	if err != nil {
 		return nil, nil
 	}
-	dbPath := filepath.Join(gitRoot, ".sprout", "codegraph.db")
-	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-		// Trigger a background build so that subsequent calls have data.
-		triggerCodegraphBuild()
+	// Build the graph, or refresh what changed, in the background, so the
+	// next call answers from it.
+	StartCodeIndex(".")
+	if _, err := os.Stat(dbPath); err != nil {
 		return nil, nil
 	}
-	// The store exists but may be stale. Refresh it in the background.
-	triggerCodegraphRefresh()
 	return codegraph.NewStore("")
 }
 

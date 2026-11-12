@@ -5,6 +5,7 @@ package codegraph
 import (
 	"context"
 	"fmt"
+	"time"
 )
 
 // WASM stubs — SQLite is not available in the browser/WASM environment.
@@ -49,6 +50,15 @@ type Store interface {
 }
 
 type SQLiteStore struct{}
+
+func DBPathFor(dir string) (root, dbPath string, err error) {
+	return "", "", errWASM()
+}
+func OpenForDir(dir string) (*SQLiteStore, error)   { return nil, nil }
+func CreateForDir(dir string) (*SQLiteStore, error) { return nil, errWASM() }
+func (s *SQLiteStore) FileIndexTimes(ctx context.Context) (map[string]time.Time, error) {
+	return nil, errWASM()
+}
 
 func NewStore(dbPath string) (*SQLiteStore, error) {
 	return nil, fmt.Errorf("codegraph: SQLite store not available on WASM")

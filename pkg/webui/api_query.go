@@ -303,7 +303,6 @@ type queryRequest struct {
 	Model         string `json:"model,omitempty"`
 	WorkspaceRoot string `json:"workspace_root,omitempty"`
 	SystemPrompt  string `json:"system_prompt,omitempty"`
-	Mode          string `json:"mode,omitempty"`
 }
 
 // buildAPIQuery is the shared backend for POST /api/query. It validates the
@@ -335,7 +334,6 @@ func (ws *ReactWebServer) buildAPIQuery(w http.ResponseWriter, r *http.Request, 
 		Model:              q.Model,
 		WorkspaceRoot:      q.WorkspaceRoot,
 		SystemPrompt:       q.SystemPrompt,
-		Mode:               q.Mode,
 		AllowSlashCommands: true,
 		EchoQueryInAccept:  true,
 		LogTag:             "handleAPIQuery",

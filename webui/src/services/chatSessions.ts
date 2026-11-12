@@ -45,8 +45,6 @@ export interface ChatSessionSwitchResponseChatSession {
   last_active_at: string;
   message_count: number;
   current_session_id: string;
-  /** Workspace-mode lane ("design"); absent = code/legacy (SP-142). */
-  mode?: string;
   /**
    * While a run is in progress: its events so far, from its query_started.
    * `messages` is stored at run end, so it stops before this turn.
@@ -74,17 +72,14 @@ export interface WorktreeListResponse {
  */
 export interface ChatSessionsApi {
   listChatSessions: () => Promise<ChatSessionsResponse>;
-  createChatSession: (
-    name?: string,
-    mode?: 'code' | 'design',
-  ) => Promise<{ message: string; chat_session: ChatSession }>;
+  createChatSession: (name?: string) => Promise<{ message: string; chat_session: ChatSession }>;
   deleteChatSession: (
     id: string,
     shouldRemoveWorktree?: boolean,
   ) => Promise<{ message: string; worktree_removed?: boolean; worktree_error?: string }>;
   deleteAllChatSessions: () => Promise<{ message: string; deleted_count: number; active_chat_id: string }>;
   renameChatSession: (id: string, name: string) => Promise<{ message: string; chat_session: ChatSession }>;
-  switchChatSession: (id: string, mode?: 'code' | 'design') => Promise<ChatSessionSwitchResponse>;
+  switchChatSession: (id: string) => Promise<ChatSessionSwitchResponse>;
   createChatSessionInWorktree: (req: {
     branch: string;
     base_ref?: string;
@@ -107,13 +102,12 @@ export async function listChatSessions(fetchFn: typeof fetch = clientFetch): Pro
 
 export async function createChatSession(
   name?: string,
-  mode?: 'code' | 'design',
   fetchFn: typeof fetch = clientFetch,
 ): Promise<{ message: string; chat_session: ChatSession }> {
   const res = await fetchFn('/api/chat-sessions/create', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...(name ? { name } : {}), ...(mode ? { mode } : {}) }),
+    body: JSON.stringify(name ? { name } : {}),
   });
   if (!res.ok) throw new Error('Failed to create chat session');
   return res.json();
@@ -159,13 +153,12 @@ export async function renameChatSession(
 
 export async function switchChatSession(
   id: string,
-  mode?: 'code' | 'design',
   fetchFn: typeof fetch = clientFetch,
 ): Promise<ChatSessionSwitchResponse> {
   const res = await fetchFn('/api/chat-sessions/switch', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(mode ? { id, mode } : { id }),
+    body: JSON.stringify({ id }),
   });
   if (!res.ok) throw new Error('Failed to switch chat session');
   return res.json();
@@ -194,11 +187,11 @@ export async function fetchChatSessionMessages(
 export function createChatSessionsApi(fetchFn: typeof fetch): ChatSessionsApi {
   return {
     listChatSessions: () => listChatSessions(fetchFn),
-    createChatSession: (name, mode) => createChatSession(name, mode, fetchFn),
+    createChatSession: (name) => createChatSession(name, fetchFn),
     deleteChatSession: (id, shouldRemoveWorktree) => deleteChatSession(id, shouldRemoveWorktree, fetchFn),
     deleteAllChatSessions: () => deleteAllChatSessions(fetchFn),
     renameChatSession: (id, name) => renameChatSession(id, name, fetchFn),
-    switchChatSession: (id, mode) => switchChatSession(id, mode, fetchFn),
+    switchChatSession: (id) => switchChatSession(id, fetchFn),
     createChatSessionInWorktree: (req) => createChatSessionInWorktree(req, fetchFn),
   };
 }

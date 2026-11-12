@@ -3,18 +3,23 @@
  *
  * Owns the `<main>` column and the Code surface's chrome: the app menubar
  * (HeaderBar), the mobile pane controls, the editor, the right-hand context
- * panel (chat context), and the status bar. Everything that reads as "the
- * editor app" lives here; Design mode gets a different shell (DesignShell)
- * so this chrome never wraps a surface that has no buffer in it.
+ * panel (chat context), the preview panel, and the status bar. Everything that
+ * reads as "the editor app" lives here.
+ *
+ * The preview panel has two bodies. A workspace with a mockup shows the mockup
+ * (`draw_mockup`'s `design/mockup.html`); otherwise it shows the dev server's
+ * output. Both are a rendered view of the work, so both belong in the same
+ * slot beside the code.
  */
 
 import { Menu, MessageSquare, PanelRightClose, SquareTerminal } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import ContextSidebar from '../components/ContextSidebar';
 import EditorWorkspace from '../components/EditorWorkspace';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { CreditsChip } from '../components/CreditsChip';
 import HeaderBar from '../components/HeaderBar';
+import MockupPanel from '../components/MockupPanel';
 import PreviewPanel from '../components/PreviewPanel';
 import StatusBar from '../components/StatusBar';
 import Terminal from '../components/Terminal';
@@ -56,6 +61,7 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
   currentBuffer,
   handleOutlineNavigateToSymbol,
   chat,
+  mockup,
   git,
 }) => {
   const { agentChanges: supportsAgentChanges } = useHostCapabilities();
@@ -81,14 +87,27 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
   // On a local daemon the panel holds the agent's change history; a
   // composition that leaves it out gets no column and no toggles.
   const hasContextPanel = contextPanel && supportsAgentChanges;
-  // The Code-mode preview panel (the running-app dev server),
-  // collapsed by default so it never steals editor space or polls.
+  // The preview panel: the workspace's mockup when it has one, otherwise the
+  // running-app dev server. Collapsed by default so it never steals editor
+  // space or polls — except in a workspace with a mockup, where it opens on
+  // the mockup: that is the thing the person is reacting to, so the panel is
+  // its home rather than a place it has to be summoned to.
   const [previewPanelOpen, setPreviewPanelOpen] = useState(false);
   useTogglePreviewCommand(setPreviewPanelOpen, previewAvailable);
   // Inside an embed the toggle shows only while the command is handled; the
   // standalone app shell handles every command, so its toggle always shows.
   const previewToggleHandled = useHasCommandHandler(PREVIEW_TOGGLE_COMMANDS);
   const showPreview = previewAvailable && previewToggleHandled;
+  const showMockup = mockup.present;
+  // Open on the mockup the first time one appears (a draw just landed, or the
+  // workspace was opened with one); later toggles stay the person's call.
+  const openedOnMockup = useRef(false);
+  useEffect(() => {
+    if (showMockup && showPreview && !openedOnMockup.current) {
+      openedOnMockup.current = true;
+      setPreviewPanelOpen(true);
+    }
+  }, [showMockup, showPreview]);
   // On phones the project sidebar lives in the drawer, so name the project
   // on the toolbar; tapping it opens the drawer.
   const activeRepoSlug = repoSlug(useActiveRepoURL());
@@ -182,7 +201,13 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
             />
           </ErrorBoundary>
         </div>
-        {showPreview && <PreviewPanel open={previewPanelOpen} onClose={() => setPreviewPanelOpen(false)} />}
+        {showPreview &&
+          previewPanelOpen &&
+          (showMockup ? (
+            <MockupPanel onClose={() => setPreviewPanelOpen(false)} />
+          ) : (
+            <PreviewPanel open onClose={() => setPreviewPanelOpen(false)} />
+          ))}
         {hasContextPanel && (
           <div className="context-panel-container">
             <ContextSidebar

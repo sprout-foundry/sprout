@@ -169,7 +169,7 @@ What it renders, left to right and top to bottom:
   repo import changes the workspace), **Search** (find and replace across the
   workspace; a result opens at its line) and **Source control** (status,
   staging, commit, branches, pull/push, history; diffs open as editor tabs).
-  Design lists Screens, Flows, Tokens and Feedback. The sidebar resizes,
+  The Design space lists **Mockup** (the mockup and its file). The sidebar resizes,
   collapses to a rail (its own button, Ctrl/Cmd+\\, `toggle_sidebar`) and
   answers `open_search` and "reveal in file list".
 - **The space** — Code renders the app's Code shell: the header (search, the
@@ -177,8 +177,8 @@ What it renders, left to right and top to bottom:
   the conversation in its own tab beside open files, diffs and reviews — and
   the status bar (the project,
   the branch, and for the active file the cursor position, language,
-  encoding, line ending and indentation). Design renders the design surface
-  with its agent chat. The Code shell's right-hand context panel (the
+  encoding, line ending and indentation). Design renders the mockup with its
+  agent chat. The Code shell's right-hand context panel (the
   agent's change history) is not part of the composed space: each turn's
   changes show under it in the conversation (review and revert per file), and
   a host that wants the change list arranges the `changes` view.

@@ -1,15 +1,14 @@
 /**
  * The composed space shell's sidebar: the standalone app's project sidebar
  * (`ProjectNav`, the layered layout's L2) with its sections drilled into the
- * workspace's own views — Files (the file-tree unit), Search, Source control,
- * the Design sections — instead of the app's sidebar panels, which reach
- * app-only state.
+ * workspace's own views — Files (the file-tree unit), Search, Source control —
+ * instead of the app's sidebar panels, which reach app-only state.
  *
  * The host owns which project and which space is mounted, so the app's
  * project rail (L1) is not rendered and the entries are the mounted space's
- * own: Code lists Files / Search / Source control (when the host declares
- * `capabilities.git`) and, for an in-browser terminal, Terminal; Design lists
- * its sections. Collapsing leaves a slim rail that expands it again.
+ * own: Files / Search / Source control (when the host declares
+ * `capabilities.git`) and, for an in-browser terminal, Terminal. Collapsing
+ * leaves a slim rail that expands it again.
  *
  * Its look is the layered layout's stylesheet (`Layered.css`), which the app
  * loads with its own sidebar and the package loads with the views; it is not
@@ -31,21 +30,17 @@ import type { WorkspaceGitState } from './useWorkspaceGitState';
 import { WorkspaceFileTreeView } from './WorkspaceFileTreeView';
 import { WorkspaceGitStatusPanel } from './WorkspaceGitView';
 import { WorkspaceSearchView } from './WorkspaceSearchView';
-import { MockupSection } from './MockupSection';
 import '../components/Sidebar.css';
 
 const CODE_SIDEBAR_COMMANDS: readonly string[] = ['open_search', 'toggle_sidebar', 'toggle_explorer'];
-const DESIGN_SIDEBAR_COMMANDS: readonly string[] = ['toggle_sidebar'];
 
 const SECTION_TITLES: Record<string, string> = {
   files: 'Files',
   search: 'Search',
   git: 'Source control',
-  mockup: 'Mockup',
 };
 
 export interface WorkspaceSidebarProps {
-  lane: 'code' | 'design';
   /** The project's display name, the sidebar's title. */
   title: string;
   collapsed: boolean;
@@ -64,7 +59,6 @@ export interface WorkspaceSidebarProps {
 }
 
 export function WorkspaceSidebar({
-  lane,
   title,
   collapsed,
   onCollapsedChange,
@@ -75,21 +69,11 @@ export function WorkspaceSidebar({
   onOpenFile,
   onToggleTerminal,
 }: WorkspaceSidebarProps): JSX.Element {
-  const [open, setOpen] = useState<ProjectNavTarget | null>(() =>
-    lane === 'design' ? { kind: 'design', id: 'mockup' } : { kind: 'section', id: 'files' },
-  );
+  const [open, setOpen] = useState<ProjectNavTarget | null>({ kind: 'section', id: 'files' });
   const [width, setWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
   const [isResizing, setIsResizing] = useState(false);
   const treeRef = useRef<FileTreeHandle>(null);
   const toggleCollapsed = useCallback(() => onCollapsedChange(!collapsed), [collapsed, onCollapsedChange]);
-
-  // A space switch shows that space's own sections.
-  const previousLane = useRef(lane);
-  useEffect(() => {
-    if (previousLane.current === lane) return;
-    previousLane.current = lane;
-    setOpen(lane === 'design' ? { kind: 'design', id: 'mockup' } : { kind: 'section', id: 'files' });
-  }, [lane]);
 
   const show = useCallback(
     (target: ProjectNavTarget) => {
@@ -107,12 +91,11 @@ export function WorkspaceSidebar({
     }
   });
 
-  useCommandHandler(lane === 'code' ? CODE_SIDEBAR_COMMANDS : DESIGN_SIDEBAR_COMMANDS);
+  useCommandHandler(CODE_SIDEBAR_COMMANDS);
   useEffect(() => {
     const handleHotkey = (event: Event) => {
       const commandId = (event as CustomEvent<{ commandId?: string }>).detail?.commandId;
       if (commandId === 'toggle_sidebar') toggleCollapsed();
-      if (lane !== 'code') return;
       if (commandId === 'open_search') show({ kind: 'section', id: 'search' });
       if (commandId === 'toggle_explorer') {
         window.dispatchEvent(new CustomEvent('sprout:reveal-in-explorer', { detail: { path: selectedFile ?? '' } }));
@@ -121,7 +104,6 @@ export function WorkspaceSidebar({
     // "Reveal in file list" (the editor tab menu, Toggle Explorer, the
     // breadcrumb): show Files and reveal the path in the tree.
     const handleReveal = (event: Event) => {
-      if (lane !== 'code') return;
       show({ kind: 'section', id: 'files' });
       const path = (event as CustomEvent<{ path?: string }>).detail?.path;
       if (path) setTimeout(() => treeRef.current?.revealFile(path), 100);
@@ -132,7 +114,7 @@ export function WorkspaceSidebar({
       window.removeEventListener('sprout:hotkey', handleHotkey);
       window.removeEventListener('sprout:reveal-in-explorer', handleReveal);
     };
-  }, [lane, show, toggleCollapsed, selectedFile]);
+  }, [show, toggleCollapsed, selectedFile]);
 
   const navigate = (target: ProjectNavTarget) => {
     if (target.kind === 'conversation') {
@@ -148,21 +130,17 @@ export function WorkspaceSidebar({
     setOpen(target);
   };
 
-  const entry = (kind: 'section' | 'design', id: keyof typeof NAV_ICONS, label: string) => ({
+  const entry = (kind: 'section', id: keyof typeof NAV_ICONS, label: string) => ({
     target: { kind, id } as ProjectNavTarget,
     label,
     icon: NAV_ICONS[id],
   });
-  const codeEntries =
-    lane === 'code'
-      ? [
-          entry('section', 'files', 'Files'),
-          entry('section', 'search', 'Search'),
-          ...(git ? [entry('section', 'git', 'Source control')] : []),
-          ...(onToggleTerminal ? [entry('section', 'terminal', 'Terminal')] : []),
-        ]
-      : [];
-  const designEntries = lane === 'design' ? [entry('design', 'mockup', 'Mockup')] : [];
+  const codeEntries = [
+    entry('section', 'files', 'Files'),
+    entry('section', 'search', 'Search'),
+    ...(git ? [entry('section', 'git', 'Source control')] : []),
+    ...(onToggleTerminal ? [entry('section', 'terminal', 'Terminal')] : []),
+  ];
 
   if (collapsed) {
     return (
@@ -192,7 +170,6 @@ export function WorkspaceSidebar({
           current={open}
           onNavigate={navigate}
           codeEntries={codeEntries}
-          designEntries={designEntries}
           automationEntries={[]}
           footerEntries={[]}
           drill={
@@ -257,8 +234,6 @@ function SidebarSection({
     content = <WorkspaceSearchView onFileClick={onOpenFile} autoFocus />;
   } else if (id === 'git' && git) {
     content = <WorkspaceGitStatusPanel workspace={git.workspace} panel={git.panel} />;
-  } else if (id === 'mockup') {
-    content = <MockupSection workspaceRoot={workspaceRoot} onOpenFile={onOpenFile} />;
   }
   return <>{content}</>;
 }

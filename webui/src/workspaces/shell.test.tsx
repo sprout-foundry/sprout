@@ -3,13 +3,13 @@
  * SP-140-5 step 3 — mode shell smoke tests.
  *
  * The shells own the <main> column and the chrome that belongs to a mode:
- * CodeShell composes the editor chrome (menubar, context panel, status bar),
- * DesignShell composes only the design surface. What is pinned here: Code
- * renders its full chrome, Design renders no Code chrome, and the
- * local/non-local terminal switch still lands in the Code column.
+ * CodeShell composes the editor chrome (menubar, context panel, status bar)
+ * and the preview panel. What is pinned here: Code renders its full chrome,
+ * the preview panel shows the mockup when the workspace has one and the dev
+ * server's output otherwise, and the local/non-local terminal switch still
+ * lands in the Code column.
  *
- * Same lightweight-mock pattern as Sidebar.designNav.test.tsx: leaf
- * components are mocked to divs, ErrorBoundary stays real (it is
+ * Leaf components are mocked to divs; ErrorBoundary stays real (it is
  * self-contained).
  */
 
@@ -56,8 +56,11 @@ vi.mock('../components/Terminal', () => ({
     createElement('div', { className: 'mock-terminal', 'data-expanded': String(!!props.isExpanded) }),
 }));
 
-vi.mock('../components/design/DesignSurface', () => ({
-  default: () => createElement('div', { className: 'mock-design-surface' }),
+vi.mock('../components/MockupPanel', () => ({
+  default: () => createElement('div', { className: 'mock-mockup-panel' }),
+}));
+vi.mock('../components/PreviewPanel', () => ({
+  default: ({ open }: { open: boolean }) => (open ? createElement('div', { className: 'mock-preview-panel' }) : null),
 }));
 
 // The preview panel (rendered by CodeShell) drives the dev-server lifecycle API
@@ -78,7 +81,6 @@ vi.mock('../contexts/SproutAdapterContext', async (importOriginal) => {
 // ---------------------------------------------------------------------------
 
 import CodeShell from './CodeShell';
-import DesignShell from './DesignShell';
 
 // ---------------------------------------------------------------------------
 // Test setup
@@ -135,13 +137,9 @@ function makeShellProps(overrides = {}) {
       reviewProps: {},
       diffState: {},
     },
-    design: {
+    mockup: {
       loading: false,
-      present: true,
-      tab: 'flows',
-      onTabChange: vi.fn(),
-      onBack: vi.fn(),
-      onOpenFile: vi.fn(),
+      present: false,
     },
     git: {
       gitBranches: { current: 'main', branches: [] },
@@ -212,33 +210,20 @@ describe('CodeShell', () => {
     });
     expect(container.querySelector('.pane-controls-mobile')).toBeNull();
   });
-});
 
-describe('DesignShell', () => {
-  it('renders the design surface with no Code chrome', () => {
+  it('opens the preview panel on the mockup when the workspace has one', () => {
     act(() => {
-      root.render(host(createElement(DesignShell, makeShellProps())));
+      root.render(host(createElement(CodeShell, makeShellProps({ mockup: { loading: false, present: true } }))));
     });
-
-    expect(container.querySelector('main.main-content')).not.toBeNull();
-    expect(container.querySelector('.mock-design-surface')).not.toBeNull();
-    expect(container.querySelector('.mock-header-bar')).toBeNull();
-    expect(container.querySelector('.mock-editor-workspace')).toBeNull();
-    expect(container.querySelector('.mock-context-sidebar')).toBeNull();
-    expect(container.querySelector('.mock-status-bar')).toBeNull();
-    expect(container.querySelector('.pane-controls-mobile')).toBeNull();
+    expect(container.querySelector('.mock-mockup-panel')).not.toBeNull();
+    expect(container.querySelector('.mock-preview-panel')).toBeNull();
   });
 
-  it('keeps the mobile pane controls to the sidebar toggle only', () => {
+  it('leaves the preview panel closed when there is no mockup', () => {
     act(() => {
-      root.render(host(createElement(DesignShell, makeShellProps({ isMobile: true }))));
+      root.render(host(createElement(CodeShell, makeShellProps())));
     });
-
-    expect(container.querySelector('.pane-controls-mobile')).not.toBeNull();
-    expect(container.querySelector('.top-mobile-menu-btn')).not.toBeNull();
-    // The side column (Details | Agent) is mobile-overlay CSS — no extra
-    // pane buttons. Terminal and context chrome stay Code-only.
-    expect(container.querySelector('.top-mobile-terminal-btn')).toBeNull();
-    expect(container.querySelector('.top-mobile-context-btn')).toBeNull();
+    expect(container.querySelector('.mock-mockup-panel')).toBeNull();
+    expect(container.querySelector('.mock-preview-panel')).toBeNull();
   });
 });

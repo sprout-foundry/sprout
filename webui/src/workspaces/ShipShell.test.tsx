@@ -3,8 +3,8 @@
  *
  * What is pinned: the Ship mode registers through the public mode API and
  * appears in the switcher; its shell renders the ship surface and none of the
- * other modes' chrome; Code and Design are unchanged by its registration
- * (they keep their identity and positions, and still work).
+ * other modes' chrome; Code is unchanged by its registration (it keeps its
+ * identity and position, and still works).
  *
  * Registration is a module side effect, so this file imports `ship-mode` (which
  * registers at load) and asserts the registry as the app sees it. A test that
@@ -18,12 +18,11 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import CodeShell from './CodeShell';
-import DesignShell from './DesignShell';
 import { WORKSPACE_MODES, availableModes, registerWorkspaceMode, type WorkspaceModeRegistration } from './registry';
 import { SHIP_MODE_ID, registerShipMode } from './ship-mode';
 import ShipShell from './ShipShell';
 
-const withDesign = { hasDesignTree: true };
+const withMockup = { hasMockup: true };
 
 /** A full shell props object; overrides win. The shells read only their slice. */
 function makeShellProps(overrides = {}) {
@@ -51,7 +50,7 @@ function makeShellProps(overrides = {}) {
     currentBuffer: null,
     handleOutlineNavigateToSymbol: vi.fn(),
     chat: { chatProps: {}, reviewProps: {}, diffState: {} },
-    design: { loading: false, present: true, tab: 'flows', onTabChange: vi.fn(), onOpenFile: vi.fn() },
+    mockup: { loading: false, present: true },
     git: { gitBranches: { current: 'main', branches: [] }, gitStatus: null, workspaceRoot: '/tmp/repo' },
     ship: {
       live: { url: 'https://example.pages.dev', version: 'v1.0.0', deployedAt: '2026-01-02T03:04:05Z', state: 'ready' },
@@ -68,24 +67,21 @@ describe('Ship mode registration', () => {
     expect(ship).toBeDefined();
     expect(ship?.label).toBe('Ship');
     expect(ship?.Shell).toBe(ShipShell);
-    expect(ship?.available(withDesign)).toBe(true);
-    expect(ship?.available({ hasDesignTree: false })).toBe(true);
-    expect(availableModes(withDesign).map((mode) => mode.id)).toContain('ship');
+    expect(ship?.available(withMockup)).toBe(true);
+    expect(ship?.available({ hasMockup: false })).toBe(true);
+    expect(availableModes(withMockup).map((mode) => mode.id)).toContain('ship');
   });
 
-  it('lists after the Code and Design built-ins', () => {
-    const ids = availableModes(withDesign).map((mode) => mode.id);
-    expect(ids.slice(0, 2)).toEqual(['code', 'design']);
+  it('lists after the Code built-in', () => {
+    const ids = availableModes(withMockup).map((mode) => mode.id);
+    expect(ids[0]).toBe('code');
     expect(ids).toContain('ship');
   });
 
-  it('leaves Code and Design unchanged', () => {
+  it('leaves Code unchanged', () => {
     const code = WORKSPACE_MODES.find((mode) => mode.id === 'code');
-    const design = WORKSPACE_MODES.find((mode) => mode.id === 'design');
     expect(code?.Shell).toBe(CodeShell);
-    expect(design?.Shell).toBe(DesignShell);
     expect(code?.label).toBe('Code');
-    expect(design?.label).toBe('Design');
   });
 
   it('re-registers in place through the public API without duplicating', () => {
@@ -147,10 +143,9 @@ describe('ShipShell', () => {
 
     expect(container.querySelector('main.main-content')).not.toBeNull();
     expect(container.querySelector('[data-testid="ship-surface"]')).not.toBeNull();
-    // No Code chrome, no Design surface.
+    // No Code chrome.
     expect(container.querySelector('.mock-header-bar')).toBeNull();
     expect(container.querySelector('.mock-status-bar')).toBeNull();
-    expect(container.querySelector('.mock-design-surface')).toBeNull();
   });
 
   it('renders the mobile sidebar toggle on mobile', () => {

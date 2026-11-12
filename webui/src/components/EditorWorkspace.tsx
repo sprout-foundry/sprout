@@ -150,8 +150,8 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   // the mobile branch below). Desktop keeps the panes topology
   // unchanged.
   const isMobileViewport = useIsMobileViewport();
-  // Design mode is a peer mode shell, not a route in this component: the
-  // editor neither probes for a mockup nor hosts a design view.
+  // A mockup is not a route in this component: it renders in the shell's
+  // preview panel, beside the editor rather than inside it.
   const {
     panes,
     paneLayout,
@@ -693,11 +693,6 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     [currentBuffer],
   );
 
-  // Design is not a route in this component any more: it is a workspace mode
-  // with its own surface (design/DesignSurface.tsx), mounted by AppContent as a
-  // peer of this one. Keeping it out of the editor's view switch is what stops
-  // the editor's chrome from wrapping a surface that has no buffer in it.
-
   // ── P4.2 mobile branch: peer-buffer keep-alive topology ─────────
   // Phone IDE placement (user doctrine 2026-09-10): the editor is not
   // a sheet over chat and chat is not a sheet over the editor — the
@@ -708,14 +703,14 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   // single-column layout. No hierarchy, no sheets-over-anything.
   if (isMobileViewport) {
     const chatBufferOpen = activePaneHasChat();
-    const laneChats = (chatSessions ?? []).filter((c) => (c as { mode?: string }).mode !== 'design');
+    const chats = chatSessions ?? [];
     return (
       <div className="mobile-peer-surfaces" data-testid="mobile-peer-surfaces">
         <div className="mobile-peer-surface" data-active={chatBufferOpen} data-testid="mobile-chat-surface">
           {/* No tab strip on phones: the chat picker stands in for it. */}
-          {onActiveChatChange && laneChats.length > 0 && (
+          {onActiveChatChange && chats.length > 0 && (
             <MobileChatSwitcher
-              chats={laneChats}
+              chats={chats}
               activeChatId={activeChatId ?? null}
               onSelect={onActiveChatChange}
               onCreate={

@@ -1479,7 +1479,6 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
       // Seeds the chat's agent if it has none yet (e.g. after a reload), so
       // the conversation on screen is also the one the agent remembers.
       JSON.stringify(historyForChat(chatId, query)),
-      parsed.mode,
     )
     .then((result) => {
       stopRequested.delete(chatId ?? '');

@@ -25,7 +25,6 @@ describe('copy defaults', () => {
     'nav.files': 'Files',
     'nav.search': 'Search',
     'nav.automations': 'Automations',
-    'nav.design': 'Design',
     'nav.settings': 'Settings',
     'nav.logs': 'Logs',
     'home.title': 'Home',

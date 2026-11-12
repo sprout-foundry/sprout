@@ -226,7 +226,7 @@ describe(
           "",
           "const host: SproutHost = localHost;",
           "void registerWorkspaceMode;",
-          "void availableModes({ hasDesignTree: false });",
+          "void availableModes({ hasMockup: false });",
           "",
           "const providersProps: SproutProvidersProps = { children: null };",
           "void providersProps;",

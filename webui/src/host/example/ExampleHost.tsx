@@ -10,9 +10,9 @@ import './chrome.css';
  *
  * This is the worked example for the host contract: it builds a real
  * `SproutHost` (its own chrome, theme, capabilities, transport, navigation,
- * notifications and entitlements), mounts two spaces, and shows what happens
- * when Sprout posts a notification or asks the host to navigate. It is
- * test-only — nothing in the app renders it.
+ * notifications and entitlements), mounts the registered spaces, and shows
+ * what happens when Sprout posts a notification or asks the host to navigate.
+ * It is test-only — nothing in the app renders it.
  *
  * It imports only the two public entry points: the views barrel
  * (`views/index`) for the spaces and the layout, and the host barrel
@@ -119,7 +119,7 @@ export function createExampleHost(state: ExampleHostState): SproutHost {
  * moves the editor view between the slots.
  */
 const CODE_SPACE_ARRANGEMENT: ViewsArrangement = { left: [], center: ['editor'], right: [], overlay: [] };
-const DESIGN_SPACE_ARRANGEMENT: ViewsArrangement = { left: ['editor'], center: [], right: [], overlay: [] };
+const OTHER_SPACE_ARRANGEMENT: ViewsArrangement = { left: ['editor'], center: [], right: [], overlay: [] };
 
 /**
  * Render the example host's own chrome around one mounted space, with its
@@ -228,12 +228,12 @@ export function ExampleHostRoot({
 }): JSX.Element {
   const host = useHost();
   const [activeSpaceId, setActiveSpaceId] = useState<WorkspaceModeId>(state.activeSpaceId);
-  const spaces = availableModes({ hasDesignTree: false }).map((mode) => String(mode.id));
-  const active = resolveWorkspaceMode(activeSpaceId, { hasDesignTree: false });
+  const spaces = availableModes({ hasMockup: false }).map((mode) => String(mode.id));
+  const active = resolveWorkspaceMode(activeSpaceId, { hasMockup: false });
   // Each space renders its own primitive view; switching moves the mounted
   // shell's view so the switch is visible in the rendered output.
   const isCodeSpace = activeSpaceId === 'code';
-  const arrangement = isCodeSpace ? CODE_SPACE_ARRANGEMENT : DESIGN_SPACE_ARRANGEMENT;
+  const arrangement = isCodeSpace ? CODE_SPACE_ARRANGEMENT : OTHER_SPACE_ARRANGEMENT;
   // The slot the space's view lands in — the switch's visible effect.
   const viewSlot = isCodeSpace ? 'center' : 'left';
 
@@ -241,7 +241,7 @@ export function ExampleHostRoot({
     <div className="host-example" data-testid="host-example" data-theme={host.theme?.mode}>
       <ExampleChrome
         state={state}
-        spaces={spaces.length > 0 ? spaces : ['code', 'design']}
+        spaces={spaces}
         activeSpaceId={activeSpaceId}
         onSwitchSpace={(id) => {
           state.activeSpaceId = id;

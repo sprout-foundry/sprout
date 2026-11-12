@@ -355,7 +355,7 @@ describe('host chat sessions are scoped to the workspace project', () => {
   it('sends the project on every session call: query on GETs, body field on POSTs', async () => {
     const api = createHostChatSessionsApi(HOST_BASE, PROJECT_A);
     const chatId = (await api.listChatSessions()).active_chat_id;
-    const created = await api.createChatSession('Second', 'code');
+    const created = await api.createChatSession('Second');
     await api.switchChatSession(created.chat_session.id);
     await api.renameChatSession(created.chat_session.id, 'Renamed');
     await fetchChatSessionMessages(chatId, hostChatSessionsFetch(HOST_BASE, PROJECT_A));
@@ -375,7 +375,7 @@ describe('host chat sessions are scoped to the workspace project', () => {
     ]);
     expect(store.requests.every((r) => r.project === PROJECT_A)).toBe(true);
     // The request's own fields are kept alongside the project.
-    expect(store.requests[1].body).toMatchObject({ name: 'Second', mode: 'code' });
+    expect(store.requests[1].body).toMatchObject({ name: 'Second' });
     expect(store.requests[5].body).toMatchObject({ chat_id: chatId, query: 'q', response: 'a' });
   });
 

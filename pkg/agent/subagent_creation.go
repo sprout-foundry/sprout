@@ -231,7 +231,7 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.
 	if persona := canonicalPersonaID(agent, opts.Persona); persona != "" && agent.GetConfig().GetSubagentType(persona) != nil {
 		agent.state.SetActivePersona(persona)
 
-		// The designer starts with the design workflow in context rather than
+		// The designer starts with the mockup skill in context rather than
 		// discovering how to load it. A missing or disabled skill must not
 		// fail the spawn; the designer still has its tools and prompt.
 		if persona == personas.IDDesigner {

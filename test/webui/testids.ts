@@ -74,8 +74,6 @@ const TESTIDS = {
   "sidebar-brand-trigger": "sidebar-brand-trigger",
   "sidebar-brand-menu": "sidebar-brand-menu",
   "sidebar-brand-option-code": "sidebar-brand-option-code",
-  "sidebar-brand-option-design": "sidebar-brand-option-design",
-  "sidebar-design-button": "sidebar-design-button",
 
   // SP-092-3: Past sessions hint
 
@@ -361,19 +359,12 @@ const TESTIDS = {
   "mobile-chat-surface": "mobile-chat-surface",
   "mobile-editor-surface": "mobile-editor-surface",
 
-  // Design mode (SP-140): the mockup and the chat.
-  "design-surface": "design-surface",
-  "design-surface-fallback": "design-surface-fallback",
-  "design-agent-column": "design-agent-column",
-  "design-agent-panel": "design-agent-panel",
-  "design-agent-head": "design-agent-head",
-  "design-agent-chat-name": "design-agent-chat-name",
-  "design-agent-new-chat": "design-agent-new-chat",
-  "design-agent-chat": "design-agent-chat",
-  "design-mockup-frame": "design-mockup-frame",
-  "design-mockup-empty": "design-mockup-empty",
-  "design-mockup-missing": "design-mockup-missing",
-  "workspace-mockup-section": "workspace-mockup-section",
+  // The mockup, in the Code surface's preview slot.
+  "mockup-panel": "mockup-panel",
+  "mockup-panel-title": "mockup-panel-title",
+  "mockup-panel-close": "mockup-panel-close",
+  "mockup-panel-frame": "mockup-panel-frame",
+  "mockup-panel-empty": "mockup-panel-empty",
 
   "workspace-busy-notice": "workspace-busy-notice",
   "workspace-busy-send-anyway": "workspace-busy-send-anyway",

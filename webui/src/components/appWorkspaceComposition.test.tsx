@@ -39,10 +39,6 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('../workspaces/CodeShell', () => ({
   default: () => <div data-testid="app-workspace-code-shell" />,
 }));
-vi.mock('../workspaces/DesignShell', () => ({
-  default: () => <div data-testid="app-workspace-design-shell" />,
-}));
-
 import { HostProvider, localHost } from '../host';
 import { SproutProviders } from '../providers';
 import { SproutWorkspace } from '../views';
@@ -87,7 +83,7 @@ describe('the local app composes its workspace through SproutWorkspace', () => {
     expect(appContentSource).toMatch(/space=\{workspaceMode\.id\}/);
     expect(appContentSource).toMatch(/shellProps=\{shellProps\}/);
     expect(appContentSource).toMatch(/onSpaceChange=\{selectWorkspaceMode\}/);
-    expect(appContentSource).toMatch(/hasDesignTree=\{hasDesignTree\}/);
+    expect(appContentSource).toMatch(/hasMockup=\{hasMockup\}/);
   });
 });
 

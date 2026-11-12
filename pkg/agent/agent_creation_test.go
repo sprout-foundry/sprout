@@ -689,15 +689,12 @@ func TestCLIPath_LCM_AutoActivatesAt32K(t *testing.T) {
 	// configuration additions alter the loaded prompt's exact text).
 	assertPromptContainsBody(t, ag.GetSystemPrompt(), ag.contextProfile, "lite")
 
-	// Regression sanity: the LCM allowlist (now 23 tools — ask_user was
-	// added in a83ced640 for the cloud IDE ask_user/edit-approval flows;
-	// the five pure-Go design loop tools in SP-140 so auto-LCM local
-	// models keep the design workflow the lite prompt instructs;
-	// mcp_tools/mcp_refresh so MCP setup stays agent-mediated on the
-	// design empty state's import paths; and list_skills/activate_skill
-	// (SP-142) so a low-context model can actually activate the
-	// design-system skill the lite prompt tells it to — the skill
-	// mechanism must stay reachable in LCM)
+	// Regression sanity: the LCM allowlist (ask_user for the cloud IDE
+	// ask_user/edit-approval flows; draw_mockup so auto-LCM local models
+	// keep the mockup loop the lite prompt instructs; mcp_tools/mcp_refresh
+	// so MCP setup stays agent-mediated; and list_skills/activate_skill so a
+	// low-context model can activate the design-system skill the lite prompt
+	// tells it to — the skill mechanism must stay reachable in LCM)
 	// should also be active on the CLI path (proves the profile flowed
 	// all the way through, not just the prompt).
 	tools := ag.getOptimizedToolDefinitions(nil)

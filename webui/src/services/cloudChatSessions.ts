@@ -97,7 +97,6 @@ interface StoredChat {
   id: string;
   /** Set only when the user renamed the chat; otherwise the transcript names it. */
   name?: string;
-  mode: 'code' | 'design';
   session_id: string;
   created_at: string;
   last_active_at: string;
@@ -116,9 +115,9 @@ function newChatId(): string {
   return `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function newChat(sessionId: string, mode: 'code' | 'design' = 'code', name?: string): StoredChat {
+function newChat(sessionId: string, name?: string): StoredChat {
   const at = now();
-  return { id: newChatId(), name, mode, session_id: sessionId, created_at: at, last_active_at: at };
+  return { id: newChatId(), name, session_id: sessionId, created_at: at, last_active_at: at };
 }
 
 function read(): ChatIndex {
@@ -154,7 +153,6 @@ function toChatSession(chat: StoredChat, index: ChatIndex): ChatSession {
     current_session_id: chat.session_id,
     active_query: runningChats.has(chat.id),
     is_pinned: false,
-    mode: chat.mode,
     is_default: chat.id === index.chats[0]?.id,
     is_active: chat.id === index.active_id,
   };
@@ -217,8 +215,7 @@ export function handleCloudChatSessionsEndpoint(
     // Creating does not switch — as with the daemon, the UI switches to the
     // new chat itself, which keeps its idea of the active chat and ours in
     // step (a mismatch would file one chat's messages under the other).
-    const mode = req.mode === 'design' ? 'design' : 'code';
-    const chat = newChat(newCloudSessionId(), mode, typeof req.name === 'string' ? req.name : undefined);
+    const chat = newChat(newCloudSessionId(), typeof req.name === 'string' ? req.name : undefined);
     index.chats.push(chat);
     write(index);
     return jsonOk({ message: 'Chat session created', chat_session: toChatSession(chat, index) });

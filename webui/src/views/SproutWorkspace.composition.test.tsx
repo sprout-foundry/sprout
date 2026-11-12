@@ -101,11 +101,6 @@ vi.mock('../workspaces/CodeShell', () => ({
     />
   ),
 }));
-vi.mock('../workspaces/DesignShell', () => ({
-  default: (props: { chat: { chatProps: StubChatProps } }) => (
-    <div data-testid="composition-design-shell" {...describeChat(props.chat.chatProps)} />
-  ),
-}));
 
 import type { SproutHost } from '../host';
 import { setActiveHost } from '../host/accessor';
@@ -276,12 +271,6 @@ describe('SproutWorkspace space shell in own mode', () => {
     });
     await waitFor(() => expect(screen.getByTestId('composition-code-shell')).toHaveAttribute('data-view', 'editor'));
     expect(screen.getByTestId('composition-code-shell')).toHaveAttribute('data-buffer', 'src/app.ts');
-  });
-
-  it('feeds the Design shell chat too', async () => {
-    render(<SproutWorkspace project={PROJECT} space="design" hasDesignTree host={makeHost()} />);
-    const shell = await screen.findByTestId('composition-design-shell');
-    expect(shell).toHaveAttribute('data-send', 'function');
   });
 
   it('lets host shellProps win', async () => {

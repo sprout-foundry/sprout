@@ -20,11 +20,11 @@ const codeMode = {
   available: () => true,
   Shell: () => null,
 };
-const designMode = {
-  id: 'design',
-  label: 'Design',
+const shipMode = {
+  id: 'ship',
+  label: 'Ship',
   icon: () => null,
-  hint: 'Flows, screens, tokens',
+  hint: 'Deploy and releases',
   available: () => true,
   Shell: () => null,
 };
@@ -57,7 +57,7 @@ function renderSwitcher(extraProps = {}) {
   act(() => {
     root.render(
       createElement(ModeSwitcher, {
-        modes: [codeMode, designMode],
+        modes: [codeMode, shipMode],
         activeId: 'code',
         onSelect: vi.fn(),
         trigger: ({ open }) => createElement('span', { className: open ? 'brand is-open' : 'brand' }),
@@ -117,7 +117,7 @@ describe('ModeSwitcher', () => {
     });
 
     expect(document.querySelector('[data-testid="sidebar-brand-option-code"]')).not.toBeNull();
-    expect(document.querySelector('[data-testid="sidebar-brand-option-design"]')).not.toBeNull();
+    expect(document.querySelector('[data-testid="sidebar-brand-option-ship"]')).not.toBeNull();
     expect(document.querySelector('[data-testid="sidebar-brand-option-code"]')!.getAttribute('aria-selected')).toBe(
       'true',
     );
@@ -132,12 +132,12 @@ describe('ModeSwitcher', () => {
 
     act(() => {
       document
-        .querySelector('[data-testid="sidebar-brand-option-design"]')!
+        .querySelector('[data-testid="sidebar-brand-option-ship"]')!
         .dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     expect(onSelect).toHaveBeenCalledTimes(1);
-    expect(onSelect).toHaveBeenCalledWith('design');
+    expect(onSelect).toHaveBeenCalledWith('ship');
     expect(menu()).toBeNull();
   });
 

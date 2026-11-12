@@ -2,8 +2,8 @@
  * Active workspace-mode state.
  *
  * Owns which mode the shell is showing and persists it **per instance**: each
- * connected filesystem root remembers whether the user was in Code or Design,
- * matching how the rest of the app scopes state by instance PID and UI context
+ * connected filesystem root remembers which mode the user was in, matching how
+ * the rest of the app scopes state by instance PID and UI context
  * (`getAppStateStorageKey` in services/appStatePersistence.ts).
  *
  * Persistence is best-effort. A read or write that throws (private mode, quota,
@@ -62,17 +62,6 @@ export function persistWorkspaceMode(id: WorkspaceModeId): void {
   }
 }
 
-let activeModeId: WorkspaceModeId | null = null;
-
-/**
- * The mode the shell is showing right now, for code outside the shell's
- * React tree (the chat send path tags each query with it). Null before the
- * shell mounts.
- */
-export function activeWorkspaceModeId(): WorkspaceModeId | null {
-  return activeModeId;
-}
-
 export interface UseWorkspaceModeResult {
   /** The active mode, resolved against what this workspace offers. */
   mode: WorkspaceMode;
@@ -88,25 +77,18 @@ export interface UseWorkspaceModeResult {
  * Tracks the active mode for the current workspace.
  *
  * The requested id is kept in state and always resolved through `resolveWorkspaceMode`,
- * so a persisted `design` in a workspace that no longer offers it degrades to
- * Code instead of rendering a mode with nothing to show.
+ * so a persisted id this build no longer registers degrades to Code instead of
+ * rendering a mode with nothing to show.
  */
 export function useWorkspaceMode(ctx: WorkspaceModeContext): UseWorkspaceModeResult {
   const [requested, setRequested] = useState<WorkspaceModeId | null>(() => readPersistedWorkspaceMode());
-  const { hasDesignTree } = ctx;
+  const { hasMockup } = ctx;
 
   // Depend on the primitive, not the context object: a caller passing an inline
   // object literal would otherwise get a new identity every render and rebuild
   // the mode list each time.
-  const modes = useMemo(() => availableModes({ hasDesignTree }), [hasDesignTree]);
-  const mode = useMemo(() => resolveWorkspaceMode(requested, { hasDesignTree }), [requested, hasDesignTree]);
-
-  useEffect(() => {
-    activeModeId = mode.id;
-    return () => {
-      activeModeId = null;
-    };
-  }, [mode.id]);
+  const modes = useMemo(() => availableModes({ hasMockup }), [hasMockup]);
+  const mode = useMemo(() => resolveWorkspaceMode(requested, { hasMockup }), [requested, hasMockup]);
 
   // Re-persist when availability changes the resolved mode: a workspace that
   // no longer offers the mode should come back on Code, not keep it stale.

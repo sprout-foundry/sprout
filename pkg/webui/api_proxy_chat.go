@@ -23,7 +23,6 @@ type proxyChatRequest struct {
 	Steer         bool               `json:"steer,omitempty"`
 	WorkspaceRoot string             `json:"workspace_root,omitempty"`
 	SystemPrompt  string             `json:"system_prompt,omitempty"`
-	Mode          string             `json:"mode,omitempty"`
 }
 
 // proxyChatMessage represents a message in the chat format.
@@ -173,7 +172,6 @@ func (ws *ReactWebServer) handleAPIProxyChatQuery(w http.ResponseWriter, r *http
 		Model:              req.Model,
 		WorkspaceRoot:      req.WorkspaceRoot,
 		SystemPrompt:       req.SystemPrompt,
-		Mode:               req.Mode,
 		AllowSlashCommands: false,
 		EchoQueryInAccept:  false,
 		LogTag:             "handleAPIProxyChat",

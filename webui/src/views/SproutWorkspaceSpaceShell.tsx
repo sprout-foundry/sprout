@@ -9,7 +9,7 @@
  *   (`WorkspaceSidebar`).
  * - The registered space shell — `CodeShell` (header, editor tabs with the
  *   conversation, the status bar; not its agent-changes context panel, as
- *   each turn's changes show in the conversation) or `DesignShell`.
+ *   each turn's changes show in the conversation).
  * - The docked terminal — the app's terminal workbench, docked under the
  *   space in flow (`WorkspaceDockedTerminal`).
  * - The app root's editor, tab and terminal commands (`useHotkeyCommandHandler`)
@@ -26,7 +26,7 @@ import type { ChatProps } from '@sprout/ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ComponentType } from 'react';
 import { closeBuffersMatching } from '../components/closeBuffers';
-import { useDesignPresence } from '../components/design/useDesignPresence';
+import { useMockupPresence } from '../components/useMockupPresence';
 import ErrorBoundary from '../components/ErrorBoundary';
 import type { ProjectNavConversations } from '../components/layered/ProjectNav';
 import { useEditorManager } from '../contexts/EditorManagerContext';
@@ -58,7 +58,6 @@ const CHAT_TAB = { kind: 'chat' as const, path: '__workspace/chat', title: 'Chat
 
 /** The app root's commands this shell handles itself (beyond the editor commands below). */
 const VIEW_COMMANDS: readonly string[] = ['switch_to_chat', 'switch_to_editor', 'close_editor'];
-const NO_COMMANDS: readonly string[] = [];
 
 /** The commands `useHotkeyCommandHandler` turns into editor and tab actions. */
 const EDITOR_COMMANDS: readonly string[] = [
@@ -105,7 +104,7 @@ export interface ComposedSpaceShellProps {
   Shell: ComponentType<WorkspaceShellProps>;
   spaceId: WorkspaceModeId;
   chatOverrides?: Partial<ChatProps>;
-  hasDesignTree?: boolean;
+  hasMockup?: boolean;
   /** The project's workspace root (local/daemon hosts). */
   workspaceRoot?: string;
   /** The project's display name, the sidebar's title. */
@@ -132,7 +131,7 @@ function SpaceShellLayout({
   Shell,
   spaceId,
   chatOverrides,
-  hasDesignTree,
+  hasMockup,
   workspaceRoot,
   projectName,
   git,
@@ -150,7 +149,6 @@ function SpaceShellLayout({
   useOpenInEditorRequests(() => setCurrentView('editor'));
   useToggleTerminalCommand(setTerminalExpanded, terminalBackend);
 
-  const lane: 'code' | 'design' = spaceId === 'design' ? 'design' : 'code';
   const currentBuffer = (activeBufferId ? buffers.get(activeBufferId) : undefined) ?? null;
   const { handleActiveChatChange, handleCreateChat, handleDeleteChat, handleDeleteAllChats, handleRenameChat } = chat;
 
@@ -231,15 +229,15 @@ function SpaceShellLayout({
     [assembled.chatProps, chatOverrides],
   );
 
-  useShellCommands({ lane, showConversation, setCurrentView });
+  useShellCommands({ showConversation, setCurrentView });
 
   const shellChat = useMemo<WorkspaceShellProps['chat']>(
     () => ({
       perChatCache: state.perChatCache,
       activeChatId: state.activeChatId,
       chatSessions: state.chatSessions,
-      onActiveChatChange: (id: string) => void handleActiveChatChange(id, lane),
-      onCreateChat: () => handleCreateChat(lane),
+      onActiveChatChange: (id: string) => void handleActiveChatChange(id),
+      onCreateChat: () => handleCreateChat(),
       onDeleteChat: handleDeleteChat,
       onDeleteAllChats: () => void handleDeleteAllChats(),
       onRenameChat: (id: string, name: string) => void handleRenameChat(id, name),
@@ -256,7 +254,6 @@ function SpaceShellLayout({
       handleDeleteChat,
       handleDeleteAllChats,
       handleRenameChat,
-      lane,
       chatProps,
       assembled.reviewProps,
       assembled.diffState,
@@ -270,15 +267,15 @@ function SpaceShellLayout({
       isWorking: (id) => (id === state.activeChatId ? state.isProcessing : !!state.perChatCache?.[id]?.isProcessing),
       inMain: currentBuffer?.kind === 'chat',
       onSelect: (id) => {
-        if (lane === 'code') showConversation();
-        void handleActiveChatChange(id, lane);
+        showConversation();
+        void handleActiveChatChange(id);
       },
       onOpen: () => {
-        if (lane === 'code') showConversation();
+        showConversation();
       },
       onCreate: () => {
-        void handleCreateChat(lane).then((id) => {
-          if (id && lane === 'code') showConversation();
+        void handleCreateChat().then((id) => {
+          if (id) showConversation();
         });
       },
       onRename: (id, name) => void handleRenameChat(id, name),
@@ -292,7 +289,6 @@ function SpaceShellLayout({
       state.isProcessing,
       state.perChatCache,
       currentBuffer?.kind,
-      lane,
       showConversation,
       handleActiveChatChange,
       handleCreateChat,
@@ -301,16 +297,14 @@ function SpaceShellLayout({
     ],
   );
 
-  const designPresence = useDesignPresenceProbe();
-  const activeChatName = state.chatSessions?.find((session) => session.id === state.activeChatId)?.name ?? null;
+  const mockupPresence = useMockupPresenceProbe();
   const resolvedRoot = git?.workspace.workspaceRoot || workspaceRoot || '';
 
   return (
     <>
-      <div className="sprout-workspace-shell" data-testid="workspace-space-shell" data-lane={lane}>
+      <div className="sprout-workspace-shell" data-testid="workspace-space-shell">
         <ErrorBoundary panelName="Sidebar">
           <WorkspaceSidebar
-            lane={lane}
             title={projectName}
             collapsed={sidebarCollapsed}
             onCollapsedChange={setSidebarCollapsed}
@@ -356,11 +350,9 @@ function SpaceShellLayout({
               document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line } }))
             }
             chat={shellChat}
-            design={{
-              loading: designPresence.loading,
-              present: designPresence.present || !!hasDesignTree,
-              agentChatName: lane === 'design' ? activeChatName : null,
-              onAgentCreateChat: () => void handleCreateChat('design'),
+            mockup={{
+              loading: mockupPresence.loading,
+              present: mockupPresence.present || !!hasMockup,
             }}
             git={{
               gitBranches: git?.workspace.gitBranches ?? NO_GIT,
@@ -395,19 +387,15 @@ function SpaceShellLayout({
  * editor, and closing the active tab.
  */
 function useShellCommands({
-  lane,
   showConversation,
   setCurrentView,
 }: {
-  lane: 'code' | 'design';
   showConversation: () => void;
   setCurrentView: (view: ViewType) => void;
 }): void {
   const { activeBufferId, closeBuffer } = useEditorManager();
-  const enabled = lane === 'code';
-  useCommandHandler(enabled ? VIEW_COMMANDS : NO_COMMANDS);
+  useCommandHandler(VIEW_COMMANDS);
   useEffect(() => {
-    if (!enabled) return;
     const handle = (event: Event) => {
       const commandId = (event as CustomEvent<{ commandId?: string }>).detail?.commandId;
       if (commandId === 'switch_to_chat') showConversation();
@@ -416,19 +404,19 @@ function useShellCommands({
     };
     window.addEventListener('sprout:hotkey', handle);
     return () => window.removeEventListener('sprout:hotkey', handle);
-  }, [enabled, showConversation, setCurrentView, activeBufferId, closeBuffer]);
+  }, [showConversation, setCurrentView, activeBufferId, closeBuffer]);
 }
 
 /** Fired by the startup repo import once the repository is in the workspace. */
 const REPO_IMPORTED_EVENT = 'sprout:repo-imported';
 
 /**
- * The design-presence probe the app root runs (a listing of the workspace
- * root), re-run when an in-browser host's adapter or repository lands, as the
- * first listing may have run before either.
+ * The mockup-presence probe the app root runs, re-run when an in-browser
+ * host's adapter or repository lands, as the first read may have run before
+ * either.
  */
-function useDesignPresenceProbe(): ReturnType<typeof useDesignPresence> {
-  const presence = useDesignPresence();
+function useMockupPresenceProbe(): ReturnType<typeof useMockupPresence> {
+  const presence = useMockupPresence();
   const { recheck } = presence;
   useEffect(() => {
     window.addEventListener(ADAPTER_INSTALLED_EVENT, recheck);

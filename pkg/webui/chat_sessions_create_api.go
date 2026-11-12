@@ -25,7 +25,6 @@ func (ws *ReactWebServer) handleAPIChatSessionsCreate(w http.ResponseWriter, r *
 	var req struct {
 		ID   string `json:"id"`
 		Name string `json:"name"`
-		Mode string `json:"mode"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -65,7 +64,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsCreate(w http.ResponseWriter, r *
 		name = "Chat " + strconv.Itoa(ctx.nextChatNumber)
 	}
 
-	cs := newChatSessionInMode(chatID, name, strings.TrimSpace(req.Mode))
+	cs := newChatSession(chatID, name)
 	ctx.ChatSessions[chatID] = cs
 	ctx.markChatCreated(chatID)
 	ws.mutex.Unlock()

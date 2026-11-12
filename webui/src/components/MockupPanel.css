@@ -1,0 +1,39 @@
+/* MockupPanel styles. Token-driven per docs/internal/design-system.md — no
+   raw hex/rgba.
+
+   The panel reuses the preview panel's column, header and body classes so the
+   mockup sits in the same slot as a dev server's output; only the frame and
+   the empty state are its own. */
+
+.mockup-panel__frame {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: none;
+  background: var(--bg-primary);
+}
+
+.mockup-panel__empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2, 8px);
+  padding: var(--space-6, 32px);
+  text-align: center;
+}
+
+.mockup-panel__empty-title {
+  margin: 0;
+  font-size: var(--text-lg, 16px);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.mockup-panel__empty-hint {
+  margin: 0;
+  max-width: 32ch;
+  font-size: var(--text-sm, 13px);
+  color: var(--text-secondary);
+}

@@ -47,7 +47,6 @@ vi.mock('../components/ChatView', () => ({ default: () => <div data-testid="prom
 vi.mock('./hostAgentBackend', () => ({ wireHostAgentBackend: vi.fn(), resetHostAgentBackend: vi.fn() }));
 vi.mock('../services/apiFileCheck', () => ({ checkFilesModified: vi.fn().mockResolvedValue({ modified: [] }) }));
 vi.mock('../workspaces/CodeShell', () => ({ default: () => <div data-testid="prompts-code-shell" /> }));
-vi.mock('../workspaces/DesignShell', () => ({ default: () => <div data-testid="prompts-design-shell" /> }));
 
 import { setActiveHost } from '../host/accessor';
 import { headlessHost } from '../host/HostProvider';

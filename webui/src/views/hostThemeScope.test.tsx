@@ -37,10 +37,6 @@ vi.mock('../services/localEventsProvider', () => ({
 vi.mock('../workspaces/CodeShell', () => ({
   default: () => <div data-testid="sprout-workspace-code-shell" />,
 }));
-vi.mock('../workspaces/DesignShell', () => ({
-  default: () => <div data-testid="sprout-workspace-design-shell" />,
-}));
-
 vi.mock('../services/api', () => {
   class MockApiService {
     private static instance: MockApiService;

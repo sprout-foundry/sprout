@@ -1,6 +1,6 @@
 /**
  * Layer 2 of the layered layout: everything in the current project, grouped
- * by what you are doing — conversations with the agent, code, design, and
+ * by what you are doing — conversations with the agent, code, and
  * automations. Picking a tool drills into its existing panel (file tree,
  * source control, search…) with a back arrow, so the panels keep their
  * sidebar home and the list stays one level deep.
@@ -12,7 +12,6 @@ import {
   FolderTree,
   GitBranch,
   MessageSquare,
-  Palette,
   PenSquare,
   ScrollText,
   Search,
@@ -26,10 +25,7 @@ import { useState, type ReactElement, type ReactNode } from 'react';
 import { showThemedConfirm, showThemedPrompt } from '../ThemedDialog';
 import type { ChatSession } from '../../services/chatSessions';
 
-export type ProjectNavTarget =
-  | { kind: 'conversation'; id: string }
-  | { kind: 'section'; id: string }
-  | { kind: 'design'; id: string };
+export type ProjectNavTarget = { kind: 'conversation'; id: string } | { kind: 'section'; id: string };
 
 export interface ProjectNavConversations {
   sessions: ChatSession[];
@@ -70,7 +66,7 @@ interface ProjectNavProps {
   current: ProjectNavTarget | null;
   onNavigate: (target: ProjectNavTarget) => void;
   codeEntries: NavEntry[];
-  designEntries: NavEntry[];
+
   automationEntries: NavEntry[];
   footerEntries: NavEntry[];
   /** When set, the nav shows this panel instead of the list. */
@@ -143,13 +139,9 @@ export default function ProjectNav(props: ProjectNavProps): ReactElement {
   ) : null;
 
   if (drill) {
-    // The open tool's siblings (Files · Search · Source control, or the
-    // design sections) switch in one click, without going back to the list.
-    const siblings = current
-      ? [props.codeEntries, props.designEntries]
-          .find((group) => group.some((e) => same(current, e.target)))
-          ?.filter((e) => e.target.id !== 'terminal')
-      : undefined;
+    // The open tool's siblings (Files · Search · Source control) switch in
+    // one click, without going back to the list.
+    const siblings = current ? props.codeEntries.filter((e) => e.target.id !== 'terminal') : undefined;
     return (
       <div className="project-nav" data-testid="project-nav">
         <div className="project-nav-drill-header">
@@ -199,7 +191,7 @@ export default function ProjectNav(props: ProjectNavProps): ReactElement {
     </button>
   );
 
-  const sessions = (conversations?.sessions ?? []).filter((s) => (s.mode ?? 'code') !== 'design' || s.is_active);
+  const sessions = conversations?.sessions ?? [];
 
   return (
     <div className="project-nav" data-testid="project-nav">
@@ -252,7 +244,6 @@ export default function ProjectNav(props: ProjectNavProps): ReactElement {
           ))}
         </Section>
         <Section title="Code">{props.codeEntries.map(item)}</Section>
-        {props.designEntries.length > 0 && <Section title="Design">{props.designEntries.map(item)}</Section>}
         {props.automationEntries.length > 0 && (
           <Section title="Automations">{props.automationEntries.map(item)}</Section>
         )}
@@ -290,7 +281,5 @@ export const NAV_ICONS = {
   automations: Zap,
   settings: Settings,
   logs: ScrollText,
-  mockup: Palette,
-  design: Palette,
   terminal: SquareTerminal,
 };

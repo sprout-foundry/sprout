@@ -2,15 +2,14 @@
  * host.9 — the example host (SP-160 Acceptance criteria 3).
  *
  * Pins the criterion end to end: a minimal host with its own chrome and theme
- * mounts two spaces, receives a notification and a navigation intent. The
- * example imports only the two public entry points; the companion
+ * mounts the registered spaces, receives a notification and a navigation
+ * intent. The example imports only the two public entry points; the companion
  * `exampleHostBoundary.test` statically enforces that, and this suite proves
  * the runtime behavior the criterion names.
  *
- * The mounted spaces are the built-in workspace modes (`code`, `design`) —
- * the two every workspace offers — so the test also demonstrates switching
- * between them. `design` is registered through the public API in one case to
- * show a host can mount a space it registered itself.
+ * The built-in space is `code`; a second space is registered through the
+ * public API, which is also how the test shows a host can mount a space it
+ * registered itself.
  */
 
 import { fireEvent, render, screen, within } from '@testing-library/react';
@@ -24,6 +23,16 @@ import { ExampleHost, ExampleHostRoot, createExampleHost } from './ExampleHost';
 function freshState(): ExampleHostState {
   return { notifications: [], intents: [], activeSpaceId: 'code' };
 }
+
+/** A second space, registered the way a host registers its own. */
+const secondSpace = {
+  id: 'example-second',
+  label: 'Example Second',
+  icon: MonitorPlay,
+  hint: 'A host-registered space',
+  available: () => true,
+  Shell: () => null,
+};
 
 describe('the example host builds a real SproutHost', () => {
   it('supplies its own chrome nodes, theme, capabilities and transport', () => {
@@ -75,33 +84,43 @@ describe('the example host renders with its own chrome and theme', () => {
   });
 });
 
-describe('the example host mounts two spaces and switches between them', () => {
-  it('offers two spaces and mounts the active one', () => {
-    const state = freshState();
-    render(<ExampleHost host={createExampleHost(state)} state={state} />);
+describe('the example host mounts the registered spaces and switches between them', () => {
+  it('offers every registered space and mounts the active one', () => {
+    const dispose = registerWorkspaceMode(secondSpace);
+    try {
+      const state = freshState();
+      render(<ExampleHost host={createExampleHost(state)} state={state} />);
 
-    expect(screen.getByTestId('host-example-space-code')).toBeInTheDocument();
-    expect(screen.getByTestId('host-example-space-design')).toBeInTheDocument();
-    expect(screen.getByTestId('host-example-space')).toHaveAttribute('data-space', 'code');
+      expect(screen.getByTestId('host-example-space-code')).toBeInTheDocument();
+      expect(screen.getByTestId('host-example-space-example-second')).toBeInTheDocument();
+      expect(screen.getByTestId('host-example-space')).toHaveAttribute('data-space', 'code');
+    } finally {
+      dispose();
+    }
   });
 
   it('switching spaces mounts the other shell (the layout re-arranges)', () => {
-    const state = freshState();
-    render(<ExampleHost host={createExampleHost(state)} state={state} />);
+    const dispose = registerWorkspaceMode(secondSpace);
+    try {
+      const state = freshState();
+      render(<ExampleHost host={createExampleHost(state)} state={state} />);
 
-    // The active space starts on code; its view lands in the center slot.
-    const space = screen.getByTestId('host-example-space');
-    expect(space).toHaveAttribute('data-space', 'code');
-    expect(space).toHaveAttribute('data-view-slot', 'center');
+      // The active space starts on code; its view lands in the center slot.
+      const space = screen.getByTestId('host-example-space');
+      expect(space).toHaveAttribute('data-space', 'code');
+      expect(space).toHaveAttribute('data-view-slot', 'center');
 
-    fireEvent.click(screen.getByTestId('host-example-space-design'));
+      fireEvent.click(screen.getByTestId('host-example-space-example-second'));
 
-    // The switch re-mounts the active space: the view moves to the left slot,
-    // and the pressed control follows.
-    expect(state.activeSpaceId).toBe('design');
-    expect(screen.getByTestId('host-example-space')).toHaveAttribute('data-space', 'design');
-    expect(screen.getByTestId('host-example-space')).toHaveAttribute('data-view-slot', 'left');
-    expect(screen.getByTestId('host-example-space-design')).toHaveAttribute('aria-pressed', 'true');
+      // The switch re-mounts the active space: the view moves to the left slot,
+      // and the pressed control follows.
+      expect(state.activeSpaceId).toBe('example-second');
+      expect(screen.getByTestId('host-example-space')).toHaveAttribute('data-space', 'example-second');
+      expect(screen.getByTestId('host-example-space')).toHaveAttribute('data-view-slot', 'left');
+      expect(screen.getByTestId('host-example-space-example-second')).toHaveAttribute('aria-pressed', 'true');
+    } finally {
+      dispose();
+    }
   });
 
   it('can mount a space a host registered through the public API', () => {

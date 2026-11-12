@@ -48,11 +48,6 @@ vi.mock('@sprout/ui', () => ({
   SkeletonText: () => null,
   CommandInput: () => null,
 }));
-vi.mock('./design/useDesignPresence', () => ({
-  __esModule: true,
-  useDesignPresence: () => ({ present: false, loading: false }),
-}));
-
 import EditorWorkspace from './EditorWorkspace';
 
 const baseProps = {

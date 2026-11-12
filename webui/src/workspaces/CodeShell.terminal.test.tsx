@@ -112,7 +112,7 @@ function shellProps(overrides: Partial<WorkspaceShellProps>): WorkspaceShellProp
     currentBuffer: null,
     handleOutlineNavigateToSymbol: vi.fn(),
     chat: { chatProps: {}, reviewProps: {}, diffState: {} } as unknown as WorkspaceShellProps['chat'],
-    design: {} as WorkspaceShellProps['design'],
+    mockup: {} as WorkspaceShellProps['mockup'],
     git: { gitBranches: { current: '', branches: [] }, gitStatus: null, workspaceRoot: '' },
     ...overrides,
   };

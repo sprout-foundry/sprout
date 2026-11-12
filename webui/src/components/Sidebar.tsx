@@ -49,7 +49,6 @@ import {
   Monitor,
   Zap,
   PanelLeft,
-  Palette,
 } from 'lucide-react';
 import SearchView from './SearchView';
 import SidebarFilesSection, { type FileTreeHandle } from './SidebarFilesSection';
@@ -57,7 +56,6 @@ import SidebarGitSection from './SidebarGitSection';
 import SidebarLogsPane from './SidebarLogsPane';
 import SidebarSettingsSection from './SidebarSettingsSection';
 import SproutLogo from './SproutLogo';
-import { MockupSection } from '../views/MockupSection';
 import { isLayeredLayout, LEFT_INSET_VAR } from '../config/layout';
 import LayeredSidebar from './layered/LayeredSidebar';
 import type { ProjectNavConversations } from './layered/ProjectNav';
@@ -438,8 +436,6 @@ function Sidebar({
         );
       case 'search':
         return renderSearchSection();
-      case 'mockup':
-        return <MockupSection workspaceRoot={gitPanel?.workspaceRoot} onOpenFile={handleFileClick} />;
       case 'automations':
         return (
           <AutomationsPanel
@@ -670,21 +666,6 @@ function Sidebar({
                     </nav>
                   </>
                 )}
-
-                {/* Design — always offered; an empty tree gets the onboarding surface */}
-                <div role="tablist" aria-orientation="vertical">
-                  <button
-                    role="tab"
-                    aria-selected={currentView === 'design'}
-                    className={`rail-icon ${currentView === 'design' ? 'active' : ''}`}
-                    onClick={() => onViewChange?.('design')}
-                    title={copy('nav.design')}
-                    aria-label={copy('nav.design')}
-                    data-testid="sidebar-design-button"
-                  >
-                    <Palette size={18} strokeWidth={1.5} />
-                  </button>
-                </div>
 
                 {/* Settings & Logs tabs */}
                 <div role="tablist" aria-orientation="vertical">

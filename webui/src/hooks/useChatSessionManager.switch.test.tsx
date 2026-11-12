@@ -95,11 +95,7 @@ describe('chat switch', () => {
   it('deleting the chat you are in moves to another chat first, then deletes', async () => {
     const calls: string[] = [];
     sessions.listChatSessions.mockResolvedValue({
-      chat_sessions: [
-        { id: 'chat-a', mode: 'code' },
-        { id: 'chat-d', mode: 'design' },
-        { id: 'chat-b', mode: 'code' },
-      ],
+      chat_sessions: [{ id: 'chat-a' }, { id: 'chat-b' }, { id: 'chat-d' }],
     });
     sessions.switchChatSession.mockImplementation(async (id: string) => {
       calls.push(`switch:${id}`);

@@ -418,10 +418,6 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 	opts.CompactionTriggerFraction = a.compactionTriggerFractionFor(a.getModelContextLimit())
 	opts.SubstitutionTargetFraction = 0.50
 
-	// Folded here, after every prompt rebuild and before the prompt is
-	// handed to the seed agent, so the mode's skills reach this turn.
-	a.autoActivateModeSkills()
-
 	// When the project's starter manifest names a starter, its
 	// stack skill auto-activates at turn start — folded into the system
 	// prompt before it is handed to the seed agent (the next block).

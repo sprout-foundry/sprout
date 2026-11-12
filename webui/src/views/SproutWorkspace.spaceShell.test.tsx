@@ -183,7 +183,6 @@ describe('SproutWorkspace space shell (own mode, no layout)', () => {
   it('renders the sidebar sections, editor tabs, the conversation, the docked terminal and the status bar', async () => {
     mount(daemonHost());
     const shell = await screen.findByTestId('workspace-space-shell');
-    expect(shell).toHaveAttribute('data-lane', 'code');
 
     const sidebar = screen.getByTestId('workspace-sidebar');
     const sections = within(sidebar).getByRole('tablist', { name: 'Files' });
@@ -373,15 +372,5 @@ describe('SproutWorkspace space shell (own mode, no layout)', () => {
       );
     });
     expect(screen.getByTestId('workspace-sidebar')).toBeInTheDocument();
-  });
-
-  it("lists the design space's one section for the design space", async () => {
-    mount(daemonHost(), 'design');
-    const shell = await screen.findByTestId('workspace-space-shell');
-    expect(shell).toHaveAttribute('data-lane', 'design');
-    const sidebar = screen.getByTestId('workspace-sidebar');
-    // One section, so the drill shows its title rather than a one-entry tab
-    // strip.
-    expect(within(sidebar).getByText('Mockup')).toBeInTheDocument();
   });
 });

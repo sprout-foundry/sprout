@@ -237,8 +237,7 @@ func steerAgentFunc(_ js.Value, args []js.Value) interface{} {
 //	args[5] (string?) — JSON [{role, content}] history, used only when the
 //	                    chat's agent is created fresh (e.g. after a page
 //	                    reload) so the conversation continues where it was
-//	args[6] (string?) — workspace mode the query was sent from ("design",
-//	                    "code", …); selects the agent's mode skills
+//	args[6] (string?) — reserved; hosts pass "" (no mode skills today)
 //	args[7] (string?) — JSON agent options, {persona?, context?} (see
 //	                    agentRunOptions); applied when the chat's agent is
 //	                    built, and a change rebuilds it
@@ -269,7 +268,6 @@ func runAgentFunc(_ js.Value, args []js.Value) interface{} {
 		chatID = *id
 	}
 	historyJSON := argString(args, 5, "")
-	mode := argString(args, 6, "")
 	optionsJSON := argString(args, 7, "")
 
 	var onEvent js.Value
@@ -378,7 +376,6 @@ func runAgentFunc(_ js.Value, args []js.Value) interface{} {
 		// The agent is cached across turns; a host-side changeDir between
 		// turns (studio: picking another repo) must reach its tool paths.
 		ag.SetWorkspaceRoot(workspaceRoot)
-		ag.SetWorkspaceMode(mode)
 
 		response, err := ag.ProcessQuery(query)
 		chatAgentsMu.Lock()

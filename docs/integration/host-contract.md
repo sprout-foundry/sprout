@@ -1093,7 +1093,7 @@ import { ViewsLayout, resolveWorkspaceMode } from '../../webui/src/views/index';
 
 function MyRoot() {
   const host = useHost();
-  const space = resolveWorkspaceMode('code', { hasDesignTree: false });
+  const space = resolveWorkspaceMode('code', { hasMockup: false });
   return (
     <div data-theme={host.theme?.mode}>
       <MyChrome />

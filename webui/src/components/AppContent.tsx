@@ -35,7 +35,7 @@ import { useCommandPaletteSources } from './CommandPalette/useCommandPaletteSour
 import type { ContextPanelHandle } from './contextPanel/types';
 import ErrorBoundary from './ErrorBoundary';
 import Sidebar from './Sidebar';
-import { useDesignPresence } from './design/useDesignPresence';
+import { useMockupPresence } from './useMockupPresence';
 import Terminal from './Terminal';
 import WorkspaceGateModal from './WorkspaceGateModal';
 import { WorktreeChatDialog } from './WorktreeChatDialog';
@@ -369,29 +369,15 @@ const AppContent: React.FC<AppContentProps> = ({
 
   const initialViewSyncRef = useRef(false);
 
-  // SP-140 / workspace modes: which mode the shell is showing. Whether the
-  // workspace has a mockup is probed once here so the switcher and the Design
-  // surface agree on what exists. Declared before the chat-tab wiring below:
-  // the tab-driven switch handler must record the mode pin, which needs the
-  // pinning hook's callbacks in scope.
-  const { present: hasDesignTree, loading: designPresenceLoading } = useDesignPresence();
-  const {
-    mode: workspaceMode,
-    modes: workspaceModes,
-    select: selectWorkspaceMode,
-  } = useWorkspaceMode({ hasDesignTree });
-
-  // One conversation per project (SP-147): the chat list is unfiltered —
-  // design and code chats are stages of the same project conversation
-  // history, and the mode shapes the agent, not the session list. Creates
-  // still carry the lane for the server's mode stamp; a mode switch keeps
-  // the active chat (no per-mode pins, no boot-time fresh design chat).
-  const chatLane: 'code' | 'design' = workspaceMode.id === 'design' ? 'design' : 'code';
+  // The workspace's mockup, probed once here and handed to the Code shell's
+  // preview panel. A mockup is a view of the work, not a mode: `draw_mockup`
+  // writes `design/mockup.html` and the panel shows it beside the code.
+  const { present: hasMockup, loading: mockupLoading } = useMockupPresence();
+  const { mode: workspaceMode, modes: workspaceModes, select: selectWorkspaceMode } = useWorkspaceMode({ hasMockup });
 
   useChatSessionsSync({
     chatSessions,
     activeChatId,
-    mode: workspaceMode.id,
     buffersRef,
     updateBufferTitle,
     setBufferPinned,
@@ -452,8 +438,7 @@ const AppContent: React.FC<AppContentProps> = ({
           metadata: { chatId: id },
         });
       }
-      const chatMode = chatSessions?.find((c) => c.id === id)?.mode;
-      const switched = Promise.resolve(onActiveChatChange?.(id, chatMode === 'design' ? 'design' : 'code'));
+      const switched = Promise.resolve(onActiveChatChange?.(id));
       onViewChange('chat');
       // A phone keyboard would cover the conversation being opened.
       if (!isMobile) void switched.finally(() => requestComposerFocus(id));
@@ -464,50 +449,21 @@ const AppContent: React.FC<AppContentProps> = ({
   /**
    * Selecting a mode moves the view. The workspace-mode state is the source of
    * truth for "which surface am I in"; `currentView` remains the intra-mode
-   * route (chat/editor/git inside Code, the design surface inside Design), so
-   * the two are kept in step here rather than each mode re-deriving it.
+   * route (chat/editor/git inside Code), so the two are kept in step here
+   * rather than each mode re-deriving it.
    */
   const handleSelectMode = useCallback(
     (id: WorkspaceModeId) => {
       selectWorkspaceMode(id);
-      if (id === 'design') onViewChange('design');
-      else if (
-        // The target mode is Code. Reset the view only when the current view
-        // belongs to some other mode's surface (design today, future modes
-        // later); chat/editor/git and plugin views are Code's own routes and
-        // switching back to Code must not yank the user out of them.
-        !['chat', 'editor', 'git', ...getPluginViewIds()].includes(state.currentView)
-      ) {
+      // Reset the view only when it belongs to a surface the target mode does
+      // not own (a mode that has since been unregistered). chat/editor/git and
+      // plugin views are Code's own routes and must not be yanked.
+      if (!['chat', 'editor', 'git', ...getPluginViewIds()].includes(state.currentView)) {
         onViewChange('chat');
       }
     },
     [selectWorkspaceMode, onViewChange, state.currentView],
   );
-
-  /**
-   * Reconcile the view with the persisted mode once the design-presence probe
-   * settles. `currentView` alone can't decide this: it is restored before the
-   * probe answers, so a Design-mode workspace whose `design/` check is still in
-   * flight would briefly (or permanently) sit on chat. Runs only until it has
-   * acted once, so it never fights the user's own navigation.
-   *
-   * Design mode is offered on every workspace now: an empty tree renders the
-   * onboarding surface rather than disqualifying the mode, so the second
-   * branch below only fires for hosts whose surface is genuinely gone
-   * (none today) — an explicit `design` view with no tree is the empty
-   * state and is left alone.
-   */
-  const modeViewSyncedRef = useRef(false);
-  useEffect(() => {
-    if (modeViewSyncedRef.current) return;
-    if (designPresenceLoading) return; // probe still in flight
-    modeViewSyncedRef.current = true;
-    // Both branches key on the literal 'design' view id, so only the Design
-    // surface's route is ever touched here: Code-owned routes (chat/editor/
-    // git, plugin views included) match neither branch and are never reset.
-    // Resetting foreign views on mode switch is handleSelectMode's job.
-    if (workspaceMode.id === 'design' && state.currentView !== 'design') onViewChange('design');
-  }, [designPresenceLoading, workspaceMode.id, state.currentView, onViewChange]);
 
   const handleOutlineNavigateToSymbol = useCallback((line: number) => {
     document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line } }));
@@ -521,13 +477,6 @@ const AppContent: React.FC<AppContentProps> = ({
     if (initialViewSyncRef.current) {
       return;
     }
-    // A persisted Design mode owns the view: the design surface renders outside
-    // the chat buffer, so forcing `chat` here would undo the mode the user left
-    // the workspace in. Mode reconciliation is handled by the effect above.
-    if (workspaceMode.id === 'design') {
-      initialViewSyncRef.current = true;
-      return;
-    }
     if (currentBuffer?.kind === 'chat' && state.currentView !== 'chat') {
       initialViewSyncRef.current = true;
       onViewChange('chat');
@@ -536,7 +485,7 @@ const AppContent: React.FC<AppContentProps> = ({
     if (currentBuffer) {
       initialViewSyncRef.current = true;
     }
-  }, [currentBuffer, onViewChange, state.currentView, workspaceMode.id]);
+  }, [currentBuffer, onViewChange, state.currentView]);
 
   const handleToggleContextPanel = () => {
     // Direct ref call (the old custom-event hop depended on a listener that
@@ -814,9 +763,7 @@ const AppContent: React.FC<AppContentProps> = ({
       activeChatId,
       chatSessions,
       onActiveChatChange,
-      // New Chat stamps the lane it was created in (SP-142): EditorTabs
-      // invokes this with no args, so the current mode is bound here.
-      onCreateChat: onCreateChat ? () => onCreateChat(chatLane) : undefined,
+      onCreateChat,
       onCreateChatInWorktree: onCreateChatInWorktree ? () => setWorktreeDialogOpen(true) : undefined,
       onDeleteChat,
       onDeleteAllChats,
@@ -825,14 +772,9 @@ const AppContent: React.FC<AppContentProps> = ({
       reviewProps,
       diffState,
     },
-    design: {
-      loading: designPresenceLoading,
-      present: hasDesignTree,
-      // SP-142 142.5: the agent panel header names the design-lane chat and
-      // offers New Chat scoped to the lane (create stamps 'design').
-      agentChatName:
-        workspaceMode.id === 'design' ? ((chatSessions ?? []).find((s) => s.id === activeChatId)?.name ?? null) : null,
-      onAgentCreateChat: onCreateChat ? () => void onCreateChat('design') : undefined,
+    mockup: {
+      loading: mockupLoading,
+      present: hasMockup,
     },
     git: {
       gitBranches,
@@ -1001,7 +943,7 @@ const AppContent: React.FC<AppContentProps> = ({
           project={project}
           space={workspaceMode.id}
           shellProps={shellProps}
-          hasDesignTree={hasDesignTree}
+          hasMockup={hasMockup}
           onSpaceChange={selectWorkspaceMode}
           className="app-workspace"
         />

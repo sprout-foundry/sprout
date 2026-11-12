@@ -36,7 +36,7 @@ src/
   config.ts           site-wide config (CONTACT_ENDPOINT lives here)
 public/               copied verbatim into dist/ (favicon.svg, 404.html)
 test/                 vitest specs (*.test.ts)
-design/               the design tree (tokens, screens, flows) — see its README
+design/               the clickable mockup (mockup.html), drawn by draw_mockup
 dist/                 build output (gitignored); never edit by hand
 ```
 

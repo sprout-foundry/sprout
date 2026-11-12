@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import type { ChatSession } from '../services/chatSessions';
 import { loadChatPanePlacement } from '../services/layoutPersistence';
 import type { EditorBuffer } from '../types/editor';
@@ -6,13 +6,11 @@ import type { EditorBuffer } from '../types/editor';
 export interface UseChatSessionsSyncParams {
   chatSessions: ChatSession[] | undefined;
   activeChatId: string | null | undefined;
-  /** The workspace-mode lane whose chats get tabs (SP-142): 'design' shows design-lane chats only; anything else shows the code lane (mode absent or 'code'). */
-  mode?: string;
   buffersRef: React.RefObject<Map<string, EditorBuffer>>;
   updateBufferTitle: (id: string, title: string) => void;
   setBufferPinned: (id: string, isPinned: boolean) => void;
   setBufferClosable: (id: string, isClosable: boolean) => void;
-  /** Close a buffer (the editor manager's path, so close events fire). Used to drop the other lane's chat tabs on a lane switch (SP-142). */
+  /** Close a buffer (the editor manager's path, so close events fire). */
   closeBuffer?: (id: string) => void;
   openWorkspaceBuffer: (options: {
     kind: 'chat' | 'diff' | 'review' | 'file' | 'compare';
@@ -45,11 +43,6 @@ export interface UseChatSessionsSyncParams {
  * pinned every chat that ever happened to be active, and chat tabs expose no
  * unpin or close control when unclosable — a stuck tab with no escape.
  *
- * Mode lanes (SP-142): each mode mirrors only its own chats — the design
- * lane is `mode === 'design'`; the code lane is everything else (absent
- * mode = legacy = code). A chat created in one lane never gets a tab in
- * the other, so cross-mode contamination can't start at the tab strip.
- *
  * Opening is once-per-session-per-mount: a session whose tab the user closed
  * must NOT come back on the next chatSessions update (a WS event, a rename,
  * another create all re-run this effect). The exclusion list is cleared on
@@ -58,7 +51,6 @@ export interface UseChatSessionsSyncParams {
 export const useChatSessionsSync = ({
   chatSessions,
   activeChatId,
-  mode,
   buffersRef,
   updateBufferTitle,
   setBufferPinned,
@@ -68,45 +60,8 @@ export const useChatSessionsSync = ({
 }: UseChatSessionsSyncParams): void => {
   const closedChatIdsRef = useRef<Set<string>>(new Set());
   const prevActiveChatIdRef = useRef<string | null | undefined>(activeChatId);
-
-  // The lane filter, applied before any mirroring: tabs exist only for the
-  // active mode's chats.
-  const laneSessions = useMemo(
-    () =>
-      (chatSessions ?? []).filter((session) =>
-        mode === 'design' ? session.mode === 'design' : session.mode !== 'design',
-      ),
-    [chatSessions, mode],
-  );
-  // A lane switch closes the other lane's chat tabs (they reopen when the
-  // user switches back and the mirroring effect re-runs for that lane).
-  // Mount is not a lane switch — the initial buffer set must survive.
   const closeRef = useRef(closeBuffer);
   closeRef.current = closeBuffer;
-  const prevLaneRef = useRef<string | null>(null);
-  // The next active-chat change after a lane switch is that lane restoring its
-  // own conversation (useChatModePinning) — a background switch that must not
-  // pull focus off a file, e.g. a design's source opened into Code.
-  const laneRestorePendingRef = useRef(false);
-  useEffect(() => {
-    const prev = prevLaneRef.current;
-    prevLaneRef.current = mode ?? 'code';
-    if (prev === null || prev === (mode ?? 'code')) return;
-    laneRestorePendingRef.current = true;
-    const close = closeRef.current;
-    const currentBuffers = buffersRef.current;
-    if (!currentBuffers) return;
-    for (const buffer of Array.from(currentBuffers.values())) {
-      if (buffer.kind !== 'chat') continue;
-      // The lane's active chat tab is unclosable, and close skips those.
-      if (close) {
-        setBufferClosable(buffer.id, true);
-        close(buffer.id);
-      } else currentBuffers.delete(buffer.id);
-    }
-    closedChatIdsRef.current.clear();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode]);
 
   // Open tabs for sessions that don't have one yet. Runs per-mount except
   // when the active chat changes (which deliberately reopens a closed tab
@@ -116,22 +71,20 @@ export const useChatSessionsSync = ({
     // active chat first becoming known at startup does not, when a restored
     // file already has focus.
     const switchedFromChat = !!prevActiveChatIdRef.current && activeChatId !== prevActiveChatIdRef.current;
-    const laneRestore = switchedFromChat && laneRestorePendingRef.current;
     if (activeChatId !== prevActiveChatIdRef.current) {
-      laneRestorePendingRef.current = false;
       if (activeChatId && closedChatIdsRef.current.has(activeChatId)) {
         closedChatIdsRef.current.delete(activeChatId);
       }
       prevActiveChatIdRef.current = activeChatId;
     }
 
-    if (!laneSessions || laneSessions.length === 0) return;
+    if (!chatSessions || chatSessions.length === 0) return;
     const currentBuffers = buffersRef.current;
     if (!currentBuffers) return;
 
     // Open in creation order: the list arrives most-recently-active first, so
     // following it reshuffled the tab strip on every reload.
-    const byCreation = [...laneSessions].sort((a, b) => (a.created_at ?? '').localeCompare(b.created_at ?? ''));
+    const byCreation = [...chatSessions].sort((a, b) => (a.created_at ?? '').localeCompare(b.created_at ?? ''));
     const savedPlacement = loadChatPanePlacement();
     const fileFocused = Array.from(currentBuffers.values()).some((b) => b.kind !== 'chat' && b.isActive);
     byCreation.forEach((session) => {
@@ -157,7 +110,7 @@ export const useChatSessionsSync = ({
         title: session.name || 'Chat',
         isPinned: false,
         isClosable: !isActive,
-        activate: isActive && ((switchedFromChat && !laneRestore) || !fileFocused),
+        activate: isActive && (switchedFromChat || !fileFocused),
         paneId: savedPlacement[session.id],
         metadata: { chatId: session.id },
       });
@@ -170,10 +123,10 @@ export const useChatSessionsSync = ({
     // been showing got a second tab, whose focus switched the conversation
     // back. Once the active chat has its own tab, retire the stand-in.
     const standIn = buffersRef.current?.get('buffer-chat');
-    const activeHasSession = !!activeChatId && laneSessions.some((session) => session.id === activeChatId);
+    const activeHasSession = !!activeChatId && chatSessions.some((session) => session.id === activeChatId);
     if (standIn && !standIn.metadata?.chatId && activeHasSession && closeRef.current) {
       if (standIn.isActive) {
-        const activeSession = laneSessions.find((session) => session.id === activeChatId);
+        const activeSession = chatSessions.find((session) => session.id === activeChatId);
         openWorkspaceBuffer({
           kind: 'chat',
           path: `__workspace/chat/${activeChatId}`,
@@ -189,7 +142,7 @@ export const useChatSessionsSync = ({
       closeRef.current('buffer-chat');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [laneSessions, activeChatId]);
+  }, [chatSessions, activeChatId]);
 
   // A chat that left the list was deleted (here or in another tab): close its
   // tab, which otherwise stayed open on a conversation that no longer exists.
@@ -217,14 +170,14 @@ export const useChatSessionsSync = ({
   // chat's tab is unclosable. Idempotent: the setters only fire when state is
   // actually wrong, so steady-state is a no-op (no render loop).
   useEffect(() => {
-    if (!laneSessions) return;
+    if (!chatSessions) return;
     const currentBuffers = buffersRef.current;
     if (!currentBuffers) return;
 
     for (const buffer of Array.from(currentBuffers.values())) {
       if (buffer.kind === 'chat' && buffer.isPinned) setBufferPinned(buffer.id, false);
     }
-    for (const session of laneSessions) {
+    for (const session of chatSessions) {
       const buffer = Array.from(currentBuffers.values()).find(
         (b) => b.kind === 'chat' && b.metadata?.chatId === session.id,
       );
@@ -237,7 +190,7 @@ export const useChatSessionsSync = ({
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [laneSessions, activeChatId]);
+  }, [chatSessions, activeChatId]);
 
   // Observe buffer closes to learn which chat tabs the user dismissed.
   // EditorManager emits 'workspace:buffer-closed' with the buffer's metadata,

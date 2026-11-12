@@ -48,21 +48,20 @@ describe('chatApi steer retraction', () => {
   });
 });
 
-describe('chatApi sendQuery mode', () => {
+describe('chatApi sendQuery body', () => {
   const okFetch = () =>
     vi.fn(async (_url: string, _init?: RequestInit) => ({ ok: true, json: async () => ({}) }) as Response);
 
-  it('sends the workspace mode so the server can prepare the agent', async () => {
+  it('sends the query and the chat it belongs to', async () => {
     const fetchFn = okFetch();
-    await sendQuery(fetchFn as unknown as typeof fetch, 'make a login screen', 'chat-1', 'design');
+    await sendQuery(fetchFn as unknown as typeof fetch, 'make a login screen', 'chat-1');
     expect(JSON.parse(String(fetchFn.mock.calls[0][1]?.body))).toEqual({
       query: 'make a login screen',
       chat_id: 'chat-1',
-      mode: 'design',
     });
   });
 
-  it('omits mode when none is given', async () => {
+  it('omits chat_id when none is given', async () => {
     const fetchFn = okFetch();
     await sendQuery(fetchFn as unknown as typeof fetch, 'hi');
     expect(JSON.parse(String(fetchFn.mock.calls[0][1]?.body))).toEqual({ query: 'hi' });

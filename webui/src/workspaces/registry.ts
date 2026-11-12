@@ -3,8 +3,7 @@
  *
  * A *workspace* in sprout is the filesystem root the user connected to (see
  * `LocationSwitcher`, where "workspace" means the folder path). A **mode** is
- * what the user is doing with that root: writing code, designing, and later
- * shipping.
+ * what the user is doing with that root: writing code, and later shipping.
  *
  * Modes are peers. Each supplies its own rail and content surface, and entering
  * one replaces the shell around the shared root rather than swapping a panel
@@ -16,11 +15,16 @@
  * surfaces stay inside their shells, not here.
  *
  * Modes are defined by one public registration API: an
- * embedding shell registers its modes with it, and the built-in Code and
- * Design modes register at module load through the same write path (minus the
- * API's built-in guard, which exists to protect them). Adding a mode is: one
+ * embedding shell registers its modes with it, and the built-in Code mode
+ * registers at module load through the same write path (minus the API's
+ * built-in guard, which exists to protect it). Adding a mode is: one
  * registration, one rail, one shell. No new
  * `currentView === 'x'` exception in the app.
+ *
+ * Mockups are not a mode. `draw_mockup` writes `design/mockup.html`, and the
+ * Code shell shows it in its preview panel — the same place a dev server's
+ * output goes. A mockup is a view of the work, not a separate activity with
+ * its own shell.
  *
  * Two invariants hold for the whole module. First, the built-ins are always
  * registered and irremovable: they cannot be replaced (registration rejects
@@ -31,25 +35,24 @@
  * guaranteed present, there is always something to resolve to.
  */
 
-import { Code2, Palette, type LucideIcon } from 'lucide-react';
+import { Code2, type LucideIcon } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { configuredDefaultWorkspaceMode } from '../config/workspaceMode';
 import CodeShell from './CodeShell';
-import DesignShell from './DesignShell';
 import type { WorkspaceShellProps } from './shell';
 
 /** Stable identifier for a mode. Persisted, so treat these as a wire format. */
 // The open union mirrors `ViewType` (types/app.ts): known ids complete, and a
 // future mode can register without a type change.
-export type WorkspaceModeId = 'code' | 'design' | (string & {}); // eslint-disable-line @typescript-eslint/ban-types
+export type WorkspaceModeId = 'code' | (string & {}); // eslint-disable-line @typescript-eslint/ban-types
 
 export interface WorkspaceModeContext {
   /**
-   * Whether the workspace root has a mockup (`design/mockup.html`). Kept so
-   * the switcher and the Design surface can observe it; it does not gate
-   * availability — Design is always offered and owns its empty state.
+   * Whether the workspace root has a mockup (`design/mockup.html`). The Code
+   * shell's preview panel reads it to decide between the mockup and a dev
+   * server's output; it never gates a mode.
    */
-  hasDesignTree: boolean;
+  hasMockup: boolean;
 }
 
 export interface WorkspaceMode {
@@ -113,12 +116,12 @@ export const BUILTIN_DEFAULT_WORKSPACE_MODE: WorkspaceModeId = 'code';
 /**
  * The built-in mode ids. These entries are part of the app's contract with
  * every workspace: the mode switcher, the default-mode resolution, and the
- * surfaces themselves all assume Code and Design exist. They are protected in
- * both directions — `registerWorkspaceMode` refuses to register over them,
- * and the returned disposers refuse to remove them — so no embedding shell or
+ * surfaces themselves all assume Code exists. It is protected in both
+ * directions — `registerWorkspaceMode` refuses to register over it, and the
+ * returned disposers refuse to remove it — so no embedding shell or
  * accidental double-registration can leave the app without a usable mode.
  */
-export const BUILTIN_WORKSPACE_MODE_IDS: readonly WorkspaceModeId[] = ['code', 'design'];
+export const BUILTIN_WORKSPACE_MODE_IDS: readonly WorkspaceModeId[] = ['code'];
 
 /** True when `id` names a built-in mode that cannot be replaced or removed. */
 export function isBuiltinWorkspaceModeId(id: WorkspaceModeId): boolean {
@@ -149,8 +152,8 @@ export const WORKSPACE_MODES: WorkspaceMode[] = [];
  * so registration is idempotent and an embedding shell can override a
  * non-built-in mode's label, icon, or shell without reordering the switcher.
  *
- * Built-in ids are rejected: the app's baseline modes cannot be replaced, so
- * a definition offered under `code` or `design` keeps the built-in one. The
+ * Built-in ids are rejected: the app's baseline mode cannot be replaced, so
+ * a definition offered under `code` keeps the built-in one. The
  * rejection is a warned no-op rather than a throw because registration is a
  * boot-time concern — a misbehaving embedder must not crash the app before it
  * renders. The returned disposer removes nothing (nothing was added or
@@ -203,11 +206,8 @@ function registerMode(definition: WorkspaceModeRegistration): UnregisterWorkspac
  * public API refuses their ids).
  *
  * `code` is always available: it is the baseline experience over any root.
- * `design` is also always offered: an empty workspace gets the Design empty
- * state (onboarding cards + the agent chat), which is how a `design/` tree
- * comes to exist in the first place. The surface itself decides what an
- * absent tree looks like; hiding the mode only meant the tree could never be
- * started from the UI.
+ * Mockups are not a mode — `draw_mockup` writes `design/mockup.html` and the
+ * Code shell's preview panel shows it.
  */
 registerMode({
   id: 'code',
@@ -216,15 +216,6 @@ registerMode({
   hint: 'Chat, editor, git, terminal',
   available: () => true,
   Shell: CodeShell,
-});
-
-registerMode({
-  id: 'design',
-  label: 'Design',
-  icon: Palette,
-  hint: 'Mockups and visual ideas',
-  available: () => true,
-  Shell: DesignShell,
 });
 
 /** Modes offered for a workspace, in switcher order. */

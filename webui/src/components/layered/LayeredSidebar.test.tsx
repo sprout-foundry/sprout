@@ -57,7 +57,7 @@ function renderSidebar(overrides: Partial<LayeredSidebarProps> = {}) {
     },
     currentView: 'chat',
     onViewChange: vi.fn(),
-    modes: [{ id: 'code' }, { id: 'design' }] as never,
+    modes: [{ id: 'code' }] as never,
     activeModeId: 'code',
     onSelectMode: vi.fn(),
     onModeSectionChange: vi.fn(),
@@ -88,7 +88,7 @@ describe('LayeredSidebar', () => {
   it('lists conversations and the project tools', () => {
     renderSidebar();
     expect(container.querySelector('.project-nav-title')?.textContent).toBe('my-app');
-    for (const label of ['Add checkout', 'Fix CI', 'Files', 'Source control', 'Mockup', 'Workflows', 'Settings']) {
+    for (const label of ['Add checkout', 'Fix CI', 'Files', 'Source control', 'Workflows', 'Settings']) {
       expect(itemByText(label)).toBeTruthy();
     }
     expect(itemByText('Fix CI')?.querySelector('.project-nav-running')).toBeTruthy();
@@ -138,13 +138,6 @@ describe('LayeredSidebar', () => {
     expect(container.querySelector('[data-testid="section-panel"]')).not.toBeNull();
   });
 
-  it('switches to design mode for design entries', () => {
-    const props = renderSidebar();
-    click(itemByText('Mockup'));
-    expect(props.onSelectMode).toHaveBeenCalledWith('design');
-    expect(props.onModeSectionChange).toHaveBeenCalledWith('mockup');
-  });
-
   it('closes the phone drawer when a project is picked on the rail', () => {
     const onCloseDrawer = vi.fn();
     const onInstanceChange = vi.fn();
@@ -181,9 +174,7 @@ describe('LayeredSidebar', () => {
     expect(getHomeView().open).toBe(false);
     const header = container.querySelector('.project-nav-drill-header');
     expect(header).not.toBeNull();
-    expect(header!.querySelector('[aria-selected="true"], .project-nav-drill-title')?.textContent).toContain(
-      'Settings',
-    );
+    expect(container.querySelector('.project-nav-drill-header [aria-label="Settings"]')).not.toBeNull();
   });
 
   it('opens the Files drill on a reveal-in-explorer event', () => {
@@ -196,15 +187,6 @@ describe('LayeredSidebar', () => {
     const active = container.querySelector('.project-nav-sibling.active');
     expect(active?.textContent).toBe('Files');
     expect(getHomeView().open).toBe(false);
-  });
-
-  it('reveal-in-explorer switches back to Code mode', () => {
-    const onSelectMode = vi.fn();
-    renderSidebar({ activeModeId: 'design', onSelectMode });
-    act(() => {
-      window.dispatchEvent(new CustomEvent('sprout:reveal-in-explorer', { detail: { path: 'src/index.ts' } }));
-    });
-    expect(onSelectMode).toHaveBeenCalledWith('code');
   });
 
   it('closes the phone drawer when a new conversation is created', () => {

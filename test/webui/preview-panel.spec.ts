@@ -76,8 +76,8 @@ test.describe("Preview panel", () => {
   test("the Code-mode HeaderBar exposes the preview toggle, with the panel closed by default", async () => {
     await page.goto(vite.url, { waitUntil: "domcontentloaded" });
 
-    // A fresh workspace has no design/ tree, so Code is the mode; its
-    // HeaderBar carries the preview toggle.
+    // A fresh workspace has no mockup, so the panel shows the dev server's
+    // output; the HeaderBar carries the toggle.
     await expect(page.getByTestId(TESTIDS["chat-shell"])).toBeVisible({
       timeout: 30_000,
     });

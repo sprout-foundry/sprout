@@ -259,7 +259,7 @@ function WorkspaceChatRuntime({
     workspaceBusy: state.workspaceBusy,
     api: useMemo(
       () => ({
-        sendQuery: (query: string, chatId?: string, mode?: string) => sendQuery(fetchFn, query, chatId, mode),
+        sendQuery: (query: string, chatId?: string) => sendQuery(fetchFn, query, chatId),
         steerQuery: (query: string, chatId?: string) => steerQuery(fetchFn, query, chatId),
         stopQuery: (chatId?: string) => stopQuery(fetchFn, chatId),
         retractSteer: (chatId?: string) => retractSteer(fetchFn, chatId),

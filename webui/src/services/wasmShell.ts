@@ -109,7 +109,7 @@ export interface WasmShell {
     chatId?: string,
     /** JSON [{role, content}] seeding a chat's agent when it is created fresh. */
     history?: string,
-    /** Workspace mode the query was sent from; selects the agent's mode skills. */
+    /** Reserved for a host-declared workspace mode; the agent ignores it. */
     mode?: string,
   ): Promise<{ response: string; provider: string; model: string }>;
   /** Clear a chat's agent history (every chat's when no id is given). */

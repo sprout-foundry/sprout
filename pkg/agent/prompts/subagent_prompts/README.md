@@ -8,7 +8,7 @@ This directory contains the system prompts for each specialized subagent persona
 2. **[Tester](tester.md)** - Unit test writing and test coverage
 3. **[Reviewer](reviewer.md)** - Diff-focused code review: correctness, security, quality
 4. **[Researcher](researcher.md)** - Local codebase analysis combined with web research (hybrid; alias: `web_scraper`)
-5. **[Designer](designer.md)** - Open-format UX design: design tokens, HTML screens, flow sources, brand (aliases: `ux`, `design`)
+5. **[Designer](designer.md)** - The clickable mockup: `draw_mockup` composes `design/mockup.html` from the plan, and a change is the person's own sentence (aliases: `ux`, `design`)
 6. **[Coordinator](coordinator.md)** - Cross-project coordination and delegation
 7. **[Computer User](computer_user.md)** - Desktop automation: screenshots, mouse, and keyboard
 8. **[General](general.md)** - General-purpose tasks that don't fit specialized categories
@@ -41,7 +41,7 @@ These prompts are loaded automatically when a subagent is spawned with a specifi
 - **Implement a feature / fix a bug / refactor** → `coder`
 - **Write tests for code** → `tester`
 - **Review a diff for real issues** → call the `review_changes` tool (it runs `reviewer` subagents with pre-built context); spawn `reviewer` directly only for a custom review task
-- **Design tokens, screens, flows under `design/`** → `designer` (aliases `ux`, `design`)
+- **Draw or change the clickable mockup** → `designer` (aliases `ux`, `design`)
 - **Investigate codebase / web research / scrape content** → `researcher`
 - **Coordinate cross-project work** → `coordinator`
 - **Drive the desktop (mouse, keyboard, screenshots)** → `computer_user`

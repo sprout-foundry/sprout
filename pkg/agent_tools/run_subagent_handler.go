@@ -52,7 +52,7 @@ func (h *runSubagentHandler) Definition() ToolDefinition {
 			"Personas are configured from JSON defaults plus user config " +
 			"(for example: general, coder, designer, tester, reviewer, researcher, web_scraper).\n\n" +
 			"Persona selection guide: `coder` — new features, production code, algorithms; " +
-			"`designer` — design work in the workspace `design/` tree (design tokens, screens, flow sources, brand); " +
+			"`designer` — the clickable mockup (`draw_mockup` writes `design/mockup.html`); " +
 			"`refactor` — behavior-preserving refactors, duplication removal; " +
 			"`tester` — unit tests, coverage; " +
 			"`reviewer` — diff review (security, correctness, quality); " +

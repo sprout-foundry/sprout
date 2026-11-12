@@ -85,10 +85,6 @@ vi.mock('../workspaces/CodeShell', () => ({
     <div data-testid="sprout-workspace-code-shell">view={props.currentView ?? ''}</div>
   ),
 }));
-vi.mock('../workspaces/DesignShell', () => ({
-  default: () => <div data-testid="sprout-workspace-design-shell" />,
-}));
-
 // The web UI services the provider stack reaches. They are not the unit under
 // test; the adapter singleton and the hotkey API touch the network.
 vi.mock('../services/api', () => {
@@ -221,11 +217,18 @@ describe('SproutWorkspace', () => {
   });
 
   it('mounts a different space through the registry', async () => {
-    render(<SproutWorkspace project={PROJECT} space="design" host={makeHost()} />);
+    registeredSpaceDisposer = registerWorkspaceMode({
+      id: 'other-space',
+      label: 'Other space',
+      icon: (() => null) as never,
+      available: () => true,
+      Shell: () => <div data-testid="sprout-workspace-other-shell" />,
+    });
+    render(<SproutWorkspace project={PROJECT} space="other-space" host={makeHost()} />);
 
     const workspace = await screen.findByTestId('sprout-workspace');
-    expect(workspace).toHaveAttribute('data-space', 'design');
-    expect(screen.getByTestId('sprout-workspace-design-shell')).toBeInTheDocument();
+    expect(workspace).toHaveAttribute('data-space', 'other-space');
+    expect(screen.getByTestId('sprout-workspace-other-shell')).toBeInTheDocument();
     expect(screen.queryByTestId('sprout-workspace-code-shell')).not.toBeInTheDocument();
   });
 
@@ -486,12 +489,20 @@ describe('SproutWorkspace', () => {
   it('calls onSpaceChange only when the mounted space changes, not on mount', async () => {
     const onSpaceChange = vi.fn();
 
+    registeredSpaceDisposer = registerWorkspaceMode({
+      id: 'other-space',
+      label: 'Other space',
+      icon: (() => null) as never,
+      available: () => true,
+      Shell: () => <div data-testid="sprout-workspace-other-shell" />,
+    });
+
     function Harness(): JSX.Element {
-      const [space, setSpace] = useState<'code' | 'design'>('code');
+      const [space, setSpace] = useState<string>('code');
       return (
         <>
-          <button type="button" data-testid="to-design" onClick={() => setSpace('design')}>
-            design
+          <button type="button" data-testid="to-other" onClick={() => setSpace('other-space')}>
+            other
           </button>
           <SproutWorkspace project={PROJECT} space={space} host={makeHost()} onSpaceChange={onSpaceChange} />
         </>
@@ -503,11 +514,11 @@ describe('SproutWorkspace', () => {
     expect(onSpaceChange).not.toHaveBeenCalled();
 
     act(() => {
-      screen.getByTestId('to-design').click();
+      screen.getByTestId('to-other').click();
     });
-    await screen.findByTestId('sprout-workspace-design-shell');
+    await screen.findByTestId('sprout-workspace-other-shell');
     expect(onSpaceChange).toHaveBeenCalledTimes(1);
-    expect(onSpaceChange).toHaveBeenCalledWith('design');
+    expect(onSpaceChange).toHaveBeenCalledWith('other-space');
   });
 
   it('does not report a change when a request resolves to the already-mounted space', async () => {
@@ -666,15 +677,23 @@ describe('SproutWorkspace rules', () => {
   it('rule: onSpaceChange is not fired for mount, and fires exactly once per resolved-space change', async () => {
     const onSpaceChange = vi.fn();
 
+    registeredSpaceDisposer = registerWorkspaceMode({
+      id: 'other-space',
+      label: 'Other space',
+      icon: (() => null) as never,
+      available: () => true,
+      Shell: () => <div data-testid="sprout-workspace-other-shell" />,
+    });
+
     function Harness(): JSX.Element {
-      const [space, setSpace] = useState<'code' | 'design'>('code');
+      const [space, setSpace] = useState<string>('code');
       return (
         <>
-          <button type="button" data-testid="to-design" onClick={() => setSpace('design')}>
-            design
+          <button type="button" data-testid="to-other" onClick={() => setSpace('other-space')}>
+            other
           </button>
-          <button type="button" data-testid="same-design" onClick={() => setSpace('design')}>
-            design again
+          <button type="button" data-testid="same-other" onClick={() => setSpace('other-space')}>
+            other again
           </button>
           <SproutWorkspace project={PROJECT} space={space} host={makeHost()} onSpaceChange={onSpaceChange} />
         </>
@@ -686,15 +705,15 @@ describe('SproutWorkspace rules', () => {
     expect(onSpaceChange).not.toHaveBeenCalled();
 
     act(() => {
-      screen.getByTestId('to-design').click();
+      screen.getByTestId('to-other').click();
     });
-    await screen.findByTestId('sprout-workspace-design-shell');
+    await screen.findByTestId('sprout-workspace-other-shell');
     expect(onSpaceChange).toHaveBeenCalledTimes(1);
-    expect(onSpaceChange).toHaveBeenCalledWith('design');
+    expect(onSpaceChange).toHaveBeenCalledWith('other-space');
 
     // Re-selecting the same space is not a change.
     act(() => {
-      screen.getByTestId('same-design').click();
+      screen.getByTestId('same-other').click();
     });
     expect(onSpaceChange).toHaveBeenCalledTimes(1);
   });

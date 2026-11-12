@@ -75,7 +75,7 @@ import { WorkspaceEditorProvider } from './WorkspaceEditorContext';
  *   with Files, Search and Source control, the docked terminal, the app's
  *   editor and view commands) and feeds it from its own chat, editor and git
  *   units — the full IDE, with no further wiring. This is the recommended
- *   mount for a host that wants the code or design space.
+ *   mount for a host that wants the code space.
  * - The `layout` arrangement: when a host wants its own placement of the
  *   individual views (chat, changes, files, editor, preview), it passes an
  *   SP-155 `ViewsArrangement` and the space's content is rendered through
@@ -222,8 +222,8 @@ export interface SproutWorkspaceProps {
    * in ambient mode, the shell renders against empty defaults.
    */
   shellProps?: WorkspaceShellProps;
-  /** Whether the workspace root has a `design/` tree — the space availability context. */
-  hasDesignTree?: boolean;
+  /** Whether the workspace root has a mockup (`design/mockup.html`) — the preview panel's context. */
+  hasMockup?: boolean;
   /**
    * Base URL the host serves the package's `dist/wasm/` WASM assets at. Sprout
    * loads its in-browser agent's WASM from there; omitted, the loader keeps the
@@ -279,7 +279,7 @@ const EMPTY_SHELL_PROPS: WorkspaceShellProps = {
     reviewProps: {} as WorkspaceShellProps['chat']['reviewProps'],
     diffState: {} as WorkspaceShellProps['chat']['diffState'],
   },
-  design: {
+  mockup: {
     loading: false,
     present: false,
   },
@@ -316,12 +316,12 @@ export function SproutWorkspace({
   commandPalette = true,
   onSpaceChange,
   shellProps,
-  hasDesignTree,
+  hasMockup,
   wasmBase,
   className,
   children,
 }: SproutWorkspaceProps): JSX.Element {
-  const ctx: WorkspaceModeContext = useMemo(() => ({ hasDesignTree: !!hasDesignTree }), [hasDesignTree]);
+  const ctx: WorkspaceModeContext = useMemo(() => ({ hasMockup: !!hasMockup }), [hasMockup]);
   const resolved = useMemo(() => resolveWorkspaceMode(space, ctx), [space, ctx]);
 
   // Report space changes, not the mount. The first render records the resolved
@@ -456,7 +456,7 @@ export function SproutWorkspace({
                 Shell={resolved.Shell}
                 spaceId={resolved.id}
                 chatOverrides={chatOverrides}
-                hasDesignTree={hasDesignTree}
+                hasMockup={hasMockup}
                 workspaceRoot={project.root}
                 projectName={projectNameOf(project)}
               />

@@ -31,10 +31,6 @@ const SECTION_TITLES: Record<string, string> = {
   automations: 'Automations',
   settings: 'Settings',
   logs: 'Logs',
-  screens: 'Design',
-  tokens: 'Design',
-  flows: 'Design',
-  feedback: 'Design',
 };
 
 function basename(path: string | undefined): string {
@@ -131,8 +127,7 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
   }, [homeShown, onCloseDrawer]);
   const title = hosted ? (repoSlug ?? copy('workspace.none')) : basename(props.workspaceRoot);
 
-  const inCode = props.activeModeId !== 'design';
-  const conversationInMain = inCode && !!props.conversations?.inMain;
+  const conversationInMain = !!props.conversations?.inMain;
 
   // A new conversation opens in the main view, like picking one does.
   const createConversation = props.conversations?.onCreate;
@@ -142,7 +137,6 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
           ...props.conversations,
           onCreate: () => {
             closeHome();
-            if (!inCode) props.onSelectMode?.('code');
             setOpen(null);
             createConversation();
             props.onCloseDrawer?.();
@@ -153,7 +147,6 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
   const navigate = (target: ProjectNavTarget) => {
     closeHome();
     if (target.kind === 'conversation') {
-      if (!inCode) props.onSelectMode?.('code');
       // A named chat opens itself; the implicit single chat (no id) opens
       // whichever conversation is current.
       if (target.id) props.conversations?.onSelect(target.id);
@@ -162,19 +155,11 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
       props.onCloseDrawer?.();
       return;
     }
-    if (target.kind === 'design') {
-      if (inCode) props.onSelectMode?.('design');
-      props.onModeSectionChange?.(target.id);
-      setOpen(target);
-      return;
-    }
     if (target.id === 'terminal') {
       window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'toggle_terminal' } }));
       props.onCloseDrawer?.();
       return;
     }
-    const global = target.id === 'settings' || target.id === 'logs';
-    if (!global && !inCode) props.onSelectMode?.('code');
     props.onSectionChange?.(target.id as SectionTab);
     setOpen(target);
   };
@@ -197,14 +182,13 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
   useEffect(() => {
     const onReveal = () => {
       closeHome();
-      if (props.activeModeId !== 'code') props.onSelectMode?.('code');
       setOpen({ kind: 'section', id: 'files' });
     };
     window.addEventListener('sprout:reveal-in-explorer', onReveal);
     return () => window.removeEventListener('sprout:reveal-in-explorer', onReveal);
-  }, [props.activeModeId, props.onSelectMode]);
+  }, []);
 
-  const entry = (kind: 'section' | 'design', id: keyof typeof NAV_ICONS, label: string) => ({
+  const entry = (kind: 'section', id: keyof typeof NAV_ICONS, label: string) => ({
     target: { kind, id } as ProjectNavTarget,
     label,
     icon: NAV_ICONS[id],
@@ -217,7 +201,6 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
     // Hosted: the in-browser terminal stays hidden until asked for.
     ...(hosted ? [entry('section', 'terminal', 'Terminal')] : []),
   ];
-  const designEntries = props.modes.some((m) => m.id === 'design') ? [entry('design', 'mockup', 'Mockup')] : [];
   const automationEntries = supportsAutomations ? [entry('section', 'automations', 'Workflows')] : [];
   const footerEntries = [
     ...(supportsSettings ? [entry('section', 'settings', 'Settings')] : []),
@@ -295,7 +278,6 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
           current={open}
           onNavigate={navigate}
           codeEntries={codeEntries}
-          designEntries={designEntries}
           automationEntries={automationEntries}
           footerEntries={footerEntries}
           drill={

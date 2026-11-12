@@ -25,7 +25,6 @@ import { chatTranscriptToMessages } from '../utils/chatTranscript';
 import { isRunEndingError, processingAfter, requestChatReplay } from '../utils/chatReplay';
 import { markSteerPending, pendingSteerBubble } from '../utils/pendingSteer';
 import { noteRunStarted, runEpoch } from '../utils/runEpoch';
-import { activeWorkspaceModeId } from '../workspaces/useWorkspaceMode';
 import { recordConversationCleared } from './bootSessionRestore';
 
 const TOOL_MARKER = /\[executing tool \[([^\]]+)\]/;
@@ -81,7 +80,7 @@ export interface QueuedMessage {
 }
 
 export interface ChatApi {
-  sendQuery: (query: string, chatId?: string, mode?: string) => Promise<void>;
+  sendQuery: (query: string, chatId?: string) => Promise<void>;
   steerQuery: (query: string, chatId?: string) => Promise<void>;
   stopQuery: (chatId?: string) => Promise<void>;
   retractSteer: (chatId?: string) => Promise<{ success: boolean; message: string }>;
@@ -116,12 +115,9 @@ export interface UseChatSessionManagerReturn {
    * took effect (or the chat was already active), `false` when it failed
    * or was superseded by a newer switch. Boot restore uses the
    * result to fall back to a fresh chat when a persisted pin is stale.
-   * `mode` (SP-142) names the caller's lane so the server can reject a
-   * cross-mode switch (409 mode_mismatch); omit it for the legacy
-   * mode-less behavior.
    */
-  handleActiveChatChange: (id: string, mode?: 'code' | 'design') => Promise<boolean>;
-  handleCreateChat: (mode?: 'code' | 'design') => Promise<string | null>;
+  handleActiveChatChange: (id: string) => Promise<boolean>;
+  handleCreateChat: () => Promise<string | null>;
   handleCreateChatInWorktree: (
     branch: string,
     baseRef?: string,
@@ -173,7 +169,7 @@ export function useChatSessionManager({
   const chatApi: ChatApi = useMemo(
     () =>
       api ?? {
-        sendQuery: (query, chatId, mode) => apiService.sendQuery(query, chatId, mode),
+        sendQuery: (query, chatId) => apiService.sendQuery(query, chatId),
         steerQuery: (query, chatId) => apiService.steerQuery(query, chatId),
         stopQuery: (chatId) => apiService.stopQuery(chatId),
         retractSteer: (chatId) => apiService.retractSteer(chatId),
@@ -219,8 +215,8 @@ export function useChatSessionManager({
       if (adoptRun && activeRequestsRef.current === 0) activeRequestsRef.current = 1;
       setState((prev) => {
         // Don't adopt this chat's transcript when the active chat
-        // moved on while we were fetching (a design-mode boot switch runs
-        // concurrently with this hook — its list refresh resolves later).
+        // moved on while we were fetching (a boot switch runs concurrently
+        // with this hook — its list refresh resolves later).
         // Showing messages for a chat the user isn't in desyncs the transcript
         // from activeChatId; the switch response already loaded the right one.
         const initialChatStillActive = !prev.activeChatId || prev.activeChatId === activeChatId;
@@ -248,7 +244,7 @@ export function useChatSessionManager({
   }, [setState, activeChatIdRef, activeRequestsRef, chatSessions]);
 
   const handleActiveChatChange = useCallback(
-    async (id: string, mode?: 'code' | 'design'): Promise<boolean> => {
+    async (id: string): Promise<boolean> => {
       const currentId = activeChatIdRef.current;
       if (currentId === id) return true;
 
@@ -334,7 +330,7 @@ export function useChatSessionManager({
       requestChatReplay(id, replayEvents);
 
       try {
-        const response = await chatSessions.switchChatSession(id, mode);
+        const response = await chatSessions.switchChatSession(id);
         // Bail if user switched to yet another chat while we were loading.
         // Report `false` so callers waiting on the switch (boot restore)
         // know it never landed and can fall back.
@@ -446,31 +442,28 @@ export function useChatSessionManager({
   // list refresh — a double-click fired two (or five) sessions. A ref (not
   // state) so re-entry during the same tick is also blocked.
   const createChatInFlightRef = useRef(false);
-  const handleCreateChat = useCallback(
-    async (mode?: 'code' | 'design'): Promise<string | null> => {
-      if (createChatInFlightRef.current) return null;
-      createChatInFlightRef.current = true;
-      try {
-        const response = await chatSessions.createChatSession(undefined, mode);
-        const newId = response.chat_session.id;
-        const sessionsResp = await chatSessions.listChatSessions();
-        setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? [] }));
-        return newId;
-      } catch (error) {
-        debugLog('[chat] Failed to create chat session:', error);
-        const message = error instanceof Error ? error.message : 'Failed to create new chat';
-        setState((prev) => ({ lastError: message }));
-        // The button gave no feedback while the request ran (and shared-mode
-        // servers reject creates outright) — without a toast the click looks
-        // dead and users re-click it.
-        notificationBus.notify('error', 'Chat', toUserErrorMessage(error, 'Could not create a new chat.'), 5000);
-        return null;
-      } finally {
-        createChatInFlightRef.current = false;
-      }
-    },
-    [setState],
-  );
+  const handleCreateChat = useCallback(async (): Promise<string | null> => {
+    if (createChatInFlightRef.current) return null;
+    createChatInFlightRef.current = true;
+    try {
+      const response = await chatSessions.createChatSession();
+      const newId = response.chat_session.id;
+      const sessionsResp = await chatSessions.listChatSessions();
+      setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? [] }));
+      return newId;
+    } catch (error) {
+      debugLog('[chat] Failed to create chat session:', error);
+      const message = error instanceof Error ? error.message : 'Failed to create new chat';
+      setState((prev) => ({ lastError: message }));
+      // The button gave no feedback while the request ran (and shared-mode
+      // servers reject creates outright) — without a toast the click looks
+      // dead and users re-click it.
+      notificationBus.notify('error', 'Chat', toUserErrorMessage(error, 'Could not create a new chat.'), 5000);
+      return null;
+    } finally {
+      createChatInFlightRef.current = false;
+    }
+  }, [setState]);
 
   const handleCreateChatInWorktree = useCallback(
     async (branch: string, baseRef?: string, name?: string, autoSwitch?: boolean): Promise<string | null> => {
@@ -502,15 +495,10 @@ export function useChatSessionManager({
     async (id: string, options?: { removeWorktree?: boolean }) => {
       try {
         // The server won't delete the active chat, so move to another chat
-        // in the same lane first (most recently active; the list is sorted
-        // that way).
+        // first (most recently active; the list is sorted that way).
         if (id === activeChatIdRef.current) {
           const before = await chatSessions.listChatSessions();
-          const doomed = before.chat_sessions.find((c) => c.id === id);
-          const lane = doomed?.mode === 'design' ? 'design' : 'code';
-          const next = before.chat_sessions.find(
-            (c) => c.id !== id && (c.mode === 'design' ? 'design' : 'code') === lane,
-          );
+          const next = before.chat_sessions.find((c) => c.id !== id);
           if (!next) {
             notificationBus.notify(
               'info',
@@ -686,7 +674,7 @@ export function useChatSessionManager({
 
       try {
         debugLog('[>>] Sending message:', trimmedMessage);
-        await chatApi.sendQuery(trimmedMessage, targetChatId, activeWorkspaceModeId() ?? undefined);
+        await chatApi.sendQuery(trimmedMessage, targetChatId);
         setState((prev) => ({ inputValue: '' }));
         debugLog('[OK] Message sent successfully');
       } catch (error) {

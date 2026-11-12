@@ -3,10 +3,9 @@
  *
  * A mode's shell owns the shell around its surface: the `<main>` column and
  * the chrome that belongs to that mode. Code gets the menubar, context panel,
- * and status bar; Design gets none of it. AppContent renders the active
- * mode's shell with this one props object, so adding a mode is a registry
- * entry plus a shell component — not new suppression flags poked into shared
- * components.
+ * and status bar. AppContent renders the active mode's shell with this one
+ * props object, so adding a mode is a registry entry plus a shell component —
+ * not new suppression flags poked into shared components.
  *
  * Plain data and callbacks only: shells read everything they render from
  * here and nothing else.
@@ -38,17 +37,12 @@ export interface WorkspaceShellChat {
   diffState: ComponentProps<typeof WorkspacePane>['diffState'];
 }
 
-/** Design surface payload, consumed by the Design shell. */
-export interface WorkspaceShellDesign {
+/** Mockup payload, consumed by the Code shell's preview panel. */
+export interface WorkspaceShellMockup {
   /** True while the mockup-presence probe is in flight. */
   loading: boolean;
-  /** True when the workspace has a mockup to show. */
+  /** True when the workspace has a `design/mockup.html` to show. */
   present: boolean;
-
-  /** SP-142 142.5: the design chat's display name (the agent header). */
-  agentChatName?: string | null;
-  /** SP-142 142.5: New Chat scoped to the design lane. */
-  onAgentCreateChat?: () => void;
 }
 /** Git state the Code shell's status bar shows. */
 export interface WorkspaceShellGit {
@@ -74,7 +68,7 @@ export interface WorkspaceShellProps {
   isTablet: boolean;
   isSidebarOpen: boolean;
   isConnected: boolean;
-  /** Intra-mode route (chat/editor/git inside Code; the design surface inside Design). */
+  /** Intra-mode route (chat/editor/git inside Code). */
   currentView: ViewType;
   onViewChange: (view: ViewType) => void;
   onToggleSidebar: () => void;
@@ -122,9 +116,9 @@ export interface WorkspaceShellProps {
   // Editor chrome handlers (Code shell).
   handleOutlineNavigateToSymbol: (line: number) => void;
 
-  // Per-mode payloads; each shell reads only its own.
+  // Per-surface payloads; each shell reads only its own.
   chat: WorkspaceShellChat;
-  design: WorkspaceShellDesign;
+  mockup: WorkspaceShellMockup;
   git: WorkspaceShellGit;
   ship: ShipPayload;
 }

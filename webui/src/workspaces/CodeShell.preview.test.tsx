@@ -130,7 +130,7 @@ function makeShellProps(overrides = {}) {
     currentBuffer: null,
     handleOutlineNavigateToSymbol: vi.fn(),
     chat: { chatProps: {}, reviewProps: {}, diffState: {} },
-    design: { loading: false, present: true, tab: 'flows', onTabChange: vi.fn(), onOpenFile: vi.fn() },
+    mockup: { loading: false, present: false },
     git: { gitBranches: { current: 'main', branches: [] }, gitStatus: null, workspaceRoot: '/tmp/repo' },
     ...overrides,
   };

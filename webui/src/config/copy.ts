@@ -26,7 +26,6 @@ export type CopyKey =
   | 'nav.files'
   | 'nav.search'
   | 'nav.automations'
-  | 'nav.design'
   | 'nav.settings'
   | 'nav.logs'
   | 'home.title'
@@ -75,7 +74,6 @@ export const DEFAULT_COPY: Readonly<Record<CopyKey, string>> = Object.freeze({
   'nav.files': 'Files',
   'nav.search': 'Search',
   'nav.automations': 'Automations',
-  'nav.design': 'Design',
   'nav.settings': 'Settings',
   'nav.logs': 'Logs',
   'home.title': 'Home',

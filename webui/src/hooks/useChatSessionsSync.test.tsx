@@ -28,7 +28,6 @@ function setup(opts: {
   sessions: Sessions;
   activeChatId: string | null;
   buffers: Map<string, EditorBuffer>;
-  mode?: string;
   closedIds?: string[];
 }) {
   const buffersRef: React.RefObject<Map<string, EditorBuffer>> = { current: opts.buffers };
@@ -68,7 +67,6 @@ function setup(opts: {
     useChatSessionsSync({
       chatSessions: opts.sessions as never,
       activeChatId: opts.activeChatId,
-      mode: opts.mode,
       buffersRef,
       updateBufferTitle: vi.fn(),
       setBufferPinned: (id, v) => {
@@ -197,46 +195,6 @@ describe('useChatSessionsSync', () => {
     expect(opened.filter((o) => o.path === '__workspace/chat/B').pop()?.activate).toBe(true);
   });
 
-  it('does not pull focus from a file when a lane switch restores its own conversation', () => {
-    const buffers = new Map<string, EditorBuffer>([
-      [
-        'file-1',
-        makeBuffer({
-          id: 'file-1',
-          kind: 'file',
-          isActive: true,
-          file: { ...makeBuffer({ id: 'x' }).file, path: 'design/flows/sign-up.mmd' },
-        }),
-      ],
-    ]);
-    const props = { active: 'D' as string | null, mode: 'design' };
-    const opened: Array<{ path: string; activate?: boolean }> = [];
-    const { rerender } = renderHook(() =>
-      useChatSessionsSync({
-        chatSessions: [{ id: 'D', mode: 'design' }, { id: 'C' }] as never,
-        activeChatId: props.active,
-        mode: props.mode,
-        buffersRef: { current: buffers },
-        updateBufferTitle: vi.fn(),
-        setBufferPinned: vi.fn(),
-        setBufferClosable: vi.fn(),
-        openWorkspaceBuffer: ((o: { path: string; activate?: boolean; metadata?: Record<string, unknown> }) => {
-          opened.push({ path: o.path, activate: o.activate });
-          buffers.set(o.path, makeBuffer({ id: o.path, metadata: { chatId: o.metadata?.chatId } }));
-          return o.path;
-        }) as never,
-      }),
-    );
-
-    // Opening a design's source switches to Code, which then restores Code's
-    // own conversation; the file stays in front.
-    props.mode = 'code';
-    rerender();
-    props.active = 'C';
-    rerender();
-    expect(opened.filter((o) => o.path === '__workspace/chat/C').pop()?.activate).toBe(false);
-  });
-
   it('keeps the stand-in while the active chat is unknown', () => {
     const closedIds: string[] = [];
     const buffers = new Map<string, EditorBuffer>([
@@ -328,120 +286,5 @@ describe('useChatSessionsSync', () => {
     setup({ sessions: [{ id: 'A' }, { id: 'B' }], activeChatId: 'B', buffers, closedIds });
     expect(closedIds).toEqual(['buffer-chat']);
     expect(Array.from(buffers.values()).filter((b) => b.metadata?.chatId === 'B')).toHaveLength(1);
-  });
-
-  it('mode lanes: the design lane mirrors only design chats, the code lane the rest', () => {
-    const sessions = [
-      { id: 'code-1', name: 'Code one' },
-      { id: 'design-1', name: 'Design one', mode: 'design' },
-      { id: 'legacy-1', name: 'Legacy' },
-    ];
-    // Code lane: design-1 gets no tab.
-    const codeBuffers = new Map<string, EditorBuffer>();
-    const code = setup({ sessions, activeChatId: 'code-1', buffers: codeBuffers });
-    expect(code.calls.open.map((c) => c.id)).toEqual(
-      expect.arrayContaining(['__workspace/chat/code-1', '__workspace/chat/legacy-1']),
-    );
-    expect(code.calls.open.some((c) => c.id === '__workspace/chat/design-1')).toBe(false);
-  });
-
-  it('mode lanes: design mode mirrors only the design chats', () => {
-    const sessions = [
-      { id: 'code-1', name: 'Code one' },
-      { id: 'design-1', name: 'Design one', mode: 'design' },
-    ];
-    const designBuffers = new Map<string, EditorBuffer>();
-    const design = setup({ sessions, activeChatId: 'design-1', buffers: designBuffers, mode: 'design' });
-    expect(design.calls.open.map((c) => c.id)).toEqual(['__workspace/chat/design-1']);
-  });
-
-  it('mode lanes: a lane switch closes the previous lane chat tabs', () => {
-    const sessions = [
-      { id: 'code-1', name: 'Code one' },
-      { id: 'design-1', name: 'Design one', mode: 'design' },
-    ];
-    const closedIds: string[] = [];
-    const buffers = new Map<string, EditorBuffer>();
-    const closeBuffer = (id: string) => {
-      closedIds.push(id);
-      buffers.delete(id);
-    };
-    const openWorkspaceBuffer = (o: { path: string; metadata?: Record<string, unknown> }) => {
-      buffers.set(o.path, makeBuffer({ id: o.path, metadata: { chatId: o.metadata?.chatId } }));
-      return o.path;
-    };
-
-    const props = { mode: 'code' as string };
-    const utils = renderHook(() =>
-      useChatSessionsSync({
-        chatSessions: sessions as never,
-        activeChatId: 'code-1',
-        mode: props.mode,
-        buffersRef: { current: buffers },
-        updateBufferTitle: vi.fn(),
-        setBufferPinned: vi.fn(),
-        setBufferClosable: vi.fn(),
-        closeBuffer,
-        openWorkspaceBuffer: openWorkspaceBuffer as never,
-      }),
-    );
-    // Code lane mounted: code-1 has a tab, design-1 does not.
-    expect(buffers.has('__workspace/chat/code-1')).toBe(true);
-    expect(buffers.has('__workspace/chat/design-1')).toBe(false);
-
-    // Switch to the design lane: the code tab closes, the design tab opens.
-    props.mode = 'design';
-    utils.rerender();
-    expect(closedIds).toContain('__workspace/chat/code-1');
-    expect(buffers.has('__workspace/chat/design-1')).toBe(true);
-    expect(buffers.has('__workspace/chat/code-1')).toBe(false);
-    utils.unmount();
-  });
-
-  it("mode lanes: a lane switch also closes the previous lane's active (unclosable) chat tab", () => {
-    const sessions = [
-      { id: 'code-1', name: 'Code one' },
-      { id: 'design-1', name: 'Design one', mode: 'design' },
-    ];
-    const buffers = new Map<string, EditorBuffer>();
-    // Like the buffer manager: an unclosable buffer is left alone.
-    const closeBuffer = (id: string) => {
-      if (buffers.get(id)?.isClosable === false) return;
-      buffers.delete(id);
-    };
-    const setBufferClosable = (id: string, isClosable: boolean) => {
-      const b = buffers.get(id);
-      if (b) buffers.set(id, { ...b, isClosable });
-    };
-    const openWorkspaceBuffer = (o: { path: string; isClosable?: boolean; metadata?: Record<string, unknown> }) => {
-      buffers.set(
-        o.path,
-        makeBuffer({ id: o.path, isClosable: o.isClosable, metadata: { chatId: o.metadata?.chatId } }),
-      );
-      return o.path;
-    };
-
-    const props = { mode: 'design' as string, active: 'design-1' };
-    const utils = renderHook(() =>
-      useChatSessionsSync({
-        chatSessions: sessions as never,
-        activeChatId: props.active,
-        mode: props.mode,
-        buffersRef: { current: buffers },
-        updateBufferTitle: vi.fn(),
-        setBufferPinned: vi.fn(),
-        setBufferClosable,
-        closeBuffer,
-        openWorkspaceBuffer: openWorkspaceBuffer as never,
-      }),
-    );
-    expect(buffers.get('__workspace/chat/design-1')?.isClosable).toBe(false);
-
-    // Back to Code while the design chat is still the active one.
-    props.mode = 'code';
-    utils.rerender();
-    expect(buffers.has('__workspace/chat/design-1')).toBe(false);
-    expect(buffers.has('__workspace/chat/code-1')).toBe(true);
-    utils.unmount();
   });
 });

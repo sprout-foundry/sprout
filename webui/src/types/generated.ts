@@ -52,8 +52,6 @@ export interface ChatSession {
   provider?: string;
   model?: string;
   worktree_path?: string;
-  /** Workspace-mode lane ("design"); absent = code/legacy (SP-142). */
-  mode?: string;
 }
 
 /**

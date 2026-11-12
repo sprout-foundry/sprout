@@ -62,12 +62,6 @@ vi.mock('../contexts/PlatformNavContext', () => ({
   }),
 }));
 
-// No mockup in these fixtures, so the presence probe reports absent.
-vi.mock('./design/useDesignPresence', () => ({
-  __esModule: true,
-  useDesignPresence: () => ({ present: false, loading: false }),
-}));
-
 // Mock config/mode so capability flags are explicit (not adapter-dependent).
 vi.mock('../config/mode', () => ({
   __esModule: true,

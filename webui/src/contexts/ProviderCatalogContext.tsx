@@ -116,7 +116,15 @@ export function ProviderCatalogProvider({ isConnected, children }: ProviderCatal
         setCurrentProvider('');
         setCurrentModel('');
       }, 1500);
-      return;
+      // This branch used to return without a cleanup, so the timer outlived
+      // the component: it fired after unmount and React touched window in a
+      // torn-down environment ("ReferenceError: window is not defined").
+      return () => {
+        if (disconnectTimerRef.current !== null) {
+          clearTimeout(disconnectTimerRef.current);
+          disconnectTimerRef.current = null;
+        }
+      };
     }
 
     // Connected: cancel any pending clear and kick off the fetch.

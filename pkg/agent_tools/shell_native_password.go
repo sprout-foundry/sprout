@@ -130,6 +130,13 @@ func runShellCommandWithPasswordSupport(ctx context.Context, command string, pro
 	var attempts int
 	var stdinClosed bool
 	var promptClaimed bool
+	// answered is set once a response has been written to the child, and
+	// consumed by the scanner when the next output arrives: only then does
+	// that output mean the command moved past the prompt it was blocked on.
+	// Resetting the claim on any output would let a second pipe that
+	// reports the same prompt (stdout and stderr both printing
+	// "Password:") prompt again.
+	var answered bool
 	var mu sync.Mutex
 
 	promptReason := fmt.Sprintf("%s needs your password", command)
@@ -215,6 +222,7 @@ func runShellCommandWithPasswordSupport(ctx context.Context, command string, pro
 		}
 		if !stdinClosed {
 			_, _ = fmt.Fprintf(stdinPipe, "%s\n", resp)
+			answered = true
 			if secret {
 				stdinClosed = true
 				_ = stdinPipe.Close()
@@ -338,9 +346,12 @@ func runShellCommandWithPasswordSupport(ctx context.Context, command string, pro
 				if len(r.data) > 0 {
 					// New output after an answer means the command moved past
 					// the prompt it was blocked on; a later prompt is a new
-					// question.
+					// question. Output that arrives while no answer has been
+					// written is the same prompt reported on the other pipe
+					// (or the rest of it), and must not re-open the slot.
 					mu.Lock()
-					if !stdinClosed {
+					if answered {
+						answered = false
 						promptClaimed = false
 					}
 					mu.Unlock()

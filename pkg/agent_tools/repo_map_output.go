@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -30,15 +31,18 @@ func buildInclusionOrder(files []fileEntry) (ordered []fileEntry, dirsRepresente
 
 	// Root files: relPath has no slash.
 	root := make([]fileEntry, 0, 16)
-	// L1 dir -> sorted file list.
+	// Cap group -> sorted file list. A group is a top-level directory, or one
+	// of its subdirectories when the top-level directory alone holds more
+	// files than a group may show (capGroups).
+	groupOf := capGroups(files)
 	byDir := make(map[string][]fileEntry)
 	for _, f := range files {
 		if !strings.Contains(f.relPath, "/") {
 			root = append(root, f)
 			continue
 		}
-		dir := topDir(f.relPath)
-		byDir[dir] = append(byDir[dir], f)
+		g := groupOf(f.relPath)
+		byDir[g] = append(byDir[g], f)
 	}
 
 	// Sort root alphabetically and apply cap.
@@ -48,29 +52,92 @@ func buildInclusionOrder(files []fileEntry) (ordered []fileEntry, dirsRepresente
 	}
 	ordered = append(ordered, root...)
 
-	// Sort per-dir lists alphabetically; track which dirs are represented vs. omitted.
 	dirNames := make([]string, 0, len(byDir))
 	for d := range byDir {
 		dirNames = append(dirNames, d)
-	}
-	sort.Strings(dirNames)
-
-	// Cap how many files we pull per dir before bailing on per-dir cycle.
-	perDirLimit := repoMapPerDirCap
-
-	for _, d := range dirNames {
 		entries := byDir[d]
 		sort.Slice(entries, func(i, j int) bool { return entries[i].relPath < entries[j].relPath })
-		take := len(entries)
-		if take > perDirLimit {
-			take = perDirLimit
-			dirsOmitted++ // the dir had files beyond the cap; flag it as partly omitted
+		if len(entries) > repoMapPerDirCap {
+			byDir[d] = entries[:repoMapPerDirCap]
+			dirsOmitted++ // the group had files beyond the cap; flag it as partly omitted
 		}
-		ordered = append(ordered, entries[:take]...)
-		dirsRepresented++
+	}
+	sort.Strings(dirNames)
+	dirsRepresented = len(dirNames)
+
+	// Round-robin across the groups: every group's first file, then every
+	// group's second, and so on, so the output budget is spread over all of
+	// them instead of being spent on the alphabetically first few.
+	for i := 0; ; i++ {
+		took := false
+		for _, d := range dirNames {
+			if i < len(byDir[d]) {
+				ordered = append(ordered, byDir[d][i])
+				took = true
+			}
+		}
+		if !took {
+			break
+		}
 	}
 
 	return ordered, dirsRepresented, dirsOmitted
+}
+
+// capGroups returns the function that names the cap group of a file: its
+// top-level directory, or, when that directory holds more files than one group
+// may show, its first two path components (internal/api, src/components), so a
+// repository whose code sits under one top-level directory still shows every
+// package.
+func capGroups(files []fileEntry) func(relPath string) string {
+	perTop := make(map[string]int)
+	for _, f := range files {
+		perTop[topDir(f.relPath)]++
+	}
+	return func(relPath string) string {
+		top := topDir(relPath)
+		if perTop[top] <= repoMapPerDirCap {
+			return top
+		}
+		rest := relPath[len(top)+1:]
+		if idx := strings.IndexByte(rest, '/'); idx >= 0 {
+			return top + "/" + rest[:idx]
+		}
+		return top
+	}
+}
+
+// groupsOf returns the distinct cap groups the files fall in.
+func groupsOf(files []fileEntry) map[string]bool {
+	groupOf := capGroups(files)
+	out := make(map[string]bool)
+	for _, f := range files {
+		out[groupOf(f.relPath)] = true
+	}
+	return out
+}
+
+// queryWords splits a repo_map query into lower-case words, so "feature
+// review" finds FeatureReview, feature_review.go and featureReview.
+func queryWords(query string) []string {
+	return strings.FieldsFunc(strings.ToLower(query), func(r rune) bool {
+		return (r < 'a' || r > 'z') && (r < '0' || r > '9')
+	})
+}
+
+// matchesQueryWords reports whether s contains every query word, ignoring
+// case and the separators identifiers and paths use (_ - . /).
+func matchesQueryWords(s string, words []string) bool {
+	if len(words) == 0 {
+		return false
+	}
+	folded := strings.NewReplacer("_", "", "-", "", ".", "", "/", "").Replace(strings.ToLower(s))
+	for _, w := range words {
+		if !strings.Contains(folded, w) {
+			return false
+		}
+	}
+	return true
 }
 
 // topDir returns the first path component of a slash-separated relative path,
@@ -305,25 +372,86 @@ func formatConceptSummary(allFiles []fileEntry) string {
 // query string (case-insensitive). Symbol-level filtering is applied
 // separately during extraction.
 func filterByQuery(files []fileEntry, query string) []fileEntry {
-	q := strings.ToLower(query)
+	words := queryWords(query)
 	var result []fileEntry
 	for _, f := range files {
-		if strings.Contains(strings.ToLower(f.relPath), q) {
+		if matchesQueryWords(f.relPath, words) {
 			result = append(result, f)
 		}
 	}
 	return result
 }
 
-// filterSymbolsByQuery keeps only symbols whose name contains the query
-// string (case-insensitive).
+// filterSymbolsByQuery keeps only symbols whose name contains every query
+// word (case-insensitive, separators ignored).
 func filterSymbolsByQuery(symbols []SymbolEntry, query string) []SymbolEntry {
-	q := strings.ToLower(query)
+	words := queryWords(query)
 	var result []SymbolEntry
 	for _, s := range symbols {
-		if strings.Contains(strings.ToLower(s.Name), q) {
+		if matchesQueryWords(s.Name, words) {
 			result = append(result, s)
 		}
+	}
+	return result
+}
+
+// repoMapQueryMaxFiles bounds how many files a query parses for symbols:
+// a common word can appear in hundreds of files, and parsing every one of
+// them made a query take minutes.
+const repoMapQueryMaxFiles = 120
+
+// declName finds what a line declares (a function, method, type, class,
+// constant...) in the languages repo_map reads: the name is the last group.
+// A matching symbol's name would be there.
+var declName = regexp.MustCompile(`^\s*(?:export\s+)?(?:default\s+)?(?:pub(?:\(crate\))?\s+)?(?:async\s+)?(?:func|type|class|interface|struct|enum|const|var|let|def|fn|function|trait|module)\s+(?:\([^)]*\)\s*)?([A-Za-z_$][\w$]*)`)
+
+// filterFilesByQueryContent picks the files a query can match before any cap
+// applies, best first: those whose path matches, then those that declare
+// something matching (a declaration line holding every query word), then
+// those that only mention the words. Filtering after the caps searched only
+// the files the caps happened to keep. At most repoMapQueryMaxFiles are kept.
+func filterFilesByQueryContent(files []fileEntry, query string) []fileEntry {
+	words := queryWords(query)
+	if len(words) == 0 {
+		return files
+	}
+	var byPath, byDecl, byMention []fileEntry
+	for _, f := range files {
+		if matchesQueryWords(f.relPath, words) {
+			byPath = append(byPath, f)
+			continue
+		}
+		info, err := os.Stat(f.absPath)
+		if err != nil || info.Size() > repoMapMaxFullFileSize {
+			continue
+		}
+		content, err := os.ReadFile(f.absPath)
+		if err != nil {
+			continue
+		}
+		text := string(content)
+		if !matchesQueryWords(text, words) {
+			continue
+		}
+		declared := false
+		for _, line := range strings.Split(text, "\n") {
+			if m := declName.FindStringSubmatch(line); m != nil && matchesQueryWords(m[1], words) {
+				declared = true
+				break
+			}
+		}
+		if declared {
+			byDecl = append(byDecl, f)
+		} else {
+			byMention = append(byMention, f)
+		}
+	}
+	for _, list := range [][]fileEntry{byPath, byDecl, byMention} {
+		sort.Slice(list, func(i, j int) bool { return list[i].relPath < list[j].relPath })
+	}
+	result := append(append(byPath, byDecl...), byMention...)
+	if len(result) > repoMapQueryMaxFiles {
+		result = result[:repoMapQueryMaxFiles]
 	}
 	return result
 }

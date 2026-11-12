@@ -247,7 +247,20 @@ func generateRepoMapFromFS(ctx context.Context, absRoot string, depth int, query
 
 	// Build the inclusion order: root, then round-robin across L1 dirs, then
 	// round-robin across deeper levels with caps applied per-directory.
-	ordered, dirsCovered, dirsOmitted := buildInclusionOrder(allFiles)
+	// A query keeps its matching files in best-first order (path, then a
+	// declaration, then a mention); without one, every area of the repository
+	// is sampled in turn.
+	var ordered []fileEntry
+	var dirsCovered, dirsOmitted int
+	candidates := allFiles
+	if query != "" {
+		candidates = filterFilesByQueryContent(allFiles, query)
+		ordered = candidates
+		dirsCovered = len(groupsOf(candidates))
+	} else {
+		ordered, dirsCovered, dirsOmitted = buildInclusionOrder(candidates)
+	}
+	groupOf := capGroups(candidates)
 
 	// Apply the file-count cap as a safety net.
 	if len(ordered) > repoMapMaxFiles {
@@ -310,8 +323,9 @@ func generateRepoMapFromFS(ctx context.Context, absRoot string, depth int, query
 		default:
 		}
 
-		dir := topDir(f.relPath)
-		// Per-directory caps.
+		dir := groupOf(f.relPath)
+		// Per-group caps (a top-level directory, or its packages when it is
+		// large: capGroups).
 		if emittedPerDir[dir] >= repoMapPerDirCap {
 			continue
 		}
@@ -349,7 +363,7 @@ func generateRepoMapFromFS(ctx context.Context, absRoot string, depth int, query
 		// which case all symbols are shown) or if any of its symbols match the
 		// query (in which case only matching symbols are shown).
 		if query != "" {
-			if !strings.Contains(strings.ToLower(f.relPath), strings.ToLower(query)) {
+			if !matchesQueryWords(f.relPath, queryWords(query)) {
 				// Path doesn't match — filter at symbol level.
 				symbols = filterSymbolsByQuery(symbols, query)
 			}

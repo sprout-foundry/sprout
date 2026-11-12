@@ -336,11 +336,19 @@ type Config struct { Port int }
 
 func TestExtractSymbolsForFile_UnsupportedExtension(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "main.rs")
+	path := filepath.Join(dir, "main.xyz")
 	content := []byte(`fn main() {}`)
-	_, err := extractSymbolsForFile(path, ".rs", content)
+	_, err := extractSymbolsForFile(path, ".xyz", content)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported file extension")
+}
+
+func TestExtractSymbolsForFile_Rust(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "main.rs")
+	syms, err := extractSymbolsForFile(path, ".rs", []byte(`fn main() {}`))
+	assert.NoError(t, err)
+	assert.Equal(t, []SymbolEntry{{Name: "fn main", Line: 1}}, syms)
 }
 
 func TestExtractSymbolsForFile_TS(t *testing.T) {

@@ -62,7 +62,7 @@ func filterFilesByQueryContent(files []fileEntry, query string, index *repoMapIn
 		if !ok || !matchesQueryWords(text, words) {
 			continue
 		}
-		if declaresQueryWords(text, words) {
+		if declaresQueryWords(f.ext, text, query, words) {
 			byDecl = append(byDecl, f)
 		} else {
 			byMention = append(byMention, f)
@@ -148,9 +148,14 @@ func readQueryCandidate(f fileEntry) (string, bool) {
 	return string(content), true
 }
 
-// declaresQueryWords reports whether a line of text declares a name holding
-// every query word.
-func declaresQueryWords(text string, words []string) bool {
+// declaresQueryWords reports whether a file's text declares a name holding
+// every query word. Languages repo_map has no parser for are read with their
+// regex extractor, the same symbols the map lists for them; the rest with
+// declName.
+func declaresQueryWords(ext, text, query string, words []string) bool {
+	if ext != ".go" && !treeSitterExtensions[ext] {
+		return len(filterSymbolsByQuery(extractSymbolsViaRegex([]byte(text), ext), query)) > 0
+	}
 	for _, line := range strings.Split(text, "\n") {
 		if m := declName.FindStringSubmatch(line); m != nil && matchesQueryWords(m[1], words) {
 			return true

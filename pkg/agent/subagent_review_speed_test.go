@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -240,10 +241,20 @@ func TestResolveParallelTaskPersonas(t *testing.T) {
 func TestRunParallel_UsesPerTaskSystemPrompt(t *testing.T) {
 	_, runner := newReviewTestRunner(t)
 
-	clients := make(chan *ScriptedClient, 2)
+	// The factory is called once per subagent AND from the context-limit
+	// probe, so the number of calls is not the task count. A fixed-size
+	// channel blocked the factory (and the run) forever once it filled, and
+	// a send racing the close below would panic; a mutex-guarded slice has
+	// neither failure mode.
+	var (
+		clientsMu sync.Mutex
+		clients   []*ScriptedClient
+	)
 	runner.testClientFactory = func(api.ClientType, string) (api.ClientInterface, error) {
 		c := NewScriptedClient(NewScriptedResponseBuilder().Content("finished reviewing the assigned slice; no issues found in it.").Build())
-		clients <- c
+		clientsMu.Lock()
+		clients = append(clients, c)
+		clientsMu.Unlock()
 		return c, nil
 	}
 
@@ -251,7 +262,6 @@ func TestRunParallel_UsesPerTaskSystemPrompt(t *testing.T) {
 		{ID: "a", Prompt: "review a", Persona: "reviewer", SystemPrompt: "SYSTEM-PROMPT-A"},
 		{ID: "b", Prompt: "review b", Persona: "reviewer", SystemPrompt: "SYSTEM-PROMPT-B"},
 	}, SubagentOptions{})
-	close(clients)
 
 	for _, r := range results {
 		if r.Error != nil {
@@ -259,8 +269,12 @@ func TestRunParallel_UsesPerTaskSystemPrompt(t *testing.T) {
 		}
 	}
 
+	clientsMu.Lock()
+	created := append([]*ScriptedClient(nil), clients...)
+	clientsMu.Unlock()
+
 	seen := map[string]bool{}
-	for c := range clients {
+	for _, c := range created {
 		for _, req := range c.GetSentRequests() {
 			for _, m := range req {
 				if m.Role != "system" {

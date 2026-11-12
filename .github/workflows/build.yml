@@ -19,18 +19,23 @@ permissions:
   pull-requests: read
 
 jobs:
-  # Primary gate: linux + macOS run the full pipeline (lint, build, vitest,
-  # unit tests with coverage, smoke). Windows is deliberately NOT in this
-  # matrix — its instrumented coverage run took 41 minutes vs 13 on Linux
-  # and gated every release behind the slowest OS. Windows runs the same
-  # suite in the parallel `test-windows` job below, off the critical path.
+  # Primary gate: ubuntu runs the full pipeline (lint, build, vitest, unit
+  # tests with coverage, smoke) on every push and PR. The OS-specific lanes
+  # run OUT of the critical path below:
+  #   - Windows (`test-windows`): its instrumented coverage run took 41 min
+  #     vs 13 on Linux.
+  #   - macOS (`test-macos`): its suite is the slowest of the three (~21 min
+  #     vs ~12 on ubuntu), and it was the critical path for every push and
+  #     release. Nightly + manual only.
+  # Both lanes run the same suite, so a failure still surfaces — nightly, or
+  # on demand — without holding every push and release behind the slowest OS.
   test:
     name: Run Tests
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest]
     defaults:
       run:
         shell: bash
@@ -330,6 +335,91 @@ jobs:
       env:
         CI: "true"
         VITEST_MAX_FORKS: "2"
+
+  # macOS test lane — same suite as `test`, running OUT OF the release
+  # critical path. Its suite is the slowest of the three platforms (~21 min
+  # vs ~12 on ubuntu) and it gated every push and release. Nightly and
+  # manual only, alongside the Windows lane.
+  test-macos:
+    name: Run Tests (macos-latest)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: macos-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+      with:
+        # Full history so golangci-lint's only-new-issues diff is accurate.
+        fetch-depth: 0
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: 1.26
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install Python dependencies
+      run: |
+        python3 -m pip install --upgrade pip
+        if [ -f "requirements.txt" ]; then
+          pip install -r requirements.txt
+        else
+          pip install requests pytest
+        fi
+
+    - name: Install dependencies
+      run: go mod download
+
+    - name: Install gopls (Go language server for the semantic adapter tests)
+      # See the note in the `test` job: SPROUT_REQUIRE_GOPLS makes the skip a
+      # failure, so the gopls path is asserted rather than assumed.
+      run: |
+        go install golang.org/x/tools/gopls@latest
+        echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+        test -x "$(go env GOPATH)/bin/gopls" || { echo "gopls not installed"; exit 1; }
+        "$(go env GOPATH)/bin/gopls" version
+
+    - name: Install MLX C library (macOS)
+      # See the note in the `test` job: runtime-only, for the darwin/arm64
+      # unit tests that load real models.
+      if: runner.arch == 'ARM64'
+      run: brew install mlx-c
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v5
+      with:
+        node-version: '22'
+
+    - name: Install Node.js dependencies (root workspaces)
+      run: npm ci
+
+    - name: Build shared workspace packages
+      run: |
+        npm run build -w @sprout/events
+        npm run build -w @sprout/ui
+
+    - name: Run full build pipeline (make build-all)
+      run: make build-all
+
+    - name: Run unit tests with coverage
+      env:
+        CI: "true"
+        TEST_P: "2"
+        TEST_PARALLEL: "2"
+        TEST_RACE: ""
+        # gopls is installed above; require it so the semantic adapter tests
+        # fail instead of skipping.
+        SPROUT_REQUIRE_GOPLS: "1"
+      run: make test-coverage
+
+    - name: Run smoke tests
+      run: make test-smoke
 
   # Windows test lane — same suite as `test`, running OUT OF the release
   # critical path. Its instrumented coverage run took 41 min on

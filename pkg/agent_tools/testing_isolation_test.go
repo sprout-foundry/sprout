@@ -25,5 +25,20 @@ func TestMain(m *testing.M) {
 	}
 	defer os.RemoveAll(tmpDir)
 	os.Setenv("SPROUT_CONFIG", filepath.Join(tmpDir, ".config", "sprout"))
+
+	// The vision tier resolves a real provider client from the developer's
+	// environment (an OPENAI_API_KEY in the shell is enough), so any test
+	// that reaches AnalyzeImage made a live API call and paid the retry
+	// backoff for it — 90s or more per test when the key is out of credits,
+	// and a pass/fail that depended on someone's billing state. Pin the
+	// tier off unless a test opts in, so those paths fail fast locally and
+	// the suite is hermetic. Set SPROUT_TEST_VISION_LIVE=1 to exercise the
+	// real provider.
+	if os.Getenv("SPROUT_TEST_VISION_LIVE") == "" {
+		// No restore: os.Exit below ends the process, and the pin is a
+		// package-level override that nothing outlives.
+		SetVisionCapabilityForTest(false)
+	}
+
 	os.Exit(m.Run())
 }

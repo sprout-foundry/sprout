@@ -152,20 +152,6 @@ func TestHumaRemainingFamiliesDispatch(t *testing.T) {
 		}
 	}
 
-	// --- design: GET /api/design/status (designStatus) ---
-	resp = do(t, http.MethodGet, "/api/design/status", "")
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("GET /api/design/status: status = %d, want %d (body: %s)", resp.StatusCode, http.StatusOK, readAll(t, resp))
-	}
-	body = readAll(t, resp)
-	var designResp map[string]any
-	if err := json.Unmarshal(body, &designResp); err != nil {
-		t.Fatalf("decode /api/design/status: %v (body: %s)", err, body)
-	}
-	if _, ok := designResp["exists"]; !ok {
-		t.Fatalf("GET /api/design/status: payload = %v, want an exists key", designResp)
-	}
-
 	// --- starters: GET /api/starters (startersList) ---
 	resp = do(t, http.MethodGet, "/api/starters", "")
 	if resp.StatusCode != http.StatusOK {

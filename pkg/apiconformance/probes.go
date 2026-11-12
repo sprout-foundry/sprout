@@ -111,9 +111,6 @@ func DefaultProbes() []Probe {
 		makeProbe("gitDiff", "git", "/api/git/diff", map[string]string{"path": "README.md"}),
 		makeProbe("gitWorktrees", "git", "/api/git/worktrees", nil),
 
-		// design
-		makeProbe("designStatus", "design", "/api/design/status", nil),
-
 		// terminal
 		makeProbe("terminalSessions", "terminal", "/api/terminal/sessions", nil),
 		makeProbe("terminalShells", "terminal", "/api/terminal/shells", nil),

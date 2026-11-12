@@ -17,13 +17,15 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// SP-140-7 §7a safe-write seam (opt-in conditional write on POST /api/file)
+// Safe-write seam: the opt-in conditional write on POST /api/file (baseMtime /
+// baseHash, 409 on a stale revision). The webui's own writers use it; the
+// fields are optional so an unconditional write behaves as before.
 // ---------------------------------------------------------------------------
 
 // seamWritePOSTs a write body to the handler for rel under root.
 func seamWrite(t *testing.T, root, rel string, body map[string]interface{}) *httptest.ResponseRecorder {
 	t.Helper()
-	server := newDesignTestServer(t, root)
+	server := newWorkspaceTestServer(t, root)
 
 	payload, jsonErr := json.Marshal(body)
 	require.NoError(t, jsonErr)
@@ -42,9 +44,9 @@ func seamRead(t *testing.T, root, rel string) string {
 
 func TestFileWriteSafeSeam(t *testing.T) {
 	root := t.TempDir()
-	rel := "design/screens/login.html"
+	rel := "src/login.html"
 	seed := "<p>v1</p>"
-	require.NoError(t, os.MkdirAll(filepath.Join(root, "design", "screens"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "src"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(root, rel), []byte(seed), 0o644))
 
 	info, statErr := os.Stat(filepath.Join(root, rel))

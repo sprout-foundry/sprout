@@ -17,18 +17,17 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
-// SP-140-7 §7f review parity: a write through the webui (POST /api/file)
-// publishes the same file_changed event an agent write publishes, so user
-// edits appear in the per-turn change strip beside agent edits. This is the
-// "like code" promise — both writers' edits are equally visible — pinned with
-// a test so it survives refactors.
+// Review parity: a write through the webui (POST /api/file) publishes the same
+// file_changed event an agent write publishes, so user edits appear in the
+// per-turn change strip beside agent edits. Both writers' edits are equally
+// visible, pinned with a test so it survives refactors.
 func TestFileWritePublishesFileChangedEvent(t *testing.T) {
 	root := t.TempDir()
-	rel := "design/screens/login.html"
-	require.NoError(t, os.MkdirAll(filepath.Join(root, "design", "screens"), 0o755))
+	rel := "src/login.html"
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "src"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(root, rel), []byte("<p>v1</p>"), 0o644))
 
-	server := newDesignTestServer(t, root)
+	server := newWorkspaceTestServer(t, root)
 
 	// Subscribe to the bus before the write; Unsubscribe by name at cleanup.
 	const subscriber = "file-write-parity-test"
@@ -62,7 +61,7 @@ func TestFileWritePublishesFileChangedEvent(t *testing.T) {
 			if filePath == "" {
 				filePath, _ = fields["path"].(string)
 			}
-			require.Contains(t, filepath.ToSlash(filePath), "design/screens/login.html")
+			require.Contains(t, filepath.ToSlash(filePath), "src/login.html")
 			require.Equal(t, "write", fields["action"])
 			return
 		case <-deadline:

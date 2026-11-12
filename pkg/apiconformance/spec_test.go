@@ -43,8 +43,8 @@ func TestLoadSpecRealContract(t *testing.T) {
 		t.Fatalf("LoadSpec on the committed contract: %v", err)
 	}
 
-	if n := len(spec.Operations); n != 168 {
-		t.Errorf("operations = %d, want 168", n)
+	if n := len(spec.Operations); n != 167 {
+		t.Errorf("operations = %d, want 167", n)
 	}
 	if got := len(spec.Families()); got != 13 {
 		t.Errorf("families = %d, want 13: %v", got, spec.Families())

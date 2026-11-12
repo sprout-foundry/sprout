@@ -75,7 +75,7 @@ var (
 // The tree includes dotfiles (.gitignore, .gitattributes, .prettierrc.json)
 // and empty-directory placeholders (.gitkeep): the default //go:embed rule
 // skips names beginning with "." or "_", which would silently drop the
-// starter's git contract and design tree. The all: prefix restores them.
+// starter's git contract. The all: prefix restores them.
 //
 //go:embed all:data
 var dataFS embed.FS

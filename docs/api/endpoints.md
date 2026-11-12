@@ -299,12 +299,6 @@ Notes:
 Notes:
 - `/api/ws-metrics` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
 
-## design
-
-| Method | Path | Handler | Served by |
-|---|---|---|---|
-| GET | `/api/design/status` | designStatus | daemon, in-browser WASM agent |
-
 ## starters
 
 | Method | Path | Handler | Served by |

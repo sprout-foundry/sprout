@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sprout-foundry/sprout/pkg/design"
 	"github.com/sprout-foundry/sprout/pkg/startermanifest"
 	"github.com/sprout-foundry/sprout/pkg/starterstore"
 )
@@ -26,7 +25,7 @@ const webAppDataVersion = "1.2.2"
 // destination) a web-app-data instantiation must produce: the React + Vite
 // client source tree, the Hono Worker under src/worker, the Drizzle schema
 // and migration, the quality config, the README, the pinned lockfile, the
-// Workers config, and the design workspace tree. The exact count is not
+// Workers config. The exact count is not
 // pinned (the tree grows), but every file the item names is asserted
 // present.
 var webAppDataProjectFiles = []string{
@@ -63,15 +62,6 @@ var webAppDataProjectFiles = []string{
 	filepath.Join("test", "setup.ts"),
 	filepath.Join("test", "app.test.tsx"),
 	filepath.Join("test", "api.test.ts"),
-	filepath.Join("design", design.ManifestName),
-	filepath.Join("design", "tokens", ".gitkeep"),
-	filepath.Join("design", "brand", ".gitkeep"),
-	filepath.Join("design", "icons", ".gitkeep"),
-	filepath.Join("design", "wireframes", ".gitkeep"),
-	filepath.Join("design", "components", ".gitkeep"),
-	filepath.Join("design", "screens", ".gitkeep"),
-	filepath.Join("design", "flows", ".gitkeep"),
-	filepath.Join("design", "feedback", ".gitkeep"),
 }
 
 // TestInstantiateWebAppDataIntoEmptyDirectory proves the web-app-data
@@ -110,9 +100,6 @@ func TestInstantiateWebAppDataIntoEmptyDirectory(t *testing.T) {
 	assert.Equal(t, "dist", m.BuildOutput)
 	assert.Equal(t, startermanifest.DeployTargetWorkers, m.DeployTarget)
 
-	// The design tree scaffold must be present so design mode works from
-	// the first turn.
-	assert.FileExists(t, filepath.Join(dest, design.DirName, design.ManifestName))
 }
 
 // TestWebAppDataManifestValidates pins the embedded descriptor against the
@@ -240,38 +227,4 @@ func TestWebAppDataIsUserFacing(t *testing.T) {
 	v, err := Version("web-app-data")
 	require.NoError(t, err)
 	assert.Equal(t, webAppDataVersion, v)
-}
-
-// TestWebAppDataDesignTreeMatchesScaffold pins the committed design tree
-// against design.Scaffold: the manifest and runtime assets in the starter
-// tree must be byte-identical to what the scaffold writes, so a scaffolded
-// tree and an instantiated one are the same tree.
-func TestWebAppDataDesignTreeMatchesScaffold(t *testing.T) {
-	scaffoldRoot := t.TempDir()
-	require.NoError(t, design.Scaffold(scaffoldRoot))
-
-	template, err := design.ManifestTemplate()
-	require.NoError(t, err)
-	committed, err := fs.ReadFile(dataFS, dataRoot+"/web-app-data/"+"design/"+design.ManifestName)
-	require.NoError(t, err)
-	assert.Equal(t, string(template), string(committed),
-		"the starter's design manifest must equal the scaffold template")
-
-	for _, asset := range design.RuntimeAssets {
-		got, err := fs.ReadFile(dataFS, dataRoot+"/web-app-data/design/"+design.RuntimeSubdir+"/"+filepath.ToSlash(asset))
-		require.NoErrorf(t, err, "design runtime asset %s must be committed in the starter", asset)
-		want, err := os.ReadFile(filepath.Join(scaffoldRoot, design.DirName, design.RuntimeSubdir, filepath.FromSlash(asset)))
-		require.NoErrorf(t, err, "scaffold must write %s", asset)
-		if asset == "sprout-screens.js" {
-			// The committed runtime is a self-contained, file://-runtime
-			// variant (it drops the webui preview-proxy re-rooting branch),
-			// so it is not byte-identical to the shipped asset; it must
-			// still be a non-empty script carrying the runtime version.
-			assert.NotEmpty(t, got)
-			assert.Contains(t, string(got), "SproutScreens")
-			continue
-		}
-		assert.Equal(t, string(want), string(got),
-			"design runtime asset %s must match the scaffold output", asset)
-	}
 }

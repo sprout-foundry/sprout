@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sprout-foundry/sprout/pkg/design"
 	"github.com/sprout-foundry/sprout/pkg/startermanifest"
 	"github.com/sprout-foundry/sprout/pkg/starterstore"
 )
@@ -21,8 +20,7 @@ const webAppVersion = "1.2.1"
 
 // webAppProjectFiles are the project files (relative to the destination) a
 // web-app instantiation must produce: the React + Vite source tree, the
-// quality config, the README, the pinned lockfile, the SPA fallback, and the
-// design workspace tree. The exact count is not pinned (the tree grows), but
+// quality config, the README, the pinned lockfile, the SPA fallback. The exact count is not pinned (the tree grows), but
 // every file the item names is asserted present.
 var webAppProjectFiles = []string{
 	"package.json",
@@ -48,15 +46,6 @@ var webAppProjectFiles = []string{
 	filepath.Join("src", "styles", "global.css"),
 	filepath.Join("test", "setup.ts"),
 	filepath.Join("test", "app.test.tsx"),
-	filepath.Join("design", design.ManifestName),
-	filepath.Join("design", "tokens", ".gitkeep"),
-	filepath.Join("design", "brand", ".gitkeep"),
-	filepath.Join("design", "icons", ".gitkeep"),
-	filepath.Join("design", "wireframes", ".gitkeep"),
-	filepath.Join("design", "components", ".gitkeep"),
-	filepath.Join("design", "screens", ".gitkeep"),
-	filepath.Join("design", "flows", ".gitkeep"),
-	filepath.Join("design", "feedback", ".gitkeep"),
 }
 
 // TestInstantiateWebAppIntoEmptyDirectory proves the web-app starter
@@ -96,9 +85,6 @@ func TestInstantiateWebAppIntoEmptyDirectory(t *testing.T) {
 	assert.Equal(t, "dist", m.BuildOutput)
 	assert.Equal(t, startermanifest.DeployTargetPages, m.DeployTarget)
 
-	// The design tree scaffold must be present so design mode works from
-	// the first turn.
-	assert.FileExists(t, filepath.Join(dest, design.DirName, design.ManifestName))
 }
 
 // TestWebAppManifestValidates pins the embedded descriptor against the
@@ -185,38 +171,4 @@ func TestWebAppIsUserFacing(t *testing.T) {
 	v, err := Version("web-app")
 	require.NoError(t, err)
 	assert.Equal(t, webAppVersion, v)
-}
-
-// TestWebAppDesignTreeMatchesScaffold pins the committed design tree against
-// design.Scaffold: the manifest and runtime assets in the starter tree must
-// be byte-identical to what the scaffold writes, so a scaffolded tree and an
-// instantiated one are the same tree.
-func TestWebAppDesignTreeMatchesScaffold(t *testing.T) {
-	scaffoldRoot := t.TempDir()
-	require.NoError(t, design.Scaffold(scaffoldRoot))
-
-	template, err := design.ManifestTemplate()
-	require.NoError(t, err)
-	committed, err := fs.ReadFile(dataFS, dataRoot+"/web-app/"+"design/"+design.ManifestName)
-	require.NoError(t, err)
-	assert.Equal(t, string(template), string(committed),
-		"the starter's design manifest must equal the scaffold template")
-
-	for _, asset := range design.RuntimeAssets {
-		got, err := fs.ReadFile(dataFS, dataRoot+"/web-app/design/"+design.RuntimeSubdir+"/"+filepath.ToSlash(asset))
-		require.NoErrorf(t, err, "design runtime asset %s must be committed in the starter", asset)
-		want, err := os.ReadFile(filepath.Join(scaffoldRoot, design.DirName, design.RuntimeSubdir, filepath.FromSlash(asset)))
-		require.NoErrorf(t, err, "scaffold must write %s", asset)
-		if asset == "sprout-screens.js" {
-			// The committed runtime is a self-contained, file://-runtime
-			// variant (it drops the webui preview-proxy re-rooting branch),
-			// so it is not byte-identical to the shipped asset; it must
-			// still be a non-empty script carrying the runtime version.
-			assert.NotEmpty(t, got)
-			assert.Contains(t, string(got), "SproutScreens")
-			continue
-		}
-		assert.Equal(t, string(want), string(got),
-			"design runtime asset %s must match the scaffold output", asset)
-	}
 }

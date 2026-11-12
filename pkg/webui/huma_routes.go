@@ -365,6 +365,6 @@ func registerHumaOperations(api huma.API, ws *ReactWebServer) {
 	// computer-use/test, browse) ----------------
 	registerMiscHumaOperations(api, ws)
 
-	// ---- design + starters families ----------------
+	// ---- starters family ----------------
 	registerDesignStartersHumaOperations(api, ws)
 }

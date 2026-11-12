@@ -41,7 +41,7 @@ agent.on("text", (e) => appendWords(e.text));
 agent.on("tool_start", (e) => showStep(e.tool, e.argsSummary));
 agent.on("ask_user", (q) => showButtons(q, (value) => agent.answer(q.id, value)));
 agent.on("file_written", (f) => {
-  if (f.path.startsWith("design/screens/")) showScreen(f.path, f.content);
+  if (f.path === "design/mockup.html") showMockup(f.content);
   if (f.path === ".sprout/plan.json") showPlan(JSON.parse(f.content ?? "{}"));
 });
 agent.on("mockup", (m) => (m.phase === "chunk" ? appendMockup(m.chunk) : null));
@@ -251,7 +251,7 @@ once at startup. The store receives the runtime's own files too (its
 configuration under `/home/user`), not only the workspace. At the handoff the
 host commits `files.snapshot()` into the new repository — through its git
 proxy, or by writing the files into a checkout — and the plan
-(`.sprout/plan.json`) and screens (`design/screens/*.html`) the planner wrote
+(`.sprout/plan.json`) and the mockup (`design/mockup.html`) the planner drew
 become the project's first commit.
 
 ## One runtime per page

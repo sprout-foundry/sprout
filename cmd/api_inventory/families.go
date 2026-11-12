@@ -18,7 +18,6 @@ var familyOrder = []string{
 	"sessions",
 	"search",
 	"diagnostics",
-	"design",
 	"starters",
 	"misc/static",
 }
@@ -82,9 +81,6 @@ var familyRules = []struct {
 		return p == "/api/diagnostics" || strings.HasPrefix(p, "/api/diagnostics/") ||
 			p == "/api/semantic" ||
 			p == "/api/stats" || p == "/api/ws-metrics" || p == "/api/support-bundle"
-	}},
-	{"design", func(p string) bool {
-		return strings.HasPrefix(p, "/api/design")
 	}},
 	{"starters", func(p string) bool {
 		return strings.HasPrefix(p, "/api/starters")

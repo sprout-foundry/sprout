@@ -77,9 +77,6 @@ func main() {
 	for name, fn := range toolExecJSFuncs() {
 		apiSurface[name] = fn
 	}
-	for name, fn := range designJSFuncs() {
-		apiSurface[name] = fn
-	}
 	for name, fn := range binaryJSFuncs() {
 		apiSurface[name] = fn
 	}

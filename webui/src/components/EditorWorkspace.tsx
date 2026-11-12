@@ -150,10 +150,8 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   // the mobile branch below). Desktop keeps the panes topology
   // unchanged.
   const isMobileViewport = useIsMobileViewport();
-  // SP-140-3 §3a's design route guard is gone: Design mode is always offered
-  // and an empty tree renders the surface's onboarding empty state, so the
-  // editor neither probes design presence nor hosts a design view — the
-  // surface is a peer mode shell (see the note near the view switch).
+  // Design mode is a peer mode shell, not a route in this component: the
+  // editor neither probes for a mockup nor hosts a design view.
   const {
     panes,
     paneLayout,
@@ -684,12 +682,6 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     window.addEventListener('sprout:hotkey', handleHotkey);
     return () => window.removeEventListener('sprout:hotkey', handleHotkey);
   }, [handleFocusPaneIndex, handleSplitRequest]);
-
-  // SP-140-3 §3a is superseded by the Design empty state: a `design` view no
-  // longer bounces to chat when the tree is absent — the empty workspace gets
-  // the onboarding surface, which is how the tree comes to exist. DesignView
-  // itself never renders here anymore: it lives inside the Design surface
-  // (a peer mode shell), which handles the empty tree directly.
 
   // ── P4.2 mobile helpers ──────────────────────────────────────────
   // activePaneHasChat: is the active buffer the chat? (Peer topology:

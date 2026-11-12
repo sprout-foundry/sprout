@@ -417,7 +417,7 @@ describe('mode persistence', () => {
 
 describe('useWorkspaceMode contract', () => {
   // The hook is exercised through its returned shape rather than a render,
-  // since the shell integration is covered by the DesignView/e2e specs.
+  // since the shell integration is covered by the e2e specs.
   it('exports a callable hook', () => {
     expect(typeof useWorkspaceMode).toBe('function');
   });

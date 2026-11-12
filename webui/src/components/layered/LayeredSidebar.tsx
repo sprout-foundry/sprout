@@ -224,9 +224,6 @@ export default function LayeredSidebar(props: LayeredSidebarProps): ReactElement
     entry('section', 'logs', 'Logs'),
   ];
 
-  // Design sections render the design assets pane, the same panel the
-  // classic sidebar shows beside the design rail; the L2 entries stand in
-  // for the rail's icons.
   const drillContent = props.renderSection();
 
   const projects: RailProject[] = hosted

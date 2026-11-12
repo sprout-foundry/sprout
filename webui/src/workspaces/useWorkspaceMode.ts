@@ -88,8 +88,8 @@ export interface UseWorkspaceModeResult {
  * Tracks the active mode for the current workspace.
  *
  * The requested id is kept in state and always resolved through `resolveWorkspaceMode`,
- * so a persisted `design` in a workspace that has since lost its design tree
- * degrades to Code instead of rendering a mode with nothing to show.
+ * so a persisted `design` in a workspace that no longer offers it degrades to
+ * Code instead of rendering a mode with nothing to show.
  */
 export function useWorkspaceMode(ctx: WorkspaceModeContext): UseWorkspaceModeResult {
   const [requested, setRequested] = useState<WorkspaceModeId | null>(() => readPersistedWorkspaceMode());
@@ -109,7 +109,7 @@ export function useWorkspaceMode(ctx: WorkspaceModeContext): UseWorkspaceModeRes
   }, [mode.id]);
 
   // Re-persist when availability changes the resolved mode: a workspace that
-  // lost its design tree should come back on Code, not keep a stale `design`.
+  // no longer offers the mode should come back on Code, not keep it stale.
   useEffect(() => {
     if (requested !== null && requested !== mode.id) persistWorkspaceMode(mode.id);
   }, [requested, mode.id]);

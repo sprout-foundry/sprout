@@ -1199,10 +1199,10 @@ func TestAllToolsConformance_InterfaceContract(t *testing.T) {
 			switch name {
 			case "read_file", "fetch_url", "search_files",
 				"write_file", "write_structured_file", "edit_file", "shell_command",
-				"get_callers", "get_callees", "design_brief":
+				"get_callers", "get_callees":
 				require.Error(t, err, "Validate(nil) should return error for tools with required params")
 			case "list_directory", "repo_map", "list_skills", "rollback_changes", "view_history",
-				"list_automate_workflows", "list_changes", "revert_my_changes", "find_dead_code", "design_validate", "design_assets", "design_export_tokens", "design_sync",
+				"list_automate_workflows", "list_changes", "revert_my_changes", "find_dead_code",
 				"review_changes", "check_subagent", "deploy", "deploy_status", "checkpoint", "draw_mockup", "check_app":
 				require.NoError(t, err, "Validate(nil) should succeed for tools with no required params")
 			default:
@@ -1212,10 +1212,10 @@ func TestAllToolsConformance_InterfaceContract(t *testing.T) {
 			switch name {
 			case "read_file", "fetch_url", "search_files",
 				"write_file", "write_structured_file", "edit_file", "shell_command",
-				"get_callers", "get_callees", "design_brief":
+				"get_callers", "get_callees":
 				require.Error(t, err, "Validate({}) should return error for tools with required params")
 			case "list_directory", "repo_map", "list_skills", "rollback_changes", "view_history",
-				"list_automate_workflows", "list_changes", "revert_my_changes", "find_dead_code", "design_validate", "design_assets", "design_export_tokens", "design_sync",
+				"list_automate_workflows", "list_changes", "revert_my_changes", "find_dead_code",
 				"review_changes", "check_subagent", "deploy", "deploy_status", "checkpoint", "draw_mockup", "check_app":
 				require.NoError(t, err, "Validate({}) should succeed for tools with no required params")
 			default:

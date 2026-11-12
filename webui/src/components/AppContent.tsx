@@ -369,11 +369,11 @@ const AppContent: React.FC<AppContentProps> = ({
 
   const initialViewSyncRef = useRef(false);
 
-  // SP-140 / workspace modes: which mode the shell is showing. Availability
-  // depends on the workspace's own content (a design tree), probed once here so
-  // the switcher and the surface agree on what exists. Declared before the
-  // chat-tab wiring below: the tab-driven switch handler must record the mode
-  // pin, which needs the pinning hook's callbacks in scope.
+  // SP-140 / workspace modes: which mode the shell is showing. Whether the
+  // workspace has a mockup is probed once here so the switcher and the Design
+  // surface agree on what exists. Declared before the chat-tab wiring below:
+  // the tab-driven switch handler must record the mode pin, which needs the
+  // pinning hook's callbacks in scope.
   const { present: hasDesignTree, loading: designPresenceLoading } = useDesignPresence();
   const {
     mode: workspaceMode,

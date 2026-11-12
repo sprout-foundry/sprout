@@ -329,7 +329,10 @@ jobs:
       run: bash scripts/check-no-duplicate-components.sh
 
     - name: Run webui unit tests (vitest)
-      continue-on-error: true
+      # Gates: a failing vitest test fails the build. This step used to be
+      # continue-on-error, so 8,585 tests ran for ~5 minutes and could not
+      # fail anything — one of them was failing on every push while the run
+      # reported green. A test that cannot fail is worse than no test.
       run: npx vitest run --reporter=verbose
       working-directory: webui
       env:

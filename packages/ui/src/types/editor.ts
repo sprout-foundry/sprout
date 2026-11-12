@@ -6,7 +6,7 @@
  * editor management components.
  */
 
-export type EditorBufferKind = 'file' | 'chat' | 'diff' | 'review' | 'welcome' | 'compare';
+export type EditorBufferKind = 'file' | 'chat' | 'diff' | 'review' | 'welcome' | 'compare' | 'preview';
 
 export interface EditorFileEntry {
   name: string;

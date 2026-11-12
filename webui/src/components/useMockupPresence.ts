@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useSproutFetch } from '../contexts/SproutAdapterContext';
-import { MOCKUP_PATH } from './MockupPanel';
+import { MOCKUP_PATH } from './mockupPath';
 
 export interface MockupPresence {
   /** True while the probe is in flight. */

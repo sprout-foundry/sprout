@@ -20,10 +20,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSproutFetch } from '../contexts/SproutAdapterContext';
 import ErrorBoundary from './ErrorBoundary';
+import { MOCKUP_PATH } from './mockupPath';
 import './MockupPanel.css';
 
-/** The mockup's place in the workspace (draw_mockup's fixed path). */
-export const MOCKUP_PATH = 'design/mockup.html';
+export { MOCKUP_PATH };
 
 export interface MockupPanelProps {
   /** Collapse the panel (wired to the pane's close affordance). */

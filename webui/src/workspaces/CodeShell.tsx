@@ -2,35 +2,37 @@
  * The Code mode's shell.
  *
  * Owns the `<main>` column and the Code surface's chrome: the app menubar
- * (HeaderBar), the mobile pane controls, the editor, the preview panel, and
- * the status bar. Everything that reads as "the editor app" lives here.
+ * (HeaderBar), the mobile pane controls, the editor, and the status bar.
+ * Everything that reads as "the editor app" lives here.
  *
- * The preview panel has two bodies. A workspace with a mockup shows the mockup
- * (`draw_mockup`'s `design/mockup.html`); otherwise it shows the dev server's
- * output. Both are a rendered view of the work, so both belong in the same
- * slot beside the code.
+ * The preview is an editor buffer (`kind: 'preview'`), opened in the
+ * rightmost pane so it sits beside the code. A workspace with a mockup shows
+ * the mockup (`draw_mockup`'s `design/mockup.html`); otherwise the dev
+ * server's output.
  */
 
 import { Menu, MessageSquare, SquareTerminal } from 'lucide-react';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import EditorWorkspace from '../components/EditorWorkspace';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { CreditsChip } from '../components/CreditsChip';
 import HeaderBar from '../components/HeaderBar';
-import MockupPanel from '../components/MockupPanel';
-import PreviewPanel from '../components/PreviewPanel';
 import StatusBar from '../components/StatusBar';
 import Terminal from '../components/Terminal';
 import type { WorkspaceShellProps } from './shell';
 import { isLayeredLayout } from '../config/layout';
 import { copy } from '../config/copy';
 import { TOGGLE_PREVIEW_COMMAND, useTogglePreviewCommand } from '../hooks/useTogglePreviewCommand';
+import { useOptionalEditorManager } from '../contexts/EditorManagerContext';
 import { useHost, useHostCapabilities } from '../host';
 import { useActiveRepoURL } from '../services/activeRepo';
 import { useHasCommandHandler } from '../services/commandHandlers';
 import { repoSlug } from '../host/repoName';
 
 const PREVIEW_TOGGLE_COMMANDS: readonly string[] = [TOGGLE_PREVIEW_COMMAND];
+
+/** The preview buffer's key — one preview per workspace, reopened not duplicated. */
+const PREVIEW_BUFFER_PATH = '__workspace/preview';
 
 const CodeShell: React.FC<WorkspaceShellProps> = ({
   isMobile,
@@ -72,26 +74,65 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
   } = chat;
 
   // The preview panel: the workspace's mockup when it has one, otherwise the
-  // running-app dev server. Collapsed by default so it never steals editor
-  // space or polls — except in a workspace with a mockup, where it opens on
-  // the mockup: that is the thing the person is reacting to, so the panel is
-  // its home rather than a place it has to be summoned to.
-  const [previewPanelOpen, setPreviewPanelOpen] = useState(false);
-  useTogglePreviewCommand(setPreviewPanelOpen, previewAvailable);
+  // The preview is an editor buffer, not a docked panel: it opens in the
+  // rightmost pane so it sits beside the code, and the split-screen model
+  // gives it resize, tabs and close for free. A shell mounted outside an
+  // editor manager (an embed rendering only the chrome) has no buffers, so
+  // the toggle stays inert rather than throwing.
+  const editor = useOptionalEditorManager();
+  const buffers = editor?.buffers;
+  const openWorkspaceBuffer = editor?.openWorkspaceBuffer;
+  const closeBuffer = editor?.closeBuffer;
+  const previewBufferId = useMemo(() => {
+    if (!buffers) return null;
+    for (const [id, b] of buffers) if (b.kind === 'preview') return id;
+    return null;
+  }, [buffers]);
+  // The toggle and the command can both fire before the buffer store
+  // re-renders this shell, so the open/close decision reads a ref rather than
+  // the rendered value — otherwise a second click in the same batch sees the
+  // stale "closed" and opens a duplicate.
+  const previewBufferIdRef = useRef<string | null>(previewBufferId);
+  previewBufferIdRef.current = previewBufferId;
+  const setPreviewOpen = useCallback(
+    (update: (open: boolean) => boolean, activate = true) => {
+      if (!openWorkspaceBuffer || !closeBuffer) return;
+      const current = previewBufferIdRef.current;
+      const next = update(current !== null);
+      if (next && current === null) {
+        previewBufferIdRef.current = openWorkspaceBuffer({
+          kind: 'preview',
+          path: PREVIEW_BUFFER_PATH,
+          title: 'Preview',
+          isPinned: false,
+          isClosable: true,
+          activate,
+        });
+      } else if (!next && current !== null) {
+        previewBufferIdRef.current = null;
+        void closeBuffer(current);
+      }
+    },
+    [openWorkspaceBuffer, closeBuffer],
+  );
+  useTogglePreviewCommand(setPreviewOpen, previewAvailable);
   // Inside an embed the toggle shows only while the command is handled; the
   // standalone app shell handles every command, so its toggle always shows.
   const previewToggleHandled = useHasCommandHandler(PREVIEW_TOGGLE_COMMANDS);
   const showPreview = previewAvailable && previewToggleHandled;
   const showMockup = mockup.present;
-  // Open on the mockup the first time one appears (a draw just landed, or the
-  // workspace was opened with one); later toggles stay the person's call.
+  // Open the preview the first time a mockup appears (a draw just landed, or
+  // the workspace was opened with one): that is the thing the person is
+  // reacting to, so it is placed beside the code rather than summoned. It
+  // opens without activating — a draw landing must not pull focus off the
+  // code the person is writing from it.
   const openedOnMockup = useRef(false);
   useEffect(() => {
     if (showMockup && showPreview && !openedOnMockup.current) {
       openedOnMockup.current = true;
-      setPreviewPanelOpen(true);
+      setPreviewOpen(() => true, false);
     }
-  }, [showMockup, showPreview]);
+  }, [showMockup, showPreview, setPreviewOpen]);
   // On phones the project sidebar lives in the drawer, so name the project
   // on the toolbar; tapping it opens the drawer.
   const activeRepoSlug = repoSlug(useActiveRepoURL());
@@ -109,8 +150,8 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
         isSidebarOpen={isSidebarOpen}
         isConnected={isConnected}
         onToggleSidebar={onToggleSidebar}
-        onTogglePreviewPanel={showPreview ? () => setPreviewPanelOpen((open) => !open) : undefined}
-        previewPanelOpen={previewPanelOpen}
+        onTogglePreviewPanel={showPreview ? () => setPreviewOpen((open) => !open) : undefined}
+        previewPanelOpen={previewBufferId !== null}
       />
       <div className="main-view-content">
         <div className="editor-view">
@@ -173,13 +214,6 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
             />
           </ErrorBoundary>
         </div>
-        {showPreview &&
-          previewPanelOpen &&
-          (showMockup ? (
-            <MockupPanel onClose={() => setPreviewPanelOpen(false)} />
-          ) : (
-            <PreviewPanel open onClose={() => setPreviewPanelOpen(false)} />
-          ))}
       </div>
       <StatusBar
         branch={git.gitBranches.current || git.gitStatus?.branch}

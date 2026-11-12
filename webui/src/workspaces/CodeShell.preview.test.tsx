@@ -1,18 +1,21 @@
 // @ts-nocheck
 /**
- * CodeShell preview-panel wiring.
+ * CodeShell preview wiring.
  *
- * Pins that the preview panel is mounted in Code mode and driven by the
- * HeaderBar toggle:
+ * The preview is an editor buffer (`kind: 'preview'`), not a docked panel, so
+ * the shell's job is to open and close that buffer:
  *   1. The toggle is present (CodeShell wires it into the HeaderBar).
- *   2. The panel is closed by default (no pane rendered, no polling).
- *   3. Clicking the toggle opens the panel — the preview pane renders in the
- *      Code surface, and the toggle reflects the open state.
+ *   2. No preview buffer exists by default.
+ *   3. Clicking the toggle opens one; clicking again closes it.
+ *   4. The toggle reflects whether the buffer exists.
+ *   5. The mockup auto-opens the preview the first time one appears.
+ *
+ * The pane body itself (mockup vs dev server) is covered by
+ * WorkspacePane.stats.test.tsx and MockupPanel.test.tsx.
  *
  * Same lightweight-mock pattern as shell.test.tsx: leaf components are mocked
- * to divs. The HeaderBar mock renders the real preview toggle (so the test can
- * drive CodeShell's open state), and the adapter fetch is mocked so the
- * PreviewPanel's hook makes no real requests.
+ * to divs, and the editor manager is a fake so the test can observe the
+ * buffer calls without mounting the whole editor stack.
  */
 
 import { fireEvent } from '@testing-library/react';
@@ -30,9 +33,6 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 vi.mock('../components/EditorWorkspace', () => ({
   default: () => createElement('div', { className: 'mock-editor-workspace' }),
 }));
-vi.mock('../components/ContextSidebar', () => ({
-  default: () => createElement('div', { className: 'mock-context-sidebar' }),
-}));
 vi.mock('../components/StatusBar', () => ({
   default: () => createElement('div', { className: 'mock-status-bar' }),
 }));
@@ -40,7 +40,7 @@ vi.mock('../components/Terminal', () => ({
   default: (props: { isExpanded?: boolean }) =>
     createElement('div', { className: 'mock-terminal', 'data-expanded': String(!!props.isExpanded) }),
 }));
-// Render the real preview toggle so the test can drive CodeShell's open state.
+// Render the real preview toggle so the test can drive CodeShell's state.
 vi.mock('../components/HeaderBar', () => ({
   default: (props: { onTogglePreviewPanel?: () => void; previewPanelOpen?: boolean }) =>
     props.onTogglePreviewPanel
@@ -51,31 +51,36 @@ vi.mock('../components/HeaderBar', () => ({
         })
       : createElement('div', { className: 'mock-header-bar' }),
 }));
-// The adapter fetch the preview hook uses. This wiring test isolates the
-// panel's open/close state from the dev-server lifecycle: the fetch is frozen
-// (never resolves) so the hook stays in its synchronous initial `stopped` state
-// and never fires an async `setState` (which would need an `act` flush — and an
-// `act` flush stalls on the live 5s heartbeat interval). The running/failed
-// lifecycle is asserted in PreviewPanel.test.tsx, where the panel is rendered
-// in isolation with a controllable fetch.
-vi.mock('../contexts/SproutAdapterContext', () => ({
+
+// A fake editor manager: the preview buffer lives in this map, so opening and
+// closing it is observable exactly as the real manager would expose it. The
+// real manager replaces the Map on every update (never mutates it in place),
+// so the fake does too — a mutated map would leave consumers reading a stale
+// identity.
+const fakeEditor = {
+  buffers: new Map<string, { kind: string }>(),
+  openWorkspaceBuffer: vi.fn((options: { kind: string }) => {
+    const id = `buffer-${options.kind}`;
+    fakeEditor.buffers = new Map(fakeEditor.buffers).set(id, { kind: options.kind });
+    return id;
+  }),
+  closeBuffer: vi.fn((id: string) => {
+    const next = new Map(fakeEditor.buffers);
+    next.delete(id);
+    fakeEditor.buffers = next;
+  }),
+};
+vi.mock('../contexts/EditorManagerContext', () => ({
   __esModule: true,
-  useSproutFetch: () => () =>
-    new Promise<Response>(() => {
-      /* frozen: never resolves, so no poll update fires */
-    }),
+  // A fresh object per call, like the real provider's context value: consumers
+  // memoise on `buffers` identity, so a stable object would freeze them.
+  useOptionalEditorManager: () => ({ ...fakeEditor, buffers: fakeEditor.buffers }),
 }));
 
 import CodeShell from './CodeShell';
 import { HostProvider } from '../host';
 import { makeTestHost } from '../host/testHost';
 
-/**
- * Wrap a tree in a host provider so useHost()/useHostCapabilities() consumers
- * resolve (the feat/host-contract refactor made a HostProvider mandatory). The
- * preview-panel tests represent a local shell, so the host turns the local-only
- * capabilities on (matching shell.test.tsx).
- */
 function host(children: unknown, capabilities: Record<string, boolean> = { agentChanges: true }): unknown {
   return createElement(HostProvider, { host: makeTestHost(capabilities) }, children);
 }
@@ -92,6 +97,9 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  fakeEditor.buffers.clear();
+  fakeEditor.openWorkspaceBuffer.mockClear();
+  fakeEditor.closeBuffer.mockClear();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -117,13 +125,6 @@ function makeShellProps(overrides = {}) {
     supportsLocalTerminal: true,
     isTerminalExpanded: false,
     onTerminalExpandedChange: vi.fn(),
-    toolExecutions: [],
-    logs: [],
-    subagentActivities: [],
-    messages: [],
-    isProcessing: false,
-    lastError: null,
-    queryProgress: null,
     currentBuffer: null,
     handleOutlineNavigateToSymbol: vi.fn(),
     chat: { chatProps: {}, reviewProps: {}, diffState: {} },
@@ -135,63 +136,50 @@ function makeShellProps(overrides = {}) {
 
 // ---------------------------------------------------------------------------
 // Tests
-//
-// The preview pane renders its root + initial (stopped) state synchronously the
-// moment the panel opens — before the hook's poll resolves — so these tests
-// assert synchronously and never `await` the poll's promise chain (an async
-// `act` flush stalls on the live 5s heartbeat interval, real or fake).
 // ---------------------------------------------------------------------------
 
-describe('CodeShell preview panel', () => {
-  it('mounts the preview toggle, with the panel closed by default', () => {
+describe('CodeShell preview buffer', () => {
+  it('mounts the preview toggle, with no preview buffer by default', () => {
     act(() => {
       root.render(host(createElement(CodeShell, makeShellProps())));
     });
 
-    // CodeShell wires the toggle into the HeaderBar.
     expect(container.querySelector('[data-testid="preview-panel-toggle"]')).not.toBeNull();
-    // Closed by default: no pane is rendered (and the toggle is not pressed).
-    expect(container.querySelector('[data-testid="preview-pane"]')).toBeNull();
-    expect(container.querySelector('[data-testid="preview-panel"]')).toBeNull();
+    expect(fakeEditor.openWorkspaceBuffer).not.toHaveBeenCalled();
     expect(container.querySelector('[data-testid="preview-panel-toggle"]')).toHaveAttribute('aria-pressed', 'false');
   });
 
-  it('opens the preview panel from the toggle (the pane renders in Code mode)', () => {
+  it('opens a preview buffer from the toggle', () => {
     act(() => {
       root.render(host(createElement(CodeShell, makeShellProps())));
     });
 
     const toggle = container.querySelector('[data-testid="preview-panel-toggle"]')!;
-    fireEvent.click(toggle);
+    act(() => {
+      fireEvent.click(toggle);
+    });
 
-    // The panel is open and renders the preview pane in the Code surface.
-    expect(container.querySelector('[data-testid="preview-panel"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="preview-pane"]')).not.toBeNull();
-    // The toggle reflects the open state.
-    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(fakeEditor.openWorkspaceBuffer).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'preview', path: '__workspace/preview' }),
+    );
   });
 
-  it('closes the panel again when the toggle is clicked a second time', () => {
+  it('closes the preview buffer when the toggle is clicked a second time', () => {
     act(() => {
       root.render(host(createElement(CodeShell, makeShellProps())));
     });
 
     const toggle = container.querySelector('[data-testid="preview-panel-toggle"]')!;
-    fireEvent.click(toggle);
-    expect(container.querySelector('[data-testid="preview-pane"]')).not.toBeNull();
-
-    fireEvent.click(toggle);
-    expect(container.querySelector('[data-testid="preview-pane"]')).toBeNull();
-  });
-
-  it('renders the pane in its initial lifecycle state (stopped)', () => {
     act(() => {
-      root.render(host(createElement(CodeShell, makeShellProps())));
+      fireEvent.click(toggle);
     });
-    const toggle = container.querySelector('[data-testid="preview-panel-toggle"]')!;
-    fireEvent.click(toggle);
+    expect(fakeEditor.buffers.size).toBe(1);
 
-    expect(container.querySelector('[data-testid="preview-pane-stopped"]')).not.toBeNull();
+    act(() => {
+      fireEvent.click(toggle);
+    });
+    expect(fakeEditor.buffers.size).toBe(0);
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('opens from the toggle_preview command', () => {
@@ -201,10 +189,17 @@ describe('CodeShell preview panel', () => {
     act(() => {
       window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'toggle_preview' } }));
     });
-    expect(container.querySelector('[data-testid="preview-panel"]')).not.toBeNull();
+    expect(fakeEditor.buffers.size).toBe(1);
   });
 
-  it('offers no toggle and mounts no panel when the preview is unavailable', () => {
+  it('auto-opens the preview the first time a mockup appears', () => {
+    act(() => {
+      root.render(host(createElement(CodeShell, makeShellProps({ mockup: { loading: false, present: true } }))));
+    });
+    expect(fakeEditor.openWorkspaceBuffer).toHaveBeenCalledWith(expect.objectContaining({ kind: 'preview' }));
+  });
+
+  it('offers no toggle and opens no buffer when the preview is unavailable', () => {
     act(() => {
       root.render(host(createElement(CodeShell, makeShellProps({ previewAvailable: false }))));
     });
@@ -212,6 +207,6 @@ describe('CodeShell preview panel', () => {
     act(() => {
       window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'toggle_preview' } }));
     });
-    expect(container.querySelector('[data-testid="preview-panel"]')).toBeNull();
+    expect(fakeEditor.buffers.size).toBe(0);
   });
 });

@@ -44,7 +44,7 @@ interface BufferManagerContextValue {
   buffersRef: React.MutableRefObject<Map<string, EditorBuffer>>;
   openFile: (file: EditorFileEntry) => string;
   openWorkspaceBuffer: (options: {
-    kind: 'chat' | 'diff' | 'review' | 'file' | 'compare';
+    kind: 'chat' | 'diff' | 'review' | 'file' | 'compare' | 'preview';
     path: string;
     title: string;
     content?: string;
@@ -358,7 +358,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
   // Open workspace buffer
   const openWorkspaceBuffer = useCallback(
     (options: {
-      kind: 'chat' | 'diff' | 'review' | 'file' | 'compare';
+      kind: 'chat' | 'diff' | 'review' | 'file' | 'compare' | 'preview';
       path: string;
       title: string;
       content?: string;
@@ -421,7 +421,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
       const requestedPane = options.paneId ? paneBridge.panes.find((p) => p.id === options.paneId) : undefined;
       const targetPane =
         requestedPane ??
-        (options.kind === 'chat'
+        (options.kind === 'chat' || options.kind === 'preview'
           ? getRightmostPane(paneBridge.panes)
           : paneBridge.panes.find((p) => p.id === paneBridge.activePaneId));
       const targetPaneId = targetPane?.id ?? paneBridge.activePaneId;

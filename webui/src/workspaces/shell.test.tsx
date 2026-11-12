@@ -52,13 +52,6 @@ vi.mock('../components/Terminal', () => ({
     createElement('div', { className: 'mock-terminal', 'data-expanded': String(!!props.isExpanded) }),
 }));
 
-vi.mock('../components/MockupPanel', () => ({
-  default: () => createElement('div', { className: 'mock-mockup-panel' }),
-}));
-vi.mock('../components/PreviewPanel', () => ({
-  default: ({ open }: { open: boolean }) => (open ? createElement('div', { className: 'mock-preview-panel' }) : null),
-}));
-
 // The preview panel (rendered by CodeShell) drives the dev-server lifecycle API
 // through the adapter fetch. Freeze it so the shell smoke tests stay hermetic:
 // no provider is mounted and no request is ever issued. importOriginal keeps
@@ -200,21 +193,5 @@ describe('CodeShell', () => {
       root.render(host(createElement(CodeShell, makeShellProps({ isMobile: false }))));
     });
     expect(container.querySelector('.pane-controls-mobile')).toBeNull();
-  });
-
-  it('opens the preview panel on the mockup when the workspace has one', () => {
-    act(() => {
-      root.render(host(createElement(CodeShell, makeShellProps({ mockup: { loading: false, present: true } }))));
-    });
-    expect(container.querySelector('.mock-mockup-panel')).not.toBeNull();
-    expect(container.querySelector('.mock-preview-panel')).toBeNull();
-  });
-
-  it('leaves the preview panel closed when there is no mockup', () => {
-    act(() => {
-      root.render(host(createElement(CodeShell, makeShellProps())));
-    });
-    expect(container.querySelector('.mock-mockup-panel')).toBeNull();
-    expect(container.querySelector('.mock-preview-panel')).toBeNull();
   });
 });

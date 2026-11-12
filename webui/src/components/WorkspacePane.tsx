@@ -9,6 +9,8 @@ import Chat from './ChatView';
 import CompareTab from './CompareTab';
 import DiffWorkspaceTab from './DiffWorkspaceTab';
 import EditorPane from './EditorPane';
+import { PreviewSurface } from './PreviewPanel';
+import { useMockupPresence } from './useMockupPresence';
 import './WorkspacePane.css';
 
 // ReviewWorkspaceTab pulls in the deep-review pipeline (595+ LOC component
@@ -83,9 +85,24 @@ interface WorkspacePaneProps {
   };
 }
 
+/**
+ * A preview buffer's pane body. Split out so the mockup probe runs only while
+ * a preview is actually on screen, not for every pane.
+ *
+ * The probe starts at `present: false` and resolves asynchronously, so the
+ * body waits for it rather than rendering the dev-server pane first — a
+ * workspace with a mockup would otherwise flash the stopped dev server before
+ * swapping to the mockup on every open.
+ */
+const PreviewPaneContent: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  const mockup = useMockupPresence();
+  if (mockup.loading) return null;
+  return <PreviewSurface showMockup={mockup.present} onClose={onClose} />;
+};
+
 const WorkspacePane: React.FC<WorkspacePaneProps> = React.memo(
   ({ paneId, chatProps, reviewProps, diffState, perChatCache, activeChatId, chatSessions }) => {
-    const { panes, buffers } = useEditorManager();
+    const { panes, buffers, closeBuffer } = useEditorManager();
     const pane = panes.find((item) => item.id === paneId);
     const buffer = pane?.bufferId ? buffers.get(pane.bufferId) : null;
 
@@ -216,6 +233,12 @@ const WorkspacePane: React.FC<WorkspacePaneProps> = React.memo(
           />
         );
       }
+      case 'preview':
+        return (
+          <div className="pane-preview" data-testid="pane-preview">
+            <PreviewPaneContent onClose={() => closeBuffer(buffer.id)} />
+          </div>
+        );
       default:
         return <EditorPane paneId={paneId} />;
     }

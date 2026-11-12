@@ -681,3 +681,21 @@
   display: flex;
   flex-direction: column;
 }
+
+/* The preview buffer's pane body: the mockup or the dev server's output,
+ * filling the pane the split-screen model gives it. */
+.pane-preview {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.pane-preview > .mockup-panel {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  border-left: none;
+  position: static;
+}

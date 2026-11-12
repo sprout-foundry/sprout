@@ -381,6 +381,7 @@ const TESTIDS = {
   "preview-pane-close": "preview-pane-close", // the close affordance (panel)
   // Preview placement (the Code-mode panel)
   "preview-panel": "preview-panel", // the Code-mode preview panel container
+  "pane-preview": "pane-preview", // the preview buffer's editor pane body
   "preview-panel-toggle": "preview-panel-toggle", // the HeaderBar toggle button
 
   // Views layout configuration:

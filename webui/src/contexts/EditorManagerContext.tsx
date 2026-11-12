@@ -51,7 +51,7 @@ interface EditorManagerContextValue {
     ext?: string;
   }) => string;
   openWorkspaceBuffer: (options: {
-    kind: 'chat' | 'diff' | 'review' | 'file' | 'compare';
+    kind: 'chat' | 'diff' | 'review' | 'file' | 'compare' | 'preview';
     path: string;
     title: string;
     content?: string;

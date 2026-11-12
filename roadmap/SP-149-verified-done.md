@@ -13,10 +13,9 @@
   to build, run tests and show proof, and to stop after repeated identical
   failures. Nothing enforces it; a final reply can claim success with no
   evidence.
-- The design workspace already has a closed loop for screens (render →
-  critique → validate: `pkg/agent_tools/design_critique_*.go`,
-  `design_validate_handler.go`). Application code has no equivalent:
-  nothing starts the app and checks it.
+- Application code has no verification loop at all: nothing starts the app
+  and checks it. (The design workspace's render→critique loop this spec used
+  to point at was withdrawn with SP-140 on 2026-11-12.)
 
 Reviewing every claim by hand costs developers time, and unattended runs
 (automation, CI, embedding environments) have no reviewer at all.

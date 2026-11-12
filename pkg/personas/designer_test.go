@@ -8,13 +8,16 @@ import (
 )
 
 // designerDesignTools is the design-tier tool roster the designer persona must
-// list per SP-140-2 §2a. Listing tools that register later is harmless (the
-// allowlist filters the registered roster), so this test asserts the declared
-// intent, not runtime registration. All eight design tools must be declared:
-// the loop skill (brief → validate → export → sync, plus the visual pass) is
-// written against the full set, and a persona missing half its loop silently
-// degrades to whatever the enforcing path leaves it.
+// list per SP-140: draw_mockup and nothing else. The withdrawn design process
+// (validate / assets / render / critique / export / sync / brief / sketch
+// import) must stay off the list — a persona that can still reach those tools
+// can still build a design system around a sketch.
 var designerDesignTools = []string{
+	"draw_mockup",
+}
+
+// designerWithdrawnTools must not appear in the designer's roster.
+var designerWithdrawnTools = []string{
 	"design_validate",
 	"design_assets",
 	"design_render",
@@ -114,6 +117,11 @@ func TestDesigner_AllowedToolsExplicitArray(t *testing.T) {
 	for _, tool := range want {
 		if !slices.Contains(def.AllowedTools, tool) {
 			t.Errorf("designer allowed_tools must include %q (got %v)", tool, def.AllowedTools)
+		}
+	}
+	for _, tool := range designerWithdrawnTools {
+		if slices.Contains(def.AllowedTools, tool) {
+			t.Errorf("designer allowed_tools must not include the withdrawn %q", tool)
 		}
 	}
 }

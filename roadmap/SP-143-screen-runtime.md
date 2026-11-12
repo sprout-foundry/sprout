@@ -1,6 +1,12 @@
 # SP-143 — Screen Kit: Interactive, Token-Driven Screens
 
-Status: Shipped v1 (2026-09-25) — items 143.1–143.7 landed; acceptance criteria verified by test/webui/design_kit.spec.ts. v1 scoped a bare runtime; v2 widens to the
+> **Status (2026-11-12): Withdrawn.** This spec described SP-143 (screen kit runtime, device chrome, generated utilities, screens.json).
+> The design workspace was rewritten around one goal — a fast, on-brand
+> mockup from a prompt — and this process layer was removed. See
+> [SP-140](./SP-140-design-workspace.md) for the current scope; this file
+> is kept as history only. Do not implement from it.
+
+Status: Shipped v1 (2026-09-25), since withdrawn — items 143.1–143.7 landed; acceptance criteria verified by test/webui/design_kit.spec.ts. v1 scoped a bare runtime; v2 widened to the
 full kit (generated utilities, device chrome, states, base templates,
 derived index) after scoping discussion. Depends on SP-140-9 §9a (the
 screen `data-nav` contract); independent of its migration items.

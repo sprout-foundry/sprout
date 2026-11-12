@@ -32,7 +32,7 @@ runtime metadata that grows with it. An import-graph refactor of
 The planner's own tools are light. Their handlers import little: `ask_user`
 (credentials), `read_file` / `list_directory` (filesystem, events),
 `edit_file` (errors, filesystem), `write_plan` (plancontract, planstore),
-`design_render` (errors, filesystem), `analyze_image_content` (the vision
+`draw_mockup` (mockupkit, planstore), `analyze_image_content` (the vision
 processor). What makes them heavy is where they live:
 
 - **One package.** Every handler is in `pkg/agent_tools`, which imports 30
@@ -89,7 +89,6 @@ The planner's tools move first, each into a package that imports only
 | `read_file`, `list_directory`, `edit_file`, `write_file` | `pkg/tools/files` | Over `pkg/filesystem`; confinement through `toolkit.Workspace` |
 | `write_plan` | `pkg/tools/plan` | `plancontract` + `planstore` are already light |
 | `analyze_image_content` | `pkg/tools/vision` | Over `toolkit.Vision`; the processor is supplied by the host build |
-| `design_render` | `pkg/tools/render` | In the browser build the host page renders (as today) |
 | `draw_mockup` | `pkg/tools/mockup` | Its model call goes through `toolkit` to the agent's provider |
 
 `pkg/agent_tools` keeps registering them in `AllTools()`, so the full agent

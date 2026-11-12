@@ -63,18 +63,11 @@ var lowContextProfile = ContextProfile{
 		"run_subagent",
 		"review_changes",
 		"ask_user",
-		// Design loop tools (SP-140): pure Go over workspace files, valid in
-		// every context tier. Without them an auto-LCM model (<132K window,
-		// e.g. most locally hosted models) loses the design workflow while
-		// the lite prompt still instructs it to run design_validate after
-		// each artifact. design_render/design_critique stay out: they need
-		// the browser and vision tiers and register conditionally (nil on
-		// WASM).
-		"design_assets",
-		"design_validate",
-		"design_brief",
-		"design_export_tokens",
-		"design_sync",
+		// Mockups (SP-140): draw_mockup is the design surface, and both
+		// prompts tell the agent to reach for it when someone wants to see a
+		// screen. Without it an auto-LCM model (<132K window, e.g. most
+		// locally hosted models) is told to draw a mockup it cannot see.
+		"draw_mockup",
 		// Both prompts tell the agent to activate skills (design-system,
 		// project-planning). This filter runs first and nothing re-adds
 		// tools after it, so without these the agent is told to use a

@@ -1,9 +1,10 @@
 # SP-158 — The Design Loop in the Browser Build
 
-> **Status (2026-10-05):** Implemented (158a–158e); browser e2e pending.
-> Amends SP-140 invariant 7. Related: SP-147 (mode shapes the agent per
-> request), SP-143 (screen kit), SP-155 (preview pane, mode registry,
-> composable views).
+> **Status (2026-11-12): Withdrawn.** This spec described SP-158 (design tools in the browser build).
+> The design workspace was rewritten around one goal — a fast, on-brand
+> mockup from a prompt — and this process layer was removed. See
+> [SP-140](./SP-140-design-workspace.md) for the current scope; this file
+> is kept as history only. Do not implement from it.
 
 ## Problem
 

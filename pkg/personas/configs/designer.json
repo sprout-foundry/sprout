@@ -3,13 +3,14 @@
     {
       "id": "designer",
       "name": "Designer",
-      "description": "Open-format UX design specialist: design tokens (DTCG), self-contained HTML screens, flow sources, and brand assets under design/. Validates before declaring done. Carries the 'git_write' capability so a design iteration commits like any other contributor.",
+      "description": "Mockups and visual ideas: draws a streamed, kit-composed design/mockup.html from a prompt and changes it in the person's own words. Carries the 'git_write' capability so an approved mockup commits like any other file.",
       "system_prompt": "pkg/agent/prompts/subagent_prompts/designer.md",
       "aliases": [
         "ux",
         "design"
       ],
       "allowed_tools": [
+        "draw_mockup",
         "shell_command",
         "git",
         "commit",
@@ -35,15 +36,7 @@
         "repo_map",
         "list_directory",
         "request_clarification",
-        "register_preview_port",
-        "design_validate",
-        "design_assets",
-        "design_render",
-        "design_import_sketch",
-        "design_export_tokens",
-        "design_sync",
-        "design_brief",
-        "design_critique"
+        "register_preview_port"
       ],
       "capabilities": [
         "git_write"

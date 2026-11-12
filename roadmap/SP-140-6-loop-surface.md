@@ -1,13 +1,10 @@
 # SP-140-6 — The Loop Surface: Agent State in the Design Space
 
-> **Status (2026-09-22):** Shipped — `849f41282` (PR #85), merged to
-> `main` via `fe93ae98a` (released in v0.18.12).
-> Parent: [SP-140](./SP-140-design-workspace.md). Depends on SP-140-3/4/5
-> (all shipped on `feat-design-workspace`). Co-editing of design assets
-> by humans — edits that interleave safely with agent edits — is scoped
-> separately in [SP-140-7](./SP-140-7-co-editing.md), which builds on
-> this spec's live tree (§6a), status endpoint (§6b), and agent panel
-> (§6f).
+> **Status (2026-11-12): Withdrawn.** This spec described SP-140-6 (health strip, /api/design/status, annotation pins, agent panel).
+> The design workspace was rewritten around one goal — a fast, on-brand
+> mockup from a prompt — and this process layer was removed. See
+> [SP-140](./SP-140-design-workspace.md) for the current scope; this file
+> is kept as history only. Do not implement from it.
 
 ## Problem
 

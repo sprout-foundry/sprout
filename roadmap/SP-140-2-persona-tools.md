@@ -1,8 +1,10 @@
 # SP-140-2 — Designer Persona, Design Skill, and Agent Design Tools
 
-> **Status (2026-09-22):** Shipped — merged to `main` via `fe93ae98a`
-> (released in v0.18.12).
-> Parent: [SP-140](./SP-140-design-workspace.md). Depends on SP-140-1.
+> **Status (2026-11-12): Withdrawn.** This spec described SP-140-2 (designer persona, design-system skill, eight design tools).
+> The design workspace was rewritten around one goal — a fast, on-brand
+> mockup from a prompt — and this process layer was removed. See
+> [SP-140](./SP-140-design-workspace.md) for the current scope; this file
+> is kept as history only. Do not implement from it.
 
 ## Problem
 

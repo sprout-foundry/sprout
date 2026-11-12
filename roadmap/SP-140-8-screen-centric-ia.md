@@ -1,19 +1,10 @@
 # SP-140-8 — Screen-Centric IA: The Design Shell Organizes Around Screens
 
-> **Status (2026-09-24):** In progress. Follow-up to SP-140-6/7 (shipped).
-> Item 8.1 (rail rework — data-driven Screens group + Library group, status
-> dot + open-annotation badge, selection routing) has landed; the workbench
-> (8.2) landed 2026-09-24 (`d0941b207`); adaptive chrome (8.3) verified
-> shipped with it (2026-09-25); the §8d empty states landed 2026-09-25.
-> Remaining: none — 8.1–8.6 all shipped (the Feedback library view closed 8.5's holdout 2026-09-26).
-> The token-display rework that motivated this (tile grid, proportional spacing
-> scale, schema-wall removal) landed in the same review pass on
-> `feat-design-workspace` and is *not* part of this spec.
-> Parent: [SP-140](./SP-140-design-workspace.md). Depends on SP-140-3 (shell),
-> SP-140-6 (health strip, live tree), SP-140-7 (co-editing affordances).
-> Coordinates with SP-140-9 (format rework) — this spec is an IA change and
-> assumes no format change; §8b's facet aggregation is defined against
-> whatever screen/flow format SP-140-9 settles.
+> **Status (2026-11-12): Withdrawn.** This spec described SP-140-8 (screen-centric rail, workbench facets, library views).
+> The design workspace was rewritten around one goal — a fast, on-brand
+> mockup from a prompt — and this process layer was removed. See
+> [SP-140](./SP-140-design-workspace.md) for the current scope; this file
+> is kept as history only. Do not implement from it.
 
 ## Problem
 

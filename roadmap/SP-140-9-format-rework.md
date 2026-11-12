@@ -1,14 +1,10 @@
 # SP-140-9 — Format Rework: HTML-First Screens, Derived Flows, Structured Steps
 
-> **Status (2026-09-26):** Shipped (9.1–9.8; 9.7's HTML render path shipped
-> with SP-143, flow-critique on the derived graph pinned in 9.3's notes; 9.8's
-> determinism/sidecar/drift/migrated-fixture pins landed per item). Parent:
-> [SP-140](./SP-140-design-workspace.md). Amends SP-140-1 §1b/§1c (format
-> charter); ripples into SP-140-4 (critique), SP-140-5 (sync/brief), and the
-> `design-system` skill / `designer` persona (SP-140-2). Coordinates with
-> SP-140-8 (screen-centric IA): this spec changes *what a screen is and
-> where flow truth lives*; 8 changes *which axis the shell leads with*.
-> They land independently — 8 works against either format.
+> **Status (2026-11-12): Withdrawn.** This spec described SP-140-9 (HTML-first screens, structured flow sources, derived .mmd).
+> The design workspace was rewritten around one goal — a fast, on-brand
+> mockup from a prompt — and this process layer was removed. See
+> [SP-140](./SP-140-design-workspace.md) for the current scope; this file
+> is kept as history only. Do not implement from it.
 
 ## Problem
 

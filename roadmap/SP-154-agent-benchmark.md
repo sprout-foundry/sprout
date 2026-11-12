@@ -15,7 +15,9 @@ nothing measures end-to-end task success:
   done.
 - The workflow harness (`pkg/workflow`, `loop_gate.go`, `automate/*.json`)
   runs and gates agent loops but has no task suite or scoring.
-- `pkg/agent/design_e2e_test.go` covers design rendering paths only.
+- `pkg/agent/design_e2e_test.go` covers design rendering paths only (the
+  design-loop specs were withdrawn on 2026-11-12; the file still pins the
+  render path).
 
 Without numbers, model recommendations and prompt changes are judged by
 anecdote, and regressions on a model show up as user reports.

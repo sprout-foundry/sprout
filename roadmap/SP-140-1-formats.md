@@ -1,8 +1,10 @@
 # SP-140-1 — Design Format Charter: DTCG Tokens, SVG Wireframes, Mermaid Flows
 
-> **Status (2026-09-22):** Shipped — merged to `main` via `fe93ae98a`
-> (feat-design-workspace, released in v0.18.12).
-> Parent: [SP-140](./SP-140-design-workspace.md). Depends on nothing.
+> **Status (2026-11-12): Withdrawn.** This spec described SP-140-1 (format charter: DTCG tokens, SVG wireframes, mermaid flows).
+> The design workspace was rewritten around one goal — a fast, on-brand
+> mockup from a prompt — and this process layer was removed. See
+> [SP-140](./SP-140-design-workspace.md) for the current scope; this file
+> is kept as history only. Do not implement from it.
 
 ## Problem
 

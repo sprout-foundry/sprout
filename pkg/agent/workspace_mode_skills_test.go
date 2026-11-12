@@ -235,10 +235,7 @@ func TestActivateSkillByID_NotesToolsThisHostLacks(t *testing.T) {
 		t.Fatalf("activateSkillByID: %v", err)
 	}
 	prompt := low.GetSystemPrompt()
-	if !strings.Contains(prompt, note) || !strings.Contains(prompt, "`design_render`") {
-		t.Error("the low-context host lacks design_render; the fold must say so")
-	}
-	if strings.Contains(prompt[strings.Index(prompt, note):], "`design_validate`") {
-		t.Error("design_validate is available in low-context mode and must not be listed as missing")
+	if strings.Contains(prompt, note) {
+		t.Error("draw_mockup is in the low-context allowlist; the fold must not list it as missing")
 	}
 }

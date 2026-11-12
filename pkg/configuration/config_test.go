@@ -98,7 +98,7 @@ func TestGetSubagentType_DesignerResolvesByIDAndAliases(t *testing.T) {
 	assert.Equal(t, "designer", canonical.ID)
 	assert.True(t, canonical.Enabled, "designer must ship enabled")
 	assert.True(t, canonical.Delegatable, "designer must be delegatable so orchestrator can spawn it")
-	assert.Contains(t, canonical.AllowedTools, "design_validate")
+	assert.Contains(t, canonical.AllowedTools, "draw_mockup")
 
 	for _, alias := range []string{"ux", "design"} {
 		resolved := cfg.GetSubagentType(alias)

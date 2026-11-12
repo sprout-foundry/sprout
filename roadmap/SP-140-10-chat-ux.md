@@ -1,14 +1,10 @@
 # SP-140-10 — Design-Mode Chat UX: Placement, Pinning, Visibility, Inline Tool Details
 
-> **Status (2026-09-22):** Shipped — items 10a–10d + the 10e dogfood
-> record; manual-browser dogfood items 1–4 verified in a 2026-09-22
-> browser pass on a local build from the feat-design-workspace branch.
-> Merged to `main` via `fe93ae98a`.
-> Parent: [SP-140](./SP-140-design-workspace.md). Depends on SP-140-6
-> (loop surface — §6f side-column agent panel), SP-140-7 (co-editing).
-> Fixes the four design-mode dogfood gripes of 2026-09-22. Item 10d
-> changes the **shared** chat mechanism, so Code mode is covered too,
-> with regression gates.
+> **Status (2026-11-12): Withdrawn.** This spec described SP-140-10 (design-mode chat placement, pinning, inline tool details).
+> The design workspace was rewritten around one goal — a fast, on-brand
+> mockup from a prompt — and this process layer was removed. See
+> [SP-140](./SP-140-design-workspace.md) for the current scope; this file
+> is kept as history only. Do not implement from it.
 
 ## Provenance (gripes, lightly paraphrased)
 

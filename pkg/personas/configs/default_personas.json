@@ -8,6 +8,7 @@
         "git_orchestrator"
       ],
       "allowed_tools": [
+        "draw_mockup",
         "shell_command",
         "git",
         "commit",

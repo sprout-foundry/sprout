@@ -110,9 +110,9 @@ func TestReadEmbeddedPromptFileWithRepoRelativePath(t *testing.T) {
 
 // TestReadEmbeddedPromptFile_DesignerPrompt verifies the designer persona's
 // prompt ships embedded (so a spawned designer never fails to load its
-// prompt) and carries the four SP-140-2 §2a content blocks: the directory
-// contract, the format charter, the validate-then-declare-done workflow, and
-// the critique vocabulary.
+// prompt) and carries the SP-140 mockup rules: draw with draw_mockup, compose
+// from a kit, change in the person's own words. The withdrawn design process
+// must not reappear in the prompt.
 func TestReadEmbeddedPromptFile_DesignerPrompt(t *testing.T) {
 	content, err := readEmbeddedPromptFile("pkg/agent/prompts/subagent_prompts/designer.md")
 	if err != nil {
@@ -124,41 +124,22 @@ func TestReadEmbeddedPromptFile_DesignerPrompt(t *testing.T) {
 	}
 
 	blocks := map[string][]string{
-		"directory contract": {"design/readme.md", "design/tokens/", "design/screens/", "design/flows/"},
-		"format charter":     {"dtcg", "$value", "data-nav", "mermaid", "flowchart"},
-		// SP-140-9 §9a/§9b: screens are the primary tier (wireframes
-		// removed — the prompt must say so, matching the validator) and
-		// flows are .json sources with derived .mmd exports.
-		"post-9.4 formats": {
-			"primary tier",
-			"hard error",
-			"data-screen=",
-			`<flow-name>.json`,
-			"design_export_tokens targets:flows",
-			"never hand-edit",
-			"flow-source-hash",
-		},
-		"validate workflow": {"design_validate", "validate, then declare done"},
-		"critique vocabulary": {
-			"hierarchy", "affordance", "consistency", "spacing rhythm", "contrast",
-		},
-		// SP-143 §143.6: the screen-kit generator surface — prompt and
-		// validator must state the same rules (the review blocker).
-		"screen kit": {
-			"design/runtime/base/phone.html",
-			`data-nav="to:<stem>;trigger:<label>"`,
-			"data-states=",
-			".bg-*", ".p-*", ".rounded-*", ".shadow-*", "var(--token)",
-			"design_export_tokens targets:screens",
-			"screen_runtime_hash",
-			"never hand-edited",
-		},
+		"mockup tool":    {"draw_mockup", "design/mockup.html", "never write the mockup html"},
+		"kit":            {"kit", "never write the", "styling"},
+		"change":         {"change", "part"},
+		"sketch posture": {"sketch"},
 	}
 	for block, needles := range blocks {
 		for _, needle := range needles {
 			if !strings.Contains(body, strings.ToLower(needle)) {
 				t.Errorf("designer prompt (%s block) must mention %q", block, needle)
 			}
+		}
+	}
+
+	for _, banned := range []string{"design_validate", "design_export_tokens", "design_sync", "design_critique", "flow-source-hash"} {
+		if strings.Contains(body, strings.ToLower(banned)) {
+			t.Errorf("designer prompt must not reference the withdrawn design process (%q)", banned)
 		}
 	}
 }

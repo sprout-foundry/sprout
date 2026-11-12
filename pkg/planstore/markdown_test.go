@@ -12,7 +12,7 @@ import (
 
 func TestRenderMarkdownFullPlan(t *testing.T) {
 	p := testPlan()
-	p.Design = "design/screens/login.html"
+	p.Design = "design/mockup.html"
 	p.Starter = "web-app"
 	// Bump to a non-1 revision so the metadata is unambiguous.
 	p.Revision = 5
@@ -24,7 +24,7 @@ func TestRenderMarkdownFullPlan(t *testing.T) {
 	assert.Contains(t, md, "# Add user authentication to the web app")
 	assert.Contains(t, md, "- **Schema:** v1")
 	assert.Contains(t, md, "- **Revision:** 5")
-	assert.Contains(t, md, "- **Design:** design/screens/login.html")
+	assert.Contains(t, md, "- **Design:** design/mockup.html")
 	assert.Contains(t, md, "- **Starter:** web-app")
 
 	assert.Contains(t, md, "## Scope")

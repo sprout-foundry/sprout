@@ -232,7 +232,7 @@ export interface CreateAgentOptions {
 /** A file the agent wrote, created, edited or deleted. */
 export interface FileWrittenEvent {
   type: 'file_written';
-  /** Workspace-relative path (`design/screens/home.html`). */
+  /** Workspace-relative path (`design/mockup.html`). */
   path: string;
   /** `write`, `edit`, `created`, `deleted`, … as the agent reported it. */
   action: string;

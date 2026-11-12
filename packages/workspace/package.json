@@ -19,7 +19,6 @@
     "dist/views.d.ts",
     "dist/providers.js",
     "dist/providers.d.ts",
-    "dist/design.js",
     "dist/agent.js",
     "dist/agent.d.ts",
     "dist/workspace.css",

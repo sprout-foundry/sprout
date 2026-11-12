@@ -17,7 +17,7 @@ func basePlan() *Plan {
 	p := New("Add user authentication to the web app", now)
 	p.Revision = 3
 	p.Updated = time.Date(2026, 10, 3, 14, 30, 0, 0, time.UTC)
-	p.Design = "design/screens/login.html"
+	p.Design = "design/mockup.html"
 	p.Starter = "web-app"
 	p.Scope = []ScopeItem{
 		{ID: "s1", Title: "Auth API", Description: "Login and token endpoints"},
@@ -68,7 +68,7 @@ const fixtureValid = `{
     {"scope": "s1", "description": "Implement /login and /token endpoints"},
     {"scope": "s2", "description": "Add login screen and wire it to the API"}
   ],
-  "design": "design/screens/login.html",
+  "design": "design/mockup.html",
   "starter": "web-app",
   "acceptance": [
     {"id": "a1", "scope": "s1", "check": "make build", "kind": "build"},

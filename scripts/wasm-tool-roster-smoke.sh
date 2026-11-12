@@ -91,56 +91,27 @@ if [ "$WASM_STUB_COUNT" -ne 4 ]; then
 fi
 echo "✓ Found all 4 expected WASM stub files"
 
-# 5. SP-140 invariant 7 as amended by SP-158: every design tool ships to WASM.
+# 5. SP-140: draw_mockup is the design tool, and it ships to every build.
 #
-#    The handlers are shared (no build tag, constructed in all.go's
-#    unconditional list). Rendering reaches the host page through
-#    pkg/webcontent's page renderer; the critique's vision pass has a js
-#    variant that leaves the critique to the primary model.
-echo "→ Checking design-tool WASM roster (SP-158)..."
-
-DESIGN_HANDLERS="design_assets_handler.go design_validate_handler.go design_brief_handler.go design_export_handler.go design_sync_handler.go design_render_handler.go design_critique_handler.go design_import_sketch_handler.go"
-
-# 5a. Every design handler is compiled into the WASM build.
-for shared in $DESIGN_HANDLERS; do
-    if echo "$WASMFILES" | grep -q "^${shared}$"; then
-        echo "✓ WASM includes $shared"
-    else
-        echo "FAIL: WASM build missing $shared — design tools ship to every build (SP-158)"
-        exit 1
-    fi
-done
-
-# 5b. No design handler carries a build tag of its own.
-for shared in $DESIGN_HANDLERS; do
-    if head -1 "pkg/agent_tools/$shared" | grep -q "^//go:build"; then
-        echo "FAIL: $shared has a build constraint; design tools must stay shared"
-        exit 1
-    fi
-done
-echo "✓ design handlers carry no build constraint"
-
-# 5c. Each design handler is constructed in all.go's shared list.
-for handler in designAssetsHandler designValidateHandler designBriefHandler designExportHandler designSyncHandler designRenderHandler designCritiqueHandler designImportSketchHandler; do
-    if ! grep -q "&${handler}{}" pkg/agent_tools/all.go; then
-        echo "FAIL: all.go does not construct ${handler} in the shared list"
-        exit 1
-    fi
-done
-echo "✓ all.go constructs every design handler"
-
-# 5d. The browser-specific pieces are selected: the critique's vision pass
-#     variant, and the page-backed renderer in pkg/webcontent.
-if ! echo "$WASMFILES" | grep -q "^design_critique_vision_js\.go$"; then
-    echo "FAIL: WASM build missing design_critique_vision_js.go"
+#    The handler is shared (no build tag, constructed in all.go's
+#    unconditional list), so the browser build can draw a mockup exactly as
+#    the daemon does.
+echo "→ Checking the mockup tool's WASM roster (SP-140)..."
+if echo "$WASMFILES" | grep -q "^draw_mockup_handler\.go$"; then
+    echo "✓ WASM includes draw_mockup_handler.go"
+else
+    echo "FAIL: WASM build missing draw_mockup_handler.go"
     exit 1
 fi
-WEBCONTENTFILES=$(GOOS=js GOARCH=wasm go list -f '{{range .GoFiles}}{{.}}{{"\n"}}{{end}}' ./pkg/webcontent/ 2>/dev/null || echo "")
-if ! echo "$WEBCONTENTFILES" | grep -q "^browser_page_js\.go$"; then
-    echo "FAIL: WASM build missing pkg/webcontent/browser_page_js.go (page renderer)"
+if head -1 "pkg/agent_tools/draw_mockup_handler.go" | grep -q "^//go:build"; then
+    echo "FAIL: draw_mockup_handler.go has a build constraint; it must stay shared"
     exit 1
 fi
-echo "✓ WASM selects the page renderer and the primary-model critique pass"
+if ! grep -q "&drawMockupHandler{}" pkg/agent_tools/all.go; then
+    echo "FAIL: all.go does not construct drawMockupHandler"
+    exit 1
+fi
+echo "✓ all.go constructs the mockup handler"
 
 # Cleanup: remove any artifacts created during the smoke test. The WASM
 # build may have written to /tmp/sprout.wasm (Linux/macOS) or the local

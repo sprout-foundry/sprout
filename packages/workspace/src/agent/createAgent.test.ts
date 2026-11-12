@@ -265,15 +265,15 @@ describe('createAgent', () => {
   it('reports file writes with the content to render', async () => {
     const { bridge, agent, events } = await setup();
     bridge.script = async (emit, b) => {
-      b.files.set('/workspace/design/screens/home.html', '<h1>Home</h1>');
-      emit('file_changed', { file_path: '/workspace/design/screens/home.html', action: 'write', size: 13 });
+      b.files.set('/workspace/design/mockup.html', '<h1>Home</h1>');
+      emit('file_changed', { file_path: '/workspace/design/mockup.html', action: 'write', size: 13 });
       emit('file_changed', { file_path: '/workspace/old.txt', action: 'deleted' });
       return 'done';
     };
     await agent.send('draw');
     const writes = events.filter((e) => e.type === 'file_written');
     expect(writes).toEqual([
-      { type: 'file_written', path: 'design/screens/home.html', action: 'write', content: '<h1>Home</h1>' },
+      { type: 'file_written', path: 'design/mockup.html', action: 'write', content: '<h1>Home</h1>' },
       { type: 'file_written', path: 'old.txt', action: 'deleted', content: null },
     ]);
   });
@@ -350,7 +350,7 @@ describe('createAgent', () => {
   });
 
   it('exposes the workspace files', async () => {
-    const { agent, bridge } = await setup({ files: { initial: { 'README.md': '# Hi', 'design/screens/a.html': '<a>' } } });
+    const { agent, bridge } = await setup({ files: { initial: { 'README.md': '# Hi', 'design/mockup.html': '<a>' } } });
     bridge.files.set('/workspace/node_modules/x/index.js', 'skip');
     expect(agent.files.root).toBe('/workspace');
     expect(agent.files.read('README.md')).toBe('# Hi');
@@ -360,12 +360,12 @@ describe('createAgent', () => {
       ['design', 'dir'],
       ['node_modules', 'dir'],
     ]);
-    expect(agent.files.walk()).toEqual(['README.md', 'design/screens/a.html']);
+    expect(agent.files.walk()).toEqual(['README.md', 'design/mockup.html']);
     agent.files.write('.sprout/plan.json', '{}');
     expect(agent.files.snapshot()).toEqual({
       '.sprout/plan.json': '{}',
       'README.md': '# Hi',
-      'design/screens/a.html': '<a>',
+      'design/mockup.html': '<a>',
     });
   });
 

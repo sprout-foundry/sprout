@@ -56,9 +56,8 @@ The project sidebar has two stacked regions:
 ```
 
 - The **tool strip** replaces the Code and Design sections and the drill-in:
-  Files · Search · Changes · Design (screens, flows, tokens, feedback as the
-  Design tool's own tabs). Workflows and Terminal move into the strip's `⋯`
-  overflow (they are occasional).
+  Files · Search · Changes · Design (the mockup and its chat). Workflows and
+  Terminal move into the strip's `⋯` overflow (they are occasional).
 - The strip remembers the open tool per project. There is always one open;
   the drill-in (and its Back) disappears.
 - The split between Conversations and the workbench is draggable and

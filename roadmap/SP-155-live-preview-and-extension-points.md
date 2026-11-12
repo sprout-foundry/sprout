@@ -13,8 +13,8 @@ it:
   (`pkg/agent_tools/register_preview_port_handler.go`) only works when
   `WORKSPACE_ID` is set (hosted workspaces) and returns a URL rather than
   showing anything.
-- `webui/src/components/LivePreview.tsx` renders single HTML/SVG files and
-  design screens, not a running dev server.
+- `webui/src/components/LivePreview.tsx` renders single HTML/SVG files, not a
+  running dev server.
 - CLI users switch to a browser tab and refresh by hand.
 
 **Composition.** Environments that embed sprout's web UI (hosted

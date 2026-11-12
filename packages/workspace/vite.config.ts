@@ -14,7 +14,6 @@ import { resolve } from "path";
  *   - `views` — the views entry point (chat, agent changes, files, preview,
  *     the layout).
  *   - `providers` — the provider wrapper the views need (`SproutProviders`).
- *   - `design` — the design space's views.
  *   - `agent` — the headless agent API (`createAgent`): no React, no web UI.
  *
  * Declared as ad-hoc entries rather than a static re-export, because a static
@@ -50,7 +49,6 @@ const libraryConfig: InlineConfig = {
         index: resolve(__dirname, "src/index.ts"),
         views: resolve(__dirname, "src/viewsChunk.ts"),
         providers: resolve(__dirname, "src/providersChunk.ts"),
-        design: resolve(__dirname, "src/designChunk.ts"),
         agent: resolve(__dirname, "src/agentChunk.ts"),
       },
       formats: ["es"],
@@ -94,8 +92,8 @@ const libraryConfig: InlineConfig = {
  * build is untouched: it is bundled once, by the same Rollup that splits it.
  *
  * A module whose only static importer is a package entry point stays lazy: it
- * is the entry's own chunk (the design views behind `design`), so its dynamic
- * import already resolves to that chunk's namespace without an accessor.
+ * is the entry's own chunk, so its dynamic import already resolves to that
+ * chunk's namespace without an accessor.
  *
  * The importer/target pairs come from a first, analysis-only pass over the same
  * graph (aborted once the module graph is complete). `scripts/check-chunk-graph.mjs`

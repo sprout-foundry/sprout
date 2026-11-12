@@ -7,4 +7,3 @@
  * views package once the design views move there.
  */
 export { default as DesignSurface } from '../../../webui/src/components/design/DesignSurface';
-export { default as DesignView } from '../../../webui/src/components/design/DesignView';

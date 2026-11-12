@@ -122,7 +122,7 @@ function respond(req: ChatRequest): string {
         return toolCall('call_queue', 'start_change', { title: `Landing (${toolResults[0]})`, scope: { paths: ['/'] } });
       case 2:
         return toolCall('call_write', 'write_file', {
-          path: 'design/screens/home.html',
+          path: 'design/mockup.html',
           content: `<h1>${toolResults[0]}</h1>`,
         });
       default:
@@ -269,10 +269,10 @@ describe.skipIf(!haveWasm)('headless agent on the real WASM module', () => {
     const steps = events.flatMap((e) => (e.type === 'tool_end' ? [`${e.tool}:${e.status}`] : []));
     expect(steps).toEqual(['ask_user:completed', 'start_change:completed', 'write_file:completed']);
 
-    const written = events.find((e) => e.type === 'file_written' && e.path === 'design/screens/home.html');
+    const written = events.find((e) => e.type === 'file_written' && e.path === 'design/mockup.html');
     expect(written).toMatchObject({ type: 'file_written', content: '<h1>calm</h1>' });
-    expect(agent.files.read('design/screens/home.html')).toBe('<h1>calm</h1>');
-    expect(agent.files.snapshot()['design/screens/home.html']).toBe('<h1>calm</h1>');
+    expect(agent.files.read('design/mockup.html')).toBe('<h1>calm</h1>');
+    expect(agent.files.snapshot()['design/mockup.html']).toBe('<h1>calm</h1>');
 
     // The model was offered the host tool with its full schema, and the
     // host's context reached the system prompt.
@@ -302,14 +302,14 @@ describe.skipIf(!haveWasm)('headless agent on the real WASM module', () => {
     };
 
     const designer = await offeredFor('designer');
-    expect(designer.has('design_render')).toBe(true);
+    expect(designer.has('draw_mockup')).toBe(true);
     expect(designer.has('ask_user')).toBe(false);
     // A host tool is offered only when the persona names it.
     expect(designer.has('start_change')).toBe(false);
 
     const general = await offeredFor('general');
     expect(general.has('ask_user')).toBe(true);
-    expect(general.has('design_render')).toBe(false);
+    expect(general.has('draw_mockup')).toBe(false);
   }, 60_000);
 
 

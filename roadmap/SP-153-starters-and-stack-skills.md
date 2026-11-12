@@ -9,8 +9,9 @@
 New projects start from nothing and the agent picks a stack ad hoc,
 differently each time:
 
-- There are no application starters. The only scaffold is the design tree
-  (`pkg/design/scaffold.go`).
+- There are no application starters. (The design tree scaffold this spec used
+  to point at was withdrawn with SP-140 on 2026-11-12; a mockup is one file,
+  `design/mockup.html`, drawn by `draw_mockup`.)
 - "New project" in the web UI creates an empty repository
   (`webui/src/components/layered/NewProjectDialog.tsx`).
 - Skills exist as a mechanism (`pkg/skills/library/`, `registry.json`;
@@ -52,8 +53,7 @@ emulation for development and tests.
 
 Each starter is a minimal working app (renders, has one test) with
 quality defaults baked in: formatter and linter config, test runner,
-plain README, the starter manifest, and the design tree scaffold so
-design mode works from the first turn. `sprout new --starter <id>` and
+plain README, and the starter manifest. `sprout new --starter <id>` and
 the web UI's new-project dialog can instantiate one.
 
 ### 153c. Stack skills

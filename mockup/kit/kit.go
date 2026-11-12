@@ -1,4 +1,4 @@
-// Package mockupkit is the design kit planner mockups are built from: style
+// Package kit is the design kit planner mockups are built from: style
 // kits (one shared component stylesheet in a few looks, each with a design
 // brief the model composes to and a few rules of its own), contrast-checked
 // colour palettes, an icon set (Lucide, ISC licence) and a small runtime for
@@ -8,7 +8,7 @@
 // and every mockup looks designed rather than generated. Strip gives back the
 // model's own document (the source), which is what a change is made to;
 // Assemble adds the kit to it for showing and saving.
-package mockupkit
+package kit
 
 import (
 	_ "embed"

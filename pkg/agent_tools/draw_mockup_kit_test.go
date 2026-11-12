@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	mockupkit "github.com/sprout-foundry/sprout/mockup/kit"
 	"github.com/sprout-foundry/sprout/pkg/events"
-	"github.com/sprout-foundry/sprout/pkg/mockupkit"
 )
 
 const kitMockupPage = `<!doctype html><html lang="en" data-kit="studio" data-palette="deep-sea-dark"><head><title>Muddy Paws</title></head>` +

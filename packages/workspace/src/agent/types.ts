@@ -304,12 +304,15 @@ export type AgentEvent =
   | FileWrittenEvent
   | MockupEvent
   | { type: 'error'; message: string; fatal: boolean }
+  /** A message steered into the running turn reached the model. */
+  | { type: 'steer_delivered'; message: string }
   | {
       type: 'done';
       status: 'completed' | 'interrupted' | 'failed';
       /** The agent's final reply. */
       response: string;
       error?: string;
+      unsentSteers?: string[];
     }
   /**
    * Any other agent event, untranslated: other tools' progress events,
@@ -351,6 +354,12 @@ export interface TurnResult {
   status: 'completed' | 'interrupted' | 'failed';
   response: string;
   error?: string;
+  /**
+   * Messages steered into the turn that it ended before reading, oldest
+   * first. The agent no longer holds them: send them as the next turn, or
+   * give them back to the person.
+   */
+  unsentSteers?: string[];
 }
 
 /** An image sent with a message: the model sees it with the words. */
@@ -376,6 +385,12 @@ export interface HeadlessAgent {
   readonly chatId: string;
   /** Start a turn. Resolves when the turn ends (also signalled by a `done` event). */
   send(message: string, options?: SendOptions): Promise<TurnResult>;
+  /**
+   * Add a message to the running turn: the agent reads it at its next step
+   * (a `steer_delivered` event says when). False when no turn is running or
+   * the runtime cannot steer; send it as a turn then.
+   */
+  steer(message: string): boolean;
   /** Stop the running turn; it ends with status `interrupted`. */
   cancel(): void;
   /** Answer an `ask_user` question. False when the question is unknown or expired. */
@@ -418,6 +433,8 @@ export interface SproutWasmBridge {
     options?: string,
   ): Promise<{ response: string; provider: string; model: string }>;
   stopAgent(chatId?: string): void;
+  steerAgent?(message: string, chatId?: string): { steered: boolean; error?: string };
+  retractSteer?(chatId?: string): { retracted: boolean; message?: string };
   clearConversation(chatId?: string): void;
   respondToAskUser(requestId: string, response: string): { delivered: boolean };
   registerHostTool(

@@ -135,6 +135,8 @@ export async function createAgent(options: CreateAgentOptions): Promise<Headless
   let stopRequested = false;
   let disposed = false;
   let writes: FileWriteTracker | null = null;
+  // Steered into the running turn and not read yet, oldest first.
+  let steers: string[] = [];
 
   const emit = (event: AgentEvent) => {
     for (const listener of [...listeners]) {
@@ -158,12 +160,31 @@ export async function createAgent(options: CreateAgentOptions): Promise<Headless
     if (typeof eventChat === 'string' && eventChat !== '' && eventChat !== chatId) return;
     const ctx = { workspaceRoot: workspaceRootOf(bridge), readFile: (p: string) => readWorkspaceFile(bridge, p) };
     const event = mapAgentEvent(raw, ctx);
+    if (event?.type === 'steer_delivered') {
+      steers.shift();
+      history.push({ role: 'user', content: event.message });
+    }
     if (event) emit(event);
     writes ??= new FileWriteTracker(ctx);
     for (const derived of writes.observe(raw, event)) emit(derived);
   };
 
+  // Takes back what was steered in too late for the turn to read: left with
+  // the agent, it would arrive at the start of some later turn instead. The
+  // list kept here is what is unread (a stopped run may drop its queue);
+  // retracting only empties the agent's.
+  const takeBackSteers = (): string[] => {
+    const unsent = steers.filter((m) => m.trim());
+    steers = [];
+    if (unsent.length) {
+      for (let i = 0; i < 100 && bridge.retractSteer?.(chatId)?.retracted; i++);
+    }
+    return unsent;
+  };
+
   const finish = (result: TurnResult): TurnResult => {
+    const unsent = takeBackSteers();
+    if (unsent.length) result = { ...result, unsentSteers: unsent };
     running = false;
     stopRequested = false;
     emit({ type: 'done', ...result });
@@ -214,6 +235,13 @@ export async function createAgent(options: CreateAgentOptions): Promise<Headless
         emit({ type: 'error', message: reason, fatal: true });
         return finish({ status: 'failed', response: '', error: reason });
       }
+    },
+
+    steer(message: string): boolean {
+      if (disposed || !running || !message.trim() || !bridge.steerAgent || !bridge.retractSteer) return false;
+      if (!bridge.steerAgent(message, chatId)?.steered) return false;
+      steers.push(message);
+      return true;
     },
 
     cancel() {

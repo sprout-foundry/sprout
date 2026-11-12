@@ -1,4 +1,4 @@
-package mockupkit
+package kit
 
 import (
 	"strings"

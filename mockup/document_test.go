@@ -1,15 +1,15 @@
-package tools
+package mockup
 
 import (
 	"strings"
 	"testing"
 )
 
-func TestApplyMockupEdits(t *testing.T) {
+func TestApplyEdits(t *testing.T) {
 	doc := "<!doctype html><html><head><style>\n    .bar {\n      background: #fff;\n    }\n</style></head><body>\n    <h1>Crumb</h1>\n    <p>Hours</p>\n</body></html>"
 
 	// Exact text, and text whose indentation the model shifted.
-	got, err := applyMockupEdits(doc, "<<<FIND\n<h1>Crumb</h1>\n===\n<h1>Fresh Crumb</h1>\n>>>\n<<<FIND\n  .bar {\n    background: #fff;\n===\n    .bar {\n      background: #14532d;\n>>>")
+	got, err := ApplyEdits(doc, "<<<FIND\n<h1>Crumb</h1>\n===\n<h1>Fresh Crumb</h1>\n>>>\n<<<FIND\n  .bar {\n    background: #fff;\n===\n    .bar {\n      background: #14532d;\n>>>")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -18,7 +18,7 @@ func TestApplyMockupEdits(t *testing.T) {
 	}
 
 	// Adding after a part, and taking a part out.
-	got, err = applyMockupEdits(doc, "<<<FIND\n<p>Hours</p>\n===\n<p>Hours</p>\n<p>Reviews</p>\n>>>\n<<<FIND\n<h1>Crumb</h1>\n===\n>>>")
+	got, err = ApplyEdits(doc, "<<<FIND\n<p>Hours</p>\n===\n<p>Hours</p>\n<p>Reviews</p>\n>>>\n<<<FIND\n<h1>Crumb</h1>\n===\n>>>")
 	if err != nil || !strings.Contains(got, "<p>Reviews</p>") || strings.Contains(got, "<h1>") {
 		t.Fatalf("add and remove = %q, %v", got, err)
 	}
@@ -30,7 +30,7 @@ func TestApplyMockupEdits(t *testing.T) {
 		"<<<FIND\n<h2>Nope</h2>\n===\n<h2>x</h2>\n>>>",
 		"<<<FIND\n    }\n===\n}\n>>>\n<<<FIND\n<p>\n===\n<p class=x>\n>>>",
 	} {
-		if _, err := applyMockupEdits(doc+"<p>", reply); err == nil {
+		if _, err := ApplyEdits(doc+"<p>", reply); err == nil {
 			t.Errorf("applied %q", reply)
 		}
 	}
@@ -50,7 +50,7 @@ func TestFindIgnoringIndent(t *testing.T) {
 	}
 }
 
-func TestCleanMockupHTML(t *testing.T) {
+func TestClean(t *testing.T) {
 	const page = "<!doctype html><html><body><section data-screen=\"home\">Hi</section></body></html>"
 	for name, raw := range map[string]string{
 		"bare":            page,
@@ -60,7 +60,7 @@ func TestCleanMockupHTML(t *testing.T) {
 		"upper doctype":   "<!DOCTYPE html><html><BODY>x</BODY></html>",
 		"no closing html": "<!doctype html><html><body>x",
 	} {
-		got, ok := cleanMockupHTML(raw)
+		got, ok := Clean(raw)
 		if !ok {
 			t.Errorf("%s: not cleaned", name)
 			continue
@@ -76,36 +76,36 @@ func TestCleanMockupHTML(t *testing.T) {
 	for name, raw := range map[string]string{
 		"no document": "I could not draw that.",
 		"no body":     "<!doctype html><html><head></head></html>",
-		"too large":   "<!doctype html><html><body>" + strings.Repeat("x", maxMockupBytes) + "</body></html>",
+		"too large":   "<!doctype html><html><body>" + strings.Repeat("x", MaxBytes) + "</body></html>",
 	} {
-		if _, ok := cleanMockupHTML(raw); ok {
+		if _, ok := Clean(raw); ok {
 			t.Errorf("%s: accepted", name)
 		}
 	}
 }
 
-func TestMockupScreenIDs(t *testing.T) {
+func TestScreenIDs(t *testing.T) {
 	doc := `<section data-screen="home"></section><section data-screen='menu'></section><a data-go="menu"></a><section data-screen="home"></section>`
-	got := mockupScreenIDs(doc)
+	got := ScreenIDs(doc)
 	if strings.Join(got, ",") != "home,menu" {
 		t.Fatalf("screens = %v", got)
 	}
 }
 
-func TestMockupChangeNote(t *testing.T) {
-	if got := mockupChangeNote(" make it bigger ", ""); got != "make it bigger" {
+func TestChangeNote(t *testing.T) {
+	if got := ChangeNote(" make it bigger ", ""); got != "make it bigger" {
 		t.Errorf("note = %q", got)
 	}
-	if got := mockupChangeNote("make it bigger", "the button “Order a cake” on the home screen"); got != "On the button “Order a cake” on the home screen: make it bigger" {
+	if got := ChangeNote("make it bigger", "the button “Order a cake” on the home screen"); got != "On the button “Order a cake” on the home screen: make it bigger" {
 		t.Errorf("pinned note = %q", got)
 	}
 }
 
 func TestMockupChartersAreEmbedded(t *testing.T) {
-	if c := mockupCharter(); !strings.Contains(c, "data-screen") || !strings.Contains(c, "data-go") || strings.HasPrefix(c, "charter-version:") {
+	if c := charter(); !strings.Contains(c, "data-screen") || !strings.Contains(c, "data-go") || strings.HasPrefix(c, "charter-version:") {
 		t.Errorf("mockup charter = %.80q", c)
 	}
-	if c := mockupEditCharter(); !strings.Contains(c, "<<<FIND") || strings.HasPrefix(c, "charter-version:") {
+	if c := editCharter(); !strings.Contains(c, "<<<FIND") || strings.HasPrefix(c, "charter-version:") {
 		t.Errorf("edit charter = %.80q", c)
 	}
 }

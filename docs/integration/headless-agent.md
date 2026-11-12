@@ -77,6 +77,7 @@ interface HeadlessAgent {
   readonly chatId: string;
   readonly busy: boolean;
   send(message: string, options?: SendOptions): Promise<TurnResult>; // resolves when the turn ends
+  steer(message: string): boolean;                   // add to the running turn; false when none runs
   cancel(): void;                                    // the turn ends "interrupted"
   answer(questionId: string, value: string | string[]): boolean;
   on(type, handler): () => void;                     // one event type; returns unsubscribe
@@ -86,7 +87,12 @@ interface HeadlessAgent {
   dispose(): void;                                   // stop, remove host tools, forget
 }
 
-interface TurnResult { status: "completed" | "interrupted" | "failed"; response: string; error?: string }
+interface TurnResult {
+  status: "completed" | "interrupted" | "failed";
+  response: string;
+  error?: string;
+  unsentSteers?: string[]; // steered in, but the turn ended before reading them
+}
 
 // Images the model sees with the message (PNG, JPEG, GIF or WebP bytes).
 interface SendOptions { images?: { data: Uint8Array; name?: string }[] }
@@ -99,6 +105,15 @@ default) receives it with the message; one that does not reads it with its
 image tool. A message may be only images. Anything that is not a PNG, JPEG,
 GIF or WebP is refused before the turn starts. This needs a runtime with
 `writeFileBytes` (workspace 1.12.0 and later).
+
+`steer` adds a message to the running turn, the way typing while Sprout
+works does in its own app: the agent reads it at its next step, and a
+`steer_delivered` event says when. A message steered in as the turn was
+ending is taken back and returned, oldest first, in the turn's
+`unsentSteers` (also on `done`), for the host to send as the next turn or
+give back to the person; a stopped turn returns its unread steers the same
+way. `steer` is false when no turn is running, or on a runtime without
+steering (before workspace 1.13.0): send the message as a turn then.
 
 Also exported: `loadSproutWasm({ wasmBase, store?, fetch?, remoteRegistries?, env? })` (load the module
 ahead of the first agent — prefetch it on a landing page), `memoryFileStore()`,
@@ -121,7 +136,8 @@ Every `send` emits `turn_start` first and exactly one `done` last.
 | `file_written` | `path` (workspace-relative), `action`, `content` (after the change; `null` when deleted) | a file tool call (`write_file`, `edit_file`, the structured-file tools, the plan tools) succeeded |
 | `mockup` | `phase` (`start`/`chunk`/`done`/`error`), `path?`, `chunk?`, `html?`, `error?`, `data` | a tool streaming a mockup (`mockup_start`/`_chunk`/`_done`/`_error`) |
 | `error` | `message`, `fatal` | a reported error; `fatal: true` is the turn failing (then `done` with `failed`) |
-| `done` | `status`, `response`, `error?` | the turn ended |
+| `steer_delivered` | `message` | a message added with `steer` reached the model |
+| `done` | `status`, `response`, `error?`, `unsentSteers?` | the turn ended |
 | `raw` | `name`, `data` | any other agent event, untranslated (other tools' progress, metrics, todo updates) |
 
 `file_written` is reported when the call completes, with the file's content

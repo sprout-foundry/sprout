@@ -8243,6 +8243,19 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.1,
+        "context_length": 1048576,
+        "description": "Kimi K3.1 Pro is Moonshot AI's flagship open-weight multimodal reasoning model and a post-trained successor to Kimi K3, with a 1M-token context window. It is built for long-horizon coding, 3D creation, financial research, and end-to-end agentic knowledge work, with native image and video understanding. This entry is the batch variant, served for asynchronous workloads.",
+        "id": "moonshotai/kimi-k3.1-pro:batch",
+        "input_cost": 0.7,
+        "name": "MoonshotAI: Kimi K3.1 Pro (batch)",
+        "output_cost": 6,
+        "tags": [
+          "vision",
+          "reasoning"
+        ]
       }
     ],
     "model_overrides": {

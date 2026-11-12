@@ -29,16 +29,18 @@
     "default_model": "mistral-large-4-0",
     "model_info": [
       {
-        "cached_input_cost": 0.05,
-        "context_length": 131072,
-        "description": "Mistral Large - Flagship model for complex tasks",
+        "cached_input_cost": 0.07,
+        "context_length": 1048576,
+        "description": "Mistral Large 4 — flagship general-purpose multimodal model with a 1M-token context window. This is Mistral's rolling alias, which currently resolves to Large 4.",
         "id": "mistral-large-latest",
-        "input_cost": 0.5,
+        "input_cost": 0.7,
         "name": "Mistral Large",
-        "output_cost": 1.5,
+        "output_cost": 2.1,
         "tags": [
+          "tools",
+          "vision",
           "reasoning",
-          "tools"
+          "structured_output"
         ]
       },
       {
@@ -297,7 +299,7 @@
       "mistral-large-2407": 131072,
       "mistral-large-2411": 131072,
       "mistral-large-4-0": 1048576,
-      "mistral-large-latest": 131072,
+      "mistral-large-latest": 1048576,
       "mistral-medium-2312": 32768,
       "mistral-medium-latest": 32768,
       "mistral-small-2409": 32768,

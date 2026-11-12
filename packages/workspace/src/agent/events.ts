@@ -164,6 +164,8 @@ export function mapAgentEvent(raw: RawAgentEvent, ctx: EventMappingContext): Age
     case 'mockup_done':
     case 'mockup_error':
       return mapMockupEvent(raw.type.slice('mockup_'.length) as MockupEvent['phase'], data, ctx);
+    case 'steer_delivered':
+      return { type: 'steer_delivered', message: str(data.content) ?? '' };
     case 'error':
       return { type: 'error', message: str(data.message) ?? str(data.error) ?? 'agent error', fatal: false };
     default:

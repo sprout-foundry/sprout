@@ -69,6 +69,21 @@ class FakeBridge implements SproutWasmBridge {
   clearConversation(chatId?: string) {
     this.cleared.push(chatId);
   }
+  /** Steered messages the agent has not read, oldest first. */
+  staged: string[] = [];
+  steerAgent(message: string) {
+    this.staged.push(message);
+    return { steered: true };
+  }
+  retractSteer() {
+    const message = this.staged.pop();
+    return message === undefined ? { retracted: false } : { retracted: true, message };
+  }
+  /** The agent reads the oldest steered message, as at a step's boundary. */
+  deliverSteer(emit: (type: string, data?: Record<string, unknown>) => void) {
+    const content = this.staged.shift();
+    if (content !== undefined) emit('steer_delivered', { content });
+  }
   respondToAskUser(id: string, value: string) {
     const pending = this.answers.get(id);
     if (!pending) return { delivered: false };
@@ -413,5 +428,62 @@ describe('provider configuration', () => {
       disable_model_discovery: true,
     });
     expect(providerConfig(baseOptions)).not.toHaveProperty('reasoning_effort');
+  });
+
+});
+
+describe('steering', () => {
+  it('adds a message to the running turn, and says when the model reads it', async () => {
+    const { bridge, agent, events } = await setup();
+    let step!: () => void;
+    bridge.script = async (emit, b) => {
+      await new Promise<void>((resolve) => (step = resolve));
+      b.deliverSteer(emit);
+      return 'Done, in blue.';
+    };
+    expect(agent.steer('make it blue')).toBe(false);
+    const turn = agent.send('make a button');
+    await Promise.resolve();
+    expect(agent.steer('make it blue')).toBe(true);
+    step();
+    const result = await turn;
+    expect(events).toContainEqual({ type: 'steer_delivered', message: 'make it blue' });
+    expect(result).toEqual({ status: 'completed', response: 'Done, in blue.' });
+    // A fresh agent picking up this chat sees the steer in its place.
+    const next = (bridge.script = async () => 'ok', agent.send('and bigger'));
+    await next;
+    expect(JSON.parse(String(bridge.runs[1][5]))).toEqual([
+      { role: 'user', content: 'make a button' },
+      { role: 'user', content: 'make it blue' },
+      { role: 'assistant', content: 'Done, in blue.' },
+    ]);
+  });
+
+  it('hands back what the turn ended before reading, oldest first', async () => {
+    const { bridge, agent, events } = await setup();
+    let step!: () => void;
+    bridge.script = async () => {
+      await new Promise<void>((resolve) => (step = resolve));
+      return 'Done.';
+    };
+    const turn = agent.send('make a button');
+    await Promise.resolve();
+    agent.steer('make it blue');
+    agent.steer('and round');
+    step();
+    const result = await turn;
+    expect(result.unsentSteers).toEqual(['make it blue', 'and round']);
+    expect(bridge.staged).toEqual([]);
+    expect(events.at(-1)).toMatchObject({ type: 'done', unsentSteers: ['make it blue', 'and round'] });
+  });
+
+  it('hands back the unread steers of a stopped turn', async () => {
+    const { bridge, agent } = await setup();
+    bridge.script = () => new Promise<string>(() => undefined);
+    const turn = agent.send('make a button');
+    await Promise.resolve();
+    agent.steer('make it blue');
+    agent.cancel();
+    expect(await turn).toEqual({ status: 'interrupted', response: '', unsentSteers: ['make it blue'] });
   });
 });

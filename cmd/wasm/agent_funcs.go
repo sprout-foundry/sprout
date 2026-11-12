@@ -170,6 +170,7 @@ func agentJSFuncs() map[string]interface{} {
 		"clearConversation": js.FuncOf(clearConversationFunc),
 		"stopAgent":         js.FuncOf(stopAgentFunc),
 		"steerAgent":        js.FuncOf(steerAgentFunc),
+		"retractSteer":      js.FuncOf(retractSteerFunc),
 	}
 }
 
@@ -222,8 +223,30 @@ func steerAgentFunc(_ js.Value, args []js.Value) interface{} {
 	if ag == nil {
 		return map[string]interface{}{"steered": false, "error": "no active agent"}
 	}
-	ag.InjectInputContext(message)
+	if err := ag.InjectInputContext(message); err != nil {
+		return map[string]interface{}{"steered": false, "error": err.Error()}
+	}
 	return map[string]interface{}{"steered": true}
+}
+
+// retractSteerFunc takes back the newest steering message a chat's agent has
+// not read yet: one sent as its run ended, which would otherwise wait for the
+// chat's next run. args[0] (string, optional) names the chat; without it the
+// most recently run chat. Returns {retracted, message}.
+func retractSteerFunc(_ js.Value, args []js.Value) interface{} {
+	chatID := optionalChatID(args, 0)
+	if chatID == nil {
+		chatAgentsMu.Lock()
+		last := lastChatID
+		chatAgentsMu.Unlock()
+		chatID = &last
+	}
+	ag := lookupChatAgent(*chatID)
+	if ag == nil {
+		return map[string]interface{}{"retracted": false}
+	}
+	message, ok := ag.RetractLatestSteer()
+	return map[string]interface{}{"retracted": ok, "message": message}
 }
 
 // runAgentFunc invokes one ProcessQuery turn through the chat's cached

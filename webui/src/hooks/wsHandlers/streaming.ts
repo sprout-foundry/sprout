@@ -83,12 +83,10 @@ export const handleQueryStarted = (ctx: EventHandlerContext): void => {
       queryCount: prev.queryCount + 1,
       messages: isClearCommand ? prev.messages : abovePendingSteers(prev.messages, withQuestion),
       // Preserve historical tool executions across turns. Wiping the array
-      // here (the original behavior) broke two visible features: (a)
-      // MessageSegments badges on past turns lost their status lookup and
-      // regressed to the running-pill render — the "tool badges flash on
-      // and off" symptom — and (b) clicking a past-turn tool badge fired
-      // contextPanelRef.highlightTool(toolId), which then couldn't find the
-      // tool in state and silently no-op'd. handleToolStart tags every new
+      // here (the original behavior) broke MessageSegments badges on past
+      // turns: they lost their status lookup and regressed to the
+      // running-pill render — the "tool badges flash on and off" symptom.
+      // handleToolStart tags every new
       // tool with the current queryCount so per-turn views (timeline bar,
       // current-turn activity group) still filter cleanly; old entries
       // stay reachable for lookup and the sidebar's "Earlier" group.

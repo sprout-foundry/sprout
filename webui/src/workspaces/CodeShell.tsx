@@ -2,9 +2,8 @@
  * The Code mode's shell.
  *
  * Owns the `<main>` column and the Code surface's chrome: the app menubar
- * (HeaderBar), the mobile pane controls, the editor, the right-hand context
- * panel (chat context), the preview panel, and the status bar. Everything that
- * reads as "the editor app" lives here.
+ * (HeaderBar), the mobile pane controls, the editor, the preview panel, and
+ * the status bar. Everything that reads as "the editor app" lives here.
  *
  * The preview panel has two bodies. A workspace with a mockup shows the mockup
  * (`draw_mockup`'s `design/mockup.html`); otherwise it shows the dev server's
@@ -12,9 +11,8 @@
  * slot beside the code.
  */
 
-import { Menu, MessageSquare, PanelRightClose, SquareTerminal } from 'lucide-react';
+import { Menu, MessageSquare, SquareTerminal } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
-import ContextSidebar from '../components/ContextSidebar';
 import EditorWorkspace from '../components/EditorWorkspace';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { CreditsChip } from '../components/CreditsChip';
@@ -42,22 +40,11 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
   currentView,
   onViewChange,
   onToggleSidebar,
-  onToggleContextPanel,
-  contextPanel = true,
   supportsLocalTerminal,
   inBrowserTerminal = true,
   previewAvailable = true,
   isTerminalExpanded,
   onTerminalExpandedChange,
-  showContextSidebar,
-  contextPanelRef,
-  toolExecutions,
-  logs,
-  subagentActivities,
-  messages,
-  isProcessing,
-  lastError,
-  queryProgress,
   currentBuffer,
   handleOutlineNavigateToSymbol,
   chat,
@@ -84,9 +71,6 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
     diffState,
   } = chat;
 
-  // On a local daemon the panel holds the agent's change history; a
-  // composition that leaves it out gets no column and no toggles.
-  const hasContextPanel = contextPanel && supportsAgentChanges;
   // The preview panel: the workspace's mockup when it has one, otherwise the
   // running-app dev server. Collapsed by default so it never steals editor
   // space or polls — except in a workspace with a mockup, where it opens on
@@ -125,8 +109,6 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
         isSidebarOpen={isSidebarOpen}
         isConnected={isConnected}
         onToggleSidebar={onToggleSidebar}
-        onToggleContextPanel={onToggleContextPanel}
-        hasContextPanel={hasContextPanel}
         onTogglePreviewPanel={showPreview ? () => setPreviewPanelOpen((open) => !open) : undefined}
         previewPanelOpen={previewPanelOpen}
       />
@@ -169,16 +151,6 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
                   <SquareTerminal size={16} />
                 </button>
               )}
-              {showContextSidebar && hasContextPanel && (
-                <button
-                  className="top-mobile-context-btn"
-                  onClick={onToggleContextPanel}
-                  aria-label="Toggle context panel"
-                  title="Toggle context panel"
-                >
-                  <PanelRightClose size={16} />
-                </button>
-              )}
             </div>
           )}
           <ErrorBoundary panelName="Editor">
@@ -208,23 +180,6 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
           ) : (
             <PreviewPanel open onClose={() => setPreviewPanelOpen(false)} />
           ))}
-        {hasContextPanel && (
-          <div className="context-panel-container">
-            <ContextSidebar
-              isMobile={isMobile}
-              isTablet={isTablet}
-              showContextSidebar={showContextSidebar}
-              contextPanelRef={contextPanelRef}
-              toolExecutions={toolExecutions}
-              logs={logs}
-              subagentActivities={subagentActivities}
-              messages={messages}
-              isProcessing={isProcessing}
-              lastError={lastError}
-              queryProgress={queryProgress}
-            />
-          </div>
-        )}
       </div>
       <StatusBar
         branch={git.gitBranches.current || git.gitStatus?.branch}

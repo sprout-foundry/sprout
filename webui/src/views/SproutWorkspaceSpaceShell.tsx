@@ -49,9 +49,6 @@ import './WorkspaceSpaceShell.css';
 
 const NO_GIT: WorkspaceShellProps['git']['gitBranches'] = { current: '', branches: [] };
 const NO_SHIP: WorkspaceShellProps['ship'] = { live: {}, availability: { canDeploy: false }, history: [] };
-/** The Code shell's context panel is left out here, so its handle stays empty. */
-const NO_CONTEXT_PANEL: WorkspaceShellProps['contextPanelRef'] = { current: null };
-const noop = (): void => undefined;
 
 /** The chat's own tab (the buffer manager opens it with the editor). */
 const CHAT_TAB = { kind: 'chat' as const, path: '__workspace/chat', title: 'Chat', ext: '.chat', isClosable: false };
@@ -327,8 +324,6 @@ function SpaceShellLayout({
             currentView={currentView}
             onViewChange={setCurrentView}
             onToggleSidebar={() => setSidebarCollapsed((collapsed) => !collapsed)}
-            onToggleContextPanel={noop}
-            contextPanel={false}
             supportsLocalTerminal={terminalBackend === 'pty'}
             // The shell's own in-browser terminal is fixed to the viewport;
             // the docked one below takes its place.
@@ -336,15 +331,6 @@ function SpaceShellLayout({
             previewAvailable={host.capabilities.preview === true}
             isTerminalExpanded={isTerminalExpanded}
             onTerminalExpandedChange={setTerminalExpanded}
-            showContextSidebar={false}
-            contextPanelRef={NO_CONTEXT_PANEL}
-            toolExecutions={state.toolExecutions}
-            logs={state.logs}
-            subagentActivities={state.subagentActivities}
-            messages={state.messages}
-            isProcessing={state.isProcessing}
-            lastError={state.lastError}
-            queryProgress={state.queryProgress}
             currentBuffer={currentBuffer}
             handleOutlineNavigateToSymbol={(line) =>
               document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line } }))

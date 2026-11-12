@@ -85,13 +85,7 @@ async function renderHeader(
   await act(async () => {
     root.render(
       <HostProvider host={host}>
-        <HeaderBar
-          isMobile={false}
-          isSidebarOpen
-          isConnected
-          onToggleSidebar={() => undefined}
-          onToggleContextPanel={() => undefined}
-        />
+        <HeaderBar isMobile={false} isSidebarOpen isConnected onToggleSidebar={() => undefined} />
       </HostProvider>,
     );
   });
@@ -186,7 +180,6 @@ describe('HeaderBar preview toggle', () => {
             isSidebarOpen
             isConnected
             onToggleSidebar={() => undefined}
-            onToggleContextPanel={() => undefined}
             onTogglePreviewPanel={onTogglePreviewPanel}
             previewPanelOpen={previewPanelOpen}
           />
@@ -233,7 +226,6 @@ describe('HeaderBar preview toggle', () => {
             isSidebarOpen
             isConnected
             onToggleSidebar={() => undefined}
-            onToggleContextPanel={() => undefined}
             onTogglePreviewPanel={() => undefined}
           />
         </HostProvider>,

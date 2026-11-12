@@ -330,7 +330,6 @@ describe('SproutWorkspace space shell (own mode, no layout)', () => {
     await screen.findByTestId('workspace-space-shell');
     expect(screen.queryByTestId('context-panel')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Toggle context panel' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('complementary', { name: 'Context panel' })).not.toBeInTheDocument();
   });
 
   it('hides what has no backend: no Source control, terminal, preview toggle or their commands', async () => {

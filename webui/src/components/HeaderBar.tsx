@@ -1,4 +1,4 @@
-import { MonitorPlay, PanelRightClose } from 'lucide-react';
+import { MonitorPlay } from 'lucide-react';
 import React, { useState } from 'react';
 import { isLayeredLayout } from '../config/layout';
 import { LayeredSearchButton } from './layered/LayeredTopBar';
@@ -20,9 +20,6 @@ export interface HeaderBarProps {
   isSidebarOpen: boolean;
   isConnected: boolean;
   onToggleSidebar: () => void;
-  onToggleContextPanel: () => void;
-  /** Whether there is a context panel to toggle. */
-  hasContextPanel?: boolean;
   /** Toggle the preview panel. Rendered when provided. */
   onTogglePreviewPanel?: () => void;
   /** Whether the preview panel is currently open (drives the toggle's state). */
@@ -35,8 +32,6 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
   isSidebarOpen,
   isConnected,
   onToggleSidebar,
-  onToggleContextPanel,
-  hasContextPanel = true,
   onTogglePreviewPanel,
   previewPanelOpen = false,
 }) => {
@@ -157,16 +152,6 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
             title="Toggle preview panel"
           >
             <MonitorPlay size={14} />
-          </button>
-        )}
-        {!isMobile && hasContextPanel && (
-          <button
-            className="header-context-toggle-btn"
-            onClick={onToggleContextPanel}
-            aria-label="Toggle context panel"
-            title="Toggle context panel"
-          >
-            <PanelRightClose size={14} />
           </button>
         )}
         {/* SP-016 P0.6: ambient usage signal — cloud mode only, renders

@@ -119,9 +119,6 @@ const TESTIDS = {
   "worktree-delete": "worktree-delete",
 
   // Context panel
-  "context-panel": "context-panel",
-  "context-panel-collapse": "context-panel-collapse",
-  "context-panel-tab": "context-panel-tab",
   "context-panel-changes": "context-panel-changes",
   "context-panel-tasks": "context-panel-tasks",
 

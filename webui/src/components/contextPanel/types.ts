@@ -7,7 +7,6 @@ import type {
   Revision,
   RevisionDetailFile,
 } from '@sprout/ui';
-import type { ReactNode, CSSProperties } from 'react';
 import type { QueryProgress } from '../../types/app';
 
 // Re-export shared types from @sprout/ui for convenience
@@ -82,23 +81,8 @@ export interface SubagentRunResult {
   resourceCounts: SubagentResourceCounts;
 }
 
-// ── Props ───────────────────────────────────────────────────────────
-
-export interface ContextPanelBaseProps {
-  className?: string;
-  style?: CSSProperties;
-  isMobileLayout?: boolean;
-  isTabletLayout?: boolean;
-  /**
-   * Idle mode: no active chat buffer behind the panel (e.g. the user is
-   * viewing a plain file). Desktop keeps the panel mounted with its rail
-   * visible but disabled and an empty body — the layout column never
-   * appears/disappears as the user moves between chat and files.
-   */
-  isIdle?: boolean;
-}
-
-export interface ChatContextPanelProps extends ContextPanelBaseProps {
+/** The chat activity a subagent-run view is built from. */
+export interface ChatContextPanelProps {
   context: 'chat';
   toolExecutions: ToolExecution[];
   logs: LogEntry[];
@@ -107,62 +91,4 @@ export interface ChatContextPanelProps extends ContextPanelBaseProps {
   isProcessing: boolean;
   lastError: string | null;
   queryProgress: QueryProgress | null;
-  stats?: {
-    provider?: string;
-    model?: string;
-    total_tokens?: number;
-    prompt_tokens?: number;
-    completion_tokens?: number;
-    cached_tokens?: number;
-    current_context_tokens?: number;
-    max_context_tokens?: number;
-    context_usage_percent?: number;
-    cache_efficiency?: number;
-    total_cost?: number;
-    cached_cost_savings?: number;
-    last_tps?: number;
-    current_iteration?: number;
-    max_iterations?: number;
-    streaming_enabled?: boolean;
-    debug_mode?: boolean;
-    context_warning_issued?: boolean;
-    uptime?: string;
-    query_count?: number;
-  };
-  onHandleToolPillClick?: (toolId: string) => void;
-}
-
-export type ContextPanelProps = ChatContextPanelProps;
-
-// ── Public API via ref ─────────────────────────────────────────────
-
-export interface ContextPanelHandle {
-  openTab: (tab: string) => void;
-  closePanel: () => void;
-  /** Expand when collapsed, collapse when expanded. */
-  togglePanel: () => void;
-}
-
-// ── Constants ──────────────────────────────────────────────────────
-
-export const PANEL_COLLAPSED_KEY = 'sprout.contextPanel.collapsed';
-export const PANEL_TAB_KEY = 'sprout.contextPanel.tab';
-export const PANEL_MIN = 280;
-export const PANEL_MAX = 760;
-export const PANEL_DEFAULT_WIDTH = 360;
-/** Width of the side-rail-only collapsed context panel (px). Must match .context-panel.collapsed width in ContextPanel.css. */
-export const PANEL_COLLAPSED_WIDTH = 52;
-export const MOBILE_LAYOUT_MAX_WIDTH = 768;
-/** Up to this width the panel is an overlay drawer, so it starts closed. */
-export const OVERLAY_LAYOUT_MAX_WIDTH = 1024;
-
-export type ChatTabId = 'changes';
-
-export interface PanelTab {
-  id: ChatTabId;
-  label: string;
-  icon: ReactNode;
-  /** Optional badge text (e.g. "3 active"). Omitted for self-counting
-   *  tabs like Agent Changes that manage their own header. */
-  count?: string;
 }

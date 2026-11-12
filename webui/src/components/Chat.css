@@ -227,45 +227,6 @@
   border-color: var(--border-strong, var(--border-color));
 }
 
-/* ── Mobile context panel toggle ────────────────────────────── */
-
-@media (max-width: 1024px) {
-  .context-panel-mobile-toggle {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: fixed;
-    bottom: calc(var(--sprout-bottom-reserved-height) + 84px + env(safe-area-inset-bottom, 0px));
-    right: 12px;
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    border: 1px solid var(--border-focus);
-    background: var(--sidebar-nav-btn-active-bg);
-    color: var(--accent-fg);
-    cursor: pointer;
-    box-shadow: var(--shadow-elevated);
-    z-index: 500;
-    transition:
-      transform 0.15s ease,
-      box-shadow 0.15s ease;
-  }
-
-  .context-panel-mobile-toggle:hover {
-    transform: scale(1.08);
-    box-shadow: 0 12px 28px rgba(2, 6, 23, 0.52);
-  }
-
-  .context-panel-mobile-toggle:active {
-    transform: scale(0.95);
-  }
-
-  .context-panel-mobile-toggle:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 3px var(--accent-primary);
-  }
-}
-
 .empty-assistant-placeholder {
   color: var(--text-muted);
   font-style: italic;

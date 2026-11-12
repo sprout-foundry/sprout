@@ -2,8 +2,8 @@
  * Workspace-mode shell contract.
  *
  * A mode's shell owns the shell around its surface: the `<main>` column and
- * the chrome that belongs to that mode. Code gets the menubar, context panel,
- * and status bar. AppContent renders the active mode's shell with this one
+ * the chrome that belongs to that mode. Code gets the menubar and status bar.
+ * AppContent renders the active mode's shell with this one
  * props object, so adding a mode is a registry entry plus a shell component —
  * not new suppression flags poked into shared components.
  *
@@ -11,12 +11,11 @@
  * here and nothing else.
  */
 
-import type { EditorBuffer, LogEntry, SubagentActivity, ToolExecution } from '@sprout/ui';
-import type { ComponentProps, RefObject } from 'react';
-import type { ContextPanelHandle } from '../components/contextPanel/types';
+import type { EditorBuffer } from '@sprout/ui';
+import type { ComponentProps } from 'react';
 import type { default as WorkspacePane } from '../components/WorkspacePane';
 import type { ChatSession } from '../services/chatSessions';
-import type { PerChatState, QueryProgress, ViewType } from '../types/app';
+import type { PerChatState, ViewType } from '../types/app';
 import type { GitBranchesState, GitStatusData } from '../types/git-types';
 import type { ShipPayload } from './ship';
 
@@ -72,7 +71,6 @@ export interface WorkspaceShellProps {
   currentView: ViewType;
   onViewChange: (view: ViewType) => void;
   onToggleSidebar: () => void;
-  onToggleContextPanel: () => void;
   supportsLocalTerminal: boolean;
   /**
    * Whether the Code shell mounts its in-browser (WASM) terminal when there is
@@ -89,26 +87,6 @@ export interface WorkspaceShellProps {
   previewAvailable?: boolean;
   isTerminalExpanded: boolean;
   onTerminalExpandedChange: (expanded: boolean) => void;
-
-  // Right-hand context panel (chat context; the Code shell renders it).
-  /**
-   * Whether the Code shell renders the right-hand context panel (the agent's
-   * change history) and its toggles. Defaults to true, and the panel still
-   * needs `capabilities.agentChanges`. The composed workspace passes false:
-   * its conversation carries each turn's changes in flow, and a host that
-   * wants the change list places the `changes` view itself. With it false the
-   * panel props below are not read.
-   */
-  contextPanel?: boolean;
-  showContextSidebar: boolean;
-  contextPanelRef: RefObject<ContextPanelHandle>;
-  toolExecutions: ToolExecution[];
-  logs: LogEntry[];
-  subagentActivities: SubagentActivity[];
-  messages: Array<{ type: string; timestamp: Date }>;
-  isProcessing: boolean;
-  lastError: string | null;
-  queryProgress: QueryProgress | null;
 
   // Active editor buffer (the Code shell's status bar).
   currentBuffer: EditorBuffer | null;

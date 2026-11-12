@@ -32,7 +32,6 @@ import { SproutWorkspace, useWorkspaceMode, useWorkspaceChatProps, useWorkspaceE
 import { closeBuffersMatching } from './closeBuffers';
 import CommandPalette, { type PaletteMode } from './CommandPalette';
 import { useCommandPaletteSources } from './CommandPalette/useCommandPaletteSources';
-import type { ContextPanelHandle } from './contextPanel/types';
 import ErrorBoundary from './ErrorBoundary';
 import Sidebar from './Sidebar';
 import { useMockupPresence } from './useMockupPresence';
@@ -470,7 +469,6 @@ const AppContent: React.FC<AppContentProps> = ({
   }, []);
 
   const currentBuffer = activeBufferId ? buffers.get(activeBufferId) : null;
-  const contextPanelRef = useRef<ContextPanelHandle>(null);
   const showContextSidebar = currentBuffer?.kind === 'chat';
 
   useEffect(() => {
@@ -486,13 +484,6 @@ const AppContent: React.FC<AppContentProps> = ({
       initialViewSyncRef.current = true;
     }
   }, [currentBuffer, onViewChange, state.currentView]);
-
-  const handleToggleContextPanel = () => {
-    // Direct ref call (the old custom-event hop depended on a listener that
-    // lived in ContextSidebar and silently toggled hidden state when the
-    // panel was unmounted in file view).
-    contextPanelRef.current?.togglePanel();
-  };
 
   const { handleOpenHotkeysConfig } = useAppContentHotkeys({
     activeBufferId,
@@ -743,19 +734,9 @@ const AppContent: React.FC<AppContentProps> = ({
     currentView: state.currentView,
     onViewChange,
     onToggleSidebar,
-    onToggleContextPanel: handleToggleContextPanel,
     supportsLocalTerminal,
     isTerminalExpanded,
     onTerminalExpandedChange,
-    showContextSidebar,
-    contextPanelRef,
-    toolExecutions: state.toolExecutions,
-    logs: state.logs,
-    subagentActivities: state.subagentActivities,
-    messages: state.messages,
-    isProcessing: state.isProcessing,
-    lastError: state.lastError,
-    queryProgress: state.queryProgress,
     currentBuffer: currentBuffer ?? null,
     handleOutlineNavigateToSymbol,
     chat: {

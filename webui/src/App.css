@@ -495,8 +495,7 @@ body {
 
 .top-mobile-menu-btn,
 .top-mobile-chat-btn,
-.top-mobile-terminal-btn,
-.top-mobile-context-btn {
+.top-mobile-terminal-btn {
   width: 34px;
   height: 34px;
   border-radius: var(--radius-md);
@@ -511,8 +510,7 @@ body {
 
 .top-mobile-menu-btn:hover,
 .top-mobile-chat-btn:hover,
-.top-mobile-terminal-btn:hover,
-.top-mobile-context-btn:hover {
+.top-mobile-terminal-btn:hover {
   color: var(--text-primary);
   border-color: var(--border-strong);
   background: var(--bg-surface);
@@ -591,11 +589,6 @@ body {
   /* Context panel container: the panel is always mounted on desktop and
    * owns its own width; on tablet it renders as an overlay drawer when
    * open, so the container must not reserve or animate width. */
-  .main-view-content > .context-panel-container {
-    width: 0;
-    overflow: hidden;
-  }
-
   .header-bar {
     padding: 0 8px;
   }
@@ -621,39 +614,6 @@ body {
 
   .top-view-current {
     max-width: 160px;
-  }
-
-  /* Context panel can be toggled open as an overlay on tablet.
-     The .context-panel-mobile class is applied when opened via header button.
-     Otherwise, it's hidden to avoid stacking below editor by default. */
-  .main-view-content > .context-panel:not(.context-panel-mobile):not(.context-panel-tablet-overlay) {
-    display: none;
-  }
-
-  /* Context panel overlay for tablet: right-side drawer taking ~50% width */
-  .context-panel-tablet-overlay {
-    position: fixed !important;
-    top: 35px; /* Below header bar */
-    right: 0;
-    bottom: var(--sprout-bottom-reserved-height);
-    width: 50%;
-    z-index: 800;
-    border-left: 1px solid var(--border-strong);
-    box-shadow: var(--shadow-elevated);
-    display: flex !important;
-    @media (prefers-reduced-motion: no-preference) {
-      animation: slideInDrawer 0.2s var(--ease-out);
-    }
-  }
-
-  /* Tablet overlay backdrop */
-  .context-panel-backdrop {
-    position: fixed;
-    inset: 0;
-    top: 35px;
-    bottom: var(--sprout-bottom-reserved-height);
-    background: rgba(0, 0, 0, 0.3);
-    z-index: 750;
   }
 
   /* Reduce split pane minimum sizes for narrower viewport (~700px effective width after sidebar) */
@@ -737,11 +697,6 @@ body {
   /* Prevent pull-to-refresh interference on mobile */
   .main-content {
     overscroll-behavior: contain;
-  }
-
-  /* Hide context panel inline on mobile; it uses a full-screen overlay instead */
-  .main-view-content > .context-panel:not(.context-panel-mobile) {
-    display: none;
   }
 
   /* Hide file tree wrapper on mobile — files accessible via sidebar overlay */
@@ -1038,12 +993,6 @@ select option {
   padding: 0;
   justify-content: center;
   gap: 0;
-}
-
-/* A row, so the panel's resizer stretches to the panel's full height (as a
- * block child it collapsed to its borders, a 2px target). */
-.context-panel-container {
-  display: flex;
 }
 
 .split-controls {
@@ -2124,22 +2073,6 @@ button.primary.success {
 }
 
 /* ── Animations ── */
-
-/* Slide-in from right for tablet overlays — wrapped in
-   prefers-reduced-motion: no-preference so the browser skips the keyframes
-   and animation entirely for users who prefer reduced motion (SP-012). */
-@media (prefers-reduced-motion: no-preference) {
-  @keyframes slideInDrawer {
-    from {
-      transform: translateX(100%);
-      opacity: 0;
-    }
-    to {
-      transform: translateX(0);
-      opacity: 1;
-    }
-  }
-}
 
 /* ── Notification center overrides ─────────────────────────────── */
 

@@ -1336,10 +1336,7 @@
  * No 48px rail lock + hidden resize handle in this band: the lock
  * caught every iPad in portrait (744-834px) and made the sidebar
  * un-resizable exactly where touch users need the fat handles
- * + snap presets most (ResizeHandle.css touch-large band). The JS
- * isTablet band (769-1024, useAppInitialization) still drives the
- * context-panel overlay behavior — the CSS rail lock no longer applies
- * in this band.
+ * + snap presets most (ResizeHandle.css touch-large band).
  */
 @media (min-width: 769px) and (max-width: 1024px) {
   .sidebar .sidebar-icon-rail {

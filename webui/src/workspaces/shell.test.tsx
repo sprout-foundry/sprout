@@ -43,10 +43,6 @@ vi.mock('../components/EditorWorkspace', () => ({
   default: () => createElement('div', { className: 'mock-editor-workspace' }),
 }));
 
-vi.mock('../components/ContextSidebar', () => ({
-  default: () => createElement('div', { className: 'mock-context-sidebar' }),
-}));
-
 vi.mock('../components/StatusBar', () => ({
   default: () => createElement('div', { className: 'mock-status-bar' }),
 }));
@@ -116,12 +112,9 @@ function makeShellProps(overrides = {}) {
     currentView: 'chat',
     onViewChange: vi.fn(),
     onToggleSidebar: vi.fn(),
-    onToggleContextPanel: vi.fn(),
     supportsLocalTerminal: true,
     isTerminalExpanded: false,
     onTerminalExpandedChange: vi.fn(),
-    showContextSidebar: true,
-    contextPanelRef: { current: null },
     toolExecutions: [],
     logs: [],
     subagentActivities: [],
@@ -163,7 +156,6 @@ describe('CodeShell', () => {
     expect(container.querySelector('main.main-content')).not.toBeNull();
     expect(container.querySelector('.mock-header-bar')).not.toBeNull();
     expect(container.querySelector('.mock-editor-workspace')).not.toBeNull();
-    expect(container.querySelector('.mock-context-sidebar')).not.toBeNull();
     expect(container.querySelector('.mock-status-bar')).not.toBeNull();
   });
 
@@ -201,7 +193,6 @@ describe('CodeShell', () => {
       root.render(host(createElement(CodeShell, makeShellProps({ isMobile: true }))));
     });
     expect(container.querySelector('.pane-controls-mobile')).not.toBeNull();
-    expect(container.querySelector('.top-mobile-context-btn')).not.toBeNull();
   });
 
   it('omits the mobile pane controls on desktop', () => {

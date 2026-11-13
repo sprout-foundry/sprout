@@ -69,6 +69,17 @@ const fakeEditor = {
     next.delete(id);
     fakeEditor.buffers = next;
   }),
+  // One pane to start with, like a fresh workspace: the preview must split.
+  panes: [{ id: 'pane-1' }] as Array<{ id: string }>,
+  activePaneId: 'pane-1' as string | null,
+  splitPane: vi.fn((paneId: string) => {
+    const id = `pane-${fakeEditor.panes.length + 1}`;
+    fakeEditor.panes = [...fakeEditor.panes, { id }];
+    return id;
+  }),
+  closePane: vi.fn((paneId: string) => {
+    fakeEditor.panes = fakeEditor.panes.filter((p) => p.id !== paneId);
+  }),
 };
 vi.mock('../contexts/EditorManagerContext', () => ({
   __esModule: true,
@@ -78,6 +89,7 @@ vi.mock('../contexts/EditorManagerContext', () => ({
 }));
 
 import CodeShell from './CodeShell';
+import { claimAppShell, __resetCommandHandlersForTests } from '../services/commandHandlers';
 import { HostProvider } from '../host';
 import { makeTestHost } from '../host/testHost';
 
@@ -94,10 +106,19 @@ let root: Root;
 
 beforeAll(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  // The standalone app owns every command, which is what makes the preview
+  // toggle (and the mockup auto-open behind it) show.
 });
 
 beforeEach(() => {
+  // Each test starts as the standalone app: resetCommandHandlers clears the
+  // app-shell flag, so claim it per test rather than once in beforeAll.
+  claimAppShell();
   fakeEditor.buffers.clear();
+  fakeEditor.panes = [{ id: 'pane-1' }];
+  fakeEditor.activePaneId = 'pane-1';
+  fakeEditor.splitPane.mockClear();
+  fakeEditor.closePane.mockClear();
   fakeEditor.openWorkspaceBuffer.mockClear();
   fakeEditor.closeBuffer.mockClear();
   container = document.createElement('div');
@@ -110,6 +131,7 @@ afterEach(() => {
     root.unmount();
   });
   container.remove();
+  __resetCommandHandlersForTests();
 });
 
 /** A full shell props object; overrides win. The shells read only their slice. */
@@ -149,14 +171,15 @@ describe('CodeShell preview buffer', () => {
     expect(container.querySelector('[data-testid="preview-panel-toggle"]')).toHaveAttribute('aria-pressed', 'false');
   });
 
-  it('opens a preview buffer from the toggle', () => {
+  it('opens a preview buffer from the toggle', async () => {
     act(() => {
       root.render(host(createElement(CodeShell, makeShellProps())));
     });
 
     const toggle = container.querySelector('[data-testid="preview-panel-toggle"]')!;
-    act(() => {
+    await act(async () => {
       fireEvent.click(toggle);
+      await new Promise((r) => setTimeout(r, 0));
     });
 
     expect(fakeEditor.openWorkspaceBuffer).toHaveBeenCalledWith(
@@ -164,14 +187,15 @@ describe('CodeShell preview buffer', () => {
     );
   });
 
-  it('closes the preview buffer when the toggle is clicked a second time', () => {
+  it('closes the preview buffer when the toggle is clicked a second time', async () => {
     act(() => {
       root.render(host(createElement(CodeShell, makeShellProps())));
     });
 
     const toggle = container.querySelector('[data-testid="preview-panel-toggle"]')!;
-    act(() => {
+    await act(async () => {
       fireEvent.click(toggle);
+      await new Promise((r) => setTimeout(r, 0));
     });
     expect(fakeEditor.buffers.size).toBe(1);
 
@@ -182,19 +206,79 @@ describe('CodeShell preview buffer', () => {
     expect(toggle).toHaveAttribute('aria-pressed', 'false');
   });
 
-  it('opens from the toggle_preview command', () => {
+  it('splits a single pane so the preview opens beside the code', async () => {
     act(() => {
       root.render(host(createElement(CodeShell, makeShellProps())));
     });
+
+    const toggle = container.querySelector('[data-testid="preview-panel-toggle"]')!;
+    await act(async () => {
+      fireEvent.click(toggle);
+      // The split commits first; the buffer opens on the next tick into it.
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(fakeEditor.splitPane).toHaveBeenCalledWith('pane-1', 'vertical');
+    expect(fakeEditor.openWorkspaceBuffer).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'preview', paneId: 'pane-2' }),
+    );
+  });
+
+  it('collapses the split it created when the preview closes', async () => {
     act(() => {
+      root.render(host(createElement(CodeShell, makeShellProps())));
+    });
+
+    const toggle = container.querySelector('[data-testid="preview-panel-toggle"]')!;
+    await act(async () => {
+      fireEvent.click(toggle);
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(fakeEditor.panes).toHaveLength(2);
+
+    act(() => {
+      fireEvent.click(toggle);
+    });
+    expect(fakeEditor.closePane).toHaveBeenCalledWith('pane-2');
+  });
+
+  it('leaves a split the user already had alone', async () => {
+    fakeEditor.panes = [{ id: 'pane-1' }, { id: 'pane-2' }];
+    act(() => {
+      root.render(host(createElement(CodeShell, makeShellProps())));
+    });
+
+    const toggle = container.querySelector('[data-testid="preview-panel-toggle"]')!;
+    act(() => {
+      fireEvent.click(toggle);
+    });
+    // An existing split is used as-is: no new pane, no collapse on close.
+    expect(fakeEditor.splitPane).not.toHaveBeenCalled();
+
+    act(() => {
+      fireEvent.click(toggle);
+    });
+    expect(fakeEditor.closePane).not.toHaveBeenCalled();
+  });
+
+  it('opens from the toggle_preview command', async () => {
+    act(() => {
+      root.render(host(createElement(CodeShell, makeShellProps())));
+    });
+    await act(async () => {
       window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'toggle_preview' } }));
+      await new Promise((r) => setTimeout(r, 0));
     });
     expect(fakeEditor.buffers.size).toBe(1);
   });
 
-  it('auto-opens the preview the first time a mockup appears', () => {
-    act(() => {
+  it('auto-opens the preview the first time a mockup appears', async () => {
+    await act(async () => {
       root.render(host(createElement(CodeShell, makeShellProps({ mockup: { loading: false, present: true } }))));
+    });
+    // The split commits first; the buffer opens on the next timer tick.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
     });
     expect(fakeEditor.openWorkspaceBuffer).toHaveBeenCalledWith(expect.objectContaining({ kind: 'preview' }));
   });

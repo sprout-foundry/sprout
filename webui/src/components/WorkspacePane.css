@@ -691,6 +691,13 @@
   min-width: 0;
 }
 
+/* PreviewPane is `flex: 0 1 auto` (sized for the old fixed-width dock); in a
+ * pane it must fill the width the split gives it. */
+.pane-preview > .preview-pane {
+  flex: 1;
+  min-width: 0;
+}
+
 .pane-preview > .mockup-panel {
   flex: 1;
   width: auto;

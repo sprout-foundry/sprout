@@ -83,6 +83,10 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
   const buffers = editor?.buffers;
   const openWorkspaceBuffer = editor?.openWorkspaceBuffer;
   const closeBuffer = editor?.closeBuffer;
+  const splitPane = editor?.splitPane;
+  const closePane = editor?.closePane;
+  const panes = editor?.panes;
+  const activePaneId = editor?.activePaneId;
   const previewBufferId = useMemo(() => {
     if (!buffers) return null;
     for (const [id, b] of buffers) if (b.kind === 'preview') return id;
@@ -94,12 +98,38 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
   // stale "closed" and opens a duplicate.
   const previewBufferIdRef = useRef<string | null>(previewBufferId);
   previewBufferIdRef.current = previewBufferId;
+  // The pane the preview created for itself, if any — closing the preview
+  // collapses that split again rather than leaving an empty pane behind.
+  const previewPaneIdRef = useRef<string | null>(null);
   const setPreviewOpen = useCallback(
     (update: (open: boolean) => boolean, activate = true) => {
       if (!openWorkspaceBuffer || !closeBuffer) return;
       const current = previewBufferIdRef.current;
       const next = update(current !== null);
       if (next && current === null) {
+        // The preview belongs beside the code. With a single pane there is no
+        // "beside", so split first and open into the new pane on the next
+        // tick: the buffer manager resolves the target pane from refs that
+        // only sync on re-render, so opening in the same tick would land the
+        // buffer back in the original pane.
+        if (splitPane && panes && panes.length < 2 && activePaneId) {
+          const newPaneId = splitPane(activePaneId, 'vertical');
+          if (newPaneId) {
+            previewPaneIdRef.current = newPaneId;
+            setTimeout(() => {
+              previewBufferIdRef.current = openWorkspaceBuffer({
+                kind: 'preview',
+                path: PREVIEW_BUFFER_PATH,
+                title: 'Preview',
+                isPinned: false,
+                isClosable: true,
+                activate,
+                paneId: newPaneId,
+              });
+            }, 0);
+            return;
+          }
+        }
         previewBufferIdRef.current = openWorkspaceBuffer({
           kind: 'preview',
           path: PREVIEW_BUFFER_PATH,
@@ -111,9 +141,14 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
       } else if (!next && current !== null) {
         previewBufferIdRef.current = null;
         void closeBuffer(current);
+        // Collapse the split the preview opened for itself; a split the user
+        // already had stays as it is.
+        const createdPane = previewPaneIdRef.current;
+        previewPaneIdRef.current = null;
+        if (createdPane && closePane) closePane(createdPane);
       }
     },
-    [openWorkspaceBuffer, closeBuffer],
+    [openWorkspaceBuffer, closeBuffer, splitPane, closePane, panes, activePaneId],
   );
   useTogglePreviewCommand(setPreviewOpen, previewAvailable);
   // Inside an embed the toggle shows only while the command is handled; the

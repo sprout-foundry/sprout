@@ -61,8 +61,9 @@ test.describe.configure({ mode: "serial" });
 test.setTimeout(90_000);
 
 const toggle = () => page.getByTestId(TESTIDS["preview-panel-toggle"]);
-const panel = () => page.getByTestId(TESTIDS["preview-panel"]);
 const pane = () => page.getByTestId(TESTIDS["preview-pane"]);
+// The preview is an editor buffer, so its pane body lives in a split pane.
+const paneBody = () => page.getByTestId(TESTIDS["pane-preview"]);
 
 /** Click the toggle only if the panel is not already open (serial tests share the page). */
 async function openPanel(): Promise<void> {
@@ -83,15 +84,15 @@ test.describe("Preview panel", () => {
     });
     await expect(toggle()).toBeVisible({ timeout: 30_000 });
 
-    // Closed by default: neither the panel nor its pane is rendered.
-    await expect(panel()).toHaveCount(0);
+    // Closed by default: no preview buffer, so no pane body.
+    await expect(paneBody()).toHaveCount(0);
     await expect(pane()).toHaveCount(0);
     await expect(toggle()).toHaveAttribute("aria-pressed", "false");
   });
 
-  test("clicking the toggle opens the preview panel (the pane renders in the Code surface)", async () => {
+  test("clicking the toggle opens the preview in a split pane beside the code", async () => {
     await openPanel();
-    await expect(panel()).toBeVisible();
+    await expect(paneBody()).toBeVisible();
     await expect(toggle()).toHaveAttribute("aria-pressed", "true");
   });
 
@@ -107,11 +108,11 @@ test.describe("Preview panel", () => {
     );
   });
 
-  test("the close affordance collapses the panel", async () => {
+  test("the close affordance closes the preview buffer", async () => {
     await openPanel();
     await page.getByTestId(TESTIDS["preview-pane-close"]).click();
     await expect(pane()).toHaveCount(0);
-    await expect(panel()).toHaveCount(0);
+    await expect(paneBody()).toHaveCount(0);
     await expect(toggle()).toHaveAttribute("aria-pressed", "false");
   });
 });

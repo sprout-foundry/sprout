@@ -13,7 +13,7 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "astro": "7.4.4"
+    "astro": "7.4.7"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
@@ -22,7 +22,7 @@
     "prettier": "3.9.10",
     "prettier-plugin-astro": "1.1.2",
     "typescript-eslint": "8.72.1",
-    "vite": "8.3.5",
-    "vitest": "5.0.5"
+    "vite": "8.3.6",
+    "vitest": "5.1.0"
   }
 }

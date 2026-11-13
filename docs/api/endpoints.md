@@ -324,6 +324,7 @@ Notes:
 | GET | `/api/file-index` | fileIndex | daemon, in-browser WASM agent |
 | POST | `/api/open-in-file-browser` | openInFileBrowser | daemon, browser-local |
 | POST | `/api/preview/restart` | handleAPIPreviewRestart | daemon |
+| GET | `/api/preview/source` | previewSource | daemon |
 | POST | `/api/preview/start` | handleAPIPreviewStart | daemon |
 | GET | `/api/preview/status` | handleAPIPreviewStatus | daemon |
 | POST | `/api/preview/stop` | handleAPIPreviewStop | daemon |
@@ -357,6 +358,7 @@ Notes:
 - `/api/automate/workflows` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
 - `/api/bootstrap` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
 - `/api/preview/restart` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
+- `/api/preview/source` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
 - `/api/preview/start` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
 - `/api/preview/status` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)
 - `/api/preview/stop` — not listed in the endpoint registry or an intercept; proxied to the host backend in cloud mode (gap)

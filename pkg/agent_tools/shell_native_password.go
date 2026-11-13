@@ -72,6 +72,13 @@ const maxPasswordAttempts = 3
 // `\n`.
 const promptSettleDelay = 250 * time.Millisecond
 
+// Pipe identities for the prompt gate: the two streams report the same
+// question independently, and the gate needs to tell them apart.
+const (
+	pipeStdout = 0
+	pipeStderr = 1
+)
+
 // runShellCommandWithPasswordSupport executes a shell command in silent mode
 // with password-prompt detection. It connects stdin/stdout/stderr pipes so
 // it can detect password prompts on stdout/stderr, forward them to the
@@ -129,14 +136,8 @@ func runShellCommandWithPasswordSupport(ctx context.Context, command string, pro
 	var password string
 	var attempts int
 	var stdinClosed bool
-	var promptClaimed bool
-	// answered is set once a response has been written to the child, and
-	// consumed by the scanner when the next output arrives: only then does
-	// that output mean the command moved past the prompt it was blocked on.
-	// Resetting the claim on any output would let a second pipe that
-	// reports the same prompt (stdout and stderr both printing
-	// "Password:") prompt again.
-	var answered bool
+	// gate decides which pipe may ask for a prompt; see shell_prompt_gate.go.
+	gate := newPromptGate()
 	var mu sync.Mutex
 
 	promptReason := fmt.Sprintf("%s needs your password", command)
@@ -145,10 +146,10 @@ func runShellCommandWithPasswordSupport(ctx context.Context, command string, pro
 	// and remembers the value for redaction.
 	//
 	// Concurrency: two scanner goroutines (stdout + stderr) can both detect
-	// the same prompt concurrently. The slot is claimed atomically under
-	// mu by setting promptClaimed = true — only the goroutine that wins
-	// the race calls prompter.Prompt(). Subsequent callers see promptClaimed
-	// and bail.
+	// the same prompt. The gate decides which one asks — the answer belongs
+	// to the question, so a duplicate report of an answered prompt is
+	// rejected regardless of how the two reads interleave. See
+	// shell_prompt_gate.go.
 	//
 	// Stdin closure is deferred to the outcome branch because the success
 	// path needs to WRITE the response to stdin before closing. Closing
@@ -158,13 +159,11 @@ func runShellCommandWithPasswordSupport(ctx context.Context, command string, pro
 	//
 	// To prevent double-close, all close paths run under mu and check
 	// stdinClosed before calling stdinPipe.Close().
-	handlePrompt := func(secret bool) {
-		mu.Lock()
-		if promptClaimed {
-			mu.Unlock()
+	handlePrompt := func(secret bool, pipe int, promptText string) {
+		if !gate.claim(pipe, promptText) {
 			return
 		}
-		promptClaimed = true
+		mu.Lock()
 		// Only secret prompts count against the cap: it exists to stop a
 		// wrong-password re-prompt loop, not to limit how many questions a
 		// wizard-style command may ask.
@@ -176,6 +175,9 @@ func runShellCommandWithPasswordSupport(ctx context.Context, command string, pro
 				_ = stdinPipe.Close()
 			}
 			mu.Unlock()
+			// Close the question in the gate too: no answer will be written,
+			// so the claim must not be left outstanding.
+			gate.release(pipe, promptText)
 			return
 		}
 		if secret {
@@ -212,6 +214,9 @@ func runShellCommandWithPasswordSupport(ctx context.Context, command string, pro
 				_ = stdinPipe.Close()
 			}
 			mu.Unlock()
+			// Close the question in the gate too: no answer will be written,
+			// so the claim must not be left outstanding.
+			gate.release(pipe, promptText)
 			return
 		}
 
@@ -222,12 +227,12 @@ func runShellCommandWithPasswordSupport(ctx context.Context, command string, pro
 		}
 		if !stdinClosed {
 			_, _ = fmt.Fprintf(stdinPipe, "%s\n", resp)
-			answered = true
 			if secret {
 				stdinClosed = true
 				_ = stdinPipe.Close()
 			}
 		}
+		gate.release(pipe, promptText)
 	}
 
 	// streamPipeAndDetect replaces the prior bufio.Scanner-based scanner,
@@ -242,7 +247,7 @@ func runShellCommandWithPasswordSupport(ctx context.Context, command string, pro
 	//   3. If bytes remain without `\n` AND match the regex, arm/reset
 	//      the settle timer. Only sustained silence fires the prompt.
 	//   4. On EOF / pipe close, drain pending bytes and stop.
-	streamPipeAndDetect := func(reader io.Reader) {
+	streamPipeAndDetect := func(reader io.Reader, pipe int) {
 		const readChunk = 4096
 		chunk := make([]byte, readChunk)
 
@@ -320,7 +325,14 @@ func runShellCommandWithPasswordSupport(ctx context.Context, command string, pro
 				trimmed := strings.TrimRight(line, "\r\n")
 				if ok, secret := isInteractivePrompt(trimmed); ok {
 					cancelSettle()
-					handlePrompt(secret)
+					handlePrompt(secret, pipe, normalizePromptText(trimmed))
+				} else if strings.TrimSpace(trimmed) != "" {
+					// A complete non-prompt line: the command moved past the
+					// question, so a later report of the same text is a new
+					// one. Decided per line, not per read chunk — a chunk can
+					// split a prompt across reads, and a fragment is not
+					// evidence the command moved on.
+					gate.observe()
 				}
 			}
 		}
@@ -339,22 +351,11 @@ func runShellCommandWithPasswordSupport(ctx context.Context, command string, pro
 					if ok, secret := isInteractivePrompt(snapshot); ok {
 						_, _ = outputBuf.Write([]byte(snapshot))
 						pending.Reset()
-						handlePrompt(secret)
+						handlePrompt(secret, pipe, normalizePromptText(snapshot))
 					}
 				}
 			case r := <-reads:
 				if len(r.data) > 0 {
-					// New output after an answer means the command moved past
-					// the prompt it was blocked on; a later prompt is a new
-					// question. Output that arrives while no answer has been
-					// written is the same prompt reported on the other pipe
-					// (or the rest of it), and must not re-open the slot.
-					mu.Lock()
-					if answered {
-						answered = false
-						promptClaimed = false
-					}
-					mu.Unlock()
 					_, _ = pending.Write(r.data)
 					flushCompleteLines()
 					if ok, _ := isInteractivePrompt(pending.String()); ok {
@@ -392,11 +393,11 @@ func runShellCommandWithPasswordSupport(ctx context.Context, command string, pro
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		streamPipeAndDetect(stdoutPipe)
+		streamPipeAndDetect(stdoutPipe, pipeStdout)
 	}()
 	go func() {
 		defer wg.Done()
-		streamPipeAndDetect(stderrPipe)
+		streamPipeAndDetect(stderrPipe, pipeStderr)
 	}()
 
 	wg.Wait()

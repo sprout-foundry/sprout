@@ -48,3 +48,61 @@ func TestRunShellCommandWithPasswordSupport_DoublePromptSingleCall(t *testing.T)
 		t.Errorf("password should be redacted; output=%q", out)
 	}
 }
+
+// TestRunShellCommandWithPasswordSupport_SamePipeTwiceBothAnswered locks in
+// the other half of the rule: duplicate suppression applies to the SAME
+// question reported on both streams. A command that asks twice on one stream
+// is asking two questions, and both must reach the prompter.
+func TestRunShellCommandWithPasswordSupport_SamePipeTwiceBothAnswered(t *testing.T) {
+	prompter := &countingPrompter{password: "pw"}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cmd := `sh -c 'echo Password:; read a; echo Password:; read b; echo done'`
+
+	out, _ := runShellCommandWithPasswordSupport(ctx, cmd, prompter)
+	if prompter.calls != 2 {
+		t.Errorf("prompter called %d times, want 2 (two questions on one stream); output=%q",
+			prompter.calls, out)
+	}
+}
+
+// TestRunShellCommandWithPasswordSupport_LegitRePromptStillAsks covers the
+// sudo shape: output in between ("Sorry, try again.") marks a new question,
+// so the second prompt must be asked.
+func TestRunShellCommandWithPasswordSupport_LegitRePromptStillAsks(t *testing.T) {
+	prompter := &countingPrompter{password: "pw"}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cmd := `sh -c '
+echo "Password:"
+read a
+echo "Sorry, try again."
+echo "Password:"
+read b
+echo "done"
+'`
+
+	out, _ := runShellCommandWithPasswordSupport(ctx, cmd, prompter)
+	if prompter.calls != 2 {
+		t.Errorf("prompter called %d times, want 2 (a genuine re-prompt must be answered); output=%q",
+			prompter.calls, out)
+	}
+}
+
+// TestRunShellCommandWithPasswordSupport_DoublePromptRepeated runs the
+// both-pipes case many times: the race reproduced in roughly a quarter of
+// runs before the gate, so a handful of iterations would pass by luck.
+func TestRunShellCommandWithPasswordSupport_DoublePromptRepeated(t *testing.T) {
+	cmd := `sh -c 'echo Password:; echo Password: 1>&2; read pw; echo "got=$pw"'`
+	for i := 0; i < 60; i++ {
+		prompter := &countingPrompter{password: "shared-secret"}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		out, _ := runShellCommandWithPasswordSupport(ctx, cmd, prompter)
+		cancel()
+		if prompter.calls != 1 {
+			t.Fatalf("iteration %d: prompter called %d times, want 1; output=%q", i, prompter.calls, out)
+		}
+	}
+}

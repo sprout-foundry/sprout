@@ -160,6 +160,15 @@ func registerFilesHumaOperations(api huma.API, ws *ReactWebServer) {
 	}, ws.lspStatusHumaHandler)
 
 	huma.Register(api, huma.Operation{
+		OperationID: "previewSource",
+		Method:      http.MethodGet,
+		Path:        "/api/preview/source",
+		Summary:     "Mint a URL for the HTML preview iframe.",
+		Description: "Returns a short-lived URL on the dedicated preview origin for the workspace file at `path`, so the editor's HTML preview renders with a real document URL (relative assets and `blob:` navigation resolve) on an origin that cannot reach the app's session storage or cookies. Reports `available: false` when the preview origin is not running, in which case the editor falls back to a `srcDoc` iframe.",
+		Tags:        []string{"preview"},
+	}, ws.previewSourceHumaHandler)
+
+	huma.Register(api, huma.Operation{
 		OperationID: "semanticRun",
 		Method:      http.MethodPost,
 		Path:        "/api/semantic",
@@ -248,6 +257,12 @@ func (ws *ReactWebServer) diagnosticsValidateHumaHandler(ctx context.Context, in
 // lspStatusHumaHandler is the Huma handler for GET /api/lsp/status.
 func (ws *ReactWebServer) lspStatusHumaHandler(ctx context.Context, in *humaRequestInput) (*writtenResponseOutput, error) {
 	ws.handleLSPStatus(in.Resp, in.Req)
+	return &writtenResponseOutput{Body: noopWrittenResponse}, nil
+}
+
+// previewSourceHumaHandler is the Huma handler for GET /api/preview/source.
+func (ws *ReactWebServer) previewSourceHumaHandler(ctx context.Context, in *humaRequestInput) (*writtenResponseOutput, error) {
+	ws.handleAPIPreviewSource(in.Resp, in.Req)
 	return &writtenResponseOutput{Body: noopWrittenResponse}, nil
 }
 

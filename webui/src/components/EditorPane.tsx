@@ -567,6 +567,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
           content={buffer?.content || ''}
           language={(buffer?.metadata?.previewKind as 'svg' | 'html') || 'html'}
           fileName={(buffer?.metadata?.sourceName || buffer?.file?.name) as string}
+          sourcePath={(buffer?.metadata?.sourcePath as string) || undefined}
           onContentChange={(newContent) => {
             if (buffer) updateBufferContent(buffer.id, newContent);
           }}

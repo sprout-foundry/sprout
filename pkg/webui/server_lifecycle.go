@@ -124,6 +124,16 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	ws.isRunning = true
 	ws.mutex.Unlock()
 
+	// The preview origin is best-effort: if the loopback bind fails, the HTML
+	// preview falls back to a srcDoc iframe rather than the server refusing to
+	// start. See preview_origin.go.
+	if ws.previewOrigin == nil {
+		ws.previewOrigin = newPreviewOrigin()
+	}
+	if err := ws.previewOrigin.start(ws.workspaceRoot); err != nil {
+		ws.log().Warn("preview origin unavailable; HTML preview falls back to srcDoc", slog.Any("err", err))
+	}
+
 	// Start server in goroutine
 	go func() {
 		defer func() {
@@ -214,6 +224,11 @@ func (ws *ReactWebServer) Shutdown() error {
 
 	// Stop the file watcher.
 	ws.fileWatcher.stop()
+
+	// Stop the preview origin listener.
+	if ws.previewOrigin != nil {
+		ws.previewOrigin.stop()
+	}
 
 	// Clean up LSP manager (closes all language server processes)
 	if ws.lspManager != nil {

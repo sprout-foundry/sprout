@@ -126,6 +126,12 @@ type ReactWebServer struct {
 	hostedPreview   *hostedPreviewInfo
 	hostedPreviewMu sync.RWMutex
 
+	// previewOrigin serves workspace files to the HTML preview iframe from a
+	// loopback listener with its own origin, so previewed HTML cannot reach
+	// the app's sessionStorage/cookies. nil until started; see
+	// preview_origin.go.
+	previewOrigin *previewOrigin
+
 	// lifecycle tracks activity and the prepare-stop drain (workspace_lifecycle.go).
 	lifecycle lifecycleState
 

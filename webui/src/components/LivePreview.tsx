@@ -1,19 +1,30 @@
 import { Code2, Eye, Columns2 } from 'lucide-react';
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { useSproutFetch } from '../contexts/SproutAdapterContext';
 import './LivePreview.css';
 
 interface LivePreviewProps {
   content: string;
   language: 'svg' | 'html';
   fileName: string;
+  /**
+   * Workspace path of the file being previewed. When set, the HTML preview is
+   * served from the dedicated preview origin so the document has a real URL:
+   * relative assets resolve and `blob:` navigation works (a `srcDoc` iframe
+   * has no base URL, which breaks self-contained bundles). Falls back to
+   * `srcDoc` when the origin is unavailable or this is omitted.
+   */
+  sourcePath?: string;
   onContentChange?: (newContent: string) => void;
 }
 
-function LivePreview({ content, language, fileName, onContentChange }: LivePreviewProps): JSX.Element {
+function LivePreview({ content, language, fileName, sourcePath, onContentChange }: LivePreviewProps): JSX.Element {
+  const fetcher = useSproutFetch();
   const [editorContent, setEditorContent] = useState(content);
   const [viewMode, setViewMode] = useState<'split' | 'preview'>('split');
   const [splitPercent, setSplitPercent] = useState<number>(50);
   const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const dividerRef = useRef<HTMLDivElement>(null);
 
@@ -40,6 +51,51 @@ function LivePreview({ content, language, fileName, onContentChange }: LivePrevi
   useEffect(() => {
     setEditorContent(content);
   }, [content]);
+
+  // Resolve the preview-origin URL for the saved file. The URL is only valid
+  // for the file as it exists on disk, so it is re-minted when the source path
+  // changes — not on every keystroke (the srcDoc fallback covers unsaved edits).
+  useEffect(() => {
+    if (language !== 'html' || !sourcePath) {
+      setPreviewUrl(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetcher(`/api/preview/source?path=${encodeURIComponent(sourcePath)}`);
+        if (!res.ok) return;
+        const data = (await res.json()) as { available?: boolean; url?: string };
+        if (!cancelled && data.available && data.url) {
+          setPreviewUrl(data.url);
+        }
+      } catch {
+        // Preview origin unavailable: the srcDoc fallback still renders.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [fetcher, language, sourcePath]);
+
+  // A preview-origin URL serves the file as it exists on disk, so an unsaved
+  // edit would not appear. Once the editor content diverges from the content
+  // the URL was minted for, drop back to srcDoc so the preview keeps tracking
+  // edits; the origin URL returns when the buffer reloads from a save.
+  const urlBasisRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (previewUrl === null) {
+      urlBasisRef.current = null;
+      return;
+    }
+    if (urlBasisRef.current === null) {
+      urlBasisRef.current = editorContent;
+      return;
+    }
+    if (urlBasisRef.current !== editorContent) {
+      setPreviewUrl(null);
+    }
+  }, [editorContent, previewUrl]);
 
   // Cleanup debounce on unmount
   useEffect(() => {
@@ -102,14 +158,16 @@ function LivePreview({ content, language, fileName, onContentChange }: LivePrevi
       );
     }
 
-    // HTML preview
+    // HTML preview. With a preview-origin URL the document loads from a real
+    // address (relative assets resolve, blob: navigation works); without one
+    // it falls back to srcDoc, which has no base URL.
     return (
       <div className="live-preview-pane live-preview-pane-html">
         <iframe
           title="HTML preview"
           className="live-preview-iframe"
-          sandbox="allow-scripts allow-same-origin"
-          srcDoc={editorContent}
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+          {...(previewUrl ? { src: previewUrl } : { srcDoc: editorContent })}
         />
       </div>
     );

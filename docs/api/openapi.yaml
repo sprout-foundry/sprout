@@ -1752,6 +1752,28 @@ paths:
       summary: Search and replace across files.
       tags:
         - search
+  /api/preview/source:
+    get:
+      description: 'Returns a short-lived URL on the dedicated preview origin for the workspace file at `path`, so the editor''s HTML preview renders with a real document URL (relative assets and `blob:` navigation resolve) on an origin that cannot reach the app''s session storage or cookies. Reports `available: false` when the preview origin is not running, in which case the editor falls back to a `srcDoc` iframe.'
+      operationId: previewSource
+      parameters:
+        - in: query
+          name: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorModel'
+          description: Error
+      summary: Mint a URL for the HTML preview iframe.
+      tags:
+        - preview
   /api/semantic:
     post:
       description: Runs one language-semantic method (diagnostics, definition, hover, rename, references, code_actions, inlay_hints, or signature_help) for the file at `path` in `language_id`, dispatched to the matching language-server adapter. The position-dependent methods (definition, hover, rename, references, code_actions, signature_help) require `position`. An unknown language returns an empty capabilities set.

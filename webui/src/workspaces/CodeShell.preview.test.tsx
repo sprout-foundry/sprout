@@ -242,6 +242,21 @@ describe('CodeShell preview buffer', () => {
     expect(fakeEditor.closePane).toHaveBeenCalledWith('pane-2');
   });
 
+  it('does not split on a phone, where the layout has no split', async () => {
+    await act(async () => {
+      root.render(
+        host(createElement(CodeShell, makeShellProps({ isMobile: true, mockup: { loading: false, present: true } }))),
+      );
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+    // The mockup still opens the buffer, but a pane created here would never
+    // be rendered by the phone's peer-surface layout.
+    expect(fakeEditor.splitPane).not.toHaveBeenCalled();
+    expect(fakeEditor.openWorkspaceBuffer).toHaveBeenCalledWith(expect.objectContaining({ kind: 'preview' }));
+  });
+
   it('leaves a split the user already had alone', async () => {
     fakeEditor.panes = [{ id: 'pane-1' }, { id: 'pane-2' }];
     act(() => {

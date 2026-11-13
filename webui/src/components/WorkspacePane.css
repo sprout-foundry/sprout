@@ -697,12 +697,3 @@
   flex: 1;
   min-width: 0;
 }
-
-.pane-preview > .mockup-panel {
-  flex: 1;
-  width: auto;
-  min-width: 0;
-  max-width: none;
-  border-left: none;
-  position: static;
-}

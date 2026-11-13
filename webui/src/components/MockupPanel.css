@@ -37,3 +37,19 @@
   font-size: var(--text-sm, 13px);
   color: var(--text-secondary);
 }
+
+/* The mockup renders inside an editor pane (the preview buffer), so it fills
+ * the pane rather than the old docked column's fixed width. */
+.mockup-panel {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* MockupPanel borrows PreviewPane's classes; that flex column has no width of
+ * its own, so it shrinks to content unless told to fill. */
+.mockup-panel > .preview-pane {
+  flex: 1;
+  min-width: 0;
+}

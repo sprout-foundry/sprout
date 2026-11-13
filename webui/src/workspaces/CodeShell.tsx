@@ -112,7 +112,11 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
         // tick: the buffer manager resolves the target pane from refs that
         // only sync on re-render, so opening in the same tick would land the
         // buffer back in the original pane.
-        if (splitPane && panes && panes.length < 2 && activePaneId) {
+        //
+        // Phones render peer surfaces (chat / editor), not a split, so a pane
+        // created there would never be shown — the buffer renders in the
+        // editor surface instead.
+        if (!isMobile && splitPane && panes && panes.length < 2 && activePaneId) {
           const newPaneId = splitPane(activePaneId, 'vertical');
           if (newPaneId) {
             previewPaneIdRef.current = newPaneId;
@@ -148,7 +152,7 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
         if (createdPane && closePane) closePane(createdPane);
       }
     },
-    [openWorkspaceBuffer, closeBuffer, splitPane, closePane, panes, activePaneId],
+    [openWorkspaceBuffer, closeBuffer, splitPane, closePane, panes, activePaneId, isMobile],
   );
   useTogglePreviewCommand(setPreviewOpen, previewAvailable);
   // Inside an embed the toggle shows only while the command is handled; the
@@ -165,9 +169,11 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
   useEffect(() => {
     if (showMockup && showPreview && !openedOnMockup.current) {
       openedOnMockup.current = true;
-      setPreviewOpen(() => true, false);
+      // A phone has no split to protect focus in: the preview renders as the
+      // editor surface, so it must be the active buffer to be visible.
+      setPreviewOpen(() => true, isMobile);
     }
-  }, [showMockup, showPreview, setPreviewOpen]);
+  }, [showMockup, showPreview, setPreviewOpen, isMobile]);
   // On phones the project sidebar lives in the drawer, so name the project
   // on the toolbar; tapping it opens the drawer.
   const activeRepoSlug = repoSlug(useActiveRepoURL());

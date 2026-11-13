@@ -125,6 +125,10 @@
 .preview-pane__body {
   flex: 1;
   display: flex;
+  /* A flex item defaults to min-width:auto, which floors it at the iframe's
+   * intrinsic width — the body then under- or over-sizes instead of taking
+   * the width its pane gives it. */
+  min-width: 0;
   min-height: 0;
 }
 

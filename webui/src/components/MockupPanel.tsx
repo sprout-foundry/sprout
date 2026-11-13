@@ -90,7 +90,7 @@ export function MockupPanel({ onClose }: MockupPanelProps): JSX.Element {
 
   return (
     <ErrorBoundary panelName="Mockup">
-      <aside className="preview-panel mockup-panel" data-testid="mockup-panel">
+      <aside className="mockup-panel" data-testid="mockup-panel">
         <div className="preview-pane">
           <div className="preview-pane__header">
             <span className="preview-pane__title" data-testid="mockup-panel-title">

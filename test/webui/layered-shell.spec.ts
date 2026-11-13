@@ -55,7 +55,9 @@ async function openLayered(viewport: {
 }): Promise<Page> {
   const context = await browser.newContext({ viewport });
   const page = await context.newPage();
-  await page.goto(`${vite.url}/?layout=layered`, { waitUntil: "domcontentloaded" });
+  await page.goto(`${vite.url}/?layout=layered`, {
+    waitUntil: "domcontentloaded",
+  });
   return page;
 }
 
@@ -93,12 +95,12 @@ test.describe("Layered layout", () => {
     await readme.click();
 
     await expect(page.getByTestId("editor")).toBeVisible({ timeout: 15_000 });
-    const panel = page.getByTestId(TESTIDS["context-panel"]);
-    await expect(panel).toBeVisible();
-    // The context panel shows only the Agent Changes tab (the Conversation
-    // tab was dropped in the repo-scoped storage change).
-    const tab = panel.getByTestId("context-panel-tab").first();
-    await expect(tab).toHaveAttribute("aria-label", "Agent Changes");
+    // The opened file is the active buffer: its tab is open and closable.
+    // (The tabbed context panel this test used to assert was dropped from the
+    // layered layout, along with its "context-panel" testid.)
+    await expect(
+      page.getByRole("button", { name: "Close README.md" }),
+    ).toBeVisible();
 
     await nav.locator(".project-nav-back").first().click();
     await expect(

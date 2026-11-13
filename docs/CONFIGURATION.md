@@ -21,6 +21,7 @@ sprout agent --provider zai --model GLM-4.6 "implement feature X"
 |----------|-------------|---------|
 | `SPROUT_NO_STREAM=1` | Disable streaming mode | `SPROUT_NO_STREAM=1 sprout agent "task"` |
 | `SPROUT_NO_SUBAGENTS=1` | Disable subagent tools | `SPROUT_NO_SUBAGENTS=1 sprout agent "task"` |
+| `SPROUT_HTTP_PROXY=<url>` | Send sprout's own web requests (fetch, search, downloads) and the browser it starts through this proxy; loopback stays direct. Commands sprout runs are not given a proxy | `SPROUT_HTTP_PROXY=http://127.0.0.1:8082 sprout agent "task"` |
 | `SPROUT_NO_CONNECTION_CHECK=1` | Skip provider connection check | `SPROUT_NO_CONNECTION_CHECK=1 sprout agent "task"` |
 | `SPROUT_RESOURCE_DIRECTORY=<dir>` | Store web/vision resources | `SPROUT_RESOURCE_DIRECTORY=captures` |
 | `SPROUT_TRACE_DATASET_DIR=<dir>` | Enable dataset tracing | `SPROUT_TRACE_DATASET_DIR=traces` |

@@ -16,6 +16,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/localmodel"
+	"github.com/sprout-foundry/sprout/pkg/netproxy"
 	"github.com/sprout-foundry/sprout/pkg/pythonruntime"
 )
 
@@ -134,6 +135,7 @@ var rootCmd = &cobra.Command{
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() error {
 	localmodel.MaybeReexecWithBundledRuntime()
+	netproxy.Apply()
 	applyCommandGroups(rootCmd)
 	installUsageErrorHooks(rootCmd)
 	registerProviderFlagCompletion(agentCmd, commitCmd, planCmd, reviewStagedCmd, shellCmd)

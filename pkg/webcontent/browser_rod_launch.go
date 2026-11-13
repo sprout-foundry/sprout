@@ -17,6 +17,8 @@ import (
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"
+
+	"github.com/sprout-foundry/sprout/pkg/netproxy"
 )
 
 // renderTimeout is the maximum time allowed for a single RenderPage call
@@ -277,6 +279,12 @@ func (r *rodRenderer) launchAndProbe(ctx context.Context, disableGPU bool) (*rod
 	l := launcher.New().Headless(true).NoSandbox(true).Context(ctx)
 	if disableGPU {
 		l.Set("disable-gpu")
+	}
+	// The browser reaches the web through the same proxy as sprout's other
+	// web tools; loopback (a dev server on this machine) stays direct.
+	if proxy := netproxy.URL(); proxy != nil {
+		l.Proxy(proxy.String())
+		l.Set("proxy-bypass-list", "<-loopback>")
 	}
 
 	// Try common system browser paths before auto-download.

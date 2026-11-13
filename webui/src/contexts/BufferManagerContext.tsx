@@ -408,6 +408,30 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
         // A background open (activate: false) refreshes the tab without
         // focusing it — focusing a chat tab switches the conversation.
         if (options.activate === false) return bufferId;
+        // A caller that named a pane wants the buffer THERE, not wherever it
+        // already sits: a re-open after a split would otherwise re-activate
+        // the old pane and leave the new one empty.
+        if (options.paneId && buffer.paneId !== options.paneId) {
+          paneBridge.setPanes((prev) =>
+            prev.map((pane) => {
+              if (pane.id === options.paneId) return { ...pane, bufferId };
+              if (pane.bufferId === bufferId) return { ...pane, bufferId: null };
+              return pane;
+            }),
+          );
+          setBuffers((prev) => {
+            const next = new Map(prev);
+            const b = next.get(bufferId);
+            if (b) next.set(bufferId, { ...b, paneId: options.paneId });
+            return next;
+          });
+          buffersRef.current = new Map(buffersRef.current);
+          const moved = buffersRef.current.get(bufferId);
+          if (moved) buffersRef.current.set(bufferId, { ...moved, paneId: options.paneId });
+          paneBridge.setActivePaneId(options.paneId);
+          setFocusedBuffer(bufferId);
+          return bufferId;
+        }
         // Navigate to the buffer's existing pane if it's in a different pane
         if (buffer.paneId && buffer.paneId !== paneBridge.activePaneId) {
           paneBridge.setActivePaneId(buffer.paneId);
@@ -419,15 +443,25 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
       }
 
       const requestedPane = options.paneId ? paneBridge.panes.find((p) => p.id === options.paneId) : undefined;
+      const shouldActivate = options.activate ?? true;
+      // A caller that just split gets an id for a pane this render has not
+      // seen yet (the split's setPanes and this open land in the same commit).
+      // Honour the requested id rather than falling back to a heuristic pick,
+      // which put the buffer in the wrong pane.
+      //
+      // A background open (activate: false) refreshes a tab that already
+      // exists; it must not claim a pane, or a chat refresh lands on top of
+      // whatever the active pane holds (the preview).
       const targetPane =
         requestedPane ??
-        (options.kind === 'chat' || options.kind === 'preview'
-          ? getRightmostPane(paneBridge.panes)
-          : paneBridge.panes.find((p) => p.id === paneBridge.activePaneId));
-      const targetPaneId = targetPane?.id ?? paneBridge.activePaneId;
+        (options.paneId || !shouldActivate
+          ? undefined
+          : options.kind === 'chat' || options.kind === 'preview'
+            ? getRightmostPane(paneBridge.panes)
+            : paneBridge.panes.find((p) => p.id === paneBridge.activePaneId));
+      const targetPaneId = options.paneId ?? targetPane?.id ?? paneBridge.activePaneId;
 
       const bufferId = nextBufferId(`buffer-${options.kind}`);
-      const shouldActivate = options.activate ?? true;
       const newBuffer: EditorBuffer = {
         id: bufferId,
         kind: options.kind,

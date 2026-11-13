@@ -86,6 +86,7 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
   const splitPane = editor?.splitPane;
   const closePane = editor?.closePane;
   const switchToBuffer = editor?.switchToBuffer;
+  const switchPane = editor?.switchPane;
   const activeBufferId = editor?.activeBufferId;
   const panes = editor?.panes;
   const activePaneId = editor?.activePaneId;
@@ -115,6 +116,7 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
         // caller did not want it (a draw landing must not pull focus off the
         // code the person is writing).
         const previousBufferId = activeBufferId;
+        const previousPaneId = activePaneId;
         const openInto = (paneId?: string) => {
           previewBufferIdRef.current = openWorkspaceBuffer({
             kind: 'preview',
@@ -125,8 +127,13 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
             activate: true,
             ...(paneId ? { paneId } : {}),
           });
-          if (!focusPreview && previousBufferId && switchToBuffer) {
-            switchToBuffer(previousBufferId);
+          // Opening activates the preview's pane. Handing back only the buffer
+          // left that pane active, so the next background chat open (which
+          // targets the active pane) landed on top of the preview. Restore the
+          // pane as well.
+          if (!focusPreview && previousPaneId && switchPane) {
+            switchPane(previousPaneId);
+            if (previousBufferId && switchToBuffer) switchToBuffer(previousBufferId);
           }
         };
         // The preview belongs beside the code. With a single pane there is no
@@ -146,7 +153,10 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
             return;
           }
         }
-        openInto();
+        // An existing split (or a phone): name the target pane explicitly.
+        // Falling back to the manager's rightmost-pane pick put the preview in
+        // the wrong pane at some widths, tabbed behind the chat.
+        openInto(panes && panes.length > 1 ? panes[panes.length - 1].id : undefined);
       } else if (!next && current !== null) {
         previewBufferIdRef.current = null;
         void closeBuffer(current);
@@ -163,7 +173,9 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
       splitPane,
       closePane,
       switchToBuffer,
+      switchPane,
       activeBufferId,
+      activePaneId,
       panes,
       activePaneId,
       isMobile,

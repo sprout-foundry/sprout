@@ -81,6 +81,7 @@ const fakeEditor = {
     fakeEditor.panes = fakeEditor.panes.filter((p) => p.id !== paneId);
   }),
   switchToBuffer: vi.fn(),
+  switchPane: vi.fn(),
   activeBufferId: 'buffer-chat' as string | null,
 };
 vi.mock('../contexts/EditorManagerContext', () => ({
@@ -122,6 +123,7 @@ beforeEach(() => {
   fakeEditor.splitPane.mockClear();
   fakeEditor.closePane.mockClear();
   fakeEditor.switchToBuffer.mockClear();
+  fakeEditor.switchPane.mockClear();
   fakeEditor.activeBufferId = 'buffer-chat';
   fakeEditor.openWorkspaceBuffer.mockClear();
   fakeEditor.closeBuffer.mockClear();
@@ -257,6 +259,9 @@ describe('CodeShell preview buffer', () => {
     // attach to a pane or nothing renders it — so it opens activated and the
     // previous buffer is restored.
     expect(fakeEditor.openWorkspaceBuffer).toHaveBeenCalledWith(expect.objectContaining({ activate: true }));
+    // Both the pane and the buffer are handed back: leaving the preview's pane
+    // active let the next background chat open land on top of it.
+    expect(fakeEditor.switchPane).toHaveBeenCalledWith('pane-1');
     expect(fakeEditor.switchToBuffer).toHaveBeenCalledWith('buffer-chat');
   });
 

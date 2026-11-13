@@ -175,9 +175,6 @@ func runShellCommandWithPasswordSupport(ctx context.Context, command string, pro
 				_ = stdinPipe.Close()
 			}
 			mu.Unlock()
-			// Close the question in the gate too: no answer will be written,
-			// so the claim must not be left outstanding.
-			gate.release(pipe, promptText)
 			return
 		}
 		if secret {
@@ -214,9 +211,6 @@ func runShellCommandWithPasswordSupport(ctx context.Context, command string, pro
 				_ = stdinPipe.Close()
 			}
 			mu.Unlock()
-			// Close the question in the gate too: no answer will be written,
-			// so the claim must not be left outstanding.
-			gate.release(pipe, promptText)
 			return
 		}
 
@@ -232,7 +226,6 @@ func runShellCommandWithPasswordSupport(ctx context.Context, command string, pro
 				_ = stdinPipe.Close()
 			}
 		}
-		gate.release(pipe, promptText)
 	}
 
 	// streamPipeAndDetect replaces the prior bufio.Scanner-based scanner,
@@ -326,13 +319,6 @@ func runShellCommandWithPasswordSupport(ctx context.Context, command string, pro
 				if ok, secret := isInteractivePrompt(trimmed); ok {
 					cancelSettle()
 					handlePrompt(secret, pipe, normalizePromptText(trimmed))
-				} else if strings.TrimSpace(trimmed) != "" {
-					// A complete non-prompt line: the command moved past the
-					// question, so a later report of the same text is a new
-					// one. Decided per line, not per read chunk — a chunk can
-					// split a prompt across reads, and a fragment is not
-					// evidence the command moved on.
-					gate.observe()
 				}
 			}
 		}

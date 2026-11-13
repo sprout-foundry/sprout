@@ -13,29 +13,27 @@ import (
 // each) surfaces the same question twice. The answer belongs to the question,
 // not to the stream that reported it, so the second report must not ask again.
 //
-// A report is a duplicate when the other stream reported the same prompt and
-// that report has not been answered. Output in between is the signal the
-// command moved on, so the same text afterwards is a new question (sudo's
-// "Sorry, try again." then a fresh "Password:").
+// The rule is deliberately timing-free: the same prompt text reported by both
+// streams is ONE question. Whichever stream reports it first asks; the other
+// stream's report — whether it arrives before the answer (the same question in
+// flight) or after it (a delayed copy, possibly following other output) — is
+// refused. The same stream asking again is a new question and is allowed:
+// commands prompt their tty, which is one stream, so genuine repeats arrive on
+// the stream that asked before.
 //
-// There is no requirement that both streams report: a command that only
-// prompts on one stream must never be held up waiting for the other.
+// There is no requirement that both streams report: a command that only ever
+// prompts on one stream is never held up waiting for the other.
 //
-// The tradeoff: a command that asks the same question twice back-to-back, on
-// opposite streams, with no output in between, is indistinguishable from one
-// question reported twice — and is treated as the duplicate. That shape is
-// rare (a re-prompt normally prints something, as sudo does) and the
-// alternative is asking twice for every prompt a command echoes to both
-// streams, which is the common case.
+// The tradeoff: a command that asks the identical prompt text on opposite
+// streams as separate questions drops the second one. That shape is
+// contrived — a re-prompt normally reaches the same tty — while a prompt
+// echoed to both streams is common, and any output-based distinction between
+// "delayed copy" and "genuine re-ask" reopens the race this gate exists to
+// close (measured: the delayed copy regularly lands after the answer's echo).
 type promptGate struct {
 	mu sync.Mutex
 	// lastReported is the prompt text each stream most recently reported.
 	lastReported map[int]string
-	// answered is the prompt text most recently answered.
-	answered string
-	// movedOn is set when a complete non-prompt line is flushed after an
-	// answer, meaning the command moved past the question.
-	movedOn bool
 }
 
 func newPromptGate() *promptGate {
@@ -52,47 +50,18 @@ func pipeOther(pipe int) int {
 
 // claim reports whether this stream may ask for promptText now.
 //
-// It refuses the case the gate exists for: the other stream reported this same
-// prompt and it has not been answered yet — the same question surfaced on both
-// streams. Once the question is answered, the same text from the other stream
-// is a new question only if the command moved on; otherwise it is the other
-// stream's copy of the question just answered.
+// It refuses when the other stream has reported the same prompt text — that is
+// the same question, surfaced twice — and records this stream's report either
+// way, so a later report from the other stream is refused in turn.
 func (g *promptGate) claim(pipe int, promptText string) bool {
 	text := normalizePromptText(promptText)
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	if other := g.lastReported[pipeOther(pipe)]; other == text {
-		// The other stream reported this text. If it is unanswered, this is
-		// the same question in flight. If it is answered, it is a duplicate
-		// unless the command has since moved on.
-		if g.answered != text || !g.movedOn {
-			return false
-		}
+	if g.lastReported[pipeOther(pipe)] == text {
+		return false
 	}
 	g.lastReported[pipe] = text
 	return true
-}
-
-// release records that pipe's report of promptText was answered. The answer
-// closes the question for both streams, so a duplicate report of the same text
-// cannot ask again until the command moves on.
-func (g *promptGate) release(pipe int, promptText string) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	g.answered = normalizePromptText(promptText)
-	g.lastReported[pipe] = g.answered
-	g.movedOn = false
-}
-
-// observe records that the command produced a complete non-prompt line, so it
-// moved past the question and a later report of the same text is a new one.
-//
-// It is called per complete line rather than per read chunk: a chunk can split
-// a prompt across reads, and a fragment is not evidence the command moved on.
-func (g *promptGate) observe() {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	g.movedOn = true
 }
 
 // normalizePromptText reduces a detected prompt to a comparable form, so the

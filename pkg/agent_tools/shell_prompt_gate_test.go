@@ -12,9 +12,8 @@ func TestPromptGateDuplicateOnOtherPipeRejected(t *testing.T) {
 	if !g.claim(pipeStdout, "Password:") {
 		t.Fatal("first report on stdout should ask")
 	}
-	g.release(pipeStdout, "Password:")
 	if g.claim(pipeStderr, "Password:") {
-		t.Error("stderr reporting the same answered question must not ask again")
+		t.Error("stderr reporting the same question must not ask again")
 	}
 }
 
@@ -23,7 +22,6 @@ func TestPromptGateSamePipeRepeatAllowed(t *testing.T) {
 	if !g.claim(pipeStdout, "Password:") {
 		t.Fatal("first report should ask")
 	}
-	g.release(pipeStdout, "Password:")
 	// A command may prompt twice in a row on one stream; that is a new
 	// question, not a duplicate.
 	if !g.claim(pipeStdout, "Password:") {
@@ -34,34 +32,30 @@ func TestPromptGateSamePipeRepeatAllowed(t *testing.T) {
 func TestPromptGateDifferentTextNotDuplicate(t *testing.T) {
 	g := newPromptGate()
 	g.claim(pipeStdout, "Password:")
-	g.release(pipeStdout, "Password:")
 	// A different question on the other stream is not a duplicate.
 	if !g.claim(pipeStderr, "Enter passphrase:") {
 		t.Error("a different prompt must be asked")
 	}
 }
 
-// TestPromptGateCrossPipeSecondQuestion is the case the both-pipes design got
-// wrong: the first question is reported on one stream only, and the next
-// question arrives on the other stream. It must be asked, not dropped.
-func TestPromptGateCrossPipeSecondQuestion(t *testing.T) {
+// TestPromptGateDelayedCopyAfterOutputRejected pins the case CI caught: the
+// other stream's copy of the prompt arrives after the answer and after the
+// command's own output. Output in between must not reopen the question —
+// identical text on both streams is one question, always.
+func TestPromptGateDelayedCopyAfterOutputRejected(t *testing.T) {
 	g := newPromptGate()
 	if !g.claim(pipeStdout, "Password:") {
 		t.Fatal("first report on stdout should ask")
 	}
-	g.release(pipeStdout, "Password:")
-	// The command moved on ("ok") and asks again, this time on stderr.
-	g.observe()
-	if !g.claim(pipeStderr, "Password:") {
-		t.Error("a second question on the other stream must be asked")
+	// The answer is written and the command echoes it; the delayed stderr
+	// copy then lands. It must still be refused.
+	if g.claim(pipeStderr, "Password:") {
+		t.Error("a delayed copy of the answered question must not ask again")
 	}
 }
 
-func TestPromptGateUnansweredDuplicateAllowed(t *testing.T) {
+func TestPromptGateUnansweredDuplicateRejected(t *testing.T) {
 	g := newPromptGate()
-	// Both streams report before either is answered: the first claims, and the
-	// second is a duplicate of a question not yet answered. It must not ask
-	// again while the first is in flight.
 	if !g.claim(pipeStdout, "Password:") {
 		t.Fatal("first report should ask")
 	}

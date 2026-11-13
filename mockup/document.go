@@ -173,6 +173,28 @@ func wholeRequest(planJSON []byte, current, note string) string {
 	return b.String()
 }
 
+// lookRequest tells the model the mockup is of an existing product, drawn
+// in its own look; "" for a new idea.
+func lookRequest(look *kit.Look, notes string, editing bool) string {
+	if look == nil {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("\n\nThis is a screen of an existing product, and it must look like that product, not like a new site. ")
+	if editing {
+		b.WriteString("Keep data-palette=\"" + kit.LookPalette + "\" on <html>: it is the product's own colours, type and corners.")
+	} else {
+		b.WriteString("On <html> use data-palette=\"" + kit.LookPalette + "\": it is the product's own colours, type and corners. " +
+			"Choose the kit whose layout is closest to the product (clean for most apps and dashboards), and build the screen as the product's interface " +
+			"(its navigation, panels, lists and forms), not as a marketing page.")
+	}
+	if notes != "" {
+		b.WriteString(" How the product is laid out and styled: ")
+		b.WriteString(notes)
+	}
+	return b.String()
+}
+
 // editRequest is the request for edits to the current mockup.
 func editRequest(current, note string) string {
 	return "The current mockup:\n" + current + "\n\nThe change they asked for: " + note

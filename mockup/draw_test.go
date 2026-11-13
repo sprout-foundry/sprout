@@ -5,6 +5,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/sprout-foundry/sprout/mockup/kit"
 )
 
 const page = `<!doctype html><html data-kit="soft" data-palette="sage"><body><section data-screen="home"><h1>Crumb</h1></section><section data-screen="menu"></section></body></html>`
@@ -48,6 +50,30 @@ func TestDraw_WholeFromThePlanStreams(t *testing.T) {
 	}
 	if got[0] != EventStart || got[len(got)-1] != EventDone || !strings.Contains(strings.Join(got, ","), EventChunk) {
 		t.Fatalf("events = %v", got)
+	}
+}
+
+func TestDraw_InTheProductsOwnLook(t *testing.T) {
+	product := `<!doctype html><html data-kit="clean" data-palette="project"><head></head><body><section data-screen="board"><h1>Board</h1></section></body></html>`
+	stream, asked := replies(t, product)
+	look := &kit.Look{Colors: map[string]string{"primary": "#7c3aed", "bg": "#0b0d12"}, FontBody: "Inter, sans-serif", Dark: true}
+	res, err := Draw(context.Background(), stream, Request{Plan: []byte(`{"brief":"archive cards"}`), Look: look, LookNotes: "a dark app with a left sidebar"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains((*asked)[0], `data-palette="project"`) || !strings.Contains((*asked)[0], "a dark app with a left sidebar") {
+		t.Fatalf("the model is told about the product: %s", (*asked)[0])
+	}
+	if !strings.Contains(res.HTML, "--primary:#7c3aed;") || !strings.Contains(res.HTML, `name="mockupkit-look"`) {
+		t.Fatal("the finished page carries the product's look")
+	}
+	// A new idea is drawn as before: nothing about a product.
+	stream, asked = replies(t, page)
+	if _, err := Draw(context.Background(), stream, Request{Plan: []byte(`{"name":"Crumb"}`)}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains((*asked)[0], "existing product") {
+		t.Fatal("no product look for a new idea")
 	}
 }
 

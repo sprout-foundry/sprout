@@ -49,6 +49,13 @@ type Request struct {
 	// part of a screen it is about, when they pointed at one.
 	Change string
 	Part   string
+	// Look is the product's own look, for a mockup of a change to an
+	// existing product: it is drawn in the product's colours, type and
+	// corners (kit/look.go). LookNotes say how the product is laid out
+	// ("a dark app with a left sidebar and dense tables"). Both are empty
+	// for a new idea, which is drawn in a palette of the kit's.
+	Look      *kit.Look
+	LookNotes string
 }
 
 // Result is a finished draw.
@@ -71,6 +78,11 @@ func Draw(ctx context.Context, stream StreamText, req Request, publish func(even
 		return Result{}, errors.New("no model is available to draw the mockup")
 	}
 	d := &draw{stream: stream, publish: publish}
+	if req.Look != nil {
+		if l, ok := req.Look.Clean(); ok {
+			d.look, d.lookNotes = &l, strings.TrimSpace(req.LookNotes)
+		}
+	}
 	current := ""
 	if req.Saved != "" {
 		current = kit.Strip(req.Saved)
@@ -94,9 +106,11 @@ func Draw(ctx context.Context, stream StreamText, req Request, publish func(even
 }
 
 type draw struct {
-	stream  StreamText
-	publish func(string, map[string]any)
-	started bool
+	stream    StreamText
+	publish   func(string, map[string]any)
+	started   bool
+	look      *kit.Look
+	lookNotes string
 }
 
 func (d *draw) emit(event string, data map[string]any) {
@@ -114,7 +128,7 @@ func (d *draw) start(mode string) {
 // false when the change could not be made that way.
 func (d *draw) edit(ctx context.Context, current, note string) (string, bool) {
 	d.start("edit")
-	reply, err := d.stream(ctx, editCharter(), editRequest(current, note), nil)
+	reply, err := d.stream(ctx, editCharter(), editRequest(current, note)+lookRequest(d.look, d.lookNotes, true), nil)
 	if err != nil {
 		return "", false
 	}
@@ -130,8 +144,8 @@ func (d *draw) edit(ctx context.Context, current, note string) (string, bool) {
 func (d *draw) whole(ctx context.Context, plan []byte, current, note string) (Result, error) {
 	d.start("whole")
 	var seq int
-	var streamer kit.Streamer
-	text, err := d.stream(ctx, charter(), wholeRequest(plan, current, note), func(chunk string) {
+	streamer := kit.Streamer{Look: d.look}
+	text, err := d.stream(ctx, charter(), wholeRequest(plan, current, note)+lookRequest(d.look, d.lookNotes, false), func(chunk string) {
 		seq++
 		d.emit(EventChunk, map[string]any{"seq": seq, "chunk": streamer.Feed(chunk)})
 	})
@@ -150,6 +164,9 @@ func (d *draw) whole(ctx context.Context, plan []byte, current, note string) (Re
 
 // finish adds the kit to the document and publishes it.
 func (d *draw) finish(source, mode string) Result {
+	if d.look != nil {
+		source = kit.WithLook(source, *d.look)
+	}
 	html := kit.Assemble(source)
 	screens := ScreenIDs(html)
 	d.emit(EventDone, map[string]any{"mode": mode, "html": html, "screens": screens})

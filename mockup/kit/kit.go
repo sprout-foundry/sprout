@@ -107,6 +107,9 @@ var (
 // Choice is the kit and palette a document asks for.
 type Choice struct {
 	Kit, Palette string
+	// Look is the project's own look, for a document that names the
+	// project palette and carries one (look.go).
+	Look *Look
 	// Uses is whether the document uses the kit at all (it names a kit or a
 	// palette, or references an icon). A document that does not is shown as
 	// written.
@@ -127,7 +130,11 @@ func ChoiceOf(doc string) Choice {
 				}
 			case "palette":
 				c.Uses = true
-				if _, ok := paletteBy[v]; ok {
+				if v == LookPalette {
+					if l, ok := LookOf(doc); ok {
+						c.Palette, c.Look = LookPalette, &l
+					}
+				} else if _, ok := paletteBy[v]; ok {
 					c.Palette = v
 				} else if base := strings.TrimSuffix(strings.TrimSuffix(v, "-dark"), "-soft"); paletteBy[base].ID != "" {
 					// A variant that did not pass the contrast checks falls
@@ -150,27 +157,35 @@ func Block(c Choice, iconNames []string) string {
 	var b strings.Builder
 	b.WriteString(blockStart)
 	b.WriteString(`<style data-mockupkit>:root{`)
-	pal := paletteBy[c.Palette]
-	keys := make([]string, 0, len(pal.Colors))
-	for k := range pal.Colors {
+	pal, ok := paletteBy[c.Palette]
+	if !ok {
+		pal = paletteBy[DefaultPalette]
+	}
+	vars := map[string]string{}
+	for k, v := range pal.Colors {
+		vars["--"+strings.ReplaceAll(k, "_", "-")] = v
+	}
+	kit := kits[c.Kit]
+	for k, v := range kit.Vars {
+		vars[k] = v
+	}
+	// The project's look goes over both: its colours, type and corners.
+	if c.Look != nil {
+		for k, v := range lookVars(*c.Look) {
+			vars[k] = v
+		}
+	}
+	keys := make([]string, 0, len(vars))
+	for k := range vars {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		fmt.Fprintf(&b, "--%s:%s;", strings.ReplaceAll(k, "_", "-"), pal.Colors[k])
-	}
-	kit := kits[c.Kit]
-	vkeys := make([]string, 0, len(kit.Vars))
-	for k := range kit.Vars {
-		vkeys = append(vkeys, k)
-	}
-	sort.Strings(vkeys)
-	for _, k := range vkeys {
-		fmt.Fprintf(&b, "%s:%s;", k, kit.Vars[k])
+		fmt.Fprintf(&b, "%s:%s;", k, vars[k])
 	}
 	b.WriteString("}\n")
 	b.WriteString(baseCSS)
-	if strings.HasSuffix(c.Palette, "-dark") {
+	if strings.HasSuffix(c.Palette, "-dark") || (c.Look != nil && c.Look.Dark) {
 		// The page is already dark: a dark band is a slightly lifted surface
 		// rather than the text colour, which on a dark palette is light.
 		b.WriteString("\n" + darkPaletteCSS)
@@ -245,6 +260,10 @@ func Assemble(doc string) string {
 // first screen on. Every icon is included (which ones the page uses is not
 // known yet); the stored document is assembled again when it is complete.
 type Streamer struct {
+	// Look is the project's look the draw is made in, when there is one:
+	// the document does not carry it until it is finished.
+	Look *Look
+
 	seen     strings.Builder
 	injected bool
 }
@@ -263,6 +282,11 @@ func (s *Streamer) Feed(chunk string) string {
 	}
 	s.injected = true
 	c := ChoiceOf(text[:loc[0]])
+	if s.Look != nil && strings.Contains(strings.ToLower(htmlTagRe.FindString(text)), `"`+LookPalette+`"`) {
+		if l, ok := s.Look.Clean(); ok {
+			c.Palette, c.Look = LookPalette, &l
+		}
+	}
 	if !c.Uses {
 		return chunk
 	}

@@ -37,7 +37,7 @@ short and focused.
 - **Review before commit** – Before staging, check the diff with `git diff` (and `git status` for new files). For anything beyond a small edit (roughly 100+ changed lines, 3+ files, a new feature) or in a risky area (auth, secrets, migrations, concurrency, API compatibility), run `review_changes` after the build and tests pass, and fix its MUST_FIX findings before committing.
 
 ## Tool Usage Guidelines
-- **Batch operations**: Read/search multiple files in a single tool call
+- **Batch operations**: Read/search multiple files in a single turn — independent reads and searches go out together as separate tool calls, since each turn costs far more time than each call
 - **Success checks**: Empty output may indicate success (e.g., `go build`), but provide proof (exit code, last output lines, artifact/test summary)
 - **Exact string matching** for `edit_file`
 - **Execute immediately** when a tool need is identified

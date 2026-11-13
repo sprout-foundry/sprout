@@ -125,6 +125,7 @@ The current date and time is provided at the top of each user message as a `<cur
 - Use `repo_map` with a `query` parameter to filter to files/symbols matching a string (e.g., `query="auth"` shows only auth-related files and symbols).
 - After reviewing the map, use `read_file` with `view_range` to read only the sections you need — target specific functions or types by their line numbers.
 - Perform searches only if needed to locate task-specific files
+- **Gather in parallel, not one call per turn.** Every turn re-reads the whole conversation before it answers, so the number of turns, not the number of tool calls, is what makes work slow. When you know several things you need (the files a task names, a type and its callers, the test beside the code), request them all in the same turn as separate tool calls. Read a whole function or type in one range rather than paging through it, and don't re-read a region that is already in the conversation. When the task or its brief names files, symbols or line ranges, start from those instead of searching for them again.
 
 ### Images & PDFs
 - Most models see images directly — pasted images, `read_file` on an image/PDF, and fetched image URLs arrive as inline pixel attachments. When pixels are attached, describe what you see; do not call other tools or run OCR first.
@@ -184,7 +185,7 @@ If there is no mockup and no request for one, none of the above applies.
 3. **Verify subagent outcomes by evidence** — run the build, run the tests, read the diff. The subagent's `files_modified` manifest is authoritative for what changed (see the `run_subagent` tool description); the build/test results are authoritative for whether it works.
 
    **Stop the retry cycle**: If a subagent fails more than twice, analyze why (task unclear? too complex?) and either break it down further or fix it yourself. Don't spin endlessly retrying.
-4. Batch read operations where possible
+4. Batch read operations: independent reads and searches go out together in one turn (see DISCOVER)
 5. Verify each change compiles/runs
 6. Use the most straightforward solution; avoid creating complex abstractions for simple problems
 7. **Edits:** Use exact string matching for `edit_file`

@@ -1,6 +1,7 @@
 package kit
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -72,5 +73,59 @@ func TestStreamer_DrawsInTheLookAsItStreams(t *testing.T) {
 	out := s.Feed(`<html data-kit="clean" data-palette="project"><head></head><body>`)
 	if !strings.Contains(out, "--primary:#7c3aed;") {
 		t.Fatal("the look is applied from the first screen")
+	}
+}
+
+func TestLook_NotesAreProseAndNeverReachTheStylesheet(t *testing.T) {
+	l, ok := Look{
+		Colors: map[string]string{"primary": "#2563eb"},
+		Notes:  "A dark app with a left rail and dense tables.",
+	}.Clean()
+	if !ok || l.Notes == "" {
+		t.Fatal("notes are kept")
+	}
+	doc := WithLook(`<html data-kit="clean" data-palette="project"><head></head><body></body></html>`, l)
+	page := Assemble(doc)
+	// The notes travel in the document's <meta> (so it reassembles the same),
+	// but never into the stylesheet the kit writes.
+	style := page[strings.Index(page, "<style data-mockupkit>"):]
+	style = style[:strings.Index(style, "</style>")]
+	if strings.Contains(style, "left rail") {
+		t.Fatalf("notes never reach the page's CSS: %s", style)
+	}
+	// They are still readable by whoever draws the mockup.
+	back, ok := LookOf(doc)
+	if !ok || back.LookNotes() != "A dark app with a left rail and dense tables." {
+		t.Fatalf("notes travel with the document: %+v", back)
+	}
+}
+
+func TestParseLook_ToleratesFencesAndProse(t *testing.T) {
+	reply := "Here is the look:\n```json\n{\"colors\":{\"primary\":\"#7c3aed\"},\"notes\":\"A board.\"}\n```\nDone."
+	l, ok := ParseLook(reply)
+	if !ok || l.Colors["primary"] != "#7c3aed" || l.Notes != "A board." {
+		t.Fatalf("parsed: %+v %v", l, ok)
+	}
+	if _, ok := ParseLook("no json here"); ok {
+		t.Fatal("no object is no look")
+	}
+}
+
+func TestSaveAndLoadLook(t *testing.T) {
+	root := t.TempDir()
+	if _, err := LoadLook(root); !errors.Is(err, ErrNoLook) {
+		t.Fatalf("a project with no look: %v", err)
+	}
+	saved, err := SaveLook(root, Look{Colors: map[string]string{"primary": "#7c3aed"}, Notes: "A board."})
+	if err != nil || !saved {
+		t.Fatalf("save: %v %v", saved, err)
+	}
+	l, err := LoadLook(root)
+	if err != nil || l.Colors["primary"] != "#7c3aed" || l.LookNotes() != "A board." {
+		t.Fatalf("load: %+v %v", l, err)
+	}
+	// A look with nothing usable is not written.
+	if wrote, err := SaveLook(root, Look{Colors: map[string]string{"primary": "url(x)"}}); err != nil || wrote {
+		t.Fatalf("nothing usable is not saved: %v %v", wrote, err)
 	}
 }

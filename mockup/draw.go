@@ -56,6 +56,11 @@ type Request struct {
 	// for a new idea, which is drawn in a palette of the kit's.
 	Look      *kit.Look
 	LookNotes string
+	// Root is the project's folder. When set and Look is nil, the draw reads
+	// the project's saved look — generating it first when the project has
+	// none — so a mockup of a change to an existing product is drawn in its
+	// own colours. Empty draws in a palette of the kit's.
+	Root string
 }
 
 // Result is a finished draw.
@@ -82,6 +87,18 @@ func Draw(ctx context.Context, stream StreamText, req Request, publish func(even
 		if l, ok := req.Look.Clean(); ok {
 			d.look, d.lookNotes = &l, strings.TrimSpace(req.LookNotes)
 		}
+	} else if req.Root != "" {
+		// The project's look is a pre-step: read the saved one, and when the
+		// project has none yet, record it now so this draw is in the
+		// product's own colours. A project with no styling to read has no
+		// look, and the mockup is drawn in a palette of the kit's.
+		look, notes, err := ensureLook(ctx, stream, req.Root)
+		if err != nil {
+			return Result{}, err
+		}
+		if look != nil {
+			d.look, d.lookNotes = look, notes
+		}
 	}
 	current := ""
 	if req.Saved != "" {
@@ -103,6 +120,27 @@ func Draw(ctx context.Context, stream StreamText, req Request, publish func(even
 		}
 	}
 	return d.whole(ctx, req.Plan, current, note)
+}
+
+// ensureLook is the look pre-step: the project's saved look, or one recorded
+// now. A project with no styling to read yields no look (not an error): the
+// mockup is drawn in a palette of the kit's.
+func ensureLook(ctx context.Context, stream StreamText, root string) (*kit.Look, string, error) {
+	look, err := kit.LoadLook(root)
+	if err == nil {
+		return &look, look.LookNotes(), nil
+	}
+	if !errors.Is(err, kit.ErrNoLook) {
+		return nil, "", fmt.Errorf("reading the project's look: %w", err)
+	}
+	res, genErr := GenerateLook(ctx, stream, root)
+	if genErr != nil {
+		if errors.Is(genErr, ErrNoStyling) {
+			return nil, "", nil
+		}
+		return nil, "", genErr
+	}
+	return &res.Look, res.Look.LookNotes(), nil
 }
 
 type draw struct {

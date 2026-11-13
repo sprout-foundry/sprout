@@ -31,6 +31,10 @@ type Look struct {
 	// Radius is the corner radius of cards ("8px"); buttons and small parts
 	// are drawn in proportion.
 	Radius string `json:"radius,omitempty"`
+	// Notes is prose on how the product is laid out and styled — its
+	// navigation, density, panels, forms, buttons. It is read by whoever
+	// draws the mockup; it is not a style value and never reaches the page.
+	Notes string `json:"notes,omitempty"`
 	// Dark is a dark interface.
 	Dark bool `json:"dark,omitempty"`
 }
@@ -65,7 +69,31 @@ func (l Look) Clean() (Look, bool) {
 	if v := strings.TrimSpace(l.Radius); lookRadiusRe.MatchString(v) {
 		out.Radius = v
 	}
+	// Notes are prose for whoever draws the mockup, not a style value: they
+	// are kept (bounded) but never reach the page's CSS.
+	if v := strings.TrimSpace(l.Notes); v != "" && len(v) <= maxLookNotes {
+		out.Notes = v
+	}
 	return out, len(out.Colors) > 0 || out.FontBody != "" || out.FontHead != "" || out.Radius != ""
+}
+
+// maxLookNotes bounds the prose a look carries.
+const maxLookNotes = 2000
+
+// ParseLook reads a look from a model's reply: the JSON object it was asked
+// for, tolerating a code fence or surrounding prose, then cleaned like any
+// other look. It reports whether the reply yielded a usable look.
+func ParseLook(reply string) (Look, bool) {
+	start := strings.Index(reply, "{")
+	end := strings.LastIndex(reply, "}")
+	if start < 0 || end <= start {
+		return Look{}, false
+	}
+	var l Look
+	if err := json.Unmarshal([]byte(reply[start:end+1]), &l); err != nil {
+		return Look{}, false
+	}
+	return l.Clean()
 }
 
 // WithLook stamps the look into a document's <head> (replacing one already

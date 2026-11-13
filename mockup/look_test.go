@@ -11,12 +11,36 @@ import (
 	"github.com/sprout-foundry/sprout/mockup/kit"
 )
 
-// The look step: a project's own colours, type and corners are recorded once
-// (from its styling) and every draw after that is in them. These tests pin the
-// pre-step behaviour: the saved look is reused, a missing one is generated and
-// saved, and a project with no styling is drawn in the kit's palette.
+// The look pre-step: a project's own colours, type and corners are recorded
+// once from the evidence of its styling, and every draw after that is in
+// them. A look whose project has since been restyled is recorded again.
 
 const lookReply = `{"colors":{"primary":"#7c3aed","bg":"#0b0d12"},"font_body":"Inter, sans-serif","radius":"6px","dark":true,"notes":"A dark app with a left rail."}`
+
+// dirFiles is a project's files on disk, as the look step reads them.
+type dirFiles struct{ root string }
+
+func (d dirFiles) Paths() []string {
+	var paths []string
+	_ = filepath.WalkDir(d.root, func(p string, e os.DirEntry, err error) error {
+		if err != nil || e.IsDir() {
+			return nil
+		}
+		if rel, err := filepath.Rel(d.root, p); err == nil {
+			paths = append(paths, filepath.ToSlash(rel))
+		}
+		return nil
+	})
+	return paths
+}
+
+func (d dirFiles) Read(p string) (string, bool) {
+	data, err := os.ReadFile(filepath.Join(d.root, filepath.FromSlash(p)))
+	if err != nil {
+		return "", false
+	}
+	return string(data), true
+}
 
 func styledProject(t *testing.T) string {
 	t.Helper()
@@ -31,39 +55,75 @@ func styledProject(t *testing.T) string {
 	return root
 }
 
-func TestGenerateLook_ReadsStylingAndSaves(t *testing.T) {
+func TestLookEvidence_ReadsPropertiesNotWholeFiles(t *testing.T) {
+	root := styledProject(t)
+	ev := LookEvidence(dirFiles{root})
+	if !strings.Contains(ev, "--primary:#7c3aed") {
+		t.Fatalf("the custom properties are the evidence: %q", ev)
+	}
+	if !strings.Contains(ev, "src/globals.css") {
+		t.Fatalf("the file is named: %q", ev)
+	}
+}
+
+func TestLookEvidence_NothingToRead(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("# hi\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if ev := LookEvidence(dirFiles{root}); ev != "" {
+		t.Fatalf("a project with no styling has no evidence: %q", ev)
+	}
+}
+
+func TestLookEvidence_NamesUILibraries(t *testing.T) {
+	root := t.TempDir()
+	pkg := `{"dependencies":{"tailwindcss":"^3","@mui/material":"^5"}}`
+	if err := os.WriteFile(filepath.Join(root, "package.json"), []byte(pkg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	css := ":root{--primary:#fff}\n"
+	if err := os.WriteFile(filepath.Join(root, "a.css"), []byte(css), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ev := LookEvidence(dirFiles{root})
+	if !strings.Contains(ev, "tailwindcss") || !strings.Contains(ev, "@mui") {
+		t.Fatalf("the UI libraries are named: %q", ev)
+	}
+}
+
+func TestGenerateLook_SavesAndReadsBack(t *testing.T) {
 	root := styledProject(t)
 	stream, asked := replies(t, lookReply)
-	res, err := GenerateLook(context.Background(), stream, root)
+	res, err := GenerateLook(context.Background(), stream, root, dirFiles{root})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !res.Saved {
-		t.Fatal("the look is saved")
+	if !res.Saved || res.Hash == "" {
+		t.Fatalf("saved with a hash: %+v", res)
 	}
 	if !strings.Contains((*asked)[0], "--primary:#7c3aed") {
-		t.Fatalf("the model is shown the project's styling: %s", (*asked)[0])
+		t.Fatalf("the model is shown the evidence: %s", (*asked)[0])
 	}
 	if res.Look.Colors["primary"] != "#7c3aed" || res.Look.Radius != "6px" || !res.Look.Dark {
 		t.Fatalf("look: %+v", res.Look)
 	}
-	// It is on disk, and reads back the same.
 	saved, err := kit.LoadLook(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if saved.Colors["primary"] != "#7c3aed" || saved.LookNotes() != "A dark app with a left rail." {
-		t.Fatalf("saved look: %+v", saved)
+	if saved.Look.Colors["primary"] != "#7c3aed" || saved.Look.LookNotes() != "A dark app with a left rail." {
+		t.Fatalf("saved: %+v", saved)
 	}
 }
 
-func TestGenerateLook_ProjectWithoutStyling(t *testing.T) {
+func TestGenerateLook_NoStyling(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("# hi\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	stream, asked := replies(t, lookReply)
-	if _, err := GenerateLook(context.Background(), stream, root); !errors.Is(err, ErrNoStyling) {
+	if _, err := GenerateLook(context.Background(), stream, root, dirFiles{root}); !errors.Is(err, ErrNoStyling) {
 		t.Fatalf("want ErrNoStyling, got %v", err)
 	}
 	if len(*asked) != 0 {
@@ -71,10 +131,10 @@ func TestGenerateLook_ProjectWithoutStyling(t *testing.T) {
 	}
 }
 
-func TestGenerateLook_UnusableReplyIsAnError(t *testing.T) {
+func TestGenerateLook_UnusableReply(t *testing.T) {
 	root := styledProject(t)
 	stream, _ := replies(t, "I could not find any colours.")
-	if _, err := GenerateLook(context.Background(), stream, root); err == nil {
+	if _, err := GenerateLook(context.Background(), stream, root, dirFiles{root}); err == nil {
 		t.Fatal("an unusable reply is an error")
 	}
 }
@@ -82,9 +142,10 @@ func TestGenerateLook_UnusableReplyIsAnError(t *testing.T) {
 func TestDraw_RecordsTheLookFirstThenDrawsInIt(t *testing.T) {
 	root := styledProject(t)
 	product := `<!doctype html><html data-kit="clean" data-palette="project"><head></head><body><section data-screen="board"><h1>Board</h1></section></body></html>`
-	// First reply is the look, second is the document.
 	stream, asked := replies(t, lookReply, product)
-	res, err := Draw(context.Background(), stream, Request{Plan: []byte(`{"brief":"board"}`), Root: root}, nil)
+	res, err := Draw(context.Background(), stream, Request{
+		Plan: []byte(`{"brief":"board"}`), Root: root, Files: dirFiles{root},
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,75 +162,60 @@ func TestDraw_RecordsTheLookFirstThenDrawsInIt(t *testing.T) {
 
 func TestDraw_ReusesTheSavedLook(t *testing.T) {
 	root := styledProject(t)
-	if _, err := kit.SaveLook(root, kit.Look{Colors: map[string]string{"primary": "#111111"}, Notes: "A light app."}); err != nil {
+	files := dirFiles{root}
+	// Record it once.
+	stream, _ := replies(t, lookReply)
+	if _, err := GenerateLook(context.Background(), stream, root, files); err != nil {
 		t.Fatal(err)
 	}
 	product := `<!doctype html><html data-kit="clean" data-palette="project"><head></head><body><section data-screen="board"></section></body></html>`
-	stream, asked := replies(t, product)
-	if _, err := Draw(context.Background(), stream, Request{Plan: []byte(`{"brief":"board"}`), Root: root}, nil); err != nil {
+	stream2, asked := replies(t, product)
+	if _, err := Draw(context.Background(), stream2, Request{Plan: []byte(`{"brief":"board"}`), Root: root, Files: files}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if len(*asked) != 1 {
-		t.Fatalf("a saved look is not regenerated: %d model calls", len(*asked))
+		t.Fatalf("a saved look is not re-recorded: %d model calls", len(*asked))
 	}
-	if !strings.Contains((*asked)[0], "A light app.") {
+	if !strings.Contains((*asked)[0], "A dark app with a left rail.") {
 		t.Fatal("the saved look's notes reach the draw")
 	}
 }
 
-func TestDraw_NoStylingDrawsInTheKitsPalette(t *testing.T) {
-	root := t.TempDir() // no styling, no look
-	stream, asked := replies(t, page)
-	if _, err := Draw(context.Background(), stream, Request{Plan: []byte(`{"name":"Crumb"}`), Root: root}, nil); err != nil {
+func TestDraw_RestyledProjectRecordsTheLookAgain(t *testing.T) {
+	root := styledProject(t)
+	files := dirFiles{root}
+	stream, _ := replies(t, lookReply)
+	if _, err := GenerateLook(context.Background(), stream, root, files); err != nil {
 		t.Fatal(err)
 	}
-	// One call: the draw itself. No look step, because there is nothing to read.
+	// The project is restyled: the recorded look no longer matches.
+	css := ":root{--primary:#16a34a;--bg:#ffffff}\n"
+	if err := os.WriteFile(filepath.Join(root, "src", "globals.css"), []byte(css), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	again := `{"colors":{"primary":"#16a34a","bg":"#ffffff"},"notes":"A light app."}`
+	product := `<!doctype html><html data-kit="clean" data-palette="project"><head></head><body><section data-screen="board"></section></body></html>`
+	stream2, asked := replies(t, again, product)
+	if _, err := Draw(context.Background(), stream2, Request{Plan: []byte(`{"brief":"board"}`), Root: root, Files: files}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(*asked) != 2 {
+		t.Fatalf("a restyled project is read again: %d model calls", len(*asked))
+	}
+	if !strings.Contains((*asked)[0], "#16a34a") {
+		t.Fatal("the new styling is the evidence")
+	}
+}
+
+func TestDraw_NoStylingDrawsInTheKitsPalette(t *testing.T) {
+	root := t.TempDir()
+	stream, asked := replies(t, page)
+	if _, err := Draw(context.Background(), stream, Request{
+		Plan: []byte(`{"name":"Crumb"}`), Root: root, Files: dirFiles{root},
+	}, nil); err != nil {
+		t.Fatal(err)
+	}
 	if len(*asked) != 1 {
 		t.Fatalf("no look step without styling: %d model calls", len(*asked))
-	}
-	if strings.Contains((*asked)[0], "existing product") {
-		t.Fatal("no product look for a project without styling")
-	}
-}
-
-func TestReadStyling_IgnoresOurOwnState(t *testing.T) {
-	// A project with only .sprout/ state (a plan, a mockup) has no styling:
-	// reading our own files as the project's look would describe the wrong
-	// thing entirely.
-	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, ".sprout"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, ".sprout", "plan.json"), []byte(`{"goal":"x"}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(filepath.Join(root, "design"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "design", "mockup.html"), []byte("<html></html>"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	sources, _ := readStyling(root)
-	if len(sources) != 0 {
-		t.Fatalf("our own state is not styling: %v", sources)
-	}
-}
-
-func TestReadStyling_SkipsHeavyDirectories(t *testing.T) {
-	root := t.TempDir()
-	for _, dir := range []string{"node_modules/pkg", "dist"} {
-		if err := os.MkdirAll(filepath.Join(root, dir), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(root, dir, "x.css"), []byte(":root{--a:#fff}"), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := os.WriteFile(filepath.Join(root, "app.css"), []byte(":root{--b:#000}"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	sources, _ := readStyling(root)
-	if len(sources) != 1 || sources[0] != "app.css" {
-		t.Fatalf("only the project's own styling: %v", sources)
 	}
 }

@@ -22,7 +22,7 @@ is complete, which is the slow path you are avoiding.
 1. **Compose from a kit; never write styling.** A kit is a look — palette,
    type scale, spacing, component classes, icons — with a short brief. Name
    a kit and a palette on the document's `<html>`, write markup using the
-   kit's classes, and reference icons by name. The platform adds the kit's
+   kit's classes, and reference icons by name. The tool adds the kit's
    CSS. That is what makes the mockup look designed rather than generated,
    and it is the whole brand story: two mockups in the same kit look like
    one product.

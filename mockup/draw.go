@@ -56,11 +56,13 @@ type Request struct {
 	// for a new idea, which is drawn in a palette of the kit's.
 	Look      *kit.Look
 	LookNotes string
-	// Root is the project's folder. When set and Look is nil, the draw reads
-	// the project's saved look — generating it first when the project has
-	// none — so a mockup of a change to an existing product is drawn in its
-	// own colours. Empty draws in a palette of the kit's.
-	Root string
+	// Root is the project's folder and Files its files. When Root is set and
+	// Look is nil, the draw reads the project's saved look — generating it
+	// first when the project has none, or when its styling has changed since
+	// — so a mockup of a change to an existing product is drawn in its own
+	// colours. Empty Root draws in a palette of the kit's.
+	Root  string
+	Files Files
 }
 
 // Result is a finished draw.
@@ -92,7 +94,7 @@ func Draw(ctx context.Context, stream StreamText, req Request, publish func(even
 		// project has none yet, record it now so this draw is in the
 		// product's own colours. A project with no styling to read has no
 		// look, and the mockup is drawn in a palette of the kit's.
-		look, notes, err := ensureLook(ctx, stream, req.Root)
+		look, notes, err := ensureLook(ctx, stream, req.Root, req.Files)
 		if err != nil {
 			return Result{}, err
 		}
@@ -125,15 +127,19 @@ func Draw(ctx context.Context, stream StreamText, req Request, publish func(even
 // ensureLook is the look pre-step: the project's saved look, or one recorded
 // now. A project with no styling to read yields no look (not an error): the
 // mockup is drawn in a palette of the kit's.
-func ensureLook(ctx context.Context, stream StreamText, root string) (*kit.Look, string, error) {
-	look, err := kit.LoadLook(root)
+func ensureLook(ctx context.Context, stream StreamText, root string, files Files) (*kit.Look, string, error) {
+	saved, err := kit.LoadLook(root)
 	if err == nil {
-		return &look, look.LookNotes(), nil
-	}
-	if !errors.Is(err, kit.ErrNoLook) {
+		// A look recorded before the project was restyled is stale: the
+		// evidence it was read from no longer matches, so read it again.
+		if saved.EvidenceHash == evidenceHash(LookEvidence(files)) {
+			look := saved.Look
+			return &look, look.LookNotes(), nil
+		}
+	} else if !errors.Is(err, kit.ErrNoLook) {
 		return nil, "", fmt.Errorf("reading the project's look: %w", err)
 	}
-	res, genErr := GenerateLook(ctx, stream, root)
+	res, genErr := GenerateLook(ctx, stream, root, files)
 	if genErr != nil {
 		if errors.Is(genErr, ErrNoStyling) {
 			return nil, "", nil

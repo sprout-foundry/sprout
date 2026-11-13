@@ -24,35 +24,45 @@ const LookRelPath = ".sprout/look.json"
 // expected not-found (the look step has not run), not a failure.
 var ErrNoLook = errors.New("no project look")
 
+// SavedLook is a project's look as recorded, with what it was read from.
+type SavedLook struct {
+	Look Look `json:"look"`
+	// EvidenceHash identifies the styling it was read from, so a look whose
+	// project has since been restyled is recognised as stale.
+	EvidenceHash string `json:"evidence_hash,omitempty"`
+}
+
 // LoadLook reads the project's look from root. A missing file yields
 // ErrNoLook; a file that exists but does not parse is an error (it was
 // written by us and should be valid — a corrupt one is worth surfacing, not
 // silently re-deriving).
-func LoadLook(root string) (Look, error) {
+func LoadLook(root string) (SavedLook, error) {
 	data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(LookRelPath)))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return Look{}, ErrNoLook
+			return SavedLook{}, ErrNoLook
 		}
-		return Look{}, err
+		return SavedLook{}, err
 	}
-	var l Look
-	if err := json.Unmarshal(data, &l); err != nil {
-		return Look{}, err
+	var saved SavedLook
+	if err := json.Unmarshal(data, &saved); err != nil {
+		return SavedLook{}, err
 	}
+	l := saved.Look
 	// Clean on read: the file is ours, but it is also in the repository and
 	// may have been edited by hand. A look that cleans to nothing is no look.
 	clean, ok := l.Clean()
 	if !ok {
-		return Look{}, ErrNoLook
+		return SavedLook{}, ErrNoLook
 	}
-	return clean, nil
+	saved.Look = clean
+	return saved, nil
 }
 
 // SaveLook writes the project's look to root, cleaned first so an invalid
 // value never reaches the file. It reports whether anything was written: a
 // look with no usable values is not saved.
-func SaveLook(root string, l Look) (bool, error) {
+func SaveLook(root string, l Look, evidenceHash string) (bool, error) {
 	clean, ok := l.Clean()
 	if !ok {
 		return false, nil
@@ -61,7 +71,7 @@ func SaveLook(root string, l Look) (bool, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return false, err
 	}
-	data, err := json.MarshalIndent(clean, "", "  ")
+	data, err := json.MarshalIndent(SavedLook{Look: clean, EvidenceHash: evidenceHash}, "", "  ")
 	if err != nil {
 		return false, err
 	}

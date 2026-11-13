@@ -116,16 +116,19 @@ func TestSaveAndLoadLook(t *testing.T) {
 	if _, err := LoadLook(root); !errors.Is(err, ErrNoLook) {
 		t.Fatalf("a project with no look: %v", err)
 	}
-	saved, err := SaveLook(root, Look{Colors: map[string]string{"primary": "#7c3aed"}, Notes: "A board."})
+	saved, err := SaveLook(root, Look{Colors: map[string]string{"primary": "#7c3aed"}, Notes: "A board."}, "abc123")
 	if err != nil || !saved {
 		t.Fatalf("save: %v %v", saved, err)
 	}
 	l, err := LoadLook(root)
-	if err != nil || l.Colors["primary"] != "#7c3aed" || l.LookNotes() != "A board." {
+	if err != nil || l.Look.Colors["primary"] != "#7c3aed" || l.Look.LookNotes() != "A board." {
 		t.Fatalf("load: %+v %v", l, err)
 	}
+	if l.EvidenceHash != "abc123" {
+		t.Fatalf("the evidence hash is kept: %+v", l)
+	}
 	// A look with nothing usable is not written.
-	if wrote, err := SaveLook(root, Look{Colors: map[string]string{"primary": "url(x)"}}); err != nil || wrote {
+	if wrote, err := SaveLook(root, Look{Colors: map[string]string{"primary": "url(x)"}}, ""); err != nil || wrote {
 		t.Fatalf("nothing usable is not saved: %v %v", wrote, err)
 	}
 }

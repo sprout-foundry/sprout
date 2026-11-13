@@ -18,7 +18,7 @@ short; follow it. If it is missing, load it with `activate_skill`
 - The model composes from a **kit** — a look with its own palette, type
   scale, spacing, component classes and icons, plus a brief. Name a kit and
   a palette on `<html>`, write markup against the kit's classes, reference
-  icons by name. The platform adds the kit's CSS. **You never write the
+  icons by name. The tool adds the kit's CSS. **You never write the
   styling** — that is what keeps every mockup on brand.
 - One document, many screens: `<section data-screen="id">` each; the
   document's runtime handles switching, tabs and forms.

@@ -123,9 +123,11 @@ func (h *drawMockupHandler) Execute(ctx context.Context, env ToolEnv, args map[s
 		Change: extractStringOrEmpty(args, "change"),
 		Part:   extractStringOrEmpty(args, "part"),
 		// The project's own look: read from .sprout/look.json, recorded first
-		// when the project has none, so a change to an existing product is
-		// drawn in its colours rather than a palette of the kit's.
-		Root: root,
+		// when the project has none (or its styling has changed since), so a
+		// change to an existing product is drawn in its colours rather than a
+		// palette of the kit's.
+		Root:  root,
+		Files: newWorkspaceFiles(root),
 	}, d.publish)
 	if err != nil {
 		return mockupFailure(err.Error()), nil

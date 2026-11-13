@@ -85,6 +85,8 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
   const closeBuffer = editor?.closeBuffer;
   const splitPane = editor?.splitPane;
   const closePane = editor?.closePane;
+  const switchToBuffer = editor?.switchToBuffer;
+  const activeBufferId = editor?.activeBufferId;
   const panes = editor?.panes;
   const activePaneId = editor?.activePaneId;
   const previewBufferId = useMemo(() => {
@@ -102,11 +104,31 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
   // collapses that split again rather than leaving an empty pane behind.
   const previewPaneIdRef = useRef<string | null>(null);
   const setPreviewOpen = useCallback(
-    (update: (open: boolean) => boolean, activate = true) => {
+    (update: (open: boolean) => boolean, focusPreview = true) => {
       if (!openWorkspaceBuffer || !closeBuffer) return;
       const current = previewBufferIdRef.current;
       const next = update(current !== null);
       if (next && current === null) {
+        // The buffer manager only attaches a new buffer to a pane when the
+        // open activates — an `activate: false` open creates a buffer nothing
+        // renders. So always activate, and hand focus back afterwards when the
+        // caller did not want it (a draw landing must not pull focus off the
+        // code the person is writing).
+        const previousBufferId = activeBufferId;
+        const openInto = (paneId?: string) => {
+          previewBufferIdRef.current = openWorkspaceBuffer({
+            kind: 'preview',
+            path: PREVIEW_BUFFER_PATH,
+            title: 'Preview',
+            isPinned: false,
+            isClosable: true,
+            activate: true,
+            ...(paneId ? { paneId } : {}),
+          });
+          if (!focusPreview && previousBufferId && switchToBuffer) {
+            switchToBuffer(previousBufferId);
+          }
+        };
         // The preview belongs beside the code. With a single pane there is no
         // "beside", so split first and open into the new pane on the next
         // tick: the buffer manager resolves the target pane from refs that
@@ -120,28 +142,11 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
           const newPaneId = splitPane(activePaneId, 'vertical');
           if (newPaneId) {
             previewPaneIdRef.current = newPaneId;
-            setTimeout(() => {
-              previewBufferIdRef.current = openWorkspaceBuffer({
-                kind: 'preview',
-                path: PREVIEW_BUFFER_PATH,
-                title: 'Preview',
-                isPinned: false,
-                isClosable: true,
-                activate,
-                paneId: newPaneId,
-              });
-            }, 0);
+            setTimeout(() => openInto(newPaneId), 0);
             return;
           }
         }
-        previewBufferIdRef.current = openWorkspaceBuffer({
-          kind: 'preview',
-          path: PREVIEW_BUFFER_PATH,
-          title: 'Preview',
-          isPinned: false,
-          isClosable: true,
-          activate,
-        });
+        openInto();
       } else if (!next && current !== null) {
         previewBufferIdRef.current = null;
         void closeBuffer(current);
@@ -152,7 +157,17 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
         if (createdPane && closePane) closePane(createdPane);
       }
     },
-    [openWorkspaceBuffer, closeBuffer, splitPane, closePane, panes, activePaneId, isMobile],
+    [
+      openWorkspaceBuffer,
+      closeBuffer,
+      splitPane,
+      closePane,
+      switchToBuffer,
+      activeBufferId,
+      panes,
+      activePaneId,
+      isMobile,
+    ],
   );
   useTogglePreviewCommand(setPreviewOpen, previewAvailable);
   // Inside an embed the toggle shows only while the command is handled; the
@@ -170,7 +185,8 @@ const CodeShell: React.FC<WorkspaceShellProps> = ({
     if (showMockup && showPreview && !openedOnMockup.current) {
       openedOnMockup.current = true;
       // A phone has no split to protect focus in: the preview renders as the
-      // editor surface, so it must be the active buffer to be visible.
+      // editor surface, so it must be the active buffer to be visible. On
+      // desktop it opens beside the code without taking focus.
       setPreviewOpen(() => true, isMobile);
     }
   }, [showMockup, showPreview, setPreviewOpen, isMobile]);

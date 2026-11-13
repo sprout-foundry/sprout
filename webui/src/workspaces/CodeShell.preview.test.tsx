@@ -80,6 +80,8 @@ const fakeEditor = {
   closePane: vi.fn((paneId: string) => {
     fakeEditor.panes = fakeEditor.panes.filter((p) => p.id !== paneId);
   }),
+  switchToBuffer: vi.fn(),
+  activeBufferId: 'buffer-chat' as string | null,
 };
 vi.mock('../contexts/EditorManagerContext', () => ({
   __esModule: true,
@@ -119,6 +121,8 @@ beforeEach(() => {
   fakeEditor.activePaneId = 'pane-1';
   fakeEditor.splitPane.mockClear();
   fakeEditor.closePane.mockClear();
+  fakeEditor.switchToBuffer.mockClear();
+  fakeEditor.activeBufferId = 'buffer-chat';
   fakeEditor.openWorkspaceBuffer.mockClear();
   fakeEditor.closeBuffer.mockClear();
   container = document.createElement('div');
@@ -240,6 +244,20 @@ describe('CodeShell preview buffer', () => {
       fireEvent.click(toggle);
     });
     expect(fakeEditor.closePane).toHaveBeenCalledWith('pane-2');
+  });
+
+  it('opens the buffer attached to a pane even when it must not take focus', async () => {
+    await act(async () => {
+      root.render(host(createElement(CodeShell, makeShellProps({ mockup: { loading: false, present: true } }))));
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+    // The mockup auto-open must not steal focus, but the buffer still has to
+    // attach to a pane or nothing renders it — so it opens activated and the
+    // previous buffer is restored.
+    expect(fakeEditor.openWorkspaceBuffer).toHaveBeenCalledWith(expect.objectContaining({ activate: true }));
+    expect(fakeEditor.switchToBuffer).toHaveBeenCalledWith('buffer-chat');
   });
 
   it('does not split on a phone, where the layout has no split', async () => {

@@ -457,6 +457,20 @@
           "tools",
           "reasoning"
         ]
+      },
+      {
+        "cached_input_cost": 0.03,
+        "context_length": 1048576,
+        "description": "Inkling 2 Small - Thinking Machines Lab's 594B-parameter MoE model (17B active) with image input, variable reasoning effort and up to 1M tokens of context, built for agentic coding and knowledge work",
+        "id": "inkling-2-small",
+        "input_cost": 0.3,
+        "name": "Inkling 2 Small",
+        "output_cost": 1,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning"
+        ]
       }
     ]
   },

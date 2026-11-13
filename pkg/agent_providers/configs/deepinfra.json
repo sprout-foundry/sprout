@@ -1366,6 +1366,21 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.03,
+        "context_length": 262144,
+        "description": "Inkling 2 Small is a general-purpose multimodal model from Thinking Machines Lab that accepts text and image inputs and generates text. It is built for agentic and tool-use systems, coding assistants, chatbots and retrieval-augmented generation, as well as general conversation, instruction following and visual tasks.",
+        "id": "thinkingmachines/Inkling-2-Small",
+        "input_cost": 0.3,
+        "name": "Inkling 2 Small",
+        "output_cost": 1,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

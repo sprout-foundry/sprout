@@ -8061,7 +8061,10 @@
         "id": "morph/morph-v3-fast:batch",
         "input_cost": 0.4,
         "name": "Morph: Morph V3 Fast (batch)",
-        "output_cost": 0.6
+        "output_cost": 0.6,
+        "tags": [
+          "structured_output"
+        ]
       },
       {
         "context_length": 262144,
@@ -8309,6 +8312,20 @@
         "input_cost": 0.3,
         "name": "Thinking Machines: Inkling 2 Small",
         "output_cost": 1,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 1048576,
+        "description": "Ling 3.2 Flash is a hybrid reasoning model from inclusionAI that accepts text and image input, with a 1M-token context window and up to 200 images per request. Thinking can be switched off per request.",
+        "id": "inclusionai/ling-3.2-flash:free",
+        "input_cost": 0,
+        "name": "inclusionAI: Ling 3.2 Flash (free)",
+        "output_cost": 0,
         "tags": [
           "tools",
           "vision",

@@ -1,5 +1,5 @@
 import { MessageBubble, MessageSegments, MessageContent, Collapsible } from '@sprout/ui';
-import { AlertTriangle, BrainCircuit, Bot, GitFork, History, Square } from 'lucide-react';
+import { AlertTriangle, BrainCircuit, Bot, GitFork, History, RefreshCw, Square } from 'lucide-react';
 import { memo } from 'react';
 import { chatErrorText } from './chatError';
 import { ToolDetailInline } from './ToolDetailInline';
@@ -98,6 +98,11 @@ export const MessageItem = memo(function MessageItem({
   // and accumulate output over time. Don't suppress them — the Collapsible
   // header (persona name) always renders even before the first output line.
   const isSubagentRun = !!message.isSubagentRun;
+  // Auto-resume (wakeup) marker: a user-side line Sprout itself generated
+  // ("Looking into …") when a background task finished. Style it as a
+  // system indicator, not user input — it reads like the user typed it but
+  // the user did not.
+  const isAutoResume = message.type === 'user' && !!message.autoResume;
   if (!hasContent && !hasReasoning && !hasToolRefs && !isSubagentRun) {
     // For assistant messages, don't vanish entirely — render a minimal
     // "(no response text)" indicator so the user can see a turn happened.
@@ -145,7 +150,8 @@ export const MessageItem = memo(function MessageItem({
   return (
     <MessageBubble
       type={message.type}
-      ariaLabel={`${message.type} message`}
+      ariaLabel={isAutoResume ? 'background task auto-resume' : `${message.type} message`}
+      className={isAutoResume ? 'message--auto-resume' : undefined}
       copyText={message.content}
       timestamp={formatTime(message.timestamp)}
       persona={message.persona}
@@ -255,6 +261,17 @@ export const MessageItem = memo(function MessageItem({
           )}
           {message.stopped && <StoppedMarker />}
         </>
+      ) : isAutoResume ? (
+        // Auto-resume marker: a system indicator, not user input. The icon +
+        // muted "auto" chip make it read as Sprout waking itself up after a
+        // background task, distinct from the user's own messages.
+        <div className="auto-resume-marker" data-testid="auto-resume-marker">
+          <RefreshCw size={12} aria-hidden="true" />
+          <span className="auto-resume-marker-label">Auto</span>
+          <div className="auto-resume-marker-content">
+            <MessageContent content={message.content} />
+          </div>
+        </div>
       ) : (
         <MessageContent content={message.content} />
       )}

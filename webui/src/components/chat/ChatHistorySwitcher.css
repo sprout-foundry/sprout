@@ -171,9 +171,19 @@
 
 .chs-footer {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
+  gap: 4px;
   padding: 6px 8px;
   border-top: 1px solid var(--border-subtle);
+}
+
+/* Outcome notice after "Export all" — full-width row so an empty/partial run
+ * is explained instead of looking like a silent no-op. */
+.chs-export-notice {
+  flex: 1 1 100%;
+  font-size: 11px;
+  color: var(--text-secondary);
 }
 
 .chs-footer-btn {

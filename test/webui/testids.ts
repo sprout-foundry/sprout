@@ -51,6 +51,8 @@ const TESTIDS = {
   "chs-search-input": "chs-search-input",
   "chs-row": "chs-row",
   "chs-export-all": "chs-export-all",
+  "chs-export-notice": "chs-export-notice", // "Export all" outcome notice (empty/partial run)
+  "auto-resume-marker": "auto-resume-marker", // "Looking into …" auto-resume (wakeup) turn marker
   "chat-query-progress": "chat-query-progress",
   "chat-new-button": "chat-new-button",
 

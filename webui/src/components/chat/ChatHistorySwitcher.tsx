@@ -61,6 +61,9 @@ function ChatHistorySwitcherInner({ chatId, onRestoreSession, iconOnly = false }
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  // Inline notice shown in the footer after "Export all" so an empty run
+  // (no saved conversations in this workspace) doesn't look like a no-op.
+  const [exportNotice, setExportNotice] = useState<string | null>(null);
   const log = useLog();
   const btnRef = useRef<HTMLButtonElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
@@ -91,6 +94,7 @@ function ChatHistorySwitcherInner({ chatId, onRestoreSession, iconOnly = false }
     setOpen(false);
     setQuery('');
     setResults(null);
+    setExportNotice(null);
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
   }, []);
 
@@ -166,19 +170,36 @@ function ChatHistorySwitcherInner({ chatId, onRestoreSession, iconOnly = false }
   const handleExportAll = useCallback(async () => {
     if (exporting) return;
     setExporting(true);
+    setExportNotice(null);
     try {
       const resp = await getSessions(clientFetch, 'current');
       const targets = (resp.sessions ?? []).filter((s) => s.message_count > 0);
+      if (targets.length === 0) {
+        // The old behavior was a silent no-op — it read as "nothing to
+        // export" with no idea why. Say what's empty and where it looks.
+        setExportNotice(
+          (resp.sessions ?? []).length === 0
+            ? 'No saved conversations in this workspace yet.'
+            : 'All saved conversations in this workspace are empty — nothing to export.',
+        );
+        return;
+      }
+      let ok = 0;
       for (const s of targets) {
         const url = `/api/sessions/${encodeURIComponent(s.session_id)}/export?format=markdown&include_tool_calls=false&include_cost=true`;
         try {
           const result = await downloadExport(url);
-          if (!result.ok) continue;
+          if (result.ok) ok += 1;
         } catch {
-          continue;
+          // Count as a failure — reported below.
         }
         await new Promise((r) => setTimeout(r, 300));
       }
+      setExportNotice(
+        ok === targets.length
+          ? `Exported ${ok} conversation${ok === 1 ? '' : 's'} as Markdown.`
+          : `Exported ${ok} of ${targets.length} conversation(s); ${targets.length - ok} failed.`,
+      );
     } finally {
       setExporting(false);
     }
@@ -252,7 +273,9 @@ function ChatHistorySwitcherInner({ chatId, onRestoreSession, iconOnly = false }
                 <span>{results ? 'Searching…' : 'Loading…'}</span>
               </div>
             ) : rows.length === 0 ? (
-              <div className="chs-empty">{query ? 'No matching conversations' : 'No saved conversations yet'}</div>
+              <div className="chs-empty">
+                {query ? 'No matching conversations' : 'No saved conversations in this workspace yet'}
+              </div>
             ) : (
               rows.map((r) => (
                 <button
@@ -290,12 +313,17 @@ function ChatHistorySwitcherInner({ chatId, onRestoreSession, iconOnly = false }
                 className="chs-footer-btn"
                 onClick={() => void handleExportAll()}
                 disabled={exporting}
-                title="Export every saved conversation as markdown"
+                title="Download every saved conversation in this workspace as Markdown"
                 data-testid="chs-export-all"
               >
                 {exporting ? <Loader2 size={12} className="chs-spinner" /> : <Download size={12} />}
                 {exporting ? 'Exporting…' : 'Export all'}
               </button>
+            )}
+            {exportNotice && (
+              <span className="chs-export-notice" role="status" data-testid="chs-export-notice">
+                {exportNotice}
+              </span>
             )}
           </div>
         </div>,

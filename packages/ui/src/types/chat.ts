@@ -74,6 +74,16 @@ export interface Message {
    * event. Absent for normal messages.
    */
   languageGuardOriginal?: string;
+  /**
+   * Set on a user-side message that marks an auto-resume (wakeup) turn: a
+   * background task finished and Sprout resumed itself, so the transcript
+   * shows the human-readable label ("Looking into …") as a user bubble.
+   * Renderers use this to style the marker distinctly from real user input
+   * (it looks like the user typed it, but the user did not). Transient UI
+   * state — not persisted, so a reloaded session renders it as an ordinary
+   * user message.
+   */
+  autoResume?: boolean;
 }
 
 export interface ToolExecution {

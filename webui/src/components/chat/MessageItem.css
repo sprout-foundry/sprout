@@ -45,3 +45,57 @@
   color: var(--text-secondary);
   overflow-wrap: anywhere;
 }
+
+/* Auto-resume (wakeup) marker — the user-side line Sprout generates on its
+ * own ("Looking into …") when a background task finishes and it resumes.
+ * Styled as a muted system indicator, not a user message: no bubble fill,
+ * no accent rail, dashed border, and an icon + "Auto" chip make it clear the
+ * user did not type this. */
+.message.user.message--auto-resume .message-bubble {
+  background: transparent;
+  border: 1px dashed var(--border-subtle);
+  box-shadow: none;
+  color: var(--text-secondary);
+  padding: 6px 10px;
+  max-width: 100%;
+}
+
+.auto-resume-marker {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.auto-resume-marker > svg {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+}
+
+/* The "Auto" chip: same tinted-pill vocabulary as the persona badge. */
+.auto-resume-marker-label {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.4;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm, 4px);
+  background: color-mix(in srgb, var(--text-tertiary) 14%, transparent);
+  color: var(--text-secondary);
+}
+
+/* The marker text is a markdown paragraph — drop the p margins so the icon,
+ * chip, and text align on one line. */
+.auto-resume-marker p {
+  margin: 0;
+}
+
+/* The markdown content takes the remaining row space and wraps. */
+.auto-resume-marker-content {
+  flex: 1 1 auto;
+  min-width: 0;
+}

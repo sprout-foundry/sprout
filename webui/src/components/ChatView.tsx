@@ -454,6 +454,8 @@ function Chat(props: ChatProps): JSX.Element {
                   type="button"
                   className="chat-export-btn"
                   onClick={() => setIsExportDialogOpen(true)}
+                  title="Download this conversation as Markdown, HTML, or JSON"
+                  aria-label="Export this conversation"
                   data-testid="chat-export-button"
                 >
                   <Download size={14} />

@@ -16,6 +16,12 @@ interface MessageBubbleProps {
    */
   persona?: string;
   /**
+   * Extra class appended to the `.message` container. Lets a renderer
+   * (MessageItem) add a modifier for special markers (e.g. the auto-resume
+   * "Looking into …" line) without a new bubble type.
+   */
+  className?: string;
+  /**
    * SP-053-1d: nesting depth (0=primary, 1=orchestrator, 2=specialist).
    * Depth > 0 indents the bubble container by `depth * 12px` so a
    * delegation chain reads as a visible hierarchy. Default 0.
@@ -42,6 +48,7 @@ function MessageBubble({
   copyText,
   timestamp,
   persona,
+  className,
   depth = 0,
   dataMessageIndex,
   tokensUsed,
@@ -74,7 +81,7 @@ function MessageBubble({
 
   return (
     <div
-      className={`message ${type}`}
+      className={className ? `message ${type} ${className}` : `message ${type}`}
       // role="user-message" / "assistant-message" aren't valid ARIA roles —
       // Lighthouse flagged them. The parent chat container carries
       // role="log" already; individual messages don't need a role.

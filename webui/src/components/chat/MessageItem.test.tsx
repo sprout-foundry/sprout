@@ -237,3 +237,50 @@ describe('MessageItem failed turn', () => {
     expect(error?.getAttribute('role')).toBe('alert');
   });
 });
+
+describe('MessageItem auto-resume marker', () => {
+  it('renders the "Looking into …" auto-resume line as a distinct marker, not a plain user bubble', () => {
+    const message = {
+      id: 'msg-wake',
+      type: 'user',
+      content: 'Looking into 2 background tasks…',
+      timestamp: new Date(),
+      autoResume: true,
+    };
+    act(() => {
+      root.render(
+        createElement(MessageItem, {
+          ...baseProps,
+          message,
+          messageIndex: 0,
+        }),
+      );
+    });
+    const marker = container.querySelector('[data-testid="auto-resume-marker"]');
+    expect(marker).not.toBeNull();
+    // The "Auto" chip and the icon are present so it reads as system, not user.
+    expect(container.querySelector('.auto-resume-marker-label')?.textContent).toBe('Auto');
+    // The wrapper carries the modifier class the CSS keys off.
+    expect(container.querySelector('.message--auto-resume')).not.toBeNull();
+  });
+
+  it('does NOT render the marker for an ordinary user message', () => {
+    const message = {
+      id: 'msg-user',
+      type: 'user',
+      content: 'Hello, real user input',
+      timestamp: new Date(),
+    };
+    act(() => {
+      root.render(
+        createElement(MessageItem, {
+          ...baseProps,
+          message,
+          messageIndex: 0,
+        }),
+      );
+    });
+    expect(container.querySelector('[data-testid="auto-resume-marker"]')).toBeNull();
+    expect(container.querySelector('.message--auto-resume')).toBeNull();
+  });
+});

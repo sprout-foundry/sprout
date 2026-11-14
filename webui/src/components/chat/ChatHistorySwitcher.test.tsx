@@ -13,6 +13,9 @@ vi.mock('../../services/api/sessionApi', () => ({
   getSessions: vi.fn(),
   searchSessions: vi.fn(),
 }));
+vi.mock('../../services/exportDownload', () => ({
+  downloadExport: vi.fn(),
+}));
 vi.mock('../ThemedDialog', () => ({
   showThemedConfirm: vi.fn().mockResolvedValue(true),
 }));
@@ -21,6 +24,7 @@ vi.mock('../../utils/log', () => ({
 }));
 
 const { getSessions, searchSessions } = await import('../../services/api/sessionApi');
+const { downloadExport } = await import('../../services/exportDownload');
 const { showThemedConfirm } = await import('../ThemedDialog');
 
 let container: HTMLDivElement;
@@ -183,5 +187,90 @@ describe('ChatHistorySwitcher', () => {
     });
     await new Promise((r) => setTimeout(r, 10));
     expect(onRestoreSession).not.toHaveBeenCalled();
+  });
+
+  describe('Export all', () => {
+    const exportBtn = () => document.querySelector('[data-testid="chs-export-all"]') as HTMLButtonElement;
+
+    it('exports each non-empty session and reports the count', async () => {
+      downloadExport.mockResolvedValue({ ok: true, filename: 's.md' });
+      const pop = await openPopover();
+      await act(async () => {
+        fireEvent.click(exportBtn());
+      });
+      await waitFor(
+        () => {
+          const notice = document.querySelector('[data-testid="chs-export-notice"]') as HTMLElement | null;
+          expect(notice?.textContent).toBe('Exported 2 conversations as Markdown.');
+        },
+        { timeout: 3000 },
+      );
+      expect(downloadExport).toHaveBeenCalledTimes(2);
+    });
+
+    it('says so when the workspace has no saved conversations', async () => {
+      // Both the list load and the export load resolve to empty (persistent,
+      // so the second getSessions call in handleExportAll sees it too).
+      getSessions.mockResolvedValue({ message: 'ok', current_session_id: '', sessions: [] });
+      const pop = await openPopover();
+      await act(async () => {
+        fireEvent.click(exportBtn());
+      });
+      await waitFor(
+        () => {
+          const notice = document.querySelector('[data-testid="chs-export-notice"]') as HTMLElement | null;
+          expect(notice?.textContent).toBe('No saved conversations in this workspace yet.');
+        },
+        { timeout: 3000 },
+      );
+      expect(downloadExport).not.toHaveBeenCalled();
+    });
+
+    it('says so when every saved conversation is empty', async () => {
+      getSessions.mockResolvedValue({
+        message: 'ok',
+        current_session_id: '',
+        sessions: [
+          {
+            session_id: 'e1',
+            name: 'empty',
+            working_directory: '/w',
+            last_updated: new Date().toISOString(),
+            message_count: 0,
+            total_tokens: 0,
+          },
+        ],
+      });
+      const pop = await openPopover();
+      await act(async () => {
+        fireEvent.click(exportBtn());
+      });
+      await waitFor(
+        () => {
+          const notice = document.querySelector('[data-testid="chs-export-notice"]') as HTMLElement | null;
+          expect(notice?.textContent).toBe('All saved conversations in this workspace are empty — nothing to export.');
+        },
+        { timeout: 3000 },
+      );
+      expect(downloadExport).not.toHaveBeenCalled();
+    });
+
+    it('reports partial failures', async () => {
+      // First download succeeds, second fails (non-2xx).
+      downloadExport
+        .mockResolvedValueOnce({ ok: true, filename: 's1.md' })
+        .mockResolvedValueOnce({ ok: false, status: 500 });
+      const pop = await openPopover();
+      await act(async () => {
+        fireEvent.click(exportBtn());
+      });
+      await waitFor(
+        () => {
+          const notice = document.querySelector('[data-testid="chs-export-notice"]') as HTMLElement | null;
+          expect(notice?.textContent).toBe('Exported 1 of 2 conversation(s); 1 failed.');
+        },
+        { timeout: 3000 },
+      );
+    });
   });
 });

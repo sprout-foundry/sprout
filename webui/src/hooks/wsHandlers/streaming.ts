@@ -74,7 +74,19 @@ export const handleQueryStarted = (ctx: EventHandlerContext): void => {
         (lastMsg.content === startedDisplay || lastMsg.content === startedQuery);
       return alreadyPresent
         ? body
-        : [...body, { id: generateMessageId(), type: 'user', content: startedDisplay, timestamp: new Date() }];
+        : [
+            ...body,
+            {
+              id: generateMessageId(),
+              type: 'user',
+              content: startedDisplay,
+              timestamp: new Date(),
+              // Auto-resume (wakeup) turns: flag the marker so it renders
+              // distinctly from real user input (it reads like the user typed
+              // it, but the user did not). Transient — not persisted.
+              ...(isWakeupTurn ? { autoResume: true } : {}),
+            },
+          ];
     };
 
     return {

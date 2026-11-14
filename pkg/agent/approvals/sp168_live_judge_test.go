@@ -78,9 +78,9 @@ var _ api.ClientInterface = (*recordingClient)(nil)
 //     fast enough to be the default (logged for the timing tests the SP-168
 //     spec calls out).
 //
-// Skips unless SPROUT_LIVE_AIWORKER=1 and AI_WORKER_API_KEY are set. The
-// endpoint/model default to the ai-worker custom provider (qwen3.8-27b);
-// override with SPROUT_AIWORKER_ENDPOINT / SPROUT_AIWORKER_MODEL.
+// Skips unless SPROUT_LIVE_AIWORKER=1, AI_WORKER_API_KEY and
+// SPROUT_AIWORKER_ENDPOINT (the self-hosted chat completions URL) are set.
+// The model defaults to qwen3.8-27b; override with SPROUT_AIWORKER_MODEL.
 func TestLiveAIWorkerRiskJudge(t *testing.T) {
 	if os.Getenv("SPROUT_LIVE_AIWORKER") != "1" {
 		t.Skip("SPROUT_LIVE_AIWORKER not set (live ai-worker qwen3.8-27b judge test)")
@@ -90,7 +90,7 @@ func TestLiveAIWorkerRiskJudge(t *testing.T) {
 	}
 	endpoint := os.Getenv("SPROUT_AIWORKER_ENDPOINT")
 	if endpoint == "" {
-		endpoint = "https://local-aprice.dev/v1/chat/completions"
+		t.Skip("SPROUT_AIWORKER_ENDPOINT not set")
 	}
 	model := os.Getenv("SPROUT_AIWORKER_MODEL")
 	if model == "" {

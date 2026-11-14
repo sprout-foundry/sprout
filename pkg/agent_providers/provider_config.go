@@ -208,6 +208,10 @@ type ReasoningSpec struct {
 	// AlwaysThinking marks models that always produce reasoning (e.g.
 	// DeepSeek-R1, QwQ). They have no effort knob and cannot be turned off.
 	AlwaysThinking bool `json:"always_thinking,omitempty"`
+	// Levels are the effort levels the model accepts, when it accepts only
+	// some: a configured effort outside them gets DefaultEffort instead, since
+	// the model would refuse the request. Empty accepts any level.
+	Levels []string `json:"levels,omitempty"`
 }
 
 // ModelInfo represents information about a model (simplified version for config)

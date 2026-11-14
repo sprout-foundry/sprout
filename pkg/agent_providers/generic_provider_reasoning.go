@@ -85,7 +85,7 @@ func (p *GenericProvider) applyReasoningEffort(model, reasoning string, request 
 // default_effort); otherwise the global fallback. An empty result means the
 // caller should not emit the knob.
 func reasoningEffortValue(effort string, spec *ReasoningSpec) string {
-	if effort != "" && isReasoningEffortLevel(effort) {
+	if effort != "" && isReasoningEffortLevel(effort) && spec.accepts(effort) {
 		return effort
 	}
 	if spec != nil && spec.DefaultEffort != "" && isReasoningEffortLevel(spec.DefaultEffort) {
@@ -121,13 +121,41 @@ func modelInfoHasReasoningTag(modelInfo *ModelInfo) bool {
 }
 
 // lookupModelReasoning returns the per-model ReasoningSpec (the host-native
-// reasoning control surface) for a model, or nil when the model's catalog
-// entry carries none.
+// reasoning control surface) for a model: its catalog entry's, else the
+// family's built-in one (familyReasoningSpec), else nil.
 func (p *GenericProvider) lookupModelReasoning(model string) *ReasoningSpec {
-	if mi := p.config.GetModelInfo(model); mi != nil {
+	if mi := p.config.GetModelInfo(model); mi != nil && mi.Reasoning != nil {
 		return mi.Reasoning
 	}
+	return familyReasoningSpec(model)
+}
+
+// familyReasoningSpec is the reasoning knob of a model family whatever host
+// serves it, for a host with no catalog entry for the model (a custom or
+// self-hosted endpoint). Qwen 3.8's chat template reads reasoning_effort,
+// accepts only low, medium and xhigh (it refuses the request for any other),
+// and thinks at xhigh when none is sent, several times the output of medium
+// on every agent step; medium is the depth that holds up for agent work.
+func familyReasoningSpec(model string) *ReasoningSpec {
+	m := strings.ToLower(model)
+	if strings.Contains(m, "qwen3.8") {
+		return &ReasoningSpec{Param: "reasoning_effort", DefaultEffort: "medium", Levels: []string{"low", "medium", "xhigh"}}
+	}
 	return nil
+}
+
+// accepts reports whether the model takes effort (any level when the spec
+// names none).
+func (s *ReasoningSpec) accepts(effort string) bool {
+	if s == nil || len(s.Levels) == 0 {
+		return true
+	}
+	for _, l := range s.Levels {
+		if l == effort {
+			return true
+		}
+	}
+	return false
 }
 
 // reportReasoningNoKnob logs (once per session) and records that a

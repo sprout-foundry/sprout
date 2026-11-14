@@ -8,14 +8,14 @@ import (
 
 // qwenJudgeConfig mirrors the ai-worker gateway behind the SP-168 auto risk
 // judge: a qwen3.8 model served on a non-loopback endpoint with no per-model
-// reasoning catalog entry, so the only thing on the wire that controls thinking
-// is the disableThinking flag. Defaults.Model is left empty so NewGenericProvider
+// reasoning catalog entry, so thinking is controlled on the wire by the
+// disableThinking flag and the family's own effort knob (familyReasoningSpec). Defaults.Model is left empty so NewGenericProvider
 // does not warm the model cache (no network at construction); the model is set
 // explicitly via SetModel.
 func qwenJudgeConfig() *ProviderConfig {
 	return &ProviderConfig{
 		Name:     "ai-worker",
-		Endpoint: "https://local-aprice.dev/v1/chat/completions",
+		Endpoint: "https://inference.example/v1/chat/completions",
 		Auth: AuthConfig{
 			Type:   "api_key",
 			EnvVar: "AI_WORKER_API_KEY",

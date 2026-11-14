@@ -1193,8 +1193,8 @@
         "name": "DeepSeek V4.1 Flash",
         "output_cost": 0.6,
         "reasoning": {
-          "param": "reasoning_effort",
-          "default_effort": "medium"
+          "default_effort": "medium",
+          "param": "reasoning_effort"
         },
         "tags": [
           "tools",
@@ -1342,9 +1342,39 @@
         "name": "DeepSeek V4.1 Flash 1017",
         "output_cost": 0.6,
         "reasoning": {
-          "param": "reasoning_effort",
-          "default_effort": "medium"
+          "default_effort": "medium",
+          "param": "reasoning_effort"
         },
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.2,
+        "context_length": 1048576,
+        "description": "Kimi K3.1 Pro is an open-weight, natively multimodal agentic model, post-trained from Kimi K3 with large-scale joint reinforcement learning across hundreds of downstream domains, it is the first model in the K3.1 series. With a 1-million-token context window, Kimi K3.1 Pro delivers substantial improvements in coding, 3D creation, financial research, factual accuracy, and other agentic capabilities.",
+        "id": "moonshotai/Kimi-K3.1-Pro",
+        "input_cost": 2,
+        "name": "Kimi K3.1 Pro",
+        "output_cost": 10,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.03,
+        "context_length": 262144,
+        "description": "Inkling 2 Small is a general-purpose multimodal model from Thinking Machines Lab that accepts text and image inputs and generates text. It is built for agentic and tool-use systems, coding assistants, chatbots and retrieval-augmented generation, as well as general conversation, instruction following and visual tasks.",
+        "id": "thinkingmachines/Inkling-2-Small",
+        "input_cost": 0.3,
+        "name": "Inkling 2 Small",
+        "output_cost": 1,
         "tags": [
           "tools",
           "vision",

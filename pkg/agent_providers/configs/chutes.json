@@ -53,7 +53,9 @@
       "deepseek-ai/DeepSeek-V4.1-Flash-1017",
       "moonshotai/Kimi-K2.7-Code",
       "zai-org/GLM-5.2-Fast",
-      "zai-org/GLM-5.3"
+      "zai-org/GLM-5.3",
+      "tencent/Hy4",
+      "Qwen/Qwen3.5-27B-TEE"
     ],
     "default_context_limit": 262144,
     "default_model": "deepseek-ai/DeepSeek-V3.2-TEE",
@@ -337,6 +339,32 @@
           "tools",
           "reasoning",
           "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.025,
+        "context_length": 1048576,
+        "description": "Tencent Hy4 is Tencent's 770B-parameter MoE flagship (49B active) with a 1M-token context window, served on Chutes public compute",
+        "id": "tencent/Hy4",
+        "input_cost": 0.525,
+        "name": "Hy4",
+        "output_cost": 1.5625,
+        "tags": [
+          "reasoning"
+        ]
+      },
+      {
+        "cached_input_cost": 0.02,
+        "context_length": 262144,
+        "description": "Qwen3.5 27B on confidential TEE compute",
+        "id": "Qwen/Qwen3.5-27B-TEE",
+        "input_cost": 0.2,
+        "name": "Qwen3.5 27B (TEE)",
+        "output_cost": 1.75,
+        "tags": [
+          "vision",
+          "tools",
+          "reasoning"
         ]
       }
     ],

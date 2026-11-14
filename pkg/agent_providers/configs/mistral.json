@@ -5,8 +5,8 @@
   },
   "cost": {
     "currency": "USD",
-    "input_token_cost": 0.4,
-    "output_token_cost": 2.0
+    "input_token_cost": 0.7,
+    "output_token_cost": 2.1
   },
   "defaults": {
     "max_tokens": -1,
@@ -26,19 +26,21 @@
   "models": {
     "available_models": [],
     "default_context_limit": 262144,
-    "default_model": "devstral-2512",
+    "default_model": "mistral-large-4-0",
     "model_info": [
       {
-        "cached_input_cost": 0.05,
-        "context_length": 131072,
-        "description": "Mistral Large - Flagship model for complex tasks",
+        "cached_input_cost": 0.07,
+        "context_length": 1048576,
+        "description": "Mistral Large 4 — flagship general-purpose multimodal model with a 1M-token context window. This is Mistral's rolling alias, which currently resolves to Large 4.",
         "id": "mistral-large-latest",
-        "input_cost": 0.5,
+        "input_cost": 0.7,
         "name": "Mistral Large",
-        "output_cost": 1.5,
+        "output_cost": 2.1,
         "tags": [
+          "tools",
+          "vision",
           "reasoning",
-          "tools"
+          "structured_output"
         ]
       },
       {
@@ -146,19 +148,6 @@
         ]
       },
       {
-        "cached_input_cost": 0.2,
-        "context_length": 131072,
-        "description": "This is Mistral AI's flagship model, Mistral Large 2 (version mistral-large-2407). It's a proprietary weights-available model and excels at reasoning, code, JSON, chat, and more. Read the launch announcement [here](https://mistral.ai/news/mistral-large-2407/)....",
-        "id": "mistral-large-2407",
-        "input_cost": 2,
-        "name": "Mistral Large 2407",
-        "output_cost": 6,
-        "tags": [
-          "tools",
-          "structured_output"
-        ]
-      },
-      {
         "cached_input_cost": 0.05,
         "context_length": 262144,
         "description": "Mistral Large 3 2512 is Mistral’s most capable model to date, featuring a sparse mixture-of-experts architecture with 41B active parameters (675B total), and released under the Apache 2.0 license.",
@@ -166,20 +155,6 @@
         "input_cost": 0.5,
         "name": "Mistral: Mistral Large 3 2512",
         "output_cost": 1.5,
-        "tags": [
-          "tools",
-          "vision",
-          "structured_output"
-        ]
-      },
-      {
-        "cached_input_cost": 0.04,
-        "context_length": 131072,
-        "description": "Mistral Medium 3 is a high-performance enterprise-grade language model designed to deliver frontier-level capabilities at significantly reduced operational cost. It balances state-of-the-art reasoning and multimodal performance with 8× lower cost...",
-        "id": "mistral-medium-3",
-        "input_cost": 0.4,
-        "name": "Mistral: Mistral Medium 3",
-        "output_cost": 2,
         "tags": [
           "tools",
           "vision",
@@ -202,57 +177,6 @@
         ]
       },
       {
-        "cached_input_cost": 0.04,
-        "context_length": 131072,
-        "description": "Mistral Medium 3.1 is an updated version of Mistral Medium 3, which is a high-performance enterprise-grade language model designed to deliver frontier-level capabilities at significantly reduced operational cost. It balances...",
-        "id": "mistral-medium-3.1",
-        "input_cost": 0.4,
-        "name": "Mistral: Mistral Medium 3.1",
-        "output_cost": 2,
-        "tags": [
-          "tools",
-          "vision",
-          "structured_output"
-        ]
-      },
-      {
-        "cached_input_cost": 0.015,
-        "context_length": 131072,
-        "description": "A 12B parameter model with a 128k token context length built by Mistral in collaboration with NVIDIA. The model is multilingual, supporting English, French, German, Spanish, Italian, Portuguese, Chinese, Japanese,...",
-        "id": "mistral-nemo",
-        "input_cost": 0.15,
-        "name": "Mistral: Mistral Nemo",
-        "output_cost": 0.15,
-        "tags": [
-          "tools",
-          "structured_output"
-        ]
-      },
-      {
-        "cached_input_cost": 0.02,
-        "context_length": 32768,
-        "description": "Mistral Saba is a 24B-parameter language model specifically designed for the Middle East and South Asia, delivering accurate and contextually relevant responses while maintaining efficient performance. Trained on curated regional...",
-        "id": "mistral-saba",
-        "input_cost": 0.2,
-        "name": "Mistral: Saba",
-        "output_cost": 0.6,
-        "tags": [
-          "tools",
-          "structured_output"
-        ]
-      },
-      {
-        "context_length": 32768,
-        "description": "Mistral Small 3 is a 24B-parameter language model optimized for low-latency performance across common AI tasks. Released under the Apache 2.0 license, it features both pre-trained and instruction-tuned versions designed...",
-        "id": "mistral-small-24b-instruct-2501",
-        "input_cost": 0.05,
-        "name": "Mistral: Mistral Small 3",
-        "output_cost": 0.08,
-        "tags": [
-          "structured_output"
-        ]
-      },
-      {
         "cached_input_cost": 0.015,
         "context_length": 262144,
         "description": "Mistral Small 4 is the next major release in the Mistral Small family, unifying the capabilities of several flagship Mistral models into a single system. It combines strong reasoning from...",
@@ -268,44 +192,6 @@
         ]
       },
       {
-        "context_length": 128000,
-        "description": "Mistral Small 3.1 24B Instruct is an upgraded variant of Mistral Small 3 (2501), featuring 24 billion parameters with advanced multimodal capabilities. It provides state-of-the-art performance in text-based reasoning and...",
-        "id": "mistral-small-3.1-24b-instruct",
-        "input_cost": 0.351,
-        "name": "Mistral: Mistral Small 3.1 24B",
-        "output_cost": 0.555,
-        "tags": [
-          "vision"
-        ]
-      },
-      {
-        "cached_input_cost": 0.01,
-        "context_length": 256000,
-        "description": "Mistral-Small-3.2-24B-Instruct-2506 is an updated 24B parameter model from Mistral optimized for instruction following, repetition reduction, and improved function calling. Compared to the 3.1 release, version 3.2 significantly improves accuracy on...",
-        "id": "mistral-small-3.2-24b-instruct",
-        "input_cost": 0.1,
-        "name": "Mistral: Mistral Small 3.2 24B",
-        "output_cost": 0.3,
-        "tags": [
-          "tools",
-          "vision",
-          "structured_output"
-        ]
-      },
-      {
-        "cached_input_cost": 0.2,
-        "context_length": 65536,
-        "description": "Mistral's official instruct fine-tuned version of [Mixtral 8x22B](/models/mistralai/mixtral-8x22b). It uses 39B active parameters out of 141B, offering unparalleled cost efficiency for its size. Its strengths include: - strong math, coding,...",
-        "id": "mixtral-8x22b-instruct",
-        "input_cost": 2,
-        "name": "Mistral: Mixtral 8x22B Instruct",
-        "output_cost": 6,
-        "tags": [
-          "tools",
-          "structured_output"
-        ]
-      },
-      {
         "cached_input_cost": 0.01,
         "context_length": 32000,
         "description": "Voxtral Small is an enhancement of Mistral Small 3, incorporating state-of-the-art audio input capabilities while retaining best-in-class text performance. It excels at speech transcription, translation and audio understanding. Input audio...",
@@ -313,19 +199,6 @@
         "input_cost": 0.1,
         "name": "Mistral: Voxtral Small 24B 2507",
         "output_cost": 0.4,
-        "tags": [
-          "tools",
-          "structured_output"
-        ]
-      },
-      {
-        "cached_input_cost": 0.04,
-        "context_length": 262144,
-        "description": "Devstral 2 is a state-of-the-art open-source model by Mistral AI specializing in agentic coding. It is a 123B-parameter dense transformer model supporting a 256K context window. Devstral 2 excels at using tools to explore codebases, editing multiple files, and powering software engineering agents.",
-        "id": "devstral-2512",
-        "input_cost": 0.4,
-        "name": "Mistral: Devstral 2 2512",
-        "output_cost": 2.0,
         "tags": [
           "tools",
           "structured_output"
@@ -388,20 +261,6 @@
         ]
       },
       {
-        "cached_input_cost": 0.02,
-        "context_length": 131072,
-        "description": "Mistral Medium 3.1 is an updated version of Mistral Medium 3, which is a high-performance enterprise-grade language model designed to deliver frontier-level capabilities at significantly reduced operational cost. It balances performance and cost for enterprise workloads.",
-        "id": "mistral-medium-3.1:batch",
-        "input_cost": 0.2,
-        "name": "Mistral: Mistral Medium 3.1 (batch)",
-        "output_cost": 1,
-        "tags": [
-          "tools",
-          "vision",
-          "structured_output"
-        ]
-      },
-      {
         "cached_input_cost": 0.0075,
         "context_length": 262144,
         "description": "Mistral Small 4 is the next major release in the Mistral Small family, unifying the capabilities of several flagship Mistral models into a single system. It combines strong reasoning from larger models with low latency and cost efficiency.",
@@ -440,7 +299,7 @@
       "mistral-large-2407": 131072,
       "mistral-large-2411": 131072,
       "mistral-large-4-0": 1048576,
-      "mistral-large-latest": 131072,
+      "mistral-large-latest": 1048576,
       "mistral-medium-2312": 32768,
       "mistral-medium-latest": 32768,
       "mistral-small-2409": 32768,

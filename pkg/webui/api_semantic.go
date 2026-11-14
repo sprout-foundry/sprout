@@ -139,27 +139,12 @@ type semanticToolHover = lspsemantic.ToolHover
 
 type semanticToolResult = lspsemantic.ToolResult
 
-var semanticAdapterRegistry = lspsemantic.NewRegistry()
+// The adapters are the process's shared ones (lspsemantic.DefaultRegistry),
+// which the agent's code navigation tools use too.
+var semanticAdapterRegistry = lspsemantic.DefaultRegistry()
 
 // semanticSessionPools holds the pools so startSemanticEviction can reach them.
-var semanticSessionPools []*lspsemantic.SessionPool
-
-func init() {
-	tsPool := lspsemantic.NewTypeScriptSessionPool(10 * time.Minute)
-	goPool := lspsemantic.NewGoSessionPool(10 * time.Minute)
-	semanticSessionPools = []*lspsemantic.SessionPool{tsPool, goPool}
-	semanticAdapterRegistry.RegisterSingleton(
-		tsPool,
-		"typescript",
-		"typescript-jsx",
-		"javascript",
-		"javascript-jsx",
-	)
-	semanticAdapterRegistry.RegisterSingleton(goPool, "go")
-	semanticAdapterRegistry.Register("python", lspsemantic.NewPythonAdapter)
-	semanticAdapterRegistry.Register("rust", lspsemantic.NewRustAdapter)
-	semanticAdapterRegistry.RegisterAliases(lspsemantic.NewCppAdapter, "c", "cpp")
-}
+var semanticSessionPools = lspsemantic.DefaultSessionPools()
 
 // startSemanticEviction runs a background goroutine that evicts idle language
 // server sessions. It stops when ctx is cancelled.

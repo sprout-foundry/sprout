@@ -95,7 +95,7 @@ const typeScriptAnalyzerAnalyzeScript = `function analyze(input) {
   if (method === 'rename') {
     const pos = input.position || { line: 1, column: 1 };
     const offset = lineColToOffset(fileContent, pos.line, pos.column);
-    const renameInfo = ls.getRenameInfoAtPosition(filePath, offset);
+    const renameInfo = ls.getRenameInfo(filePath, offset, {});
     if (!renameInfo || !renameInfo.canRename) {
       return {
         capabilities: { diagnostics: true, definition: true, hover: true, rename: true, references: true },
@@ -103,7 +103,7 @@ const typeScriptAnalyzerAnalyzeScript = `function analyze(input) {
       };
     }
     // Find all references in the current file to get locations
-    const refs = ls.findReferences(filePath, offset) || [];
+    const refs = (ls.findReferences(filePath, offset) || []).flatMap((sym) => sym.references || []);
     const currentFileRefs = refs.filter(r => r.fileName === filePath);
     const locations = [];
     const seen = new Set();
@@ -128,7 +128,7 @@ const typeScriptAnalyzerAnalyzeScript = `function analyze(input) {
   if (method === 'references') {
     const pos = input.position || { line: 1, column: 1 };
     const offset = lineColToOffset(fileContent, pos.line, pos.column);
-    const renameInfo = ls.getRenameInfoAtPosition(filePath, offset);
+    const renameInfo = ls.getRenameInfo(filePath, offset, {});
     if (!renameInfo || !renameInfo.canRename) {
       return {
         capabilities: { diagnostics: true, definition: true, hover: true, rename: true, references: true },
@@ -136,7 +136,7 @@ const typeScriptAnalyzerAnalyzeScript = `function analyze(input) {
       };
     }
     const symbolName = renameInfo.displayName || '<symbol>';
-    const refs = ls.findReferences(filePath, offset) || [];
+    const refs = (ls.findReferences(filePath, offset) || []).flatMap((sym) => sym.references || []);
     const locations = [];
     const seen = new Set();
     for (const ref of refs) {

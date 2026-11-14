@@ -154,7 +154,7 @@ func runGoReferences(input ToolInput) (ToolResult, error) {
 	}
 	posArg := fmt.Sprintf("%s:%d:%d", input.FilePath, pos.Line, pos.Column)
 
-	cmd := exec.Command(goplsPath, "references", "-c", "0", posArg)
+	cmd := exec.Command(goplsPath, "references", "-d", posArg)
 	cmd.Dir = input.WorkspaceRoot
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

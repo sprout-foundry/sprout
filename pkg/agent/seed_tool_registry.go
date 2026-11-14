@@ -48,17 +48,17 @@ func newSeedToolRegistryWithPublisher(agent *Agent, ep core.EventPublisher) *cor
 		if agent != nil {
 			// LCM tool allowlist: skip tools not in the curated set.
 			if allowSet != nil {
-				if _, ok := allowSet[h.Name()]; !ok {
+				if !toolAllowed(allowSet, h.Name()) {
 					continue
 				}
 			}
 			if personaSet != nil {
-				if _, ok := personaSet[h.Name()]; !ok {
+				if !toolAllowed(personaSet, h.Name()) {
 					continue
 				}
 			}
 			if providerSet != nil {
-				if _, ok := providerSet[h.Name()]; !ok {
+				if !toolAllowed(providerSet, h.Name()) {
 					continue
 				}
 			}

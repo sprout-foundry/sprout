@@ -39,7 +39,7 @@ type CustomProviderConfig struct {
 	TopP                   *float64                    `json:"top_p,omitempty"`               // Optional default top_p
 	Parameters             map[string]interface{}      `json:"parameters,omitempty"`          // Optional provider-specific default parameters
 	RequiresAPIKey         bool                        `json:"requires_api_key"`
-	ToolCalls              []string                    `json:"tool_calls,omitempty"`               // Optional explicit tool allowlist; when set, only these tools are exposed
+	ToolCalls              []string                    `json:"tool_calls,omitempty"`               // Optional explicit tool allowlist; when set, only these tools are exposed. An entry ending in "*" admits a prefix ("mcp_*": every MCP tool)
 	EnvVar                 string                      `json:"env_var,omitempty"`                  // Environment variable name for API key
 	ChunkTimeoutMs         int                         `json:"chunk_timeout_ms,omitempty"`         // Streaming chunk timeout in milliseconds
 	FirstChunkTimeoutMs    int                         `json:"first_chunk_timeout_ms,omitempty"`   // Deadline for the first streamed chunk (capped by chunk_timeout_ms)

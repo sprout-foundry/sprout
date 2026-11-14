@@ -142,3 +142,23 @@ func TestNewAgentWithLayersInWorkspace_CarriesWorkspaceRoot(t *testing.T) {
 
 	assert.Equal(t, workspace, a.GetWorkspaceRoot())
 }
+
+// A remote server's headers reach the manager: an HTTP server whose auth
+// header was dropped on load could never authenticate.
+func TestInitializeMCP_KeepsServerHeaders(t *testing.T) {
+	t.Setenv("SPROUT_MCP_AUTO_DISCOVER", "false")
+	t.Setenv("GITHUB_PERSONAL_ACCESS_TOKEN", "")
+
+	agent := newTestAgent(t)
+	workspace := t.TempDir()
+	writeWorkspaceMCPConfig(t, workspace, map[string]mcp.MCPServerConfig{
+		"remote": {Name: "remote", Type: "http", URL: "https://mcp.example.com/mcp",
+			Headers: map[string]string{"Authorization": "Bearer {{credential:mcp/remote/TOKEN}}"}},
+	})
+	agent.SetWorkspaceRoot(workspace)
+	require.NoError(t, agent.initializeMCP())
+
+	srv, ok := agent.mcpSub.GetManager().GetServer("remote")
+	require.True(t, ok)
+	assert.Equal(t, "Bearer {{credential:mcp/remote/TOKEN}}", srv.GetConfig().Headers["Authorization"])
+}

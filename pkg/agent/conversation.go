@@ -221,10 +221,25 @@ func makeAllowedToolSet(toolNames []string) map[string]struct{} {
 	return toolSet
 }
 
+// toolAllowed reports whether a tool allowlist admits name: by its exact
+// name, or by an entry ending in "*" that name starts with ("mcp_*" admits
+// every MCP tool, "mcp_github_*" one server's).
+func toolAllowed(allowed map[string]struct{}, name string) bool {
+	if _, ok := allowed[name]; ok {
+		return true
+	}
+	for entry := range allowed {
+		if prefix, ok := strings.CutSuffix(entry, "*"); ok && strings.HasPrefix(name, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 func filterToolsByName(tools []api.Tool, allowed map[string]struct{}) []api.Tool {
 	filtered := make([]api.Tool, 0, len(tools))
 	for _, tool := range tools {
-		if _, ok := allowed[tool.Function.Name]; !ok {
+		if !toolAllowed(allowed, tool.Function.Name) {
 			continue
 		}
 		filtered = append(filtered, tool)

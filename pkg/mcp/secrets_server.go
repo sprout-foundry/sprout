@@ -262,6 +262,47 @@ func MigrateHeaderSecretsFromServer(serverName string, config *MCPServerConfig) 
 	return len(pending), nil
 }
 
+// resolveHeaderRefs replaces each credential placeholder in a header value
+// with the credential, so a value may be one ("{{credential:mcp/s/TOKEN}}")
+// or sit inside text ("Bearer {{credential:mcp/s/TOKEN}}"). A placeholder
+// whose credential is not set drops the header (false): sending it with the
+// placeholder or an empty token would only fail the server's auth.
+func resolveHeaderRefs(serverName, headerName, value string) (string, bool) {
+	var out strings.Builder
+	rest := value
+	for {
+		i := strings.Index(rest, "{{credential:")
+		if i < 0 {
+			out.WriteString(rest)
+			return out.String(), true
+		}
+		j := strings.Index(rest[i:], "}}")
+		if j < 0 {
+			out.WriteString(rest)
+			return out.String(), true
+		}
+		ref := rest[i : i+j+2]
+		refServer, credName, ok := ParseSecretRef(ref)
+		if !ok {
+			return "", false
+		}
+		// The key is taken from the placeholder itself so a header can
+		// reference a credential stored under either namespace.
+		key := CredentialKey(refServer, credName)
+		stored, _, getErr := credentials.GetFromActiveBackend(key)
+		if getErr != nil || stored == "" {
+			stored = os.Getenv(credName)
+		}
+		if stored == "" {
+			log.Printf("[mcp] header %s for %s references credential %s which is not set", headerName, serverName, key)
+			return "", false
+		}
+		out.WriteString(rest[:i])
+		out.WriteString(stored)
+		rest = rest[i+j+2:]
+	}
+}
+
 // ResolveCredentialsForServer resolves all credential placeholders for a server
 // and returns a map of env var name -> actual value.
 // This is used when starting an MCP server to build the full environment.
@@ -386,25 +427,11 @@ func buildRequestHeaders(serverName string, config *MCPServerConfig) (map[string
 		if value == "" {
 			continue
 		}
-		if IsSecretRef(value) {
-			refServer, credName, ok := ParseSecretRef(value)
-			if !ok {
-				continue
-			}
-			// The key is taken from the placeholder itself so a header can
-			// reference a credential stored under either namespace.
-			key := CredentialKey(refServer, credName)
-			stored, _, getErr := credentials.GetFromActiveBackend(key)
-			if getErr != nil || stored == "" {
-				stored = os.Getenv(credName)
-			}
-			if stored == "" {
-				log.Printf("[mcp] header %s for %s references credential %s which is not set", name, serverName, key)
-				continue
-			}
-			value = stored
+		resolved, ok := resolveHeaderRefs(serverName, name, value)
+		if !ok {
+			continue
 		}
-		headers[name] = value
+		headers[name] = resolved
 	}
 
 	derived := make(map[string]string)

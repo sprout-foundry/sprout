@@ -146,6 +146,7 @@ request).
 | OAuth 2.1 (Figma, Linear, Notion, GitHub remote) | Add the HTTP server, then `mcp_refresh login`. Tokens refresh automatically; a hard 401 means re-login. |
 | Bearer token | `mcp_refresh set-credential` with a token-shaped env var name (`STRIPE_API_KEY`, `*_TOKEN`, `*_API_KEY`). Sent as `Authorization: Bearer <value>`. |
 | Custom header | Set it in the server's `headers` map with a `{{credential:...}}` placeholder, then `set-credential` under the same name. |
+| Header with fixed text | The placeholder can sit inside the value, e.g. `"Authorization": "Bearer {{credential:mcp/acme/ACME_TOKEN}}"`. A credential that is not in the store is read from the environment variable of the same name (`ACME_TOKEN`); when neither is set, the header is not sent. |
 
 Stripe's remote MCP server takes an API key as a bearer token; it does not
 offer the dynamic client registration the OAuth flow requires, so use the

@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/net/html"
+
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
@@ -60,6 +62,9 @@ func GetSearchResults(query string, cfg *configuration.Manager) ([]SearchResult,
 	results, err := performDuckDuckGoSearch(query, logger)
 	if err != nil {
 		return nil, fmt.Errorf("both Jina and DuckDuckGo searches failed: %w", err)
+	}
+	if len(results) == 0 {
+		return results, nil
 	}
 
 	// Cache the results
@@ -147,116 +152,126 @@ func (d *DuckDuckGoSearchProvider) Search(query string, logger *utils.Logger) ([
 	return performDuckDuckGoSearch(query, logger)
 }
 
-// performDuckDuckGoSearch performs a search using DuckDuckGo Instant Answer API
+// duckDuckGoHTMLURL is DuckDuckGo's HTML results page, which lists web
+// results; its Instant Answer API (api.duckduckgo.com) answers only a few
+// encyclopedic queries and returns nothing for most searches.
+var duckDuckGoHTMLURL = "https://html.duckduckgo.com/html/"
+
+// duckDuckGoMaxBody bounds the results page read.
+const duckDuckGoMaxBody = 2 << 20
+
+// performDuckDuckGoSearch searches DuckDuckGo's HTML results page. No result
+// is an empty list, never a made-up one.
 func performDuckDuckGoSearch(query string, logger *utils.Logger) ([]SearchResult, error) {
 	logger.LogProcessStep(fmt.Sprintf("Performing DuckDuckGo search for query: %s", query))
 
-	// Use DuckDuckGo Instant Answer API
-	ddgURL := fmt.Sprintf("https://api.duckduckgo.com/?q=%s&format=json&no_html=1&skip_disambig=1", url.QueryEscape(query))
-
-	req, err := http.NewRequest("GET", ddgURL, nil)
+	form := url.Values{"q": {query}}
+	req, err := http.NewRequest(http.MethodPost, duckDuckGoHTMLURL, strings.NewReader(form.Encode()))
 	if err != nil {
-		logger.Logf("Failed to create DuckDuckGo request: %v", err)
 		return nil, fmt.Errorf("failed to create duckduckgo request: %w", err)
 	}
-
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; sprout/1.0)")
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Accept", "text/html")
 
 	client := &http.Client{Timeout: 30 * time.Second}
-	logger.Logf("Making HTTP request to DuckDuckGo API: %s", req.URL.String())
 	resp, err := client.Do(req)
 	if err != nil {
 		logger.Logf("DuckDuckGo search request failed: %v", err)
 		return nil, fmt.Errorf("failed to perform duckduckgo search: %w", err)
 	}
 	defer resp.Body.Close()
-
 	if resp.StatusCode != http.StatusOK {
-		logger.Logf("DuckDuckGo returned status %d", resp.StatusCode)
 		return nil, fmt.Errorf("duckduckgo returned status %d", resp.StatusCode)
 	}
-
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, duckDuckGoMaxBody))
 	if err != nil {
-		logger.Logf("Failed to read DuckDuckGo response body: %v", err)
 		return nil, fmt.Errorf("failed to read duckduckgo response body: %w", err)
 	}
-
-	// Parse DuckDuckGo response
-	results, err := parseDuckDuckGoResponse(body, query)
-	if err != nil {
-		logger.Logf("Failed to parse DuckDuckGo response: %v", err)
-		return nil, fmt.Errorf("failed to parse duckduckgo response: %w", err)
-	}
-
+	results := parseDuckDuckGoHTML(string(body))
 	logger.Logf("Received %d search results from DuckDuckGo", len(results))
 	return results, nil
 }
 
-// parseDuckDuckGoResponse parses DuckDuckGo API response
-func parseDuckDuckGoResponse(body []byte, query string) ([]SearchResult, error) {
-	var ddgResponse struct {
-		Abstract       string `json:"Abstract"`
-		AbstractText   string `json:"AbstractText"`
-		AbstractURL    string `json:"AbstractURL"`
-		AbstractSource string `json:"AbstractSource"`
-		RelatedTopics  []struct {
-			FirstURL string `json:"FirstURL"`
-			Text     string `json:"Text"`
-			Result   string `json:"Result"`
-		} `json:"RelatedTopics"`
+// parseDuckDuckGoHTML reads the results page: each title link (class
+// result__a, its address behind DuckDuckGo's redirect) and the snippet after
+// it (class result__snippet).
+func parseDuckDuckGoHTML(src string) []SearchResult {
+	doc, err := html.Parse(strings.NewReader(src))
+	if err != nil {
+		return nil
 	}
-
-	if err := json.Unmarshal(body, &ddgResponse); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal duckduckgo response: %w", err)
+	hasClass := func(n *html.Node, class string) bool {
+		for _, a := range n.Attr {
+			if a.Key == "class" {
+				for _, c := range strings.Fields(a.Val) {
+					if c == class {
+						return true
+					}
+				}
+			}
+		}
+		return false
 	}
-
+	attr := func(n *html.Node, key string) string {
+		for _, a := range n.Attr {
+			if a.Key == key {
+				return a.Val
+			}
+		}
+		return ""
+	}
+	text := func(n *html.Node) string {
+		var b strings.Builder
+		var walk func(*html.Node)
+		walk = func(n *html.Node) {
+			if n.Type == html.TextNode {
+				b.WriteString(n.Data)
+			}
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				walk(c)
+			}
+		}
+		walk(n)
+		return strings.Join(strings.Fields(b.String()), " ")
+	}
 	var results []SearchResult
-
-	// Add abstract as first result if available
-	if ddgResponse.AbstractText != "" {
-		results = append(results, SearchResult{
-			Title:       fmt.Sprintf("About: %s", query),
-			URL:         ddgResponse.AbstractURL,
-			Description: ddgResponse.AbstractText,
-		})
-	}
-
-	// Add related topics
-	for i, topic := range ddgResponse.RelatedTopics {
-		// Limit to first 10 results to avoid overwhelming
-		if i >= 10 {
-			break
+	var walk func(*html.Node)
+	walk = func(n *html.Node) {
+		if n.Type == html.ElementNode && n.Data == "a" {
+			switch {
+			case hasClass(n, "result__a"):
+				results = append(results, SearchResult{Title: text(n), URL: duckDuckGoTarget(attr(n, "href"))})
+			case hasClass(n, "result__snippet") && len(results) > 0 && results[len(results)-1].Description == "":
+				results[len(results)-1].Description = text(n)
+			}
 		}
-
-		// Extract clean text from HTML if present
-		text := topic.Text
-		if text == "" && topic.Result != "" {
-			// Simple HTML stripping - remove tags
-			text = strings.ReplaceAll(topic.Result, "<[^>]*>", "")
-			text = strings.TrimSpace(text)
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
 		}
-
-		if text == "" {
-			text = fmt.Sprintf("Related topic for: %s", query)
+	}
+	walk(doc)
+	out := results[:0]
+	for _, r := range results {
+		if r.URL != "" && r.Title != "" {
+			out = append(out, r)
 		}
-
-		results = append(results, SearchResult{
-			Title:       fmt.Sprintf("Result %d", i+1),
-			URL:         topic.FirstURL,
-			Description: text,
-		})
 	}
+	return out
+}
 
-	// If no results found, provide a fallback
-	if len(results) == 0 {
-		results = append(results, SearchResult{
-			Title:       fmt.Sprintf("Search results for: %s", query),
-			URL:         fmt.Sprintf("https://duckduckgo.com/?q=%s", url.QueryEscape(query)),
-			Description: "No specific results found. Use this URL to manually search DuckDuckGo.",
-		})
+// duckDuckGoTarget is the address behind a result link: DuckDuckGo wraps it
+// as //duckduckgo.com/l/?uddg=<address>.
+func duckDuckGoTarget(href string) string {
+	u, err := url.Parse(href)
+	if err != nil {
+		return ""
 	}
-
-	return results, nil
+	if target := u.Query().Get("uddg"); target != "" {
+		return target
+	}
+	if u.Scheme == "https" || u.Scheme == "http" {
+		return u.String()
+	}
+	return ""
 }

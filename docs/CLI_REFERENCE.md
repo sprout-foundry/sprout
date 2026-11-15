@@ -384,15 +384,17 @@ sprout gpu unlink
 
 | Flag | Description |
 |------|-------------|
-| `--engine <host:port>` | The engine as this machine reaches it (default `127.0.0.1:11434`, Ollama; llama.cpp 8080, vLLM 8000, LM Studio 1234) |
+| `--engine <host:port>` | The engine as this machine reaches it (default `127.0.0.1:11434`, Ollama; llama.cpp 8080, vLLM 8000, LM Studio 1234). When it is not given and nothing answers at the default, Apple Silicon builds link with sinter instead |
 | `--engine-key <key>` | The engine's own API key, if it requires one (kept in the credential store) |
 | `--name <name>` | Name shown on the platform (default: the hostname) |
 | `--platform <url>` | Platform URL (default `$SPROUT_PLATFORM_URL`, else the previous link) |
 | `--no-browser` | Print the approval URL instead of opening a browser |
 | `--sinter` | Serve a model in-process with sinter instead of a server at `--engine` (Apple Silicon builds) |
-| `--model <name\|dir>` | With `--sinter`: a catalog name (e.g. `qwen3.5-9b`), an installed model, or a model directory; default: the model recommended for this machine's memory. A missing catalog model and the MLX runtime are downloaded once |
+| `--model <name\|dir>` | The model to serve with sinter (implies `--sinter`): a catalog name (e.g. `qwen3.5-9b`), an installed model, or a model directory; default: the model recommended for this machine's memory. A missing catalog model and the MLX runtime are downloaded once |
 
-With `--sinter`, `sprout gpu start` loads the model and serves it through the
+`sprout gpu start` warns when a linked engine does not answer, and keeps the
+tunnel open: the platform picks up the engine's models within a minute of
+it starting. With `--sinter`, `sprout gpu start` loads the model and serves it through the
 tunnel itself: no separate engine and no local port. Requests are served one
 at a time, as the GPU runs one generation at a time.
 

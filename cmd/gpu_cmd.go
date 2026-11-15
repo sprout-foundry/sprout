@@ -26,7 +26,9 @@ var gpuCmd = &cobra.Command{
 	Short: "Link a GPU you run to your platform account",
 	Long: `Link an inference engine this machine runs (Ollama, llama.cpp, vLLM, MLX,
 LM Studio: anything that answers OpenAI's /v1/chat/completions) to your
-platform account, so your tasks and Sprout can run on its models.
+platform account, so your tasks and Sprout can run on its models. On an
+Apple Silicon Mac, sprout can serve the model itself with sinter (--sinter);
+it does so too when no --engine is given and nothing answers at Ollama's port.
 
 The agent connects out to the platform: no port is opened on your network,
 and the platform reaches only the engine's model-serving paths.`,
@@ -49,13 +51,13 @@ func init() {
 		Args:  cobra.NoArgs,
 		RunE:  runGPULink,
 	}
-	linkCmd.Flags().StringVar(&gpuEngine, "engine", gpulink.DefaultEngine, "host:port of the engine as this machine reaches it (Ollama 11434, llama.cpp 8080, vLLM 8000, LM Studio 1234)")
+	linkCmd.Flags().StringVar(&gpuEngine, "engine", gpulink.DefaultEngine, "host:port of the engine as this machine reaches it (Ollama 11434, llama.cpp 8080, vLLM 8000, LM Studio 1234); when not given and nothing answers there, Apple Silicon Macs serve with sinter")
 	linkCmd.Flags().StringVar(&gpuEngineKey, "engine-key", "", "the engine's own API key, if it requires one (stored in the credential store)")
 	linkCmd.Flags().StringVar(&gpuName, "name", "", "name shown on the platform (default: this machine's hostname)")
 	linkCmd.Flags().StringVar(&gpuPlatform, "platform", "", "platform URL (default $SPROUT_PLATFORM_URL, else the previous link, else "+runner.DefaultPlatformURL+")")
 	linkCmd.Flags().BoolVar(&gpuNoBrowser, "no-browser", false, "print the approval URL without opening a browser (SSH sessions, headless machines)")
 	linkCmd.Flags().BoolVar(&gpuSinter, "sinter", false, "serve a model in-process with sinter instead of a server at --engine (Apple Silicon)")
-	linkCmd.Flags().StringVar(&gpuModel, "model", "", "with --sinter: the model to serve (a catalog name such as qwen3.5-9b, an installed model, or a model directory; default: the one recommended for this machine), downloaded if missing")
+	linkCmd.Flags().StringVar(&gpuModel, "model", "", "the model to serve with sinter (a catalog name such as qwen3.5-9b, an installed model, or a model directory; default: the one recommended for this machine), downloaded if missing; implies --sinter")
 
 	gpuCmd.AddCommand(
 		linkCmd,
@@ -86,11 +88,13 @@ func runGPULink(cmd *cobra.Command, _ []string) error {
 	if u, err := url.Parse(platform); err != nil || (u.Scheme != "https" && u.Hostname() != "localhost" && u.Hostname() != "127.0.0.1") {
 		return fmt.Errorf("platform URL must be https (got %q)", platform)
 	}
-	if !gpuSinter {
+	engineSet := cmd.Flags().Changed("engine")
+	useSinter := gpuSinter || (gpuModel != "" && !engineSet)
+	if !useSinter {
 		if err := validEngine(gpuEngine); err != nil {
 			return err
 		}
-	} else if cmd.Flags().Changed("engine") {
+	} else if engineSet {
 		return errors.New("--sinter serves a model in-process; pass --model instead of --engine")
 	}
 	name := gpuName
@@ -105,7 +109,18 @@ func runGPULink(cmd *cobra.Command, _ []string) error {
 	// a typo shows here rather than as a GPU that never answers.
 	engine := gpuEngine
 	sinterDir := ""
-	if gpuSinter {
+	var engineModels []string
+	var engineErr error
+	if !useSinter {
+		engineModels, engineErr = gpulink.EngineModels(ctx, gpuEngine, gpuEngineKey)
+		if engineErr != nil && !engineSet && gpulink.SinterAvailable {
+			// No engine was named and none runs at Ollama's port: serve
+			// in-process rather than link a GPU that cannot answer.
+			_, _ = fmt.Fprintf(out, "Nothing answers at %s (Ollama's port), so this links a model served in-process with sinter.\nTo link a server you run instead, start it and pass --engine host:port.\n\n", gpuEngine)
+			useSinter = true
+		}
+	}
+	if useSinter {
 		dir, model, err := prepareSinterModel(ctx, out, gpuModel)
 		if err != nil {
 			return err
@@ -113,11 +128,11 @@ func runGPULink(cmd *cobra.Command, _ []string) error {
 		sinterDir = dir
 		engine = gpulink.EngineSinter + " (" + model + ")"
 		_, _ = fmt.Fprintf(out, "Serving %s in-process with sinter.\n\n", model)
-	} else if models, err := gpulink.EngineModels(ctx, gpuEngine, gpuEngineKey); err != nil {
-		_, _ = fmt.Fprintf(out, "Note: the engine at %s did not answer /v1/models (%v). Linking anyway; start it before using the GPU.\n\n", gpuEngine, err)
-	} else if len(models) > 0 {
-		_, _ = fmt.Fprintf(out, "The engine at %s serves: %s\n\n", gpuEngine, strings.Join(models, ", "))
-		engine = gpuEngine + " (" + strings.Join(models, ", ") + ")"
+	} else if engineErr != nil {
+		_, _ = fmt.Fprintf(out, "Note: the engine at %s did not answer /v1/models (%v). Linking anyway; start it before using the GPU.\n\n", gpuEngine, engineErr)
+	} else if len(engineModels) > 0 {
+		_, _ = fmt.Fprintf(out, "The engine at %s serves: %s\n\n", gpuEngine, strings.Join(engineModels, ", "))
+		engine = gpuEngine + " (" + strings.Join(engineModels, ", ") + ")"
 	}
 
 	var creds *gpulink.Credentials
@@ -156,7 +171,7 @@ func runGPULink(cmd *cobra.Command, _ []string) error {
 	st.Account = creds.AccountEmail
 	st.Engine = gpuEngine
 	st.Model = ""
-	if gpuSinter {
+	if useSinter {
 		st.Engine = gpulink.EngineSinter
 		st.Model = sinterDir
 	}
@@ -227,6 +242,10 @@ func runGPUStart(cmd *cobra.Command, _ []string) error {
 		defer unload()
 		agent.Local = handler
 		log.Info("serving with sinter", "model", model)
+	} else if _, err := gpulink.EngineModels(ctx, st.Engine, agent.EngineKey); err != nil {
+		// The tunnel still opens: the engine may start later, and the
+		// platform picks its models up within a minute.
+		log.Warn("the engine is not answering; requests fail until it starts (or link again with `sprout gpu link --sinter`)", "engine", st.Engine, "err", err)
 	}
 	log.Info("starting", "platform", st.PlatformURL, "engine", st.Engine)
 	return agent.Run(ctx)

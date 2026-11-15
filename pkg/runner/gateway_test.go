@@ -233,9 +233,11 @@ func TestRunnerRefusesUnservableGatewayTasks(t *testing.T) {
 		t.Errorf("a key-less gateway task must be refused; got %+v", res)
 	}
 
-	// A repo on a gateway task: refuse (gateway workspaces are repo-less).
-	if res := start("gw-repo", func(tk *WorkspaceTask) { tk.RepoURL = "https://github.com/o/r" }); res.Status != "failed" {
-		t.Errorf("a gateway task naming a repo must be refused; got %+v", res)
+	// A repo on a gateway task starts: the gateway is where the agent's
+	// models come from, the repo is what it works on (the platform sends the
+	// gateway on ordinary repo workspaces).
+	if res := start("gw-repo", func(tk *WorkspaceTask) { tk.RepoURL = "https://github.com/o/r" }); res.Status != "running" {
+		t.Errorf("a gateway task naming a repo must start; got %+v", res)
 	}
 
 	// A well-formed gateway task starts.

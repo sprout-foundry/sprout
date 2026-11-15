@@ -67,10 +67,10 @@ func (l *HostLauncher) Start(ctx context.Context, task WorkspaceTask) (*Workspac
 	switch {
 	case localDir != "":
 		// Local-directory workspace: the user's directory is the root.
-	case IsGatewayProvider(task.LLMProvider):
-		// Gateway workspace: no repo by design — it runs in the
-		// runner-owned workspace directory with the gateway's models
-		// as the backend.
+	case IsGatewayProvider(task.LLMProvider) && strings.TrimSpace(task.RepoURL) == "":
+		// A gateway workspace with no repo runs in an empty runner-owned
+		// directory. (With a repo, the gateway is only where the agent's
+		// models come from: the repo is cloned as for any workspace.)
 		repo = filepath.Join(dir, "repo")
 		if err := os.MkdirAll(repo, 0o700); err != nil {
 			return nil, fmt.Errorf("creating workspace dir: %w", err)

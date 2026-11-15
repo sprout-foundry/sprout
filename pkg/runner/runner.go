@@ -226,8 +226,6 @@ func (r *Runner) refusal(t *WorkspaceTask) string {
 			return "gateway workspaces need host execution (native or bare-metal mode)"
 		case t.LLMKey == "":
 			return "gateway start task carries no workspace key"
-		case t.RepoURL != "":
-			return "gateway workspaces are repo-less; the start task names a repo"
 		}
 		if _, err := gatewayEndpoint(t.GatewayURL, t.PlatformAPIURL); err != nil {
 			return err.Error()

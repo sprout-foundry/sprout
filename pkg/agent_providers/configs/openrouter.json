@@ -1956,19 +1956,18 @@
       },
       {
         "context_length": 262144,
-        "description": "Morph's fastest apply model for code edits. ~10,500 tokens/sec with 96% accuracy for rapid code transformations. The model requires the prompt to be in the following format: \u003cinstruction\u003e{instruction}\u003c/instruction\u003e \u003ccode\u003e{initial_code}\u003c/code\u003e \u003cupdate\u003e{edit_snippet}\u003c/update\u003e...",
+        "description": "Morph's fastest apply model for code edits. ~10,500 tokens/sec with 96% accuracy for rapid code transformations.\n\nThe model requires the prompt to be in the following format: \n\u003cinstruction\u003e{instruction}\u003c/instruction\u003e\n\u003ccode\u003e{initial_code}\u003c/code\u003e\n\u003cupdate\u003e{edit_snippet}\u003c/update\u003e\n\nZero Data Retention is enabled for Morph. Learn more about this model in their [documentation](https://docs.morphllm.com/quickstart)",
         "id": "morph/morph-v3-fast",
         "input_cost": 0.8,
         "name": "Morph: Morph V3 Fast",
         "output_cost": 1.2,
         "tags": [
-          "tools",
-          "reasoning"
+          "structured_output"
         ]
       },
       {
         "context_length": 262144,
-        "description": "Morph's high-accuracy apply model for complex code edits. ~4,500 tokens/sec with 98% accuracy for precise code transformations. The model requires the prompt to be in the following format: \u003cinstruction\u003e{instruction}\u003c/instruction\u003e \u003ccode\u003e{initial_code}\u003c/code\u003e...",
+        "description": "Morph's high-accuracy apply model for complex code edits. ~4,500 tokens/sec with 98% accuracy for precise code transformations.\n\nThe model requires the prompt to be in the following format: \n\u003cinstruction\u003e{instruction}\u003c/instruction\u003e\n\u003ccode\u003e{initial_code}\u003c/code\u003e\n\u003cupdate\u003e{edit_snippet}\u003c/update\u003e\n\nZero Data Retention is enabled for Morph. Learn more about this model in their [documentation](https://docs.morphllm.com/quickstart)",
         "id": "morph/morph-v3-large",
         "input_cost": 0.9,
         "name": "Morph: Morph V3 Large",
@@ -7929,6 +7928,404 @@
         "input_cost": 1.6,
         "name": "SpaceXAI: Grok 4.7 (batch)",
         "output_cost": 4.8,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 131072,
+        "description": "Gemini Omni 1.1 Flash is Google's native multimodal video generation and editing model, the generally available successor to Gemini Omni Flash Preview. It is suited for text-to-video, image-to-video, first and...",
+        "id": "google/gemini-omni-1.1-flash",
+        "input_cost": 1.5,
+        "name": "Google: Gemini Omni 1.1 Flash",
+        "output_cost": 9,
+        "tags": [
+          "vision",
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 131072,
+        "description": "Gemini Omni 1.2 Flash is Google's native multimodal video generation and editing model, the successor to Gemini Omni 1.1 Flash. It generates clips up to 15 seconds long with native...",
+        "id": "google/gemini-omni-1.2-flash",
+        "input_cost": 1.5,
+        "name": "Google: Gemini Omni 1.2 Flash",
+        "output_cost": 9,
+        "tags": [
+          "vision",
+          "reasoning"
+        ]
+      },
+      {
+        "cached_input_cost": 0.003,
+        "context_length": 262144,
+        "description": "Ling 3.0 Tiny is a mixture-of-experts model from InclusionAI, with 1.3B active parameters out of 7.9B total. It is designed for responsive agents, instruction following, and multi-turn conversations, with switchable...",
+        "id": "inclusionai/ling-3.0-tiny",
+        "input_cost": 0.015,
+        "name": "inclusionAI: Ling 3.0 Tiny",
+        "output_cost": 0.045,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 2000000,
+        "description": "Auto Code is OpenRouter’s router built specifically for coding agents and harnesses. It uses the same routing engine as the [Auto Router](https://openrouter.ai/openrouter/auto), with every request treated as part of an...",
+        "id": "openrouter/auto-code",
+        "name": "Auto Code",
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.05,
+        "context_length": 1048576,
+        "description": "Ripple-65B-Preview by ricursiveAI, a 65B model with native tool calling, served in BF16.",
+        "id": "ricursiveai/ripple-65b-preview",
+        "input_cost": 0.2,
+        "name": "ricursiveAI/Ripple-65B-Preview",
+        "output_cost": 0.6,
+        "tags": [
+          "tools",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.02,
+        "context_length": 262144,
+        "description": "A compact 1.7B-parameter text model with a 256K-token context, post-trained for agents, tool calling, and structured outputs. It reasons before it answers.",
+        "id": "liquid/lfm-3-1.7b",
+        "input_cost": 0.08,
+        "name": "LiquidAI: LFM3-1.7B",
+        "output_cost": 0.2,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 262144,
+        "description": "A compact 1.7B-parameter text model with a 256K-token context, post-trained for agents, tool calling, and structured outputs. It reasons before it answers.",
+        "id": "liquid/lfm-3-1.7b:free",
+        "input_cost": 0,
+        "name": "LiquidAI: LFM3-1.7B (free)",
+        "output_cost": 0,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.04,
+        "context_length": 262144,
+        "description": "Qwen3.8 27B via the Batch API. Open-weight dense vision-language model from Qwen for coding, professional workflows, research, multimodal interaction, and long-running agent tasks, with flexible thinking that can be enabled or disabled.",
+        "id": "qwen/qwen3.8-27b:batch",
+        "input_cost": 0.16,
+        "name": "Qwen: Qwen3.8 27B (batch)",
+        "output_cost": 2,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.002,
+        "context_length": 1048576,
+        "description": "DeepSeek V4.1 Flash 1017 via the Batch API. The October 17, 2026 snapshot of DeepSeek V4.1 Flash, served by DeepSeek under the `deepseek-flash` API model name. V4.1 Flash is a sparse mixture-of-experts model from DeepSeek, and the first built on the company's Causal Encoder-Decoder (CED) architecture. It activates 8B parameters on input and 16B on output from a 552B-parameter backbone, an asymmetric split that keeps per-token compute low relative to the model's total size. Image understanding is native to the architecture, with visual and text embeddings trained jointly from the start of pre-training rather than added afterward as in the earlier experimental [V4 Flash Vision Exp](https://openrouter.ai/deepseek/deepseek-v4-flash-vision-exp).\n\nIt is suited for coding, terminal, and computer-use agents, along with long-horizon tasks that must run to completion across many steps and long-context analysis. Compressed KV caching cuts cache memory to roughly a quarter of the previous Flash generation, significantly reducing costs on agentic workloads. DeepSeek positions it as the cost-efficient tier of the V4.1 family and reports that it exceeds [V4 Pro](https://openrouter.ai/deepseek/deepseek-v4-pro-0813) on performance, speed, and task completion time.",
+        "id": "deepseek/deepseek-v4.1-flash-1017:batch",
+        "input_cost": 0.011,
+        "name": "DeepSeek: DeepSeek V4.1 Flash 1017 (batch)",
+        "output_cost": 0.2,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 81920,
+        "description": "Morph's fastest apply model for code edits. ~10,500 tokens/sec with 96% accuracy for rapid code transformations.\n\nThe model requires the prompt to be in the following format: \n\u003cinstruction\u003e{instruction}\u003c/instruction\u003e\n\u003ccode\u003e{initial_code}\u003c/code\u003e\n\u003cupdate\u003e{edit_snippet}\u003c/update\u003e\n\nZero Data Retention is enabled for Morph. Learn more about this model in their [documentation](https://docs.morphllm.com/quickstart)",
+        "id": "morph/morph-v3-fast:batch",
+        "input_cost": 0.4,
+        "name": "Morph: Morph V3 Fast (batch)",
+        "output_cost": 0.6,
+        "tags": [
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Morph's high-accuracy apply model for complex code edits. ~4,500 tokens/sec with 98% accuracy for precise code transformations.\n\nThe model requires the prompt to be in the following format: \n\u003cinstruction\u003e{instruction}\u003c/instruction\u003e\n\u003ccode\u003e{initial_code}\u003c/code\u003e\n\u003cupdate\u003e{edit_snippet}\u003c/update\u003e\n\nZero Data Retention is enabled for Morph. Learn more about this model in their [documentation](https://docs.morphllm.com/quickstart)",
+        "id": "morph/morph-v3-large:batch",
+        "input_cost": 0.45,
+        "name": "Morph: Morph V3 Large (batch)",
+        "output_cost": 0.95,
+        "tags": [
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.2,
+        "context_length": 1000000,
+        "description": "Claude Fable 5.2 is Anthropic's most capable model for the most demanding technical work, with gains over Fable 5.1 in coding, reasoning, and vision. It accepts text, image, and file input with a 1M-token context window.",
+        "id": "anthropic/claude-fable-5.2",
+        "input_cost": 8,
+        "name": "Anthropic: Claude Fable 5.2",
+        "output_cost": 40,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.004,
+        "context_length": 1048576,
+        "description": "Muse Ember is the smallest and most efficient model from Meta, built for the complex reasoning work agents repeat all day: tool calls, coding-agent subtasks, and routing. It accepts text, image, video, audio, and file input with a 1M-token context window.",
+        "id": "meta/muse-ember",
+        "input_cost": 0.1,
+        "name": "Meta: Muse Ember",
+        "output_cost": 0.5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 262144,
+        "description": "Qwen3.8 Max 0902 (batch) is the asynchronous batch variant of Qwen3.8 Max from Alibaba's Qwen team: a 2.4-trillion-parameter mixture-of-experts model that accepts text, image, and video input and returns text. Batch requests are priced per token at a discount to the standard endpoint.",
+        "id": "qwen/qwen3.8-max-0902:batch",
+        "input_cost": 1.15,
+        "name": "Qwen: Qwen3.8 Max (0902) (batch)",
+        "output_cost": 3.45,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.1,
+        "context_length": 1000000,
+        "description": "Claude Fable 5.2 via the Batch API at 50% of standard pricing. Anthropic's most capable model for the most demanding technical work, with gains over Fable 5.1 in coding, reasoning, and vision.",
+        "id": "anthropic/claude-fable-5.2:batch",
+        "input_cost": 4,
+        "name": "Anthropic: Claude Fable 5.2 (batch)",
+        "output_cost": 20,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.1,
+        "context_length": 1048576,
+        "description": "Gemini 4 Carbon is a frontier Gemini 4 model from Google for coding, agentic and complex reasoning work. It takes text, image, audio, video and file input, supports long decode of up to 1M output tokens through continuation, and controls thinking depth with low, medium and high reasoning effort.",
+        "id": "google/gemini-4-carbon",
+        "input_cost": 2,
+        "name": "Google: Gemini 4 Carbon",
+        "output_cost": 10,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.05,
+        "context_length": 1048576,
+        "description": "Gemini 4 Carbon via the Batch API at 50% of standard pricing. Frontier Gemini 4 model for coding, agentic and complex reasoning work.",
+        "id": "google/gemini-4-carbon:batch",
+        "input_cost": 1,
+        "name": "Google: Gemini 4 Carbon (batch)",
+        "output_cost": 5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.024,
+        "context_length": 262144,
+        "description": "Nex-N2.6 is an agentic model from Nex AGI, built on [GLM-5.3-Flash](https://huggingface.co/zai-org/GLM-5.3-Flash-BF16) with about 321B parameters. It is suited for computer use, coding, and long-horizon tasks that involve tools. Compared with Nex-N2.5-Pro, it reduces repetitive reasoning and follows the tools available in the current environment more closely.",
+        "id": "nex-agi/nex-n2.6",
+        "input_cost": 0.12,
+        "name": "Nex AGI: Nex-N2.6",
+        "output_cost": 0.4,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 1048576,
+        "description": "Inkling 2 Small is a multimodal mixture-of-experts reasoning model from Thinking Machines Lab, with 17B active parameters out of 594B total. It is the first model in the second Inkling generation. It was trained with reinforcement learning on long-horizon coding tasks across many agent harnesses, and is suited for agentic coding, autonomous research, agentic knowledge work and retrieval-augmented generation, with English and general multilingual support. It accepts text and image input (no audio), supports tool calling and variable reasoning effort, and has a 1M-token context window.",
+        "id": "thinkingmachines/inkling-2-small:free",
+        "input_cost": 0,
+        "name": "Thinking Machines: Inkling 2 Small (free)",
+        "output_cost": 0,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 1024000,
+        "description": "ERNIE 5.5 Flash Preview is the latest foundation model in the ERNIE family, with comprehensive improvements in coding, agentic capabilities, knowledge work, and deep research. It has 280 billion total parameters, activates 14 billion parameters per token, and supports a context window of 1 million tokens. Its new architecture combines strong model capabilities with efficient inference, delivering generation speeds of more than 200 tokens per second.",
+        "id": "baidu/ernie-5.5-flash-preview:free",
+        "input_cost": 0,
+        "name": "Baidu: ERNIE-5.5-Flash-Preview (free)",
+        "output_cost": 0,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.113,
+        "context_length": 1024000,
+        "description": "ERNIE-Light-DT-1.0 is based on open-source GLM models and includes research findings from Baidu Search's Lightning large model. It features Baidu Sparse Attention (BSA), a unique sparse attention mechanism developed by Baidu ERNIE. By using feedback-driven history compression, it improves the storage and indexing of historical information. This significantly reduces KV cache storage and computational costs while maintaining model performance. As a result, it allows for longer context windows at a lower cost.",
+        "id": "baidu/ernie-light-dt-1.0-intl",
+        "input_cost": 1.13,
+        "name": "Baidu: ERNIE-Light-DT-1.0",
+        "output_cost": 3.94,
+        "tags": [
+          "tools",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.04,
+        "context_length": 261795,
+        "description": "Mi:dm K 3.0 Pro is a Mixture-of-Experts reasoning model from KT, with 120B total and 12B active parameters. It uses a hybrid architecture that mixes Mamba, MoE and attention layers.",
+        "id": "kt/midm-k-3.0-pro",
+        "input_cost": 0.2,
+        "name": "KT: Mi:dm K 3.0 Pro",
+        "output_cost": 0.8,
+        "tags": [
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.06,
+        "context_length": 262144,
+        "description": "Motif 3 is a Mixture-of-Experts language model from Motif Technologies, with 314B total and 13.2B active parameters. It is a general-purpose multilingual model for English and Korean, particularly strong at long-horizon agentic tool use and terminal-based problem solving, with additional training emphasis on Korean, reasoning-intensive, legal, and financial data.",
+        "id": "motif-technologies/motif-3",
+        "input_cost": 0.3,
+        "name": "Motif Technologies: Motif 3",
+        "output_cost": 1.2,
+        "tags": [
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.1,
+        "context_length": 1048576,
+        "description": "Kimi K3.1 Pro is Moonshot AI's flagship open-weight multimodal reasoning model and a post-trained successor to Kimi K3, with a 1M-token context window. It is built for long-horizon coding, 3D creation, financial research, and end-to-end agentic knowledge work, with native image and video understanding. This entry is the batch variant, served for asynchronous workloads.",
+        "id": "moonshotai/kimi-k3.1-pro:batch",
+        "input_cost": 0.7,
+        "name": "MoonshotAI: Kimi K3.1 Pro (batch)",
+        "output_cost": 6,
+        "tags": [
+          "vision",
+          "reasoning"
+        ]
+      },
+      {
+        "cached_input_cost": 0.075,
+        "context_length": 1048576,
+        "description": "Gemini 4 Hydrogen is the high-efficiency workhorse model of the Gemini 4 family from Google, built for high-throughput agentic workflows, coding and multi-model routing at lower cost and latency than Gemini 4 Carbon. It takes text, image, audio, video and file input, supports long decode of up to 1M output tokens through continuation, and controls thinking depth with low, medium, high and xhigh reasoning effort.",
+        "id": "google/gemini-4-hydrogen",
+        "input_cost": 1.5,
+        "name": "Google: Gemini 4 Hydrogen",
+        "output_cost": 7.5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.0375,
+        "context_length": 1048576,
+        "description": "Gemini 4 Hydrogen is the high-efficiency workhorse model of the Gemini 4 family from Google, built for high-throughput agentic workflows, coding and multi-model routing at lower cost and latency than Gemini 4 Carbon. It takes text, image, audio, video and file input, supports long decode of up to 1M output tokens through continuation, and controls thinking depth with low, medium, high and xhigh reasoning effort.",
+        "id": "google/gemini-4-hydrogen:batch",
+        "input_cost": 0.75,
+        "name": "Google: Gemini 4 Hydrogen (batch)",
+        "output_cost": 3.75,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 1048576,
+        "description": "Particle-1 is a token-efficient agentic coding model from Particle AI, post-trained on DeepSeek V4.1 Flash. It is suited for software engineering work such as terminal workflows, codebase changes, and data engineering tasks, and is trained to complete them with substantially fewer reasoning and tool-call tokens while keeping accuracy close to its base model.",
+        "id": "particle-ai/particle-1:free",
+        "input_cost": 0,
+        "name": "Particle AI: Particle-1 (free)",
+        "output_cost": 0,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.03,
+        "context_length": 1048576,
+        "description": "Inkling 2 Small is an open-weight multimodal mixture-of-experts reasoning model from Thinking Machines Lab, with 17B active parameters out of 594B total. It is the first model in the second Inkling generation. It was trained with reinforcement learning on long-horizon coding tasks across many agent harnesses, and is suited for agentic coding, autonomous research, agentic knowledge work and retrieval-augmented generation, with English and general multilingual support. It accepts text and image input (no audio), supports tool calling and variable reasoning effort, and has a 1M-token context window.",
+        "id": "thinkingmachines/inkling-2-small",
+        "input_cost": 0.3,
+        "name": "Thinking Machines: Inkling 2 Small",
+        "output_cost": 1,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "context_length": 1048576,
+        "description": "Ling 3.2 Flash is a hybrid reasoning model from inclusionAI that accepts text and image input, with a 1M-token context window and up to 200 images per request. Thinking can be switched off per request.",
+        "id": "inclusionai/ling-3.2-flash:free",
+        "input_cost": 0,
+        "name": "inclusionAI: Ling 3.2 Flash (free)",
+        "output_cost": 0,
         "tags": [
           "tools",
           "vision",

@@ -37,7 +37,7 @@
         ]
       },
       {
-        "context_length": 65536,
+        "context_length": 131072,
         "description": "Qwen 3.8 27B on Cerebras wafer-scale hardware, served at roughly 1850 tokens per second. Supports text input and tool calling.",
         "id": "qwen-3.8-27b",
         "input_cost": 0.99,
@@ -49,7 +49,7 @@
       }
     ],
     "model_overrides": {
-      "qwen-3.8-27b": 65536
+      "qwen-3.8-27b": 131072
     },
     "pattern_overrides": [],
     "supports_vision": false,

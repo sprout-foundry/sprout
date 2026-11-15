@@ -352,20 +352,20 @@
         ]
       },
       {
-        "cached_input_cost": 0.05,
+        "cached_input_cost": 0.015,
         "context_length": 1048576,
         "description": "Beam is an open model by Reflection designed to deliver strong performance for areas such as agentic tool use, coding and general reasoning with an emphasis on token efficient usage.",
         "id": "beam",
-        "input_cost": 0.25,
+        "input_cost": 0.125,
         "name": "Beam",
-        "output_cost": 1,
+        "output_cost": 0.4,
         "tags": [
           "tools",
           "reasoning"
         ]
       },
       {
-        "context_length": 262144,
+        "context_length": 65536,
         "description": "Clef is a 27B multimodal model created by Cloudflare that turns a state and a schema of typed questions into decisions.",
         "id": "clef:27b",
         "input_cost": 0.24,
@@ -441,6 +441,34 @@
         "tags": [
           "vision",
           "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "cached_input_cost": 0.2,
+        "context_length": 1048576,
+        "description": "Kimi K3.1 Pro - Moonshot's 3T-class multimodal agentic model with a 1M-token context window",
+        "id": "kimi-k3.1-pro",
+        "input_cost": 2,
+        "name": "Kimi K3.1 Pro",
+        "output_cost": 10,
+        "tags": [
+          "vision",
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "cached_input_cost": 0.03,
+        "context_length": 1048576,
+        "description": "Inkling 2 Small - Thinking Machines Lab's 594B-parameter MoE model (17B active) with image input, variable reasoning effort and up to 1M tokens of context, built for agentic coding and knowledge work",
+        "id": "inkling-2-small",
+        "input_cost": 0.3,
+        "name": "Inkling 2 Small",
+        "output_cost": 1,
+        "tags": [
+          "tools",
+          "vision",
           "reasoning"
         ]
       }

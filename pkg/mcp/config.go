@@ -130,6 +130,29 @@ func mcpConfigCandidates(workspaceRoot string) []string {
 	return paths
 }
 
+// LoadGlobalMCPConfigFile reads only the global config file, without the
+// auto-discovered servers and environment overrides LoadMCPConfig layers on
+// top, so a caller that edits one server and saves writes back only what
+// the file already held. A missing file is the default config.
+func LoadGlobalMCPConfigFile() (MCPConfig, error) {
+	dir, err := getConfigDir()
+	if err != nil {
+		return MCPConfig{}, err
+	}
+	path := filepath.Join(dir, mcpConfigFileName)
+	if _, err := os.Stat(path); err != nil {
+		return DefaultMCPConfig(), nil
+	}
+	cfg, ok := readMCPConfigFile(path)
+	if !ok {
+		return MCPConfig{}, fmt.Errorf("reading %s: the file is not valid MCP config", path)
+	}
+	if cfg.Servers == nil {
+		cfg.Servers = make(map[string]MCPServerConfig)
+	}
+	return cfg, nil
+}
+
 // LoadMCPConfig loads MCP configuration from the process's config root.
 func LoadMCPConfig() (MCPConfig, error) {
 	return LoadMCPConfigForWorkspace("")

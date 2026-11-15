@@ -26,7 +26,7 @@ func fakePlatform(t *testing.T, token string) *httptest.Server {
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
-			_, _ = w.Write([]byte(`{"user_id":"u1","email":"me@example.com","plan":"pro"}`))
+			_, _ = w.Write([]byte(`{"user_id":"u1","email":"me@example.com","plan":"pro","mcp_allowed":true}`))
 		case "/cli/runners", "/cli/gpus":
 			if !authed {
 				w.WriteHeader(http.StatusUnauthorized)
@@ -63,7 +63,7 @@ func TestLoginFlowAndLinking(t *testing.T) {
 
 	signed := NewClient(srv.URL, granted.AccessToken)
 	account, err := signed.WhoAmI(ctx)
-	if err != nil || account.Email != "me@example.com" || account.Plan != "pro" {
+	if err != nil || account.Email != "me@example.com" || account.Plan != "pro" || !account.MCPAllowed {
 		t.Fatalf("whoami = %+v, %v", account, err)
 	}
 	if _, err := anon.WhoAmI(ctx); !errors.Is(err, ErrNotSignedIn) {

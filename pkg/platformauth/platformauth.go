@@ -1,9 +1,11 @@
 // Package platformauth is the sprout CLI's sign-in to a platform account
 // (`sprout login`): a device-code flow approved in the browser mints an
-// access token that can read who the account is and link this machine to it
-// (as a runner or a GPU), and nothing else. With it, `sprout runner link`
-// and `sprout gpu link` link straight to the signed-in account instead of
-// asking for a browser approval each time.
+// access token that can read who the account is, link this machine to it
+// (as a runner or a GPU), and use the platform's MCP server for the person
+// (their projects and tasks; no repository access). With it, `sprout runner
+// link` and `sprout gpu link` link straight to the signed-in account instead
+// of asking for a browser approval each time, and sprout's agent gets the
+// platform's tools through the MCP server login adds (mcp.go).
 //
 // The platform side is the platform repo's internal/api/cli_login.go.
 package platformauth
@@ -193,6 +195,9 @@ type Account struct {
 	UserID string `json:"user_id"`
 	Email  string `json:"email"`
 	Plan   string `json:"plan"`
+	// MCPAllowed is whether the account's plan includes the platform's MCP
+	// server, which the sign-in token reaches.
+	MCPAllowed bool `json:"mcp_allowed"`
 }
 
 // WhoAmI reads the signed-in account.

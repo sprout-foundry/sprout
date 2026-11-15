@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"os/signal"
@@ -28,9 +29,11 @@ func init() {
 		Short: "Sign this machine's sprout in to your platform account",
 		Long: `Sign sprout in to your platform account: approve it once in the browser,
 and ` + "`sprout runner link`" + ` and ` + "`sprout gpu link`" + ` then link this machine to that
-account without another approval. The sign-in can see who you are and link
-machines to your account, and nothing else; revoke it under Account →
-Developer on the platform, or with ` + "`sprout logout`" + ` here.`,
+account without another approval. On Pro and Team plans it also adds the
+platform's MCP server to sprout ("sprout-foundry"), so sprout can list your
+projects and add, follow and manage their tasks for you. The sign-in cannot
+reach your repositories; revoke it under Account → Developer on the
+platform, or with ` + "`sprout logout`" + ` here.`,
 		Args: cobra.NoArgs,
 		RunE: runLogin,
 	}
@@ -89,7 +92,32 @@ func runLogin(cmd *cobra.Command, _ []string) error {
 		as = " as " + granted.AccountEmail
 	}
 	_, _ = fmt.Fprintf(out, "Signed in to %s%s (kept in the %s). `sprout runner link` and `sprout gpu link` now link this machine to this account.\n", platform, as, store)
+	connectPlatformMCP(ctx, out, platform, granted.AccessToken)
 	return nil
+}
+
+// connectPlatformMCP adds the platform's MCP server to sprout's MCP config
+// when the account's plan includes it, so sprout's agent can work with the
+// person's projects and tasks. A failure here leaves the sign-in in place.
+func connectPlatformMCP(ctx context.Context, out io.Writer, platform, token string) {
+	account, err := platformauth.NewClient(platform, token).WhoAmI(ctx)
+	if err != nil {
+		_, _ = fmt.Fprintf(out, "Could not check whether your plan includes the platform's MCP server (%v); run `sprout login` again to connect it.\n", err)
+		return
+	}
+	if !account.MCPAllowed {
+		if removed, _ := platformauth.RemoveMCP(); removed {
+			_, _ = fmt.Fprintf(out, "Removed the %q MCP server: your %s plan does not include it.\n", platformauth.MCPServerName, account.Plan)
+			return
+		}
+		_, _ = fmt.Fprintf(out, "Your %s plan does not include the platform's MCP server; on Pro and Team, sprout can also work with your projects and tasks there.\n", account.Plan)
+		return
+	}
+	if err := platformauth.ConfigureMCP(platform, token); err != nil {
+		_, _ = fmt.Fprintf(out, "Could not add the platform's MCP server (%v); run `sprout login` again to retry.\n", err)
+		return
+	}
+	_, _ = fmt.Fprintf(out, "Added the %q MCP server (%s): sprout can now list your projects and add, follow and manage their tasks for you. It starts with your next sprout session.\n", platformauth.MCPServerName, platformauth.MCPURL(platform))
 }
 
 func pollLogin(ctx context.Context, client *platformauth.Client, start *runner.DeviceStart) (*platformauth.Granted, error) {
@@ -125,6 +153,12 @@ func runLogout(cmd *cobra.Command, _ []string) error {
 	if err := platformauth.Remove(); err != nil {
 		return err
 	}
+	removedMCP, mcpErr := platformauth.RemoveMCP()
+	if mcpErr != nil {
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Could not remove the %q MCP server: %v\n", platformauth.MCPServerName, mcpErr)
+	} else if removedMCP {
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Removed the %q MCP server.\n", platformauth.MCPServerName)
+	}
 	if !ok {
 		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Not signed in.")
 		return nil
@@ -148,5 +182,8 @@ func runWhoami(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	_, _ = fmt.Fprintf(out, "Signed in to %s as %s (%s plan)\n", l.PlatformURL, account.Email, account.Plan)
+	if account.MCPAllowed {
+		_, _ = fmt.Fprintf(out, "MCP server: %s (%q in sprout's MCP config)\n", platformauth.MCPURL(l.PlatformURL), platformauth.MCPServerName)
+	}
 	return nil
 }

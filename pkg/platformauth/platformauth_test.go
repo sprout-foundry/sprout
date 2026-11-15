@@ -27,6 +27,12 @@ func fakePlatform(t *testing.T, token string) *httptest.Server {
 				return
 			}
 			_, _ = w.Write([]byte(`{"user_id":"u1","email":"me@example.com","plan":"pro","mcp_allowed":true}`))
+		case "/cli/logout":
+			if !authed {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			_, _ = w.Write([]byte(`{"status":"revoked"}`))
 		case "/cli/runners", "/cli/gpus":
 			if !authed {
 				w.WriteHeader(http.StatusUnauthorized)
@@ -65,6 +71,12 @@ func TestLoginFlowAndLinking(t *testing.T) {
 	account, err := signed.WhoAmI(ctx)
 	if err != nil || account.Email != "me@example.com" || account.Plan != "pro" || !account.MCPAllowed {
 		t.Fatalf("whoami = %+v, %v", account, err)
+	}
+	if err := signed.Logout(ctx); err != nil {
+		t.Fatalf("logout = %v", err)
+	}
+	if err := anon.Logout(ctx); err != nil {
+		t.Fatalf("logout of a token the platform no longer accepts = %v, want nil", err)
 	}
 	if _, err := anon.WhoAmI(ctx); !errors.Is(err, ErrNotSignedIn) {
 		t.Fatalf("whoami without a token = %v, want ErrNotSignedIn", err)

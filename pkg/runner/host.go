@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/runner/sandbox"
 )
 
@@ -160,9 +161,22 @@ func (l *HostLauncher) command(ctx context.Context, workDir, dir, tmp string, po
 		// sibling of (not inside) the clone and may be nowhere near a
 		// local-directory workspace.
 		Writable:     append(append([]string{}, l.Writable...), dir),
-		DenyRead:     sandbox.DefaultDenyRead(home),
+		DenyRead:     append(sandbox.DefaultDenyRead(home), hostCredentialDirs()...),
 		AllowNetwork: true,
 	}, bin, args...)
+}
+
+// hostCredentialDirs are the runner's own credential store directories as
+// this process resolves them. DefaultDenyRead covers the default location;
+// a runner whose config root moved (SPROUT_CONFIG_DIR, XDG_CONFIG_HOME)
+// keeps its credential files, among them the sign-in token, the runner key
+// and provider keys, somewhere the default list does not name.
+func hostCredentialDirs() []string {
+	dir, err := envutil.ConfigDir()
+	if err != nil {
+		return nil
+	}
+	return []string{filepath.Join(dir, "credentials")}
 }
 
 // env is the daemon's environment. Bare metal inherits the user's; native

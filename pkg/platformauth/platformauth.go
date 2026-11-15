@@ -1,8 +1,9 @@
 // Package platformauth is the sprout CLI's sign-in to a platform account
 // (`sprout login`): a device-code flow approved in the browser mints an
 // access token that can read who the account is, link this machine to it
-// (as a runner or a GPU), and use the platform's MCP server for the person
-// (their projects and tasks; no repository access). With it, `sprout runner
+// (as a runner or a GPU), and use the platform's MCP server for the person:
+// their projects and tasks. It has no direct git access, but tasks it adds
+// change the person's repositories as any task does. With it, `sprout runner
 // link` and `sprout gpu link` link straight to the signed-in account instead
 // of asking for a browser approval each time, and sprout's agent gets the
 // platform's tools through the MCP server login adds (mcp.go).
@@ -214,6 +215,19 @@ func (c *Client) WhoAmI(ctx context.Context) (*Account, error) {
 		return nil, fmt.Errorf("reading the account: platform returned %d", status)
 	}
 	return &out, nil
+}
+
+// Logout revokes the client's token on the platform. A token the platform
+// no longer accepts (already revoked) is not an error.
+func (c *Client) Logout(ctx context.Context) error {
+	status, err := c.do(ctx, http.MethodPost, "/cli/logout", nil, nil)
+	if err != nil {
+		return err
+	}
+	if status != http.StatusOK && status != http.StatusUnauthorized {
+		return fmt.Errorf("revoking the sign-in: platform returned %d", status)
+	}
+	return nil
 }
 
 // LinkRequest describes the machine (and, for a GPU, its engine) to link.

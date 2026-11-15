@@ -134,8 +134,8 @@ func runRunnerLink(cmd *cobra.Command, _ []string) error {
 		if err != nil {
 			return err
 		}
-		verify := firstNonEmpty(start.VerificationURIComplete, start.VerificationURI)
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "To link %q, approve it on the platform:\n\n  %s\n\nand check the code matches: %s\n\nWaiting for approval…\n", name, verify, start.UserCode)
+		verify := start.VerificationURI
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "To link %q, approve it on the platform: open\n\n  %s\n\nand enter this code: %s\n\nWaiting for approval…\n", name, verify, start.UserCode)
 		if !runnerNoBrowser {
 			runner.OpenURL(verify)
 		}

@@ -31,9 +31,12 @@ func init() {
 and ` + "`sprout runner link`" + ` and ` + "`sprout gpu link`" + ` then link this machine to that
 account without another approval. On Pro and Team plans it also adds the
 platform's MCP server to sprout ("sprout-foundry"), so sprout can list your
-projects and add, follow and manage their tasks for you. The sign-in cannot
-reach your repositories; revoke it under Account → Developer on the
-platform, or with ` + "`sprout logout`" + ` here.`,
+projects, read task results and add, run and manage tasks for you. It has no
+direct git access, but the tasks it adds change your repositories as any task
+does and spend your credits, and sprout asks before each platform tool call
+unless you allow it. Signing in again replaces (and revokes) the previous
+sign-in; ` + "`sprout logout`" + ` revokes it, as does removing it under
+Account → Developer on the platform.`,
 		Args: cobra.NoArgs,
 		RunE: runLogin,
 	}
@@ -56,9 +59,9 @@ func linkedTo(email string) string {
 }
 
 func runLogin(cmd *cobra.Command, _ []string) error {
-	saved := ""
-	if l, _, ok := platformauth.Load(); ok {
-		saved = l.PlatformURL
+	saved, previousToken := "", ""
+	if l, token, ok := platformauth.Load(); ok {
+		saved, previousToken = l.PlatformURL, token
 	}
 	platform := resolveLinkPlatform(loginPlatform, os.Getenv("SPROUT_PLATFORM_URL"), saved)
 	if u, err := url.Parse(platform); err != nil || (u.Scheme != "https" && u.Hostname() != "localhost" && u.Hostname() != "127.0.0.1") {
@@ -74,8 +77,8 @@ func runLogin(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	verify := firstNonEmpty(start.VerificationURIComplete, start.VerificationURI)
-	_, _ = fmt.Fprintf(out, "To sign in, approve it on the platform:\n\n  %s\n\nand check the code matches: %s\n\nWaiting for approval…\n", verify, start.UserCode)
+	verify := start.VerificationURI
+	_, _ = fmt.Fprintf(out, "To sign in, open\n\n  %s\n\nand enter this code: %s\n\nWaiting for approval…\n", verify, start.UserCode)
 	if !loginNoBrowser {
 		runner.OpenURL(verify)
 	}
@@ -86,6 +89,13 @@ func runLogin(cmd *cobra.Command, _ []string) error {
 	store, err := platformauth.Save(&platformauth.Login{PlatformURL: platform, Email: granted.AccountEmail}, granted.AccessToken)
 	if err != nil {
 		return err
+	}
+	if previousToken != "" && previousToken != granted.AccessToken {
+		// The new sign-in replaces the old one: revoke it, so it does not
+		// stay valid on the platform after this machine forgot it.
+		if err := platformauth.NewClient(saved, previousToken).Logout(ctx); err != nil {
+			_, _ = fmt.Fprintf(out, "Could not revoke the previous sign-in (%v); remove it under Account → Developer.\n", err)
+		}
 	}
 	as := ""
 	if granted.AccountEmail != "" {
@@ -117,7 +127,7 @@ func connectPlatformMCP(ctx context.Context, out io.Writer, platform, token stri
 		_, _ = fmt.Fprintf(out, "Could not add the platform's MCP server (%v); run `sprout login` again to retry.\n", err)
 		return
 	}
-	_, _ = fmt.Fprintf(out, "Added the %q MCP server (%s): sprout can now list your projects and add, follow and manage their tasks for you. It starts with your next sprout session.\n", platformauth.MCPServerName, platformauth.MCPURL(platform))
+	_, _ = fmt.Fprintf(out, "Added the %q MCP server (%s): sprout can now list your projects and add, run and manage their tasks for you (tasks change your repositories and spend credits; sprout asks before each platform tool call unless you allow it). It starts with your next sprout session.\n", platformauth.MCPServerName, platformauth.MCPURL(platform))
 }
 
 func pollLogin(ctx context.Context, client *platformauth.Client, start *runner.DeviceStart) (*platformauth.Granted, error) {
@@ -149,7 +159,15 @@ func pollLogin(ctx context.Context, client *platformauth.Client, start *runner.D
 }
 
 func runLogout(cmd *cobra.Command, _ []string) error {
-	l, _, ok := platformauth.Load()
+	l, token, ok := platformauth.Load()
+	revoked := false
+	if ok {
+		if err := platformauth.NewClient(l.PlatformURL, token).Logout(cmd.Context()); err != nil {
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Could not revoke the sign-in on the platform (%v); remove it under Account → Developer.\n", err)
+		} else {
+			revoked = true
+		}
+	}
 	if err := platformauth.Remove(); err != nil {
 		return err
 	}
@@ -163,7 +181,11 @@ func runLogout(cmd *cobra.Command, _ []string) error {
 		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Not signed in.")
 		return nil
 	}
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Signed out of %s on this machine. To revoke the sign-in everywhere, remove its token under Account → Developer.\n", l.PlatformURL)
+	if revoked {
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Signed out of %s and revoked the sign-in on the platform.\n", l.PlatformURL)
+	} else {
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Signed out of %s on this machine.\n", l.PlatformURL)
+	}
 	return nil
 }
 

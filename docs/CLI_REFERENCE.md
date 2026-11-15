@@ -345,11 +345,16 @@ sprout deploy rollback my-app-2     # roll back to the previous deployment
 Sign this machine's sprout in to your platform account. You approve it once
 in the browser (the approval page names the account it is for); after that,
 `sprout runner link` and `sprout gpu link` link this machine straight to that
-account without another approval. The sign-in can read who you are, link
-machines to your account, and use the platform's MCP server: list your
-projects and add, follow and manage their tasks. It cannot reach your
-repositories. It is listed, and can be revoked, under **Account → Developer**
-on the platform.
+account without another approval. You type the code sprout shows on the
+platform's approval page (links never carry it), and the page warns when the
+request comes from a different network than your browser. The sign-in can
+read who you are, link machines to your account, and use the platform's MCP
+server: list your projects, read task results and diffs, and add, run and
+manage tasks. It has no direct git access, but tasks it adds change your
+repositories as any task does and spend your credits; sprout asks before each
+platform tool call unless you allow it. It is listed, and can be revoked,
+under **Account → Developer** on the platform; signing in again revokes the
+previous sign-in, and `sprout logout` revokes the current one.
 
 On Pro and Team plans, `sprout login` also adds the platform's MCP server to
 sprout's global MCP config as `sprout-foundry` (`<platform>/mcp`, the token in
@@ -360,7 +365,7 @@ refreshes it; `sprout logout` removes it.
 ```bash
 sprout login [--platform <url>] [--no-browser]
 sprout whoami    # the account and plan this machine is signed in to, and the MCP server
-sprout logout    # forget the sign-in and remove the MCP server on this machine
+sprout logout    # revoke the sign-in and remove the MCP server on this machine
 ```
 
 Without a sign-in, `runner link` and `gpu link` ask for a browser approval

@@ -37,6 +37,8 @@ var (
 	gpuName      string
 	gpuPlatform  string
 	gpuNoBrowser bool
+	gpuSinter    bool
+	gpuModel     string
 )
 
 func init() {
@@ -51,6 +53,8 @@ func init() {
 	linkCmd.Flags().StringVar(&gpuName, "name", "", "name shown on the platform (default: this machine's hostname)")
 	linkCmd.Flags().StringVar(&gpuPlatform, "platform", "", "platform URL (default $SPROUT_PLATFORM_URL, else the previous link, else "+runner.DefaultPlatformURL+")")
 	linkCmd.Flags().BoolVar(&gpuNoBrowser, "no-browser", false, "print the approval URL without opening a browser (SSH sessions, headless machines)")
+	linkCmd.Flags().BoolVar(&gpuSinter, "sinter", false, "serve a model in-process with sinter instead of a server at --engine (Apple Silicon)")
+	linkCmd.Flags().StringVar(&gpuModel, "model", "", "with --sinter: the model to serve (a catalog name such as qwen3.5-9b, an installed model, or a model directory; default: the one recommended for this machine), downloaded if missing")
 
 	gpuCmd.AddCommand(
 		linkCmd,
@@ -81,8 +85,12 @@ func runGPULink(cmd *cobra.Command, _ []string) error {
 	if u, err := url.Parse(platform); err != nil || (u.Scheme != "https" && u.Hostname() != "localhost" && u.Hostname() != "127.0.0.1") {
 		return fmt.Errorf("platform URL must be https (got %q)", platform)
 	}
-	if err := validEngine(gpuEngine); err != nil {
-		return err
+	if !gpuSinter {
+		if err := validEngine(gpuEngine); err != nil {
+			return err
+		}
+	} else if cmd.Flags().Changed("engine") {
+		return errors.New("--sinter serves a model in-process; pass --model instead of --engine")
 	}
 	name := gpuName
 	if name == "" {
@@ -92,10 +100,19 @@ func runGPULink(cmd *cobra.Command, _ []string) error {
 	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// The engine is checked first, so a typo in the address shows here
-	// rather than as a GPU that never answers.
+	// The engine is checked (or, with sinter, its model fetched) first, so
+	// a typo shows here rather than as a GPU that never answers.
 	engine := gpuEngine
-	if models, err := gpulink.EngineModels(ctx, gpuEngine, gpuEngineKey); err != nil {
+	sinterDir := ""
+	if gpuSinter {
+		dir, model, err := prepareSinterModel(ctx, out, gpuModel)
+		if err != nil {
+			return err
+		}
+		sinterDir = dir
+		engine = gpulink.EngineSinter + " (" + model + ")"
+		_, _ = fmt.Fprintf(out, "Serving %s in-process with sinter.\n\n", model)
+	} else if models, err := gpulink.EngineModels(ctx, gpuEngine, gpuEngineKey); err != nil {
 		_, _ = fmt.Fprintf(out, "Note: the engine at %s did not answer /v1/models (%v). Linking anyway; start it before using the GPU.\n\n", gpuEngine, err)
 	} else if len(models) > 0 {
 		_, _ = fmt.Fprintf(out, "The engine at %s serves: %s\n\n", gpuEngine, strings.Join(models, ", "))
@@ -127,6 +144,11 @@ func runGPULink(cmd *cobra.Command, _ []string) error {
 	st.LinkID = creds.LinkID
 	st.Name = name
 	st.Engine = gpuEngine
+	st.Model = ""
+	if gpuSinter {
+		st.Engine = gpulink.EngineSinter
+		st.Model = sinterDir
+	}
 	if err := st.Save(); err != nil {
 		return err
 	}
@@ -186,6 +208,15 @@ func runGPUStart(cmd *cobra.Command, _ []string) error {
 	defer stop()
 	log := slog.New(slog.NewTextHandler(cmd.ErrOrStderr(), nil)).With("gpu", st.Name)
 	agent := &gpulink.Agent{State: st, APIKey: key, EngineKey: gpulink.LoadEngineKey(), Log: log}
+	if st.Engine == gpulink.EngineSinter {
+		handler, model, unload, err := gpulink.SinterHandler(st.Model)
+		if err != nil {
+			return err
+		}
+		defer unload()
+		agent.Local = handler
+		log.Info("serving with sinter", "model", model)
+	}
 	log.Info("starting", "platform", st.PlatformURL, "engine", st.Engine)
 	return agent.Run(ctx)
 }
@@ -201,6 +232,10 @@ func runGPUStatus(cmd *cobra.Command, _ []string) error {
 		return nil
 	}
 	_, _ = fmt.Fprintf(out, "Linked as %q to %s\nEngine: %s\n", st.Name, st.PlatformURL, st.Engine)
+	if st.Engine == gpulink.EngineSinter {
+		_, _ = fmt.Fprintf(out, "Model: %s (served in-process by `sprout gpu start`)\n", st.Model)
+		return nil
+	}
 	models, err := gpulink.EngineModels(cmd.Context(), st.Engine, gpulink.LoadEngineKey())
 	if err != nil {
 		_, _ = fmt.Fprintf(out, "The engine is not answering: %v\n", err)

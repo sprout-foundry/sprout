@@ -45,6 +45,9 @@ type Agent struct {
 	Log       *slog.Logger
 	// Dialer opens the tunnel; nil is the default dialer.
 	Dialer *websocket.Dialer
+	// Local, when set, serves the requests in-process (the sinter engine)
+	// instead of proxying them to State.Engine.
+	Local http.Handler
 }
 
 // tunnelURL is the platform's tunnel endpoint for the link.
@@ -90,6 +93,11 @@ func (a *Agent) Handler() relay.Handler {
 	return func(_ string, w http.ResponseWriter, r *http.Request) {
 		if !enginePaths[r.URL.Path] {
 			http.NotFound(w, r)
+			return
+		}
+		if a.Local != nil {
+			r.Header.Del("Authorization")
+			a.Local.ServeHTTP(w, r)
 			return
 		}
 		proxy.ServeHTTP(w, r)

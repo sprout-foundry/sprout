@@ -354,6 +354,7 @@ network, and the platform reaches only the engine's model-serving paths
 
 ```bash
 sprout gpu link --engine 127.0.0.1:11434   # approve in the browser window that opens
+sprout gpu link --sinter --model qwen3.5-9b  # or serve a model in-process with sinter (Apple Silicon)
 sprout gpu start                           # serve in the foreground
 sprout gpu install                         # or run it at login (systemd user unit / launchd agent)
 sprout gpu status
@@ -369,6 +370,12 @@ sprout gpu unlink
 | `--name <name>` | Name shown on the platform (default: the hostname) |
 | `--platform <url>` | Platform URL (default `$SPROUT_PLATFORM_URL`, else the previous link) |
 | `--no-browser` | Print the approval URL instead of opening a browser |
+| `--sinter` | Serve a model in-process with sinter instead of a server at `--engine` (Apple Silicon builds) |
+| `--model <name\|dir>` | With `--sinter`: a catalog name (e.g. `qwen3.5-9b`), an installed model, or a model directory; default: the model recommended for this machine's memory. A missing catalog model and the MLX runtime are downloaded once |
+
+With `--sinter`, `sprout gpu start` loads the model and serves it through the
+tunnel itself: no separate engine and no local port. Requests are served one
+at a time, as the GPU runs one generation at a time.
 
 After linking, choose one of the engine's models under **Account → Models**
 on the platform. The link key and engine key live in sprout's credential

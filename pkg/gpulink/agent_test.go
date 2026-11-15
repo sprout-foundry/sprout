@@ -147,3 +147,24 @@ func TestTunnelURL(t *testing.T) {
 		t.Fatalf("tunnelURL = %q, %v", got, err)
 	}
 }
+
+func TestHandler_LocalEngineServesInProcess(t *testing.T) {
+	var sawAuth string
+	local := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawAuth = r.Header.Get("Authorization")
+		_, _ = io.WriteString(w, `{"data":[{"id":"qwen3-1.7b"}]}`)
+	})
+	h := (&Agent{State: &State{Engine: EngineSinter}, Local: local}).Handler()
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+	req.Header.Set("Authorization", "Bearer platform-key")
+	h("", rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "qwen3-1.7b") || sawAuth != "" {
+		t.Fatalf("local = %d %s (auth %q)", rec.Code, rec.Body.String(), sawAuth)
+	}
+	rec = httptest.NewRecorder()
+	h("", rec, httptest.NewRequest(http.MethodPost, "/api/pull", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("/api/pull = %d, want 404", rec.Code)
+	}
+}

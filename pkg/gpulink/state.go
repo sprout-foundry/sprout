@@ -30,14 +30,21 @@ const (
 // DefaultEngine is Ollama's address, the most common local engine.
 const DefaultEngine = "127.0.0.1:11434"
 
+// EngineSinter is the Engine of a link served in-process by sinter, with
+// the model in State.Model, instead of by a server at host:port.
+const EngineSinter = "sinter"
+
 // State is the link's persistent configuration. The keys are not part of
 // it: they live in the credential store.
 type State struct {
 	PlatformURL string `json:"platform_url"`
 	LinkID      string `json:"link_id"`
 	Name        string `json:"name"`
-	// Engine is the engine's host:port as this machine reaches it.
+	// Engine is the engine's host:port as this machine reaches it, or
+	// EngineSinter.
 	Engine string `json:"engine"`
+	// Model is the sinter model directory when Engine is EngineSinter.
+	Model string `json:"model,omitempty"`
 }
 
 // Linked reports whether `sprout gpu link` completed.

@@ -340,6 +340,40 @@ sprout deploy rollback my-app-2     # roll back to the previous deployment
 
 ---
 
+### `sprout gpu`
+
+Link an inference engine this machine runs (Ollama, llama.cpp, vLLM, MLX,
+LM Studio: anything that answers OpenAI's `/v1/chat/completions`) to your
+platform account, so your tasks and Sprout can run on its models. The agent
+connects out to the platform over one WebSocket: no port is opened on your
+network, and the platform reaches only the engine's model-serving paths
+(`/v1/chat/completions`, `/v1/completions`, `/v1/embeddings`, `/v1/models`,
+`/health`). Linking needs a paid plan on the platform.
+
+**Basic Usage:**
+
+```bash
+sprout gpu link --engine 127.0.0.1:11434   # approve in the browser window that opens
+sprout gpu start                           # serve in the foreground
+sprout gpu install                         # or run it at login (systemd user unit / launchd agent)
+sprout gpu status
+sprout gpu unlink
+```
+
+**`link` flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--engine <host:port>` | The engine as this machine reaches it (default `127.0.0.1:11434`, Ollama; llama.cpp 8080, vLLM 8000, LM Studio 1234) |
+| `--engine-key <key>` | The engine's own API key, if it requires one (kept in the credential store) |
+| `--name <name>` | Name shown on the platform (default: the hostname) |
+| `--platform <url>` | Platform URL (default `$SPROUT_PLATFORM_URL`, else the previous link) |
+| `--no-browser` | Print the approval URL instead of opening a browser |
+
+After linking, choose one of the engine's models under **Account → Models**
+on the platform. The link key and engine key live in sprout's credential
+store; the state is in the config directory's `gpu/gpu.json`.
+
 ## Advanced Agent Flags
 
 ### Session Management

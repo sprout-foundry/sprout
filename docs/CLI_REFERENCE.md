@@ -340,6 +340,25 @@ sprout deploy rollback my-app-2     # roll back to the previous deployment
 
 ---
 
+### `sprout login`
+
+Sign this machine's sprout in to your platform account. You approve it once
+in the browser (the approval page names the account it is for); after that,
+`sprout runner link` and `sprout gpu link` link this machine straight to that
+account without another approval. The sign-in can read who you are and link
+machines to your account, and nothing else. It is listed, and can be revoked,
+under **Account → Developer** on the platform.
+
+```bash
+sprout login [--platform <url>] [--no-browser]
+sprout whoami    # the account and plan this machine is signed in to
+sprout logout    # forget the sign-in on this machine
+```
+
+Without a sign-in, `runner link` and `gpu link` ask for a browser approval
+each time, and print the account the machine was linked to; `sprout runner
+status` and `sprout gpu status` show it too.
+
 ### `sprout gpu`
 
 Link an inference engine this machine runs (Ollama, llama.cpp, vLLM, MLX,

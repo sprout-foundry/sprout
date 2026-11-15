@@ -56,7 +56,9 @@ type State struct {
 	PlatformURL string `json:"platform_url"`
 	RunnerID    string `json:"runner_id"`
 	Name        string `json:"name"`
-	Mode        string `json:"mode"`
+	// Account is the email of the account the runner is linked to.
+	Account string `json:"account,omitempty"`
+	Mode    string `json:"mode"`
 	// PublicURL is the HTTPS base the platform reaches the host server at
 	// (direct mode). Empty means the relay tunnel, once the platform offers it.
 	PublicURL  string `json:"public_url,omitempty"`

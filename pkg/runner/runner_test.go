@@ -336,11 +336,11 @@ func TestRunnerServesLocalDirectoryWorkspaces(t *testing.T) {
 		plat.mu.Unlock()
 		t.Fatalf("heartbeat must advertise the local dirs; got %v", plat.heartbeats[0].LocalDirs)
 	}
-	caps := strings.Join(plat.heartbeats[0].Capabilities, ",")
+	caps := plat.heartbeats[0].Capabilities
 	plat.mu.Unlock()
 	for _, c := range []string{CapabilityLocalDirs, CapabilityGateway, CapabilityTaskErrors} {
-		if !strings.Contains(caps, c) {
-			t.Errorf("a native runner with local dirs must advertise %q; got %q", c, caps)
+		if !caps.Has(c) {
+			t.Errorf("a native runner with local dirs must advertise %q; got %+v", c, caps)
 		}
 	}
 

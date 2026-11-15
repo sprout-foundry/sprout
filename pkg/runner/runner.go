@@ -90,18 +90,15 @@ func (r *Runner) heartbeat(ctx context.Context) {
 	}
 }
 
-// capabilities lists the optional start-task features this runner serves, so
+// capabilities is the optional start-task features this runner serves, so
 // the platform sends a feature only to runners that understand it (an older
 // runner would ignore workspace_dir or misread a gateway key).
-func (r *Runner) capabilities() []string {
-	caps := []string{CapabilityTaskErrors}
-	if len(r.State.LocalDirs) > 0 {
-		caps = append(caps, CapabilityLocalDirs)
+func (r *Runner) capabilities() *Capabilities {
+	return &Capabilities{
+		TaskErrors: true,
+		LocalDirs:  len(r.State.LocalDirs) > 0,
+		Gateway:    r.State.Mode != ModeContainer,
 	}
-	if r.State.Mode != ModeContainer {
-		caps = append(caps, CapabilityGateway)
-	}
-	return caps
 }
 
 func (r *Runner) poll(ctx context.Context) {

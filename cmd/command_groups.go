@@ -13,7 +13,7 @@ var commandGroups = []struct {
 	{cobra.Group{ID: "automation", Title: "Automation:"}, []string{"automate", "shell-bg"}},
 	{cobra.Group{ID: "deploy", Title: "Deploy:"}, []string{"deploy"}},
 	{cobra.Group{ID: "benchmark", Title: "Benchmarking:"}, []string{"benchmark"}},
-	{cobra.Group{ID: "config", Title: "Configuration:"}, []string{"config", "keys", "custom", "mcp", "lsp", "skill", "policy", "service", "runner", "gpu", "trust", "persona"}},
+	{cobra.Group{ID: "config", Title: "Configuration:"}, []string{"config", "keys", "custom", "mcp", "lsp", "skill", "policy", "service", "runner", "gpu", "login", "logout", "whoami", "trust", "persona"}},
 	{cobra.Group{ID: "diagnostics", Title: "Diagnostics & Maintenance:"}, []string{"diag", "explain", "health", "check", "audit", "api", "version", "upgrade", "bug", "help", "completion"}},
 }
 

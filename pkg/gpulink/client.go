@@ -18,6 +18,8 @@ import (
 type Credentials struct {
 	LinkID string `json:"link_id"`
 	APIKey string `json:"api_key"`
+	// AccountEmail is the account the GPU linked to.
+	AccountEmail string `json:"account_email,omitempty"`
 }
 
 // Client speaks the GPU link's device flow to one platform.

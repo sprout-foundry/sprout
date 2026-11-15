@@ -18,6 +18,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/sprout-foundry/sprout/pkg/buildinfo"
+	"github.com/sprout-foundry/sprout/pkg/platformauth"
 	"github.com/sprout-foundry/sprout/pkg/runner"
 	"github.com/sprout-foundry/sprout/pkg/runner/sandbox"
 )
@@ -119,20 +120,28 @@ func runRunnerLink(cmd *cobra.Command, _ []string) error {
 	if err := preflightLinkImage(ctx, cmd, st, ""); err != nil {
 		return err
 	}
-	client := runner.NewClient(platform, runner.Credentials{})
-	start, err := client.StartLink(ctx, name, runtime.GOOS, runtime.GOARCH, st.Mode)
-	if err != nil {
-		return err
-	}
-	verify := firstNonEmpty(start.VerificationURIComplete, start.VerificationURI)
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "To link %q, approve it on the platform:\n\n  %s\n\nand check the code matches: %s\n\nWaiting for approval…\n", name, verify, start.UserCode)
-	if !runnerNoBrowser {
-		runner.OpenURL(verify)
-	}
-
-	creds, err := pollLink(ctx, client, start)
-	if err != nil {
-		return err
+	var creds *runner.Credentials
+	if _, token, ok := platformauth.SignedInTo(platform); ok {
+		// Signed in (`sprout login`): link straight to that account.
+		linked, err := platformauth.NewClient(platform, token).LinkRunner(ctx, platformauth.LinkRequest{Name: name, OS: runtime.GOOS, Arch: runtime.GOARCH, Mode: st.Mode})
+		if err != nil {
+			return err
+		}
+		creds = &runner.Credentials{RunnerID: linked.RunnerID, APIKey: linked.APIKey, AccountEmail: linked.AccountEmail}
+	} else {
+		client := runner.NewClient(platform, runner.Credentials{})
+		start, err := client.StartLink(ctx, name, runtime.GOOS, runtime.GOARCH, st.Mode)
+		if err != nil {
+			return err
+		}
+		verify := firstNonEmpty(start.VerificationURIComplete, start.VerificationURI)
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "To link %q, approve it on the platform:\n\n  %s\n\nand check the code matches: %s\n\nWaiting for approval…\n", name, verify, start.UserCode)
+		if !runnerNoBrowser {
+			runner.OpenURL(verify)
+		}
+		if creds, err = pollLink(ctx, client, start); err != nil {
+			return err
+		}
 	}
 	keyStore, err := runner.SaveAPIKey(creds.APIKey)
 	if err != nil {
@@ -141,6 +150,7 @@ func runRunnerLink(cmd *cobra.Command, _ []string) error {
 	st.PlatformURL = strings.TrimRight(platform, "/")
 	st.RunnerID = creds.RunnerID
 	st.Name = name
+	st.Account = creds.AccountEmail
 	if runnerPublicURL != "" {
 		st.PublicURL = runnerPublicURL
 	}
@@ -151,7 +161,7 @@ func runRunnerLink(cmd *cobra.Command, _ []string) error {
 	if err := st.Save(); err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Linked as %q (mode: %s; key stored in the %s). Start it with `sprout runner start`, or `sprout runner install` to run at login.\n", name, st.Mode, keyStore)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Linked as %q%s (mode: %s; key stored in the %s). Start it with `sprout runner start`, or `sprout runner install` to run at login.\n", name, linkedTo(creds.AccountEmail), st.Mode, keyStore)
 	return printLocalDirNotice(cmd, st)
 }
 
@@ -343,7 +353,7 @@ func runRunnerStatus(cmd *cobra.Command, _ []string) error {
 		return nil
 	}
 	c := sandbox.Detect()
-	_, _ = fmt.Fprintf(out, "Linked:    %s (%s)\nPlatform:  %s\nMode:      %s\n", st.Name, st.RunnerID, st.PlatformURL, st.Mode)
+	_, _ = fmt.Fprintf(out, "Linked:    %s (%s)\nPlatform:  %s\nAccount:   %s\nMode:      %s\n", st.Name, st.RunnerID, st.PlatformURL, firstNonEmpty(st.Account, "(not recorded; link again to see it)"), st.Mode)
 	_, _ = fmt.Fprintf(out, "Sandbox:   %s", c.Name)
 	switch {
 	case !c.Available:

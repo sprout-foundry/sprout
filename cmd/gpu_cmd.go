@@ -17,6 +17,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sprout-foundry/sprout/pkg/gpulink"
+	"github.com/sprout-foundry/sprout/pkg/platformauth"
 	"github.com/sprout-foundry/sprout/pkg/runner"
 )
 
@@ -119,19 +120,28 @@ func runGPULink(cmd *cobra.Command, _ []string) error {
 		engine = gpuEngine + " (" + strings.Join(models, ", ") + ")"
 	}
 
-	client := gpulink.NewClient(platform)
-	start, err := client.StartLink(ctx, name, runtime.GOOS, runtime.GOARCH, engine)
-	if err != nil {
-		return err
-	}
-	verify := firstNonEmpty(start.VerificationURIComplete, start.VerificationURI)
-	_, _ = fmt.Fprintf(out, "To link %q, approve it on the platform:\n\n  %s\n\nand check the code matches: %s\n\nWaiting for approval…\n", name, verify, start.UserCode)
-	if !gpuNoBrowser {
-		runner.OpenURL(verify)
-	}
-	creds, err := pollGPULink(ctx, client, start)
-	if err != nil {
-		return err
+	var creds *gpulink.Credentials
+	if _, token, ok := platformauth.SignedInTo(platform); ok {
+		// Signed in (`sprout login`): link straight to that account.
+		linked, err := platformauth.NewClient(platform, token).LinkGPU(ctx, platformauth.LinkRequest{Name: name, OS: runtime.GOOS, Arch: runtime.GOARCH, Engine: engine})
+		if err != nil {
+			return err
+		}
+		creds = &gpulink.Credentials{LinkID: linked.LinkID, APIKey: linked.APIKey, AccountEmail: linked.AccountEmail}
+	} else {
+		client := gpulink.NewClient(platform)
+		start, err := client.StartLink(ctx, name, runtime.GOOS, runtime.GOARCH, engine)
+		if err != nil {
+			return err
+		}
+		verify := firstNonEmpty(start.VerificationURIComplete, start.VerificationURI)
+		_, _ = fmt.Fprintf(out, "To link %q, approve it on the platform:\n\n  %s\n\nand check the code matches: %s\n\nWaiting for approval…\n", name, verify, start.UserCode)
+		if !gpuNoBrowser {
+			runner.OpenURL(verify)
+		}
+		if creds, err = pollGPULink(ctx, client, start); err != nil {
+			return err
+		}
 	}
 	keyStore, err := gpulink.SaveAPIKey(creds.APIKey)
 	if err != nil {
@@ -143,6 +153,7 @@ func runGPULink(cmd *cobra.Command, _ []string) error {
 	st.PlatformURL = strings.TrimRight(platform, "/")
 	st.LinkID = creds.LinkID
 	st.Name = name
+	st.Account = creds.AccountEmail
 	st.Engine = gpuEngine
 	st.Model = ""
 	if gpuSinter {
@@ -152,7 +163,7 @@ func runGPULink(cmd *cobra.Command, _ []string) error {
 	if err := st.Save(); err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintf(out, "Linked as %q (key stored in the %s). Start it with `sprout gpu start`, or `sprout gpu install` to run it at login. Then choose one of its models under Account → Models.\n", name, keyStore)
+	_, _ = fmt.Fprintf(out, "Linked as %q%s (key stored in the %s). Start it with `sprout gpu start`, or `sprout gpu install` to run it at login. Then choose one of its models under Account → Models.\n", name, linkedTo(creds.AccountEmail), keyStore)
 	return nil
 }
 
@@ -231,7 +242,7 @@ func runGPUStatus(cmd *cobra.Command, _ []string) error {
 		_, _ = fmt.Fprintln(out, "No GPU is linked on this machine. Run `sprout gpu link --engine host:port`.")
 		return nil
 	}
-	_, _ = fmt.Fprintf(out, "Linked as %q to %s\nEngine: %s\n", st.Name, st.PlatformURL, st.Engine)
+	_, _ = fmt.Fprintf(out, "Linked as %q to %s\nAccount: %s\nEngine: %s\n", st.Name, st.PlatformURL, firstNonEmpty(st.Account, "(not recorded; link again to see it)"), st.Engine)
 	if st.Engine == gpulink.EngineSinter {
 		_, _ = fmt.Fprintf(out, "Model: %s (served in-process by `sprout gpu start`)\n", st.Model)
 		return nil

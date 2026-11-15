@@ -42,6 +42,9 @@ type DeviceStart struct {
 type Credentials struct {
 	RunnerID string `json:"runner_id"`
 	APIKey   string `json:"api_key"`
+	// AccountEmail is the account the runner linked to, as the platform
+	// reports it (empty from platforms that predate it).
+	AccountEmail string `json:"account_email,omitempty"`
 }
 
 // Heartbeat reports liveness plus what the runner can do. The platform only
@@ -57,17 +60,41 @@ type Heartbeat struct {
 	// --dir`) this runner serves workspaces in place. A start task naming
 	// one of them runs against the user's real files, no clone.
 	LocalDirs []string `json:"local_dirs,omitempty"`
-	// Capabilities lists the optional start-task features this runner
-	// serves (Capability* constants). The platform sends workspace_dir or
-	// a gateway provider only to runners that advertise them: an older
-	// runner ignores workspace_dir and would hand a gateway key to a
-	// public provider.
-	Capabilities []string `json:"capabilities,omitempty"`
+	// Capabilities is the optional start-task features this runner serves.
+	// The platform sends workspace_dir or a gateway provider only to
+	// runners that advertise them: an older runner ignores workspace_dir
+	// and would hand a gateway key to a public provider.
+	Capabilities *Capabilities `json:"capabilities,omitempty"`
 	// DirectURL is where the platform reaches the host server now; empty
 	// for a relayed runner.
 	DirectURL string `json:"direct_url,omitempty"`
 	// Relayed reports that the runner serves the platform over its tunnel.
 	Relayed bool `json:"relayed,omitempty"`
+}
+
+// Capabilities is the heartbeat's capability object (protocol §4): one
+// boolean per optional feature; an absent member is not advertised.
+type Capabilities struct {
+	LocalDirs  bool `json:"local_dirs"`
+	Gateway    bool `json:"gateway"`
+	TaskErrors bool `json:"task_errors"`
+}
+
+// Has reports whether c advertises the feature named by a Capability*
+// constant.
+func (c *Capabilities) Has(name string) bool {
+	if c == nil {
+		return false
+	}
+	switch name {
+	case CapabilityLocalDirs:
+		return c.LocalDirs
+	case CapabilityGateway:
+		return c.Gateway
+	case CapabilityTaskErrors:
+		return c.TaskErrors
+	}
+	return false
 }
 
 // Optional start-task features a runner advertises in its heartbeat.

@@ -40,6 +40,8 @@ type State struct {
 	PlatformURL string `json:"platform_url"`
 	LinkID      string `json:"link_id"`
 	Name        string `json:"name"`
+	// Account is the email of the account the GPU is linked to.
+	Account string `json:"account,omitempty"`
 	// Engine is the engine's host:port as this machine reaches it, or
 	// EngineSinter.
 	Engine string `json:"engine"`

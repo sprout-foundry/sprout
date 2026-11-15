@@ -272,8 +272,8 @@
       },
       {
         "cached_input_cost": 0.25,
-        "context_length": 262144,
-        "description": "Qwen3.8 2.4T A95B is Qwen's text-only 2.4T-parameter mixture-of-experts model with always-on reasoning and a 262K context window on Chutes public compute",
+        "context_length": 1000000,
+        "description": "Qwen3.8 2.4T A95B is Qwen's text-only 2.4T-parameter mixture-of-experts model with always-on reasoning and a 1M-token context window on Chutes public compute",
         "id": "Qwen/Qwen3.8-2.4T-A95B",
         "input_cost": 2,
         "name": "Qwen3.8 2.4T A95B",

@@ -10,7 +10,7 @@
   },
   "defaults": {
     "max_tokens": -1,
-    "model": "devstral-2512",
+    "model": "mistral-large-4-0",
     "temperature": 0.7,
     "top_p": 1
   },

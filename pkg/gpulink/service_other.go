@@ -12,5 +12,5 @@ func InstallService() (string, error) { return "", errNoService }
 // UninstallService is unavailable on this OS.
 func UninstallService() error { return errNoService }
 
-// ServiceNote is what to know about the login service on this OS.
-const ServiceNote = ""
+// ServiceNotice is what to know about the service on this machine.
+func ServiceNotice() string { return "" }

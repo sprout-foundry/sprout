@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -47,11 +48,17 @@ func InstallService() (string, error) {
 	if err := os.WriteFile(path, []byte(unit), 0o644); err != nil {
 		return "", err
 	}
-	for _, args := range [][]string{{"--user", "daemon-reload"}, {"--user", "enable", "--now", systemdUnit}} {
+	// restart, not just start: after a new link the running agent must pick
+	// up the new link's state and key.
+	for _, args := range [][]string{{"--user", "daemon-reload"}, {"--user", "enable", systemdUnit}, {"--user", "restart", systemdUnit}} {
 		if out, err := exec.Command("systemctl", args...).CombinedOutput(); err != nil { //nolint:gosec // G204: fixed systemctl subcommands for the link's own unit
 			return "", fmt.Errorf("systemctl %s: %s", strings.Join(args, " "), out)
 		}
 	}
+	// A user service stops at logout unless the user lingers; a GPU box
+	// usually has nobody logged in. Enabling it needs no sudo where polkit
+	// lets users linger themselves; ServiceNotice says when it did not.
+	_ = exec.Command("loginctl", "enable-linger").Run()
 	return path, nil
 }
 
@@ -69,5 +76,12 @@ func UninstallService() error {
 	return nil
 }
 
-// ServiceNote is what to know about the login service on this OS.
-const ServiceNote = "On Linux the user service stops when you log out; run `sudo loginctl enable-linger $USER` to keep it serving."
+// ServiceNotice is what to know about the service on this machine: on Linux,
+// that it stops at logout while the user does not linger.
+func ServiceNotice() string {
+	out, err := exec.Command("loginctl", "show-user", strconv.Itoa(os.Getuid()), "--property=Linger", "--value").Output() //nolint:gosec // G204: fixed loginctl query for the current user
+	if err == nil && strings.TrimSpace(string(out)) == "yes" {
+		return ""
+	}
+	return "The service stops when you log out; run `sudo loginctl enable-linger $USER` to keep it serving."
+}

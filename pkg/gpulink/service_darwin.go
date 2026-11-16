@@ -82,5 +82,7 @@ func UninstallService() error {
 	return nil
 }
 
-// ServiceNote is what to know about the login service on this OS.
-const ServiceNote = "The agent serves while you are logged in and the Mac is awake; keep it from sleeping while you want it to serve (System Settings → Energy, or `caffeinate -s`)."
+// ServiceNotice is what to know about the service on this machine.
+func ServiceNotice() string {
+	return "The agent serves while you are logged in and the Mac is awake; keep it from sleeping while you want it to serve (System Settings → Energy, or `caffeinate -s`)."
+}

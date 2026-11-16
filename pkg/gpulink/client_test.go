@@ -31,6 +31,22 @@ func TestStartLink_SendsTheEngine(t *testing.T) {
 	}
 }
 
+func TestStartFleetLink_UsesTheFleetEndpoint(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		_, _ = w.Write([]byte(`{"device_code":"d","user_code":"CDFG-HJKM","verification_uri":"https://x/fleet/link","interval":5,"expires_in":600}`))
+	}))
+	defer srv.Close()
+	start, err := NewClient(srv.URL).StartFleetLink(context.Background(), "rig-1", "linux", "amd64", "127.0.0.1:8006")
+	if err != nil || start.UserCode != "CDFG-HJKM" {
+		t.Fatalf("start = %+v, %v", start, err)
+	}
+	if gotPath != "/fleet/gpus/device" {
+		t.Fatalf("path = %q, want /fleet/gpus/device", gotPath)
+	}
+}
+
 func TestPollLink_Outcomes(t *testing.T) {
 	cases := []struct {
 		status int

@@ -42,6 +42,7 @@ var (
 	gpuNoBrowser bool
 	gpuSinter    bool
 	gpuModel     string
+	gpuFleet     bool
 )
 
 func init() {
@@ -57,6 +58,7 @@ func init() {
 	linkCmd.Flags().StringVar(&gpuPlatform, "platform", "", "platform URL (default $SPROUT_PLATFORM_URL, else the previous link, else "+runner.DefaultPlatformURL+")")
 	linkCmd.Flags().BoolVar(&gpuNoBrowser, "no-browser", false, "print the approval URL without opening a browser (SSH sessions, headless machines)")
 	linkCmd.Flags().BoolVar(&gpuSinter, "sinter", false, "serve a model in-process with sinter instead of a server at --engine (Apple Silicon)")
+	linkCmd.Flags().BoolVar(&gpuFleet, "fleet", false, "link to the platform's own GPU fleet (a machine the platform owns or rents), approved by a platform admin, instead of to your account")
 	linkCmd.Flags().StringVar(&gpuModel, "model", "", "the model to serve with sinter (a catalog name such as qwen3.5-9b, an installed model, or a model directory; default: the one recommended for this machine), downloaded if missing; implies --sinter")
 
 	gpuCmd.AddCommand(
@@ -136,7 +138,7 @@ func runGPULink(cmd *cobra.Command, _ []string) error {
 	}
 
 	var creds *gpulink.Credentials
-	if _, token, ok := platformauth.SignedInTo(platform); ok {
+	if _, token, ok := platformauth.SignedInTo(platform); ok && !gpuFleet {
 		// Signed in (`sprout login`): link straight to that account.
 		linked, err := platformauth.NewClient(platform, token).LinkGPU(ctx, platformauth.LinkRequest{Name: name, OS: runtime.GOOS, Arch: runtime.GOARCH, Engine: engine})
 		if err != nil {
@@ -144,8 +146,15 @@ func runGPULink(cmd *cobra.Command, _ []string) error {
 		}
 		creds = &gpulink.Credentials{LinkID: linked.LinkID, APIKey: linked.APIKey, AccountEmail: linked.AccountEmail}
 	} else {
+		// A fleet link always takes the browser approval: only a platform
+		// admin, with a fresh second factor, may add a machine to the fleet.
 		client := gpulink.NewClient(platform)
-		start, err := client.StartLink(ctx, name, runtime.GOOS, runtime.GOARCH, engine)
+		var start *runner.DeviceStart
+		if gpuFleet {
+			start, err = client.StartFleetLink(ctx, name, runtime.GOOS, runtime.GOARCH, engine)
+		} else {
+			start, err = client.StartLink(ctx, name, runtime.GOOS, runtime.GOARCH, engine)
+		}
 		if err != nil {
 			return err
 		}
@@ -177,6 +186,10 @@ func runGPULink(cmd *cobra.Command, _ []string) error {
 	}
 	if err := st.Save(); err != nil {
 		return err
+	}
+	if gpuFleet {
+		_, _ = fmt.Fprintf(out, "Linked %q to the platform fleet (key stored in the %s). Start it with `sprout gpu start`, or `sprout gpu install` to run it at login. Then add it as a Linked GPU (fleet) provider under Admin → LLM providers.\n", name, keyStore)
+		return nil
 	}
 	_, _ = fmt.Fprintf(out, "Linked as %q%s (key stored in the %s). Start it with `sprout gpu start`, or `sprout gpu install` to run it at login. Then choose one of its models under Account → Models.\n", name, linkedTo(creds.AccountEmail), keyStore)
 	return nil

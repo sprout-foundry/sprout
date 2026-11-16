@@ -37,8 +37,19 @@ func NewClient(baseURL string) *Client {
 // shown on the approval screen; the platform never reaches it but through
 // the tunnel.
 func (c *Client) StartLink(ctx context.Context, name, goos, arch, engine string) (*runner.DeviceStart, error) {
+	return c.startLink(ctx, "/gpus/device", name, goos, arch, engine)
+}
+
+// StartFleetLink asks the platform for a device code to link this machine's
+// engine to the platform's own fleet (a GPU the platform owns or rents). A
+// platform admin approves it; it is not linked to the approver's account.
+func (c *Client) StartFleetLink(ctx context.Context, name, goos, arch, engine string) (*runner.DeviceStart, error) {
+	return c.startLink(ctx, "/fleet/gpus/device", name, goos, arch, engine)
+}
+
+func (c *Client) startLink(ctx context.Context, path, name, goos, arch, engine string) (*runner.DeviceStart, error) {
 	var out runner.DeviceStart
-	status, err := c.post(ctx, "/gpus/device", map[string]string{"name": name, "os": goos, "arch": arch, "engine": engine}, &out)
+	status, err := c.post(ctx, path, map[string]string{"name": name, "os": goos, "arch": arch, "engine": engine}, &out)
 	if err != nil {
 		return nil, err
 	}

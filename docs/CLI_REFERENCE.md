@@ -403,6 +403,7 @@ sprout gpu unlink
 | `--platform <url>` | Platform URL (default `$SPROUT_PLATFORM_URL`, else the previous link) |
 | `--no-browser` | Print the approval URL instead of opening a browser |
 | `--sinter` | Serve a model in-process with sinter instead of a server at `--engine` (Apple Silicon builds) |
+| `--fleet` | Link to the platform's own GPU fleet (a machine the platform owns or rents) instead of your account. Always approved in the browser by a platform admin; the GPU is then added as a Linked GPU (fleet) provider |
 | `--model <name\|dir>` | The model to serve with sinter (implies `--sinter`): a catalog name (e.g. `qwen3.5-9b`), an installed model, or a model directory; default: the model recommended for this machine's memory. A missing catalog model and the MLX runtime are downloaded once |
 
 While linked, the agent also answers the platform's metrics poll itself

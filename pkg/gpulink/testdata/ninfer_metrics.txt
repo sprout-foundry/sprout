@@ -145,3 +145,21 @@ ninfer_prefix_reused_tokens_total{role="input_replay"} 0
 ninfer_prefix_reused_tokens_total{role="long_anchor"} 0
 ninfer_prefix_reused_tokens_total{role="shared_prefix"} 0
 ninfer_prefix_reused_tokens_total{role="continuation"} 0
+# HELP ninfer_gpu_utilization_percent Sampled GPU SM utilization, 0-100.
+# TYPE ninfer_gpu_utilization_percent gauge
+# HELP ninfer_gpu_memory_utilization_percent Sampled GPU memory-controller utilization, 0-100.
+# TYPE ninfer_gpu_memory_utilization_percent gauge
+# HELP ninfer_gpu_temperature_celsius Sampled GPU die temperature.
+# TYPE ninfer_gpu_temperature_celsius gauge
+# HELP ninfer_gpu_power_watts Sampled GPU board power draw.
+# TYPE ninfer_gpu_power_watts gauge
+# HELP ninfer_gpu_power_limit_watts Configured GPU power management limit.
+# TYPE ninfer_gpu_power_limit_watts gauge
+# HELP ninfer_gpu_sm_clock_mhz Sampled GPU SM clock.
+# TYPE ninfer_gpu_sm_clock_mhz gauge
+ninfer_gpu_utilization_percent{rank="0",node="0"} 0
+ninfer_gpu_memory_utilization_percent{rank="0",node="0"} 0
+ninfer_gpu_temperature_celsius{rank="0",node="0"} 26
+ninfer_gpu_power_watts{rank="0",node="0"} 13.862
+ninfer_gpu_power_limit_watts{rank="0",node="0"} 450
+ninfer_gpu_sm_clock_mhz{rank="0",node="0"} 180

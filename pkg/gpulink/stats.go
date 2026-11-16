@@ -83,6 +83,7 @@ type GPUStats struct {
 	Name             string   `json:"name,omitempty"`
 	MemoryTotalBytes *float64 `json:"memory_total_bytes,omitempty"`
 	MemoryUsedBytes  *float64 `json:"memory_used_bytes,omitempty"`
+	MemoryFreeBytes  *float64 `json:"memory_free_bytes,omitempty"`
 	UtilizationPct   *float64 `json:"utilization_pct,omitempty"`
 	MemoryUtilPct    *float64 `json:"memory_utilization_pct,omitempty"`
 	TemperatureC     *float64 `json:"temperature_c,omitempty"`
@@ -90,8 +91,9 @@ type GPUStats struct {
 	PowerLimitW      *float64 `json:"power_limit_w,omitempty"`
 	SMClockMHz       *float64 `json:"sm_clock_mhz,omitempty"`
 	FanPct           *float64 `json:"fan_pct,omitempty"`
-	// Source is where these came from: "engine" (the engine's own metrics,
-	// DCGM names) or "nvidia-smi".
+	// Source is where these came from: "engine" (the engine's own metrics),
+	// "nvidia-smi", or "engine+nvidia-smi" when nvidia-smi filled what the
+	// engine does not report.
 	Source string `json:"source"`
 }
 

@@ -409,8 +409,9 @@ While linked, the agent also answers the platform's metrics poll itself
 (it is never passed to the engine): the engine's load, token counts, latency
 and cache figures read from its `/metrics` and `/slots` (ninfer, vLLM,
 llama.cpp and SGLang are recognised), and the GPUs' utilisation, memory,
-temperature and power from the engine's own metrics under the DCGM names, or
-else from `nvidia-smi`.
+temperature and power from the engine's own GPU metrics where it reports them
+(ninfer's `ninfer_gpu_*`), with `nvidia-smi` filling in what the engine does
+not report.
 
 `sprout gpu start` warns when a linked engine does not answer, and keeps the
 tunnel open: the platform picks up the engine's models within a minute of

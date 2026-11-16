@@ -163,45 +163,79 @@ func applySlots(e *EngineStats, body []byte) {
 	}
 }
 
-// gpusFromMetrics reads GPU hardware metrics an engine (or a DCGM exporter
-// it embeds) reports under the DCGM field names, one GPU per "gpu" label.
+// gpusFromMetrics reads the GPU hardware metrics an engine reports itself:
+// ninfer's ninfer_gpu_* gauges and its sampled free CUDA memory, one GPU per
+// rank. nil when the engine reports none.
 func gpusFromMetrics(m promMetrics) []GPUStats {
 	fields := map[string]func(*GPUStats, float64){
-		"DCGM_FI_DEV_GPU_UTIL":         func(g *GPUStats, v float64) { g.UtilizationPct = ptr(v) },
-		"DCGM_FI_DEV_MEM_COPY_UTIL":    func(g *GPUStats, v float64) { g.MemoryUtilPct = ptr(v) },
-		"DCGM_FI_DEV_GPU_TEMP":         func(g *GPUStats, v float64) { g.TemperatureC = ptr(v) },
-		"DCGM_FI_DEV_POWER_USAGE":      func(g *GPUStats, v float64) { g.PowerW = ptr(v) },
-		"DCGM_FI_DEV_POWER_MGMT_LIMIT": func(g *GPUStats, v float64) { g.PowerLimitW = ptr(v) },
-		"DCGM_FI_DEV_SM_CLOCK":         func(g *GPUStats, v float64) { g.SMClockMHz = ptr(v) },
-		"DCGM_FI_DEV_FAN_SPEED":        func(g *GPUStats, v float64) { g.FanPct = ptr(v) },
-		"DCGM_FI_DEV_FB_USED":          func(g *GPUStats, v float64) { g.MemoryUsedBytes = ptr(v * 1024 * 1024) },
+		"ninfer_gpu_utilization_percent":        func(g *GPUStats, v float64) { g.UtilizationPct = ptr(v) },
+		"ninfer_gpu_memory_utilization_percent": func(g *GPUStats, v float64) { g.MemoryUtilPct = ptr(v) },
+		"ninfer_gpu_temperature_celsius":        func(g *GPUStats, v float64) { g.TemperatureC = ptr(v) },
+		"ninfer_gpu_power_watts":                func(g *GPUStats, v float64) { g.PowerW = ptr(v) },
+		"ninfer_gpu_power_limit_watts":          func(g *GPUStats, v float64) { g.PowerLimitW = ptr(v) },
+		"ninfer_gpu_sm_clock_mhz":               func(g *GPUStats, v float64) { g.SMClockMHz = ptr(v) },
+		"ninfer_cuda_memory_free_bytes":         func(g *GPUStats, v float64) { g.MemoryFreeBytes = ptr(v) },
 	}
-	byIndex := map[string]*GPUStats{}
-	order := []string{}
+	byRank := map[int]*GPUStats{}
 	for name, set := range fields {
 		for _, s := range m[name] {
-			idx := s.labels["gpu"]
-			g, ok := byIndex[idx]
+			rank, err := parseIndex(s.labels["rank"])
+			if err != nil {
+				continue
+			}
+			g, ok := byRank[rank]
 			if !ok {
-				g = &GPUStats{Source: "engine", Name: s.labels["modelName"]}
-				if n, err := parseIndex(idx); err == nil {
-					g.Index = n
-				}
-				byIndex[idx] = g
-				order = append(order, idx)
+				g = &GPUStats{Index: rank, Source: "engine"}
+				byRank[rank] = g
 			}
 			set(g, s.value)
 		}
 	}
-	for _, s := range m["DCGM_FI_DEV_FB_FREE"] {
-		if g, ok := byIndex[s.labels["gpu"]]; ok && g.MemoryUsedBytes != nil {
-			g.MemoryTotalBytes = ptr(*g.MemoryUsedBytes + s.value*1024*1024)
-		}
+	if len(byRank) == 0 {
+		return nil
 	}
-	out := make([]GPUStats, 0, len(order))
-	for _, idx := range order {
-		out = append(out, *byIndex[idx])
+	out := make([]GPUStats, 0, len(byRank))
+	for _, g := range byRank {
+		out = append(out, *g)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Index < out[j].Index })
+	return out
+}
+
+// mergeGPUs fills what the engine's GPU figures lack (memory total and used,
+// fan, name) from nvidia-smi's for the same index. The engine's own figures
+// win; nvidia-smi alone is used when the engine reports no GPUs.
+func mergeGPUs(engine, smi []GPUStats) []GPUStats {
+	if len(engine) == 0 {
+		return smi
+	}
+	byIndex := map[int]GPUStats{}
+	for _, g := range smi {
+		byIndex[g.Index] = g
+	}
+	out := make([]GPUStats, 0, len(engine))
+	for _, g := range engine {
+		if s, ok := byIndex[g.Index]; ok {
+			fill := func(dst **float64, src *float64) {
+				if *dst == nil {
+					*dst = src
+				}
+			}
+			if g.Name == "" {
+				g.Name = s.Name
+			}
+			fill(&g.MemoryTotalBytes, s.MemoryTotalBytes)
+			fill(&g.MemoryUsedBytes, s.MemoryUsedBytes)
+			fill(&g.MemoryUtilPct, s.MemoryUtilPct)
+			fill(&g.UtilizationPct, s.UtilizationPct)
+			fill(&g.TemperatureC, s.TemperatureC)
+			fill(&g.PowerW, s.PowerW)
+			fill(&g.PowerLimitW, s.PowerLimitW)
+			fill(&g.SMClockMHz, s.SMClockMHz)
+			fill(&g.FanPct, s.FanPct)
+			g.Source = "engine+nvidia-smi"
+		}
+		out = append(out, g)
+	}
 	return out
 }

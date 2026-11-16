@@ -3,6 +3,7 @@ package gpulink
 import (
 	"encoding/json"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -163,18 +164,23 @@ func applySlots(e *EngineStats, body []byte) {
 	}
 }
 
-// gpusFromMetrics reads the GPU hardware metrics an engine reports itself:
-// ninfer's ninfer_gpu_* gauges and its sampled free CUDA memory, one GPU per
-// rank. nil when the engine reports none.
+// gpusFromMetrics reads the GPU hardware metrics an engine reports itself,
+// one GPU per rank: ninfer's ninfer_gpu_* gauges (utilisation, memory,
+// temperature, power, clock, fan) and ninfer_gpu_info's name. nil when the
+// engine reports none; nothing else is consulted.
 func gpusFromMetrics(m promMetrics) []GPUStats {
 	fields := map[string]func(*GPUStats, float64){
 		"ninfer_gpu_utilization_percent":        func(g *GPUStats, v float64) { g.UtilizationPct = ptr(v) },
 		"ninfer_gpu_memory_utilization_percent": func(g *GPUStats, v float64) { g.MemoryUtilPct = ptr(v) },
+		"ninfer_gpu_memory_total_bytes":         func(g *GPUStats, v float64) { g.MemoryTotalBytes = ptr(v) },
+		"ninfer_gpu_memory_used_bytes":          func(g *GPUStats, v float64) { g.MemoryUsedBytes = ptr(v) },
+		"ninfer_gpu_memory_free_bytes":          func(g *GPUStats, v float64) { g.MemoryFreeBytes = ptr(v) },
 		"ninfer_gpu_temperature_celsius":        func(g *GPUStats, v float64) { g.TemperatureC = ptr(v) },
 		"ninfer_gpu_power_watts":                func(g *GPUStats, v float64) { g.PowerW = ptr(v) },
 		"ninfer_gpu_power_limit_watts":          func(g *GPUStats, v float64) { g.PowerLimitW = ptr(v) },
 		"ninfer_gpu_sm_clock_mhz":               func(g *GPUStats, v float64) { g.SMClockMHz = ptr(v) },
-		"ninfer_cuda_memory_free_bytes":         func(g *GPUStats, v float64) { g.MemoryFreeBytes = ptr(v) },
+		"ninfer_gpu_fan_speed_percent":          func(g *GPUStats, v float64) { g.FanPct = ptr(v) },
+		"ninfer_gpu_info":                       func(*GPUStats, float64) {},
 	}
 	byRank := map[int]*GPUStats{}
 	for name, set := range fields {
@@ -189,6 +195,9 @@ func gpusFromMetrics(m promMetrics) []GPUStats {
 				byRank[rank] = g
 			}
 			set(g, s.value)
+			if name == "ninfer_gpu_info" {
+				g.Name = s.labels["name"]
+			}
 		}
 	}
 	if len(byRank) == 0 {
@@ -202,40 +211,6 @@ func gpusFromMetrics(m promMetrics) []GPUStats {
 	return out
 }
 
-// mergeGPUs fills what the engine's GPU figures lack (memory total and used,
-// fan, name) from nvidia-smi's for the same index. The engine's own figures
-// win; nvidia-smi alone is used when the engine reports no GPUs.
-func mergeGPUs(engine, smi []GPUStats) []GPUStats {
-	if len(engine) == 0 {
-		return smi
-	}
-	byIndex := map[int]GPUStats{}
-	for _, g := range smi {
-		byIndex[g.Index] = g
-	}
-	out := make([]GPUStats, 0, len(engine))
-	for _, g := range engine {
-		if s, ok := byIndex[g.Index]; ok {
-			fill := func(dst **float64, src *float64) {
-				if *dst == nil {
-					*dst = src
-				}
-			}
-			if g.Name == "" {
-				g.Name = s.Name
-			}
-			fill(&g.MemoryTotalBytes, s.MemoryTotalBytes)
-			fill(&g.MemoryUsedBytes, s.MemoryUsedBytes)
-			fill(&g.MemoryUtilPct, s.MemoryUtilPct)
-			fill(&g.UtilizationPct, s.UtilizationPct)
-			fill(&g.TemperatureC, s.TemperatureC)
-			fill(&g.PowerW, s.PowerW)
-			fill(&g.PowerLimitW, s.PowerLimitW)
-			fill(&g.SMClockMHz, s.SMClockMHz)
-			fill(&g.FanPct, s.FanPct)
-			g.Source = "engine+nvidia-smi"
-		}
-		out = append(out, g)
-	}
-	return out
+func parseIndex(s string) (int, error) {
+	return strconv.Atoi(strings.TrimSpace(s))
 }

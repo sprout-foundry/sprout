@@ -157,9 +157,24 @@ ninfer_prefix_reused_tokens_total{role="continuation"} 0
 # TYPE ninfer_gpu_power_limit_watts gauge
 # HELP ninfer_gpu_sm_clock_mhz Sampled GPU SM clock.
 # TYPE ninfer_gpu_sm_clock_mhz gauge
+# HELP ninfer_gpu_memory_total_bytes Sampled GPU total memory.
+# TYPE ninfer_gpu_memory_total_bytes gauge
+# HELP ninfer_gpu_memory_used_bytes Sampled GPU memory in use.
+# TYPE ninfer_gpu_memory_used_bytes gauge
+# HELP ninfer_gpu_memory_free_bytes Sampled GPU free memory.
+# TYPE ninfer_gpu_memory_free_bytes gauge
+# HELP ninfer_gpu_fan_speed_percent Sampled GPU fan speed, 0-100.
+# TYPE ninfer_gpu_fan_speed_percent gauge
+# HELP ninfer_gpu_info Resident GPU identity; always 1.
+# TYPE ninfer_gpu_info gauge
 ninfer_gpu_utilization_percent{rank="0",node="0"} 0
 ninfer_gpu_memory_utilization_percent{rank="0",node="0"} 0
-ninfer_gpu_temperature_celsius{rank="0",node="0"} 26
-ninfer_gpu_power_watts{rank="0",node="0"} 13.862
+ninfer_gpu_temperature_celsius{rank="0",node="0"} 33
+ninfer_gpu_power_watts{rank="0",node="0"} 80.031999999999996
 ninfer_gpu_power_limit_watts{rank="0",node="0"} 450
-ninfer_gpu_sm_clock_mhz{rank="0",node="0"} 180
+ninfer_gpu_sm_clock_mhz{rank="0",node="0"} 2610
+ninfer_gpu_memory_total_bytes{rank="0",node="0"} 102641958912
+ninfer_gpu_memory_used_bytes{rank="0",node="0"} 101433409536
+ninfer_gpu_memory_free_bytes{rank="0",node="0"} 1208549376
+ninfer_gpu_fan_speed_percent{rank="0",node="0"} 30
+ninfer_gpu_info{rank="0",node="0",name="Example GPU"} 1

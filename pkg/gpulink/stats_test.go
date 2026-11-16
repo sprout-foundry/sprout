@@ -1,9 +1,7 @@
 package gpulink
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -66,20 +64,6 @@ func TestSlotsFillWhatMetricsLack(t *testing.T) {
 	}
 }
 
-func TestParseSMI(t *testing.T) {
-	gpus := parseSMI("0, NVIDIA RTX PRO 6000, 97887, 96099, 37, 12, 28, 213.85, 450.00, 2400, 30\n1, Test GPU, 24576, 1024, [N/A], [N/A], 40, [N/A], [N/A], 1800, [N/A]\n")
-	if len(gpus) != 2 {
-		t.Fatalf("gpus = %+v", gpus)
-	}
-	g := gpus[0]
-	if g.Name != "NVIDIA RTX PRO 6000" || *g.UtilizationPct != 37 || *g.TemperatureC != 28 || *g.PowerW != 213.85 || *g.MemoryTotalBytes != 97887*1024*1024 || g.Source != "nvidia-smi" {
-		t.Fatalf("gpu 0 = %+v", g)
-	}
-	if gpus[1].UtilizationPct != nil || gpus[1].PowerW != nil || *gpus[1].TemperatureC != 40 {
-		t.Fatal("[N/A] reads as absent, not zero")
-	}
-}
-
 func TestNinferReportsItsGPUs(t *testing.T) {
 	m := parseProm(strings.NewReader(string(readFixture(t, "ninfer_metrics.txt"))))
 	gpus := gpusFromMetrics(m)
@@ -87,29 +71,17 @@ func TestNinferReportsItsGPUs(t *testing.T) {
 		t.Fatalf("gpus = %+v", gpus)
 	}
 	g := gpus[0]
-	if g.Index != 0 || g.Source != "engine" || *g.TemperatureC != 26 || *g.PowerLimitW != 450 || *g.SMClockMHz != 180 ||
-		g.UtilizationPct == nil || g.MemoryFreeBytes == nil || g.MemoryTotalBytes != nil {
-		t.Fatalf("gpu = %+v", g)
+	if g.Index != 0 || g.Source != "engine" || g.Name != "Example GPU" {
+		t.Fatalf("identity = %+v", g)
 	}
-}
-
-func TestNvidiaSMIFillsOnlyWhatTheEngineLacks(t *testing.T) {
-	engine := []GPUStats{{Index: 0, Source: "engine", UtilizationPct: ptr(80), TemperatureC: ptr(60), MemoryFreeBytes: ptr(1)}}
-	smi := []GPUStats{{Index: 0, Name: "Test GPU", Source: "nvidia-smi", UtilizationPct: ptr(10), TemperatureC: ptr(30),
-		MemoryTotalBytes: ptr(100), MemoryUsedBytes: ptr(99), FanPct: ptr(40)}}
-	got := mergeGPUs(engine, smi)
-	if len(got) != 1 {
-		t.Fatalf("merged = %+v", got)
+	if *g.MemoryTotalBytes != 102641958912 || *g.MemoryUsedBytes != 101433409536 || *g.MemoryFreeBytes != 1208549376 {
+		t.Fatalf("memory = %v/%v/%v", *g.MemoryUsedBytes, *g.MemoryTotalBytes, *g.MemoryFreeBytes)
 	}
-	g := got[0]
-	if *g.UtilizationPct != 80 || *g.TemperatureC != 60 {
-		t.Fatal("the engine's own figures win")
+	if *g.TemperatureC != 33 || *g.PowerLimitW != 450 || *g.SMClockMHz != 2610 || *g.FanPct != 30 || *g.UtilizationPct != 0 || *g.MemoryUtilPct != 0 {
+		t.Fatalf("gauges = %+v", g)
 	}
-	if g.Name != "Test GPU" || *g.MemoryTotalBytes != 100 || *g.MemoryUsedBytes != 99 || *g.FanPct != 40 || g.Source != "engine+nvidia-smi" {
-		t.Fatalf("nvidia-smi fills the gaps: %+v", g)
-	}
-	if only := mergeGPUs(nil, smi); len(only) != 1 || only[0].Source != "nvidia-smi" {
-		t.Fatal("without engine GPU metrics, nvidia-smi's are used")
+	if gpusFromMetrics(parseProm(strings.NewReader("vllm:num_requests_running 1\n"))) != nil {
+		t.Fatal("an engine without GPU metrics reports no GPUs")
 	}
 }
 
@@ -153,12 +125,6 @@ func TestAgentServesStats(t *testing.T) {
 		}
 	}))
 	defer engine.Close()
-	prev := runSMI
-	runSMI = func(context.Context) ([]byte, error) {
-		return []byte("0, Test GPU, 1024, 512, 50, 10, 45, 100, 300, 1500, 20\n"), nil
-	}
-	defer func() { runSMI = prev }()
-
 	a := &Agent{State: &State{Engine: strings.TrimPrefix(engine.URL, "http://")}}
 	rr := httptest.NewRecorder()
 	a.Handler()("", rr, httptest.NewRequest(http.MethodGet, StatsPath, nil))
@@ -172,8 +138,8 @@ func TestAgentServesStats(t *testing.T) {
 	if s.Version != StatsVersion || s.Engine == nil || s.Engine.Kind != "ninfer" || len(s.GPUs) != 1 {
 		t.Fatalf("stats = %+v", s)
 	}
-	if g := s.GPUs[0]; *g.TemperatureC != 26 || g.Name != "Test GPU" || *g.MemoryTotalBytes != 1024*1024*1024 || g.Source != "engine+nvidia-smi" {
-		t.Fatalf("the engine's GPU figures, with nvidia-smi filling the rest: %+v", g)
+	if g := s.GPUs[0]; *g.TemperatureC != 33 || g.Name != "Example GPU" || *g.MemoryTotalBytes != 102641958912 || g.Source != "engine" {
+		t.Fatalf("the engine's GPU figures: %+v", g)
 	}
 	mu.Lock()
 	reached := false
@@ -183,12 +149,5 @@ func TestAgentServesStats(t *testing.T) {
 	mu.Unlock()
 	if reached {
 		t.Fatal("the stats path reached the engine")
-	}
-
-	// No nvidia-smi: the engine's own GPU figures are still served.
-	runSMI = func(context.Context) ([]byte, error) { return nil, errors.New("not found") }
-	b := &Agent{State: &State{Engine: strings.TrimPrefix(engine.URL, "http://")}}
-	if got := b.collect(context.Background()); got.Engine == nil || len(got.GPUs) != 1 || got.GPUs[0].Source != "engine" {
-		t.Fatalf("without nvidia-smi, the engine's own GPU figures = %+v", got)
 	}
 }

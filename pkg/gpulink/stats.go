@@ -12,8 +12,8 @@ const StatsPath = "/sprout/stats"
 // StatsVersion is the version of the Stats shape.
 const StatsVersion = 1
 
-// Stats is one sample of a linked GPU's state: what its engine reports and
-// what the GPUs report. Counters and histograms are cumulative since the
+// Stats is one sample of a linked GPU's state, all of it as its engine
+// reports it: its load and work, and its GPUs' hardware. Counters and histograms are cumulative since the
 // engine started; the platform derives rates and percentiles from the
 // difference between samples. A field the engine does not report is absent
 // (nil), never zero.
@@ -91,9 +91,8 @@ type GPUStats struct {
 	PowerLimitW      *float64 `json:"power_limit_w,omitempty"`
 	SMClockMHz       *float64 `json:"sm_clock_mhz,omitempty"`
 	FanPct           *float64 `json:"fan_pct,omitempty"`
-	// Source is where these came from: "engine" (the engine's own metrics),
-	// "nvidia-smi", or "engine+nvidia-smi" when nvidia-smi filled what the
-	// engine does not report.
+	// Source is where these came from: "engine", the engine's own metrics
+	// (the only source: the agent runs nothing on the machine to read GPUs).
 	Source string `json:"source"`
 }
 

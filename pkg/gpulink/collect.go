@@ -42,7 +42,6 @@ func (a *Agent) collect(ctx context.Context) *Stats {
 	} else {
 		s.Engine, s.GPUs = a.engineStats(ctx)
 	}
-	s.GPUs = mergeGPUs(s.GPUs, gpusFromSMI(ctx))
 	a.stats.last, a.stats.lastAt = s, time.Now()
 	return s
 }

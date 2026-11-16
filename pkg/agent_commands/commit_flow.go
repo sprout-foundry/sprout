@@ -29,6 +29,16 @@ type CommitFlow struct {
 	// trailers are the explicit git trailers (--trailer "Key: Value")
 	// appended to the commit message on top of the commit.trailers defaults.
 	trailers []string
+	// providerOverride and modelOverride are the --provider/--model flags.
+	providerOverride string
+	modelOverride    string
+}
+
+// SetModelOverride sets the --provider/--model flags, which win over the
+// commit role in the config.
+func (cf *CommitFlow) SetModelOverride(provider, model string) {
+	cf.providerOverride = provider
+	cf.modelOverride = model
 }
 
 // NewCommitFlow creates a new commit flow
@@ -353,6 +363,8 @@ func (cf *CommitFlow) generateCommitMessageAndCommit() error {
 		userInstructions: cf.userInstructions,
 		agentError:       cf.agentError,
 		trailers:         cf.trailers,
+		providerOverride: cf.providerOverride,
+		modelOverride:    cf.modelOverride,
 	}
 	return commitCmd.generateAndCommit(cf.agent, nil)
 }
@@ -373,6 +385,8 @@ func (cf *CommitFlow) executeNonInteractive() error {
 		userInstructions: cf.userInstructions,
 		agentError:       cf.agentError,
 		trailers:         cf.trailers,
+		providerOverride: cf.providerOverride,
+		modelOverride:    cf.modelOverride,
 	}
 	return commitCmd.executeMultiFileCommit(cf.agent)
 }

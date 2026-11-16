@@ -128,6 +128,7 @@ func (c *CommitCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	flow := NewCommitFlowWithFlags(chatAgent, c.skipPrompt, c.dryRun, c.allowSecrets)
 	flow.SetUserInstructions(c.userInstructions)
 	flow.SetTrailers(c.trailers)
+	flow.SetModelOverride(c.providerOverride, c.modelOverride)
 	flow.agentError = c.agentError
 	return flow.Execute()
 }
@@ -144,6 +145,7 @@ func (c *CommitCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Ag
 	flow := NewCommitFlowWithFlags(chatAgent, c.skipPrompt, c.dryRun, c.allowSecrets)
 	flow.SetUserInstructions(c.userInstructions)
 	flow.SetTrailers(c.trailers)
+	flow.SetModelOverride(c.providerOverride, c.modelOverride)
 	if err := flow.Execute(); err != nil {
 		result := CommitJSONResult{
 			Status: CommitStatusError,
@@ -341,10 +343,7 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 	}
 	// The commit flow resolves the commit role (the commit
 	// settings alias it).
-	var commitProvider, commitModel string
-	if cfg != nil {
-		commitProvider, commitModel = cfg.ResolveRole(configuration.RoleCommit)
-	}
+	commitProvider, commitModel := c.commitProviderModel(cfg)
 	switch {
 	case chatAgent == nil && c.agentError != nil:
 		c.printf("%sManual commit mode — AI agent unavailable: %v\n", console.GlyphWarning.Prefix(), c.agentError)

@@ -30,9 +30,10 @@ func (c *CommitCommand) prepareCommitClient(cfg *configuration.Config, chatAgent
 	var clientType api.ClientType
 	var model string
 
-	// Use the resolved commit role (commit settings alias it) if available
-	if cfg != nil {
-		commitProvider, commitModel := cfg.ResolveRole(configuration.RoleCommit)
+	// The --provider/--model flags, else the resolved commit role (commit
+	// settings alias it), if available.
+	{
+		commitProvider, commitModel := c.commitProviderModel(cfg)
 		if commitProvider != "" {
 			clientType = api.ClientType(commitProvider)
 			model = commitModel

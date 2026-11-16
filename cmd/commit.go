@@ -4,6 +4,7 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
@@ -85,6 +86,7 @@ duplicated — and appear in the message --dry-run displays.`,
 		}
 
 		commitCmd := &commands.CommitCommand{}
+		commitCmd.SetModelOverride(commitModelOverride(commitProvider, commitModel))
 
 		if chatAgent == nil && err != nil {
 			commitCmd.SetAgentError(err)
@@ -101,6 +103,23 @@ duplicated — and appear in the message --dry-run displays.`,
 	},
 }
 
+// commitModelOverride turns the --provider/--model flags into the provider
+// and model the message is generated with: a "provider:model" --model names
+// both, and a provider alone takes its default model. Both empty means the
+// commit role in the config decides.
+func commitModelOverride(provider, model string) (string, string) {
+	if provider == "" {
+		// Split only on a known provider name: "qwen3-coder:30b" is a model.
+		if i := strings.Index(model, ":"); i > 0 && knownProvider(model[:i]) {
+			provider, model = model[:i], model[i+1:]
+		}
+	}
+	if provider != "" && model == "" {
+		model = defaultModelForProvider(provider)
+	}
+	return provider, model
+}
+
 func init() {
 	commitCmd.Flags().BoolVarP(&commitSkipPrompt, "yes", "y", false, "Skip confirmation prompts and commit automatically")
 	boolFlagAlias(commitCmd.Flags(), &commitSkipPrompt, "skip-prompt", "yes", aliasSilent)
@@ -109,4 +128,14 @@ func init() {
 	commitCmd.Flags().BoolVar(&commitAllowSecrets, "allow-secrets", false, "Allow committing files flagged as potentially containing secrets")
 	commitCmd.Flags().BoolVar(&commitDryRun, "dry-run", false, "Generate and display commit message without executing commit")
 	commitCmd.Flags().StringArrayVar(&commitTrailers, "trailer", nil, "Git trailer (\"Key: Value\") appended to the commit message; repeatable, and joined with the commit.trailers defaults from the .sprout config and the repo's AGENTS.md")
+}
+
+// knownProvider reports whether name is a built-in or configured provider.
+func knownProvider(name string) bool {
+	var cfg *configuration.Config
+	if mgr, err := configuration.NewManagerSilent(); err == nil {
+		cfg = mgr.GetConfig()
+	}
+	_, err := configuration.MapProviderStringToClientType(cfg, name)
+	return err == nil
 }

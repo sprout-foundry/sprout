@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/credentials"
@@ -47,7 +48,15 @@ type State struct {
 	Engine string `json:"engine"`
 	// Model is the sinter model directory when Engine is EngineSinter.
 	Model string `json:"model,omitempty"`
+	// Fleet marks a link to the platform's own fleet: its agent keeps two
+	// tunnels and rotates its key every FleetKeyRotation.
+	Fleet bool `json:"fleet,omitempty"`
+	// KeyRotatedAt is when the agent key was last rotated (or issued).
+	KeyRotatedAt time.Time `json:"key_rotated_at,omitempty"`
 }
+
+// FleetKeyRotation is how often a fleet GPU's agent rotates its key.
+const FleetKeyRotation = 30 * 24 * time.Hour
 
 // Linked reports whether `sprout gpu link` completed.
 func (s *State) Linked() bool { return s.LinkID != "" }

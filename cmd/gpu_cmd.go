@@ -43,6 +43,7 @@ var (
 	gpuSinter    bool
 	gpuModel     string
 	gpuFleet     bool
+	gpuToken     string
 )
 
 func init() {
@@ -59,6 +60,7 @@ func init() {
 	linkCmd.Flags().BoolVar(&gpuNoBrowser, "no-browser", false, "print the approval URL without opening a browser (SSH sessions, headless machines)")
 	linkCmd.Flags().BoolVar(&gpuSinter, "sinter", false, "serve a model in-process with sinter instead of a server at --engine (Apple Silicon)")
 	linkCmd.Flags().BoolVar(&gpuFleet, "fleet", false, "link to the platform's own GPU fleet (a machine the platform owns or rents), approved by a platform admin, instead of to your account")
+	linkCmd.Flags().StringVar(&gpuToken, "token", "", "an enrollment token an admin minted (Admin → Linked GPUs): link to the fleet without the browser approval, for a rented box that links itself; implies --fleet")
 	linkCmd.Flags().StringVar(&gpuModel, "model", "", "the model to serve with sinter (a catalog name such as qwen3.5-9b, an installed model, or a model directory; default: the one recommended for this machine), downloaded if missing; implies --sinter")
 
 	gpuCmd.AddCommand(
@@ -68,6 +70,7 @@ func init() {
 		&cobra.Command{Use: "install", Short: "Run the GPU link at login (systemd user unit or launchd agent)", Args: cobra.NoArgs, RunE: runGPUInstall},
 		&cobra.Command{Use: "uninstall", Short: "Stop running the GPU link at login", Args: cobra.NoArgs, RunE: runGPUUninstall},
 		&cobra.Command{Use: "unlink", Short: "Forget the link on this machine", Args: cobra.NoArgs, RunE: runGPUUnlink},
+		&cobra.Command{Use: "rotate-key", Short: "Trade the link's key for a new one (a running agent moves to it when it restarts)", Args: cobra.NoArgs, RunE: runGPURotateKey},
 	)
 	rootCmd.AddCommand(gpuCmd)
 }
@@ -98,6 +101,9 @@ func runGPULink(cmd *cobra.Command, _ []string) error {
 		}
 	} else if engineSet {
 		return errors.New("--sinter serves a model in-process; pass --model instead of --engine")
+	}
+	if gpuToken != "" {
+		gpuFleet = true
 	}
 	name := gpuName
 	if name == "" {
@@ -138,7 +144,12 @@ func runGPULink(cmd *cobra.Command, _ []string) error {
 	}
 
 	var creds *gpulink.Credentials
-	if _, token, ok := platformauth.SignedInTo(platform); ok && !gpuFleet {
+	if gpuToken != "" {
+		// An admin's enrollment token stands in for the browser approval.
+		if creds, err = gpulink.NewClient(platform).Enroll(ctx, gpuToken, name, runtime.GOOS, runtime.GOARCH, engine); err != nil {
+			return err
+		}
+	} else if _, token, ok := platformauth.SignedInTo(platform); ok && !gpuFleet {
 		// Signed in (`sprout login`): link straight to that account.
 		linked, err := platformauth.NewClient(platform, token).LinkGPU(ctx, platformauth.LinkRequest{Name: name, OS: runtime.GOOS, Arch: runtime.GOARCH, Engine: engine})
 		if err != nil {
@@ -180,6 +191,8 @@ func runGPULink(cmd *cobra.Command, _ []string) error {
 	st.Account = creds.AccountEmail
 	st.Engine = gpuEngine
 	st.Model = ""
+	st.Fleet = gpuFleet
+	st.KeyRotatedAt = time.Now().UTC()
 	if useSinter {
 		st.Engine = gpulink.EngineSinter
 		st.Model = sinterDir
@@ -246,7 +259,21 @@ func runGPUStart(cmd *cobra.Command, _ []string) error {
 	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	log := slog.New(slog.NewTextHandler(cmd.ErrOrStderr(), nil)).With("gpu", st.Name)
-	agent := &gpulink.Agent{State: st, APIKey: key, EngineKey: gpulink.LoadEngineKey(), Log: log}
+	agent := &gpulink.Agent{State: st, APIKey: key, EngineKey: gpulink.LoadEngineKey(), Log: log, ReloadKey: gpulink.LoadAPIKey}
+	if st.Fleet {
+		// A fleet GPU keeps a tunnel to each of two platform replicas and
+		// rotates its key monthly.
+		agent.Tunnels = 2
+		agent.RotateEvery = gpulink.FleetKeyRotation
+		agent.RotatedAt = st.KeyRotatedAt
+		agent.SaveKey = func(k string) error { _, err := gpulink.SaveAPIKey(k); return err }
+		agent.OnRotated = func(at time.Time) {
+			st.KeyRotatedAt = at
+			if err := st.Save(); err != nil {
+				log.Warn("recording the key rotation", "err", err)
+			}
+		}
+	}
 	if st.Engine == gpulink.EngineSinter {
 		handler, model, unload, err := gpulink.SinterHandler(st.Model)
 		if err != nil {
@@ -325,5 +352,28 @@ func runGPUUnlink(cmd *cobra.Command, _ []string) error {
 		name = "this GPU"
 	}
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Forgot the link on this machine. Remove %q under Account → My GPUs on the platform too.\n", name)
+	return nil
+}
+
+func runGPURotateKey(cmd *cobra.Command, _ []string) error {
+	st, key, err := loadLinkedGPU()
+	if err != nil {
+		return err
+	}
+	next, err := gpulink.RotateKey(cmd.Context(), st.PlatformURL, st.LinkID, key)
+	if err != nil {
+		return err
+	}
+	keyStore, err := gpulink.SaveAPIKey(next)
+	if err != nil {
+		// The platform keeps the current key working until the new one is
+		// used, so nothing is lost.
+		return fmt.Errorf("storing the new key failed (%w); the current key keeps working", err)
+	}
+	st.KeyRotatedAt = time.Now().UTC()
+	if err := st.Save(); err != nil {
+		return err
+	}
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Rotated the key for %q (stored in the %s). A running agent keeps the old key until it restarts; the old key stops working once the new one connects.\n", st.Name, keyStore)
 	return nil
 }

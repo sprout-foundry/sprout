@@ -391,6 +391,7 @@ sprout gpu start                           # serve in the foreground
 sprout gpu install                         # or run it at login (systemd user unit / launchd agent)
 sprout gpu status
 sprout gpu unlink
+sprout gpu rotate-key                      # trade the link's key for a new one
 ```
 
 **`link` flags:**
@@ -403,7 +404,8 @@ sprout gpu unlink
 | `--platform <url>` | Platform URL (default `$SPROUT_PLATFORM_URL`, else the previous link) |
 | `--no-browser` | Print the approval URL instead of opening a browser |
 | `--sinter` | Serve a model in-process with sinter instead of a server at `--engine` (Apple Silicon builds) |
-| `--fleet` | Link to the platform's own GPU fleet (a machine the platform owns or rents) instead of your account. Always approved in the browser by a platform admin; the GPU is then added as a Linked GPU (fleet) provider |
+| `--fleet` | Link to the platform's own GPU fleet (a machine the platform owns or rents) instead of your account. Approved in the browser by a platform admin (or with `--token`); the GPU is then added as a Linked GPU (fleet) provider |
+| `--token <token>` | An enrollment token a platform admin minted: links to the fleet without the browser approval, for a rented box that links itself on boot. Single use and short-lived; implies `--fleet` |
 | `--model <name\|dir>` | The model to serve with sinter (implies `--sinter`): a catalog name (e.g. `qwen3.5-9b`), an installed model, or a model directory; default: the model recommended for this machine's memory. A missing catalog model and the MLX runtime are downloaded once |
 
 While linked, the agent also answers the platform's metrics poll itself
@@ -419,6 +421,13 @@ tunnel open: the platform picks up the engine's models within a minute of
 it starting. With `--sinter`, `sprout gpu start` loads the model and serves it through the
 tunnel itself: no separate engine and no local port. Requests are served one
 at a time, as the GPU runs one generation at a time.
+
+A fleet GPU's agent keeps two tunnels open, each to a different platform
+replica when it can, so a platform deploy never leaves it unreachable, and
+rotates its key every 30 days. `sprout gpu rotate-key` rotates any link's key
+by hand; a running agent keeps the old key until it restarts, and the old
+key stops working once the new one connects, so a rotation the agent did not
+save cannot lock it out.
 
 After linking, choose one of the engine's models under **Account → Models**
 on the platform. The link key and engine key live in sprout's credential

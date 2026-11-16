@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -57,6 +58,61 @@ func (c *Client) startLink(ctx context.Context, path, name, goos, arch, engine s
 		return nil, fmt.Errorf("starting link: platform returned %d", status)
 	}
 	return &out, nil
+}
+
+// Enroll trades an admin-minted enrollment token for a fleet link, without
+// the device flow (a rented box linking itself on boot).
+func (c *Client) Enroll(ctx context.Context, token, name, goos, arch, engine string) (*Credentials, error) {
+	var out Credentials
+	status, err := c.post(ctx, "/fleet/gpus/enroll", map[string]string{"token": token, "name": name, "os": goos, "arch": arch, "engine": engine}, &out)
+	if err != nil {
+		return nil, err
+	}
+	switch status {
+	case http.StatusOK:
+		if out.LinkID == "" || out.APIKey == "" {
+			return nil, errors.New("the platform accepted the enrollment token but returned no credentials")
+		}
+		return &out, nil
+	case http.StatusUnauthorized:
+		return nil, errors.New("the platform refused the enrollment token: it is unknown, used or expired; ask an admin for a new one")
+	case http.StatusConflict:
+		return nil, errors.New("a fleet GPU with this name is already linked; enroll with `--name …` and another name")
+	case http.StatusTooManyRequests:
+		return nil, runner.ErrSlowDown
+	default:
+		return nil, fmt.Errorf("enrolling: platform returned %d", status)
+	}
+}
+
+// RotateKey asks the platform for a new agent key, authenticated by the
+// current one. The platform keeps the current key working until the agent
+// connects with the new one.
+func RotateKey(ctx context.Context, platformURL, linkID, key string) (string, error) {
+	u := strings.TrimRight(platformURL, "/") + "/internal/gpu/rotate-key?link_id=" + url.QueryEscape(linkID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("X-GPU-Key", key)
+	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusUnauthorized {
+		return "", ErrLinkRemoved
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("rotating the key: platform returned %d", resp.StatusCode)
+	}
+	var out struct {
+		APIKey string `json:"api_key"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<16)).Decode(&out); err != nil || out.APIKey == "" {
+		return "", errors.New("the platform returned no rotated key")
+	}
+	return out.APIKey, nil
 }
 
 // PollLink checks whether the person approved the link. It returns the

@@ -28,6 +28,7 @@ func TestSteerCapable_SafeCommands(t *testing.T) {
 		"tools",
 		"keys",
 		"custom",
+		"whoami",            // reads the platform sign-in, changes nothing
 		"persona",           // safe during steer
 		"subagent-persona",  // alias for /persona - safe
 		"subagent-personas", // alias for /persona - safe
@@ -76,7 +77,9 @@ func TestSteerCapable_UnsafeCommands(t *testing.T) {
 		"rollback",
 		"rewind",
 		"fork",
-		"task", // creates a worktree and a branch: repository state the in-flight turn may be reading
+		"login",  // waits in the call for an approval made in a browser
+		"logout", // revokes a credential
+		"task",   // creates a worktree and a branch: repository state the in-flight turn may be reading
 	}
 
 	for _, name := range unsafeCommands {
@@ -185,10 +188,11 @@ func TestDefaultRegistry_InitializesAllCommands(t *testing.T) {
 		"info", "codegraph", "model", "provider", "help", "status",
 		"changes", "log", "mcp", "risk-profile", "skill",
 		"search", "transcript", "verbose", "tools", "keys", "custom",
+		"whoami",
 		// Mutating commands (unsafe)
 		"setup", "settings", "compact", "sessions", "commit", "clear", "exit",
 		"init", "shell", "edit", "review", "review-deep", "rollback",
-		"rewind", "fork",
+		"rewind", "fork", "login", "logout",
 		// Subagent commands
 		"persona", "subagent-provider", "subagent-model",
 		"subagent-persona", "subagent-personas",

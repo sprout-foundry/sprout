@@ -204,7 +204,7 @@ func runGPULink(cmd *cobra.Command, _ []string) error {
 		_, _ = fmt.Fprintf(out, "Linked %q to the platform fleet (key stored in the %s). Start it with `sprout gpu start`, or `sprout gpu install` to run it at login. Then add it as a Linked GPU (fleet) provider under Admin → LLM providers.\n", name, keyStore)
 		return nil
 	}
-	_, _ = fmt.Fprintf(out, "Linked as %q%s (key stored in the %s). Start it with `sprout gpu start`, or `sprout gpu install` to run it at login. Then choose one of its models under Account → Models.\n", name, linkedTo(creds.AccountEmail), keyStore)
+	_, _ = fmt.Fprintf(out, "Linked as %q%s (key stored in the %s). Start it with `sprout gpu start`, or `sprout gpu install` to run it at login. Then choose one of its models under Account → Models.\n", name, platformauth.LinkedTo(creds.AccountEmail), keyStore)
 	return nil
 }
 

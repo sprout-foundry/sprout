@@ -368,6 +368,13 @@ sprout whoami    # the account and plan this machine is signed in to, and the MC
 sprout logout    # revoke the sign-in and remove the MCP server on this machine
 ```
 
+The same three are slash commands — `/login [platform-url] [--no-browser]`,
+`/whoami`, `/logout` — so you can sign in without leaving a session. They sign
+in this machine, so the terminal and the browser share the result. `/whoami`
+only reads and works from the browser too; `/login` waits inside the call for
+the approval you make elsewhere, and `/logout` revokes a credential, so both
+run in the terminal.
+
 Without a sign-in, `runner link` and `gpu link` ask for a browser approval
 each time, and print the account the machine was linked to; `sprout runner
 status` and `sprout gpu status` show it too.
@@ -542,6 +549,9 @@ In interactive `sprout` or `sprout agent`, use `/` for commands (tab-complete).
 | `/skill` | Install, update, remove, list, enable, or disable skills |
 | `/transcript [preview\|markdown\|diff]` | Snapshot the current conversation to JSON for inspection (includes the session's provider/model) |
 | `/custom` | Manage custom providers |
+| `/login [platform-url]` | Sign this machine in to your platform account (terminal only — it waits for your browser approval) |
+| `/whoami` | Show the platform account this machine is signed in to |
+| `/logout` | Revoke this machine's platform sign-in (terminal only) |
 | `/risk-profile [name\|clear]` | Show or change the shell-command risk profile mid-session. With no args, lists profiles and marks the active one. See [SECURITY.md](SECURITY.md#risk-profiles). |
 
 ### Help

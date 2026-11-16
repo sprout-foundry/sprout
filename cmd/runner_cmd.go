@@ -161,7 +161,7 @@ func runRunnerLink(cmd *cobra.Command, _ []string) error {
 	if err := st.Save(); err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Linked as %q%s (mode: %s; key stored in the %s). Start it with `sprout runner start`, or `sprout runner install` to run at login.\n", name, linkedTo(creds.AccountEmail), st.Mode, keyStore)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Linked as %q%s (mode: %s; key stored in the %s). Start it with `sprout runner start`, or `sprout runner install` to run at login.\n", name, platformauth.LinkedTo(creds.AccountEmail), st.Mode, keyStore)
 	return printLocalDirNotice(cmd, st)
 }
 

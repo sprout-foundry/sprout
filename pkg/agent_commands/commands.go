@@ -195,6 +195,11 @@ func NewCommandRegistry() *CommandRegistry {
 	registry.Register(&KeysCommand{})
 	registry.RegisterAlias("key", "keys")
 
+	// Platform account sign-in (the same sign-in as `sprout login`)
+	registry.Register(&LoginCommand{})
+	registry.Register(&LogoutCommand{})
+	registry.Register(&WhoamiCommand{})
+
 	// Custom provider management (in-chat wrapper for `sprout custom`)
 	registry.Register(&CustomCommand{})
 

@@ -48,6 +48,8 @@ type Agent struct {
 	// Local, when set, serves the requests in-process (the sinter engine)
 	// instead of proxying them to State.Engine.
 	Local http.Handler
+
+	stats statsCollector
 }
 
 // tunnelURL is the platform's tunnel endpoint for the link.
@@ -91,6 +93,12 @@ func (a *Agent) Handler() relay.Handler {
 		},
 	}
 	return func(_ string, w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == StatsPath {
+			// The agent's own metrics endpoint: answered here, never sent
+			// to the engine.
+			a.serveStats(w, r)
+			return
+		}
 		if !enginePaths[r.URL.Path] {
 			http.NotFound(w, r)
 			return

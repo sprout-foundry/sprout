@@ -1,0 +1,147 @@
+# HELP ninfer_engine_ready Whether Engine can accept work.
+# TYPE ninfer_engine_ready gauge
+ninfer_engine_ready 1
+# HELP ninfer_model_info Resident model and speculative backend.
+# TYPE ninfer_model_info gauge
+ninfer_model_info{model_name="example-model",speculative_backend="mtp"} 1
+# HELP ninfer_max_concurrency Maximum resident execution lanes.
+# TYPE ninfer_max_concurrency gauge
+ninfer_max_concurrency 16
+# HELP ninfer_max_context_tokens Per-request logical context limit.
+# TYPE ninfer_max_context_tokens gauge
+ninfer_max_context_tokens 262144
+# HELP ninfer_requests_running Resident requests, including prefill and decode.
+# TYPE ninfer_requests_running gauge
+ninfer_requests_running 0
+# HELP ninfer_requests_waiting Requests waiting for initial admission.
+# TYPE ninfer_requests_waiting gauge
+ninfer_requests_waiting 0
+# HELP ninfer_requests_paused Paused requests waiting for recovery.
+# TYPE ninfer_requests_paused gauge
+ninfer_requests_paused 0
+# HELP ninfer_prompt_tokens_total Full input tokens counted once on initial binding.
+# TYPE ninfer_prompt_tokens_total counter
+ninfer_prompt_tokens_total 531233
+# HELP ninfer_prompt_tokens_cached_total Input tokens supplied by exact checkpoints.
+# TYPE ninfer_prompt_tokens_cached_total counter
+ninfer_prompt_tokens_cached_total 0
+# HELP ninfer_generation_tokens_total Committed output tokens, including first and control tokens.
+# TYPE ninfer_generation_tokens_total counter
+ninfer_generation_tokens_total 15550
+# HELP ninfer_preemptions_total Resource-pressure pauses.
+# TYPE ninfer_preemptions_total counter
+ninfer_preemptions_total 0
+# HELP ninfer_spec_decode_draft_tokens_total Draft tokens evaluated by native verification.
+# TYPE ninfer_spec_decode_draft_tokens_total counter
+ninfer_spec_decode_draft_tokens_total 19257
+# HELP ninfer_spec_decode_accepted_tokens_total Draft tokens accepted by native verification.
+# TYPE ninfer_spec_decode_accepted_tokens_total counter
+ninfer_spec_decode_accepted_tokens_total 9055
+# HELP ninfer_requests_total Generation attempts entering preparation, by terminal outcome.
+# TYPE ninfer_requests_total counter
+ninfer_requests_total{outcome="completed"} 64
+ninfer_requests_total{outcome="cancelled"} 0
+ninfer_requests_total{outcome="failed"} 0
+ninfer_requests_total{outcome="rejected"} 0
+# HELP ninfer_time_to_first_token_seconds Preparation through first committed token; observed once, before completion.
+# TYPE ninfer_time_to_first_token_seconds histogram
+ninfer_time_to_first_token_seconds_bucket{le="0.001"} 0
+ninfer_time_to_first_token_seconds_bucket{le="0.002"} 0
+ninfer_time_to_first_token_seconds_bucket{le="0.0050000000000000001"} 0
+ninfer_time_to_first_token_seconds_bucket{le="0.01"} 0
+ninfer_time_to_first_token_seconds_bucket{le="0.025000000000000001"} 0
+ninfer_time_to_first_token_seconds_bucket{le="0.050000000000000003"} 0
+ninfer_time_to_first_token_seconds_bucket{le="0.10000000000000001"} 1
+ninfer_time_to_first_token_seconds_bucket{le="0.25"} 2
+ninfer_time_to_first_token_seconds_bucket{le="0.5"} 2
+ninfer_time_to_first_token_seconds_bucket{le="1"} 4
+ninfer_time_to_first_token_seconds_bucket{le="2.5"} 32
+ninfer_time_to_first_token_seconds_bucket{le="5"} 32
+ninfer_time_to_first_token_seconds_bucket{le="10"} 32
+ninfer_time_to_first_token_seconds_bucket{le="20"} 32
+ninfer_time_to_first_token_seconds_bucket{le="40"} 64
+ninfer_time_to_first_token_seconds_bucket{le="80"} 64
+ninfer_time_to_first_token_seconds_bucket{le="160"} 64
+ninfer_time_to_first_token_seconds_bucket{le="320"} 64
+ninfer_time_to_first_token_seconds_bucket{le="640"} 64
+ninfer_time_to_first_token_seconds_bucket{le="1280"} 64
+ninfer_time_to_first_token_seconds_bucket{le="+Inf"} 64
+ninfer_time_to_first_token_seconds_sum 750.76682603600011
+ninfer_time_to_first_token_seconds_count 64
+# HELP ninfer_request_duration_seconds Generation request duration through settlement, including cancellation.
+# TYPE ninfer_request_duration_seconds histogram
+ninfer_request_duration_seconds_bucket{le="0.001"} 0
+ninfer_request_duration_seconds_bucket{le="0.002"} 0
+ninfer_request_duration_seconds_bucket{le="0.0050000000000000001"} 0
+ninfer_request_duration_seconds_bucket{le="0.01"} 0
+ninfer_request_duration_seconds_bucket{le="0.025000000000000001"} 0
+ninfer_request_duration_seconds_bucket{le="0.050000000000000003"} 0
+ninfer_request_duration_seconds_bucket{le="0.10000000000000001"} 0
+ninfer_request_duration_seconds_bucket{le="0.25"} 0
+ninfer_request_duration_seconds_bucket{le="0.5"} 0
+ninfer_request_duration_seconds_bucket{le="1"} 0
+ninfer_request_duration_seconds_bucket{le="2.5"} 1
+ninfer_request_duration_seconds_bucket{le="5"} 1
+ninfer_request_duration_seconds_bucket{le="10"} 32
+ninfer_request_duration_seconds_bucket{le="20"} 32
+ninfer_request_duration_seconds_bucket{le="40"} 64
+ninfer_request_duration_seconds_bucket{le="80"} 64
+ninfer_request_duration_seconds_bucket{le="160"} 64
+ninfer_request_duration_seconds_bucket{le="320"} 64
+ninfer_request_duration_seconds_bucket{le="640"} 64
+ninfer_request_duration_seconds_bucket{le="1280"} 64
+ninfer_request_duration_seconds_bucket{le="+Inf"} 64
+ninfer_request_duration_seconds_sum 966.64967523899998
+ninfer_request_duration_seconds_count 64
+# HELP ninfer_request_queue_seconds Initial Engine queue wait of settled generation requests.
+# TYPE ninfer_request_queue_seconds histogram
+ninfer_request_queue_seconds_bucket{le="0.001"} 3
+ninfer_request_queue_seconds_bucket{le="0.002"} 3
+ninfer_request_queue_seconds_bucket{le="0.0050000000000000001"} 4
+ninfer_request_queue_seconds_bucket{le="0.01"} 5
+ninfer_request_queue_seconds_bucket{le="0.025000000000000001"} 7
+ninfer_request_queue_seconds_bucket{le="0.050000000000000003"} 12
+ninfer_request_queue_seconds_bucket{le="0.10000000000000001"} 15
+ninfer_request_queue_seconds_bucket{le="0.25"} 23
+ninfer_request_queue_seconds_bucket{le="0.5"} 36
+ninfer_request_queue_seconds_bucket{le="1"} 40
+ninfer_request_queue_seconds_bucket{le="2.5"} 50
+ninfer_request_queue_seconds_bucket{le="5"} 63
+ninfer_request_queue_seconds_bucket{le="10"} 64
+ninfer_request_queue_seconds_bucket{le="20"} 64
+ninfer_request_queue_seconds_bucket{le="40"} 64
+ninfer_request_queue_seconds_bucket{le="80"} 64
+ninfer_request_queue_seconds_bucket{le="160"} 64
+ninfer_request_queue_seconds_bucket{le="320"} 64
+ninfer_request_queue_seconds_bucket{le="640"} 64
+ninfer_request_queue_seconds_bucket{le="1280"} 64
+ninfer_request_queue_seconds_bucket{le="+Inf"} 64
+ninfer_request_queue_seconds_sum 79.001214058000002
+ninfer_request_queue_seconds_count 64
+# HELP ninfer_memory_allocation_bytes Owned backing bytes by rank, location and resource.
+# TYPE ninfer_memory_allocation_bytes gauge
+# HELP ninfer_memory_budget_bytes Startup memory budget by rank.
+# TYPE ninfer_memory_budget_bytes gauge
+# HELP ninfer_cuda_memory_free_bytes Sampled CUDA free memory, not process-owned bytes.
+# TYPE ninfer_cuda_memory_free_bytes gauge
+ninfer_memory_budget_bytes{rank="0",node="0"} 101370626048
+ninfer_memory_allocation_bytes{rank="0",node="0",resource="weights",location="device"} 79299675648
+ninfer_memory_allocation_bytes{rank="0",node="0",resource="weights",location="host"} 0
+ninfer_memory_allocation_bytes{rank="0",node="0",resource="persistent",location="device"} 341924608
+ninfer_memory_allocation_bytes{rank="0",node="0",resource="context",location="device"} 19327352832
+ninfer_memory_allocation_bytes{rank="0",node="0",resource="workspace",location="device"} 978968064
+ninfer_memory_allocation_bytes{rank="0",node="0",resource="io",location="host_pinned"} 250624256
+ninfer_memory_allocation_bytes{rank="0",node="0",resource="context",location="host_pinned"} 9515384832
+ninfer_memory_allocation_bytes{rank="0",node="0",resource="ple",location="device"} 41943040
+ninfer_memory_allocation_bytes{rank="0",node="0",resource="ple",location="host_pinned"} 41943040
+ninfer_memory_allocation_bytes{rank="0",node="0",resource="ple",location="host"} 116435216
+ninfer_memory_allocation_bytes{rank="0",node="0",resource="experts",location="device"} 0
+ninfer_memory_allocation_bytes{rank="0",node="0",resource="experts",location="host_pinned"} 0
+ninfer_memory_allocation_bytes{rank="0",node="0",resource="experts",location="host"} 0
+ninfer_cuda_memory_free_bytes{rank="0",node="0"} 1206452224
+# HELP ninfer_prefix_reused_tokens_total Prompt tokens reused by adopted checkpoint role.
+# TYPE ninfer_prefix_reused_tokens_total counter
+ninfer_prefix_reused_tokens_total{role="input_replay"} 0
+ninfer_prefix_reused_tokens_total{role="long_anchor"} 0
+ninfer_prefix_reused_tokens_total{role="shared_prefix"} 0
+ninfer_prefix_reused_tokens_total{role="continuation"} 0

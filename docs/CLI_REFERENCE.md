@@ -405,6 +405,13 @@ sprout gpu unlink
 | `--sinter` | Serve a model in-process with sinter instead of a server at `--engine` (Apple Silicon builds) |
 | `--model <name\|dir>` | The model to serve with sinter (implies `--sinter`): a catalog name (e.g. `qwen3.5-9b`), an installed model, or a model directory; default: the model recommended for this machine's memory. A missing catalog model and the MLX runtime are downloaded once |
 
+While linked, the agent also answers the platform's metrics poll itself
+(it is never passed to the engine): the engine's load, token counts, latency
+and cache figures read from its `/metrics` and `/slots` (ninfer, vLLM,
+llama.cpp and SGLang are recognised), and the GPUs' utilisation, memory,
+temperature and power from the engine's own metrics under the DCGM names, or
+else from `nvidia-smi`.
+
 `sprout gpu start` warns when a linked engine does not answer, and keeps the
 tunnel open: the platform picks up the engine's models within a minute of
 it starting. With `--sinter`, `sprout gpu start` loads the model and serves it through the

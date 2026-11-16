@@ -41,6 +41,35 @@ type AgentMCPManager struct {
 	initErr      error
 	inherited    bool
 	initMu       sync.Mutex
+	// confirmEach holds "server/tool" for the tools whose server asks that
+	// every call be approved (mcp.MCPTool.ConfirmEachCall); nil until the
+	// tool list was read.
+	confirmEachMu sync.RWMutex
+	confirmEach   map[string]bool
+}
+
+// setConfirmEachCall records which tools need approval on every call.
+func (m *AgentMCPManager) setConfirmEachCall(tools []mcp.MCPTool) {
+	set := make(map[string]bool)
+	for _, t := range tools {
+		if t.ConfirmEachCall() {
+			set[t.ServerName+"/"+t.Name] = true
+		}
+	}
+	m.confirmEachMu.Lock()
+	m.confirmEach = set
+	m.confirmEachMu.Unlock()
+}
+
+// confirmEachCall reports whether server/tool needs approval on every call;
+// known is false until the tool list was read.
+func (m *AgentMCPManager) confirmEachCall(server, tool string) (confirm, known bool) {
+	m.confirmEachMu.RLock()
+	defer m.confirmEachMu.RUnlock()
+	if m.confirmEach == nil {
+		return false, false
+	}
+	return m.confirmEach[server+"/"+tool], true
 }
 
 // NewAgentMCPManager creates a new AgentMCPManager with default values.

@@ -183,6 +183,18 @@ type MCPTool struct {
 	Description string                 `json:"description"`
 	InputSchema map[string]interface{} `json:"inputSchema"`
 	ServerName  string                 `json:"server_name"`
+	// Annotations are the server's hints about the tool (readOnlyHint,
+	// openWorldHint, and confirmEachCall: see ConfirmEachCall).
+	Annotations map[string]interface{} `json:"annotations,omitempty"`
+}
+
+// ConfirmEachCall reports whether the server asks that every call to the
+// tool be approved by the person, with no standing "always allow" (a call
+// that sends something outside the person's account). A server can only
+// make approval stricter with it, so it is honoured from any server.
+func (t MCPTool) ConfirmEachCall() bool {
+	v, _ := t.Annotations["confirmEachCall"].(bool)
+	return v
 }
 
 // MCPResource represents a resource available via MCP

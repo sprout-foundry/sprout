@@ -281,6 +281,9 @@ func (a *Agent) getMCPTools() []api.Tool {
 	if a.debug {
 		a.Logger().Debug("[tool] Loading %d MCP tools from manager (first time)\n", len(mcpTools))
 	}
+	if m, ok := a.mcpSub.(*AgentMCPManager); ok {
+		m.setConfirmEachCall(mcpTools)
+	}
 
 	var agentTools []api.Tool
 	for _, mcpTool := range mcpTools {
@@ -438,7 +441,7 @@ func (a *Agent) executeMCPTool(toolName string, args map[string]interface{}) (st
 	// SP-170: authorize before any server-side call. The gate is the only
 	// thing standing between a steered model and a destructive third-party
 	// action, since MCP tools never reach the registry's security gate.
-	if err := a.authorizeMCPTool(serverName, actualToolName); err != nil {
+	if err := a.authorizeMCPTool(serverName, actualToolName, args); err != nil {
 		return "", err
 	}
 
@@ -564,7 +567,7 @@ func (a *Agent) handleMCPToolsCommand(args map[string]interface{}) (string, erro
 		// same server-side invocation, so it is gated identically. Discovery
 		// actions (list/describe/status/refresh) run no server-side tool and
 		// stay ungated.
-		if err := a.authorizeMCPTool(server, tool); err != nil {
+		if err := a.authorizeMCPTool(server, tool, callArgs); err != nil {
 			return "", err
 		}
 		result, err := a.mcpSub.GetManager().CallTool(ctx, server, tool, callArgs)

@@ -67,7 +67,7 @@ func (a *Agent) tryRouteGitHubToMCP(ctx context.Context, rawURL string) (string,
 	// denial rather than falling back to a plain fetch: silently substituting
 	// a different mechanism for a call the user just refused would defeat the
 	// gate.
-	if authzErr := a.authorizeMCPTool("github", mcpTool); authzErr != nil {
+	if authzErr := a.authorizeMCPTool("github", mcpTool, args); authzErr != nil {
 		return "", false, authzErr
 	}
 	result, callErr := a.mcpSub.GetManager().CallTool(ctx, "github", mcpTool, args)

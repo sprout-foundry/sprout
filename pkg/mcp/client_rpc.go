@@ -79,6 +79,7 @@ func (c *MCPClient) ListTools(ctx context.Context) ([]MCPTool, error) {
 			Name        string                 `json:"name"`
 			Description string                 `json:"description"`
 			InputSchema map[string]interface{} `json:"inputSchema"`
+			Annotations map[string]interface{} `json:"annotations"`
 		} `json:"tools"`
 	}
 
@@ -99,6 +100,7 @@ func (c *MCPClient) ListTools(ctx context.Context) ([]MCPTool, error) {
 			Description: tool.Description,
 			InputSchema: tool.InputSchema,
 			ServerName:  c.config.Name,
+			Annotations: tool.Annotations,
 		}
 	}
 

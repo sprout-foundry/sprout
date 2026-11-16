@@ -20,7 +20,9 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -88,27 +90,36 @@ func (a *Agent) PersistMCPToolAllowlist(entry string) error {
 // `server` and `tool` are the identity the call will actually be made with,
 // so the allowlist entry named in the error is the one that would permit
 // exactly this call.
-func (a *Agent) authorizeMCPTool(server, tool string) error {
+func (a *Agent) authorizeMCPTool(server, tool string, args map[string]interface{}) error {
 	if a == nil {
 		return mcpToolDeniedError(server, tool)
 	}
-	if a.IsMCPToolAllowlisted(server, tool) {
+	// A tool its server marks confirm-each-call is asked about every time,
+	// whatever the allowlist says, and the prompt offers no standing allow.
+	confirmEach := a.mcpConfirmEachCall(server, tool)
+	if !confirmEach && a.IsMCPToolAllowlisted(server, tool) {
 		return nil
 	}
 
-	choice, answered := a.promptMCPAuthorization(server, tool)
+	choice, answered := a.promptMCPAuthorization(mcpAuthzRequest{server: server, tool: tool, args: args, confirmEach: confirmEach})
 	if !answered {
 		return mcpToolDeniedError(server, tool)
 	}
 
 	switch choice {
 	case mcpAuthzAllowTool:
+		if confirmEach {
+			return nil
+		}
 		// Persist before running so a crash mid-call cannot lose the
 		// user's decision. A persistence failure is surfaced but does not
 		// block this invocation — the user did answer.
 		a.persistMCPAuthorization(injection.MCPToolAllowlistEntry(server, tool))
 		return nil
 	case mcpAuthzAllowServer:
+		if confirmEach {
+			return nil
+		}
 		a.persistMCPAuthorization(injection.MCPToolAllowlistServerEntry(server))
 		return nil
 	case mcpAuthzRunOnce:
@@ -117,6 +128,58 @@ func (a *Agent) authorizeMCPTool(server, tool string) error {
 		return agenterrors.NewSecurityError(fmt.Sprintf(
 			"MCP tool call denied: %s/%s. The user declined approval.", server, tool), nil)
 	}
+}
+
+// mcpAuthzRequest is one call put to the person: which tool, with what
+// arguments, and whether its server asks for approval on every call.
+type mcpAuthzRequest struct {
+	server, tool string
+	args         map[string]interface{}
+	confirmEach  bool
+}
+
+// mcpArgsPreviewMax bounds the arguments shown for an ordinary call; a
+// confirm-each-call tool's arguments are shown whole, since the person is
+// approving exactly what it sends.
+const mcpArgsPreviewMax = 2000
+
+// argsPreview renders the call's arguments for the prompt.
+func (r mcpAuthzRequest) argsPreview() string {
+	if len(r.args) == 0 {
+		return ""
+	}
+	b, err := json.MarshalIndent(r.args, "", "  ")
+	if err != nil {
+		return ""
+	}
+	text := string(b)
+	if !r.confirmEach && len(text) > mcpArgsPreviewMax {
+		text = text[:mcpArgsPreviewMax] + "\n… (cut)"
+	}
+	return text
+}
+
+// mcpConfirmEachCall reports whether server/tool's server asks that every
+// call be approved, reading the tool list once when it has not been read.
+func (a *Agent) mcpConfirmEachCall(server, tool string) bool {
+	m, ok := a.mcpSub.(*AgentMCPManager)
+	if !ok || m == nil {
+		return false
+	}
+	if confirm, known := m.confirmEachCall(server, tool); known {
+		return confirm
+	}
+	mgr := m.GetManager()
+	if mgr == nil {
+		return false
+	}
+	tools, err := mgr.GetAllTools(context.Background())
+	if err != nil {
+		return false
+	}
+	m.setConfirmEachCall(tools)
+	confirm, _ := m.confirmEachCall(server, tool)
+	return confirm
 }
 
 // persistMCPAuthorization records an allowlist entry, reporting a failure
@@ -136,11 +199,11 @@ func (a *Agent) persistMCPAuthorization(entry string) {
 // Surface order follows the shell path (tool_security.go / approvals
 // broker): the WebUI dialog when a browser tab is connected outside a
 // workflow run, then the terminal picker.
-func (a *Agent) promptMCPAuthorization(server, tool string) (string, bool) {
-	if choice, answered := a.promptMCPAuthorizationWebUI(server, tool); answered {
+func (a *Agent) promptMCPAuthorization(req mcpAuthzRequest) (string, bool) {
+	if choice, answered := a.promptMCPAuthorizationWebUI(req); answered {
 		return choice, true
 	}
-	return a.promptMCPAuthorizationCLI(server, tool)
+	return a.promptMCPAuthorizationCLI(req)
 }
 
 // promptMCPAuthorizationWebUI routes the prompt through the security
@@ -148,7 +211,8 @@ func (a *Agent) promptMCPAuthorization(server, tool string) (string, bool) {
 // 4-option control the shell gate uses; its "always" answer maps to
 // allowlisting this tool (the server-wide choice is offered on the
 // terminal picker, which can label it).
-func (a *Agent) promptMCPAuthorizationWebUI(server, tool string) (string, bool) {
+func (a *Agent) promptMCPAuthorizationWebUI(req mcpAuthzRequest) (string, bool) {
+	server, tool := req.server, req.tool
 	mgr := a.GetSecurityApprovalMgr()
 	if mgr == nil || a.GetEventBus() == nil {
 		return "", false
@@ -158,9 +222,16 @@ func (a *Agent) promptMCPAuthorizationWebUI(server, tool string) (string, bool) 
 	}
 
 	extras := map[string]string{
-		"mcp_server":    server,
-		"mcp_tool":      tool,
-		"allow_options": "true",
+		"mcp_server": server,
+		"mcp_tool":   tool,
+	}
+	if !req.confirmEach {
+		// A confirm-each-call tool gets the plain Allow / Block pair: no
+		// "always" answer to give.
+		extras["allow_options"] = "true"
+	}
+	if preview := req.argsPreview(); preview != "" {
+		extras["command"] = preview
 	}
 	// Suspend the CLI spinner / steer reader / streaming for the duration of
 	// the wait, exactly as the shell broker does around the same call: the
@@ -176,7 +247,7 @@ func (a *Agent) promptMCPAuthorizationWebUI(server, tool string) (string, bool) 
 	decision, outcome := mgr.RequestToolApprovalDecisionWithOutcome(
 		a.GetEventBus(), a.GetEventClientID(), a.GetEventUserID(),
 		"mcp:"+server+"/"+tool, "CAUTION",
-		fmt.Sprintf("MCP tool call: %s/%s", server, tool),
+		mcpPromptTitle(req),
 		extras,
 	)
 	if outcome != security.ApprovalOutcomeResponded {
@@ -198,7 +269,8 @@ func (a *Agent) promptMCPAuthorizationWebUI(server, tool string) (string, bool) 
 // logger is the same interactive surface the shell gate uses; when it is not
 // interactive (SkipPrompt, no TTY, a subagent, or a workflow run) nothing
 // answers and the caller denies.
-func (a *Agent) promptMCPAuthorizationCLI(server, tool string) (string, bool) {
+func (a *Agent) promptMCPAuthorizationCLI(req mcpAuthzRequest) (string, bool) {
+	server, tool := req.server, req.tool
 	if a.IsWorkflowRun() || a.IsNonInteractive() {
 		return "", false
 	}
@@ -243,6 +315,12 @@ func (a *Agent) promptMCPAuthorizationCLI(server, tool string) (string, bool) {
 		injection.MCPToolAllowlistEntry(server, tool),
 		injection.MCPToolAllowlistServerEntry(server),
 	)
+	if req.confirmEach {
+		prompt = subagentLabel + mcpPromptTitle(req)
+	}
+	if preview := req.argsPreview(); preview != "" {
+		prompt += "\n  Arguments:\n" + indentLines(preview, "    ")
+	}
 	fmt.Print("\a")
 	fmt.Println(prompt)
 
@@ -251,13 +329,8 @@ func (a *Agent) promptMCPAuthorizationCLI(server, tool string) (string, bool) {
 	// production code assigns, so every prompt would report "no surface" and
 	// silently deny — turning a prompt into a wall.
 	sl := console.NewSelectList(console.SelectListOptions{
-		Title: "MCP tool authorization",
-		Items: []console.SelectItem{
-			{Label: "Run once", Value: mcpAuthzRunOnce},
-			{Label: "Always allow this tool", Detail: injection.MCPToolAllowlistEntry(server, tool), Value: mcpAuthzAllowTool},
-			{Label: "Always allow this server", Detail: injection.MCPToolAllowlistServerEntry(server), Value: mcpAuthzAllowServer},
-			{Label: "Deny", Value: mcpAuthzDeny},
-		},
+		Title:    "MCP tool authorization",
+		Items:    mcpAuthzItems(req),
 		ArmDelay: console.ApprovalArmDelay,
 	})
 	choice, ok, err := sl.Run(context.Background())
@@ -280,4 +353,38 @@ func mcpToolDeniedError(server, tool string) error {
 			"Add %q to approved_mcp_tools in your Sprout config (or %q to allow every tool on the %s server), "+
 			"or take a different approach that does not call this tool. Do not retry this exact call — it will be denied again.",
 		server, tool, entry, injection.MCPToolAllowlistServerEntry(server), server), nil)
+}
+
+// mcpAuthzItems are the picker's answers: a confirm-each-call tool offers
+// only this call or none.
+func mcpAuthzItems(req mcpAuthzRequest) []console.SelectItem {
+	if req.confirmEach {
+		return []console.SelectItem{
+			{Label: "Run once", Value: mcpAuthzRunOnce},
+			{Label: "Deny", Value: mcpAuthzDeny},
+		}
+	}
+	return []console.SelectItem{
+		{Label: "Run once", Value: mcpAuthzRunOnce},
+		{Label: "Always allow this tool", Detail: injection.MCPToolAllowlistEntry(req.server, req.tool), Value: mcpAuthzAllowTool},
+		{Label: "Always allow this server", Detail: injection.MCPToolAllowlistServerEntry(req.server), Value: mcpAuthzAllowServer},
+		{Label: "Deny", Value: mcpAuthzDeny},
+	}
+}
+
+// mcpPromptTitle is the prompt's first line.
+func mcpPromptTitle(req mcpAuthzRequest) string {
+	if req.confirmEach {
+		return fmt.Sprintf("MCP tool call: %s/%s (its server asks you to approve every call: it sends what is below outside your account)", req.server, req.tool)
+	}
+	return fmt.Sprintf("MCP tool call: %s/%s", req.server, req.tool)
+}
+
+// indentLines prefixes every line of text.
+func indentLines(text, prefix string) string {
+	lines := strings.Split(text, "\n")
+	for i, l := range lines {
+		lines[i] = prefix + l
+	}
+	return strings.Join(lines, "\n")
 }

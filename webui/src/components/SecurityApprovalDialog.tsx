@@ -342,10 +342,12 @@ function SecurityApprovalDialog({
             </div>
           )}
 
-          {/* Command (for shell_command) */}
+          {/* Command (for shell_command), or an MCP call's arguments */}
           {command && (
             <div className="security-approval-command-wrapper">
-              <div className="security-approval-command-label">Command</div>
+              <div className="security-approval-command-label">
+                {toolName.startsWith('mcp:') ? 'Arguments' : 'Command'}
+              </div>
               <div
                 className={`security-approval-command-box${
                   risk === 'dangerous' ? ' security-approval-command-box--dangerous' : ''

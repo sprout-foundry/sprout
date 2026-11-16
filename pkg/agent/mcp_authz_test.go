@@ -220,7 +220,7 @@ func TestMCPAuthz_NilAgentAuthorizesNothing(t *testing.T) {
 	if a.IsMCPToolAllowlisted("github", "read") {
 		t.Error("nil agent must authorize nothing")
 	}
-	if err := a.authorizeMCPTool("github", "read"); err == nil {
+	if err := a.authorizeMCPTool("github", "read", nil); err == nil {
 		t.Error("nil agent must deny")
 	}
 }

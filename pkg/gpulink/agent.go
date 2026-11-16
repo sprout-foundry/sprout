@@ -226,7 +226,7 @@ func (a *Agent) runTunnel(ctx context.Context, i, n int, target string, handler 
 			}
 			return ErrLinkRemoved
 		}
-		if err == nil && n > 1 && replica != "" && spread < spreadTries && a.replicaInUse(i, replica) {
+		if err == nil && n > 1 && replica != "" && spread < spreadTries && !a.claimReplica(i, replica) {
 			// Both tunnels on one replica would both end in its deploy:
 			// dial again for another.
 			spread++
@@ -281,17 +281,22 @@ func (a *Agent) setLive(i int, t *liveTunnel) {
 	a.live[i] = t
 }
 
-// replicaInUse reports whether another of the agent's tunnels is open to
-// replica.
-func (a *Agent) replicaInUse(i int, replica string) bool {
+// claimReplica records tunnel i as reaching replica unless another of the
+// agent's tunnels is open (or opening) to it; checking and recording under
+// one lock keeps two tunnels connecting at once from both settling there.
+func (a *Agent) claimReplica(i int, replica string) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	for j, t := range a.live {
 		if j != i && t.replica == replica {
-			return true
+			return false
 		}
 	}
-	return false
+	if a.live == nil {
+		a.live = map[int]*liveTunnel{}
+	}
+	a.live[i] = &liveTunnel{replica: replica}
+	return true
 }
 
 // liveMux is tunnel i's open connection, or nil.

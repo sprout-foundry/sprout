@@ -40,6 +40,8 @@ function ModelSelectionModal({
   const [models, setModels] = useState<ProviderModel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** Why the list came back empty, as reported by the backend. */
+  const [emptyDetail, setEmptyDetail] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState<string>('');
   const [filter, setFilter] = useState('');
   // Downloads: model ID → live status. Local-provider rows tagged
@@ -127,10 +129,12 @@ function ModelSelectionModal({
   const fetchModels = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setEmptyDetail(null);
     try {
       const apiService = ApiService.getInstance();
       const response = await apiService.getProviderModels(provider);
       const normalized = normalizeModels(response.models);
+      setEmptyDetail(response.detail ?? null);
       setModels(normalized);
       debugLog('[ModelSelectionModal] Fetched models:', normalized.length);
     } catch (err) {
@@ -241,7 +245,7 @@ function ModelSelectionModal({
           {error && <div className="model-selection-error">{error}</div>}
 
           {!loading && !error && models.length === 0 && (
-            <div className="model-selection-empty">No models available for this provider.</div>
+            <div className="model-selection-empty">{emptyDetail ?? 'No models available for this provider.'}</div>
           )}
 
           {!loading && !error && isLocal && Object.entries(downloadErrors).some(([, e]) => e) && (

@@ -416,3 +416,13 @@ func runGPURotateKey(cmd *cobra.Command, _ []string) error {
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Rotated the key for %q (stored in the %s). A running agent keeps the old key until it restarts; the old key stops working once the new one connects.\n", st.Name, keyStore)
 	return nil
 }
+
+// isGPUCommand reports whether cmd is `sprout gpu` or one of its subcommands.
+func isGPUCommand(cmd *cobra.Command) bool {
+	for c := cmd; c != nil; c = c.Parent() {
+		if c == gpuCmd {
+			return true
+		}
+	}
+	return false
+}

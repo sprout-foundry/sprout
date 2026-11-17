@@ -15,6 +15,7 @@ import (
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/gpulink"
 	"github.com/sprout-foundry/sprout/pkg/localmodel"
 	"github.com/sprout-foundry/sprout/pkg/netproxy"
 	"github.com/sprout-foundry/sprout/pkg/pythonruntime"
@@ -80,6 +81,22 @@ var rootCmd = &cobra.Command{
 		isolatedFlagExplicit := cmd.Flags().Changed("isolated-config")
 		isServiceDaemon := os.Getenv("SPROUT_SERVICE") == "1"
 		autoDetected := false
+		// `sprout gpu` manages a link that belongs to the machine and is
+		// read by a background service started outside any repo, so it
+		// always uses the machine's config. A link an earlier version saved
+		// to a repo's .sprout is moved there.
+		if isGPUCommand(cmd) && !isolatedConfig && !isolatedFlagExplicit {
+			if cwd, err := os.Getwd(); err == nil {
+				if repoDir, found := detectGitRepo(cwd); found {
+					if moved, err := gpulink.AdoptLink(repoDir); err != nil {
+						console.GlyphWarning.Printf("Could not move the GPU link from %s: %v", repoDir, err)
+					} else if moved {
+						console.GlyphInfo.Printf("Moved the GPU link from %s to this machine's sprout config", repoDir)
+					}
+				}
+			}
+			return initializeSystem()
+		}
 		if !isolatedConfig && !isolatedFlagExplicit && !isServiceDaemon {
 			if cwd, err := os.Getwd(); err == nil {
 				if isolatedDir, found := detectGitRepo(cwd); found {

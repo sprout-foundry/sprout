@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/url"
@@ -44,6 +45,7 @@ var (
 	gpuModel     string
 	gpuFleet     bool
 	gpuToken     string
+	gpuNoService bool
 )
 
 func init() {
@@ -60,14 +62,15 @@ func init() {
 	linkCmd.Flags().BoolVar(&gpuNoBrowser, "no-browser", false, "print the approval URL without opening a browser (SSH sessions, headless machines)")
 	linkCmd.Flags().BoolVar(&gpuSinter, "sinter", false, "serve a model in-process with sinter instead of a server at --engine (Apple Silicon)")
 	linkCmd.Flags().BoolVar(&gpuFleet, "fleet", false, "link to the platform's own GPU fleet (a machine the platform owns or rents), approved by a platform admin, instead of to your account")
+	linkCmd.Flags().BoolVar(&gpuNoService, "no-service", false, "link only: do not install and start the background service (run `sprout gpu start` yourself)")
 	linkCmd.Flags().StringVar(&gpuToken, "token", "", "an enrollment token an admin minted (Admin → Linked GPUs): link to the fleet without the browser approval, for a rented box that links itself; implies --fleet")
 	linkCmd.Flags().StringVar(&gpuModel, "model", "", "the model to serve with sinter (a catalog name such as qwen3.5-9b, an installed model, or a model directory; default: the one recommended for this machine), downloaded if missing; implies --sinter")
 
 	gpuCmd.AddCommand(
 		linkCmd,
-		&cobra.Command{Use: "start", Short: "Serve the platform's requests to the engine (foreground)", Args: cobra.NoArgs, RunE: runGPUStart},
+		&cobra.Command{Use: "start", Short: "Serve the platform's requests to the engine in the foreground (what the background service runs)", Args: cobra.NoArgs, RunE: runGPUStart},
 		&cobra.Command{Use: "status", Short: "Show the link and whether the engine answers", Args: cobra.NoArgs, RunE: runGPUStatus},
-		&cobra.Command{Use: "install", Short: "Run the GPU link at login (systemd user unit or launchd agent)", Args: cobra.NoArgs, RunE: runGPUInstall},
+		&cobra.Command{Use: "install", Short: "Run the GPU link in the background, at login and after restarts (systemd user unit or launchd agent); `link` does this already", Args: cobra.NoArgs, RunE: runGPUInstall},
 		&cobra.Command{Use: "uninstall", Short: "Stop running the GPU link at login", Args: cobra.NoArgs, RunE: runGPUUninstall},
 		&cobra.Command{Use: "unlink", Short: "Forget the link on this machine", Args: cobra.NoArgs, RunE: runGPUUnlink},
 		&cobra.Command{Use: "rotate-key", Short: "Trade the link's key for a new one (a running agent moves to it when it restarts)", Args: cobra.NoArgs, RunE: runGPURotateKey},
@@ -201,11 +204,35 @@ func runGPULink(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	if gpuFleet {
-		_, _ = fmt.Fprintf(out, "Linked %q to the platform fleet (key stored in the %s). Start it with `sprout gpu start`, or `sprout gpu install` to run it at login. Then add it as a Linked GPU (fleet) provider under Admin → LLM providers.\n", name, keyStore)
-		return nil
+		_, _ = fmt.Fprintf(out, "Linked %q to the platform fleet (key stored in the %s).\n", name, keyStore)
+	} else {
+		_, _ = fmt.Fprintf(out, "Linked as %q%s (key stored in the %s).\n", name, platformauth.LinkedTo(creds.AccountEmail), keyStore)
 	}
-	_, _ = fmt.Fprintf(out, "Linked as %q%s (key stored in the %s). Start it with `sprout gpu start`, or `sprout gpu install` to run it at login. Then choose one of its models under Account → Models.\n", name, platformauth.LinkedTo(creds.AccountEmail), keyStore)
+	startGPUService(out)
+	if gpuFleet {
+		_, _ = fmt.Fprintln(out, "Then add it as a Linked GPU (fleet) provider under Admin → LLM providers.")
+	} else {
+		_, _ = fmt.Fprintln(out, "Then choose one of its models under Account → Models.")
+	}
 	return nil
+}
+
+// startGPUService runs the link in the background (the login service),
+// unless --no-service, or says how to when this OS has no service.
+func startGPUService(out io.Writer) {
+	if gpuNoService {
+		_, _ = fmt.Fprintln(out, "Start it with `sprout gpu start`, or `sprout gpu install` to run it in the background.")
+		return
+	}
+	path, err := gpulink.InstallService()
+	if err != nil {
+		_, _ = fmt.Fprintf(out, "Could not run it in the background (%v); start it with `sprout gpu start`.\n", err)
+		return
+	}
+	_, _ = fmt.Fprintf(out, "Running in the background (%s), at login and after restarts; `sprout gpu status` shows it.\n", path)
+	if note := gpulink.ServiceNotice(); note != "" {
+		_, _ = fmt.Fprintln(out, note)
+	}
 }
 
 func pollGPULink(ctx context.Context, client *gpulink.Client, start *runner.DeviceStart) (*gpulink.Credentials, error) {
@@ -323,9 +350,9 @@ func runGPUInstall(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Installed %s; the GPU link runs at login.\n", path)
-	if gpulink.ServiceNote != "" {
-		_, _ = fmt.Fprintln(cmd.OutOrStdout(), gpulink.ServiceNote)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Installed %s; the GPU link runs in the background, at login and after restarts.\n", path)
+	if note := gpulink.ServiceNotice(); note != "" {
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), note)
 	}
 	return nil
 }

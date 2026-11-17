@@ -392,10 +392,10 @@ network, and the platform reaches only the engine's model-serving paths
 **Basic Usage:**
 
 ```bash
-sprout gpu link --engine 127.0.0.1:11434   # approve in the browser window that opens
+sprout gpu link --engine 127.0.0.1:11434   # approve in the browser; then it serves in the background
 sprout gpu link --sinter --model qwen3.5-9b  # or serve a model in-process with sinter (Apple Silicon)
-sprout gpu start                           # serve in the foreground
-sprout gpu install                         # or run it at login (systemd user unit / launchd agent)
+sprout gpu install                         # (re)install the background service (systemd user unit / launchd agent)
+sprout gpu start                           # serve in the foreground instead (what the service runs)
 sprout gpu status
 sprout gpu unlink
 sprout gpu rotate-key                      # trade the link's key for a new one
@@ -412,6 +412,7 @@ sprout gpu rotate-key                      # trade the link's key for a new one
 | `--no-browser` | Print the approval URL instead of opening a browser |
 | `--sinter` | Serve a model in-process with sinter instead of a server at `--engine` (Apple Silicon builds) |
 | `--fleet` | Link to the platform's own GPU fleet (a machine the platform owns or rents) instead of your account. Approved in the browser by a platform admin (or with `--token`); the GPU is then added as a Linked GPU (fleet) provider |
+| `--no-service` | Link only; do not install and start the background service. By default `link` installs it (a systemd user unit or launchd agent running `sprout gpu start`, restarted if it exits) and restarts it after a new link; on Linux it also enables lingering where allowed, so the service keeps serving with nobody logged in |
 | `--token <token>` | An enrollment token a platform admin minted: links to the fleet without the browser approval, for a rented box that links itself on boot. Single use and short-lived; implies `--fleet` |
 | `--model <name\|dir>` | The model to serve with sinter (implies `--sinter`): a catalog name (e.g. `qwen3.5-9b`), an installed model, or a model directory; default: the model recommended for this machine's memory. A missing catalog model and the MLX runtime are downloaded once |
 

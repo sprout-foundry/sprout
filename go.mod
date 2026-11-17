@@ -5,7 +5,6 @@ go 1.26.0
 toolchain go1.26.10
 
 require (
-	github.com/sprout-foundry/sprout/mockup v0.1.0
 	filippo.io/age v1.3.1
 	github.com/creack/pty v1.1.24
 	github.com/fsnotify/fsnotify v1.9.0
@@ -16,6 +15,7 @@ require (
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/sergi/go-diff v1.3.1
 	github.com/spf13/cobra v1.10.2
+	github.com/sprout-foundry/sprout/mockup v0.1.0
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/net v0.60.0
 	golang.org/x/sync v0.23.0
@@ -40,10 +40,10 @@ require (
 	github.com/mattn/go-runewidth v0.0.24
 	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
-	github.com/sprout-foundry/sinter v0.7.2
+	github.com/sprout-foundry/sinter v0.8.2
 	github.com/wk8/go-ordered-map/v2 v2.1.8
 	github.com/zricethezav/gitleaks/v8 v8.30.1
-	golang.org/x/image v0.45.0
+	golang.org/x/image v0.46.0
 	modernc.org/sqlite v1.53.0
 )
 

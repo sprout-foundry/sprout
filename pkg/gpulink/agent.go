@@ -82,6 +82,10 @@ type liveTunnel struct {
 // replica the tunnel reached.
 const replicaHeader = "X-Relay-Replica"
 
+// rotateIdleWait bounds how long a key rotation waits for a tunnel's
+// requests to finish before moving it to the new key.
+const rotateIdleWait = 2 * time.Minute
+
 // spreadTries bounds how often a tunnel that reached the same replica as
 // another one dials again before it settles for it.
 const spreadTries = 3
@@ -354,6 +358,15 @@ func (a *Agent) RotateKey(ctx context.Context) error {
 		m := a.liveMux(i)
 		if m == nil {
 			continue
+		}
+		// Let the requests on it finish first (bounded): moving a tunnel
+		// must not cut a reply.
+		idleBy := time.Now().Add(rotateIdleWait)
+		for m.Streams() > 0 && time.Now().Before(idleBy) && ctx.Err() == nil {
+			select {
+			case <-m.Done():
+			case <-time.After(100 * time.Millisecond):
+			}
 		}
 		m.Close()
 		// Wait for this tunnel to be back before moving the next one.

@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 const launchdLabel = "com.sprout.gpu"
@@ -85,4 +86,24 @@ func UninstallService() error {
 // ServiceNotice is what to know about the service on this machine.
 func ServiceNotice() string {
 	return "The agent serves while you are logged in and the Mac is awake; keep it from sleeping while you want it to serve (System Settings → Energy, or `caffeinate -s`)."
+}
+
+// ServiceState is whether the service is running, and how to see its log.
+func ServiceState() (state, logs string) {
+	out, err := exec.Command("launchctl", "print", "gui/"+strconv.Itoa(os.Getuid())+"/"+launchdLabel).Output() //nolint:gosec // G204: launchctl query for the link's own agent
+	state = "not installed"
+	if err == nil {
+		state = "loaded"
+		for _, line := range strings.Split(string(out), "\n") {
+			if l := strings.TrimSpace(line); strings.HasPrefix(l, "state = ") {
+				state = strings.TrimPrefix(l, "state = ")
+				break
+			}
+		}
+	}
+	logs = "the log file in the GPU link's config directory (gpu.log)"
+	if dir, err := Dir(); err == nil {
+		logs = "tail -n 50 " + filepath.Join(dir, "gpu.log")
+	}
+	return state, logs
 }

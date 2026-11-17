@@ -132,8 +132,8 @@ func Remove() error {
 	return nil
 }
 
-// SaveAPIKey stores the agent key. The platform issues it once, so when the
-// OS keyring refuses it falls back to sprout's encrypted file store.
+// SaveAPIKey stores the agent key in sprout's encrypted file store, where the
+// background service can read it.
 func SaveAPIKey(key string) (string, error) { return saveSecret(credentialKey, key) }
 
 // LoadAPIKey reads the agent key.
@@ -154,24 +154,67 @@ func LoadEngineKey() string {
 	return key
 }
 
+// The link's keys are kept in sprout's encrypted file store, not the OS
+// keyring: the agent runs as a background service (systemd user unit,
+// launchd agent), and on a machine nobody is logged in to the keyring is
+// locked or unreachable, so a service reading it fails or waits on an unlock
+// prompt no one sees.
 func saveSecret(name, value string) (string, error) {
-	if err := credentials.SetToActiveBackend(name, value); err == nil {
-		return "credential store", nil
-	} else if fileErr := credentials.NewFileBackend().Set(name, value); fileErr != nil {
-		return "", fmt.Errorf("%w; file fallback: %v", err, fileErr)
+	if err := credentials.NewFileBackend().Set(name, value); err != nil {
+		return "", fmt.Errorf("storing %s: %w", name, err)
 	}
-	return "encrypted file (the OS keyring was unavailable)", nil
+	return "encrypted file store", nil
 }
 
+// keyringReadTimeout bounds reading a key an older link left in the OS
+// keyring: a locked keyring can wait on an unlock prompt indefinitely.
+const keyringReadTimeout = 3 * time.Second
+
 func loadSecret(name string) (string, error) {
-	value, _, err := credentials.GetFromActiveBackend(name)
-	if err == nil && value != "" {
-		return value, nil
-	}
-	if fileValue, fileErr := credentials.NewFileBackend().Get(name); fileErr == nil && fileValue != "" {
+	fileValue, fileErr := credentials.NewFileBackend().Get(name)
+	if fileErr == nil && fileValue != "" {
 		return fileValue, nil
 	}
-	return value, err
+	// A link made before keys moved to the file store kept its key in the
+	// keyring: read it there (bounded) and move it, so the service finds it
+	// next time.
+	type result struct {
+		value string
+		err   error
+	}
+	done := make(chan result, 1)
+	go func() {
+		v, _, err := credentials.GetFromActiveBackend(name)
+		done <- result{v, err}
+	}()
+	select {
+	case r := <-done:
+		if r.err == nil && r.value != "" {
+			_ = credentials.NewFileBackend().Set(name, r.value)
+			return r.value, nil
+		}
+		if fileErr != nil {
+			return "", fileErr
+		}
+		return "", r.err
+	case <-time.After(keyringReadTimeout):
+		if fileErr != nil {
+			return "", fileErr
+		}
+		return "", fmt.Errorf("reading %s: the OS keyring did not answer (locked, or no login session)", name)
+	}
+}
+
+// MoveKeysToFileStore copies the link's keys into the file store when an
+// older link left them only in the OS keyring. `sprout gpu install` runs it
+// from the person's session, where the keyring opens, so the service never
+// needs the keyring.
+func MoveKeysToFileStore() error {
+	if _, err := loadSecret(credentialKey); err != nil {
+		return err
+	}
+	_, _ = loadSecret(engineKeyCredential)
+	return nil
 }
 
 func deleteSecret(name string) error {

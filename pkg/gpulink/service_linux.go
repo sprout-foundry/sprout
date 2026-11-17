@@ -85,3 +85,13 @@ func ServiceNotice() string {
 	}
 	return "The service stops when you log out; run `sudo loginctl enable-linger $USER` to keep it serving."
 }
+
+// ServiceState is whether the service is running, and how to see its log.
+func ServiceState() (state, logs string) {
+	out, _ := exec.Command("systemctl", "--user", "is-active", systemdUnit).Output() //nolint:gosec // G204: fixed systemctl query for the link's own unit
+	state = strings.TrimSpace(string(out))
+	if state == "" {
+		state = "not installed"
+	}
+	return state, "journalctl --user -u " + systemdUnit + " -n 50 --no-pager"
+}

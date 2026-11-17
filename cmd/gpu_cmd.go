@@ -329,6 +329,12 @@ func runGPUStatus(cmd *cobra.Command, _ []string) error {
 		return nil
 	}
 	_, _ = fmt.Fprintf(out, "Linked as %q to %s\nAccount: %s\nEngine: %s\n", st.Name, st.PlatformURL, firstNonEmpty(st.Account, "(not recorded; link again to see it)"), st.Engine)
+	if state, logs := gpulink.ServiceState(); state != "" {
+		_, _ = fmt.Fprintf(out, "Service: %s\n", state)
+		if logs != "" {
+			_, _ = fmt.Fprintf(out, "Service log: %s\n", logs)
+		}
+	}
 	if st.Engine == gpulink.EngineSinter {
 		_, _ = fmt.Fprintf(out, "Model: %s (served in-process by `sprout gpu start`)\n", st.Model)
 		return nil
@@ -345,6 +351,12 @@ func runGPUStatus(cmd *cobra.Command, _ []string) error {
 func runGPUInstall(cmd *cobra.Command, _ []string) error {
 	if _, _, err := loadLinkedGPU(); err != nil {
 		return err
+	}
+	// The service runs without a login session, where the OS keyring is out
+	// of reach: an older link's keys move to the file store now, while it
+	// opens.
+	if err := gpulink.MoveKeysToFileStore(); err != nil {
+		return fmt.Errorf("the GPU link key could not be moved where the service can read it (%w); run `sprout gpu link` again", err)
 	}
 	path, err := gpulink.InstallService()
 	if err != nil {

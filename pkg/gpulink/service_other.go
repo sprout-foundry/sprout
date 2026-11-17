@@ -14,3 +14,6 @@ func UninstallService() error { return errNoService }
 
 // ServiceNotice is what to know about the service on this machine.
 func ServiceNotice() string { return "" }
+
+// ServiceState is unavailable on this OS.
+func ServiceState() (state, logs string) { return "not supported here", "" }

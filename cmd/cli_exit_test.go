@@ -126,6 +126,9 @@ func TestHumanizeFlagGroupError(t *testing.T) {
 }
 
 func TestInvokedCommandPath(t *testing.T) {
-	assert.Equal(t, "sprout upgrade", invokedCommandPath([]string{"upgrade", "--check", "--rollback"}))
+	// Both spellings resolve to the canonical path: `upgrade` is the alias
+	// kept for the name the update notice of an installed binary prints.
+	assert.Equal(t, "sprout update", invokedCommandPath([]string{"update", "--check", "--rollback"}))
+	assert.Equal(t, "sprout update", invokedCommandPath([]string{"upgrade", "--check", "--rollback"}))
 	assert.Equal(t, "sprout", invokedCommandPath([]string{"--bogus"}))
 }

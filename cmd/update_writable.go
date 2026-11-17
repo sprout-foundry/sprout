@@ -61,19 +61,19 @@ func requireWritableInstallDir(execPath string) error {
 	dir := filepath.Dir(execPath)
 	if err := probeWritableInstallDir(dir); err != nil {
 		return fmt.Errorf("install dir %s is not writable: %w\n\n%s",
-			dir, err, upgradeNotWritableHelp(execPath))
+			dir, err, updateNotWritableHelp(execPath))
 	}
 	return nil
 }
 
-// upgradeNotWritableHelp renders the actionable guidance shown when the
+// updateNotWritableHelp renders the actionable guidance shown when the
 // install dir can't be written to. The binary path is embedded so the
 // message works no matter how the binary was installed.
-func upgradeNotWritableHelp(execPath string) string {
+func updateNotWritableHelp(execPath string) string {
 	if runtime.GOOS == "windows" {
 		return fmt.Sprintf(`The current user can't replace the binary in place.
 Pick one:
-  Re-run sprout upgrade from an elevated (Run as Administrator) terminal
+  Re-run sprout update from an elevated (Run as Administrator) terminal
   Take ownership of %s, then retry
   $env:SPROUT_INSTALL_DIR="$env:LOCALAPPDATA\Programs\sprout"; irm https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/install.ps1 | iex
                           reinstall to a user-writable dir
@@ -81,7 +81,7 @@ Pick one:
 	}
 	return fmt.Sprintf(`The current user can't replace the binary in place.
 Pick one:
-  sudo sprout upgrade     re-run with elevated privileges
+  sudo sprout update     re-run with elevated privileges
   sudo chown <you> %s     take ownership, then retry
   SPROUT_INSTALL_DIR=~/.local/bin curl -fsSL \
       https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/install.sh | sh

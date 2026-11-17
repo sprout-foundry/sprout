@@ -86,7 +86,7 @@ type ConfigFromNewerBuildError struct {
 }
 
 func (e *ConfigFromNewerBuildError) Error() string {
-	return fmt.Sprintf("config version %q is newer than this build's %q — run `sprout upgrade` to catch up (config is used as-is)",
+	return fmt.Sprintf("config version %q is newer than this build's %q — run `sprout update` to catch up (config is used as-is)",
 		e.ConfigVersion, e.BuildVersion)
 }
 

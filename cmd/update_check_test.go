@@ -34,8 +34,8 @@ func TestIsBrewPath(t *testing.T) {
 
 func TestWriteUpdateNotice(t *testing.T) {
 	var buf bytes.Buffer
-	writeUpdateNotice(&buf, "v0.15.0", "sprout upgrade")
-	want := "sprout v0.15.0 available — run `sprout upgrade`\n"
+	writeUpdateNotice(&buf, "v0.15.0", "sprout update")
+	want := "sprout v0.15.0 available — run `sprout update`\n"
 	if buf.String() != want {
 		t.Errorf("notice = %q, want %q", buf.String(), want)
 	}
@@ -45,6 +45,22 @@ func TestWriteUpdateNotice(t *testing.T) {
 	want = "sprout v0.15.0 available — run `brew upgrade sprout`\n"
 	if buf.String() != want {
 		t.Errorf("brew notice = %q, want %q", buf.String(), want)
+	}
+}
+
+// TestUpdateHint pins the command the notice tells people to run after the
+// rename. The brew branch (don't overwrite a Cellar entry) is pinned by
+// TestIsBrewPath and the brew notice case above.
+func TestUpdateHint(t *testing.T) {
+	execPath, err := os.Executable()
+	if err != nil {
+		t.Skip(err)
+	}
+	if isBrewPath(execPath) {
+		t.Skip("test binary lives under a Homebrew Cellar")
+	}
+	if got := updateHint(); got != "sprout update" {
+		t.Errorf("updateHint() = %q, want the renamed command", got)
 	}
 }
 

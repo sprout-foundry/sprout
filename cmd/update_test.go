@@ -111,7 +111,7 @@ func TestRollbackBinary_NoBackup(t *testing.T) {
 	if err := os.WriteFile(target, []byte("stub"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	backup := target + upgradeBackupSuffix
+	backup := target + updateBackupSuffix
 	if _, err := os.Stat(backup); err == nil {
 		t.Fatalf("test setup invariant violated: %s should not exist", backup)
 	}
@@ -185,7 +185,7 @@ func TestProbeWritableInstallDir(t *testing.T) {
 // installed via sudo — assert the actionable guidance survives refactors.
 func TestRequireWritableInstallDir_ErrorMessage(t *testing.T) {
 	dir := t.TempDir()
-	wants := []string{"is not writable", "sudo sprout upgrade", "SPROUT_INSTALL_DIR"}
+	wants := []string{"is not writable", "sudo sprout update", "SPROUT_INSTALL_DIR"}
 	if runtime.GOOS == "windows" {
 		// Directory mode bits are ignored on Windows, so a missing dir stands in
 		// for an unwritable one.
@@ -252,7 +252,7 @@ func TestReplaceBinary_StagePermissionDenied(t *testing.T) {
 	if !strings.Contains(msg, "stage new binary in install dir") {
 		t.Fatalf("expected staging error, got:\n%s", msg)
 	}
-	if !strings.Contains(msg, "sudo sprout upgrade") {
+	if !strings.Contains(msg, "sudo sprout update") {
 		t.Fatalf("expected actionable hint in error, got:\n%s", msg)
 	}
 
@@ -266,8 +266,8 @@ func TestReplaceBinary_StagePermissionDenied(t *testing.T) {
 		t.Fatalf("running binary was modified: %q", data)
 	}
 	for _, litter := range []string{
-		filepath.Join(dir, ".sprout.upgrade.tmp"),
-		target + upgradeBackupSuffix,
+		filepath.Join(dir, ".sprout.update.tmp"),
+		target + updateBackupSuffix,
 	} {
 		if _, err := os.Stat(litter); err == nil {
 			t.Fatalf("leftover %s after failed upgrade", litter)

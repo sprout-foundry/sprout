@@ -45,7 +45,7 @@ func maybeRenderUpdateNotice(a *agent.Agent) {
 	if !ok {
 		return
 	}
-	writeUpdateNotice(os.Stderr, latest, upgradeHint())
+	writeUpdateNotice(os.Stderr, latest, updateHint())
 }
 
 // maybeRenderUpdateNoticeTo is maybeRenderUpdateNotice with an
@@ -55,7 +55,7 @@ func maybeRenderUpdateNoticeTo(w io.Writer) {
 	if !ok {
 		return
 	}
-	writeUpdateNotice(w, latest, upgradeHint())
+	writeUpdateNotice(w, latest, updateHint())
 }
 
 func writeUpdateNotice(w io.Writer, latest, hint string) {
@@ -74,15 +74,15 @@ func updateCheckSkipped(a *agent.Agent) bool {
 	return updatecheck.Skipped(buildinfo.Version, disabled)
 }
 
-// upgradeHint names the right upgrade command for how this binary was
-// installed. An in-place `sprout upgrade` under Homebrew leaves the
+// updateHint names the right upgrade command for how this binary was
+// installed. An in-place `sprout update` under Homebrew leaves the
 // Cellar entry stale and the next `brew upgrade` may clobber or
 // downgrade it, so brew-managed installs get the brew command instead.
-func upgradeHint() string {
+func updateHint() string {
 	if brewManagedBinary() {
 		return "brew upgrade sprout"
 	}
-	return "sprout upgrade"
+	return "sprout update"
 }
 
 func brewManagedBinary() bool {

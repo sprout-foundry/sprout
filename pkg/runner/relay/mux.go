@@ -97,6 +97,13 @@ func NewMux(conn *websocket.Conn, handler Handler) *Mux {
 // Done is closed when the connection ends.
 func (m *Mux) Done() <-chan struct{} { return m.done }
 
+// Streams is how many streams are open on the connection now.
+func (m *Mux) Streams() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.streams)
+}
+
 // Serve runs the mux until the connection ends or ctx is cancelled.
 func (m *Mux) Serve(ctx context.Context) error {
 	go m.writeLoop()

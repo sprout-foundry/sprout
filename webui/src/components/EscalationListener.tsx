@@ -24,7 +24,13 @@ import type { EscalationTriggerEvent } from '../hooks/useEscalationTriggers';
 import { ESCALATION_TRIGGER_EVENT } from '../hooks/useEscalationTriggers';
 import { useRunHostChoice } from '../hooks/useRunHostChoice';
 import { isTerminalCloudTaskStatus, pollCloudTask, submitCloudTask, type CloudTask } from '../services/cloudTasks';
-import { HostUnavailableError, runTxnCommand, txnPhaseLabel, type TxnProgress } from '../services/cloudTxnEscalate';
+import {
+  collectTxnPushFiles,
+  HostUnavailableError,
+  runTxnCommand,
+  txnPhaseLabel,
+  type TxnProgress,
+} from '../services/cloudTxnEscalate';
 import { CLOUD_HOST, hostDisplayName, rememberHost, type EscalationHost } from '../services/escalationHost';
 import { startFullWorkspace, useFullWorkspacesAvailable } from '../services/fullWorkspace';
 import { onPlatformLinkClick, openPlatformPage } from '../services/homeView';
@@ -86,6 +92,12 @@ export function EscalationListener() {
   const [submitting, setSubmitting] = useState(false);
   const [startingWorkspace, setStartingWorkspace] = useState(false);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  // The confirmation step: opened by the txn CTA, closed by confirming or
+  // cancelling. The command reaches a remote machine only from there.
+  const [confirmTxn, setConfirmTxn] = useState(false);
+  // What the push phase would carry, counted when the step opens (null =
+  // still counting / not countable).
+  const [pendingPushCount, setPendingPushCount] = useState<number | null>(null);
   const workspacesAvailable = useFullWorkspacesAvailable();
   const mountedRef = useRef(true);
   // Bumped whenever the toast is dismissed or a new trigger replaces the
@@ -116,6 +128,8 @@ export function EscalationListener() {
         setTxn(null);
         setSubmitting(false);
         setWorkspaceError(null);
+        setConfirmTxn(false);
+        setPendingPushCount(null);
         setEscalation({ trigger: detail, visible: true });
       }
     };
@@ -133,6 +147,8 @@ export function EscalationListener() {
     setTxn(null);
     setSubmitting(false);
     setWorkspaceError(null);
+    setConfirmTxn(false);
+    setPendingPushCount(null);
   }, []);
 
   /**
@@ -200,10 +216,43 @@ export function EscalationListener() {
     [escalation, submitting],
   );
 
+  /**
+   * The txn CTA opens the confirmation step instead of starting the run: the
+   * command executes on a machine the browser does not control, so it needs
+   * an explicit go-ahead naming what will run, where, and what it costs.
+   */
   const handleRunTxn = useCallback(() => {
     if (txn || !hostChoice.loaded) return;
+    setPendingPushCount(null);
+    setConfirmTxn(true);
+  }, [txn, hostChoice.loaded]);
+
+  /** The confirmed run: starts the transaction on the currently chosen host. */
+  const handleConfirmTxn = useCallback(() => {
+    setConfirmTxn(false);
     startTxn(hostChoice.host);
-  }, [txn, hostChoice.loaded, hostChoice.host, startTxn]);
+  }, [hostChoice.host, startTxn]);
+
+  const handleCancelTxnConfirm = useCallback(() => setConfirmTxn(false), []);
+
+  // What the push phase would carry, counted with the same enumerator the run
+  // itself uses so the number is what will really be sent. Zero means the
+  // machine would run without the browser's edits (the step warns); a failed
+  // count only omits the line, it never blocks the run.
+  useEffect(() => {
+    if (!confirmTxn) return;
+    let cancelled = false;
+    collectTxnPushFiles()
+      .then(({ inputs, deletes }) => {
+        if (!cancelled) setPendingPushCount(inputs.length + deletes.length);
+      })
+      .catch(() => {
+        if (!cancelled) setPendingPushCount(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [confirmTxn]);
 
   const handleRunInCloudInstead = useCallback(() => startTxn(CLOUD_HOST), [startTxn]);
 
@@ -292,7 +341,11 @@ export function EscalationListener() {
   const repoURL = escalation.trigger.repoURL;
   // The txn CTA needs both the command (what to run) and repo context (where
   // to run it); without either the toast falls back to Mode A / Mode B.
-  const showTxnButton = canRunTxn && !txn && !cloudTask;
+  // A runnable command with nothing in flight: the user acts on the CTA, or
+  // on the confirmation step once the CTA has been clicked.
+  const canStartTxn = canRunTxn && !txn && !cloudTask;
+  const showTxnButton = canStartTxn && !confirmTxn;
+  const showTxnConfirm = canStartTxn && confirmTxn;
   const txnOnRunner = hostChoice.host.kind === 'runner';
   // Shown only when there is repo context (same gate the Mode B path uses for
   // a meaningful task) and no txn/cloud task is already in flight.
@@ -419,7 +472,9 @@ export function EscalationListener() {
               </p>
             ) : null}
 
-            {showTxnButton && hostChoice.runners.length > 0 ? (
+            {/* The host stays switchable while confirming: the choice is read
+                when the run is confirmed, not when the step opens. */}
+            {canStartTxn && hostChoice.runners.length > 0 ? (
               <RunHostPicker
                 runners={hostChoice.runners}
                 value={hostChoice.host}
@@ -428,52 +483,103 @@ export function EscalationListener() {
               />
             ) : null}
 
-            <div className="escalation-toast-actions">
-              {showTxnButton ? (
-                <button
-                  className="escalation-toast-action"
-                  onClick={handleRunTxn}
-                  disabled={submitting || !hostChoice.loaded}
-                  data-testid="escalation-toast-txn"
-                >
-                  {submitting ? (
-                    <Loader2 size={14} className="spinner" aria-hidden="true" />
-                  ) : txnOnRunner ? (
-                    <Server size={14} />
-                  ) : (
-                    <Container size={14} />
-                  )}
-                  {txnOnRunner ? `Run on ${hostDisplayName(hostChoice.host)}` : 'Run in cloud container'}
-                </button>
-              ) : null}
-              {showCloudTaskButton ? (
-                <button
-                  className="escalation-toast-action escalation-toast-action-secondary"
-                  onClick={handleRunCloudTask}
-                  disabled={submitting}
-                  data-testid="escalation-toast-cloud-task"
-                  title="Runs an agent on the repository as last pushed; edits made in the browser aren't included. Uses platform credits."
-                >
-                  {submitting ? <Loader2 size={14} className="spinner" aria-hidden="true" /> : <Cloud size={14} />}
-                  Run as cloud task
-                </button>
-              ) : null}
-              {workspacesAvailable ? (
-                <button
-                  className="escalation-toast-action"
-                  onClick={handleStartWorkspace}
-                  disabled={startingWorkspace}
-                  data-testid="escalation-toast-start-workspace"
-                >
-                  {startingWorkspace ? (
-                    <Loader2 size={14} className="spinner" aria-hidden="true" />
-                  ) : (
-                    <Rocket size={14} />
-                  )}
-                  Start Full Workspace
-                </button>
-              ) : null}
-            </div>
+            {showTxnConfirm ? (
+              <div
+                className="escalation-toast-confirm"
+                data-testid="escalation-toast-txn-confirm"
+                role="group"
+                aria-label="Confirm running this command on another machine"
+              >
+                <p className="escalation-toast-confirm-lead">
+                  Run <code>{escalation.trigger.command}</code> on{' '}
+                  <strong>{txnOnRunner ? hostDisplayName(hostChoice.host) : 'a cloud container'}</strong>?
+                </p>
+                <p className="escalation-toast-confirm-detail" data-testid="escalation-toast-txn-confirm-changes">
+                  {pendingPushCount === null
+                    ? 'Counting your browser changes…'
+                    : pendingPushCount === 0
+                      ? 'No browser changes detected.'
+                      : `${pendingPushCount} changed ${pendingPushCount === 1 ? 'file' : 'files'} will be sent.`}
+                </p>
+                {pendingPushCount === 0 ? (
+                  <p className="escalation-toast-task-error" data-testid="escalation-toast-txn-confirm-empty-push">
+                    The command would run without your browser edits.
+                  </p>
+                ) : null}
+                <p className="escalation-toast-confirm-detail" data-testid="escalation-toast-txn-confirm-cost">
+                  Cloud and runner machines bill per minute while they run. A run that fails or is cancelled is billed
+                  for the time it used.
+                </p>
+                <div className="escalation-toast-actions">
+                  <button
+                    className="escalation-toast-action"
+                    onClick={handleConfirmTxn}
+                    disabled={submitting}
+                    data-testid="escalation-toast-txn-confirm-run"
+                  >
+                    {submitting ? <Loader2 size={14} className="spinner" aria-hidden="true" /> : <Rocket size={14} />}
+                    Run command
+                  </button>
+                  <button
+                    className="escalation-toast-action escalation-toast-action-secondary"
+                    onClick={handleCancelTxnConfirm}
+                    disabled={submitting}
+                    data-testid="escalation-toast-txn-confirm-cancel"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {showTxnConfirm ? null : (
+              <div className="escalation-toast-actions">
+                {showTxnButton ? (
+                  <button
+                    className="escalation-toast-action"
+                    onClick={handleRunTxn}
+                    disabled={submitting || !hostChoice.loaded}
+                    data-testid="escalation-toast-txn"
+                  >
+                    {submitting ? (
+                      <Loader2 size={14} className="spinner" aria-hidden="true" />
+                    ) : txnOnRunner ? (
+                      <Server size={14} />
+                    ) : (
+                      <Container size={14} />
+                    )}
+                    {txnOnRunner ? `Run on ${hostDisplayName(hostChoice.host)}` : 'Run in cloud container'}
+                  </button>
+                ) : null}
+                {showCloudTaskButton ? (
+                  <button
+                    className="escalation-toast-action escalation-toast-action-secondary"
+                    onClick={handleRunCloudTask}
+                    disabled={submitting}
+                    data-testid="escalation-toast-cloud-task"
+                    title="Runs an agent on the repository as last pushed; edits made in the browser aren't included. Uses platform credits."
+                  >
+                    {submitting ? <Loader2 size={14} className="spinner" aria-hidden="true" /> : <Cloud size={14} />}
+                    Run as cloud task
+                  </button>
+                ) : null}
+                {workspacesAvailable ? (
+                  <button
+                    className="escalation-toast-action"
+                    onClick={handleStartWorkspace}
+                    disabled={startingWorkspace}
+                    data-testid="escalation-toast-start-workspace"
+                  >
+                    {startingWorkspace ? (
+                      <Loader2 size={14} className="spinner" aria-hidden="true" />
+                    ) : (
+                      <Rocket size={14} />
+                    )}
+                    Start Full Workspace
+                  </button>
+                ) : null}
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -330,6 +330,14 @@ const TESTIDS = {
   "escalation-toast-txn-status": "escalation-toast-txn-status",
   "escalation-toast-txn-result": "escalation-toast-txn-result",
   "escalation-toast-txn-empty-push": "escalation-toast-txn-empty-push",
+  "escalation-toast-txn-confirm": "escalation-toast-txn-confirm",
+  "escalation-toast-txn-confirm-changes":
+    "escalation-toast-txn-confirm-changes",
+  "escalation-toast-txn-confirm-empty-push":
+    "escalation-toast-txn-confirm-empty-push",
+  "escalation-toast-txn-confirm-cost": "escalation-toast-txn-confirm-cost",
+  "escalation-toast-txn-confirm-run": "escalation-toast-txn-confirm-run",
+  "escalation-toast-txn-confirm-cancel": "escalation-toast-txn-confirm-cancel",
   "escalation-toast-txn-pulled": "escalation-toast-txn-pulled",
   "escalation-toast-txn-skipped": "escalation-toast-txn-skipped",
   "escalation-toast-txn-warning": "escalation-toast-txn-warning",

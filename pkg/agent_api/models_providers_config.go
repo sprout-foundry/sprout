@@ -170,7 +170,12 @@ func (w *genericConfigListModelsWrapper) loadCustomProviderModels(ctx context.Co
 	if err != nil {
 		return nil, agenterrors.Wrap(err, fmt.Sprintf("failed to fetch models from %s", w.providerName))
 	}
-	return nil, agenterrors.NewNotFound(fmt.Sprintf("models for provider %s", w.providerName))
+	// The endpoint answered and listed nothing. Say what resolves it: without
+	// a model name there is nothing to offer, and the provider reads as
+	// broken rather than as one whose models are not published.
+	return nil, agenterrors.NewNotFound(fmt.Sprintf(
+		"provider %s published no models at its models endpoint; set \"model_name\" in its provider config, and \"disable_model_discovery\": true if it has no models endpoint",
+		w.providerName))
 }
 
 func customProviderFilePath(providerName string) string {

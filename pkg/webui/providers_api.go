@@ -390,6 +390,25 @@ func (ws *ReactWebServer) handleGetModels(w http.ResponseWriter, r *http.Request
 				return
 			}
 		}
+		if reason, detail := modelListFailure(clientType, err); reason != "" {
+			logRateLimitedWarn(
+				"model_discovery_reason:"+string(clientType),
+				"model listing failed with an actionable reason",
+				slog.String("provider", string(clientType)),
+				slog.String("reason", reason),
+				slog.Any("err", err),
+			)
+			// An empty list the user can act on is not a server fault, so
+			// this answers 200 with the reason the pickers already render
+			// copy for (ProviderModelsResponse.reason).
+			writeJSON(w, http.StatusOK, map[string]interface{}{
+				"models": []interface{}{},
+				"total":  0,
+				"reason": reason,
+				"detail": detail,
+			})
+			return
+		}
 		writeJSONErr(w, http.StatusInternalServerError, "model_list_failed", fmt.Sprintf("failed to list models: %v", err))
 		return
 	}

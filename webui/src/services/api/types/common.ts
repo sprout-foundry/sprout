@@ -86,6 +86,8 @@ export interface ProviderModelsResponse {
    * 'unavailable' | 'unknown-provider'.
    */
   reason?: string | null;
+  /** Free-text cause behind `reason`, safe to show next to it. */
+  detail?: string | null;
 }
 
 export interface LocalLLMDownloadStatus {

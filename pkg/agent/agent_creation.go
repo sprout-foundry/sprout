@@ -548,7 +548,7 @@ func newAgentWithConfigManagerInner(configManager *configuration.Manager, worksp
 		}
 
 		// Create the client
-		client, err = factory.CreateProviderClient(clientType, finalModel)
+		client, err = providerClientFactory(clientType, finalModel)
 		if err != nil {
 			nextClientType, nextModel, recoverErr := recoverProviderStartup(configManager, clientType, model, err)
 			if recoverErr != nil {
@@ -568,7 +568,12 @@ func newAgentWithConfigManagerInner(configManager *configuration.Manager, worksp
 			clientType == api.ZAIClientType ||
 			clientType == api.ZAICodingClientType
 		if !skipConnectionCheck {
-			if err := client.CheckConnection(); err != nil {
+			// A retryable failure (a transient network blip, a gateway
+			// 502/503/504) gets up to 4 more attempts with exponential
+			// backoff; a non-retryable one (unknown model, rejected key)
+			// reaches recovery at once. Only a failure that survives the
+			// retries (or a permanent one) falls through to recovery below.
+			if err := checkConnectionWithRetry(client); err != nil {
 				// A daemon cannot ask which provider to use instead, and the
 				// provider is configured: report that it could not be reached,
 				// with the cause, rather than that it is not configured.

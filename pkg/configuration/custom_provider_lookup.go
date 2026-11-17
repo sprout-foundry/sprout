@@ -8,6 +8,7 @@ package configuration
 // ModelsEndpoint derives the /models URL for a provider.
 import (
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 
@@ -188,24 +189,27 @@ func LookupKnownProvider(name string) (info KnownProviderInfo, ok bool) {
 	// providers/ directory — that merge happens in the layered manager
 	// path (LoadConfigWithLayers).
 	customProviders, err := LoadCustomProviders()
-	if err == nil {
-		if custom, exists := customProviders[normalized]; exists {
-			envVar := strings.TrimSpace(custom.EnvVar)
-			displayName := strings.TrimSpace(custom.Name)
-			if displayName == "" {
-				displayName = normalized
-			}
-			return KnownProviderInfo{
-				Source:         "custom",
-				Name:           normalized,
-				DisplayName:    displayName,
-				EnvVar:         envVar,
-				RequiresAPIKey: custom.RequiresAPIKey || envVar != "",
-				Endpoint:       strings.TrimSpace(custom.Endpoint),
-				DefaultModel:   strings.TrimSpace(custom.ModelName),
-				ContextSize:    custom.ContextSize,
-			}, true
+	if err != nil {
+		log.Printf("[config] warning: custom providers partially loaded: %v", err)
+	}
+	// The map is valid even when err reports skipped files (see
+	// LoadCustomProvidersFromDir): consult it either way.
+	if custom, exists := customProviders[normalized]; exists {
+		envVar := strings.TrimSpace(custom.EnvVar)
+		displayName := strings.TrimSpace(custom.Name)
+		if displayName == "" {
+			displayName = normalized
 		}
+		return KnownProviderInfo{
+			Source:         "custom",
+			Name:           normalized,
+			DisplayName:    displayName,
+			EnvVar:         envVar,
+			RequiresAPIKey: custom.RequiresAPIKey || envVar != "",
+			Endpoint:       strings.TrimSpace(custom.Endpoint),
+			DefaultModel:   strings.TrimSpace(custom.ModelName),
+			ContextSize:    custom.ContextSize,
+		}, true
 	}
 
 	// Fallback to the embedded / factory view. This catches skill-installed

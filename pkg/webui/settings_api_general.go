@@ -33,10 +33,13 @@ func (ws *ReactWebServer) handleAPISettings(w http.ResponseWriter, r *http.Reque
 // Shared utilities
 // ---------------------------------------------------------------------------
 
-// enrichCustomProviders loads custom provider files from the global providers
-// directory into cfg. Config.json never stores custom providers (they are set
-// to nil before saving), so raw-file reads always miss them. This helper
-// bridges the gap by always reading from the true global location.
+// enrichCustomProviders loads custom provider files from the providers
+// directories into cfg. Config.json never stores custom providers (they are
+// set to nil before saving), so raw-file reads always miss them. This
+// helper bridges the gap: it reads the global home directory AND the
+// scoped directory, with the scoped directory winning on name conflicts —
+// providers are always saved globally, so a settings view under an isolated
+// config still has to see them.
 func enrichCustomProviders(cfg *configuration.Config) {
 	if cfg == nil {
 		return
@@ -44,21 +47,26 @@ func enrichCustomProviders(cfg *configuration.Config) {
 	if cfg.CustomProviders == nil {
 		cfg.CustomProviders = make(map[string]configuration.CustomProviderConfig)
 	}
-	// Always load from the global providers directory.
+	merge := func(dir string) {
+		// A partial read (some files skipped) still contributes its valid
+		// providers; the error names the skipped files.
+		fileProviders, err := configuration.LoadCustomProvidersFromDir(dir)
+		if err != nil {
+			slog.Default().Warn("custom provider files partially loaded", slog.Any("err", err))
+		}
+		for name, provider := range fileProviders {
+			cfg.CustomProviders[name] = provider
+		}
+	}
+	if globalDir, err := configuration.DefaultConfigDir(); err == nil {
+		merge(filepath.Join(globalDir, configuration.ProvidersDirName))
+	}
 	configDir, err := configuration.GetConfigDir()
 	if err != nil {
 		slog.Default().Warn("failed to resolve config directory", slog.Any("err", err))
 		return
 	}
-	providersDir := filepath.Join(configDir, configuration.ProvidersDirName)
-	fileProviders, err := configuration.LoadCustomProvidersFromDir(providersDir)
-	if err != nil {
-		slog.Default().Warn("failed to load custom provider files", slog.Any("err", err))
-		return
-	}
-	for name, provider := range fileProviders {
-		cfg.CustomProviders[name] = provider
-	}
+	merge(filepath.Join(configDir, configuration.ProvidersDirName))
 }
 
 // applySystemPromptToLiveAgents distributes a system prompt update to all

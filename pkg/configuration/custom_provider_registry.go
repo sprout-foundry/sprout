@@ -90,23 +90,22 @@ func getScopedProvidersDir() (string, error) {
 }
 
 // LoadCustomProviders loads all custom provider configs. It merges
-// providers from the SPROUT_CONFIG-resolved directory and the global
-// home directory (~/.config/sprout/providers/), with the global home
-// directory winning on name conflicts.
+// providers from the global home directory (~/.config/sprout/providers/)
+// and the SPROUT_CONFIG-resolved directory, with the scoped directory
+// winning on name conflicts — the project-scoped override, matching how
+// the layered manager merges its providers dirs. Every consumer (the
+// /provider listing via the manager, and the factory/creation path via
+// this function) therefore resolves the same definition for a given name.
 //
-// This matches the layered manager's effective behavior (which only
-// reads from global) and ensures the factory's /provider switch path
-// resolves the same providers the /provider listing shows. Without
-// the merge, a user running sprout from a project workspace with
+// Without the merge, a user running sprout from a project workspace with
 // SPROUT_CONFIG overridden sees custom providers listed (via the
 // layered manager) but receives a "not registered as a custom
 // provider" error when trying to switch to one (via LoadCustomProviders,
 // which would otherwise only see the SPROUT_CONFIG-resolved dir).
 func LoadCustomProviders() (map[string]CustomProviderConfig, error) {
-	// Read from both the SPROUT_CONFIG-resolved dir and the global home
-	// dir. Custom providers are always saved to the global dir now, but
-	// stale copies may still exist in the scoped dir from before the fix.
-	// Global wins on name conflicts.
+	// Read from both the global home dir and the SPROUT_CONFIG-resolved
+	// dir. Custom providers are always saved to the global dir; a file in
+	// the scoped dir is a deliberate project-scoped override and wins.
 	scopedDir, err := GetConfigDir()
 	if err != nil {
 		return nil, fmt.Errorf("get scoped config directory: %w", err)
@@ -120,23 +119,25 @@ func LoadCustomProviders() (map[string]CustomProviderConfig, error) {
 
 	merged := make(map[string]CustomProviderConfig)
 
-	// Read the SPROUT_CONFIG-scoped dir first so the global home dir
-	// can override on conflict (matching the layered manager: global
-	// is the source of truth for custom providers).
-	if scopedProviders, scopedErr := LoadCustomProvidersFromDir(scopedProvidersDir); scopedErr != nil {
-		log.Printf("[config] warning: failed to read scoped custom providers from %s: %v", scopedProvidersDir, scopedErr)
-	} else {
-		for name, provider := range scopedProviders {
-			merged[name] = provider
-		}
+	// Global first (lowest priority). A partial read (some files skipped)
+	// still contributes its valid providers — the error names what was
+	// skipped, it does not void the rest.
+	globalProviders, globalErr := LoadCustomProvidersFromDir(globalProvidersDir)
+	if globalErr != nil {
+		log.Printf("[config] warning: %v", globalErr)
+	}
+	for name, provider := range globalProviders {
+		merged[name] = provider
 	}
 
-	if globalProviders, globalErr := LoadCustomProvidersFromDir(globalProvidersDir); globalErr != nil {
-		log.Printf("[config] warning: failed to read global custom providers from %s: %v", globalDir, globalErr)
-	} else {
-		for name, provider := range globalProviders {
-			merged[name] = provider
-		}
+	// Then the scoped dir; same-named entries override (matching the
+	// layered manager: the project layer wins on conflicts).
+	scopedProviders, scopedErr := LoadCustomProvidersFromDir(scopedProvidersDir)
+	if scopedErr != nil {
+		log.Printf("[config] warning: %v", scopedErr)
+	}
+	for name, provider := range scopedProviders {
+		merged[name] = provider
 	}
 
 	// A provider may also be defined inline in the global config.json
@@ -196,6 +197,14 @@ func loadInlineCustomProviders(dir string) (map[string]CustomProviderConfig, err
 // given directory. Used by LoadCustomProviders for both the
 // SPROUT_CONFIG-resolved dir and the global home dir (see the merge
 // behavior in LoadCustomProviders for context).
+//
+// One unreadable or invalid file must not hide the healthy ones: a provider
+// directory is hand-seeded, copied between machines, and volume-mounted, so
+// a stray or half-written file is a normal condition. Each bad file is
+// skipped with a warning naming it, and the valid providers still load. The
+// returned error summarizes what was skipped — it is a warning, not a
+// verdict: callers merge the returned map and surface the error, never
+// discard the map on account of it.
 func LoadCustomProvidersFromDir(providersDir string) (map[string]CustomProviderConfig, error) {
 
 	files, err := filepath.Glob(filepath.Join(providersDir, "*.json"))
@@ -204,25 +213,41 @@ func LoadCustomProvidersFromDir(providersDir string) (map[string]CustomProviderC
 	}
 
 	result := make(map[string]CustomProviderConfig, len(files))
+	var skipped []string
 	for _, path := range files {
-		data, err := os.ReadFile(path)
+		cfg, err := loadCustomProviderFile(path)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read custom provider file %s: %w", path, err)
-		}
-
-		var cfg CustomProviderConfig
-		if err := json.Unmarshal(data, &cfg); err != nil {
-			return nil, fmt.Errorf("failed to parse custom provider file %s: %w", path, err)
-		}
-
-		cfg, err = NormalizeCustomProviderConfig(cfg)
-		if err != nil {
-			return nil, fmt.Errorf("invalid custom provider file %s: %w", path, err)
+			log.Printf("[config] warning: skipping custom provider file %s: %v", path, err)
+			skipped = append(skipped, filepath.Base(path))
+			continue
 		}
 		result[cfg.Name] = cfg
 	}
 
+	if len(skipped) > 0 {
+		return result, fmt.Errorf("skipped %d invalid custom provider file(s) in %s: %s",
+			len(skipped), providersDir, strings.Join(skipped, ", "))
+	}
 	return result, nil
+}
+
+// loadCustomProviderFile reads and normalizes one provider JSON file. A
+// failure says which stage failed so the warning points at the real problem
+// (a truncated copy and an invalid name need different repairs).
+func loadCustomProviderFile(path string) (CustomProviderConfig, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return CustomProviderConfig{}, fmt.Errorf("read: %w", err)
+	}
+	var cfg CustomProviderConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return CustomProviderConfig{}, fmt.Errorf("parse JSON: %w", err)
+	}
+	cfg, err = NormalizeCustomProviderConfig(cfg)
+	if err != nil {
+		return CustomProviderConfig{}, fmt.Errorf("invalid provider config: %w", err)
+	}
+	return cfg, nil
 }
 
 func SaveCustomProvider(cfg CustomProviderConfig) error {

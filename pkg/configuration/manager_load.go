@@ -156,25 +156,27 @@ func loadConfigWithLayers(globalPath, workspacePath, sessionPath, globalDir, wor
 		}
 	}
 
-	// Load global home providers first (lowest priority).
+	// Load global home providers first (lowest priority). A partial read
+	// (some files skipped) still contributes its valid providers; the
+	// error names the skipped files, it does not void the rest.
 	if globalHomeProvidersDir != "" {
-		if fileProviders, err := LoadCustomProvidersFromDir(globalHomeProvidersDir); err != nil {
-			log.Printf("[config] warning: failed to load global custom providers from %s: %v", globalHomeProvidersDir, err)
-		} else {
-			for name, provider := range fileProviders {
-				result.CustomProviders[name] = provider
-			}
+		fileProviders, err := LoadCustomProvidersFromDir(globalHomeProvidersDir)
+		if err != nil {
+			log.Printf("[config] warning: %v", err)
+		}
+		for name, provider := range fileProviders {
+			result.CustomProviders[name] = provider
 		}
 	}
 
 	// Load scoped providers second (overrides global on conflict).
 	if scopedProvidersDir != "" {
-		if fileProviders, err := LoadCustomProvidersFromDir(scopedProvidersDir); err != nil {
-			log.Printf("[config] warning: failed to load scoped custom providers from %s: %v", scopedProvidersDir, err)
-		} else {
-			for name, provider := range fileProviders {
-				result.CustomProviders[name] = provider
-			}
+		fileProviders, err := LoadCustomProvidersFromDir(scopedProvidersDir)
+		if err != nil {
+			log.Printf("[config] warning: %v", err)
+		}
+		for name, provider := range fileProviders {
+			result.CustomProviders[name] = provider
 		}
 	}
 

@@ -274,7 +274,10 @@ func CreateGenericProvider(providerName, model string) (api.ClientInterface, err
 func CreateCustomProvider(providerName, model string) (api.ClientInterface, error) {
 	customProviders, err := configuration.LoadCustomProviders()
 	if err != nil {
-		return nil, fmt.Errorf("failed to load custom providers: %w", err)
+		// The error reports files that were skipped (invalid JSON in the
+		// providers dir); the healthy providers came back with it. Using
+		// them beats refusing to start over an unrelated stray file.
+		log.Printf("[factory] warning: custom providers partially loaded: %v", err)
 	}
 
 	if len(customProviders) == 0 {

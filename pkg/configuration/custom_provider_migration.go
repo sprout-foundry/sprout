@@ -22,12 +22,22 @@ const (
 // promoted when no file with the same name already exists.
 func MigrateLegacyCustomProviders(cfg *Config) (map[string]CustomProviderConfig, error) {
 	if cfg == nil || len(cfg.CustomProviders) == 0 {
-		return LoadCustomProviders()
+		// LoadCustomProviders' error reports files it skipped (a stray or
+		// invalid JSON in the providers dir), not a failed read — the valid
+		// providers came back with it. Propagating that error here would
+		// fail every Load() and make the app unusable over one bad file.
+		fileProviders, err := LoadCustomProviders()
+		if err != nil {
+			log.Printf("[config] warning: custom providers partially loaded: %v", err)
+		}
+		return fileProviders, nil
 	}
 
 	fileProviders, err := LoadCustomProviders()
 	if err != nil {
-		return nil, fmt.Errorf("load custom providers: %w", err)
+		// Partial load: the healthy providers are still the migration
+		// target's baseline; only the skipped files are lost.
+		log.Printf("[config] warning: custom providers partially loaded: %v", err)
 	}
 
 	for name, provider := range cfg.CustomProviders {

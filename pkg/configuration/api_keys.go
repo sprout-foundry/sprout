@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"sort"
 	"strings"
@@ -38,10 +39,15 @@ func isCustomProvider(provider string) bool {
 			return true
 		}
 	}
-	if customs, err := LoadCustomProviders(); err == nil {
-		if _, ok := customs[provider]; ok {
-			return true
-		}
+	// LoadCustomProviders' error reports skipped files, not a failed
+	// read: consult the map either way, or one stray JSON in the
+	// providers dir stops every other custom provider being recognized.
+	customs, err := LoadCustomProviders()
+	if err != nil {
+		log.Printf("[config] warning: custom providers partially loaded: %v", err)
+	}
+	if _, ok := customs[provider]; ok {
+		return true
 	}
 	return false
 }

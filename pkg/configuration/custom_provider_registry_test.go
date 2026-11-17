@@ -821,11 +821,13 @@ func TestLoadCustomProviders_MergesScopedAndGlobal(t *testing.T) {
 	assert.Contains(t, got, "local", "scoped provider should be present")
 }
 
-// TestLoadCustomProviders_GlobalOverridesScoped verifies that when the
-// same provider name exists in both dirs, the global home dir wins —
-// matching the layered manager's effective behavior, which treats the
-// global home dir as the source of truth.
-func TestLoadCustomProviders_GlobalOverridesScoped(t *testing.T) {
+// TestLoadCustomProviders_ScopedOverridesGlobal verifies that when the same
+// provider name exists in both dirs, the SPROUT_CONFIG-scoped dir wins —
+// the project-scoped override the layered manager documents ("global-first
+// with optional project-scoped overrides"). Both paths must agree on the
+// winner, or the endpoint the listing shows and the endpoint the factory
+// creates can silently differ.
+func TestLoadCustomProviders_ScopedOverridesGlobal(t *testing.T) {
 	fakeHome := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", fakeHome)
 	t.Setenv("HOME", fakeHome)
@@ -858,8 +860,8 @@ func TestLoadCustomProviders_GlobalOverridesScoped(t *testing.T) {
 	got, err := LoadCustomProviders()
 	require.NoError(t, err)
 	require.Contains(t, got, "shared")
-	assert.Equal(t, "global-model", got["shared"].ModelName,
-		"global home dir should win name conflicts, matching layered manager behavior")
+	assert.Equal(t, "scoped-model", got["shared"].ModelName,
+		"the scoped dir is the project override and must win name conflicts, matching the layered manager")
 }
 
 // TestDeleteCustomProvider_GlobalScopedSplitBrain is the regression test

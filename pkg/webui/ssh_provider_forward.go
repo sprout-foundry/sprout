@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"os"
 	"regexp"
 	"sort"
@@ -75,12 +76,16 @@ func forwardedProviderFor(provider, model string) (*sshForwardedProvider, error)
 	if cred.Value != "" && sshForwardNamePattern.MatchString(cred.EnvVar) {
 		fwd.Env[cred.EnvVar] = cred.Value
 	}
-	if customs, err := configuration.LoadCustomProviders(); err == nil {
-		if _, ok := customs[provider]; ok {
-			if path, err := configuration.GetCustomProviderPath(provider); err == nil {
-				if data, err := os.ReadFile(path); err == nil {
-					fwd.Definition = data
-				}
+	// LoadCustomProviders' error reports skipped files, not a failed
+	// read: consult the map either way.
+	customs, err := configuration.LoadCustomProviders()
+	if err != nil {
+		slog.Default().Warn("custom providers partially loaded", slog.Any("err", err))
+	}
+	if _, ok := customs[provider]; ok {
+		if path, err := configuration.GetCustomProviderPath(provider); err == nil {
+			if data, err := os.ReadFile(path); err == nil {
+				fwd.Definition = data
 			}
 		}
 	}

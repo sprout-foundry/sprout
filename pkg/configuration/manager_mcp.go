@@ -5,6 +5,7 @@ package configuration
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"path/filepath"
 	"reflect"
 
@@ -17,9 +18,16 @@ func (m *Manager) GetMCPConfig() mcp.MCPConfig {
 	return m.config.MCP
 }
 
-// EnrichCustomProviders loads custom provider files from the global providers
-// directory into the config. This is needed before provider name lookups
+// EnrichCustomProviders loads custom provider files from the providers
+// directories into the config. This is needed before provider name lookups
 // because config.json never stores custom providers directly.
+//
+// Both the manager's own (possibly SPROUT_CONFIG-scoped) directory and the
+// global home directory are read, with the scoped directory winning on name
+// conflicts — matching how the layered load merges them. Providers are
+// always SAVED globally, so reading only the scoped dir would leave a
+// manager running under an isolated config blind to every provider the user
+// registered.
 func (m *Manager) EnrichCustomProviders() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -27,7 +35,14 @@ func (m *Manager) EnrichCustomProviders() {
 	if m.config.CustomProviders == nil {
 		m.config.CustomProviders = make(map[string]CustomProviderConfig)
 	}
-	// Use manager's explicit configDir if set, otherwise fall back to env-based resolution.
+
+	// Global home dir first (lowest priority).
+	if globalDir, err := getDefaultConfigDir(); err == nil {
+		mergeCustomProviderDir(m.config.CustomProviders, filepath.Join(globalDir, ProvidersDirName))
+	}
+
+	// Use manager's explicit configDir if set, otherwise fall back to
+	// env-based resolution.
 	configDir := m.configDir
 	if configDir == "" {
 		var err error
@@ -36,13 +51,20 @@ func (m *Manager) EnrichCustomProviders() {
 			return
 		}
 	}
-	providersDir := filepath.Join(configDir, ProvidersDirName)
+	mergeCustomProviderDir(m.config.CustomProviders, filepath.Join(configDir, ProvidersDirName))
+}
+
+// mergeCustomProviderDir loads the provider files in providersDir into dst,
+// overriding same-named entries. A partial read (some files skipped) still
+// contributes its valid providers; the error names the skipped files, it
+// does not void the rest.
+func mergeCustomProviderDir(dst map[string]CustomProviderConfig, providersDir string) {
 	fileProviders, err := LoadCustomProvidersFromDir(providersDir)
 	if err != nil {
-		return
+		log.Printf("[config] warning: %v", err)
 	}
 	for name, provider := range fileProviders {
-		m.config.CustomProviders[name] = provider
+		dst[name] = provider
 	}
 }
 

@@ -1381,6 +1381,21 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.071,
+        "context_length": 1000000,
+        "description": "Qwen's next-generation flagship multimodal model, combining text, image and video understanding with deep reasoning for coding, office work and complex agentic tasks.",
+        "id": "Qwen/Qwen4-Max",
+        "input_cost": 1.413,
+        "name": "Qwen4 Max",
+        "output_cost": 4.24,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

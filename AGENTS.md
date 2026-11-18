@@ -62,3 +62,7 @@ Guidance for AI agents working in this repository.
 ## Integration with Sprout Foundry
 
 This repo's binary and packages (`@sprout/events`, `@sprout/ui`) are consumed by the sister `sprout-foundry` checkout. When changing contracts (`packages/ui/src/types`, event schemas, HTTP API shapes), bump versions and run foundry's `make test-integration` from that checkout. Optional/backward-compatible props still warrant the run when the sibling checkout exists — if it doesn't, note the pending integration check in the commit message. See foundry's `COMPATIBILITY.md` for the compatibility rules.
+
+## Comments
+
+Code gets clear names, and comments only where the reason isn't obvious from the code. When you touch old code, trim its comment blocks. Rationale goes in specs and commit messages instead.

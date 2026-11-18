@@ -140,6 +140,10 @@ func (a *Agent) processQueryWithSeed(source, userQuery string) (string, error) {
 	// marker is set once and the model switch is once-guarded.
 	a.markSessionStarted()
 	a.applyEconomyMainLoopModel()
+	// Out-of-process MCP config changes (a terminal `sprout login` adding
+	// the platform's MCP server) are picked up before this turn builds its
+	// tool list; a per-turn stat until the file's mtime moves.
+	a.maybeRefreshMCPFromDisk()
 	defer func() {
 		a.turnTimestampMu.Lock()
 		a.turnTimestamp = time.Time{}

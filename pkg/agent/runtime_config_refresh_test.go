@@ -2,9 +2,13 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -217,6 +221,11 @@ func writeConfig(t *testing.T, servers map[string]mcp.MCPServerConfig) *configur
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", dir)
+	// LoadMCPConfigForWorkspace auto-discovers extra servers (github,
+	// playwright) on machines that have the tools; the dev box does, so pin
+	// auto-discovery off or reconcile sees servers the test never accounted
+	// for.
+	t.Setenv("SPROUT_MCP_AUTO_DISCOVER", "false")
 
 	mgr, err := configuration.NewManagerWithDir(dir)
 	if err != nil {
@@ -388,6 +397,287 @@ func TestReconcileMCPServers_AggregatesErrors(t *testing.T) {
 	}
 }
 
+// writeLegacyMCPConfig writes a standalone mcp_config.json into the
+// workspace layer of a fresh temp workspace and returns the workspace root.
+// This is the file `sprout login` writes the platform's MCP server to — the
+// reconcile under test must treat it as a first-class server source.
+func writeLegacyMCPConfig(t *testing.T, servers map[string]mcp.MCPServerConfig) string {
+	t.Helper()
+	ws := t.TempDir()
+	cfg := mcp.MCPConfig{
+		Enabled:   true,
+		Servers:   servers,
+		AutoStart: true,
+	}
+	if err := mcp.SaveMCPConfigForWorkspace(&cfg, ws); err != nil {
+		t.Fatalf("SaveMCPConfigForWorkspace: %v", err)
+	}
+	if path := mcp.MCPConfigSourcePath(ws); path == "" {
+		t.Fatalf("no mcp_config.json source path under %s", ws)
+	}
+	return ws
+}
+
+func TestReconcileMCPServers_AddsServerFromLegacyFile(t *testing.T) {
+	// The login scenario: a server is written to mcp_config.json after the
+	// session started, so it is in no config the manager has seen. Reconcile
+	// must add and start it instead of ignoring it.
+	mgr := writeConfig(t, map[string]mcp.MCPServerConfig{}) // main config: empty
+	ws := writeLegacyMCPConfig(t, map[string]mcp.MCPServerConfig{
+		"foundry": {Name: "foundry", Type: "http", URL: "https://example.com/mcp", AutoStart: true, Timeout: 30 * time.Second},
+	})
+	mock := newMockMCPManager()
+	a := buildAgentWithMockMCP(t, mgr, mock)
+	a.SetWorkspaceRoot(ws)
+
+	if err := a.reconcileMCPServers(context.Background()); err != nil {
+		t.Fatalf("reconcileMCPServers: %v", err)
+	}
+
+	if got := mock.addCalls.Load(); got != 1 {
+		t.Errorf("AddServer calls = %d, want 1 (from the legacy file)", got)
+	}
+	if got := mock.removeCalls.Load(); got != 0 {
+		t.Errorf("RemoveServer calls = %d, want 0", got)
+	}
+	if got := mock.startCalls.Load(); got != 1 {
+		t.Errorf("StartAll calls = %d, want 1", got)
+	}
+	srv, ok := mock.servers["foundry"]
+	if !ok {
+		t.Fatal("expected the legacy-file server to be registered after reconcile")
+	}
+	if srv.URL != "https://example.com/mcp" {
+		t.Errorf("server URL = %q, want the legacy file's value", srv.URL)
+	}
+}
+
+func TestReconcileMCPServers_DoesNotPruneLegacyFileServer(t *testing.T) {
+	// The prune direction: a server registered from mcp_config.json (as
+	// initializeMCP does at startup) must survive a refresh whose main
+	// config.json knows nothing about it. This is the bug that made a
+	// successful `sprout login` invisible to a running session.
+	mgr := writeConfig(t, map[string]mcp.MCPServerConfig{}) // main config: empty
+	ws := writeLegacyMCPConfig(t, map[string]mcp.MCPServerConfig{
+		"foundry": {Name: "foundry", Type: "http", URL: "https://example.com/mcp", AutoStart: true, Timeout: 30 * time.Second},
+	})
+	legacyCfg := mcp.MCPServerConfig{Name: "foundry", Type: "http", URL: "https://example.com/mcp", AutoStart: true, Timeout: 30 * time.Second}
+	mock := newMockMCPManager()
+	if err := mock.AddServer(legacyCfg); err != nil {
+		t.Fatalf("seed mock: %v", err)
+	}
+	a := buildAgentWithMockMCP(t, mgr, mock)
+	a.SetWorkspaceRoot(ws)
+
+	if err := a.reconcileMCPServers(context.Background()); err != nil {
+		t.Fatalf("reconcileMCPServers: %v", err)
+	}
+
+	if got := mock.removeCalls.Load(); got != 0 {
+		t.Errorf("RemoveServer calls = %d, want 0 — a legacy-file server must not be pruned", got)
+	}
+	if _, ok := mock.servers["foundry"]; !ok {
+		t.Error("legacy-file server was pruned from the manager")
+	}
+}
+
+func TestReconcileMCPServers_MainConfigWinsOverLegacyFile(t *testing.T) {
+	// On a name collision the main config's definition wins, and a changed
+	// legacy-file server restarts with the main config's values — mirroring
+	// initializeMCP's merge precedence.
+	mgr := writeConfig(t, map[string]mcp.MCPServerConfig{
+		"gh": {Name: "gh", Type: "stdio", Command: "node", Timeout: 30 * time.Second},
+	})
+	ws := writeLegacyMCPConfig(t, map[string]mcp.MCPServerConfig{
+		"gh":     {Name: "gh", Type: "stdio", Command: "npx", Timeout: 30 * time.Second},
+		"legacy": {Name: "legacy", Type: "http", URL: "https://legacy.example/mcp", AutoStart: true, Timeout: 30 * time.Second},
+	})
+	mock := newMockMCPManager()
+	originalCfg := mcp.MCPServerConfig{Name: "gh", Type: "stdio", Command: "npx", Timeout: 30 * time.Second}
+	if err := mock.AddServer(originalCfg); err != nil {
+		t.Fatalf("seed mock: %v", err)
+	}
+	a := buildAgentWithMockMCP(t, mgr, mock)
+	a.SetWorkspaceRoot(ws)
+
+	if err := a.reconcileMCPServers(context.Background()); err != nil {
+		t.Fatalf("reconcileMCPServers: %v", err)
+	}
+
+	if got := mock.servers["gh"].Command; got != "node" {
+		t.Errorf("gh Command = %q, want the main config's \"node\" (main must win on collision)", got)
+	}
+	if _, ok := mock.servers["legacy"]; !ok {
+		t.Error("expected the legacy-only server to be added alongside the collision")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Login end-to-end: a server written to mcp_config.json after the session
+// started (what `sprout login` does) is picked up by RefreshRuntimeConfig,
+// against a REAL MCP manager — no mock — so the tool list is what a running
+// session would actually offer.
+// ---------------------------------------------------------------------------
+
+// fakeFoundryMCP is a minimal Streamable-HTTP MCP server: it answers
+// initialize, the initialized notification, and a tools/list with one tool.
+func fakeFoundryMCP(t *testing.T) (url string, toolName string) {
+	t.Helper()
+	var mu sync.Mutex
+	var initialized bool
+	toolName = "list_projects"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var msg struct {
+			JSONRPC string          `json:"jsonrpc"`
+			ID      json.RawMessage `json:"id"`
+			Method  string          `json:"method"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&msg)
+		w.Header().Set("Content-Type", "application/json")
+		if msg.ID == nil { // notification (notifications/initialized)
+			mu.Lock()
+			initialized = true
+			mu.Unlock()
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+		switch msg.Method {
+		case "initialize":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"jsonrpc": "2.0", "id": json.RawMessage(msg.ID),
+				"result": map[string]any{
+					"protocolVersion": "2025-06-18",
+					"capabilities":    map[string]any{},
+					"serverInfo":      map[string]any{"name": "fake-foundry", "version": "0"},
+				},
+			})
+		case "tools/list":
+			mu.Lock()
+			ok := initialized
+			mu.Unlock()
+			if !ok {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"jsonrpc": "2.0", "id": json.RawMessage(msg.ID),
+					"error": map[string]any{"code": -32000, "message": "Server not initialized"},
+				})
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"jsonrpc": "2.0", "id": json.RawMessage(msg.ID),
+				"result": map[string]any{"tools": []map[string]any{{
+					"name":        "list_projects",
+					"description": "list the account's projects",
+					"inputSchema": map[string]any{"type": "object"},
+				}}},
+			})
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv.URL, toolName
+}
+
+func TestRefreshRuntimeConfig_PicksUpServerWrittenToLegacyFileAfterStart(t *testing.T) {
+	// Simulate the exact gap: the session's MCP manager is initialized and
+	// empty (nothing configured at startup), then `sprout login` writes the
+	// platform's MCP server to the workspace's mcp_config.json. A refresh —
+	// the only in-session path — must register, start and list that server's
+	// tools against the real manager.
+	mgr := writeConfig(t, map[string]mcp.MCPServerConfig{}) // main config: empty
+	ws := t.TempDir()
+	srvURL, toolName := fakeFoundryMCP(t)
+	legacy := mcp.MCPConfig{
+		Enabled:   true,
+		Servers:   map[string]mcp.MCPServerConfig{"sprout-foundry": {Name: "sprout-foundry", Type: "http", URL: srvURL, AutoStart: true, Timeout: 30 * time.Second}},
+		AutoStart: true,
+	}
+	if err := mcp.SaveMCPConfigForWorkspace(&legacy, ws); err != nil {
+		t.Fatalf("SaveMCPConfigForWorkspace: %v", err)
+	}
+
+	realManager := mcp.NewMCPManager(nil)
+	a := buildAgentWithMockMCP(t, mgr, realManager)
+	a.SetWorkspaceRoot(ws)
+
+	// The session already ran its startup init with an empty config: mark it
+	// initialized so getMCPTools takes the cache path, not initializeMCP.
+	a.mcpSub.SetInitialized(true)
+	if tools := a.getMCPTools(); len(tools) != 0 {
+		t.Fatalf("before the login write: %d tools, want 0", len(tools))
+	}
+
+	if err := a.RefreshRuntimeConfig(context.Background()); err != nil {
+		t.Fatalf("RefreshRuntimeConfig: %v", err)
+	}
+
+	tools := a.getMCPTools()
+	var found bool
+	for _, tool := range tools {
+		if strings.Contains(tool.Function.Name, toolName) {
+			found = true
+			break
+		}
+	}
+	if !found {
+		names := make([]string, 0, len(tools))
+		for _, tool := range tools {
+			names = append(names, tool.Function.Name)
+		}
+		t.Errorf("after the login write: the %q tool is not offered (tools: %v)", toolName, names)
+	}
+}
+
+// TestMaybeRefreshMCPFromDisk pins the per-turn hook that makes a
+// terminal `sprout login` (a separate process writing mcp_config.json while
+// the session runs) visible to the live session: a changed file triggers a
+// reload + reconcile, an unchanged one does not.
+func TestMaybeRefreshMCPFromDisk(t *testing.T) {
+	mgr := writeConfig(t, map[string]mcp.MCPServerConfig{}) // main config: empty
+	ws := t.TempDir()
+	srvURL, toolName := fakeFoundryMCP(t)
+	realManager := mcp.NewMCPManager(nil)
+	a := buildAgentWithMockMCP(t, mgr, realManager)
+	a.SetWorkspaceRoot(ws)
+	a.mcpSub.SetInitialized(true)
+
+	// No file yet: the stamp is 0 and nothing happens.
+	a.maybeRefreshMCPFromDisk()
+	if got := realManager.ListServers(); len(got) != 0 {
+		t.Fatalf("with no mcp_config.json: %d servers registered, want 0", len(got))
+	}
+
+	// A login lands the platform's server in the file out of process.
+	legacy := mcp.MCPConfig{
+		Enabled:   true,
+		Servers:   map[string]mcp.MCPServerConfig{"sprout-foundry": {Name: "sprout-foundry", Type: "http", URL: srvURL, AutoStart: true, Timeout: 30 * time.Second}},
+		AutoStart: true,
+	}
+	if err := mcp.SaveMCPConfigForWorkspace(&legacy, ws); err != nil {
+		t.Fatalf("SaveMCPConfigForWorkspace: %v", err)
+	}
+
+	// The next turn picks it up.
+	a.maybeRefreshMCPFromDisk()
+	tools := a.getMCPTools()
+	var found bool
+	for _, tool := range tools {
+		if strings.Contains(tool.Function.Name, toolName) {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("after the out-of-process login: the %q tool is not offered", toolName)
+	}
+
+	// An unchanged file is a no-op: the tool cache is kept and nothing is
+	// re-added.
+	a.maybeRefreshMCPFromDisk()
+	if got := a.mcpSub.GetToolsCache(); len(got) == 0 {
+		t.Error("an unchanged file must not clear the tool cache")
+	}
+}
+
 type mockError struct{ msg string }
 
 func (e *mockError) Error() string { return e.msg }
@@ -400,6 +690,7 @@ func TestRefreshRuntimeConfig_ReloadsConfigAndReconciles(t *testing.T) {
 	// Step 1: write config with NO servers, seed mock with empty state.
 	dir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", dir)
+	t.Setenv("SPROUT_MCP_AUTO_DISCOVER", "false") // keep the merged view deterministic (see writeConfig)
 	mgr, err := configuration.NewManagerWithDir(dir)
 	if err != nil {
 		t.Fatalf("NewManagerWithDir: %v", err)

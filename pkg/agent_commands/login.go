@@ -8,6 +8,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
@@ -83,7 +84,12 @@ func (l *LoginCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	if err != nil {
 		return err
 	}
-	return platformauth.NewFlow(l.out()).Login(commandContext(chatAgent), opts)
+	if err := platformauth.NewFlow(l.out()).Login(commandContext(chatAgent), opts); err != nil {
+		return err
+	}
+	refreshSessionMCP(l.out(), chatAgent, commandContext(chatAgent),
+		"This session's MCP servers were refreshed: the platform's tools (list_projects, add_tasks, wait_for_tasks, …) are available now.")
+	return nil
 }
 
 // commandContext is the context a sign-in command runs under: the agent's
@@ -96,6 +102,26 @@ func commandContext(chatAgent *agent.Agent) context.Context {
 		return context.Background()
 	}
 	return chatAgent.InterruptCtx()
+}
+
+// refreshSessionMCP applies a just-completed platform sign-in to the running
+// session's MCP servers. The login flow writes the platform's MCP server to
+// the workspace's mcp_config.json (or removes it on sign-out), but the
+// session's manager was reconciled from the config on disk at startup and has
+// no way to know the file changed underneath it. Refreshing re-reads the
+// config, starts the newly added server, drops the removed one, and clears
+// the tool cache so the next turn sees the new tool set. A failure only costs
+// the convenience: the server is already configured on disk and starts with
+// the next session, so it is reported, not returned.
+func refreshSessionMCP(out io.Writer, chatAgent *agent.Agent, ctx context.Context, note string) {
+	if chatAgent == nil {
+		return
+	}
+	if err := chatAgent.RefreshRuntimeConfig(ctx); err != nil {
+		fmt.Fprintf(out, "Note: %v (the platform's MCP server will start with your next session).\n", err)
+		return
+	}
+	fmt.Fprintln(out, note)
 }
 
 // parseLoginArgs splits a /login invocation into its options.
@@ -158,7 +184,12 @@ func (l *LogoutCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	if len(args) > 0 {
 		return fmt.Errorf("logout takes no arguments. Usage: /logout")
 	}
-	return platformauth.NewFlow(l.out()).SignOut(commandContext(chatAgent))
+	if err := platformauth.NewFlow(l.out()).SignOut(commandContext(chatAgent)); err != nil {
+		return err
+	}
+	refreshSessionMCP(l.out(), chatAgent, commandContext(chatAgent),
+		"This session's MCP servers were refreshed: the platform's tools are no longer available.")
+	return nil
 }
 
 // WhoamiCommand implements the /whoami slash command.

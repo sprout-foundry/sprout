@@ -130,6 +130,26 @@ func mcpConfigCandidates(workspaceRoot string) []string {
 	return paths
 }
 
+// MCPConfigStamp returns the newest mtime (Unix nanoseconds) of the
+// mcp_config.json files LoadMCPConfigForWorkspace would read for the
+// workspace, or 0 when none exists. A caller polling for config changes
+// made out of process (a terminal `sprout login` adding the platform's
+// MCP server while an agent runs) compares successive stamps instead of
+// parsing the files.
+func MCPConfigStamp(workspaceRoot string) int64 {
+	var stamp int64
+	for _, path := range mcpConfigCandidates(workspaceRoot) {
+		info, err := os.Stat(path)
+		if err != nil {
+			continue
+		}
+		if mt := info.ModTime().UnixNano(); mt > stamp {
+			stamp = mt
+		}
+	}
+	return stamp
+}
+
 // LoadGlobalMCPConfigFile reads only the global config file, without the
 // auto-discovered servers and environment overrides LoadMCPConfig layers on
 // top, so a caller that edits one server and saves writes back only what

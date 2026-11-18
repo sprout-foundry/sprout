@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/credentials"
+	"github.com/sprout-foundry/sprout/pkg/mcp"
+	"github.com/sprout-foundry/sprout/pkg/platformauth"
 )
 
 // isolatePlatform points the config, credential and MCP stores at a temp dir
@@ -190,6 +192,67 @@ func TestLoginCommand_SignsInThroughTheSink(t *testing.T) {
 		if !strings.Contains(text, want) {
 			t.Errorf("/login output missing %q:\n%s", want, text)
 		}
+	}
+}
+
+// TestLoginCommand_RefreshesTheRunningSessionsMCP pins the end-to-end fix:
+// after a successful /login the running session must see the platform's MCP
+// server without restarting. The flow writes it to the workspace's
+// mcp_config.json (ConfigureMCP); the command's final RefreshRuntimeConfig is
+// what reconciles the live manager from that file.
+func TestLoginCommand_RefreshesTheRunningSessionsMCP(t *testing.T) {
+	isolatePlatform(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/cli/device":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"device_code": "dc", "user_code": "WXYZ-1234",
+				"verification_uri": "https://platform.example/cli/link", "interval": 1, "expires_in": 30,
+			})
+		case "/runners/device/poll":
+			_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "spt_ok", "account_email": "me@example.com"})
+		case "/cli/whoami":
+			_ = json.NewEncoder(w).Encode(map[string]any{"user_id": "u", "email": "me@example.com", "plan": "pro", "mcp_allowed": true})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	// A real agent on the temp config root (createTestAgentWithTempConfig
+	// repoints HOME and clears SPROUT_CONFIG after isolatePlatform). Its
+	// workspace root is a fresh temp dir so the reconcile's workspace layer
+	// reads nothing — only the global layer the login wrote to.
+	chatAgent := createTestAgentWithTempConfig(t)
+	chatAgent.SetWorkspaceRoot(t.TempDir())
+	out := &syncWriter{}
+	c := &LoginCommand{}
+	c.SetOutput(out)
+	if err := c.Execute([]string{srv.URL, "--no-browser"}, chatAgent); err != nil {
+		t.Fatalf("/login = %v\n%s", err, out.String())
+	}
+
+	text := out.String()
+	if !strings.Contains(text, "MCP servers were refreshed") {
+		t.Errorf("the in-session refresh note is missing — the running session would not see the new server:\n%s", text)
+	}
+
+	// The login wrote the platform's server into the session's config root —
+	// the file the running session's reconcile reads — with auto-start so a
+	// live StartAll picks it up without an extra step.
+	legacy, err := mcp.LoadGlobalMCPConfigFile()
+	if err != nil {
+		t.Fatalf("reading the login-written mcp_config.json: %v", err)
+	}
+	server, ok := legacy.Servers[platformauth.MCPServerName]
+	if !ok {
+		t.Fatalf("the login did not register %q in the session's mcp_config.json", platformauth.MCPServerName)
+	}
+	if !server.AutoStart {
+		t.Error("the platform's MCP server must auto-start so a running session starts it without an extra step")
+	}
+	if server.URL != platformauth.MCPURL(srv.URL) {
+		t.Errorf("server URL = %q, want %q", server.URL, platformauth.MCPURL(srv.URL))
 	}
 }
 

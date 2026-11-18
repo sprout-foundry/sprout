@@ -305,6 +305,34 @@ func (a *Agent) getMCPTools() []api.Tool {
 	return agentTools
 }
 
+// maybeRefreshMCPFromDisk re-reconciles the session's MCP servers when the
+// mcp_config.json on disk changed out of process — a terminal `sprout login`
+// registers the platform's MCP server while this session runs, and the
+// session's manager has no other way to learn the file changed underneath it.
+// The per-turn cost is a stat of at most two files (MCPConfigStamp); the full
+// reload + reconcile + tool-cache clear happens only when the stamp actually
+// moved. The stamp advances only on success, so a failed refresh retries on
+// the next turn.
+func (a *Agent) maybeRefreshMCPFromDisk() {
+	if a.mcpSub == nil || a.mcpSub.IsInherited() || a.configManager == nil {
+		return
+	}
+	stamp := mcp.MCPConfigStamp(a.GetWorkspaceRoot())
+	if stamp == 0 || stamp == a.mcpSub.GetDiskMCPConfigMtime() {
+		return
+	}
+	if err := a.RefreshRuntimeConfig(context.Background()); err != nil {
+		if a.debug {
+			a.Logger().Debug("MCP config changed on disk; refresh failed (retries next turn): %v\n", err)
+		}
+		return
+	}
+	a.mcpSub.SetDiskMCPConfigMtime(stamp)
+	if a.debug {
+		a.Logger().Info("MCP config changed on disk; servers refreshed")
+	}
+}
+
 // isValidMCPTool checks if the tool name is a valid MCP tool
 func (a *Agent) isValidMCPTool(toolName string) bool {
 	if !strings.HasPrefix(toolName, "mcp_") {

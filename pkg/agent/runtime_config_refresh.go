@@ -104,7 +104,28 @@ func (a *Agent) reconcileMCPServers(ctx context.Context) error {
 
 	mgr := a.mcpSub.GetManager()
 	newConfig := a.configManager.GetConfig()
-	newServers := newConfig.MCP.Servers
+
+	// Reconcile against the effective server set the agent loads at startup
+	// (initializeMCP): the main config's servers plus the standalone
+	// mcp_config.json servers, the main config winning on a name collision.
+	// Reconciling against config.json alone would prune a server written to
+	// mcp_config.json after the session started — `sprout login` does exactly
+	// that for the platform's MCP server — because this path never reads that
+	// file: the removal loop below would drop it as "no longer in config" and
+	// the add loop would never re-add it. initializeMCP merges the legacy
+	// servers regardless of the enabled flag (which only gates starting), so
+	// so does this.
+	newServers := make(map[string]mcp.MCPServerConfig, len(newConfig.MCP.Servers))
+	for name, cfg := range newConfig.MCP.Servers {
+		newServers[name] = cfg
+	}
+	if legacy, err := mcp.LoadMCPConfigForWorkspace(a.GetWorkspaceRoot()); err == nil {
+		for name, serverConfig := range legacy.Servers {
+			if _, exists := newServers[name]; !exists {
+				newServers[name] = serverConfig
+			}
+		}
+	}
 
 	// Build a map of currently registered servers (name -> config)
 	currentServers := make(map[string]mcp.MCPServerConfig)

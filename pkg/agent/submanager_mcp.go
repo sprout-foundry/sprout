@@ -25,6 +25,10 @@ type MCPSubManager interface {
 	// still using them.
 	IsInherited() bool
 	SetInherited(inherited bool)
+	// Disk-mtime of the last per-turn MCP config change check (Unix
+	// nanoseconds; 0 = never checked).
+	GetDiskMCPConfigMtime() int64
+	SetDiskMCPConfigMtime(nano int64)
 }
 
 // AgentMCPManager implements MCPSubManager.
@@ -41,6 +45,10 @@ type AgentMCPManager struct {
 	initErr      error
 	inherited    bool
 	initMu       sync.Mutex
+	// diskMCPConfigMtime is the mtime (Unix ns) of the mcp_config.json the
+	// last per-turn change check reconciled against; 0 = never checked.
+	// Guarded by stateMu.
+	diskMCPConfigMtime int64
 	// confirmEach holds "server/tool" for the tools whose server asks that
 	// every call be approved (mcp.MCPTool.ConfirmEachCall); nil until the
 	// tool list was read.
@@ -148,4 +156,20 @@ func (m *AgentMCPManager) SetInherited(inherited bool) {
 	m.stateMu.Lock()
 	defer m.stateMu.Unlock()
 	m.inherited = inherited
+}
+
+// GetDiskMCPConfigMtime returns the mtime (Unix nanoseconds) of the MCP
+// config file the last per-turn change check saw, or 0 when no check has
+// run yet.
+func (m *AgentMCPManager) GetDiskMCPConfigMtime() int64 {
+	m.stateMu.RLock()
+	defer m.stateMu.RUnlock()
+	return m.diskMCPConfigMtime
+}
+
+// SetDiskMCPConfigMtime records the mtime a change check reconciled against.
+func (m *AgentMCPManager) SetDiskMCPConfigMtime(nano int64) {
+	m.stateMu.Lock()
+	defer m.stateMu.Unlock()
+	m.diskMCPConfigMtime = nano
 }

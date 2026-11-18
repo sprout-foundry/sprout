@@ -40,7 +40,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.24
 	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
-	github.com/sprout-foundry/sinter v0.8.2
+	github.com/sprout-foundry/sinter v0.8.3
 	github.com/wk8/go-ordered-map/v2 v2.1.8
 	github.com/zricethezav/gitleaks/v8 v8.30.1
 	golang.org/x/image v0.46.0
@@ -128,7 +128,7 @@ require (
 	github.com/ysmood/fetchup v0.2.3 // indirect
 	github.com/ysmood/goob v0.4.0 // indirect
 	github.com/ysmood/got v0.40.0 // indirect
-	github.com/ysmood/gson v0.7.3 // indirect
+	github.com/ysmood/gson v0.7.3
 	github.com/ysmood/leakless v0.9.0 // indirect
 	github.com/zalando/go-keyring v0.2.8
 	golang.org/x/crypto v0.57.0 // indirect

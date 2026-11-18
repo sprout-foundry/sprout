@@ -118,10 +118,10 @@ func refreshSessionMCP(out io.Writer, chatAgent *agent.Agent, ctx context.Contex
 		return
 	}
 	if err := chatAgent.RefreshRuntimeConfig(ctx); err != nil {
-		fmt.Fprintf(out, "Note: %v (the platform's MCP server will start with your next session).\n", err)
+		_, _ = fmt.Fprintf(out, "Note: %v (the platform's MCP server will start with your next session).\n", err)
 		return
 	}
-	fmt.Fprintln(out, note)
+	_, _ = fmt.Fprintln(out, note)
 }
 
 // parseLoginArgs splits a /login invocation into its options.

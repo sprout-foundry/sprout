@@ -24,7 +24,11 @@ concurrency:
 jobs:
   e2e:
     name: E2E (shard ${{ matrix.shard }}/4)
-    runs-on: ubuntu-latest
+    # Pinned: `ubuntu-latest` moved to 26.04, which Playwright does not
+    # support for chromium ("Playwright does not support chromium on
+    # ubuntu26.04-x64"), so the browser install step failed before any test
+    # ran. 24.04 is the newest image the pinned Playwright release supports.
+    runs-on: ubuntu-24.04
     # Playwright's --shard splits by spec file, and with 41 specs the shards are
     # uneven: the slow ones land in 3/4 and 4/4, which measure 14-15m on loaded
     # runners while 1/4 finishes in 3-5m. At a 15m cap those shards get

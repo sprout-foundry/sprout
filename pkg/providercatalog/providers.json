@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-15T16:25:34Z",
+  "updated_at": "2026-11-18T18:09:29Z",
   "source": "refresh_provider_catalog",
   "onboarding_order": [
     "deepinfra",
@@ -588,15 +588,15 @@
             "tools",
             "reasoning"
           ],
-          "input_cost": 0.25,
-          "output_cost": 1,
-          "cached_input_cost": 0.05
+          "input_cost": 0.125,
+          "output_cost": 0.4,
+          "cached_input_cost": 0.015
         },
         {
           "id": "clef:27b",
           "name": "clef:27b",
           "description": "Clef is a 27B multimodal model created by Cloudflare that turns a state and a schema of typed questions into decisions.",
-          "context_length": 262144,
+          "context_length": 65536,
           "tags": [
             "vision"
           ],
@@ -803,6 +803,13 @@
         {
           "id": "inkling-2-small",
           "name": "inkling-2-small",
+          "description": "Inkling 2 Small - Thinking Machines Lab's 594B-parameter MoE model (17B active) with image input, variable reasoning effort and up to 1M tokens of context, built for agentic coding and knowledge work",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning"
+          ],
           "input_cost": 0.3,
           "output_cost": 1,
           "cached_input_cost": 0.03
@@ -849,9 +856,16 @@
         {
           "id": "kimi-k3.1-pro",
           "name": "kimi-k3.1-pro",
+          "description": "Kimi K3.1 Pro - Moonshot's 3T-class multimodal agentic model with a 1M-token context window",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning"
+          ],
           "input_cost": 2,
           "output_cost": 10,
-          "cached_input_cost": 0.19999999999999998
+          "cached_input_cost": 0.2
         },
         {
           "id": "mimo-v2.6-flash",
@@ -2116,8 +2130,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.5,
-          "output_cost": 2.1500000000000004,
+          "input_cost": 0.5710000000000001,
+          "output_cost": 2.2859999999999996,
           "cached_input_cost": 0.35
         },
         {
@@ -2195,9 +2209,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.0434,
-          "output_cost": 0.3,
-          "cached_input_cost": 0.035
+          "input_cost": 0.06,
+          "output_cost": 0.18,
+          "cached_input_cost": 0.015
         },
         {
           "id": "deepseek/deepseek-v4-flash-0731:batch",
@@ -2322,9 +2336,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.02,
-          "output_cost": 0.108,
-          "cached_input_cost": 0.007
+          "input_cost": 0.036,
+          "output_cost": 0.5,
+          "cached_input_cost": 0.01
         },
         {
           "id": "deepseek/deepseek-v4.1-flash-1017:batch",
@@ -2337,9 +2351,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.038000000000000006,
-          "output_cost": 0.33599999999999997,
-          "cached_input_cost": 0.004
+          "input_cost": 0.036,
+          "output_cost": 0.15,
+          "cached_input_cost": 0.003
         },
         {
           "id": "deepseek/deepseek-v4.1-flash:batch",
@@ -3030,7 +3044,7 @@
             "structured_output"
           ],
           "input_cost": 0.08,
-          "output_cost": 0.35,
+          "output_cost": 0.44999999999999996,
           "cached_input_cost": 0.04
         },
         {
@@ -3068,9 +3082,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.0675,
-          "output_cost": 0.22499999999999998,
-          "cached_input_cost": 0.0375
+          "input_cost": 0.09,
+          "output_cost": 0.3,
+          "cached_input_cost": 0.049999999999999996
         },
         {
           "id": "google/gemma-4-26b-a4b-it:free",
@@ -3721,8 +3735,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.3,
-          "output_cost": 1.2,
+          "input_cost": 0.35,
+          "output_cost": 1.5,
           "cached_input_cost": 0.04
         },
         {
@@ -3940,9 +3954,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.27,
-          "output_cost": 0.95,
-          "cached_input_cost": 0.03
+          "input_cost": 0.295,
+          "output_cost": 1.2,
+          "cached_input_cost": 0.06
         },
         {
           "id": "minimax/minimax-m2.7",
@@ -4223,9 +4237,9 @@
             "vision",
             "structured_output"
           ],
-          "input_cost": 0.39999999999999997,
-          "output_cost": 2,
-          "cached_input_cost": 0.04
+          "input_cost": 0.44,
+          "output_cost": 2.2,
+          "cached_input_cost": 0.044
         },
         {
           "id": "mistralai/mistral-medium-3-5",
@@ -4265,9 +4279,9 @@
             "vision",
             "structured_output"
           ],
-          "input_cost": 0.39999999999999997,
-          "output_cost": 2,
-          "cached_input_cost": 0.04
+          "input_cost": 0.44,
+          "output_cost": 2.2,
+          "cached_input_cost": 0.044
         },
         {
           "id": "mistralai/mistral-medium-3.1:batch",
@@ -4372,9 +4386,8 @@
             "vision",
             "structured_output"
           ],
-          "input_cost": 0.09999999999999999,
-          "output_cost": 0.3,
-          "cached_input_cost": 0.01
+          "input_cost": 0.075,
+          "output_cost": 0.19999999999999998
         },
         {
           "id": "mistralai/mixtral-8x22b-instruct",
@@ -4549,8 +4562,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 2,
-          "output_cost": 10,
+          "input_cost": 0.2403,
+          "output_cost": 8.402299999999999,
           "cached_input_cost": 0.19999999999999998
         },
         {
@@ -4562,8 +4575,8 @@
             "vision",
             "reasoning"
           ],
-          "input_cost": 0.7,
-          "output_cost": 6,
+          "input_cost": 0.372,
+          "output_cost": 5.582999999999999,
           "cached_input_cost": 0.09999999999999999
         },
         {
@@ -4848,9 +4861,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.6,
-          "output_cost": 2.4,
-          "cached_input_cost": 0.12
+          "input_cost": 0.5,
+          "output_cost": 2.2,
+          "cached_input_cost": 0.09999999999999999
         },
         {
           "id": "nvidia/nemotron-3-ultra-550b-a55b:batch",
@@ -4902,7 +4915,7 @@
           "id": "nvidia/nemotron-3.5-lightning",
           "name": "NVIDIA: Nemotron 3.5 Lightning",
           "description": "NVIDIA Nemotron 3.5 Lightning is an open mixture-of-experts model from NVIDIA, with 3B active parameters out of 30B total. It is suited for high-throughput agentic workloads and specialized tasks that...",
-          "context_length": 262144,
+          "context_length": 1048576,
           "tags": [
             "tools",
             "reasoning",
@@ -5879,9 +5892,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 4.4,
-          "output_cost": 22,
-          "cached_input_cost": 0.44
+          "input_cost": 4,
+          "output_cost": 20,
+          "cached_input_cost": 0.39999999999999997
         },
         {
           "id": "openai/gpt-5.6-sol-pro",
@@ -6304,6 +6317,126 @@
           "cached_input_cost": 0.024999999999999998
         },
         {
+          "id": "openai/gpt-6.2-astra",
+          "name": "OpenAI: GPT-6.2 Astra",
+          "description": "GPT-6.2 Astra is the flagship model in the GPT-6.2 series from OpenAI, built for the hardest projects. It is suited for real-world engineering, professional work and scientific research, with stronger...",
+          "context_length": 1050000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 8,
+          "output_cost": 40,
+          "cached_input_cost": 0.39999999999999997
+        },
+        {
+          "id": "openai/gpt-6.2-astra-pro",
+          "name": "OpenAI: GPT-6.2 Astra Pro",
+          "description": "GPT-6.2 Astra Pro is the same underlying model as [GPT-6.2 Astra](https://openrouter.ai/openai/gpt-6.2-astra), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks. **Cost note:** pro mode spends far more...",
+          "context_length": 1050000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 8,
+          "output_cost": 40,
+          "cached_input_cost": 0.39999999999999997
+        },
+        {
+          "id": "openai/gpt-6.2-astra-pro:batch",
+          "name": "OpenAI: GPT-6.2 Astra Pro (batch)",
+          "description": "GPT-6.2 Astra Pro is the same underlying model as [GPT-6.2 Astra](https://openrouter.ai/openai/gpt-6.2-astra), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks. **Cost note:** pro mode spends far more...",
+          "context_length": 1050000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 4,
+          "output_cost": 20,
+          "cached_input_cost": 0.19999999999999998
+        },
+        {
+          "id": "openai/gpt-6.2-astra:batch",
+          "name": "OpenAI: GPT-6.2 Astra (batch)",
+          "description": "GPT-6.2 Astra is the flagship model in the GPT-6.2 series from OpenAI, built for the hardest projects. It is suited for real-world engineering, professional work and scientific research, with stronger...",
+          "context_length": 1050000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 4,
+          "output_cost": 20,
+          "cached_input_cost": 0.19999999999999998
+        },
+        {
+          "id": "openai/gpt-6.2-sol",
+          "name": "OpenAI: GPT-6.2 Sol",
+          "description": "GPT-6.2 Sol is an upgrade to GPT-6.1 Sol from OpenAI, positioned below the flagship GPT-6.2 Astra in the GPT-6.2 series. It is an efficient, versatile model for everyday work, suited...",
+          "context_length": 1050000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 2,
+          "output_cost": 10,
+          "cached_input_cost": 0.09999999999999999
+        },
+        {
+          "id": "openai/gpt-6.2-sol-pro",
+          "name": "OpenAI: GPT-6.2 Sol Pro",
+          "description": "GPT-6.2 Sol Pro is the same underlying model as [GPT-6.2 Sol](https://openrouter.ai/openai/gpt-6.2-sol), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks. **Cost note:** pro mode spends far more...",
+          "context_length": 1050000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 2,
+          "output_cost": 10,
+          "cached_input_cost": 0.09999999999999999
+        },
+        {
+          "id": "openai/gpt-6.2-sol-pro:batch",
+          "name": "OpenAI: GPT-6.2 Sol Pro (batch)",
+          "description": "GPT-6.2 Sol Pro is the same underlying model as [GPT-6.2 Sol](https://openrouter.ai/openai/gpt-6.2-sol), served with `reasoning.mode` set to `pro` for higher-quality responses on complex tasks. **Cost note:** pro mode spends far more...",
+          "context_length": 1050000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 1,
+          "output_cost": 5,
+          "cached_input_cost": 0.049999999999999996
+        },
+        {
+          "id": "openai/gpt-6.2-sol:batch",
+          "name": "OpenAI: GPT-6.2 Sol (batch)",
+          "description": "GPT-6.2 Sol is an upgrade to GPT-6.1 Sol from OpenAI, positioned below the flagship GPT-6.2 Astra in the GPT-6.2 series. It is an efficient, versatile model for everyday work, suited...",
+          "context_length": 1050000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 1,
+          "output_cost": 5,
+          "cached_input_cost": 0.049999999999999996
+        },
+        {
           "id": "openai/gpt-audio",
           "name": "OpenAI: GPT Audio",
           "description": "The gpt-audio model is OpenAI's first generally available audio model. The new snapshot features an upgraded decoder for more natural sounding voices and maintains better voice consistency. Audio is priced...",
@@ -6378,9 +6511,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.03,
-          "output_cost": 0.13,
-          "cached_input_cost": 0.03
+          "input_cost": 0.018,
+          "output_cost": 0.09,
+          "cached_input_cost": 0.009
         },
         {
           "id": "openai/gpt-oss-20b:batch",
@@ -7083,7 +7216,8 @@
           "description": "Qwen3-Coder-30B-A3B-Instruct is a 30.5B parameter Mixture-of-Experts (MoE) model with 128 experts (8 active per forward pass), designed for advanced code generation, repository-scale understanding, and agentic tool use. Built on the...",
           "context_length": 262144,
           "tags": [
-            "tools"
+            "tools",
+            "structured_output"
           ],
           "input_cost": 0.15,
           "output_cost": 0.6
@@ -7162,8 +7296,9 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.09,
-          "output_cost": 1.1
+          "input_cost": 0.09999999999999999,
+          "output_cost": 1.1,
+          "cached_input_cost": 0.07
         },
         {
           "id": "qwen/qwen3-next-80b-a3b-thinking",
@@ -7299,8 +7434,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.26,
-          "output_cost": 2.6,
+          "input_cost": 0.3,
+          "output_cost": 2.4,
           "cached_input_cost": 0.27
         },
         {
@@ -7329,9 +7464,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.6,
-          "output_cost": 3.5999999999999996,
-          "cached_input_cost": 0.12
+          "input_cost": 0.44999999999999996,
+          "output_cost": 3,
+          "cached_input_cost": 0.22
         },
         {
           "id": "qwen/qwen3.5-9b",
@@ -7344,9 +7479,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.092,
-          "output_cost": 0.136,
-          "cached_input_cost": 0.083
+          "input_cost": 0.13,
+          "output_cost": 0.191,
+          "cached_input_cost": 0.117
         },
         {
           "id": "qwen/qwen3.5-9b:batch",
@@ -7572,9 +7707,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.15,
-          "output_cost": 1.875,
-          "cached_input_cost": 0.0375
+          "input_cost": 0.06,
+          "output_cost": 2.2,
+          "cached_input_cost": 0.059
         },
         {
           "id": "qwen/qwen3.8-27b:batch",
@@ -7691,6 +7826,21 @@
           "input_cost": 0.15,
           "output_cost": 0.47,
           "cached_input_cost": 0.016
+        },
+        {
+          "id": "qwen/qwen4-max",
+          "name": "Qwen: Qwen4 Max",
+          "description": "Qwen4 Max is the flagship model in Alibaba's Qwen4 series. It accepts text, image, and video input and returns text, with a 1M-token context window and reasoning enabled by default....",
+          "context_length": 1000000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 1.4249999999999998,
+          "output_cost": 4.2749999999999995,
+          "cached_input_cost": 0.07125000000000001
         },
         {
           "id": "recursive/flint-v1.0:free",
@@ -8049,6 +8199,21 @@
           "input_cost": 0.417,
           "output_cost": 1.2505,
           "cached_input_cost": 0.020999999999999998
+        },
+        {
+          "id": "tencent/hy4-flash",
+          "name": "Tencent: Hy4 flash",
+          "description": "Hy4 flash is a cost-efficient variant of [Hy4](https://openrouter.ai/tencent/hy4) from Tencent, served with roughly a quarter of the flagship's parameter count for lower latency and cost. It targets code assistance, agent...",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.035,
+          "output_cost": 0.14049999999999999,
+          "cached_input_cost": 0.0015
         },
         {
           "id": "tencent/hy4-preview",
@@ -8510,15 +8675,15 @@
           "id": "xiaomi/mimo-v2.5-pro",
           "name": "Xiaomi: MiMo-V2.5-Pro",
           "description": "MiMo-V2.5-Pro is Xiaomi’s flagship model, delivering strong performance in general agentic capabilities, complex software engineering, and long-horizon tasks, with top rankings on benchmarks such as ClawEval, GDPVal, and SWE-bench Pro....",
-          "context_length": 1024000,
+          "context_length": 262144,
           "tags": [
             "tools",
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.435,
-          "output_cost": 0.87,
-          "cached_input_cost": 0.0036
+          "input_cost": 0.48,
+          "output_cost": 1.7999999999999998,
+          "cached_input_cost": 0.096
         },
         {
           "id": "xiaomi/mimo-v2.6-flash",
@@ -8599,9 +8764,9 @@
             "tools",
             "reasoning"
           ],
-          "input_cost": 0.19999999999999998,
-          "output_cost": 1.1,
-          "cached_input_cost": 0.03
+          "input_cost": 0.13,
+          "output_cost": 0.85,
+          "cached_input_cost": 0.024999999999999998
         },
         {
           "id": "z-ai/glm-4.5v",
@@ -8645,7 +8810,7 @@
           ],
           "input_cost": 0.3,
           "output_cost": 0.8999999999999999,
-          "cached_input_cost": 0.055
+          "cached_input_cost": 0.049999999999999996
         },
         {
           "id": "z-ai/glm-4.7",
@@ -8733,16 +8898,16 @@
         {
           "id": "z-ai/glm-5.2:batch",
           "name": "Z.ai: GLM 5.2 (batch)",
-          "description": "GLM-5.2 via the Batch API at 50% of standard pricing. Large-scale reasoning model from Z.ai with a 1M-token context window.",
+          "description": "GLM 5.2 is a large-scale reasoning model from Z.ai. It supports text input and output with a 1M-token context window, and is suited for long-horizon agent workflows, project-level software engineering,...",
           "context_length": 1048576,
           "tags": [
             "tools",
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.7,
-          "output_cost": 2.2,
-          "cached_input_cost": 0.07
+          "input_cost": 0.322,
+          "output_cost": 0.989,
+          "cached_input_cost": 0.109
         },
         {
           "id": "z-ai/glm-5.2:free",
@@ -8763,9 +8928,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.08399999999999999,
-          "output_cost": 3.5999999999999996,
-          "cached_input_cost": 0.079
+          "input_cost": 0.0699,
+          "output_cost": 1.4,
+          "cached_input_cost": 0.0689
         },
         {
           "id": "z-ai/glm-5.3-flash",
@@ -8778,8 +8943,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.0399,
-          "output_cost": 0.0784,
+          "input_cost": 0.15,
+          "output_cost": 0.5,
           "cached_input_cost": 0.03
         },
         {
@@ -8793,8 +8958,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.049999999999999996,
-          "output_cost": 0.18,
+          "input_cost": 0.024,
+          "output_cost": 0.06899999999999999,
           "cached_input_cost": 0.01
         },
         {
@@ -8837,9 +9002,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 2.8,
-          "output_cost": 8.8,
-          "cached_input_cost": 0.56
+          "input_cost": 1.68,
+          "output_cost": 5.28,
+          "cached_input_cost": 0.33599999999999997
         },
         {
           "id": "z-ai/glm-5.3:batch",
@@ -8851,9 +9016,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.44999999999999996,
-          "output_cost": 2,
-          "cached_input_cost": 0.09999999999999999
+          "input_cost": 0.28099999999999997,
+          "output_cost": 1.25,
+          "cached_input_cost": 0.062
         },
         {
           "id": "z-ai/glm-5v-turbo",
@@ -8941,9 +9106,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.02,
-          "output_cost": 0.108,
-          "cached_input_cost": 0.007
+          "input_cost": 0.036,
+          "output_cost": 0.5,
+          "cached_input_cost": 0.01
         },
         {
           "id": "~deepseek/deepseek-pro-latest",
@@ -9029,9 +9194,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 10,
-          "output_cost": 50,
-          "cached_input_cost": 1
+          "input_cost": 8,
+          "output_cost": 40,
+          "cached_input_cost": 0.39999999999999997
         },
         {
           "id": "~openai/gpt-latest",
@@ -9956,7 +10121,8 @@
             "structured_output"
           ],
           "input_cost": 2,
-          "output_cost": 10
+          "output_cost": 10,
+          "cached_input_cost": 0.2
         },
         {
           "id": "NousResearch/Hermes-3-Llama-3.1-405B",
@@ -10343,6 +10509,20 @@
           "cached_input_cost": 0.206
         },
         {
+          "id": "Qwen/Qwen4-Max",
+          "name": "Qwen/Qwen4-Max",
+          "description": "Qwen's next-generation flagship multimodal model, combining text, image and video understanding with deep reasoning for coding, office work and complex agentic tasks.",
+          "context_length": 1000000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 1.4129999999999998,
+          "output_cost": 4.24
+        },
+        {
           "id": "Sao10K/L3-8B-Lunaris-v1-Turbo",
           "name": "Sao10K/L3-8B-Lunaris-v1-Turbo",
           "description": "Lunaris is an 8B Llama 3 roleplay and creative-writing model from Sao10K, served in a faster Turbo configuration.",
@@ -10405,7 +10585,8 @@
             "structured_output"
           ],
           "input_cost": 0.3,
-          "output_cost": 1
+          "output_cost": 1,
+          "cached_input_cost": 0.03
         },
         {
           "id": "thinkingmachines/Inkling-Small",
@@ -10685,7 +10866,17 @@
         },
         {
           "id": "Qwen/Qwen3.5-27B-TEE",
-          "name": "Qwen/Qwen3.5-27B-TEE"
+          "name": "Qwen/Qwen3.5-27B-TEE",
+          "description": "Qwen3.5 27B on confidential TEE compute",
+          "context_length": 262144,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning"
+          ],
+          "input_cost": 0.2,
+          "output_cost": 1.75,
+          "cached_input_cost": 0.02
         },
         {
           "id": "Qwen/Qwen3.5-397B-A17B-TEE",
@@ -10717,8 +10908,8 @@
         {
           "id": "Qwen/Qwen3.8-2.4T-A95B",
           "name": "Qwen/Qwen3.8-2.4T-A95B",
-          "description": "Qwen3.8 2.4T A95B is Qwen's text-only 2.4T-parameter mixture-of-experts model with always-on reasoning and a 262K context window on Chutes public compute",
-          "context_length": 262144,
+          "description": "Qwen3.8 2.4T A95B is Qwen's text-only 2.4T-parameter mixture-of-experts model with always-on reasoning and a 1M-token context window on Chutes public compute",
+          "context_length": 1000000,
           "tags": [
             "tools",
             "reasoning"
@@ -10757,7 +10948,15 @@
         },
         {
           "id": "tencent/Hy4",
-          "name": "tencent/Hy4"
+          "name": "tencent/Hy4",
+          "description": "Tencent Hy4 is Tencent's 770B-parameter MoE flagship (49B active) with a 1M-token context window, served on Chutes public compute",
+          "context_length": 1048576,
+          "tags": [
+            "reasoning"
+          ],
+          "input_cost": 0.525,
+          "output_cost": 1.5625,
+          "cached_input_cost": 0.025
         },
         {
           "id": "unsloth/Mistral-Nemo-Instruct-2407-TEE",

@@ -36,14 +36,14 @@ func newConnFake(failures ...error) *fakeConnectionCheckClient {
 	return &fakeConnectionCheckClient{TestClient: &factory.TestClient{}, failures: failures}
 }
 
-// connRetryable is a transient connection failure: isRetryableProviderError
-// reports it (the "connection reset" fragment matches a provider-reported
-// reset).
-var connRetryable = errors.New("Post \"https://model.example/v1\": connection reset by peer")
+// errConnRetryable is a transient connection failure:
+// isRetryableProviderError reports it (the "connection reset" fragment
+// matches a provider-reported reset).
+var errConnRetryable = errors.New("post \"https://model.example/v1\": connection reset by peer")
 
-// connPermanent is a permanent provider failure (a rejected key): not
+// errConnPermanent is a permanent provider failure (a rejected key): not
 // retryable, so it must reach recovery at once.
-var connPermanent = errors.New("HTTP 401: invalid API key")
+var errConnPermanent = errors.New("http 401: invalid API key")
 
 // runConnCheckStartup drives a full newAgentWithConfigManagerInner startup
 // against an injected fake client and captures what happened:
@@ -64,7 +64,7 @@ var connPermanent = errors.New("HTTP 401: invalid API key")
 //
 // The package-level seams (providerClientFactory, testConnectionCheckSleep)
 // are restored after the call, so the test body observes them pre-restore.
-func runConnCheckStartup(t *testing.T, fake *fakeConnectionCheckClient) (*Agent, error, []string, []time.Duration) {
+func runConnCheckStartup(t *testing.T, fake *fakeConnectionCheckClient) (*Agent, []string, []time.Duration, error) {
 	t.Helper()
 
 	manager, mgrCleanup := configuration.NewTestManager(t)
@@ -101,7 +101,7 @@ func runConnCheckStartup(t *testing.T, fake *fakeConnectionCheckClient) (*Agent,
 	t.Cleanup(func() { testConnectionCheckSleep = oldSleep })
 
 	ag, err := newAgentWithConfigManagerInner(manager, t.TempDir(), "")
-	return ag, err, factoryCalls, waits
+	return ag, factoryCalls, waits, err
 }
 
 // TestStartupConnectionCheck_RetryableFailureRecovers pins the regression
@@ -111,8 +111,8 @@ func runConnCheckStartup(t *testing.T, fake *fakeConnectionCheckClient) (*Agent,
 // succeeds: startup continues with that very client (no provider recovery),
 // and the 2 s + 4 s backoff waits were injected, not slept.
 func TestStartupConnectionCheck_RetryableFailureRecovers(t *testing.T) {
-	fake := newConnFake(connRetryable, connRetryable)
-	ag, err, factoryCalls, waits := runConnCheckStartup(t, fake)
+	fake := newConnFake(errConnRetryable, errConnRetryable)
+	ag, factoryCalls, waits, err := runConnCheckStartup(t, fake)
 	if err != nil {
 		t.Fatalf("startup should have recovered from a retryable connection failure: %v", err)
 	}
@@ -147,8 +147,8 @@ func TestStartupConnectionCheck_RetryableFailureRecovers(t *testing.T) {
 // non-interactive mode fails with "failed to initialize provider …
 // Running in non-interactive mode".
 func TestStartupConnectionCheck_NonRetryableGoesToRecoveryAtOnce(t *testing.T) {
-	fake := newConnFake(connPermanent)
-	_, err, factoryCalls, waits := runConnCheckStartup(t, fake)
+	fake := newConnFake(errConnPermanent)
+	_, factoryCalls, waits, err := runConnCheckStartup(t, fake)
 	if err == nil {
 		t.Fatal("expected startup to fail via provider recovery, got success")
 	}

@@ -495,6 +495,31 @@ store; the state is in the config directory's `gpu/gpu.json`.
 | `--workflow-config <file>` | Run workflow configuration | `sprout agent --workflow-config examples/agent_workflow.json "task"` |
 | `--trace-dataset-dir <dir>` | Enable dataset tracing | `sprout agent --trace-dataset-dir traces "task"` |
 | `--prompt-stdin` | Read prompt from stdin | `echo "task" | sprout agent --prompt-stdin` |
+| `--steer-inbox <dir>` | Steer a run with no terminal: messages dropped into the directory are delivered while it works | `sprout agent --steer-inbox /tmp/steers --json "task"` |
+
+### Steering a headless run
+
+`--steer-inbox <dir>` lets something outside the process add to a run while it
+works, as if the person had typed a message mid-task:
+
+- Write each message to its own file, `<id>.msg`, atomically: write it under
+  another name in the same directory, then rename it. Ids are read in name
+  order, so use ids that sort in the order you send them.
+- At its next step the run claims the oldest message by renaming it to
+  `<id>.taken`, then delivers it. One message is delivered per step, and only
+  when no typed steer is waiting.
+- To take a message back, delete `<id>.msg`. Once the run has claimed it, the
+  delete fails and the message has been read.
+- A message must be UTF-8 text of at most 8 KB; one that is not is set aside
+  and reported dropped.
+- With `--progress-events`, the run reports `progress: steer landed <id>` once
+  the message is in the conversation, and `progress: steer dropped <id>
+  <reason>` when it never got there. With `--json`, the result lists every
+  message's outcome under `steers`: `landed`, `dropped`, or `unread` (still
+  waiting, or claimed but not delivered before the run ended).
+
+The inbox is read by an in-process run; a turn handed to a running daemon does
+not read it.
 
 ### Model Selection
 

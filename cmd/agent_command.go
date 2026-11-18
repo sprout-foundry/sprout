@@ -61,6 +61,7 @@ var (
 	// responses, so redaction is the safe default and raw capture is opt-in.
 	agentTraceUnredacted bool
 	agentPromptStdin     bool
+	agentSteerInbox      string
 	agentRiskProfile     string
 	agentEconomy         bool
 	// Workflow budget overrides — populated from CLI flags on `sprout
@@ -359,6 +360,7 @@ func init() {
 	agentCmd.Flags().StringVar(&agentTraceDatasetDir, "trace-dataset-dir", "", "Enable dataset trace mode and write to directory (also settable via SPROUT_TRACE_DATASET_DIR env var)")
 	agentCmd.Flags().BoolVar(&agentTraceUnredacted, "trace-unredacted", false, "Write trace content without the secret-detection backstop (raw prompts/responses; use only for trusted datasets)")
 	agentCmd.Flags().BoolVar(&agentPromptStdin, "prompt-stdin", false, "Read the prompt from stdin (avoids OS ARG_MAX limits for large prompts)")
+	agentCmd.Flags().StringVar(&agentSteerInbox, "steer-inbox", "", "Read steer messages from this directory while the run works: each <id>.msg file is delivered at the next step and renamed <id>.taken (in-process runs only)")
 	agentCmd.Flags().BoolVar(&agentMockLLM, "mock-llm", false, "Use a stub LLM provider that returns canned responses (for testing)")
 	agentCmd.Flags().BoolVar(&agentNoDaemon, "no-daemon", false, "Run this turn in-process instead of handing it to a running daemon (also set by SPROUT_DAEMON_AGENT=0)")
 	_ = agentCmd.RegisterFlagCompletionFunc("persona", completePersonaFlag)

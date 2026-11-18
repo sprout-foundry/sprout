@@ -611,3 +611,22 @@ func TestProgressEmitter_ToolEnd(t *testing.T) {
 	require.Len(t, lines, 1)
 	require.Equal(t, "progress: tool done: shell_command 1500ms", lines[0])
 }
+
+// A steer read from the steer inbox is reported by its inbox id, so a host
+// following the run learns when the run read it or gave up on it.
+func TestProgressEmitter_SteerInbox(t *testing.T) {
+	bus := events.NewEventBus()
+	var buf safeBuffer
+	pe := startProgressEmitterDirect(context.Background(), bus, &buf)
+	defer pe.stop()
+
+	bus.Publish(events.EventTypeSteerLanded, map[string]interface{}{"id": "0001"})
+	bus.Publish(events.EventTypeSteerDropped, map[string]interface{}{"id": "0002", "reason": "never reached the conversation"})
+	bus.Publish(events.EventTypeSteerLanded, map[string]interface{}{})
+
+	require.Eventually(t, func() bool { return len(readLines(&buf)) >= 2 }, 2*time.Second, 20*time.Millisecond)
+	require.Equal(t, []string{
+		"progress: steer landed 0001",
+		"progress: steer dropped 0002 never reached the conversation",
+	}, readLines(&buf))
+}

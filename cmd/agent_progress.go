@@ -105,6 +105,15 @@ func (pe *progressEmitter) handleEvent(evt events.UIEvent) {
 	case events.EventTypeError:
 		pe.startedEmitted = false
 		line = formatError(data)
+	case events.EventTypeSteerLanded:
+		if id, _ := data["id"].(string); id != "" {
+			line = "progress: steer landed " + id
+		}
+	case events.EventTypeSteerDropped:
+		if id, _ := data["id"].(string); id != "" {
+			reason, _ := data["reason"].(string)
+			line = strings.TrimSpace("progress: steer dropped " + id + " " + reason)
+		}
 	default:
 		return
 	}

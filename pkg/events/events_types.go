@@ -29,7 +29,12 @@ const (
 	// EventTypeSteerDelivered marks the moment a steer message sent during a
 	// run reaches the model: text streamed before it answers the earlier
 	// input, text after it may answer the steer.
-	EventTypeSteerDelivered   = "steer_delivered"
+	EventTypeSteerDelivered = "steer_delivered"
+	// EventTypeSteerLanded and EventTypeSteerDropped report a steer read from
+	// a steer inbox (--steer-inbox) by its inbox id: landed once the
+	// conversation holds it, dropped when it never reached the conversation.
+	EventTypeSteerLanded      = "steer_landed"
+	EventTypeSteerDropped     = "steer_dropped"
 	EventTypeError            = "error"
 	EventTypeToolStart        = "tool_start"
 	EventTypeToolEnd          = "tool_end"

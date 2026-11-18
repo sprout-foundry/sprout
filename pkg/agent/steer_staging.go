@@ -36,6 +36,9 @@ type pendingSteer struct {
 	// stranded again past steerStrandingCap is dropped rather than injected on
 	// every subsequent turn.
 	stranding int
+	// inboxID names a steer read from the steer inbox, so its landing or drop
+	// is reported by the id its sender gave it ("" for a typed steer).
+	inboxID string
 }
 
 // steerStrandingCap bounds how many runs may accept a steer message without it
@@ -71,6 +74,12 @@ func (a *Agent) getSteerStage() *steerStage {
 // legacy consumers that read SteeringChannel directly keep observing
 // submissions; nothing in the delivery path drains that channel anymore.
 func (a *Agent) StageSteerInput(text string) error {
+	return a.stageSteer(text, "")
+}
+
+// stageSteer is StageSteerInput for a steer that may come from the steer
+// inbox (inboxID names it there; "" for a typed one).
+func (a *Agent) stageSteer(text, inboxID string) error {
 	if a == nil {
 		return agenterrors.NewTransientError("failed to inject input: agent is nil", nil)
 	}
@@ -85,6 +94,7 @@ func (a *Agent) StageSteerInput(text string) error {
 	ss.entries = append(ss.entries, pendingSteer{
 		id:      ss.nextID,
 		content: text,
+		inboxID: inboxID,
 	})
 	ss.nextID++
 
@@ -166,6 +176,7 @@ func (a *Agent) settleAcceptedSteer(counted func(stamped string) int, release bo
 	ranks := map[string]int{}
 	released := 0
 	var lost []string
+	var landedIDs, lostIDs []string
 	kept := ss.entries[:0]
 	for _, e := range ss.entries {
 		if !e.accepted {
@@ -174,7 +185,11 @@ func (a *Agent) settleAcceptedSteer(counted func(stamped string) int, release bo
 		}
 		ranks[e.stamped]++
 		if counted != nil && counted(e.stamped) >= ranks[e.stamped] {
-			continue // vouched for: it is in the conversation
+			// Vouched for: it is in the conversation.
+			if e.inboxID != "" {
+				landedIDs = append(landedIDs, e.inboxID)
+			}
+			continue
 		}
 		if !release {
 			kept = append(kept, e)
@@ -183,6 +198,9 @@ func (a *Agent) settleAcceptedSteer(counted func(stamped string) int, release bo
 		e.stranding++
 		if e.stranding > steerStrandingCap {
 			lost = append(lost, e.content)
+			if e.inboxID != "" {
+				lostIDs = append(lostIDs, e.inboxID)
+			}
 			continue
 		}
 		e.accepted = false
@@ -193,6 +211,12 @@ func (a *Agent) settleAcceptedSteer(counted func(stamped string) int, release bo
 	ss.entries = kept
 	ss.mu.Unlock()
 
+	for _, id := range landedIDs {
+		a.reportInboxSteer(id, inboxSteerLanded, "")
+	}
+	for _, id := range lostIDs {
+		a.reportInboxSteer(id, inboxSteerDropped, "never reached the conversation")
+	}
 	if released > 0 {
 		log.Debug("[steer] %d steer message(s) taken by a run that ended before delivering them are queued for redelivery\n", released)
 	}

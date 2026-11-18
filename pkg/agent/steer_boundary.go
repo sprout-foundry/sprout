@@ -111,6 +111,10 @@ func (d *steerBoundaryDeliverer) deliverOne() bool {
 	// list. One still unaccounted for at the turn's end is released for
 	// redelivery (see releaseUnlandedSteer).
 	agent.resolveLandedSteer(landedObserver(sa))
+	// A run with a steer inbox reads its next message now, when nothing typed
+	// is waiting: claimed only as it is about to be delivered, a message stays
+	// retractable until this boundary.
+	agent.claimInboxSteer()
 
 	id, content, ok := agent.peekStagedSteer()
 	if !ok {

@@ -39,6 +39,7 @@ var advancedAgentFlags = []string{
 	"trace-dataset-dir",
 	"trace-unredacted",
 	"prompt-stdin",
+	"steer-inbox",
 	"no-project-skills",
 	"web-port",
 	"bind",

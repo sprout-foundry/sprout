@@ -28,6 +28,7 @@ type AgentResult struct {
 	PullRequestURL string             `json:"pull_request_url,omitempty"` // URL of PR created during execution
 	Question       *AgentQuestion     `json:"question,omitempty"`         // the question that ended a "needs_input" run
 	Handoff        string             `json:"handoff,omitempty"`          // a "handed_off" run's note for the next run
+	Steers         []agent.InboxSteer `json:"steers,omitempty"`           // each --steer-inbox message's outcome: landed, dropped or unread
 	Metrics        AgentResultMetrics `json:"metrics"`
 }
 
@@ -105,6 +106,7 @@ func emitJSONResult(query string, startTime time.Time, runErr error, a *agent.Ag
 		result.Metrics.SecurityCautionsIssued = a.GetSecurityCautionsIssued()
 		result.Metrics.SecurityRetriesAfterCaution = a.GetSecurityRetriesAfterCaution()
 		result.Metrics.SecurityLoopsDetected = a.GetSecurityLoopsDetected()
+		result.Steers = a.SteerInboxReport()
 	}
 
 	if q := a.PendingQuestion(); q != nil {

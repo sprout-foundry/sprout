@@ -198,6 +198,9 @@ type Agent struct {
 	// into it for legacy SteeringChannel readers only.
 	steerStage   *steerStage
 	steerStageMu sync.Mutex
+	// steerInbox, when set, is a directory steers are read from at loop
+	// boundaries (steer_inbox.go).
+	steerInbox *steerInbox
 
 	// Notification queue for background task completions.
 	pendingNotifications []Notification

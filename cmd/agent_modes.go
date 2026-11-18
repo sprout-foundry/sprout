@@ -128,6 +128,9 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 	// Set up event publishing for agent (skip when agent is nil in daemon mode)
 	if chatAgent != nil {
 		SetupAgentEvents(chatAgent, eventBus, indicator)
+		// Steers dropped into the inbox are delivered at loop boundaries
+		// (pkg/agent/steer_inbox.go).
+		chatAgent.SetSteerInbox(agentSteerInbox)
 	}
 
 	// Start progress event emitter (opt-in via --progress-events flag).

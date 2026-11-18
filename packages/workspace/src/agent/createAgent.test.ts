@@ -157,8 +157,22 @@ describe('createAgent', () => {
     expect(config.requires_api_key).toBe(false);
   });
 
-  it('carries the conversation into later turns as history', async () => {
-    const { bridge, agent } = await setup({ history: [{ role: 'user', content: 'earlier' }] });
+  it('names the provider the host asks for, in the config and in the run', async () => {
+    // A host whose endpoint is a provider registry must name a provider the
+    // registry knows; the module posts this name with every turn.
+    const { bridge, agent } = await setup({ provider: 'ai-worker' });
+    bridge.script = async () => 'ok';
+    await agent.send('hi');
+
+    expect(bridge.runs[0][0]).toBe('ai-worker');
+    const config = JSON.parse(bridge.files.get('/home/user/.config/sprout/providers/ai-worker.json') ?? '{}');
+    expect(config.name).toBe('ai-worker');
+    expect(config.endpoint).toBe('https://app.example.test/proxy/chat');
+    // The default provider's file is not written as well: one provider per agent.
+    expect(bridge.files.has('/home/user/.config/sprout/providers/platform.json')).toBe(false);
+  });
+
+  it('carries the conversation into later turns as history', async () => {    const { bridge, agent } = await setup({ history: [{ role: 'user', content: 'earlier' }] });
     bridge.script = async () => 'first answer';
     await agent.send('one');
     await agent.send('two');

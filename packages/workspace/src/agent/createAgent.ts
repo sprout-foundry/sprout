@@ -25,7 +25,15 @@ import type {
   TurnResult,
 } from './types';
 
-/** Provider name of the agent's model endpoint in the module's configuration. */
+/**
+ * Provider name of the agent's model endpoint in the module's configuration.
+ *
+ * The default when a host does not name one. A host that serves several
+ * providers behind one endpoint passes `provider` instead: the module writes
+ * its provider config under this name and runs the agent as it, so the name
+ * decides which provider the module believes it is talking to. Without the
+ * option every host's agent is `platform`, whatever it is actually pointed at.
+ */
 export const HEADLESS_PROVIDER = 'platform';
 
 const DEFAULT_CONTEXT_WINDOW = 200_000;
@@ -56,10 +64,10 @@ export function resolveModelEndpoint(endpoint: string): string {
   return url.toString().replace(/\/+$/, '');
 }
 
-/** The provider configuration the module reads for `HEADLESS_PROVIDER`. */
+/** The provider configuration the module reads for the agent's provider. */
 export function providerConfig(options: CreateAgentOptions) {
   return {
-    name: HEADLESS_PROVIDER,
+    name: options.provider || HEADLESS_PROVIDER,
     endpoint: resolveModelEndpoint(options.modelEndpoint),
     model_name: options.model || 'managed',
     context_size: options.contextWindow ?? DEFAULT_CONTEXT_WINDOW,
@@ -120,7 +128,8 @@ export async function createAgent(options: CreateAgentOptions): Promise<Headless
     persona: options.persona ?? '',
     context: options.context ?? '',
   });
-  const providerPath = `${homeDirOf(bridge)}/.config/sprout/providers/${HEADLESS_PROVIDER}.json`;
+  const providerName = config.name;
+  const providerPath = `${homeDirOf(bridge)}/.config/sprout/providers/${providerName}.json`;
   const files = createAgentFiles(bridge);
 
   if (options.allowedOrigins) bridge.setAllowedOrigins?.(options.allowedOrigins);
@@ -217,7 +226,7 @@ export async function createAgent(options: CreateAgentOptions): Promise<Headless
         const seed = JSON.stringify(history);
         history.push({ role: 'user', content: message });
         const result = await bridge.runAgent(
-          HEADLESS_PROVIDER,
+          providerName,
           config.model_name,
           message,
           onRawEvent,

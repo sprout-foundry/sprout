@@ -175,6 +175,16 @@ export interface CreateAgentOptions {
    * no credentials of its own.
    */
   modelEndpoint: string;
+  /**
+   * Provider name the agent runs as. Default `HEADLESS_PROVIDER` (`platform`).
+   *
+   * The module writes its provider config under this name and runs the agent
+   * as it, so the name decides which provider the module believes it is
+   * talking to. A host that fronts several providers with one endpoint names
+   * the one it wants; a host talking straight to a single provider leaves it
+   * unset.
+   */
+  provider?: string;
   /** Model id sent to the endpoint. Default `managed`. */
   model?: string;
   /** The model's context window in tokens. Default 200,000. */

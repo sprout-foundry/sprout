@@ -91,6 +91,10 @@ async function clickRunTxn(): Promise<void> {
   const button = screen.getByTestId('escalation-toast-txn');
   await waitFor(() => expect(button).toBeEnabled());
   fireEvent.click(button);
+  // The CTA opens the confirmation step; the run only starts from there.
+  const confirm = screen.getByTestId('escalation-toast-txn-confirm-run');
+  await waitFor(() => expect(confirm).toBeEnabled());
+  fireEvent.click(confirm);
 }
 
 /** Fire a trigger inside act() so its state update lands in act. */
@@ -217,6 +221,70 @@ describe('EscalationListener — ETH-2 txn action', () => {
     fireTrigger();
     expect(screen.getByTestId('escalation-toast-txn')).toBeInTheDocument();
     expect(screen.getByTestId('escalation-toast-txn')).toHaveTextContent('Run in cloud container');
+  });
+
+  it('stops at a confirmation step that names the command, the target and what is uploaded', async () => {
+    renderListener();
+    fireTrigger();
+
+    const button = screen.getByTestId('escalation-toast-txn');
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+    await flush();
+
+    // Nothing has been opened or pushed yet: the run waits for the second click.
+    expect(resolveTxnWorkspace).not.toHaveBeenCalled();
+    expect(createTxn).not.toHaveBeenCalled();
+    expect(txnPush).not.toHaveBeenCalled();
+
+    const panel = screen.getByTestId('escalation-toast-txn-confirm');
+    expect(panel).toBeInTheDocument();
+    expect(panel).toHaveTextContent('go build ./...');
+    expect(panel).toHaveTextContent('cloud container');
+    // The fake bridge reports one dirty file (main.go).
+    expect(screen.getByTestId('escalation-toast-txn-confirm-changes')).toHaveTextContent('1 changed file');
+    expect(screen.getByTestId('escalation-toast-txn-confirm-changes')).toHaveTextContent('will be sent');
+    expect(screen.queryByTestId('escalation-toast-txn-confirm-empty-push')).toBeNull();
+    expect(screen.getByTestId('escalation-toast-txn-confirm-cost')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('escalation-toast-txn-confirm-run'));
+    await flush();
+    expect(createTxn).toHaveBeenCalledWith('ws-1');
+  });
+
+  it('warns when a cloud run would carry no browser edits', async () => {
+    // Clean tree with a commit ahead: the push phase enumerates nothing.
+    gitStatus.mockResolvedValue({ staged: [], unstaged: [], untracked: [] });
+    renderListener();
+    fireTrigger();
+
+    const button = screen.getByTestId('escalation-toast-txn');
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+    await flush();
+
+    expect(screen.getByTestId('escalation-toast-txn-confirm-changes')).toHaveTextContent('No browser changes');
+    expect(screen.getByTestId('escalation-toast-txn-confirm-empty-push')).toBeInTheDocument();
+
+    // The warning informs the choice instead of removing it.
+    const confirm = screen.getByTestId('escalation-toast-txn-confirm-run');
+    expect(confirm).toBeEnabled();
+  });
+
+  it('cancels the confirmation without starting anything', async () => {
+    renderListener();
+    fireTrigger();
+
+    const button = screen.getByTestId('escalation-toast-txn');
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+    await flush();
+    fireEvent.click(screen.getByTestId('escalation-toast-txn-confirm-cancel'));
+
+    expect(screen.queryByTestId('escalation-toast-txn-confirm')).toBeNull();
+    expect(screen.getByTestId('escalation-toast-txn')).toBeInTheDocument();
+    expect(createTxn).not.toHaveBeenCalled();
+    expect(txnPush).not.toHaveBeenCalled();
   });
 
   it('runs open → push → run → pull → apply → finish and renders the result', async () => {

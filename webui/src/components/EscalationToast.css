@@ -215,3 +215,33 @@
 .escalation-toast-txn-pre.is-stderr {
   color: var(--accent-error, inherit);
 }
+
+/* ── Pre-flight confirmation step (txn CTA) ───────────────────────────────
+ * The Run CTA is deliberately not the last click: the command executes on a
+ * machine the browser does not control, publishes to GitHub and bills for the
+ * time it uses. This panel names the command, the machine, what the push
+ * carries and what it costs, and waits for a second click.
+ */
+.escalation-toast-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--border-subtle, transparent);
+  border-radius: 8px;
+  background: var(--bg-secondary, transparent);
+}
+
+.escalation-toast-confirm-lead {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--text-primary, inherit);
+}
+
+.escalation-toast-confirm-detail {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--text-secondary, inherit);
+}

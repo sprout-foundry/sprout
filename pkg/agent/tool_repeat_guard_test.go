@@ -247,3 +247,48 @@ func wrapStallErrForTest() error {
 	inner := errors.New("context canceled")
 	return errors.Join(ErrTurnStalled, inner)
 }
+
+// The call right before the identical-call stall threshold fires gets a
+// single, distinctly-worded "last chance" note instead of another copy of
+// the note already shown at every count since the 3rd — the one a model
+// that kept calling anyway has already seen and not acted on (D170).
+func TestRepeatFinalWarningBeforeTheStallThreshold(t *testing.T) {
+	a := &Agent{}
+	a.SetStallThresholds(5, 60)
+	var notes []string
+	var stalled bool
+	for i := 0; i < 5; i++ {
+		var note string
+		note, stalled, _ = a.recordToolCall("shell_command", "probe", "out")
+		notes = append(notes, note)
+	}
+	// Calls 1-2: no note. Call 3-4: the ordinary note. Call 4 (count 4,
+	// thr-1) is the one-time final warning — distinct wording, not another
+	// copy of call 3's note. Call 5 (count 5, thr) stalls the turn.
+	require.Len(t, notes, 5)
+	assert.Empty(t, notes[0])
+	assert.Empty(t, notes[1])
+	assert.Contains(t, notes[2], "will not change the outcome", "the ordinary note at count 3")
+	assert.Contains(t, notes[3], "last chance", "the one-time final warning at count 4 (thr-1)")
+	assert.Contains(t, notes[3], "One more identical call")
+	assert.NotEqual(t, notes[2], notes[3], "the final warning must not repeat the note already ignored")
+	require.True(t, stalled, "count 5 reaches the threshold")
+}
+
+// A threshold low enough that thr-1 falls below the note-start count never
+// shows the final warning — there is no earlier note for it to read
+// differently from, and the existing behavior (no note at all before such a
+// low bar) is unchanged.
+func TestRepeatFinalWarningNotShownBelowNoteFloor(t *testing.T) {
+	a := &Agent{}
+	a.SetStallThresholds(3, 60)
+	note1, stalled1, _ := a.recordToolCall("shell_command", "probe", "out")
+	note2, stalled2, _ := a.recordToolCall("shell_command", "probe", "out")
+	_, stalled3, summary3 := a.recordToolCall("shell_command", "probe", "out")
+	assert.Empty(t, note1)
+	assert.Empty(t, note2)
+	assert.False(t, stalled1)
+	assert.False(t, stalled2)
+	require.True(t, stalled3)
+	require.NotNil(t, summary3)
+}

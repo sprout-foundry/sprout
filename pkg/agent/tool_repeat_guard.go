@@ -281,7 +281,17 @@ func (a *Agent) recordToolCall(toolName, args, result string) (note string, stal
 	normArgs := normalizeToolArgs(args)
 
 	if count >= repeatNoteMinCount {
-		note = toolRepeatNote(tool, normArgs, count, identical)
+		// The call right before the identical-call stall threshold fires
+		// gets a single, differently-worded warning instead of another
+		// copy of the note it has already seen (and evidently not acted
+		// on) at every count since repeatNoteMinCount: a model that tunes
+		// out a repeated note still has one unmistakable last chance to
+		// change course before the turn ends under it.
+		if count == a.stallIdenticalThreshold()-1 {
+			note = toolRepeatFinalWarning(tool, normArgs, count)
+		} else {
+			note = toolRepeatNote(tool, normArgs, count, identical)
+		}
 	}
 
 	if reason, s := stallDecision(tracker, a, tool, normArgs, key, nearKey, count); reason != "" {
@@ -310,6 +320,29 @@ func toolRepeatNote(tool, args string, count int, identicalResult bool) string {
 		b.WriteString(" The output is byte-identical to the previous identical call.")
 	}
 	b.WriteString(" Repeating it will not change the outcome — change the command, inspect a different signal, or record the blocker and stop.")
+	return b.String()
+}
+
+// toolRepeatFinalWarning is the one note shown at the call right before the
+// identical-call stall threshold fires. Unlike toolRepeatNote (unchanged
+// wording from the 3rd identical call onward), this fires exactly once per
+// repeated call, worded as a deadline rather than an observation, so it
+// reads differently from the notes the model has already seen on the same
+// call and apparently not acted on.
+func toolRepeatFinalWarning(tool, args string, count int) string {
+	var b strings.Builder
+	b.WriteString("[repeat guard — last chance] ")
+	if strings.TrimSpace(args) != "" {
+		snippet := args
+		if len(snippet) > 80 {
+			snippet = snippet[:77] + "..."
+		}
+		fmt.Fprintf(&b, "%s with %s has now run %d times this turn. ", tool, snippet, count)
+	} else {
+		fmt.Fprintf(&b, "%s has now run %d times this turn. ", tool, count)
+	}
+	b.WriteString("One more identical call ends this turn here, with no further progress. " +
+		"Do something different right now: change the command, inspect a different signal, make an actual edit, or state the blocker and stop on your own.")
 	return b.String()
 }
 

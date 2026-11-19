@@ -46,7 +46,7 @@ type CustomProviderConfig struct {
 	IdleChunkTimeoutMs     int                         `json:"idle_chunk_timeout_ms,omitempty"`    // Deadline between chunks after the first; does not shorten chunk_timeout_ms
 	IncludeUsage           *bool                       `json:"include_usage,omitempty"`            // Request usage stats in streaming responses (stream_options.include_usage); on unless false
 	Conversion             providers.MessageConversion `json:"message_conversion,omitempty"`       // Message conversion configuration
-	SupportsVision         bool                        `json:"supports_vision,omitempty"`          // Whether this provider supports vision requests
+	SupportsVision         *bool                       `json:"supports_vision,omitempty"`          // Tri-state: nil assumes vision, false opts out
 	VisionModel            string                      `json:"vision_model,omitempty"`             // Vision-capable model for this provider
 	VisionFallbackProvider string                      `json:"vision_fallback_provider,omitempty"` // Optional fallback provider for vision
 	VisionFallbackModel    string                      `json:"vision_fallback_model,omitempty"`    // Optional fallback model for vision provider

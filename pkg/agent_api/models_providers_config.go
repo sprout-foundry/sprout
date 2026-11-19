@@ -32,6 +32,13 @@ type genericConfigListModelsWrapper struct {
 	providerName string
 }
 
+// ModelsFromEndpoint reports false: this wrapper synthesizes its list from
+// the provider's config JSON and never asks the endpoint. A caller that needs
+// to know whether a model is still served cannot use this list as evidence —
+// it restates the config, so it would confirm a retired model against the
+// config that still names it.
+func (w *genericConfigListModelsWrapper) ModelsFromEndpoint() bool { return false }
+
 // configModelInfo mirrors providers.ModelInfo for our local use
 type configModelInfo struct {
 	ID              string   `json:"id"`

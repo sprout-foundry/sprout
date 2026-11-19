@@ -25,8 +25,8 @@ func visionTestProvider(t *testing.T, name string) {
 }
 
 func TestGetVisionModelForProvider_ActiveModelWinsWhenVisionCapable(t *testing.T) {
-	// Load a config whose default model IS vision-tagged: with the fix the
-	// vision tier is that model itself, not any pin.
+	// Load a config whose default model IS vision-tagged: the vision tier is
+	// that model itself, not any pin.
 	cfgJSON := `{
 		"name": "vision-order-test",
 		"endpoint": "https://example.invalid/v1/chat/completions",
@@ -34,7 +34,6 @@ func TestGetVisionModelForProvider_ActiveModelWinsWhenVisionCapable(t *testing.T
 		"defaults": {"model": "flash-multimodal"},
 		"models": {
 			"default_context_limit": 128000,
-			"supports_vision": true,
 			"vision_model": "pinned-vision-model",
 			"model_info": [
 				{"id": "flash-multimodal", "name": "Flash", "tags": ["tools", "vision"]},
@@ -52,18 +51,19 @@ func TestGetVisionModelForProvider_ActiveModelWinsWhenVisionCapable(t *testing.T
 	}
 }
 
-func TestGetVisionModelForProvider_PinServesNonVisionActiveModel(t *testing.T) {
-	// Default model has no vision tag: the registry pin is the correct tier.
+func TestGetVisionModelForProvider_UntaggedActiveModelWins(t *testing.T) {
+	// The active model names no modality: vision is assumed, so the active
+	// model still wins and no pin is needed to serve the vision tier.
 	cfgJSON := `{
 		"name": "vision-order-test-2",
 		"endpoint": "https://example.invalid/v1/chat/completions",
 		"auth": {"type": "api_key", "env_var": "VISION_ORDER_TEST2_KEY"},
-		"defaults": {"model": "text-only-model"},
+		"defaults": {"model": "untagged-model"},
 		"models": {
 			"default_context_limit": 128000,
 			"vision_model": "pinned-vision-model",
 			"model_info": [
-				{"id": "text-only-model", "name": "Text", "tags": ["tools"]},
+				{"id": "untagged-model", "name": "Untagged", "tags": ["tools"]},
 				{"id": "pinned-vision-model", "name": "Pinned", "tags": ["tools", "vision"]}
 			]
 		}
@@ -73,15 +73,42 @@ func TestGetVisionModelForProvider_PinServesNonVisionActiveModel(t *testing.T) {
 	}
 
 	got := GetVisionModelForProvider("vision-order-test-2")
-	if got != "pinned-vision-model" {
-		t.Fatalf("non-vision active model must fall to the pin: got %q, want %q", got, "pinned-vision-model")
+	if got != "untagged-model" {
+		t.Fatalf("untagged active model is assumed vision-capable and must win: got %q, want %q", got, "untagged-model")
 	}
 }
 
-func TestGetVisionModelForProvider_ZaiCodingResolvesFlashNotTurbo(t *testing.T) {
-	// The shipped zai-coding config pins glm-5.3-flash (was glm-5v-turbo,
-	// excluded from the observed user's plan) and its default glm-5 carries
-	// no vision tag — so the pin serves, and it must be the flash tier.
+func TestGetVisionModelForProvider_PinServesOptedOutActiveModel(t *testing.T) {
+	// Default model is explicitly text-only: the pin is the correct tier,
+	// because the active model genuinely cannot take images.
+	cfgJSON := `{
+		"name": "vision-order-test-3",
+		"endpoint": "https://example.invalid/v1/chat/completions",
+		"auth": {"type": "api_key", "env_var": "VISION_ORDER_TEST3_KEY"},
+		"defaults": {"model": "text-only-model"},
+		"models": {
+			"default_context_limit": 128000,
+			"vision_model": "pinned-vision-model",
+			"model_info": [
+				{"id": "text-only-model", "name": "Text", "tags": ["tools", "text-only"]},
+				{"id": "pinned-vision-model", "name": "Pinned", "tags": ["tools", "vision"]}
+			]
+		}
+	}`
+	if err := factory.GlobalFactory().LoadConfigFromBytes([]byte(cfgJSON)); err != nil {
+		t.Fatalf("seed test provider config: %v", err)
+	}
+
+	got := GetVisionModelForProvider("vision-order-test-3")
+	if got != "pinned-vision-model" {
+		t.Fatalf("text-only active model must fall to the pin: got %q, want %q", got, "pinned-vision-model")
+	}
+}
+
+func TestGetVisionModelForProvider_ZaiCodingResolvesActiveModel(t *testing.T) {
+	// The shipped zai-coding config no longer pins a vision model: with
+	// vision assumed, its active model serves the vision tier directly and
+	// vision is never forked to a separate (possibly plan-excluded) model.
 	visionTestProvider(t, "zai-coding")
 	got := GetVisionModelForProvider("zai-coding")
 	if strings.Contains(got, "5v") {
@@ -89,6 +116,9 @@ func TestGetVisionModelForProvider_ZaiCodingResolvesFlashNotTurbo(t *testing.T) 
 	}
 	if got == "" {
 		t.Fatal("zai-coding should resolve a vision model")
+	}
+	if got != "glm-5" {
+		t.Fatalf("zai-coding vision tier should be its active model, got %q", got)
 	}
 }
 
@@ -98,11 +128,14 @@ func TestProviderModelSeesImages(t *testing.T) {
 	if err != nil || cfg == nil {
 		t.Fatalf("zai-coding config unavailable: %v", err)
 	}
-	if !providerModelSeesImages(cfg, "glm-5.3-flash") {
-		t.Error("glm-5.3-flash is vision-tagged and must read as seeing images")
+	if !providerModelSeesImages(cfg, "glm-4.6v") {
+		t.Error("glm-4.6v is vision-tagged and must read as seeing images")
 	}
-	if providerModelSeesImages(cfg, "glm-5") {
-		t.Error("glm-5 carries no vision tag; it must not read as seeing images")
+	if !providerModelSeesImages(cfg, "glm-5") {
+		t.Error("glm-5 names no modality; vision is assumed and it must read as seeing images")
+	}
+	if providerModelSeesImages(cfg, "glm-5-turbo") {
+		t.Error("glm-5-turbo carries a text-only tag and must not read as seeing images")
 	}
 	if providerModelSeesImages(nil, "any") {
 		t.Error("nil config must read false")

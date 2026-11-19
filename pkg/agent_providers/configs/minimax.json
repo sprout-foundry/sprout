@@ -236,8 +236,7 @@
         "pattern": "MiniMax-.*"
       }
     ],
-    "supports_vision": true,
-    "vision_model": "MiniMax-VL-01"
+    "supports_vision": true
   },
   "name": "minimax",
   "retry": {

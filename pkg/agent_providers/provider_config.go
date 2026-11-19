@@ -260,11 +260,22 @@ type ModelConfig struct {
 	// the chat request.
 	DisableDiscovery bool `json:"disable_discovery,omitempty"`
 	// Legacy fields for backward compatibility
-	ContextLimit    int      `json:"context_limit,omitempty"`
-	SupportsVision  bool     `json:"supports_vision"`
+	ContextLimit int `json:"context_limit,omitempty"`
+	// SupportsVision is tri-state: nil (absent) means vision is assumed
+	// available, true is an explicit yes, false is an explicit opt-out.
+	// Almost every current model is multimodal, so the default is "yes" and
+	// a provider must say otherwise. Only a provider whose transport cannot
+	// carry image parts at all (a text-only engine) should set false.
+	SupportsVision  *bool    `json:"supports_vision,omitempty"`
 	VisionModel     string   `json:"vision_model"`
 	DefaultModel    string   `json:"default_model"`
 	AvailableModels []string `json:"available_models"`
+}
+
+// SeesImages reports whether this model table permits image input, applying
+// the tri-state default: only an explicit false withholds vision.
+func (m ModelConfig) SeesImages() bool {
+	return m.SupportsVision == nil || *m.SupportsVision
 }
 
 // RetryConfig defines retry behavior

@@ -31,7 +31,7 @@ type DelegatedImage struct {
 func DelegateImageDescriptions(ctx context.Context, client api.ClientInterface, imagePath string) (DelegatedImage, error) {
 	if client == nil {
 		var err error
-		client, err = CreateVisionClient()
+		client, err = CreateVisionClientContext(ctx)
 		if err != nil {
 			return DelegatedImage{}, fmt.Errorf("create delegation vision client: %w", err)
 		}

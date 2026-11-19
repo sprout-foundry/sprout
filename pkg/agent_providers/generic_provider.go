@@ -39,6 +39,12 @@ type GenericProvider struct {
 	mu           sync.RWMutex
 	models       []api.ModelInfo
 	modelsCached bool
+	// modelsFromEndpoint records whether the cached list came from the
+	// provider's own /models endpoint rather than a config fallback. The
+	// vision model probe needs the distinction: a config-derived list
+	// restates what the config already claims, so it cannot confirm a model
+	// is still served.
+	modelsFromEndpoint bool
 
 	// warmPending prevents goroutine accumulation from rapid warmModelsCache calls.
 	warmPending atomic.Bool

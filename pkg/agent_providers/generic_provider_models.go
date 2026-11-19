@@ -200,7 +200,7 @@ func (p *GenericProvider) listModelsOpenAI(ctx context.Context) ([]api.ModelInfo
 		return p.fallbackToConfigOrCurrent()
 	}
 
-	p.setCachedModels(models)
+	p.setCachedModels(models, true)
 	return models, nil
 }
 
@@ -261,7 +261,7 @@ func (p *GenericProvider) listModelsVLLM(ctx context.Context) ([]api.ModelInfo, 
 		return p.fallbackToConfigOrCurrent()
 	}
 
-	p.setCachedModels(models)
+	p.setCachedModels(models, true)
 	return models, nil
 }
 
@@ -321,16 +321,29 @@ func (p *GenericProvider) listModelsLlamaCPP(ctx context.Context) ([]api.ModelIn
 		return p.fallbackToConfigOrCurrent()
 	}
 
-	p.setCachedModels(models)
+	p.setCachedModels(models, true)
 	return models, nil
 }
 
 // setCachedModels stores the fetched model list and marks the cache warm.
-func (p *GenericProvider) setCachedModels(models []api.ModelInfo) {
+// fromEndpoint records whether the list came from the provider's own
+// /models endpoint (true) or a config fallback (false).
+func (p *GenericProvider) setCachedModels(models []api.ModelInfo, fromEndpoint bool) {
 	p.mu.Lock()
 	p.models = models
 	p.modelsCached = true
+	p.modelsFromEndpoint = fromEndpoint
 	p.mu.Unlock()
+}
+
+// ModelsFromEndpoint reports whether the cached model list came from the
+// provider's own /models endpoint. False when no list is cached, or when the
+// list was synthesized from config. The vision model probe uses this to
+// avoid "verifying" a model against the config that declared it.
+func (p *GenericProvider) ModelsFromEndpoint() bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.modelsCached && p.modelsFromEndpoint
 }
 
 // fallbackToConfigOrCurrent returns config model_info or current model as fallback
@@ -348,7 +361,7 @@ func (p *GenericProvider) fallbackToConfigOrCurrent() ([]api.ModelInfo, error) {
 				Tags:          mi.Tags,
 			}
 		}
-		p.setCachedModels(models)
+		p.setCachedModels(models, false)
 		return models, nil
 	}
 
@@ -377,7 +390,7 @@ func (p *GenericProvider) fallbackToConfigOrCurrent() ([]api.ModelInfo, error) {
 			}
 			models[i] = modelInfo
 		}
-		p.setCachedModels(models)
+		p.setCachedModels(models, false)
 		return models, nil
 	}
 
@@ -391,7 +404,7 @@ func (p *GenericProvider) fallbackToConfigOrCurrent() ([]api.ModelInfo, error) {
 		Provider:      p.config.Name,
 		ContextLength: p.config.GetContextLimit(currentModel),
 	}}
-	p.setCachedModels(models)
+	p.setCachedModels(models, false)
 	return models, nil
 }
 

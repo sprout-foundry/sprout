@@ -202,9 +202,7 @@
         "context_limit": 128000,
         "pattern": "deepseek-coder.*"
       }
-    ],
-    "supports_vision": false,
-    "vision_model": ""
+    ]
   },
   "name": "deepseek",
   "retry": {

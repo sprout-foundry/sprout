@@ -16,16 +16,16 @@ func visionTestConfig() *ProviderConfig {
 		},
 		Models: ModelConfig{
 			DefaultContextLimit: 4096,
-			SupportsVision:      true,
+			SupportsVision:      boolPtr(true),
 		},
 	}
 }
 
-func TestSupportsVision_ProviderDisabled(t *testing.T) {
+func TestSupportsVision_ProviderOptOut(t *testing.T) {
 	config := visionTestConfig()
-	config.Models.SupportsVision = false
+	config.Models.SupportsVision = boolPtr(false)
 
-	// Even when model_info has a "vision" tag, provider-level false wins.
+	// Even when model_info has a "vision" tag, the provider-level opt-out wins.
 	config.Models.ModelInfo = []ModelInfo{
 		{ID: "default-model", Tags: []string{"vision"}},
 	}
@@ -36,14 +36,13 @@ func TestSupportsVision_ProviderDisabled(t *testing.T) {
 	}
 
 	if provider.SupportsVision() {
-		t.Fatal("expected SupportsVision() == false when provider config has supports_vision: false")
+		t.Fatal("expected SupportsVision() == false when provider config opts out with supports_vision: false")
 	}
 }
 
-func TestSupportsVision_ProviderEnabled_ModelNotInCatalog(t *testing.T) {
+func TestSupportsVision_UnsetDefaultsToTrue(t *testing.T) {
 	config := visionTestConfig()
-	config.Models.SupportsVision = true
-	// No model_info entries at all — unknown model should trust provider flag.
+	config.Models.SupportsVision = nil // absent from config
 
 	provider, err := NewGenericProvider(config)
 	if err != nil {
@@ -51,13 +50,26 @@ func TestSupportsVision_ProviderEnabled_ModelNotInCatalog(t *testing.T) {
 	}
 
 	if !provider.SupportsVision() {
-		t.Fatal("expected SupportsVision() == true when provider enables vision and model is not in catalog")
+		t.Fatal("expected SupportsVision() == true when supports_vision is absent (vision is the default)")
 	}
 }
 
-func TestSupportsVision_ProviderEnabled_ModelInCatalog_WithVisionTag(t *testing.T) {
+func TestSupportsVision_ModelNotInCatalog_AssumesVision(t *testing.T) {
 	config := visionTestConfig()
-	config.Models.SupportsVision = true
+	// No model_info entries at all — an uncatalogued model is assumed to see images.
+
+	provider, err := NewGenericProvider(config)
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	if !provider.SupportsVision() {
+		t.Fatal("expected SupportsVision() == true for a model absent from the catalog")
+	}
+}
+
+func TestSupportsVision_ModelInCatalog_WithVisionTag(t *testing.T) {
+	config := visionTestConfig()
 	config.Models.ModelInfo = []ModelInfo{
 		{ID: "default-model", Tags: []string{"vision", "chat"}},
 	}
@@ -72,9 +84,8 @@ func TestSupportsVision_ProviderEnabled_ModelInCatalog_WithVisionTag(t *testing.
 	}
 }
 
-func TestSupportsVision_ProviderEnabled_ModelInCatalog_WithoutVisionTag(t *testing.T) {
+func TestSupportsVision_ModelInCatalog_UntaggedAssumesVision(t *testing.T) {
 	config := visionTestConfig()
-	config.Models.SupportsVision = true
 	config.Models.ModelInfo = []ModelInfo{
 		{ID: "default-model", Tags: []string{"chat", "reasoning"}},
 	}
@@ -84,14 +95,15 @@ func TestSupportsVision_ProviderEnabled_ModelInCatalog_WithoutVisionTag(t *testi
 		t.Fatalf("failed to create provider: %v", err)
 	}
 
-	if provider.SupportsVision() {
-		t.Fatal("expected SupportsVision() == false when model is in catalog but lacks 'vision' tag")
+	// A tag list that names no modality is not a veto: the model is assumed
+	// to see images and the send path verifies on first contact.
+	if !provider.SupportsVision() {
+		t.Fatal("expected SupportsVision() == true when model_info names no modality")
 	}
 }
 
-func TestSupportsVision_ProviderEnabled_ModelInCatalog_NoTags(t *testing.T) {
+func TestSupportsVision_ModelInCatalog_NoTags(t *testing.T) {
 	config := visionTestConfig()
-	config.Models.SupportsVision = true
 	config.Models.ModelInfo = []ModelInfo{
 		{ID: "default-model"}, // no tags at all
 	}
@@ -101,15 +113,47 @@ func TestSupportsVision_ProviderEnabled_ModelInCatalog_NoTags(t *testing.T) {
 		t.Fatalf("failed to create provider: %v", err)
 	}
 
-	if provider.SupportsVision() {
-		t.Fatal("expected SupportsVision() == false when model is in catalog with no tags")
+	if !provider.SupportsVision() {
+		t.Fatal("expected SupportsVision() == true when model is in catalog with no tags")
 	}
 }
 
-func TestSupportsVision_EmptyModel_ReturnsFalse(t *testing.T) {
+func TestSupportsVision_ModelInCatalog_TextOnlyTag(t *testing.T) {
+	config := visionTestConfig()
+	config.Models.ModelInfo = []ModelInfo{
+		{ID: "default-model", Tags: []string{"chat", "text-only"}},
+	}
+
+	provider, err := NewGenericProvider(config)
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	if provider.SupportsVision() {
+		t.Fatal("expected SupportsVision() == false when model carries a text-only tag")
+	}
+}
+
+func TestSupportsVision_TextOnlyTagBeatsVisionTag(t *testing.T) {
+	config := visionTestConfig()
+	config.Models.ModelInfo = []ModelInfo{
+		{ID: "default-model", Tags: []string{"vision", "text-only"}},
+	}
+
+	provider, err := NewGenericProvider(config)
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	// An explicit modality restriction is the more specific statement.
+	if provider.SupportsVision() {
+		t.Fatal("expected SupportsVision() == false when a text-only tag accompanies a vision tag")
+	}
+}
+
+func TestSupportsVision_EmptyModel_AssumesVision(t *testing.T) {
 	config := visionTestConfig()
 	config.Defaults.Model = "" // no fallback model either
-	config.Models.SupportsVision = true
 
 	provider, err := NewGenericProvider(config)
 	if err != nil {
@@ -121,15 +165,17 @@ func TestSupportsVision_EmptyModel_ReturnsFalse(t *testing.T) {
 	provider.model = ""
 	provider.mu.Unlock()
 
-	if provider.SupportsVision() {
-		t.Fatal("expected SupportsVision() == false when both provider.model and config.Defaults.Model are empty")
+	// No model to disqualify: vision stays assumed, and the send path
+	// verifies on first contact.
+	if !provider.SupportsVision() {
+		t.Fatal("expected SupportsVision() == true when no model is resolved at all")
 	}
 }
 
 func TestSupportsVision_FallsBackToConfigDefaultModel(t *testing.T) {
 	config := visionTestConfig()
 	config.Defaults.Model = "fallback-model"
-	config.Models.SupportsVision = true
+	config.Models.SupportsVision = boolPtr(true)
 	// Provider.model is empty; should fall back to config.Defaults.Model.
 	config.Models.ModelInfo = []ModelInfo{
 		{ID: "fallback-model", Tags: []string{"vision"}},
@@ -150,12 +196,11 @@ func TestSupportsVision_FallsBackToConfigDefaultModel(t *testing.T) {
 	}
 }
 
-func TestSupportsVision_FallsBackToConfigDefaultModel_NoVisionTag(t *testing.T) {
+func TestSupportsVision_FallsBackToConfigDefaultModel_UntaggedAssumesVision(t *testing.T) {
 	config := visionTestConfig()
 	config.Defaults.Model = "fallback-model"
-	config.Models.SupportsVision = true
 	config.Models.ModelInfo = []ModelInfo{
-		{ID: "fallback-model", Tags: []string{"chat"}}, // no vision tag
+		{ID: "fallback-model", Tags: []string{"chat"}}, // names no modality
 	}
 
 	provider, err := NewGenericProvider(config)
@@ -168,8 +213,8 @@ func TestSupportsVision_FallsBackToConfigDefaultModel_NoVisionTag(t *testing.T) 
 	provider.model = ""
 	provider.mu.Unlock()
 
-	if provider.SupportsVision() {
-		t.Fatal("expected SupportsVision() == false when fallback model lacks vision tag")
+	if !provider.SupportsVision() {
+		t.Fatal("expected SupportsVision() == true when the fallback model names no modality")
 	}
 }
 
@@ -184,9 +229,9 @@ func TestSupportsVision_TagMatching_CaseInsensitive(t *testing.T) {
 		{"titlecase", []string{"Vision"}, true},
 		{"mixed case", []string{"ViSiOn"}, true},
 		{"with whitespace", []string{" vision "}, true},
-		{"not vision", []string{"video"}, false},
-		{"empty tag", []string{""}, false},
-		{"whitespace only", []string{"   "}, false},
+		{"not vision", []string{"video"}, true},
+		{"empty tag", []string{""}, true},
+		{"whitespace only", []string{"   "}, true},
 		{"vision among others", []string{"chat", "vision", "reasoning"}, true},
 	}
 
@@ -212,10 +257,10 @@ func TestSupportsVision_TagMatching_CaseInsensitive(t *testing.T) {
 
 func TestSupportsVision_SetModel_SwitchesVisionStatus(t *testing.T) {
 	config := visionTestConfig()
-	config.Models.SupportsVision = true
+	config.Models.SupportsVision = boolPtr(true)
 	config.Models.ModelInfo = []ModelInfo{
 		{ID: "vision-model", Tags: []string{"vision"}},
-		{ID: "text-only-model", Tags: []string{"chat"}},
+		{ID: "text-only-model", Tags: []string{"chat", "text-only"}},
 	}
 
 	provider, err := NewGenericProvider(config)
@@ -239,12 +284,12 @@ func TestSupportsVision_SetModel_SwitchesVisionStatus(t *testing.T) {
 		t.Fatal("expected SupportsVision() == false for text-only-model")
 	}
 
-	// Switch to unknown model (not in catalog) — should trust provider flag
+	// Switch to unknown model (not in catalog) — vision is assumed
 	if err := provider.SetModel("unknown-model"); err != nil {
 		t.Fatalf("SetModel failed: %v", err)
 	}
 	if !provider.SupportsVision() {
-		t.Fatal("expected SupportsVision() == true for unknown-model (trusts provider flag)")
+		t.Fatal("expected SupportsVision() == true for unknown-model (assumed)")
 	}
 }
 
@@ -268,9 +313,9 @@ func TestSupportsVision_SetModel_TrimsWhitespace(t *testing.T) {
 	}
 }
 
-func TestSupportsVision_ProviderDisabled_OverridesSetModel(t *testing.T) {
+func TestSupportsVision_ProviderOptOut_OverridesSetModel(t *testing.T) {
 	config := visionTestConfig()
-	config.Models.SupportsVision = false
+	config.Models.SupportsVision = boolPtr(false)
 	config.Models.ModelInfo = []ModelInfo{
 		{ID: "some-model", Tags: []string{"vision"}},
 	}
@@ -280,12 +325,12 @@ func TestSupportsVision_ProviderDisabled_OverridesSetModel(t *testing.T) {
 		t.Fatalf("failed to create provider: %v", err)
 	}
 
-	// Even after setting a model with vision tag, provider-level false wins.
+	// Even after setting a model with vision tag, the provider opt-out wins.
 	if err := provider.SetModel("some-model"); err != nil {
 		t.Fatalf("SetModel failed: %v", err)
 	}
 	if provider.SupportsVision() {
-		t.Fatal("expected SupportsVision() == false when provider-level vision is disabled, regardless of model")
+		t.Fatal("expected SupportsVision() == false when the provider opts out, regardless of model")
 	}
 }
 

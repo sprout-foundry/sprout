@@ -56,7 +56,7 @@ func TestLMStudioEmbeddedConfigUsesRuntimeModelMetadata(t *testing.T) {
 	if got := provider.GetModel(); got != "" {
 		t.Errorf("expected provider to start without a seeded model, got %q", got)
 	}
-	if !config.Models.SupportsVision {
+	if !config.Models.SeesImages() {
 		t.Error("expected LM Studio vision support to remain enabled")
 	}
 

@@ -194,7 +194,7 @@ func TestGetModelContextLimitUsesCachedModelAfterWarmup(t *testing.T) {
 	provider.mu.Unlock()
 	provider.setCachedModels([]api.ModelInfo{
 		{ID: "cached-model", ContextLength: 98304, Provider: "cached-test"},
-	})
+	}, true)
 
 	limit, err := provider.GetModelContextLimit()
 	if err != nil {

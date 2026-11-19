@@ -158,15 +158,3 @@ func limitProviderErrorText(text string) string {
 	}
 	return text[:maxProviderErrorBodyPreview-3] + "..."
 }
-
-func modelInfoHasVisionTag(modelInfo *ModelInfo) bool {
-	if modelInfo == nil {
-		return false
-	}
-	for _, tag := range modelInfo.Tags {
-		if strings.EqualFold(strings.TrimSpace(tag), "vision") {
-			return true
-		}
-	}
-	return false
-}

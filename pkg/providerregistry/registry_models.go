@@ -84,10 +84,16 @@ type RemoteModelConfig struct {
 	CompletionPatternOverrides []RemotePatternOverride `json:"completion_pattern_overrides,omitempty"`
 	ModelInfo                  []RemoteModelInfo       `json:"model_info,omitempty"`
 	ContextLimit               int                     `json:"context_limit,omitempty"`
-	SupportsVision             bool                    `json:"supports_vision"`
+	SupportsVision             *bool                   `json:"supports_vision,omitempty"`
 	VisionModel                string                  `json:"vision_model"`
 	DefaultModel               string                  `json:"default_model"`
 	AvailableModels            []string                `json:"available_models"`
+}
+
+// SeesImages reports whether this model table permits image input, applying
+// the tri-state default: only an explicit false withholds vision.
+func (m RemoteModelConfig) SeesImages() bool {
+	return m.SupportsVision == nil || *m.SupportsVision
 }
 
 // RemoteRetryConfig duplicates RetryConfig.

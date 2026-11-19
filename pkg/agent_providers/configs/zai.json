@@ -113,7 +113,8 @@
         "output_cost": 4,
         "tags": [
           "tools",
-          "coding"
+          "coding",
+          "text-only"
         ]
       },
       {
@@ -386,8 +387,7 @@
         "pattern": "glm-3.*"
       }
     ],
-    "supports_vision": true,
-    "vision_model": "glm-5.3-flash"
+    "supports_vision": true
   },
   "name": "zai",
   "retry": {

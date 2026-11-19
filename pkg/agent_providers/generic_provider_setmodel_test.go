@@ -190,7 +190,7 @@ func TestGenericProviderSetModelWithModelsCached(t *testing.T) {
 			Provider:      "test-provider",
 			ContextLength: 128000,
 		},
-	})
+	}, true)
 
 	// Verify cache is true
 	provider.mu.RLock()

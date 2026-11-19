@@ -200,7 +200,8 @@ func getModelListForVisionPicker(provider configuration.CustomProviderConfig, ap
 }
 
 func pickVisionModel(reader *bufio.Reader, provider *configuration.CustomProviderConfig, models []configuration.ProviderDiscoveryModel) error {
-	provider.SupportsVision = true
+	yes := true
+	provider.SupportsVision = &yes
 	// Only show the vision-model picker if discovery actually returned
 	// models. If discovery failed, fall back to "use default model".
 	if len(models) == 0 {

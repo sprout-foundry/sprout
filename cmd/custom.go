@@ -197,8 +197,8 @@ func runCustomModelAdd() error {
 	if len(normalized.ModelContextSizes) > 0 {
 		fmt.Printf("  Per-model context sizes: %d model(s) with known context\n", len(normalized.ModelContextSizes))
 	}
-	fmt.Printf("  Supports vision: %t\n", normalized.SupportsVision)
-	if normalized.SupportsVision && normalized.VisionModel != "" {
+	fmt.Printf("  Supports vision: %s\n", visionLabel(normalized.SupportsVision))
+	if visionEnabled(normalized.SupportsVision) && normalized.VisionModel != "" {
 		fmt.Printf("  Vision model: %s\n", normalized.VisionModel)
 	}
 	fmt.Printf("  File: %s\n", path)
@@ -380,8 +380,8 @@ func runCustomModelList() error {
 		if len(provider.ModelContextSizes) > 0 {
 			fmt.Printf("  Known model contexts: %d model(s)\n", len(provider.ModelContextSizes))
 		}
-		fmt.Printf("  Supports vision: %t\n", provider.SupportsVision)
-		if provider.SupportsVision && provider.VisionModel != "" {
+		fmt.Printf("  Supports vision: %s\n", visionLabel(provider.SupportsVision))
+		if visionEnabled(provider.SupportsVision) && provider.VisionModel != "" {
 			fmt.Printf("  Vision model: %s\n", provider.VisionModel)
 		}
 		fmt.Printf("  File: %s\n", path)
@@ -389,6 +389,24 @@ func runCustomModelList() error {
 	}
 
 	return nil
+}
+
+// visionEnabled applies the tri-state default for a custom provider's
+// supports_vision: absent means vision is assumed.
+func visionEnabled(v *bool) bool {
+	return v == nil || *v
+}
+
+// visionLabel renders the tri-state for CLI output, so "unset" is not
+// reported as an explicit "false".
+func visionLabel(v *bool) string {
+	if v == nil {
+		return "assumed (unset)"
+	}
+	if *v {
+		return "yes"
+	}
+	return "no (opted out)"
 }
 
 func init() {

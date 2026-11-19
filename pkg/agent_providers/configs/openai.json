@@ -1423,8 +1423,7 @@
         "pattern": "gpt-4o.*"
       }
     ],
-    "supports_vision": true,
-    "vision_model": "gpt-4o"
+    "supports_vision": true
   },
   "name": "openai",
   "retry": {

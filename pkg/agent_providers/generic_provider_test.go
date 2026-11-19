@@ -231,7 +231,7 @@ func TestGenericProviderGetModelContextLimitUsesCachedModel(t *testing.T) {
 			Provider:      "test",
 			ContextLength: 128000,
 		},
-	})
+	}, true)
 
 	contextLimit, err := provider.GetModelContextLimit()
 	if err != nil {
@@ -269,7 +269,7 @@ func TestGenericProviderGetModelContextLimitFallsBackWhenCachedEntryHasNoContext
 			Provider:      "test",
 			ContextLength: 0,
 		},
-	})
+	}, true)
 
 	contextLimit, err := provider.GetModelContextLimit()
 	if err != nil {
@@ -293,7 +293,7 @@ func TestConvertToolCallsArgumentsAsJSON(t *testing.T) {
 		Models: ModelConfig{
 			DefaultContextLimit: 4096,
 			DefaultModel:        "test-model",
-			SupportsVision:      false,
+			SupportsVision:      boolPtr(false),
 		},
 	}
 

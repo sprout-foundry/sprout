@@ -50,21 +50,22 @@ func (p *GenericProvider) RecoversFromVisionRejection() bool { return true }
 
 // SupportsVision returns whether the current model can accept image input.
 //
-// Resolution:
-//  1. If the provider config sets supports_vision: false, vision is off for
-//     the entire provider — return false immediately.
-//  2. If the current model is listed in model_info, the tag list is
-//     authoritative: return true only when a "vision" tag is present.
-//     This lets configs grant or withhold vision on a per-model basis when
-//     the model catalogue is populated.
-//  3. When supports_vision: true but the current model is NOT in model_info
-//     (no per-model data), trust the provider-level flag and return true.
-//     This is the common case — most configs set supports_vision: true with
-//     an empty model_info, meaning "all models from this provider accept
-//     images". Returning false here would silently break image embedding for
-//     models like gpt-5-mini that do support vision.
+// Almost every current model is multimodal, so vision is the default and a
+// provider must opt out. Resolution:
+//  1. An explicit supports_vision: false turns vision off for the entire
+//     provider. This is for a transport that cannot carry image parts at
+//     all, not for a model that merely hasn't been catalogued yet.
+//  2. If the current model is listed in model_info AND that entry names a
+//     modality, the tag list is authoritative: a "text-only" tag withholds
+//     vision, a "vision" tag grants it. A model_info entry that says nothing
+//     about modality is not a veto — it just has no opinion.
+//  3. Otherwise vision is assumed. An unlisted model, or a listed one with
+//     no modality tags, gets images optimistically; the send path verifies
+//     on first contact and remembers the real answer (SP-140 Phase 2), so a
+//     wrong guess costs one stripped retry rather than a silently dropped
+//     image.
 func (p *GenericProvider) SupportsVision() bool {
-	if !p.config.Models.SupportsVision {
+	if !p.config.Models.SeesImages() {
 		return false
 	}
 
@@ -75,17 +76,39 @@ func (p *GenericProvider) SupportsVision() bool {
 		currentModel = strings.TrimSpace(p.config.Defaults.Model)
 	}
 	if currentModel == "" {
-		return false
+		return true
 	}
 
-	// Per-model override: if the model is in model_info, the tag list is
-	// authoritative.
+	// Per-model entry: authoritative only when it states a modality.
 	if mi := p.config.GetModelInfo(currentModel); mi != nil {
-		return modelInfoHasVisionTag(mi)
+		if verdict, known := ModelInfoVisionVerdict(*mi); known {
+			return verdict
+		}
 	}
 
-	// No per-model info — trust the provider-level flag.
 	return true
+}
+
+// ModelInfoVisionVerdict reads one model_info entry's modality tags.
+// known is false when the entry names no modality at all, which is not a
+// veto — an entry that only lists "coding" and "tools" has no opinion on
+// images, and treating that silence as "no vision" is what made the old
+// opt-in default drop images for uncatalogued models.
+func ModelInfoVisionVerdict(modelInfo ModelInfo) (verdict, known bool) {
+	// Text-only wins over a stray vision tag: an explicit modality
+	// restriction is the more specific statement.
+	for _, tag := range modelInfo.Tags {
+		switch strings.ToLower(strings.TrimSpace(tag)) {
+		case "text-only", "text_only", "textonly", "no-vision", "no_vision":
+			return false, true
+		}
+	}
+	for _, tag := range modelInfo.Tags {
+		if strings.EqualFold(strings.TrimSpace(tag), "vision") {
+			return true, true
+		}
+	}
+	return false, false
 }
 
 // GetVisionModel returns the vision model

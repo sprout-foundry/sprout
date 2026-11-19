@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -65,7 +66,8 @@ func GetCustomVisionProviders() []api.ClientType {
 
 	providers := make([]api.ClientType, 0, len(config.CustomProviders))
 	for name, custom := range config.CustomProviders {
-		if !custom.SupportsVision {
+		// Tri-state: only an explicit opt-out excludes a provider.
+		if custom.SupportsVision != nil && !*custom.SupportsVision {
 			continue
 		}
 		providers = append(providers, api.ClientType(name))
@@ -225,7 +227,7 @@ func GetVisionModelForProvider(providerType api.ClientType) string {
 
 	// Check custom provider config first for explicit vision settings.
 	if customConfig, ok := GetCustomProviderConfig(providerType); ok {
-		if !customConfig.SupportsVision {
+		if customConfig.SupportsVision != nil && !*customConfig.SupportsVision {
 			return ""
 		}
 		if strings.TrimSpace(customConfig.VisionModel) != "" {
@@ -262,27 +264,19 @@ func GetVisionModelForProvider(providerType api.ClientType) string {
 // providerModelSeesImages reports whether one model of a provider config is
 // vision-capable — the same declared-capability read the live client's
 // SupportsVision performs, applied to the config's model table so the check
-// needs no client construction. Mirrors its semantics exactly: a false
-// provider-wide supports_vision vetoes everything; a model_info entry makes
-// the tag list authoritative; otherwise the provider flag decides.
+// needs no client construction. Mirrors its semantics exactly: an explicit
+// provider-wide opt-out vetoes everything; a model_info entry that names a
+// modality is authoritative; otherwise vision is assumed.
 func providerModelSeesImages(cfg *providers.ProviderConfig, model string) bool {
-	if cfg == nil || !cfg.Models.SupportsVision {
+	if cfg == nil || !cfg.Models.SeesImages() {
 		return false
 	}
 	if info := cfg.GetModelInfo(model); info != nil {
-		return modelInfoSeesImages(*info)
-	}
-	return true
-}
-
-// modelInfoSeesImages reads one model_info entry's vision tags.
-func modelInfoSeesImages(info providers.ModelInfo) bool {
-	for _, tag := range info.Tags {
-		if strings.EqualFold(strings.TrimSpace(tag), "vision") {
-			return true
+		if verdict, known := providers.ModelInfoVisionVerdict(*info); known {
+			return verdict
 		}
 	}
-	return false
+	return true
 }
 
 // GetDefaultModelForProvider returns the provider's configured default
@@ -331,6 +325,14 @@ func visionProviderCandidates() []api.ClientType {
 
 // CreateVisionClient creates a client capable of vision analysis
 func CreateVisionClient() (api.ClientInterface, error) {
+	return CreateVisionClientContext(context.Background())
+}
+
+// CreateVisionClientContext is CreateVisionClient with a caller-supplied
+// context, so a cancelled turn stops the candidate walk (each candidate may
+// cost one model listing).
+func CreateVisionClientContext(ctx context.Context) (api.ClientInterface, error) {
+	var retired []string
 	for _, providerType := range visionProviderCandidates() {
 		if !configuration.HasProviderAuth(string(providerType)) {
 			continue // Skip if API key not set
@@ -348,15 +350,32 @@ func CreateVisionClient() (api.ClientInterface, error) {
 			continue // Try next provider
 		}
 
-		// Verify the client supports vision
+		// Verify the client supports vision. Declared support is config, not
+		// reality: a retired model keeps its vision tag, so also require the
+		// provider to still list it (vision_model_probe.go).
 		if !client.SupportsVision() {
+			continue // Try next provider
+		}
+		if !visionModelServed(ctx, client, visionModel) {
+			retired = append(retired, fmt.Sprintf("%s/%s", providerType, visionModel))
 			continue // Try next provider
 		}
 
 		return client, nil
 	}
 
+	if len(retired) > 0 {
+		// Name the dead pins: the fix is a config change, and the error is
+		// the only place the user ever sees which model was tried.
+		return nil, retiredVisionModelError(retired)
+	}
 	return nil, fmt.Errorf("no vision capability available: no configured provider offers a vision model and native OCR is unavailable")
+}
+
+// retiredVisionModelError names the configured vision models their providers
+// no longer serve — the actionable half of a vision-tier failure.
+func retiredVisionModelError(retired []string) error {
+	return fmt.Errorf("no vision capability available: no configured provider offers a vision model and native OCR is unavailable (the configured vision model is no longer served by its provider: %s)", strings.Join(retired, ", "))
 }
 
 // isLocalRuntimeProvider reports whether the provider needs no credentials
@@ -420,8 +439,12 @@ func HasVisionCapability() bool {
 
 // probeVisionCapability resolves vision availability from the environment:
 // native OCR shim, then a registry-driven provider that can build a
-// vision-capable client. It never performs a network call — client
-// construction and SupportsVision() are local.
+// vision-capable client. Client construction and SupportsVision() are local;
+// the model-availability check may cost one listing per provider
+// (vision_model_probe.go), and fails open when the listing is unavailable.
+// HasVisionCapability memoizes this whole probe for the process, so the
+// listing is paid once; the listing cache in vision_model_probe.go matters
+// for CreateVisionClientContext, which runs per turn.
 func probeVisionCapability() bool {
 	// Native OCR counts: text extraction needs no provider at all (SP-137).
 	if nativeOCRAvailable() {
@@ -449,9 +472,21 @@ func probeVisionCapability() bool {
 		}
 
 		// Verify the client actually supports vision
-		if client.SupportsVision() {
-			return true
+		if !client.SupportsVision() {
+			continue // Try next provider
 		}
+
+		// Declared support is config; a retired model still carries its
+		// vision tag. Require the provider to still list it, so the
+		// capability answer does not promise a model the endpoint dropped.
+		// This whole probe runs once per process (HasVisionCapability's
+		// sync.Once), so the listing costs one call at most — see
+		// vision_model_probe.go.
+		if !visionModelServed(context.Background(), client, visionModel) {
+			continue // Try next provider
+		}
+
+		return true
 	}
 
 	return false

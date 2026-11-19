@@ -320,7 +320,7 @@ func TestFetchProviderConfig_ValidJSONParsing(t *testing.T) {
 	if cfg.Models.DefaultMaxCompletionTokens != 128000 {
 		t.Errorf("expected default_max_completion_tokens 128000, got %d", cfg.Models.DefaultMaxCompletionTokens)
 	}
-	if !cfg.Models.SupportsVision {
+	if !cfg.Models.SeesImages() {
 		t.Error("expected supports_vision = true")
 	}
 	if cfg.Models.VisionModel != "google/gemma-3-27b-it" {
@@ -1142,7 +1142,7 @@ func TestToProviderConfig_FullConfig(t *testing.T) {
 	if result.Models.DefaultMaxCompletionTokens != 128000 {
 		t.Errorf("expected default_max_completion_tokens, got %d", result.Models.DefaultMaxCompletionTokens)
 	}
-	if !result.Models.SupportsVision {
+	if !result.Models.SeesImages() {
 		t.Error("expected supports_vision = true")
 	}
 	if result.Models.VisionModel != "google/gemma-3-27b-it" {

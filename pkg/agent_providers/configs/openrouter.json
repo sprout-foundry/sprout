@@ -8542,8 +8542,7 @@
         "pattern": "gemini-.*"
       }
     ],
-    "supports_vision": true,
-    "vision_model": "google/gemma-3-27b-it"
+    "supports_vision": true
   },
   "name": "openrouter",
   "retry": {

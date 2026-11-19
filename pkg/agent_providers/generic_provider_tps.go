@@ -134,7 +134,7 @@ func (p *GenericProvider) SetMaxTokensHint(tokens int) {
 //   summarizeProviderHTTPError, extractProviderJSONErrorMessage,
 //   extractProviderJSONErrorField, looksLikeProviderHTMLErrorPage,
 //   summarizeProviderHTMLErrorPage, extractProviderHTMLTitle,
-//   limitProviderErrorText, modelInfoHasVisionTag
+//   limitProviderErrorText
 //
 // generic_provider_request.go:
 //   buildChatRequest, applyReasoningEffort, applyDisableThinking,

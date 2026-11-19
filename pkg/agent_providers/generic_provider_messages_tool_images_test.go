@@ -18,7 +18,7 @@ func TestToolMessageWithImagesKeepsStringContent(t *testing.T) {
 		Conversion: MessageConversion{IncludeToolCallID: true},
 		Defaults:   RequestDefaults{Model: "qwen3.8-27b"},
 		Models: ModelConfig{
-			SupportsVision: true,
+			SupportsVision: boolPtr(true),
 		},
 	}
 	p := &GenericProvider{config: cfg}
@@ -91,7 +91,7 @@ func TestToolResultImagesCollectedAcrossBatch(t *testing.T) {
 		Name:       "ai-worker",
 		Conversion: MessageConversion{IncludeToolCallID: true},
 		Defaults:   RequestDefaults{Model: "qwen3.8-27b"},
-		Models:     ModelConfig{SupportsVision: true},
+		Models:     ModelConfig{SupportsVision: boolPtr(true)},
 	}
 	p := &GenericProvider{config: cfg}
 
@@ -139,7 +139,7 @@ func TestToolResultImagesMergeIntoConvertedUserTail(t *testing.T) {
 			ConvertToolRoleToUser: true,
 		},
 		Defaults: RequestDefaults{Model: "google/gemma-3-27b-it"},
-		Models:   ModelConfig{SupportsVision: true},
+		Models:   ModelConfig{SupportsVision: boolPtr(true)},
 	}
 	p := &GenericProvider{config: cfg}
 
@@ -181,7 +181,7 @@ func TestToolResultImagesOmittedForNonVisionProvider(t *testing.T) {
 	cfg := &ProviderConfig{
 		Name:       "text-only",
 		Conversion: MessageConversion{IncludeToolCallID: true},
-		Models:     ModelConfig{SupportsVision: false},
+		Models:     ModelConfig{SupportsVision: boolPtr(false)},
 	}
 	p := &GenericProvider{config: cfg}
 
@@ -222,7 +222,7 @@ func TestAssistantMessageWithImagesKeepsStringContent(t *testing.T) {
 		Name:       "deepinfra",
 		Conversion: MessageConversion{IncludeToolCallID: true},
 		Defaults:   RequestDefaults{Model: "deepseek-ai/DeepSeek-V4.1-Flash-1017"},
-		Models:     ModelConfig{SupportsVision: true},
+		Models:     ModelConfig{SupportsVision: boolPtr(true)},
 	}
 	p := &GenericProvider{config: cfg}
 
@@ -290,7 +290,7 @@ func TestUserMessageWithImagesKeepsMultimodalContent(t *testing.T) {
 		Name:       "deepinfra",
 		Conversion: MessageConversion{IncludeToolCallID: true},
 		Defaults:   RequestDefaults{Model: "deepseek-ai/DeepSeek-V4.1-Flash-1017"},
-		Models:     ModelConfig{SupportsVision: true},
+		Models:     ModelConfig{SupportsVision: boolPtr(true)},
 	}
 	p := &GenericProvider{config: cfg}
 
@@ -322,7 +322,7 @@ func TestToolResultImageDeliveriesArePrefixStable(t *testing.T) {
 		Name:       "ai-worker",
 		Conversion: MessageConversion{IncludeToolCallID: true},
 		Defaults:   RequestDefaults{Model: "qwen3.8-27b"},
-		Models:     ModelConfig{SupportsVision: true},
+		Models:     ModelConfig{SupportsVision: boolPtr(true)},
 	}
 	p := &GenericProvider{config: cfg}
 

@@ -52,8 +52,6 @@
       "qwen-3.8-27b": 131072
     },
     "pattern_overrides": [],
-    "supports_vision": false,
-    "vision_model": "",
     "default_model": "qwen-3.8-27b",
     "available_models": []
   },

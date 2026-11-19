@@ -334,8 +334,7 @@
         "pattern": "codestral.*"
       }
     ],
-    "supports_vision": true,
-    "vision_model": "mistralai/Mistral-Small-3.2-24B-Instruct-2506"
+    "supports_vision": true
   },
   "name": "mistral",
   "retry": {

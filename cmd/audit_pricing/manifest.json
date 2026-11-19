@@ -161,7 +161,7 @@
   },
   "deepinfra": {
     "source": "https://api.deepinfra.com/v1/models",
-    "last_verified": "2026-11-15",
+    "last_verified": "2026-11-18",
     "models": [
       {
         "id": "ByteDance/Seed-1.8",
@@ -705,6 +705,12 @@
         "input_per_mtok": 0.3,
         "output_per_mtok": 1,
         "cached_per_mtok": 0.03
+      },
+      {
+        "id": "Qwen/Qwen4-Max",
+        "input_per_mtok": 1.413,
+        "output_per_mtok": 4.24,
+        "cached_per_mtok": 0.071
       }
     ]
   },
@@ -1187,7 +1193,7 @@
   },
   "openai": {
     "source": "https://platform.openai.com/docs/pricing",
-    "last_verified": "2026-11-15",
+    "last_verified": "2026-11-18",
     "models": [
       {
         "id": "gpt-5",
@@ -1695,6 +1701,54 @@
         "input_per_mtok": 0.5,
         "output_per_mtok": 2.5,
         "cached_per_mtok": 0.025
+      },
+      {
+        "id": "gpt-6.2-astra",
+        "input_per_mtok": 8,
+        "output_per_mtok": 40,
+        "cached_per_mtok": 0.4
+      },
+      {
+        "id": "gpt-6.2-astra-pro",
+        "input_per_mtok": 8,
+        "output_per_mtok": 40,
+        "cached_per_mtok": 0.4
+      },
+      {
+        "id": "gpt-6.2-astra-pro:batch",
+        "input_per_mtok": 4,
+        "output_per_mtok": 20,
+        "cached_per_mtok": 0.2
+      },
+      {
+        "id": "gpt-6.2-astra:batch",
+        "input_per_mtok": 4,
+        "output_per_mtok": 20,
+        "cached_per_mtok": 0.2
+      },
+      {
+        "id": "gpt-6.2-sol",
+        "input_per_mtok": 2,
+        "output_per_mtok": 10,
+        "cached_per_mtok": 0.1
+      },
+      {
+        "id": "gpt-6.2-sol-pro",
+        "input_per_mtok": 2,
+        "output_per_mtok": 10,
+        "cached_per_mtok": 0.1
+      },
+      {
+        "id": "gpt-6.2-sol-pro:batch",
+        "input_per_mtok": 1,
+        "output_per_mtok": 5,
+        "cached_per_mtok": 0.05
+      },
+      {
+        "id": "gpt-6.2-sol:batch",
+        "input_per_mtok": 1,
+        "output_per_mtok": 5,
+        "cached_per_mtok": 0.05
       }
     ],
     "retired": [
@@ -1731,7 +1785,7 @@
   },
   "openrouter": {
     "source": "https://openrouter.ai/api/v1/models",
-    "last_verified": "2026-11-15",
+    "last_verified": "2026-11-18",
     "models": [
       {
         "id": "ai21/jamba-large-1.7",
@@ -5130,6 +5184,66 @@
         "id": "inclusionai/ling-3.2-flash:free",
         "input_per_mtok": 0,
         "output_per_mtok": 0
+      },
+      {
+        "id": "openai/gpt-6.2-astra",
+        "input_per_mtok": 8,
+        "output_per_mtok": 40,
+        "cached_per_mtok": 0.4
+      },
+      {
+        "id": "openai/gpt-6.2-astra-pro",
+        "input_per_mtok": 8,
+        "output_per_mtok": 40,
+        "cached_per_mtok": 0.4
+      },
+      {
+        "id": "openai/gpt-6.2-astra-pro:batch",
+        "input_per_mtok": 4,
+        "output_per_mtok": 20,
+        "cached_per_mtok": 0.2
+      },
+      {
+        "id": "openai/gpt-6.2-astra:batch",
+        "input_per_mtok": 4,
+        "output_per_mtok": 20,
+        "cached_per_mtok": 0.2
+      },
+      {
+        "id": "openai/gpt-6.2-sol",
+        "input_per_mtok": 2,
+        "output_per_mtok": 10,
+        "cached_per_mtok": 0.1
+      },
+      {
+        "id": "openai/gpt-6.2-sol-pro",
+        "input_per_mtok": 2,
+        "output_per_mtok": 10,
+        "cached_per_mtok": 0.1
+      },
+      {
+        "id": "openai/gpt-6.2-sol-pro:batch",
+        "input_per_mtok": 1,
+        "output_per_mtok": 5,
+        "cached_per_mtok": 0.05
+      },
+      {
+        "id": "openai/gpt-6.2-sol:batch",
+        "input_per_mtok": 1,
+        "output_per_mtok": 5,
+        "cached_per_mtok": 0.05
+      },
+      {
+        "id": "qwen/qwen4-max",
+        "input_per_mtok": 1.425,
+        "output_per_mtok": 4.275,
+        "cached_per_mtok": 0.07125
+      },
+      {
+        "id": "tencent/hy4-flash",
+        "input_per_mtok": 0.035,
+        "output_per_mtok": 0.1405,
+        "cached_per_mtok": 0.0015
       }
     ]
   },

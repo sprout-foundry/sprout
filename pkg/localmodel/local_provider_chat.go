@@ -26,10 +26,6 @@ func (p *LocalProvider) SendChatRequest(ctx context.Context, messages []api.Mess
 
 	prompt := buildPrompt(model, messages, tools, !disableThinking)
 	cfg := llm.DefaultGenerateConfig()
-	// k=6 measured the best net on agent-style traffic: +30-50% tok/s on
-	// echo-heavy generation (tool output, quoted files) vs k=4, ~5% cost on
-	// novel prose from wasted candidate search.
-	cfg.PromptLookupMaxDrafts = 6
 	// Real output budget against the context window — see
 	// localMaxOutputTokens. The 512 default truncated real turns
 	// mid-thought while reporting a clean "stop".
@@ -55,10 +51,9 @@ func (p *LocalProvider) SendChatRequest(ctx context.Context, messages []api.Mess
 	// useGPUArgmax gate), forcing every decode step to transfer the full
 	// vocab logits vector (250K+ floats) to the CPU for sampling — a fixed
 	// per-token tax that made local decode 10-30x slower than mlx-lm's
-	// greedy-by-default CLI on the same model. It also silently disabled
-	// PromptLookupMaxDrafts above, which requires useGPUArgmax. Zeroing both
-	// here restores the fast path; deterministic output is also simply
-	// correct for tool-calling and commit-message generation.
+	// greedy-by-default CLI on the same model. Zeroing both here restores the
+	// fast path; deterministic output is also simply correct for
+	// tool-calling and commit-message generation.
 	cfg.Temperature = 0
 	cfg.RepetitionPenalty = 0
 
@@ -119,10 +114,6 @@ func (p *LocalProvider) SendChatRequestStream(ctx context.Context, messages []ap
 
 	prompt := buildPrompt(model, messages, tools, !disableThinking)
 	cfg := llm.DefaultGenerateConfig()
-	// k=6 measured the best net on agent-style traffic: +30-50% tok/s on
-	// echo-heavy generation (tool output, quoted files) vs k=4, ~5% cost on
-	// novel prose from wasted candidate search.
-	cfg.PromptLookupMaxDrafts = 6
 	// Real output budget against the context window — see
 	// localMaxOutputTokens. The 512 default truncated real turns
 	// mid-thought while reporting a clean "stop".

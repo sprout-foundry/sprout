@@ -8482,6 +8482,36 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.15,
+        "context_length": 1048576,
+        "description": "Gemini 4 Neon is a fast, mid-priced model in the Gemini 4 family from Google, built for coding and agentic work. It is suited for repository and terminal coding, web builds, multi-turn tool use and multimodal STEM problems, and is positioned as a step up from Gemini 4 Hydrogen that targets Gemini 4 Carbon quality at higher speed and lower cost. It supports long decode of up to 1M output tokens through continuation, and controls thinking depth with low, medium, high and xhigh reasoning effort.",
+        "id": "google/gemini-4-neon",
+        "input_cost": 3,
+        "name": "Google: Gemini 4 Neon",
+        "output_cost": 15,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.075,
+        "context_length": 1048576,
+        "description": "Gemini 4 Neon is a fast, mid-priced model in the Gemini 4 family from Google, built for coding and agentic work. It is suited for repository and terminal coding, web builds, multi-turn tool use and multimodal STEM problems, and is positioned as a step up from Gemini 4 Hydrogen that targets Gemini 4 Carbon quality at higher speed and lower cost. It supports long decode of up to 1M output tokens through continuation, and controls thinking depth with low, medium, high and xhigh reasoning effort.",
+        "id": "google/gemini-4-neon:batch",
+        "input_cost": 1.5,
+        "name": "Google: Gemini 4 Neon (batch)",
+        "output_cost": 7.5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

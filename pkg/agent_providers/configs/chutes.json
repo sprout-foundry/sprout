@@ -284,13 +284,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.03,
+        "cached_input_cost": 0.02,
         "context_length": 1048576,
         "description": "DeepSeek V4.1 Flash 1017 is DeepSeek's fast multimodal model with vision input, thinking mode, and a 1M context window on Chutes public compute",
         "id": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
-        "input_cost": 0.3,
+        "input_cost": 0.195,
         "name": "DeepSeek V4.1 Flash 1017",
-        "output_cost": 1.2,
+        "output_cost": 0.78,
         "tags": [
           "vision",
           "tools",
@@ -327,13 +327,13 @@
         ]
       },
       {
-        "cached_input_cost": 0.245,
+        "cached_input_cost": 0.16,
         "context_length": 1048576,
         "description": "GLM-5.3 is Z.AI's flagship open-weights coding and agentic reasoning model with a 1M context window on Chutes public compute",
         "id": "zai-org/GLM-5.3",
-        "input_cost": 1.225,
+        "input_cost": 0.8,
         "name": "GLM-5.3",
-        "output_cost": 3.85,
+        "output_cost": 2.5,
         "tags": [
           "coding",
           "tools",

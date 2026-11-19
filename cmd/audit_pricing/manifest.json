@@ -1,7 +1,7 @@
 {
   "cerebras": {
     "source": "https://www.cerebras.ai/pricing",
-    "last_verified": "2026-11-15",
+    "last_verified": "2026-11-19",
     "models": [
       {
         "id": "qwen-3.8-27b",
@@ -17,7 +17,7 @@
   },
   "chutes": {
     "source": "https://llm.chutes.ai/v1/models",
-    "last_verified": "2026-11-15",
+    "last_verified": "2026-11-19",
     "models": [
       {
         "id": "Nemotron-3-Nano-Omni-30B-TEE",
@@ -123,9 +123,9 @@
       },
       {
         "id": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
-        "input_per_mtok": 0.3,
-        "output_per_mtok": 1.2,
-        "cached_per_mtok": 0.03
+        "input_per_mtok": 0.195,
+        "output_per_mtok": 0.78,
+        "cached_per_mtok": 0.02
       },
       {
         "id": "moonshotai/Kimi-K2.7-Code",
@@ -141,9 +141,9 @@
       },
       {
         "id": "zai-org/GLM-5.3",
-        "input_per_mtok": 1.225,
-        "output_per_mtok": 3.85,
-        "cached_per_mtok": 0.245
+        "input_per_mtok": 0.8,
+        "output_per_mtok": 2.5,
+        "cached_per_mtok": 0.16
       },
       {
         "id": "tencent/Hy4",
@@ -161,7 +161,7 @@
   },
   "deepinfra": {
     "source": "https://api.deepinfra.com/v1/models",
-    "last_verified": "2026-11-18",
+    "last_verified": "2026-11-19",
     "models": [
       {
         "id": "ByteDance/Seed-1.8",
@@ -516,7 +516,8 @@
       {
         "id": "openai/gpt-oss-120b",
         "input_per_mtok": 0.037,
-        "output_per_mtok": 0.17
+        "output_per_mtok": 0.17,
+        "cached_per_mtok": 0.019
       },
       {
         "id": "openai/gpt-oss-120b-Ultra",
@@ -526,7 +527,8 @@
       {
         "id": "openai/gpt-oss-20b",
         "input_per_mtok": 0.03,
-        "output_per_mtok": 0.14
+        "output_per_mtok": 0.14,
+        "cached_per_mtok": 0.015
       },
       {
         "id": "thinkingmachines/Inkling-Small",
@@ -716,7 +718,7 @@
   },
   "deepseek": {
     "source": "https://api-docs.deepseek.com/quick_start/pricing",
-    "last_verified": "2026-11-15",
+    "last_verified": "2026-11-19",
     "models": [
       {
         "id": "deepseek-v4-flash",
@@ -776,7 +778,7 @@
   },
   "minimax": {
     "source": "https://platform.minimax.io/docs/guides/pricing-paygo",
-    "last_verified": "2026-11-15",
+    "last_verified": "2026-11-19",
     "models": [
       {
         "id": "MiniMax-M2",
@@ -854,7 +856,7 @@
   },
   "mistral": {
     "source": "https://docs.mistral.ai/inference/pricing",
-    "last_verified": "2026-11-15",
+    "last_verified": "2026-11-19",
     "models": [
       {
         "id": "mistral-large-latest",
@@ -987,7 +989,7 @@
   },
   "ollama-cloud": {
     "source": "https://ollama.com/pricing",
-    "last_verified": "2026-11-15",
+    "last_verified": "2026-11-19",
     "models": [
       {
         "id": "deepseek-v4-flash",
@@ -1193,7 +1195,7 @@
   },
   "openai": {
     "source": "https://platform.openai.com/docs/pricing",
-    "last_verified": "2026-11-18",
+    "last_verified": "2026-11-19",
     "models": [
       {
         "id": "gpt-5",
@@ -1785,7 +1787,7 @@
   },
   "openrouter": {
     "source": "https://openrouter.ai/api/v1/models",
-    "last_verified": "2026-11-18",
+    "last_verified": "2026-11-19",
     "models": [
       {
         "id": "ai21/jamba-large-1.7",
@@ -5244,12 +5246,24 @@
         "input_per_mtok": 0.035,
         "output_per_mtok": 0.1405,
         "cached_per_mtok": 0.0015
+      },
+      {
+        "id": "google/gemini-4-neon",
+        "input_per_mtok": 3,
+        "output_per_mtok": 15,
+        "cached_per_mtok": 0.15
+      },
+      {
+        "id": "google/gemini-4-neon:batch",
+        "input_per_mtok": 1.5,
+        "output_per_mtok": 7.5,
+        "cached_per_mtok": 0.075
       }
     ]
   },
   "zai": {
     "source": "https://docs.z.ai/guides/overview/pricing",
-    "last_verified": "2026-11-15",
+    "last_verified": "2026-11-19",
     "models": [
       {
         "id": "glm-4.5v",
@@ -5385,7 +5399,7 @@
   },
   "zai-coding": {
     "source": "https://docs.z.ai/guides/overview/pricing",
-    "last_verified": "2026-11-15",
+    "last_verified": "2026-11-19",
     "models": [
       {
         "id": "glm-4.5",

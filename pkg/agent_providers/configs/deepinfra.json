@@ -904,6 +904,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.019,
         "context_length": 131072,
         "description": "gpt-oss-120b is an open-weight, 117B-parameter Mixture-of-Experts (MoE) language model from OpenAI designed for high-reasoning, agentic, and general-purpose production use cases. The model supports configurable reasoning depth, full chain-of-thought access, and native tool use, including function calling, browsing, and structured output generation.",
         "id": "openai/gpt-oss-120b",
@@ -930,6 +931,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.015,
         "context_length": 131072,
         "description": "gpt-oss-20b is an open-weight 21B parameter model released by OpenAI under the Apache 2.0 license. It uses a Mixture-of-Experts (MoE) architecture with 3.6B active parameters per forward pass, optimized for lower-latency inference. The model is trained in OpenAI’s Harmony response format and supports reasoning level configuration, fine-tuning, and agentic capabilities including function calling, tool use, and structured outputs.",
         "id": "openai/gpt-oss-20b",

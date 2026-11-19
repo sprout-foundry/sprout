@@ -13,6 +13,7 @@ import { resolveWorkspaceMode } from '../workspaces/registry';
 import type { WorkspaceModeContext, WorkspaceModeId } from '../workspaces/registry';
 import type { WorkspaceShellProps } from '../workspaces/shell';
 import { resetHostAgentBackend, wireHostAgentBackend } from './hostAgentBackend';
+import { registerWorkspaceHostTools, type WorkspaceHostTool } from './workspaceHostTools';
 import { useSproutWorkspaceChatTransport } from './SproutWorkspaceChat';
 import { ComposedSpaceShell } from './SproutWorkspaceSpaceShell';
 import { ArrangedViews, usePreviewGatedArrangement } from './SproutWorkspaceUnits';
@@ -207,6 +208,13 @@ export interface SproutWorkspaceProps {
    */
   commandPalette?: boolean;
   /**
+   * Tools the host implements and offers to the workspace's in-browser agent
+   * while it is mounted (a board, an account). Re-registered when the tool
+   * names change; each call runs the latest handler. A daemon backend's agent
+   * runs elsewhere and takes none.
+   */
+  hostTools?: WorkspaceHostTool[];
+  /**
    * Called with the resolved space id whenever the mounted space changes after
    * the initial mount. Not called on the initial mount (there is no change
    * yet). See the component note for the exact contract.
@@ -304,6 +312,7 @@ export function SproutWorkspace({
   chatFetch,
   chatOverrides,
   commandPalette = true,
+  hostTools,
   onSpaceChange,
   shellProps,
   hasMockup,
@@ -393,6 +402,7 @@ export function SproutWorkspace({
   // changed transport is the same swap an in-place re-render is — a fresh
   // instance must still see the old socket's target to reconnect it.
   const agentBackendKind = host?.transport.agent?.kind;
+  const wiredBackend = useRef<Promise<void>>(Promise.resolve());
   useEffect(() => {
     if (ambient || !host) return;
     // The socket target is the active backend's: a daemon backend has its own
@@ -403,7 +413,7 @@ export function SproutWorkspace({
     // connected" until its adapter is installed, even if the socket opens first.
     // A host that names no backend starts from the socket's connection
     // state, not whatever an earlier wasm mount left behind.
-    void wireHostAgentBackend(host, project.repoUrl);
+    wiredBackend.current = wireHostAgentBackend(host, project.repoUrl);
     if (lastConnectedTarget === null || lastConnectedTarget === target) {
       chatTransport.eventsProvider.connect();
     } else {
@@ -415,6 +425,32 @@ export function SproutWorkspace({
       if (agentBackendKind === 'wasm') resetHostAgentBackend();
     };
   }, [ambient, host, agentBackendKind, project.repoUrl, chatTransport.eventsProvider]);
+
+  // The host's tools, offered to the in-browser agent once its wiring is done.
+  const hostToolsRef = useRef(hostTools);
+  hostToolsRef.current = hostTools;
+  const hostToolNames = (hostTools ?? []).map((t) => t.name).join('\n');
+  useEffect(() => {
+    if (ambient || !host || agentBackendKind !== 'wasm' || !hostToolNames) return;
+    let cancelled = false;
+    let withdraw: (() => void) | undefined;
+    const tools = (hostToolsRef.current ?? []).map((tool) => ({
+      ...tool,
+      handler: (args: Record<string, unknown>, context: { chatId: string; toolName: string }) =>
+        (hostToolsRef.current?.find((t) => t.name === tool.name) ?? tool).handler(args, context),
+    }));
+    void wiredBackend.current
+      .then(() => registerWorkspaceHostTools(tools))
+      .then((undo) => {
+        if (cancelled) undo();
+        else withdraw = undo;
+      })
+      .catch((err) => console.warn('[SproutWorkspace] host tools not offered:', err));
+    return () => {
+      cancelled = true;
+      withdraw?.();
+    };
+  }, [ambient, host, agentBackendKind, hostToolNames]);
 
   // The ambient host's capabilities gate the arranged preview panel too; own
   // mode gates it inside its own HostProvider (`ArrangedViews`).

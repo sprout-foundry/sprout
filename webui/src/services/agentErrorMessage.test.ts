@@ -11,6 +11,15 @@ describe('describeAgentError', () => {
     });
   });
 
+  it('keeps only the platform sentence from another refusal', () => {
+    const raw =
+      'process query: chat failed: client error (managed): HTTP 501: No model is set up for this request: set a route in Admin → Models & routing.';
+    expect(describeAgentError(raw)).toEqual({
+      message: 'No model is set up for this request: set a route in Admin → Models & routing.',
+      creditsBlocked: false,
+    });
+  });
+
   it('prefixes other failures', () => {
     expect(describeAgentError('dial tcp: connection refused')).toEqual({
       message: 'Agent error: dial tcp: connection refused',

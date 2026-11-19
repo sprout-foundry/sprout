@@ -1431,7 +1431,7 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
   try {
     providerConfig = resolvePlatformProviderConfig(apiOrigin);
   } catch (err) {
-    dispatch('error', { message: err instanceof Error ? err.message : String(err) });
+    dispatch('error', { message: err instanceof Error ? err.message : String(err), terminal: true });
     return jsonOk({ status: 'processing', message: 'Agent query started' });
   }
 
@@ -1501,7 +1501,9 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
         return;
       }
       const { message, creditsBlocked } = describeAgentError(err instanceof Error ? err.message : String(err));
-      dispatch('error', { message });
+      // The run is over: the chat says why, inline, whether or not it has
+      // a chat id to scope the event to.
+      dispatch('error', { message, terminal: true });
       if (creditsBlocked) notifyCreditsBlocked(message);
     });
 

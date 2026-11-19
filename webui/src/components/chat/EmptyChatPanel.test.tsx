@@ -7,9 +7,9 @@
  * repository into a workspace that has one — it renders the ordinary welcome
  * state instead.
  */
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EmptyChatPanel } from './EmptyChatPanel';
 
 vi.mock('../../services/activeRepo', () => ({ useActiveRepoURL: () => '' }));
@@ -21,6 +21,11 @@ import { setActiveHost } from '../../host/accessor';
 import { headlessHost } from '../../host/HostProvider';
 import { HostProvider } from '../../host/HostProvider';
 import type { SproutHost } from '../../host/types';
+import {
+  __resetStartupRepoImportForTests,
+  claimHostProjectRepo,
+  importStartupRepo,
+} from '../../services/startupRepoImport';
 
 function hostWith(transport: Partial<SproutHost['transport']>): SproutHost {
   const base = headlessHost();
@@ -42,7 +47,10 @@ function renderWithHost(host: SproutHost, children: ReactNode) {
 
 afterEach(() => {
   setActiveHost(headlessHost());
+  __resetStartupRepoImportForTests();
 });
+
+const PROJECT_REPO = 'https://git.example.test/acme/app';
 
 describe('EmptyChatPanel', () => {
   it('offers to open a repository when the in-browser agent has none', () => {
@@ -61,5 +69,55 @@ describe('EmptyChatPanel', () => {
     renderWithHost(LOCAL, <EmptyChatPanel />);
     expect(screen.queryByTestId('chat-open-repo')).not.toBeInTheDocument();
     expect(screen.getByTestId('chat-welcome')).toBeInTheDocument();
+  });
+
+  it('says the project repository is opening, not offering another one', () => {
+    claimHostProjectRepo(PROJECT_REPO);
+    renderWithHost(PLATFORM_WASM, <EmptyChatPanel />);
+    expect(screen.getByTestId('chat-project-repo').dataset.state).toBe('opening');
+    expect(screen.queryByTestId('chat-open-repo')).not.toBeInTheDocument();
+  });
+
+  it('says why the project repository failed to open, with a way to fix the git connection and to retry', async () => {
+    const open = vi.fn();
+    const host: SproutHost = {
+      ...PLATFORM_WASM,
+      navigation: { ...PLATFORM_WASM.navigation, open, intentPath: () => '/account/git' },
+    };
+    const restoreRepo = vi
+      .fn()
+      .mockResolvedValueOnce({ success: false, error: 'git proxy: HTTP 401 Unauthorized' })
+      .mockResolvedValueOnce({ success: true });
+    claimHostProjectRepo(PROJECT_REPO);
+    renderWithHost(host, <EmptyChatPanel />);
+    await act(async () => {
+      await importStartupRepo({ restoreRepo }, PROJECT_REPO, 'host');
+    });
+
+    expect(screen.getByTestId('chat-project-repo').dataset.state).toBe('failed');
+    expect(screen.getByText(/isn't connected for your account/)).toBeInTheDocument();
+    expect(screen.queryByTestId('chat-open-repo')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('project-repo-connect'));
+    expect(open).toHaveBeenCalledWith({ type: 'gitConnections' });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('project-repo-retry'));
+      await Promise.resolve();
+    });
+    expect(restoreRepo).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows any other open failure as it is', async () => {
+    claimHostProjectRepo(PROJECT_REPO);
+    renderWithHost(PLATFORM_WASM, <EmptyChatPanel />);
+    await act(async () => {
+      await importStartupRepo(
+        { restoreRepo: async () => ({ success: false, error: 'repository not found' }) },
+        PROJECT_REPO,
+        'host',
+      );
+    });
+    expect(screen.getByText('repository not found')).toBeInTheDocument();
+    expect(screen.queryByTestId('project-repo-connect')).not.toBeInTheDocument();
   });
 });

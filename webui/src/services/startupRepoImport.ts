@@ -22,6 +22,40 @@ const started = new Map<string, Promise<RestoreResult>>();
 /** The repo a mounted workspace's host named, which outranks the bootstrap's. */
 let hostProjectRepo: string | null = null;
 
+/** The adapter the host project repo was last imported through, for a retry. */
+let hostAdapter: Pick<CloudAdapter, 'restoreRepo'> | null = null;
+
+/**
+ * Where the host's project repo stands: opening, open, or failed with the
+ * reason. Null when no mounted workspace names a project repo.
+ */
+export type HostProjectRepoStatus = {
+  repo: string;
+  state: 'opening' | 'open' | 'failed';
+  error?: string;
+} | null;
+
+let hostStatus: HostProjectRepoStatus = null;
+const hostStatusListeners = new Set<() => void>();
+
+function setHostStatus(next: HostProjectRepoStatus): void {
+  hostStatus = next;
+  hostStatusListeners.forEach((listener) => listener());
+}
+
+/** The host project repo's status now. */
+export function getHostProjectRepoStatus(): HostProjectRepoStatus {
+  return hostStatus;
+}
+
+/** Follow the host project repo's status; returns the unsubscribe. */
+export function subscribeHostProjectRepoStatus(listener: () => void): () => void {
+  hostStatusListeners.add(listener);
+  return () => {
+    hostStatusListeners.delete(listener);
+  };
+}
+
 /**
  * Record that a mounted workspace's host names this project repo. Called
  * synchronously before either adapter install finishes, so a bootstrap import
@@ -29,11 +63,19 @@ let hostProjectRepo: string | null = null;
  */
 export function claimHostProjectRepo(repoUrl: string): void {
   hostProjectRepo = repoUrl;
+  if (hostStatus?.repo !== repoUrl) setHostStatus({ repo: repoUrl, state: 'opening' });
 }
 
 /** Release the host project repo claim (the workspace that made it unmounted). */
 export function releaseHostProjectRepo(): void {
   hostProjectRepo = null;
+  hostAdapter = null;
+  setHostStatus(null);
+}
+
+/** Try opening the host project repo again after it failed. */
+export function retryHostProjectRepo(): void {
+  if (hostProjectRepo && hostAdapter) void importStartupRepo(hostAdapter, hostProjectRepo, 'host');
 }
 
 /**
@@ -53,8 +95,21 @@ export function importStartupRepo(
   source: 'host' | 'bootstrap',
 ): Promise<RestoreResult> | null {
   if (source === 'bootstrap' && hostProjectRepo && hostProjectRepo !== repoUrl) return null;
+  if (source === 'host') hostAdapter = adapter;
+  const forHost = () => hostStatus?.repo === repoUrl;
   const existing = started.get(repoUrl);
-  if (existing) return existing;
+  if (existing) {
+    // A remount claims the repo again: its status follows the import that
+    // already ran rather than staying "opening".
+    void existing.then((result) => {
+      if (forHost())
+        setHostStatus(
+          result.success ? { repo: repoUrl, state: 'open' } : { repo: repoUrl, state: 'failed', error: result.error },
+        );
+    });
+    return existing;
+  }
+  if (forHost()) setHostStatus({ repo: repoUrl, state: 'opening' });
 
   const markers = window as unknown as Record<string, unknown>;
   // Signal that an import is in progress (before the WASM shell is ready).
@@ -62,6 +117,7 @@ export function importStartupRepo(
   const run = adapter.restoreRepo(repoUrl).then(
     (result) => {
       if (result.success) {
+        if (forHost()) setHostStatus({ repo: repoUrl, state: 'open' });
         console.warn(
           `startup repo ${result.fromCache ? 'restored from cache' : 'imported'}: ${result.repo ?? repoUrl}`,
         );
@@ -74,12 +130,14 @@ export function importStartupRepo(
         );
       } else {
         importFailed(repoUrl, result.error ?? 'Unknown error');
+        if (forHost()) setHostStatus({ repo: repoUrl, state: 'failed', error: result.error ?? 'Unknown error' });
       }
       return result;
     },
     (err: unknown) => {
       const error = err instanceof Error ? err.message : String(err);
       importFailed(repoUrl, error);
+      if (forHost()) setHostStatus({ repo: repoUrl, state: 'failed', error });
       return { success: false, error };
     },
   );
@@ -101,4 +159,7 @@ function importFailed(repoUrl: string, error: string): void {
 export function __resetStartupRepoImportForTests(): void {
   started.clear();
   hostProjectRepo = null;
+  hostAdapter = null;
+  hostStatus = null;
+  hostStatusListeners.clear();
 }

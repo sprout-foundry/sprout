@@ -52,6 +52,11 @@ export type CopyKey =
   | 'chat.noProviderHint'
   | 'chat.openRepo'
   | 'chat.openRepoHint'
+  | 'chat.projectRepoOpening'
+  | 'chat.projectRepoFailed'
+  | 'chat.projectRepoNeedsGit'
+  | 'action.connectGit'
+  | 'action.tryAgain'
   | 'workspace.none'
   | 'action.retryConnection'
   | 'action.configureProvider'
@@ -103,6 +108,11 @@ export const DEFAULT_COPY: Readonly<Record<CopyKey, string>> = Object.freeze({
   'chat.openRepo': 'Open a repository to get started',
   'chat.openRepoHint':
     'The agent works on the repository you open. Public GitHub repositories work without connecting an account.',
+  'chat.projectRepoOpening': "Opening the project's repository…",
+  'chat.projectRepoFailed': "This project's repository couldn't be opened",
+  'chat.projectRepoNeedsGit': "Its git host isn't connected for your account, or the connection needs renewing.",
+  'action.connectGit': 'Connect your git host',
+  'action.tryAgain': 'Try again',
   'workspace.none': 'No repository open',
   'action.retryConnection': 'Retry Connection',
   'action.configureProvider': 'Configure Provider',

@@ -168,6 +168,15 @@ export interface HostReportBugIntent {
 }
 
 /**
+ * Connect (or reconnect) a git host for the person's account, e.g. when a
+ * project's repository cannot be opened. The host resolves it to wherever it
+ * manages git connections.
+ */
+export interface HostGitConnectionsIntent {
+  type: 'gitConnections';
+}
+
+/**
  * A deep link back into a specific project.
  */
 export interface HostProjectIntent {
@@ -215,6 +224,7 @@ export type HostNavigationIntent =
   | HostHelpIntent
   | HostSignOutIntent
   | HostReportBugIntent
+  | HostGitConnectionsIntent
   | HostProjectIntent
   | HostSpaceIntent
   | HostNavIntent;

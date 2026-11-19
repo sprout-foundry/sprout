@@ -3,14 +3,15 @@ import { openPlatformPage } from './homeView';
 import { notificationBus } from './notificationBus';
 
 /**
- * Turn a failed browser-agent run into chat text. A 402 from the platform's
- * credit gate carries a complete, user-facing sentence after "HTTP 402:";
- * everything around it is provider plumbing ("process query: chat failed:
- * …") that only obscures what to do next.
+ * Turn a failed browser-agent run into chat text. The platform answers a
+ * refusal (402 from the credit gate, 501 when no model is set up, …) with a
+ * complete, user-facing sentence after "HTTP <status>:"; everything around it
+ * is provider plumbing ("process query: chat failed: …") that only obscures
+ * what to do next.
  */
 export function describeAgentError(raw: string): { message: string; creditsBlocked: boolean } {
-  const match = /HTTP 402:\s*([\s\S]+)$/.exec(raw);
-  if (match) return { message: match[1].trim(), creditsBlocked: true };
+  const match = /HTTP (\d{3}):\s*([\s\S]+)$/.exec(raw);
+  if (match && match[2].trim()) return { message: match[2].trim(), creditsBlocked: match[1] === '402' };
   return { message: `Agent error: ${raw}`, creditsBlocked: false };
 }
 

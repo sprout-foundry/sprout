@@ -73,6 +73,7 @@ export function intentPath(intent: HostNavigationIntent): string | null {
   if (intent.type === 'account') return '/?from=editor';
   // The platform's own support flow, not the public GitHub issue.
   if (intent.type === 'reportBug') return PLATFORM_PAGES.support;
+  if (intent.type === 'gitConnections') return '/account/git';
   if (intent.type === 'nav') {
     const page = PLATFORM_PAGES[intent.id];
     if (page === undefined) return null;

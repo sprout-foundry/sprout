@@ -178,6 +178,7 @@ export type { WasmAssets, WasmAssetsProviderProps } from '../contexts/WasmAssets
 // an embedding host does not assemble a workspace from internals.
 export { SproutWorkspace } from './SproutWorkspace';
 export type { SproutWorkspaceProps, SproutProject } from './SproutWorkspace';
+export type { WorkspaceHostTool } from './workspaceHostTools';
 
 // The chat unit: the chat state, its WebSocket event reducer, the chat
 // session manager and the queue, plus the chat/review/diff view props. A host

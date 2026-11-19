@@ -5,6 +5,7 @@ import { useHost } from '../../host/useHost';
 import { useActiveRepoURL } from '../../services/activeRepo';
 import SproutLogo from '../SproutLogo';
 import { OpenRepositoryPanel } from './OpenRepositoryPanel';
+import { ProjectRepoPanel, useHostProjectRepoStatus } from './ProjectRepoPanel';
 
 interface EmptyChatPanelProps {
   /** Show offline panel when backend requires health check and is unreachable */
@@ -31,6 +32,8 @@ export const EmptyChatPanel = forwardRef<HTMLDivElement, EmptyChatPanelProps>(fu
   // into a workspace that already has one. Only a host whose agent runs in the
   // page has no checkout of its own, which is what the panel is for.
   const daemonBackend = host.transport.agent?.kind === 'daemon';
+  // A space bound to a project opens that project's repository: no picker.
+  const projectRepo = useHostProjectRepoStatus();
   if (showOffline) {
     return (
       <div className="chat-container chat-container--empty" ref={ref}>
@@ -74,6 +77,14 @@ export const EmptyChatPanel = forwardRef<HTMLDivElement, EmptyChatPanelProps>(fu
             </button>
           )}
         </div>
+      </div>
+    );
+  }
+
+  if (!daemonBackend && !activeRepo && projectRepo && projectRepo.state !== 'open') {
+    return (
+      <div className="chat-container chat-container--empty" ref={ref}>
+        <ProjectRepoPanel status={projectRepo} />
       </div>
     );
   }

@@ -209,6 +209,11 @@ export class CloudAdapter implements APIAdapter {
    * On failure, caches the failure so future calls short-circuit (avoiding
    * infinite retries in browsers that permanently lack WASM support).
    */
+  /** The in-browser agent's runtime, started when it is not yet. */
+  agentShell(): Promise<WasmShell> {
+    return this.ensureWasmShell();
+  }
+
   private ensureWasmShell(): Promise<WasmShell> {
     if (this.wasmShell) return Promise.resolve(this.wasmShell);
     if (this.wasmInitFailed) {

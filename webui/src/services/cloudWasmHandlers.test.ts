@@ -926,6 +926,34 @@ describe('a relative or unusable host model endpoint', () => {
   });
 });
 
+describe('a run the platform refuses', () => {
+  it("ends the turn in the chat with the platform's own sentence", async () => {
+    const { setActiveHost } = await import('../host/accessor');
+    const { headlessHost } = await import('../host/HostProvider');
+    const { setAgentEventDispatcher } = await import('./cloudWasmHandlers');
+    setActiveHost({
+      ...headlessHost(),
+      transport: { apiBaseURL: '', wsURL: '', authMode: 'none', agent: { kind: 'wasm', modelEndpoint: '/proxy/chat' } },
+    });
+    const events: Array<{ type: string; data: Record<string, unknown> }> = [];
+    setAgentEventDispatcher((event) => events.push(event as { type: string; data: Record<string, unknown> }));
+    const runAgent = vi.fn(async () => {
+      throw new Error(
+        'process query: chat failed: client error (managed): HTTP 501: No model is set up for this request: set a route in Admin → Models & routing.',
+      );
+    });
+    const shell = createMockShell({ runAgent, writeFile: () => '' });
+    handleWasmLocal(shell, '/api/query', 'POST', '/api/query', JSON.stringify({ query: 'hello' }));
+    await vi.waitFor(() => expect(events.some((e) => e.type === 'error')).toBe(true));
+    setAgentEventDispatcher(null);
+    setActiveHost(headlessHost());
+
+    const error = events.find((e) => e.type === 'error');
+    expect(error?.data.terminal).toBe(true);
+    expect(error?.data.message).toBe('No model is set up for this request: set a route in Admin → Models & routing.');
+  });
+});
+
 describe('handleWasmLocal — /api/search/replace', () => {
   /** A workspace at /workspace whose files live in `files`; writes land there too. */
   function replaceIn(initial: Record<string, string>, request: Record<string, unknown>) {

@@ -130,6 +130,16 @@ export interface WasmShell {
   getBuildInfo(): { version: string; commit: string; date: string } | null;
   /** Get the fully initialized Go global. */
   readonly wasm: typeof globalThis & { SproutWasm: unknown };
+  /**
+   * Offer a tool the host implements to the in-browser agent; false when the
+   * runtime predates host tools or refuses this one.
+   */
+  registerHostTool(
+    specJSON: string,
+    handler: (argsJSON: string, context: { chatId?: string; toolName?: string }) => string | Promise<string>,
+  ): { ok: boolean; error?: string };
+  /** Withdraw a host tool. */
+  unregisterHostTool(name: string): void;
 }
 
 // ── IndexedDB store ─────────────────────────────────────────────────────────
@@ -348,6 +358,12 @@ export interface SproutWasmAPI {
   ): Promise<{ response: string; provider: string; model: string }>;
   clearConversation?(chatId?: string): void;
   stopAgent?(chatId?: string): void;
+  // ── Host tools (cmd/wasm/host_tool_funcs.go) ──
+  registerHostTool?(
+    specJSON: string,
+    handler: (argsJSON: string, context: { chatId?: string; toolName?: string }) => string | Promise<string>,
+  ): { ok: boolean; error?: string };
+  unregisterHostTool?(name: string): boolean;
   steerAgent?(message: string, chatId?: string): Record<string, unknown>;
   respondToAskUser?(requestId: string, response: string): { delivered: boolean };
   respondToEditDecision?(requestId: string, approved: boolean, acceptedHunks: string[]): { delivered: boolean };
@@ -662,6 +678,16 @@ export function createWasmShellBridge(wasm: SproutWasmAPI): WasmShell {
         return Promise.reject(new Error('WASM binary does not expose runAgent'));
       }
       return api.runAgent(provider, model, query, onEvent, chatId, history, mode);
+    },
+
+    registerHostTool(specJSON, handler) {
+      const api = wasm as SproutWasmAPI;
+      if (!api.registerHostTool) return { ok: false, error: 'this agent runtime does not take host tools' };
+      return api.registerHostTool(specJSON, handler);
+    },
+
+    unregisterHostTool(name: string): void {
+      (wasm as SproutWasmAPI).unregisterHostTool?.(name);
     },
 
     clearConversation(chatId?: string): void {

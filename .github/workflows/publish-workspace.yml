@@ -50,6 +50,11 @@ jobs:
         with:
           go-version: 1.26
 
+      - name: Download Go modules
+        # prepare-grammars reads the grammar blobs from the module cache,
+        # which a changed go.sum leaves empty.
+        run: go mod download
+
       - name: Prepare grammar blobs
         # pkg/ast embeds the tree-sitter grammar blobs this generates; the
         # WASM build fails without them.

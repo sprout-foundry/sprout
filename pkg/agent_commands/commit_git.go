@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/console"
@@ -165,4 +166,62 @@ func getGitBranchName() (string, error) {
 type printlnPrintfHelper interface {
 	printf(format string, args ...interface{})
 	println(text string)
+}
+
+// mergeCommitMessage is the message of a merge in progress: git's own
+// MERGE_MSG ("Merge branch 'x' into y"), with the files whose conflicts were
+// resolved listed in its body. A merge's staged diff is everything the merged
+// branch brings in, so a message written from it would describe that branch's
+// work instead of the merge. ok is false when no merge is in progress.
+func mergeCommitMessage() (message string, ok bool) {
+	if err := gitCommand("rev-parse", "-q", "--verify", "MERGE_HEAD").Run(); err != nil {
+		return "", false
+	}
+	pathOut, err := gitCommand("rev-parse", "--git-path", "MERGE_MSG").Output()
+	if err != nil {
+		return "", false
+	}
+	path := strings.TrimSpace(string(pathOut))
+	if !filepath.IsAbs(path) {
+		if dir := currentGitDir(); dir != "" {
+			path = filepath.Join(dir, path)
+		}
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		head, herr := gitCommand("rev-parse", "--short", "MERGE_HEAD").Output()
+		if herr != nil {
+			return "", false
+		}
+		return "Merge " + strings.TrimSpace(string(head)), true
+	}
+	return formatMergeMessage(normalizeNewlines(string(raw))), true
+}
+
+// formatMergeMessage turns git's MERGE_MSG into a commit message: its own
+// lines as they are, and the files its "# Conflicts:" comment names as a
+// "Resolved conflicts in:" list.
+func formatMergeMessage(raw string) string {
+	var body, conflicts []string
+	inConflicts := false
+	for _, line := range strings.Split(raw, "\n") {
+		if strings.HasPrefix(line, "#") {
+			text := strings.TrimSpace(strings.TrimPrefix(line, "#"))
+			switch {
+			case text == "Conflicts:":
+				inConflicts = true
+			case inConflicts && text != "":
+				conflicts = append(conflicts, text)
+			default:
+				inConflicts = false
+			}
+			continue
+		}
+		body = append(body, line)
+	}
+	message := strings.TrimSpace(strings.Join(body, "\n"))
+	if len(conflicts) > 0 {
+		message += "\n\nResolved conflicts in:\n- " + strings.Join(conflicts, "\n- ")
+	}
+	return message
 }

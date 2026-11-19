@@ -430,8 +430,20 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 	}
 	trailers := gitops.DedupTrailers(append(defaults, explicitTrailers...))
 
+	mergeMessage, merging := mergeCommitMessage()
+
 	// Retry loop for commit message generation (LLM if available, otherwise manual input)
 	for {
+		if merging {
+			// A merge is described by git's own merge message, not by the
+			// incoming branch's diff.
+			commitMessage = mergeMessage
+			c.println("With message:")
+			c.println("")
+			c.println(commitMessage)
+			c.println("")
+			break
+		}
 		if client == nil {
 			if c.skipPrompt {
 				return errors.New("no AI provider available to generate a commit message, and --yes rules out typing one")
@@ -491,7 +503,7 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 	// Apply commit attribution (the opt-in Assisted-by trailer) and the
 	// commit trailers. The final message is what dry-run displays and what
 	// gets committed.
-	finalMessage := attributeCommitCommand(cfg, chatAgent, clientType, model, client != nil, commitMessage)
+	finalMessage := attributeCommitCommand(cfg, chatAgent, clientType, model, client != nil && !merging, commitMessage)
 	finalMessage = gitops.AppendTrailers(finalMessage, trailers...)
 
 	// Handle dry-run mode

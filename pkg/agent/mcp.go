@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/injection"
 	"github.com/sprout-foundry/sprout/pkg/mcp"
@@ -59,6 +60,18 @@ func (a *Agent) initializeMCP() error {
 	// the daemon started, so reading it would hide a repo-local config
 	// written afterwards. The workspace layer wins over the global one.
 	workspaceRoot := a.GetWorkspaceRoot()
+	// Register the workspace's credential store as a fallback scope for MCP
+	// header/env resolution. A workspace-scoped `sprout login` stores the
+	// platform token in this workspace's store, but a daemon that did not
+	// start inside the scope resolves credentials from its ambient (global)
+	// store and cannot see it — without this, the platform's MCP server
+	// authenticates with an empty Authorization header and its tools never
+	// load. The process's own store still wins when it holds the value.
+	// WorkspaceConfigDir is "" when the workspace is $HOME, where the
+	// workspace store and the global store are the same.
+	if workspaceConfigDir := configuration.WorkspaceConfigDir(workspaceRoot); workspaceConfigDir != "" {
+		mcp.SetWorkspaceCredentialDir(workspaceConfigDir)
+	}
 	var legacyEnabled bool
 	if legacyMCPConfig, err := mcp.LoadMCPConfigForWorkspace(workspaceRoot); err == nil {
 		legacyEnabled = len(legacyMCPConfig.Servers) > 0 && legacyMCPConfig.Enabled

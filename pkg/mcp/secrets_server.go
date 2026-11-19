@@ -289,8 +289,8 @@ func resolveHeaderRefs(serverName, headerName, value string) (string, bool) {
 		// The key is taken from the placeholder itself so a header can
 		// reference a credential stored under either namespace.
 		key := CredentialKey(refServer, credName)
-		stored, _, getErr := credentials.GetFromActiveBackend(key)
-		if getErr != nil || stored == "" {
+		stored, _ := getMCPHeaderCredential(key)
+		if stored == "" {
 			stored = os.Getenv(credName)
 		}
 		if stored == "" {
@@ -329,11 +329,7 @@ func ResolveCredentialsForServer(serverName string, config *MCPServerConfig) (ma
 
 		// Get from credential store
 		key := CredentialKey(serverName, actualEnvVarName)
-		credValue, _, err := credentials.GetFromActiveBackend(key)
-		if err != nil {
-			log.Printf("[mcp-secrets] Error getting credential %s: %v", key, err)
-			continue
-		}
+		credValue, _ := getMCPHeaderCredential(key)
 
 		// If empty, fall back to OS environment
 		if credValue == "" {
@@ -383,11 +379,7 @@ func BuildFullEnvForServer(serverName string, config *MCPServerConfig) (map[stri
 				continue
 			}
 			key := CredentialKey(serverName, actualEnvVarName)
-			credValue, _, getErr := credentials.GetFromActiveBackend(key)
-			if getErr != nil {
-				log.Printf("[mcp-secrets] Error resolving env placeholder %s: %v", key, getErr)
-				continue
-			}
+			credValue, _ := getMCPHeaderCredential(key)
 			if credValue == "" {
 				credValue = os.Getenv(actualEnvVarName)
 			}

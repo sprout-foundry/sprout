@@ -102,10 +102,10 @@ export function importStartupRepo(
     // A remount claims the repo again: its status follows the import that
     // already ran rather than staying "opening".
     void existing.then((result) => {
-      if (forHost())
-        setHostStatus(
-          result.success ? { repo: repoUrl, state: 'open' } : { repo: repoUrl, state: 'failed', error: result.error },
-        );
+      if (!forHost()) return;
+      setHostStatus(
+        result.success ? { repo: repoUrl, state: 'open' } : { repo: repoUrl, state: 'failed', error: result.error },
+      );
     });
     return existing;
   }

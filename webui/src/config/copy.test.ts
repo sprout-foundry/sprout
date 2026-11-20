@@ -60,6 +60,11 @@ describe('copy defaults', () => {
     'action.open': 'Open',
     'action.newProject': 'Start a new project',
     'action.chooseRepo': 'Choose from your repositories',
+    'chat.projectRepoOpening': "Opening the project's repository…",
+    'chat.projectRepoFailed': "This project's repository couldn't be opened",
+    'chat.projectRepoNeedsGit': "Its git host isn't connected for your account, or the connection needs renewing.",
+    'action.connectGit': 'Connect your git host',
+    'action.tryAgain': 'Try again',
   };
 
   it('covers every declared key', () => {

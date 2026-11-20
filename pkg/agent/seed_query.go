@@ -421,6 +421,7 @@ func (a *Agent) prepareQueryRun(userQuery, source string) (*queryRunContext, err
 	// model is compacted at ~300K of live context, not ~734K.
 	opts.CompactionTriggerFraction = a.compactionTriggerFractionFor(a.getModelContextLimit())
 	opts.CompactionSettleMargin = compactionSettleMarginFor(opts.CompactionTriggerFraction)
+	opts.ContinuationCompaction = continuationCompactionFor(a.getModelContextLimit(), opts.CompactionTriggerFraction)
 	opts.SubstitutionTargetFraction = 0.50
 
 	// When the project's starter manifest names a starter, its

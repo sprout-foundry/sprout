@@ -1,5 +1,7 @@
 package agent
 
+import core "github.com/sprout-foundry/seed/core"
+
 // Model-aware context reservations for compaction trigger calculation.
 // We compute the trigger fraction by subtracting conservative reservations
 // for the response, thinking budget, and tool I/O.
@@ -37,6 +39,33 @@ const compactionSettleShare = 0.30
 // for a compaction trigger that is itself a share of the window.
 func compactionSettleMarginFor(trigger float64) float64 {
 	return trigger * compactionSettleShare
+}
+
+// A compaction first asks the model for a summary in a request that continues
+// the live one, so the provider's prompt cache serves the whole prefix, and
+// settles the conversation near continuationTargetTokens: the summary plus the
+// latest steps verbatim. The settle margin above is the fallback's.
+const (
+	continuationTargetTokens  = 24_000
+	continuationSummaryTokens = 6_000
+	// minContinuationTargetTokens is the smallest target worth a summary
+	// call; a model whose trigger leaves less keeps the fallback alone.
+	minContinuationTargetTokens = 8_000
+)
+
+// continuationCompactionFor is the continuation compaction for a model with
+// the given window and trigger fraction, or nil when the trigger leaves too
+// little room beneath it.
+func continuationCompactionFor(contextLimit int, trigger float64) *core.ContinuationCompaction {
+	triggerTokens := int(float64(contextLimit) * trigger)
+	target := min(continuationTargetTokens, triggerTokens/2)
+	if target < minContinuationTargetTokens {
+		return nil
+	}
+	return &core.ContinuationCompaction{
+		TargetTokens:  target,
+		SummaryTokens: min(continuationSummaryTokens, target/4),
+	}
 }
 
 // defaultCompactionCeilingTokens is the built-in absolute ceiling on the live

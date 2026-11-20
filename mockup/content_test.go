@@ -133,3 +133,10 @@ func TestApplyContent_ReplacesWordsAndKeepsIcons(t *testing.T) {
 		t.Errorf("fields = %+v", after.Fields)
 	}
 }
+
+func TestKeyed_ALineBreakSeparatesWords(t *testing.T) {
+	_, c := Keyed(`<html><body><h1>Bring a book,<br>leave with another.</h1></body></html>`, nil)
+	if len(c.Fields) != 1 || c.Fields[0].Text != "Bring a book, leave with another." {
+		t.Fatalf("fields = %+v, want the heading's words separated at the line break", c.Fields)
+	}
+}

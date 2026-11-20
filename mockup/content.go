@@ -198,6 +198,12 @@ func Keyed(doc string, saved *Content) (string, Content) {
 					pieces = append(pieces, renderTag(tok, tt == nethtml.SelfClosingTagToken))
 					continue
 				}
+				// A line break separates words, as a space does.
+				if tag == "br" && len(stack) > 0 && !skipping() {
+					top := stack[len(stack)-1]
+					top.direct.WriteString(" ")
+					top.full.WriteString(" ")
+				}
 				pieces = append(pieces, raw)
 				continue
 			}

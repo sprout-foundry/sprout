@@ -314,11 +314,21 @@ function emitDeclarations(outDir) {
     ),
   );
 
-  const tsc = resolve(repoRoot, "node_modules/.bin/tsc");
-  const result = spawnSync(tsc, ["-p", scratchTsconfig], {
-    cwd: repoRoot,
-    encoding: "utf-8",
-  });
+  // Spawn the compiler as `node <typescript/bin/tsc>`: on Windows the
+  // `node_modules/.bin/tsc` shim is a POSIX shell script CreateProcess
+  // cannot execute, so spawnSync fails with a null exit status and no
+  // output. Resolving the JS entry and reusing this process's binary
+  // behaves identically on every platform.
+  const require = createRequire(import.meta.url);
+  const tscEntry = require.resolve("typescript/bin/tsc");
+  const result = spawnSync(
+    process.execPath,
+    [tscEntry, "-p", scratchTsconfig],
+    {
+      cwd: repoRoot,
+      encoding: "utf-8",
+    },
+  );
   if (result.status !== 0) {
     fail(
       `tsc could not emit the declaration tree (exit ${result.status}):\n${result.stdout}${result.stderr}`,
@@ -379,7 +389,13 @@ function writeScratchScaffolding(outDir) {
   // node_modules copies are built dists, not the source graph).
   const scratchNodeModules = resolve(outDir, "node_modules");
   if (!existsSync(scratchNodeModules)) {
-    symlinkSync(resolve(repoRoot, "node_modules"), scratchNodeModules, "dir");
+    // "junction": a plain dir symlink needs elevated privileges on Windows,
+    // a junction does not; the type is ignored on other platforms.
+    symlinkSync(
+      resolve(repoRoot, "node_modules"),
+      scratchNodeModules,
+      "junction",
+    );
   }
 
   // API Extractor's analyzer refuses a program whose source files are not all

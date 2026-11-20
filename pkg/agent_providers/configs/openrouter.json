@@ -8512,6 +8512,17 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "context_length": 128000,
+        "description": "Pixtral Large 2502 is the February 2025 version of Mistral AI's large multimodal model, following [Pixtral Large 2411](https://openrouter.ai/mistralai/pixtral-large-2411). It accepts text and image input, including documents, charts, and natural images, and returns text. It has a 128,000-token context window.",
+        "id": "mistralai/pixtral-large-2502",
+        "input_cost": 2,
+        "name": "Mistral: Pixtral Large 2502",
+        "output_cost": 6,
+        "tags": [
+          "vision"
+        ]
       }
     ],
     "model_overrides": {

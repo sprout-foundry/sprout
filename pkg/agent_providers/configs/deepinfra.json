@@ -1398,6 +1398,21 @@
           "reasoning",
           "structured_output"
         ]
+      },
+      {
+        "cached_input_cost": 0.05,
+        "context_length": 262144,
+        "description": "DaisyRose-27B is RadixArk's multimodal reasoning model, trained from Qwen3.8-27B with reinforcement learning only on long-horizon agent tasks. It improves on the base model in agentic coding, reasoning and instruction following, with thinking that can be enabled or disabled, image understanding and a 256K-token context.",
+        "id": "RadixArk/DaisyRose-27B",
+        "input_cost": 0.2,
+        "name": "RadixArk/DaisyRose-27B",
+        "output_cost": 2.5,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

@@ -2,13 +2,16 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/sprout-foundry/sprout/mockup"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -120,13 +123,38 @@ func runDrawMockup(t *testing.T, root string, model *stubMockupModel, args map[s
 	return res
 }
 
+// readMockup is the written page as drawn: its text keys and embedded
+// content file taken out (the content file is checked on its own).
 func readMockup(t *testing.T, root string) string {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(root, mockupRelPath))
 	if err != nil {
 		t.Fatal(err)
 	}
-	return string(data)
+	return unkeyed(string(data))
+}
+
+// unkeyed is a page without its text keys and content file.
+func unkeyed(page string) string {
+	return textKeyRe.ReplaceAllString(mockup.StripContent(page), "")
+}
+
+var textKeyRe = regexp.MustCompile(` data-c(?:-ph)?="c\d+"`)
+
+func TestDrawMockup_WritesTheContentFile(t *testing.T) {
+	root := mockupProject(t, true, "")
+	model := &stubMockupModel{wholeReply: sampleMockupPage}
+	if res := runDrawMockup(t, root, model, map[string]any{}); res.IsError {
+		t.Fatalf("draw failed: %s", res.Output)
+	}
+	data, err := os.ReadFile(filepath.Join(root, contentRelPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var c mockup.Content
+	if err := json.Unmarshal(data, &c); err != nil || len(c.Fields) == 0 || c.Fields[0].Text != "Muddy Paws" {
+		t.Fatalf("content = %s", data)
+	}
 }
 
 func TestDrawMockup_FromPlanStreamsAndWrites(t *testing.T) {
@@ -174,7 +202,7 @@ func TestDrawMockup_FromPlanStreamsAndWrites(t *testing.T) {
 		t.Errorf("start mode = %v", model.events[0].Data["mode"])
 	}
 	done := model.events[len(model.events)-1].Data
-	if done["html"] != sampleMockupPage || strings.Join(done["screens"].([]string), ",") != "home,book" || done["path"] != mockupRelPath {
+	if unkeyed(done["html"].(string)) != sampleMockupPage || strings.Join(done["screens"].([]string), ",") != "home,book" || done["path"] != mockupRelPath {
 		t.Errorf("done = %v", done)
 	}
 }

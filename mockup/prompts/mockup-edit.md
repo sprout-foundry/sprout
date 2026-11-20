@@ -1,4 +1,4 @@
-charter-version: mockup-edit/v2
+charter-version: mockup-edit/v3
 
 # Mockup edit charter
 
@@ -17,6 +17,10 @@ the text that replaces it
 - Each FIND must be copied exactly from the current mockup, character for
   character, and must appear in it only once: include a little surrounding
   text when a line alone could match more than once.
+- Keep every `data-c`, `data-c-ph` and `data-label` attribute exactly as it
+  is: they tie the page's text to the person's own. New text needs none of
+  them, except a `data-label` on a new real-world fact (a date, a place, a
+  price, a name).
 - Keep each FIND short: just the lines that change, plus enough to be
   unique. Never repeat the whole document.
 - To add something, FIND the text just before where it goes and replace it

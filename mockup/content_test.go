@@ -1,0 +1,135 @@
+package mockup
+
+import (
+	"strings"
+	"testing"
+)
+
+const invite = `<!doctype html><html><head><title>Maya</title><style>p{color:red}</style></head><body>
+<section data-screen="invitation"><h1>Maya turns thirty</h1>
+<p data-label="Event date">Saturday, June 14 &middot; 7pm</p>
+<p>Come hungry, <strong>stay late</strong>, bring someone.</p>
+<a class="btn btn-primary" data-go="rsvp">RSVP by June 7</a>
+<svg><text>ignored</text></svg><script>var x = "<p>no</p>";</script></section>
+<section data-screen="rsvp"><h2>Will you be there?</h2>
+<form><label for="n">Your name</label><input id="n" placeholder="Priya Raman"><textarea>typed</textarea><button>Send</button></form>
+<p>   </p><p>·</p></section></body></html>`
+
+func fieldByText(c Content, text string) (Field, bool) {
+	for _, f := range c.Fields {
+		if f.Text == text {
+			return f, true
+		}
+	}
+	return Field{}, false
+}
+
+func TestKeyed_EveryPieceOfTextHasAKeyLabelAndSection(t *testing.T) {
+	doc, c := Keyed(invite, nil)
+	want := []struct{ text, label, section string }{
+		{"Maya turns thirty", "Main heading", "Invitation"},
+		{"Saturday, June 14 · 7pm", "Event date", "Invitation · Maya turns thirty"},
+		{"Come hungry, stay late, bring someone.", "Text", "Invitation · Maya turns thirty"},
+		{"RSVP by June 7", "Button", "Invitation · Maya turns thirty"},
+		{"Will you be there?", "Heading", "Rsvp"},
+		{"Your name", "Field label", "Rsvp · Will you be there?"},
+		{"Priya Raman", "Placeholder", "Rsvp · Will you be there?"},
+		{"Send", "Button", "Rsvp · Will you be there?"},
+	}
+	if len(c.Fields) != len(want) {
+		t.Fatalf("fields = %+v", c.Fields)
+	}
+	for i, w := range want {
+		f := c.Fields[i]
+		if f.Text != w.text || f.Label != w.label || f.Section != w.section || f.Key == "" {
+			t.Errorf("field %d = %+v, want %+v", i, f, w)
+		}
+		if !strings.Contains(doc, `data-c="`+f.Key+`"`) && !strings.Contains(doc, `data-c-ph="`+f.Key+`"`) {
+			t.Errorf("%q has no key on the page", f.Text)
+		}
+	}
+	for _, skipped := range []string{"ignored", "no", "typed", "Maya", "stay late", "·"} {
+		if _, ok := fieldByText(c, skipped); ok {
+			t.Errorf("%q should not be a field", skipped)
+		}
+	}
+	if !strings.Contains(doc, `var x = "<p>no</p>";`) {
+		t.Error("scripts are left exactly as written")
+	}
+}
+
+func TestKeyed_KeysAreKeptAndNewTextGetsNewOnes(t *testing.T) {
+	doc, first := Keyed(invite, nil)
+	again, second := Keyed(doc, nil)
+	if again != doc {
+		t.Error("keying a keyed page changes nothing")
+	}
+	if len(first.Fields) != len(second.Fields) || first.Fields[0].Key != second.Fields[0].Key {
+		t.Errorf("keys moved: %+v vs %+v", first.Fields, second.Fields)
+	}
+	added := strings.Replace(doc, "</section></body>", "<p>A new line</p></section></body>", 1)
+	_, third := Keyed(added, nil)
+	f, ok := fieldByText(third, "A new line")
+	if !ok {
+		t.Fatal("new text gets a field")
+	}
+	for _, old := range first.Fields {
+		if old.Key == f.Key {
+			t.Errorf("new text reused key %s", f.Key)
+		}
+	}
+}
+
+func TestApplyContent_ThePersonsTextStaysThroughARedraw(t *testing.T) {
+	doc, c := Keyed(invite, nil)
+	button, _ := fieldByText(c, "RSVP by June 7")
+	name, _ := fieldByText(c, "Priya Raman")
+	doc, c = ApplyContent(doc, c, map[string]string{button.Key: "Count me in <now>", name.Key: "Your full name"})
+	if !strings.Contains(doc, "Count me in &lt;now&gt;") || !strings.Contains(doc, `placeholder="Your full name"`) {
+		t.Fatalf("the page shows the person's text:\n%s", doc)
+	}
+	if f, _ := fieldByText(c, "Count me in <now>"); !f.Mine {
+		t.Error("the field is marked as theirs")
+	}
+	// A redraw writes the invented text again; the person's text wins.
+	redrawn := strings.Replace(doc, "Count me in &lt;now&gt;", "RSVP by June 1", 1)
+	out, after := Keyed(redrawn, &c)
+	if !strings.Contains(out, "Count me in &lt;now&gt;") {
+		t.Error("the person's text survives a redraw")
+	}
+	if f, _ := fieldByText(after, "Count me in <now>"); !f.Mine || f.Key != button.Key {
+		t.Errorf("field after redraw = %+v", f)
+	}
+}
+
+func TestWithContent_EmbedsAndReadsBack(t *testing.T) {
+	doc, c := Keyed(invite, nil)
+	page := WithContent(doc, c)
+	got, ok := ContentOf(page)
+	if !ok || len(got.Fields) != len(c.Fields) {
+		t.Fatalf("content read back = %+v", got)
+	}
+	if strings.Count(WithContent(page, c), `id="sprout-content"`) != 1 {
+		t.Error("embedding twice keeps one content file")
+	}
+	if StripContent(page) != doc {
+		t.Error("stripping gives back the page")
+	}
+}
+
+func TestApplyContent_ReplacesWordsAndKeepsIcons(t *testing.T) {
+	page := `<body><p>Come hungry, <strong>stay late</strong>, bring someone.</p><button><svg><use href="#i-send"></use></svg> Send RSVP</button></body>`
+	doc, c := Keyed(page, nil)
+	sentence, _ := fieldByText(c, "Come hungry, stay late, bring someone.")
+	button, _ := fieldByText(c, "Send RSVP")
+	out, after := ApplyContent(doc, c, map[string]string{sentence.Key: "Dinner at eight.", button.Key: "Count me in"})
+	if strings.Contains(out, "stay late") || !strings.Contains(out, ">Dinner at eight.</p>") {
+		t.Errorf("the sentence is replaced whole:\n%s", out)
+	}
+	if !strings.Contains(out, `<use href="#i-send"></use></svg>Count me in</button>`) {
+		t.Errorf("the icon stays and the words change:\n%s", out)
+	}
+	if len(after.Fields) != 2 {
+		t.Errorf("fields = %+v", after.Fields)
+	}
+}

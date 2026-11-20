@@ -52,7 +52,7 @@ func TestDrawMockup_KitIsStreamedAndSaved(t *testing.T) {
 		t.Errorf("the stream must carry the kit once, just after <body>")
 	}
 	done := model.events[len(model.events)-1].Data
-	if done["html"] != saved {
+	if unkeyed(done["html"].(string)) != saved {
 		t.Errorf("done html must be the saved document")
 	}
 }

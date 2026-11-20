@@ -26,4 +26,15 @@
   document.querySelectorAll('[data-tabs]').forEach(function(box){var t=box.querySelector('[data-tab]');if(t)t.click();});
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
+  // Content: the host sends {type:'sprout-content', fields:{key:text}} to change text in place.
+  window.addEventListener('message',function(e){var d=e.data;if(!d||d.type!=='sprout-content'||!d.fields)return;
+    Object.keys(d.fields).forEach(function(k){var t=String(d.fields[k]);
+      document.querySelectorAll('[data-c="'+k+'"]').forEach(function(el){var put=false;
+        Array.prototype.slice.call(el.childNodes).forEach(function(n){var words=(n.textContent||'').trim()!=='';
+          if(!words)return;
+          if(!put&&n.nodeType===3){n.nodeValue=t;put=true;return;}
+          if(!put){el.insertBefore(document.createTextNode(t),n);put=true;}
+          el.removeChild(n);});
+        if(!put)el.appendChild(document.createTextNode(t));});
+      document.querySelectorAll('[data-c-ph="'+k+'"]').forEach(function(el){el.setAttribute('placeholder',t);});});});
 })();

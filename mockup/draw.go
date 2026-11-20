@@ -63,6 +63,9 @@ type Request struct {
 	// colours. Empty Root draws in a palette of the kit's.
 	Root  string
 	Files Files
+	// Content is the current first look's content file: the fields the
+	// person set keep their text through this draw.
+	Content *Content
 }
 
 // Result is a finished draw.
@@ -72,6 +75,8 @@ type Result struct {
 	// Mode is "edit" when the change was made by edits, else "whole".
 	Mode    string
 	Screens []string
+	// Content is the page's text, every piece keyed (content.go).
+	Content Content
 }
 
 // ErrNothingToDraw is a draw with no plan and no change to a current mockup.
@@ -104,8 +109,9 @@ func Draw(ctx context.Context, stream StreamText, req Request, publish func(even
 	}
 	current := ""
 	if req.Saved != "" {
-		current = kit.Strip(req.Saved)
+		current = StripContent(kit.Strip(req.Saved))
 	}
+	d.saved = req.Content
 	note := ChangeNote(req.Change, req.Part)
 	if req.Plan == nil && (current == "" || note == "") {
 		return Result{}, ErrNothingToDraw
@@ -150,6 +156,7 @@ func ensureLook(ctx context.Context, stream StreamText, root string, files Files
 }
 
 type draw struct {
+	saved     *Content
 	stream    StreamText
 	publish   func(string, map[string]any)
 	started   bool
@@ -211,10 +218,11 @@ func (d *draw) finish(source, mode string) Result {
 	if d.look != nil {
 		source = kit.WithLook(source, *d.look)
 	}
-	html := kit.Assemble(source)
+	source, content := Keyed(source, d.saved)
+	html := WithContent(kit.Assemble(source), content)
 	screens := ScreenIDs(html)
-	d.emit(EventDone, map[string]any{"mode": mode, "html": html, "screens": screens})
-	return Result{HTML: html, Mode: mode, Screens: screens}
+	d.emit(EventDone, map[string]any{"mode": mode, "html": html, "screens": screens, "content": content})
+	return Result{HTML: html, Mode: mode, Screens: screens, Content: content}
 }
 
 // fail ends a draw that could not be made, telling the host when it had been

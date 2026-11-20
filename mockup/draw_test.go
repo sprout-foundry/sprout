@@ -45,7 +45,7 @@ func TestDraw_WholeFromThePlanStreams(t *testing.T) {
 	if res.Mode != "whole" || strings.Join(res.Screens, ",") != "home,menu" {
 		t.Fatalf("result = %+v", res)
 	}
-	if !strings.Contains(res.HTML, "<h1>Crumb</h1>") || res.HTML == page {
+	if !strings.Contains(res.HTML, `<h1 data-c="c1">Crumb</h1>`) || res.HTML == page {
 		t.Fatal("the result is the assembled document, kit included")
 	}
 	if got[0] != EventStart || got[len(got)-1] != EventDone || !strings.Contains(strings.Join(got, ","), EventChunk) {

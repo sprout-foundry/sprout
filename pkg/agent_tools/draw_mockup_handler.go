@@ -36,6 +36,8 @@ type drawMockupHandler struct{}
 const (
 	// mockupRelPath is the mockup's place in the project.
 	mockupRelPath = "design/mockup.html"
+	// contentRelPath is the mockup's text, keyed (mockup.Content).
+	contentRelPath = "design/content.json"
 	// mockupRole books the mockup's model use in the session's cost totals.
 	mockupRole = "mockup"
 	// mockupTimeout bounds one draw.
@@ -108,6 +110,13 @@ func (h *drawMockupHandler) Execute(ctx context.Context, env ToolEnv, args map[s
 	if data, readErr := os.ReadFile(filepath.Join(root, mockupRelPath)); readErr == nil {
 		saved = string(data)
 	}
+	var content *mockup.Content
+	if data, readErr := os.ReadFile(filepath.Join(root, contentRelPath)); readErr == nil {
+		var c mockup.Content
+		if json.Unmarshal(data, &c) == nil {
+			content = &c
+		}
+	}
 
 	d := &mockupDraw{
 		env:   env,
@@ -126,8 +135,9 @@ func (h *drawMockupHandler) Execute(ctx context.Context, env ToolEnv, args map[s
 		// when the project has none (or its styling has changed since), so a
 		// change to an existing product is drawn in its colours rather than a
 		// palette of the kit's.
-		Root:  root,
-		Files: newWorkspaceFiles(root),
+		Root:    root,
+		Files:   newWorkspaceFiles(root),
+		Content: content,
 	}, d.publish)
 	if err != nil {
 		return mockupFailure(err.Error()), nil
@@ -185,6 +195,15 @@ func (d *mockupDraw) save(root string, res mockup.Result, previous string) ToolR
 		return mockupFailure(fmt.Sprintf("the mockup could not be saved (%v)", err))
 	}
 	_ = d.funcs.TrackWrite(path, previous, res.HTML, previous != "")
+	// The page's text, keyed: what the person changes to make the details
+	// their own, and what the app reads its words from.
+	if data, err := json.MarshalIndent(res.Content, "", "  "); err == nil {
+		contentPath := filepath.Join(root, contentRelPath)
+		previousContent, _ := os.ReadFile(contentPath)
+		if err := os.WriteFile(contentPath, append(data, '\n'), 0o644); err == nil {
+			_ = d.funcs.TrackWrite(contentPath, string(previousContent), string(data)+"\n", len(previousContent) > 0)
+		}
+	}
 
 	out := "Mockup drawn: " + mockupRelPath + "."
 	if res.Mode == "edit" {

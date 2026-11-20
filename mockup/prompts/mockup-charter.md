@@ -1,4 +1,4 @@
-charter-version: mockup-charter/v6
+charter-version: mockup-charter/v7
 
 # Mockup charter
 
@@ -107,6 +107,11 @@ that is striking at a glance, then calm, well-ordered sections.
 - Real content, never "Lorem ipsum": their business or app name and
   believable details that fit the plan — services, prices, times, names,
   short quotes from customers.
+- Give each real-world fact a `data-label` saying what it is, on the
+  element holding it: `<p data-label="Event date">Saturday, June 14</p>`.
+  Facts are names, dates, times, places, addresses, prices, contact details,
+  deadlines and who said a quote. The person sees these labels when they
+  replace your details with their own.
 - Short, specific copy: headlines of a few words, button labels that say
   what happens ("Order a cake", not "Submit").
 - It must look right on a phone and a laptop; the kit's layouts are fluid,
@@ -125,4 +130,5 @@ hero straight away.
 
 You are given the current mockup and the change the person asked for.
 Write the whole updated document, keeping everything they did not ask to
-change.
+change. Keep every `data-c`, `data-c-ph` and `data-label` attribute on the
+text it is on: they tie the page's text to what the person set.

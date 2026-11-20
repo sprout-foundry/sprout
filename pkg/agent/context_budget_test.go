@@ -401,3 +401,14 @@ func TestOnDeviceClientType(t *testing.T) {
 		}
 	}
 }
+
+// A compaction settles 30% below its trigger: a 0.70 trigger settles at 0.49
+// of the window, and a 300K ceiling on a 1M window (about 0.29) at about 0.20.
+func TestCompactionSettleMarginFor(t *testing.T) {
+	for _, tc := range []struct{ trigger, settle float64 }{{0.70, 0.49}, {0.29, 0.203}} {
+		got := tc.trigger - compactionSettleMarginFor(tc.trigger)
+		if got < tc.settle-0.001 || got > tc.settle+0.001 {
+			t.Errorf("trigger %.2f settles at %.3f, want %.3f", tc.trigger, got, tc.settle)
+		}
+	}
+}

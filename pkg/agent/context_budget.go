@@ -26,6 +26,19 @@ func (a *Agent) computeCompactionTriggerFraction() float64 {
 	return 1.0 - totalReservedFraction()
 }
 
+// compactionSettleShare is how far below its trigger a proactive compaction
+// settles, as a share of the trigger. Every compaction makes the provider
+// re-read the conversation after the cut, which on a self-hosted GPU costs the
+// compute other runs are waiting for; settling well below the trigger means
+// one re-read per long stretch of work rather than one every few tool calls.
+const compactionSettleShare = 0.30
+
+// compactionSettleMarginFor is the settle margin, as a share of the window,
+// for a compaction trigger that is itself a share of the window.
+func compactionSettleMarginFor(trigger float64) float64 {
+	return trigger * compactionSettleShare
+}
+
 // defaultCompactionCeilingTokens is the built-in absolute ceiling on the live
 // conversation (rel.2). For a 1M-token window the window-share trigger
 // (0.70 → ~734K) would let an automate coordinator run for hundreds of

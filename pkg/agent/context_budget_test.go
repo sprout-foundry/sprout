@@ -412,3 +412,18 @@ func TestCompactionSettleMarginFor(t *testing.T) {
 		}
 	}
 }
+
+// A large window compacts to the 24K target with a 6K summary; a small one
+// scales both down, and one whose trigger leaves too little room keeps the
+// fallback alone.
+func TestContinuationCompactionFor(t *testing.T) {
+	if cc := continuationCompactionFor(262_144, 0.70); cc == nil || cc.TargetTokens != 24_000 || cc.SummaryTokens != 6_000 {
+		t.Errorf("262K window: %+v, want a 24K target and a 6K summary", cc)
+	}
+	if cc := continuationCompactionFor(32_000, 0.85); cc == nil || cc.TargetTokens != 13_600 || cc.SummaryTokens != 3_400 {
+		t.Errorf("32K window: %+v, want a 13.6K target and a 3.4K summary", cc)
+	}
+	if cc := continuationCompactionFor(16_000, 0.85); cc != nil {
+		t.Errorf("16K window: %+v, want none", cc)
+	}
+}

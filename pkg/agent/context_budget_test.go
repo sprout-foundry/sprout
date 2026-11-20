@@ -62,8 +62,29 @@ func TestCompactionTriggerFractionInRange(t *testing.T) {
 	}
 }
 
+// A remote model with a small window (a platform's managed model, a hosted
+// endpoint) keeps the full context mode: Low-Context Mode is for on-device
+// models, and only the config turns it on for a remote one.
+func TestRemoteSmallWindowModelKeepsFullContextMode(t *testing.T) {
+	mgr, cleanup := configuration.NewTestManager(t)
+	defer cleanup()
+
+	agent, err := NewAgentWithClient(NewMockLLMProviderWithLimit(32_000), api.TestClientType, mgr)
+	if err != nil {
+		t.Fatalf("NewAgentWithClient failed: %v", err)
+	}
+	defer agent.Shutdown()
+
+	if agent.contextProfile.Mode != configuration.ContextModeFull {
+		t.Errorf("a remote 32K model resolved to %q, want full", agent.contextProfile.Mode)
+	}
+	if len(agent.contextProfile.ToolAllowlist) != 0 {
+		t.Errorf("a remote 32K model was narrowed to %d tools", len(agent.contextProfile.ToolAllowlist))
+	}
+}
+
 // TestSP125_LowContextMode_32K verifies that an agent created against a 32K
-// context model auto-activates Low-Context Mode with the expected levers:
+// on-device model auto-activates Low-Context Mode with the expected levers:
 // the 13-tool allowlist (ask_user added in a83ced640 for the cloud IDE
 // ask_user/edit-approval flows), the lite system prompt, and the tighter
 // compaction trigger.
@@ -72,7 +93,7 @@ func TestSP125_LowContextMode_32K(t *testing.T) {
 	defer cleanup()
 
 	client := NewMockLLMProviderWithLimit(32_000)
-	agent, err := NewAgentWithClient(client, api.TestClientType, mgr)
+	agent, err := NewAgentWithClient(client, api.OllamaLocalClientType, mgr)
 	if err != nil {
 		t.Fatalf("NewAgentWithClient failed: %v", err)
 	}

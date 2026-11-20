@@ -202,7 +202,7 @@ func (a *Agent) resolveAndApplyContextProfile() error {
 		cfg = a.configManager.GetConfig()
 	}
 
-	profile, err := configuration.ResolveContextProfile(cfg, a.state.GetMaxContextTokens())
+	profile, err := configuration.ResolveContextProfile(cfg, a.state.GetMaxContextTokens(), onDeviceClientType(a.getClientType()))
 	if err != nil {
 		return agenterrors.NewConfig("resolving context profile", err)
 	}

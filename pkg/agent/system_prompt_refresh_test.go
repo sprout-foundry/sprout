@@ -109,13 +109,13 @@ func TestRefreshSystemPrompt_FlagOn_DifferentProvider(t *testing.T) {
 			first200(initialPrompt))
 	}
 
-	// Swap to a 32K-context client. The 32K window is well below
+	// Swap to a 32K-context on-device client. The 32K window is well below
 	// subagentContextThreshold (132K), so ResolveContextProfile will
 	// auto-detect LCM. setClient triggers refreshSystemPrompt through
 	// the new wiring in agent_accessors.go; the assertion below
 	// validates that the refresh actually fired and produced the
 	// lite prompt.
-	agent.setClient(NewMockLLMProviderWithLimit(32_000), api.TestClientType)
+	agent.setClient(NewMockLLMProviderWithLimit(32_000), api.OllamaLocalClientType)
 
 	refreshedPrompt := agent.GetSystemPrompt()
 	if refreshedPrompt == initialPrompt {

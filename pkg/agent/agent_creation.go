@@ -124,7 +124,7 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 		agent.state.SetCurrentContextTokens(0)
 		agent.state.SetContextWarningIssued(false)
 
-		// Resolve the context profile once at agent creation. Auto-detects LCM from model context window.
+		// Resolve the context profile once at agent creation. Auto-detects LCM from the window of an on-device model.
 		var cfg *configuration.Config
 		if agent.configManager != nil {
 			cfg = agent.configManager.GetConfig()
@@ -132,6 +132,7 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 		profile, err := configuration.ResolveContextProfile(
 			cfg,
 			agent.state.GetMaxContextTokens(),
+			onDeviceClientType(agent.getClientType()),
 		)
 		if err != nil {
 			return nil, err
@@ -278,7 +279,7 @@ func resolveProfileAndSystemPrompt(
 	if configManager != nil {
 		cfg = configManager.GetConfig()
 	}
-	profile, err := configuration.ResolveContextProfile(cfg, contextWindow)
+	profile, err := configuration.ResolveContextProfile(cfg, contextWindow, onDeviceClientType(clientType))
 	if err != nil {
 		return profile, "", agenterrors.NewPermanentError("context profile resolution failed", err)
 	}

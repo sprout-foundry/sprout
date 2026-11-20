@@ -98,6 +98,16 @@ func handleToolError(agent *Agent, err error, toolName string) (string, error) {
 	}
 }
 
+// onDeviceClientType reports whether a provider runs its model on this device,
+// where a small context window means a small model.
+func onDeviceClientType(ct api.ClientType) bool {
+	switch ct {
+	case api.OllamaLocalClientType, api.OllamaClientType, api.LMStudioClientType:
+		return true
+	}
+	return false
+}
+
 // isLocalProvider returns true if the provider runs locally and never sends data outside the network.
 func isLocalProvider(agent *Agent) bool {
 	if agent == nil {

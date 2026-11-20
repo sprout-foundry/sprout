@@ -89,7 +89,7 @@ func (a *Agent) refreshSystemPrompt() {
 	contextWindow := a.getModelContextLimit()
 	// Re-resolve the context profile against the current window so lite
 	// prompts (LCM) carry over when the new model is also sub-ContextFloor.
-	profile, err := configuration.ResolveContextProfile(cfg, contextWindow)
+	profile, err := configuration.ResolveContextProfile(cfg, contextWindow, onDeviceClientType(a.getClientType()))
 	if err != nil {
 		if a.debug {
 			a.Logger().Debug("refreshSystemPrompt: failed to resolve profile: %v", err)

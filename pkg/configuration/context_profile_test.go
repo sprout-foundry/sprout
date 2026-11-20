@@ -23,6 +23,7 @@ func TestResolveContextProfileReturnsExactLowContextPreset(t *testing.T) {
 	profile, err := ResolveContextProfile(
 		&Config{ContextMode: ContextModeLowContext},
 		200_000,
+		false,
 	)
 	require.NoError(t, err)
 
@@ -61,6 +62,7 @@ func TestResolveContextProfileResolutionPrecedence(t *testing.T) {
 		name               string
 		cfg                *Config
 		modelContextWindow int
+		onDevice           bool
 		wantMode           ContextMode
 	}{
 		{
@@ -86,22 +88,42 @@ func TestResolveContextProfileResolutionPrecedence(t *testing.T) {
 		{
 			name:               "floor boundary auto-detects low context",
 			modelContextWindow: 8_000,
+			onDevice:           true,
 			wantMode:           ContextModeLowContext,
 		},
 		{
 			name:               "16K window auto-detects low context",
 			modelContextWindow: 16_000,
+			onDevice:           true,
 			wantMode:           ContextModeLowContext,
 		},
 		{
 			name:               "32K window auto-detects low context",
 			modelContextWindow: 32_000,
+			onDevice:           true,
 			wantMode:           ContextModeLowContext,
 		},
 		{
 			name:               "one below full threshold auto-detects low context",
 			modelContextWindow: 131_999,
+			onDevice:           true,
 			wantMode:           ContextModeLowContext,
+		},
+		{
+			name:               "a remote 128K model uses full",
+			modelContextWindow: 131_072,
+			wantMode:           ContextModeFull,
+		},
+		{
+			name:               "a remote 32K model uses full",
+			modelContextWindow: 32_000,
+			wantMode:           ContextModeFull,
+		},
+		{
+			name:               "an on-device model at the threshold uses full",
+			modelContextWindow: 132_000,
+			onDevice:           true,
+			wantMode:           ContextModeFull,
 		},
 		{
 			name:               "explicit low overrides high window",
@@ -143,6 +165,7 @@ func TestResolveContextProfileResolutionPrecedence(t *testing.T) {
 			name:               "empty mode falls through to low auto-detection",
 			cfg:                &Config{ContextMode: ""},
 			modelContextWindow: 32_000,
+			onDevice:           true,
 			wantMode:           ContextModeLowContext,
 		},
 		{
@@ -155,6 +178,7 @@ func TestResolveContextProfileResolutionPrecedence(t *testing.T) {
 			name:               "unknown mode falls through to low auto-detection",
 			cfg:                &Config{ContextMode: ContextMode("typo")},
 			modelContextWindow: 32_000,
+			onDevice:           true,
 			wantMode:           ContextModeLowContext,
 		},
 		{
@@ -167,7 +191,7 @@ func TestResolveContextProfileResolutionPrecedence(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			profile, err := ResolveContextProfile(tt.cfg, tt.modelContextWindow)
+			profile, err := ResolveContextProfile(tt.cfg, tt.modelContextWindow, tt.onDevice)
 			require.NoError(t, err)
 
 			switch tt.wantMode {
@@ -210,7 +234,7 @@ func TestResolveContextProfileRejectsWindowsBelowHardFloor(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			profile, err := ResolveContextProfile(tt.cfg, tt.modelContextWindow)
+			profile, err := ResolveContextProfile(tt.cfg, tt.modelContextWindow, true)
 			require.Error(t, err)
 
 			message := err.Error()
@@ -360,7 +384,7 @@ func ptr[T any](v T) *T {
 func TestResolveContextProfileCarriesTheCorePrompt(t *testing.T) {
 	cfg := &Config{SystemPromptCore: "  core  "}
 	for _, window := range []int{0, 32_000, 200_000} {
-		p, err := ResolveContextProfile(cfg, window)
+		p, err := ResolveContextProfile(cfg, window, true)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -88,20 +88,23 @@ var lowContextProfile = ContextProfile{
 	RepoMapDefaultDepth:       1,
 }
 
-// subagentContextThreshold is the context window below which LCM auto-activates (132K).
+// subagentContextThreshold is the context window below which LCM auto-activates (132K)
+// for a model that runs on the device.
 const subagentContextThreshold = 132_000
 
 // ResolveContextProfile picks the effective profile from the user's config plus the detected model context window.
 // Precedence: hard floor > explicit ContextMode > auto-detect by window > full default.
-func ResolveContextProfile(cfg *Config, modelContextWindow int) (ContextProfile, error) {
-	p, err := resolveContextPreset(cfg, modelContextWindow)
+// Auto-detection applies only to a model running on the device (onDevice): LCM is for small on-device models, and a
+// remote endpoint with a small window still gets the full tools and prompt unless the config asks for LCM.
+func ResolveContextProfile(cfg *Config, modelContextWindow int, onDevice bool) (ContextProfile, error) {
+	p, err := resolveContextPreset(cfg, modelContextWindow, onDevice)
 	if cfg != nil {
 		p.SystemPromptCore = strings.TrimSpace(cfg.SystemPromptCore)
 	}
 	return p, err
 }
 
-func resolveContextPreset(cfg *Config, modelContextWindow int) (ContextProfile, error) {
+func resolveContextPreset(cfg *Config, modelContextWindow int, onDevice bool) (ContextProfile, error) {
 	// Hard floor: below ContextFloor the agent is unusable.
 	if modelContextWindow > 0 && modelContextWindow < ContextFloor {
 		return fullContextProfile, fmt.Errorf(
@@ -119,7 +122,7 @@ func resolveContextPreset(cfg *Config, modelContextWindow int) (ContextProfile, 
 		return lowContextProfile, nil
 	case cfg != nil && cfg.ContextMode == ContextModeFull:
 		return fullContextProfile, nil
-	case modelContextWindow > 0 && modelContextWindow < subagentContextThreshold:
+	case onDevice && modelContextWindow > 0 && modelContextWindow < subagentContextThreshold:
 		return lowContextProfile, nil
 	default:
 		return fullContextProfile, nil

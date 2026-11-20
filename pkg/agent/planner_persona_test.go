@@ -329,18 +329,18 @@ func TestPlannerPrompt_NoSessionTags(t *testing.T) {
 	}
 }
 
-// Under a low-context model (< 132K window, e.g. a host's managed model) the
+// Under a low-context model (an on-device model under a 132K window) the
 // generic low-context tool list must not replace the planner's own: a
 // confined persona's allowed_tools are its whole tool set at any size, while
 // any other persona stays narrowed by the low-context list.
 func TestPlannerPersona_KeepsItsToolsUnderALowContextModel(t *testing.T) {
 	agent, _ := newPlannerAgent(t)
-	profile, err := configuration.ResolveContextProfile(agent.configManager.GetConfig(), 128_000)
+	profile, err := configuration.ResolveContextProfile(agent.configManager.GetConfig(), 128_000, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(profile.ToolAllowlist) == 0 {
-		t.Fatal("a 128K model must resolve to the low-context profile for this test to mean anything")
+		t.Fatal("a 128K on-device model must resolve to the low-context profile for this test to mean anything")
 	}
 	agent.contextProfile = profile
 

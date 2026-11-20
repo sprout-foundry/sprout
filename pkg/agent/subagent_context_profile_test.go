@@ -22,7 +22,7 @@ func newSubagentProfileTestRunner(t *testing.T, parentWindow, subagentWindow int
 
 	parent := newIsolatedTestAgent(t)
 	// Override the parent's client so its context window matches the fixture.
-	parent.setClient(NewMockLLMProviderWithLimit(parentWindow), api.TestClientType)
+	parent.setClient(NewMockLLMProviderWithLimit(parentWindow), api.OllamaLocalClientType)
 
 	shared := &SharedState{
 		EventBus:      events.NewEventBus(),
@@ -37,13 +37,12 @@ func newSubagentProfileTestRunner(t *testing.T, parentWindow, subagentWindow int
 	return parent, runner
 }
 
-// subagentProfileOpts returns SubagentOptions with an explicit "test" provider
-// so createSubagent's provider resolution maps to TestClientType (the parent's
-// own provider is "mock" from the overridden client, which is not a resolvable
-// provider string). The testClientFactory ignores the resolved type and returns
+// subagentProfileOpts returns SubagentOptions with an explicit on-device
+// provider, so the subagent's window decides its context mode as it does for
+// a local model. The testClientFactory ignores the resolved type and returns
 // the fixture mock regardless.
 func subagentProfileOpts() SubagentOptions {
-	return SubagentOptions{Persona: "coder", Provider: "test"}
+	return SubagentOptions{Persona: "coder", Provider: string(api.OllamaLocalClientType)}
 }
 
 // TestSubagentProfile_SmallModelActivatesLCM verifies that a 200K parent
@@ -81,7 +80,7 @@ func TestSubagentProfile_RoleResolvedModelResolvesOwnProfile(t *testing.T) {
 
 	if err := parent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
 		cfg.Roles = map[string]configuration.RoleConfig{
-			configuration.RoleCoder: {Provider: "test", Model: "small-context-model"},
+			configuration.RoleCoder: {Provider: string(api.OllamaLocalClientType), Model: "small-context-model"},
 		}
 		return nil
 	}); err != nil {
@@ -91,8 +90,8 @@ func TestSubagentProfile_RoleResolvedModelResolvesOwnProfile(t *testing.T) {
 	// The spawn path resolves the coder role and flows the
 	// pair into SubagentOptions exactly as the spawn handler does.
 	provider, model := parent.configManager.GetConfig().ResolveRole(configuration.RoleCoder)
-	if provider != "test" || model != "small-context-model" {
-		t.Fatalf("role resolution = (%q, %q), want (test, small-context-model)", provider, model)
+	if provider != string(api.OllamaLocalClientType) || model != "small-context-model" {
+		t.Fatalf("role resolution = (%q, %q), want (ollama-local, small-context-model)", provider, model)
 	}
 
 	sub, err := runner.createSubagent(SubagentOptions{Persona: "coder", Provider: provider, Model: model}, context.Background())

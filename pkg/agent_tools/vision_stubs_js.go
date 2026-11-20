@@ -5,6 +5,8 @@ package tools
 import (
 	"context"
 	"errors"
+
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
 // OptimizeImageData — WASM stub. Returns data unchanged.
@@ -13,17 +15,17 @@ func OptimizeImageData(_ string, data []byte) ([]byte, string, error) {
 }
 
 // AnalyzeImage — WASM stub. Signature mirrors the !js definition.
-func AnalyzeImage(_ context.Context, _ string, _ string, _ string, _ interface{}) (string, error) {
+func AnalyzeImage(_ context.Context, _ string, _ string, _ string, _ api.ClientType) (string, error) {
 	return "The image is attached to this result; look at it directly to judge it.", nil
 }
 
 // ProcessPDFForTextOnly — WASM stub.
-func ProcessPDFForTextOnly(_ context.Context, _ string, _ interface{}) (string, error) {
+func ProcessPDFForTextOnly(_ context.Context, _ string, _ api.ClientType) (string, error) {
 	return "", nil
 }
 
 // ProcessPDFForTextOnlyWithProvider — WASM stub.
-func ProcessPDFForTextOnlyWithProvider(_ context.Context, _ string, _ interface{}) (string, error) {
+func ProcessPDFForTextOnlyWithProvider(_ context.Context, _ string, _ api.ClientType) (string, error) {
 	return "", nil
 }
 

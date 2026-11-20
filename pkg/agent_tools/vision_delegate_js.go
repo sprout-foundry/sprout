@@ -10,6 +10,8 @@ package tools
 import (
 	"context"
 	"errors"
+
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
 var errDelegationUnavailable = errors.New("image delegation is not available in WASM mode")
@@ -24,7 +26,7 @@ type DelegatedImage struct {
 
 // DelegateImageDescriptions — WASM stub. Delegation is unavailable in the
 // browser build; callers fall back to the analyze-tool prompt.
-func DelegateImageDescriptions(_ context.Context, _ interface{}, _ interface{}, _ string) (DelegatedImage, error) {
+func DelegateImageDescriptions(_ context.Context, _ api.ClientInterface, _ api.ClientType, _ string) (DelegatedImage, error) {
 	return DelegatedImage{}, errDelegationUnavailable
 }
 

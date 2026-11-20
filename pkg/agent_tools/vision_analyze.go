@@ -152,6 +152,13 @@ func (vp *VisionProcessor) AnalyzeImageBytes(ctx context.Context, imageName stri
 
 // analyzeImageData runs one vision request over already-encoded image data.
 func (vp *VisionProcessor) analyzeImageData(ctx context.Context, imageName, imageData, imageType string, optionalPrompt ...string) (VisionAnalysis, error) {
+	// An empty-provider construction and the WASM stub both produce a
+	// processor with no client; fail with a clear message rather than
+	// dereferencing nil.
+	if vp.visionClient == nil {
+		return VisionAnalysis{}, fmt.Errorf("no vision client available for %s", imageName)
+	}
+
 	// Use optional prompt if provided and non-empty, otherwise create default
 	var prompt string
 	if len(optionalPrompt) > 0 && optionalPrompt[0] != "" {

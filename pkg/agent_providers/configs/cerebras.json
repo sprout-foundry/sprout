@@ -44,7 +44,8 @@
         "name": "Qwen 3.8 27B",
         "output_cost": 1.49,
         "tags": [
-          "tools"
+          "tools",
+          "text-only"
         ]
       }
     ],

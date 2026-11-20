@@ -66,7 +66,7 @@ func ProcessPDFForTextOnlyWithProvider(ctx context.Context, pdfPath string, prov
 		return text, nil
 	}
 
-	client, err := CreateVisionClientWithProvider(providerType)
+	client, err := CreateVisionClientWithProvider(ctx, providerType)
 	if err != nil {
 		return "", fmt.Errorf("PDF has no extractable text and no vision client available for OCR: %w", err)
 	}

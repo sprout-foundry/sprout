@@ -146,7 +146,7 @@ func NewVisionProcessorWithMode(debug bool, providerType api.ClientType) (*Visio
 
 // NewVisionProcessorWithProvider creates a vision processor using the specified provider
 func NewVisionProcessorWithProvider(debug bool, providerType api.ClientType) (*VisionProcessor, error) {
-	client, err := CreateVisionClientWithProvider(providerType)
+	client, err := CreateVisionClientWithProvider(context.Background(), providerType)
 	if err != nil {
 		return nil, fmt.Errorf("create vision client for provider %s: %w", providerType, err)
 	}
@@ -165,7 +165,16 @@ func NewVisionProcessorWithProvider(debug bool, providerType api.ClientType) (*V
 // global walk — a turn on provider A must never be served by provider B's
 // model, which is how an unrelated (and possibly retired) vision_model pin
 // used to surface in a session that never configured it.
-func CreateVisionClientWithProvider(providerType api.ClientType) (api.ClientInterface, error) {
+//
+// A model the provider no longer lists is rejected here, not just in the
+// capability probe, so "this provider has vision" and "this provider yields a
+// vision client" cannot disagree. The error names the dead pin: a config
+// change is the fix, and this is the only place the operator sees which model
+// was tried.
+//
+// ctx bounds the model-listing check, so a cancelled turn does not block on a
+// slow provider.
+func CreateVisionClientWithProvider(ctx context.Context, providerType api.ClientType) (api.ClientInterface, error) {
 	if providerType == "" || providerType == api.TestClientType {
 		return nil, fmt.Errorf("no vision provider named")
 	}
@@ -186,7 +195,7 @@ func CreateVisionClientWithProvider(providerType api.ClientType) (api.ClientInte
 		// Rejecting it here (not only in the capability probe) keeps "this
 		// provider has vision" and "this provider yields a vision client"
 		// from disagreeing.
-		if !visionModelServed(context.Background(), client, model) {
+		if !visionModelServed(ctx, client, model) {
 			retired = append(retired, fmt.Sprintf("%s/%s", provider, model))
 			return nil
 		}
@@ -319,7 +328,7 @@ func GetDefaultModelForProvider(providerType api.ClientType) string {
 // provider. There is no global walk: the caller must name the provider it is
 // running on (see CreateVisionClientWithProvider).
 func CreateVisionClient(providerType api.ClientType) (api.ClientInterface, error) {
-	return CreateVisionClientWithProvider(providerType)
+	return CreateVisionClientWithProvider(context.Background(), providerType)
 }
 
 // isLocalRuntimeProvider reports whether the provider needs no credentials
@@ -436,8 +445,11 @@ func probeVisionCapability(providerType api.ClientType) bool {
 // client whose model the provider still serves. It delegates to the same
 // constructor the callers use, so the capability answer and the client
 // actually obtained cannot disagree.
+//
+// This is the memoized probe path, not a turn path: HasVisionCapabilityFor
+// caches the verdict per provider, so the listing is paid once per process.
 func providerHasVision(providerType api.ClientType) bool {
-	client, err := CreateVisionClientWithProvider(providerType)
+	client, err := CreateVisionClientWithProvider(context.Background(), providerType)
 	return err == nil && client != nil
 }
 

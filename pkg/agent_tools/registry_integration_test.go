@@ -163,7 +163,7 @@ func TestRegistry_NoOrphanHandlers(t *testing.T) {
 		"TodoRead", "TodoWrite", "ask_user",
 		"activate_skill",
 		"browse_url", "web_search",
-		"analyze_image_content", "analyze_ui_screenshot",
+		"analyze_ui_screenshot",
 		"search_memories", "list_directory", "fetch_url",
 	}
 

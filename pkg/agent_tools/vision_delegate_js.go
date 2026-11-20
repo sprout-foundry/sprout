@@ -24,7 +24,7 @@ type DelegatedImage struct {
 
 // DelegateImageDescriptions — WASM stub. Delegation is unavailable in the
 // browser build; callers fall back to the analyze-tool prompt.
-func DelegateImageDescriptions(_ context.Context, _ interface{}, _ string) (DelegatedImage, error) {
+func DelegateImageDescriptions(_ context.Context, _ interface{}, _ interface{}, _ string) (DelegatedImage, error) {
 	return DelegatedImage{}, errDelegationUnavailable
 }
 

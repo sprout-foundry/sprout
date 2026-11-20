@@ -21,9 +21,20 @@ import (
 	"io"
 	"time"
 
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
+
+// envProviderType reads the agent's provider from the tool environment,
+// returning "" when unknown. Untagged so both the native and WASM builds see
+// it.
+func envProviderType(env ToolEnv) api.ClientType {
+	if env.ProviderType == nil {
+		return ""
+	}
+	return env.ProviderType()
+}
 
 // BackgroundNotifier is the interface tools use to queue a background
 // completion notification. The agent (pkg/agent) implements this so
@@ -140,6 +151,10 @@ type ToolEnv struct {
 	// second vision model. Nil/absent means unknown — tools fall back to
 	// their legacy (analyze/OCR) behavior.
 	PrimaryAcceptsImages func() bool
+	// ProviderType names the provider the agent is running on, so vision
+	// tools resolve a vision client inside that provider rather than
+	// borrowing an unrelated one. Nil/absent means unknown.
+	ProviderType func() api.ClientType
 	// VisionProcessor, when set, lets vision-dependent tools analyze
 	// images and UI screenshots without holding an *Agent reference.
 	// Nil means the tool must report "vision unavailable".

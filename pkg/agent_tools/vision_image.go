@@ -16,6 +16,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
 // ============================================================================
@@ -301,7 +303,7 @@ func detectImageMimeType(path string) string {
 
 // AnalyzeImage is the tool function called by the agent for image analysis
 // Returns a structured JSON response with metadata for robust error handling
-func AnalyzeImage(ctx context.Context, imagePath string, analysisPrompt string, analysisMode string) (string, error) {
+func AnalyzeImage(ctx context.Context, imagePath string, analysisPrompt string, analysisMode string, providerType api.ClientType) (string, error) {
 	response := ImageAnalysisResponse{
 		Success:     false,
 		ToolInvoked: true,
@@ -320,7 +322,7 @@ func AnalyzeImage(ctx context.Context, imagePath string, analysisPrompt string, 
 	// (handleAnalyzeUIScreenshot / handleAnalyzeImageContent) to avoid
 	// redundant HTTP HEAD requests on every remote image URL call.
 
-	if !HasVisionCapability() {
+	if !HasVisionCapabilityFor(providerType) {
 		response.Success = false
 		response.InputResolved = false
 		response.ErrorCode = ErrCodeVisionNotAvailable
@@ -364,7 +366,7 @@ func AnalyzeImage(ctx context.Context, imagePath string, analysisPrompt string, 
 	ext := strings.ToLower(GetFileExtension(imagePath))
 	if ext == ".pdf" {
 		// Try simplified PDF processing
-		pdfText, err := ProcessPDFWithVision(ctx, imagePath)
+		pdfText, err := ProcessPDFWithVision(ctx, imagePath, providerType)
 		if err != nil {
 			response.Success = false
 			response.InputResolved = true
@@ -397,7 +399,7 @@ func AnalyzeImage(ctx context.Context, imagePath string, analysisPrompt string, 
 		return string(respJSON), nil
 	}
 
-	processor, err := NewVisionProcessorWithMode(false, analysisMode)
+	processor, err := NewVisionProcessorWithMode(false, providerType)
 	if err != nil {
 		response.Success = false
 		response.InputResolved = false

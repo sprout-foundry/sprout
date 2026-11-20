@@ -7,11 +7,10 @@
       "system_prompt": "pkg/agent/prompts/subagent_prompts/planner.md",
       "allowed_tools": [
         "ask_user",
-        "analyze_image_content",
+        "read_file",
         "browse_url",
         "write_plan",
         "draw_mockup",
-        "read_file",
         "list_directory",
         "search",
         "start_change"

@@ -26,13 +26,13 @@ func (h *readFileHandler) Name() string {
 func (h *readFileHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "read_file",
-		Description: "Read the contents of a file. Text files return lines; images and PDFs are attached inline for visual analysis (never dumped as binary). For large files, use view_range to read specific line ranges.",
+		Description: "Read the contents of a file. Text files return lines; images and PDFs are attached inline for visual analysis (never dumped as binary). For large files, use view_range to read specific line ranges. Accepts http(s) URLs for images and PDFs. Set ocr=true to extract text instead of attaching pixels.",
 		Parameters: []ParameterDef{
 			{
 				Name:        "path",
 				Type:        "string",
 				Required:    true,
-				Description: "Path to the file to read.",
+				Description: "Path to the file to read, or an http(s) URL for an image or PDF.",
 			},
 			{
 				Name:        "view_range",
@@ -40,6 +40,12 @@ func (h *readFileHandler) Definition() ToolDefinition {
 				Required:    false,
 				Description: "Optional line range as [start, end] array (1-based). Use this to read specific sections of large files. Aliases accepted for convenience: start_line/end_line, line_start/line_end, offset/limit (offset is a 1-based start line, limit a line count). An explicit view_range takes precedence.",
 				Items:       map[string]any{"type": "integer"},
+			},
+			{
+				Name:        "ocr",
+				Type:        "boolean",
+				Required:    false,
+				Description: "Extract text from an image or PDF instead of attaching pixels. Use when you need verbatim text (code, tables, dense documents) rather than a visual description.",
 			},
 		},
 		Required: []string{"path"},
@@ -105,6 +111,13 @@ func (h *readFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 		return ToolResult{Output: err.Error(), IsError: true}, err
 	}
 
+	// Remote images and PDFs: fetched over the network, so they skip the
+	// path-tier classifier (there is no local path to classify) and go
+	// straight to the content handlers.
+	if isHTTPURL(path) {
+		return h.handleRemote(ctx, env, path, ocrRequested(args))
+	}
+
 	// Gate 1 precheck — resolves the path and classifies it.
 	resolvedPath, decision := PrecheckFileAccess(ctx, env.FileAccessClassifier, "read_file", path)
 	if decision == "deny" {
@@ -144,14 +157,14 @@ func (h *readFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 
 	// Check if this is a PDF file
 	if strings.ToLower(filepath.Ext(path)) == ".pdf" {
-		return h.handlePDF(ctx, env, path)
+		return h.handlePDF(ctx, env, path, ocrRequested(args))
 	}
 
 	// Image files: never dump binary into the context (SP-137). Vision-
 	// capable models get the image inline as multimodal content; others
 	// get OCR-extracted text.
 	if isImageExtension(path) {
-		return h.handleImage(ctx, env, path)
+		return h.handleImage(ctx, env, path, ocrRequested(args))
 	}
 
 	// Use existing read logic. Off-workspace paths will fail
@@ -221,7 +234,7 @@ func (h *readFileHandler) SafeForParallel() bool  { return false }
 func (h *readFileHandler) Interactive() bool      { return false }
 
 // handlePDF processes a PDF file and returns it as base64 data URI for vision-capable models.
-func (h *readFileHandler) handlePDF(ctx context.Context, env ToolEnv, path string) (ToolResult, error) {
+func (h *readFileHandler) handlePDF(ctx context.Context, env ToolEnv, path string, ocr bool) (ToolResult, error) {
 	// Resolve path securely. Off-workspace paths will fail with the raw
 	// filesystem error since the interactive gate is gone.
 	cleanPath, err := filesystem.SafeResolvePathWithBypass(ctx, path)
@@ -267,6 +280,24 @@ func (h *readFileHandler) handlePDF(ctx context.Context, env ToolEnv, path strin
 	}
 	encoded := base64.StdEncoding.EncodeToString(data)
 	dataURI := fmt.Sprintf("data:%s;base64,%s", mimeType, encoded)
+
+	// ocr=true asks for text, not pixels: return the extracted text and skip
+	// the data URI, so a caller that wants verbatim content does not pay for
+	// an attachment it will not use.
+	if ocr {
+		text, ocrErr := ProcessPDFForTextOnly(ctx, cleanPath, envProviderType(env))
+		if ocrErr != nil {
+			return ToolResult{
+				Output:  fmt.Sprintf("[PDF %s — text extraction failed: %v]", filepath.Base(path), ocrErr),
+				IsError: true,
+			}, ocrErr
+		}
+		out := fmt.Sprintf("[PDF content extracted from %s]\n\n%s", cleanPath, text)
+		return ToolResult{
+			Output:     out,
+			TokenUsage: int64(estimateTokenUsage(out)),
+		}, nil
+	}
 
 	// Try to extract text via the existing PDF pipeline as supplementary content
 	var textContent string
@@ -319,7 +350,7 @@ const inlinePDFMaxBytes = 5 * 1024 * 1024
 // seed registry attaches ToolResult.Images to the tool message, and seed's
 // prepareMessages strips them for non-vision models). Non-vision models
 // get OCR-extracted text via the analyze pipeline.
-func (h *readFileHandler) handleImage(ctx context.Context, env ToolEnv, path string) (ToolResult, error) {
+func (h *readFileHandler) handleImage(ctx context.Context, env ToolEnv, path string, ocr bool) (ToolResult, error) {
 	cleanPath, err := filesystem.SafeResolvePathWithBypass(ctx, path)
 	if err != nil {
 		return ToolResult{
@@ -343,7 +374,7 @@ func (h *readFileHandler) handleImage(ctx context.Context, env ToolEnv, path str
 	}
 	if info.Size() > maxInlineImageBytes {
 		return ToolResult{
-			Output:  fmt.Sprintf("[image file %s is %d bytes, over the %d MB inline cap; use analyze_image_content]", filepath.Base(path), info.Size(), maxInlineImageBytes/1024/1024),
+			Output:  fmt.Sprintf("[image file %s is %d bytes, over the %d MB inline cap; re-encode it smaller]", filepath.Base(path), info.Size(), maxInlineImageBytes/1024/1024),
 			IsError: true,
 		}, fmt.Errorf("image too large to read inline: %s", path)
 	}
@@ -373,6 +404,34 @@ func (h *readFileHandler) handleImage(ctx context.Context, env ToolEnv, path str
 	// pixels — seed strips Images per model — so attach raw (no wire
 	// cost) and let the OCR text below carry the analysis.
 	primarySees := env.PrimaryAcceptsImages == nil || env.PrimaryAcceptsImages()
+
+	// ocr=true asks for text, not pixels: run the OCR shim and return its
+	// output without attaching the image, so a caller that wants verbatim
+	// text (code, tables, dense documents) does not pay for pixels.
+	if ocr {
+		if !nativeOCRAvailable() {
+			return ToolResult{
+				Output:  fmt.Sprintf("[image: %s — OCR is unavailable on this platform]", filepath.Base(path)),
+				IsError: true,
+			}, fmt.Errorf("OCR unavailable for %s", path)
+		}
+		text, ocrErr := nativeOCR(ctx, cleanPath)
+		if ocrErr != nil {
+			return ToolResult{
+				Output:  fmt.Sprintf("[image: %s — OCR failed: %v]", filepath.Base(path), ocrErr),
+				IsError: true,
+			}, ocrErr
+		}
+		trimmed, truncated, _ := limitVisionOutputText(strings.TrimSpace(text))
+		if truncated {
+			trimmed += "\n[truncated]"
+		}
+		out := fmt.Sprintf("[image: %s (%d bytes, %s)] OCR text:\n%s", filepath.Base(path), info.Size(), mimeType, trimmed)
+		return ToolResult{
+			Output:     out,
+			TokenUsage: int64(estimateTokenUsage(out)),
+		}, nil
+	}
 
 	var payload []byte
 	var payloadMime string
@@ -416,7 +475,7 @@ func (h *readFileHandler) handleImage(ctx context.Context, env ToolEnv, path str
 			textContent = fmt.Sprintf("[image: %s (%d bytes, %s) attached — describe what you see]",
 				filepath.Base(path), info.Size(), mimeType)
 		} else {
-			textContent = fmt.Sprintf("[image: %s (%d bytes, %s) attached for visual analysis; OCR text unavailable — use analyze_image_content]",
+			textContent = fmt.Sprintf("[image: %s (%d bytes, %s) attached for visual analysis; OCR text unavailable]",
 				filepath.Base(path), info.Size(), mimeType)
 		}
 	}
@@ -426,6 +485,139 @@ func (h *readFileHandler) handleImage(ctx context.Context, env ToolEnv, path str
 		Images:     images,
 		TokenUsage: int64(estimateTokenUsage(textContent)),
 	}, nil
+}
+
+// ocrRequested reports whether the caller asked for text extraction rather
+// than pixels.
+func ocrRequested(args map[string]any) bool {
+	v, ok := args["ocr"]
+	if !ok {
+		return false
+	}
+	b, ok := v.(bool)
+	return ok && b
+}
+
+// handleRemote fetches an http(s) image or PDF and returns it the same way a
+// local file would be returned: pixels inline for a vision-capable primary,
+// OCR text otherwise. Remote content is never written to the workspace.
+func (h *readFileHandler) handleRemote(ctx context.Context, env ToolEnv, url string, ocr bool) (ToolResult, error) {
+	primarySees := env.PrimaryAcceptsImages == nil || env.PrimaryAcceptsImages()
+
+	kind, _, ok := SniffURLContent(ctx, url)
+	if !ok {
+		return ToolResult{
+			Output:  fmt.Sprintf("[remote %s: not an image or PDF]", url),
+			IsError: true,
+		}, fmt.Errorf("remote content is not an image or PDF: %s", url)
+	}
+
+	result, err := FetchBinaryURL(ctx, url, kind)
+	if err != nil {
+		return ToolResult{
+			Output:  fmt.Sprintf("[remote %s: %v]", url, err),
+			IsError: true,
+		}, err
+	}
+
+	// A text-bearing result (a text-based PDF) carries no pixels.
+	if len(result.Images) == 0 {
+		if strings.TrimSpace(result.Text) == "" {
+			return ToolResult{
+				Output:  fmt.Sprintf("[remote %s: no readable content]", url),
+				IsError: true,
+			}, fmt.Errorf("remote content yielded no text or images: %s", url)
+		}
+		return ToolResult{
+			Output:     result.Text,
+			TokenUsage: int64(estimateTokenUsage(result.Text)),
+		}, nil
+	}
+
+	images := make([]ImageData, 0, len(result.Images))
+	for _, img := range result.Images {
+		images = append(images, ImageData{
+			URI:      fmt.Sprintf("data:%s;base64,%s", img.Type, img.Base64),
+			MIMEType: img.Type,
+		})
+	}
+
+	// The primary cannot see: describe the image with a vision model rather
+	// than handing it pixels seed will strip.
+	if ocr || !primarySees {
+		text := describeRemoteImage(ctx, env, url, images)
+		if text != "" {
+			return ToolResult{
+				Output:     text,
+				TokenUsage: int64(estimateTokenUsage(text)),
+			}, nil
+		}
+		// An explicit ocr request must not silently degrade to pixels: the
+		// caller asked for text, and on a non-vision primary the attached
+		// pixels would be stripped, leaving the model with nothing at all.
+		// Mirror the local-image branch's contract.
+		if ocr {
+			return ToolResult{
+				Output:  fmt.Sprintf("[remote image: %s — OCR text unavailable; no vision model could describe it]", url),
+				IsError: true,
+			}, fmt.Errorf("no OCR text available for remote image %s", url)
+		}
+	}
+
+	note := fmt.Sprintf("[remote image: %s — attached, describe what you see]", url)
+	if result.Text != "" {
+		note = result.Text
+	}
+	return ToolResult{
+		Output:     note,
+		Images:     images,
+		TokenUsage: int64(estimateTokenUsage(note)),
+	}, nil
+}
+
+// describeRemoteImage runs a non-vision primary's remote image through the
+// agent's vision model, returning a provenance-labeled description. Empty
+// when no vision client is available or the analysis fails — the caller then
+// either attaches pixels (a vision primary) or reports the failure.
+//
+// The bytes are passed through rather than the URL, so the image is not
+// downloaded a second time.
+func describeRemoteImage(ctx context.Context, env ToolEnv, url string, images []ImageData) string {
+	if env.VisionProcessor == nil || len(images) == 0 {
+		return ""
+	}
+	data, mimeType, ok := decodeDataURI(images[0].URI)
+	if !ok {
+		return ""
+	}
+	analysis, err := env.VisionProcessor.AnalyzeImageBytes(ctx, url, data, mimeType, GetStructuredDescriptionPrompt())
+	if err != nil || strings.TrimSpace(analysis.Description) == "" {
+		return ""
+	}
+	return fmt.Sprintf("[remote image: %s — described via %s]\n%s", url, env.VisionProcessor.providerLabel(), analysis.Description)
+}
+
+// decodeDataURI splits a "data:<mime>;base64,<payload>" URI into its parts.
+func decodeDataURI(uri string) ([]byte, string, bool) {
+	const prefix = "data:"
+	if !strings.HasPrefix(uri, prefix) {
+		return nil, "", false
+	}
+	rest := uri[len(prefix):]
+	comma := strings.Index(rest, ",")
+	if comma < 0 {
+		return nil, "", false
+	}
+	meta := rest[:comma]
+	if !strings.HasSuffix(meta, ";base64") {
+		return nil, "", false
+	}
+	mimeType := strings.TrimSuffix(meta, ";base64")
+	data, err := base64.StdEncoding.DecodeString(rest[comma+1:])
+	if err != nil {
+		return nil, "", false
+	}
+	return data, mimeType, true
 }
 
 // toIntArg converts an interface{} to int, handling float64 from JSON.

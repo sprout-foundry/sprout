@@ -20,7 +20,7 @@ func loadScreenshotForMultimodal(ctx context.Context, env ToolEnv, path string) 
 // attachScreenshotIfRequested is the nonjs path: when the user asked for a
 // screenshot and the file exists, try to attach it as inline multimodal
 // content so the model sees it directly without a separate
-// analyze_image_content call. Best-effort: never fails the tool.
+// read_file call. Best-effort: never fails the tool.
 func attachScreenshotIfRequested(ctx context.Context, env ToolEnv, args map[string]any, result *ToolResult) {
 	action, ok := args["action"].(string)
 	if !ok || action != "screenshot" {

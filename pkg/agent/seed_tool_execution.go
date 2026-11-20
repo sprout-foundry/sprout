@@ -122,7 +122,7 @@ func postProcessResult(ctx context.Context, agent *Agent, toolName string, args 
 		return result
 	}
 
-	// 1. Model-specific constraints (constrainToolResultForModel handles fetch_url and analyze_image_content)
+	// 1. Model-specific constraints (constrainToolResultForModel handles fetch_url)
 	result = constrainToolResultForModel(toolName, args, result)
 
 	// 2. Universal truncation

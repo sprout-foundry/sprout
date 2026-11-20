@@ -27,7 +27,6 @@ func TestAllToolsRegistered(t *testing.T) {
 		"fetch_url",
 		"browse_url",
 		"analyze_ui_screenshot",
-		"analyze_image_content",
 		"view_history",
 		"rollback_changes",
 		"list_skills",

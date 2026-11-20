@@ -66,7 +66,7 @@ func TestReadFile_ImageBranch_NeverDumpsBinary(t *testing.T) {
 }
 
 // TestReadFile_ImageBranch_RejectsOversize pins the size cap: images over
-// maxInlineImageBytes error out pointing at analyze_image_content instead of
+// maxInlineImageBytes error out explaining the inline cap instead of
 // loading the file.
 func TestReadFile_ImageBranch_RejectsOversize(t *testing.T) {
 	dir := t.TempDir()
@@ -83,25 +83,25 @@ func TestReadFile_ImageBranch_RejectsOversize(t *testing.T) {
 	if err == nil && !res.IsError {
 		t.Fatal("oversize image should fail")
 	}
-	if !strings.Contains(res.Output, "analyze_image_content") {
-		t.Errorf("error should point at analyze_image_content, got %q", res.Output)
+	if !strings.Contains(res.Output, "inline cap") {
+		t.Errorf("error should explain the inline cap, got %q", res.Output)
 	}
 }
 
-// TestAnalyzeImageContent_AttachesImageForGeneralMode pins SP-137 1d: the
+// TestReadFileImage_AttachesImageForGeneralMode pins SP-137 1d: the
 // non-OCR mode attaches the image for vision-capable primaries (seed strips
 // Images for non-vision models).
-func TestAnalyzeImageContent_AttachesImageForGeneralMode(t *testing.T) {
+func TestReadFileImage_AttachesImageForGeneralMode(t *testing.T) {
 	dir := t.TempDir()
 	imgPath := filepath.Join(dir, "pic.png")
 	if err := os.WriteFile(imgPath, validPNG(), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	h := &analyzeImageContentHandler{}
+	h := &readFileHandler{}
 	res, err := h.Execute(context.Background(), ToolEnv{}, map[string]any{
-		"image_path":    imgPath,
-		"analysis_mode": "general",
+		"path": imgPath,
+		"ocr":  false,
 	})
 	// Analysis itself may fail (no vision provider in test env) — but the
 	// attachment must still ride when the handler produced a result.
@@ -112,19 +112,19 @@ func TestAnalyzeImageContent_AttachesImageForGeneralMode(t *testing.T) {
 	}
 }
 
-// TestAnalyzeImageContent_OCRModeSkipsAttachment pins the payload guard: OCR
+// TestReadFileImage_OCRModeSkipsAttachment pins the payload guard: OCR
 // mode returns text only, no inline image doubling.
-func TestAnalyzeImageContent_OCRModeSkipsAttachment(t *testing.T) {
+func TestReadFileImage_OCRModeSkipsAttachment(t *testing.T) {
 	dir := t.TempDir()
 	imgPath := filepath.Join(dir, "pic.png")
 	if err := os.WriteFile(imgPath, validPNG(), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	h := &analyzeImageContentHandler{}
+	h := &readFileHandler{}
 	res, err := h.Execute(context.Background(), ToolEnv{}, map[string]any{
-		"image_path":    imgPath,
-		"analysis_mode": "ocr",
+		"path": imgPath,
+		"ocr":  true,
 	})
 	_ = res
 	_ = err
@@ -139,7 +139,7 @@ func TestAnalyzeImage_ProviderNeutralUnavailableError(t *testing.T) {
 	if HasVisionCapability() {
 		t.Skip("vision capability available in this env; dead-end path not exercised")
 	}
-	out, err := AnalyzeImage(context.Background(), "/nonexistent/img.png", "", "general")
+	out, err := AnalyzeImage(context.Background(), "/nonexistent/img.png", "", "general", "test-provider")
 	if err != nil {
 		t.Fatalf("AnalyzeImage returns structured JSON, not error: %v", err)
 	}

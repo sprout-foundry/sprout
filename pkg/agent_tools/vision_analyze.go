@@ -4,6 +4,7 @@ package tools
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -117,13 +118,46 @@ func (vp *VisionProcessor) AnalyzeImage(ctx context.Context, imagePath string, o
 	if err != nil {
 		return VisionAnalysis{}, fmt.Errorf("get image data: %w", err)
 	}
+	return vp.analyzeImageData(ctx, imagePath, imageData, imageType, optionalPrompt...)
+}
 
+// AnalyzeImageBytes analyzes an image already held in memory, so a caller that
+// fetched the bytes (read_file's remote path) does not download them again.
+// imageName is used only for prompt context. The bytes go through the same
+// optimization cascade as the path-based form, so a large image is resized
+// rather than rejected.
+func (vp *VisionProcessor) AnalyzeImageBytes(ctx context.Context, imageName string, data []byte, mimeType string, optionalPrompt ...string) (VisionAnalysis, error) {
+	if len(data) == 0 {
+		return VisionAnalysis{}, fmt.Errorf("no image data for %s", imageName)
+	}
+	if len(data) > visionMaxImageFileSizeBytes {
+		return VisionAnalysis{}, fmt.Errorf("image too large (%d MB), maximum size is %d MB",
+			len(data)/1024/1024, visionMaxImageFileSizeBytes/1024/1024)
+	}
+	if optimized, optimizedMIME, optErr := OptimizeImageData(imageName, data); optErr == nil && len(optimized) > 0 {
+		data = optimized
+		if optimizedMIME != "" {
+			mimeType = optimizedMIME
+		}
+	}
+	if len(data) > visionMaxImageFileSizeBytes {
+		return VisionAnalysis{}, fmt.Errorf("image still too large after optimization (%d MB), maximum size is %d MB",
+			len(data)/1024/1024, visionMaxImageFileSizeBytes/1024/1024)
+	}
+	if mimeType == "" {
+		_, mimeType = console.DetectImageMagic(data)
+	}
+	return vp.analyzeImageData(ctx, imageName, base64.StdEncoding.EncodeToString(data), mimeType, optionalPrompt...)
+}
+
+// analyzeImageData runs one vision request over already-encoded image data.
+func (vp *VisionProcessor) analyzeImageData(ctx context.Context, imageName, imageData, imageType string, optionalPrompt ...string) (VisionAnalysis, error) {
 	// Use optional prompt if provided and non-empty, otherwise create default
 	var prompt string
 	if len(optionalPrompt) > 0 && optionalPrompt[0] != "" {
 		prompt = optionalPrompt[0]
 	} else {
-		prompt = vp.CreateVisionPrompt(imagePath)
+		prompt = vp.CreateVisionPrompt(imageName)
 	}
 
 	// Create message with image
@@ -139,7 +173,7 @@ func (vp *VisionProcessor) AnalyzeImage(ctx context.Context, imagePath string, o
 	// context is threaded through so the Stop button can abort in-flight
 	// vision calls (SP-034-1c).
 	var response *api.ChatResponse
-	err = DoVisionRetry(ctx, func(ctx context.Context) error {
+	err := DoVisionRetry(ctx, func(ctx context.Context) error {
 		var innerErr error
 		response, innerErr = vp.visionClient.SendVisionRequest(ctx, messages, nil, "", false)
 		return innerErr
@@ -149,13 +183,13 @@ func (vp *VisionProcessor) AnalyzeImage(ctx context.Context, imagePath string, o
 		// The delegated-vision path has no second-tier fallback by design:
 		// an honest error lets the calling model retry or switch strategy.
 		// Non-vision primaries already received native-OCR text upstream
-		// (read_file / analyze_image_content); a failure here means the
-		// delegated vision tier itself is down.
+		// (read_file); a failure here means the delegated vision tier
+		// itself is down.
 		return VisionAnalysis{}, fmt.Errorf("vision request: %w", err)
 	}
 
 	// Extract response content
-	analysis, parseErr := parseVisionResponse(response, imagePath)
+	analysis, parseErr := parseVisionResponse(response, imageName)
 	if parseErr != nil {
 		return VisionAnalysis{}, parseErr
 	}

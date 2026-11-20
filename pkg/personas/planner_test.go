@@ -12,11 +12,10 @@ import (
 // tool must be a deliberate edit to this test as well as to the catalog.
 var plannerAllowedTools = []string{
 	"ask_user",
-	"analyze_image_content",
+	"read_file",
 	"browse_url",
 	"write_plan",
 	"draw_mockup",
-	"read_file",
 	"list_directory",
 	"search",
 	"start_change",

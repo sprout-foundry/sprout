@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -14,13 +15,13 @@ import (
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// analyze_image_content_handler — deny on local path
+// read_file — deny on local path
 // ---------------------------------------------------------------------------
 
-func TestAnalyzeImageContent_Deny_LocalPath_ReturnsTypedError(t *testing.T) {
+func TestReadFile_Image_Deny_LocalPath_ReturnsTypedError(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	h := &analyzeImageContentHandler{}
+	h := &readFileHandler{}
 
 	env := ToolEnv{
 		WorkspaceRoot:        dir,
@@ -28,7 +29,7 @@ func TestAnalyzeImageContent_Deny_LocalPath_ReturnsTypedError(t *testing.T) {
 	}
 
 	result, err := h.Execute(context.Background(), env, map[string]any{
-		"image_path": "/etc/hostname",
+		"path": "/etc/hostname",
 	})
 	require.Error(t, err, "Execute should return an error on deny")
 	require.True(t, result.IsError, "result.IsError should be true on deny")
@@ -37,13 +38,13 @@ func TestAnalyzeImageContent_Deny_LocalPath_ReturnsTypedError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// analyze_image_content_handler — http URL skips gate
+// read_file — http URL skips gate
 // ---------------------------------------------------------------------------
 
-func TestAnalyzeImageContent_HTTPURL_SkipsGate(t *testing.T) {
+func TestReadFile_Image_HTTPURL_SkipsGate(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	h := &analyzeImageContentHandler{}
+	h := &readFileHandler{}
 
 	// Even with a deny classifier, an http URL should skip the gate
 	// and proceed to AnalyzeImage (which will fail without vision, but
@@ -54,7 +55,7 @@ func TestAnalyzeImageContent_HTTPURL_SkipsGate(t *testing.T) {
 	}
 
 	result, err := h.Execute(context.Background(), env, map[string]any{
-		"image_path": "https://example.com/image.png",
+		"path": "https://example.com/image.png",
 	})
 	// The deny classifier should NOT have blocked this — it should
 	// have fallen through to AnalyzeImage. The result may fail for
@@ -67,13 +68,13 @@ func TestAnalyzeImageContent_HTTPURL_SkipsGate(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// analyze_image_content_handler — https URL skips gate
+// read_file — https URL skips gate
 // ---------------------------------------------------------------------------
 
-func TestAnalyzeImageContent_HTTPSURL_SkipsGate(t *testing.T) {
+func TestReadFile_Image_HTTPSURL_SkipsGate(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	h := &analyzeImageContentHandler{}
+	h := &readFileHandler{}
 
 	env := ToolEnv{
 		WorkspaceRoot:        dir,
@@ -81,7 +82,7 @@ func TestAnalyzeImageContent_HTTPSURL_SkipsGate(t *testing.T) {
 	}
 
 	result, err := h.Execute(context.Background(), env, map[string]any{
-		"image_path": "https://example.com/photo.jpg",
+		"path": "https://example.com/photo.jpg",
 	})
 	if err != nil {
 		require.NotContains(t, err.Error(), "blocked", "https URL must not trigger deny error")
@@ -442,10 +443,10 @@ func TestIsHTTPURL(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// analyze_image_content — prompt with approval on local path
+// read_file — prompt with approval on local path
 // ---------------------------------------------------------------------------
 
-func TestAnalyzeImageContent_Prompt_Approved_Proceeds(t *testing.T) {
+func TestReadFile_Image_Prompt_Approved_Proceeds(t *testing.T) {
 	outside := outsideWorkspaceTarget(t)
 	approved := &fakeFSPrompter{approve: true}
 	env := ToolEnv{
@@ -453,10 +454,10 @@ func TestAnalyzeImageContent_Prompt_Approved_Proceeds(t *testing.T) {
 		FileAccessClassifier: &fakeClassifier{verdict: "prompt"},
 		FileAccessPrompter:   approved,
 	}
-	h := &analyzeImageContentHandler{}
+	h := &readFileHandler{}
 
 	result, err := h.Execute(context.Background(), env, map[string]any{
-		"image_path": outside,
+		"path": outside,
 	})
 	// With approval, the gate passes and AnalyzeImage runs.
 	// It may fail without vision capability, but it must NOT be the deny "blocked" error.
@@ -491,10 +492,10 @@ func TestAnalyzeUIScreenshot_Prompt_Approved_Proceeds(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// analyze_image_content — prompt denial on local path blocks
+// read_file — prompt denial on local path blocks
 // ---------------------------------------------------------------------------
 
-func TestAnalyzeImageContent_Prompt_Denied_Blocks(t *testing.T) {
+func TestReadFile_Image_Prompt_Denied_Blocks(t *testing.T) {
 	outside := outsideWorkspaceTarget(t)
 	denied := &fakeFSPrompter{}
 	env := ToolEnv{
@@ -502,14 +503,18 @@ func TestAnalyzeImageContent_Prompt_Denied_Blocks(t *testing.T) {
 		FileAccessClassifier: &fakeClassifier{verdict: "prompt"},
 		FileAccessPrompter:   denied,
 	}
-	h := &analyzeImageContentHandler{}
+	h := &readFileHandler{}
 
 	result, err := h.Execute(context.Background(), env, map[string]any{
-		"image_path": outside,
+		"path": outside,
 	})
+	// read_file's pinned contract: a denied off-workspace read surfaces the
+	// underlying off-workspace error, not a synthesized "not approved" one
+	// (see TestReadFileHandlerPromptFlow).
 	require.Error(t, err, "prompt denial must block the operation")
-	require.True(t, result.IsError, "result.IsError should be true on prompt denial")
-	require.Contains(t, result.Output, "not approved", "prompt denial must surface the not-approved error")
+	if !strings.Contains(err.Error(), "outside working directory") && !strings.Contains(result.Output, "outside working directory") {
+		require.Failf(t, "unexpected denial error", "err=%v output=%.120s", err, result.Output)
+	}
 	require.Equal(t, 1, denied.called, "prompter must have been consulted once")
 }
 
@@ -613,12 +618,12 @@ func TestFindDeadCode_Prompt_Approved_Proceeds(t *testing.T) {
 
 func TestNewHandlers_PassReadMode(t *testing.T) {
 	t.Parallel()
-	// analyze_image_content
+	// read_file
 	cc := &captureModeClassifier{}
 	env := ToolEnv{WorkspaceRoot: t.TempDir(), FileAccessClassifier: cc}
-	h := &analyzeImageContentHandler{}
-	h.Execute(context.Background(), env, map[string]any{"image_path": "/etc/hosts"})
-	require.Equal(t, "read", cc.gotMode, "analyze_image_content should pass read mode")
+	h := &readFileHandler{}
+	_, _ = h.Execute(context.Background(), env, map[string]any{"path": "/etc/hosts"})
+	require.Equal(t, "read", cc.gotMode, "read_file should pass read mode")
 
 	// analyze_ui_screenshot
 	cc = &captureModeClassifier{}
@@ -660,13 +665,13 @@ func TestNewHandlers_PassReadMode(t *testing.T) {
 // HTTP URL gate-skip verification: deny classifier + http URL = no gate call
 // ---------------------------------------------------------------------------
 
-func TestAnalyzeImageContent_HTTPURL_NoClassifierCall(t *testing.T) {
+func TestReadFile_Image_HTTPURL_NoClassifierCall(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	// neverCallClassifier returns "deny" but panics if actually called —
 	// if the gate is skipped, it won't be called.
 	ncc := &neverCallClassifier{}
-	h := &analyzeImageContentHandler{}
+	h := &readFileHandler{}
 
 	env := ToolEnv{
 		WorkspaceRoot:        dir,
@@ -675,7 +680,7 @@ func TestAnalyzeImageContent_HTTPURL_NoClassifierCall(t *testing.T) {
 
 	// This should NOT call the classifier since it's an http URL.
 	_, _ = h.Execute(context.Background(), env, map[string]any{
-		"image_path": "https://example.com/image.png",
+		"path": "https://example.com/image.png",
 	})
 	require.False(t, ncc.called, "classifier must NOT be called for http URL")
 }

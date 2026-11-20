@@ -781,8 +781,8 @@ func TestAllToolsRegistration(t *testing.T) {
 	if tools == nil {
 		t.Fatal("AllTools() returned nil")
 	}
-	if len(tools) != 53 {
-		t.Fatalf("AllTools() returned %d tools, want 53", len(tools))
+	if len(tools) != 52 {
+		t.Fatalf("AllTools() returned %d tools, want 52", len(tools))
 	}
 
 	expectedNames := map[string]string{
@@ -812,7 +812,6 @@ func TestAllToolsRegistration(t *testing.T) {
 		"browse_url":              "browse_url",
 		"check_app":               "check_app",
 		"web_search":              "web_search",
-		"analyze_image_content":   "analyze_image_content",
 		"analyze_ui_screenshot":   "analyze_ui_screenshot", // SP-109 Phase 3 Batch A2
 		"list_automate_workflows": "list_automate_workflows",
 		"list_changes":            "list_changes",
@@ -959,10 +958,6 @@ func TestAllToolsRegistration(t *testing.T) {
 		case "web_search":
 			if len(def.Required) != 1 || def.Required[0] != "query" {
 				t.Errorf("web_search Required = %v, want [\"query\"]", def.Required)
-			}
-		case "analyze_image_content":
-			if len(def.Required) != 1 || def.Required[0] != "image_path" {
-				t.Errorf("analyze_image_content Required = %v, want [\"image_path\"]", def.Required)
 			}
 		case "analyze_ui_screenshot":
 			if len(def.Required) != 1 || def.Required[0] != "image_path" {

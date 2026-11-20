@@ -5,7 +5,6 @@
 package agent
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
@@ -29,7 +27,6 @@ func defaultFetchURLArchiveDir() string {
 	return filepath.Join(os.TempDir(), "sprout", "downloads")
 }
 
-const defaultAnalyzeImageResultExcerptChars = 4000
 const defaultToolResultMaxChars = 50000 // Universal cap on tool result size (~12K tokens)
 
 // truncateToolResult truncates large tool results to prevent blowing up the LLM context window.
@@ -49,9 +46,6 @@ func truncateToolResult(result string) string {
 }
 
 func constrainToolResultForModel(toolName string, args map[string]interface{}, result string) string {
-	if toolName == "analyze_image_content" {
-		return compactAnalyzeImageResultForModel(result)
-	}
 
 	if toolName != "fetch_url" {
 		return result
@@ -125,84 +119,4 @@ func saveFetchURLOutputToFile(args map[string]interface{}, output string) (strin
 		return "", agenterrors.Wrap(err, "failed to write fetch URL output file")
 	}
 	return path, nil
-}
-
-func compactAnalyzeImageResultForModel(result string) string {
-	var parsed tools.ImageAnalysisResponse
-	if err := json.Unmarshal([]byte(result), &parsed); err != nil {
-		return result
-	}
-
-	var b strings.Builder
-	b.WriteString("analyze_image_content result:\n")
-	b.WriteString(fmt.Sprintf("- success: %t\n", parsed.Success))
-	if parsed.InputPath != "" {
-		b.WriteString(fmt.Sprintf("- input_path: %s\n", parsed.InputPath))
-	}
-	if parsed.InputType != "" {
-		b.WriteString(fmt.Sprintf("- input_type: %s\n", parsed.InputType))
-	}
-	b.WriteString(fmt.Sprintf("- ocr_attempted: %t\n", parsed.OCRAttempted))
-
-	if parsed.ErrorCode != "" {
-		b.WriteString(fmt.Sprintf("- error_code: %s\n", parsed.ErrorCode))
-	}
-	if parsed.ErrorMessage != "" {
-		b.WriteString(fmt.Sprintf("- error_message: %s\n", parsed.ErrorMessage))
-	}
-
-	excerpt := strings.TrimSpace(parsed.ExtractedText)
-	if excerpt == "" && parsed.Analysis != nil {
-		excerpt = strings.TrimSpace(parsed.Analysis.Description)
-	}
-	if excerpt != "" {
-		originalChars := parsed.OriginalChars
-		if originalChars == 0 {
-			originalChars = len(excerpt)
-		}
-		returnedChars := parsed.ReturnedChars
-		if returnedChars == 0 {
-			returnedChars = len(excerpt)
-		}
-		b.WriteString(fmt.Sprintf("- extracted_chars: %d\n", originalChars))
-		b.WriteString(fmt.Sprintf("- returned_chars: %d\n", returnedChars))
-	}
-	if parsed.OutputTruncated {
-		b.WriteString("- tool_output_truncated: true\n")
-	}
-	if parsed.FullOutputPath != "" {
-		b.WriteString(fmt.Sprintf("- full_output_path: %s\n", parsed.FullOutputPath))
-	}
-	if parsed.Analysis != nil {
-		if len(parsed.Analysis.Elements) > 0 {
-			b.WriteString(fmt.Sprintf("- detected_elements: %d\n", len(parsed.Analysis.Elements)))
-		}
-		if len(parsed.Analysis.Issues) > 0 {
-			b.WriteString(fmt.Sprintf("- issues: %s\n", strings.Join(parsed.Analysis.Issues, "; ")))
-		}
-		if len(parsed.Analysis.Suggestions) > 0 {
-			b.WriteString(fmt.Sprintf("- suggestions: %s\n", strings.Join(parsed.Analysis.Suggestions, "; ")))
-		}
-	}
-	if excerpt != "" {
-		b.WriteString("- extracted_text_excerpt:\n")
-		b.WriteString(limitAnalyzeImageExcerpt(excerpt, defaultAnalyzeImageResultExcerptChars))
-	}
-
-	return strings.TrimSpace(b.String())
-}
-
-func limitAnalyzeImageExcerpt(text string, maxChars int) string {
-	text = strings.TrimSpace(text)
-	if maxChars <= 0 || len(text) <= maxChars {
-		return text
-	}
-
-	suffix := fmt.Sprintf("\n[EXCERPT TRUNCATED: kept first %d of %d chars]", maxChars, len(text))
-	keep := maxChars - len(suffix)
-	if keep < 0 {
-		keep = maxChars
-		suffix = ""
-	}
-	return strings.TrimSpace(text[:keep]) + suffix
 }

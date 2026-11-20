@@ -33,7 +33,7 @@ type VisionAnalysis struct {
 	Suggestions []string    `json:"suggestions,omitempty"`
 }
 
-// ImageAnalysisResponse represents a structured response for the analyze_image_content tool
+// ImageAnalysisResponse represents a structured response for image analysis
 type ImageAnalysisResponse struct {
 	Success         bool                   `json:"success"`
 	ToolInvoked     bool                   `json:"tool_invoked"`

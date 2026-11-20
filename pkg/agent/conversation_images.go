@@ -93,7 +93,7 @@ func (a *Agent) processImagesInQuery(query string) ([]api.ImageData, string, err
 
 	// A model the runtime has verified cannot see (learned negative): delegate
 	// to a vision model when one exists; otherwise fall back to steering the
-	// model at analyze_image_content. The resolver is optimistic, so this is
+	// model at read_file. The resolver is optimistic, so this is
 	// the post-rejection rung, never the first guess.
 	enhanced, delegated := a.processImagesByDelegation(query, paths)
 	if delegated {
@@ -113,18 +113,24 @@ func extractPastedImagePaths(query string) []string {
 // the query. It never runs as a first guess — the capability resolver is
 // optimistic, so an image is always attempted on the active model first and
 // only a runtime-recorded rejection reaches this rung (see
-// ResolveVisionCapability). Falls back to the analyze-tool prompt when no
-// delegation client exists — the model can still help itself via
-// analyze_image_content.
+// ResolveVisionCapability). Falls back to the read_file prompt when no
+// delegation client exists — the model can still read the image itself.
 func (a *Agent) processImagesByDelegation(query string, paths []string) (string, bool) {
-	if !tools.HasVisionCapability() {
+	// Gate on the provider this turn runs on: a provider-agnostic answer
+	// would attempt delegation on a provider that has no vision model,
+	// failing once per image before falling back.
+	if !tools.HasVisionCapabilityFor(a.getClientType()) {
 		return a.buildNonVisionImageToolPrompt(query, paths), false
 	}
 
 	var b strings.Builder
 	delegated := 0
+	// Delegation stays inside the provider this turn runs on, so an
+	// unrelated provider's (possibly stale) vision model cannot describe
+	// the images.
+	provider := a.getClientType()
 	for i, path := range paths {
-		delegate, err := tools.DelegateImageDescriptions(a.InterruptCtx(), nil, path)
+		delegate, err := tools.DelegateImageDescriptions(a.InterruptCtx(), nil, provider, path)
 		if err != nil {
 			a.Logger().Debug("[WARN] image delegation failed for %s: %v\n", path, err)
 			b.WriteString(fmt.Sprintf("[image %d of %d: %s — description unavailable]\n", i+1, len(paths), filepath.Base(path)))
@@ -139,20 +145,19 @@ func (a *Agent) processImagesByDelegation(query string, paths []string) (string,
 		return a.buildNonVisionImageToolPrompt(query, paths), false
 	}
 
-	b.WriteString("\nOriginal user request (images above were described by a separate vision model; call analyze_image_content for higher-fidelity analysis):\n")
+	b.WriteString("\nOriginal user request (images above were described by a separate vision model; re-read them with read_file if you need more fidelity):\n")
 	b.WriteString(query)
 	return b.String(), true
 }
 
-// buildNonVisionImageToolPrompt steers a non-multimodal model to the
-// analyze_image_content tool. Kept as the final fallback when delegation
-// itself is unavailable (no vision client at all).
+// buildNonVisionImageToolPrompt steers a non-multimodal model to read the
+// image itself. Kept as the final fallback when delegation itself is
+// unavailable (no vision client at all).
 func (a *Agent) buildNonVisionImageToolPrompt(query string, paths []string) string {
 	var b strings.Builder
 	b.WriteString("Image Analysis Policy: The active model is non-multimodal. ")
-	b.WriteString("Before answering, call analyze_image_content for each pasted image path below. ")
-	b.WriteString("Use the default mode (general) first — it describes layout, text, and UI structure. ")
-	b.WriteString("Only follow with analysis_mode=\"ocr\" if you need verbatim text extraction.\n")
+	b.WriteString("Before answering, call read_file for each pasted image path below. ")
+	b.WriteString("Set ocr=true if you need verbatim text extraction.\n")
 	b.WriteString("Pasted image paths:\n")
 	for _, path := range paths {
 		b.WriteString("- ")

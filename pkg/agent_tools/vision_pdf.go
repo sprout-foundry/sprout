@@ -37,14 +37,24 @@ const (
 	maxPDFOCRPages  = 8
 )
 
-// ProcessPDFWithVision processes a PDF file. Delegates to ProcessPDFForTextOnly.
-func ProcessPDFWithVision(ctx context.Context, pdfPath string) (string, error) {
-	return ProcessPDFForTextOnly(ctx, pdfPath)
+// ProcessPDFWithVision processes a PDF file. Delegates to
+// ProcessPDFForTextOnlyWithProvider, scoped to providerType so the OCR
+// fallback stays inside the provider the caller runs on.
+func ProcessPDFWithVision(ctx context.Context, pdfPath string, providerType api.ClientType) (string, error) {
+	return ProcessPDFForTextOnlyWithProvider(ctx, pdfPath, providerType)
 }
 
 // ProcessPDFForTextOnly extracts text from a PDF using Go-native extraction.
-// Falls back to page-rasterization OCR if no text is found.
-func ProcessPDFForTextOnly(ctx context.Context, pdfPath string) (string, error) {
+// Falls back to page-rasterization OCR if no text is found, using the
+// provider the caller runs on.
+func ProcessPDFForTextOnly(ctx context.Context, pdfPath string, providerType api.ClientType) (string, error) {
+	return ProcessPDFForTextOnlyWithProvider(ctx, pdfPath, providerType)
+}
+
+// ProcessPDFForTextOnlyWithProvider is ProcessPDFForTextOnly with the OCR
+// vision client scoped to providerType, so a turn on provider A is not OCR'd
+// by an unrelated provider B. Empty providerType means no vision client.
+func ProcessPDFForTextOnlyWithProvider(ctx context.Context, pdfPath string, providerType api.ClientType) (string, error) {
 	resolvedPath, cleanup, err := ResolvePDFInputPath(ctx, pdfPath)
 	if err != nil {
 		return "", fmt.Errorf("resolve PDF input path: %w", err)
@@ -56,7 +66,7 @@ func ProcessPDFForTextOnly(ctx context.Context, pdfPath string) (string, error) 
 		return text, nil
 	}
 
-	client, err := CreateVisionClientContext(ctx)
+	client, err := CreateVisionClientWithProvider(providerType)
 	if err != nil {
 		return "", fmt.Errorf("PDF has no extractable text and no vision client available for OCR: %w", err)
 	}

@@ -56,7 +56,7 @@ func TestDelegateImageDescriptions(t *testing.T) {
 	// DelegateImageDescriptions with an explicit client avoids the factory.
 	client := &delegateTestClient{serverURL: server.URL}
 
-	result, err := DelegateImageDescriptions(context.Background(), client, imgPath)
+	result, err := DelegateImageDescriptions(context.Background(), client, "", imgPath)
 	if err != nil {
 		t.Fatalf("DelegateImageDescriptions: %v", err)
 	}

@@ -78,7 +78,7 @@ func TestFilterToolsByNameFromConversation(t *testing.T) {
 		makeTool("read_file"),
 		makeTool("write_file"),
 		makeTool("shell_command"),
-		makeTool("analyze_image_content"),
+		makeTool("analyze_ui_screenshot"),
 	}
 
 	t.Run("empty allowed returns empty result", func(t *testing.T) {
@@ -113,7 +113,7 @@ func TestFilterToolsByNameFromConversation(t *testing.T) {
 	})
 
 	t.Run("all allowed returns all", func(t *testing.T) {
-		allowed := makeAllowedToolSet([]string{"read_file", "write_file", "shell_command", "analyze_image_content"})
+		allowed := makeAllowedToolSet([]string{"read_file", "write_file", "shell_command", "analyze_ui_screenshot"})
 		got := filterToolsByName(tools, allowed)
 		if len(got) != 4 {
 			t.Fatalf("got %d tools, want 4", len(got))
@@ -393,8 +393,11 @@ func TestBuildNonVisionImageToolPrompt(t *testing.T) {
 	if !strings.Contains(prompt, "Image Analysis Policy") {
 		t.Error("expected image analysis policy in prompt")
 	}
-	if !strings.Contains(prompt, "general") {
-		t.Error("expected prompt to prefer general mode first")
+	if !strings.Contains(prompt, "read_file") {
+		t.Error("expected prompt to steer the model at read_file")
+	}
+	if !strings.Contains(prompt, "ocr=true") {
+		t.Error("expected prompt to mention the ocr flag")
 	}
 	if !strings.Contains(prompt, "/tmp/img.png") || !strings.Contains(prompt, "/tmp/img2.jpg") {
 		t.Error("expected image paths in prompt")

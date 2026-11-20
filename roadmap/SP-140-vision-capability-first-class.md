@@ -24,6 +24,43 @@
 > to the text handler. WASM degrades explicitly: both are stubbed to
 > unavailable, matching the existing WASM vision-tool stubs.
 >
+> **Delegation scoping (resolved).** `processImagesByDelegation` used to call
+> `DelegateImageDescriptions(ctx, nil, path)`, and the `nil` client made the
+> delegation walk start from `visionProviderCandidates()` — every provider in
+> the registry, ordered by *global* usage. The caller's own provider was
+> discarded even though `a.getClientType()` was right there. Two consequences:
+>
+> 1. **Unrelated-provider selection.** A turn on provider A could have its
+>    images described by provider B, chosen purely by usage ordering. The
+>    provenance label (`described via provider/model`) was the only signal.
+> 2. **Dead pins surfaced far from their config.** A retired `vision_model`
+>    pin in *any* authenticated provider's config could be selected for a turn
+>    running on a different provider, so the 404 named a model the user never
+>    configured for that provider. This is what made the retired
+>    `MiniMax-VL-01` pin appear in a DeepInfra session.
+>
+> Compounding it, `ProviderFactory.GetAvailableProviders()` iterates a map, so
+> the candidate order varied call to call — the walk was not even
+> deterministic.
+>
+> The global walk is **gone**, not scoped: `CreateVisionClientWithProvider`
+> resolves inside one provider (its active model, then its own
+> `vision_fallback_provider`), and `HasVisionCapabilityFor(providerType)`
+> answers per provider. Callers name the provider they run on
+> (`ToolEnv.ProviderType`, `a.getClientType()`); `HasVisionCapability()`
+> remains for provider-agnostic callers and sorts its candidate list so the
+> answer is stable. A turn on provider A can no longer be served by provider
+> B's model.
+>
+> **`analyze_image_content` removed.** `read_file` already handled images and
+> PDFs (inline pixels for a vision primary, OCR text otherwise), so the
+> separate tool was a second path to the same pipeline. Its three unique
+> capabilities moved into `read_file`: `http(s)` URLs, an `ocr=true` flag
+> (text instead of pixels, including the native-OCR shim), and non-vision
+> delegation for remote images. Fewer tools means less context spent on tool
+> definitions and one obvious way to read an image. Persona allowlists were
+> updated to `read_file`.
+>
 > **Phase 4 landing notes:** system prompts (both variants) flipped to
 > assumed-vision posture — inline arrival is the default, bracketed
 > provenance means degraded seeing, re-run `analyze_image_content` for more

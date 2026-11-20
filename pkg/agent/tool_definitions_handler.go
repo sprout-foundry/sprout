@@ -211,6 +211,7 @@ func buildToolEnvFromAgent(agent *Agent) tools.ToolEnv {
 		c := agent.getClient()
 		return c != nil && api.ResolveVisionCapability(c).AcceptsImages
 	}
+	env.ProviderType = func() api.ClientType { return agent.getClientType() }
 	env.SkillLoader = newSkillLoaderAdapter(agent)
 	env.AllowedSkills = agent.activePersonaSkills()
 	env.SearchEngine = newSearchEngineAdapter(agent)

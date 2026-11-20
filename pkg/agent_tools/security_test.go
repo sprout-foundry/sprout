@@ -444,7 +444,7 @@ func TestClassifyToolCall(t *testing.T) {
 		{"fetch_url", "fetch_url", map[string]interface{}{"url": "http://example.com"}, SecuritySafe},
 		{"browse_url", "browse_url", map[string]interface{}{"url": "http://example.com"}, SecuritySafe},
 		{"analyze_ui_screenshot", "analyze_ui_screenshot", map[string]interface{}{"image_path": "screenshot.png"}, SecuritySafe},
-		{"analyze_image_content", "analyze_image_content", map[string]interface{}{"image_path": "image.png"}, SecuritySafe},
+		{"read_file", "read_file", map[string]interface{}{"path": "image.png"}, SecuritySafe},
 		{"view_history", "view_history", map[string]interface{}{}, SecuritySafe},
 		{"TodoRead", "TodoRead", map[string]interface{}{}, SecuritySafe},
 		{"TodoWrite", "TodoWrite", map[string]interface{}{}, SecuritySafe},

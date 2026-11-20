@@ -20,18 +20,24 @@ type DelegatedImage struct {
 	Model       string
 }
 
-// DelegateImageDescriptions sends images to the best registry-driven vision
+// DelegateImageDescriptions sends images to the caller's provider's vision
 // model with the structured-description prompt and returns attributed
 // descriptions. This is the inline chat path's delegation rung: it invokes
-// the SAME pipeline as analyze_image_content (CreateVisionClient walk +
-// VisionProcessor + retry + OCR fallback), never a second implementation.
+// the SAME pipeline as the vision tools (VisionProcessor + retry + OCR
+// fallback), never a second implementation.
+//
+// providerType names the provider the turn is running on. Delegation stays
+// inside it — a turn on provider A is never described by provider B's model,
+// which is how an unrelated (and possibly retired) vision_model pin used to
+// surface in a session that never configured it. Pass "" to use client
+// directly (client must then be non-nil).
 //
 // Per-image failure degrades to a placeholder description — delegation must
 // not fail the caller's turn.
-func DelegateImageDescriptions(ctx context.Context, client api.ClientInterface, imagePath string) (DelegatedImage, error) {
+func DelegateImageDescriptions(ctx context.Context, client api.ClientInterface, providerType api.ClientType, imagePath string) (DelegatedImage, error) {
 	if client == nil {
 		var err error
-		client, err = CreateVisionClientContext(ctx)
+		client, err = CreateVisionClientWithProvider(providerType)
 		if err != nil {
 			return DelegatedImage{}, fmt.Errorf("create delegation vision client: %w", err)
 		}

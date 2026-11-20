@@ -704,7 +704,6 @@ Thumbs.db
 | `browse_url` | Open URLs in headless browser for screenshot/DOM/text extraction |
 | `web_search` | Real-time web search for grounding knowledge |
 | `analyze_ui_screenshot` | Analyze UI screenshots, mockups, or HTML files |
-| `analyze_image_content` | Extract text/code from images |
 
 ### Shell & Git
 

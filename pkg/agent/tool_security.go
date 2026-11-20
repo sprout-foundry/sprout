@@ -303,6 +303,7 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 			c := agent.getClient()
 			return c != nil && api.ResolveVisionCapability(c).AcceptsImages
 		}
+		env.ProviderType = func() api.ClientType { return agent.getClientType() }
 	} else {
 		env.OutputWriter = os.Stdout
 		env.MaxTokensFunc = func() int { return 0 }

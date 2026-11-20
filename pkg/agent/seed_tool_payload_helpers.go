@@ -141,10 +141,6 @@ func buildDisplayName(toolName string, payload map[string]interface{}) string {
 		if imgPath, ok := payload["image_path"].(string); ok && imgPath != "" {
 			return fmt.Sprintf("%s %s", toolName, imgPath)
 		}
-	case "analyze_image_content":
-		if imgPath, ok := payload["image_path"].(string); ok && imgPath != "" {
-			return fmt.Sprintf("%s %s", toolName, imgPath)
-		}
 	}
 
 	return toolName

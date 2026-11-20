@@ -2332,61 +2332,6 @@ func (f *fakeSearchEngine) Search(ctx context.Context, query string) (string, er
 	return f.results[query], nil
 }
 
-func TestAnalyzeImageContentHandlerConformance(t *testing.T) {
-	h := &analyzeImageContentHandler{}
-
-	// Test Name
-	if h.Name() != "analyze_image_content" {
-		t.Errorf("Name() = %q, want %q", h.Name(), "analyze_image_content")
-	}
-
-	// Test Definition
-	d := h.Definition()
-	if d.Name != "analyze_image_content" {
-		t.Errorf("Definition().Name = %q, want %q", d.Name, "analyze_image_content")
-	}
-	if d.Description == "" {
-		t.Error("Definition().Description should not be empty")
-	}
-
-	hasParam := func(name string) bool {
-		for _, p := range d.Parameters {
-			if p.Name == name {
-				return true
-			}
-		}
-		return false
-	}
-	for _, name := range []string{"image_path", "analysis_prompt", "analysis_mode"} {
-		if !hasParam(name) {
-			t.Errorf("Definition missing '%s' parameter", name)
-		}
-	}
-
-	// Validate: missing required
-	if err := h.Validate(nil); err == nil {
-		t.Error("Validate(nil) should return error")
-	}
-	if err := h.Validate(map[string]any{}); err == nil {
-		t.Error("Validate(empty) should return error for missing image_path")
-	}
-
-	// Validate: valid image_path
-	if err := h.Validate(map[string]any{"image_path": "/tmp/test.png"}); err != nil {
-		t.Errorf("Validate(image_path) should return nil, got: %v", err)
-	}
-
-	// Validate: valid with optional params
-	if err := h.Validate(map[string]any{"image_path": "/tmp/test.png", "analysis_prompt": "extract text", "analysis_mode": "ocr"}); err != nil {
-		t.Errorf("Validate(full args) should return nil, got: %v", err)
-	}
-
-	// Validate: non-string image_path
-	if err := h.Validate(map[string]any{"image_path": 123}); err == nil {
-		t.Error("Validate(non-string image_path) should return error")
-	}
-}
-
 func TestAnalyzeUIScreenshotHandlerConformance(t *testing.T) {
 	h := &analyzeUIScreenshotHandler{}
 

@@ -17,7 +17,6 @@
         "patch_structured_file",
         "search",
         "analyze_ui_screenshot",
-        "analyze_image_content",
         "browse_url",
         "web_search",
         "fetch_url",

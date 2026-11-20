@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -132,20 +133,15 @@ func splitProviderQualifiedModel(model string) (provider, modelName string) {
 // Vision Processor Creation
 // ============================================================================
 
-// NewVisionProcessorWithMode creates a vision processor for image/OCR workflows.
-// Client selection is intentionally deterministic and does not vary by mode:
-// Registry-driven client selection (SP-137: provider-neutral).
-func NewVisionProcessorWithMode(debug bool, _ string) (*VisionProcessor, error) {
-	client, err := CreateVisionClient()
-	if err != nil {
-		return nil, fmt.Errorf("create vision client: %w", err)
+// NewVisionProcessorWithMode creates a vision processor for image/OCR
+// workflows, scoped to providerType. An empty providerType yields a processor
+// with no vision client, so callers report "vision unavailable" rather than
+// borrowing an unrelated provider's model.
+func NewVisionProcessorWithMode(debug bool, providerType api.ClientType) (*VisionProcessor, error) {
+	if providerType == "" {
+		return &VisionProcessor{logger: nil, debug: debug}, nil
 	}
-
-	return &VisionProcessor{
-		visionClient: client,
-		logger:       nil,
-		debug:        debug,
-	}, nil
+	return NewVisionProcessorWithProvider(debug, providerType)
 }
 
 // NewVisionProcessorWithProvider creates a vision processor using the specified provider
@@ -162,40 +158,69 @@ func NewVisionProcessorWithProvider(debug bool, providerType api.ClientType) (*V
 	}, nil
 }
 
-// CreateVisionClientWithProvider creates a vision client using the specified provider
+// CreateVisionClientWithProvider creates a vision client for one provider.
+//
+// Resolution stays inside that provider: its active model, then its explicit
+// vision_model pin, then its configured vision_fallback_provider. There is no
+// global walk — a turn on provider A must never be served by provider B's
+// model, which is how an unrelated (and possibly retired) vision_model pin
+// used to surface in a session that never configured it.
 func CreateVisionClientWithProvider(providerType api.ClientType) (api.ClientInterface, error) {
+	if providerType == "" || providerType == api.TestClientType {
+		return nil, fmt.Errorf("no vision provider named")
+	}
+	// A provider with no credentials cannot build a client; the local
+	// runtimes need none.
+	if !configuration.HasProviderAuth(string(providerType)) && !isLocalRuntimeProvider(providerType) {
+		return nil, fmt.Errorf("provider %s has no credentials configured", providerType)
+	}
+
+	var retired []string
+
+	tryModel := func(provider api.ClientType, model string) api.ClientInterface {
+		client, err := factory.CreateProviderClient(provider, model)
+		if err != nil || !client.SupportsVision() {
+			return nil
+		}
+		// Declared support is config; a retired model keeps its vision tag.
+		// Rejecting it here (not only in the capability probe) keeps "this
+		// provider has vision" and "this provider yields a vision client"
+		// from disagreeing.
+		if !visionModelServed(context.Background(), client, model) {
+			retired = append(retired, fmt.Sprintf("%s/%s", provider, model))
+			return nil
+		}
+		return client
+	}
+
 	// Get the vision model for this provider
-	visionModel := GetVisionModelForProvider(providerType)
-	if visionModel != "" {
-		// Create client with the vision model
-		client, err := factory.CreateProviderClient(providerType, visionModel)
-		if err == nil && client.SupportsVision() {
+	if visionModel := GetVisionModelForProvider(providerType); visionModel != "" {
+		if client := tryModel(providerType, visionModel); client != nil {
 			return client, nil
 		}
 	}
 
-	// For custom providers, support explicit vision fallback provider/model.
+	// A custom provider may name an explicit fallback provider/model. This is
+	// the provider's OWN declared fallback, not a search of other providers.
 	fallbackProvider, fallbackModel, hasFallback := GetCustomVisionFallback(providerType)
 	if hasFallback {
 		if fallbackModel == "" {
 			fallbackModel = GetVisionModelForProvider(fallbackProvider)
 		}
 		if fallbackModel != "" {
-			client, err := factory.CreateProviderClient(fallbackProvider, fallbackModel)
-			if err == nil && client.SupportsVision() {
+			if client := tryModel(fallbackProvider, fallbackModel); client != nil {
 				return client, nil
 			}
 		}
 	}
 
-	// Deterministic final fallback path shared across scenarios:
-	// run the standard registry-driven provider-first list.
-	globalClient, globalErr := CreateVisionClient()
-	if globalErr == nil && globalClient != nil && globalClient.SupportsVision() {
-		return globalClient, nil
+	if len(retired) > 0 {
+		// Name the dead pin: a config change is the fix, and this is the only
+		// place the operator sees which model was tried.
+		return nil, fmt.Errorf("provider %s has no usable vision model: the configured vision model is no longer served by its provider (%s)",
+			providerType, strings.Join(retired, ", "))
 	}
-
-	return nil, fmt.Errorf("provider %s does not support vision models and no usable fallback is configured: %w", providerType, globalErr)
+	return nil, fmt.Errorf("provider %s does not support vision models and no fallback is configured for it", providerType)
 }
 
 // GetVisionModelForProvider returns the appropriate vision model for a given
@@ -290,92 +315,11 @@ func GetDefaultModelForProvider(providerType api.ClientType) string {
 	return strings.TrimSpace(cfg.Defaults.Model)
 }
 
-// visionProviderCandidates returns provider types that may offer a vision
-// model, in resolution order: authenticated providers from the registry
-// (sorted for determinism), then custom vision providers, then local
-// runtimes (which need no credentials). Registry-driven — no provider is
-// named here (SP-137 rule).
-func visionProviderCandidates() []api.ClientType {
-	var providers []api.ClientType
-	seen := map[api.ClientType]struct{}{}
-	add := func(pt api.ClientType) {
-		if _, dup := seen[pt]; dup {
-			return
-		}
-		seen[pt] = struct{}{}
-		providers = append(providers, pt)
-	}
-
-	names := factory.GlobalFactory().GetAvailableProviders()
-	// Usage-tiered priority: recently-used providers first, then
-	// credentialed ones, then the rest (shared with onboarding's
-	// provider ordering). Explicit and stable — never alphabetical.
-	var cfg *configuration.Config
-	if cm, err := configuration.NewManagerSilent(); err == nil {
-		cfg = cm.GetConfig()
-	}
-	for _, name := range configuration.OrderProvidersByUsage(names, cfg) {
-		add(api.ClientType(name))
-	}
-	for _, pt := range GetCustomVisionProviders() {
-		add(pt)
-	}
-	return providers
-}
-
-// CreateVisionClient creates a client capable of vision analysis
-func CreateVisionClient() (api.ClientInterface, error) {
-	return CreateVisionClientContext(context.Background())
-}
-
-// CreateVisionClientContext is CreateVisionClient with a caller-supplied
-// context, so a cancelled turn stops the candidate walk (each candidate may
-// cost one model listing).
-func CreateVisionClientContext(ctx context.Context) (api.ClientInterface, error) {
-	var retired []string
-	for _, providerType := range visionProviderCandidates() {
-		if !configuration.HasProviderAuth(string(providerType)) {
-			continue // Skip if API key not set
-		}
-
-		// Get vision model from provider config
-		visionModel := GetVisionModelForProvider(providerType)
-		if visionModel == "" {
-			continue // Skip if no vision model configured
-		}
-
-		// Try to create client with vision model
-		client, err := factory.CreateProviderClient(providerType, visionModel)
-		if err != nil {
-			continue // Try next provider
-		}
-
-		// Verify the client supports vision. Declared support is config, not
-		// reality: a retired model keeps its vision tag, so also require the
-		// provider to still list it (vision_model_probe.go).
-		if !client.SupportsVision() {
-			continue // Try next provider
-		}
-		if !visionModelServed(ctx, client, visionModel) {
-			retired = append(retired, fmt.Sprintf("%s/%s", providerType, visionModel))
-			continue // Try next provider
-		}
-
-		return client, nil
-	}
-
-	if len(retired) > 0 {
-		// Name the dead pins: the fix is a config change, and the error is
-		// the only place the user ever sees which model was tried.
-		return nil, retiredVisionModelError(retired)
-	}
-	return nil, fmt.Errorf("no vision capability available: no configured provider offers a vision model and native OCR is unavailable")
-}
-
-// retiredVisionModelError names the configured vision models their providers
-// no longer serve — the actionable half of a vision-tier failure.
-func retiredVisionModelError(retired []string) error {
-	return fmt.Errorf("no vision capability available: no configured provider offers a vision model and native OCR is unavailable (the configured vision model is no longer served by its provider: %s)", strings.Join(retired, ", "))
+// CreateVisionClient creates a client capable of vision analysis for one
+// provider. There is no global walk: the caller must name the provider it is
+// running on (see CreateVisionClientWithProvider).
+func CreateVisionClient(providerType api.ClientType) (api.ClientInterface, error) {
+	return CreateVisionClientWithProvider(providerType)
 }
 
 // isLocalRuntimeProvider reports whether the provider needs no credentials
@@ -409,85 +353,104 @@ func SetVisionCapabilityForTest(available bool) func() {
 	return func() { testVisionCapabilityOverride.Store(nil) }
 }
 
-// ResetVisionCapabilityCacheForTest clears the one-shot capability cache, so a
-// test that changes the environment (keys, config, native-OCR availability) can
+// ResetVisionCapabilityCacheForTest clears the capability cache, so a test
+// that changes the environment (keys, config, native-OCR availability) can
 // re-probe instead of reading a verdict cached earlier in the process.
 func ResetVisionCapabilityCacheForTest() {
-	visionCapabilityOnce = sync.Once{}
-	visionCapabilityValue = false
+	visionCapabilityMu.Lock()
+	defer visionCapabilityMu.Unlock()
+	visionCapabilityValues = nil
 }
 
-// visionCapabilityOnce caches the *probe* result for the process, so a run
-// with no vision tier does not re-resolve provider clients per call. Tests can
-// pin the verdict with SetVisionCapabilityForTest (which bypasses the cache) or
-// clear the cache with ResetVisionCapabilityCacheForTest.
+// visionCapabilityValues caches one probe verdict per provider for the
+// process, so a run does not re-resolve provider clients per call. Tests can
+// pin the verdict with SetVisionCapabilityForTest (which bypasses the cache)
+// or clear it with ResetVisionCapabilityCacheForTest.
 var (
-	visionCapabilityOnce  sync.Once
-	visionCapabilityValue bool
+	visionCapabilityMu     sync.Mutex
+	visionCapabilityValues map[api.ClientType]bool
 )
 
-// HasVisionCapability checks if vision processing is available
+// HasVisionCapability reports whether vision processing is available at all,
+// without naming a provider: native OCR, or any configured provider that can
+// build a vision-capable client. Use HasVisionCapabilityFor when the caller
+// knows which provider the turn runs on.
 func HasVisionCapability() bool {
+	return HasVisionCapabilityFor("")
+}
+
+// HasVisionCapabilityFor reports whether vision is available to a turn
+// running on providerType. Native OCR counts regardless of provider. When
+// providerType is empty, any configured provider may answer.
+//
+// The verdict is cached per provider for the process: the probe constructs
+// clients and may cost one model listing (vision_model_probe.go), which must
+// not be repaid per turn.
+func HasVisionCapabilityFor(providerType api.ClientType) bool {
 	if override := testVisionCapabilityOverride.Load(); override != nil {
 		return *override
 	}
-	visionCapabilityOnce.Do(func() {
-		visionCapabilityValue = probeVisionCapability()
-	})
-	return visionCapabilityValue
+
+	visionCapabilityMu.Lock()
+	defer visionCapabilityMu.Unlock()
+	if visionCapabilityValues == nil {
+		visionCapabilityValues = map[api.ClientType]bool{}
+	}
+	if v, ok := visionCapabilityValues[providerType]; ok {
+		return v
+	}
+	v := probeVisionCapability(providerType)
+	visionCapabilityValues[providerType] = v
+	return v
 }
 
-// probeVisionCapability resolves vision availability from the environment:
-// native OCR shim, then a registry-driven provider that can build a
-// vision-capable client. Client construction and SupportsVision() are local;
-// the model-availability check may cost one listing per provider
-// (vision_model_probe.go), and fails open when the listing is unavailable.
-// HasVisionCapability memoizes this whole probe for the process, so the
-// listing is paid once; the listing cache in vision_model_probe.go matters
-// for CreateVisionClientContext, which runs per turn.
-func probeVisionCapability() bool {
-	// Native OCR counts: text extraction needs no provider at all (SP-137).
-	if nativeOCRAvailable() {
-		return true
-	}
-	// Check if any provider with vision capability is available.
-	// Registry-driven candidate list — see visionProviderCandidates.
-	for _, providerType := range visionProviderCandidates() {
-		// Get the vision model for this provider
-		visionModel := GetVisionModelForProvider(providerType)
-		if visionModel == "" {
-			continue // Skip providers without vision support
+// probeVisionCapability resolves vision availability for one provider: that
+// provider's own vision client, or native OCR when the caller named no
+// provider (native OCR is provider-independent, so it answers the
+// provider-agnostic question but NOT "can this provider see").
+func probeVisionCapability(providerType api.ClientType) bool {
+	if providerType == "" {
+		// Provider-agnostic: native OCR counts, since text extraction needs
+		// no provider at all (SP-137).
+		if nativeOCRAvailable() {
+			return true
 		}
-
-		if !configuration.HasProviderAuth(string(providerType)) {
-			if !isLocalRuntimeProvider(providerType) {
-				continue
+		// Any configured provider may answer. The list is sorted so the
+		// answer is deterministic — GetAvailableProviders iterates a map and
+		// would otherwise vary call to call.
+		for _, pt := range sortedVisionProviders() {
+			if providerHasVision(pt) {
+				return true
 			}
 		}
-
-		// Try to create client with vision model
-		client, err := factory.CreateProviderClient(providerType, visionModel)
-		if err != nil {
-			continue // Try next provider
-		}
-
-		// Verify the client actually supports vision
-		if !client.SupportsVision() {
-			continue // Try next provider
-		}
-
-		// Declared support is config; a retired model still carries its
-		// vision tag. Require the provider to still list it, so the
-		// capability answer does not promise a model the endpoint dropped.
-		// This whole probe runs once per process (HasVisionCapability's
-		// sync.Once), so the listing costs one call at most — see
-		// vision_model_probe.go.
-		if !visionModelServed(context.Background(), client, visionModel) {
-			continue // Try next provider
-		}
-
-		return true
+		return false
 	}
 
-	return false
+	// Provider-scoped: the answer is whether THIS provider yields a vision
+	// client. Native OCR is not a substitute — it extracts text, it does not
+	// let the provider see.
+	return providerHasVision(providerType)
+}
+
+// providerHasVision reports whether one provider can build a vision-capable
+// client whose model the provider still serves. It delegates to the same
+// constructor the callers use, so the capability answer and the client
+// actually obtained cannot disagree.
+func providerHasVision(providerType api.ClientType) bool {
+	client, err := CreateVisionClientWithProvider(providerType)
+	return err == nil && client != nil
+}
+
+// sortedVisionProviders returns every known provider in a deterministic
+// order. GetAvailableProviders iterates a map, so callers that need a stable
+// answer must sort.
+func sortedVisionProviders() []api.ClientType {
+	names := factory.GlobalFactory().GetAvailableProviders()
+	out := make([]api.ClientType, 0, len(names))
+	for _, n := range names {
+		out = append(out, api.ClientType(n))
+	}
+	out = append(out, GetCustomVisionProviders()...)
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out
 }

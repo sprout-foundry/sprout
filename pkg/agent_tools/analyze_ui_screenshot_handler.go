@@ -79,7 +79,7 @@ func (h *analyzeUIScreenshotHandler) Execute(ctx context.Context, env ToolEnv, a
 
 	result, rendered, err := renderInputToString(ctx, env, "analyze_ui_screenshot", imagePath, renderOpts,
 		func(analyzeCtx context.Context, pngPath string) (string, error) {
-			return AnalyzeImage(analyzeCtx, pngPath, analysisPrompt, visionModeFrontend)
+			return AnalyzeImage(analyzeCtx, pngPath, analysisPrompt, visionModeFrontend, envProviderType(env))
 		})
 	if rendered {
 		if err != nil {
@@ -88,7 +88,7 @@ func (h *analyzeUIScreenshotHandler) Execute(ctx context.Context, env ToolEnv, a
 		return ToolResult{Output: result}, nil
 	}
 
-	result, err = AnalyzeImage(ctx, imagePath, analysisPrompt, visionModeFrontend)
+	result, err = AnalyzeImage(ctx, imagePath, analysisPrompt, visionModeFrontend, envProviderType(env))
 	if err != nil {
 		return ToolResult{Output: result, IsError: true}, err
 	}

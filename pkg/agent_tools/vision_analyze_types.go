@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"fmt"
 	"strconv"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
@@ -34,6 +35,16 @@ type VisionProcessor struct {
 	visionClient api.ClientInterface
 	logger       *utils.Logger
 	debug        bool
+}
+
+// providerLabel names the vision client for provenance labels, e.g.
+// "deepinfra/meta-llama/Llama-3.3-70B-Instruct-Turbo". Returns "unknown" when
+// no client is attached.
+func (vp *VisionProcessor) providerLabel() string {
+	if vp == nil || vp.visionClient == nil {
+		return "unknown"
+	}
+	return fmt.Sprintf("%s/%s", vp.visionClient.GetProvider(), vp.visionClient.GetModel())
 }
 
 // ============================================================================

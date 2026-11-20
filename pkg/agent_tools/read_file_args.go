@@ -28,7 +28,7 @@ var readRangeEndAliases = []string{"end_line", "line_end", "limit"}
 
 // readFileCanonicalArgs is the set of keys the handler understands, after
 // alias translation. Used only to build the unknown-argument error.
-var readFileCanonicalArgs = []string{"path", "view_range"}
+var readFileCanonicalArgs = []string{"path", "view_range", "ocr"}
 
 // isKnownReadFileArg reports whether key (case-insensitively) is one of the
 // canonical argument names or an accepted alias.
@@ -73,7 +73,7 @@ func rejectUnknownReadFileArgs(args map[string]any) error {
 	}
 	sort.Strings(unknown)
 	return fmt.Errorf(
-		"unknown argument(s) %s: read_file accepts 'path' and 'view_range' (aliases 'file_path'; 'start_line'/'end_line', 'line_start'/'line_end', 'offset'/'limit')",
+		"unknown argument(s) %s: read_file accepts 'path', 'view_range' and 'ocr' (aliases 'file_path'; 'start_line'/'end_line', 'line_start'/'line_end', 'offset'/'limit')",
 		strings.Join(unknown, ", "),
 	)
 }

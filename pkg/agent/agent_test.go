@@ -2156,38 +2156,6 @@ func TestSP079_BrowseURL_AdapterPassThrough(t *testing.T) {
 }
 
 // ============================================================================
-// 4. analyze_image_content — handler calls tools.AnalyzeImage
-//
-// The legacy pkg/agent handleAnalyzeImageContent path was deleted (SP-137 B4:
-// dead code — never wired). The interface-based handler is the only path.
-// ============================================================================
-
-func TestSP079_AnalyzeImageContent_HandlerBehavior(t *testing.T) {
-	// NOTE: cannot use t.Parallel() — newIsolatedTestAgent uses t.Setenv()
-	ctx := context.Background()
-
-	imagePath := "/tmp/sp079-nonexistent-test-image-12345.png"
-
-	env := tools.ToolEnv{}
-	newHandler := fetchNewHandler(t, "analyze_image_content")
-	newArgs := map[string]any{
-		"image_path":      imagePath,
-		"analysis_prompt": "test prompt",
-		"analysis_mode":   "general",
-	}
-	newResult, newExecErr := newHandler.Execute(ctx, env, newArgs)
-
-	haveNewError := newExecErr != nil || newResult.IsError || newResult.Output == ""
-	if !haveNewError {
-		return // unexpected success; nothing to assert
-	}
-	// The error should be about the missing file, not a missing dependency.
-	if strings.Contains(newResult.Output, "not configured") {
-		t.Errorf("handler error suggests missing dependency rather than missing file: %s", newResult.Output)
-	}
-}
-
-// ============================================================================
 // 5. analyze_ui_screenshot — handler calls tools.AnalyzeImage
 //
 // Legacy pkg/agent handleAnalyzeUIScreenshot deleted with the SP-137 B4

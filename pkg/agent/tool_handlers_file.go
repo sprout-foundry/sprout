@@ -135,8 +135,14 @@ func handleReadFileWithImages(ctx context.Context, a *Agent, args map[string]int
 			}
 		}
 
-		// Non-multimodal: extract text via OCR
-		result, ocrErr := tools.ProcessPDFForTextOnly(ctx, cleanPath)
+		// Non-multimodal: extract text via OCR, scoped to this agent's
+		// provider. `a` is guarded because the surrounding branch tolerates
+		// a nil agent and the image branch below checks it explicitly.
+		provider := api.ClientType("")
+		if a != nil {
+			provider = a.getClientType()
+		}
+		result, ocrErr := tools.ProcessPDFForTextOnlyWithProvider(ctx, cleanPath, provider)
 		if ocrErr != nil {
 			return nil, "", agenterrors.NewTool("read_file", "failed to read PDF", ocrErr).WithDetail("path", path)
 		}

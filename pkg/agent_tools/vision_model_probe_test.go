@@ -5,7 +5,6 @@ package tools
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
@@ -178,26 +177,21 @@ func TestVisionModelServed_ModelMatchIsCaseInsensitive(t *testing.T) {
 	}
 }
 
-// TestCreateVisionClientContext_NamesRetiredPin pins the operator-facing half
-// of the fix: when the only configured vision model is retired, the error
-// names it instead of claiming no provider offers vision.
-func TestCreateVisionClientContext_NamesRetiredPin(t *testing.T) {
+// TestVisionModelServed_RetiredPinIsNotServed pins the operator-facing half of
+// the fix: a retired pinned model must not read as served, so a provider's own
+// vision resolution does not promise a model its endpoint dropped.
+func TestVisionModelServed_RetiredPinIsNotServed(t *testing.T) {
 	ResetVisionModelListCacheForTest()
 	t.Cleanup(ResetVisionModelListCacheForTest)
 
 	client := &listingClient{provider: "names-pin-provider", model: "retired-vision-model", ids: []string{"live-model"}}
-	err := retiredVisionModelError([]string{"names-pin-provider/retired-vision-model"})
-	if err == nil {
-		t.Fatal("expected an error")
-	}
-	for _, want := range []string{"names-pin-provider/retired-vision-model", "no longer served"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("error %q must mention %q", err.Error(), want)
-		}
-	}
 	// The retired model must not be selected even though the client is
 	// vision-capable by declaration.
 	if visionModelServed(context.Background(), client, client.model) {
 		t.Fatal("retired model must not read as served")
+	}
+	// A model the provider does list still reads as served.
+	if !visionModelServed(context.Background(), client, "live-model") {
+		t.Fatal("a listed model must read as served")
 	}
 }

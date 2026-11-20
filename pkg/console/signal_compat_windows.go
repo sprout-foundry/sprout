@@ -45,6 +45,10 @@ func resetTerminalSignals() {
 	// SIGTTIN/SIGTTOU are not available on Windows
 }
 
+// claimTerminalForeground is a no-op on Windows: there is no POSIX process
+// group to re-assert.
+func claimTerminalForeground() {}
+
 // setNonblock is a no-op on Windows since file descriptor non-blocking mode is not directly supported.
 func setNonblock(fd int, nonblock bool) error {
 	// Non-blocking mode works differently on Windows and is handled by os.Stdin.Read()

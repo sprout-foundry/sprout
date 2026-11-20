@@ -80,6 +80,12 @@ func RegisterGlobalGroundTruth(gt *GroundTruthTermios) {
 // re-showing the cursor and re-asserting the region would race the
 // streaming writer and the steer reader's raw mode.
 func ResyncTerminal() {
+	// 0. foreground group: a `!` child (or any full-screen child) that took
+	// the terminal's foreground group and died without handing it back
+	// leaves sprout backgrounded; every later termios write would land as
+	// SIGTTOU. Re-claim before the mode writes below need it.
+	claimTerminalForeground()
+
 	// 1. termios: cooked mode from the startup snapshot (idempotent;
 	// no-op when unregistered or non-Unix).
 	if gt := globalGroundTruthSnapshot(); gt != nil {

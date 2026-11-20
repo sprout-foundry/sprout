@@ -25,4 +25,6 @@ func prepareSuspension() (notifyResume func(), resume <-chan os.Signal) {
 func ignoreTerminalSignals() {}
 func resetTerminalSignals()  {}
 
+func claimTerminalForeground() {}
+
 func setNonblock(_ int, _ bool) error { return nil }

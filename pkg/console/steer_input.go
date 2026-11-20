@@ -268,6 +268,10 @@ func (r *SteerInputReader) Start() {
 	doneCh := r.doneCh
 	r.mu.Unlock()
 
+	// A child that grabbed the terminal's foreground group and died
+	// without handing it back leaves this process backgrounded; the
+	// termios write below would then be kernel-stopped (SIGTTOU).
+	claimTerminalForeground()
 	st, err := enterSteerMode(r.fd)
 	if err != nil {
 		// Couldn't enter steer mode — degrade to no-op rather than
@@ -368,7 +372,10 @@ func (r *SteerInputReader) Stop() {
 	// over oldState). Ground truth is the REPL's original cooked-mode
 	// snapshot, immune to termios-state descent from PauseSteer /
 	// ResumeSteer cycles where intermediate code may have altered the
-	// termios between our enter and exit.
+	// termios between our enter and exit. Re-claim the foreground group
+	// first for the same reason Start() does: a child that died holding
+	// the tty's foreground group would turn this restore into a stop.
+	claimTerminalForeground()
 	r.mu.Lock()
 	gt := r.groundTruth
 	r.mu.Unlock()

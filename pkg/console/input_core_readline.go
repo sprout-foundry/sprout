@@ -28,7 +28,11 @@ func (ir *InputReader) ReadLine() (string, error) {
 	// stop bit, missing OPOST — and any one of those silently latches
 	// for the rest of the session because MakeRaw → defer Restore
 	// faithfully restores whatever-broken-state was current at entry.
-	// Defensive: also clear any leaked O_NONBLOCK from a prior session.
+	// Defensive: also clear any leaked O_NONBLOCK from a prior session,
+	// and re-claim the tty's foreground group in case a child left one
+	// of its own in charge (a backgrounded sprout's termios writes here
+	// would otherwise be kernel-stopped with SIGTTOU).
+	claimTerminalForeground()
 	if ir.groundTruth != nil {
 		ir.groundTruth.EnsureCooked()
 	}

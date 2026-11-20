@@ -57,19 +57,31 @@ if (!built) {
 
 /** Run a command, returning the spawn result with both streams. */
 function run(command, args, options = {}) {
-  return spawnSync(
-    // On Windows npm is npm.cmd, which spawnSync cannot execute without a
-    // shell; a shell spawn resolves it via PATHEXT (same approach as
-    // scripts/build-webui-dist.mjs).
-    process.platform === "win32" && command === "npm" ? "npm.cmd" : command,
-    args,
-    {
-      encoding: "utf-8",
-      maxBuffer: 64 * 1024 * 1024,
-      shell: process.platform === "win32",
-      ...options,
-    },
-  );
+  let executable = command;
+  let useShell = false;
+  if (process.platform === "win32") {
+    if (command === "npm") {
+      // npm is npm.cmd, which a shell resolves via PATHEXT (same approach
+      // as scripts/build-webui-dist.mjs).
+      executable = "npm.cmd";
+      useShell = true;
+    } else if (command === "tar") {
+      // Pin System32's bsdtar: the checked-out PATH may resolve Git's GNU
+      // tar, which reads the leading "C:" of a Windows path as a remote
+      // hostname ("Cannot connect to C: resolve failed").
+      executable = path.join(
+        process.env.SystemRoot || "C:\\Windows",
+        "System32",
+        "tar.exe",
+      );
+    }
+  }
+  return spawnSync(executable, args, {
+    encoding: "utf-8",
+    maxBuffer: 64 * 1024 * 1024,
+    shell: useShell,
+    ...options,
+  });
 }
 
 /**

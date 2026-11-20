@@ -57,17 +57,19 @@ if (!built) {
 
 /** Run a command, returning the spawn result with both streams. */
 function run(command, args, options = {}) {
-  // On Windows npm is npm.cmd, which spawnSync without a shell cannot
-  // execute; run npm's JS entry on the current node binary instead.
-  if (process.platform === "win32" && command === "npm") {
-    command = process.execPath;
-    args = [path.join(NODE_MODULES, "npm/bin/npm-cli.js"), ...args];
-  }
-  return spawnSync(command, args, {
-    encoding: "utf-8",
-    maxBuffer: 64 * 1024 * 1024,
-    ...options,
-  });
+  return spawnSync(
+    // On Windows npm is npm.cmd, which spawnSync cannot execute without a
+    // shell; a shell spawn resolves it via PATHEXT (same approach as
+    // scripts/build-webui-dist.mjs).
+    process.platform === "win32" && command === "npm" ? "npm.cmd" : command,
+    args,
+    {
+      encoding: "utf-8",
+      maxBuffer: 64 * 1024 * 1024,
+      shell: process.platform === "win32",
+      ...options,
+    },
+  );
 }
 
 /**

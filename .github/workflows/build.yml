@@ -300,7 +300,11 @@ jobs:
       # would block every PR on the historical backlog (431 findings as of
       # 2026-09-19, see `make lint-go`). only-new-issues diffs against the
       # PR base or the push range. Needs a full fetch for accurate diffs
-      # and pull-requests: read for the GitHub-API diff path.
+      # and pull-requests: read for the GitHub-API diff path. The action's
+      # diff has no base on schedule/dispatch events, which would fall back
+      # to whole-tree linting against the backlog; on those events diff
+      # since the latest release tag instead via make lint-go-new.
+      if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
       uses: golangci/golangci-lint-action@v9
       with:
         # v2.13.2: prebuilt binaries must be built with a Go version >= the
@@ -308,6 +312,12 @@ jobs:
         # exits with "language version lower than targeted" on every run.
         version: v2.13.2
         only-new-issues: true
+
+    - name: Lint Go (new code only, since latest release)
+      if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+      run: |
+        rev=$(git describe --tags --match='v*' --abbrev=0)
+        make lint-go-new NEW_FROM_REV="$rev"
 
     - name: Set up Node.js
       uses: actions/setup-node@v5
@@ -477,11 +487,22 @@ jobs:
       run: make fmt-check
 
     - name: Lint Go (new code only)
-      # Same new-code gate as the `test` job — see the note there.
+      # Same new-code gate as the `test` job — see the note there. The
+      # action's only-new-issues diff has no base on schedule/dispatch
+      # events, which would fall back to whole-tree linting against the
+      # historical backlog; on those events diff since the latest release
+      # tag instead via make lint-go-new.
+      if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
       uses: golangci/golangci-lint-action@v9
       with:
         version: v2.13.2
         only-new-issues: true
+
+    - name: Lint Go (new code only, since latest release)
+      if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+      run: |
+        rev=$(git describe --tags --match='v*' --abbrev=0)
+        make lint-go-new NEW_FROM_REV="$rev"
 
     - name: Set up Node.js
       uses: actions/setup-node@v5

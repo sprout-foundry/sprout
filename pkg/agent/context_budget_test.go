@@ -386,3 +386,18 @@ func newAgentWithContextCap(t *testing.T, nativeWindow, capTokens int) *Agent {
 	t.Cleanup(agent.Shutdown)
 	return agent
 }
+
+// The providers that run their model on this device are the ones whose small
+// window turns Low-Context Mode on.
+func TestOnDeviceClientType(t *testing.T) {
+	for _, ct := range []api.ClientType{api.SproutLocalClientType, api.OllamaLocalClientType, api.OllamaClientType, api.LMStudioClientType} {
+		if !onDeviceClientType(ct) {
+			t.Errorf("%s runs on the device", ct)
+		}
+	}
+	for _, ct := range []api.ClientType{api.OpenAIClientType, api.DeepInfraClientType, api.OllamaCloudClientType, api.TestClientType} {
+		if onDeviceClientType(ct) {
+			t.Errorf("%s does not run on the device", ct)
+		}
+	}
+}

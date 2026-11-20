@@ -102,7 +102,7 @@ func handleToolError(agent *Agent, err error, toolName string) (string, error) {
 // where a small context window means a small model.
 func onDeviceClientType(ct api.ClientType) bool {
 	switch ct {
-	case api.OllamaLocalClientType, api.OllamaClientType, api.LMStudioClientType:
+	case api.SproutLocalClientType, api.OllamaLocalClientType, api.OllamaClientType, api.LMStudioClientType:
 		return true
 	}
 	return false

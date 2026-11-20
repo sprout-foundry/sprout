@@ -23,7 +23,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const packageDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const dist = resolve(packageDir, "dist");
@@ -286,8 +286,10 @@ export function emitWorkspaceStylesheet() {
 }
 
 // `node scripts/scope-stylesheet.mjs` runs the pass on its own (used by the
-// build script after `vite build`).
-if (import.meta.url === `file://${process.argv[1]}`) {
+// build script after `vite build`). Compare path-to-URL conversions, not a
+// hand-built `file://` string: on Windows argv[1] is a backslash path the
+// naive comparison never matches, silently skipping the pass.
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const result = emitWorkspaceStylesheet();
   process.stdout.write(
     `scope-stylesheet: wrote ${relative(packageDir, resolve(dist, "workspace.css"))} ` +

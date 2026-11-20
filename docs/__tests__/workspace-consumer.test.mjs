@@ -37,6 +37,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -56,6 +57,12 @@ if (!built) {
 
 /** Run a command, returning the spawn result with both streams. */
 function run(command, args, options = {}) {
+  // On Windows npm is npm.cmd, which spawnSync without a shell cannot
+  // execute; run npm's JS entry on the current node binary instead.
+  if (process.platform === "win32" && command === "npm") {
+    command = process.execPath;
+    args = [path.join(NODE_MODULES, "npm/bin/npm-cli.js"), ...args];
+  }
   return spawnSync(command, args, {
     encoding: "utf-8",
     maxBuffer: 64 * 1024 * 1024,
@@ -76,14 +83,15 @@ function linkNodeModules(nodeModulesDir, extractedPackageDir) {
     if (name === "@sprout-foundry") continue;
     const target = path.join(nodeModulesDir, name);
     if (fs.lstatSync(target, { throwIfNoEntry: false })) continue;
-    fs.symlinkSync(path.join(NODE_MODULES, name), target, "dir");
+    // "junction": unprivileged on Windows, a dir symlink elsewhere.
+    fs.symlinkSync(path.join(NODE_MODULES, name), target, "junction");
   }
   // The workspace package, installed from the tarball rather than the repo.
   const scope = path.join(nodeModulesDir, "@sprout-foundry");
   fs.mkdirSync(scope, { recursive: true });
   const workspaceLink = path.join(scope, "workspace");
   if (!fs.lstatSync(workspaceLink, { throwIfNoEntry: false })) {
-    fs.symlinkSync(extractedPackageDir, workspaceLink, "dir");
+    fs.symlinkSync(extractedPackageDir, workspaceLink, "junction");
   }
 }
 
@@ -274,10 +282,18 @@ describe(
       );
 
       // ── tsc --noEmit ─────────────────────────────────────────────────
-      const tsc = path.join(NODE_MODULES, ".bin/tsc");
-      const typeCheck = run(tsc, ["--noEmit", "-p", "tsconfig.json"], {
-        cwd: APP,
-      });
+      // `node <typescript/bin/tsc>`: the `.bin/tsc` shim is a POSIX shell
+      // script CreateProcess cannot execute on Windows (see
+      // packages/workspace/scripts/bundle-dts.mjs).
+      const require = createRequire(import.meta.url);
+      const tsc = require.resolve("typescript/bin/tsc");
+      const typeCheck = run(
+        process.execPath,
+        [tsc, "--noEmit", "-p", "tsconfig.json"],
+        {
+          cwd: APP,
+        },
+      );
       assert.equal(
         typeCheck.status,
         0,

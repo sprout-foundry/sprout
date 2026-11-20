@@ -21,6 +21,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 // ── Helpers ────────────────────────────────────────────────────────────
@@ -527,7 +528,11 @@ describe("package sources", () => {
     ];
     for (const file of sources) {
       const source = read(file);
-      assert.doesNotMatch(source, /webui\/src|from ['"]react/, `${file} must not reach the web UI or React`);
+      assert.doesNotMatch(
+        source,
+        /webui\/src|from ['"]react/,
+        `${file} must not reach the web UI or React`,
+      );
     }
   });
 
@@ -668,12 +673,19 @@ describe(
 
     test("the agent entry is self-contained: it loads no chunk and no React", () => {
       const agent = fs.readFileSync(path.join(DIST, "agent.js"), "utf-8");
-      assert.doesNotMatch(agent, /\bfrom\s+["']|\bimport\s*\(\s*["']/, "agent.js imports nothing");
+      assert.doesNotMatch(
+        agent,
+        /\bfrom\s+["']|\bimport\s*\(\s*["']/,
+        "agent.js imports nothing",
+      );
       assert.ok(
         agent.length < 64 * 1024,
         `the headless agent API must stay small, was ${agent.length} bytes`,
       );
-      assert.ok(fs.existsSync(path.join(DIST, "agent.d.ts")), "agent.d.ts emitted");
+      assert.ok(
+        fs.existsSync(path.join(DIST, "agent.d.ts")),
+        "agent.d.ts emitted",
+      );
     });
 
     test("code-splitting: the entry is small and the views are their own chunks", () => {
@@ -1342,10 +1354,14 @@ describe(
           ].join("\n"),
         );
 
-        const tsc = path.join(ROOT, "node_modules/.bin/tsc");
+        // `node <typescript/bin/tsc>`: the `.bin/tsc` shim is a POSIX shell
+        // script CreateProcess cannot execute on Windows (see
+        // packages/workspace/scripts/bundle-dts.mjs).
+        const require = createRequire(import.meta.url);
+        const tsc = require.resolve("typescript/bin/tsc");
         const result = spawnSync(
-          tsc,
-          ["-p", path.join(scratch, "tsconfig.json")],
+          process.execPath,
+          [tsc, "-p", path.join(scratch, "tsconfig.json")],
           {
             encoding: "utf-8",
           },

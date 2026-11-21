@@ -320,6 +320,12 @@ const TESTIDS = {
   "shell-approval-submit": "shell-approval-submit",
 
   // Escalation toast (browser-limitation → Mode A cloud task / Mode B workspace)
+  // Mode A's CTA opens a confirm step (EscalationListener): the prompt is
+  // editable there, and only "Start task" creates the task.
+  "escalation-cloud-task-confirm": "escalation-cloud-task-confirm",
+  "escalation-cloud-task-prompt": "escalation-cloud-task-prompt",
+  "escalation-cloud-task-start": "escalation-cloud-task-start",
+  "escalation-cloud-task-back": "escalation-cloud-task-back",
   "escalation-toast-cloud-task": "escalation-toast-cloud-task",
   "escalation-toast-cloud-task-status": "escalation-toast-cloud-task-status",
   "escalation-toast-cloud-task-link": "escalation-toast-cloud-task-link",

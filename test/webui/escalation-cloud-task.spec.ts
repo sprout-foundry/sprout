@@ -14,16 +14,6 @@
 // all three guarantees: nothing posts before "Start task", the edit is what
 // gets posted, and "Back" posts nothing at all.
 //
-// The prompt/start/back testids are spelled out inline rather than added to
-// test/webui/testids.ts: the registry requires every id to be used by a
-// component, and the component side of this change is a separate task — the
-// ids belong in the registry the moment the markup uses them.
-//
-// Until that markup lands, these cases fail. That is the point: they state the
-// confirm step's contract (nothing posts before "Start task", the edited text
-// is what posts, "Back" posts nothing), so the component work is done when
-// this spec goes green.
-//
 // The platform endpoints are stubbed with page.route (the Vite dev E2E
 // environment has no Foundry platform). The escalation is driven by
 // dispatching the `sprout:escalation-trigger` window event directly — the
@@ -110,9 +100,9 @@ const DERIVED_PROMPT =
 const EDITED_PROMPT = 'Continue building this repository, but run the full test suite first.';
 
 /** The confirm step's own testids (see the header note). */
-const PROMPT_TESTID = 'escalation-cloud-task-prompt';
-const START_TESTID = 'escalation-cloud-task-start';
-const BACK_TESTID = 'escalation-cloud-task-back';
+const PROMPT_TESTID = TESTIDS['escalation-cloud-task-prompt'];
+const START_TESTID = TESTIDS['escalation-cloud-task-start'];
+const BACK_TESTID = TESTIDS['escalation-cloud-task-back'];
 
 /** Dismiss any toast left over from a previous test (serial page reuse). */
 async function dismissToastIfOpen() {

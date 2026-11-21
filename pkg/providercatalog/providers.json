@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-18T23:13:21Z",
+  "updated_at": "2026-11-21T16:49:57Z",
   "source": "refresh_provider_catalog",
   "onboarding_order": [
     "deepinfra",
@@ -2880,8 +2880,8 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.29,
-          "output_cost": 1.1400000000000001,
+          "input_cost": 0.25,
+          "output_cost": 1,
           "cached_input_cost": 0.11
         },
         {
@@ -3000,9 +3000,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.06,
-          "output_cost": 0.18,
-          "cached_input_cost": 0.015
+          "input_cost": 0.0443,
+          "output_cost": 0.3,
+          "cached_input_cost": 0.035
         },
         {
           "id": "deepseek/deepseek-v4-flash-0731:batch",
@@ -3040,9 +3040,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.44,
-          "output_cost": 1.32,
-          "cached_input_cost": 0.014
+          "input_cost": 0.21559999999999999,
+          "output_cost": 0.6468,
+          "cached_input_cost": 0.00686
         },
         {
           "id": "deepseek/deepseek-v4-flash-vision-exp:batch",
@@ -3071,7 +3071,7 @@
           ],
           "input_cost": 0.8999999999999999,
           "output_cost": 1.5,
-          "cached_input_cost": 0.25
+          "cached_input_cost": 0.19999999999999998
         },
         {
           "id": "deepseek/deepseek-v4-pro-0813",
@@ -3083,9 +3083,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.111,
-          "output_cost": 4.4399999999999995,
-          "cached_input_cost": 0.09699999999999999
+          "input_cost": 1.32,
+          "output_cost": 3.9600000000000004,
+          "cached_input_cost": 0.044
         },
         {
           "id": "deepseek/deepseek-v4-pro-0813:batch",
@@ -3112,9 +3112,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.050699999999999995,
-          "output_cost": 0.20279999999999998,
-          "cached_input_cost": 0.001014
+          "input_cost": 0.049800000000000004,
+          "output_cost": 0.19920000000000002,
+          "cached_input_cost": 0.0009960000000000001
         },
         {
           "id": "deepseek/deepseek-v4.1-flash-1017",
@@ -3142,9 +3142,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.036,
-          "output_cost": 0.15,
-          "cached_input_cost": 0.003
+          "input_cost": 0.035,
+          "output_cost": 0.149,
+          "cached_input_cost": 0.0029
         },
         {
           "id": "deepseek/deepseek-v4.1-flash:batch",
@@ -3157,9 +3157,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.112,
-          "output_cost": 0.33599999999999997,
-          "cached_input_cost": 0.00336
+          "input_cost": 0.049999999999999996,
+          "output_cost": 0.15,
+          "cached_input_cost": 0.004
         },
         {
           "id": "dots-studio/dots-3-note-preview:free",
@@ -3903,9 +3903,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.0765,
-          "output_cost": 0.255,
-          "cached_input_cost": 0.042499999999999996
+          "input_cost": 0.0675,
+          "output_cost": 0.22499999999999998,
+          "cached_input_cost": 0.0375
         },
         {
           "id": "google/gemma-4-26b-a4b-it:free",
@@ -4240,9 +4240,9 @@
             "tools",
             "reasoning"
           ],
-          "input_cost": 0.045,
-          "output_cost": 0.135,
-          "cached_input_cost": 0.009
+          "input_cost": 0.06,
+          "output_cost": 0.18,
+          "cached_input_cost": 0.012
         },
         {
           "id": "inclusionai/ling-3.2-flash:free",
@@ -4465,6 +4465,9 @@
           "name": "Meta: Llama 3.2 1B Instruct",
           "description": "Llama 3.2 1B is a 1-billion-parameter language model focused on efficiently performing natural language tasks, such as summarization, dialogue, and multilingual text analysis. Its smaller size allows it to operate...",
           "context_length": 60000,
+          "tags": [
+            "tools"
+          ],
           "input_cost": 0.027,
           "output_cost": 0.201
         },
@@ -4476,8 +4479,8 @@
           "tags": [
             "structured_output"
           ],
-          "input_cost": 0.0509,
-          "output_cost": 0.335
+          "input_cost": 0.049999999999999996,
+          "output_cost": 0.33
         },
         {
           "id": "meta-llama/llama-3.3-70b-instruct",
@@ -4775,9 +4778,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.295,
-          "output_cost": 1.2,
-          "cached_input_cost": 0.06
+          "input_cost": 0.27,
+          "output_cost": 0.95,
+          "cached_input_cost": 0.03
         },
         {
           "id": "minimax/minimax-m2.7",
@@ -4786,12 +4789,11 @@
           "context_length": 196608,
           "tags": [
             "tools",
-            "reasoning",
-            "structured_output"
+            "reasoning"
           ],
-          "input_cost": 0.21,
-          "output_cost": 0.84,
-          "cached_input_cost": 0.041999999999999996
+          "input_cost": 0.6,
+          "output_cost": 1.7999999999999998,
+          "cached_input_cost": 0.06
         },
         {
           "id": "minimax/minimax-m2.7:free",
@@ -5224,6 +5226,17 @@
           "cached_input_cost": 0.19999999999999998
         },
         {
+          "id": "mistralai/pixtral-large-2502",
+          "name": "Mistral: Pixtral Large 2502",
+          "description": "Pixtral Large 2502 is the February 2025 version of Mistral AI's large multimodal model, following [Pixtral Large 2411](https://openrouter.ai/mistralai/pixtral-large-2411). It accepts text and image input, including documents, charts, and natural images,...",
+          "context_length": 128000,
+          "tags": [
+            "vision"
+          ],
+          "input_cost": 2,
+          "output_cost": 6
+        },
+        {
           "id": "mistralai/voxtral-small-24b-2507",
           "name": "Mistral: Voxtral Small 24B 2507",
           "description": "Voxtral Small is an enhancement of Mistral Small 3, incorporating state-of-the-art audio input capabilities while retaining best-in-class text performance. It excels at speech transcription, translation and audio understanding. Input audio...",
@@ -5339,8 +5352,8 @@
             "structured_output"
           ],
           "input_cost": 0.6,
-          "output_cost": 3.5,
-          "cached_input_cost": 0.16
+          "output_cost": 3,
+          "cached_input_cost": 0.12
         },
         {
           "id": "moonshotai/kimi-k2.7-code:batch",
@@ -5383,9 +5396,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.2403,
-          "output_cost": 8.402299999999999,
-          "cached_input_cost": 0.19999999999999998
+          "input_cost": 0.253,
+          "output_cost": 8.8,
+          "cached_input_cost": 0.18
         },
         {
           "id": "moonshotai/kimi-k3.1-pro:batch",
@@ -5393,8 +5406,10 @@
           "description": "Kimi K3.1 Pro is Moonshot AI's flagship open-weight multimodal reasoning model and a post-trained successor to Kimi K3, with a 1M-token context window. It is built for long-horizon coding, 3D...",
           "context_length": 1048576,
           "tags": [
+            "tools",
             "vision",
-            "reasoning"
+            "reasoning",
+            "structured_output"
           ],
           "input_cost": 0.372,
           "output_cost": 5.582999999999999,
@@ -5768,7 +5783,7 @@
             "structured_output"
           ],
           "input_cost": 0.15,
-          "output_cost": 0.5,
+          "output_cost": 0.47,
           "cached_input_cost": 0.02
         },
         {
@@ -7305,8 +7320,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.15,
-          "output_cost": 0.6,
+          "input_cost": 0.09,
+          "output_cost": 0.36,
           "cached_input_cost": 0.075
         },
         {
@@ -7332,9 +7347,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.018,
-          "output_cost": 0.09,
-          "cached_input_cost": 0.009
+          "input_cost": 0.017,
+          "output_cost": 0.08499999999999999,
+          "cached_input_cost": 0.0085
         },
         {
           "id": "openai/gpt-oss-20b:batch",
@@ -7639,9 +7654,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.06,
+          "input_cost": 0.07,
           "output_cost": 0.5,
-          "cached_input_cost": 0.003
+          "cached_input_cost": 0.006
         },
         {
           "id": "particle-ai/particle-1:free",
@@ -8040,8 +8055,8 @@
             "tools",
             "structured_output"
           ],
-          "input_cost": 0.15,
-          "output_cost": 0.6
+          "input_cost": 0.07,
+          "output_cost": 0.28
         },
         {
           "id": "qwen/qwen3-coder-flash",
@@ -8255,8 +8270,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.3,
-          "output_cost": 2.4,
+          "input_cost": 0.195,
+          "output_cost": 1.56,
           "cached_input_cost": 0.27
         },
         {
@@ -8300,9 +8315,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.142,
-          "output_cost": 0.21,
-          "cached_input_cost": 0.128
+          "input_cost": 0.16999999999999998,
+          "output_cost": 0.25,
+          "cached_input_cost": 0.04
         },
         {
           "id": "qwen/qwen3.5-9b:batch",
@@ -8529,7 +8544,7 @@
             "structured_output"
           ],
           "input_cost": 0.06,
-          "output_cost": 2.2,
+          "output_cost": 1.96,
           "cached_input_cost": 0.059
         },
         {
@@ -8664,6 +8679,21 @@
           "cached_input_cost": 0.07125000000000001
         },
         {
+          "id": "radixark/daisyrose-27b",
+          "name": "RadixArk: DaisyRose 27B",
+          "description": "DaisyRose 27B is an open-weight multimodal reasoning model from RadixArk, trained from [Qwen3.8 27B](https://openrouter.ai/qwen/qwen3.8-27b) using reinforcement learning only on long-horizon agent tasks, with no supervised fine-tuning or distillation. It is...",
+          "context_length": 262144,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.15,
+          "output_cost": 1.875,
+          "cached_input_cost": 0.0375
+        },
+        {
           "id": "recursive/flint-v1.0:free",
           "name": "Recursive: Flint (free)",
           "description": "Flint is an open-weight mixture-of-experts model from Recursive, with about 2.5B active parameters out of 40B total, built by Recursive's autoresearch system Eureka Machine for coding agents. It is suited...",
@@ -8684,9 +8714,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.3,
+          "input_cost": 0.25,
           "output_cost": 1,
-          "cached_input_cost": 0.04
+          "cached_input_cost": 0.049999999999999996
         },
         {
           "id": "rekaai/reka-edge",
@@ -9111,6 +9141,21 @@
           "cached_input_cost": 0.16999999999999998
         },
         {
+          "id": "thinkingmachines/inkling-2-mini",
+          "name": "Thinking Machines: Inkling 2 Mini",
+          "description": "Inkling 2 Mini is an open-weight multimodal looped transformer from Thinking Machines Lab, with 3.4B active parameters out of 26.4B total (MoE). Its middle layers run three times with shared...",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.09999999999999999,
+          "output_cost": 0.39999999999999997,
+          "cached_input_cost": 0.02
+        },
+        {
           "id": "thinkingmachines/inkling-2-small",
           "name": "Thinking Machines: Inkling 2 Small",
           "description": "Inkling 2 Small is an open-weight multimodal mixture-of-experts reasoning model from Thinking Machines Lab, with 17B active parameters out of 594B total. It is the first model in the second...",
@@ -9128,7 +9173,7 @@
         {
           "id": "thinkingmachines/inkling-2-small:free",
           "name": "Thinking Machines: Inkling 2 Small (free)",
-          "description": "Inkling 2 Small is an open-weight multimodal mixture-of-experts reasoning model from Thinking Machines Lab, with 17B active parameters out of 594B total. It is the first model in the second...",
+          "description": "Inkling 2 Small is a multimodal mixture-of-experts reasoning model from Thinking Machines Lab, with 17B active parameters out of 594B total. It is the first model in the second Inkling generation. It was trained with reinforcement learning on long-horizon coding tasks across many agent harnesses, and is suited for agentic coding, autonomous research, agentic knowledge work and retrieval-augmented generation, with English and general multilingual support. It accepts text and image input (no audio), supports tool calling and variable reasoning effort, and has a 1M-token context window.",
           "context_length": 1048576,
           "tags": [
             "tools",
@@ -9330,8 +9375,8 @@
         },
         {
           "id": "x-ai/grok-4.20",
-          "name": "SpaceXAI: Grok 4.20",
-          "description": "Grok 4.20 is a reasoning model from SpaceXAI with industry-leading speed and agentic tool calling capabilities. It combines the lowest hallucination rate on the market with strict prompt adherance, delivering...",
+          "name": "SpaceXSI: Grok 4.20",
+          "description": "Grok 4.20 is a reasoning model from SpaceXSI with industry-leading speed and agentic tool calling capabilities. It combines the lowest hallucination rate on the market with strict prompt adherance, delivering...",
           "context_length": 2000000,
           "tags": [
             "tools",
@@ -9345,8 +9390,8 @@
         },
         {
           "id": "x-ai/grok-4.20-multi-agent",
-          "name": "SpaceXAI: Grok 4.20 Multi-Agent",
-          "description": "Grok 4.20 Multi-Agent is a variant of SpaceXAI’s Grok 4.20 designed for collaborative, agent-based workflows. Multiple agents operate in parallel to conduct deep research, coordinate tool use, and synthesize information...",
+          "name": "SpaceXSI: Grok 4.20 Multi-Agent",
+          "description": "Grok 4.20 Multi-Agent is a variant of SpaceXSI’s Grok 4.20 designed for collaborative, agent-based workflows. Multiple agents operate in parallel to conduct deep research, coordinate tool use, and synthesize information...",
           "context_length": 2000000,
           "tags": [
             "vision",
@@ -9359,8 +9404,8 @@
         },
         {
           "id": "x-ai/grok-4.3",
-          "name": "SpaceXAI: Grok 4.3",
-          "description": "Grok 4.3 is a reasoning model from SpaceXAI. It accepts text and image inputs with text output, and is suited for agentic workflows, instruction-following tasks, and applications requiring high factual...",
+          "name": "SpaceXSI: Grok 4.3",
+          "description": "Grok 4.3 is a reasoning model from SpaceXSI. It accepts text and image inputs with text output, and is suited for agentic workflows, instruction-following tasks, and applications requiring high factual...",
           "context_length": 1000000,
           "tags": [
             "tools",
@@ -9374,8 +9419,8 @@
         },
         {
           "id": "x-ai/grok-4.3:batch",
-          "name": "SpaceXAI: Grok 4.3 (batch)",
-          "description": "Grok 4.3 is a reasoning model from SpaceXAI. It accepts text and image inputs with text output, and is suited for agentic workflows, instruction-following tasks, and applications requiring high factual...",
+          "name": "SpaceXSI: Grok 4.3 (batch)",
+          "description": "Grok 4.3 is a reasoning model from SpaceXSI. It accepts text and image inputs with text output, and is suited for agentic workflows, instruction-following tasks, and applications requiring high factual...",
           "context_length": 1000000,
           "tags": [
             "tools",
@@ -9389,8 +9434,8 @@
         },
         {
           "id": "x-ai/grok-4.5",
-          "name": "SpaceXAI: Grok 4.5",
-          "description": "Grok 4.5 is a model from SpaceXAI with frontier performance on coding, knowledge work, and STEM.",
+          "name": "SpaceXSI: Grok 4.5",
+          "description": "Grok 4.5 is a model from SpaceXSI with frontier performance on coding, knowledge work, and STEM.",
           "context_length": 500000,
           "tags": [
             "tools",
@@ -9404,8 +9449,8 @@
         },
         {
           "id": "x-ai/grok-4.6",
-          "name": "SpaceXAI: Grok 4.6",
-          "description": "Grok 4.6 is a model from SpaceXAI with frontier performance on coding, knowledge work, and STEM. It is succeeded by [Grok 4.7](/x-ai/grok-4.7).",
+          "name": "SpaceXSI: Grok 4.6",
+          "description": "Grok 4.6 is a model from SpaceXSI with frontier performance on coding, knowledge work, and STEM. It is succeeded by [Grok 4.7](/x-ai/grok-4.7).",
           "context_length": 500000,
           "tags": [
             "tools",
@@ -9419,8 +9464,8 @@
         },
         {
           "id": "x-ai/grok-4.6:batch",
-          "name": "SpaceXAI: Grok 4.6 (batch)",
-          "description": "Grok 4.6 is a model from SpaceXAI with frontier performance on coding, knowledge work, and STEM. It is succeeded by [Grok 4.7](/x-ai/grok-4.7).",
+          "name": "SpaceXSI: Grok 4.6 (batch)",
+          "description": "Grok 4.6 is a model from SpaceXSI with frontier performance on coding, knowledge work, and STEM. It is succeeded by [Grok 4.7](/x-ai/grok-4.7).",
           "context_length": 500000,
           "tags": [
             "tools",
@@ -9434,8 +9479,8 @@
         },
         {
           "id": "x-ai/grok-4.7",
-          "name": "SpaceXAI: Grok 4.7",
-          "description": "Grok 4.7 is SpaceXAI's flagship model for coding, agentic tasks, and knowledge work, succeeding Grok 4.6. It is particularly strong at long-running software engineering tasks, verifying its own work, and...",
+          "name": "SpaceXSI: Grok 4.7",
+          "description": "Grok 4.7 is SpaceXSI's flagship model for coding, agentic tasks, and knowledge work, succeeding Grok 4.6. It is particularly strong at long-running software engineering tasks, verifying its own work, and...",
           "context_length": 500000,
           "tags": [
             "tools",
@@ -9449,8 +9494,8 @@
         },
         {
           "id": "x-ai/grok-4.7:batch",
-          "name": "SpaceXAI: Grok 4.7 (batch)",
-          "description": "Grok 4.7 is SpaceXAI's flagship model for coding, agentic tasks, and knowledge work, succeeding Grok 4.6. It is particularly strong at long-running software engineering tasks, verifying its own work, and...",
+          "name": "SpaceXSI: Grok 4.7 (batch)",
+          "description": "Grok 4.7 is SpaceXSI's flagship model for coding, agentic tasks, and knowledge work, succeeding Grok 4.6. It is particularly strong at long-running software engineering tasks, verifying its own work, and...",
           "context_length": 500000,
           "tags": [
             "tools",
@@ -9464,8 +9509,8 @@
         },
         {
           "id": "x-ai/grok-build-0.1",
-          "name": "SpaceXAI: Grok Build 0.1",
-          "description": "Grok Build 0.1 is SpaceXAI’s fast coding model trained specifically for agentic software engineering workflows. It supports text and image inputs with text output, and is optimized for interactive coding...",
+          "name": "xAI: Grok Build 0.1",
+          "description": "Grok Build 0.1 is xAI’s fast coding model trained specifically for agentic software engineering workflows. It supports text and image inputs with text output, and is optimized for interactive coding...",
           "context_length": 256000,
           "tags": [
             "tools",
@@ -9475,7 +9520,7 @@
           ],
           "input_cost": 1,
           "output_cost": 2,
-          "cached_input_cost": 0.19999999999999998
+          "cached_input_cost": 0.2
         },
         {
           "id": "xiaomi/mimo-v2.5",
@@ -9510,7 +9555,7 @@
           "id": "xiaomi/mimo-v2.6-flash",
           "name": "Xiaomi: MiMo-V2.6-Flash",
           "description": "MiMo-V2.6-Flash is an open-source foundation model developed by Xiaomi. Built on a Mixture-of-Experts architecture with 309B total parameters and 15B activated per token, it employs a hybrid attention mechanism for...",
-          "context_length": 1050000,
+          "context_length": 1048576,
           "tags": [
             "tools",
             "vision",
@@ -9525,7 +9570,7 @@
           "id": "xiaomi/mimo-v2.6-pro",
           "name": "Xiaomi: MiMo-V2.6-Pro",
           "description": "MiMo-V2.6-Pro is the flagship foundation model developed by Xiaomi. Built at a scale of over 1T parameters, it is designed to push the ceiling of capability for the most demanding...",
-          "context_length": 1050000,
+          "context_length": 1048576,
           "tags": [
             "tools",
             "vision",
@@ -9631,7 +9676,7 @@
           ],
           "input_cost": 0.3,
           "output_cost": 0.8999999999999999,
-          "cached_input_cost": 0.049999999999999996
+          "cached_input_cost": 0.055
         },
         {
           "id": "z-ai/glm-4.7",
@@ -9698,9 +9743,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 1.4,
-          "output_cost": 4.4,
-          "cached_input_cost": 0.26
+          "input_cost": 1.19,
+          "output_cost": 3.74,
+          "cached_input_cost": 0.6
         },
         {
           "id": "z-ai/glm-5.2",
@@ -9764,8 +9809,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.15,
-          "output_cost": 0.5,
+          "input_cost": 0.0399,
+          "output_cost": 0.0784,
           "cached_input_cost": 0.03
         },
         {
@@ -9779,9 +9824,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.024,
-          "output_cost": 0.06899999999999999,
-          "cached_input_cost": 0.01
+          "input_cost": 0.023,
+          "output_cost": 0.068,
+          "cached_input_cost": 0.009
         },
         {
           "id": "z-ai/glm-5.3-flashx",
@@ -9837,9 +9882,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.28099999999999997,
-          "output_cost": 1.25,
-          "cached_input_cost": 0.062
+          "input_cost": 0.28,
+          "output_cost": 1.249,
+          "cached_input_cost": 0.061000000000000006
         },
         {
           "id": "z-ai/glm-5v-turbo",
@@ -9927,9 +9972,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.035,
-          "output_cost": 0.15,
-          "cached_input_cost": 0.0015
+          "input_cost": 0.036,
+          "output_cost": 0.5,
+          "cached_input_cost": 0.01
         },
         {
           "id": "~deepseek/deepseek-pro-latest",
@@ -9955,9 +10000,9 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.045599999999999995,
-          "output_cost": 0.3,
-          "cached_input_cost": 0.035
+          "input_cost": 0.044,
+          "output_cost": 0.13199999999999998,
+          "cached_input_cost": 0.0014
         },
         {
           "id": "~google/gemini-flash-latest",
@@ -10000,7 +10045,7 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.18239999999999998,
+          "input_cost": 0.18050000000000002,
           "output_cost": 11.0055,
           "cached_input_cost": 0.18
         },
@@ -11345,6 +11390,20 @@
           "cached_input_cost": 0.071
         },
         {
+          "id": "RadixArk/DaisyRose-27B",
+          "name": "RadixArk/DaisyRose-27B",
+          "description": "DaisyRose-27B is RadixArk's multimodal reasoning model, trained from Qwen3.8-27B with reinforcement learning only on long-horizon agent tasks. It improves on the base model in agentic coding, reasoning and instruction following, with thinking that can be enabled or disabled, image understanding and a 256K-token context.",
+          "context_length": 262144,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.2,
+          "output_cost": 2.5
+        },
+        {
           "id": "Sao10K/L3-8B-Lunaris-v1-Turbo",
           "name": "Sao10K/L3-8B-Lunaris-v1-Turbo",
           "description": "Lunaris is an 8B Llama 3 roleplay and creative-writing model from Sao10K, served in a faster Turbo configuration.",
@@ -11767,6 +11826,10 @@
           "input_cost": 2,
           "output_cost": 6,
           "cached_input_cost": 0.25
+        },
+        {
+          "id": "Qwen/Qwen4-Max",
+          "name": "Qwen/Qwen4-Max"
         },
         {
           "id": "tencent/Hy4",

@@ -55,7 +55,8 @@
       "zai-org/GLM-5.2-Fast",
       "zai-org/GLM-5.3",
       "tencent/Hy4",
-      "Qwen/Qwen3.5-27B-TEE"
+      "Qwen/Qwen3.5-27B-TEE",
+      "Qwen/Qwen4-Max"
     ],
     "default_context_limit": 262144,
     "default_model": "deepseek-ai/DeepSeek-V3.2-TEE",
@@ -361,6 +362,20 @@
         "input_cost": 0.2,
         "name": "Qwen3.5 27B (TEE)",
         "output_cost": 1.75,
+        "tags": [
+          "vision",
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "cached_input_cost": 0.075,
+        "context_length": 1000000,
+        "description": "Qwen4 Max is Qwen's flagship 1M-context mixture-of-experts model with text, image, and video input on Chutes public compute",
+        "id": "Qwen/Qwen4-Max",
+        "input_cost": 1.5,
+        "name": "Qwen4 Max",
+        "output_cost": 4.5,
         "tags": [
           "vision",
           "tools",

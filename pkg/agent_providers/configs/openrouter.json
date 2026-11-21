@@ -8523,6 +8523,36 @@
         "tags": [
           "vision"
         ]
+      },
+      {
+        "cached_input_cost": 0.0375,
+        "context_length": 262144,
+        "description": "DaisyRose 27B is an open-weight multimodal reasoning model from RadixArk, trained from [Qwen3.8 27B](https://openrouter.ai/qwen/qwen3.8-27b) using reinforcement learning only on long-horizon agent tasks, with no supervised fine-tuning or distillation.",
+        "id": "radixark/daisyrose-27b",
+        "input_cost": 0.15,
+        "name": "RadixArk: DaisyRose 27B",
+        "output_cost": 1.875,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.02,
+        "context_length": 1048576,
+        "description": "Inkling 2 Mini is an open-weight multimodal looped transformer from Thinking Machines Lab, with 3.4B active parameters out of 26.4B total (MoE).",
+        "id": "thinkingmachines/inkling-2-mini",
+        "input_cost": 0.1,
+        "name": "Thinking Machines: Inkling 2 Mini",
+        "output_cost": 0.4,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
       }
     ],
     "model_overrides": {

@@ -245,3 +245,27 @@
   line-height: 1.4;
   color: var(--text-secondary, inherit);
 }
+
+.escalation-toast-confirm-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary, inherit);
+}
+
+/* The prompt is the task's whole instruction: give it room and let it scroll
+   rather than push the toast's actions off-screen. */
+.escalation-toast-confirm-prompt {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  min-height: 64px;
+  max-height: 200px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-subtle, transparent);
+  border-radius: 6px;
+  background: var(--bg-primary, transparent);
+  color: var(--text-primary, inherit);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}

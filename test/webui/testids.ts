@@ -324,6 +324,12 @@ const TESTIDS = {
   "escalation-toast-cloud-task-status": "escalation-toast-cloud-task-status",
   "escalation-toast-cloud-task-link": "escalation-toast-cloud-task-link",
   "escalation-toast-cloud-task-error": "escalation-toast-cloud-task-error",
+  "escalation-toast-cloud-task-confirm": "escalation-toast-cloud-task-confirm",
+  "escalation-toast-cloud-task-confirm-cost":
+    "escalation-toast-cloud-task-confirm-cost",
+  "escalation-cloud-task-prompt": "escalation-cloud-task-prompt",
+  "escalation-cloud-task-start": "escalation-cloud-task-start",
+  "escalation-cloud-task-back": "escalation-cloud-task-back",
   "escalation-toast-start-workspace": "escalation-toast-start-workspace",
   "escalation-toast-workspace-error": "escalation-toast-workspace-error",
 

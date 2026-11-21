@@ -97,6 +97,17 @@ async function clickRunTxn(): Promise<void> {
   fireEvent.click(confirm);
 }
 
+/** Click "Run as cloud task" and confirm the step's prefilled prompt. */
+async function clickRunCloudTask(): Promise<void> {
+  const button = screen.getByTestId('escalation-toast-cloud-task');
+  await waitFor(() => expect(button).toBeEnabled());
+  fireEvent.click(button);
+  // The CTA opens the confirmation step; the task is queued only from there.
+  const start = screen.getByTestId('escalation-cloud-task-start');
+  await waitFor(() => expect(start).toBeEnabled());
+  fireEvent.click(start);
+}
+
 /** Fire a trigger inside act() so its state update lands in act. */
 function fireTrigger(overrides: Partial<EscalationTriggerEvent> = {}): void {
   act(() => dispatchTrigger(overrides));
@@ -666,7 +677,7 @@ describe('EscalationListener — Mode A/B regressions', () => {
     renderListener();
     // No command → Mode A is the primary inline action.
     fireTrigger({ command: undefined, reason: 'git_push_failed' });
-    fireEvent.click(screen.getByTestId('escalation-toast-cloud-task'));
+    await clickRunCloudTask();
     await flush();
 
     const [, init] = fetchMock.mock.calls.find(([input]) => String(input) === '/api/tasks') as [string, RequestInit];
@@ -679,6 +690,68 @@ describe('EscalationListener — Mode A/B regressions', () => {
     expect(status).toHaveTextContent('Cloud task completed');
     // A finished task must not keep spinning.
     expect(status.querySelector('.spinner')).toBeNull();
+  });
+
+  it('opens the confirmation step prefilled instead of submitting on click', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderListener();
+    fireTrigger({ command: undefined, reason: 'git_push_failed' });
+    fireEvent.click(screen.getByTestId('escalation-toast-cloud-task'));
+    await flush();
+
+    const prompt = screen.getByTestId('escalation-cloud-task-prompt') as HTMLTextAreaElement;
+    expect(prompt.value).toBe(
+      'Continue building this repository. Pushing from the browser failed; commit and push the current changes.',
+    );
+    // Nothing is queued until the user confirms.
+    expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === 'POST')).toBe(false);
+    // The CTA row is replaced by the step, so it can't be clicked twice.
+    expect(screen.queryByTestId('escalation-toast-cloud-task')).toBeNull();
+  });
+
+  it('submits exactly the edited prompt when the step is confirmed', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url === '/api/tasks') return jsonResponse({ task_id: 'task-9', status: 'pending' }, { status: 201 });
+      return jsonResponse({ task_id: 'task-9', status: 'pending' });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderListener();
+    fireTrigger({ command: undefined, reason: 'git_push_failed' });
+    fireEvent.click(screen.getByTestId('escalation-toast-cloud-task'));
+    fireEvent.change(screen.getByTestId('escalation-cloud-task-prompt'), {
+      target: { value: 'Fix the failing build instead.' },
+    });
+    fireEvent.click(screen.getByTestId('escalation-cloud-task-start'));
+    await flush();
+
+    const submitCalls = fetchMock.mock.calls.filter(([input]) => String(input) === '/api/tasks');
+    expect(submitCalls).toHaveLength(1);
+    expect(JSON.parse((submitCalls[0][1] as RequestInit).body as string)).toEqual({
+      repo_url: 'https://github.com/acme/app',
+      prompt: 'Fix the failing build instead.',
+    });
+    // The step closes once the task is queued: progress takes its place.
+    expect(screen.queryByTestId('escalation-cloud-task-prompt')).toBeNull();
+    expect(await screen.findByTestId('escalation-toast-cloud-task-status')).toBeInTheDocument();
+  });
+
+  it('returns to the toast on Back without submitting or losing the task', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderListener();
+    fireTrigger({ command: undefined, reason: 'git_push_failed' });
+    fireEvent.click(screen.getByTestId('escalation-toast-cloud-task'));
+    fireEvent.click(screen.getByTestId('escalation-cloud-task-back'));
+    await flush();
+
+    expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === 'POST')).toBe(false);
+    expect(screen.queryByTestId('escalation-cloud-task-prompt')).toBeNull();
+    expect(screen.getByTestId('escalation-toast-cloud-task')).toBeInTheDocument();
   });
 
   it('hides the cloud-task CTA once a txn is in flight for the same toast', async () => {
@@ -708,7 +781,7 @@ describe('EscalationListener — Mode A/B regressions', () => {
     };
     renderListener(host);
     fireTrigger({ command: undefined, reason: 'git_push_failed' });
-    fireEvent.click(screen.getByTestId('escalation-toast-cloud-task'));
+    await clickRunCloudTask();
     await flush();
 
     const link = await screen.findByTestId('escalation-toast-cloud-task-link');
@@ -733,7 +806,7 @@ describe('EscalationListener — Mode A/B regressions', () => {
     };
     renderListener(host);
     fireTrigger({ command: undefined, reason: 'git_push_failed' });
-    fireEvent.click(screen.getByTestId('escalation-toast-cloud-task'));
+    await clickRunCloudTask();
     await flush();
 
     expect(await screen.findByTestId('escalation-toast-cloud-task-status')).toBeInTheDocument();
@@ -750,7 +823,7 @@ describe('EscalationListener — Mode A/B regressions', () => {
 
     renderListener(localHost);
     fireTrigger({ command: undefined, reason: 'git_push_failed' });
-    fireEvent.click(screen.getByTestId('escalation-toast-cloud-task'));
+    await clickRunCloudTask();
     await flush();
 
     expect(await screen.findByTestId('escalation-toast-cloud-task-status')).toBeInTheDocument();

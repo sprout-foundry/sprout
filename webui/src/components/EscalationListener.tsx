@@ -95,6 +95,12 @@ export function EscalationListener() {
   // The confirmation step: opened by the txn CTA, closed by confirming or
   // cancelling. The command reaches a remote machine only from there.
   const [confirmTxn, setConfirmTxn] = useState(false);
+  // Same idea for the cloud-task CTA: the submitted prompt is the task's whole
+  // instruction, so the user gets to read and edit it before it is queued.
+  const [confirmCloudTask, setConfirmCloudTask] = useState(false);
+  // The prompt the confirm step will submit: seeded from the trigger when the
+  // step opens, then owned by the textarea.
+  const [cloudTaskPrompt, setCloudTaskPrompt] = useState('');
   // What the push phase would carry, counted when the step opens (null =
   // still counting / not countable).
   const [pendingPushCount, setPendingPushCount] = useState<number | null>(null);
@@ -129,6 +135,7 @@ export function EscalationListener() {
         setSubmitting(false);
         setWorkspaceError(null);
         setConfirmTxn(false);
+        setConfirmCloudTask(false);
         setPendingPushCount(null);
         setEscalation({ trigger: detail, visible: true });
       }
@@ -148,6 +155,7 @@ export function EscalationListener() {
     setSubmitting(false);
     setWorkspaceError(null);
     setConfirmTxn(false);
+    setConfirmCloudTask(false);
     setPendingPushCount(null);
   }, []);
 
@@ -223,6 +231,8 @@ export function EscalationListener() {
    */
   const handleRunTxn = useCallback(() => {
     if (txn || !hostChoice.loaded) return;
+    // The mirror of handleRunCloudTask: never leave both confirm steps open.
+    setConfirmCloudTask(false);
     setPendingPushCount(null);
     setConfirmTxn(true);
   }, [txn, hostChoice.loaded]);
@@ -257,21 +267,41 @@ export function EscalationListener() {
   const handleRunInCloudInstead = useCallback(() => startTxn(CLOUD_HOST), [startTxn]);
 
   /**
-   * Mode A: submit the escalation as a platform task, then poll it inline.
-   * Status is rendered from the submit response first (usually 'pending') so
-   * the user sees progress before the first poll tick.
+   * Mode A step 1: the CTA opens the confirmation step with the derived prompt
+   * prefilled. The task is submitted only from "Start task", so the user can
+   * correct the instruction (and its cost) before credits are spent.
    */
   const handleRunCloudTask = useCallback(() => {
     const trigger = escalation?.trigger;
-    const repoURL = trigger?.repoURL;
-    if (!repoURL || submitting || cloudTask) return;
+    if (!trigger?.repoURL || submitting || cloudTask) return;
+    // Only one confirm step at a time: with both flags set the action row is
+    // suppressed and the toast would have no control to get out of.
+    setConfirmTxn(false);
+    setCloudTaskPrompt(deriveEscalationPrompt(trigger));
+    setConfirmCloudTask(true);
+  }, [escalation, submitting, cloudTask]);
+
+  /** Back out of the confirmation step without submitting anything. */
+  const handleBackCloudTask = useCallback(() => setConfirmCloudTask(false), []);
+
+  /**
+   * Mode A step 2: submit the (possibly edited) prompt as a platform task,
+   * then poll it inline. Status is rendered from the submit response first
+   * (usually 'pending') so the user sees progress before the first poll tick.
+   */
+  const handleConfirmCloudTask = useCallback(() => {
+    const repoURL = escalation?.trigger?.repoURL;
+    const prompt = cloudTaskPrompt.trim();
+    // An empty prompt would queue a task with no instruction: stay on the step.
+    if (!repoURL || prompt === '' || submitting || cloudTask) return;
+    setConfirmCloudTask(false);
 
     setSubmitting(true);
     const epoch = epochRef.current;
     const live = () => mountedRef.current && epochRef.current === epoch;
     submitCloudTask({
       repo_url: repoURL,
-      prompt: deriveEscalationPrompt(trigger),
+      prompt,
     })
       .then(({ task }: { task: CloudTask }) => {
         if (!live()) return;
@@ -301,7 +331,7 @@ export function EscalationListener() {
       .finally(() => {
         if (live()) setSubmitting(false);
       });
-  }, [escalation, submitting, cloudTask]);
+  }, [escalation, submitting, cloudTask, cloudTaskPrompt]);
 
   const handleStartWorkspace = useCallback(() => {
     const repoURL = escalation?.trigger?.repoURL;
@@ -350,6 +380,7 @@ export function EscalationListener() {
   // Shown only when there is repo context (same gate the Mode B path uses for
   // a meaningful task) and no txn/cloud task is already in flight.
   const showCloudTaskButton = Boolean(repoURL) && !cloudTask && !txn;
+  const showCloudTaskConfirm = showCloudTaskButton && !confirmTxn && confirmCloudTask;
   // The task page's route for the deep link, resolved host-side: a cloud
   // host maps it to its platform route; the local host maps it to its own
   // hash route. When the host has no page for it the link is not rendered —
@@ -532,7 +563,55 @@ export function EscalationListener() {
               </div>
             ) : null}
 
-            {showTxnConfirm ? null : (
+            {showCloudTaskConfirm ? (
+              <div
+                className="escalation-toast-confirm"
+                data-testid="escalation-toast-cloud-task-confirm"
+                role="group"
+                aria-label="Confirm the prompt for this cloud task"
+              >
+                <p className="escalation-toast-confirm-lead">
+                  Send this repository to a platform agent as a cloud task?
+                </p>
+                <label className="escalation-toast-confirm-label" htmlFor="escalation-cloud-task-prompt">
+                  Task prompt
+                </label>
+                <textarea
+                  id="escalation-cloud-task-prompt"
+                  className="escalation-toast-confirm-prompt"
+                  data-testid="escalation-cloud-task-prompt"
+                  value={cloudTaskPrompt}
+                  onChange={(e) => setCloudTaskPrompt(e.target.value)}
+                  rows={4}
+                  disabled={submitting}
+                />
+                <p className="escalation-toast-confirm-detail" data-testid="escalation-toast-cloud-task-confirm-cost">
+                  Runs against the repository as last pushed; edits made in the browser aren&rsquo;t included. Uses
+                  platform credits.
+                </p>
+                <div className="escalation-toast-actions">
+                  <button
+                    className="escalation-toast-action"
+                    onClick={handleConfirmCloudTask}
+                    disabled={submitting || cloudTaskPrompt.trim() === ''}
+                    data-testid="escalation-cloud-task-start"
+                  >
+                    {submitting ? <Loader2 size={14} className="spinner" aria-hidden="true" /> : <Cloud size={14} />}
+                    Start task
+                  </button>
+                  <button
+                    className="escalation-toast-action escalation-toast-action-secondary"
+                    onClick={handleBackCloudTask}
+                    disabled={submitting}
+                    data-testid="escalation-cloud-task-back"
+                  >
+                    Back
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {showTxnConfirm || showCloudTaskConfirm ? null : (
               <div className="escalation-toast-actions">
                 {showTxnButton ? (
                   <button

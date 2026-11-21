@@ -904,6 +904,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.019,
         "context_length": 131072,
         "description": "gpt-oss-120b is an open-weight, 117B-parameter Mixture-of-Experts (MoE) language model from OpenAI designed for high-reasoning, agentic, and general-purpose production use cases. The model supports configurable reasoning depth, full chain-of-thought access, and native tool use, including function calling, browsing, and structured output generation.",
         "id": "openai/gpt-oss-120b",
@@ -930,6 +931,7 @@
         ]
       },
       {
+        "cached_input_cost": 0.015,
         "context_length": 131072,
         "description": "gpt-oss-20b is an open-weight 21B parameter model released by OpenAI under the Apache 2.0 license. It uses a Mixture-of-Experts (MoE) architecture with 3.6B active parameters per forward pass, optimized for lower-latency inference. The model is trained in OpenAI’s Harmony response format and supports reasoning level configuration, fine-tuning, and agentic capabilities including function calling, tool use, and structured outputs.",
         "id": "openai/gpt-oss-20b",
@@ -1390,6 +1392,21 @@
         "input_cost": 1.413,
         "name": "Qwen4 Max",
         "output_cost": 4.24,
+        "tags": [
+          "tools",
+          "vision",
+          "reasoning",
+          "structured_output"
+        ]
+      },
+      {
+        "cached_input_cost": 0.05,
+        "context_length": 262144,
+        "description": "DaisyRose-27B is RadixArk's multimodal reasoning model, trained from Qwen3.8-27B with reinforcement learning only on long-horizon agent tasks. It improves on the base model in agentic coding, reasoning and instruction following, with thinking that can be enabled or disabled, image understanding and a 256K-token context.",
+        "id": "RadixArk/DaisyRose-27B",
+        "input_cost": 0.2,
+        "name": "RadixArk/DaisyRose-27B",
+        "output_cost": 2.5,
         "tags": [
           "tools",
           "vision",

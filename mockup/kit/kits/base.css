@@ -125,6 +125,7 @@ body.screens-ready [data-screen]:not(.is-shown){display:none}
 .center .display,.display.center{margin-inline:auto}
 .text-accent{color:var(--primary)}
 .text-gradient{background:linear-gradient(100deg,var(--primary),var(--accent));-webkit-background-clip:text;background-clip:text;color:transparent}
+.section-primary :is(.text-accent,.text-gradient){color:var(--on-primary);background:none;-webkit-text-fill-color:currentColor;text-decoration:underline;text-decoration-color:color-mix(in srgb,var(--on-primary) 45%,transparent);text-decoration-thickness:.08em;text-underline-offset:.14em}
 .kicker{font-family:var(--font-head);font-weight:700;font-size:.9rem;color:var(--muted);letter-spacing:.08em}
 .rule{border:0;border-top:1px solid var(--border);margin:2.5rem 0}
 .section-primary{background:var(--primary);color:var(--on-primary)}.section-primary h1,.section-primary h2,.section-primary h3,.section-primary .display{color:var(--on-primary)}.section-primary .muted,.section-primary .lead,.section-primary .eyebrow{color:color-mix(in srgb,var(--on-primary) 80%,transparent)}.section-primary .btn-primary{background:var(--on-primary);color:var(--primary)}

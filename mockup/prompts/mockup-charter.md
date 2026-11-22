@@ -1,4 +1,4 @@
-charter-version: mockup-charter/v8
+charter-version: mockup-charter/v9
 
 # Mockup charter
 
@@ -101,8 +101,13 @@ It is added to your document for you, so do not copy any of it.
   panels with `data-panel="id"`.
 - Write a `<script>` (last, before `</body>`) only for behaviour the plan
   needs beyond that: adding to a list, totals, points. Keep it short.
-- A `<style>` is for the rare thing the kit does not cover; keep it to a
-  few lines, and never restyle the kit's components.
+- A `<style>` may lay out your own sections where the composition needs
+  it (placement, columns, sizes, overlaps), using only the kit's variables
+  for colour, type and shape (`var(--primary)`, `--accent`, `--text`,
+  `--muted`, `--surface`, `--soft`, `--border`, `--font-head`, `--radius`,
+  `--shadow`), never raw colours or font names. Never restyle the kit's
+  components (`btn`, `card`, `nav`, form parts, `chip`). Every layout you
+  write falls back to one column on a phone. Keep it under about 30 lines.
 - Load nothing from anywhere: no fonts, images, libraries or links to
   other sites.
 
@@ -113,7 +118,9 @@ that is striking at a glance, then calm, well-ordered sections.
 
 - Make the first screen count: it is what the person sees first and
   judges the whole by. Build it as the composition you named, not just a
-  heading and a button.
+  heading and a button, and lead with what this idea's visitor came for:
+  the menu, the next class, the date and the RSVP, the app itself, shown
+  as real content rather than an icon.
 - One clear hierarchy per screen: a strong headline, a short supporting
   line, one primary action. Secondary actions are `btn-secondary` or
   `btn-ghost`.

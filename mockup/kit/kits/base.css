@@ -146,7 +146,7 @@ body.screens-ready [data-screen]:not(.is-shown){display:none}
 .frame-browser::before{content:"";display:block;height:2.1rem;border-bottom:1px solid var(--border);background:radial-gradient(circle at 1.1rem 50%,var(--border) .3rem,transparent .32rem),radial-gradient(circle at 2rem 50%,var(--border) .3rem,transparent .32rem),radial-gradient(circle at 2.9rem 50%,var(--border) .3rem,transparent .32rem),var(--soft)}
 .frame-phone{width:min(300px,100%);margin-inline:auto;background:var(--surface);border:10px solid var(--text);border-radius:2.6rem;box-shadow:var(--shadow-lg);overflow:hidden;min-height:540px;position:relative}
 .frame-phone::before{content:"";position:absolute;top:.5rem;left:50%;transform:translateX(-50%);width:5.5rem;height:1.3rem;border-radius:999px;background:var(--text);z-index:2}
-.frame-phone .tabbar{position:absolute}
+.frame-phone .tabbar{position:absolute}.frame-phone>:first-child{padding-top:2.4rem}
 /* Bento: an uneven grid of feature tiles */
 .bento{display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:minmax(10rem,auto);gap:var(--grid-gap,1.25rem);align-items:start}
 .bento>.tall{align-self:stretch}

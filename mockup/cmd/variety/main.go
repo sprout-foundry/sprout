@@ -240,6 +240,12 @@ func setThinking(payload map[string]any, model string, on bool) {
 	switch {
 	case strings.Contains(m, "qwen") || strings.Contains(m, "glm"):
 		payload["chat_template_kwargs"] = map[string]any{"enable_thinking": on}
+	case strings.Contains(m, "inkling"):
+		effort := "none"
+		if on {
+			effort = "medium"
+		}
+		payload["reasoning_effort"] = effort
 	case strings.Contains(m, "deepseek-v3") || strings.Contains(m, "deepseek-v4"):
 		state := "disabled"
 		if on {

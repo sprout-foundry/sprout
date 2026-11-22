@@ -148,7 +148,7 @@ that is striking at a glance, then calm, well-ordered sections.
 - Short, specific copy: headlines of a few words, button labels that say
   what happens ("Order a cake", not "Submit"). Write in the person's own
   voice, from how they described the idea. Avoid stock formulas: "… your
-  dog looks forward to", "Get your hands …", "Where X meets Y", "Elevate",
+  dog looks forward to", "… your dog actually likes", "Get your hands …", "Where X meets Y", "Elevate",
   "Unlock", "Discover the …", "Your … journey", "More than just …";
   say the plain specific thing instead.
 - It must look right on a phone and a laptop; the kit's layouts are fluid,

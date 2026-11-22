@@ -28,10 +28,10 @@ var runnerCmd = &cobra.Command{
 	Short: "Use this machine as a runner for the browser build",
 	Long: `Link this machine to your platform account so the browser build's
 escalated commands (builds, tests, git push) run here instead of in a cloud
-workspace.
+dev space.
 
 Modes:
-  container   each workspace runs in a hardened container (default)
+  container   each dev space runs in a hardened container (default)
   native      host toolchains under the OS sandbox (Seatbelt, bubblewrap)
   bare-metal  host toolchains with no sandbox — your full user access`,
 }
@@ -42,12 +42,12 @@ var (
 	runnerPublicURL  string
 	runnerListen     string
 	runnerNoBrowser  bool
-	runnerWorkspaces []string
+	runnerLocalDirs  []string
 	runnerStartLocal []string
 	runnerImage      string
 )
 
-var imageFlagUsage = "workspace image container mode runs (saved; default " + runner.DefaultImage() + "); the runner pulls it with Docker's own credentials, so run `docker login <registry>` for a private image"
+var imageFlagUsage = "dev space image container mode runs (saved; default " + runner.DefaultImage() + "); the runner pulls it with Docker's own credentials, so run `docker login <registry>` for a private image"
 
 func init() {
 	linkCmd := &cobra.Command{
@@ -60,13 +60,13 @@ func init() {
 	linkCmd.Flags().StringVar(&runnerPublicURL, "public-url", "", "HTTPS URL the platform reaches this runner at; omit to connect through the platform relay")
 	linkCmd.Flags().StringVar(&runnerListen, "listen", "", "address the runner listens on (default "+runner.DefaultListenAddr+")")
 	linkCmd.Flags().BoolVar(&runnerNoBrowser, "no-browser", false, "print the approval URL without opening a browser (SSH sessions, headless machines)")
-	linkCmd.Flags().StringArrayVar(&runnerWorkspaces, "dir", nil, "local directory this runner serves workspaces in place (repeatable); the user's real files are the workspace — opt in deliberately")
-	linkCmd.Flags().StringArrayVar(&runnerWorkspaces, "workspace", nil, "alias for --dir")
+	linkCmd.Flags().StringArrayVar(&runnerLocalDirs, "dir", nil, "local directory this runner serves projects in place (repeatable); the user's real files are the project folder — opt in deliberately")
+	linkCmd.Flags().StringArrayVar(&runnerLocalDirs, "workspace", nil, "alias for --dir")
 	markAlias(linkCmd.Flags(), "workspace", "dir", aliasDeprecated)
 	linkCmd.Flags().StringVar(&runnerImage, "image", "", imageFlagUsage)
 
 	startCmd := &cobra.Command{Use: "start", Short: "Run the runner in the foreground", Args: cobra.NoArgs, RunE: runRunnerStart}
-	startCmd.Flags().StringArrayVar(&runnerStartLocal, "dir", nil, "local directory this runner serves workspaces in place (repeatable; passing it replaces the saved list); the user's real files are the workspace — opt in deliberately")
+	startCmd.Flags().StringArrayVar(&runnerStartLocal, "dir", nil, "local directory this runner serves projects in place (repeatable; passing it replaces the saved list); the user's real files are the project folder — opt in deliberately")
 	startCmd.Flags().StringArrayVar(&runnerStartLocal, "workspace", nil, "alias for --dir")
 	markAlias(startCmd.Flags(), "workspace", "dir", aliasDeprecated)
 	startCmd.Flags().StringVar(&runnerImage, "image", "", imageFlagUsage)
@@ -77,7 +77,7 @@ func init() {
 		&cobra.Command{Use: "status", Short: "Show link state, mode and sandbox", Args: cobra.NoArgs, RunE: runRunnerStatus},
 		&cobra.Command{
 			Use:       "mode container|native|bare-metal",
-			Short:     "Choose how workspaces run on this machine",
+			Short:     "Choose how dev spaces run on this machine",
 			Args:      cobra.ExactArgs(1),
 			ValidArgs: []string{runner.ModeContainer, runner.ModeNative, runner.ModeBareMetal},
 			RunE:      runRunnerMode,
@@ -107,7 +107,7 @@ func runRunnerLink(cmd *cobra.Command, _ []string) error {
 			return fmt.Errorf("--public-url must be an https URL (got %q)", runnerPublicURL)
 		}
 	}
-	localDirs, err := resolveWorkspaceDirs(runnerWorkspaces, st.LocalDirs)
+	localDirs, err := resolveLocalDirs(runnerLocalDirs, st.LocalDirs)
 	if err != nil {
 		return err
 	}
@@ -195,20 +195,20 @@ func preflightLinkImage(ctx context.Context, cmd *cobra.Command, st *runner.Stat
 		return nil
 	}
 	if err := runner.DockerAvailable(ctx, docker); err != nil {
-		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Warning: %v\n`sprout runner start` needs it running, with the workspace image %s available.\n", err, st.Image)
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Warning: %v\n`sprout runner start` needs it running, with the dev space image %s available.\n", err, st.Image)
 		return nil
 	}
 	l := &runner.ContainerLauncher{Image: st.Image, Docker: docker}
 	return l.EnsureImage(ctx, cmd.OutOrStdout())
 }
 
-// resolveWorkspaceDirs applies the --dir flags to the saved allowlist.
+// resolveLocalDirs applies the --dir flags to the saved allowlist.
 // Passing no flags keeps the saved list, so a plain `runner start` never
 // loses the configuration. With flags, the saved list is REPLACED (the flags
 // are the whole new list): that is how entries are removed. Re-validate every
 // entry so a since-deleted directory fails with a clear error instead of
 // silently dropping from the list.
-func resolveWorkspaceDirs(flags []string, saved []string) ([]string, error) {
+func resolveLocalDirs(flags []string, saved []string) ([]string, error) {
 	if len(flags) == 0 {
 		return saved, nil
 	}
@@ -234,7 +234,7 @@ func printLocalDirNotice(cmd *cobra.Command, st *runner.State) error {
 	if len(st.LocalDirs) == 0 {
 		return nil
 	}
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Local workspace directories (work started there uses your real files):\n")
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Local project folders (work started there uses your real files):\n")
 	for _, dir := range st.LocalDirs {
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  %s\n", dir)
 	}
@@ -281,7 +281,7 @@ func runRunnerStart(cmd *cobra.Command, _ []string) error {
 	if err != nil || key == "" {
 		return errors.New("the runner key is missing from the credential store; run `sprout runner link` again")
 	}
-	st.LocalDirs, err = resolveWorkspaceDirs(runnerStartLocal, st.LocalDirs)
+	st.LocalDirs, err = resolveLocalDirs(runnerStartLocal, st.LocalDirs)
 	if err != nil {
 		return err
 	}
@@ -363,7 +363,7 @@ func runRunnerStatus(cmd *cobra.Command, _ []string) error {
 	}
 	_, _ = fmt.Fprintf(out, "\nListen:    %s\nPublic URL: %s\n", st.ListenAddr, firstNonEmpty(st.PublicURL, "(none — connects through the platform relay)"))
 	if len(st.LocalDirs) > 0 {
-		_, _ = fmt.Fprint(out, "Local workspaces (your real files are the workspace):\n")
+		_, _ = fmt.Fprint(out, "Local project folders (your real files are the project folder):\n")
 		for _, dir := range st.LocalDirs {
 			_, _ = fmt.Fprintf(out, "  %s\n", dir)
 		}
@@ -410,7 +410,7 @@ func confirmBareMetal(cmd *cobra.Command) error {
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
 		return errors.New("bare-metal mode must be confirmed interactively on this machine")
 	}
-	_, _ = fmt.Fprint(cmd.OutOrStdout(), `Bare-metal mode runs workspace commands with no sandbox: anything the
+	_, _ = fmt.Fprint(cmd.OutOrStdout(), `Bare-metal mode runs dev space commands with no sandbox: anything the
 browser build escalates can read and change everything your user can,
 including SSH keys, cloud credentials and other projects.
 

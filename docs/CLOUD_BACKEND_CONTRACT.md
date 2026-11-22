@@ -123,14 +123,14 @@ in §3):
 - **Repo import** — `POST /api/repo/import` with `{url}` → clones
   server-side and returns the file tree as JSON, which the bundle writes
   into its browser VFS.
-- **Escalation** — `GET|POST /workspace/txn` and the txn lifecycle under
-  `/workspace/txn/{workspaceId}/txn/…` (open/status/push/run/pull/finish):
-  the "Run in cloud container" action. `/workspace/txn` is the
-  host-agnostic surface (SP-BUILDER-12): the platform picks the workspace
+- **Escalation** — `GET|POST /dev-space/txn` and the txn lifecycle under
+  `/dev-space/txn/{devSpaceId}/txn/…` (open/status/push/run/pull/finish):
+  the "Run in cloud container" action. `/dev-space/txn` is the
+  host-agnostic surface (SP-BUILDER-12): the platform picks the dev space
   backend (the user's own runner when one is attached, else Fly), so a
   self-host answers the same routes regardless of where containers run.
-  The legacy `/workspace/fly` prefix still works for in-flight clients
-  that resolved a workspace before the rename. See `docs/txn-protocol.md`
+  The legacy `/dev-space/fly` prefix still works for in-flight clients
+  that resolved a dev space before the rename. See `docs/txn-protocol.md`
   for the daemon-side contract these proxy to.
 - **Settings / BYOK** — `GET|POST /api/settings`,
   `GET|POST /api/settings/providers` (+ `/{id}`),
@@ -168,10 +168,13 @@ Every request below is sent by the CloudAdapter to the origin serving the bundle
 | `/api/tasks//…` | GET | Get task status/details by id |
 | `/api/terminal/agent-sessions` | GET | List background agent terminal sessions (needs backend) |
 | `/api/terminal/agent-sessions//…` | GET, POST | Agent session actions (output, attach, kill) — needs backend |
-| `/workspace/fly` | GET, POST | Legacy: list/create Fly workspaces (in-flight sessions only) |
-| `/workspace/fly//…` | POST, GET | Legacy: Fly workspace txn lifecycle (in-flight sessions only) |
-| `/workspace/txn` | GET, POST | Resolve/create the caller workspace for a repo, any backend (runner when attached, else Fly) — the escalation entry point |
-| `/workspace/txn//…` | POST, GET | Backend-agnostic txn lifecycle (open/status/push/run/pull/finish) |
+| `/dev-space` | GET | List the caller’s dev spaces (backend per row) — picks the dev space on the chosen escalation host |
+| `/dev-space//…` | GET | Get one dev space row (carries runner_id) — confirms a runner-hosted escalation dev space |
+| `/dev-space/fly` | GET, POST | Legacy: list/create Fly dev spaces (in-flight sessions only) |
+| `/dev-space/fly//…` | POST, GET | Legacy: Fly dev space txn lifecycle (in-flight sessions only) |
+| `/dev-space/txn` | GET, POST | Resolve/create the caller’s dev space for a repo, any backend (runner when attached, else Fly) — the escalation entry point |
+| `/dev-space/txn//…` | POST, GET | Backend-agnostic txn lifecycle (open/status/push/run/pull/finish) |
+| `/runners` | GET | List the caller's runners — the escalation host picker |
 
 ### Endpoints handled inside the browser (WASM)
 
@@ -183,7 +186,9 @@ Never leave the page — a self-host backend does not need to implement these. L
 | `/api/browse` | GET | Directory browsing (WASM handles locally) |
 | `/api/create` | POST | File creation (WASM handles locally) |
 | `/api/delete` | DELETE, POST | File deletion (WASM handles locally) |
+| `/api/design/status` | GET | Design tree health and drift (WASM designStatus) |
 | `/api/file` | GET, POST | Read/write file content (WASM handles locally) |
+| `/api/file-index` | GET | Whole-workspace quick-open index (WASM bulk walk) |
 | `/api/file/check-modified` | GET, POST | Check if file modified (WASM handles locally) |
 | `/api/file/consent` | POST | File consent (no security prompts in cloud mode) |
 | `/api/files` | GET | File listing (WASM handles locally) |
@@ -236,7 +241,6 @@ The adapter answers these itself with safe defaults; a backend may ignore them.
 | `/api/settings/subagent-types` | GET | Subagent type configs (not available in browser mode) |
 | `/api/settings/subagent-types//…` | GET | Subagent type read-only (not available in browser mode) |
 | `/api/support-bundle` | GET | Support bundle (not available in cloud mode) |
-| `/api/upload/image` | POST | Image upload for vision (not available in browser mode) |
 | `/api/workspace` | GET, POST | Workspace info (cloud mode: WASM shell owns workspace, virtual FS root) |
 | `/api/workspace/symbols` | GET | Workspace symbols via LSP (not available in browser mode) |
 

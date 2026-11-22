@@ -2,7 +2,7 @@
  * AgentEscalationBridge — cloud mode only. Installs the bridge the WASM agent
  * calls when one of its shell commands can't run in the browser, and asks the
  * user (per the escalation policy) before running it on one of their runners
- * or in the cloud workspace.
+ * or in the cloud dev space.
  */
 
 import { Cloud, Server } from 'lucide-react';
@@ -196,7 +196,7 @@ export function AgentEscalationBridge({ repoURL, container }: AgentEscalationBri
               </span>
               <div className="security-approval-header-row">
                 <h2 id="agent-escalation-title" className="security-approval-title">
-                  {onRunner ? `Run this on ${hostDisplayName(host)}?` : 'Run this in your cloud workspace?'}
+                  {onRunner ? `Run this on ${hostDisplayName(host)}?` : 'Run this in your cloud dev space?'}
                 </h2>
               </div>
             </div>
@@ -209,7 +209,7 @@ export function AgentEscalationBridge({ repoURL, container }: AgentEscalationBri
               <div className="security-approval-reasoning">
                 {onRunner
                   ? `The agent wants to run a command the in-browser shell can't. Your files are copied to a workspace on ${hostDisplayName(host)}, the command runs there, and any changes come back here. Runs on your own runner don't use workspace time from your plan.`
-                  : "The agent wants to run a command the in-browser shell can't. Your files are copied to your cloud workspace, the command runs there, and any changes come back here. This uses workspace time from your plan."}
+                  : "The agent wants to run a command the in-browser shell can't. Your files are copied to your cloud dev space, the command runs there, and any changes come back here. This uses workspace time from your plan."}
               </div>
               {choice.runners.length > 0 ? (
                 <RunHostPicker runners={choice.runners} value={host} onChange={choice.setHost} />

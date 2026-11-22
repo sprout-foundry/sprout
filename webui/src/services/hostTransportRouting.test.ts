@@ -1,5 +1,5 @@
 /**
- * Platform-surface clients (runners, cloud tasks, cloud txn, full workspaces)
+ * Platform-surface clients (runners, cloud tasks, cloud txn, dev spaces)
  * must reach the backend through clientFetch, so an embedding host whose
  * transport points at another origin receives the request instead of the page
  * origin. The real clientFetch runs here; only the active host and the
@@ -18,7 +18,7 @@ vi.mock('./apiAdapter', () => ({
 import { WEBUI_CLIENT_ID_HEADER } from './clientSession';
 import { getCloudTask, submitCloudTask } from './cloudTasks';
 import { txnStatus } from './cloudTxn';
-import { __resetFullWorkspaceForTests, probeFullWorkspaces, startFullWorkspace } from './fullWorkspace';
+import { __resetDevSpacesForTests, probeDevSpaces, startDevSpace } from './cloudDevSpace';
 import { listRunners } from './runners';
 
 const HOST_API = 'https://api.host.test';
@@ -41,7 +41,7 @@ describe('platform clients route through the host transport', () => {
   afterEach(() => {
     activeHostRef.value = null;
     vi.unstubAllGlobals();
-    __resetFullWorkspaceForTests();
+    __resetDevSpacesForTests();
   });
 
   function lastCall(): [string, RequestInit] {
@@ -79,23 +79,23 @@ describe('platform clients route through the host transport', () => {
   it('txnStatus GETs the host backend', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ txn_id: 'x', status: 'run' }));
     await txnStatus('ws', 'x');
-    expect(lastCall()[0]).toBe(`${HOST_API}/workspace/fly/ws/txn/x`);
+    expect(lastCall()[0]).toBe(`${HOST_API}/dev-space/fly/ws/txn/x`);
   });
 
   it('full-workspace probe and launch hit the host backend, not the page origin', async () => {
     // A fresh body per call: the probe reads its response, then the launch
     // POST gets its own — a single shared Response body is one-shot.
     fetchMock.mockImplementation(() => Promise.resolve(jsonResponse({ status: 'starting' })));
-    await probeFullWorkspaces();
+    await probeDevSpaces();
     // The probe asks the typed availability endpoint (200 { available }); only
     // a definitive available:false hides the option — a non-boolean answer
     // like this keeps failing open, so the fetch is the assertion target.
-    expect(fetchMock.mock.calls[0][0]).toBe(`${HOST_API}/workspace/availability`);
+    expect(fetchMock.mock.calls[0][0]).toBe(`${HOST_API}/dev-space/availability`);
     // Launch POSTs the host-agnostic cloud create (host=cloud), not the
-    // legacy /workspace/fly start route.
-    await startFullWorkspace('https://github.com/o/r');
+    // legacy /dev-space/fly start route.
+    await startDevSpace('https://github.com/o/r');
     const [url, init] = lastCall();
-    expect(url).toBe(`${HOST_API}/workspace/txn`);
+    expect(url).toBe(`${HOST_API}/dev-space/txn`);
     expect(init.method).toBe('POST');
     expect(JSON.parse(String(init.body))).toEqual({
       repo_url: 'https://github.com/o/r',
@@ -109,12 +109,12 @@ describe('platform clients route through the host transport', () => {
         apiBaseURL: HOST_API,
         wsURL: '',
         authMode: 'none',
-        agent: { kind: 'daemon', apiBaseURL: '/workspace/ws-1/proxy', wsURL: '' },
+        agent: { kind: 'daemon', apiBaseURL: '/dev-space/ws-1/proxy', wsURL: '' },
       },
     };
     fetchMock.mockImplementation(() => Promise.resolve(jsonResponse({ available: true })));
-    await probeFullWorkspaces();
-    expect(fetchMock.mock.calls[0][0]).toBe(`${HOST_API}/workspace/availability`);
+    await probeDevSpaces();
+    expect(fetchMock.mock.calls[0][0]).toBe(`${HOST_API}/dev-space/availability`);
   });
 
   it('without a host the same calls stay same-origin', async () => {

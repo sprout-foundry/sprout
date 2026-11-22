@@ -41,14 +41,14 @@ function routeFetch(routes: Record<string, () => Response>) {
 }
 
 const OK_ROUTES: Record<string, () => Response> = {
-  'GET /workspace/txn/resolve': () => jsonResponse({ workspace_id: WS, backend: 'fly' }),
-  'POST /workspace/txn': () => jsonResponse({ workspace_id: WS, backend: 'fly' }),
-  [`POST /workspace/txn/${WS}/txn`]: () => jsonResponse({ txn_id: TXN, status: 'push' }),
-  [`POST /workspace/txn/${WS}/txn/${TXN}/push`]: () => jsonResponse({ files: [], bytes: 0 }),
-  [`POST /workspace/txn/${WS}/txn/${TXN}/run`]: () =>
+  'GET /dev-space/txn/resolve': () => jsonResponse({ dev_space_id: WS, backend: 'fly' }),
+  'POST /dev-space/txn': () => jsonResponse({ dev_space_id: WS, backend: 'fly' }),
+  [`POST /dev-space/txn/${WS}/txn`]: () => jsonResponse({ txn_id: TXN, status: 'push' }),
+  [`POST /dev-space/txn/${WS}/txn/${TXN}/push`]: () => jsonResponse({ files: [], bytes: 0 }),
+  [`POST /dev-space/txn/${WS}/txn/${TXN}/run`]: () =>
     jsonResponse({ stdout: 'ok\n', stderr: '', exit_code: 0, duration_ms: 1, timed_out: false, truncated: false }),
-  [`POST /workspace/txn/${WS}/txn/${TXN}/pull`]: () => jsonResponse({ base: { git_sha: '', client: 'c' }, files: [] }),
-  [`POST /workspace/txn/${WS}/txn/${TXN}/finish`]: () => jsonResponse({ status: 'done' }),
+  [`POST /dev-space/txn/${WS}/txn/${TXN}/pull`]: () => jsonResponse({ base: { git_sha: '', client: 'c' }, files: [] }),
+  [`POST /dev-space/txn/${WS}/txn/${TXN}/finish`]: () => jsonResponse({ status: 'done' }),
 };
 
 afterEach(() => {
@@ -66,13 +66,13 @@ describe('runTxnCommand phase stream', () => {
   });
 
   it('emits a terminal "error" when the run fails before reaching pulling', async () => {
-    // The workspace opens, but the run call fails — the phase must not stick on
+    // The dev space opens, but the run call fails — the phase must not stick on
     // "running" (the regression that pinned the status over the composer).
     vi.stubGlobal(
       'fetch',
       routeFetch({
         ...OK_ROUTES,
-        [`POST /workspace/txn/${WS}/txn/${TXN}/run`]: () => jsonResponse({ error: 'boom' }, { status: 500 }),
+        [`POST /dev-space/txn/${WS}/txn/${TXN}/run`]: () => jsonResponse({ error: 'boom' }, { status: 500 }),
       }),
     );
     const phases: string[] = [];
@@ -82,14 +82,14 @@ describe('runTxnCommand phase stream', () => {
     expect(phases.at(-1)).toBe('error');
   });
 
-  it('emits a terminal "error" when opening the workspace fails', async () => {
+  it('emits a terminal "error" when opening the dev space fails', async () => {
     // A stall/failure at "opening" is exactly the screenshot case: previously
     // the last emitted phase was "opening" and the status never cleared.
     vi.stubGlobal(
       'fetch',
       routeFetch({
-        'GET /workspace/txn/resolve': () => jsonResponse({}, { status: 503 }),
-        'POST /workspace/txn': () => jsonResponse({ error: 'workspaces are not available' }, { status: 503 }),
+        'GET /dev-space/txn/resolve': () => jsonResponse({}, { status: 503 }),
+        'POST /dev-space/txn': () => jsonResponse({ error: 'workspaces are not available' }, { status: 503 }),
       }),
     );
     const phases: string[] = [];

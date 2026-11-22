@@ -100,7 +100,7 @@ function normalizeAnswer(answer: ConsentDecision | ConsentAnswer): ConsentAnswer
 }
 
 function whereFor(host: EscalationHost): string {
-  return host.kind === 'runner' ? `on ${hostDisplayName(host)}` : 'in the cloud workspace';
+  return host.kind === 'runner' ? `on ${hostDisplayName(host)}` : 'in the cloud dev space';
 }
 
 function toResult(outcome: TxnCommandOutcome, host: EscalationHost): EscalationResult {
@@ -133,12 +133,12 @@ export async function escalateCommand(command: string, opts: EscalationBridgeOpt
     return {
       ran: false,
       message:
-        'Running this needs a cloud workspace, which is tied to a repository. Open the project from a GitHub repository to enable it.',
+        'Running this needs a cloud dev space, which is tied to a repository. Open the project from a GitHub repository to enable it.',
     };
   }
   const policy = getEscalationPolicy();
   if (policy === 'never') {
-    return { ran: false, message: 'The user has turned off running agent commands in the cloud workspace.' };
+    return { ran: false, message: 'The user has turned off running agent commands in the cloud dev space.' };
   }
 
   let host: EscalationHost;
@@ -146,7 +146,7 @@ export async function escalateCommand(command: string, opts: EscalationBridgeOpt
   if (policy === 'ask') {
     const answer = normalizeAnswer(await opts.requestConsent(command));
     if (answer.decision === 'deny') {
-      return { ran: false, message: 'The user declined to run this command in the cloud workspace.' };
+      return { ran: false, message: 'The user declined to run this command in the cloud dev space.' };
     }
     host = applyApproval(repoURL, answer);
     prompted = true;

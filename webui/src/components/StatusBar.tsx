@@ -26,7 +26,7 @@ interface WebuiStatusBarProps {
   encoding?: string;
   indentation?: string;
   /**
-   * SP-022-W2.3: Full workspace directory path. When provided, the
+   * SP-022-W2.3: Dev space directory path. When provided, the
    * workspace basename is shown as a clickable indicator on the left
    * side of the status bar (before the SproutStatusBar content).
    */

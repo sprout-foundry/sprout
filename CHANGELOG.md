@@ -4,6 +4,7 @@ All notable changes to Sprout will be documented in this file.
 
 ## [Unreleased]
 
+- refactor(runner): the runner and the web UI's cloud client use the platform's names for a project's machine, the **dev space**: the runner polls `/runners/{id}/dev-space-tasks`, reports to `/dev-space-result` and `/dev-space/{id}/status`, and its tasks and results carry `dev_space_id` and `dev_space_dir`; the cloud client opens, resolves and runs transactions under `/dev-space/txn…` and reads `dev_space_id`. The copy says dev space where it said full or cloud workspace, and a runner's `--dir` folders are project folders. Needs a platform that serves the `/dev-space` paths (it still answers the old ones for older runners and packages). The `--workspace` flag alias, the container's `WORKSPACE_*` environment, its `/workspace` mount, its label and the image name are unchanged.
 - feat(login): `/login`, `/logout` and `/whoami` are slash commands, so the platform sign-in no longer needs a trip back to `sprout login`. They sign in this machine, which the terminal and the browser share. `/whoami` only reads and runs anywhere; `/login` waits inside the call for the approval made in the browser and `/logout` revokes a credential, so both stay in the terminal.
 - feat(cli): `sprout upgrade` is now `sprout update`, the name that says what it does — it replaces the installed binary, and `--check` only reports. `sprout upgrade` keeps working as an alias, so the name printed by the update notice of an installed binary is never dead.
 

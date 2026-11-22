@@ -792,7 +792,7 @@ instead.
 | In-browser terminal | `GET /api/terminal/agent-sessions` (polled while expanded), `POST /api/terminal/agent-sessions/{id}/attach`, `/kill` | `capabilities.localTerminal` is `false` (the Code shell then renders the in-browser terminal) |
 | Arranged `terminal` view | the in-browser terminal's paths above (polled while it is mounted) | the arrangement places `terminal` on a wasm-agent host |
 | Editor | `POST /api/completion` | the user enables AI completions |
-| Escalation | `GET /workspace`, `GET /workspace/{id}`, `/workspace/txn*`, `GET /runners` | the host mounts `AgentEscalationBridge` / `EscalationListener` |
+| Escalation | `GET /dev-space`, `GET /dev-space/{id}`, `/dev-space/txn*`, `GET /runners` | the host mounts `AgentEscalationBridge` / `EscalationListener` |
 
 **Source control and search views.** On an in-browser-agent host an arranged
 `git` or `search` view forwards nothing: `/api/git/*` is answered by browser
@@ -820,7 +820,7 @@ endpoint resolves against `apiBaseURL`). When a
 startup repository is set and there is no git proxy or the browser clone
 fails, the adapter falls back to `POST <apiBase>/api/repo/import`. The git
 proxy (below) is at `transport.gitProxyURL`, by default `/git-proxy` at the
-page origin for a `bearer` host, which also serves `/workspace/fly` there.
+page origin for a `bearer` host, which also serves `/dev-space/fly` there.
 
 **Git proxy for in-browser git.** A startup repository (`project.repoUrl`, or
 the hosted build's `?repo=`) opens as a git repository in the browser, so the

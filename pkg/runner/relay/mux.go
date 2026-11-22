@@ -9,7 +9,7 @@
 //
 // Frames are JSON text messages:
 //
-//	{"t":"open","id":"1","ws":"<workspace>","method":"POST","path":"/api/txn/run","hdr":{…}}
+//	{"t":"open","id":"1","ws":"<dev space>","method":"POST","path":"/api/txn/run","hdr":{…}}
 //	{"t":"head","id":"1","status":200,"hdr":{…}}
 //	{"t":"data","id":"1","b64":"<chunk>"}    (≤ ChunkSize bytes, either direction)
 //	{"t":"ack","id":"1","n":65536}           (credit returned for consumed bytes)
@@ -64,7 +64,7 @@ type frame struct {
 	Err    string              `json:"err,omitempty"`
 }
 
-// Handler serves one relayed request for workspace ws.
+// Handler serves one relayed request for dev space ws.
 type Handler func(ws string, w http.ResponseWriter, r *http.Request)
 
 // Mux multiplexes streams over one WebSocket. Either side may open streams;
@@ -378,7 +378,7 @@ func (c *credit) fail() {
 	c.cond.Broadcast()
 }
 
-// RoundTripper returns a transport that sends requests to workspace ws
+// RoundTripper returns a transport that sends requests to dev space ws
 // through the peer. The request URL's path and query are forwarded; scheme
 // and host are ignored.
 func (m *Mux) RoundTripper(ws string) http.RoundTripper {

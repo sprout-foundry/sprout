@@ -25,7 +25,7 @@ import { getBootstrapUser } from '../../bootstrapAdapter';
 import { copy, formatCopy } from '../../config/copy';
 import type { HostNavItem } from '../../host/types';
 import { useHost } from '../../host/useHost';
-import { useFullWorkspacesAvailable } from '../../services/fullWorkspace';
+import { useDevSpacesAvailable } from '../../services/cloudDevSpace';
 import { homeRoute, normalizeHomePath } from '../../services/homeView';
 
 /** An icon for a host-provided item, chosen by its label (icons are Sprout's). */
@@ -89,8 +89,8 @@ export default function HomeNav({ path, projectLabel, onBackToProject, onNavigat
   const { navigation } = useHost();
   const user = getBootstrapUser();
   // Workspaces only where the deployment offers them, as on the platform.
-  const workspacesAvailable = useFullWorkspacesAvailable(true);
-  const work = (navigation.workItems ?? []).filter((i) => workspacesAvailable || i.label !== 'Workspaces');
+  const devSpacesAvailable = useDevSpacesAvailable(true);
+  const work = (navigation.workItems ?? []).filter((i) => devSpacesAvailable || i.label !== 'Workspaces');
   const baseAccount = navigation.accountItems ?? [];
   // Admins get the host's Admin item when it supplies one; otherwise Sprout
   // adds a generic admin entry (the host resolves its destination).

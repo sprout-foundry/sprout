@@ -4,7 +4,7 @@ import { isLayeredLayout } from '../config/layout';
 import { LayeredSearchButton } from './layered/LayeredTopBar';
 import { useHost } from '../host';
 import { useActiveRepoURL } from '../services/activeRepo';
-import { startFullWorkspace, useFullWorkspacesAvailable } from '../services/fullWorkspace';
+import { startDevSpace, useDevSpacesAvailable } from '../services/cloudDevSpace';
 import { notificationBus } from '../services/notificationBus';
 import HostNotificationCount from '../host/HostNotificationCount';
 import { githubRepoSlug } from '../host/repoName';
@@ -52,14 +52,14 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
     host.navigation.intentPath?.({ type: 'account' }) ??
     null;
   const backHref = backPath ? (host.navigation.platformPagePath?.(backPath) ?? backPath) : undefined;
-  // Hidden on deployments without workspace compute rather than offering an
+  // Hidden on deployments without dev space compute rather than offering an
   // action that can only fail, when the agent already runs on a workspace's
-  // daemon (that workspace is the full workspace the button would start, and
+  // daemon (that workspace is the dev space the button would start, and
   // the host owns its lifecycle), and when the host offers the move itself
   // (capabilities.containerUpgrade off).
   const onDaemon = host.transport.agent?.kind === 'daemon';
   const offersUpgrade = hosted && !onDaemon && host.capabilities.containerUpgrade === true;
-  const workspacesAvailable = useFullWorkspacesAvailable(offersUpgrade);
+  const devSpacesAvailable = useDevSpacesAvailable(offersUpgrade);
 
   const retry = () => {
     // Defer so the toast's dismiss finishes before the next request starts.
@@ -74,19 +74,19 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
       notificationBus.notify(
         'info',
         'Add a repository first',
-        'A full workspace is created for a repository. Use "Add repository" in the Files panel, then start one.',
+        'A dev space is created for a repository. Use "Add repository" in the Files panel, then start one.',
       );
       return;
     }
 
     setBusy(true);
     try {
-      const result = await startFullWorkspace(repoURL);
+      const result = await startDevSpace(repoURL);
       if (result.kind === 'unavailable') {
         notificationBus.notify(
           'warning',
-          'Full workspaces unavailable',
-          "This deployment doesn't offer full workspaces. You can keep working in the browser workspace.",
+          'Dev spaces unavailable',
+          "This deployment doesn't offer dev spaces. You can keep working in the browser.",
         );
       } else if (result.kind === 'error') {
         notificationBus.notify('error', 'Failed to start workspace', result.message, undefined, {
@@ -124,12 +124,12 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
       )}
       {!hosted && <MenuBar />}
       <div className="header-bar-actions">
-        {offersUpgrade && workspacesAvailable && (
+        {offersUpgrade && devSpacesAvailable && (
           <button
             className="btn btn-sm btn-accent start-building-btn"
             onClick={handleStartBuilding}
             disabled={busy}
-            title="Upgrade to a full workspace with real compute, persistent storage, and git push."
+            title="Upgrade to a dev space with real compute, persistent storage, and git push."
           >
             {busy ? 'Starting…' : 'Start Building'}
           </button>

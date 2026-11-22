@@ -16,7 +16,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/runner/sandbox"
 )
 
-// TestHostLauncherEndToEnd runs a real workspace daemon on this machine and
+// TestHostLauncherEndToEnd runs a real dev space daemon on this machine and
 // drives the txn protocol through the host server, the way the platform
 // does. It needs a built sprout binary:
 //
@@ -54,13 +54,13 @@ func runHostE2E(t *testing.T, bin string, sandboxed bool) {
 	}
 
 	l := &HostLauncher{Sandboxed: sandboxed, SproutBin: bin}
-	task := WorkspaceTask{WorkspaceID: "e2e-ws", Action: "start", RepoURL: "file://" + origin, TxnSecret: "e2e-secret"}
+	task := DevSpaceTask{DevSpaceID: "e2e-ws", Action: "start", RepoURL: "file://" + origin, TxnSecret: "e2e-secret"}
 	ctx := context.Background()
 	ws, err := l.Start(ctx, task)
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	t.Cleanup(func() { _ = l.Destroy(ctx, task.WorkspaceID, ws) })
+	t.Cleanup(func() { _ = l.Destroy(ctx, task.DevSpaceID, ws) })
 
 	host := NewHostServer()
 	host.Bind(ws.ID, ws.Port, task.TxnSecret)
@@ -118,7 +118,7 @@ func runHostE2E(t *testing.T, bin string, sandboxed bool) {
 	}
 }
 
-// TestHostLauncherLocalDirectoryEndToEnd runs a workspace daemon against a
+// TestHostLauncherLocalDirectoryEndToEnd runs a dev space daemon against a
 // plain (non-git) local directory and proves the txn protocol works in place,
 // the way a bare-metal runner serves the user's real checkout. Same gates as
 // the clone-based test above.
@@ -152,13 +152,13 @@ func runLocalDirE2E(t *testing.T, bin string, sandboxed bool) {
 	}
 
 	l := &HostLauncher{SproutBin: bin, Sandboxed: sandboxed}
-	task := WorkspaceTask{WorkspaceID: "e2e-local", Action: "start", WorkspaceDir: local, TxnSecret: "e2e-secret"}
+	task := DevSpaceTask{DevSpaceID: "e2e-local", Action: "start", DevSpaceDir: local, TxnSecret: "e2e-secret"}
 	ctx := context.Background()
 	ws, err := l.Start(ctx, task)
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	t.Cleanup(func() { _ = l.Destroy(ctx, task.WorkspaceID, ws) })
+	t.Cleanup(func() { _ = l.Destroy(ctx, task.DevSpaceID, ws) })
 
 	host := NewHostServer()
 	host.Bind(ws.ID, ws.Port, task.TxnSecret)

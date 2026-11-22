@@ -76,12 +76,12 @@ afterEach(() => {
 });
 
 describe('AgentEscalationBridge', () => {
-  it('asks before running an agent command in the cloud workspace', async () => {
+  it('asks before running an agent command in the cloud dev space', async () => {
     runTxnCommand.mockResolvedValue(OK);
     renderBridge({ repoURL: REPO });
 
     const { pending } = await ask('npm test');
-    expect(screen.getByRole('dialog', { name: /run this in your cloud workspace/i })).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: /run this in your cloud dev space/i })).toBeTruthy();
     expect(screen.getByText('npm test')).toBeTruthy();
     // No runners: no picker, today's cloud-only prompt.
     expect(screen.queryByTestId('run-host-picker')).toBeNull();
@@ -162,7 +162,7 @@ describe('AgentEscalationBridge', () => {
     // Defaults to the first online runner, and the copy names it instead of the cloud.
     expect(options[0]).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByRole('dialog', { name: 'Run this on MacBook?' })).toBeTruthy();
-    expect(screen.queryByText(/cloud workspace\?/)).toBeNull();
+    expect(screen.queryByText(/cloud dev space\?/)).toBeNull();
 
     expect(screen.queryByTestId('run-host-bare-metal-warning')).toBeNull();
     fireEvent.click(options[2]);
@@ -192,7 +192,7 @@ describe('AgentEscalationBridge', () => {
     renderBridge({ repoURL: REPO });
     await ask('make');
     expect(screen.getByTestId('run-host-option-cloud')).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByRole('dialog', { name: /run this in your cloud workspace/i })).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: /run this in your cloud dev space/i })).toBeTruthy();
   });
 
   it('"Always allow" remembers the host and later runs there without asking', async () => {

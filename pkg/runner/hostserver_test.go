@@ -33,7 +33,7 @@ func hostCall(t *testing.T, h *HostServer, path, bearer, body string) (int, stri
 	return rr.Code, rr.Body.String()
 }
 
-func TestHostServerProxiesOnlyWithTheWorkspaceSecret(t *testing.T) {
+func TestHostServerProxiesOnlyWithTheDevSpaceSecret(t *testing.T) {
 	h := NewHostServer()
 	h.Bind("ws-1", fakeDaemon(t), "s3cret")
 

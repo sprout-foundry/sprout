@@ -6,7 +6,7 @@
  * pages historically lacked, which made escalation from an embedded editor
  * useless: (1) the browser-git VFS bridge, so a txn push manifest carries the
  * visitor's actual files, and (2) the agent escalation bridge, so exit-127
- * commands can run in the user's cloud workspace at all.
+ * commands can run in the user's cloud dev space at all.
  *
  * Both need three inputs the standalone pages don't have on their own:
  * the WASM shell (passed in by the caller after initWasmShell resolves), the

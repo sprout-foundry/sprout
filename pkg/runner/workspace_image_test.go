@@ -1,6 +1,6 @@
 package runner
 
-// These tests run the public workspace image's entrypoint
+// These tests run the public dev space image's entrypoint
 // (docker/workspace/entrypoint.sh) and git credential helper on the host
 // with sh and git: no Docker, no network. A stub `sprout` on PATH records how
 // the daemon would have been started, SPROUT_WORKSPACE_ROOT points the
@@ -159,7 +159,7 @@ func assertNoCloneLeftovers(t *testing.T, root string) {
 	}
 }
 
-func TestWorkspaceImageServesALocalDirectoryInPlace(t *testing.T) {
+func TestDevSpaceImageServesALocalDirectoryInPlace(t *testing.T) {
 	root := t.TempDir()
 	imgMust(t, os.WriteFile(filepath.Join(root, "notes.txt"), []byte("mine\n"), 0o644))
 	imgMust(t, os.MkdirAll(filepath.Join(root, "sub"), 0o755))
@@ -181,7 +181,7 @@ func TestWorkspaceImageServesALocalDirectoryInPlace(t *testing.T) {
 	}
 }
 
-func TestWorkspaceImageRefusesToCloneOverUnknownContent(t *testing.T) {
+func TestDevSpaceImageRefusesToCloneOverUnknownContent(t *testing.T) {
 	root := t.TempDir()
 	imgMust(t, os.WriteFile(filepath.Join(root, "keep.txt"), []byte("keep\n"), 0o644))
 	r := runEntrypoint(t, root, cloneEnv(imgSourceRepo(t)))
@@ -202,7 +202,7 @@ func TestWorkspaceImageRefusesToCloneOverUnknownContent(t *testing.T) {
 	}
 }
 
-func TestWorkspaceImageRefusesNonHTTPSRepos(t *testing.T) {
+func TestDevSpaceImageRefusesNonHTTPSRepos(t *testing.T) {
 	root := t.TempDir()
 	env := cloneEnv(imgSourceRepo(t))
 	env["REPO_URL"] = "file:///etc"
@@ -212,7 +212,7 @@ func TestWorkspaceImageRefusesNonHTTPSRepos(t *testing.T) {
 	}
 }
 
-func TestWorkspaceImageClonesBesideLostAndFound(t *testing.T) {
+func TestDevSpaceImageClonesBesideLostAndFound(t *testing.T) {
 	root := t.TempDir()
 	imgMust(t, os.MkdirAll(filepath.Join(root, "lost+found"), 0o700))
 	imgMust(t, os.WriteFile(filepath.Join(root, "lost+found", "#123"), []byte("fsck\n"), 0o600))
@@ -240,7 +240,7 @@ func TestWorkspaceImageClonesBesideLostAndFound(t *testing.T) {
 	}
 }
 
-func TestWorkspaceImageRecoversItsOwnInterruptedClone(t *testing.T) {
+func TestDevSpaceImageRecoversItsOwnInterruptedClone(t *testing.T) {
 	root := t.TempDir()
 	imgMust(t, os.MkdirAll(filepath.Join(root, "lost+found"), 0o700))
 	// An earlier boot recorded its manifest, moved README.md and src in and
@@ -265,7 +265,7 @@ func TestWorkspaceImageRecoversItsOwnInterruptedClone(t *testing.T) {
 	assertNoCloneLeftovers(t, root)
 }
 
-func TestWorkspaceImageRecoveryNeverDeletesUnlistedFiles(t *testing.T) {
+func TestDevSpaceImageRecoveryNeverDeletesUnlistedFiles(t *testing.T) {
 	root := t.TempDir()
 	imgMust(t, os.WriteFile(filepath.Join(root, ".sprout-clone-pending"), []byte("README.md\n"), 0o644))
 	imgMust(t, os.WriteFile(filepath.Join(root, "README.md"), []byte("partial"), 0o644))
@@ -282,7 +282,7 @@ func TestWorkspaceImageRecoveryNeverDeletesUnlistedFiles(t *testing.T) {
 	}
 }
 
-func TestWorkspaceImageGitCredentialsAreHostScoped(t *testing.T) {
+func TestDevSpaceImageGitCredentialsAreHostScoped(t *testing.T) {
 	dir := imgDir(t)
 	helper := filepath.Join(dir, "git-credential-sprout")
 	ask := func(input string, env ...string) string {

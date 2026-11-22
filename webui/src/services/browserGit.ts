@@ -483,7 +483,7 @@ export async function gitPush(remote = 'origin', branch?: string) {
   if (!remotes.some((r) => r.remote === remote)) {
     if (await snapshotSource()) {
       throw new Error(
-        'This workspace was imported without git history, so it has no remote to push to. Run the push from a cloud workspace instead.',
+        'This project was imported without git history, so it has no remote to push to. Run the push from a cloud dev space instead.',
       );
     }
     throw new Error(

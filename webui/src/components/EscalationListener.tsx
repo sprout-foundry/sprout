@@ -11,7 +11,7 @@
  *          the IDE; cloud runs pay only for the machine time used.
  *   Mode A — "Run as cloud task": submit the work to the platform task queue
  *          (POST /api/tasks) and poll it to completion inline.
- *   Mode B — "Start Full Workspace": provision a full cloud workspace and
+ *   Mode B — "Start a Dev Space": provision a cloud dev space and
  *          navigate to it (the original escalation path).
  *
  * Listens for sprout:escalation-trigger events with severity='blocking'.
@@ -32,7 +32,7 @@ import {
   type TxnProgress,
 } from '../services/cloudTxnEscalate';
 import { CLOUD_HOST, hostDisplayName, rememberHost, type EscalationHost } from '../services/escalationHost';
-import { startFullWorkspace, useFullWorkspacesAvailable } from '../services/fullWorkspace';
+import { startDevSpace, useDevSpacesAvailable } from '../services/cloudDevSpace';
 import { onPlatformLinkClick, openPlatformPage } from '../services/homeView';
 import { RunHostPicker } from './RunHostPicker';
 import './EscalationToast.css';
@@ -98,7 +98,7 @@ export function EscalationListener() {
   // What the push phase would carry, counted when the step opens (null =
   // still counting / not countable).
   const [pendingPushCount, setPendingPushCount] = useState<number | null>(null);
-  const workspacesAvailable = useFullWorkspacesAvailable();
+  const devSpacesAvailable = useDevSpacesAvailable();
   const mountedRef = useRef(true);
   // Bumped whenever the toast is dismissed or a new trigger replaces the
   // current one. Async txn/cloud-task callbacks capture the value at start
@@ -316,11 +316,11 @@ export function EscalationListener() {
     }
     setWorkspaceError(null);
     setStartingWorkspace(true);
-    startFullWorkspace(repoURL)
+    startDevSpace(repoURL)
       .then((result) => {
         if (!mountedRef.current) return;
         if (result.kind === 'unavailable') {
-          setWorkspaceError("This deployment doesn't offer full workspaces.");
+          setWorkspaceError("This deployment doesn't offer dev spaces.");
         } else if (result.kind === 'error') {
           setWorkspaceError(`Couldn't start the workspace: ${result.message}`);
         } else if (result.kind === 'status') {
@@ -563,7 +563,7 @@ export function EscalationListener() {
                     Run as cloud task
                   </button>
                 ) : null}
-                {workspacesAvailable ? (
+                {devSpacesAvailable ? (
                   <button
                     className="escalation-toast-action"
                     onClick={handleStartWorkspace}
@@ -575,7 +575,7 @@ export function EscalationListener() {
                     ) : (
                       <Rocket size={14} />
                     )}
-                    Start Full Workspace
+                    Start a Dev Space
                   </button>
                 ) : null}
               </div>

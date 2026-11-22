@@ -71,7 +71,10 @@ func (s siteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		hit = s.file(path + ".html")
 	}
 	if hit == "" {
-		hit = s.file(filepath.Join(path, "index.html"))
+		// The /about → about/index.html lookup, as a URL path: filepath.Join
+		// would collapse a trailing "/" (and the root path "/" itself) to the
+		// directory, which is never a file.
+		hit = s.file(strings.TrimSuffix(path, "/") + "/index.html")
 	}
 	status := http.StatusOK
 	if hit == "" {

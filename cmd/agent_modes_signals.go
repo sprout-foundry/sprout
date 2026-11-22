@@ -101,8 +101,11 @@ func startSignalHandler(ctx context.Context, cancel context.CancelFunc, chatAgen
 				// Cancel the context which will stop all operations
 				cancel()
 
-				// Close the global browser renderer to release Chromium resources
+				// Close the global browser renderers to release Chromium
+				// resources. The app check drives a renderer of its own
+				// (kept off any configured proxy), so both are closed.
 				webcontent.CloseGlobalBrowser()
+				webcontent.CloseDirectBrowser()
 
 				// Signal that shutdown has started
 				close(shutdown)

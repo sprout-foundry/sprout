@@ -203,6 +203,11 @@ type browserSession struct {
 type rodRenderer struct {
 	browser *rod.Browser
 
+	// directMode keeps every request off any configured proxy. The app
+	// check drives a server on this machine only, and a proxy that happens
+	// to be configured for outbound traffic must not answer for loopback.
+	directMode bool
+
 	mu       sync.Mutex
 	closed   bool
 	sessions map[string]*browserSession
@@ -215,6 +220,16 @@ var _ BrowserRenderer = (*rodRenderer)(nil)
 // The browser is launched lazily on the first call to RenderPage.
 func NewBrowserRenderer() BrowserRenderer {
 	r := &rodRenderer{}
+	runtime.SetFinalizer(r, (*rodRenderer).Close)
+	return r
+}
+
+// NewDirectBrowserRenderer returns a BrowserRenderer whose browser never uses
+// a proxy, so a request to a server on this machine reaches that server even
+// when a proxy is configured for outbound traffic. It is what a check driving
+// its own loopback server uses.
+func NewDirectBrowserRenderer() BrowserRenderer {
+	r := &rodRenderer{directMode: true}
 	runtime.SetFinalizer(r, (*rodRenderer).Close)
 	return r
 }
@@ -280,12 +295,11 @@ func (r *rodRenderer) launchAndProbe(ctx context.Context, disableGPU bool) (*rod
 	if disableGPU {
 		l.Set("disable-gpu")
 	}
-	// The browser reaches the web through the same proxy as sprout's other
-	// web tools; loopback (a dev server on this machine) stays direct.
-	if proxy := netproxy.URL(); proxy != nil {
-		l.Proxy(proxy.String())
-		l.Set("proxy-bypass-list", "<-loopback>")
+	proxyURL := ""
+	if u := netproxy.URL(); u != nil {
+		proxyURL = u.String()
 	}
+	applyProxyLaunchFlags(l, r.directMode, proxyURL)
 
 	// Try common system browser paths before auto-download.
 	// This allows running on systems with pre-installed Chromium/Chrome.
@@ -508,4 +522,23 @@ func (r *rodRenderer) Close() {
 		_ = r.browser.Close()
 		r.browser = nil
 	}
+}
+
+// applyProxyLaunchFlags decides how the browser reaches the network. The
+// browser otherwise shares sprout's outbound proxy, with loopback kept
+// direct; a caller driving a server on this machine (the app check) asks for
+// direct mode instead, so a proxy never answers for its own loopback
+// requests. The flag names are returned as well so a test can pin the choice
+// without launching Chromium.
+func applyProxyLaunchFlags(l *launcher.Launcher, direct bool, proxyURL string) []string {
+	if direct {
+		l.Set("no-proxy-server")
+		return []string{"no-proxy-server"}
+	}
+	if proxyURL != "" {
+		l.Proxy(proxyURL)
+		l.Set("proxy-bypass-list", "<-loopback>")
+		return []string{"proxy-server", "proxy-bypass-list"}
+	}
+	return nil
 }

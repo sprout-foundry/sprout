@@ -85,9 +85,11 @@ func (h *checkAppHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 	return ToolResult{Output: out}, nil
 }
 
-// sharedRodBrowser is the browser the check drives: the same Rod renderer
-// browse_url uses (pkg/webcontent), so the app has one browser stack. A
-// missing Chromium surfaces as "could not run" in the report, not an error.
+// sharedRodBrowser is the browser the check drives. It is the same Rod stack
+// browse_url uses (pkg/webcontent), so the app has one browser implementation;
+// the check renders through a renderer of its own that keeps its loopback
+// server off any configured proxy. A missing Chromium surfaces as "could not
+// run" in the report, not an error.
 func sharedRodBrowser() appcheck.RodBrowser {
 	return appcheck.NewWebcontentBrowser()
 }

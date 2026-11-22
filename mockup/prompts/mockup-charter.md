@@ -107,7 +107,8 @@ It is added to your document for you, so do not copy any of it.
   `--muted`, `--surface`, `--soft`, `--border`, `--font-head`, `--radius`,
   `--shadow`), never raw colours or font names. Never restyle the kit's
   components (`btn`, `card`, `nav`, form parts, `chip`). Every layout you
-  write falls back to one column on a phone. Keep it under about 30 lines.
+  write falls back to one column on a phone: a media query, or an auto-fit
+  grid whose columns are at least `14rem`. Keep it under about 30 lines.
 - Load nothing from anywhere: no fonts, images, libraries or links to
   other sites.
 

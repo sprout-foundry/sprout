@@ -1,0 +1,114 @@
+[
+ {
+  "id": "fraunces",
+  "family": "Fraunces",
+  "about": "warm soft serif, friendly and characterful",
+  "fallback": "Georgia,'Times New Roman',serif",
+  "file": "fraunces.woff2"
+ },
+ {
+  "id": "instrument-serif",
+  "family": "Instrument Serif",
+  "about": "elegant condensed editorial serif",
+  "fallback": "'Iowan Old Style',Georgia,serif",
+  "file": "instrument-serif.woff2"
+ },
+ {
+  "id": "young-serif",
+  "family": "Young Serif",
+  "about": "sturdy old-style serif, bookish and warm",
+  "fallback": "Georgia,serif",
+  "file": "young-serif.woff2"
+ },
+ {
+  "id": "gloock",
+  "family": "Gloock",
+  "about": "high-contrast display serif, luxurious",
+  "fallback": "Georgia,serif",
+  "file": "gloock.woff2"
+ },
+ {
+  "id": "bodoni-moda",
+  "family": "Bodoni Moda",
+  "about": "classic fashion Bodoni, refined",
+  "fallback": "Didot,Georgia,serif",
+  "file": "bodoni-moda.woff2"
+ },
+ {
+  "id": "cormorant-garamond",
+  "family": "Cormorant Garamond",
+  "about": "delicate Garamond, graceful and quiet",
+  "fallback": "Garamond,Georgia,serif",
+  "file": "cormorant-garamond.woff2"
+ },
+ {
+  "id": "space-grotesk",
+  "family": "Space Grotesk",
+  "about": "technical grotesk with quirks, for software",
+  "fallback": "ui-sans-serif,system-ui,sans-serif",
+  "file": "space-grotesk.woff2"
+ },
+ {
+  "id": "bricolage-grotesque",
+  "family": "Bricolage Grotesque",
+  "about": "characterful grotesk, contemporary and lively",
+  "fallback": "ui-sans-serif,system-ui,sans-serif",
+  "file": "bricolage-grotesque.woff2"
+ },
+ {
+  "id": "outfit",
+  "family": "Outfit",
+  "about": "clean geometric sans, modern and even",
+  "fallback": "ui-sans-serif,system-ui,sans-serif",
+  "file": "outfit.woff2"
+ },
+ {
+  "id": "syne",
+  "family": "Syne",
+  "about": "wide artful sans, for creative and night",
+  "fallback": "ui-sans-serif,system-ui,sans-serif",
+  "file": "syne.woff2"
+ },
+ {
+  "id": "unbounded",
+  "family": "Unbounded",
+  "about": "wide rounded display sans, bold and retro-futurist",
+  "fallback": "ui-sans-serif,system-ui,sans-serif",
+  "file": "unbounded.woff2"
+ },
+ {
+  "id": "baloo-2",
+  "family": "Baloo 2",
+  "about": "chunky rounded sans, playful and kind",
+  "fallback": "ui-rounded,system-ui,sans-serif",
+  "file": "baloo-2.woff2"
+ },
+ {
+  "id": "nunito",
+  "family": "Nunito",
+  "about": "soft rounded sans, gentle and friendly",
+  "fallback": "ui-rounded,system-ui,sans-serif",
+  "file": "nunito.woff2"
+ },
+ {
+  "id": "archivo-black",
+  "family": "Archivo Black",
+  "about": "heavy grotesk, loud and confident",
+  "fallback": "'Arial Black',system-ui,sans-serif",
+  "file": "archivo-black.woff2"
+ },
+ {
+  "id": "anton",
+  "family": "Anton",
+  "about": "tall condensed impact type, for sport and posters",
+  "fallback": "Impact,'Arial Narrow',sans-serif",
+  "file": "anton.woff2"
+ },
+ {
+  "id": "bebas-neue",
+  "family": "Bebas Neue",
+  "about": "condensed all-caps headline type, for sport and signage",
+  "fallback": "Impact,'Arial Narrow',sans-serif",
+  "file": "bebas-neue.woff2"
+ }
+]

@@ -67,6 +67,23 @@ func TestDraw_InTheProductsOwnLook(t *testing.T) {
 	if !strings.Contains(res.HTML, "--primary:#7c3aed;") || !strings.Contains(res.HTML, `name="mockupkit-look"`) {
 		t.Fatal("the finished page carries the product's look")
 	}
+	// The variety steering is for new ideas: a product's screen gets no
+	// direction or composition suggestion, and is told to keep its own type
+	// and layout.
+	if strings.Contains((*asked)[0], "lean toward") || strings.Contains((*asked)[0], "Consider a `") {
+		t.Fatalf("a product's screen was steered like a new idea: %s", (*asked)[0])
+	}
+	if !strings.Contains((*asked)[0], "Name no data-font") || !strings.Contains((*asked)[0], "the way the product's existing screens are") {
+		t.Fatalf("the product's own type and layout are not asked for: %s", (*asked)[0])
+	}
+	withFont := strings.Replace(product, `data-palette="project"`, `data-palette="project" data-font="fraunces"`, 1)
+	stream, _ = replies(t, withFont)
+	if res, err = Draw(context.Background(), stream, Request{Plan: []byte(`{"brief":"archive cards"}`), Look: look}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(res.HTML, "@font-face") {
+		t.Fatal("a product's screen got a bundled font over its own type")
+	}
 	// A new idea is drawn as before: nothing about a product.
 	stream, asked = replies(t, page)
 	if _, err := Draw(context.Background(), stream, Request{Plan: []byte(`{"name":"Crumb"}`)}, nil); err != nil {
@@ -74,6 +91,9 @@ func TestDraw_InTheProductsOwnLook(t *testing.T) {
 	}
 	if strings.Contains((*asked)[0], "existing product") {
 		t.Fatal("no product look for a new idea")
+	}
+	if !strings.Contains((*asked)[0], "lean toward") {
+		t.Fatal("a new idea gets a direction")
 	}
 }
 
@@ -119,5 +139,37 @@ func TestDraw_AFailureAfterItBeganSaysSo(t *testing.T) {
 	}
 	if got[len(got)-1] != EventError {
 		t.Fatalf("events = %v", got)
+	}
+}
+
+// A different look on purpose redraws the whole page, steering away from the
+// current look; the person's recent looks are steered away from too.
+func TestDraw_FreshAndAvoid(t *testing.T) {
+	other := strings.Replace(page, `data-kit="soft" data-palette="sage"`, `data-kit="retro" data-palette="ocean" data-composition="band"`, 1)
+	stream, asked := replies(t, other)
+	res, err := Draw(context.Background(), stream, Request{
+		Saved: kit.Assemble(page), Fresh: true,
+		Avoid: []kit.Choice{{Kit: "craft", Palette: "terracotta", Composition: "art", Font: "fraunces"}},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Mode != "whole" || len(*asked) != 1 {
+		t.Fatalf("mode = %s, asked %d", res.Mode, len(*asked))
+	}
+	ask := (*asked)[0]
+	for _, want := range []string{"a different look", "a kit other than soft, craft", "terracotta", "a first-screen composition other than art"} {
+		if !strings.Contains(ask, want) {
+			t.Errorf("the request does not say %q:\n%s", want, ask)
+		}
+	}
+	if c := kit.ChoiceOf(res.HTML); c.Kit != "retro" || c.Composition != "band" {
+		t.Errorf("result choice = %+v", c)
+	}
+}
+
+func TestSteerRequestIsEmptyWithNothingToAvoid(t *testing.T) {
+	if s := steerRequest(nil, false, ""); s != "" {
+		t.Errorf("steer = %q", s)
 	}
 }

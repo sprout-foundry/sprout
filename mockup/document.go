@@ -188,6 +188,9 @@ func lookRequest(look *kit.Look, notes string, editing bool) string {
 			"Choose the kit whose layout is closest to the product (clean for most apps and dashboards), and build the screen as the product's interface " +
 			"(its navigation, panels, lists and forms), not as a marketing page.")
 	}
+	b.WriteString(" Name no data-font and no modifiers: the product's own type and spacing apply. The kit guide by kind of idea, " +
+		"any direction you are given and the preference for content as the picture are for new ideas, not this: lay the screen out " +
+		"the way the product's existing screens are, with their kinds of section.")
 	if notes != "" {
 		b.WriteString(" How the product is laid out and styled: ")
 		b.WriteString(notes)

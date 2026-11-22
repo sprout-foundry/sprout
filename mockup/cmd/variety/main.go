@@ -46,6 +46,7 @@ func main() {
 	out := flag.String("out", "variety-out", "where to write the drawn pages and the report")
 	parallel := flag.Int("parallel", 3, "draws at a time")
 	only := flag.String("only", "", "comma-separated idea ids to draw (default all)")
+	thinking := flag.Bool("thinking", false, "let the model think first (the platform draws with thinking off)")
 	person := flag.Bool("person", false, "draw the ideas one after another as one person's, each steering away from the looks before it")
 	flag.Parse()
 	key := os.Getenv("VARIETY_API_KEY")
@@ -57,7 +58,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	stream := openAIStream(*base, *model, key)
+	stream := openAIStream(*base, *model, key, *thinking)
 
 	pick := map[string]bool{}
 	for _, id := range strings.Split(*only, ",") {
@@ -91,7 +92,9 @@ func main() {
 			mu.Lock()
 			avoid := append([]kit.Choice(nil), recent...)
 			mu.Unlock()
+			started := time.Now()
 			res, err := mockup.Draw(context.Background(), stream, mockup.Request{Plan: plan, Avoid: avoid}, nil)
+			_ = os.WriteFile(filepath.Join(*out, id+".secs"), []byte(fmt.Sprintf("%.1f", time.Since(started).Seconds())), 0o644)
 			if err == nil && *person {
 				mu.Lock()
 				recent = append([]kit.Choice{kit.ChoiceOf(res.HTML)}, recent...)
@@ -172,17 +175,19 @@ func dash(s string) string {
 }
 
 // openAIStream streams a chat completion from an OpenAI-compatible API.
-func openAIStream(base, model, key string) mockup.StreamText {
+func openAIStream(base, model, key string, thinking bool) mockup.StreamText {
 	client := &http.Client{Timeout: 10 * time.Minute}
 	return func(ctx context.Context, system, user string, onChunk func(string)) (string, error) {
-		body, _ := json.Marshal(map[string]any{
+		payload := map[string]any{
 			"model":  model,
 			"stream": true,
 			"messages": []map[string]string{
 				{"role": "system", "content": system},
 				{"role": "user", "content": user},
 			},
-		})
+		}
+		setThinking(payload, model, thinking)
+		body, _ := json.Marshal(payload)
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimSuffix(base, "/")+"/chat/completions", bytes.NewReader(body))
 		if err != nil {
 			return "", err
@@ -225,5 +230,27 @@ func openAIStream(base, model, key string) mockup.StreamText {
 			}
 		}
 		return all.String(), sc.Err()
+	}
+}
+
+// setThinking sets the model family's thinking switch the way the platform
+// does; a family with no known switch keeps its provider's default.
+func setThinking(payload map[string]any, model string, on bool) {
+	m := strings.ToLower(model)
+	switch {
+	case strings.Contains(m, "qwen") || strings.Contains(m, "glm"):
+		payload["chat_template_kwargs"] = map[string]any{"enable_thinking": on}
+	case strings.Contains(m, "inkling"):
+		effort := "none"
+		if on {
+			effort = "medium"
+		}
+		payload["reasoning_effort"] = effort
+	case strings.Contains(m, "deepseek-v3") || strings.Contains(m, "deepseek-v4"):
+		state := "disabled"
+		if on {
+			state = "enabled"
+		}
+		payload["thinking"] = map[string]any{"type": state}
 	}
 }

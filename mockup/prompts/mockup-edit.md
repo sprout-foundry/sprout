@@ -1,4 +1,4 @@
-charter-version: mockup-edit/v3
+charter-version: mockup-edit/v4
 
 # Mockup edit charter
 
@@ -26,7 +26,10 @@ the text that replaces it
 - To add something, FIND the text just before where it goes and replace it
   with that same text followed by the new part.
 - The mockup is built with the design kit (its catalogue is below), which
-  is added to the document for you: use the kit's classes for anything you
-  add, keep the kit and palette named on `<html>` unless the change is to
-  them, and load nothing from anywhere. Keep the change in the mockup's own
-  style.
+  is added to the document for you: build anything you add from the kit's
+  classes or the page's own (from its `<style>`), keep the kit and palette
+  named on `<html>` unless the change is to them, and load nothing from
+  anywhere. Keep the change in the mockup's own style.
+- A layout change may edit or add to the page's `<style>`: the kit's
+  variables for colour, type and shape, never raw colours or font names,
+  never restyling the kit's components, and one column on a phone.

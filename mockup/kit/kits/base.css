@@ -61,7 +61,7 @@ p{margin:0 0 1em}
 .btn-block{width:100%}
 /* Cards */
 .card{background:var(--surface);border:var(--card-border,1px) solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
-.card-body{padding:var(--card-pad,1.5rem)}
+.card-body{padding:var(--card-pad,1.5rem)}.card:not(:has(>.card-body)){padding:var(--card-pad,1.5rem)}
 .card-hover{transition:transform .2s,box-shadow .2s}.card-hover:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg)}
 .price{font-family:var(--font-head);font-weight:800;font-size:1.25rem;color:var(--text)}
 .feature .icon-badge{margin-bottom:1rem}
@@ -125,6 +125,8 @@ body.screens-ready [data-screen]:not(.is-shown){display:none}
 .center .display,.display.center{margin-inline:auto}
 .text-accent{color:var(--primary)}
 .text-gradient{background:linear-gradient(100deg,var(--primary),var(--accent));-webkit-background-clip:text;background-clip:text;color:transparent}
+.section-primary :is(.text-accent,.text-gradient){color:var(--on-primary);background:none;-webkit-text-fill-color:currentColor;text-decoration:underline;text-decoration-color:color-mix(in srgb,var(--on-primary) 45%,transparent);text-decoration-thickness:.08em;text-underline-offset:.14em}
+.section-primary :is(h4,.kicker){color:var(--on-primary)}.section-primary .btn-ghost{color:var(--on-primary)}.section-dark .btn-ghost{color:inherit}
 .kicker{font-family:var(--font-head);font-weight:700;font-size:.9rem;color:var(--muted);letter-spacing:.08em}
 .rule{border:0;border-top:1px solid var(--border);margin:2.5rem 0}
 .section-primary{background:var(--primary);color:var(--on-primary)}.section-primary h1,.section-primary h2,.section-primary h3,.section-primary .display{color:var(--on-primary)}.section-primary .muted,.section-primary .lead,.section-primary .eyebrow{color:color-mix(in srgb,var(--on-primary) 80%,transparent)}.section-primary .btn-primary{background:var(--on-primary);color:var(--primary)}
@@ -136,14 +138,15 @@ body.screens-ready [data-screen]:not(.is-shown){display:none}
 .media-arch{border-radius:999px 999px var(--radius) var(--radius)}
 .media-round{border-radius:50%}
 .media-rounded{border-radius:var(--radius);overflow:hidden}
-.overlap{position:relative}.float-card{position:absolute;left:-1.25rem;bottom:-1.25rem;max-width:16rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-lg);padding:.9rem 1.1rem}
-@media (max-width:820px){.float-card{left:.75rem;bottom:.75rem}}
+.overlap{position:relative}.float-card{max-width:16rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow-lg);padding:.9rem 1.1rem}
+.overlap .float-card{position:absolute;left:-1.25rem;bottom:-1.25rem}
+@media (max-width:820px){.overlap .float-card{left:.75rem;bottom:.75rem}}
 /* Device frames: a product shown in a browser window or a phone */
 .frame-browser{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-lg);overflow:hidden}
 .frame-browser::before{content:"";display:block;height:2.1rem;border-bottom:1px solid var(--border);background:radial-gradient(circle at 1.1rem 50%,var(--border) .3rem,transparent .32rem),radial-gradient(circle at 2rem 50%,var(--border) .3rem,transparent .32rem),radial-gradient(circle at 2.9rem 50%,var(--border) .3rem,transparent .32rem),var(--soft)}
 .frame-phone{width:min(300px,100%);margin-inline:auto;background:var(--surface);border:10px solid var(--text);border-radius:2.6rem;box-shadow:var(--shadow-lg);overflow:hidden;min-height:540px;position:relative}
 .frame-phone::before{content:"";position:absolute;top:.5rem;left:50%;transform:translateX(-50%);width:5.5rem;height:1.3rem;border-radius:999px;background:var(--text);z-index:2}
-.frame-phone .tabbar{position:absolute}
+.frame-phone .tabbar{position:absolute}.frame-phone>:first-child{padding-top:2.4rem}
 /* Bento: an uneven grid of feature tiles */
 .bento{display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:minmax(10rem,auto);gap:var(--grid-gap,1.25rem);align-items:start}
 .bento>.tall{align-self:stretch}

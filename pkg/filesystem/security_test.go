@@ -942,7 +942,7 @@ func TestSafeResolvePathForWrite_SymlinkReValidation(t *testing.T) {
 		t.Fatalf("Failed to create session folder: %v", err)
 	}
 	defer func() {
-		os.RemoveAll(projectFolder)
+		_ = os.RemoveAll(projectFolder)
 		os.RemoveAll(sessionFolder)
 	}()
 
@@ -1058,7 +1058,7 @@ func TestSafeResolvePathForWrite_SymlinkToEffectiveCwdFolder(t *testing.T) {
 		t.Fatalf("Failed to create effective cwd: %v", err)
 	}
 	defer func() {
-		os.RemoveAll(projectFolder)
+		_ = os.RemoveAll(projectFolder)
 		os.RemoveAll(effectiveCwd)
 	}()
 
@@ -1109,7 +1109,7 @@ func TestSafeResolvePath_MultipleSymlinkHops(t *testing.T) {
 		t.Fatalf("Failed to create outside dir: %v", err)
 	}
 	defer func() {
-		os.RemoveAll(projectFolder)
+		_ = os.RemoveAll(projectFolder)
 		os.RemoveAll(outsideDir)
 	}()
 
@@ -1219,7 +1219,7 @@ func TestAgentContext_Getters(t *testing.T) {
 
 	t.Run("nil context handling", func(t *testing.T) {
 		// All functions should handle nil context gracefully
-		if got := ProjectFolderFromContext(nil); got != "" {
+		if got := ProjectFolderFromContext(nil); got != "" { //nolint:staticcheck // intentionally nil: this test covers nil-context handling
 			t.Errorf("ProjectFolderFromContext(nil) should return empty string")
 		}
 		if got := AgentEffectiveCwdFromContext(nil); got != "" {

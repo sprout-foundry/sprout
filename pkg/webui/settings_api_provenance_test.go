@@ -140,11 +140,11 @@ func setupProvenanceTestServer(t *testing.T, globalCfg, projectFolderCfg *config
 	if projectFolderCfg != nil {
 		projectFolder = t.TempDir()
 		projectFolderDir := filepath.Join(projectFolder, ".sprout")
-		os.MkdirAll(projectFolderDir, 0700)
+		_ = os.MkdirAll(projectFolderDir, 0700)
 		projectFolderConfigPath := filepath.Join(projectFolderDir, "config.json")
 		data, err := json.Marshal(projectFolderCfg)
 		require.NoError(t, err)
-		os.WriteFile(projectFolderConfigPath, data, 0600)
+		_ = os.WriteFile(projectFolderConfigPath, data, 0600)
 
 		ctx.ProjectFolder = projectFolder
 	}

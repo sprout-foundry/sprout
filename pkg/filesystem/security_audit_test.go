@@ -30,7 +30,7 @@ func TestSafeResolvePathWithBypass_AuditLoggerAllowed(t *testing.T) {
 	// Create a test project folder outside /tmp so audit is emitted
 	root := auditTestRoot(t)
 	projectFolder := filepath.Join(root, "fs-audit-workspace-"+t.Name())
-	os.MkdirAll(projectFolder, 0755)
+	_ = os.MkdirAll(projectFolder, 0755)
 	defer os.RemoveAll(projectFolder)
 	testFile := filepath.Join(projectFolder, "test.txt")
 	os.WriteFile(testFile, []byte("hello"), 0644)
@@ -121,7 +121,7 @@ func TestSafeResolvePathWithBypass_AuditLoggerDenied(t *testing.T) {
 func TestSafeResolvePathWithBypass_AuditLoggerAllowedViaSessionFolder(t *testing.T) {
 	root := auditTestRoot(t)
 	projectFolder := filepath.Join(root, "fs-audit-workspace-"+t.Name())
-	os.MkdirAll(projectFolder, 0755)
+	_ = os.MkdirAll(projectFolder, 0755)
 	defer os.RemoveAll(projectFolder)
 	allowedFolder := filepath.Join(root, "fs-audit-allowed-"+t.Name())
 	os.MkdirAll(allowedFolder, 0755)
@@ -164,7 +164,7 @@ func TestSafeResolvePathWithBypass_NilLoggerNoPanic(t *testing.T) {
 
 	root := auditTestRoot(t)
 	projectFolder := filepath.Join(root, "fs-audit-workspace-"+t.Name())
-	os.MkdirAll(projectFolder, 0755)
+	_ = os.MkdirAll(projectFolder, 0755)
 	defer os.RemoveAll(projectFolder)
 
 	// Build context with nil audit logger
@@ -181,7 +181,7 @@ func TestSafeResolvePathWithBypass_NilLoggerNoPanic(t *testing.T) {
 func TestSafeResolvePathForWriteWithBypass_AuditLoggerAllowed(t *testing.T) {
 	root := auditTestRoot(t)
 	projectFolder := filepath.Join(root, "fs-audit-workspace-"+t.Name())
-	os.MkdirAll(projectFolder, 0755)
+	_ = os.MkdirAll(projectFolder, 0755)
 	defer os.RemoveAll(projectFolder)
 
 	// Create a simple audit logger wrapper that captures entries
@@ -255,7 +255,7 @@ func TestSafeResolvePathForWriteWithBypass_AuditLoggerDenied(t *testing.T) {
 func TestSafeResolvePathForWriteWithBypass_AuditLoggerSymlinkRedirected(t *testing.T) {
 	root := auditTestRoot(t)
 	projectFolder := filepath.Join(root, "fs-audit-workspace-"+t.Name())
-	os.MkdirAll(projectFolder, 0755)
+	_ = os.MkdirAll(projectFolder, 0755)
 	defer os.RemoveAll(projectFolder)
 	allowedFolder := filepath.Join(root, "fs-audit-allowed-"+t.Name())
 	os.MkdirAll(allowedFolder, 0755)
@@ -309,7 +309,7 @@ func TestSafeResolvePathForWriteWithBypass_NilLoggerNoPanic(t *testing.T) {
 
 	root := auditTestRoot(t)
 	projectFolder := filepath.Join(root, "fs-audit-workspace-"+t.Name())
-	os.MkdirAll(projectFolder, 0755)
+	_ = os.MkdirAll(projectFolder, 0755)
 	defer os.RemoveAll(projectFolder)
 
 	// Build context with nil audit logger

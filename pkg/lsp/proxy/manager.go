@@ -116,7 +116,7 @@ func (m *Manager) GetOrCreate(projectFolderPath, languageID string) (*LSPProcess
 	}
 
 	// Start the process
-	log.Printf("LSP manager: starting %s for project_folder=%s", cfg.ID, projectFolderPath)
+	log.Printf("LSP manager: starting %s for project_folder=%s", cfg.ID, projectFolderPath) //nolint:gosec // G706: path comes from local config, not attacker input
 	process, err := StartLSPProcess(m.ctx, projectFolderPath, binaryPath, cfg.Args)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to start %s: %w", cfg.Binary, err)

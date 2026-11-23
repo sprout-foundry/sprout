@@ -76,7 +76,7 @@ func TestMultiProjectFolderConcurrentSessions(t *testing.T) {
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	require.NoError(t, err)
 	ws.daemonRoot = daemonRoot
-	ws.SetProjectFolder(projectFolderDirs[0])
+	_, _ = ws.SetProjectFolder(projectFolderDirs[0])
 
 	// 5 sessions across 3 project folders: w1×2, w2×2, w3×1.
 	sessions := []session{

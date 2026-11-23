@@ -43,7 +43,7 @@ func TestMultiWindowClientIsolationForProjectFolderSessionAndModel(t *testing.T)
 		t.Fatal(err)
 	}
 	ws.daemonRoot = daemonRoot
-	ws.SetProjectFolder(daemonRoot)
+	_, _ = ws.SetProjectFolder(daemonRoot)
 	ws.terminalManager = NewTerminalManager(daemonRoot)
 	ws.fileConsents = newFileConsentManager()
 
@@ -188,7 +188,7 @@ func TestActiveQueryIsolationAllowsOtherWindowProjectFolderSwitch(t *testing.T) 
 		t.Fatal(err)
 	}
 	ws.daemonRoot = daemonRoot
-	ws.SetProjectFolder(daemonRoot)
+	_, _ = ws.SetProjectFolder(daemonRoot)
 	ws.terminalManager = NewTerminalManager(daemonRoot)
 	ws.fileConsents = newFileConsentManager()
 
@@ -259,7 +259,7 @@ func TestSetClientProjectFolderResetsAgentSessionState(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws.daemonRoot = daemonRoot
-	ws.SetProjectFolder(daemonRoot)
+	_, _ = ws.SetProjectFolder(daemonRoot)
 
 	clientID := "window-reset"
 	if _, err := ws.setClientProjectFolder(clientID, startProjectFolder); err != nil {
@@ -462,7 +462,7 @@ func TestCleanupInactiveClientContextsRemovesOnlyStaleInactiveDisconnectedClient
 		t.Fatal(err)
 	}
 	ws.daemonRoot = daemonRoot
-	ws.SetProjectFolder(daemonRoot)
+	_, _ = ws.SetProjectFolder(daemonRoot)
 
 	old := time.Now().Add(-2 * time.Hour)
 	recent := time.Now().Add(-5 * time.Minute)

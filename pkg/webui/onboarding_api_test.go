@@ -64,7 +64,7 @@ func setupOnboardingTestServer(t *testing.T) (*ReactWebServer, string) {
 		t.Fatal(err)
 	}
 	ws.daemonRoot = daemonRoot
-	ws.SetProjectFolder(daemonRoot)
+	_, _ = ws.SetProjectFolder(daemonRoot)
 	ws.terminalManager = NewTerminalManager(daemonRoot)
 	ws.fileConsents = newFileConsentManager()
 

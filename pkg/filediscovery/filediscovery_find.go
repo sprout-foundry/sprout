@@ -74,7 +74,7 @@ func (fd *FileDiscovery) findWithFindCommand(patterns []string, projectFolderInf
 
 	for _, pattern := range patterns {
 		// Build find command
-		cmd := exec.Command("find", projectFolderInfo.RootDir,
+		cmd := exec.Command("find", projectFolderInfo.RootDir, //nolint:gosec // pre-existing: find -name with the caller's query patterns is the documented behavior
 			"-type", "f", // Only files
 			"-name", pattern, // Match pattern
 			"-not", "-path", "*/.*", // Exclude hidden files

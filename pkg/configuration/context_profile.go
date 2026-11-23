@@ -33,6 +33,9 @@ type ContextProfile struct {
 	// SystemPromptCore, from Config.SystemPromptCore, replaces the embedded
 	// core prompt the profile would load.
 	SystemPromptCore string `json:"-"`
+	// From Config.MemoryPrompt / MemoryPromptMaxBytes (see memory_prompt.go in pkg/agent).
+	MemoryPrompt         string `json:"-"`
+	MemoryPromptMaxBytes int    `json:"-"`
 }
 
 // fullContextProfile is the baked full-context preset (all defaults).
@@ -100,6 +103,8 @@ func ResolveContextProfile(cfg *Config, modelContextWindow int, onDevice bool) (
 	p, err := resolveContextPreset(cfg, modelContextWindow, onDevice)
 	if cfg != nil {
 		p.SystemPromptCore = strings.TrimSpace(cfg.SystemPromptCore)
+		p.MemoryPrompt = strings.TrimSpace(cfg.MemoryPrompt)
+		p.MemoryPromptMaxBytes = cfg.MemoryPromptMaxBytes
 	}
 	return p, err
 }

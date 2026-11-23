@@ -113,7 +113,7 @@ func GetEmbeddedSystemPromptForProfile(profile configuration.ContextProfile, pro
 		promptContent = promptContent + contextFiles
 	}
 
-	memories := LoadMemoriesForPrompt()
+	memories := LoadMemoriesForPromptMode(profile.MemoryPrompt, profile.MemoryPromptMaxBytes)
 	if memories != "" {
 		promptContent = promptContent + memories
 	}

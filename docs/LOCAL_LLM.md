@@ -87,3 +87,11 @@ hanging — reduce the model size (e.g. 4B → 0.8B).
 | Runtime download fails | Check network access to github.com, then retry setup |
 | Generation slow / swap-heavy | Use a smaller model (e.g. 4B → 0.8B) |
 | Memory-limit error | Close other apps; use a smaller model |
+
+## Prompt Size With Local Models
+
+Every request re-sends the system prompt, so its fixed part sets how fast a local server answers each step. Memories are often the largest share of it: with `memory_prompt` unset, up to 50 KB of memory bodies (about 12 500 tokens) ride on every request. `"memory_prompt": "index"` keeps a one-line index instead and lets the agent read the bodies it needs with `manage_memory`; `"off"` leaves memories out of the prompt. See [CONFIGURATION.md](CONFIGURATION.md#memory_prompt-and-memory_prompt_max_bytes).
+
+A provider's `"parameters": {"max_tokens": 16384}` also replaces the 64 000-token completion cap on servers that reserve memory for a request's output budget.
+
+Trimming the tool list with `tool_calls` shortens the prompt too, but measure task success before relying on it: the system prompt still describes the tools it removes, and a model told about tools it cannot call may loop.

@@ -75,12 +75,12 @@ const pseInvalidPlanJSON = `{
 // Helpers
 // ---------------------------------------------------------------------------
 
-// pseAgent wires a scripted client into a fresh agent whose workspace root is
+// pseAgent wires a scripted client into a fresh agent whose project folder is
 // a temp project directory (the .sprout/ plan files land under it). The full
 // context profile keeps the write_plan tool on the roster; SkipPrompt keeps
 // the turn from ever blocking on an interactive prompt (stdin is closed in
 // tests).
-func pseAgent(t *testing.T, client *ScriptedClient, workspaceRoot string) *Agent {
+func pseAgent(t *testing.T, client *ScriptedClient, projectFolder string) *Agent {
 	t.Helper()
 
 	mgr, cleanup := configuration.NewTestManager(t)
@@ -99,7 +99,7 @@ func pseAgent(t *testing.T, client *ScriptedClient, workspaceRoot string) *Agent
 	}
 	t.Cleanup(ag.Shutdown)
 	ag.SetMaxIterations(10)
-	ag.SetWorkspaceRoot(workspaceRoot)
+	ag.SetProjectFolder(projectFolder)
 	return ag
 }
 

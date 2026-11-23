@@ -36,7 +36,7 @@ export default function ComputerUseSettingsTab({
   // ── Audit log dir (read-only display) ──────────────────────
   const auditLogDir = String(getNestedValue(settings ?? {}, 'computer_use.audit_log_dir') ?? '');
 
-  // ── Workspace allowlist (textarea, newline-separated) ──────
+  // ── Project folder allowlist (textarea, newline-separated) ──────
   const rawAllowlist = settings ? (getNestedValue(settings, 'computer_use.workspace_allowlist') as unknown) : [];
   const persistedAllowlist: string[] = Array.isArray(rawAllowlist) ? rawAllowlist : [];
   const [allowlistDraft, setAllowlistDraft] = useState<string>(persistedAllowlist.join('\n'));
@@ -223,9 +223,9 @@ export default function ComputerUseSettingsTab({
         </div>
       </div>
 
-      {/* ── Workspace allowlist ────────────────────────────── */}
+      {/* ── Project folder allowlist ────────────────────────────── */}
       <div className="config-item">
-        <label htmlFor="setting-computer-use-allowlist">Workspace allowlist</label>
+        <label htmlFor="setting-computer-use-allowlist">Project folder allowlist</label>
         <textarea
           id="setting-computer-use-allowlist"
           className="styled-input styled-textarea"
@@ -252,7 +252,7 @@ export default function ComputerUseSettingsTab({
           }}
         />
         <div className="config-help">
-          One path per line. Workspace roots listed here auto-approve computer use for the session without the
+          One path per line. Project folders listed here auto-approve computer use for the session without the
           per-session opt-in prompt. Lines are trimmed; blank lines are ignored.
         </div>
       </div>

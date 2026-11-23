@@ -10,7 +10,7 @@ import type { PlatformNavItem } from '../services/apiAdapter';
  * are part of that contract and must not be renamed here.
  */
 export interface GitSyncReport {
-  /** False when the workspace root is not inside a git repository (all other fields are then zero/empty). */
+  /** False when the project folder is not inside a git repository (all other fields are then zero/empty). */
   in_git_repo: boolean;
 
   /** Checked-out branch (empty when it cannot be determined). */
@@ -107,9 +107,9 @@ export interface RuntimeConfig {
    * Undefined in local mode / when the platform doesn't advertise one. */
   egressProxy?: string;
 
-  /** The repository the workspace should open, when the host names one (a
+  /** The repository the project folder should open, when the host names one (a
    * host's project `repoUrl`). The hosted build's own repo arrives as the
-   * `?repo=` query parameter; a host that mounts a workspace supplies it here
+   * `?repo=` query parameter; a host that mounts a project folder supplies it here
    * so the repo does not have to live in the URL. Undefined when no host names
    * a repo — the adapter then falls back to the query parameter. */
   repoUrl?: string;

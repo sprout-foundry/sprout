@@ -66,14 +66,14 @@ func (ws *ReactWebServer) syncAgentStateForClient(clientID string) error {
 	ctx.setChatSessionState(ctx.getActiveChatID(), snapshot)
 	ctx.LastSeenAt = time.Now()
 	if clientID == defaultWebClientID {
-		ws.workspaceRoot = ctx.WorkspaceRoot
+		ws.projectFolder = ctx.ProjectFolder
 	}
 	return nil
 }
 
 // startTerminalCleanupIfNeeded starts the idle-session cleanup worker for a
 // per-client TerminalManager. The server-level TM gets its worker during
-// Start(); per-client TMs created later (e.g. via setClientWorkspaceRoot or
+// Start(); per-client TMs created later (e.g. via setClientProjectFolder or
 // new non-default client contexts) need their own worker to prevent PTY
 // process leaks from idle hidden sessions.
 //

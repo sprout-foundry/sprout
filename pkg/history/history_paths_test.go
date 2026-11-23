@@ -51,7 +51,7 @@ func TestInitializeHistoryPaths_GlobalScope(t *testing.T) {
 	defer setPathsForTesting(originalChanges, originalRevisions)
 
 	// SP-133: "global" history scope is no longer supported.
-	// changes/ and revisions/ are always workspace-local.
+	// changes/ and revisions/ are always project-folder-local.
 	// Verify that even with HistoryScope="global", the paths remain
 	// project-scoped.
 	config := &configuration.Config{
@@ -64,10 +64,10 @@ func TestInitializeHistoryPaths_GlobalScope(t *testing.T) {
 	// Verify paths remain project-scoped regardless of HistoryScope
 	currentChanges, currentRevisions := getPathsForTesting()
 	if currentChanges != projectChangesDir {
-		t.Errorf("Expected changesDir to be %s (always workspace-local), got %s", projectChangesDir, currentChanges)
+		t.Errorf("Expected changesDir to be %s (always project-folder-local), got %s", projectChangesDir, currentChanges)
 	}
 	if currentRevisions != projectRevisionsDir {
-		t.Errorf("Expected revisionsDir to be %s (always workspace-local), got %s", projectRevisionsDir, currentRevisions)
+		t.Errorf("Expected revisionsDir to be %s (always project-folder-local), got %s", projectRevisionsDir, currentRevisions)
 	}
 }
 

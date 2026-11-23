@@ -11,19 +11,19 @@ import (
 )
 
 // getGitFileStatusMap runs git status --porcelain once and returns sets of modified and untracked files.
-func getGitFileStatusMap(workspaceRoot string) (modified, untracked map[string]bool) {
+func getGitFileStatusMap(projectFolder string) (modified, untracked map[string]bool) {
 	modified = make(map[string]bool)
 	untracked = make(map[string]bool)
 
 	// Check if we're in a git repo
 	cmd := exec.Command("git", "rev-parse", "--git-dir")
-	cmd.Dir = workspaceRoot
+	cmd.Dir = projectFolder
 	if err := cmd.Run(); err != nil {
 		return
 	}
 
 	cmd = exec.Command("git", "status", "--porcelain")
-	cmd.Dir = workspaceRoot
+	cmd.Dir = projectFolder
 	output, err := cmd.Output()
 	if err != nil {
 		return
@@ -57,7 +57,7 @@ func getGitFileStatusMap(workspaceRoot string) (modified, untracked map[string]b
 }
 
 // getGitStatusForEntry determines the git status for a single file or directory entry.
-func getGitStatusForEntry(relPath string, isDir bool, modified, untracked map[string]bool, ignoreRules *ignore.GitIgnore, workspaceRoot string) string {
+func getGitStatusForEntry(relPath string, isDir bool, modified, untracked map[string]bool, ignoreRules *ignore.GitIgnore, projectFolder string) string {
 	// The status maps are keyed by git's slash paths; relPath is OS-native.
 	relPath = filepath.ToSlash(relPath)
 	// Special case: .git directory is always gitignored

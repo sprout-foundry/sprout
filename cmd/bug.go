@@ -17,7 +17,7 @@ import (
 
 // bugReportTemplate mirrors the web UI's short template (webui/src/services/
 // reportBug.ts): what happened / what you expected / steps, then the
-// environment. It carries no file paths, workspace names, session ids,
+// environment. It carries no file paths, project folder names, session ids,
 // provider keys, prompts or model output — this is a public repo.
 const bugReportTemplate = `### What happened
 

@@ -44,8 +44,8 @@ export interface QueryProgress {
 }
 
 /**
- * The workspace is busy: another chat in this client context has a query
- * running (SP-142 §3). Set when a send is rejected with 409 workspace_busy;
+ * The project folder is busy: another chat in this client context has a query
+ * running (SP-142 §3). Set when a send is rejected with 409 project_folder_busy;
  * the composer renders the inline busy notice with a send-anyway affordance.
  * Released when the running chat's terminal event arrives (query_completed /
  * error / session_terminated), or when the user stops processing.
@@ -107,7 +107,7 @@ export interface AppState {
   logs: LogEntry[];
   isProcessing: boolean;
   lastError: string | null;
-  /** 409 workspace_busy payload (SP-142 §3) — see WorkspaceBusyInfo. */
+  /** 409 project_folder_busy payload (SP-142 §3) — see WorkspaceBusyInfo. */
   workspaceBusy: WorkspaceBusyInfo | null;
   currentView: ViewType;
   toolExecutions: ToolExecution[];

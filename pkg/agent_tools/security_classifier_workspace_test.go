@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestClassifyToolCallWithWorkspace(t *testing.T) {
+func TestClassifyToolCallWithProjectFolder(t *testing.T) {
 	ws := "/home/dev/ws"
 	home := os.Getenv("HOME")
 	if home == "" {
@@ -15,7 +15,7 @@ func TestClassifyToolCallWithWorkspace(t *testing.T) {
 
 	safe := func(cmd string) bool {
 		t.Helper()
-		res := ClassifyToolCallWithWorkspace("shell_command", map[string]interface{}{"command": cmd}, ws)
+		res := ClassifyToolCallWithProjectFolder("shell_command", map[string]interface{}{"command": cmd}, ws)
 		return res.Risk == SecuritySafe
 	}
 
@@ -25,7 +25,7 @@ func TestClassifyToolCallWithWorkspace(t *testing.T) {
 		safe bool
 	}{
 		{"relative ls", "ls -la", true},
-		{"workspace abs path", "cat /home/dev/ws/main.go", true},
+		{"project folder abs path", "cat /home/dev/ws/main.go", true},
 		{"tmp allowed", "cp file /tmp/sprout/x.txt", true},
 		{"dev null", "make build > /dev/null 2>&1", true},
 		{"system binary env", "/usr/bin/env python3 script.py", true},
@@ -48,68 +48,68 @@ func TestClassifyToolCallWithWorkspace(t *testing.T) {
 	}
 }
 
-func TestClassifyToolCallWithWorkspaceEscalatesToCaution(t *testing.T) {
+func TestClassifyToolCallWithProjectFolderEscalatesToCaution(t *testing.T) {
 	ws := "/home/dev/ws"
-	res := ClassifyToolCallWithWorkspace("shell_command", map[string]interface{}{"command": "cat /home/dev/other-repo/main.go"}, ws)
+	res := ClassifyToolCallWithProjectFolder("shell_command", map[string]interface{}{"command": "cat /home/dev/other-repo/main.go"}, ws)
 	if res.Risk != SecurityCaution {
 		t.Fatalf("expected Caution, got %v", res.Risk)
 	}
 	if !res.ShouldPrompt {
 		t.Fatal("expected ShouldPrompt=true")
 	}
-	if res.RiskType != "filesystem_outside_workspace" {
+	if res.RiskType != "filesystem_outside_project_folder" {
 		t.Fatalf("expected risk type filesystem_outside_workspace, got %s", res.RiskType)
 	}
 }
 
-func TestClassifyToolCallWithWorkspaceExtraAllowed(t *testing.T) {
+func TestClassifyToolCallWithProjectFolderExtraAllowed(t *testing.T) {
 	ws := "/home/dev/ws"
 	extra := "/home/dev/shared"
-	res := ClassifyToolCallWithWorkspace("shell_command", map[string]interface{}{"command": "cat /home/dev/shared/lib.go"}, ws, extra)
+	res := ClassifyToolCallWithProjectFolder("shell_command", map[string]interface{}{"command": "cat /home/dev/shared/lib.go"}, ws, extra)
 	if res.Risk != SecuritySafe {
 		t.Fatalf("expected Safe with extraAllowed, got %v", res.Risk)
 	}
-	res2 := ClassifyToolCallWithWorkspace("shell_command", map[string]interface{}{"command": "cat /home/dev/other-repo/main.go"}, ws, extra)
+	res2 := ClassifyToolCallWithProjectFolder("shell_command", map[string]interface{}{"command": "cat /home/dev/other-repo/main.go"}, ws, extra)
 	if res2.Risk == SecuritySafe {
 		t.Fatal("non-allowlisted sibling must not be Safe")
 	}
 }
 
-func TestClassifyToolCallWithWorkspaceNoBaseEscalation(t *testing.T) {
+func TestClassifyToolCallWithProjectFolderNoBaseEscalation(t *testing.T) {
 	ws := "/home/dev/ws"
 	// rm -rf against a sibling home path: base classifier calls it Safe
 	// (the exact hole this wrapper closes) — the wrapper must escalate.
-	escalated := ClassifyToolCallWithWorkspace("shell_command", map[string]interface{}{"command": "rm -rf /home/dev/other"}, ws)
+	escalated := ClassifyToolCallWithProjectFolder("shell_command", map[string]interface{}{"command": "rm -rf /home/dev/other"}, ws)
 	if escalated.Risk != SecurityCaution {
 		t.Fatalf("expected Caution escalation, got %v", escalated.Risk)
 	}
 	// Hard blocks stay hard blocks.
-	hb := ClassifyToolCallWithWorkspace("shell_command", map[string]interface{}{"command": "rm -rf /"}, ws)
+	hb := ClassifyToolCallWithProjectFolder("shell_command", map[string]interface{}{"command": "rm -rf /"}, ws)
 	if hb.Risk != SecurityDangerous || !hb.IsHardBlock {
 		t.Fatalf("hard block must remain Dangerous+IsHardBlock, got %v block=%v", hb.Risk, hb.IsHardBlock)
 	}
 
-	nonShell := ClassifyToolCallWithWorkspace("read_file", map[string]interface{}{"path": "/home/dev/other/x"}, ws)
+	nonShell := ClassifyToolCallWithProjectFolder("read_file", map[string]interface{}{"path": "/home/dev/other/x"}, ws)
 	if nonShell.Risk != ClassifyToolCall("read_file", map[string]interface{}{"path": "/home/dev/other/x"}).Risk {
 		t.Fatal("non-shell tools must return base classification")
 	}
 }
 
-func TestOffWorkspacePathInCommandDotDot(t *testing.T) {
+func TestOffProjectFolderPathInCommandDotDot(t *testing.T) {
 	ws := "/home/dev/ws"
-	if !offWorkspacePathInCommand("cat ../../etc/hosts", ws, nil) {
+	if !offProjectFolderPathInCommand("cat ../../etc/hosts", ws, nil) {
 		t.Fatal("../ escape must be detected")
 	}
-	if !offWorkspacePathInCommand("ls sub/../../other", ws, nil) {
+	if !offProjectFolderPathInCommand("ls sub/../../other", ws, nil) {
 		t.Fatal("mixed ../ escape must be detected")
 	}
-	if offWorkspacePathInCommand("ls ../ws-sub/../ws", ws, nil) {
-		t.Fatal("path resolving back into workspace must not flag")
+	if offProjectFolderPathInCommand("ls ../ws-sub/../ws", ws, nil) {
+		t.Fatal("path resolving back into project folder must not flag")
 	}
 }
 
-func TestOffWorkspacePathRegex(t *testing.T) {
-	toks := offWorkspacePathPattern.FindAllStringSubmatch("cat /etc/passwd | tee ~/x > /home/dev/ws/out", -1)
+func TestOffProjectFolderPathRegex(t *testing.T) {
+	toks := offProjectFolderPathPattern.FindAllStringSubmatch("cat /etc/passwd | tee ~/x > /home/dev/ws/out", -1)
 	var paths []string
 	for _, m := range toks {
 		paths = append(paths, m[1])
@@ -120,13 +120,13 @@ func TestOffWorkspacePathRegex(t *testing.T) {
 	}
 }
 
-// TestOffWorkspacePathInCommandPatternArguments pins the rule that a rooted
+// TestOffProjectFolderPathInCommandPatternArguments pins the rule that a rooted
 // token whose top-level directory does not exist on this machine is treated as
 // a pattern/route string, not a file target. Quoted grep patterns like
-// `grep -n "/api/git/"` must not trigger an "outside the workspace root" prompt,
+// `grep -n "/api/git/"` must not trigger an "outside the project folder" prompt,
 // while a genuine outside path with an existing top-level directory (e.g.
 // /etc/hosts) must still be flagged.
-func TestOffWorkspacePathInCommandPatternArguments(t *testing.T) {
+func TestOffProjectFolderPathInCommandPatternArguments(t *testing.T) {
 	ws := "/home/dev/ws"
 
 	// A route-style pattern argument under a nonexistent top-level dir is not a
@@ -138,7 +138,7 @@ func TestOffWorkspacePathInCommandPatternArguments(t *testing.T) {
 		`git grep -n "/api/v1/users/"`,
 	}
 	for _, cmd := range patternCases {
-		if offWorkspacePathInCommand(cmd, ws, nil) {
+		if offProjectFolderPathInCommand(cmd, ws, nil) {
 			t.Errorf("route/pattern argument must not be flagged: %q", cmd)
 		}
 	}
@@ -155,7 +155,7 @@ func TestOffWorkspacePathInCommandPatternArguments(t *testing.T) {
 		"cat /no-such-dir/../../etc/passwd",
 	}
 	for _, cmd := range realCases {
-		if !offWorkspacePathInCommand(cmd, ws, nil) {
+		if !offProjectFolderPathInCommand(cmd, ws, nil) {
 			t.Errorf("real outside path must still be flagged: %q", cmd)
 		}
 	}
@@ -164,16 +164,16 @@ func TestOffWorkspacePathInCommandPatternArguments(t *testing.T) {
 	// exist locally is treated as a pattern and NOT flagged. This is a
 	// deliberate trade-off, pinned here so a future change cannot widen it
 	// silently.
-	if offWorkspacePathInCommand("cat /prod/data", ws, nil) {
+	if offProjectFolderPathInCommand("cat /prod/data", ws, nil) {
 		t.Error("path under a nonexistent top-level dir is treated as a pattern and must not be flagged")
 	}
 
 	// And confirm the classifier escalation behaves the same way end to end.
-	prompted := ClassifyToolCallWithWorkspace("shell_command", map[string]interface{}{"command": `grep -n "/api/git/" file`}, ws)
+	prompted := ClassifyToolCallWithProjectFolder("shell_command", map[string]interface{}{"command": `grep -n "/api/git/" file`}, ws)
 	if prompted.ShouldPrompt {
 		t.Errorf("grep route pattern must not prompt, got risk=%v reason=%q", prompted.Risk, prompted.Reasoning)
 	}
-	outside := ClassifyToolCallWithWorkspace("shell_command", map[string]interface{}{"command": "cat /etc/hosts"}, ws)
+	outside := ClassifyToolCallWithProjectFolder("shell_command", map[string]interface{}{"command": "cat /etc/hosts"}, ws)
 	if !outside.ShouldPrompt || outside.Risk != SecurityCaution {
 		t.Errorf("cat /etc/hosts must prompt as Caution, got risk=%v prompt=%v", outside.Risk, outside.ShouldPrompt)
 	}

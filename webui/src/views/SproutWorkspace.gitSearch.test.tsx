@@ -45,7 +45,7 @@ vi.mock('../components/EditorPane', async () => {
 import type { SproutHost } from '../host';
 import { setActiveHost } from '../host/accessor';
 import { headlessHost } from '../host/HostProvider';
-import { onWorkspaceResponse } from '../services/workspaceResponses';
+import { onProjectFolderResponse } from '../services/workspaceResponses';
 import { SproutWorkspace } from './SproutWorkspace';
 import type { ViewsArrangement } from './ViewsLayout';
 
@@ -221,7 +221,7 @@ describe('SproutWorkspace source control view (daemon host)', () => {
   it('publishes a failed push on the workspace request channel the escalation triggers watch', async () => {
     pushFails = true;
     const seen: Array<{ url: string; ok: boolean }> = [];
-    const stop = onWorkspaceResponse((url, response) => seen.push({ url, ok: response.ok }));
+    const stop = onProjectFolderResponse((url, response) => seen.push({ url, ok: response.ok }));
     try {
       render(<SproutWorkspace project={PROJECT} space="code" host={daemonHost()} layout={SOURCE_CONTROL} />);
       const view = await screen.findByTestId('workspace-git');

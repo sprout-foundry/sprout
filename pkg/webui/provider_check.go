@@ -21,18 +21,18 @@ var ErrNoProviderConfigured = errors.New("no AI provider configured")
 // NOT attempt to create an agent or validate connection.
 //
 // The check must mirror the layering agent creation actually uses
-// (global + workspace): when the workspace layer sets a real provider, the
+// (global + project folder): when the project folder layer sets a real provider, the
 // chat paths stay available even if the global layer says "editor" (e.g. the
-// user pressed "use as editor" in another workspace). Reading global-only
-// here gated chats in workspaces whose own config fully configures a provider.
+// user pressed "use as editor" in another project folder). Reading global-only
+// here gated chats in project folders whose own config fully configures a provider.
 func isProviderAvailable() bool {
-	return isProviderAvailableInWorkspace("")
+	return isProviderAvailableInProjectFolder("")
 }
 
-// isProviderAvailableInWorkspace is the workspace-aware variant. Pass an empty
-// workspaceRoot for the global-only check (legacy call sites).
-func isProviderAvailableInWorkspace(workspaceRoot string) bool {
-	provider, ok := configuredProviderForWorkspace(workspaceRoot)
+// isProviderAvailableInProjectFolder is the project-folder-aware variant. Pass an empty
+// projectFolder for the global-only check (legacy call sites).
+func isProviderAvailableInProjectFolder(projectFolder string) bool {
+	provider, ok := configuredProviderForProjectFolder(projectFolder)
 	if !ok {
 		// Config load failed — let the full agent creation path surface
 		// the actual error rather than masking it as "no provider".
@@ -43,19 +43,19 @@ func isProviderAvailableInWorkspace(workspaceRoot string) bool {
 	return provider != "editor"
 }
 
-// configuredProviderForWorkspace resolves the effective provider the layered
-// config (global + workspace) would select, without creating an agent.
+// configuredProviderForProjectFolder resolves the effective provider the layered
+// config (global + project folder) would select, without creating an agent.
 // Returns ok=false when the layered config could not be loaded.
-func configuredProviderForWorkspace(workspaceRoot string) (provider string, ok bool) {
+func configuredProviderForProjectFolder(projectFolder string) (provider string, ok bool) {
 	globalDir, err := configuration.GetConfigDir()
 	if err != nil {
 		return "", false
 	}
-	var workspaceDir string
-	if workspaceRoot != "" {
-		workspaceDir = configuration.WorkspaceConfigDir(workspaceRoot)
+	var projectFolderDir string
+	if projectFolder != "" {
+		projectFolderDir = configuration.ProjectFolderConfigDir(projectFolder)
 	}
-	cm, err := configuration.NewManagerWithLayers(globalDir, workspaceDir)
+	cm, err := configuration.NewManagerWithLayers(globalDir, projectFolderDir)
 	if err != nil {
 		return "", false
 	}

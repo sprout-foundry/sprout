@@ -6,7 +6,7 @@ import (
 )
 
 func TestRunBoundaryEventsAreCritical(t *testing.T) {
-	for _, typ := range []string{EventTypeQueryStarted, EventTypeQueryCompleted, EventTypeError, EventTypeWorkspaceStopping} {
+	for _, typ := range []string{EventTypeQueryStarted, EventTypeQueryCompleted, EventTypeError, EventTypeDevSpaceStopping} {
 		if !isCriticalEvent(typ) {
 			t.Errorf("isCriticalEvent(%q) = false, want true", typ)
 		}

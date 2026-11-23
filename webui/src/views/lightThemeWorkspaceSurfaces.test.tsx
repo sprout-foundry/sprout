@@ -71,8 +71,8 @@ vi.mock('../services/api', () => {
     async applyHotkeyPreset() {
       return { hotkeys: [] };
     }
-    async getWorkspace() {
-      return { workspace_root: '' };
+    async getProjectFolder() {
+      return { project_folder: '' };
     }
     getAgentSessionSummary(...args: unknown[]) {
       return api.getAgentSessionSummary(...args);
@@ -338,8 +338,8 @@ describe('a light workspace resolves the composer and the change list light', ()
     // is themed and the host's `documentElement` is not, so an omitted pack
     // token falls through to the package's dark `:root` default.
     render(<ArrangedWorkspace />);
-    const workspace = await screen.findByTestId('sprout-workspace');
-    await waitFor(() => expect(workspace.getAttribute('data-theme')).toBe('light'));
+    const projectFolder = await screen.findByTestId('sprout-workspace');
+    await waitFor(() => expect(projectFolder.getAttribute('data-theme')).toBe('light'));
     expect(document.documentElement.getAttribute('data-theme')).toBeNull();
   });
 

@@ -28,9 +28,9 @@ import (
 func newProxyServer(tunnelPort int, sessionKey string) *ReactWebServer {
 	srv := &ReactWebServer{
 		port:        56000,
-		sshSessions: make(map[string]*sshWorkspaceSession),
+		sshSessions: make(map[string]*sshProjectFolderSession),
 	}
-	srv.sshSessions[sessionKey] = &sshWorkspaceSession{
+	srv.sshSessions[sessionKey] = &sshProjectFolderSession{
 		Key:       sessionKey,
 		HostAlias: "test-host",
 		LocalPort: tunnelPort,
@@ -51,7 +51,7 @@ const testSessionKey = "test-host::$HOME"
 // startEchoBackend creates an httptest server that acts as the "remote" sprout
 // backend.  It handles:
 //   - /health          → {"status":"ok"}
-//   - /api/workspace   → {"workspace_root":"/remote/project"}
+//   - /api/project-folder   → {"project_folder":"/remote/project"}
 //   - /api/stats       → {"session_id":"s1"}
 //   - /api/providers   → {"providers":["openai"]}
 //   - /api/files       → {"files":[]}
@@ -67,9 +67,9 @@ func startEchoBackend(t *testing.T) (*httptest.Server, int) {
 		w.Header().Set("Content-Type", "application/json")
 		io.WriteString(w, `{"status":"ok"}`) //nolint:errcheck
 	})
-	mux.HandleFunc("/api/workspace", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/api/project-folder", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		io.WriteString(w, `{"workspace_root":"/remote/project"}`) //nolint:errcheck
+		io.WriteString(w, `{"project_folder":"/remote/project"}`) //nolint:errcheck,gosec // test fake
 	})
 	mux.HandleFunc("/api/stats", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -113,10 +113,10 @@ func startEchoBackend(t *testing.T) (*httptest.Server, int) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// normalizeRemoteWorkspacePath
+// normalizeRemoteProjectFolderPath
 // ─────────────────────────────────────────────────────────────────────────────
 
-func TestNormalizeRemoteWorkspacePath(t *testing.T) {
+func TestNormalizeRemoteProjectFolderPath(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"~", "$HOME"},
 		{"~/project", "$HOME/project"},
@@ -129,9 +129,9 @@ func TestNormalizeRemoteWorkspacePath(t *testing.T) {
 		{"relative/path", "relative/path"},
 	}
 	for _, tc := range cases {
-		got := normalizeRemoteWorkspacePath(tc.in)
+		got := normalizeRemoteProjectFolderPath(tc.in)
 		if got != tc.want {
-			t.Errorf("normalizeRemoteWorkspacePath(%q) = %q; want %q", tc.in, got, tc.want)
+			t.Errorf("normalizeRemoteProjectFolderPath(%q) = %q; want %q", tc.in, got, tc.want)
 		}
 	}
 }
@@ -141,7 +141,7 @@ func TestNormalizeRemoteWorkspacePath(t *testing.T) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 func TestSSHProxyReturns404ForUnknownSession(t *testing.T) {
-	srv := &ReactWebServer{sshSessions: make(map[string]*sshWorkspaceSession)}
+	srv := &ReactWebServer{sshSessions: make(map[string]*sshProjectFolderSession)}
 
 	req := httptest.NewRequest(http.MethodGet, sessionProxyPath("no-such-host::$HOME", "/health"), nil)
 	rec := httptest.NewRecorder()
@@ -236,11 +236,11 @@ func TestSSHProxyHealthEndpoint(t *testing.T) {
 	}
 }
 
-func TestSSHProxyWorkspaceAPI(t *testing.T) {
+func TestSSHProxyProjectFolderAPI(t *testing.T) {
 	_, port := startEchoBackend(t)
 	srv := newProxyServer(port, testSessionKey)
 
-	req := httptest.NewRequest(http.MethodGet, sessionProxyPath(testSessionKey, "/api/workspace"), nil)
+	req := httptest.NewRequest(http.MethodGet, sessionProxyPath(testSessionKey, "/api/project-folder"), nil)
 	rec := httptest.NewRecorder()
 	srv.handleSSHProxy(rec, req)
 
@@ -251,8 +251,8 @@ func TestSSHProxyWorkspaceAPI(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
 	}
-	if body["workspace_root"] != "/remote/project" {
-		t.Fatalf("unexpected workspace_root: %v", body["workspace_root"])
+	if body["project_folder"] != "/remote/project" {
+		t.Fatalf("unexpected workspace_root: %v", body["project_folder"])
 	}
 }
 
@@ -402,7 +402,7 @@ func TestSSHServeIndexInjectsBeforeClosingHead(t *testing.T) {
 	if !strings.Contains(body, want) {
 		t.Fatalf("expected %q in body; got (head 400 chars):\n%.400s", want, body)
 	}
-	// Verify initial workspace is also injected.
+	// Verify initial project folder is also injected.
 	if !strings.Contains(body, `window.SPROUT_INITIAL_WORKSPACE="$HOME"`) {
 		t.Fatalf("expected window.SPROUT_INITIAL_WORKSPACE in body; got (head 400 chars):\n%.400s", body)
 	}
@@ -499,7 +499,7 @@ func TestSSHProxyConcurrentRequests(t *testing.T) {
 
 	paths := []string{
 		sessionProxyPath(testSessionKey, "/health"),
-		sessionProxyPath(testSessionKey, "/api/workspace"),
+		sessionProxyPath(testSessionKey, "/api/project-folder"),
 		sessionProxyPath(testSessionKey, "/api/stats"),
 		sessionProxyPath(testSessionKey, "/api/providers"),
 		sessionProxyPath(testSessionKey, "/api/files"),
@@ -597,8 +597,8 @@ func TestSSHProxyRealBackendIntegration(t *testing.T) {
 		}
 	})
 
-	t.Run("workspace_api_proxied", func(t *testing.T) {
-		resp, err := client.Get(baseURL + "/api/workspace")
+	t.Run("project_folder_api_proxied", func(t *testing.T) {
+		resp, err := client.Get(baseURL + "/api/project-folder") //nolint:gosec // test server URL
 		if err != nil {
 			t.Fatalf("GET /api/workspace: %v", err)
 		}
@@ -611,7 +611,7 @@ func TestSSHProxyRealBackendIntegration(t *testing.T) {
 		if err := json.Unmarshal(body, &data); err != nil {
 			t.Fatalf("invalid JSON from /api/workspace: %v; body: %s", err, body)
 		}
-		if _, ok := data["workspace_root"]; !ok {
+		if _, ok := data["project_folder"]; !ok {
 			t.Fatalf("expected workspace_root in response; got: %v", data)
 		}
 	})
@@ -638,13 +638,13 @@ func TestSSHProxyRealBackendIntegration(t *testing.T) {
 	})
 }
 
-// A workspace in a subfolder has a slash in its session key; it arrives
+// A project folder in a subfolder has a slash in its session key; it arrives
 // escaped (%2F) and must not be cut there.
 func TestSSHProxyFindsSessionsInSubfolders(t *testing.T) {
 	key := "mac-mini::$HOME/projects/app"
 	srv := newProxyServer(1, key)
 
-	// The same escaping launchSSHWorkspace uses for the proxy base.
+	// The same escaping launchSSHProjectFolder uses for the proxy base.
 	req := httptest.NewRequest(http.MethodGet, "/ssh/"+url.PathEscape(key)+"/", nil)
 	rec := httptest.NewRecorder()
 	srv.handleSSHProxy(rec, req)

@@ -10,29 +10,29 @@ import (
 	"strings"
 )
 
-// WorkspacePruneResult describes what PruneWorkspaceConfig removed.
-type WorkspacePruneResult struct {
+// ProjectFolderPruneResult describes what PruneProjectFolderConfig removed.
+type ProjectFolderPruneResult struct {
 	Path    string
 	Removed []string // dot paths, sorted
 	Kept    []string // top-level keys left in the file, sorted
 }
 
-// PruneWorkspaceConfig removes from a workspace config file every setting
+// PruneProjectFolderConfig removes from a project folder config file every setting
 // whose value the global config already gives: the same value, or a zero the
 // global config leaves unset. Such files were written by earlier versions,
-// which saved the whole merged config into the workspace layer, so global
-// changes stopped reaching the workspace. A setting deliberately pinned to
+// which saved the whole merged config into the project folder layer, so global
+// changes stopped reaching the project folder. A setting deliberately pinned to
 // the global value is removed too — it keeps working until the global value
 // changes. Unless dryRun, the original is kept as <file>.bak.
-func PruneWorkspaceConfig(globalDir, workspaceFile string, dryRun bool) (WorkspacePruneResult, error) {
-	result := WorkspacePruneResult{Path: workspaceFile}
-	original, err := os.ReadFile(workspaceFile)
+func PruneProjectFolderConfig(globalDir, projectFolderFile string, dryRun bool) (ProjectFolderPruneResult, error) {
+	result := ProjectFolderPruneResult{Path: projectFolderFile}
+	original, err := os.ReadFile(projectFolderFile)
 	if err != nil {
-		return result, fmt.Errorf("read workspace config: %w", err)
+		return result, fmt.Errorf("read project folder config: %w", err)
 	}
-	workspace := map[string]interface{}{}
-	if err := json.Unmarshal(original, &workspace); err != nil {
-		return result, fmt.Errorf("parse workspace config %q: %w", workspaceFile, err)
+	projectFolder := map[string]interface{}{}
+	if err := json.Unmarshal(original, &projectFolder); err != nil {
+		return result, fmt.Errorf("parse project folder config %q: %w", projectFolderFile, err)
 	}
 
 	global, err := LoadConfigWithLayers(filepath.Join(globalDir, ConfigFileName), "", "", globalDir)
@@ -45,7 +45,7 @@ func PruneWorkspaceConfig(globalDir, workspaceFile string, dryRun bool) (Workspa
 	}
 	delete(globalMap, "version")
 
-	pruned := cloneJSONMap(workspace)
+	pruned := cloneJSONMap(projectFolder)
 	pruneRedundantJSON(pruned, globalMap, "", &result.Removed)
 
 	// Some settings replace the global value wholesale instead of merging
@@ -53,26 +53,26 @@ func PruneWorkspaceConfig(globalDir, workspaceFile string, dryRun bool) (Workspa
 	// changes the result. Check the effective config and put back, whole,
 	// any setting whose effective value would change.
 	globalFile := filepath.Join(globalDir, ConfigFileName)
-	changed, err := effectiveDifferences(globalFile, globalDir, workspace, pruned)
+	changed, err := effectiveDifferences(globalFile, globalDir, projectFolder, pruned)
 	if err != nil {
 		return result, err
 	}
 	for _, key := range changed {
-		if original, ok := workspace[key]; ok {
+		if original, ok := projectFolder[key]; ok {
 			pruned[key] = original
 		}
 		result.Removed = dropPathsUnder(result.Removed, key)
 	}
 	if len(changed) > 0 {
-		if still, err := effectiveDifferences(globalFile, globalDir, workspace, pruned); err != nil {
+		if still, err := effectiveDifferences(globalFile, globalDir, projectFolder, pruned); err != nil {
 			return result, err
 		} else if len(still) > 0 {
-			return result, fmt.Errorf("pruning %s would change %s; left unchanged", workspaceFile, strings.Join(still, ", "))
+			return result, fmt.Errorf("pruning %s would change %s; left unchanged", projectFolderFile, strings.Join(still, ", "))
 		}
 	}
-	workspace = pruned
+	projectFolder = pruned
 	sort.Strings(result.Removed)
-	for key := range workspace {
+	for key := range projectFolder {
 		result.Kept = append(result.Kept, key)
 	}
 	sort.Strings(result.Kept)
@@ -80,21 +80,21 @@ func PruneWorkspaceConfig(globalDir, workspaceFile string, dryRun bool) (Workspa
 	if dryRun || len(result.Removed) == 0 {
 		return result, nil
 	}
-	if err := os.WriteFile(filepath.Clean(workspaceFile+".bak"), original, 0600); err != nil { // #nosec G703 -- beside the workspace config the caller named
-		return result, fmt.Errorf("back up workspace config: %w", err)
+	if err := os.WriteFile(filepath.Clean(projectFolderFile+".bak"), original, 0600); err != nil { // #nosec G703 -- beside the project folder config the caller named
+		return result, fmt.Errorf("back up project folder config: %w", err)
 	}
-	data, err := json.MarshalIndent(workspace, "", "  ")
+	data, err := json.MarshalIndent(projectFolder, "", "  ")
 	if err != nil {
-		return result, fmt.Errorf("marshal workspace config: %w", err)
+		return result, fmt.Errorf("marshal project folder config: %w", err)
 	}
-	if err := os.WriteFile(workspaceFile, data, 0600); err != nil {
-		return result, fmt.Errorf("write workspace config: %w", err)
+	if err := os.WriteFile(projectFolderFile, data, 0600); err != nil {
+		return result, fmt.Errorf("write project folder config: %w", err)
 	}
 	return result, nil
 }
 
-func pruneRedundantJSON(workspace, global map[string]interface{}, prefix string, removed *[]string) {
-	for key, value := range workspace {
+func pruneRedundantJSON(projectFolder, global map[string]interface{}, prefix string, removed *[]string) {
+	for key, value := range projectFolder {
 		if prefix == "" && key == "version" {
 			continue
 		}
@@ -110,14 +110,14 @@ func pruneRedundantJSON(workspace, global map[string]interface{}, prefix string,
 			wasEmpty := len(wsObj) == 0
 			pruneRedundantJSON(wsObj, globalObj, path, removed)
 			if len(wsObj) == 0 {
-				delete(workspace, key)
+				delete(projectFolder, key)
 				if wasEmpty {
 					*removed = append(*removed, path)
 				}
 			}
 		case inGlobal && reflect.DeepEqual(value, globalValue),
 			!inGlobal && isZeroJSON(value):
-			delete(workspace, key)
+			delete(projectFolder, key)
 			*removed = append(*removed, path)
 		}
 	}
@@ -158,24 +158,24 @@ func dropPathsUnder(paths []string, key string) []string {
 	return kept
 }
 
-// effectiveDifferences loads global+workspace for both workspace versions
+// effectiveDifferences loads global+project folder for both project folder versions
 // and returns the top-level settings whose merged value differs.
 func effectiveDifferences(globalFile, globalDir string, before, after map[string]interface{}) ([]string, error) {
 	load := func(ws map[string]interface{}) (map[string]interface{}, error) {
-		f, err := os.CreateTemp("", "sprout-workspace-*.json")
+		f, err := os.CreateTemp("", "sprout-project-folder-*.json")
 		if err != nil {
-			return nil, fmt.Errorf("stage workspace config: %w", err)
+			return nil, fmt.Errorf("stage project folder config: %w", err)
 		}
 		defer func() { _ = os.Remove(f.Name()) }()
 		data, _ := json.Marshal(ws)
 		if _, err := f.Write(data); err != nil {
 			_ = f.Close()
-			return nil, fmt.Errorf("stage workspace config: %w", err)
+			return nil, fmt.Errorf("stage project folder config: %w", err)
 		}
 		if err := f.Close(); err != nil {
-			return nil, fmt.Errorf("stage workspace config: %w", err)
+			return nil, fmt.Errorf("stage project folder config: %w", err)
 		}
-		// The staged layer lives in a temp file: no workspace directory, so
+		// The staged layer lives in a temp file: no project folder, so
 		// no project persona I/O during a prune.
 		cfg, err := loadConfigWithLayers(globalFile, f.Name(), "", globalDir, "")
 		if err != nil {

@@ -177,7 +177,7 @@ func (w *Logger) AskForApprovalWithOptions(prompt, command string, analysis *Sec
 	}
 }
 
-// AskForFilesystemApproval prompts the user about an out-of-workspace
+// AskForFilesystemApproval prompts the user about an out-of-project-folder
 // filesystem access. The option set depends on tier:
 //
 //   - FilesystemPromptExternal: 3 options — Allow once / Allow this

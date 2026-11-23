@@ -133,7 +133,7 @@ const TerminalSessionHost = React.memo(function TerminalSessionHost({
  * The terminal's working surface: the pane tabs, shell picker, split and
  * clear actions, the font and copy-on-select menu, and the panes themselves.
  * Placement-free: the app's docked terminal wraps it in its bottom-panel
- * chrome, and the workspace's terminal view renders it in place.
+ * chrome, and the project folder's terminal view renders it in place.
  */
 export function TerminalWorkbench({
   workbench,

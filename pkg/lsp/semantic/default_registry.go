@@ -9,7 +9,7 @@ import (
 
 // The process's language adapters, shared by every caller (the web editor's
 // /api/semantic and the agent's code navigation tools), so one gopls or
-// TypeScript session per workspace serves both.
+// TypeScript session per project folder serves both.
 var (
 	defaultOnce     sync.Once
 	defaultRegistry *Registry

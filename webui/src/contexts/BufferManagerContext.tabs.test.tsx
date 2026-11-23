@@ -110,8 +110,8 @@ describe('chat tab bookkeeping', () => {
     );
     localStorage.setItem('sprout.editor.paneLayout:_default', 'split-vertical');
     mount();
-    // Restored once the workspace lookup settles (it fails in tests; the
-    // restore still runs, against the default workspace keys).
+    // Restored once the project folder lookup settles (it fails in tests; the
+    // restore still runs, against the default project folder keys).
     for (let i = 0; i < 50 && latest.panes.length < 2; i++) {
       await act(async () => {
         await new Promise((r) => setTimeout(r, 20));

@@ -110,10 +110,10 @@ func (h *writePlanHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 		return ToolResult{Output: planRejectionMessage(err), IsError: true}, nil
 	}
 
-	root := env.WorkspaceRoot
+	root := env.ProjectFolder
 	if root == "" {
 		return ToolResult{
-			Output:  "write_plan: no workspace root available — cannot write .sprout/plan.json",
+			Output:  "write_plan: no project folder available — cannot write .sprout/plan.json",
 			IsError: true,
 		}, nil
 	}

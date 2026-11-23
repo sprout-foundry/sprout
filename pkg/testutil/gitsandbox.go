@@ -10,7 +10,7 @@ import (
 //
 // History-rewriting or side-effecting git commands (rebase, reset, push,
 // clean, checkout …) must never be able to escape into a real checkout:
-// a test whose "it will fail harmlessly in the temp workspace" assumption
+// a test whose "it will fail harmlessly in the temp project folder" assumption
 // silently breaks (cwd fallback, discovery walk-up) ends up operating on
 // the developer's actual repository. Two defenses:
 //

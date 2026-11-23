@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// RuntimeStatePatterns are the files sprout writes into a workspace's .sprout
+// RuntimeStatePatterns are the files sprout writes into a project folder's .sprout
 // directory while it runs (its log and the web UI's host record). They are
 // machine state, not project files: a commit that picks them up adds a log
 // and a pid record to the person's repository.

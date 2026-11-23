@@ -58,8 +58,8 @@ const (
 	SignalPrivilegeEscalation SignalKind = "privilege-escalation"
 	// SignalRecursiveDelete — a recursive delete.
 	SignalRecursiveDelete SignalKind = "recursive-delete"
-	// SignalWriteOutsideWorkspace — a write target outside the workspace.
-	SignalWriteOutsideWorkspace SignalKind = "write-outside-workspace"
+	// SignalWriteOutsideProjectFolder — a write target outside the project folder.
+	SignalWriteOutsideProjectFolder SignalKind = "write-outside-workspace"
 	// SignalDangerousClassification — the static classifier rated the content
 	// dangerous (High on the assessment scale).
 	SignalDangerousClassification SignalKind = "dangerous-classification"
@@ -135,8 +135,8 @@ const (
 type SignalInput struct {
 	// Command is the shell command under judgement (empty for non-shell content).
 	Command string
-	// WorkspaceRoot scopes the "writes outside the workspace" signal.
-	WorkspaceRoot string
+	// ProjectFolder scopes the "writes outside the project folder" signal.
+	ProjectFolder string
 	// ClassifiedDangerous reports the static classifier rated the command
 	// dangerous (High).
 	ClassifiedDangerous bool
@@ -205,9 +205,9 @@ func ComputeSignals(in SignalInput) Signals {
 			add(SignalRecursiveDelete, holdThreshold,
 				"the command performs a recursive delete")
 		}
-		if writesOutsideWorkspace(cmd, in.WorkspaceRoot) {
-			add(SignalWriteOutsideWorkspace, holdThreshold,
-				"the command writes outside the workspace")
+		if writesOutsideProjectFolder(cmd, in.ProjectFolder) {
+			add(SignalWriteOutsideProjectFolder, holdThreshold,
+				"the command writes outside the project folder")
 		}
 	}
 
@@ -346,11 +346,11 @@ func recursiveDelete(cmd string) bool {
 	return false
 }
 
-// writesOutsideWorkspace reports a redirect or a copy/move target outside the
-// workspace root. It is a signal, not a block: the workspace root is often
+// writesOutsideProjectFolder reports a redirect or a copy/move target outside the
+// project folder. It is a signal, not a block: the project folder is often
 // unknown (empty) and legitimate commands write to /tmp.
-func writesOutsideWorkspace(cmd, workspaceRoot string) bool {
-	if workspaceRoot == "" {
+func writesOutsideProjectFolder(cmd, projectFolder string) bool {
+	if projectFolder == "" {
 		return false
 	}
 	for _, marker := range []string{"> /", ">> /", "> /tmp", "> ~", "> ~/", "cp -r /", "mv /"} {

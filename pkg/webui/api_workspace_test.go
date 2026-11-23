@@ -15,25 +15,25 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
-func TestHandleAPIWorkspaceMethodNotAllowed(t *testing.T) {
+func TestHandleAPIProjectFolderMethodNotAllowed(t *testing.T) {
 	ws := &ReactWebServer{}
-	req := httptest.NewRequest(http.MethodPut, "/api/workspace", nil)
+	req := httptest.NewRequest(http.MethodPut, "/api/project-folder", nil)
 	rec := httptest.NewRecorder()
-	ws.handleAPIWorkspace(rec, req)
+	ws.handleAPIProjectFolder(rec, req)
 
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected 405, got %d", rec.Code)
 	}
 }
 
-func TestHandleAPIWorkspaceGet(t *testing.T) {
+func TestHandleAPIProjectFolderGet(t *testing.T) {
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/project-folder", nil)
 	rec := httptest.NewRecorder()
-	ws.handleAPIWorkspace(rec, req)
+	ws.handleAPIProjectFolder(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -46,85 +46,85 @@ func TestHandleAPIWorkspaceGet(t *testing.T) {
 	if resp["daemon_root"] == "" {
 		t.Error("expected daemon_root in response")
 	}
-	if resp["workspace_root"] == "" {
+	if resp["project_folder"] == "" {
 		t.Error("expected workspace_root in response")
 	}
 }
 
-func TestHandleAPIWorkspaceGetMethod(t *testing.T) {
+func TestHandleAPIProjectFolderGetMethod(t *testing.T) {
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/project-folder", nil)
 	rec := httptest.NewRecorder()
-	ws.handleAPIWorkspaceGet(rec, req)
+	ws.handleAPIProjectFolderGet(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
 	}
 }
 
-func TestHandleAPIWorkspaceSetMethodNotAllowed(t *testing.T) {
+func TestHandleAPIProjectFolderSetMethodNotAllowed(t *testing.T) {
 	ws := &ReactWebServer{}
-	req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
-	// The handler uses handleAPIWorkspace which dispatches - GET goes to handleAPIWorkspaceGet
-	// POST is what we're testing via handleAPIWorkspaceSet
+	req := httptest.NewRequest(http.MethodGet, "/api/project-folder", nil)
+	// The handler uses handleAPIProjectFolder which dispatches - GET goes to handleAPIProjectFolderGet
+	// POST is what we're testing via handleAPIProjectFolderSet
 	rec := httptest.NewRecorder()
-	ws.handleAPIWorkspaceGet(rec, req)
+	ws.handleAPIProjectFolderGet(rec, req)
 	// Should work since GET is valid
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET expected 200, got %d", rec.Code)
 	}
 }
 
-func TestHandleAPIWorkspaceSetInvalidJSON(t *testing.T) {
+func TestHandleAPIProjectFolderSetInvalidJSON(t *testing.T) {
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	req := httptest.NewRequest(http.MethodPost, "/api/workspace", strings.NewReader("not json"))
+	req := httptest.NewRequest(http.MethodPost, "/api/project-folder", strings.NewReader("not json"))
 	rec := httptest.NewRecorder()
-	ws.handleAPIWorkspace(rec, req)
+	ws.handleAPIProjectFolder(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rec.Code)
 	}
 }
 
-func TestHandleAPIWorkspaceSetMissingPath(t *testing.T) {
+func TestHandleAPIProjectFolderSetMissingPath(t *testing.T) {
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	req := httptest.NewRequest(http.MethodPost, "/api/workspace", strings.NewReader(`{}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/project-folder", strings.NewReader(`{}`))
 	rec := httptest.NewRecorder()
-	ws.handleAPIWorkspace(rec, req)
+	ws.handleAPIProjectFolder(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rec.Code)
 	}
 }
 
-func TestHandleAPIWorkspaceSetWhitespacePath(t *testing.T) {
+func TestHandleAPIProjectFolderSetWhitespacePath(t *testing.T) {
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	req := httptest.NewRequest(http.MethodPost, "/api/workspace", strings.NewReader(`{"path":"   "}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/project-folder", strings.NewReader(`{"path":"   "}`))
 	rec := httptest.NewRecorder()
-	ws.handleAPIWorkspace(rec, req)
+	ws.handleAPIProjectFolder(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for whitespace path, got %d", rec.Code)
 	}
 }
 
-func TestHandleAPIWorkspaceBrowseMethodNotAllowed(t *testing.T) {
+func TestHandleAPIProjectFolderBrowseMethodNotAllowed(t *testing.T) {
 	ws := &ReactWebServer{}
-	req := httptest.NewRequest(http.MethodPost, "/api/workspace/browse", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/project-folder/browse", nil)
 	rec := httptest.NewRecorder()
-	ws.handleAPIWorkspaceBrowse(rec, req)
+	ws.handleAPIProjectFolderBrowse(rec, req)
 
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected 405, got %d", rec.Code)
@@ -179,21 +179,21 @@ func TestGetSSHSessionForProxyRequest(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Home-workspace consent gate (SP-130) — API-layer tests
+// Home-project-folder consent gate (SP-130) — API-layer tests
 //
-// These exercise the HTTP handlers (handleAPIWorkspaceGet /
-// handleAPIWorkspaceSet) end-to-end with a workspace root that resolves to the
+// These exercise the HTTP handlers (handleAPIProjectFolderGet /
+// handleAPIProjectFolderSet) end-to-end with a project folder that resolves to the
 // user's home directory. Test isolation is achieved by pointing HOME at a temp
 // directory via t.Setenv, so the consent file lives under the temp home and no
 // state leaks to the real ~/.sprout/.
 // ---------------------------------------------------------------------------
 
-// newHomeWorkspaceServer builds a ReactWebServer whose daemonRoot and default
-// workspace root are the resolved temp home. The caller is expected to have
-// already called t.Setenv("HOME", tmpHome) so that resolveHomeDir / isHomeWorkspace
+// newHomeProjectFolderServer builds a ReactWebServer whose daemonRoot and default
+// project folder are the resolved temp home. The caller is expected to have
+// already called t.Setenv("HOME", tmpHome) so that resolveHomeDir / isHomeProjectFolder
 // agree that the temp dir *is* the home. daemonRoot is set to the symlink-resolved
-// home so that isWithinWorkspace passes for the home path itself.
-func newHomeWorkspaceServer(t *testing.T) (ws *ReactWebServer, resolvedHome string) {
+// home so that isWithinProjectFolder passes for the home path itself.
+func newHomeProjectFolderServer(t *testing.T) (ws *ReactWebServer, resolvedHome string) {
 	t.Helper()
 	tmpHome := t.TempDir()
 	setTestHome(t, tmpHome)
@@ -212,29 +212,29 @@ func newHomeWorkspaceServer(t *testing.T) (ws *ReactWebServer, resolvedHome stri
 		t.Fatal(err)
 	}
 	ws.daemonRoot = resolved
-	ws.workspaceRoot = resolved
+	ws.projectFolder = resolved
 	return ws, resolved
 }
 
-// TestHandleAPIWorkspaceGet_HomeWorkspaceNeedsSelection verifies that when the
-// active workspace root is the home directory and the user has not yet
-// consented, the GET endpoint reports that workspace selection is needed and
+// TestHandleAPIProjectFolderGet_HomeProjectFolderNeedsSelection verifies that when the
+// active project folder is the home directory and the user has not yet
+// consented, the GET endpoint reports that project folder selection is needed and
 // surfaces the home flag. It also confirms suggested_projects is populated
 // (FindProjectsInDirectory runs only when selection is needed).
-func TestHandleAPIWorkspaceGet_HomeWorkspaceNeedsSelection(t *testing.T) {
-	ws, resolvedHome := newHomeWorkspaceServer(t)
+func TestHandleAPIProjectFolderGet_HomeProjectFolderNeedsSelection(t *testing.T) {
+	ws, resolvedHome := newHomeProjectFolderServer(t)
 
-	// Set the client context's workspace root to home so the GET handler reads
-	// it. Using setClientWorkspaceRoot would hit the home gate (which is the
+	// Set the client context's project folder to home so the GET handler reads
+	// it. Using setClientProjectFolder would hit the home gate (which is the
 	// point of the consent flow), so populate the context directly.
 	ws.mutex.Lock()
 	ctx := ws.getOrCreateClientContextLocked(defaultWebClientID)
-	ctx.WorkspaceRoot = resolvedHome
+	ctx.ProjectFolder = resolvedHome
 	ws.mutex.Unlock()
 
-	req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/project-folder", nil)
 	rec := httptest.NewRecorder()
-	ws.handleAPIWorkspaceGet(rec, req)
+	ws.handleAPIProjectFolderGet(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -245,11 +245,11 @@ func TestHandleAPIWorkspaceGet_HomeWorkspaceNeedsSelection(t *testing.T) {
 		t.Fatalf("expected JSON response, got error: %v", err)
 	}
 
-	if got, _ := resp["workspace_is_home"].(bool); !got {
-		t.Errorf("expected workspace_is_home=true, got %v", resp["workspace_is_home"])
+	if got, _ := resp["project_folder_is_home"].(bool); !got {
+		t.Errorf("expected workspace_is_home=true, got %v", resp["project_folder_is_home"])
 	}
-	if got, _ := resp["needs_workspace_selection"].(bool); !got {
-		t.Errorf("expected needs_workspace_selection=true, got %v", resp["needs_workspace_selection"])
+	if got, _ := resp["needs_project_folder_selection"].(bool); !got {
+		t.Errorf("expected needs_workspace_selection=true, got %v", resp["needs_project_folder_selection"])
 	}
 	// When selection is needed, FindProjectsInDirectory runs and the key is set.
 	if _, ok := resp["suggested_projects"]; !ok {
@@ -257,27 +257,27 @@ func TestHandleAPIWorkspaceGet_HomeWorkspaceNeedsSelection(t *testing.T) {
 	}
 }
 
-// TestHandleAPIWorkspaceGet_HomeWorkspaceWithConsent verifies that once the
-// user has consented to a home workspace, the GET endpoint no longer forces
-// workspace selection.
-func TestHandleAPIWorkspaceGet_HomeWorkspaceWithConsent(t *testing.T) {
-	ws, resolvedHome := newHomeWorkspaceServer(t)
+// TestHandleAPIProjectFolderGet_HomeProjectFolderWithConsent verifies that once the
+// user has consented to a home project folder, the GET endpoint no longer forces
+// project folder selection.
+func TestHandleAPIProjectFolderGet_HomeProjectFolderWithConsent(t *testing.T) {
+	ws, resolvedHome := newHomeProjectFolderServer(t)
 
 	// Record consent up front.
-	if err := recordHomeWorkspaceConsent(); err != nil {
-		t.Fatalf("recordHomeWorkspaceConsent: %v", err)
+	if err := recordHomeProjectFolderConsent(); err != nil {
+		t.Fatalf("recordHomeProjectFolderConsent: %v", err)
 	}
 
-	// Populate the client context workspace root directly (consent is already
+	// Populate the client context project folder directly (consent is already
 	// recorded, so the home gate is satisfied).
 	ws.mutex.Lock()
 	ctx := ws.getOrCreateClientContextLocked(defaultWebClientID)
-	ctx.WorkspaceRoot = resolvedHome
+	ctx.ProjectFolder = resolvedHome
 	ws.mutex.Unlock()
 
-	req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/project-folder", nil)
 	rec := httptest.NewRecorder()
-	ws.handleAPIWorkspaceGet(rec, req)
+	ws.handleAPIProjectFolderGet(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -288,24 +288,24 @@ func TestHandleAPIWorkspaceGet_HomeWorkspaceWithConsent(t *testing.T) {
 		t.Fatalf("expected JSON response, got error: %v", err)
 	}
 
-	if got, _ := resp["workspace_is_home"].(bool); !got {
-		t.Errorf("expected workspace_is_home=true, got %v", resp["workspace_is_home"])
+	if got, _ := resp["project_folder_is_home"].(bool); !got {
+		t.Errorf("expected workspace_is_home=true, got %v", resp["project_folder_is_home"])
 	}
-	if got, _ := resp["needs_workspace_selection"].(bool); got {
-		t.Errorf("expected needs_workspace_selection=false after consent, got %v", resp["needs_workspace_selection"])
+	if got, _ := resp["needs_project_folder_selection"].(bool); got {
+		t.Errorf("expected needs_workspace_selection=false after consent, got %v", resp["needs_project_folder_selection"])
 	}
 }
 
-// TestHandleAPIWorkspaceSet_HomeRequiresConsent verifies that POSTing the home
-// directory as the workspace without consent_home is rejected with a 403 and
+// TestHandleAPIProjectFolderSet_HomeRequiresConsent verifies that POSTing the home
+// directory as the project folder without consent_home is rejected with a 403 and
 // the structured home_workspace_requires_consent error code.
-func TestHandleAPIWorkspaceSet_HomeRequiresConsent(t *testing.T) {
-	ws, resolvedHome := newHomeWorkspaceServer(t)
+func TestHandleAPIProjectFolderSet_HomeRequiresConsent(t *testing.T) {
+	ws, resolvedHome := newHomeProjectFolderServer(t)
 
 	body := `{"path": ` + jsonQuote(resolvedHome) + `}`
-	req := httptest.NewRequest(http.MethodPost, "/api/workspace", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/project-folder", strings.NewReader(body))
 	rec := httptest.NewRecorder()
-	ws.handleAPIWorkspaceSet(rec, req)
+	ws.handleAPIProjectFolderSet(rec, req)
 
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
@@ -315,75 +315,75 @@ func TestHandleAPIWorkspaceSet_HomeRequiresConsent(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("expected JSON response, got error: %v", err)
 	}
-	if code, _ := resp["code"].(string); code != "home_workspace_requires_consent" {
+	if code, _ := resp["code"].(string); code != "home_project_folder_requires_consent" {
 		t.Errorf("expected code home_workspace_requires_consent, got %v", resp["code"])
 	}
 	// No consent should have been recorded by a rejected request.
-	if hasHomeWorkspaceConsent() {
+	if hasHomeProjectFolderConsent() {
 		t.Error("expected no consent to be recorded after a rejected request")
 	}
 }
 
-// TestHandleAPIWorkspaceSet_HomeWithConsent verifies that POSTing the home
-// directory with consent_home=true records the consent, sets the workspace, and
+// TestHandleAPIProjectFolderSet_HomeWithConsent verifies that POSTing the home
+// directory with consent_home=true records the consent, sets the project folder, and
 // returns 200.
-func TestHandleAPIWorkspaceSet_HomeWithConsent(t *testing.T) {
-	ws, resolvedHome := newHomeWorkspaceServer(t)
+func TestHandleAPIProjectFolderSet_HomeWithConsent(t *testing.T) {
+	ws, resolvedHome := newHomeProjectFolderServer(t)
 
 	body := `{"path": ` + jsonQuote(resolvedHome) + `, "consent_home": true}`
-	req := httptest.NewRequest(http.MethodPost, "/api/workspace", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/project-folder", strings.NewReader(body))
 	rec := httptest.NewRecorder()
-	ws.handleAPIWorkspaceSet(rec, req)
+	ws.handleAPIProjectFolderSet(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
 	// Consent must now be persisted.
-	if !hasHomeWorkspaceConsent() {
+	if !hasHomeProjectFolderConsent() {
 		t.Error("expected consent to be recorded after consent_home=true")
 	}
 
-	// The workspace root in the response should be the home dir.
+	// The project folder in the response should be the home dir.
 	var resp map[string]interface{}
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("expected JSON response, got error: %v", err)
 	}
-	if got, _ := resp["workspace_root"].(string); got != resolvedHome {
+	if got, _ := resp["project_folder"].(string); got != resolvedHome {
 		t.Errorf("expected workspace_root %q, got %q", resolvedHome, got)
 	}
 }
 
-// TestHandleAPIWorkspaceSet_ConsentRecordedEvenWhenQueryActive verifies that
+// TestHandleAPIProjectFolderSet_ConsentRecordedEvenWhenQueryActive verifies that
 // the home-consent branch runs before the active-query 409. The gate modal
-// dismisses on consent alone: GET /api/workspace computes
-// needs_workspace_selection from the consent file, not from workspace state,
+// dismisses on consent alone: GET /api/project-folder computes
+// needs_workspace_selection from the consent file, not from project folder state,
 // and the overlay blocks every other control. If a stuck query could 409 the
 // consent POST before the consent is persisted, the user would be trapped
 // behind an undismissable modal.
-func TestHandleAPIWorkspaceSet_ConsentRecordedEvenWhenQueryActive(t *testing.T) {
-	ws, resolvedHome := newHomeWorkspaceServer(t)
+func TestHandleAPIProjectFolderSet_ConsentRecordedEvenWhenQueryActive(t *testing.T) {
+	ws, resolvedHome := newHomeProjectFolderServer(t)
 
 	// Simulate a query stuck active on the client context (the daemon-stall
 	// symptom: ActiveQuery never cleared).
 	ws.mutex.Lock()
 	ctx := ws.getOrCreateClientContextLocked(defaultWebClientID)
-	ctx.WorkspaceRoot = resolvedHome
+	ctx.ProjectFolder = resolvedHome
 	ctx.ActiveQuery = true
 	ws.mutex.Unlock()
 
 	body := `{"path": ` + jsonQuote(resolvedHome) + `, "consent_home": true}`
-	req := httptest.NewRequest(http.MethodPost, "/api/workspace", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/project-folder", strings.NewReader(body))
 	rec := httptest.NewRecorder()
-	ws.handleAPIWorkspaceSet(rec, req)
+	ws.handleAPIProjectFolderSet(rec, req)
 
 	if rec.Code != http.StatusConflict {
-		t.Fatalf("expected 409 from the workspace-switch branch, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("expected 409 from the project-folder-switch branch, got %d: %s", rec.Code, rec.Body.String())
 	}
 
 	// The consent must nevertheless have been persisted — this is what lets
 	// the gate dismiss (and the reload clear the modal) despite the 409.
-	if !hasHomeWorkspaceConsent() {
+	if !hasHomeProjectFolderConsent() {
 		t.Error("expected consent to be recorded before the active-query 409")
 	}
 }
@@ -397,7 +397,7 @@ func keysOf(m map[string]interface{}) []string {
 	return keys
 }
 
-// A single page load calls GET /api/workspace from ~10 places. Re-walking the
+// A single page load calls GET /api/project-folder from ~10 places. Re-walking the
 // home directory on each one is what made the privacy prompts repeat.
 func TestCachedProjectsInReusesScan(t *testing.T) {
 	projectsCacheMu.Lock()
@@ -436,8 +436,8 @@ func TestCachedProjectsInReusesScan(t *testing.T) {
 	}
 }
 
-// handleAPIWorkspaceProjects prepends the daemon root to the scan. That
-// decoration must not leak into the shared cache that /api/workspace reads.
+// handleAPIProjectFolderProjects prepends the daemon root to the scan. That
+// decoration must not leak into the shared cache that /api/project-folder reads.
 func TestProjectsCacheNotPollutedByRootPrepend(t *testing.T) {
 	projectsCacheMu.Lock()
 	projectsCache, projectsCacheRoot, projectsCacheTime = nil, "", time.Time{}

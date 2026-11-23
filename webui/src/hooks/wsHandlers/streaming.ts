@@ -366,7 +366,7 @@ export const handleQueryCompleted = (ctx: EventHandlerContext): void => {
       currentTodos: wasClearCommand ? [] : prev.currentTodos,
       isProcessing: activeRequestsRef.current > 0,
       lastError: null,
-      // SP-142 §3: if this was the run holding the workspace, release the
+      // SP-142 §3: if this was the run holding the project folder, release the
       // chat held back behind it (its queued messages drain next).
       workspaceBusy:
         prev.workspaceBusy && (!data.chat_id || prev.workspaceBusy.runningChatId === String(data.chat_id))

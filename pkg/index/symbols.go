@@ -60,7 +60,7 @@ func LoadSymbols(root string) (*SymbolIndex, error) {
 	return &idx, nil
 }
 
-// BuildSymbols scans the workspace root for source files and extracts symbols
+// BuildSymbols scans the project folder for source files and extracts symbols
 // using tree-sitter AST for supported languages (Go, Python, TypeScript, JavaScript)
 // with regex fallback for others. Results are sorted by file path and then by
 // line number within each file.

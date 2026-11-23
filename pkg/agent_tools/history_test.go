@@ -10,7 +10,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/history"
 )
 
-func withTempWorkspace(t *testing.T) func() {
+func withTempProjectFolder(t *testing.T) func() {
 	t.Helper()
 
 	tempDir := t.TempDir()
@@ -49,7 +49,7 @@ func recordSampleChange(t *testing.T, filename, original, updated string) string
 }
 
 func TestViewHistoryWhenEmpty(t *testing.T) {
-	cleanup := withTempWorkspace(t)
+	cleanup := withTempProjectFolder(t)
 	defer cleanup()
 
 	res, err := ViewHistory(5, "", nil, false)
@@ -67,7 +67,7 @@ func TestViewHistoryWhenEmpty(t *testing.T) {
 }
 
 func TestViewHistoryWithFilter(t *testing.T) {
-	cleanup := withTempWorkspace(t)
+	cleanup := withTempProjectFolder(t)
 	defer cleanup()
 
 	revisionID := recordSampleChange(t, "sample/file.go", "package main\n", "package main\nfunc x() {}\n")
@@ -88,7 +88,7 @@ func TestViewHistoryWithFilter(t *testing.T) {
 
 func TestRollbackChangesFlow(t *testing.T) {
 	t.Run("ListRevisions", func(t *testing.T) {
-		cleanup := withTempWorkspace(t)
+		cleanup := withTempProjectFolder(t)
 		defer cleanup()
 
 		recordSampleChange(t, "foo.txt", "original", "updated")
@@ -108,7 +108,7 @@ func TestRollbackChangesFlow(t *testing.T) {
 	})
 
 	t.Run("FileRollback", func(t *testing.T) {
-		cleanup := withTempWorkspace(t)
+		cleanup := withTempProjectFolder(t)
 		defer cleanup()
 
 		filename := filepath.Join("dir", "bar.go")
@@ -142,7 +142,7 @@ func TestRollbackChangesFlow(t *testing.T) {
 	})
 
 	t.Run("RevisionRollback", func(t *testing.T) {
-		cleanup := withTempWorkspace(t)
+		cleanup := withTempProjectFolder(t)
 		defer cleanup()
 
 		revisionID := recordSampleChange(t, "baz.js", "console.log('hi')\n", "console.log('bye')\n")

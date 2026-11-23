@@ -52,9 +52,9 @@ func handleSearchFiles(ctx context.Context, a *Agent, args map[string]interface{
 		root = v
 	}
 	// In daemon multi-window mode, process CWD is unreliable.  Resolve
-	// relative roots against the per-agent workspace propagated via context.
+	// relative roots against the per-agent project folder propagated via context.
 	if !filepath.IsAbs(root) {
-		if wd := filesystem.WorkspaceRootFromContext(ctx); wd != "" {
+		if wd := filesystem.ProjectFolderFromContext(ctx); wd != "" {
 			root = filepath.Join(wd, root)
 		}
 	}

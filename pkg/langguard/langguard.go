@@ -8,7 +8,7 @@
 // provides the deterministic, in-process half of that check: no
 // external service and no model call, pure Go with the standard library
 // only (no cgo), so the same code runs in the CLI process, in the sprout
-// process of a hosted workspace, and compiled into the WASM browser
+// process of a hosted project folder, and compiled into the WASM browser
 // build — and can be called by other Go programs embedding sprout.
 //
 // The intended pipeline, which later items build on this package:

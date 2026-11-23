@@ -93,21 +93,21 @@ func TestManager_Reload_LayeredManager_PreservesGlobalLayer(t *testing.T) {
 		"reasoning_effort":   "low",
 	})
 
-	workspaceRoot := t.TempDir()
-	workspaceDir := filepath.Join(workspaceRoot, ".sprout")
-	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+	projectFolder := t.TempDir()
+	projectFolderDir := filepath.Join(projectFolder, ".sprout")
+	if err := os.MkdirAll(projectFolderDir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	writeJSON(t, filepath.Join(workspaceDir, "workspace.json"), map[string]interface{}{
+	writeJSON(t, filepath.Join(projectFolderDir, "workspace.json"), map[string]interface{}{
 		"reasoning_effort": "high",
 	})
 
-	mgr, err := NewManagerWithLayers(globalDir, workspaceDir)
+	mgr, err := NewManagerWithLayers(globalDir, projectFolderDir)
 	if err != nil {
 		t.Fatalf("NewManagerWithLayers() failed: %v", err)
 	}
 
-	// Merged view before reload: workspace reasoning_effort wins, global provider visible.
+	// Merged view before reload: project folder reasoning_effort wins, global provider visible.
 	if got := mgr.GetConfig().ReasoningEffort; got != "high" {
 		t.Fatalf("expected merged reasoning_effort %q before reload, got %q", "high", got)
 	}
@@ -115,8 +115,8 @@ func TestManager_Reload_LayeredManager_PreservesGlobalLayer(t *testing.T) {
 		t.Fatalf("expected global provider %q before reload, got %q", "openai", got)
 	}
 
-	// External edit to the workspace layer (what PUT ?layer=workspace does).
-	writeJSON(t, filepath.Join(workspaceDir, "workspace.json"), map[string]interface{}{
+	// External edit to the project folder layer (what PUT ?layer=project folder does).
+	writeJSON(t, filepath.Join(projectFolderDir, "workspace.json"), map[string]interface{}{
 		"reasoning_effort": "medium",
 	})
 
@@ -127,7 +127,7 @@ func TestManager_Reload_LayeredManager_PreservesGlobalLayer(t *testing.T) {
 	if got := mgr.GetConfig().ReasoningEffort; got != "medium" {
 		t.Errorf("expected reloaded reasoning_effort %q, got %q", "medium", got)
 	}
-	// The bug this pins: reloading from the workspace save file alone dropped
+	// The bug this pins: reloading from the project folder save file alone dropped
 	// the global layer, so last_used_provider vanished from memory.
 	if got := mgr.GetConfig().LastUsedProvider; got != "openai" {
 		t.Errorf("expected global provider %q to survive layered reload, got %q", "openai", got)

@@ -58,7 +58,7 @@ type EngineStats struct {
 	QueueWait        *Histogram `json:"queue_wait_seconds,omitempty"`
 
 	// MemoryBytes is the engine's own device memory by use (weights,
-	// context, workspace, ...), where it reports one.
+	// context, project folder, ...), where it reports one.
 	MemoryBytes map[string]float64 `json:"memory_bytes,omitempty"`
 }
 

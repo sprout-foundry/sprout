@@ -203,11 +203,11 @@ export const cloudHost: SproutHost = {
     automations: false,
     agentChanges: false,
     // The hosted build has no shell of its own around it: the header's
-    // Start Building is how a project moves into a full workspace.
+    // Start Building is how a project moves into a dev space.
     containerUpgrade: true,
     // The preview lifecycle (/api/preview/*) is served by a Sprout daemon:
     // a platform-registered ("hosted") preview is reported by the daemon
-    // running inside a full workspace, which registers its port with the
+    // running inside a dev space, which registers its port with the
     // platform. The hosted build's in-browser agent has no daemon, the
     // adapter does not answer /api/preview/*, and the platform API does not
     // serve it (it only proxies registered ports under /preview/), so the
@@ -222,7 +222,7 @@ export const cloudHost: SproutHost = {
     // list lives in the browser (the in-browser agent), so this stays off.
     chatSessions: false,
     // The hosted agent runs in the browser, so the host may read the
-    // in-browser workspace's files (to carry them into a container when the
+    // in-browser project folder's files (to carry them into a container when the
     // project moves off the in-browser agent).
     browserFiles: true,
   },

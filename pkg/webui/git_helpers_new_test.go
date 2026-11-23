@@ -97,31 +97,31 @@ func TestMakeGitRelativePath(t *testing.T) {
 	tests := []struct {
 		name          string
 		path          string
-		workspaceRoot string
+		projectFolder string
 		want          string
 	}{
 		{
 			name: "relative stays unchanged",
-			path: "foo.go", workspaceRoot: osAbs("/workspace"),
+			path: "foo.go", projectFolder: osAbs("/workspace"),
 			want: "foo.go",
 		},
 		{
-			name: "absolute in workspace",
-			path: osAbs("/workspace/src/foo.go"), workspaceRoot: osAbs("/workspace"),
+			name: "absolute in project folder",
+			path: osAbs("/workspace/src/foo.go"), projectFolder: osAbs("/workspace"),
 			want: "src/foo.go",
 		},
 		{
-			name: "absolute outside workspace",
-			path: osAbs("/other/foo.go"), workspaceRoot: osAbs("/workspace"),
+			name: "absolute outside project folder",
+			path: osAbs("/other/foo.go"), projectFolder: osAbs("/workspace"),
 			want: osAbs("/other/foo.go"),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := makeGitRelativePath(tt.path, tt.workspaceRoot)
+			got := makeGitRelativePath(tt.path, tt.projectFolder)
 			if got != tt.want {
-				t.Errorf("makeGitRelativePath(%q, %q) = %q, want %q", tt.path, tt.workspaceRoot, got, tt.want)
+				t.Errorf("makeGitRelativePath(%q, %q) = %q, want %q", tt.path, tt.projectFolder, got, tt.want)
 			}
 		})
 	}

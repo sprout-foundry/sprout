@@ -284,7 +284,7 @@ func TestFindProjectsInDirectory_HiddenDirs(t *testing.T) {
 // Privacy-gated home directories
 // ---------------------------------------------------------------------------
 
-// The daemon's CWD is $HOME, so until a workspace is attached the project scan
+// The daemon's CWD is $HOME, so until a project folder is attached the project scan
 // runs against the home directory. Listing ~/Documents, ~/Desktop and friends
 // is what raises the macOS privacy prompts, so those must never be descended
 // into — even though they can contain project markers.
@@ -351,7 +351,7 @@ func TestFindProjectsInDirectory_ProtectedNamesOnlyGatedAtHome(t *testing.T) {
 // Sprout creates .sprout in every directory it runs in — including $HOME, and
 // including a bare directory the user just happened to open once. On its own it
 // means "sprout has been here", not "this is a project". At weight 90 it made
-// the home directory self-certify, letting the workspace gate be bypassed.
+// the home directory self-certify, letting the project folder gate be bypassed.
 func TestSproutDirAloneIsNotAProject(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, ".sprout"), 0755); err != nil {

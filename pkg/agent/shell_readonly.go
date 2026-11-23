@@ -188,7 +188,7 @@ func isReadOnlyGitInvocation(args []string) bool {
 		"diff":        true,
 		"show":        true,
 		"blame":       true,
-		"config":      true, // `git config` without --add/--set is read; with them it writes ~/.gitconfig or repo config — repo config isn't workspace-tracked content, accept risk
+		"config":      true, // `git config` without --add/--set is read; with them it writes ~/.gitconfig or repo config — repo config isn't project-folder-tracked content, accept risk
 		"remote":      true,
 		"rev-parse":   true,
 		"rev-list":    true,

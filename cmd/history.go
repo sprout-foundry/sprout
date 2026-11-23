@@ -31,7 +31,7 @@ Subcommands:
 }
 
 var clearOlderThan string
-var clearWorkspace string
+var clearProjectFolder string
 var clearYes bool
 var clearDryRun bool
 
@@ -59,8 +59,8 @@ Examples:
 
 func init() {
 	historyClearCmd.Flags().StringVar(&clearOlderThan, "older-than", "", "Duration threshold (e.g. 30d, 7d, 24h). Entries older than this are cleared. Empty means clear ALL.")
-	historyClearCmd.Flags().StringVar(&clearWorkspace, "dir", "", "Workspace directory to clear history from (default: current directory)")
-	stringFlagAlias(historyClearCmd.Flags(), &clearWorkspace, "workspace", "dir", aliasDeprecated)
+	historyClearCmd.Flags().StringVar(&clearProjectFolder, "dir", "", "Project folder directory to clear history from (default: current directory)")
+	stringFlagAlias(historyClearCmd.Flags(), &clearProjectFolder, "workspace", "dir", aliasDeprecated)
 	historyClearCmd.Flags().BoolVarP(&clearYes, "yes", "y", false, "Skip confirmation prompt")
 	boolFlagAlias(historyClearCmd.Flags(), &clearYes, "force", "yes", aliasDeprecated)
 	historyClearCmd.Flags().BoolVar(&clearDryRun, "dry-run", false, "Show what would be cleared without deleting anything")
@@ -70,11 +70,11 @@ func init() {
 
 // runHistoryClear implements the history clear subcommand.
 func runHistoryClear() error {
-	// 1. Resolve the workspace path
-	workspace := clearWorkspace
-	if workspace == "" {
+	// 1. Resolve the project folder path
+	projectFolder := clearProjectFolder
+	if projectFolder == "" {
 		var err error
-		workspace, err = os.Getwd()
+		projectFolder, err = os.Getwd()
 		if err != nil {
 			return fmt.Errorf("failed to get current working directory: %w", err)
 		}
@@ -85,7 +85,7 @@ func runHistoryClear() error {
 		if !StdinIsTerminal() {
 			return fmt.Errorf("this command requires confirmation. Pass --yes to skip confirmation or run interactively")
 		}
-		if !ConfirmPrompt("This will clear ALL history for " + workspace + ". Continue") {
+		if !ConfirmPrompt("This will clear ALL history for " + projectFolder + ". Continue") {
 			return fmt.Errorf("aborted by user")
 		}
 	}
@@ -102,23 +102,23 @@ func runHistoryClear() error {
 
 	// 4. Handle --dry-run
 	if clearDryRun {
-		return runHistoryDryRun(workspace, since)
+		return runHistoryDryRun(projectFolder, since)
 	}
 
-	// 5. Clear changes and revisions via history package (pass workspace directly)
+	// 5. Clear changes and revisions via history package (pass project folder directly)
 	var changesCleared, revisionsCleared int
 	var err error
 	if clearOlderThan != "" {
-		changesCleared, revisionsCleared, err = history.ClearOlderThan(workspace, since)
+		changesCleared, revisionsCleared, err = history.ClearOlderThan(projectFolder, since)
 	} else {
-		changesCleared, revisionsCleared, err = history.ClearAll(workspace)
+		changesCleared, revisionsCleared, err = history.ClearAll(projectFolder)
 	}
 	if err != nil {
 		return fmt.Errorf("failed to clear history: %w", err)
 	}
 
-	// 6. Clear runlogs from the workspace
-	runlogCleared, err := clearOldRunlogs(workspace, since, clearOlderThan == "")
+	// 6. Clear runlogs from the project folder
+	runlogCleared, err := clearOldRunlogs(projectFolder, since, clearOlderThan == "")
 	if err != nil {
 		return fmt.Errorf("failed to clear runlogs: %w", err)
 	}
@@ -132,38 +132,38 @@ func runHistoryClear() error {
 	// 8. Print summary
 	if clearOlderThan != "" {
 		fmt.Printf("Cleared %d revision(s), %d change(s), %d runlog(s) older than %s from %s\n",
-			revisionsCleared, changesCleared, runlogCleared, clearOlderThan, workspace)
+			revisionsCleared, changesCleared, runlogCleared, clearOlderThan, projectFolder)
 	} else {
 		fmt.Printf("Cleared %d revision(s), %d change(s), %d runlog(s) from %s\n",
-			revisionsCleared, changesCleared, runlogCleared, workspace)
+			revisionsCleared, changesCleared, runlogCleared, projectFolder)
 	}
 
 	return nil
 }
 
 // runHistoryDryRun counts what would be deleted without actually deleting anything.
-func runHistoryDryRun(workspace string, since time.Time) error {
-	changesCount, err := countChangeDirs(workspace, since)
+func runHistoryDryRun(projectFolder string, since time.Time) error {
+	changesCount, err := countChangeDirs(projectFolder, since)
 	if err != nil {
 		return fmt.Errorf("failed to count changes: %w", err)
 	}
 
-	revisionsCount, err := countRevisionDirs(workspace, since)
+	revisionsCount, err := countRevisionDirs(projectFolder, since)
 	if err != nil {
 		return fmt.Errorf("failed to count revisions: %w", err)
 	}
 
-	runlogsCount, err := countRunlogs(workspace, since, clearOlderThan == "")
+	runlogsCount, err := countRunlogs(projectFolder, since, clearOlderThan == "")
 	if err != nil {
 		return fmt.Errorf("failed to count runlogs: %w", err)
 	}
 
 	if clearOlderThan != "" {
 		fmt.Printf("Would clear %d revision(s), %d change(s), %d runlog(s) older than %s from %s\n",
-			revisionsCount, changesCount, runlogsCount, clearOlderThan, workspace)
+			revisionsCount, changesCount, runlogsCount, clearOlderThan, projectFolder)
 	} else {
 		fmt.Printf("Would clear %d revision(s), %d change(s), %d runlog(s) from %s\n",
-			revisionsCount, changesCount, runlogsCount, workspace)
+			revisionsCount, changesCount, runlogsCount, projectFolder)
 	}
 
 	return nil
@@ -171,8 +171,8 @@ func runHistoryDryRun(workspace string, since time.Time) error {
 
 // countChangeDirs counts change subdirectories in .sprout/changes.
 // If since is non-zero, only counts entries whose metadata timestamp is before since.
-func countChangeDirs(workspace string, since time.Time) (int, error) {
-	changesDir := filepath.Join(workspace, ".sprout", "changes")
+func countChangeDirs(projectFolder string, since time.Time) (int, error) {
+	changesDir := filepath.Join(projectFolder, ".sprout", "changes")
 	entries, err := os.ReadDir(changesDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -203,8 +203,8 @@ func countChangeDirs(workspace string, since time.Time) (int, error) {
 // If since is non-zero, only count revisions that would be orphaned
 // (i.e., no remaining changes reference them after filtering out old changes).
 // This mirrors the orphaning logic in history.ClearOlderThan().
-func countRevisionDirs(workspace string, since time.Time) (int, error) {
-	revisionsDir := filepath.Join(workspace, ".sprout", "revisions")
+func countRevisionDirs(projectFolder string, since time.Time) (int, error) {
+	revisionsDir := filepath.Join(projectFolder, ".sprout", "revisions")
 	entries, err := os.ReadDir(revisionsDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -226,7 +226,7 @@ func countRevisionDirs(workspace string, since time.Time) (int, error) {
 
 	// --older-than mode: only count revisions that have no remaining (non-old) changes.
 	// First, collect revision IDs that have at least one non-old change.
-	changesDir := filepath.Join(workspace, ".sprout", "changes")
+	changesDir := filepath.Join(projectFolder, ".sprout", "changes")
 	changeEntries, err := os.ReadDir(changesDir)
 	if err != nil && !os.IsNotExist(err) {
 		return 0, err
@@ -268,8 +268,8 @@ func countRevisionDirs(workspace string, since time.Time) (int, error) {
 // countRunlogs counts .jsonl files in .sprout/runlogs.
 // If clearAll is true, all .jsonl files are counted.
 // If clearAll is false and since is non-zero, only files modified before since are counted.
-func countRunlogs(workspace string, since time.Time, clearAll bool) (int, error) {
-	runlogsDir := filepath.Join(workspace, ".sprout", "runlogs")
+func countRunlogs(projectFolder string, since time.Time, clearAll bool) (int, error) {
+	runlogsDir := filepath.Join(projectFolder, ".sprout", "runlogs")
 	entries, err := os.ReadDir(runlogsDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -333,11 +333,11 @@ func parseDuration(s string) (time.Duration, error) {
 	return dur, nil
 }
 
-// clearOldRunlogs removes runlog files from the workspace's .sprout/runlogs/ directory.
+// clearOldRunlogs removes runlog files from the project folder's .sprout/runlogs/ directory.
 // If clearAll is true, all runlogs are removed regardless of age.
 // Returns the number of runlogs cleared.
-func clearOldRunlogs(workspace string, since time.Time, clearAll bool) (int, error) {
-	runlogsDir := filepath.Join(workspace, ".sprout", "runlogs")
+func clearOldRunlogs(projectFolder string, since time.Time, clearAll bool) (int, error) {
+	runlogsDir := filepath.Join(projectFolder, ".sprout", "runlogs")
 
 	// Check if the directory exists
 	entries, err := os.ReadDir(runlogsDir)

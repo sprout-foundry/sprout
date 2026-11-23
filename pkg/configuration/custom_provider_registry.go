@@ -97,7 +97,7 @@ func getScopedProvidersDir() (string, error) {
 // /provider listing via the manager, and the factory/creation path via
 // this function) therefore resolves the same definition for a given name.
 //
-// Without the merge, a user running sprout from a project workspace with
+// Without the merge, a user running sprout from a project project folder with
 // SPROUT_CONFIG overridden sees custom providers listed (via the
 // layered manager) but receives a "not registered as a custom
 // provider" error when trying to switch to one (via LoadCustomProviders,
@@ -143,7 +143,7 @@ func LoadCustomProviders() (map[string]CustomProviderConfig, error) {
 	// A provider may also be defined inline in the global config.json
 	// (custom_providers). Sprout never writes that key itself — Save strips
 	// it — but a seeded or hand-written config carries it, and a run whose
-	// active config directory is elsewhere (an isolated workspace layer)
+	// active config directory is elsewhere (an isolated project folder layer)
 	// has no other way to see the definition: the provider files live under
 	// the global dir, and the isolated config never holds the key. Lowest
 	// priority, so a provider file still wins on a name conflict.

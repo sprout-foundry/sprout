@@ -27,7 +27,7 @@ func TestHumaFilesDispatch(t *testing.T) {
 	defer srv.Close()
 
 	// GET /api/files — a Huma operation (was a plain handler). A fresh temp
-	// workspace lists deterministically.
+	// project folder lists deterministically.
 	resp, err := http.Get(srv.URL + "/api/files?git_status=false")
 	if err != nil {
 		t.Fatalf("GET /api/files: %v", err)
@@ -49,7 +49,7 @@ func TestHumaFilesDispatch(t *testing.T) {
 	if fs["message"] != "success" {
 		t.Fatalf("GET /api/files: message = %v, want success", fs["message"])
 	}
-	// The temp workspace is empty, so `files` may marshal to null; the
+	// The temp project folder is empty, so `files` may marshal to null; the
 	// deterministic part of the payload is the message and the resolved path.
 	if _, ok := fs["path"]; !ok {
 		t.Fatalf("GET /api/files: payload = %v, want a path key", fs)
@@ -74,7 +74,7 @@ func TestHumaFilesDispatch(t *testing.T) {
 	}
 
 	// POST /api/delete of a nonexistent path — the Huma POST operation drives
-	// the shared handler, which resolves the client's workspace (via the
+	// the shared handler, which resolves the client's project folder (via the
 	// client-ID header) and reports a 400 for a path that does not exist.
 	req, err := http.NewRequest(http.MethodPost, srv.URL+"/api/delete", strings.NewReader(`{"path":"no-such-file"}`))
 	if err != nil {

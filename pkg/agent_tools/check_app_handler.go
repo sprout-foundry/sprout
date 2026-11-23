@@ -61,9 +61,9 @@ func (h *checkAppHandler) Validate(args map[string]any) error {
 }
 
 func (h *checkAppHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	root := strings.TrimSpace(env.WorkspaceRoot)
+	root := strings.TrimSpace(env.ProjectFolder)
 	if root == "" {
-		msg := "check_app: no workspace root, so there is no project to check"
+		msg := "check_app: no project folder, so there is no project to check"
 		return ToolResult{Output: msg, IsError: true}, agenterrors.NewPermanentError(msg, nil)
 	}
 	budget := appcheck.DefaultBudget

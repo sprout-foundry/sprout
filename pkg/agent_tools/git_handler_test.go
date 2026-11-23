@@ -58,7 +58,7 @@ func makeInitialCommit(t *testing.T, dir string) {
 func execShell(t *testing.T, dir string, cmd string) {
 	t.Helper()
 	handler := &shellCommandHandler{}
-	result, err := handler.Execute(t.Context(), ToolEnv{WorkspaceRoot: dir}, map[string]any{"command": cmd})
+	result, err := handler.Execute(t.Context(), ToolEnv{ProjectFolder: dir}, map[string]any{"command": cmd})
 	if err != nil {
 		t.Fatalf("execShell(%q) error: %v", cmd, err)
 	}
@@ -70,7 +70,7 @@ func execShell(t *testing.T, dir string, cmd string) {
 func newGitHandler() *gitHandler { return &gitHandler{} }
 
 func baseEnv(ws string, am ApprovalManager) ToolEnv {
-	return ToolEnv{WorkspaceRoot: ws, EventBus: events.NewEventBus(), ApprovalManager: am, OutputWriter: &strings.Builder{}}
+	return ToolEnv{ProjectFolder: ws, EventBus: events.NewEventBus(), ApprovalManager: am, OutputWriter: &strings.Builder{}}
 }
 
 func runGit(t *testing.T, ctx context.Context, ws string, am ApprovalManager, op string, argsStr string) (ToolResult, error) {

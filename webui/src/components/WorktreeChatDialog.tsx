@@ -220,7 +220,7 @@ export const WorktreeChatDialog: React.FC<WorktreeChatDialogProps> = ({
               disabled={isCreating}
             />
             <label htmlFor="wt-auto-switch" className="wt-chat-dialog-checkbox-label">
-              Switch workspace to this worktree
+              Switch the project folder to this worktree
             </label>
           </div>
 

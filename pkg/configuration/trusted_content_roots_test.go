@@ -6,7 +6,7 @@ import (
 )
 
 // TestTrustedContentRootsRoundTrip pins the JSON shape of the SP-169 trust
-// store: per absolute workspace root, then root-relative path → third-party
+// store: per absolute project folder, then root-relative path → third-party
 // flag. The key is user-visible (the file is hand-editable) so it must stay
 // stable, and omitempty must not collapse a populated map.
 func TestTrustedContentRootsRoundTrip(t *testing.T) {

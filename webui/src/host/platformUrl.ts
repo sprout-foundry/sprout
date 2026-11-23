@@ -3,8 +3,8 @@
  *
  * The editor's account-surface exits ("← Dashboard" back-link, escalation
  * "View task on platform" links, avatar-menu exits) must not self-loop
- * into this daemon's own SPA on a Fly workspace (Mode B): relative hrefs
- * resolve against the workspace origin and land back in the editor.
+ * into this daemon's own SPA on a Fly project folder (Mode B): relative hrefs
+ * resolve against the project folder origin and land back in the editor.
  * When the host's transport carries a platform base URL (its outward
  * platform surface), exits build absolute URLs against it. When the host
  * has no platform surface — the local build, or a hosted build that did not

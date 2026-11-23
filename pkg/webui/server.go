@@ -39,7 +39,7 @@ type ReactWebServer struct {
 	agent           *agent.Agent
 	eventBus        *events.EventBus
 	daemonRoot      string
-	workspaceRoot   string
+	projectFolder   string
 	sshHostAlias    string
 	sshSessionKey   string
 	sshLauncherURL  string
@@ -70,27 +70,27 @@ type ReactWebServer struct {
 	activeQueryClientID string
 	fixReviewJobs       map[string]*gitFixReviewJob
 	fixReviewMu         sync.RWMutex
-	sshSessions         map[string]*sshWorkspaceSession
+	sshSessions         map[string]*sshProjectFolderSession
 	sshSessionsMu       sync.Mutex
 	sshInFlight         map[string]chan struct{}
 	sshInFlightMu       sync.Mutex
 	sshLaunchStatuses   map[string]*sshLaunchStatus
 	sshLaunchStatusMu   sync.RWMutex
-	workspaceExecMu     sync.Mutex
+	projectFolderExecMu sync.Mutex
 
-	// clientWorkspaces remembers the last workspace each non-default client
-	// explicitly selected (via setClientWorkspaceRoot or worktree switches).
+	// clientProjectFolders remembers the last project folder each non-default client
+	// explicitly selected (via setClientProjectFolder or worktree switches).
 	// When the idle-eviction worker removes a client context, the tab is
 	// still alive on the other end; the next request recreates the context,
 	// and without this map that recreated context silently falls back to
 	// the daemon's launch directory — every new terminal session spawned
-	// in the wrong cwd while the UI still displayed the chosen workspace.
-	clientWorkspaces map[string]string
-	// clientWorkspacesUpdatedAt and clientWorkspacesPath back the on-disk
-	// copy of clientWorkspaces (client_workspaces.go), so a selection also
+	// in the wrong cwd while the UI still displayed the chosen project folder.
+	clientProjectFolders map[string]string
+	// clientProjectFoldersUpdatedAt and clientProjectFoldersPath back the on-disk
+	// copy of clientProjectFolders (client_workspaces.go), so a selection also
 	// survives a daemon restart. An empty path disables persistence.
-	clientWorkspacesUpdatedAt map[string]time.Time
-	clientWorkspacesPath      string
+	clientProjectFoldersUpdatedAt map[string]time.Time
+	clientProjectFoldersPath      string
 
 	// agentTeardownWg tracks in-flight releaseAgents goroutines so Shutdown
 	// (and tests) can wait for agent teardown — which writes history — to
@@ -126,7 +126,7 @@ type ReactWebServer struct {
 	hostedPreview   *hostedPreviewInfo
 	hostedPreviewMu sync.RWMutex
 
-	// previewOrigin serves workspace files to the HTML preview iframe from a
+	// previewOrigin serves project folder files to the HTML preview iframe from a
 	// loopback listener with its own origin, so previewed HTML cannot reach
 	// the app's sessionStorage/cookies. nil until started; see
 	// preview_origin.go.
@@ -174,11 +174,11 @@ func (ws *ReactWebServer) GetPort() int {
 	return ws.port
 }
 
-// GetWorkspaceRoot returns the current workspace root.
-func (ws *ReactWebServer) GetWorkspaceRoot() string {
+// GetProjectFolder returns the current project folder.
+func (ws *ReactWebServer) GetProjectFolder() string {
 	ws.mutex.RLock()
 	defer ws.mutex.RUnlock()
-	return ws.workspaceRoot
+	return ws.projectFolder
 }
 
 // looksLikeUserHome heuristically reports whether dir resembles a real
@@ -287,10 +287,10 @@ func (ws *ReactWebServer) HasActiveWebUIClients() bool {
 	return hasWebUI
 }
 
-// SetWorkspaceRoot updates the active workspace root, changes the process cwd,
+// SetProjectFolder updates the active project folder, changes the process cwd,
 // and resets terminal state.
-func (ws *ReactWebServer) SetWorkspaceRoot(path string) (string, error) {
-	return ws.setClientWorkspaceRoot(defaultWebClientID, path)
+func (ws *ReactWebServer) SetProjectFolder(path string) (string, error) {
+	return ws.setClientProjectFolder(defaultWebClientID, path)
 }
 
 // countConnections returns the current number of WebSocket connections

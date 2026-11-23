@@ -20,7 +20,7 @@ import (
 // folding all security inputs onto the Low/Medium/High/Critical scale.
 func (a *Agent) ResolveToolRisk(toolName string, args map[string]interface{}) RiskAssessment {
 	if a == nil {
-		return assessmentFromClassifier(tools.ClassifyToolCallWithWorkspace(toolName, args, ""))
+		return assessmentFromClassifier(tools.ClassifyToolCallWithProjectFolder(toolName, args, ""))
 	}
 	return approvals.ResolveToolRisk(a, toolName, args)
 }

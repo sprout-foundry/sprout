@@ -203,7 +203,7 @@ function refreshFromAdapter(): void {
 
 // Host-set refresh: when an active host exists, every host-derivable binding
 // resolves from host.capabilities. The field names map 1:1 to HostCapabilities
-// (ssh, git, chat, workspaceSwitching, folderPicker, export, instances,
+// (ssh, git, chat, projectFolderSwitching, folderPicker, export, instances,
 // localTerminal, settings, automations, agentChanges). Idempotent: re-setting
 // from the same (stable) host yields the same values.
 const HOST_REFRESH: Array<{

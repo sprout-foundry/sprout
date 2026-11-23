@@ -32,7 +32,7 @@ func writeContinuationTodo(t *testing.T, dir string, items []string) string {
 }
 
 // newContinuationAgent builds a minimal agent for the continuation loop.
-// The loop only reads the agent's workspace root and budget state, and
+// The loop only reads the agent's project folder and budget state, and
 // passes it straight to the (test-provided) queryExecutor, so a scripted
 // client is enough.
 func newContinuationAgent(t *testing.T) *agent.Agent {
@@ -263,14 +263,14 @@ func TestRunInitialContinuation_GitCommitCountsAsProgress(t *testing.T) {
 	runGit(t, dir, "add", "TODO.md")
 	runGit(t, dir, "commit", "-m", "initial")
 
-	// Point the agent's workspace root at the repo so the loop probes HEAD
+	// Point the agent's project folder at the repo so the loop probes HEAD
 	// there.
 	client := agent.NewScriptedClient()
 	if err := client.SetModel("test:test"); err != nil {
 		t.Fatalf("SetModel: %v", err)
 	}
 	chatAgent := newTestLoopAgent(t, client)
-	chatAgent.SetWorkspaceRoot(dir)
+	chatAgent.SetProjectFolder(dir)
 
 	turns := 0
 	queryExecutor := func(context.Context, *agent.Agent, *events.EventBus, string) error {

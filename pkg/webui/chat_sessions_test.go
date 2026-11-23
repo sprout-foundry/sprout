@@ -390,7 +390,7 @@ func TestSetChatSessionStateKeepsTopLevelOnActiveChat(t *testing.T) {
 func TestChatWithoutWorktreeUsesProjectRoot(t *testing.T) {
 	p := newProjectTestServer(t)
 	const client = "tab-project"
-	if _, err := p.ws.setClientWorkspaceRoot(client, p.project); err != nil {
+	if _, err := p.ws.setClientProjectFolder(client, p.project); err != nil {
 		t.Fatal(err)
 	}
 	p.switchChat(t, client, p.addWorktreeChat(t, client))
@@ -405,7 +405,7 @@ func TestChatWithoutWorktreeUsesProjectRoot(t *testing.T) {
 	wtChat := newChatSession("chat-wt", "Worktree chat")
 	wtChat.setWorktreePath("/repo-wt")
 	cc := &webClientContext{
-		WorkspaceRoot: "/repo-wt",
+		ProjectFolder: "/repo-wt",
 		DefaultChatID: wtChat.ID,
 		ChatSessions:  map[string]*chatSession{wtChat.ID: wtChat},
 	}

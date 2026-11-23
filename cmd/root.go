@@ -27,7 +27,7 @@ var debugPprofAddr string
 var whyFlag bool
 var colorBlindFlag bool
 var noColorFlag bool
-var autoDetectedWorkspaceDir string // set when auto-detection finds a git repo
+var autoDetectedProjectFolderDir string // set when auto-detection finds a git repo
 
 // Training data collection flags (opt-in session recording).
 var trainFlag bool
@@ -69,7 +69,7 @@ var rootCmd = &cobra.Command{
 				}
 			}()
 		}
-		// Auto-detect workspace config when running inside a git repo.
+		// Auto-detect project folder config when running inside a git repo.
 		// Walk up from cwd looking for .git; if found, bootstrap .sprout/
 		// on first run and use isolated config. This makes --isolated-config
 		// the default for repo-backed directories.
@@ -77,7 +77,7 @@ var rootCmd = &cobra.Command{
 		// Only auto-detect when --isolated-config was not explicitly set
 		// (including --isolated-config=false) so users can opt out.
 		// Also skip for the system service daemon (SPROUT_SERVICE=1) —
-		// the daemon is a system-wide service, not workspace-scoped.
+		// the daemon is a system-wide service, not project-folder-scoped.
 		isolatedFlagExplicit := cmd.Flags().Changed("isolated-config")
 		isServiceDaemon := os.Getenv("SPROUT_SERVICE") == "1"
 		autoDetected := false
@@ -103,7 +103,7 @@ var rootCmd = &cobra.Command{
 					if err := configuration.BootstrapIsolatedConfig(isolatedDir); err == nil {
 						isolatedConfig = true
 						autoDetected = true
-						autoDetectedWorkspaceDir = isolatedDir // for layered config
+						autoDetectedProjectFolderDir = isolatedDir // for layered config
 					}
 				}
 			}

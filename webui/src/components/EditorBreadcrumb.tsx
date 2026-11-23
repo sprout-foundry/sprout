@@ -1,21 +1,21 @@
 import { ChevronRight } from 'lucide-react';
 import { useMemo, useCallback, memo, useSyncExternalStore } from 'react';
 import type { KeyboardEvent } from 'react';
-import { getWorkspaceCwd, subscribeWorkspaceCwd } from '../services/workspaceCwd';
+import { getProjectFolderCwd, subscribeProjectFolderCwd } from '../services/workspaceCwd';
 import { type SymbolInfo as BreadcrumbSymbol, type SymbolKind, KIND_ICONS } from '../utils/symbolUtils';
 import './EditorBreadcrumb.css';
 
 // ── Workspace cwd snapshot (external store) ─────────────────────────────
 
-function useWorkspaceCwd(): string {
-  return useSyncExternalStore(subscribeWorkspaceCwd, getWorkspaceCwd, () => '');
+function useProjectFolderCwd(): string {
+  return useSyncExternalStore(subscribeProjectFolderCwd, getProjectFolderCwd, () => '');
 }
 
 // ── Path collapsing ──────────────────────────────────────────────────────
 
 /**
  * Collapse the middle of a long segment list into an ellipsis item, keeping
- * the first segment (workspace root context) and the last two (the file's
+ * the first segment (project folder context) and the last two (the file's
  * immediate directory + name). Single leading collapse keeps enough context
  * to know WHERE you are without showing the whole machine path.
  *
@@ -32,9 +32,9 @@ function collapseSegments(parts: string[], maxSegments = 5): { visible: string[]
   return { visible, collapsed: true };
 }
 
-/** Strip a known workspace prefix so the breadcrumb shows project-relative
+/** Strip a known project folder prefix so the breadcrumb shows project-relative
  * segments instead of the full machine path. Returns the input when no
- * prefix matches (paths outside the workspace keep their full form, but
+ * prefix matches (paths outside the project folder keep their full form, but
  * the middle-collapse still applies). */
 function relativizePath(filePath: string, cwd: string): string {
   if (!cwd) return filePath;
@@ -55,7 +55,7 @@ export type { BreadcrumbSymbol };
 
 interface EditorBreadcrumbProps {
   filePath: string;
-  /** The workspace root; paths inside it show relative to it. */
+  /** The project folder; paths inside it show relative to it. */
   workspaceRoot?: string;
   /** Name a top-level file too; for layouts without a tab strip to name it. */
   showFileName?: boolean;
@@ -72,7 +72,7 @@ const getKindIcon = (kind: SymbolKind): string => (KIND_ICONS as Record<string, 
 
 function EditorBreadcrumb({
   filePath,
-  workspaceRoot = '',
+  workspaceRoot: projectFolder = '',
   showFileName = false,
   onNavigate,
   symbols,
@@ -80,21 +80,21 @@ function EditorBreadcrumb({
 }: EditorBreadcrumbProps): JSX.Element | null {
   // ── Workspace cwd + file path segments ───────────────────────────────
 
-  const cwd = useWorkspaceCwd();
+  const cwd = useProjectFolderCwd();
 
   const segments = useMemo(() => {
-    // Don't show breadcrumbs for virtual workspace paths
+    // Don't show breadcrumbs for virtual project folder paths
     if (filePath.startsWith('__workspace/')) return null;
     if (!filePath) return null;
 
-    // Display relative to the workspace when possible — the full machine
+    // Display relative to the project folder when possible — the full machine
     // path is noise (and LSP buffer paths are absolute).
-    const displayPath = relativizePath(relativizePath(filePath, workspaceRoot), cwd);
+    const displayPath = relativizePath(relativizePath(filePath, projectFolder), cwd);
     const parts = displayPath.split('/').filter(Boolean);
     // A top-level file's name alone would repeat its tab.
     if (parts.length < 2 && !(showFileName && parts.length === 1)) return null;
     return parts;
-  }, [filePath, workspaceRoot, cwd, showFileName]);
+  }, [filePath, projectFolder, cwd, showFileName]);
 
   // ── Symbol segments ──────────────────────────────────────────────────
 

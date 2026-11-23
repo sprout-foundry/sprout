@@ -4,7 +4,7 @@
  * Extracts keymap logic from EditorPane:
  * - Hotkey actions ref (stable references for keymap callbacks)
  * - Effect that reconfigures hotkeys compartment when hotkeys change
- * - Custom keymap for save, goto line, goto symbol, workspace symbol, toggles
+ * - Custom keymap for save, goto line, goto symbol, project folder symbol, toggles
  * - Replace panel keymap (Ctrl+H to open search panel with replace focus)
  * - Zoom keymaps (Mod+=, Mod+-, Mod+0)
  * - Semantic keymaps (F12, F2, Shift+F12) - uses refs to avoid circular deps

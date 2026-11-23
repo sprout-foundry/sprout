@@ -32,8 +32,8 @@ func newSyncTestWebServer(t *testing.T, root string) *ReactWebServer {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server.workspaceRoot = root
-	server.getOrCreateClientContext(defaultWebClientID).WorkspaceRoot = root
+	server.projectFolder = root
+	server.getOrCreateClientContext(defaultWebClientID).ProjectFolder = root
 	return server
 }
 

@@ -72,7 +72,7 @@ func (c *ExecCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		console.WriteTranscript(console.GlyphShell.Prefix() + "Executing: " + command + "\n")
 		dir := ""
 		if chatAgent != nil {
-			dir = chatAgent.GetWorkspaceRoot()
+			dir = chatAgent.GetProjectFolder()
 		}
 		code, err := runOnTerminal(command, dir)
 		switch {
@@ -87,7 +87,7 @@ func (c *ExecCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	// Execute the shell command using the same pattern as direct shell execution
 	console.GlyphShell.Fprintf(c.out(), "Executing: %s", command)
 	// The agent's context, not context.Background(): the password prompter,
-	// workspace root, and process manager all travel in the context, so a bare
+	// project folder, and process manager all travel in the context, so a bare
 	// one leaves sudo/passwd prompts with no surface and the command hangs.
 	ctx := context.Background()
 	if chatAgent != nil {

@@ -30,8 +30,8 @@ var (
 //
 // The scan reads every non-hidden directory under root to depth 2, which on a
 // home directory is both slow and privacy-prompt-inducing. A single page load
-// calls GET /api/workspace from ~10 places (useAppInitialization, useWorkspace,
-// WorkspaceBar, useFileIndex, lspClientService, …); without this the walk ran
+// calls GET /api/project-folder from ~10 places (useAppInitialization, useProjectFolder,
+// ProjectFolderBar, useFileIndex, lspClientService, …); without this the walk ran
 // once per call.
 // The cache holds the raw scan only. Callers that decorate the list (e.g.
 // prepending the daemon root) must do so on the returned copy, or the
@@ -112,24 +112,24 @@ func (ws *ReactWebServer) buildAPIStats(r *http.Request) map[string]interface{} 
 	return stats
 }
 
-// handleAPIWorkspace handles API requests for reading and updating the active workspace root.
-func (ws *ReactWebServer) handleAPIWorkspace(w http.ResponseWriter, r *http.Request) {
+// handleAPIProjectFolder handles API requests for reading and updating the active project folder.
+func (ws *ReactWebServer) handleAPIProjectFolder(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		ws.handleAPIWorkspaceGet(w, r)
+		ws.handleAPIProjectFolderGet(w, r)
 	case http.MethodPost:
-		ws.handleAPIWorkspaceSet(w, r)
+		ws.handleAPIProjectFolderSet(w, r)
 	default:
 		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 	}
 }
 
-func (ws *ReactWebServer) handleAPIWorkspaceGet(w http.ResponseWriter, r *http.Request) {
-	clientCtx := ws.workspaceViewForRequest(r)
-	workspaceRoot := clientCtx.WorkspaceRoot
-	isProject, markers := IsProjectDirectory(workspaceRoot)
+func (ws *ReactWebServer) handleAPIProjectFolderGet(w http.ResponseWriter, r *http.Request) {
+	clientCtx := ws.projectFolderViewForRequest(r)
+	projectFolder := clientCtx.ProjectFolder
+	isProject, markers := IsProjectDirectory(projectFolder)
 
-	// Home-workspace gate (SP-130). The two cases are decided by different
+	// Home-project-folder gate (SP-130). The two cases are decided by different
 	// evidence and must not be mixed:
 	//
 	//   home     → consent decides, full stop. Project markers are meaningless
@@ -141,22 +141,22 @@ func (ws *ReactWebServer) handleAPIWorkspaceGet(w http.ResponseWriter, r *http.R
 	// scoring as a project via that `.sprout` marker, so down-weighting the
 	// marker would otherwise have kept re-prompting users who had already
 	// consented.
-	workspaceIsHome := isHomeWorkspace(workspaceRoot)
-	homeConsented := hasHomeWorkspaceConsent()
+	projectFolderIsHome := isHomeProjectFolder(projectFolder)
+	homeConsented := hasHomeProjectFolderConsent()
 	needsSelection := !isProject
-	if workspaceIsHome {
+	if projectFolderIsHome {
 		needsSelection = !homeConsented
 	}
 
 	response := map[string]interface{}{
-		"daemon_root":               ws.GetDaemonRoot(),
-		"workspace_root":            workspaceRoot,
-		"is_project":                isProject,
-		"project_markers":           markers,
-		"needs_workspace_selection": needsSelection,
-		"recent_workspaces":         GetRecentWorkspaces(),
-		"workspace_is_home":         workspaceIsHome,
-		"home_dir":                  resolveHomeDir(),
+		"daemon_root":                    ws.GetDaemonRoot(),
+		"project_folder":                 projectFolder,
+		"is_project":                     isProject,
+		"project_markers":                markers,
+		"needs_project_folder_selection": needsSelection,
+		"recent_project_folders":         GetRecentProjectFolders(),
+		"project_folder_is_home":         projectFolderIsHome,
+		"home_dir":                       resolveHomeDir(),
 	}
 
 	// Suggest nearby projects only when selection is actually needed. Moving
@@ -186,7 +186,7 @@ func (ws *ReactWebServer) handleAPIWorkspaceGet(w http.ResponseWriter, r *http.R
 	writeJSON(w, http.StatusOK, response)
 }
 
-func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.Request) {
+func (ws *ReactWebServer) handleAPIProjectFolderSet(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxQueryBodyBytes)
 
 	var req struct {
@@ -212,47 +212,47 @@ func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.R
 	// relative path resolution (like for pasted images) works correctly on the
 	// remote backend.
 	//
-	// The SSH session already has the remote workspace path (e.g., "$HOME/project").
+	// The SSH session already has the remote project folder path (e.g., "$HOME/project").
 	// We use that directly instead of the locally-resolved absolute path.
 	if req.Path != "" && ws.isSSHProxyRequest(r) {
 		session := ws.getSSHSessionForProxyRequest(r)
-		if session != nil && session.RemoteWorkspacePath != "" {
-			// Use the remote workspace path directly - it's what the remote
+		if session != nil && session.RemoteProjectFolderPath != "" {
+			// Use the remote project folder path directly - it's what the remote
 			// backend needs for correct relative path resolution
-			req.Path = session.RemoteWorkspacePath
+			req.Path = session.RemoteProjectFolderPath
 		}
 	}
 
-	// Home-workspace consent gate (SP-130): selecting the home directory as
-	// the workspace is an intentional, high-blast-radius choice (the agent
+	// Home-project-folder consent gate (SP-130): selecting the home directory as
+	// the project folder is an intentional, high-blast-radius choice (the agent
 	// gains access to all files under ~). Require explicit consent on the
 	// request and persist it so it is not re-prompted on every launch.
 	//
 	// Skipped for SSH proxy requests — the remote home is not the local home,
-	// and SSH workspaces are explicitly selected via the remote picker.
+	// and SSH project folders are explicitly selected via the remote picker.
 	// Canonicalize the path before checking so that ~ / $HOME / relative
 	// paths are resolved to their real target (otherwise a raw "~" bypasses
 	// this gate and only gets caught by the defense-in-depth check in
-	// setClientWorkspaceRoot, which returns a generic error instead of the
+	// setClientProjectFolder, which returns a generic error instead of the
 	// structured consent error the frontend expects).
 	//
 	// Consent is recorded BEFORE the active-query check below. The gate UI
 	// dismisses on consent alone (GET computes needs_workspace_selection
-	// from the consent file, not from the workspace state), and the modal
+	// from the consent file, not from the project folder state), and the modal
 	// blocks every other control — if a query were stuck active, rejecting
 	// here would leave the user trapped behind an undismissable overlay
 	// with no way to record the very consent they just granted.
 	if !ws.isSSHProxyRequest(r) {
 		if canonicalPath, cerr := filepathAbsEval(req.Path); cerr == nil {
-			if isHomeWorkspace(canonicalPath) && !hasHomeWorkspaceConsent() {
+			if isHomeProjectFolder(canonicalPath) && !hasHomeProjectFolderConsent() {
 				if req.ConsentHome {
-					if err := recordHomeWorkspaceConsent(); err != nil {
-						ws.log().Warn("failed to record home-workspace consent", slog.Any("err", err))
+					if err := recordHomeProjectFolderConsent(); err != nil {
+						ws.log().Warn("failed to record home-project-folder consent", slog.Any("err", err))
 					}
 				} else {
 					writeJSON(w, http.StatusForbidden, map[string]interface{}{
-						"error": "Selecting the home directory as workspace requires explicit consent. The agent will have access to all files under your home directory.",
-						"code":  "home_workspace_requires_consent",
+						"error": "Selecting the home directory as project folder requires explicit consent. The agent will have access to all files under your home directory.",
+						"code":  "home_project_folder_requires_consent",
 					})
 					return
 				}
@@ -260,40 +260,40 @@ func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.R
 		}
 	}
 
-	// Reject workspace changes only for the window that currently owns an active run.
+	// Reject project folder changes only for the window that currently owns an active run.
 	if ws.hasActiveQueryForClient(clientID) {
 		writeJSON(w, http.StatusConflict, map[string]interface{}{
-			"error":          "cannot change workspace while an agent query is active. Wait for the query to complete before switching.",
+			"error":          "cannot change project folder while an agent query is active. Wait for the query to complete before switching.",
 			"code":           "query_in_progress",
 			"active_queries": 1,
 		})
 		return
 	}
 
-	// Capture the previous workspace root before setting the new one
-	previousWorkspaceRoot := ws.getWorkspaceRootForRequest(r)
+	// Capture the previous project folder before setting the new one
+	previousProjectFolder := ws.getProjectFolderForRequest(r)
 
-	workspaceRoot, err := ws.setClientWorkspaceRoot(clientID, req.Path)
+	projectFolder, err := ws.setClientProjectFolder(clientID, req.Path)
 	if err != nil {
-		writeJSONErr(w, http.StatusBadRequest, "workspace_update_failed", fmt.Sprintf("Failed to set workspace: %v", err))
+		writeJSONErr(w, http.StatusBadRequest, "project_folder_update_failed", fmt.Sprintf("Failed to set project folder: %v", err))
 		return
 	}
 
-	// Record this workspace as recently used.
-	RecordWorkspace(workspaceRoot)
+	// Record this project folder as recently used.
+	RecordProjectFolder(projectFolder)
 
-	ws.publishClientEvent(clientID, events.EventTypeWorkspaceChanged, map[string]interface{}{
+	ws.publishClientEvent(clientID, events.EventTypeProjectFolderChanged, map[string]interface{}{
 		"daemon_root":             ws.GetDaemonRoot(),
-		"workspace_root":          workspaceRoot,
-		"previous_workspace_root": previousWorkspaceRoot,
+		"project_folder":          projectFolder,
+		"previous_project_folder": previousProjectFolder,
 	})
 
 	response := map[string]interface{}{
 		"daemon_root":    ws.GetDaemonRoot(),
-		"message":        "Workspace updated",
-		"workspace_root": workspaceRoot,
+		"message":        "Project folder updated",
+		"project_folder": projectFolder,
 	}
-	clientCtx := ws.workspaceViewForRequest(r)
+	clientCtx := ws.projectFolderViewForRequest(r)
 	if clientCtx.SSHHostAlias != "" {
 		sshContext := map[string]interface{}{
 			"host_alias":  clientCtx.SSHHostAlias,
@@ -312,7 +312,7 @@ func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.R
 	writeJSON(w, http.StatusOK, response)
 }
 
-func (ws *ReactWebServer) handleAPIWorkspaceBrowse(w http.ResponseWriter, r *http.Request) {
+func (ws *ReactWebServer) handleAPIProjectFolderBrowse(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
@@ -336,7 +336,7 @@ func (ws *ReactWebServer) handleAPIWorkspaceBrowse(w http.ResponseWriter, r *htt
 		writeJSONErr(w, http.StatusBadRequest, "invalid_directory", fmt.Sprintf("Invalid directory: %v", err))
 		return
 	}
-	if canonicalDir != resolvedDaemonRoot && !isWithinWorkspace(canonicalDir, resolvedDaemonRoot) {
+	if canonicalDir != resolvedDaemonRoot && !isWithinProjectFolder(canonicalDir, resolvedDaemonRoot) {
 		writeJSONErr(w, http.StatusForbidden, "directory_outside_daemon_root", "Directory outside daemon root")
 		return
 	}
@@ -371,7 +371,7 @@ func (ws *ReactWebServer) handleAPIWorkspaceBrowse(w http.ResponseWriter, r *htt
 		"message":        "success",
 		"path":           canonicalDir,
 		"daemon_root":    daemonRoot,
-		"workspace_root": ws.getWorkspaceRootForRequest(r),
+		"project_folder": ws.getProjectFolderForRequest(r),
 		"files":          files,
 	})
 }
@@ -397,7 +397,7 @@ func (ws *ReactWebServer) isSSHProxyRequest(r *http.Request) bool {
 
 // getSSHSessionForProxyRequest looks up the SSH session for a proxied request.
 // Returns nil if not an SSH proxy request.
-func (ws *ReactWebServer) getSSHSessionForProxyRequest(r *http.Request) *sshWorkspaceSession {
+func (ws *ReactWebServer) getSSHSessionForProxyRequest(r *http.Request) *sshProjectFolderSession {
 	// Extract session key from /ssh/{sessionKey}/ path
 	if !strings.HasPrefix(r.URL.Path, "/ssh/") {
 		return nil
@@ -418,7 +418,7 @@ func (ws *ReactWebServer) getSSHSessionForProxyRequest(r *http.Request) *sshWork
 
 const projectsCacheTTL = 5 * time.Minute
 
-func (ws *ReactWebServer) handleAPIWorkspaceProjects(w http.ResponseWriter, r *http.Request) {
+func (ws *ReactWebServer) handleAPIProjectFolderProjects(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeJSONErr(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 		return
@@ -446,23 +446,23 @@ func (ws *ReactWebServer) handleAPIWorkspaceProjects(w http.ResponseWriter, r *h
 	})
 }
 
-// clientWorkspaceView is a copy of the workspace-related client context
+// clientProjectFolderView is a copy of the project-folder-related client context
 // fields, read under ws.mutex: handlers that switch chats or worktrees write
 // them concurrently.
-type clientWorkspaceView struct {
-	WorkspaceRoot  string
+type clientProjectFolderView struct {
+	ProjectFolder  string
 	SSHHostAlias   string
 	SSHSessionKey  string
 	SSHLauncherURL string
 	SSHHomePath    string
 }
 
-func (ws *ReactWebServer) workspaceViewForRequest(r *http.Request) clientWorkspaceView {
+func (ws *ReactWebServer) projectFolderViewForRequest(r *http.Request) clientProjectFolderView {
 	ctx := ws.getClientContextForRequest(r)
 	ws.mutex.RLock()
 	defer ws.mutex.RUnlock()
-	return clientWorkspaceView{
-		WorkspaceRoot:  ctx.WorkspaceRoot,
+	return clientProjectFolderView{
+		ProjectFolder:  ctx.ProjectFolder,
 		SSHHostAlias:   ctx.SSHHostAlias,
 		SSHSessionKey:  ctx.SSHSessionKey,
 		SSHLauncherURL: ctx.SSHLauncherURL,

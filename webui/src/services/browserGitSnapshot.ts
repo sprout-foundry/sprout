@@ -2,7 +2,7 @@
  * A local repository for a repository imported as plain files.
  *
  * When the host offers no git proxy (or the clone through it fails), the
- * import brings the files without their history. The workspace still gets a
+ * import brings the files without their history. The project folder still gets a
  * real repository: one "imported snapshot" commit of exactly the files the
  * VFS holds, so status, diff, staging and commit work against that baseline.
  * There is no origin remote — the snapshot shares no history with the real

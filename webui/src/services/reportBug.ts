@@ -10,7 +10,7 @@
  * import site.
  *
  * The prefilled issue body carries only the short template and the environment
- * — never a file path, workspace name, session id, provider key, prompt or
+ * — never a file path, project folder name, session id, provider key, prompt or
  * model output (this is a public repo).
  */
 

@@ -9,14 +9,14 @@ import (
 )
 
 // resolveAbsPath resolves filePath to a cleaned absolute path, using
-// the agent's workspace root as the base for relative paths.
+// the agent's project folder as the base for relative paths.
 func (ct *ChangeTracker) resolveAbsPath(filePath string) string {
 	if filepath.IsAbs(filePath) {
 		return filepath.Clean(filePath)
 	}
 	root := ""
 	if ct.view != nil {
-		root = ct.view.GetWorkspaceRoot()
+		root = ct.view.GetProjectFolder()
 	}
 	if root == "" {
 		var err error
@@ -27,7 +27,7 @@ func (ct *ChangeTracker) resolveAbsPath(filePath string) string {
 	}
 	joined := filepath.Join(root, filePath)
 	// A drive-less rooted Windows path ("/etc/shadow") names the root of
-	// the workspace's drive, as pkg/filesystem resolves it for the write —
+	// the project folder's drive, as pkg/filesystem resolves it for the write —
 	// except /tmp, which follows Git Bash to the user's temp dir.
 	if tmp, ok := filesystem.PosixTmpPath(filePath); ok {
 		joined = tmp
@@ -41,15 +41,15 @@ func (ct *ChangeTracker) resolveAbsPath(filePath string) string {
 	return abs
 }
 
-// IsOutsideWorkspace returns true if filePath is outside the agent's
-// workspace root. Exported for pkg/agent's IsPathOutsideWorkspace
+// IsOutsideProjectFolder returns true if filePath is outside the agent's
+// project folder. Exported for pkg/agent's IsPathOutsideProjectFolder
 // facade (SP-141 phase 2).
-func (ct *ChangeTracker) IsOutsideWorkspace(filePath string) bool {
+func (ct *ChangeTracker) IsOutsideProjectFolder(filePath string) bool {
 	if ct.view == nil {
 		return false
 	}
-	workspaceRoot := ct.view.GetWorkspaceRoot()
-	if workspaceRoot == "" {
+	projectFolder := ct.view.GetProjectFolder()
+	if projectFolder == "" {
 		return false
 	}
 
@@ -58,21 +58,21 @@ func (ct *ChangeTracker) IsOutsideWorkspace(filePath string) bool {
 		return false
 	}
 
-	absWorkspace, err := filepath.Abs(workspaceRoot)
+	absProjectFolder, err := filepath.Abs(projectFolder)
 	if err != nil {
 		return false
 	}
 
 	// Resolve symlinks on both sides for consistent comparison.
 	absFile = resolveSymlinksPath(absFile)
-	resolvedWorkspace, werr := filepath.EvalSymlinks(absWorkspace)
+	resolvedProjectFolder, werr := filepath.EvalSymlinks(absProjectFolder)
 	if werr == nil {
-		absWorkspace = resolvedWorkspace
+		absProjectFolder = resolvedProjectFolder
 	}
 
 	// Rel fails when the two paths share no root (different Windows
 	// volumes); such a file is outside by definition.
-	rel, err := filepath.Rel(absWorkspace, absFile)
+	rel, err := filepath.Rel(absProjectFolder, absFile)
 	if err != nil {
 		return true
 	}

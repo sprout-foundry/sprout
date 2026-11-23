@@ -1,7 +1,7 @@
 /**
  * OPFS (Origin Private File System) Replica Service.
  *
- * Provides a local file-system-backed replica of workspace files using the
+ * Provides a local file-system-backed replica of project folder files using the
  * browser's Origin Private File System API.  All data is stored under
  * `navigator.storage.getDirectory()` so it is isolated to this origin and
  * persists across browser sessions.

@@ -12,7 +12,7 @@ import (
 
 // performStagedReview handles reviews of Git staged changes
 func (s *CodeReviewService) performStagedReview(ctx *ReviewContext) (*types.CodeReviewResult, error) {
-	// Use enhanced agent-based review with workspace intelligence
+	// Use enhanced agent-based review with project folder intelligence
 	return s.performAgentBasedCodeReview(ctx, false) // human-readable format for staged changes
 }
 
@@ -22,7 +22,7 @@ func (s *CodeReviewService) performAgentBasedCodeReview(ctx *ReviewContext, stru
 		return nil, fmt.Errorf("agent client not available for enhanced code review")
 	}
 
-	// Build enhanced review prompt with workspace context
+	// Build enhanced review prompt with project folder context
 	prompt := s.buildPreparedReviewPrompt(ctx, structured, false)
 
 	// Create messages for agent API
@@ -223,7 +223,7 @@ func truncateForPromptSection(content string, maxBytes int, label string) string
 	return head + notice + tail
 }
 
-// buildEnhancedReviewPrompt builds a review prompt with workspace intelligence and context
+// buildEnhancedReviewPrompt builds a review prompt with project folder intelligence and context
 func (s *CodeReviewService) buildEnhancedReviewPrompt(ctx *ReviewContext, structured bool) string {
 	var promptParts []string
 

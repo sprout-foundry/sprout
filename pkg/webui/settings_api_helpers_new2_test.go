@@ -91,7 +91,7 @@ func TestValidateHistoryScope2(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "invalid value - workspace",
+			name:    "invalid value - project folder",
 			v:       "workspace",
 			wantErr: true,
 		},

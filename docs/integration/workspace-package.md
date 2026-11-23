@@ -657,7 +657,7 @@ When an agent command cannot run in the browser (exit 127 — no compilers in
 the WASM shell), a git push the browser cannot perform, or the VFS hitting its
 quota, the work can run instead in the user's cloud workspace or on one of
 their runners: the browser's changed files are pushed, the command runs, the
-resulting deltas come back (`/workspace/txn`, see the host contract). `./views`
+resulting deltas come back (`/dev-space/txn`, see the host contract). `./views`
 exports the pieces a composing host mounts — the same two the Sprout app root
 mounts:
 

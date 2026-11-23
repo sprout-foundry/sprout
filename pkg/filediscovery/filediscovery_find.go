@@ -46,7 +46,7 @@ type QueryTerms struct {
 }
 
 // findFilesUsingShellCommands finds files using shell commands
-func (fd *FileDiscovery) findFilesUsingShellCommands(query string, workspaceInfo *WorkspaceInfo) []string {
+func (fd *FileDiscovery) findFilesUsingShellCommands(query string, projectFolderInfo *ProjectFolderInfo) []string {
 	var found []string
 
 	// Parse the query to extract file patterns and search terms
@@ -55,26 +55,26 @@ func (fd *FileDiscovery) findFilesUsingShellCommands(query string, workspaceInfo
 	// Use different strategies based on the query type
 	if len(terms.FilePatterns) > 0 {
 		// Use find command for file pattern matching
-		found = fd.findWithFindCommand(terms.FilePatterns, workspaceInfo)
+		found = fd.findWithFindCommand(terms.FilePatterns, projectFolderInfo)
 	} else if len(terms.SearchTerms) > 0 {
 		// Use grep command for content searching
-		found = fd.findWithGrepCommand(terms.SearchTerms, workspaceInfo)
+		found = fd.findWithGrepCommand(terms.SearchTerms, projectFolderInfo)
 	} else {
 		// Fallback to directory walk with basic filtering
-		found = fd.findWithDirectoryWalk(query, workspaceInfo)
+		found = fd.findWithDirectoryWalk(query, projectFolderInfo)
 	}
 
 	// Remove duplicates and apply security filtering
-	return fd.deduplicateAndFilter(found, workspaceInfo)
+	return fd.deduplicateAndFilter(found, projectFolderInfo)
 }
 
 // findWithFindCommand uses the find command to locate files by pattern
-func (fd *FileDiscovery) findWithFindCommand(patterns []string, workspaceInfo *WorkspaceInfo) []string {
+func (fd *FileDiscovery) findWithFindCommand(patterns []string, projectFolderInfo *ProjectFolderInfo) []string {
 	var found []string
 
 	for _, pattern := range patterns {
 		// Build find command
-		cmd := exec.Command("find", workspaceInfo.RootDir,
+		cmd := exec.Command("find", projectFolderInfo.RootDir, //nolint:gosec // pre-existing: find -name with the caller's query patterns is the documented behavior
 			"-type", "f", // Only files
 			"-name", pattern, // Match pattern
 			"-not", "-path", "*/.*", // Exclude hidden files
@@ -103,7 +103,7 @@ func (fd *FileDiscovery) findWithFindCommand(patterns []string, workspaceInfo *W
 }
 
 // findWithGrepCommand uses grep to search file contents
-func (fd *FileDiscovery) findWithGrepCommand(searchTerms []string, workspaceInfo *WorkspaceInfo) []string {
+func (fd *FileDiscovery) findWithGrepCommand(searchTerms []string, projectFolderInfo *ProjectFolderInfo) []string {
 	var found []string
 
 	for _, term := range searchTerms {
@@ -116,7 +116,7 @@ func (fd *FileDiscovery) findWithGrepCommand(searchTerms []string, workspaceInfo
 			"--include=*.html", "--include=*.css", "--include=*.json", "--include=*.xml",
 			"--include=*.yaml", "--include=*.yml", "--include=*.md", "--include=*.txt",
 			"-l", // Only list filenames
-			term, workspaceInfo.RootDir)
+			term, projectFolderInfo.RootDir)
 
 		output, err := cmd.Output()
 		if err != nil {
@@ -137,11 +137,11 @@ func (fd *FileDiscovery) findWithGrepCommand(searchTerms []string, workspaceInfo
 }
 
 // findWithDirectoryWalk falls back to directory walking
-func (fd *FileDiscovery) findWithDirectoryWalk(query string, workspaceInfo *WorkspaceInfo) []string {
+func (fd *FileDiscovery) findWithDirectoryWalk(query string, projectFolderInfo *ProjectFolderInfo) []string {
 	var found []string
 
 	// Simple directory walk as fallback
-	err := filepath.Walk(workspaceInfo.RootDir, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(projectFolderInfo.RootDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil // Skip files we can't access
 		}
@@ -176,7 +176,7 @@ func (fd *FileDiscovery) findWithDirectoryWalk(query string, workspaceInfo *Work
 }
 
 // deduplicateAndFilter removes duplicates and applies security filtering
-func (fd *FileDiscovery) deduplicateAndFilter(files []string, workspaceInfo *WorkspaceInfo) []string {
+func (fd *FileDiscovery) deduplicateAndFilter(files []string, projectFolderInfo *ProjectFolderInfo) []string {
 	seen := make(map[string]bool)
 	var result []string
 
@@ -193,8 +193,8 @@ func (fd *FileDiscovery) deduplicateAndFilter(files []string, workspaceInfo *Wor
 		}
 		seen[absPath] = true
 
-		// Security: ensure file is within workspace
-		if !strings.HasPrefix(absPath, workspaceInfo.RootDir) {
+		// Security: ensure file is within project folder
+		if !strings.HasPrefix(absPath, projectFolderInfo.RootDir) {
 			continue
 		}
 

@@ -22,11 +22,11 @@ const (
 	// than silently behaving as "allow".
 	PathTierUnknown PathTier = iota
 
-	// PathTierWorkspace — the path is inside the agent's workspace
+	// PathTierProjectFolder — the path is inside the agent's project folder
 	// root (or the sprout config dir). No approval required.
-	PathTierWorkspace
+	PathTierProjectFolder
 
-	// PathTierExternal — outside the workspace but not in a system
+	// PathTierExternal — outside the project folder but not in a system
 	// or off-CWD home directory. Eligible for the "Allow this folder
 	// for the rest of the session" approval choice. Once a parent
 	// folder is in the agent's session allowlist, future accesses
@@ -45,8 +45,8 @@ const (
 // extras (the WebUI uses it to pick a button set) and tests.
 func (t PathTier) String() string {
 	switch t {
-	case PathTierWorkspace:
-		return "workspace"
+	case PathTierProjectFolder:
+		return "project_folder"
 	case PathTierExternal:
 		return "external"
 	case PathTierSensitive:
@@ -60,13 +60,13 @@ func (t PathTier) String() string {
 // All three input paths should be absolute (or empty for unset fields).
 // Behavior:
 //
-//  1. Inside workspaceRoot → PathTierWorkspace.
+//  1. Inside projectFolder → PathTierProjectFolder.
 //  2. Under a known system directory (e.g. /etc, /usr, /var on Unix;
 //     C:\Windows, C:\Program Files on Windows) → PathTierSensitive.
 //  3. Under the user's home dir AND the agent's CWD is NOT under
 //     home → PathTierSensitive (working in /tmp, accessing ~ is
 //     unusual and shouldn't get session-wide allowlisting).
-//  4. Anything else outside the workspace → PathTierExternal.
+//  4. Anything else outside the project folder → PathTierExternal.
 //
 // homeDir and cwd are passed explicitly so tests can drive each
 // branch deterministically. Production callers use os.UserHomeDir
@@ -83,13 +83,13 @@ func (t PathTier) String() string {
 // The classifier is therefore advisory: if you've crafted a clever
 // symlink to dodge tier classification, the filesystem layer still
 // enforces its own checks at write time.
-func ClassifyPathAccess(path, workspaceRoot, homeDir, cwd string) PathTier {
+func ClassifyPathAccess(path, projectFolder, homeDir, cwd string) PathTier {
 	if path == "" {
 		return PathTierUnknown
 	}
 	abs := NormalizePath(path)
-	if workspaceRoot != "" && IsUnderPrefix(abs, NormalizePath(workspaceRoot)) {
-		return PathTierWorkspace
+	if projectFolder != "" && IsUnderPrefix(abs, NormalizePath(projectFolder)) {
+		return PathTierProjectFolder
 	}
 	// Use the original path for system path detection to handle symlinks.
 	// On systems where a system directory is itself a symlink (e.g., /etc → /system/etc),

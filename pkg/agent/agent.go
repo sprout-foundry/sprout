@@ -78,7 +78,7 @@ func (a *Agent) LifetimeCtx() context.Context {
 // refreshSystemPrompt re-derives the system prompt for the active provider and context profile.
 // Used by setClient when RefreshSystemPromptOnModelChange is true. No-ops if prerequisites are missing.
 func (a *Agent) refreshSystemPrompt() {
-	if a == nil || a.configManager == nil || a.GetWorkspaceRoot() == "" {
+	if a == nil || a.configManager == nil || a.GetProjectFolder() == "" {
 		return
 	}
 	cfg := a.configManager.GetConfig()
@@ -96,7 +96,7 @@ func (a *Agent) refreshSystemPrompt() {
 		}
 		return
 	}
-	prompt, err := GetEmbeddedSystemPromptForProfile(profile, providerName, contextWindow, a.GetWorkspaceRoot())
+	prompt, err := GetEmbeddedSystemPromptForProfile(profile, providerName, contextWindow, a.GetProjectFolder())
 	if err != nil {
 		if a.debug {
 			a.Logger().Debug("refreshSystemPrompt: failed to load prompt: %v", err)
@@ -151,9 +151,9 @@ type Agent struct {
 
 	// Configuration
 	configManager *configuration.Manager
-	// workspaceRootMu protects workspaceRoot from concurrent access.
-	workspaceRootMu sync.RWMutex
-	workspaceRoot   string
+	// projectFolderMu protects projectFolder from concurrent access.
+	projectFolderMu sync.RWMutex
+	projectFolder   string
 	debug           bool
 	// role is the role whose model selection this agent's
 	// usage is attributed to (a configuration.Role* constant such as
@@ -413,7 +413,7 @@ type Agent struct {
 	// subagentDepth tracks the nesting depth of this agent. 0 = primary, 1 = orchestrator, 2 = coder/tester, etc.
 	subagentDepth int
 
-	// taskLoadMu guards taskLoaded: the set of workspaces whose persisted
+	// taskLoadMu guards taskLoaded: the set of project folders whose persisted
 	// task records this process has already restored.
 	taskLoadMu sync.Mutex
 	taskLoaded map[string]bool
@@ -479,9 +479,9 @@ type Agent struct {
 	// lastStallSummary, stallStopFn, stallIdenticalCalls, stallIdleCalls).
 	stallMu sync.Mutex
 
-	// fileMetadata holds per-path WorkspaceFileMetadata populated by the platform-side sync layer.
+	// fileMetadata holds per-path ProjectFolderFileMetadata populated by the platform-side sync layer.
 	// checkWriteStaleness consults it to refuse writes over files with pending unsynced browser edits.
-	fileMetadata *workspaceMetadataStore
+	fileMetadata *projectFolderMetadataStore
 
 	fileReadsMu sync.Mutex
 

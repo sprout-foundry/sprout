@@ -12,8 +12,8 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
-// RecentWorkspace tracks a workspace that was recently used.
-type RecentWorkspace struct {
+// RecentProjectFolder tracks a project folder that was recently used.
+type RecentProjectFolder struct {
 	Path         string    `json:"path"`
 	Name         string    `json:"name"`
 	LastUsed     time.Time `json:"last_used"`
@@ -21,42 +21,42 @@ type RecentWorkspace struct {
 	SessionCount int       `json:"session_count"`
 }
 
-const maxRecentWorkspaces = 10
+const maxRecentProjectFolders = 10
 
-// recentWorkspacesState holds the in-memory state for recent workspace tracking.
-type recentWorkspacesState struct {
-	mu         sync.RWMutex
-	workspaces []RecentWorkspace
-	filePath   string
+// recentProjectFoldersState holds the in-memory state for recent project folder tracking.
+type recentProjectFoldersState struct {
+	mu             sync.RWMutex
+	projectFolders []RecentProjectFolder
+	filePath       string
 }
 
-var recentWorkspaces = &recentWorkspacesState{}
+var recentProjectFolders = &recentProjectFoldersState{}
 
-// initRecentWorkspaces loads recent workspaces from disk.
+// initRecentProjectFolders loads recent project folders from disk.
 // Call this once during server startup.
 //
 // An already-configured path is left alone. Every ReactWebServer construction
 // calls this, so unconditionally re-deriving the path from os.UserHomeDir()
 // stomped the temp file that tests point the global at — which is how test
-// workspace paths ended up in the user's real recent-workspaces file and
+// project folder paths ended up in the user's real recent-project-folders file and
 // evicted their actual projects from the picker.
-func initRecentWorkspaces() {
-	recentWorkspaces.mu.Lock()
-	if recentWorkspaces.filePath == "" {
+func initRecentProjectFolders() {
+	recentProjectFolders.mu.Lock()
+	if recentProjectFolders.filePath == "" {
 		stateDir, err := envutil.StateDir()
 		if err == nil {
-			recentWorkspaces.filePath = filepath.Join(stateDir, "recent_workspaces.json")
+			recentProjectFolders.filePath = filepath.Join(stateDir, "recent_workspaces.json")
 		}
 	}
-	recentWorkspaces.mu.Unlock()
+	recentProjectFolders.mu.Unlock()
 
-	recentWorkspaces.load()
+	recentProjectFolders.load()
 }
 
-// load reads the recent-workspace list from disk. It takes the lock itself —
+// load reads the recent-project-folder list from disk. It takes the lock itself —
 // callers must not hold it. (save, by contrast, is only ever reached from
-// RecordWorkspace with the lock already held.)
-func (s *recentWorkspacesState) load() {
+// RecordProjectFolder with the lock already held.)
+func (s *recentProjectFoldersState) load() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -67,28 +67,28 @@ func (s *recentWorkspacesState) load() {
 	if err != nil {
 		return
 	}
-	if err := json.Unmarshal(data, &s.workspaces); err != nil {
-		s.workspaces = nil
+	if err := json.Unmarshal(data, &s.projectFolders); err != nil {
+		s.projectFolders = nil
 	}
 }
 
-func (s *recentWorkspacesState) save() {
+func (s *recentProjectFoldersState) save() {
 	if s.filePath == "" {
 		return
 	}
 	if err := os.MkdirAll(filepath.Dir(s.filePath), 0700); err != nil {
 		return
 	}
-	data, err := json.MarshalIndent(s.workspaces, "", "  ")
+	data, err := json.MarshalIndent(s.projectFolders, "", "  ")
 	if err != nil {
 		return
 	}
 	os.WriteFile(s.filePath, data, 0600)
 }
 
-// RecordWorkspace records a workspace as recently used.
-func RecordWorkspace(path string) {
-	s := recentWorkspaces
+// RecordProjectFolder records a project folder as recently used.
+func RecordProjectFolder(path string) {
+	s := recentProjectFolders
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -96,11 +96,11 @@ func RecordWorkspace(path string) {
 	name := filepath.Base(path)
 
 	// Check if already tracked
-	for i, w := range s.workspaces {
+	for i, w := range s.projectFolders {
 		if w.Path == path {
-			s.workspaces[i].LastUsed = time.Now()
-			s.workspaces[i].SessionCount++
-			s.workspaces[i].Name = name
+			s.projectFolders[i].LastUsed = time.Now()
+			s.projectFolders[i].SessionCount++
+			s.projectFolders[i].Name = name
 			s.save()
 			return
 		}
@@ -110,37 +110,37 @@ func RecordWorkspace(path string) {
 	_, markers := IsProjectDirectory(path)
 
 	// Add new entry
-	ew := RecentWorkspace{
+	ew := RecentProjectFolder{
 		Path:         path,
 		Name:         name,
 		LastUsed:     time.Now(),
 		Markers:      markers,
 		SessionCount: 1,
 	}
-	s.workspaces = append([]RecentWorkspace{ew}, s.workspaces...)
+	s.projectFolders = append([]RecentProjectFolder{ew}, s.projectFolders...)
 
 	// Trim to max
-	if len(s.workspaces) > maxRecentWorkspaces {
-		s.workspaces = s.workspaces[:maxRecentWorkspaces]
+	if len(s.projectFolders) > maxRecentProjectFolders {
+		s.projectFolders = s.projectFolders[:maxRecentProjectFolders]
 	}
 
 	s.save()
 }
 
-// GetRecentWorkspaces returns up to 10 recently used workspaces that still
+// GetRecentProjectFolders returns up to 10 recently used project folders that still
 // exist on disk.
 //
-// Entries are dropped rather than shown as dead links: a workspace can be
+// Entries are dropped rather than shown as dead links: a project folder can be
 // renamed, deleted, or (as happened in practice) recorded against a temp
 // directory that no longer exists, and offering those in the picker gives the
 // user a list they cannot act on and cannot distinguish from real projects.
-func GetRecentWorkspaces() []RecentWorkspace {
-	s := recentWorkspaces
+func GetRecentProjectFolders() []RecentProjectFolder {
+	s := recentProjectFolders
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	result := make([]RecentWorkspace, 0, len(s.workspaces))
-	for _, w := range s.workspaces {
+	result := make([]RecentProjectFolder, 0, len(s.projectFolders))
+	for _, w := range s.projectFolders {
 		if info, err := os.Stat(w.Path); err == nil && info.IsDir() {
 			result = append(result, w)
 		}
@@ -148,13 +148,13 @@ func GetRecentWorkspaces() []RecentWorkspace {
 	return result
 }
 
-// GetMostRecentWorkspace returns the most recently used workspace path, or "" if none.
-func GetMostRecentWorkspace() string {
-	s := recentWorkspaces
+// GetMostRecentProjectFolder returns the most recently used project folder path, or "" if none.
+func GetMostRecentProjectFolder() string {
+	s := recentProjectFolders
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if len(s.workspaces) == 0 {
+	if len(s.projectFolders) == 0 {
 		return ""
 	}
-	return s.workspaces[0].Path
+	return s.projectFolders[0].Path
 }

@@ -1,11 +1,11 @@
 /**
- * useMockupPresence — does this workspace have a mockup to show?
+ * useMockupPresence — does this project folder have a mockup to show?
  *
  * `draw_mockup` writes `design/mockup.html`; the preview shows it when it
  * exists and the dev server's output otherwise. This probe is the only thing
  * that decides between them, so it is deliberately cheap: one file read.
  *
- * It re-probes when a workspace file changes (the draw lands mid-session, with
+ * It re-probes when a project folder file changes (the draw lands mid-session, with
  * no focus event and no reload) and on window focus, which catches a write
  * that happened while the tab was in the background.
  */
@@ -14,13 +14,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { useSproutFetch } from '../contexts/SproutAdapterContext';
 import { useEvents } from '../contexts/EventsContext';
 import type { SproutEvent } from '../types/events';
-import { changesWorkspaceFiles } from '../hooks/workspaceFileEvents';
+import { changesProjectFolderFiles } from '../hooks/workspaceFileEvents';
 import { MOCKUP_PATH } from './mockupPath';
 
 export interface MockupPresence {
   /** True while the probe is in flight. */
   loading: boolean;
-  /** True when the workspace has a mockup. */
+  /** True when the project folder has a mockup. */
   present: boolean;
   /** Re-run the probe. */
   recheck: () => void;
@@ -55,11 +55,11 @@ export function useMockupPresence(): MockupPresence {
   }, [fetcher, probe]);
 
   // A draw writes the mockup while the person is working, so the probe has to
-  // follow the workspace's file events; waiting for focus would leave the
+  // follow the project folder's file events; waiting for focus would leave the
   // mockup invisible until they clicked away and back.
   useEffect(() => {
     const handleEvent = (event: SproutEvent): void => {
-      if (changesWorkspaceFiles(event)) recheck();
+      if (changesProjectFolderFiles(event)) recheck();
     };
     events.onEvent(handleEvent);
     return () => {

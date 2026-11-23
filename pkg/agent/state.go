@@ -341,7 +341,7 @@ func (a *Agent) autoSaveState() {
 		a.state.SetSessionID(fmt.Sprintf("session_%d", time.Now().Unix()))
 	}
 
-	if err := a.SaveStateScoped(a.state.GetSessionID(), a.currentWorkspaceRoot()); err != nil {
+	if err := a.SaveStateScoped(a.state.GetSessionID(), a.currentProjectFolder()); err != nil {
 		if a.debug {
 			a.Logger().Debug("[WARN] Failed to write state file for auto-save: %v\n", err)
 		}
@@ -385,7 +385,7 @@ func (a *Agent) RotateSession() (string, error) {
 
 	currentID := a.state.GetSessionID()
 	if currentID != "" {
-		if err := a.SaveStateScoped(currentID, a.currentWorkspaceRoot()); err != nil {
+		if err := a.SaveStateScoped(currentID, a.currentProjectFolder()); err != nil {
 			return "", agenterrors.Wrap(err, "rotate: failed to snapshot prior session")
 		}
 	}
@@ -488,7 +488,7 @@ func (a *Agent) ForkAtBreakpoint(breakpointIndex int) (string, error) {
 	// Save current session to disk before truncating.
 	currentID := a.state.GetSessionID()
 	if currentID != "" {
-		if err := a.SaveStateScoped(currentID, a.currentWorkspaceRoot()); err != nil {
+		if err := a.SaveStateScoped(currentID, a.currentProjectFolder()); err != nil {
 			return "", agenterrors.Wrap(err, "fork: failed to save current session")
 		}
 	}

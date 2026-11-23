@@ -123,14 +123,14 @@ func TestAllowedLocalDirIsExactMatch(t *testing.T) {
 	}
 }
 
-func TestWorkspaceEnvCarriesTheLocalDirectoryInsteadOfTheRepo(t *testing.T) {
-	env := workspaceEnv(WorkspaceTask{
-		WorkspaceID:  "ws-local",
-		WorkspaceDir: "/Users/me/src/proj",
-		TxnSecret:    "s3cret",
+func TestDevSpaceEnvCarriesTheLocalDirectoryInsteadOfTheRepo(t *testing.T) {
+	env := devSpaceEnv(DevSpaceTask{
+		DevSpaceID:  "ws-local",
+		DevSpaceDir: "/Users/me/src/proj",
+		TxnSecret:   "s3cret",
 	})
 	if env["REPO_URL"] != "" {
-		t.Errorf("a local workspace has no repo; REPO_URL = %q", env["REPO_URL"])
+		t.Errorf("a local project folder has no repo; REPO_URL = %q", env["REPO_URL"])
 	}
 	if env["WORKSPACE_DIR"] != "/Users/me/src/proj" {
 		t.Errorf("WORKSPACE_DIR = %q, want the served directory", env["WORKSPACE_DIR"])
@@ -139,15 +139,15 @@ func TestWorkspaceEnvCarriesTheLocalDirectoryInsteadOfTheRepo(t *testing.T) {
 		t.Errorf("a local workspace still authenticates; WORKSPACE_TOKEN = %q", env["WORKSPACE_TOKEN"])
 	}
 	if env["SPROUT_GIT_HOST"] != "" {
-		t.Errorf("a local workspace has no git host; SPROUT_GIT_HOST = %q", env["SPROUT_GIT_HOST"])
+		t.Errorf("a local project folder has no git host; SPROUT_GIT_HOST = %q", env["SPROUT_GIT_HOST"])
 	}
 
-	// Execution follows workspace_dir regardless of a stale repo_url, and
+	// Execution follows dev_space_dir regardless of a stale repo_url, and
 	// the env agrees (dir wins; the platform sends at most one).
-	env = workspaceEnv(WorkspaceTask{
-		WorkspaceID:  "ws-local",
-		WorkspaceDir: "/Users/me/src/proj",
-		RepoURL:      "https://github.com/o/r",
+	env = devSpaceEnv(DevSpaceTask{
+		DevSpaceID:  "ws-local",
+		DevSpaceDir: "/Users/me/src/proj",
+		RepoURL:     "https://github.com/o/r",
 	})
 	if env["WORKSPACE_DIR"] == "" || env["REPO_URL"] != "" {
 		t.Errorf("a dir-backed workspace must carry WORKSPACE_DIR, not REPO_URL; got %+v", env)

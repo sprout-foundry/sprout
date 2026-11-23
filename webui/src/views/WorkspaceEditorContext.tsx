@@ -17,7 +17,7 @@
 import type { FileInfo, FileTreeProps } from '@sprout/ui';
 import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react';
 import { useEditorManager } from '../contexts/EditorManagerContext';
-import { getWorkspaceRootPath, resolveEditorFilePath } from '../services/lspClientService';
+import { getProjectFolderPath, resolveEditorFilePath } from '../services/lspClientService';
 import type { EditorBuffer } from '../types/editor';
 
 /** A file open in the editor. */
@@ -83,8 +83,8 @@ function extensionOf(name: string): string {
 }
 
 /** The tree's form of an editor path: relative to the workspace root when it is known. */
-function toWorkspacePath(path: string): string {
-  const root = getWorkspaceRootPath();
+function toProjectFolderPath(path: string): string {
+  const root = getProjectFolderPath();
   if (!root) return path;
   const prefix = `${root.replace(/\/+$/, '')}/`;
   return path.startsWith(prefix) ? path.slice(prefix.length) : path;
@@ -94,7 +94,7 @@ function toEditorFile(buffer: EditorBuffer): WorkspaceEditorFile {
   return {
     bufferId: buffer.id,
     path: buffer.file.path,
-    workspacePath: toWorkspacePath(buffer.file.path),
+    workspacePath: toProjectFolderPath(buffer.file.path),
     name: buffer.file.name,
     isModified: buffer.isModified,
   };

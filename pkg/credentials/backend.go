@@ -339,8 +339,8 @@ func SetToActiveBackend(provider, value string) error {
 
 // SetForDir stores a credential in the file store under an explicit config
 // root, bypassing the process's resolved backend. The OS keyring is
-// process-wide and has no per-workspace notion, so an explicit scope choice
-// (user-level vs workspace) can only be honoured by the file store — which
+// process-wide and has no per-project-folder notion, so an explicit scope choice
+// (user-level vs project folder) can only be honoured by the file store — which
 // is exactly the store whose root differs between the two.
 func SetForDir(configDir, provider, value string) error {
 	provider = strings.TrimSpace(provider)

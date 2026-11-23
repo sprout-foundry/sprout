@@ -17,7 +17,7 @@ import (
 // process's ambient one). It is the read-side counterpart of SetForDir and
 // LoadFromDir: the ambient Load() resolves the config root from the
 // environment, so a process that does not run inside the same scope (for
-// example a daemon that a workspace-scoped `sprout login` did not start)
+// example a daemon that a project-folder-scoped `sprout login` did not start)
 // cannot read another scope's store through it.
 //
 // A missing store file is not an error: an empty Store is returned, matching

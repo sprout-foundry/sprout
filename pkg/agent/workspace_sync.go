@@ -1,8 +1,8 @@
 package agent
 
-// workspace_sync.go — the workspace file-metadata + patch-reconciliation
-// layer: the WorkspaceFileMetadata type, the patch sequence-number state,
-// the workspace metadata store, the seq-number reconciliation
+// workspace_sync.go — the project folder file-metadata + patch-reconciliation
+// layer: the ProjectFolderFileMetadata type, the patch sequence-number state,
+// the project folder metadata store, the seq-number reconciliation
 // (ReconcileSeqNumbers, determineReconcileAction, CheckPatchConflict), the
 // turn file-read tracker, and the write-staleness check. The sync-op apply
 // layer lives in workspace_sync_ops.go.
@@ -20,12 +20,12 @@ import (
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
-// WorkspaceFileMetadata describes the per-file sync state for enforcing
+// ProjectFolderFileMetadata describes the per-file sync state for enforcing
 // consistency between the browser-side OPFS replica and the container FS.
 // On native sprout (single-replica), only ModifiedAt and the agent's
 // turn-scoped read tracking matter; sequence fields are placeholders for
 // the eventual WS-based sync layer.
-type WorkspaceFileMetadata struct {
+type ProjectFolderFileMetadata struct {
 	// BrowserSeq counts user-driven edits to the file from the browser side.
 	// Bumped each time the user types and the change flushes to OPFS.
 	BrowserSeq int64 `json:"browser_seq"`
@@ -52,7 +52,7 @@ type WorkspaceFileMetadata struct {
 // HasUnsyncedBrowserEdits reports whether the browser side has writes
 // the container hasn't applied yet. The agent's write_file tool wrapper
 // refuses to overwrite such files without explicit user confirmation.
-func (m WorkspaceFileMetadata) HasUnsyncedBrowserEdits() bool {
+func (m ProjectFolderFileMetadata) HasUnsyncedBrowserEdits() bool {
 	return m.BrowserSeq > m.LastSyncedBrowser
 }
 
@@ -75,21 +75,21 @@ func nextPatchSeq() int64 {
 // stalenessFreshnessWindow is the "modified recently" cutoff for the staleness rule.
 const stalenessFreshnessWindow = 30 * time.Second
 
-// workspaceMetadataStore is the in-memory per-path metadata the agent
+// projectFolderMetadataStore is the in-memory per-path metadata the agent
 // consults from checkWriteStaleness. The platform-side sync layer
 // populates it via Agent.SetFileMetadata.
-type workspaceMetadataStore struct {
+type projectFolderMetadataStore struct {
 	mu sync.RWMutex
-	m  map[string]WorkspaceFileMetadata
+	m  map[string]ProjectFolderFileMetadata
 }
 
-func newWorkspaceMetadataStore() *workspaceMetadataStore {
-	return &workspaceMetadataStore{m: make(map[string]WorkspaceFileMetadata)}
+func newProjectFolderMetadataStore() *projectFolderMetadataStore {
+	return &projectFolderMetadataStore{m: make(map[string]ProjectFolderFileMetadata)}
 }
 
-func (s *workspaceMetadataStore) get(path string) (WorkspaceFileMetadata, bool) {
+func (s *projectFolderMetadataStore) get(path string) (ProjectFolderFileMetadata, bool) {
 	if s == nil {
-		return WorkspaceFileMetadata{}, false
+		return ProjectFolderFileMetadata{}, false
 	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -97,26 +97,26 @@ func (s *workspaceMetadataStore) get(path string) (WorkspaceFileMetadata, bool) 
 	return md, ok
 }
 
-func (s *workspaceMetadataStore) set(path string, md WorkspaceFileMetadata) {
+func (s *projectFolderMetadataStore) set(path string, md ProjectFolderFileMetadata) {
 	if s == nil {
 		return
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.m == nil {
-		s.m = make(map[string]WorkspaceFileMetadata)
+		s.m = make(map[string]ProjectFolderFileMetadata)
 	}
 	s.m[path] = md
 }
 
 // SetFileMetadata replaces the cached sync metadata for `path`.
-func (a *Agent) SetFileMetadata(path string, md WorkspaceFileMetadata) {
+func (a *Agent) SetFileMetadata(path string, md ProjectFolderFileMetadata) {
 	if a == nil {
 		return
 	}
 	a.fileReadsMu.Lock()
 	if a.fileMetadata == nil {
-		a.fileMetadata = newWorkspaceMetadataStore()
+		a.fileMetadata = newProjectFolderMetadataStore()
 	}
 	a.fileReadsMu.Unlock()
 	a.fileMetadata.set(path, md)
@@ -124,15 +124,15 @@ func (a *Agent) SetFileMetadata(path string, md WorkspaceFileMetadata) {
 
 // GetFileMetadata returns the cached metadata for `path` (zero-value +
 // false if absent). Read-side companion to SetFileMetadata.
-func (a *Agent) GetFileMetadata(path string) (WorkspaceFileMetadata, bool) {
+func (a *Agent) GetFileMetadata(path string) (ProjectFolderFileMetadata, bool) {
 	if a == nil {
-		return WorkspaceFileMetadata{}, false
+		return ProjectFolderFileMetadata{}, false
 	}
 	a.fileReadsMu.Lock()
 	store := a.fileMetadata
 	a.fileReadsMu.Unlock()
 	if store == nil {
-		return WorkspaceFileMetadata{}, false
+		return ProjectFolderFileMetadata{}, false
 	}
 	return store.get(path)
 }
@@ -164,7 +164,7 @@ type ReconciliationActionResult struct {
 // against the container's stored metadata and returns a reconciliation plan.
 func ReconcileSeqNumbers(ag *Agent, browserSeqs map[string]int64) ([]ReconciliationActionResult, error) {
 	if ag == nil {
-		return nil, agenterrors.NewTool("workspace_sync", "agent is nil", nil)
+		return nil, agenterrors.NewTool("project_folder_sync", "agent is nil", nil)
 	}
 	if ag.fileMetadata == nil {
 		// No metadata store means no files tracked — everything is browser_ahead
@@ -214,7 +214,7 @@ func ReconcileSeqNumbers(ag *Agent, browserSeqs map[string]int64) ([]Reconciliat
 }
 
 // determineReconcileAction decides the recovery action for one file.
-func determineReconcileAction(browserSeq int64, md WorkspaceFileMetadata) ReconciliationActionType {
+func determineReconcileAction(browserSeq int64, md ProjectFolderFileMetadata) ReconciliationActionType {
 	// If both agree on the same seq, we're in sync
 	if browserSeq == md.ContainerSeq {
 		return ReconcileSyncOK
@@ -265,11 +265,11 @@ func (a *Agent) CheckPatchConflict(path string) (bool, string) {
 
 // normalizeFilePath resolves a path to its absolute form so the staleness
 // tracker's map keys match regardless of relative or absolute input.
-func normalizeFilePath(path, workspaceRoot string) string {
+func normalizeFilePath(path, projectFolder string) string {
 	if filepath.IsAbs(path) {
 		return filepath.Clean(path)
 	}
-	base := workspaceRoot
+	base := projectFolder
 	if base == "" {
 		var err error
 		base, err = os.Getwd()
@@ -301,7 +301,7 @@ func newTurnFileTracker() *turnFileTracker {
 	}
 }
 
-func (t *turnFileTracker) recordRead(path, workspaceRoot string) {
+func (t *turnFileTracker) recordRead(path, projectFolder string) {
 	if t == nil {
 		return
 	}
@@ -310,13 +310,13 @@ func (t *turnFileTracker) recordRead(path, workspaceRoot string) {
 	if t.reads == nil {
 		t.reads = make(map[string]time.Time)
 	}
-	t.reads[normalizeFilePath(path, workspaceRoot)] = time.Now()
+	t.reads[normalizeFilePath(path, projectFolder)] = time.Now()
 }
 
 // observeRead increments and returns the count of identical read_file calls
 // (same normalized path + same effective range) made this turn, including
 // this one. A range of (0, 0) is a full-file read.
-func (t *turnFileTracker) observeRead(path, workspaceRoot string, startLine, endLine int) int {
+func (t *turnFileTracker) observeRead(path, projectFolder string, startLine, endLine int) int {
 	if t == nil {
 		return 1
 	}
@@ -325,30 +325,30 @@ func (t *turnFileTracker) observeRead(path, workspaceRoot string, startLine, end
 	if t.readCalls == nil {
 		t.readCalls = make(map[string]int)
 	}
-	key := normalizeFilePath(path, workspaceRoot) + fmt.Sprintf("|%d-%d", startLine, endLine)
+	key := normalizeFilePath(path, projectFolder) + fmt.Sprintf("|%d-%d", startLine, endLine)
 	t.readCalls[key]++
 	return t.readCalls[key]
 }
 
-func (t *turnFileTracker) hasReadThisTurn(path, workspaceRoot string) bool {
+func (t *turnFileTracker) hasReadThisTurn(path, projectFolder string) bool {
 	if t == nil {
 		return false
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	_, ok := t.reads[normalizeFilePath(path, workspaceRoot)]
+	_, ok := t.reads[normalizeFilePath(path, projectFolder)]
 	return ok
 }
 
 // getReadTime returns the time the file was read this turn (zero time if not read).
 // Caller must NOT hold t.mu.
-func (t *turnFileTracker) getReadTime(path, workspaceRoot string) (time.Time, bool) {
+func (t *turnFileTracker) getReadTime(path, projectFolder string) (time.Time, bool) {
 	if t == nil {
 		return time.Time{}, false
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	readAt, ok := t.reads[normalizeFilePath(path, workspaceRoot)]
+	readAt, ok := t.reads[normalizeFilePath(path, projectFolder)]
 	return readAt, ok
 }
 
@@ -373,7 +373,7 @@ func (a *Agent) RecordFileReadThisTurn(path string) {
 		a.filesReadThisTurn = newTurnFileTracker()
 	}
 	a.fileReadsMu.Unlock()
-	a.filesReadThisTurn.recordRead(path, a.currentWorkspaceRoot())
+	a.filesReadThisTurn.recordRead(path, a.currentProjectFolder())
 }
 
 // ObserveRead implements tools.ReadCallGuard. It records an identical
@@ -392,7 +392,7 @@ func (a *Agent) ObserveRead(path string, startLine, endLine int) int {
 	}
 	tracker := a.filesReadThisTurn
 	a.fileReadsMu.Unlock()
-	return tracker.observeRead(path, a.currentWorkspaceRoot(), startLine, endLine)
+	return tracker.observeRead(path, a.currentProjectFolder(), startLine, endLine)
 }
 
 // ResetFileReadsForNewTurn clears the per-turn read tracker at turn boundaries.
@@ -437,12 +437,12 @@ func (a *Agent) checkWriteStaleness(path string) error {
 	}
 
 	hasReadThisTurn := false
-	workspaceRoot := a.currentWorkspaceRoot()
+	projectFolder := a.currentProjectFolder()
 	a.fileReadsMu.Lock()
 	tracker := a.filesReadThisTurn
 	a.fileReadsMu.Unlock()
 	if tracker != nil {
-		hasReadThisTurn = tracker.hasReadThisTurn(path, workspaceRoot)
+		hasReadThisTurn = tracker.hasReadThisTurn(path, projectFolder)
 	}
 
 	if !hasReadThisTurn {
@@ -455,7 +455,7 @@ func (a *Agent) checkWriteStaleness(path string) error {
 	// File was read this turn — but if it's been modified within the
 	// freshness window by something OTHER than the prior read, refuse.
 	if tracker != nil {
-		readAt, ok := tracker.getReadTime(path, workspaceRoot)
+		readAt, ok := tracker.getReadTime(path, projectFolder)
 		if ok && info.ModTime().After(readAt) &&
 			time.Since(info.ModTime()) < stalenessFreshnessWindow {
 			return agenterrors.Wrapf(

@@ -31,7 +31,7 @@ func TestWorkflowRequiresApproval_DefaultsToTrue(t *testing.T) {
 	tmp := withAutomateDir(t, map[string]string{
 		"check.json": `{"initial":{"prompt":"hi"}}`,
 	})
-	a := &Agent{workspaceRoot: tmp}
+	a := &Agent{projectFolder: tmp}
 	if !workflowRequiresApproval(a, "check.json") {
 		t.Fatalf("workflow without requires_approval field should require approval")
 	}
@@ -41,7 +41,7 @@ func TestWorkflowRequiresApproval_FalseSkipsApproval(t *testing.T) {
 	tmp := withAutomateDir(t, map[string]string{
 		"check.json": `{"requires_approval": false, "initial":{"prompt":"hi"}}`,
 	})
-	a := &Agent{workspaceRoot: tmp}
+	a := &Agent{projectFolder: tmp}
 	if workflowRequiresApproval(a, "check.json") {
 		t.Fatalf("workflow with requires_approval=false should NOT require approval")
 	}
@@ -55,7 +55,7 @@ func TestWorkflowRequiresApproval_FailsSafe(t *testing.T) {
 	tmp := withAutomateDir(t, map[string]string{
 		"valid.json": `{"requires_approval": false, "initial":{"prompt":"hi"}}`,
 	})
-	a := &Agent{workspaceRoot: tmp}
+	a := &Agent{projectFolder: tmp}
 	// Unknown workflow falls through to requiring approval (fail-safe).
 	if !workflowRequiresApproval(a, "nonexistent.json") {
 		t.Fatalf("unresolvable workflow must default to requiring approval")
@@ -66,7 +66,7 @@ func TestWorkflowRequiresApproval_MalformedJsonFailsSafe(t *testing.T) {
 	tmp := withAutomateDir(t, map[string]string{
 		"broken.json": `{"requires_approval": false,`,
 	})
-	a := &Agent{workspaceRoot: tmp}
+	a := &Agent{projectFolder: tmp}
 	// Malformed JSON still has the regex-valid filename, but Summarize will
 	// fail. Must fall through to requiring approval.
 	if !workflowRequiresApproval(a, "broken.json") {

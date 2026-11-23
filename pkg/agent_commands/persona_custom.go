@@ -138,12 +138,12 @@ func (p *PersonaCommand) personaAccept(id string, chatAgent *agent.Agent) error 
 	}
 	hash := personas.ContentHash(data)
 
-	workspaceRoot := chatAgent.GetWorkspaceRoot()
-	if strings.TrimSpace(workspaceRoot) == "" {
-		return fmt.Errorf("/persona accept: no workspace root; project personas are unavailable here")
+	projectFolder := chatAgent.GetProjectFolder()
+	if strings.TrimSpace(projectFolder) == "" {
+		return fmt.Errorf("/persona accept: no project folder; project personas are unavailable here")
 	}
 	if err := configManager.UpdateConfig(func(cfg *configuration.Config) error {
-		cfg.AcceptProjectPersona(workspaceRoot, issue.ID, hash)
+		cfg.AcceptProjectPersona(projectFolder, issue.ID, hash)
 		return nil
 	}); err != nil {
 		return fmt.Errorf("/persona accept: save config: %w", err)
@@ -153,7 +153,7 @@ func (p *PersonaCommand) personaAccept(id string, chatAgent *agent.Agent) error 
 	}
 
 	console.GlyphSuccess.Fprintf(p.out(), "Accepted project persona %s", issue.ID)
-	p.printf("   Recorded against %s in %s.\n", issue.File, workspaceRoot)
+	p.printf("   Recorded against %s in %s.\n", issue.File, projectFolder)
 	return nil
 }
 

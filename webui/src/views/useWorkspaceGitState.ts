@@ -18,8 +18,8 @@ import type { SidebarGitPanelProps } from '../components/git/gitPanelProps';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useSproutFetch } from '../contexts/SproutAdapterContext';
 import { useGitHandlers } from '../hooks/useGitHandlers';
-import { useGitWorkspace } from '../hooks/useGitWorkspace';
-import type { UseGitWorkspaceResult } from '../hooks/useGitWorkspace';
+import { useGitProjectFolder } from '../hooks/useGitWorkspace';
+import type { UseGitProjectFolderResult } from '../hooks/useGitWorkspace';
 import { useHost } from '../host';
 import { ADAPTER_INSTALLED_EVENT } from '../services/apiAdapter';
 import type { WorkspaceChatDiffState, WorkspaceChatReviewProps } from './WorkspaceChatContext';
@@ -27,9 +27,9 @@ import type { WorkspaceChatDiffState, WorkspaceChatReviewProps } from './Workspa
 /** Fired by the startup repo import once the repository is in the workspace. */
 const REPO_IMPORTED_EVENT = 'sprout:repo-imported';
 
-export interface WorkspaceGitState {
+export interface ProjectFolderGitState {
   /** The git workspace the app's root runs (status, branches, diffs, review). */
-  workspace: UseGitWorkspaceResult;
+  workspace: UseGitProjectFolderResult;
   /** The Source control section's props. */
   panel: SidebarGitPanelProps;
   /** The review tab's state, for the chat unit's `review` override. */
@@ -41,12 +41,12 @@ export interface WorkspaceGitState {
 /** The editor shows a diff or review tab as soon as it opens; there is no view to switch. */
 const noViewChange = (): void => undefined;
 
-export function useWorkspaceGitState({
+export function useProjectFolderGitState({
   onOpenFile,
 }: {
   /** Open a working-tree file in the editor. */
   onOpenFile: (path: string) => void;
-}): WorkspaceGitState {
+}): ProjectFolderGitState {
   const fetchFn = useSproutFetch();
   const host = useHost();
   const { openWorkspaceBuffer } = useEditorManager();
@@ -66,7 +66,7 @@ export function useWorkspaceGitState({
     };
   }, []);
 
-  const workspace = useGitWorkspace({
+  const projectFolder = useGitProjectFolder({
     fetchFn,
     gitRefreshToken: refreshToken,
     onViewChange: noViewChange,
@@ -82,7 +82,7 @@ export function useWorkspaceGitState({
   // git has no such backend, so the action is not offered there.
   const reviewAvailable = !transportUsesBrowserGit(host.transport);
   const panel: SidebarGitPanelProps = {
-    ...buildGitPanelProps(workspace, { openWorkspaceBuffer, onOpenFile }),
+    ...buildGitPanelProps(projectFolder, { openWorkspaceBuffer, onOpenFile }),
     ...(reviewAvailable ? {} : { onRunReview: undefined }),
   };
 
@@ -101,7 +101,7 @@ export function useWorkspaceGitState({
     isDiffLoading,
     diffError,
     handleDiffModeChange,
-  } = workspace;
+  } = projectFolder;
   const review = useMemo<WorkspaceChatReviewProps>(
     () => ({
       review: deepReview,
@@ -129,5 +129,5 @@ export function useWorkspaceGitState({
     [activeDiffPath, activeDiff, diffMode, isDiffLoading, diffError, handleDiffModeChange],
   );
 
-  return { workspace, panel, review, diff };
+  return { workspace: projectFolder, panel, review, diff };
 }

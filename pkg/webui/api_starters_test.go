@@ -24,7 +24,7 @@ import (
 
 // newStartersTestServer builds the same minimal server shape the other
 // pkg/webui handler tests use (no auth, no agent, no serving). The
-// starter handlers are stateless — no client context, no workspace root —
+// starter handlers are stateless — no client context, no project folder —
 // so no decoration is needed.
 func newStartersTestServer(t *testing.T) *ReactWebServer {
 	t.Helper()

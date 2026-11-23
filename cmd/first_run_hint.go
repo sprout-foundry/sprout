@@ -14,7 +14,7 @@ import (
 )
 
 // firstRunStateFile is the filename of the persisted state used to
-// track which workspaces have seen the first-run hint. Lives in the
+// track which project folders have seen the first-run hint. Lives in the
 // state directory.
 const firstRunStateFile = "state.json"
 
@@ -23,7 +23,7 @@ const firstRunStateFile = "state.json"
 // (e.g. session metadata) lives elsewhere.
 type sproutState struct {
 	SeenFirstRunHint []string `json:"seen_first_run_hint,omitempty"`
-	// SeenIndexRecommendation tracks workspaces where the one-time "enable the
+	// SeenIndexRecommendation tracks project folders where the one-time "enable the
 	// semantic index" suggestion has already been shown.
 	SeenIndexRecommendation []string `json:"seen_index_recommendation,omitempty"`
 }
@@ -31,14 +31,14 @@ type sproutState struct {
 var firstRunStateMu sync.Mutex
 
 // maybeShowFirstRunHint prints a single brief hint about REPL keystrokes
-// the very first time a workspace is opened in `sprout agent`. After
-// printing it, the workspace path is appended to ~/.sprout/state.json so
-// the hint never repeats in that workspace. SP-048-5b.
+// the very first time a project folder is opened in `sprout agent`. After
+// printing it, the project folder path is appended to ~/.sprout/state.json so
+// the hint never repeats in that project folder. SP-048-5b.
 //
 // Silent on:
 //   - errors loading or persisting state (the hint is non-essential)
 //   - non-interactive contexts (output would be noise)
-//   - workspaces already in the seen list
+//   - project folders already in the seen list
 //
 // Note: this prints to stderr to avoid contaminating stdout for users
 // who pipe sprout's output.

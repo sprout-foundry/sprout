@@ -747,7 +747,7 @@ func TestCombinedSecurityAssessment_FileOperations(t *testing.T) {
 		if assessment.PathAllowed {
 			t.Error("expected PathAllowed=false")
 		}
-		if assessment.OverrideAction != "path denied by workspace security policy" {
+		if assessment.OverrideAction != "path denied by project folder security policy" {
 			t.Errorf("unexpected OverrideAction: %q", assessment.OverrideAction)
 		}
 	})
@@ -939,7 +939,7 @@ func TestCombinedSecurityAssessment_OverrideAccumulation(t *testing.T) {
 		if assessment.PathAllowed {
 			t.Error("expected PathAllowed=false")
 		}
-		if assessment.OverrideAction != "path denied by workspace security policy" {
+		if assessment.OverrideAction != "path denied by project folder security policy" {
 			t.Errorf("unexpected OverrideAction: %q", assessment.OverrideAction)
 		}
 	})

@@ -26,9 +26,9 @@ const DefaultListenAddr = "127.0.0.1:8935"
 // link names another.
 const DefaultPlatformURL = "https://app.sproutfoundry.com"
 
-// WorkspaceImageRepo is the public workspace image, built from
+// DevSpaceImageRepo is the public dev space image, built from
 // docker/workspace and published for every release.
-const WorkspaceImageRepo = "ghcr.io/sprout-foundry/sprout-workspace"
+const DevSpaceImageRepo = "ghcr.io/sprout-foundry/sprout-workspace"
 
 // legacyDefaultImage is the default earlier runners wrote into their state.
 // It is not a public image, so LoadState replaces exactly this value with
@@ -37,17 +37,17 @@ const legacyDefaultImage = "ghcr.io/sprout-foundry/sprout:latest"
 
 var releaseVersionRe = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
 
-// DefaultImage is the workspace image container mode runs unless the owner
+// DefaultImage is the dev space image container mode runs unless the owner
 // chose another with --image: the image built for this runner's own release,
-// so the daemon in the workspace matches the runner, or :latest for source
+// so the daemon in the dev space matches the runner, or :latest for source
 // and pre-release builds.
 func DefaultImage() string { return defaultImageFor(buildinfo.Version) }
 
 func defaultImageFor(version string) string {
 	if releaseVersionRe.MatchString(version) {
-		return WorkspaceImageRepo + ":" + version
+		return DevSpaceImageRepo + ":" + version
 	}
-	return WorkspaceImageRepo + ":latest"
+	return DevSpaceImageRepo + ":latest"
 }
 
 // State is the runner's persistent configuration. The API key is not part of
@@ -66,9 +66,8 @@ type State struct {
 	Image      string `json:"image,omitempty"`
 	// Writable are extra paths native mode may write (toolchain caches).
 	Writable []string `json:"writable,omitempty"`
-	// LocalDirs are the directories the user named (with `sprout runner
-	// start --workspace`, repeatable) that this runner serves workspaces
-	// in place: a start task naming one runs against the user's real
+	// LocalDirs are the project folders the user named (with `sprout
+	// runner start --dir`, repeatable) that this runner serves in place: a start task naming one runs against the user's real
 	// files there, with no clone. Explicitly opt-in; never platform-set.
 	LocalDirs []string `json:"local_dirs,omitempty"`
 }
@@ -76,7 +75,7 @@ type State struct {
 // Linked reports whether the runner has completed `sprout runner link`.
 func (s *State) Linked() bool { return s.RunnerID != "" }
 
-// Dir is where the runner keeps its state and workspaces.
+// Dir is where the runner keeps its state and dev spaces.
 func Dir() (string, error) {
 	base, err := configuration.GetConfigDir()
 	if err != nil {
@@ -85,10 +84,10 @@ func Dir() (string, error) {
 	return filepath.Join(base, "runner"), nil
 }
 
-// WorkspacesDir holds one clone per workspace; a runner never touches the
+// DevSpacesDir holds one clone per dev space; a runner never touches the
 // user's own working copies. It lives in sprout's state dir, outside the
-// config dir whose credential files native mode hides from workspaces.
-func WorkspacesDir() (string, error) {
+// config dir whose credential files native mode hides from dev spaces.
+func DevSpacesDir() (string, error) {
 	base, err := envutil.StateDir()
 	if err != nil {
 		return "", fmt.Errorf("locating state dir: %w", err)

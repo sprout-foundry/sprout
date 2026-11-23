@@ -20,7 +20,7 @@ import (
 // as untrusted makes the model distrust its own output. So this file decides
 // the class for one read and, in the ambiguous case only, asks once and
 // remembers the answer through the existing config store
-// (Config.TrustedContentRoots, keyed by absolute workspace root).
+// (Config.TrustedContentRoots, keyed by absolute project folder).
 
 // The two answers the trust question offers. "third-party" is the default and
 // the value an unrecognised answer falls back to.
@@ -33,7 +33,7 @@ const trustOursOption = "ours"
 //
 //  1. A known dependency marker, or a decision recorded for a prefix of the
 //     path, decides without asking (ClassifyPath).
-//  2. A path outside the workspace root, or under a nested repository (a
+//  2. A path outside the project folder, or under a nested repository (a
 //     clone inside our tree), is "pulled in" code whose status is ambiguous:
 //     consult a recorded decision, then the repository's origin — a clone the
 //     user owns or can push to is their own work and is not framed (see
@@ -52,43 +52,43 @@ func resolveReadTrust(env ToolEnv, absPath string) injection.TrustClass {
 		absPath = resolved
 	}
 
-	workspaceRoot := env.WorkspaceRoot
+	projectFolder := env.ProjectFolder
 	// Paths are compared in one canonical space: the read follows symlinks, so
 	// both the target and the root are resolved before they are related to
 	// each other. On macOS this is also what makes a temp dir under /var
 	// comparable with its /private/var spelling. The unresolved root stays the
 	// key for stored decisions, so the store keeps the spelling the CLI wrote.
-	classRoot := workspaceRoot
-	if resolved, err := filepath.EvalSymlinks(workspaceRoot); err == nil {
+	classRoot := projectFolder
+	if resolved, err := filepath.EvalSymlinks(projectFolder); err == nil {
 		classRoot = resolved
 	}
-	relPath := relToWorkspace(classRoot, absPath)
+	relPath := relToProjectFolder(classRoot, absPath)
 
 	// Rule 1: markers and recorded decisions. A marker (node_modules, vendor,
 	// .git, ...) is structural and outranks anything persisted.
-	if class := injection.ClassifyPath(relPath, trustDecisions(env, workspaceRoot)); class == injection.TrustThirdParty {
+	if class := injection.ClassifyPath(relPath, trustDecisions(env, projectFolder)); class == injection.TrustThirdParty {
 		return injection.TrustThirdParty
 	}
 
-	// Sprout's own state under the workspace (.sprout/: task worktrees,
+	// Sprout's own state under the project folder (.sprout/: task worktrees,
 	// revisions, plans) is ours.
 	if relPath == ".sprout" || strings.HasPrefix(relPath, ".sprout/") {
 		return injection.TrustFirstParty
 	}
 
-	// Rule 2: pulled-in code — outside the workspace, or inside a nested repo.
-	outside := isOutsideWorkspace(classRoot, absPath)
+	// Rule 2: pulled-in code — outside the project folder, or inside a nested repo.
+	outside := isOutsideProjectFolder(classRoot, absPath)
 	if !outside && !isNestedRepo(classRoot, absPath) {
 		return injection.TrustFirstParty
 	}
 	repo := repoRootOf(absPath)
 	switch {
 	case repo != "" && sameRepository(repo, classRoot):
-		// A worktree of the workspace's own repository — a /task worktree,
+		// A worktree of the project folder's own repository — a /task worktree,
 		// or one checked out elsewhere — is our code under another path.
 		return injection.TrustFirstParty
 	case repo == "" && outside:
-		// Outside the workspace and in no repository: tool output in a temp
+		// Outside the project folder and in no repository: tool output in a temp
 		// dir, a module or package cache, system headers, config files.
 		// "Is this code you did not write?" has no sensible answer for
 		// those, so it is not asked; the content is framed, which labels it
@@ -103,7 +103,7 @@ func resolveReadTrust(env ToolEnv, absPath string) injection.TrustClass {
 	if repo != "" {
 		askRel = trustKey(classRoot, repo)
 	}
-	decisions := trustDecisions(env, workspaceRoot)
+	decisions := trustDecisions(env, projectFolder)
 	if class := injection.ClassifyPath(askRel, decisions); class != injection.TrustUnknown {
 		return class
 	}
@@ -118,7 +118,7 @@ func resolveReadTrust(env ToolEnv, absPath string) injection.TrustClass {
 	// established from the repository's origin, not assumed: anything the
 	// lookup cannot prove falls through to the question below.
 	if owner := trustOwnershipCheck(absPath); owner.trusted {
-		persistTrustDecision(env, workspaceRoot, askRel, injection.TrustFirstParty)
+		persistTrustDecision(env, projectFolder, askRel, injection.TrustFirstParty)
 		return injection.TrustFirstParty
 	}
 
@@ -128,15 +128,15 @@ func resolveReadTrust(env ToolEnv, absPath string) injection.TrustClass {
 		return injection.TrustThirdParty
 	}
 
-	return askTrustOnce(env, workspaceRoot, askRel)
+	return askTrustOnce(env, projectFolder, askRel)
 }
 
 // askTrustOnce asks the trust question for one root and persists the answer.
 // Reads run in parallel — several files of the same clone at once — and each
 // would otherwise raise the same question; concurrent askers for one root
 // share a single question and its answer.
-func askTrustOnce(env ToolEnv, workspaceRoot, askRel string) injection.TrustClass {
-	key := workspaceRoot + "\x00" + askRel
+func askTrustOnce(env ToolEnv, projectFolder, askRel string) injection.TrustClass {
+	key := projectFolder + "\x00" + askRel
 	trustAsks.mu.Lock()
 	if q, ok := trustAsks.inflight[key]; ok {
 		trustAsks.mu.Unlock()
@@ -152,7 +152,7 @@ func askTrustOnce(env ToolEnv, workspaceRoot, askRel string) injection.TrustClas
 		trustAsks.mu.Unlock()
 		close(q.done)
 	}()
-	q.class = askTrust(env, workspaceRoot, askRel)
+	q.class = askTrust(env, projectFolder, askRel)
 	return q.class
 }
 
@@ -167,7 +167,7 @@ var trustAsks = struct {
 }{inflight: map[string]*trustQuestion{}}
 
 // askTrust puts the question to the user and persists the answer.
-func askTrust(env ToolEnv, workspaceRoot, askRel string) injection.TrustClass {
+func askTrust(env ToolEnv, projectFolder, askRel string) injection.TrustClass {
 	answer, err := env.AskUser.Ask(context.Background(), AskUserRequest{
 		Header:   "Trust",
 		Question: fmt.Sprintf("Is `%s` third-party content — code you did not write? Tools reading it will be marked as untrusted data. This does not block anything.", askRel),
@@ -192,7 +192,7 @@ func askTrust(env ToolEnv, workspaceRoot, askRel string) injection.TrustClass {
 	if strings.EqualFold(strings.TrimSpace(answer), trustOursOption) {
 		class = injection.TrustFirstParty
 	}
-	persistTrustDecision(env, workspaceRoot, askRel, class)
+	persistTrustDecision(env, projectFolder, askRel, class)
 	return class
 }
 
@@ -206,9 +206,9 @@ const trustQuestionTimeout = 2 * time.Minute
 // the verdict without a network or a real repository.
 var trustOwnershipCheck = repoOwnedByUser
 
-// trustDecisions returns the recorded decisions for workspaceRoot, or nil when
+// trustDecisions returns the recorded decisions for projectFolder, or nil when
 // no config manager is available (tests, minimal harnesses).
-func trustDecisions(env ToolEnv, workspaceRoot string) map[string]bool {
+func trustDecisions(env ToolEnv, projectFolder string) map[string]bool {
 	if env.ConfigManager == nil {
 		return nil
 	}
@@ -216,15 +216,15 @@ func trustDecisions(env ToolEnv, workspaceRoot string) map[string]bool {
 	if cfg == nil {
 		return nil
 	}
-	return cfg.TrustedContentRoots[workspaceRoot]
+	return cfg.TrustedContentRoots[projectFolder]
 }
 
 // persistTrustDecision records the answer through the ConfigManager save path,
 // the same store `sprout trust set` writes. A failure to persist is not fatal:
 // the read proceeds with the answer we were given, and the worst case is that
 // the question is asked again next time.
-func persistTrustDecision(env ToolEnv, workspaceRoot, relDir string, class injection.TrustClass) {
-	if env.ConfigManager == nil || workspaceRoot == "" {
+func persistTrustDecision(env ToolEnv, projectFolder, relDir string, class injection.TrustClass) {
+	if env.ConfigManager == nil || projectFolder == "" {
 		return
 	}
 	thirdParty := class == injection.TrustThirdParty
@@ -232,10 +232,10 @@ func persistTrustDecision(env ToolEnv, workspaceRoot, relDir string, class injec
 		if cfg.TrustedContentRoots == nil {
 			cfg.TrustedContentRoots = make(map[string]map[string]bool)
 		}
-		repo := cfg.TrustedContentRoots[workspaceRoot]
+		repo := cfg.TrustedContentRoots[projectFolder]
 		if repo == nil {
 			repo = make(map[string]bool)
-			cfg.TrustedContentRoots[workspaceRoot] = repo
+			cfg.TrustedContentRoots[projectFolder] = repo
 		}
 		repo[injection.NormalizeRelPath(relDir)] = thirdParty
 		return nil
@@ -243,19 +243,19 @@ func persistTrustDecision(env ToolEnv, workspaceRoot, relDir string, class injec
 }
 
 // trustAskRoot returns the root-relative path the question is asked about: the
-// directory holding the content. For a path outside the workspace there is no
+// directory holding the content. For a path outside the project folder there is no
 // root-relative spelling, so the absolute directory is used as the key — still
 // stable across reads of the same tree, and still readable by `sprout trust
 // list`.
-func trustAskRoot(workspaceRoot, absPath string) string {
-	return trustKey(workspaceRoot, filepath.Dir(absPath))
+func trustAskRoot(projectFolder, absPath string) string {
+	return trustKey(projectFolder, filepath.Dir(absPath))
 }
 
 // trustKey is the stored spelling of a decision about dir: root-relative
-// inside the workspace, absolute outside it.
-func trustKey(workspaceRoot, dir string) string {
-	if workspaceRoot != "" {
-		if rel, err := filepath.Rel(workspaceRoot, dir); err == nil && !strings.HasPrefix(rel, "..") {
+// inside the project folder, absolute outside it.
+func trustKey(projectFolder, dir string) string {
+	if projectFolder != "" {
+		if rel, err := filepath.Rel(projectFolder, dir); err == nil && !strings.HasPrefix(rel, "..") {
 			return injection.NormalizeRelPath(rel)
 		}
 	}
@@ -265,7 +265,7 @@ func trustKey(workspaceRoot, dir string) string {
 // trustPathForRead picks the absolute path the trust decision is made about.
 // The precheck's resolved path is preferred (it is the path the read actually
 // used, symlinks and all); when the classifier was unavailable it is empty, so
-// the argument is resolved against the workspace root instead. A relative
+// the argument is resolved against the project folder instead. A relative
 // argument left unresolved would otherwise be classified against the process
 // CWD, which is not the basis the read uses.
 func trustPathForRead(env ToolEnv, argPath, resolvedPath string) string {
@@ -275,20 +275,20 @@ func trustPathForRead(env ToolEnv, argPath, resolvedPath string) string {
 	if filepath.IsAbs(argPath) {
 		return filepath.Clean(argPath)
 	}
-	if env.WorkspaceRoot == "" {
+	if env.ProjectFolder == "" {
 		return argPath
 	}
-	return filepath.Join(env.WorkspaceRoot, argPath)
+	return filepath.Join(env.ProjectFolder, argPath)
 }
 
-// relToWorkspace spells absPath relative to the workspace root. A path outside
+// relToProjectFolder spells absPath relative to the project folder. A path outside
 // the root keeps its absolute form (ClassifyPath's marker scan still applies,
 // which is what catches a vendored tree outside our tree).
-func relToWorkspace(workspaceRoot, absPath string) string {
-	if workspaceRoot == "" {
+func relToProjectFolder(projectFolder, absPath string) string {
+	if projectFolder == "" {
 		return absPath
 	}
-	rel, err := filepath.Rel(workspaceRoot, absPath)
+	rel, err := filepath.Rel(projectFolder, absPath)
 	if err != nil {
 		return absPath
 	}
@@ -298,15 +298,15 @@ func relToWorkspace(workspaceRoot, absPath string) string {
 	return injection.NormalizeRelPath(rel)
 }
 
-// isOutsideWorkspace reports whether absPath lies outside the workspace root.
+// isOutsideProjectFolder reports whether absPath lies outside the project folder.
 // Both sides are compared after cleaning; symlinks are deliberately not
 // resolved, because the read path itself resolves them and a classification
 // that disagreed with the read would be worse than one that is conservative.
-func isOutsideWorkspace(workspaceRoot, absPath string) bool {
-	if workspaceRoot == "" {
+func isOutsideProjectFolder(projectFolder, absPath string) bool {
+	if projectFolder == "" {
 		return true
 	}
-	root := filepath.Clean(workspaceRoot)
+	root := filepath.Clean(projectFolder)
 	abs := filepath.Clean(absPath)
 	if abs == root {
 		return false
@@ -315,14 +315,14 @@ func isOutsideWorkspace(workspaceRoot, absPath string) bool {
 }
 
 // isNestedRepo reports whether absPath lies inside a repository nested within
-// the workspace: walking up from the file, the first ancestor containing .git
-// is not the workspace root. That is a clone or a submodule — code we pulled
+// the project folder: walking up from the file, the first ancestor containing .git
+// is not the project folder. That is a clone or a submodule — code we pulled
 // in rather than wrote — and its status is the ambiguous case the user decides.
-func isNestedRepo(workspaceRoot, absPath string) bool {
-	if workspaceRoot == "" {
+func isNestedRepo(projectFolder, absPath string) bool {
+	if projectFolder == "" {
 		return false
 	}
-	root := filepath.Clean(workspaceRoot)
+	root := filepath.Clean(projectFolder)
 	dir := filepath.Dir(filepath.Clean(absPath))
 	for {
 		if dir == root || dir == filepath.Dir(dir) {

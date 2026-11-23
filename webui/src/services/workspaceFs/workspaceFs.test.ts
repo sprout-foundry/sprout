@@ -1,5 +1,5 @@
 /**
- * workspaceFs seam contract tests.
+ * projectFolderFs seam contract tests.
  *
  * Runs the ENTIRE contract against the memory backend, plus the
  * backend-resolution rules and the gitFs adapter's mapping (ENOENT codes,
@@ -13,8 +13,8 @@ import git from 'isomorphic-git';
 import { createMemoryFs } from './memoryFs';
 import { createGitFs } from './gitFs';
 import { cloneRepo, listRepos, parseRepoRef, removeRepo, repoDir } from './workspaceGit';
-import { isWorkspaceFs, normalizeFsPath, WRITE_BATCH_CAP } from './types';
-import type { WorkspaceFs } from './types';
+import { isProjectFolderFs, normalizeFsPath, WRITE_BATCH_CAP } from './types';
+import type { ProjectFolderFs } from './types';
 
 /** isomorphic-git requires raw fs objects to pass through its binding layer. */
 function bindGitFs(gitFs: ReturnType<typeof createGitFs>) {
@@ -22,13 +22,13 @@ function bindGitFs(gitFs: ReturnType<typeof createGitFs>) {
   return bind ? (bind(gitFs) as ReturnType<typeof createGitFs>) : gitFs;
 }
 
-function fsWithSeed(seed: Record<string, string> = {}): WorkspaceFs {
+function fsWithSeed(seed: Record<string, string> = {}): ProjectFolderFs {
   return createMemoryFs(seed);
 }
 
 describe('workspaceFs contract (memory backend)', () => {
   it('is a WorkspaceFs', () => {
-    expect(isWorkspaceFs(createMemoryFs())).toBe(true);
+    expect(isProjectFolderFs(createMemoryFs())).toBe(true);
   });
 
   it('write then read round-trips utf-8', async () => {

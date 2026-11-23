@@ -1,7 +1,7 @@
-// Build-and-upload: build in the workspace, then hand the built output to a
+// Build-and-upload: build in the project folder, then hand the built output to a
 // deploy target.
 //
-// A deploy is two steps: build the project in the workspace, then upload the
+// A deploy is two steps: build the project in the project folder, then upload the
 // built output. The build command comes from the starter manifest
 // (pkg/startermanifest.Build) and the output directory from the resolved
 // deploy config (pkg/deployconfig.Resolve); the target only ever receives the
@@ -56,7 +56,7 @@ var ErrTreeChanged = errors.New("deploy: tree changed since verification")
 // build; the orchestrator never guesses one.
 var ErrNoBuildCommand = errors.New("deploy: no build command configured")
 
-// ErrBuildFailed is returned by BuildAndDeploy when the workspace build
+// ErrBuildFailed is returned by BuildAndDeploy when the project folder build
 // exits non-zero (or cannot be started). The failure is wrapped so the
 // underlying cause is available through errors.Is/As; nothing is uploaded.
 var ErrBuildFailed = errors.New("deploy: build failed")
@@ -107,7 +107,7 @@ type BuildRequest struct {
 }
 
 // BuildRunner runs a build command in the project root and reports whether it
-// succeeded. It is the injectable seam over the workspace build: the default
+// succeeded. It is the injectable seam over the project folder build: the default
 // spawns a shell, and tests supply a stub so no process runs. A non-nil error
 // means the build failed.
 type BuildRunner func(ctx context.Context, root, command string) error
@@ -129,21 +129,21 @@ type BuildRunner func(ctx context.Context, root, command string) error
 type TreeFingerprint func(root string, skip ...string) (string, error)
 
 // Deployer orchestrates a build-and-upload: gate on confirmation and
-// verification, build in the workspace, hand the built output to a target. Its
+// verification, build in the project folder, hand the built output to a target. Its
 // three collaborators are fields so a caller (and a test) wires them
 // independently; nil Run and Fingerprint fall back to the real defaults, while
 // a nil Target is an error (there is nowhere to ship).
 type Deployer struct {
 	// Target receives the built output. Required.
 	Target DeployTarget
-	// Run builds the project in the workspace. Nil uses DefaultBuildRunner.
+	// Run builds the project in the project folder. Nil uses DefaultBuildRunner.
 	Run BuildRunner
 	// Fingerprint computes the tree fingerprint. Nil uses
 	// DefaultTreeFingerprint.
 	Fingerprint TreeFingerprint
 }
 
-// BuildAndDeploy builds the project in the workspace and uploads the built
+// BuildAndDeploy builds the project in the project folder and uploads the built
 // output through the target, gated first on the preview/production rule and
 // then on a passing verification of the same tree. confirm is the caller's
 // explicit user confirmation; it is required for a production deploy and
@@ -215,7 +215,7 @@ func (d *Deployer) BuildAndDeploy(ctx context.Context, req BuildRequest, snap Ve
 		return Deployment{}, ErrTreeChanged
 	}
 
-	// Build in the workspace, never on the target.
+	// Build in the project folder, never on the target.
 	if err := run(ctx, root, req.Command); err != nil {
 		return Deployment{}, fmt.Errorf("%w: %w", ErrBuildFailed, err)
 	}

@@ -30,11 +30,11 @@ func TestWordColumn(t *testing.T) {
 func TestLSPNavRefusesWithoutAServer(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("Run\n"), 0o644)
-	res, _ := (&findDefinitionHandler{}).Execute(context.Background(), ToolEnv{WorkspaceRoot: dir}, map[string]any{"path": "notes.txt", "line": 1.0, "symbol": "Run"})
+	res, _ := (&findDefinitionHandler{}).Execute(context.Background(), ToolEnv{ProjectFolder: dir}, map[string]any{"path": "notes.txt", "line": 1.0, "symbol": "Run"})
 	if !res.IsError || !strings.Contains(res.Output, "no language server") {
 		t.Fatalf("got %+v", res)
 	}
-	res, _ = (&findDefinitionHandler{}).Execute(context.Background(), ToolEnv{WorkspaceRoot: dir}, map[string]any{"path": "missing.go", "line": 1.0, "symbol": "Run"})
+	res, _ = (&findDefinitionHandler{}).Execute(context.Background(), ToolEnv{ProjectFolder: dir}, map[string]any{"path": "missing.go", "line": 1.0, "symbol": "Run"})
 	if !res.IsError {
 		t.Fatalf("a missing file is an error: %+v", res)
 	}
@@ -56,7 +56,7 @@ func TestLSPNavWithGopls(t *testing.T) {
 	write("go.mod", "module example.com/nav\n\ngo 1.21\n")
 	write("lib.go", "package nav\n\n// Greet says hello.\nfunc Greet(name string) string { return \"hi \" + name }\n")
 	write("use.go", "package nav\n\nfunc use() string {\n\treturn Greet(\"x\")\n}\n")
-	env := ToolEnv{WorkspaceRoot: dir}
+	env := ToolEnv{ProjectFolder: dir}
 
 	res, err := (&findDefinitionHandler{}).Execute(context.Background(), env, map[string]any{"path": "use.go", "line": 4.0, "symbol": "Greet"})
 	if err != nil || res.IsError {

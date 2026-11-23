@@ -56,7 +56,7 @@ Examples:
   sprout config get wakeup.enabled
   sprout config get mcp.enabled
 
-Use --show-origin to print which layer (global, global-local, workspace,
+Use --show-origin to print which layer (global, global-local, project folder,
 workspace-local, session) supplied the value and the file path.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -175,14 +175,14 @@ func showConfigOrigin(key string) error {
 	if configDir, err := configuration.GetConfigDir(); err == nil {
 		layers = append(layers, layer{"global-local", filepath.Join(configDir, configuration.ConfigLocalFileName)})
 	}
-	// 3. Workspace config
-	if wsPath := configuration.GetWorkspaceConfigPath("."); wsPath != "" {
-		layers = append(layers, layer{"workspace", wsPath})
+	// 3. Project folder config
+	if wsPath := configuration.GetProjectFolderConfigPath("."); wsPath != "" {
+		layers = append(layers, layer{"project folder", wsPath})
 	}
-	// 4. Workspace-local override
-	wsDir := configuration.WorkspaceConfigDir(".")
+	// 4. Project-folder-local override
+	wsDir := configuration.ProjectFolderConfigDir(".")
 	if wsDir != "" {
-		layers = append(layers, layer{"workspace-local", filepath.Join(wsDir, configuration.WorkspaceLocalFileName)})
+		layers = append(layers, layer{"workspace-local", filepath.Join(wsDir, configuration.ProjectFolderLocalFileName)})
 	}
 
 	var winner *layer

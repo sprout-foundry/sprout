@@ -110,15 +110,15 @@ export function getActiveHost(): SproutHost | null {
  * Register a host as the active one for the module-level services, and return
  * a function that restores whatever host was active before. This is the
  * embedding counterpart to the entry point's own registration: the entry
- * selects a host once at startup, and a component that mounts a workspace in
+ * selects a host once at startup, and a component that mounts a project folder in
  * its own provider stack registers its host while it is mounted so the
  * non-React services (client session fetch, WebSocket URL) resolve against it.
  *
  * The restore function puts the previous host back, so unmounting a mounted
- * workspace does not leave its host installed for whatever runs next. When no
+ * project folder does not leave its host installed for whatever runs next. When no
  * host was active before (the embedding case), the restore keeps the
  * registered host rather than clearing the singleton to null: the accessor has
- * no null setter, and a mounted-then-unmounted workspace leaving a resolvable
+ * no null setter, and a mounted-then-unmounted project folder leaving a resolvable
  * host is safer than leaving the services with none. The restore is
  * idempotent: calling it more than once restores only on the first call.
  */

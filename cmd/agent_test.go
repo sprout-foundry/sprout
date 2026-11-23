@@ -104,7 +104,7 @@ func TestDisplayVerboseLog_NoSproutDir(t *testing.T) {
 	}
 }
 
-func TestDisplayVerboseLog_NoWorkspaceLog(t *testing.T) {
+func TestDisplayVerboseLog_NoProjectFolderLog(t *testing.T) {
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, ".sprout"), 0755)
 	origDir, _ := os.Getwd()
@@ -1522,11 +1522,11 @@ func TestCaptureAPIKeysFromEnv_Coverage(t *testing.T) {
 }
 
 // =============================================================================
-// log_redirect.go — redirectGoLogToWorkspace
+// log_redirect.go — redirectGoLogToProjectFolder
 // =============================================================================
 
-func TestRedirectGoLogToWorkspace_Coverage(t *testing.T) {
-	// Change to a temp dir so we don't pollute the real workspace
+func TestRedirectGoLogToProjectFolder_Coverage(t *testing.T) {
+	// Change to a temp dir so we don't pollute the real project folder
 	origDir, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -1537,9 +1537,9 @@ func TestRedirectGoLogToWorkspace_Coverage(t *testing.T) {
 	}
 	defer os.Chdir(origDir)
 
-	restore, err := redirectGoLogToWorkspace()
+	restore, err := redirectGoLogToProjectFolder()
 	if err != nil {
-		t.Fatalf("redirectGoLogToWorkspace() error: %v", err)
+		t.Fatalf("redirectGoLogToProjectFolder() error: %v", err)
 	}
 	defer func() {
 		restore()

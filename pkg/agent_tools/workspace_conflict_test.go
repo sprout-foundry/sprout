@@ -271,8 +271,8 @@ func TestEventPayloadContents(t *testing.T) {
 	}
 
 	ev := bus.events[0]
-	if ev.eventType != eventWorkspaceConflict {
-		t.Errorf("event type = %q; want %q", ev.eventType, eventWorkspaceConflict)
+	if ev.eventType != eventProjectFolderConflict {
+		t.Errorf("event type = %q; want %q", ev.eventType, eventProjectFolderConflict)
 	}
 
 	data, ok := ev.data.(map[string]interface{})

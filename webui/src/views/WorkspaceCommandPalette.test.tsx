@@ -45,7 +45,7 @@ vi.mock('../services/api', () => {
       return { hotkeys: [{ key: 'Ctrl+Shift+P', command_id: 'command_palette' }], platform: 'test' };
     },
     applyHotkeyPreset: async () => ({ hotkeys: [] }),
-    getWorkspace: async () => ({ workspace_root: '/work/widgets' }),
+    getProjectFolder: async () => ({ project_folder: '/work/widgets' }),
     getStats: async () => ({}),
     getSettings: async () => ({}),
   };
@@ -86,7 +86,7 @@ function palette(): HTMLElement | null {
 }
 
 /** The hotkey provider answers keys once its config has loaded. */
-async function pressInsideWorkspace(): Promise<void> {
+async function pressInsideProjectFolder(): Promise<void> {
   const target = await screen.findByTestId('palette-test-chat');
   await waitFor(() => expect(hotkeysLoaded.count).toBeGreaterThan(0));
   await act(async () => {
@@ -126,7 +126,7 @@ afterEach(() => {
 describe('WorkspaceCommandPalette in an own-mode workspace', () => {
   it('opens on its shortcut inside the workspace but not from the host page', async () => {
     render(<Page />);
-    await pressInsideWorkspace();
+    await pressInsideProjectFolder();
     expect(within(screen.getByTestId('sprout-workspace')).getByRole('dialog')).toBe(palette());
 
     // The shortcut toggles: pressed again inside, the palette closes.

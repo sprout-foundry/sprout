@@ -251,7 +251,9 @@ describe('bridge structural detection', () => {
   });
 
   it('detectSproutStudioGit returns null when window.SproutStudio lacks getCapabilities', () => {
-    (globalThis as unknown as { window?: unknown }).window = { SproutStudio: { readWorkspaceFile: async () => ({}) } };
+    (globalThis as unknown as { window?: unknown }).window = {
+      SproutStudio: { readWorkspaceFile: async () => ({}) },
+    };
     try {
       expect(detectSproutStudioGit()).toBeNull();
     } finally {

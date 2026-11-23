@@ -50,13 +50,13 @@ func (h *searchFilesHandler) Execute(ctx context.Context, env ToolEnv, args map[
 	// resolveSearchDirectory normalises it.
 	rawDir, _ := extractString(args, "directory")
 
-	directory, err := resolveSearchDirectory(rawDir, env.WorkspaceRoot)
+	directory, err := resolveSearchDirectory(rawDir, env.ProjectFolder)
 	if err != nil {
 		return ToolResult{Output: err.Error(), IsError: true}, nil
 	}
 
 	// Gate 1 precheck — only when the user explicitly named a non-default
-	// directory. An empty or "." directory resolves to the workspace root,
+	// directory. An empty or "." directory resolves to the project folder,
 	// which is already allowlisted; gating the default would prompt on every
 	// vanilla search.
 	if rawDir != "" && rawDir != "." {
@@ -66,11 +66,11 @@ func (h *searchFilesHandler) Execute(ctx context.Context, env ToolEnv, args map[
 				fmt.Errorf("read blocked: %s is not accessible", directory)
 		}
 		if decision == "prompt" && env.FileAccessPrompter != nil {
-			if ctx2, approved := promptForOffWorkspacePath(ctx, env, "search_files", directory, resolvedPath, "read"); approved {
+			if ctx2, approved := promptForOffProjectFolderPath(ctx, env, "search_files", directory, resolvedPath, "read"); approved {
 				ctx = ctx2
 			} else {
-				return ToolResult{Output: fmt.Sprintf("read blocked: off-workspace access to %s was not approved", directory), IsError: true},
-					fmt.Errorf("read blocked: off-workspace access to %s was not approved", directory)
+				return ToolResult{Output: fmt.Sprintf("read blocked: off-project-folder access to %s was not approved", directory), IsError: true},
+					fmt.Errorf("read blocked: off-project-folder access to %s was not approved", directory)
 			}
 		}
 	}

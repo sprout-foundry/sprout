@@ -8,12 +8,12 @@ import (
 	"reflect"
 )
 
-// SaveWorkspaceOverlay persists a layered (global + workspace) config to the
-// workspace file as an overlay: the settings the file already holds, plus
+// SaveProjectFolderOverlay persists a layered (global + project folder) config to the
+// project folder file as an overlay: the settings the file already holds, plus
 // whatever changed since since. The in-memory config is the merge of both
-// layers, so writing it whole copied every global setting into the workspace
+// layers, so writing it whole copied every global setting into the project folder
 // file, where it then overrode later global changes.
-func (c *Config) SaveWorkspaceOverlay(dir, fileName string, since *Config) error {
+func (c *Config) SaveProjectFolderOverlay(dir, fileName string, since *Config) error {
 	c.prepareForPersist()
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return fmt.Errorf("create config directory %q: %w", dir, err)
@@ -23,10 +23,10 @@ func (c *Config) SaveWorkspaceOverlay(dir, fileName string, since *Config) error
 	overlay := map[string]interface{}{}
 	if data, err := os.ReadFile(path); err == nil {
 		if err := json.Unmarshal(data, &overlay); err != nil {
-			return fmt.Errorf("parse workspace config %q: %w", path, err)
+			return fmt.Errorf("parse project folder config %q: %w", path, err)
 		}
 	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("read workspace config %q: %w", path, err)
+		return fmt.Errorf("read project folder config %q: %w", path, err)
 	}
 
 	current, err := persistedJSONMap(c)
@@ -44,10 +44,10 @@ func (c *Config) SaveWorkspaceOverlay(dir, fileName string, since *Config) error
 
 	data, err := json.MarshalIndent(overlay, "", "  ")
 	if err != nil {
-		return fmt.Errorf("marshal workspace config: %w", err)
+		return fmt.Errorf("marshal project folder config: %w", err)
 	}
 	if err := writeFileAtomic(path, data, 0600); err != nil {
-		return fmt.Errorf("write workspace config: %w", err)
+		return fmt.Errorf("write project folder config: %w", err)
 	}
 	return nil
 }

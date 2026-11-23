@@ -38,11 +38,11 @@ func TestMain(m *testing.M) {
 	// developer's real ~/.gitconfig.
 	testgit.Configure()
 
-	// Isolate all agent-package tests from the real workspace config.
+	// Isolate all agent-package tests from the real project folder config.
 	// Inside a git repo, SPROUT_CONFIG is set to .sprout/ by the CLI;
 	// without this override, tests calling NewManagerSilent/NewManager
 	// without per-test SPROUT_CONFIG isolation read/write the real
-	// workspace config file, corrupting it with test fixtures.
+	// project folder config file, corrupting it with test fixtures.
 	// The directory is per-run: a shared fixed path let one interrupted run
 	// leave encrypted keys without their key.age, failing every later run.
 	tmpDir, err := os.MkdirTemp("", "sprout-agent-test-state-*")

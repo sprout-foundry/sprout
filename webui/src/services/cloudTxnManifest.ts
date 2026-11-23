@@ -1,6 +1,6 @@
 /**
  * cloudTxnManifest.ts — the delta manifests the ETH-2 txn protocol moves
- * between the browser and the workspace daemon (see docs/txn-protocol.md).
+ * between the browser and the project folder daemon (see docs/txn-protocol.md).
  *
  * The browser and the daemon agree on one pinned shape: caps (5 MiB/file,
  * 2000 files, 100 MiB total) are honored client-side and over-cap entries

@@ -3,7 +3,7 @@
  *
  * Omitted `isConnected`, the wrapper tracks the events transport: the state
  * follows the transport's `connection_status` events, so a transport that
- * opens after mount (the composed workspace calls `connect()` in an effect)
+ * opens after mount (the composed project folder calls `connect()` in an effect)
  * still lets the catalog load. The catalog provider is stubbed to expose the
  * flag it receives.
  */
@@ -26,7 +26,7 @@ vi.mock('../services/api', () => {
   const instance = {
     getHotkeys: async () => ({ hotkeys: [], platform: 'test' }),
     applyHotkeyPreset: async () => ({ hotkeys: [] }),
-    getWorkspace: async () => ({ workspace_root: '' }),
+    getProjectFolder: async () => ({ project_folder: '' }),
   };
   return { ApiService: { getInstance: () => instance } };
 });

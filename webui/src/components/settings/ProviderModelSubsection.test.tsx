@@ -433,15 +433,15 @@ describe('No inherited value (direct dropdown mode)', () => {
 describe('Scope uniqueness', () => {
   test('select IDs are scoped', () => {
     const props = createBaseProps({
-      scope: 'workspace' as const,
+      scope: 'project_folder' as const,
     });
 
     act(() => {
       root.render(createElement(ProviderModelSubsection, props));
     });
 
-    expect(container.querySelector('select#provider-select-workspace')).not.toBeNull();
-    expect(container.querySelector('select#model-select-workspace')).not.toBeNull();
+    expect(container.querySelector('select#provider-select-project_folder')).not.toBeNull();
+    expect(container.querySelector('select#model-select-project_folder')).not.toBeNull();
     expect(container.querySelector('select#provider-select-session')).toBeNull();
     expect(container.querySelector('select#model-select-session')).toBeNull();
   });

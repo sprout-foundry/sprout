@@ -15,7 +15,7 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-// Logger represents a workspace logger.
+// Logger represents a project folder logger.
 type Logger struct {
 	logger                 *log.Logger
 	userInteractionEnabled bool // Flag to control user interaction
@@ -35,7 +35,7 @@ var (
 // This value can be overridden on subsequent calls to GetLogger.
 func GetLogger(skipPrompts bool) *Logger {
 	once.Do(func() {
-		// The log lives in the workspace's .sprout; keep it (and the other
+		// The log lives in the project folder's .sprout; keep it (and the other
 		// runtime files there) out of the repository's commits.
 		if wd, err := os.Getwd(); err == nil {
 			EnsureRuntimeStateExcluded(wd)
@@ -78,8 +78,8 @@ func (w *Logger) LogAnalysisResult(filePath, success, summary, err string) {
 	w.logger.Printf("Analysis Result - File: %s, Success: %s, Summary: %s, Error: %s", filePath, success, summary, err)
 }
 
-// LogWorkspaceOperation logs workspace operations. These messages go only to the log file.
-func (w *Logger) LogWorkspaceOperation(operation, details string) {
+// LogProjectFolderOperation logs project folder operations. These messages go only to the log file.
+func (w *Logger) LogProjectFolderOperation(operation, details string) {
 	w.logger.Printf("Operation: %s, Details: %s", operation, details)
 }
 

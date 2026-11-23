@@ -1,7 +1,7 @@
 /**
  * Overlay shown while the WASM binary downloads and initializes in a hosted
  * shell. The binary is ~44MB so this can take 5-30 seconds depending on
- * connection. Without this overlay, users see a blank workspace with no
+ * connection. Without this overlay, users see a blank project folder with no
  * feedback. A shell with a local terminal (no in-browser WASM) never shows it.
  */
 

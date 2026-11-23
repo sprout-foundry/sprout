@@ -171,7 +171,7 @@ type SubagentOptions struct {
 	MaxTokens              int           // token budget (0 = unlimited)
 	MaxIterations          int           // raise the iteration budget above the persona's (0 = persona budget; a lower value is ignored); clamped to a ceiling
 	Timeout                time.Duration // execution timeout; <=0 defaults to 30 minutes, 1 hour for the orchestrator persona (see runTask)
-	WorkingDir             string        // optional: override workspace root (must be within $HOME)
+	WorkingDir             string        // optional: override project folder (must be within $HOME)
 	MaxConcurrentSubagents int           // max parallel subagents (0 = unlimited, default unlimited)
 	FleetTokenBudget       int           // shared token budget across all parallel subagents (0 = unlimited)
 	// Role is the role the subagent's usage is attributed to
@@ -191,7 +191,7 @@ type SharedState struct {
 	EventBus      *events.EventBus
 	TodoManager   *tools.TodoManager
 	ConfigManager *configuration.Manager
-	WorkspaceRoot string
+	ProjectFolder string
 }
 
 // SubagentResult is the structured output from a subagent
@@ -302,7 +302,7 @@ type SubagentTask struct {
 	Model      string
 	Provider   string
 	Persona    string
-	WorkingDir string // optional: override workspace root
+	WorkingDir string // optional: override project folder
 	// SystemPrompt is the resolved persona system prompt; empty falls back to
 	// SubagentOptions.SystemPrompt.
 	SystemPrompt string

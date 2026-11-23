@@ -6,7 +6,7 @@ import (
 )
 
 // TestDesignSystemSkillMockupLoop pins the design-system skill to the one goal
-// the design workspace has: a fast, on-brand mockup drawn by draw_mockup and
+// the design project folder has: a fast, on-brand mockup drawn by draw_mockup and
 // changed in the person's own words. The skill is prose, so the test asserts
 // the load-bearing rules exist — an edit that reintroduces a design process
 // (token tiers, validation passes, flow sources) or drops the kit rule would

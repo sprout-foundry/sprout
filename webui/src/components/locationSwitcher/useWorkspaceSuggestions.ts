@@ -2,21 +2,21 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useHostCapabilities } from '../../host';
 import { clientFetch } from '../../services/clientSession';
 import { getBrowseTarget, normalizePath } from './pathUtils';
-import type { WorkspaceDirectory, SwitchingState, SSHFailureState, RemoteWorkspaceContext } from './types';
+import type { ProjectFolderDirectory, SwitchingState, SSHFailureState, RemoteProjectFolderContext } from './types';
 import { MAX_RECENT_WORKSPACES, MAX_SUGGESTIONS } from './types';
 
-export interface UseWorkspaceSuggestionsProps {
+export interface UseProjectFolderSuggestionsProps {
   isConnected: boolean;
   workspaceRoot: string;
   daemonRoot: string;
-  remoteContext: RemoteWorkspaceContext | null;
+  remoteContext: RemoteProjectFolderContext | null;
   switchingState: SwitchingState;
   sshFailure: SSHFailureState | null;
   isLoading: boolean;
-  recentWorkspaces: string[];
-  remoteRecentWorkspaces: Record<string, string[]>;
-  sshFavoriteWorkspaces: Record<string, string[]>;
-  submitWorkspaceChange: (targetPath: string) => Promise<void>;
+  recentProjectFolders: string[];
+  remoteRecentProjectFolders: Record<string, string[]>;
+  sshFavoriteProjectFolders: Record<string, string[]>;
+  submitProjectFolderChange: (targetPath: string) => Promise<void>;
   setSwitchingState: React.Dispatch<React.SetStateAction<SwitchingState>>;
   setSshFailure: (s: SSHFailureState | null) => void;
   sidebarCollapsed: boolean;
@@ -26,15 +26,15 @@ export interface UseWorkspaceSuggestionsProps {
   setIsSshPanelOpen: (v: boolean | ((p: boolean) => boolean)) => void;
 }
 
-export interface UseWorkspaceSuggestionsResult {
+export interface UseProjectFolderSuggestionsResult {
   inputValue: string;
   selectedIndex: number;
-  suggestions: WorkspaceDirectory[];
+  suggestions: ProjectFolderDirectory[];
   suggestionsLoading: boolean;
   suggestionsError: string | null;
-  recentWorkspaceItems: string[];
+  recentProjectFolderItems: string[];
   remoteHostFavorites: string[];
-  totalWorkspaceRows: number;
+  totalProjectFolderRows: number;
   showText: boolean;
   setInputValue: (v: string) => void;
   setSelectedIndex: (i: number | ((p: number) => number)) => void;
@@ -50,18 +50,18 @@ export interface UseWorkspaceSuggestionsResult {
   pathInputRef: React.RefObject<HTMLInputElement>;
 }
 
-export function useWorkspaceSuggestions({
+export function useProjectFolderSuggestions({
   isConnected,
-  workspaceRoot,
+  workspaceRoot: projectFolder,
   daemonRoot,
   remoteContext,
   switchingState: _switchingState,
   sshFailure: _sshFailure,
   isLoading: _isLoading,
-  recentWorkspaces,
-  remoteRecentWorkspaces,
-  sshFavoriteWorkspaces,
-  submitWorkspaceChange,
+  recentProjectFolders,
+  remoteRecentProjectFolders,
+  sshFavoriteProjectFolders,
+  submitProjectFolderChange,
   setSwitchingState,
   setSshFailure,
   sidebarCollapsed: _sidebarCollapsed,
@@ -69,11 +69,11 @@ export function useWorkspaceSuggestions({
   isSshPanelOpen,
   setIsOpen,
   setIsSshPanelOpen,
-}: UseWorkspaceSuggestionsProps): UseWorkspaceSuggestionsResult {
+}: UseProjectFolderSuggestionsProps): UseProjectFolderSuggestionsResult {
   const { workspaceSwitching: supportsWorkspaceSwitching } = useHostCapabilities();
   const [inputValue, setInputValue] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(-1);
-  const [suggestions, setSuggestions] = useState<WorkspaceDirectory[]>([]);
+  const [suggestions, setSuggestions] = useState<ProjectFolderDirectory[]>([]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [suggestionsError, setSuggestionsError] = useState<string | null>(null);
 
@@ -83,25 +83,27 @@ export function useWorkspaceSuggestions({
   const sshPanelRef = useRef<HTMLDivElement>(null);
   const pathInputRef = useRef<HTMLInputElement>(null);
 
-  // Reset input when workspace changes and popover is closed
+  // Reset input when project folder changes and popover is closed
   useEffect(() => {
-    if (!isOpen) setInputValue(workspaceRoot);
-  }, [workspaceRoot, isOpen]);
+    if (!isOpen) setInputValue(projectFolder);
+  }, [projectFolder, isOpen]);
 
-  // Derived: recent workspace items
-  const recentWorkspaceItems = useMemo(() => {
-    const source = remoteContext?.hostAlias ? remoteRecentWorkspaces[remoteContext.hostAlias] || [] : recentWorkspaces;
-    return source.filter((p) => p !== workspaceRoot).slice(0, MAX_RECENT_WORKSPACES);
-  }, [recentWorkspaces, remoteContext?.hostAlias, remoteRecentWorkspaces, workspaceRoot]);
+  // Derived: recent project folder items
+  const recentProjectFolderItems = useMemo(() => {
+    const source = remoteContext?.hostAlias
+      ? remoteRecentProjectFolders[remoteContext.hostAlias] || []
+      : recentProjectFolders;
+    return source.filter((p) => p !== projectFolder).slice(0, MAX_RECENT_WORKSPACES);
+  }, [recentProjectFolders, remoteContext?.hostAlias, remoteRecentProjectFolders, projectFolder]);
 
   // Derived: remote host favorites
   const remoteHostFavorites = useMemo(() => {
     if (!remoteContext?.hostAlias) return [];
-    return (sshFavoriteWorkspaces[remoteContext.hostAlias] || []).filter((p) => p !== workspaceRoot);
-  }, [remoteContext?.hostAlias, sshFavoriteWorkspaces, workspaceRoot]);
+    return (sshFavoriteProjectFolders[remoteContext.hostAlias] || []).filter((p) => p !== projectFolder);
+  }, [remoteContext?.hostAlias, sshFavoriteProjectFolders, projectFolder]);
 
   const showText = !_sidebarCollapsed;
-  const totalWorkspaceRows = suggestions.length + recentWorkspaceItems.length;
+  const totalProjectFolderRows = suggestions.length + recentProjectFolderItems.length;
 
   // Suggestions loading
   useEffect(() => {
@@ -125,7 +127,7 @@ export function useWorkspaceSuggestions({
       setSuggestionsLoading(true);
       setSuggestionsError(null);
       try {
-        const response = await clientFetch(`/api/workspace/browse?path=${encodeURIComponent(target.browsePath)}`);
+        const response = await clientFetch(`/api/project-folder/browse?path=${encodeURIComponent(target.browsePath)}`);
         if (!response.ok) {
           const body = await response.json().catch(() => null);
           const message =
@@ -152,9 +154,10 @@ export function useWorkspaceSuggestions({
             path: normalizePath(String(f.path)),
           }))
           .filter(
-            (e: WorkspaceDirectory) => !target.prefix || e.name.toLowerCase().startsWith(target.prefix.toLowerCase()),
+            (e: ProjectFolderDirectory) =>
+              !target.prefix || e.name.toLowerCase().startsWith(target.prefix.toLowerCase()),
           )
-          .sort((a: WorkspaceDirectory, b: WorkspaceDirectory) => a.name.localeCompare(b.name))
+          .sort((a: ProjectFolderDirectory, b: ProjectFolderDirectory) => a.name.localeCompare(b.name))
           .slice(0, MAX_SUGGESTIONS);
         setSuggestions(next);
         setSuggestionsLoading(false);
@@ -172,9 +175,9 @@ export function useWorkspaceSuggestions({
 
   // Clamp selected index
   useEffect(() => {
-    const max = suggestions.length + recentWorkspaceItems.length - 1;
+    const max = suggestions.length + recentProjectFolderItems.length - 1;
     if (selectedIndex > max) setSelectedIndex(-1);
-  }, [recentWorkspaceItems.length, selectedIndex, suggestions.length]);
+  }, [recentProjectFolderItems.length, selectedIndex, suggestions.length]);
 
   // Focus input on open
   useEffect(() => {
@@ -199,15 +202,15 @@ export function useWorkspaceSuggestions({
     setSwitchingState({ isSwitching: false, error: null, status: null });
     setSuggestionsError(null);
     setSshFailure(null);
-    if (workspaceRoot) setInputValue(workspaceRoot);
-  }, [workspaceRoot, setSwitchingState, setSshFailure, setIsSshPanelOpen, setIsOpen]);
+    if (projectFolder) setInputValue(projectFolder);
+  }, [projectFolder, setSwitchingState, setSshFailure, setIsSshPanelOpen, setIsOpen]);
 
   const togglePopover = useCallback(() => {
     setIsOpen((prev) => {
       const next = !prev;
       if (next) {
         setSelectedIndex(-1);
-        setInputValue(workspaceRoot);
+        setInputValue(projectFolder);
         setSwitchingState({ isSwitching: false, error: null, status: null });
         setSuggestionsError(null);
         setSshFailure(null);
@@ -215,7 +218,7 @@ export function useWorkspaceSuggestions({
       return next;
     });
     setIsSshPanelOpen(false);
-  }, [workspaceRoot, setSwitchingState, setSshFailure, setIsOpen, setIsSshPanelOpen]);
+  }, [projectFolder, setSwitchingState, setSshFailure, setIsOpen, setIsSshPanelOpen]);
 
   const toggleSshPanel = useCallback(() => {
     setIsSshPanelOpen((prev) => !prev);
@@ -226,16 +229,16 @@ export function useWorkspaceSuggestions({
 
   const handleInputSubmit = useCallback(async () => {
     if (selectedIndex >= 0 && selectedIndex < suggestions.length) {
-      await submitWorkspaceChange(suggestions[selectedIndex].path);
+      await submitProjectFolderChange(suggestions[selectedIndex].path);
       return;
     }
     const ri = selectedIndex - suggestions.length;
-    if (ri >= 0 && ri < recentWorkspaceItems.length) {
-      await submitWorkspaceChange(recentWorkspaceItems[ri]);
+    if (ri >= 0 && ri < recentProjectFolderItems.length) {
+      await submitProjectFolderChange(recentProjectFolderItems[ri]);
       return;
     }
-    await submitWorkspaceChange(inputValue);
-  }, [inputValue, recentWorkspaceItems, selectedIndex, submitWorkspaceChange, suggestions]);
+    await submitProjectFolderChange(inputValue);
+  }, [inputValue, recentProjectFolderItems, selectedIndex, submitProjectFolderChange, suggestions]);
 
   // Store handleInputSubmit in a ref so keyboard handler doesn't re-bind constantly
   const handleInputSubmitRef = useRef(handleInputSubmit);
@@ -253,13 +256,13 @@ export function useWorkspaceSuggestions({
           break;
         case 'ArrowDown':
           event.preventDefault();
-          if (totalWorkspaceRows === 0) return;
-          setSelectedIndex((p) => (p < totalWorkspaceRows - 1 ? p + 1 : 0));
+          if (totalProjectFolderRows === 0) return;
+          setSelectedIndex((p) => (p < totalProjectFolderRows - 1 ? p + 1 : 0));
           break;
         case 'ArrowUp':
           event.preventDefault();
-          if (totalWorkspaceRows === 0) return;
-          setSelectedIndex((p) => (p <= 0 ? totalWorkspaceRows - 1 : p - 1));
+          if (totalProjectFolderRows === 0) return;
+          setSelectedIndex((p) => (p <= 0 ? totalProjectFolderRows - 1 : p - 1));
           break;
         case 'Enter':
           event.preventDefault();
@@ -271,7 +274,7 @@ export function useWorkspaceSuggestions({
     return () => {
       document.removeEventListener('keydown', handler);
     };
-  }, [totalWorkspaceRows, isOpen, closePopover]);
+  }, [totalProjectFolderRows, isOpen, closePopover]);
 
   // sprout:open-workspace-switcher event — disabled in cloud mode
   useEffect(() => {
@@ -316,9 +319,9 @@ export function useWorkspaceSuggestions({
     suggestions,
     suggestionsLoading,
     suggestionsError,
-    recentWorkspaceItems,
+    recentProjectFolderItems,
     remoteHostFavorites,
-    totalWorkspaceRows,
+    totalProjectFolderRows,
     showText,
     setInputValue,
     setSelectedIndex,

@@ -11,19 +11,19 @@ type ShellPattern struct {
 	Reason string `json:"reason,omitempty"` // optional human-readable note
 }
 
-// WorkspaceOverlayConfig controls how workspace-rooted policy files are loaded.
-type WorkspaceOverlayConfig struct {
+// ProjectFolderOverlayConfig controls how project-folder-rooted policy files are loaded.
+type ProjectFolderOverlayConfig struct {
 	// Mode: "tighten_only" (default — only user_dangerous_patterns honored),
 	// "trusted" (full overlay honored after `sprout policy trust`), or
-	// "ignore" (workspace policy never loaded).
+	// "ignore" (project folder policy never loaded).
 	Mode string `json:"mode,omitempty"`
 }
 
 // ShellConfig holds user-configurable shell permission policy.
 type ShellConfig struct {
-	UserSafePatterns      []ShellPattern         `json:"user_safe_patterns,omitempty"`
-	UserDangerousPatterns []ShellPattern         `json:"user_dangerous_patterns,omitempty"`
-	WorkspaceOverlay      WorkspaceOverlayConfig `json:"workspace_overlay,omitempty"`
+	UserSafePatterns      []ShellPattern             `json:"user_safe_patterns,omitempty"`
+	UserDangerousPatterns []ShellPattern             `json:"user_dangerous_patterns,omitempty"`
+	ProjectFolderOverlay  ProjectFolderOverlayConfig `json:"workspace_overlay,omitempty"`
 }
 
 // Validate checks the ShellConfig values and normalizes invalid ones.
@@ -49,8 +49,8 @@ func (sc *ShellConfig) Validate() error {
 		sc.UserDangerousPatterns[i].Kind = normalizeShellPatternKind(p.Kind)
 	}
 
-	// Validate workspace overlay mode
-	sc.WorkspaceOverlay.Mode = normalizeWorkspaceOverlayMode(sc.WorkspaceOverlay.Mode)
+	// Validate project folder overlay mode
+	sc.ProjectFolderOverlay.Mode = normalizeProjectFolderOverlayMode(sc.ProjectFolderOverlay.Mode)
 
 	return nil
 }
@@ -76,8 +76,8 @@ func normalizeShellPatternKind(kind string) string {
 	}
 }
 
-// normalizeWorkspaceOverlayMode returns a valid mode, defaulting to "tighten_only".
-func normalizeWorkspaceOverlayMode(mode string) string {
+// normalizeProjectFolderOverlayMode returns a valid mode, defaulting to "tighten_only".
+func normalizeProjectFolderOverlayMode(mode string) string {
 	switch mode {
 	case "", "tighten_only", "trusted", "ignore":
 		if mode == "" {

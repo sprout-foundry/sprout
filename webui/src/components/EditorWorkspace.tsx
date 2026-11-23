@@ -21,7 +21,7 @@ const SPLIT_COMMANDS = new Map<string, 'vertical' | 'horizontal'>([
   ['split_editor_horizontal', 'horizontal'],
 ]);
 
-// The pane commands this workspace handles: it owns the split layout.
+// The pane commands this project folder handles: it owns the split layout.
 const isPaneCommand = (commandId: string): boolean =>
   /^focus_split_\d+$/.test(commandId) || SPLIT_COMMANDS.has(commandId);
 
@@ -229,8 +229,8 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   // Only the pane you're working in shows its tab as focused: with focus in
   // the sidebar, terminal or another pane, each pane's tab stays marked as
   // shown but not highlighted.
-  const workspaceRef = useRef<HTMLDivElement>(null);
-  const engaged = useEngagedWithin(workspaceRef);
+  const projectFolderRef = useRef<HTMLDivElement>(null);
+  const engaged = useEngagedWithin(projectFolderRef);
   const engagedRef = useRef(engaged);
   engagedRef.current = engaged;
   const panesRef = useRef(panes);
@@ -750,7 +750,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
       isFileOpen={currentBuffer?.kind === 'file'}
       onNavigateToSymbol={handleOutlineNavigateToSymbol}
     >
-      <div ref={workspaceRef} className={`editor-workspace ${paneLayout}`}>
+      <div ref={projectFolderRef} className={`editor-workspace ${paneLayout}`}>
         <div ref={containerRef} className={`panes-container layout-${paneLayout}`}>
           {renderPaneLayout()}
         </div>

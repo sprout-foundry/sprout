@@ -58,7 +58,7 @@ type TurnOutcomeFacts struct {
 	// Verification is the turn's SP-149 verification result, when the
 	// turn-end hook ran one. Its Summary() is used verbatim.
 	Verification *verify.Result
-	// ChangedPaths are the workspace paths this turn changed, when
+	// ChangedPaths are the project folder paths this turn changed, when
 	// change tracking observed any.
 	ChangedPaths []string
 	// Duration is the turn's wall time.
@@ -189,7 +189,7 @@ func changedFilesSegment(paths []string) []string {
 	return parts
 }
 
-// shortPathName trims a tracked path to its workspace-relative tail so a
+// shortPathName trims a tracked path to its project-folder-relative tail so a
 // success line stays one line.
 func shortPathName(p string) string {
 	p = strings.TrimPrefix(p, "./")

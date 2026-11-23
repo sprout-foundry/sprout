@@ -90,7 +90,7 @@ func TestCommitTool_InteractiveDenialStopsTheCommit(t *testing.T) {
 		out, err := cmd.CombinedOutput()
 		require.NoError(t, err, "%s", out)
 	}
-	a.SetWorkspaceRoot(repo)
+	a.SetProjectFolder(repo)
 	// A persona without git_write is the one that has to ask; orchestrator,
 	// the default, may commit by capability.
 	require.NoError(t, a.ApplyPersona("general"))

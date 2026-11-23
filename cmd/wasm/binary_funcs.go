@@ -28,13 +28,13 @@ func bytesToJS(data []byte) js.Value {
 }
 
 // readFileBytesFunc returns {bytes: Uint8Array} or {error: string}.
-// args[0] (string) — workspace-relative or absolute path.
+// args[0] (string) — project-folder-relative or absolute path.
 func readFileBytesFunc(_ js.Value, args []js.Value) interface{} {
 	path := argString(args, 0, "")
 	if path == "" {
 		return map[string]interface{}{"error": "readFileBytes: missing path argument"}
 	}
-	data, err := os.ReadFile(workspacePath(path))
+	data, err := os.ReadFile(projectFolderPath(path))
 	if err != nil {
 		return map[string]interface{}{"error": err.Error()}
 	}
@@ -52,12 +52,12 @@ func saveImageFunc(_ js.Value, args []js.Value) interface{} {
 	if ext, _ := console.DetectImageMagic(data); ext == "" {
 		return map[string]interface{}{"error": "Not a recognized image format"}
 	}
-	saved, err := console.SavePastedImage(data, workspaceRoot)
+	saved, err := console.SavePastedImage(data, projectFolder)
 	if err != nil {
 		return map[string]interface{}{"error": err.Error()}
 	}
 	if !filepath.IsAbs(saved) {
-		saved = filepath.Join(workspaceRoot, saved)
+		saved = filepath.Join(projectFolder, saved)
 	}
 	return map[string]interface{}{"path": saved, "filename": filepath.Base(saved)}
 }

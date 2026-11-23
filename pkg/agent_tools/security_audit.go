@@ -13,7 +13,7 @@ import (
 // SP-127 Phase 2.7: AuditActionAllowedPathHit distinguishes paths that
 // landed under a session-allowlisted folder (workflow-declared allowed_paths
 // OR user clicked "Allow folder this session") from the base "allowed"
-// category (workspace root, /tmp). Existing consumers reading "allowed" see
+// category (project folder, /tmp). Existing consumers reading "allowed" see
 // all allow events; the new value lets the WebUI automations panel filter
 // specifically for session-allowlist grants.
 const (
@@ -25,19 +25,19 @@ const (
 
 // AuditEntry represents a single security audit log entry.
 type AuditEntry struct {
-	Timestamp time.Time `json:"timestamp"`
-	Tool      string    `json:"tool"`
-	Args      string    `json:"args,omitempty"`
-	RiskLevel string    `json:"risk_level"`
-	Category  string    `json:"category"`
-	Action    string    `json:"action"` // "allowed", "denied", "prompted", "allowed_path_hit"
-	Reasoning string    `json:"reasoning,omitempty"`
-	Source    string    `json:"source,omitempty"` // "classifier", "policy", "user_override"
-	SessionID string    `json:"session_id,omitempty"`
-	Workspace string    `json:"workspace,omitempty"`
+	Timestamp     time.Time `json:"timestamp"`
+	Tool          string    `json:"tool"`
+	Args          string    `json:"args,omitempty"`
+	RiskLevel     string    `json:"risk_level"`
+	Category      string    `json:"category"`
+	Action        string    `json:"action"` // "allowed", "denied", "prompted", "allowed_path_hit"
+	Reasoning     string    `json:"reasoning,omitempty"`
+	Source        string    `json:"source,omitempty"` // "classifier", "policy", "user_override"
+	SessionID     string    `json:"session_id,omitempty"`
+	ProjectFolder string    `json:"workspace,omitempty"`
 
 	// PathTier is the filesystem path-tier when the tool operates on a file
-	// (e.g. "workspace", "external", "sensitive"). Empty for non-file tools.
+	// (e.g. "project_folder", "external", "sensitive"). Empty for non-file tools.
 	// SP-068 SP-127 synergy: enables consumers to distinguish path-tier
 	// elevation from risk-tier without parsing reasoning strings.
 	PathTier string `json:"path_tier,omitempty"`

@@ -35,7 +35,7 @@ export function useSidebarEventHandlers({
 }: UseSidebarEventHandlersParams): void {
   const { settings: supportsSettings } = useHostCapabilities();
   // Ctrl+\ or Cmd+\ to toggle sidebar width (collapsed/expanded). Scoped to
-  // the workspace, so in an embed it fires only for keys pressed inside it.
+  // the project folder, so in an embed it fires only for keys pressed inside it.
   useWorkspaceKeyDown((e) => {
     if (e.key === '\\' && (e.ctrlKey || e.metaKey) && onSidebarToggle) {
       e.preventDefault();

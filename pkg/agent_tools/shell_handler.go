@@ -29,7 +29,7 @@ func (h *shellCommandHandler) Name() string {
 func (h *shellCommandHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name: "shell_command",
-		Description: "Execute a shell command. Supports background execution (background=true), checking accumulated output of a background session (check_background=session_id, optionally with wait_seconds to block until exit), and stopping a background session (stop_background=session_id). Background operations work in CLI as well as WebUI; promoted sessions are discoverable via `sprout shell-bg list`. The browser shell itself is a POSIX-style shell (pipes, redirections, heredocs, if/for/while/case, functions, $(...), $((...)), set -e) over built-in tools: ls, cat, cp, mv, rm, mkdir, touch, find, grep, rg, sed, awk, jq, sort, uniq, cut, tr, head, tail, wc, diff, xargs, printf, echo, test, base64, sha256sum, stat, du. Compilers, package managers, interpreters (node, python, go) and network tools are not available there; such a command either runs in the user's cloud workspace — if they approve — and returns its real output, or exits 127 with a note explaining why it didn't run; don't retry it in a loop." +
+		Description: "Execute a shell command. Supports background execution (background=true), checking accumulated output of a background session (check_background=session_id, optionally with wait_seconds to block until exit), and stopping a background session (stop_background=session_id). Background operations work in CLI as well as WebUI; promoted sessions are discoverable via `sprout shell-bg list`. The browser shell itself is a POSIX-style shell (pipes, redirections, heredocs, if/for/while/case, functions, $(...), $((...)), set -e) over built-in tools: ls, cat, cp, mv, rm, mkdir, touch, find, grep, rg, sed, awk, jq, sort, uniq, cut, tr, head, tail, wc, diff, xargs, printf, echo, test, base64, sha256sum, stat, du. Compilers, package managers, interpreters (node, python, go) and network tools are not available there; such a command either runs in the user's cloud dev space — if they approve — and returns its real output, or exits 127 with a note explaining why it didn't run; don't retry it in a loop." +
 			" In browser/wasm environments, git and GitHub run in-browser: the `git` command answers the read-only subcommands (status, diff, log, show, branch, remote, ls-files, rev-list, rev-parse, symbolic-ref, ...) AND the local/remote write subcommands (add, commit, checkout, switch, fetch, push, pull, clone, init, rm, mv); the `gh` command answers `repo clone`, `repo view`, `pr list`, `pr view`, `pr checkout`, `pr create`, `pr diff`, `pr status`, and `auth status`. For structured git operations you can also call `gittool:<tool> <json>` — available tools: git_clone {url, branch?, depth?}, git_list_repos {}, git_status {repo}, git_diff {repo}, git_log {repo, depth?}, git_branch_list {repo}, git_refs {repo, remote?}, git_read_file {repo, filepath}, git_write_file {repo, filepath, content}, git_list_files {repo}, git_add {repo, filepath?}, git_commit {repo, message}, git_fetch {repo, remote?, ref?, branch?}, git_create_branch {repo, name}, git_config {repo, key, value?}, git_checkout {repo, ref}, git_pull {repo, branch?}, git_push {repo, branch?} (remote ops need a GitHub token; public clone does not). Check out a PR head with `gh pr checkout <n>`, which fetches and checks out its branch in one step." + shellPlatformNote(),
 		Parameters: []ParameterDef{
 			{
@@ -165,12 +165,12 @@ func (h *shellCommandHandler) Validate(args map[string]any) error {
 }
 
 func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	// Inject env.WorkspaceRoot into context so runShellCommand resolves
+	// Inject env.ProjectFolder into context so runShellCommand resolves
 	// the correct cmd.Dir. Without this, the shell falls back to
 	// os.Getwd() which is the package source dir during tests —
 	// creating nested .git repos that corrupt the ChangeTracker.
-	if env.WorkspaceRoot != "" {
-		ctx = filesystem.WithWorkspaceRoot(ctx, env.WorkspaceRoot)
+	if env.ProjectFolder != "" {
+		ctx = filesystem.WithProjectFolder(ctx, env.ProjectFolder)
 	}
 
 	// Scope hidden/background shell sessions to this conversation so
@@ -235,7 +235,7 @@ func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map
 	}
 
 	// --- Security classification ---
-	secResult := ClassifyToolCallWithWorkspace("shell_command", args, env.WorkspaceRoot)
+	secResult := ClassifyToolCallWithProjectFolder("shell_command", args, env.ProjectFolder)
 
 	// Only truly unrecoverable operations (IsHardBlock) are blocked outright.
 	// ShouldBlock without IsHardBlock falls through to the approval prompt
@@ -355,7 +355,7 @@ func (h *shellCommandHandler) SafeForParallel() bool { return false }
 
 func (h *shellCommandHandler) Interactive() bool { return false }
 
-// prepareShellMutation lets the agent's ChangeTracker snapshot the workspace
+// prepareShellMutation lets the agent's ChangeTracker snapshot the project folder
 // before a command runs, so the command's own mutations are diffable. Without
 // it, a tracker that skipped the eager snapshot (subagents) took its first
 // snapshot after the first mutating command — making that command's changes

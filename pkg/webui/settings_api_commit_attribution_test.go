@@ -84,7 +84,7 @@ func TestHandleAPIGitCommit_Attribution(t *testing.T) {
 		require.NoError(t, err)
 		ws.mutex.Lock()
 		ctx := ws.getOrCreateClientContextLocked(defaultWebClientID)
-		ctx.WorkspaceRoot = dir
+		ctx.ProjectFolder = dir
 		ctx.Agent = ag
 		ws.mutex.Unlock()
 

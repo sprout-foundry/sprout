@@ -69,11 +69,11 @@ const WORKSPACE_ID = "e2e-ws-1";
 const TXN_ID = "e2e-txn-1";
 
 /** Route globs — exact per-endpoint so app bootstrap traffic is untouched. */
-const RESOLVE_ROUTE = "**/workspace/txn/resolve*";
+const RESOLVE_ROUTE = "**/dev-space/txn/resolve*";
 const LIST_ROUTE = RESOLVE_ROUTE; // the resolve endpoint (list replaced in SP-BUILDER-12)
-const CREATE_ROUTE = "**/workspace/txn";
-const TXN_OPEN_ROUTE = `**/workspace/txn/${WORKSPACE_ID}/txn`;
-const TXN_ACTION_ROUTE = `**/workspace/txn/${WORKSPACE_ID}/txn/${TXN_ID}/*`;
+const CREATE_ROUTE = "**/dev-space/txn";
+const TXN_OPEN_ROUTE = `**/dev-space/txn/${WORKSPACE_ID}/txn`;
+const TXN_ACTION_ROUTE = `**/dev-space/txn/${WORKSPACE_ID}/txn/${TXN_ID}/*`;
 
 /** Dismiss any toast left over from a previous test (serial page reuse). */
 async function dismissToastIfOpen() {
@@ -128,14 +128,14 @@ test.describe("Escalation — Run in cloud container (ETH-2)", () => {
       if (route.request().method() !== "GET") return route.fallback();
       captured.push({
         method: "GET",
-        pathname: "/workspace/txn/resolve",
+        pathname: "/dev-space/txn/resolve",
         body: null,
       });
       await route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          workspace_id: WORKSPACE_ID,
+          dev_space_id: WORKSPACE_ID,
           repo_url: "https://github.com/example/repo",
           status: "running",
           backend: "runner",
@@ -147,7 +147,7 @@ test.describe("Escalation — Run in cloud container (ETH-2)", () => {
       if (route.request().method() !== "POST") return route.fallback();
       captured.push({
         method: "POST",
-        pathname: `/workspace/txn/${WORKSPACE_ID}/txn`,
+        pathname: `/dev-space/txn/${WORKSPACE_ID}/txn`,
         body: route.request().postDataJSON(),
       });
       await route.fulfill({
@@ -157,7 +157,7 @@ test.describe("Escalation — Run in cloud container (ETH-2)", () => {
           txn_id: TXN_ID,
           status: "push",
           expires_at: "2030-01-01T00:00:00Z",
-          workspace_id: WORKSPACE_ID,
+          dev_space_id: WORKSPACE_ID,
         }),
       });
     });
@@ -242,7 +242,7 @@ test.describe("Escalation — Run in cloud container (ETH-2)", () => {
       page.getByRole("button", { name: "Run as cloud task" }),
     ).toBeVisible({ timeout: 5_000 });
     await expect(
-      page.getByRole("button", { name: "Start Full Workspace" }),
+      page.getByRole("button", { name: "Start a Dev Space" }),
     ).toBeVisible({ timeout: 5_000 });
 
     await txnButton.click();
@@ -273,19 +273,19 @@ test.describe("Escalation — Run in cloud container (ETH-2)", () => {
     const lifecycle = captured
       .map((c) => `${c.method} ${c.pathname}`)
       .join("\n");
-    expect(lifecycle).toContain(`GET /workspace/txn/resolve`);
-    expect(lifecycle).toContain(`POST /workspace/txn/${WORKSPACE_ID}/txn`);
+    expect(lifecycle).toContain(`GET /dev-space/txn/resolve`);
+    expect(lifecycle).toContain(`POST /dev-space/txn/${WORKSPACE_ID}/txn`);
     expect(lifecycle).toContain(
-      `POST /workspace/txn/${WORKSPACE_ID}/txn/${TXN_ID}/push`,
+      `POST /dev-space/txn/${WORKSPACE_ID}/txn/${TXN_ID}/push`,
     );
     expect(lifecycle).toContain(
-      `POST /workspace/txn/${WORKSPACE_ID}/txn/${TXN_ID}/run`,
+      `POST /dev-space/txn/${WORKSPACE_ID}/txn/${TXN_ID}/run`,
     );
     expect(lifecycle).toContain(
-      `POST /workspace/txn/${WORKSPACE_ID}/txn/${TXN_ID}/pull`,
+      `POST /dev-space/txn/${WORKSPACE_ID}/txn/${TXN_ID}/pull`,
     );
     expect(lifecycle).toContain(
-      `POST /workspace/txn/${WORKSPACE_ID}/txn/${TXN_ID}/finish`,
+      `POST /dev-space/txn/${WORKSPACE_ID}/txn/${TXN_ID}/finish`,
     );
 
     // The pushed manifest is the pinned delta-manifest shape.
@@ -326,7 +326,7 @@ test.describe("Escalation — Run in cloud container (ETH-2)", () => {
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          workspace_id: WORKSPACE_ID,
+          dev_space_id: WORKSPACE_ID,
           repo_url: "https://github.com/example/repo",
           status: "running",
           backend: "runner",
@@ -362,13 +362,13 @@ test.describe("Escalation — Run in cloud container (ETH-2)", () => {
     await expect(
       page.getByTestId(TESTIDS["escalation-toast-txn-error"]),
     ).toHaveText(
-      "Another command is already running in the cloud workspace — try again shortly.",
+      "Another command is already running in the cloud dev space — try again shortly.",
       { timeout: 10_000 },
     );
 
     // Mode B is still the way out when the txn lane is busy.
     await expect(
-      page.getByRole("button", { name: "Start Full Workspace" }),
+      page.getByRole("button", { name: "Start a Dev Space" }),
     ).toBeVisible({ timeout: 5_000 });
 
     await page.unroute(LIST_ROUTE);

@@ -41,9 +41,9 @@ interface BootstrapResponse {
   pluginScripts?: string[];
   /** Absolute base URL of the platform web UI (SP-016). Served by the
    * platform (cloud mode) or by the daemon when SPROUT_PLATFORM_URL is set
-   * (Mode B Fly workspaces). Absent when the host cannot know it. */
+   * (Mode B Fly project folders). Absent when the host cannot know it. */
   platformURL?: string;
-  /** The repository the workspace should open, when the host names one.
+  /** The repository the project folder should open, when the host names one.
    * Absent when no host names a repo (the adapter falls back to ?repo=). */
   repoUrl?: string;
   /** Workspace git snapshot (ETH-1). Absent/null when the daemon could not determine it. */
@@ -103,7 +103,7 @@ export function getBootstrapUser(): BootstrapUser | undefined {
 }
 
 /**
- * Most recently resolved workspace git snapshot (ETH-1 sync-on-resume) from
+ * Most recently resolved project folder git snapshot (ETH-1 sync-on-resume) from
  * the bootstrap response. null when the platform/daemon did not provide one
  * or bootstrap has not resolved yet — callers wanting fresher state should
  * hit GET /api/sync directly.
@@ -301,7 +301,7 @@ async function resolveRuntimeConfig(): Promise<RuntimeConfig> {
         // SP-016 P0.3: absolute platform base for account-surface exits.
         // An empty string means "the host doesn't know" → treat as absent.
         platformURL: data.platformURL || undefined,
-        // The repository the workspace should open, when the host names one.
+        // The repository the project folder should open, when the host names one.
         // Empty means "no host repo" → the adapter falls back to ?repo=.
         repoUrl: data.repoUrl || undefined,
         // Version negotiation: the daemon's reported contract version, checked
@@ -360,7 +360,7 @@ export function getBootstrapConfig(): RuntimeConfig {
  * the API and runs the agent, and an in-browser adapter left over from an
  * earlier wasm phase answers `/api/query` itself and leaves the turn silent.
  * The check therefore runs both before and after the async adapter import: the
- * platform swaps a running workspace's daemon backend in place, so the install
+ * platform swaps a running project folder's daemon backend in place, so the install
  * can start under the wasm backend and land under the daemon.
  *
  * Cloud-adapter-only rule (Trust-Boundary Principle, see root AGENTS.md):
@@ -389,7 +389,7 @@ async function installAdapterForConfig(config: RuntimeConfig): Promise<void> {
     return;
   }
   // The adapter the page had before this install started. A mounted
-  // workspace's own backend wiring installs one for the same host (with the
+  // project folder's own backend wiring installs one for the same host (with the
   // project's repo and git author), and its install can land while this one is
   // waiting for the module. Whichever lands second must not replace the other:
   // an adapter that appeared in between is the one the host's backend called
@@ -418,7 +418,7 @@ async function installAdapterForConfig(config: RuntimeConfig): Promise<void> {
     wsUrl: hostURLs ? current.transport.wsURL : config.wsURL,
     navItems: config.navItems ?? current.navigation.navItems ?? [],
     egressProxy: config.egressProxy,
-    // A host that mounts a workspace already knows the project, so its repo
+    // A host that mounts a project folder already knows the project, so its repo
     // comes from the host (the project's repoUrl) rather than the `?repo=`
     // URL parameter. Absent a host-named repo, the adapter falls back to the
     // query parameter (the hosted build's shareable deep link).
@@ -429,9 +429,9 @@ async function installAdapterForConfig(config: RuntimeConfig): Promise<void> {
   // Auto-import repo from the bootstrap's repo (or the ?repo= query param)
   // if present. restoreRepo checks the IndexedDB import cache first (the
   // file tree lives in the in-memory WASM VFS, so without the cache a reload
-  // loses the workspace) and only falls back to the server-side clone on a
+  // loses the project folder) and only falls back to the server-side clone on a
   // cache miss. The ?repo= param stays in the URL: it is a shareable deep
-  // link, and refreshes are served from the cache. A mounted workspace whose
+  // link, and refreshes are served from the cache. A mounted project folder whose
   // host names a project repo imports that one instead (startupRepoImport).
   const repoParam = adapter.getStartupRepo();
   if (repoParam) {

@@ -70,7 +70,7 @@ func TestHandleAPIDiagnostics_WhitespaceOnlyPath(t *testing.T) {
 	}
 }
 
-func TestHandleAPIDiagnostics_PathOutsideWorkspace(t *testing.T) {
+func TestHandleAPIDiagnostics_PathOutsideProjectFolder(t *testing.T) {
 	ws, _ := newTestWebServer(t)
 
 	outside := filepath.Join(t.TempDir(), "passwd")
@@ -81,7 +81,7 @@ func TestHandleAPIDiagnostics_PathOutsideWorkspace(t *testing.T) {
 	ws.handleAPIDiagnostics(rec, req)
 
 	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 for path outside workspace, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("expected 403 for path outside project folder, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

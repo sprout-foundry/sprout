@@ -197,7 +197,7 @@ func TestLoginCommand_SignsInThroughTheSink(t *testing.T) {
 
 // TestLoginCommand_RefreshesTheRunningSessionsMCP pins the end-to-end fix:
 // after a successful /login the running session must see the platform's MCP
-// server without restarting. The flow writes it to the workspace's
+// server without restarting. The flow writes it to the project folder's
 // mcp_config.json (ConfigureMCP); the command's final RefreshRuntimeConfig is
 // what reconciles the live manager from that file.
 func TestLoginCommand_RefreshesTheRunningSessionsMCP(t *testing.T) {
@@ -221,10 +221,10 @@ func TestLoginCommand_RefreshesTheRunningSessionsMCP(t *testing.T) {
 
 	// A real agent on the temp config root (createTestAgentWithTempConfig
 	// repoints HOME and clears SPROUT_CONFIG after isolatePlatform). Its
-	// workspace root is a fresh temp dir so the reconcile's workspace layer
+	// project folder is a fresh temp dir so the reconcile's project folder layer
 	// reads nothing — only the global layer the login wrote to.
 	chatAgent := createTestAgentWithTempConfig(t)
-	chatAgent.SetWorkspaceRoot(t.TempDir())
+	chatAgent.SetProjectFolder(t.TempDir())
 	out := &syncWriter{}
 	c := &LoginCommand{}
 	c.SetOutput(out)

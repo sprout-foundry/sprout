@@ -38,8 +38,8 @@ type launchdPlistConfig struct {
 	BinaryPath string
 	HomeDir    string
 	// DaemonRoot scopes daemon storage (sessions, config) and the web UI's
-	// workspace browser. It does NOT set the agent workspace — since SP-130
-	// the webui gates on explicit workspace selection instead of silently
+	// project folder browser. It does NOT set the agent project folder — since SP-130
+	// the webui gates on explicit project folder selection instead of silently
 	// inheriting it. Empty means HomeDir.
 	DaemonRoot string
 	// LogPath receives launchd's stdout/stderr for the daemon process.

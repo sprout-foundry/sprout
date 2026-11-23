@@ -67,7 +67,7 @@ type ModelSpec struct {
 
 // AgentFactory builds the headless agent for one run. It receives the
 // run's fresh copy directory (starter instantiated, frozen plan written,
-// ShapeCopy applied) and must return an agent whose workspace root is
+// ShapeCopy applied) and must return an agent whose project folder is
 // that directory. The default factory (a real provider client from
 // pkg/factory plus agent.NewAgentWithClient, the production SDK path)
 // is used when Runner.AgentFactory is nil; tests and custom harnesses

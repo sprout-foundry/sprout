@@ -71,7 +71,7 @@ func GetEmbeddedSystemPromptWithProvider(provider string) (string, error) {
 }
 
 // GetEmbeddedSystemPromptForProfile selects the full or lite system prompt based on the ContextProfile.
-func GetEmbeddedSystemPromptForProfile(profile configuration.ContextProfile, provider string, contextWindow int, workspaceRoot string) (string, error) {
+func GetEmbeddedSystemPromptForProfile(profile configuration.ContextProfile, provider string, contextWindow int, projectFolder string) (string, error) {
 	promptContent, err := extractSystemPromptForProfile(profile)
 	if err != nil {
 		return "", agenterrors.NewPermanentError("failed to extract system prompt", err)
@@ -111,9 +111,9 @@ func GetEmbeddedSystemPromptForProfile(profile configuration.ContextProfile, pro
 	return promptContent, nil
 }
 
-// buildCurrentWorkingDirectorySection formats the "Current Working Directory" block. Uses workspaceRoot if set, otherwise os.Getwd().
-func buildCurrentWorkingDirectorySection(workspaceRoot string) string {
-	cwd := workspaceRoot
+// buildCurrentWorkingDirectorySection formats the "Current Working Directory" block. Uses projectFolder if set, otherwise os.Getwd().
+func buildCurrentWorkingDirectorySection(projectFolder string) string {
+	cwd := projectFolder
 	if cwd == "" {
 		var err error
 		cwd, err = os.Getwd()

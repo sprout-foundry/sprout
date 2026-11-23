@@ -90,7 +90,7 @@ func TestSessionPathModes_OnlyForAllowlistedFolder(t *testing.T) {
 // NOTE: AddSessionAllowedFolder and SetSessionAllowedFolderMode
 // normalize paths via filepath.EvalSymlinks (normalizePath helper
 // in path_tier.go). On macOS /var and /tmp may resolve to
-// /private/var and /private/tmp, so the test uses a workspace
+// /private/var and /private/tmp, so the test uses a project folder
 // tempdir which never has a symlinked ancestor. The mode-lookup
 // itself uses the same normalization, so the round-trip behavior
 // is what production callers observe.

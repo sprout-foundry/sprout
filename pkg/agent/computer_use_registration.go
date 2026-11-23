@@ -137,7 +137,7 @@ func isComputerUseToolBlocked(toolName string, agent *Agent) bool {
 
 // checkComputerUseSessionOptIn enforces the per-session consent gate for
 // computer-use actions. On the first tool call it prompts the user for
-// explicit consent. Once approved (or when the workspace is on the
+// explicit consent. Once approved (or when the project folder is on the
 // persistent allowlist), subsequent calls are fast-pathed.
 func (a *Agent) checkComputerUseSessionOptIn(toolName string) error {
 	if a == nil {
@@ -157,12 +157,12 @@ func (a *Agent) checkComputerUseSessionOptIn(toolName string) error {
 	}
 
 	ws := a.effectiveCwd()
-	if ws != "" && isWorkspaceComputerUseAllowlisted(ws, cfg.ComputerUse.WorkspaceAllowlist) {
+	if ws != "" && isProjectFolderComputerUseAllowlisted(ws, cfg.ComputerUse.ProjectFolderAllowlist) {
 		a.computerUseMu.Lock()
 		a.computerUseSessionApproved = true
 		a.computerUseMu.Unlock()
 		if a.debug {
-			a.debugLog("[computer-use] session auto-approved via workspace allowlist: %s\n", ws)
+			a.debugLog("[computer-use] session auto-approved via project folder allowlist: %s\n", ws)
 		}
 		return nil
 	}
@@ -170,7 +170,7 @@ func (a *Agent) checkComputerUseSessionOptIn(toolName string) error {
 	actionDesc := computerUseActionDescription(toolName)
 	prompt := fmt.Sprintf(
 		"The computer_user persona is about to control your desktop for the first time this session.\n\n"+
-			"Workspace: %s\n"+
+			"Project folder: %s\n"+
 			"Action: %s\n\n"+
 			"Allow this session to use computer use?",
 		ws, actionDesc,
@@ -184,13 +184,13 @@ func (a *Agent) checkComputerUseSessionOptIn(toolName string) error {
 		defer clihooks.ResumeSteer()
 
 		if a.debug {
-			a.debugLog("[computer-use] requesting per-session opt-in via webui for %s (workspace: %s)\n", toolName, ws)
+			a.debugLog("[computer-use] requesting per-session opt-in via webui for %s (project folder: %s)\n", toolName, ws)
 		}
 		extras := map[string]string{
-			"risk_type": "Computer Use Opt-In",
-			"workspace": ws,
-			"action":    toolName,
-			"kind":      "computer_use_optin",
+			"risk_type":      "Computer Use Opt-In",
+			"project_folder": ws,
+			"action":         toolName,
+			"kind":           "computer_use_optin",
 		}
 		decision, outcome := mgr.RequestApprovalDecisionWithOutcome(
 			a.GetEventBus(),
@@ -229,17 +229,17 @@ func (a *Agent) checkComputerUseSessionOptIn(toolName string) error {
 }
 
 // applyComputerUseOptInDecision records the user's consent choice and persists "always" approvals.
-func (a *Agent) applyComputerUseOptInDecision(decision security.ApprovalDecision, workspace string) error {
+func (a *Agent) applyComputerUseOptInDecision(decision security.ApprovalDecision, projectFolder string) error {
 	switch decision {
 	case security.ApprovalDeny:
 		if a.debug {
-			a.debugLog("[computer-use] user denied per-session opt-in (workspace: %s)\n", workspace)
+			a.debugLog("[computer-use] user denied per-session opt-in (project folder: %s)\n", projectFolder)
 		}
 		return errors.NewPermission("computer use denied: the user declined the per-session opt-in", nil)
 	case security.ApprovalApproveAlways:
-		if err := a.persistComputerUseWorkspaceAllowlist(workspace); err != nil {
+		if err := a.persistComputerUseProjectFolderAllowlist(projectFolder); err != nil {
 			if a.debug {
-				a.debugLog("[computer-use] failed to persist workspace allowlist: %v (continuing with session approval)\n", err)
+				a.debugLog("[computer-use] failed to persist project folder allowlist: %v (continuing with session approval)\n", err)
 			}
 		}
 		fallthrough
@@ -248,47 +248,47 @@ func (a *Agent) applyComputerUseOptInDecision(decision security.ApprovalDecision
 		a.computerUseSessionApproved = true
 		a.computerUseMu.Unlock()
 		computer_use.RecordSafetyEvent("opt_in", map[string]any{
-			"workspace": workspace,
-			"scope":     decision.String(),
+			"project_folder": projectFolder,
+			"scope":          decision.String(),
 		})
 		if a.debug {
-			a.debugLog("[computer-use] session opt-in approved (scope=%s, workspace=%s)\n", decision.String(), workspace)
+			a.debugLog("[computer-use] session opt-in approved (scope=%s, project_folder=%s)\n", decision.String(), projectFolder)
 		}
 		return nil
 	}
 }
 
-// persistComputerUseWorkspaceAllowlist appends workspace to the persistent
-// ComputerUse.WorkspaceAllowlist in config and saves to disk. Idempotent.
-func (a *Agent) persistComputerUseWorkspaceAllowlist(workspace string) error {
-	if a == nil || workspace == "" {
-		return errors.NewValidation("cannot allowlist empty workspace", nil)
+// persistComputerUseProjectFolderAllowlist appends project folder to the persistent
+// ComputerUse.ProjectFolderAllowlist in config and saves to disk. Idempotent.
+func (a *Agent) persistComputerUseProjectFolderAllowlist(projectFolder string) error {
+	if a == nil || projectFolder == "" {
+		return errors.NewValidation("cannot allowlist empty project folder", nil)
 	}
 	mgr := a.GetConfigManager()
 	if mgr == nil {
-		return errors.NewTool("computer_use", "no config manager — cannot persist workspace allowlist", nil)
+		return errors.NewTool("computer_use", "no config manager — cannot persist project folder allowlist", nil)
 	}
 	return mgr.UpdateConfig(func(cfg *configuration.Config) error {
 		if cfg.ComputerUse == nil {
 			cfg.ComputerUse = &configuration.ComputerUseConfig{}
 		}
-		for _, w := range cfg.ComputerUse.WorkspaceAllowlist {
-			if w == workspace {
+		for _, w := range cfg.ComputerUse.ProjectFolderAllowlist {
+			if w == projectFolder {
 				return nil
 			}
 		}
-		cfg.ComputerUse.WorkspaceAllowlist = append(cfg.ComputerUse.WorkspaceAllowlist, workspace)
+		cfg.ComputerUse.ProjectFolderAllowlist = append(cfg.ComputerUse.ProjectFolderAllowlist, projectFolder)
 		return nil
 	})
 }
 
-// isWorkspaceComputerUseAllowlisted reports whether the workspace path
+// isProjectFolderComputerUseAllowlisted reports whether the project folder path
 // sits under (or equals) any entry in the allowlist.
-func isWorkspaceComputerUseAllowlisted(workspace string, allowlist []string) bool {
-	if workspace == "" || len(allowlist) == 0 {
+func isProjectFolderComputerUseAllowlisted(projectFolder string, allowlist []string) bool {
+	if projectFolder == "" || len(allowlist) == 0 {
 		return false
 	}
-	normalized := normalizePath(workspace)
+	normalized := normalizePath(projectFolder)
 	for _, entry := range allowlist {
 		if isUnderPrefix(normalized, normalizePath(entry)) {
 			return true

@@ -73,8 +73,8 @@ Providers also resolve keys stored with 'sprout keys set <provider>' when
 no environment variable is set.
 
 --root sets SPROUT_DAEMON_ROOT, the directory that scopes the daemon's
-storage and the web UI's workspace browser (default: your home directory).
-It does not choose the agent's workspace; the web UI asks for that.`,
+storage and the web UI's project folder browser (default: your home directory).
+It does not choose the agent's project folder; the web UI asks for that.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if installRootFlag != "" {
 			home, err := os.UserHomeDir()
@@ -314,7 +314,7 @@ var serviceDiagnoseCmd = &cobra.Command{
 
 func init() {
 	serviceInstallCmd.Flags().BoolVarP(&ForceConfirm, "yes", "y", false, "Skip confirmation prompts and auto-remove legacy services")
-	serviceInstallCmd.Flags().StringVar(&installRootFlag, "root", "", "Daemon root (SPROUT_DAEMON_ROOT): scopes daemon storage and the workspace browser; must exist (default: home directory)")
+	serviceInstallCmd.Flags().StringVar(&installRootFlag, "root", "", "Daemon root (SPROUT_DAEMON_ROOT): scopes daemon storage and the project folder browser; must exist (default: home directory)")
 	serviceUninstallCmd.Flags().BoolVarP(&ForceConfirm, "yes", "y", false, "Skip confirmation prompts")
 	serviceRestartCmd.Flags().BoolVarP(&ForceConfirm, "yes", "y", false, "Restart without confirming when queries are still active")
 

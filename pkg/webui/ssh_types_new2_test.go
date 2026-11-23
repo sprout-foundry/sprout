@@ -244,26 +244,26 @@ func TestShellEscapeSSH2(t *testing.T) {
 	}
 }
 
-// Test workspaceLogPath function
-func TestWorkspaceLogPath2(t *testing.T) {
-	path := workspaceLogPath()
+// Test projectFolderLogPath function
+func TestProjectFolderLogPath2(t *testing.T) {
+	path := projectFolderLogPath()
 
 	t.Run("returns non-empty string", func(t *testing.T) {
 		if path == "" {
-			t.Error("workspaceLogPath() should return a non-empty string")
+			t.Error("projectFolderLogPath() should return a non-empty string")
 		}
 	})
 
 	t.Run("ends with workspace.log", func(t *testing.T) {
 		if !strings.HasSuffix(path, "workspace.log") {
-			t.Errorf("workspaceLogPath() should end with 'workspace.log', got %q", path)
+			t.Errorf("projectFolderLogPath() should end with 'workspace.log', got %q", path)
 		}
 	})
 
 	t.Run("is a valid path format", func(t *testing.T) {
 		// Check if it contains path separators
 		if !strings.Contains(path, "/") && !strings.Contains(path, string('\\')) {
-			t.Logf("workspaceLogPath() returned: %q (may be relative)", path)
+			t.Logf("projectFolderLogPath() returned: %q (may be relative)", path)
 		}
 	})
 }
@@ -383,13 +383,13 @@ func TestShellEscapeSSHEdgeCases2(t *testing.T) {
 	})
 }
 
-// Test that workspaceLogPath and localSSHCacheRoot produce valid strings
+// Test that projectFolderLogPath and localSSHCacheRoot produce valid strings
 func TestSSHPathFunctionsReturnValidStrings2(t *testing.T) {
-	t.Run("workspaceLogPath is consistent", func(t *testing.T) {
-		path1 := workspaceLogPath()
-		path2 := workspaceLogPath()
+	t.Run("projectFolderLogPath is consistent", func(t *testing.T) {
+		path1 := projectFolderLogPath()
+		path2 := projectFolderLogPath()
 		if path1 != path2 {
-			t.Error("workspaceLogPath() should return consistent results")
+			t.Error("projectFolderLogPath() should return consistent results")
 		}
 	})
 
@@ -402,7 +402,7 @@ func TestSSHPathFunctionsReturnValidStrings2(t *testing.T) {
 	})
 
 	t.Run("functions return different paths", func(t *testing.T) {
-		logPath := workspaceLogPath()
+		logPath := projectFolderLogPath()
 		cachePath := localSSHCacheRoot()
 		if logPath == cachePath {
 			t.Logf("Both functions returned same path: %q (may be intentional)", logPath)

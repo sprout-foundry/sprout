@@ -86,9 +86,9 @@ func (s *stubApprovalManager) RequestApproval(requestID, toolName, riskLevel, pr
 }
 
 // deployToolEnv builds the ToolEnv the tools run under, with the project
-// root as the workspace and optional overrides.
+// root as the project folder and optional overrides.
 func deployToolEnv(root string, opts ...func(*ToolEnv)) ToolEnv {
-	env := ToolEnv{WorkspaceRoot: root}
+	env := ToolEnv{ProjectFolder: root}
 	for _, opt := range opts {
 		opt(&env)
 	}

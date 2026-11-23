@@ -116,7 +116,7 @@ func TestVerificationHook_RunnerSetupErrorDoesNotGateTurn(t *testing.T) {
 			fmt.Sprintf(`{"path":%q,"content":"x"}`, filepath.Join(dir, "app.js")), "Writing."),
 		NewScriptedTextResponse("Done."),
 	)
-	// No workspace root: the runner cannot start ("project root is
+	// No project folder: the runner cannot start ("project root is
 	// required") — the turn must not be gated on it.
 	ag := vhAgent(t, client, "", &configuration.VerificationConfig{Enabled: true, RepairAttempts: 2})
 

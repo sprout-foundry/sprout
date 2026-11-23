@@ -176,7 +176,7 @@ func executeCommit(userMessage, notes string, configManager configManagerInterfa
 
 	var executor *git.CommitExecutor
 
-	// Get workspace directory from the agent, if available.
+	// Get project folder from the agent, if available.
 	workDir := ""
 	if chatAgent != nil {
 		workDir = chatAgent.effectiveCwd()
@@ -274,7 +274,7 @@ func handleCreatePullRequest(ctx context.Context, a *Agent, args map[string]inte
 		}
 	}
 
-	// Default repoDir to the agent's workspace root
+	// Default repoDir to the agent's project folder
 	if repoDir == "" {
 		repoDir = a.effectiveCwd()
 	}

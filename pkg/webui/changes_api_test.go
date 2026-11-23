@@ -49,7 +49,7 @@ func newNoAgentTestServer(t *testing.T) *ReactWebServer {
 		t.Fatal(err)
 	}
 	ws.daemonRoot = daemonRoot
-	ws.workspaceRoot = daemonRoot
+	ws.projectFolder = daemonRoot
 	return ws
 }
 

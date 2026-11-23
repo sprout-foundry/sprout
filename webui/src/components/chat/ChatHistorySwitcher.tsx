@@ -31,7 +31,7 @@ function ageLabel(iso: string): string {
 /**
  * Chat-header history switcher (SP-139 Phase 3). A permanent header row
  * control that opens a popover for browsing/restoring past conversations
- * in this workspace — the relocated Sessions tab.
+ * in this project folder — the relocated Sessions tab.
  *
  * Performance contract: closed popover renders ONE button; the list and
  * search fetch only on open/typing (debounced). No polling, no store
@@ -62,7 +62,7 @@ function ChatHistorySwitcherInner({ chatId, onRestoreSession, iconOnly = false }
   const [restoring, setRestoring] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   // Inline notice shown in the footer after "Export all" so an empty run
-  // (no saved conversations in this workspace) doesn't look like a no-op.
+  // (no saved conversations in this project folder) doesn't look like a no-op.
   const [exportNotice, setExportNotice] = useState<string | null>(null);
   const log = useLog();
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -179,8 +179,8 @@ function ChatHistorySwitcherInner({ chatId, onRestoreSession, iconOnly = false }
         // export" with no idea why. Say what's empty and where it looks.
         setExportNotice(
           (resp.sessions ?? []).length === 0
-            ? 'No saved conversations in this workspace yet.'
-            : 'All saved conversations in this workspace are empty — nothing to export.',
+            ? 'No saved conversations in this project folder yet.'
+            : 'All saved conversations in this project folder are empty — nothing to export.',
         );
         return;
       }
@@ -274,7 +274,7 @@ function ChatHistorySwitcherInner({ chatId, onRestoreSession, iconOnly = false }
               </div>
             ) : rows.length === 0 ? (
               <div className="chs-empty">
-                {query ? 'No matching conversations' : 'No saved conversations in this workspace yet'}
+                {query ? 'No matching conversations' : 'No saved conversations in this project folder yet'}
               </div>
             ) : (
               rows.map((r) => (
@@ -313,7 +313,7 @@ function ChatHistorySwitcherInner({ chatId, onRestoreSession, iconOnly = false }
                 className="chs-footer-btn"
                 onClick={() => void handleExportAll()}
                 disabled={exporting}
-                title="Download every saved conversation in this workspace as Markdown"
+                title="Download every saved conversation in this project folder as Markdown"
                 data-testid="chs-export-all"
               >
                 {exporting ? <Loader2 size={12} className="chs-spinner" /> : <Download size={12} />}

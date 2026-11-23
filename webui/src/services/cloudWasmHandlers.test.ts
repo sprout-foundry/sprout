@@ -955,7 +955,7 @@ describe('a run the platform refuses', () => {
 });
 
 describe('handleWasmLocal — /api/search/replace', () => {
-  /** A workspace at /workspace whose files live in `files`; writes land there too. */
+  /** A project folder at /workspace whose files live in `files`; writes land there too. */
   function replaceIn(initial: Record<string, string>, request: Record<string, unknown>) {
     const files = { ...initial };
     const writes: string[] = [];

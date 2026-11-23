@@ -52,7 +52,7 @@ func (h *checkpointHandler) Execute(ctx context.Context, env ToolEnv, args map[s
 	summary, _ := extractString(args, "summary")
 	confirm := getBoolArg(args, "confirm")
 
-	result, err := ManageCheckpoints(env.WorkspaceRoot, action, id, revisionID, summary, confirm)
+	result, err := ManageCheckpoints(env.ProjectFolder, action, id, revisionID, summary, confirm)
 	if err != nil {
 		return ToolResult{Output: fmt.Sprintf("checkpoint: %v", err), IsError: true}, nil
 	}

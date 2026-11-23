@@ -6,7 +6,7 @@
  * pages historically lacked, which made escalation from an embedded editor
  * useless: (1) the browser-git VFS bridge, so a txn push manifest carries the
  * visitor's actual files, and (2) the agent escalation bridge, so exit-127
- * commands can run in the user's cloud workspace at all.
+ * commands can run in the user's cloud dev space at all.
  *
  * Both need three inputs the standalone pages don't have on their own:
  * the WASM shell (passed in by the caller after initWasmShell resolves), the
@@ -57,7 +57,7 @@ function hostEscalationDefaults(): { policy: 'ask' | 'always' | 'never' | null; 
 }
 
 export interface StandaloneEscalationBoot {
-  /** The repo URL escalation will resolve workspaces against ('' when none). */
+  /** The repo URL escalation will resolve project folders against ('' when none). */
   repoURL: string;
 }
 
@@ -117,7 +117,7 @@ export function bootStandaloneEscalation(shell: WasmShell): StandaloneEscalation
   });
 
   // 2. The escalation bridge: exit-127 commands ask the host (postMessage),
-  //    run transactionally in the user's workspace, pull deltas back into
+  //    run transactionally in the user's project folder, pull deltas back into
   //    the VFS the editor is showing.
   installEscalationBridge({
     repoURL: repoURL || undefined,

@@ -186,8 +186,8 @@ export function translateAndProxyChat(
 /**
  * Translate a webui chat request body to the Foundry proxy/chat format.
  *
- * Webui sends: { query, chat_id?, provider?, model?, workspace_root?, system_prompt?, mode? }
- * Foundry expects: { provider?, model?, messages, stream, chat_id?, steer?, workspace_root?, system_prompt?, mode? }
+ * Webui sends: { query, chat_id?, provider?, model?, project_folder?, system_prompt?, mode? }
+ * Foundry expects: { provider?, model?, messages, stream, chat_id?, steer?, project_folder?, system_prompt?, mode? }
  */
 export function translateRequestBody(webuiPath: string, parsed: Record<string, unknown>): Record<string, unknown> {
   const query = typeof parsed.query === 'string' ? parsed.query : '';
@@ -218,7 +218,7 @@ export function translateRequestBody(webuiPath: string, parsed: Record<string, u
   if (parsed.provider) translated.provider = parsed.provider;
   if (parsed.model) translated.model = parsed.model;
   if (parsed.chat_id) translated.chat_id = parsed.chat_id;
-  if (parsed.workspace_root) translated.workspace_root = parsed.workspace_root;
+  if (parsed.project_folder) translated.project_folder = parsed.project_folder;
   if (parsed.system_prompt) translated.system_prompt = parsed.system_prompt;
   if (parsed.mode) translated.mode = parsed.mode;
   if (isSteer) translated.steer = true;

@@ -8,7 +8,7 @@ import (
 // isSafeShellCommand admits, and the dangerous / caution pattern sets it
 // rejects. Split out of the original monolith; pure move.
 
-// isSafeShellCommand checks if a command is safe (read-only or workspace operations).
+// isSafeShellCommand checks if a command is safe (read-only or project folder operations).
 // Rejects commands with output redirection (> or >>) unless to /tmp/.
 func isSafeShellCommand(cmd string) bool {
 	// Reject commands with output redirection that target non-tmp paths
@@ -123,7 +123,7 @@ func isSafeShellCommand(cmd string) bool {
 		return true
 	}
 
-	// sed (safe for all usage in workspace context)
+	// sed (safe for all usage in project folder context)
 	if strings.HasPrefix(cmd, "sed ") {
 		return true
 	}
@@ -242,18 +242,18 @@ func isSafeShellCommand(cmd string) bool {
 		}
 	}
 
-	// Common workspace operations that are safe
-	safeWorkspacePrefixes := []string{
-		"mkdir -p", "touch ", "tee ", // writing to workspace, not system dirs
-		"cp ", "mv ", "ln ", // workspace-level moves/copies/symlinks
-		"chmod ", "chown ", "chgrp ", // workspace permissions
+	// Common project folder operations that are safe
+	safeProjectFolderPrefixes := []string{
+		"mkdir -p", "touch ", "tee ", // writing to project folder, not system dirs
+		"cp ", "mv ", "ln ", // project-folder-level moves/copies/symlinks
+		"chmod ", "chown ", "chgrp ", // project folder permissions
 		"strip ", "install ",
 	}
-	// Common workspace operations that are safe.
+	// Common project folder operations that are safe.
 	// NOTE: This block relies on isDangerousPattern (called first in classifySingleCommand)
 	// for source-path validation of multi-path commands like cp/mv. If a command has any
 	// system path argument, isDangerousPattern catches it before reaching this block.
-	for _, prefix := range safeWorkspacePrefixes {
+	for _, prefix := range safeProjectFolderPrefixes {
 		if strings.HasPrefix(cmd, prefix) {
 			argsAfterCmd := cmd[len(prefix):]
 			// Check ALL arguments (not just destination) to catch:
@@ -305,7 +305,7 @@ func isDangerousPattern(cmd string) bool {
 		return true
 	}
 
-	// Check for workspace commands targeting system directories.
+	// Check for project folder commands targeting system directories.
 	// This catches cp/mv/chmod/etc. that modify files in /etc/, /usr/, etc.
 	prefixes := []string{"chmod ", "chown ", "chgrp ", "cp ", "mv ", "mkdir -p", "touch ", "tee ", "ln ", "install ", "strip "}
 	for _, prefix := range prefixes {

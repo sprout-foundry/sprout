@@ -15,7 +15,7 @@ const maxDiffBytes = 200000
 
 // handleAPIGitDiff handles git diff requests for a specific file
 func (ws *ReactWebServer) handleAPIGitDiff(w http.ResponseWriter, r *http.Request) {
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	projectFolder := ws.getProjectFolderForRequest(r)
 	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
@@ -26,11 +26,11 @@ func (ws *ReactWebServer) handleAPIGitDiff(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Convert absolute paths to workspace-relative for git operations.
-	reqPath = makeGitRelativePath(reqPath, workspaceRoot)
+	// Convert absolute paths to project-folder-relative for git operations.
+	reqPath = makeGitRelativePath(reqPath, projectFolder)
 
 	// Return empty diffs gracefully when not in a git repository.
-	checkCmd := ws.gitCommandForWorkspace(workspaceRoot, "rev-parse", "--git-dir")
+	checkCmd := ws.gitCommandForProjectFolder(projectFolder, "rev-parse", "--git-dir")
 	if err := checkCmd.Run(); err != nil {
 		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"message":       "success",
@@ -44,13 +44,13 @@ func (ws *ReactWebServer) handleAPIGitDiff(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	stagedDiff, err := ws.gitDiffAllowExitOneForWorkspace(workspaceRoot, "diff", "--cached", "--", reqPath)
+	stagedDiff, err := ws.gitDiffAllowExitOneForProjectFolder(projectFolder, "diff", "--cached", "--", reqPath)
 	if err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_get_staged_diff", fmt.Sprintf("Failed to get staged diff: %v", err))
 		return
 	}
 
-	unstagedDiff, err := ws.gitDiffAllowExitOneForWorkspace(workspaceRoot, "diff", "--", reqPath)
+	unstagedDiff, err := ws.gitDiffAllowExitOneForProjectFolder(projectFolder, "diff", "--", reqPath)
 	if err != nil {
 		writeJSONErr(w, http.StatusInternalServerError, "failed_to_get_unstaged_diff", fmt.Sprintf("Failed to get unstaged diff: %v", err))
 		return
@@ -60,16 +60,16 @@ func (ws *ReactWebServer) handleAPIGitDiff(w http.ResponseWriter, r *http.Reques
 	if strings.TrimSpace(stagedDiff) == "" && strings.TrimSpace(unstagedDiff) == "" {
 		absPath := reqPath
 		if !filepath.IsAbs(absPath) {
-			absPath = filepath.Join(workspaceRoot, absPath)
+			absPath = filepath.Join(projectFolder, absPath)
 		}
 		// Only try the synthetic diff if the file actually exists on disk
 		// (it may be clean/committed, in which case we just return empty diffs).
 		if _, statErr := os.Stat(absPath); statErr == nil {
 			// Check if the file is tracked by git. If it is, skip the synthetic diff.
-			cmd := ws.gitCommandForWorkspace(workspaceRoot, "ls-files", "--error-unmatch", "--", reqPath)
+			cmd := ws.gitCommandForProjectFolder(projectFolder, "ls-files", "--error-unmatch", "--", reqPath)
 			if cmd.Run() != nil {
 				// File is not tracked, so it's untracked - generate synthetic diff
-				untrackedDiff, untrackedErr := ws.gitDiffAllowExitOneForWorkspace(workspaceRoot, "diff", "--no-index", "--", "/dev/null", reqPath)
+				untrackedDiff, untrackedErr := ws.gitDiffAllowExitOneForProjectFolder(projectFolder, "diff", "--no-index", "--", "/dev/null", reqPath)
 				if untrackedErr == nil {
 					unstagedDiff = untrackedDiff
 				}
@@ -109,7 +109,7 @@ func (ws *ReactWebServer) handleAPIGitDiff(w http.ResponseWriter, r *http.Reques
 	// rest of the file. When extraction succeeds the frontend uses these
 	// verbatim; when it fails (size cap) the merge view degrades to
 	// read-only on the fragment reconstruction.
-	originalContent, modifiedContent, contentsTruncated := ws.gitDiffFileContents(workspaceRoot, reqPath)
+	originalContent, modifiedContent, contentsTruncated := ws.gitDiffFileContents(projectFolder, reqPath)
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"message":            "success",
@@ -152,11 +152,11 @@ func looksBinary(data []byte) bool {
 // maxDiffFileContentBytes or being binary. Git errors leave strings empty —
 // the diff text remains authoritative for display; only editability is
 // affected.
-func (ws *ReactWebServer) gitDiffFileContents(workspaceRoot, reqPath string) (string, string, bool) {
+func (ws *ReactWebServer) gitDiffFileContents(projectFolder, reqPath string) (string, string, bool) {
 	truncated := false
 
 	var original string
-	if cmd := ws.gitCommandForWorkspace(workspaceRoot, "show", "HEAD:"+reqPath); cmd != nil {
+	if cmd := ws.gitCommandForProjectFolder(projectFolder, "show", "HEAD:"+reqPath); cmd != nil {
 		if out, err := cmd.Output(); err == nil {
 			if len(out) > maxDiffFileContentBytes || looksBinary(out) {
 				truncated = true
@@ -171,7 +171,7 @@ func (ws *ReactWebServer) gitDiffFileContents(workspaceRoot, reqPath string) (st
 	var modified string
 	absPath := reqPath
 	if !filepath.IsAbs(absPath) {
-		absPath = filepath.Join(workspaceRoot, reqPath)
+		absPath = filepath.Join(projectFolder, reqPath)
 	}
 	if info, err := os.Stat(absPath); err == nil && !info.IsDir() {
 		if info.Size() > maxDiffFileContentBytes {

@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// The browser workspace search (webui cloudWasmHandlers handleWasmSearch)
+// The browser project folder search (webui cloudWasmHandlers handleWasmSearch)
 // runs grep with -F for a plain query, -E for a regex, -w for whole word and
 // -i unless case-sensitive, the query after -e. These pin that each option
 // changes the hits as the daemon's search does.

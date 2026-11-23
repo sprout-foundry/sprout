@@ -5,7 +5,7 @@ import "net/http"
 // Probe describes one operation the suite checks against a live base URL: the
 // request to send (method, path, and any query) and the expectation (a 200 and
 // a body shaped by the operation's 200 schema). A probe is deliberately
-// conservative: it must be safe to run against a fresh, disposable workspace
+// conservative: it must be safe to run against a fresh, disposable project folder
 // with no active chat and no running agent.
 type Probe struct {
 	// OperationID is the operation's operationId; it is what a result is
@@ -18,7 +18,7 @@ type Probe struct {
 	// Path is the concrete request path. Path parameters (if any) are
 	// substituted with a safe concrete value (or the path is left empty of the
 	// parameter where that is the safe form). A probe is only added when the
-	// resulting request is safe to fire at a fresh workspace.
+	// resulting request is safe to fire at a fresh project folder.
 	Path string
 
 	// Query carries the request query string values. It is empty for the
@@ -37,12 +37,12 @@ type Probe struct {
 }
 
 // DefaultProbes returns the curated set of safe, read-only GET probes for a
-// fresh, disposable workspace. Each entry returns a usable 200 response with no
+// fresh, disposable project folder. Each entry returns a usable 200 response with no
 // active chat, running agent, or prior state required. The set deliberately
 // excludes:
 //   - GETs that need a session, chat, or edit id to exist
 //     (editStatus, chatSessionWorktreeGet, the chat-sessions/{id} family,
-//     sessionExport) — a fresh workspace has none, and inventing an id only
+//     sessionExport) — a fresh project folder has none, and inventing an id only
 //     probes 404 paths;
 //   - GETs that depend on an external or optional subsystem being present
 //     (sshHosts, sshSessions, sshLaunchStatus, localLLMStatus,
@@ -54,7 +54,7 @@ type Probe struct {
 //     network;
 //   - GETs that require a query parameter the table will not fabricate
 //     (searchQuery is the one exception: it needs ?query and is included with
-//     a literal query so a fresh workspace returns a valid, possibly-empty
+//     a literal query so a fresh project folder returns a valid, possibly-empty
 //     result set).
 //
 // The default set is the high-signal baseline. A later suite consumer overrides
@@ -85,9 +85,9 @@ func DefaultProbes() []Probe {
 		makeProbe("get-stats", "diagnostics", "/api/stats", nil),
 
 		// workspace/instances
-		makeProbe("workspaceGet", "workspace/instances", "/api/workspace", nil),
-		makeProbe("workspaceProjects", "workspace/instances", "/api/workspace/projects", nil),
-		makeProbe("workspaceBrowse", "workspace/instances", "/api/workspace/browse", nil),
+		makeProbe("workspaceGet", "workspace/instances", "/api/project-folder", nil),
+		makeProbe("workspaceProjects", "workspace/instances", "/api/project-folder/projects", nil),
+		makeProbe("workspaceBrowse", "workspace/instances", "/api/project-folder/browse", nil),
 		makeProbe("instancesList", "workspace/instances", "/api/instances", nil),
 
 		// files
@@ -97,9 +97,9 @@ func DefaultProbes() []Probe {
 
 		// git
 		//
-		// The git probes assume the workspace is a git repository: a real sprout
-		// workspace (a code-editing tool's project) is a git repo, and a conformance
-		// harness should stage the disposable workspace as one. gitLog returns 200
+		// The git probes assume the project folder is a git repository: a real sprout
+		// project folder (a code-editing tool's project) is a git repo, and a conformance
+		// harness should stage the disposable project folder as one. gitLog returns 200
 		// only in a git repo (it 400s otherwise), while gitStatus / gitBranches /
 		// gitWorktrees report in_git_repo:false and still return 200 outside one.
 		makeProbe("gitStatus", "git", "/api/git/status", nil),
@@ -107,7 +107,7 @@ func DefaultProbes() []Probe {
 		makeProbe("gitLog", "git", "/api/git/log", nil),
 		// gitDiff is a per-file operation: it requires a `path` query parameter (a
 		// bare GET is 400 path_required). Like searchQuery, the probe supplies the
-		// parameter so a fresh workspace returns a valid, possibly-empty diff.
+		// parameter so a fresh project folder returns a valid, possibly-empty diff.
 		makeProbe("gitDiff", "git", "/api/git/diff", map[string]string{"path": "README.md"}),
 		makeProbe("gitWorktrees", "git", "/api/git/worktrees", nil),
 
@@ -132,7 +132,7 @@ func DefaultProbes() []Probe {
 		makeProbe("txnStatus", "sync/txn", "/api/txn/status", nil),
 		makeProbe("lifecycleActivity", "sync/txn", "/api/lifecycle/activity", nil),
 
-		// search (needs a query parameter to return a 200 on a fresh workspace)
+		// search (needs a query parameter to return a 200 on a fresh project folder)
 		makeProbe("searchQuery", "search", "/api/search", map[string]string{"query": "x"}),
 
 		// starters

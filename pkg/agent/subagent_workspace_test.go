@@ -66,71 +66,71 @@ func TestCommonParent(t *testing.T) {
 	}
 }
 
-// TestIsPathInWorkspace verifies the path-in-workspace check works correctly
-func TestIsPathInWorkspace(t *testing.T) {
-	workspaceDir := "/home/user/project"
+// TestIsPathInProjectFolder verifies the path-in-project-folder check works correctly
+func TestIsPathInProjectFolder(t *testing.T) {
+	projectFolderDir := "/home/user/project"
 
 	tests := []struct {
-		name      string
-		path      string
-		workspace string
-		expected  bool
+		name          string
+		path          string
+		projectFolder string
+		expected      bool
 	}{
 		{
-			name:      "file in workspace",
-			path:      "/home/user/project/pkg/file.go",
-			workspace: workspaceDir,
-			expected:  true,
+			name:          "file in project folder",
+			path:          "/home/user/project/pkg/file.go",
+			projectFolder: projectFolderDir,
+			expected:      true,
 		},
 		{
-			name:      "file directly in workspace",
-			path:      "/home/user/project/file.go",
-			workspace: workspaceDir,
-			expected:  true,
+			name:          "file directly in project folder",
+			path:          "/home/user/project/file.go",
+			projectFolder: projectFolderDir,
+			expected:      true,
 		},
 		{
-			name:      "deep nested file in workspace",
-			path:      "/home/user/project/pkg/sub1/sub2/file.go",
-			workspace: workspaceDir,
-			expected:  true,
+			name:          "deep nested file in project folder",
+			path:          "/home/user/project/pkg/sub1/sub2/file.go",
+			projectFolder: projectFolderDir,
+			expected:      true,
 		},
 		{
-			name:      "file outside workspace (different project)",
-			path:      "/home/user/other-project/file.go",
-			workspace: workspaceDir,
-			expected:  false,
+			name:          "file outside project folder (different project)",
+			path:          "/home/user/other-project/file.go",
+			projectFolder: projectFolderDir,
+			expected:      false,
 		},
 		{
-			name:      "file outside workspace (different user)",
-			path:      "/home/other-user/project/file.go",
-			workspace: workspaceDir,
-			expected:  false,
+			name:          "file outside project folder (different user)",
+			path:          "/home/other-user/project/file.go",
+			projectFolder: projectFolderDir,
+			expected:      false,
 		},
 		{
-			name:      "file outside workspace (system path)",
-			path:      "/usr/local/bin/file",
-			workspace: workspaceDir,
-			expected:  false,
+			name:          "file outside project folder (system path)",
+			path:          "/usr/local/bin/file",
+			projectFolder: projectFolderDir,
+			expected:      false,
 		},
 		{
-			name:      "workspace directory itself",
-			path:      "/home/user/project",
-			workspace: workspaceDir,
-			expected:  true,
+			name:          "project folder itself",
+			path:          "/home/user/project",
+			projectFolder: projectFolderDir,
+			expected:      true,
 		},
 		{
-			name:      "file in subdirectory of workspace with same prefix",
-			path:      "/home/user/project-2/file.go",
-			workspace: workspaceDir,
-			expected:  false,
+			name:          "file in subdirectory of project folder with same prefix",
+			path:          "/home/user/project-2/file.go",
+			projectFolder: projectFolderDir,
+			expected:      false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := isPathInWorkspace(filepath.FromSlash(tt.path), filepath.FromSlash(tt.workspace))
+			result := isPathInProjectFolder(filepath.FromSlash(tt.path), filepath.FromSlash(tt.projectFolder))
 			if result != tt.expected {
-				t.Errorf("isPathInWorkspace(%q, %q) = %v, want %v", tt.path, tt.workspace, result, tt.expected)
+				t.Errorf("isPathInProjectFolder(%q, %q) = %v, want %v", tt.path, tt.projectFolder, result, tt.expected)
 			}
 		})
 	}
@@ -159,7 +159,7 @@ func TestIsPathInTmp(t *testing.T) {
 			expected: true,
 		},
 		{
-			name:     "file in workspace",
+			name:     "file in project folder",
 			path:     "/home/user/project/file.go",
 			expected: false,
 		},
@@ -272,11 +272,11 @@ func fromSlashAll(paths []string) []string {
 	return out
 }
 
-func TestIsPathInWorkspace_VolumeRootAndOSTemp(t *testing.T) {
+func TestIsPathInProjectFolder_VolumeRootAndOSTemp(t *testing.T) {
 	root := filepath.VolumeName(os.TempDir()) + string(filepath.Separator)
 	inside := filepath.Join(os.TempDir(), "sprout", "file.go")
-	if !isPathInWorkspace(inside, root) {
-		t.Errorf("isPathInWorkspace(%q, %q) = false, want true", inside, root)
+	if !isPathInProjectFolder(inside, root) {
+		t.Errorf("isPathInProjectFolder(%q, %q) = false, want true", inside, root)
 	}
 	if !isPathInTmp(inside) {
 		t.Errorf("isPathInTmp(%q) = false, want true", inside)

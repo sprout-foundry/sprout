@@ -85,7 +85,7 @@ func (h *patchStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 	}
 	// "prompt" → interactive approval; on deny fall through to the raw error.
 	if decision == "prompt" {
-		if ctx2, approved := promptForOffWorkspacePath(ctx, env, "patch_structured_file", path, resolvedPath, "write"); approved {
+		if ctx2, approved := promptForOffProjectFolderPath(ctx, env, "patch_structured_file", path, resolvedPath, "write"); approved {
 			ctx = ctx2
 		}
 	}

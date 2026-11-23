@@ -154,16 +154,16 @@ func TestBuildTimeline_IncludesCheckpoints(t *testing.T) {
 	workdir := seedCheckpointStore(t)
 	recordRevision(t, workdir, "rev-1", "a.go", "package a\n", "package a\n// x\n")
 
-	verCP, err := history.CreateCheckpointInWorkspace(workdir, history.CheckpointVerification, "verification passed", nil)
+	verCP, err := history.CreateCheckpointInProjectFolder(workdir, history.CheckpointVerification, "verification passed", nil)
 	if err != nil {
 		t.Fatalf("CreateCheckpoint: %v", err)
 	}
-	depCP, err := history.CreateCheckpointInWorkspace(workdir, history.CheckpointDeploy, "deployed", nil)
+	depCP, err := history.CreateCheckpointInProjectFolder(workdir, history.CheckpointDeploy, "deployed", nil)
 	if err != nil {
 		t.Fatalf("CreateCheckpoint: %v", err)
 	}
 
-	entries, err := BuildTimelineInWorkspace(workdir, nil, nil, OldestFirst)
+	entries, err := BuildTimelineInProjectFolder(workdir, nil, nil, OldestFirst)
 	if err != nil {
 		t.Fatalf("BuildTimeline: %v", err)
 	}
@@ -192,21 +192,21 @@ func TestBuildTimeline_ShowsRestoreAsEntry(t *testing.T) {
 	workdir := seedCheckpointStore(t)
 	recordRevision(t, workdir, "rev-1", "a.go", "package a\n", "package a\n// x\n")
 
-	cp, err := history.CreateCheckpointInWorkspace(workdir, history.CheckpointManual, "point", nil)
+	cp, err := history.CreateCheckpointInProjectFolder(workdir, history.CheckpointManual, "point", nil)
 	if err != nil {
 		t.Fatalf("CreateCheckpoint: %v", err)
 	}
 
-	before, err := BuildTimelineInWorkspace(workdir, nil, nil, OldestFirst)
+	before, err := BuildTimelineInProjectFolder(workdir, nil, nil, OldestFirst)
 	if err != nil {
 		t.Fatalf("BuildTimeline: %v", err)
 	}
 
-	if _, err := history.RestoreCheckpointInWorkspace(workdir, cp.ID); err != nil {
+	if _, err := history.RestoreCheckpointInProjectFolder(workdir, cp.ID); err != nil {
 		t.Fatalf("RestoreCheckpoint: %v", err)
 	}
 
-	after, err := BuildTimelineInWorkspace(workdir, nil, nil, OldestFirst)
+	after, err := BuildTimelineInProjectFolder(workdir, nil, nil, OldestFirst)
 	if err != nil {
 		t.Fatalf("BuildTimeline: %v", err)
 	}

@@ -21,11 +21,11 @@ import (
 // helpers
 // ---------------------------------------------------------------------------
 
-func newTestEnv(t *testing.T, workspaceRoot string) ToolEnv {
+func newTestEnv(t *testing.T, projectFolder string) ToolEnv {
 	t.Helper()
 	return ToolEnv{
 		EventBus:      events.NewEventBus(),
-		WorkspaceRoot: workspaceRoot,
+		ProjectFolder: projectFolder,
 		OutputWriter:  os.Stderr,
 		MaxTokensFunc: func() int { return 128000 },
 		// Hermetic config manager. Without this, handlers that fall
@@ -55,7 +55,7 @@ func newHermeticConfigManager(t *testing.T) *configuration.Manager {
 }
 
 func newTestCtx(root string) context.Context {
-	return filesystem.WithWorkspaceRoot(context.Background(), root)
+	return filesystem.WithProjectFolder(context.Background(), root)
 }
 
 // ---------------------------------------------------------------------------
@@ -1281,7 +1281,7 @@ func TestReadFileHandlerConformance_RelativePath(t *testing.T) {
 	path := filepath.Join(dir, "relative.txt")
 	require.NoError(t, os.WriteFile(path, []byte("relative content"), 0o644))
 
-	// Use relative path (relative to workspace root)
+	// Use relative path (relative to project folder)
 	res, err := h.Execute(ctx, newTestEnv(t, dir), map[string]any{"path": "relative.txt"})
 	require.NoError(t, err)
 	require.Contains(t, res.Output, "relative content")
@@ -1823,10 +1823,10 @@ func TestCommitHandlerConformance(t *testing.T) {
 		t.Errorf("Validate(notes) should return nil, got: %v", err)
 	}
 
-	// Execute: with valid args and workspace root (should not panic)
+	// Execute: with valid args and project folder (should not panic)
 	ctx := context.Background()
 	tmpDir := t.TempDir()
-	env := ToolEnv{WorkspaceRoot: tmpDir}
+	env := ToolEnv{ProjectFolder: tmpDir}
 	_, err := h.Execute(ctx, env, map[string]any{"message": "test"})
 	// We don't assert specific output since git won't work in a temp dir,
 	// but we verify it doesn't panic
@@ -2132,8 +2132,8 @@ func TestPatchStructuredFileHandlerConformance(t *testing.T) {
 	jsonPath := filepath.Join(tmpDir, "test.json")
 	os.WriteFile(jsonPath, []byte(`{"name": "original", "value": 1}`), 0644)
 
-	ctx := filesystem.WithWorkspaceRoot(context.Background(), tmpDir)
-	env := ToolEnv{WorkspaceRoot: tmpDir}
+	ctx := filesystem.WithProjectFolder(context.Background(), tmpDir)
+	env := ToolEnv{ProjectFolder: tmpDir}
 	result, err := h.Execute(ctx, env, map[string]any{
 		"path": jsonPath,
 		"patch_ops": []interface{}{

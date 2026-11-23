@@ -1,5 +1,5 @@
 /**
- * Native bridge backend for the workspaceFs seam.
+ * Native bridge backend for the projectFolderFs seam.
  *
  * Routes every operation to the shell's `files` bridge channel
  * (bridge-protocol.md §10.1): iOS via WKWebView message handlers, Android
@@ -12,7 +12,7 @@
  * every result uniformly.
  */
 
-import type { BatchResult, FsOk, ListResult, ReadResult, StatResult, WorkspaceFs, WriteEntry } from './types';
+import type { BatchResult, FsOk, ListResult, ReadResult, StatResult, ProjectFolderFs, WriteEntry } from './types';
 import { normalizeFsPath, WRITE_BATCH_CAP } from './types';
 
 /** Minimal shape of the bridge the shell injects (studio-bridge.js). */
@@ -47,7 +47,7 @@ async function filesOp(call: BridgeCall, payload: Record<string, unknown>): Prom
   }
 }
 
-export function createNativeBridgeFs(call: BridgeCall = requiredCall()): WorkspaceFs {
+export function createNativeBridgeFs(call: BridgeCall = requiredCall()): ProjectFolderFs {
   return {
     async read(path) {
       const r = await filesOp(call, { op: 'readWorkspaceFile', path: normalizeFsPath(path) });

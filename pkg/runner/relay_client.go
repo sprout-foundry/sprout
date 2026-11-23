@@ -38,7 +38,7 @@ func tunnelURL(platformURL, runnerID string) (string, error) {
 
 // relayLoop keeps a tunnel to the platform open, reconnecting with backoff,
 // and serves the platform's calls through the host server's handler — so
-// relayed calls pass the same per-workspace secret check as direct ones.
+// relayed calls pass the same per-dev-space secret check as direct ones.
 func (r *Runner) relayLoop(ctx context.Context) {
 	target, err := tunnelURL(r.State.PlatformURL, r.State.RunnerID)
 	if err != nil {

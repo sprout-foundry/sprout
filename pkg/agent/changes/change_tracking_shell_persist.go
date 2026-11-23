@@ -8,12 +8,12 @@
 //
 // This file persists the learned set to
 // `~/.config/sprout/shell_skip_dirs.json`, keyed by absolute
-// workspace root, so subsequent sessions in the same workspace
+// project folder, so subsequent sessions in the same project folder
 // inherit the learning. The file is best-effort: read failures fall
 // back to an empty set (re-learn), write failures log a warning.
 //
-// To prevent unbounded growth across many workspaces, the file caps
-// at maxPersistedWorkspaces entries — least-recently-used workspaces
+// To prevent unbounded growth across many project folders, the file caps
+// at maxPersistedProjectFolders entries — least-recently-used project folders
 // are evicted first when the cap is exceeded.
 package changes
 
@@ -31,43 +31,43 @@ import (
 )
 
 // shellSkipDirsFilename is the on-disk name within the sprout config
-// directory. One file holds all workspaces — keyed by workspace root
+// directory. One file holds all project folders — keyed by project folder
 // inside the JSON. Easy to inspect / edit by hand to forget a
 // previously-learned dir.
 const shellSkipDirsFilename = "shell_skip_dirs.json"
 
-// maxPersistedWorkspaces caps the number of workspaces tracked in
+// maxPersistedProjectFolders caps the number of project folders tracked in
 // shell_skip_dirs.json. 50 covers most users (a few dozen projects +
 // some scratch dirs); the cap prevents the file from growing without
 // bound when a user works across many projects over time. LRU
-// eviction ensures frequently-used workspaces survive.
-const maxPersistedWorkspaces = 50
+// eviction ensures frequently-used project folders survive.
+const maxPersistedProjectFolders = 50
 
 // shellSkipDirsFileSchema is the on-disk shape. Versioned in case we
-// want to evolve the file format. LastUsed is keyed by workspace root
-// (same key as Workspaces) and stores a unix timestamp; missing
+// want to evolve the file format. LastUsed is keyed by project folder
+// (same key as Project folders) and stores a unix timestamp; missing
 // entries are treated as epoch (oldest) so they evict first.
 type shellSkipDirsFileSchema struct {
-	Version    int                 `json:"version"`
-	Workspaces map[string][]string `json:"workspaces"`
-	LastUsed   map[string]int64    `json:"last_used,omitempty"`
+	Version        int                 `json:"version"`
+	ProjectFolders map[string][]string `json:"workspaces"`
+	LastUsed       map[string]int64    `json:"last_used,omitempty"`
 }
 
 // shellSkipDirsPersistMu serializes file I/O so concurrent subagents
 // in the same process don't race on the read-modify-write pattern.
-// One mutex covers all workspaces (the file is global); contention is
+// One mutex covers all project folders (the file is global); contention is
 // negligible because saves only happen at walk-end when something new
 // is learned.
 var shellSkipDirsPersistMu sync.Mutex
 
 // loadAutoSkipDirsFor returns the previously-persisted auto-skip set
-// for the given workspace root. Returns an empty (non-nil) map on
+// for the given project folder. Returns an empty (non-nil) map on
 // first run, missing config dir, or any I/O / parse error — we never
 // surface persistence failures to the agent, just log and continue
 // with an empty learned set (re-learning is cheap).
-func loadAutoSkipDirsFor(workspaceRoot string) map[string]bool {
+func loadAutoSkipDirsFor(projectFolder string) map[string]bool {
 	result := make(map[string]bool)
-	if workspaceRoot == "" {
+	if projectFolder == "" {
 		return result
 	}
 	path, err := shellSkipDirsFilePath()
@@ -86,7 +86,7 @@ func loadAutoSkipDirsFor(workspaceRoot string) map[string]bool {
 	if jsonErr := json.Unmarshal(data, &schema); jsonErr != nil {
 		return result
 	}
-	for _, dir := range schema.Workspaces[workspaceRoot] {
+	for _, dir := range schema.ProjectFolders[projectFolder] {
 		result[dir] = true
 	}
 
@@ -94,15 +94,15 @@ func loadAutoSkipDirsFor(workspaceRoot string) map[string]bool {
 }
 
 // saveAutoSkipDirsFor merges the given set into the persisted file
-// under the workspace key. Read-modify-write under a process-level
+// under the project folder key. Read-modify-write under a process-level
 // mutex; atomic via temp + rename so a crash never produces a partial
 // JSON file.
 //
-// Enforces maxPersistedWorkspaces via LRU eviction: if the workspace
+// Enforces maxPersistedProjectFolders via LRU eviction: if the project folder
 // count exceeds the cap, the least-recently-used entries (oldest
 // LastUsed) are removed until count <= cap.
-func saveAutoSkipDirsFor(workspaceRoot string, dirs map[string]bool) error {
-	if workspaceRoot == "" || len(dirs) == 0 {
+func saveAutoSkipDirsFor(projectFolder string, dirs map[string]bool) error {
+	if projectFolder == "" || len(dirs) == 0 {
 		return nil
 	}
 	path, err := shellSkipDirsFilePath()
@@ -118,8 +118,8 @@ func saveAutoSkipDirsFor(workspaceRoot string, dirs map[string]bool) error {
 	if data, readErr := os.ReadFile(path); readErr == nil {
 		_ = json.Unmarshal(data, &schema)
 	}
-	if schema.Workspaces == nil {
-		schema.Workspaces = make(map[string][]string)
+	if schema.ProjectFolders == nil {
+		schema.ProjectFolders = make(map[string][]string)
 	}
 	if schema.LastUsed == nil {
 		schema.LastUsed = make(map[string]int64)
@@ -127,8 +127,8 @@ func saveAutoSkipDirsFor(workspaceRoot string, dirs map[string]bool) error {
 	schema.Version = 1
 
 	// Merge: union of previously-saved + currently-known.
-	existing := make(map[string]bool, len(schema.Workspaces[workspaceRoot]))
-	for _, d := range schema.Workspaces[workspaceRoot] {
+	existing := make(map[string]bool, len(schema.ProjectFolders[projectFolder]))
+	for _, d := range schema.ProjectFolders[projectFolder] {
 		existing[d] = true
 	}
 	for d := range dirs {
@@ -139,22 +139,22 @@ func saveAutoSkipDirsFor(workspaceRoot string, dirs map[string]bool) error {
 		merged = append(merged, d)
 	}
 	sort.Strings(merged) // deterministic output for sane diffs
-	schema.Workspaces[workspaceRoot] = merged
+	schema.ProjectFolders[projectFolder] = merged
 
-	// Bump LastUsed for the current workspace. If it was loaded this
+	// Bump LastUsed for the current project folder. If it was loaded this
 	// process (or already has a future timestamp), use now; otherwise
 	// preserve whatever was there (could be a newer timestamp from
 	// another process).
 	now := time.Now().Unix()
-	if schema.LastUsed[workspaceRoot] < now {
-		schema.LastUsed[workspaceRoot] = now
+	if schema.LastUsed[projectFolder] < now {
+		schema.LastUsed[projectFolder] = now
 	}
 
 	// LRU eviction: if we're over the cap, remove the oldest
-	// workspaces until we're at the cap. Workspaces with no LastUsed
+	// project folders until we're at the cap. Project folders with no LastUsed
 	// (missing/zero) evict first.
-	if len(schema.Workspaces) > maxPersistedWorkspaces {
-		evictOldestWorkspaces(&schema, len(schema.Workspaces)-maxPersistedWorkspaces)
+	if len(schema.ProjectFolders) > maxPersistedProjectFolders {
+		evictOldestProjectFolders(&schema, len(schema.ProjectFolders)-maxPersistedProjectFolders)
 	}
 
 	out, marshalErr := json.MarshalIndent(&schema, "", "  ")
@@ -188,20 +188,20 @@ func saveAutoSkipDirsFor(workspaceRoot string, dirs map[string]bool) error {
 	return nil
 }
 
-// evictOldestWorkspaces removes the n least-recently-used workspaces
-// from schema.Workspaces and schema.LastUsed. Workspaces without a
+// evictOldestProjectFolders removes the n least-recently-used project folders
+// from schema.ProjectFolders and schema.LastUsed. Project folders without a
 // LastUsed (zero timestamp) evict first; ties broken by sorted
-// workspace root for determinism.
-func evictOldestWorkspaces(schema *shellSkipDirsFileSchema, n int) {
-	if n <= 0 || len(schema.Workspaces) <= n {
+// project folder for determinism.
+func evictOldestProjectFolders(schema *shellSkipDirsFileSchema, n int) {
+	if n <= 0 || len(schema.ProjectFolders) <= n {
 		return
 	}
 	type entry struct {
 		root     string
 		lastUsed int64
 	}
-	entries := make([]entry, 0, len(schema.Workspaces))
-	for root := range schema.Workspaces {
+	entries := make([]entry, 0, len(schema.ProjectFolders))
+	for root := range schema.ProjectFolders {
 		entries = append(entries, entry{root: root, lastUsed: schema.LastUsed[root]})
 	}
 	// Sort ascending by lastUsed; ties broken by root name for
@@ -213,7 +213,7 @@ func evictOldestWorkspaces(schema *shellSkipDirsFileSchema, n int) {
 		return entries[i].root < entries[j].root
 	})
 	for i := 0; i < n; i++ {
-		delete(schema.Workspaces, entries[i].root)
+		delete(schema.ProjectFolders, entries[i].root)
 		delete(schema.LastUsed, entries[i].root)
 	}
 }
@@ -225,7 +225,7 @@ func evictOldestWorkspaces(schema *shellSkipDirsFileSchema, n int) {
 func shellSkipDirsFilePath() (string, error) {
 	// Under `go test`, refuse to persist unless the test pointed the config
 	// dir somewhere explicit. Packages without config isolation otherwise
-	// wrote their temp workspaces into the developer's real skip file,
+	// wrote their temp project folders into the developer's real skip file,
 	// evicting real entries from its LRU (mirrors git.SafeGitCmd's guard).
 	if testing.Testing() && os.Getenv("SPROUT_CONFIG_DIR") == "" && os.Getenv("SPROUT_CONFIG") == "" {
 		return "", errors.New("shell skip-dir persistence is disabled in tests without an isolated config dir")

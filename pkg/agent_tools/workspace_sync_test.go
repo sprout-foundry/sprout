@@ -11,7 +11,7 @@ import (
 
 // --- SyncState: UpdateContainerPatch ---
 
-func TestWorkspace_UpdateContainerPatch_FreshFile_SetsSeqs(t *testing.T) {
+func TestProjectFolder_UpdateContainerPatch_FreshFile_SetsSeqs(t *testing.T) {
 	ss := NewSyncState()
 
 	event := &PatchEvent{
@@ -40,7 +40,7 @@ func TestWorkspace_UpdateContainerPatch_FreshFile_SetsSeqs(t *testing.T) {
 	}
 }
 
-func TestWorkspace_UpdateContainerPatch_Conflict_BrowserUnsynced(t *testing.T) {
+func TestProjectFolder_UpdateContainerPatch_Conflict_BrowserUnsynced(t *testing.T) {
 	ss := NewSyncState()
 
 	// Simulate the browser having unsynced edits.
@@ -92,7 +92,7 @@ func TestWorkspace_UpdateContainerPatch_Conflict_BrowserUnsynced(t *testing.T) {
 	}
 }
 
-func TestWorkspace_UpdateContainerPatch_MultipleSeqs(t *testing.T) {
+func TestProjectFolder_UpdateContainerPatch_MultipleSeqs(t *testing.T) {
 	ss := NewSyncState()
 
 	seqs := []int64{1, 3, 7}
@@ -117,7 +117,7 @@ func TestWorkspace_UpdateContainerPatch_MultipleSeqs(t *testing.T) {
 
 // --- SyncState: ApplyBrowserOp ---
 
-func TestWorkspace_ApplyBrowserOp_BumpsSeqs(t *testing.T) {
+func TestProjectFolder_ApplyBrowserOp_BumpsSeqs(t *testing.T) {
 	ss := NewSyncState()
 
 	meta, err := ss.ApplyBrowserOp("pkg/foo/bar.go", "new content")
@@ -138,7 +138,7 @@ func TestWorkspace_ApplyBrowserOp_BumpsSeqs(t *testing.T) {
 	}
 }
 
-func TestWorkspace_ApplyBrowserOp_SecondOp_BumpsAgain(t *testing.T) {
+func TestProjectFolder_ApplyBrowserOp_SecondOp_BumpsAgain(t *testing.T) {
 	ss := NewSyncState()
 
 	_, err := ss.ApplyBrowserOp("pkg/foo/bar.go", "first")
@@ -162,7 +162,7 @@ func TestWorkspace_ApplyBrowserOp_SecondOp_BumpsAgain(t *testing.T) {
 	}
 }
 
-func TestWorkspace_ApplyBrowserOp_MultipleFiles_IndependentSeqs(t *testing.T) {
+func TestProjectFolder_ApplyBrowserOp_MultipleFiles_IndependentSeqs(t *testing.T) {
 	ss := NewSyncState()
 
 	_, err := ss.ApplyBrowserOp("a.go", "content a")
@@ -197,7 +197,7 @@ func TestWorkspace_ApplyBrowserOp_MultipleFiles_IndependentSeqs(t *testing.T) {
 
 // --- SyncState: GetMetadata ---
 
-func TestWorkspace_GetMetadata_Nonexistent_ReturnsNilFalse(t *testing.T) {
+func TestProjectFolder_GetMetadata_Nonexistent_ReturnsNilFalse(t *testing.T) {
 	ss := NewSyncState()
 	meta, ok := ss.GetMetadata("no-such-file.go")
 	if ok {
@@ -208,7 +208,7 @@ func TestWorkspace_GetMetadata_Nonexistent_ReturnsNilFalse(t *testing.T) {
 	}
 }
 
-func TestWorkspace_GetMetadata_ReturnsCopy(t *testing.T) {
+func TestProjectFolder_GetMetadata_ReturnsCopy(t *testing.T) {
 	ss := NewSyncState()
 	_, err := ss.ApplyBrowserOp("x.go", "initial")
 	if err != nil {
@@ -233,7 +233,7 @@ func TestWorkspace_GetMetadata_ReturnsCopy(t *testing.T) {
 
 // --- SyncState: GetAllMetadata ---
 
-func TestWorkspace_GetAllMetadata_Empty(t *testing.T) {
+func TestProjectFolder_GetAllMetadata_Empty(t *testing.T) {
 	ss := NewSyncState()
 	result := ss.GetAllMetadata()
 	if len(result) != 0 {
@@ -241,7 +241,7 @@ func TestWorkspace_GetAllMetadata_Empty(t *testing.T) {
 	}
 }
 
-func TestWorkspace_GetAllMetadata_ReturnsIndependentCopies(t *testing.T) {
+func TestProjectFolder_GetAllMetadata_ReturnsIndependentCopies(t *testing.T) {
 	ss := NewSyncState()
 	_, err := ss.ApplyBrowserOp("a.go", "content")
 	if err != nil {
@@ -280,7 +280,7 @@ func TestWorkspace_GetAllMetadata_ReturnsIndependentCopies(t *testing.T) {
 
 // --- Envelope construction ---
 
-func TestWorkspace_NewPatchInEnvelope(t *testing.T) {
+func TestProjectFolder_NewPatchInEnvelope(t *testing.T) {
 	env := NewPatchInEnvelope("file content", "pkg/x.go", 42)
 
 	if env.Type != EnvelopeTypePatchIn {
@@ -307,7 +307,7 @@ func TestWorkspace_NewPatchInEnvelope(t *testing.T) {
 	}
 }
 
-func TestWorkspace_NewPatchOutEnvelope(t *testing.T) {
+func TestProjectFolder_NewPatchOutEnvelope(t *testing.T) {
 	event := &PatchEvent{
 		Path:         "pkg/y.go",
 		ContainerSeq: 7,
@@ -333,7 +333,7 @@ func TestWorkspace_NewPatchOutEnvelope(t *testing.T) {
 	}
 }
 
-func TestWorkspace_NewHeartbeatEnvelope(t *testing.T) {
+func TestProjectFolder_NewHeartbeatEnvelope(t *testing.T) {
 	env := NewHeartbeatEnvelope()
 
 	if env.Type != EnvelopeTypeHeartbeat {
@@ -345,7 +345,7 @@ func TestWorkspace_NewHeartbeatEnvelope(t *testing.T) {
 	}
 }
 
-func TestWorkspace_EnvelopeTypeConstants(t *testing.T) {
+func TestProjectFolder_EnvelopeTypeConstants(t *testing.T) {
 	if EnvelopeTypePatchIn != "workspace.patch_in" {
 		t.Errorf("EnvelopeTypePatchIn = %q; want %q", EnvelopeTypePatchIn, "workspace.patch_in")
 	}
@@ -359,7 +359,7 @@ func TestWorkspace_EnvelopeTypeConstants(t *testing.T) {
 
 // --- Thread safety ---
 
-func TestWorkspace_UpdateContainerPatch_Concurrent_NoRace(t *testing.T) {
+func TestProjectFolder_UpdateContainerPatch_Concurrent_NoRace(t *testing.T) {
 	ss := NewSyncState()
 	var wg sync.WaitGroup
 
@@ -387,7 +387,7 @@ func TestWorkspace_UpdateContainerPatch_Concurrent_NoRace(t *testing.T) {
 	}
 }
 
-func TestWorkspace_ApplyBrowserOp_Concurrent_NoRace(t *testing.T) {
+func TestProjectFolder_ApplyBrowserOp_Concurrent_NoRace(t *testing.T) {
 	ss := NewSyncState()
 	var wg sync.WaitGroup
 
@@ -411,7 +411,7 @@ func TestWorkspace_ApplyBrowserOp_Concurrent_NoRace(t *testing.T) {
 	}
 }
 
-func TestWorkspace_MixedOperations_Concurrent_NoRace(t *testing.T) {
+func TestProjectFolder_MixedOperations_Concurrent_NoRace(t *testing.T) {
 	ss := NewSyncState()
 	var wg sync.WaitGroup
 
@@ -445,7 +445,7 @@ func TestWorkspace_MixedOperations_Concurrent_NoRace(t *testing.T) {
 
 // --- Integration: Container emits, browser acks ---
 
-func TestWorkspace_ContainerPatchThenBrowserAck_FullFlow(t *testing.T) {
+func TestProjectFolder_ContainerPatchThenBrowserAck_FullFlow(t *testing.T) {
 	ss := NewSyncState()
 
 	// 1. Container emits patch (agent writes file).
@@ -517,7 +517,7 @@ func findSubstr(s, substr string) bool {
 
 // --- HandleContainerPatchWithConflictDetection ---
 
-func TestWorkspace_HandleContainerPatchWithConflictDetection_CleanApply(t *testing.T) {
+func TestProjectFolder_HandleContainerPatchWithConflictDetection_CleanApply(t *testing.T) {
 	ss := NewSyncState()
 
 	// No conflict: browser_seq == last_synced_browser (both 0 on fresh file).
@@ -541,7 +541,7 @@ func TestWorkspace_HandleContainerPatchWithConflictDetection_CleanApply(t *testi
 	}
 }
 
-func TestWorkspace_HandleContainerPatchWithConflictDetection_Conflict(t *testing.T) {
+func TestProjectFolder_HandleContainerPatchWithConflictDetection_Conflict(t *testing.T) {
 	ss := NewSyncState()
 
 	// Use a flat path to avoid needing parent directories in CWD.
@@ -611,7 +611,7 @@ func TestWorkspace_HandleContainerPatchWithConflictDetection_Conflict(t *testing
 	}
 }
 
-func TestWorkspace_HandleContainerPatchWithConflictDetection_EmptyBrowserContent(t *testing.T) {
+func TestProjectFolder_HandleContainerPatchWithConflictDetection_EmptyBrowserContent(t *testing.T) {
 	ss := NewSyncState()
 	path := "empty_test.go"
 
@@ -646,7 +646,7 @@ func TestWorkspace_HandleContainerPatchWithConflictDetection_EmptyBrowserContent
 	_ = meta
 }
 
-func TestWorkspace_HandleContainerPatchWithConflictDetection_EventEmission(t *testing.T) {
+func TestProjectFolder_HandleContainerPatchWithConflictDetection_EventEmission(t *testing.T) {
 	ss := NewSyncState()
 	bus := events.NewEventBus()
 	sub := bus.Subscribe("test_conflict")
@@ -704,7 +704,7 @@ func TestWorkspace_HandleContainerPatchWithConflictDetection_EventEmission(t *te
 	os.Remove(theirsRel) // cleanup
 }
 
-func TestWorkspace_HandleContainerPatchWithConflictDetection_NoEventBus(t *testing.T) {
+func TestProjectFolder_HandleContainerPatchWithConflictDetection_NoEventBus(t *testing.T) {
 	// Verify nil eventBus is handled gracefully (no panic).
 	ss := NewSyncState()
 	path := "no_bus.go"

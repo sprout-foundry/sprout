@@ -67,8 +67,8 @@ func applyComputerUseSettings(cfg *configuration.Config, patch map[string]interf
 			return fmt.Errorf("invalid computer_use config: %w", err)
 		}
 		cu.AuditLogDir = truncateString(cu.AuditLogDir, maxSettingPathLength)
-		for i, p := range cu.WorkspaceAllowlist {
-			cu.WorkspaceAllowlist[i] = truncateString(p, maxSettingPathLength)
+		for i, p := range cu.ProjectFolderAllowlist {
+			cu.ProjectFolderAllowlist[i] = truncateString(p, maxSettingPathLength)
 		}
 		cfg.ComputerUse = &cu
 	}

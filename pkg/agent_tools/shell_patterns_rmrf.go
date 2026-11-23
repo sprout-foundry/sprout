@@ -6,7 +6,7 @@ import (
 )
 
 // shell_patterns_rmrf.go — the "rm -rf is safe" allowlist: which
-// prefixes/components of an rm -rf invocation count as workspace-safe,
+// prefixes/components of an rm -rf invocation count as project-folder-safe,
 // split out of the original shell_patterns.go monolith. Pure move.
 
 // safeRmRfPrefixes is a set of safe "rm -rf " (and "rm -fr ") command prefixes
@@ -199,7 +199,7 @@ func isSafeRmRfComponent(target string) bool {
 		return false
 	}
 
-	// Reject absolute paths (conservative: only workspace-relative paths are safe)
+	// Reject absolute paths (conservative: only project-folder-relative paths are safe)
 	if strings.HasPrefix(target, "/") {
 		return false
 	}
@@ -237,9 +237,9 @@ func isSafeRmRfComponent(target string) bool {
 	return false
 }
 
-// pathIsWorkspaceSafe checks whether a file path argument is safe for workspace operations.
+// pathIsProjectFolderSafe checks whether a file path argument is safe for project folder operations.
 // A path is considered safe if:
-//   - It is a relative path (no leading /) — assumed to be within the workspace
+//   - It is a relative path (no leading /) — assumed to be within the project folder
 //   - It is under /tmp/ (temporary files)
 //   - It is /dev/null, /dev/stdout, or /dev/stderr
 //   - It is a hyphen ("-") which is stdin/stdout in many commands
@@ -253,7 +253,7 @@ func isSafeRmRfComponent(target string) bool {
 // If path.Clean produces a result starting with "/tmp/", all parent directory references
 // have been resolved — the path cannot escape /tmp. No additional ".." check is needed.
 // This is a string-only heuristic — no filesystem access.
-func pathIsWorkspaceSafe(pathStr string) bool {
+func pathIsProjectFolderSafe(pathStr string) bool {
 	if pathStr == "" || pathStr == "-" {
 		return true
 	}
@@ -278,7 +278,7 @@ func pathIsWorkspaceSafe(pathStr string) bool {
 			return true
 		}
 		// User home directories (macOS /Users, Linux /home) are safe for
-		// workspace operations — developers regularly copy/move files between
+		// project folder operations — developers regularly copy/move files between
 		// sibling repos and project directories under their home. Root's home
 		// (/root) stays blocked as a sensitive system directory.
 		// Note: callers (isDangerousPattern) may already lowercase the path,
@@ -301,7 +301,7 @@ func pathIsWorkspaceSafe(pathStr string) bool {
 		return false
 	}
 
-	// Relative paths are safe (assumed within workspace)
+	// Relative paths are safe (assumed within project folder)
 	return true
 }
 
@@ -342,13 +342,13 @@ func hasSystemPathTarget(args string) bool {
 			// Handle --flag=VALUE style arguments where VALUE may be a path
 			if eqIdx := strings.Index(part, "="); eqIdx >= 0 {
 				val := part[eqIdx+1:]
-				if val != "" && !pathIsWorkspaceSafe(val) {
+				if val != "" && !pathIsProjectFolderSafe(val) {
 					return true
 				}
 			}
 			continue // Skip standalone flags
 		}
-		if !pathIsWorkspaceSafe(part) {
+		if !pathIsProjectFolderSafe(part) {
 			return true
 		}
 	}

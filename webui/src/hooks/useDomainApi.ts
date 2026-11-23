@@ -27,7 +27,7 @@ import * as session from '../services/api/sessionApi';
 import * as settings from '../services/api/settingsApi';
 import * as ssh from '../services/api/sshApi';
 import * as terminal from '../services/api/terminalApi';
-import * as workspace from '../services/api/workspaceApi';
+import * as projectFolder from '../services/api/workspaceApi';
 
 /**
  * Extract all but the first element from a tuple type.
@@ -111,11 +111,11 @@ export function useCredentialsApi() {
 }
 
 /**
- * Workspace API hook — adapter-aware workspace operations.
+ * Workspace API hook — adapter-aware project folder operations.
  */
-export function useWorkspaceApi() {
+export function useProjectFolderApi() {
   const fetchFn = useSproutFetch();
-  return useMemo(() => bindModule(workspace, fetchFn), [fetchFn]);
+  return useMemo(() => bindModule(projectFolder, fetchFn), [fetchFn]);
 }
 
 /**

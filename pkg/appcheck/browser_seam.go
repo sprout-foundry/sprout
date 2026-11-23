@@ -22,6 +22,11 @@ type RodBrowser interface {
 	// OpenSession opens an incognito browser context and a page in it.
 	// errors.Is(err, webcontent.ErrBrowserUnavailable) marks a browser that
 	// cannot run here (the check then reports "could not run").
+	//
+	// A browser holds no resources the check must release: the production
+	// browser drives a process-lifetime renderer whose Chromium is closed at
+	// shutdown (webcontent.CloseDirectBrowser), and a check closes only the
+	// session it opened.
 	OpenSession(ctx context.Context) (RodSession, error)
 }
 
@@ -40,18 +45,24 @@ type webcontentSession struct{ s *webcontent.RodSession }
 func (w webcontentSession) Page() *rod.Page { return w.s.Page }
 func (w webcontentSession) Close()          { w.s.Close() }
 
-// NewWebcontentBrowser returns the production RodBrowser backed by
-// webcontent.GetGlobalBrowser(). Chromium launches on the first session, so
-// constructing it never starts a browser.
+// NewWebcontentBrowser returns the production RodBrowser. It renders through
+// pkg/webcontent's proxy-free renderer — the same Rod stack browse_url drives,
+// but kept off any configured proxy, because the check serves the app on this
+// machine and a proxy answering for loopback would turn every page into a
+// proxy error. That renderer is process-lifetime and shared by every check,
+// and Chromium launches on the first session, so constructing a browser starts
+// nothing and a check closes only its own session.
 func NewWebcontentBrowser() RodBrowser {
-	return webcontentBrowser{}
+	return webcontentBrowser{renderer: webcontent.GetDirectBrowser()}
 }
 
-type webcontentBrowser struct{}
+type webcontentBrowser struct {
+	renderer webcontent.BrowserRenderer
+}
 
 // OpenSession implements RodBrowser.
-func (webcontentBrowser) OpenSession(ctx context.Context) (RodSession, error) {
-	s, err := webcontent.GetGlobalBrowser().OpenRodSession(ctx)
+func (b webcontentBrowser) OpenSession(ctx context.Context) (RodSession, error) {
+	s, err := b.renderer.OpenRodSession(ctx)
 	if err != nil {
 		return nil, err
 	}
